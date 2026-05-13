@@ -20,7 +20,7 @@ pnpm start
 The backend listens on `http://localhost:8080`.
 The frontend listens on `http://localhost:5173`.
 
-The default backend TTS provider is Kokoro and the default checker is local Qwen3-ASR.
+The default local stack is Bonsai for pre-TTS text optimization, Kokoro for speech synthesis, and Qwen3-ASR for verification.
 Set `TTS_PROVIDER=mock` or `VOICE_CHECKER_PROVIDER=mock` when you want fast local fallback behavior.
 
 `pnpm start` loads `.env` and `backend/.env` when present, fills local defaults, starts both servers, and stops both when you press `Ctrl-C`.
@@ -44,21 +44,28 @@ The frontend subscribes to `GET /api/voice-jobs/:id/events` for server-sent prog
 Completed job audio is saved as `audio.wav` under `backend/data/jobs/<job-id>/` by default, with `metadata.json` next to it.
 
 Kokoro synthesis uses `hexgrad/Kokoro-82M` through the Python `kokoro` package.
+Local voice optimization uses `prism-ml/Bonsai-8B-mlx-1bit` through MLX and streams partial rewritten text into the job state.
 Local ASR checking uses `Qwen/Qwen3-ASR-1.7B` through the Python `qwen-asr` package.
 The mock TTS path still generates silent WAV data so tests and fallback development work without model downloads.
 
 ## Voice Optimization
 
-The backend defaults to `VOICE_OPTIMIZER_PROVIDER=auto`. In auto mode it uses OpenRouter when `OPENROUTER_API_KEY` is set, otherwise it falls back to the local rule-based optimizer.
-OpenRouter optimization streams partial spoken-form output into the job over the existing job events stream.
+The backend defaults to `VOICE_OPTIMIZER_PROVIDER=bonsai`, which keeps the pre-TTS rewrite fully local on Apple Silicon through the Prism MLX fork.
+`pnpm start` creates a separate `backend/.venv-bonsai` environment for Bonsai because `mlx-lm` and `qwen-asr` currently require incompatible `transformers` versions.
 
 ```sh
-export OPENROUTER_API_KEY
-export OPENROUTER_MODEL=openrouter/free
-export OPENROUTER_TIMEOUT_SECONDS=180
+export VOICE_OPTIMIZER_PROVIDER=bonsai
+export BONSAI_MODEL=prism-ml/Bonsai-8B-mlx-1bit
+export BONSAI_PRELOAD=true
 ```
 
-Use `VOICE_OPTIMIZER_PROVIDER=rules` to force the local optimizer, or `VOICE_OPTIMIZER_PROVIDER=openrouter` to fail fast when the key is missing.
+The Bonsai dependency requires the Xcode Metal toolchain:
+
+```sh
+xcodebuild -downloadComponent metalToolchain
+```
+
+Use `VOICE_OPTIMIZER_PROVIDER=rules` to force the simple local rules optimizer, or `VOICE_OPTIMIZER_PROVIDER=openrouter` to use OpenRouter explicitly when `OPENROUTER_API_KEY` is set.
 
 ## Voice Checking
 

@@ -82,3 +82,9 @@
 - [x] Build local versus OpenRouter optimizer comparison harness
 - [x] Run shared pre-TTS samples through both models
 - [x] Summarize whether Bonsai can handle prompt processing
+
+## 2026-05-13 11:24 EDT - Local Bonsai Stack And Publish
+- [x] Add Bonsai as the default local voice optimizer
+- [x] Verify local Bonsai plus Kokoro plus Qwen pipeline
+- [x] Audit committed files for secrets and generated artifacts
+- [x] Create public GitHub repository with gh and push

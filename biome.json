@@ -4,6 +4,7 @@
     "includes": [
       "**",
       "!backend/.venv",
+      "!backend/.venv-bonsai",
       "!backend/go.sum",
       "!backend/data",
       "!node_modules",

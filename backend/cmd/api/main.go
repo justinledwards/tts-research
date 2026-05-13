@@ -20,6 +20,19 @@ func main() {
 		logger.Error("invalid optimizer configuration", "error", err)
 		os.Exit(1)
 	}
+	preloadOptimizer, err := envBoolWithDefault("BONSAI_PRELOAD", true)
+	if err != nil {
+		logger.Error("invalid optimizer configuration", "error", err)
+		os.Exit(1)
+	}
+	if warmable, ok := optimizer.(interface{ Warm(context.Context) error }); ok && preloadOptimizer {
+		go func() {
+			logger.Info("warming voice optimizer")
+			if err := warmable.Warm(context.Background()); err != nil {
+				logger.Warn("voice optimizer warmup failed", "error", err)
+			}
+		}()
+	}
 
 	ttsAgent, err := ttsAgentFromEnv()
 	if err != nil {
@@ -74,17 +87,13 @@ func main() {
 }
 
 func optimizerFromEnv() (pipeline.VoiceOptimizer, error) {
-	provider := strings.ToLower(envWithDefault("VOICE_OPTIMIZER_PROVIDER", "auto"))
+	provider := strings.ToLower(envWithDefault("VOICE_OPTIMIZER_PROVIDER", "bonsai"))
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	rules := agents.NewVoiceOptimizationAgent()
 
 	switch provider {
-	case "auto":
-		if strings.TrimSpace(apiKey) == "" {
-			return rules, nil
-		}
-
-		return agents.NewOpenRouterVoiceOptimizationAgent(openRouterOptimizerConfig(apiKey, rules)), nil
+	case "auto", "bonsai":
+		return agents.NewBonsaiVoiceOptimizationAgent(bonsaiOptimizerConfig()), nil
 	case "openrouter":
 		if strings.TrimSpace(apiKey) == "" {
 			return nil, fmt.Errorf("OPENROUTER_API_KEY is required when VOICE_OPTIMIZER_PROVIDER=openrouter")
@@ -95,6 +104,40 @@ func optimizerFromEnv() (pipeline.VoiceOptimizer, error) {
 		return rules, nil
 	default:
 		return nil, fmt.Errorf("unsupported VOICE_OPTIMIZER_PROVIDER %q", provider)
+	}
+}
+
+func bonsaiOptimizerConfig() agents.BonsaiVoiceOptimizationConfig {
+	timeout, err := envIntWithDefault("BONSAI_TIMEOUT_SECONDS", 600)
+	if err != nil {
+		timeout = 600
+	}
+	maxTokens, err := envIntWithDefault("BONSAI_MAX_TOKENS", 0)
+	if err != nil {
+		maxTokens = 0
+	}
+	temperature, err := envFloatWithDefault("BONSAI_TEMPERATURE", 0.1)
+	if err != nil {
+		temperature = 0.1
+	}
+	topP, err := envFloatWithDefault("BONSAI_TOP_P", 0.9)
+	if err != nil {
+		topP = 0.9
+	}
+	topK, err := envIntWithDefault("BONSAI_TOP_K", 20)
+	if err != nil {
+		topK = 20
+	}
+
+	return agents.BonsaiVoiceOptimizationConfig{
+		PythonPath:     envWithDefault("BONSAI_PYTHON_PATH", "./.venv-bonsai/bin/python"),
+		ScriptPath:     envWithDefault("BONSAI_SCRIPT_PATH", "./scripts/bonsai_optimize.py"),
+		Model:          envWithDefault("BONSAI_MODEL", "prism-ml/Bonsai-8B-mlx-1bit"),
+		TimeoutSeconds: timeout,
+		MaxTokens:      maxTokens,
+		Temperature:    temperature,
+		TopP:           topP,
+		TopK:           topK,
 	}
 }
 

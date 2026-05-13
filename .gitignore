@@ -11,6 +11,7 @@
 !.env.example
 .venv/
 backend/.venv/
+backend/.venv-bonsai/
 
 # Logs
 *.log
