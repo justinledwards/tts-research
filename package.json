@@ -1,0 +1,27 @@
+{
+  "name": "tts-research",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "prepare": "husky",
+    "dev": "pnpm --parallel --filter @tts-research/backend --filter @tts-research/frontend dev",
+    "start": "bash ./scripts/start.sh",
+    "start:mock": "VOICE_OPTIMIZER_PROVIDER=rules TTS_PROVIDER=mock VOICE_CHECKER_PROVIDER=mock bash ./scripts/start.sh",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint . && eslint .",
+    "typecheck": "pnpm --filter @tts-research/frontend typecheck",
+    "test": "pnpm --filter @tts-research/backend test && pnpm --filter @tts-research/frontend test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-sonarjs": "^4.0.3",
+    "eslint-plugin-unicorn": "^64.0.0",
+    "husky": "^9.1.7",
+    "typescript-eslint": "^8.48.0"
+  }
+}

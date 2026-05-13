@@ -1,0 +1,60 @@
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+!.env.example
+.venv/
+backend/.venv/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+coverage/
+.vite/
+
+# Go
+bin/
+*.test
+*.out
+coverage.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated media and local data
+backend/data/
+!backend/data/
+backend/data/**
+!backend/data/.gitkeep
+backend/tmp/
+frontend/.vercel/
+
+# Tool caches
+.cache/
+.turbo/
+.playwright-mcp/
+
+# Local verification screenshots
+/tts-research-*.png

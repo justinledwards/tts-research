@@ -1,0 +1,9 @@
+{
+  "name": "@tts-research/backend",
+  "private": true,
+  "scripts": {
+    "dev": "go run ./cmd/api",
+    "test": "go test ./...",
+    "check": "go test ./..."
+  }
+}
