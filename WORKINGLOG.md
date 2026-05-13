@@ -76,3 +76,9 @@
 - [x] Stage intended source files only
 - [x] Scan staged contents for secrets and artifacts
 - [x] Commit locally
+
+## 2026-05-13 10:38 EDT - Bonsai Optimizer Evaluation
+- [x] Inspect Bonsai 8B MLX requirements
+- [x] Build local versus OpenRouter optimizer comparison harness
+- [x] Run shared pre-TTS samples through both models
+- [x] Summarize whether Bonsai can handle prompt processing
