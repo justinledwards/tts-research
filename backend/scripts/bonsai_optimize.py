@@ -48,6 +48,14 @@ FEW_SHOTS = [
     ),
 ]
 
+LEAKED_FEW_SHOT_OUTPUTS = {
+    "CPU usage is ninety percent plus memory equals four gigabytes.",
+    "P ninety five latency equals two hundred eighty milliseconds and temperature is thirty seven degrees Celsius.",
+    "Go code sample: fmt dot Println, open parenthesis, quote hello quote, close parenthesis.",
+    "Doctor Smith reviewed G P U and A S R metrics.",
+    "If x is less than or equal to three and y is not equal to zero, return O of n log n.",
+}
+
 MAX_CHUNK_RUNES = 1_600
 
 DOMAIN_PATTERN = re.compile(
@@ -514,7 +522,13 @@ def clean_output(value: str) -> str:
     if text.endswith("```"):
         text = text[:-3].strip()
 
-    return text
+    lines = []
+    for line in text.splitlines():
+        if line.strip() in LEAKED_FEW_SHOT_OUTPUTS:
+            continue
+        lines.append(line)
+
+    return "\n".join(lines).strip()
 
 
 def emit(payload: dict[str, Any]) -> None:

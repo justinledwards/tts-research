@@ -16,7 +16,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 )
 
 type VoiceCheckResult struct {
@@ -539,6 +538,7 @@ func spokenComparisonText(text string) string {
 	replaced := comparisonTLDRPattern.ReplaceAllString(text, " too long did not read ")
 	replaced = comparisonUS3Pattern.ReplaceAllString(replaced, " U S ")
 	replaced = comparisonWhoisPattern.ReplaceAllString(replaced, " who is ")
+	replaced = comparisonDashPattern.ReplaceAllString(replaced, " ")
 	replaced = comparisonItalicDomainPattern.ReplaceAllStringFunc(replaced, func(value string) string {
 		match := comparisonItalicDomainPattern.FindStringSubmatch(value)
 		if len(match) != 2 {
@@ -646,7 +646,7 @@ func expandNormalizedWord(original string, normalized string) []string {
 }
 
 func expandComparisonAcronym(original string, normalized string) []string {
-	if _, ok := comparisonAcronyms[normalized]; !ok && !isAllCapsAcronym(original) {
+	if _, ok := comparisonAcronyms[normalized]; !ok {
 		return nil
 	}
 
@@ -658,27 +658,6 @@ func expandComparisonAcronym(original string, normalized string) []string {
 	}
 
 	return values
-}
-
-func isAllCapsAcronym(value string) bool {
-	cleaned := strings.TrimFunc(value, func(current rune) bool {
-		return !unicode.IsLetter(current) && !unicode.IsDigit(current)
-	})
-	if len(cleaned) < 2 || len(cleaned) > 6 {
-		return false
-	}
-
-	hasLetter := false
-	for _, current := range cleaned {
-		if unicode.IsLetter(current) {
-			hasLetter = true
-		}
-		if unicode.IsLower(current) {
-			return false
-		}
-	}
-
-	return hasLetter
 }
 
 func numberToWords(value int) string {
@@ -758,6 +737,7 @@ var (
 	comparisonTLDRPattern         = regexp.MustCompile(`(?i)\btl\s*;\s*dr\b`)
 	comparisonUS3Pattern          = regexp.MustCompile(`(?i)\bus3\b`)
 	comparisonWhoisPattern        = regexp.MustCompile(`(?i)\bwhois\b`)
+	comparisonDashPattern         = regexp.MustCompile(`[-‐‑‒–—―]+`)
 	comparisonDomainPattern       = regexp.MustCompile(`(?i)(\*\.)?([a-z0-9][a-z0-9-]*\.)+(us|org|com|net|edu|gov|io|dev|co)\b`)
 	comparisonItalicDomainPattern = regexp.MustCompile(`(?i)\*((?:[a-z0-9][a-z0-9-]*\.)+(?:us|org|com|net|edu|gov|io|dev|co))\*`)
 	comparisonEmailPattern        = regexp.MustCompile(`(?i)\b([a-z0-9._%+\-]+)@((?:[a-z0-9][a-z0-9-]*\.)+(?:us|org|com|net|edu|gov|io|dev|co))\b`)
@@ -783,6 +763,7 @@ var (
 		"tld":   {},
 		"tts":   {},
 		"url":   {},
+		"us":    {},
 		"usb":   {},
 		"wa":    {},
 	}

@@ -102,3 +102,10 @@
 - [x] Lower default segment size so paragraph and numbered-field text are less likely to mix
 - [x] Add regression tests for missing domain separators in ASR output
 - [x] Run checks and verify behavior
+
+## 2026-05-13 17:00 EDT - Exact Prompt Verification
+- [x] Restart local stack on current code
+- [x] Submit the full locality-domain article prompt
+- [x] Record completion or failing segment details
+- [x] Apply follow-up fixes if the exact prompt still fails
+- [x] Re-run the exact prompt on the follow-up fix

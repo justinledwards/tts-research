@@ -100,3 +100,24 @@ func TestCompareVoiceTranscriptAcceptsMissingDomainSeparators(t *testing.T) {
 		t.Fatalf("Complete = false, reason: %s, similarity: %f", result.Reason, result.Similarity)
 	}
 }
+
+func TestCompareVoiceTranscriptDetectsCutoffAfterHyphenatedHeading(t *testing.T) {
+	t.Parallel()
+
+	result := compareVoiceTranscript(
+		"In this section, I'll walk you through some of the trickier parts of this form, assuming you are registering a domain for yourself. 2. FULLY-QUALIFIED DOMAIN NAME: This is the domain you want to register, e.g. frederick dot seattle dot W A dot U S.",
+		"In this section, I'll walk you through some of the trickier parts of this form, assuming you are registering a domain for yourself. Two, fully qualified domain name. This is the domain you want to register, e.g.",
+		"test",
+		0.9,
+	)
+
+	if result.Complete {
+		t.Fatal("Complete = true, want false")
+	}
+	if !result.NeedsResume {
+		t.Fatalf("NeedsResume = false, reason: %s, similarity: %f", result.Reason, result.Similarity)
+	}
+	if result.ResumeText != "frederick dot seattle dot W A dot U S." {
+		t.Fatalf("ResumeText = %q", result.ResumeText)
+	}
+}
