@@ -85,3 +85,18 @@ func TestCompareVoiceTranscriptAcceptsASRDotFragments(t *testing.T) {
 		t.Fatalf("Complete = false, reason: %s, similarity: %f", result.Reason, result.Similarity)
 	}
 }
+
+func TestCompareVoiceTranscriptAcceptsMissingDomainSeparators(t *testing.T) {
+	t.Parallel()
+
+	result := compareVoiceTranscript(
+		"In this section, I'll walk you through some of the trickier parts of this form, assuming you are registering a domain for yourself. Two, fully qualified domain name. This is the domain you want to register, e.g. frederick dot seattle dot W A dot U S.",
+		"In this section, I'll walk you through some of the trickier parts of this form, assuming you are registering a domain for yourself. Two, fully qualified domain name. This is the domain you want to register, e.g. Frederick Seattle wa us3.",
+		"test",
+		0.9,
+	)
+
+	if !result.Complete {
+		t.Fatalf("Complete = false, reason: %s, similarity: %f", result.Reason, result.Similarity)
+	}
+}

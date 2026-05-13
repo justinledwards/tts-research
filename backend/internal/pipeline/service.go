@@ -51,7 +51,7 @@ type Options struct {
 }
 
 const (
-	defaultSegmentMaxRunes = 300
+	defaultSegmentMaxRunes = 220
 	defaultJobDataDir      = "./data/jobs"
 )
 

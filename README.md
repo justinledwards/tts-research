@@ -39,7 +39,7 @@ pnpm check
 3. `VoiceChecker` transcribes generated audio and compares it with optimized text.
 4. The pipeline retries bounded cutoff recovery work when audio appears incomplete.
 
-Long optimized text is split into smaller synthesis/checking segments with `VOICE_SEGMENT_MAX_RUNES`, which defaults to `300`.
+Long optimized text is split into smaller synthesis/checking segments with `VOICE_SEGMENT_MAX_RUNES`, which defaults to `220`.
 The frontend subscribes to `GET /api/voice-jobs/:id/events` for server-sent progress updates while each segment runs.
 Completed job audio is saved as `audio.wav` under `backend/data/jobs/<job-id>/` by default, with `metadata.json` next to it.
 

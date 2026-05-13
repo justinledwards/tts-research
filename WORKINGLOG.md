@@ -95,3 +95,10 @@
 - [x] Fix failed-stage reporting for checker retry exhaustion
 - [x] Add regression coverage for the long technical article path
 - [x] Run checks and verify behavior
+
+## 2026-05-13 16:52 EDT - Missing Prefix Checker Recovery
+- [x] Reproduce domain-heavy ASR mismatch from locality-domain article segment
+- [x] Add checker tolerance for omitted domain separators and ASR artifacts
+- [x] Lower default segment size so paragraph and numbered-field text are less likely to mix
+- [x] Add regression tests for missing domain separators in ASR output
+- [x] Run checks and verify behavior

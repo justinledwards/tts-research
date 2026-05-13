@@ -413,8 +413,13 @@ func compareVoiceTranscript(expectedText string, transcript string, provider str
 		}
 	}
 
-	lcs := longestCommonSubsequenceLength(normalizedOnly(expectedTokens), normalizedOnly(transcriptTokens))
-	similarity := float64(lcs) / float64(len(expectedTokens))
+	expectedNormalized := normalizedOnly(expectedTokens)
+	transcriptNormalized := normalizedOnly(transcriptTokens)
+	lcs := longestCommonSubsequenceLength(expectedNormalized, transcriptNormalized)
+	similarity := float64(lcs) / float64(len(expectedNormalized))
+	if relaxedSimilarity := similarityWithoutOptionalTokens(expectedNormalized, transcriptNormalized); relaxedSimilarity > similarity {
+		similarity = relaxedSimilarity
+	}
 	if similarity >= threshold {
 		return VoiceCheckResult{
 			Complete:    true,
@@ -426,7 +431,7 @@ func compareVoiceTranscript(expectedText string, transcript string, provider str
 		}
 	}
 
-	prefixLength := commonPrefixLength(normalizedOnly(expectedTokens), normalizedOnly(transcriptTokens))
+	prefixLength := commonPrefixLength(expectedNormalized, transcriptNormalized)
 	cleanCutoff := prefixLength > 0 &&
 		prefixLength < len(expectedTokens) &&
 		float64(prefixLength)/float64(len(transcriptTokens)) >= 0.65
@@ -491,6 +496,29 @@ func normalizedOnly(tokens []wordToken) []string {
 	return values
 }
 
+func similarityWithoutOptionalTokens(expected []string, transcript []string) float64 {
+	filteredExpected := withoutOptionalComparisonTokens(expected)
+	filteredTranscript := withoutOptionalComparisonTokens(transcript)
+	if len(filteredExpected) == 0 || len(filteredTranscript) == 0 {
+		return 0
+	}
+
+	lcs := longestCommonSubsequenceLength(filteredExpected, filteredTranscript)
+	return float64(lcs) / float64(len(filteredExpected))
+}
+
+func withoutOptionalComparisonTokens(values []string) []string {
+	filtered := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := optionalComparisonTokens[value]; ok {
+			continue
+		}
+		filtered = append(filtered, value)
+	}
+
+	return filtered
+}
+
 func originalTextFromTokens(tokens []wordToken) string {
 	values := make([]string, 0, len(tokens))
 	for _, token := range tokens {
@@ -509,6 +537,7 @@ func normalizeSpokenWord(value string) string {
 
 func spokenComparisonText(text string) string {
 	replaced := comparisonTLDRPattern.ReplaceAllString(text, " too long did not read ")
+	replaced = comparisonUS3Pattern.ReplaceAllString(replaced, " U S ")
 	replaced = comparisonWhoisPattern.ReplaceAllString(replaced, " who is ")
 	replaced = comparisonItalicDomainPattern.ReplaceAllStringFunc(replaced, func(value string) string {
 		match := comparisonItalicDomainPattern.FindStringSubmatch(value)
@@ -727,6 +756,7 @@ var (
 	digitLetterBoundary           = regexp.MustCompile(`([0-9])([A-Za-z])`)
 	letterDigitBoundary           = regexp.MustCompile(`([A-Za-z])([0-9])`)
 	comparisonTLDRPattern         = regexp.MustCompile(`(?i)\btl\s*;\s*dr\b`)
+	comparisonUS3Pattern          = regexp.MustCompile(`(?i)\bus3\b`)
 	comparisonWhoisPattern        = regexp.MustCompile(`(?i)\bwhois\b`)
 	comparisonDomainPattern       = regexp.MustCompile(`(?i)(\*\.)?([a-z0-9][a-z0-9-]*\.)+(us|org|com|net|edu|gov|io|dev|co)\b`)
 	comparisonItalicDomainPattern = regexp.MustCompile(`(?i)\*((?:[a-z0-9][a-z0-9-]*\.)+(?:us|org|com|net|edu|gov|io|dev|co))\*`)
@@ -754,6 +784,11 @@ var (
 		"tts":   {},
 		"url":   {},
 		"usb":   {},
+		"wa":    {},
+	}
+	optionalComparisonTokens = map[string]struct{}{
+		"dash": {},
+		"dot":  {},
 	}
 	unitAliases = map[string][]string{
 		"gb":  {"gigabytes"},

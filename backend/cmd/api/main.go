@@ -59,7 +59,7 @@ func main() {
 		}()
 	}
 
-	segmentMaxRunes, err := envIntWithDefault("VOICE_SEGMENT_MAX_RUNES", 300)
+	segmentMaxRunes, err := envIntWithDefault("VOICE_SEGMENT_MAX_RUNES", 220)
 	if err != nil {
 		logger.Error("invalid pipeline configuration", "error", err)
 		os.Exit(1)
