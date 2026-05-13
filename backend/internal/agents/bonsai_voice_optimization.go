@@ -21,6 +21,7 @@ type BonsaiVoiceOptimizationConfig struct {
 	Model          string
 	TimeoutSeconds int
 	MaxTokens      int
+	ChunkRunes     int
 	Temperature    float64
 	TopP           float64
 	TopK           int
@@ -60,6 +61,9 @@ func NewBonsaiVoiceOptimizationAgent(config BonsaiVoiceOptimizationConfig) *Bons
 	}
 	if config.TimeoutSeconds <= 0 {
 		config.TimeoutSeconds = 600
+	}
+	if config.ChunkRunes <= 0 {
+		config.ChunkRunes = 1600
 	}
 	if config.Temperature <= 0 {
 		config.Temperature = 0.1
@@ -192,6 +196,8 @@ func (agent *BonsaiVoiceOptimizationAgent) ensureWorker(ctx context.Context) (*b
 		config.Model,
 		"--max-tokens",
 		strconv.Itoa(maxBonsaiOptimizationTokens("", config.MaxTokens)),
+		"--chunk-runes",
+		strconv.Itoa(config.ChunkRunes),
 		"--temperature",
 		strconv.FormatFloat(config.Temperature, 'f', -1, 64),
 		"--top-p",

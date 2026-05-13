@@ -88,3 +88,10 @@
 - [x] Verify local Bonsai plus Kokoro plus Qwen pipeline
 - [x] Audit committed files for secrets and generated artifacts
 - [x] Create public GitHub repository with gh and push
+
+## 2026-05-13 12:10 EDT - Long Technical Article Reliability
+- [x] Inspect failed locality-domain job output and checker metadata
+- [x] Improve local pre-TTS normalization around domains, dates, abbreviations, and section labels
+- [x] Fix failed-stage reporting for checker retry exhaustion
+- [x] Add regression coverage for the long technical article path
+- [x] Run checks and verify behavior

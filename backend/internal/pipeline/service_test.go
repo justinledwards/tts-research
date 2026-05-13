@@ -101,6 +101,33 @@ func TestCreateJobRetriesRejectedSegmentFromStart(t *testing.T) {
 	}
 }
 
+func TestCreateJobMarksCheckerFailedWhenRetryLimitExhausts(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		&alwaysRejectChecker{},
+		pipeline.Options{MaxRetries: 2, JobDataDir: t.TempDir()},
+	)
+
+	job, err := service.CreateJob(context.Background(), "first sentence. second sentence.")
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	failed := waitForFailedJob(t, service, job.ID)
+	if failed.Stages.Checker != pipeline.StageStatusFailed {
+		t.Fatalf("checker stage = %q, want %q", failed.Stages.Checker, pipeline.StageStatusFailed)
+	}
+	if failed.Stages.Synthesis != pipeline.StageStatusDone {
+		t.Fatalf("synthesis stage = %q, want %q", failed.Stages.Synthesis, pipeline.StageStatusDone)
+	}
+	if failed.Retries.Attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", failed.Retries.Attempts)
+	}
+}
+
 func TestCreateJobExposesStreamingOptimizationPreview(t *testing.T) {
 	t.Parallel()
 
@@ -206,6 +233,19 @@ func (checker *retryRejectedChecker) Check(_ context.Context, optimizedText stri
 	}, nil
 }
 
+type alwaysRejectChecker struct{}
+
+func (checker *alwaysRejectChecker) Check(_ context.Context, _ string, _ []byte) (agents.VoiceCheckResult, error) {
+	return agents.VoiceCheckResult{
+		Complete:    false,
+		Transcript:  "unrelated transcript",
+		NeedsResume: false,
+		Reason:      "test rejected attempt",
+		Provider:    "test",
+		Similarity:  0.1,
+	}, nil
+}
+
 type cutoffChecker struct {
 	calls int
 }
@@ -265,5 +305,25 @@ func waitForJob(t *testing.T, service *pipeline.Service, id string, status pipel
 
 	job, _ := service.GetJob(id)
 	t.Fatalf("job status = %q, want %q", job.Status, status)
+	return pipeline.VoiceJob{}
+}
+
+func waitForFailedJob(t *testing.T, service *pipeline.Service, id string) pipeline.VoiceJob {
+	t.Helper()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		job, err := service.GetJob(id)
+		if err != nil {
+			t.Fatalf("GetJob returned error: %v", err)
+		}
+		if job.Status == pipeline.JobStatusFailed {
+			return job
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	job, _ := service.GetJob(id)
+	t.Fatalf("job status = %q, want %q", job.Status, pipeline.JobStatusFailed)
 	return pipeline.VoiceJob{}
 }

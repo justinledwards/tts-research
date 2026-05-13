@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 type VoiceCheckResult struct {
@@ -507,12 +508,89 @@ func normalizeSpokenWord(value string) string {
 }
 
 func spokenComparisonText(text string) string {
-	replaced := spokenSymbolReplacer.Replace(text)
+	replaced := comparisonTLDRPattern.ReplaceAllString(text, " too long did not read ")
+	replaced = comparisonWhoisPattern.ReplaceAllString(replaced, " who is ")
+	replaced = comparisonItalicDomainPattern.ReplaceAllStringFunc(replaced, func(value string) string {
+		match := comparisonItalicDomainPattern.FindStringSubmatch(value)
+		if len(match) != 2 {
+			return value
+		}
+
+		return spokenComparisonDomain("*." + match[1])
+	})
+	replaced = comparisonEmailPattern.ReplaceAllStringFunc(replaced, spokenComparisonEmail)
+	replaced = comparisonDomainPattern.ReplaceAllStringFunc(replaced, spokenComparisonDomain)
+	replaced = comparisonDotFragmentPattern.ReplaceAllStringFunc(replaced, spokenComparisonDotFragment)
+	replaced = spokenSymbolReplacer.Replace(replaced)
 	replaced = digitLetterBoundary.ReplaceAllString(replaced, "$1 $2")
 	return letterDigitBoundary.ReplaceAllString(replaced, "$1 $2")
 }
 
+func spokenComparisonDotFragment(value string) string {
+	match := comparisonDotFragmentPattern.FindStringSubmatch(value)
+	if len(match) != 2 {
+		return value
+	}
+
+	return " dot " + spokenComparisonDomainLabel(match[1], true, []string{match[1]})
+}
+
+func spokenComparisonEmail(value string) string {
+	match := comparisonEmailPattern.FindStringSubmatch(value)
+	if len(match) != 3 {
+		return value
+	}
+
+	local := strings.NewReplacer(
+		".", " dot ",
+		"_", " underscore ",
+		"-", " dash ",
+		"+", " plus ",
+	).Replace(match[1])
+
+	return local + " at " + spokenComparisonDomain(match[2])
+}
+
+func spokenComparisonDomain(value string) string {
+	domain := strings.Trim(value, ".,;:()[]{}<>\"'")
+	wildcard := strings.HasPrefix(domain, "*.")
+	domain = strings.TrimPrefix(domain, "*.")
+	labels := strings.Split(domain, ".")
+	words := make([]string, 0, len(labels)*2+2)
+	if wildcard {
+		words = append(words, "wildcard", "dot")
+	}
+
+	for index, label := range labels {
+		if index > 0 {
+			words = append(words, "dot")
+		}
+		words = append(words, spokenComparisonDomainLabel(label, index == len(labels)-1, labels))
+	}
+
+	return strings.Join(words, " ")
+}
+
+func spokenComparisonDomainLabel(label string, isTLD bool, labels []string) string {
+	normalized := strings.ToLower(label)
+	if normalized == "us" {
+		return "U S"
+	}
+	if len(normalized) == 2 && strings.EqualFold(labels[len(labels)-1], "us") {
+		return strings.Join(strings.Split(strings.ToUpper(normalized), ""), " ")
+	}
+	if isTLD && (normalized == "io" || normalized == "co") {
+		return strings.Join(strings.Split(strings.ToUpper(normalized), ""), " ")
+	}
+
+	return strings.ReplaceAll(normalized, "-", " dash ")
+}
+
 func expandNormalizedWord(original string, normalized string) []string {
+	if values := expandComparisonAcronym(original, normalized); len(values) > 0 {
+		return values
+	}
+
 	if values, ok := unitAliases[normalized]; ok {
 		return values
 	}
@@ -536,6 +614,42 @@ func expandNormalizedWord(original string, normalized string) []string {
 	}
 
 	return values
+}
+
+func expandComparisonAcronym(original string, normalized string) []string {
+	if _, ok := comparisonAcronyms[normalized]; !ok && !isAllCapsAcronym(original) {
+		return nil
+	}
+
+	values := make([]string, 0, len(normalized))
+	for _, value := range normalized {
+		if value >= 'a' && value <= 'z' {
+			values = append(values, string(value))
+		}
+	}
+
+	return values
+}
+
+func isAllCapsAcronym(value string) bool {
+	cleaned := strings.TrimFunc(value, func(current rune) bool {
+		return !unicode.IsLetter(current) && !unicode.IsDigit(current)
+	})
+	if len(cleaned) < 2 || len(cleaned) > 6 {
+		return false
+	}
+
+	hasLetter := false
+	for _, current := range cleaned {
+		if unicode.IsLetter(current) {
+			hasLetter = true
+		}
+		if unicode.IsLower(current) {
+			return false
+		}
+	}
+
+	return hasLetter
 }
 
 func numberToWords(value int) string {
@@ -609,15 +723,38 @@ func longestCommonSubsequenceLength(left []string, right []string) int {
 }
 
 var (
-	nonWordPattern       = regexp.MustCompile(`[^a-z0-9]+`)
-	digitLetterBoundary  = regexp.MustCompile(`([0-9])([A-Za-z])`)
-	letterDigitBoundary  = regexp.MustCompile(`([A-Za-z])([0-9])`)
-	spokenSymbolReplacer = strings.NewReplacer(
+	nonWordPattern                = regexp.MustCompile(`[^a-z0-9]+`)
+	digitLetterBoundary           = regexp.MustCompile(`([0-9])([A-Za-z])`)
+	letterDigitBoundary           = regexp.MustCompile(`([A-Za-z])([0-9])`)
+	comparisonTLDRPattern         = regexp.MustCompile(`(?i)\btl\s*;\s*dr\b`)
+	comparisonWhoisPattern        = regexp.MustCompile(`(?i)\bwhois\b`)
+	comparisonDomainPattern       = regexp.MustCompile(`(?i)(\*\.)?([a-z0-9][a-z0-9-]*\.)+(us|org|com|net|edu|gov|io|dev|co)\b`)
+	comparisonItalicDomainPattern = regexp.MustCompile(`(?i)\*((?:[a-z0-9][a-z0-9-]*\.)+(?:us|org|com|net|edu|gov|io|dev|co))\*`)
+	comparisonEmailPattern        = regexp.MustCompile(`(?i)\b([a-z0-9._%+\-]+)@((?:[a-z0-9][a-z0-9-]*\.)+(?:us|org|com|net|edu|gov|io|dev|co))\b`)
+	comparisonDotFragmentPattern  = regexp.MustCompile(`(?i)\.([a-z]{2,4})\b`)
+	spokenSymbolReplacer          = strings.NewReplacer(
 		"%", " percent ",
 		"+", " plus ",
 		"=", " equals ",
 		"&", " and ",
 	)
+	comparisonAcronyms = map[string]struct{}{
+		"asr":   {},
+		"aws":   {},
+		"cpu":   {},
+		"dns":   {},
+		"faq":   {},
+		"ftp":   {},
+		"gpu":   {},
+		"html":  {},
+		"http":  {},
+		"https": {},
+		"ip":    {},
+		"tld":   {},
+		"tts":   {},
+		"url":   {},
+		"usb":   {},
+	}
 	unitAliases = map[string][]string{
 		"gb":  {"gigabytes"},
 		"kb":  {"kilobytes"},

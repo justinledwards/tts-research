@@ -116,6 +116,10 @@ func bonsaiOptimizerConfig() agents.BonsaiVoiceOptimizationConfig {
 	if err != nil {
 		maxTokens = 0
 	}
+	chunkRunes, err := envIntWithDefault("BONSAI_CHUNK_RUNES", 1600)
+	if err != nil {
+		chunkRunes = 1600
+	}
 	temperature, err := envFloatWithDefault("BONSAI_TEMPERATURE", 0.1)
 	if err != nil {
 		temperature = 0.1
@@ -135,6 +139,7 @@ func bonsaiOptimizerConfig() agents.BonsaiVoiceOptimizationConfig {
 		Model:          envWithDefault("BONSAI_MODEL", "prism-ml/Bonsai-8B-mlx-1bit"),
 		TimeoutSeconds: timeout,
 		MaxTokens:      maxTokens,
+		ChunkRunes:     chunkRunes,
 		Temperature:    temperature,
 		TopP:           topP,
 		TopK:           topK,

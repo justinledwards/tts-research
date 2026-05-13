@@ -374,7 +374,7 @@ func (service *Service) synthesizeUntilComplete(ctx context.Context, id string, 
 				break
 			}
 
-			if check.NeedsResume && strings.TrimSpace(check.ResumeText) != "" {
+			if check.NeedsResume && strings.TrimSpace(check.ResumeText) != "" && attempt < service.options.MaxRetries {
 				committedSegmentChunks = candidateSegmentChunks
 				committedSegmentDurationMS += result.DurationMS
 				resumeText = check.ResumeText
@@ -394,22 +394,36 @@ func (service *Service) synthesizeUntilComplete(ctx context.Context, id string, 
 				continue
 			}
 
+			if attempt < service.options.MaxRetries {
+				service.updateJob(id, func(job *storedJob) {
+					job.Status = JobStatusRetrying
+					job.Stages.Synthesis = StageStatusRunning
+					job.Stages.Checker = StageStatusWaiting
+					setProgress(
+						job,
+						string(JobStatusRetrying),
+						fmt.Sprintf("Regenerating segment %d of %d", segmentNumber, len(segments)),
+						fmt.Sprintf("Checker did not accept attempt %d; regenerating this same segment.", attempt),
+						segmentNumber,
+						len(segments),
+					)
+				})
+			}
+		}
+
+		if !lastCheck.Complete {
 			service.updateJob(id, func(job *storedJob) {
-				job.Status = JobStatusRetrying
-				job.Stages.Synthesis = StageStatusRunning
-				job.Stages.Checker = StageStatusWaiting
+				job.Stages.Synthesis = StageStatusDone
+				job.Stages.Checker = StageStatusFailed
 				setProgress(
 					job,
-					string(JobStatusRetrying),
-					fmt.Sprintf("Regenerating segment %d of %d", segmentNumber, len(segments)),
-					fmt.Sprintf("Checker did not accept attempt %d; regenerating this same segment.", attempt),
+					string(JobStatusFailed),
+					fmt.Sprintf("Voice checker retry limit reached on segment %d of %d", segmentNumber, len(segments)),
+					lastCheck.Reason,
 					segmentNumber,
 					len(segments),
 				)
 			})
-		}
-
-		if !lastCheck.Complete {
 			return mergedResult, lastCheck, ErrRetryExhaust
 		}
 
