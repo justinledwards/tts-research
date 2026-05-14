@@ -1,4 +1,4 @@
-import type { CreateVoiceJobRequest, VoiceJob } from "./types";
+import type { CreateVoiceJobRequest, Voice, VoiceJob } from "./types";
 
 // Vite rewrites direct import.meta.env access during dev and build.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -18,6 +18,33 @@ export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<Vo
   }
 
   return response.json() as Promise<VoiceJob>;
+}
+
+export async function listVoices(): Promise<Voice[]> {
+  const response = await fetch(`${apiBaseUrl}/api/voices`);
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<Voice[]>;
+}
+
+export async function uploadVoice(name: string, file: File): Promise<Voice> {
+  const formData = new FormData();
+  formData.set("name", name);
+  formData.set("file", file);
+
+  const response = await fetch(`${apiBaseUrl}/api/voices`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<Voice>;
 }
 
 export async function getVoiceJob(id: string): Promise<VoiceJob> {
@@ -64,7 +91,9 @@ export function subscribeToVoiceJob(
 }
 
 export function audioSource(job: VoiceJob): string {
-  const version = encodeURIComponent(job.completedAt ?? job.updatedAt);
+  const version = encodeURIComponent(
+    job.completedAt ?? `${job.durationMs.toString()}-${job.retries.completedSegments.toString()}`,
+  );
   const separator = job.audioUrl.includes("?") ? "&" : "?";
 
   return `${apiBaseUrl}${job.audioUrl}${separator}v=${version}`;

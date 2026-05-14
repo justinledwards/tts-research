@@ -64,6 +64,11 @@ func main() {
 		logger.Error("invalid pipeline configuration", "error", err)
 		os.Exit(1)
 	}
+	ttsWorkerCount, err := envIntWithDefault("TTS_WORKER_COUNT", 2)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
 
 	service := pipeline.NewService(
 		optimizer,
@@ -72,7 +77,10 @@ func main() {
 		pipeline.Options{
 			MaxRetries:      3,
 			SegmentMaxRunes: segmentMaxRunes,
+			TTSWorkerCount:  ttsWorkerCount,
 			JobDataDir:      envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
+			VoiceDataDir:    envWithDefault("VOICE_DATA_DIR", "./data/voices"),
+			FFMPEGPath:      envWithDefault("FFMPEG_PATH", "ffmpeg"),
 		},
 	)
 
@@ -178,7 +186,7 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 			return nil, err
 		}
 
-		return agents.NewKokoroTTSAgent(agents.KokoroConfig{
+		kokoroAgent := agents.NewKokoroTTSAgent(agents.KokoroConfig{
 			PythonPath:     envWithDefault("KOKORO_PYTHON_PATH", "./.venv/bin/python"),
 			ScriptPath:     envWithDefault("KOKORO_SCRIPT_PATH", "./scripts/kokoro_synth.py"),
 			DataDir:        envWithDefault("KOKORO_DATA_DIR", "./data/kokoro"),
@@ -187,7 +195,23 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 			Speed:          speed,
 			Device:         envWithDefault("KOKORO_DEVICE", "cpu"),
 			TimeoutSeconds: timeout,
-		}), nil
+		})
+
+		kokocloneTimeout, err := envIntWithDefault("KOKOCLONE_TIMEOUT_SECONDS", 600)
+		if err != nil {
+			return nil, err
+		}
+		kokocloneAgent := agents.NewKokoCloneTTSAgent(agents.KokoCloneConfig{
+			PythonPath:     envWithDefault("KOKOCLONE_PYTHON_PATH", envWithDefault("KOKORO_PYTHON_PATH", "./.venv/bin/python")),
+			ScriptPath:     envWithDefault("KOKOCLONE_SCRIPT_PATH", "./scripts/kokoclone_synth.py"),
+			DataDir:        envWithDefault("KOKOCLONE_DATA_DIR", "./data/kokoclone"),
+			RepoDir:        envWithDefault("KOKOCLONE_REPO_DIR", "./data/kokoclone/repo"),
+			RuntimeDir:     envWithDefault("KOKOCLONE_RUNTIME_DIR", "./data/kokoclone/runtime"),
+			LangCode:       envWithDefault("KOKOCLONE_LANG_CODE", "en"),
+			TimeoutSeconds: kokocloneTimeout,
+		})
+
+		return agents.NewSelectableTTSAgent(kokoroAgent, kokocloneAgent), nil
 	case "mock":
 		return agents.NewMockTTSAgent(), nil
 	default:

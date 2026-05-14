@@ -109,3 +109,11 @@
 - [x] Record completion or failing segment details
 - [x] Apply follow-up fixes if the exact prompt still fails
 - [x] Re-run the exact prompt on the follow-up fix
+
+## 2026-05-14 12:32 EDT - Voice Selection And Clone Streaming
+- [x] Inspect current voice pipeline and frontend playback flow
+- [x] Review Kokoclone requirements and local integration points
+- [x] Add voice listing, upload, extraction, and clone registration API
+- [x] Add parallel segment workers with progressive audio availability
+- [x] Add frontend voice selection, clone upload, and streaming playback UI
+- [x] Run checks and verify the flow

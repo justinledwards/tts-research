@@ -1,23 +1,35 @@
-import { useEffect, useMemo, useState } from "react";
-import { audioSource, createVoiceJob, subscribeToVoiceJob } from "./api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { audioSource, createVoiceJob, listVoices, subscribeToVoiceJob, uploadVoice } from "./api";
 import { formatDuration } from "./format";
-import type { StageStatus, VoiceJob } from "./types";
+import type { StageStatus, Voice, VoiceJob } from "./types";
 
 const sampleText =
   'CPU usage is 92%, memory equals 4GB, and request latency is p95 = 280ms. ```go\nfmt.Println("hello")\n```';
 
 type RequestState = "idle" | "running" | "complete" | "error";
+type UploadState = "idle" | "uploading" | "error";
 
 export function App() {
   const [text, setText] = useState(sampleText);
   const [job, setJob] = useState<VoiceJob | null>(null);
+  const [voices, setVoices] = useState<Voice[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState("");
+  const [voiceName, setVoiceName] = useState("");
+  const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [requestState, setRequestState] = useState<RequestState>("idle");
+  const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const isProcessing = requestState === "running";
+  const isUploading = uploadState === "uploading";
   const canSubmit = useMemo(() => text.trim().length > 0 && !isProcessing, [text, isProcessing]);
-  const audioJob = job?.status === "completed" && job.audioUrl ? job : null;
+  const canUploadVoice = useMemo(
+    () => voiceFile !== null && !isUploading,
+    [voiceFile, isUploading],
+  );
+  const audioJob = job?.audioUrl ? job : null;
   const activeJobId = job && job.status !== "completed" && job.status !== "failed" ? job.id : null;
 
   useEffect(() => {
@@ -70,17 +82,56 @@ export function App() {
     void submitVoiceJob();
   }
 
+  const refreshVoices = useCallback(async () => {
+    try {
+      const nextVoices = await listVoices();
+      setVoices(nextVoices);
+    } catch (caughtError) {
+      setVoiceError(caughtError instanceof Error ? caughtError.message : "Unable to load voices");
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshVoices();
+  }, [refreshVoices]);
+
+  useEffect(() => {
+    if (selectedVoiceId || voices.length === 0) {
+      return;
+    }
+
+    setSelectedVoiceId(voices[0]?.id ?? "");
+  }, [selectedVoiceId, voices]);
+
   async function submitVoiceJob() {
     setRequestState("running");
     setError(null);
 
     try {
-      const nextJob = await createVoiceJob({ text });
+      const nextJob = await createVoiceJob({ text, voiceId: selectedVoiceId || undefined });
       setJob(nextJob);
       setRequestState(nextJob.status === "completed" ? "complete" : "running");
     } catch (caughtError) {
       setRequestState("error");
       setError(caughtError instanceof Error ? caughtError.message : "Unable to create voice job");
+    }
+  }
+
+  async function submitVoiceUpload(file: File) {
+    setUploadState("uploading");
+    setVoiceError(null);
+
+    try {
+      const uploadedVoice = await uploadVoice(voiceName, file);
+      const nextVoices = await listVoices();
+      setVoices(nextVoices);
+      setSelectedVoiceId(uploadedVoice.id);
+      setVoiceName("");
+      setVoiceFile(null);
+      setUploadState("idle");
+    } catch (caughtError) {
+      setUploadState("error");
+      setVoiceError(caughtError instanceof Error ? caughtError.message : "Unable to upload voice");
     }
   }
 
@@ -100,7 +151,7 @@ export function App() {
             <StatusBadge state={requestState} />
           </header>
 
-          <form className="grid flex-1 grid-rows-[1fr_auto] gap-5 py-6" onSubmit={handleSubmit}>
+          <form className="grid flex-1 gap-5 py-6" onSubmit={handleSubmit}>
             <label className="flex min-h-[320px] flex-col gap-3">
               <span className="text-sm font-medium text-zinc-700">Source text</span>
               <textarea
@@ -115,6 +166,72 @@ export function App() {
                 spellCheck={false}
               />
             </label>
+
+            <section className="grid items-start gap-4 border-t border-zinc-200 pt-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+              <label className="grid gap-2 self-start">
+                <span className="text-sm font-medium text-zinc-700">Voice</span>
+                <select
+                  className="min-h-11 border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-emerald-500/20"
+                  disabled={isProcessing || voices.length === 0}
+                  onChange={(event) => {
+                    setSelectedVoiceId(event.target.value);
+                  }}
+                  value={selectedVoiceId}
+                >
+                  {voices.map((voice) => (
+                    <option key={voice.id} value={voice.id}>
+                      {voice.kind === "clone" ? "Clone" : "Kokoro"}: {voice.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="grid gap-3">
+                <div className="grid gap-2">
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium text-zinc-700">Clone name</span>
+                    <input
+                      className="min-h-11 border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-emerald-500/20"
+                      onChange={(event) => {
+                        setVoiceName(event.target.value);
+                      }}
+                      placeholder="Reference voice"
+                      type="text"
+                      value={voiceName}
+                    />
+                  </label>
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium text-zinc-700">Audio or video</span>
+                    <input
+                      accept="audio/*,video/*"
+                      className="min-h-11 border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none file:mr-3 file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
+                      onChange={(event) => {
+                        setVoiceFile(event.target.files?.[0] ?? null);
+                      }}
+                      type="file"
+                    />
+                  </label>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs leading-5 text-zinc-500">
+                    Upload a short clip; video files are converted to a mono WAV reference.
+                  </p>
+                  <button
+                    className="inline-flex min-h-10 shrink-0 items-center justify-center border border-zinc-300 px-4 text-sm font-semibold text-zinc-800 transition hover:border-zinc-950 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:text-zinc-400"
+                    disabled={!canUploadVoice}
+                    onClick={() => {
+                      if (voiceFile) {
+                        void submitVoiceUpload(voiceFile);
+                      }
+                    }}
+                    type="button"
+                  >
+                    {isUploading ? "Adding..." : "Add clone"}
+                  </button>
+                </div>
+                {voiceError ? <p className="text-sm leading-6 text-red-700">{voiceError}</p> : null}
+              </div>
+            </section>
 
             <div className="flex flex-col gap-3 border-t border-zinc-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-zinc-600">
@@ -196,20 +313,24 @@ function AudioPanel({
   if (audioJob) {
     return (
       <>
-        <audio className="w-full" controls src={audioSource(audioJob)}>
-          <track kind="captions" />
-        </audio>
+        <ProgressiveAudio job={audioJob} />
         <dl className="grid grid-cols-2 gap-3 text-sm">
           <Metric label="Duration" value={formatDuration(audioJob.durationMs)} />
           <Metric label="Attempts" value={formatAttempts(audioJob)} />
-          <Metric label="Segment" value={formatSegment(audioJob)} />
+          <Metric label="Ready" value={formatReadySegments(audioJob)} />
           <Metric label="Optimizer" value={audioJob.optimizer} />
           <Metric label="TTS" value={audioJob.provider} />
           <Metric label="Voice" value={audioJob.voice} />
+          <Metric label="Workers" value={formatWorkers(audioJob)} />
           <Metric label="ASR" value={audioJob.voiceCheck.provider || "waiting"} />
           <Metric label="Similarity" value={formatSimilarity(audioJob.voiceCheck.similarity)} />
           {audioJob.audioPath ? <Metric label="Saved" value={audioJob.audioPath} /> : null}
         </dl>
+        {audioJob.status === "completed" ? null : (
+          <p className="text-sm leading-6 text-zinc-600">
+            Playback uses the verified contiguous segments that are ready so far.
+          </p>
+        )}
       </>
     );
   }
@@ -227,6 +348,44 @@ function AudioPanel({
   }
 
   return <p className="text-sm text-zinc-600">No audio generated yet.</p>;
+}
+
+function ProgressiveAudio({ job }: Readonly<{ job: VoiceJob }>) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [source, setSource] = useState(() => audioSource(job));
+  const restoreTimeRef = useRef(0);
+  const shouldResumeRef = useRef(false);
+
+  useEffect(() => {
+    const nextSource = audioSource(job);
+    const audio = audioRef.current;
+    restoreTimeRef.current = audio?.currentTime ?? 0;
+    shouldResumeRef.current = audio ? !audio.paused && !audio.ended : false;
+    setSource(nextSource);
+  }, [job]);
+
+  return (
+    <audio
+      className="w-full"
+      controls
+      onLoadedMetadata={() => {
+        const audio = audioRef.current;
+        if (!audio) {
+          return;
+        }
+        if (restoreTimeRef.current > 0 && Number.isFinite(audio.duration)) {
+          audio.currentTime = Math.min(restoreTimeRef.current, Math.max(audio.duration - 0.25, 0));
+        }
+        if (shouldResumeRef.current) {
+          void audio.play().catch(() => false);
+        }
+      }}
+      ref={audioRef}
+      src={source}
+    >
+      <track kind="captions" />
+    </audio>
+  );
 }
 
 function ProgressPanel({ job, now }: Readonly<{ job: VoiceJob; now: number }>) {
@@ -247,6 +406,8 @@ function ProgressPanel({ job, now }: Readonly<{ job: VoiceJob; now: number }>) {
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <Metric label="Elapsed" value={formatElapsed(job.progress.startedAt, now)} />
         <Metric label="Current segment" value={formatSegment(job)} />
+        <Metric label="Ready" value={formatReadySegments(job)} />
+        <Metric label="Workers" value={formatWorkers(job)} />
       </dl>
     </section>
   );
@@ -321,6 +482,25 @@ function formatSegment(job: VoiceJob): string {
     job.retries.totalSegments > 0 ? job.retries.totalSegments : (job.progress.totalSegments ?? 0);
   if (current > 0 && total > 0) {
     return `${String(current)}/${String(total)}`;
+  }
+
+  return "waiting";
+}
+
+function formatReadySegments(job: VoiceJob): string {
+  const ready = job.retries.completedSegments;
+  const total =
+    job.retries.totalSegments > 0 ? job.retries.totalSegments : (job.progress.totalSegments ?? 0);
+  if (ready > 0 && total > 0) {
+    return `${String(ready)}/${String(total)}`;
+  }
+
+  return formatSegment(job);
+}
+
+function formatWorkers(job: VoiceJob): string {
+  if (job.retries.workerCount > 0) {
+    return String(job.retries.workerCount);
   }
 
   return "waiting";

@@ -11,6 +11,21 @@ export type StageStatus = "waiting" | "running" | "done" | "failed";
 
 export interface CreateVoiceJobRequest {
   text: string;
+  voiceId?: string;
+}
+
+export type VoiceKind = "native" | "clone";
+
+export interface Voice {
+  id: string;
+  name: string;
+  kind: VoiceKind;
+  provider: string;
+  langCode: string;
+  referenceAudioUrl?: string;
+  referenceAudioPath?: string;
+  sourceFilename?: string;
+  createdAt: string;
 }
 
 export interface RetryMetadata {
@@ -19,6 +34,8 @@ export interface RetryMetadata {
   segmentAttempts: number;
   currentSegment: number;
   totalSegments: number;
+  completedSegments: number;
+  workerCount: number;
 }
 
 export interface PipelineStages {
@@ -58,6 +75,7 @@ export interface VoiceJob {
   contentType: string;
   durationMs: number;
   provider: string;
+  voiceId: string;
   voice: string;
   retries: RetryMetadata;
   voiceCheck: VoiceCheck;

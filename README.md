@@ -40,10 +40,13 @@ pnpm check
 4. The pipeline retries bounded cutoff recovery work when audio appears incomplete.
 
 Long optimized text is split into smaller synthesis/checking segments with `VOICE_SEGMENT_MAX_RUNES`, which defaults to `220`.
+The backend runs up to `TTS_WORKER_COUNT=2` synthesis workers by default and publishes contiguous verified audio as soon as it is ready, so playback can begin before the whole job completes.
 The frontend subscribes to `GET /api/voice-jobs/:id/events` for server-sent progress updates while each segment runs.
 Completed job audio is saved as `audio.wav` under `backend/data/jobs/<job-id>/` by default, with `metadata.json` next to it.
 
 Kokoro synthesis uses `hexgrad/Kokoro-82M` through the Python `kokoro` package.
+Built-in Kokoro voices and uploaded KokoClone reference voices are exposed through `GET /api/voices`.
+Clone uploads use `POST /api/voices` with an audio or video file; `ffmpeg` extracts the first audio stream and writes a mono 24 kHz PCM WAV reference under `backend/data/voices/`.
 Local voice optimization uses `prism-ml/Bonsai-8B-mlx-1bit` through MLX and streams partial rewritten text into the job state.
 Local ASR checking uses `Qwen/Qwen3-ASR-1.7B` through the Python `qwen-asr` package.
 The mock TTS path still generates silent WAV data so tests and fallback development work without model downloads.
@@ -66,6 +69,18 @@ xcodebuild -downloadComponent metalToolchain
 ```
 
 Use `VOICE_OPTIMIZER_PROVIDER=rules` to force the simple local rules optimizer, or `VOICE_OPTIMIZER_PROVIDER=openrouter` to use OpenRouter explicitly when `OPENROUTER_API_KEY` is set.
+
+## Voices And Cloning
+
+The voice picker includes built-in Kokoro voices plus local cloned voices. Uploaded clone clips are converted with `ffmpeg`, stored locally, and used as KokoClone reference audio when that voice is selected.
+
+```sh
+export TTS_WORKER_COUNT=2
+export VOICE_DATA_DIR=./data/voices
+export KOKOCLONE_REPO_DIR=./data/kokoclone/repo
+```
+
+`pnpm start` clones `Ashish-Patnaik/kokoclone` into `backend/data/kokoclone/repo` when needed and installs the extra Python dependencies into the backend virtual environment.
 
 ## Voice Checking
 

@@ -23,17 +23,29 @@ type TTSResult struct {
 	Voice       string
 }
 
+type SynthesisRequest struct {
+	Text               string
+	Voice              string
+	LangCode           string
+	Speed              float64
+	ReferenceAudioPath string
+}
+
 type MockTTSAgent struct{}
 
 func NewMockTTSAgent() *MockTTSAgent {
 	return &MockTTSAgent{}
 }
 
-func (agent *MockTTSAgent) Synthesize(_ context.Context, text string) (TTSResult, error) {
-	durationMS := audio.DurationForText(text)
+func (agent *MockTTSAgent) Synthesize(_ context.Context, request SynthesisRequest) (TTSResult, error) {
+	durationMS := audio.DurationForText(request.Text)
 	wav, err := audio.SilentWAV(durationMS)
 	if err != nil {
 		return TTSResult{}, err
+	}
+	voice := strings.TrimSpace(request.Voice)
+	if voice == "" {
+		voice = "silent"
 	}
 
 	return TTSResult{
@@ -41,7 +53,7 @@ func (agent *MockTTSAgent) Synthesize(_ context.Context, text string) (TTSResult
 		ContentType: "audio/wav",
 		DurationMS:  durationMS,
 		Provider:    "mock",
-		Voice:       "silent",
+		Voice:       voice,
 	}, nil
 }
 
@@ -58,6 +70,25 @@ type KokoroConfig struct {
 
 type KokoroTTSAgent struct {
 	config KokoroConfig
+}
+
+type KokoCloneConfig struct {
+	PythonPath     string
+	ScriptPath     string
+	DataDir        string
+	RepoDir        string
+	RuntimeDir     string
+	LangCode       string
+	TimeoutSeconds int
+}
+
+type KokoCloneTTSAgent struct {
+	config KokoCloneConfig
+}
+
+type SelectableTTSAgent struct {
+	kokoro    *KokoroTTSAgent
+	kokoclone *KokoCloneTTSAgent
 }
 
 type kokoroMetadata struct {
@@ -100,8 +131,68 @@ func NewKokoroTTSAgent(config KokoroConfig) *KokoroTTSAgent {
 	return &KokoroTTSAgent{config: config}
 }
 
-func (agent *KokoroTTSAgent) Synthesize(ctx context.Context, text string) (TTSResult, error) {
+func NewKokoCloneTTSAgent(config KokoCloneConfig) *KokoCloneTTSAgent {
+	if config.PythonPath == "" {
+		config.PythonPath = "./.venv/bin/python"
+	}
+	if config.ScriptPath == "" {
+		config.ScriptPath = "./scripts/kokoclone_synth.py"
+	}
+	if config.DataDir == "" {
+		config.DataDir = "./data/kokoclone"
+	}
+	if config.RepoDir == "" {
+		config.RepoDir = "./data/kokoclone/repo"
+	}
+	if config.RuntimeDir == "" {
+		config.RuntimeDir = "./data/kokoclone/runtime"
+	}
+	if config.LangCode == "" {
+		config.LangCode = "en"
+	}
+	if config.TimeoutSeconds <= 0 {
+		config.TimeoutSeconds = 600
+	}
+
+	return &KokoCloneTTSAgent{config: config}
+}
+
+func NewSelectableTTSAgent(kokoro *KokoroTTSAgent, kokoclone *KokoCloneTTSAgent) *SelectableTTSAgent {
+	return &SelectableTTSAgent{kokoro: kokoro, kokoclone: kokoclone}
+}
+
+func (agent *SelectableTTSAgent) Synthesize(ctx context.Context, request SynthesisRequest) (TTSResult, error) {
+	if strings.TrimSpace(request.ReferenceAudioPath) != "" {
+		if agent.kokoclone == nil {
+			return TTSResult{}, errors.New("kokoclone is not configured")
+		}
+
+		return agent.kokoclone.Synthesize(ctx, request)
+	}
+
+	if agent.kokoro == nil {
+		return TTSResult{}, errors.New("kokoro is not configured")
+	}
+
+	return agent.kokoro.Synthesize(ctx, request)
+}
+
+func (agent *KokoroTTSAgent) Synthesize(ctx context.Context, request SynthesisRequest) (TTSResult, error) {
 	config := agent.config
+	text := strings.TrimSpace(request.Text)
+	if text == "" {
+		return TTSResult{}, errors.New("synthesis text is empty")
+	}
+	if voice := strings.TrimSpace(request.Voice); voice != "" {
+		config.Voice = voice
+	}
+	if langCode := strings.TrimSpace(request.LangCode); langCode != "" {
+		config.LangCode = langCode
+	}
+	if request.Speed > 0 {
+		config.Speed = request.Speed
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.TimeoutSeconds)*time.Second)
 	defer cancel()
 
@@ -162,6 +253,98 @@ func (agent *KokoroTTSAgent) Synthesize(ctx context.Context, text string) (TTSRe
 	wav, err := os.ReadFile(outputPath)
 	if err != nil {
 		return TTSResult{}, fmt.Errorf("read kokoro output: %w", err)
+	}
+
+	return TTSResult{
+		Audio:       wav,
+		ContentType: "audio/wav",
+		DurationMS:  metadata.DurationMS,
+		Provider:    metadata.Provider,
+		Voice:       metadata.Voice,
+	}, nil
+}
+
+func (agent *KokoCloneTTSAgent) Synthesize(ctx context.Context, request SynthesisRequest) (TTSResult, error) {
+	config := agent.config
+	text := strings.TrimSpace(request.Text)
+	if text == "" {
+		return TTSResult{}, errors.New("synthesis text is empty")
+	}
+	referenceAudioPath := strings.TrimSpace(request.ReferenceAudioPath)
+	if referenceAudioPath == "" {
+		return TTSResult{}, errors.New("kokoclone reference audio is required")
+	}
+	langCode := strings.TrimSpace(request.LangCode)
+	if langCode == "" {
+		langCode = config.LangCode
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.TimeoutSeconds)*time.Second)
+	defer cancel()
+
+	if err := os.MkdirAll(config.DataDir, 0o755); err != nil {
+		return TTSResult{}, fmt.Errorf("create kokoclone data dir: %w", err)
+	}
+	if err := os.MkdirAll(config.RuntimeDir, 0o755); err != nil {
+		return TTSResult{}, fmt.Errorf("create kokoclone runtime dir: %w", err)
+	}
+
+	workDir, err := os.MkdirTemp(config.DataDir, "clone-synth-*")
+	if err != nil {
+		return TTSResult{}, fmt.Errorf("create kokoclone work dir: %w", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(workDir)
+	}()
+
+	textPath := filepath.Join(workDir, "input.txt")
+	outputPath := filepath.Join(workDir, "output.wav")
+	if err := os.WriteFile(textPath, []byte(text), 0o600); err != nil {
+		return TTSResult{}, fmt.Errorf("write kokoclone input: %w", err)
+	}
+
+	command := exec.CommandContext(
+		ctx,
+		config.PythonPath,
+		config.ScriptPath,
+		"--text-file",
+		textPath,
+		"--output",
+		outputPath,
+		"--reference-audio",
+		referenceAudioPath,
+		"--lang",
+		langCode,
+		"--repo-dir",
+		config.RepoDir,
+		"--runtime-dir",
+		config.RuntimeDir,
+	)
+	if voice := strings.TrimSpace(request.Voice); voice != "" {
+		command.Args = append(command.Args, "--voice-name", voice)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+
+	if err := command.Run(); err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return TTSResult{}, fmt.Errorf("kokoclone synthesis timed out after %d seconds", config.TimeoutSeconds)
+		}
+
+		return TTSResult{}, fmt.Errorf("kokoclone synthesis failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+
+	metadata, err := parseKokoroMetadata(stdout.String())
+	if err != nil {
+		return TTSResult{}, err
+	}
+
+	wav, err := os.ReadFile(outputPath)
+	if err != nil {
+		return TTSResult{}, fmt.Errorf("read kokoclone output: %w", err)
 	}
 
 	return TTSResult{

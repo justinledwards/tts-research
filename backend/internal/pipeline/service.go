@@ -20,6 +20,8 @@ import (
 var (
 	ErrEmptyText     = errors.New("text is required")
 	ErrJobNotFound   = errors.New("voice job not found")
+	ErrVoiceNotFound = errors.New("voice not found")
+	ErrInvalidVoice  = errors.New("voice upload is invalid")
 	ErrAudioNotReady = errors.New("voice job audio is not ready")
 	ErrRetryExhaust  = errors.New("voice checker did not confirm complete audio before retry limit")
 )
@@ -37,7 +39,7 @@ type namedVoiceOptimizer interface {
 }
 
 type TTSAgent interface {
-	Synthesize(context.Context, string) (agents.TTSResult, error)
+	Synthesize(context.Context, agents.SynthesisRequest) (agents.TTSResult, error)
 }
 
 type VoiceChecker interface {
@@ -47,12 +49,18 @@ type VoiceChecker interface {
 type Options struct {
 	MaxRetries      int
 	SegmentMaxRunes int
+	TTSWorkerCount  int
 	JobDataDir      string
+	VoiceDataDir    string
+	FFMPEGPath      string
 }
 
 const (
 	defaultSegmentMaxRunes = 220
+	defaultTTSWorkerCount  = 2
 	defaultJobDataDir      = "./data/jobs"
+	defaultVoiceDataDir    = "./data/voices"
+	defaultFFMPEGPath      = "ffmpeg"
 )
 
 type Service struct {
@@ -62,6 +70,7 @@ type Service struct {
 	options   Options
 	mu        sync.RWMutex
 	jobs      map[string]storedJob
+	voices    map[string]Voice
 }
 
 func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, options Options) *Service {
@@ -71,23 +80,41 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if options.SegmentMaxRunes <= 0 {
 		options.SegmentMaxRunes = defaultSegmentMaxRunes
 	}
+	if options.TTSWorkerCount <= 0 {
+		options.TTSWorkerCount = defaultTTSWorkerCount
+	}
 	if strings.TrimSpace(options.JobDataDir) == "" {
 		options.JobDataDir = defaultJobDataDir
 	}
+	if strings.TrimSpace(options.VoiceDataDir) == "" {
+		options.VoiceDataDir = defaultVoiceDataDir
+	}
+	if strings.TrimSpace(options.FFMPEGPath) == "" {
+		options.FFMPEGPath = defaultFFMPEGPath
+	}
 
-	return &Service{
+	service := &Service{
 		optimizer: optimizer,
 		tts:       tts,
 		checker:   checker,
 		options:   options,
 		jobs:      map[string]storedJob{},
+		voices:    map[string]Voice{},
 	}
+	service.loadCloneVoices()
+
+	return service
 }
 
-func (service *Service) CreateJob(_ context.Context, text string) (VoiceJob, error) {
+func (service *Service) CreateJob(_ context.Context, request CreateJobRequest) (VoiceJob, error) {
+	text := request.Text
 	inputText := strings.TrimSpace(text)
 	if inputText == "" {
 		return VoiceJob{}, ErrEmptyText
+	}
+	voice, err := service.ResolveVoice(request.VoiceID)
+	if err != nil {
+		return VoiceJob{}, err
 	}
 
 	now := time.Now().UTC()
@@ -97,6 +124,8 @@ func (service *Service) CreateJob(_ context.Context, text string) (VoiceJob, err
 			Status:    JobStatusQueued,
 			Stages:    initialStages(),
 			InputText: inputText,
+			VoiceID:   voice.ID,
+			Voice:     voice.Name,
 			Retries: RetryMetadata{
 				MaxRetries: service.options.MaxRetries,
 				Attempts:   0,
@@ -182,12 +211,19 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		setProgress(job, string(JobStatusSynthesizing), "Preparing synthesis segments", fmt.Sprintf("%d optimized characters ready.", len([]rune(optimizedText))), 0, 0)
 	})
 
-	result, check, err := service.synthesizeUntilComplete(ctx, id, optimizedText)
+	voice, err := service.ResolveVoice(job.VoiceID)
+	if err != nil {
+		service.failJobByID(id, err)
+		return
+	}
+
+	result, check, err := service.synthesizeUntilComplete(ctx, id, optimizedText, voice)
 	if err != nil {
 		service.updateJob(id, func(job *storedJob) {
 			job.ContentType = result.ContentType
 			job.DurationMS = result.DurationMS
 			job.Provider = result.Provider
+			job.VoiceID = voice.ID
 			job.Voice = result.Voice
 			job.audio = result.Audio
 			job.VoiceCheck = toVoiceCheck(check)
@@ -217,6 +253,7 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		job.ContentType = result.ContentType
 		job.DurationMS = result.DurationMS
 		job.Provider = result.Provider
+		job.VoiceID = voice.ID
 		job.Voice = result.Voice
 		job.VoiceCheck = toVoiceCheck(check)
 		job.audio = result.Audio
@@ -262,7 +299,23 @@ func (service *Service) optimizeText(ctx context.Context, id string, inputText s
 	return strings.TrimSpace(optimizedText), nil
 }
 
-func (service *Service) synthesizeUntilComplete(ctx context.Context, id string, optimizedText string) (agents.TTSResult, agents.VoiceCheckResult, error) {
+type segmentWork struct {
+	index int
+	text  string
+}
+
+type segmentResult struct {
+	index       int
+	audio       []byte
+	contentType string
+	durationMS  int
+	provider    string
+	voice       string
+	check       agents.VoiceCheckResult
+	err         error
+}
+
+func (service *Service) synthesizeUntilComplete(ctx context.Context, id string, optimizedText string, voice Voice) (agents.TTSResult, agents.VoiceCheckResult, error) {
 	var mergedResult agents.TTSResult
 	var lastCheck agents.VoiceCheckResult
 	segments := splitTextSegments(optimizedText, service.options.SegmentMaxRunes)
@@ -271,178 +324,283 @@ func (service *Service) synthesizeUntilComplete(ctx context.Context, id string, 
 	similarities := make([]float64, 0, len(segments))
 	totalDurationMS := 0
 	totalAttempts := 0
+	workerCount := minInt(service.options.TTSWorkerCount, len(segments))
+	if workerCount <= 0 {
+		workerCount = 1
+	}
+	var attemptMu sync.Mutex
+	nextAttempt := func() int {
+		attemptMu.Lock()
+		defer attemptMu.Unlock()
+		totalAttempts++
+
+		return totalAttempts
+	}
 
 	service.updateJob(id, func(job *storedJob) {
 		job.Retries.TotalSegments = len(segments)
-		setProgress(job, string(JobStatusSynthesizing), "Starting segmented synthesis", fmt.Sprintf("%d segments will be synthesized and checked.", len(segments)), 0, len(segments))
+		job.Retries.WorkerCount = workerCount
+		setProgress(job, string(JobStatusSynthesizing), "Starting segmented synthesis", fmt.Sprintf("%d segments will be synthesized and checked with %d workers.", len(segments), workerCount), 0, len(segments))
 	})
 
-	for segmentIndex, expectedSegment := range segments {
-		segmentNumber := segmentIndex + 1
-		resumeText := expectedSegment
-		committedSegmentChunks := make([][]byte, 0, service.options.MaxRetries)
-		committedSegmentDurationMS := 0
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-		for attempt := 1; attempt <= service.options.MaxRetries; attempt++ {
-			totalAttempts++
-			service.updateJob(id, func(job *storedJob) {
-				job.Status = JobStatusSynthesizing
-				if attempt > 1 {
-					job.Status = JobStatusRetrying
-				}
-				job.Stages.Synthesis = StageStatusRunning
-				job.Stages.Checker = StageStatusWaiting
-				job.Retries.Attempts = totalAttempts
-				job.Retries.SegmentAttempts = attempt
-				job.Retries.CurrentSegment = segmentNumber
-				job.Retries.TotalSegments = len(segments)
-				setProgress(
-					job,
-					string(job.Status),
-					fmt.Sprintf("Synthesizing segment %d of %d", segmentNumber, len(segments)),
-					fmt.Sprintf("Attempt %d of %d for this segment; %d characters in this pass.", attempt, service.options.MaxRetries, len([]rune(resumeText))),
-					segmentNumber,
-					len(segments),
-				)
-			})
+	workCh := make(chan segmentWork)
+	resultCh := make(chan segmentResult, len(segments))
+	var workerWG sync.WaitGroup
+	for workerIndex := 0; workerIndex < workerCount; workerIndex++ {
+		workerWG.Add(1)
+		go func() {
+			defer workerWG.Done()
+			for work := range workCh {
+				resultCh <- service.synthesizeSegment(ctx, id, work.index, len(segments), work.text, voice, nextAttempt)
+			}
+		}()
+	}
+	go func() {
+		defer close(workCh)
+		for index, segment := range segments {
+			select {
+			case workCh <- segmentWork{index: index, text: segment}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
-			result, err := service.tts.Synthesize(ctx, resumeText)
-			if err != nil {
-				return mergedResult, lastCheck, fmt.Errorf("synthesize text: %w", err)
+	results := make([]segmentResult, len(segments))
+	received := make([]bool, len(segments))
+	nextCommitIndex := 0
+	for completedResults := 0; completedResults < len(segments); completedResults++ {
+		result := <-resultCh
+		if result.err != nil {
+			cancel()
+			workerWG.Wait()
+			if result.check.Provider != "" || result.check.Reason != "" {
+				lastCheck = result.check
 			}
 
-			candidateSegmentChunks := appendCopy(committedSegmentChunks, result.Audio)
-			candidateAudioSegments := appendCopy(audioSegments, candidateSegmentChunks...)
-			candidateDurationMS := totalDurationMS + committedSegmentDurationMS + result.DurationMS
-			mergedAudio, _, err := audio.ConcatWAV(candidateAudioSegments)
+			return mergedResult, lastCheck, result.err
+		}
+
+		results[result.index] = result
+		received[result.index] = true
+		for nextCommitIndex < len(segments) && received[nextCommitIndex] {
+			ready := results[nextCommitIndex]
+			audioSegments = append(audioSegments, ready.audio)
+			totalDurationMS += ready.durationMS
+			lastCheck = ready.check
+			transcripts = append(transcripts, ready.check.Transcript)
+			similarities = append(similarities, ready.check.Similarity)
+			mergedAudio, _, err := audio.ConcatWAV(audioSegments)
 			if err != nil {
-				return mergedResult, lastCheck, fmt.Errorf("merge synthesized audio: %w", err)
+				cancel()
+				workerWG.Wait()
+				return mergedResult, lastCheck, fmt.Errorf("merge playable audio: %w", err)
 			}
-			segmentAudio, _, err := audio.ConcatWAV(candidateSegmentChunks)
-			if err != nil {
-				return mergedResult, lastCheck, fmt.Errorf("merge segment audio: %w", err)
-			}
+
 			mergedResult = agents.TTSResult{
 				Audio:       mergedAudio,
-				ContentType: result.ContentType,
-				DurationMS:  candidateDurationMS,
-				Provider:    result.Provider,
-				Voice:       result.Voice,
+				ContentType: ready.contentType,
+				DurationMS:  totalDurationMS,
+				Provider:    ready.provider,
+				Voice:       ready.voice,
 			}
-
+			nextCommitIndex++
+			committedSegments := nextCommitIndex
+			committedCheck := aggregateVoiceCheck(transcripts, similarities, lastCheck.Provider)
 			service.updateJob(id, func(job *storedJob) {
-				job.Stages.Synthesis = StageStatusDone
-				job.Status = JobStatusChecking
+				job.Status = JobStatusSynthesizing
+				job.Stages.Synthesis = StageStatusRunning
 				job.Stages.Checker = StageStatusRunning
+				job.AudioURL = fmt.Sprintf("/api/voice-jobs/%s/audio", job.ID)
 				job.ContentType = mergedResult.ContentType
 				job.DurationMS = mergedResult.DurationMS
 				job.Provider = mergedResult.Provider
+				job.VoiceID = voice.ID
 				job.Voice = mergedResult.Voice
+				job.audio = mergedResult.Audio
+				job.VoiceCheck = toVoiceCheck(committedCheck)
+				job.Retries.CompletedSegments = committedSegments
 				setProgress(
 					job,
-					string(JobStatusChecking),
-					fmt.Sprintf("Checking segment %d of %d", segmentNumber, len(segments)),
-					fmt.Sprintf("Qwen ASR is checking %s of generated audio. Longer segments can take several minutes on CPU.", formatMilliseconds(result.DurationMS)),
-					segmentNumber,
+					string(JobStatusSynthesizing),
+					fmt.Sprintf("Segment %d of %d ready", committedSegments, len(segments)),
+					"Verified audio is playable while remaining segments continue.",
+					committedSegments,
 					len(segments),
 				)
 			})
-
-			check, err := service.checker.Check(ctx, expectedSegment, segmentAudio)
-			if err != nil {
-				return mergedResult, lastCheck, fmt.Errorf("check audio: %w", err)
-			}
-			lastCheck = check
-
-			service.updateJob(id, func(job *storedJob) {
-				job.VoiceCheck = toVoiceCheck(check)
-				setProgress(
-					job,
-					string(JobStatusChecking),
-					fmt.Sprintf("Checked segment %d of %d", segmentNumber, len(segments)),
-					check.Reason,
-					segmentNumber,
-					len(segments),
-				)
-			})
-
-			if check.Complete {
-				audioSegments = candidateAudioSegments
-				totalDurationMS = candidateDurationMS
-				transcripts = append(transcripts, check.Transcript)
-				similarities = append(similarities, check.Similarity)
-				break
-			}
-
-			if check.NeedsResume && strings.TrimSpace(check.ResumeText) != "" && attempt < service.options.MaxRetries {
-				committedSegmentChunks = candidateSegmentChunks
-				committedSegmentDurationMS += result.DurationMS
-				resumeText = check.ResumeText
-				service.updateJob(id, func(job *storedJob) {
-					job.Status = JobStatusRetrying
-					job.Stages.Synthesis = StageStatusRunning
-					job.Stages.Checker = StageStatusWaiting
-					setProgress(
-						job,
-						string(JobStatusRetrying),
-						fmt.Sprintf("Resuming segment %d of %d", segmentNumber, len(segments)),
-						"Checker found a clean cutoff; the next attempt will synthesize the remaining text.",
-						segmentNumber,
-						len(segments),
-					)
-				})
-				continue
-			}
-
-			if attempt < service.options.MaxRetries {
-				service.updateJob(id, func(job *storedJob) {
-					job.Status = JobStatusRetrying
-					job.Stages.Synthesis = StageStatusRunning
-					job.Stages.Checker = StageStatusWaiting
-					setProgress(
-						job,
-						string(JobStatusRetrying),
-						fmt.Sprintf("Regenerating segment %d of %d", segmentNumber, len(segments)),
-						fmt.Sprintf("Checker did not accept attempt %d; regenerating this same segment.", attempt),
-						segmentNumber,
-						len(segments),
-					)
-				})
-			}
 		}
-
-		if !lastCheck.Complete {
-			service.updateJob(id, func(job *storedJob) {
-				job.Stages.Synthesis = StageStatusDone
-				job.Stages.Checker = StageStatusFailed
-				setProgress(
-					job,
-					string(JobStatusFailed),
-					fmt.Sprintf("Voice checker retry limit reached on segment %d of %d", segmentNumber, len(segments)),
-					lastCheck.Reason,
-					segmentNumber,
-					len(segments),
-				)
-			})
-			return mergedResult, lastCheck, ErrRetryExhaust
-		}
-
-		service.updateJob(id, func(job *storedJob) {
-			job.Status = JobStatusSynthesizing
-			job.Stages.Synthesis = StageStatusRunning
-			job.Stages.Checker = StageStatusWaiting
-			setProgress(
-				job,
-				string(JobStatusSynthesizing),
-				fmt.Sprintf("Segment %d of %d passed", segmentNumber, len(segments)),
-				"Moving to the next synthesis segment.",
-				segmentNumber,
-				len(segments),
-			)
-		})
 	}
+	workerWG.Wait()
 
 	return mergedResult, aggregateVoiceCheck(transcripts, similarities, lastCheck.Provider), nil
+}
+
+func (service *Service) synthesizeSegment(ctx context.Context, id string, segmentIndex int, totalSegments int, expectedSegment string, voice Voice, nextAttempt func() int) segmentResult {
+	segmentNumber := segmentIndex + 1
+	resumeText := expectedSegment
+	committedSegmentChunks := make([][]byte, 0, service.options.MaxRetries)
+	committedSegmentDurationMS := 0
+	var lastCheck agents.VoiceCheckResult
+	var segmentAudio []byte
+	var contentType string
+	var provider string
+	var resultVoice string
+
+	for attempt := 1; attempt <= service.options.MaxRetries; attempt++ {
+		totalAttempt := nextAttempt()
+		service.updateJob(id, func(job *storedJob) {
+			job.Status = JobStatusSynthesizing
+			if attempt > 1 {
+				job.Status = JobStatusRetrying
+			}
+			job.Stages.Synthesis = StageStatusRunning
+			job.Stages.Checker = StageStatusRunning
+			job.Retries.Attempts = totalAttempt
+			job.Retries.SegmentAttempts = attempt
+			job.Retries.CurrentSegment = segmentNumber
+			job.Retries.TotalSegments = totalSegments
+			setProgress(
+				job,
+				string(job.Status),
+				fmt.Sprintf("Synthesizing segment %d of %d", segmentNumber, totalSegments),
+				fmt.Sprintf("Attempt %d of %d for this segment; %d characters in this pass.", attempt, service.options.MaxRetries, len([]rune(resumeText))),
+				segmentNumber,
+				totalSegments,
+			)
+		})
+
+		result, err := service.tts.Synthesize(ctx, agents.SynthesisRequest{
+			Text:               resumeText,
+			Voice:              voiceSynthesisName(voice),
+			LangCode:           voice.LangCode,
+			ReferenceAudioPath: voice.ReferenceAudioPath,
+		})
+		if err != nil {
+			return segmentResult{index: segmentIndex, check: lastCheck, err: fmt.Errorf("synthesize text: %w", err)}
+		}
+
+		candidateSegmentChunks := appendCopy(committedSegmentChunks, result.Audio)
+		candidateDurationMS := committedSegmentDurationMS + result.DurationMS
+		segmentAudio, _, err = audio.ConcatWAV(candidateSegmentChunks)
+		if err != nil {
+			return segmentResult{index: segmentIndex, check: lastCheck, err: fmt.Errorf("merge segment audio: %w", err)}
+		}
+		contentType = result.ContentType
+		provider = result.Provider
+		resultVoice = result.Voice
+
+		service.updateJob(id, func(job *storedJob) {
+			job.Status = JobStatusChecking
+			job.Stages.Synthesis = StageStatusRunning
+			job.Stages.Checker = StageStatusRunning
+			job.ContentType = contentType
+			job.Provider = provider
+			job.VoiceID = voice.ID
+			job.Voice = resultVoice
+			setProgress(
+				job,
+				string(JobStatusChecking),
+				fmt.Sprintf("Checking segment %d of %d", segmentNumber, totalSegments),
+				fmt.Sprintf("Qwen ASR is checking %s of generated audio. Longer segments can take several minutes on CPU.", formatMilliseconds(result.DurationMS)),
+				segmentNumber,
+				totalSegments,
+			)
+		})
+
+		check, err := service.checker.Check(ctx, expectedSegment, segmentAudio)
+		if err != nil {
+			return segmentResult{index: segmentIndex, check: lastCheck, err: fmt.Errorf("check audio: %w", err)}
+		}
+		lastCheck = check
+
+		service.updateJob(id, func(job *storedJob) {
+			job.VoiceCheck = toVoiceCheck(check)
+			setProgress(
+				job,
+				string(JobStatusChecking),
+				fmt.Sprintf("Checked segment %d of %d", segmentNumber, totalSegments),
+				check.Reason,
+				segmentNumber,
+				totalSegments,
+			)
+		})
+
+		if check.Complete {
+			return segmentResult{
+				index:       segmentIndex,
+				audio:       segmentAudio,
+				contentType: contentType,
+				durationMS:  candidateDurationMS,
+				provider:    provider,
+				voice:       resultVoice,
+				check:       check,
+			}
+		}
+
+		if check.NeedsResume && strings.TrimSpace(check.ResumeText) != "" && attempt < service.options.MaxRetries {
+			committedSegmentChunks = candidateSegmentChunks
+			committedSegmentDurationMS = candidateDurationMS
+			resumeText = check.ResumeText
+			service.updateJob(id, func(job *storedJob) {
+				job.Status = JobStatusRetrying
+				job.Stages.Synthesis = StageStatusRunning
+				job.Stages.Checker = StageStatusWaiting
+				setProgress(
+					job,
+					string(JobStatusRetrying),
+					fmt.Sprintf("Resuming segment %d of %d", segmentNumber, totalSegments),
+					"Checker found a clean cutoff; the next attempt will synthesize the remaining text.",
+					segmentNumber,
+					totalSegments,
+				)
+			})
+			continue
+		}
+
+		if attempt < service.options.MaxRetries {
+			service.updateJob(id, func(job *storedJob) {
+				job.Status = JobStatusRetrying
+				job.Stages.Synthesis = StageStatusRunning
+				job.Stages.Checker = StageStatusWaiting
+				setProgress(
+					job,
+					string(JobStatusRetrying),
+					fmt.Sprintf("Regenerating segment %d of %d", segmentNumber, totalSegments),
+					fmt.Sprintf("Checker did not accept attempt %d; regenerating this same segment.", attempt),
+					segmentNumber,
+					totalSegments,
+				)
+			})
+		}
+	}
+
+	service.updateJob(id, func(job *storedJob) {
+		job.Stages.Synthesis = StageStatusDone
+		job.Stages.Checker = StageStatusFailed
+		setProgress(
+			job,
+			string(JobStatusFailed),
+			fmt.Sprintf("Voice checker retry limit reached on segment %d of %d", segmentNumber, totalSegments),
+			lastCheck.Reason,
+			segmentNumber,
+			totalSegments,
+		)
+	})
+
+	return segmentResult{
+		index:       segmentIndex,
+		audio:       segmentAudio,
+		contentType: contentType,
+		durationMS:  committedSegmentDurationMS,
+		provider:    provider,
+		voice:       resultVoice,
+		check:       lastCheck,
+		err:         ErrRetryExhaust,
+	}
 }
 
 func (service *Service) writeJobAudio(id string, audioBytes []byte) (string, error) {
@@ -517,6 +675,25 @@ func appendCopy(chunks [][]byte, more ...[]byte) [][]byte {
 	copied = append(copied, more...)
 
 	return copied
+}
+
+func voiceSynthesisName(voice Voice) string {
+	if voice.Kind == VoiceKindNative {
+		return strings.TrimPrefix(voice.ID, "kokoro:")
+	}
+	if strings.TrimSpace(voice.Name) != "" {
+		return voice.Name
+	}
+
+	return voice.ID
+}
+
+func minInt(left int, right int) int {
+	if left < right {
+		return left
+	}
+
+	return right
 }
 
 func stripStreamingPreview(value string) string {

@@ -52,10 +52,26 @@ require_command() {
   fi
 }
 
+backend_path() {
+  local path_value="$1"
+  if [[ "$path_value" == /* ]]; then
+    printf '%s' "$path_value"
+    return
+  fi
+
+  printf '%s/%s' "$ROOT_DIR/backend" "${path_value#./}"
+}
+
 optimizer_uses_bonsai() {
   local provider
   provider="$(printf '%s' "$VOICE_OPTIMIZER_PROVIDER" | tr '[:upper:]' '[:lower:]')"
   [[ "$provider" == "bonsai" || "$provider" == "auto" ]]
+}
+
+tts_uses_kokoro() {
+  local provider
+  provider="$(printf '%s' "$TTS_PROVIDER" | tr '[:upper:]' '[:lower:]')"
+  [[ "$provider" == "kokoro" ]]
 }
 
 cleanup() {
@@ -95,6 +111,16 @@ export BONSAI_TOP_K="${BONSAI_TOP_K:-20}"
 export OPENROUTER_MODEL="${OPENROUTER_MODEL:-openrouter/free}"
 export OPENROUTER_TIMEOUT_SECONDS="${OPENROUTER_TIMEOUT_SECONDS:-180}"
 export TTS_PROVIDER="${TTS_PROVIDER:-kokoro}"
+export TTS_WORKER_COUNT="${TTS_WORKER_COUNT:-2}"
+export VOICE_DATA_DIR="${VOICE_DATA_DIR:-./data/voices}"
+export FFMPEG_PATH="${FFMPEG_PATH:-ffmpeg}"
+export KOKOCLONE_PYTHON_PATH="${KOKOCLONE_PYTHON_PATH:-${KOKORO_PYTHON_PATH:-./.venv/bin/python}}"
+export KOKOCLONE_SCRIPT_PATH="${KOKOCLONE_SCRIPT_PATH:-./scripts/kokoclone_synth.py}"
+export KOKOCLONE_DATA_DIR="${KOKOCLONE_DATA_DIR:-./data/kokoclone}"
+export KOKOCLONE_REPO_DIR="${KOKOCLONE_REPO_DIR:-./data/kokoclone/repo}"
+export KOKOCLONE_RUNTIME_DIR="${KOKOCLONE_RUNTIME_DIR:-./data/kokoclone/runtime}"
+export KOKOCLONE_LANG_CODE="${KOKOCLONE_LANG_CODE:-en}"
+export KOKOCLONE_TIMEOUT_SECONDS="${KOKOCLONE_TIMEOUT_SECONDS:-600}"
 export VOICE_CHECKER_PROVIDER="${VOICE_CHECKER_PROVIDER:-qwen}"
 export QWEN_ASR_MODEL="${QWEN_ASR_MODEL:-Qwen/Qwen3-ASR-1.7B}"
 export QWEN_ASR_LANGUAGE="${QWEN_ASR_LANGUAGE:-English}"
@@ -111,6 +137,10 @@ if ! command -v mise >/dev/null 2>&1; then
   require_command go
   require_command uv
 fi
+if tts_uses_kokoro; then
+  require_command "$FFMPEG_PATH"
+  require_command git
+fi
 
 if [[ "${SKIP_BOOTSTRAP:-0}" != "1" ]]; then
   if [[ ! -d "$ROOT_DIR/node_modules" || ! -d "$ROOT_DIR/frontend/node_modules" ]]; then
@@ -121,6 +151,20 @@ if [[ "${SKIP_BOOTSTRAP:-0}" != "1" ]]; then
   if [[ ! -x "$ROOT_DIR/backend/.venv/bin/python" ]]; then
     echo "Creating backend Python environment..."
     (cd "$ROOT_DIR/backend" && run_with_mise uv sync)
+  fi
+
+  if tts_uses_kokoro; then
+    if ! "$ROOT_DIR/backend/.venv/bin/python" -c "import kokoro_onnx, kanade_tokenizer, torchaudio" >/dev/null 2>&1; then
+      echo "Installing KokoClone Python dependencies..."
+      (cd "$ROOT_DIR/backend" && run_with_mise uv sync)
+    fi
+
+    KOKOCLONE_REPO_PATH="$(backend_path "$KOKOCLONE_REPO_DIR")"
+    if [[ ! -f "$KOKOCLONE_REPO_PATH/core/cloner.py" ]]; then
+      echo "Cloning KokoClone..."
+      mkdir -p "$(dirname "$KOKOCLONE_REPO_PATH")"
+      git clone --depth 1 https://github.com/Ashish-Patnaik/kokoclone.git "$KOKOCLONE_REPO_PATH"
+    fi
   fi
 
   if optimizer_uses_bonsai; then
@@ -149,6 +193,10 @@ if optimizer_uses_bonsai; then
   echo "  Bonsai model: ${BONSAI_MODEL}, preload: ${BONSAI_PRELOAD}"
 fi
 echo "  TTS: ${TTS_PROVIDER}"
+if tts_uses_kokoro; then
+  echo "  TTS workers: ${TTS_WORKER_COUNT}, voices: ${VOICE_DATA_DIR}"
+  echo "  KokoClone repo: ${KOKOCLONE_REPO_DIR}"
+fi
 echo "  Checker: ${VOICE_CHECKER_PROVIDER} (${QWEN_ASR_DEVICE})"
 echo "  Checker persistent: ${QWEN_ASR_PERSISTENT}, preload: ${QWEN_ASR_PRELOAD}"
 echo "  Segment size: ${VOICE_SEGMENT_MAX_RUNES} runes"

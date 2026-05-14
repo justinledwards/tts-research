@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -14,7 +15,8 @@ import (
 
 func NewRouter(service *pipeline.Service) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName: "tts-research",
+		AppName:   "tts-research",
+		BodyLimit: 512 * 1024 * 1024,
 	})
 
 	app.Use(cors.New(cors.Config{
@@ -27,16 +29,67 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(fiber.Map{"status": "ok"})
 	})
 
+	app.Get("/api/voices", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.ListVoices())
+	})
+
+	app.Post("/api/voices", func(ctx fiber.Ctx) error {
+		fileHeader, err := ctx.FormFile("file")
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("voice file is required"))
+		}
+
+		file, err := fileHeader.Open()
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("unable to read voice file"))
+		}
+		defer func() {
+			_ = file.Close()
+		}()
+
+		var reader io.Reader = file
+		voice, err := service.CreateCloneVoice(ctx.Context(), pipeline.VoiceUpload{
+			Name:        ctx.FormValue("name"),
+			Filename:    fileHeader.Filename,
+			ContentType: fileHeader.Header.Get("Content-Type"),
+			Reader:      reader,
+		})
+		if err != nil {
+			status := fiber.StatusInternalServerError
+			if errors.Is(err, pipeline.ErrInvalidVoice) {
+				status = fiber.StatusBadRequest
+			}
+
+			return ctx.Status(status).JSON(errorResponse(err.Error()))
+		}
+
+		return ctx.Status(fiber.StatusCreated).JSON(voice)
+	})
+
+	app.Get("/api/voices/:id/reference-audio", func(ctx fiber.Ctx) error {
+		audio, contentType, err := service.GetVoiceReferenceAudio(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+
+		ctx.Set(fiber.HeaderContentType, contentType)
+		ctx.Set(fiber.HeaderCacheControl, "no-store")
+		return ctx.Send(audio)
+	})
+
 	app.Post("/api/voice-jobs", func(ctx fiber.Ctx) error {
 		var request pipeline.CreateJobRequest
 		if err := ctx.Bind().Body(&request); err != nil {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
 		}
 
-		job, err := service.CreateJob(ctx.Context(), request.Text)
+		job, err := service.CreateJob(ctx.Context(), request)
 		if err != nil {
 			status := fiber.StatusInternalServerError
 			if errors.Is(err, pipeline.ErrEmptyText) {
+				status = fiber.StatusBadRequest
+			}
+			if errors.Is(err, pipeline.ErrVoiceNotFound) {
 				status = fiber.StatusBadRequest
 			}
 
@@ -111,7 +164,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 }
 
 func notFound(ctx fiber.Ctx, err error) error {
-	if errors.Is(err, pipeline.ErrJobNotFound) {
+	if errors.Is(err, pipeline.ErrJobNotFound) || errors.Is(err, pipeline.ErrVoiceNotFound) {
 		return ctx.Status(fiber.StatusNotFound).JSON(errorResponse(err.Error()))
 	}
 

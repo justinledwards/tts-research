@@ -1,6 +1,9 @@
 package pipeline
 
-import "time"
+import (
+	"io"
+	"time"
+)
 
 type JobStatus string
 
@@ -24,15 +27,44 @@ const (
 )
 
 type CreateJobRequest struct {
-	Text string `json:"text"`
+	Text    string `json:"text"`
+	VoiceID string `json:"voiceId,omitempty"`
+}
+
+type VoiceKind string
+
+const (
+	VoiceKindNative VoiceKind = "native"
+	VoiceKindClone  VoiceKind = "clone"
+)
+
+type Voice struct {
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	Kind               VoiceKind `json:"kind"`
+	Provider           string    `json:"provider"`
+	LangCode           string    `json:"langCode"`
+	ReferenceAudioURL  string    `json:"referenceAudioUrl,omitempty"`
+	ReferenceAudioPath string    `json:"referenceAudioPath,omitempty"`
+	SourceFilename     string    `json:"sourceFilename,omitempty"`
+	CreatedAt          time.Time `json:"createdAt"`
+}
+
+type VoiceUpload struct {
+	Name        string
+	Filename    string
+	ContentType string
+	Reader      io.Reader
 }
 
 type RetryMetadata struct {
-	MaxRetries      int `json:"maxRetries"`
-	Attempts        int `json:"attempts"`
-	SegmentAttempts int `json:"segmentAttempts"`
-	CurrentSegment  int `json:"currentSegment"`
-	TotalSegments   int `json:"totalSegments"`
+	MaxRetries        int `json:"maxRetries"`
+	Attempts          int `json:"attempts"`
+	SegmentAttempts   int `json:"segmentAttempts"`
+	CurrentSegment    int `json:"currentSegment"`
+	TotalSegments     int `json:"totalSegments"`
+	CompletedSegments int `json:"completedSegments"`
+	WorkerCount       int `json:"workerCount"`
 }
 
 type PipelineStages struct {
@@ -72,6 +104,7 @@ type VoiceJob struct {
 	ContentType   string         `json:"contentType"`
 	DurationMS    int            `json:"durationMs"`
 	Provider      string         `json:"provider"`
+	VoiceID       string         `json:"voiceId"`
 	Voice         string         `json:"voice"`
 	Retries       RetryMetadata  `json:"retries"`
 	VoiceCheck    VoiceCheck     `json:"voiceCheck"`
