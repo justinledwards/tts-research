@@ -116,6 +116,11 @@ func main() {
 		logger.Error("invalid pipeline configuration", "error", err)
 		os.Exit(1)
 	}
+	voiceProfileLikenessTimeoutSeconds, err := envIntWithDefault("VOICE_PROFILE_LIKENESS_TIMEOUT_SECONDS", 120)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
 	voiceProfileDiarizationToken := strings.TrimSpace(os.Getenv("PYANNOTE_AUTH_TOKEN"))
 	if voiceProfileDiarizationToken == "" {
 		voiceProfileDiarizationToken = strings.TrimSpace(os.Getenv("HF_TOKEN"))
@@ -154,8 +159,18 @@ func main() {
 		voiceProfileReferenceMaxSeconds,
 		"voiceProfileDiarizationModel",
 		envWithDefault("VOICE_PROFILE_DIARIZATION_MODEL", "pyannote/speaker-diarization-community-1"),
+		"voiceProfileDiarizationModelPath",
+		strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_MODEL_PATH")),
+		"voiceProfileDiarizationLocalModelDir",
+		strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR")),
 		"voiceProfileDiarizationConfigured",
-		voiceProfileDiarizationToken != "",
+		voiceProfileDiarizationToken != "" ||
+			strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_MODEL_PATH")) != "" ||
+			strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR")) != "",
+		"voiceProfileDenoiseProvider",
+		envWithDefault("VOICE_PROFILE_DENOISE_PROVIDER", "ffmpeg"),
+		"voiceProfileDenoiseStrength",
+		envWithDefault("VOICE_PROFILE_DENOISE_STRENGTH", "balanced"),
 		"studioInheritsFromDefault",
 		studioSegmentWorkers == 0 && studioSegmentMaxRunes == 0,
 	)
@@ -165,25 +180,35 @@ func main() {
 		ttsAgent,
 		checker,
 		pipeline.Options{
-			MaxRetries:                          3,
-			SegmentMaxRunes:                     segmentMaxRunes,
-			SegmentWorkers:                      segmentWorkers,
-			StudioSegmentMaxRunes:               studioSegmentMaxRunes,
-			StudioSegmentWorkers:                studioSegmentWorkers,
-			StudioSegmentWorkersAdaptive:        studioSegmentWorkersAdaptive,
-			StudioSegmentMaxRunesAdaptive:       studioSegmentMaxRunesAdaptive,
-			JobDataDir:                          envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
-			VoiceProfileDir:                     envWithDefault("VOICE_PROFILE_DATA_DIR", "./data/voice-profiles"),
-			VoiceProfileSourceDir:               envWithDefault("VOICE_PROFILE_SOURCE_DATA_DIR", "./data/voice-profile-sources"),
-			MaxProfileBytes:                     maxProfileBytes,
-			VoiceProfileReferenceMinSeconds:     voiceProfileReferenceMinSeconds,
-			VoiceProfileReferenceTargetSeconds:  voiceProfileReferenceTargetSeconds,
-			VoiceProfileReferenceMaxSeconds:     voiceProfileReferenceMaxSeconds,
-			VoiceProfileDiarizationModel:        envWithDefault("VOICE_PROFILE_DIARIZATION_MODEL", "pyannote/speaker-diarization-community-1"),
-			VoiceProfileDiarizationToken:        voiceProfileDiarizationToken,
-			VoiceProfileAnalysisPythonPath:      envWithDefault("VOICE_PROFILE_ANALYSIS_PYTHON_PATH", "python3"),
-			VoiceProfileAnalysisScriptPath:      envWithDefault("VOICE_PROFILE_ANALYSIS_SCRIPT_PATH", "./scripts/profile_analyze.py"),
-			VoiceProfileAnalysisStrategyVersion: envWithDefault("VOICE_PROFILE_ANALYSIS_STRATEGY_VERSION", "speaker-aware-v1"),
+			MaxRetries:                           3,
+			SegmentMaxRunes:                      segmentMaxRunes,
+			SegmentWorkers:                       segmentWorkers,
+			StudioSegmentMaxRunes:                studioSegmentMaxRunes,
+			StudioSegmentWorkers:                 studioSegmentWorkers,
+			StudioSegmentWorkersAdaptive:         studioSegmentWorkersAdaptive,
+			StudioSegmentMaxRunesAdaptive:        studioSegmentMaxRunesAdaptive,
+			ReferenceWorkerCount:                 referenceWorkerCount,
+			JobDataDir:                           envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
+			ProjectDataDir:                       envWithDefault("VOICE_PROJECT_DATA_DIR", "./data/projects"),
+			VoiceProfileDir:                      envWithDefault("VOICE_PROFILE_DATA_DIR", "./data/voice-profiles"),
+			VoiceProfileSourceDir:                envWithDefault("VOICE_PROFILE_SOURCE_DATA_DIR", "./data/voice-profile-sources"),
+			MaxProfileBytes:                      maxProfileBytes,
+			VoiceProfileReferenceMinSeconds:      voiceProfileReferenceMinSeconds,
+			VoiceProfileReferenceTargetSeconds:   voiceProfileReferenceTargetSeconds,
+			VoiceProfileReferenceMaxSeconds:      voiceProfileReferenceMaxSeconds,
+			VoiceProfileDiarizationModel:         envWithDefault("VOICE_PROFILE_DIARIZATION_MODEL", "pyannote/speaker-diarization-community-1"),
+			VoiceProfileDiarizationModelPath:     strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_MODEL_PATH")),
+			VoiceProfileDiarizationLocalModelDir: strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR")),
+			VoiceProfileDiarizationToken:         voiceProfileDiarizationToken,
+			VoiceProfileAnalysisPythonPath:       envWithDefault("VOICE_PROFILE_ANALYSIS_PYTHON_PATH", "python3"),
+			VoiceProfileAnalysisScriptPath:       envWithDefault("VOICE_PROFILE_ANALYSIS_SCRIPT_PATH", "./scripts/profile_analyze.py"),
+			VoiceProfileAnalysisStrategyVersion:  envWithDefault("VOICE_PROFILE_ANALYSIS_STRATEGY_VERSION", "speaker-aware-v1"),
+			VoiceProfileDenoiseProvider:          envWithDefault("VOICE_PROFILE_DENOISE_PROVIDER", "ffmpeg"),
+			VoiceProfileDenoiseStrength:          envWithDefault("VOICE_PROFILE_DENOISE_STRENGTH", "balanced"),
+			VoiceProfileEmbeddingModel:           envWithDefault("VOICE_PROFILE_EMBEDDING_MODEL", "pyannote/embedding"),
+			VoiceProfileEmbeddingScriptPath:      envWithDefault("VOICE_PROFILE_EMBEDDING_SCRIPT_PATH", "./scripts/profile_likeness.py"),
+			VoiceProfileLikenessCalibrationText:  envWithDefault("VOICE_PROFILE_LIKENESS_CALIBRATION_TEXT", "This is a short voice clone calibration sample for measuring speaker likeness."),
+			VoiceProfileLikenessTimeoutSeconds:   voiceProfileLikenessTimeoutSeconds,
 		},
 	)
 	serviceOptions := service.Options()
@@ -334,9 +359,9 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 		}
 
 		return agents.NewKokoroTTSAgent(agents.KokoroConfig{
-			PythonPath: envWithDefault("KOKORO_PYTHON_PATH", "./.venv/bin/python"),
+			PythonPath:          envWithDefault("KOKORO_PYTHON_PATH", "./.venv/bin/python"),
 			ReferencePythonPath: referencePythonPath,
-			ScriptPath: envWithDefault("KOKORO_SCRIPT_PATH", "./scripts/kokoro_synth.py"),
+			ScriptPath:          envWithDefault("KOKORO_SCRIPT_PATH", "./scripts/kokoro_synth.py"),
 			ReferenceScriptPath: envWithDefault(
 				"KOKORO_REFERENCE_SCRIPT_PATH",
 				"",

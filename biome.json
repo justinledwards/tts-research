@@ -3,6 +3,8 @@
   "files": {
     "includes": [
       "**",
+      "!.venv",
+      "!.venv-*",
       "!backend/.venv",
       "!backend/.venv-bonsai",
       "!backend/.venv-kokoclone",
@@ -11,6 +13,8 @@
       "!backend/data",
       "!.playwright-cli",
       "!demo",
+      "!model",
+      "!voice",
       "!node_modules",
       "!dist",
       "!**/dist"

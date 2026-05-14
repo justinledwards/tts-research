@@ -1,18 +1,32 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { formatDuration } from "./format";
+import { KOKORO_VOICEPACKS, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
 import type { RunConfiguration } from "./runConfig";
 import { describePerformanceMode, getRunModePreset } from "./runConfig";
-import type { SystemMetrics, VoiceJob, VoiceProfile, VoiceProfileSource } from "./types";
+import {
+  buildTeleprompterWordCues,
+  type TeleprompterEffectStyle,
+  type TeleprompterHighlightSettings,
+} from "./teleprompter";
+import type {
+  SystemMetrics,
+  VoiceJob,
+  VoiceProfile,
+  VoiceProfileSource,
+  VoiceProfileSourceDiagnostics,
+} from "./types";
 
 export function HelpPanel({
   isOpen,
   job,
+  profileSourceDiagnostics,
   profileSource,
   selectedProfile,
   onClose,
 }: Readonly<{
   isOpen: boolean;
   job: VoiceJob | null;
+  profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
   profileSource: VoiceProfileSource | null;
   selectedProfile: VoiceProfile | null;
   onClose: () => void;
@@ -51,6 +65,18 @@ export function HelpPanel({
           label="Source analysis"
           value={profileSource?.status ?? "No source queued"}
         />
+        <DiagnosticLine
+          label="Pyannote"
+          value={profileSourceDiagnostics?.mode ?? "Diagnostics pending"}
+        />
+        <DiagnosticLine
+          label="Local model"
+          value={
+            profileSourceDiagnostics?.localModelAvailable
+              ? "Available"
+              : "Set VOICE_PROFILE_DIARIZATION_MODEL_PATH"
+          }
+        />
         <DiagnosticLine label="TTS job" value={job?.status ?? "No active job"} />
         <DiagnosticLine
           label="Checker"
@@ -77,19 +103,25 @@ export function SettingsPanel({
   job,
   metrics,
   metricsError,
+  profileSourceDiagnostics,
   profileSource,
   runConfiguration,
   selectedProfile,
+  teleprompterSettings,
   onClose,
+  onTeleprompterSettingsChange,
 }: Readonly<{
   isOpen: boolean;
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
   metricsError: string | null;
+  profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
   profileSource: VoiceProfileSource | null;
   runConfiguration: RunConfiguration;
   selectedProfile: VoiceProfile | null;
+  teleprompterSettings: TeleprompterHighlightSettings;
   onClose: () => void;
+  onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
 }>) {
   useEscapeClose(isOpen, onClose);
   const [activeTab, setActiveTab] = useState<
@@ -98,9 +130,6 @@ export function SettingsPanel({
   if (!isOpen) {
     return null;
   }
-
-  const gpu = metrics?.gpus?.[0];
-  const preset = getRunModePreset(runConfiguration.runMode);
 
   return (
     <PanelShell label="Settings" title="Studio Settings" onClose={onClose}>
@@ -123,87 +152,420 @@ export function SettingsPanel({
         ))}
       </div>
 
-      {activeTab === "preferences" ? (
-        <PanelSection title="Preferences">
-          <DiagnosticLine label="Run mode" value={preset.label} />
-          <DiagnosticLine
-            label="Performance"
-            value={describePerformanceMode(runConfiguration.performanceMode)}
-          />
-          <DiagnosticLine
-            label="Arrival playback"
-            value={runConfiguration.options.arrivalPlayback ? "On" : "Off"}
-          />
-          <p className="text-sm leading-6 text-zinc-600">
-            Preferences are saved locally in this browser. Runtime provider configuration remains
-            read-only in this pass.
-          </p>
-        </PanelSection>
-      ) : null}
-
-      {activeTab === "providers" ? (
-        <PanelSection title="Providers">
-          <DiagnosticLine
-            label="Backend"
-            value={metrics ? "Online" : (metricsError ?? "Pending")}
-          />
-          <DiagnosticLine
-            label="TTS provider"
-            value={job?.provider ?? "Resolved when a job runs"}
-          />
-          <DiagnosticLine
-            label="Checker provider"
-            value={job?.voiceCheck.provider ?? "Resolved when checker runs"}
-          />
-          <DiagnosticLine
-            label="Diarization"
-            value={profileSource?.modelVersion ?? "Requires configured pyannote access"}
-          />
-        </PanelSection>
-      ) : null}
-
-      {activeTab === "performance" ? (
-        <PanelSection title="Performance">
-          <DiagnosticLine label="Run shape" value={preset.label} />
-          <DiagnosticLine label="Performance mode" value={runConfiguration.performanceMode} />
-          <DiagnosticLine
-            label="GPU memory"
-            value={
-              gpu
-                ? `${String(gpu.memoryUsedMiB)}/${String(gpu.memoryTotalMiB)} MiB (${String(
-                    gpu.utilizationGpuPct,
-                  )}% util.)`
-                : "Unavailable"
-            }
-          />
-          <DiagnosticLine
-            label="Average latency"
-            value={
-              job?.qualityReport
-                ? formatDuration(job.qualityReport.averageLatencyMs)
-                : "No report yet"
-            }
-          />
-        </PanelSection>
-      ) : null}
-
-      {activeTab === "storage" ? (
-        <PanelSection title="Storage">
-          <DiagnosticLine
-            label="Selected profile"
-            value={selectedProfile?.referencePath ?? "None"}
-          />
-          <DiagnosticLine
-            label="Source analysis"
-            value={profileSource?.normalizedAudio ?? "None"}
-          />
-          <DiagnosticLine label="Completed audio" value={job?.audioPath ?? "None"} />
-          <p className="text-sm leading-6 text-zinc-600">
-            Storage locations are backend-managed and surfaced here for diagnostics.
-          </p>
-        </PanelSection>
-      ) : null}
+      <SettingsTabContent
+        activeTab={activeTab}
+        job={job}
+        metrics={metrics}
+        metricsError={metricsError}
+        profileSource={profileSource}
+        profileSourceDiagnostics={profileSourceDiagnostics}
+        runConfiguration={runConfiguration}
+        selectedProfile={selectedProfile}
+        teleprompterSettings={teleprompterSettings}
+        onTeleprompterSettingsChange={onTeleprompterSettingsChange}
+      />
     </PanelShell>
+  );
+}
+
+function SettingsTabContent({
+  activeTab,
+  job,
+  metrics,
+  metricsError,
+  profileSource,
+  profileSourceDiagnostics,
+  runConfiguration,
+  selectedProfile,
+  teleprompterSettings,
+  onTeleprompterSettingsChange,
+}: Readonly<{
+  activeTab: "preferences" | "providers" | "performance" | "storage";
+  job: VoiceJob | null;
+  metrics: SystemMetrics | null;
+  metricsError: string | null;
+  profileSource: VoiceProfileSource | null;
+  profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
+  runConfiguration: RunConfiguration;
+  selectedProfile: VoiceProfile | null;
+  teleprompterSettings: TeleprompterHighlightSettings;
+  onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
+}>) {
+  const preset = getRunModePreset(runConfiguration.runMode);
+
+  if (activeTab === "preferences") {
+    return (
+      <SettingsPreferencesTab
+        presetLabel={preset.label}
+        runConfiguration={runConfiguration}
+        teleprompterSettings={teleprompterSettings}
+        onTeleprompterSettingsChange={onTeleprompterSettingsChange}
+      />
+    );
+  }
+
+  if (activeTab === "providers") {
+    return (
+      <SettingsProvidersTab
+        job={job}
+        metrics={metrics}
+        metricsError={metricsError}
+        profileSourceDiagnostics={profileSourceDiagnostics}
+      />
+    );
+  }
+
+  if (activeTab === "performance") {
+    return (
+      <SettingsPerformanceTab
+        job={job}
+        metrics={metrics}
+        presetLabel={preset.label}
+        runConfiguration={runConfiguration}
+      />
+    );
+  }
+
+  return (
+    <SettingsStorageTab job={job} profileSource={profileSource} selectedProfile={selectedProfile} />
+  );
+}
+
+function SettingsPreferencesTab({
+  presetLabel,
+  runConfiguration,
+  teleprompterSettings,
+  onTeleprompterSettingsChange,
+}: Readonly<{
+  presetLabel: string;
+  runConfiguration: RunConfiguration;
+  teleprompterSettings: TeleprompterHighlightSettings;
+  onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
+}>) {
+  return (
+    <PanelSection title="Preferences">
+      <DiagnosticLine label="Run mode" value={presetLabel} />
+      <DiagnosticLine
+        label="Performance"
+        value={describePerformanceMode(runConfiguration.performanceMode)}
+      />
+      <DiagnosticLine
+        label="Arrival playback"
+        value={runConfiguration.options.arrivalPlayback ? "On" : "Off"}
+      />
+      <p className="text-sm leading-6 text-zinc-600">
+        Preferences are saved locally in this browser. Runtime provider configuration remains
+        read-only in this pass.
+      </p>
+      <TeleprompterSettingsControls
+        settings={teleprompterSettings}
+        onChange={onTeleprompterSettingsChange}
+      />
+    </PanelSection>
+  );
+}
+
+function SettingsProvidersTab({
+  job,
+  metrics,
+  metricsError,
+  profileSourceDiagnostics,
+}: Readonly<{
+  job: VoiceJob | null;
+  metrics: SystemMetrics | null;
+  metricsError: string | null;
+  profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
+}>) {
+  return (
+    <PanelSection title="Providers">
+      <DiagnosticLine label="Backend" value={metrics ? "Online" : (metricsError ?? "Pending")} />
+      <DiagnosticLine label="TTS provider" value={job?.provider ?? "Resolved when a job runs"} />
+      <DiagnosticLine
+        label="Kokoro voice"
+        value={job?.voice ? kokoroVoicepackLabel(job.voice) : "Resolved when Kokoro runs"}
+      />
+      <DiagnosticLine
+        label="Checker provider"
+        value={job?.voiceCheck.provider ?? "Resolved when checker runs"}
+      />
+      <DiagnosticLine
+        label="Diarization"
+        value={profileSourceDiagnostics?.mode ?? "Diagnostics pending"}
+      />
+      <DiagnosticLine
+        label="Model"
+        value={profileSourceDiagnostics?.modelPath ?? profileSourceDiagnostics?.model ?? "pyannote"}
+      />
+      <DiagnosticLine
+        label="Analysis Python"
+        value={profileSourceDiagnostics?.pythonPath ?? "Diagnostics pending"}
+      />
+      <DiagnosticLine
+        label="ffmpeg"
+        value={profileSourceDiagnostics?.ffmpegAvailable ? "Available" : "Missing"}
+      />
+      {profileSourceDiagnostics?.setupMessage ? (
+        <p className="break-words text-sm leading-6 text-zinc-600">
+          {profileSourceDiagnostics.setupMessage}
+        </p>
+      ) : null}
+      <KokoroVoicepackDetails />
+    </PanelSection>
+  );
+}
+
+function KokoroVoicepackDetails() {
+  return (
+    <details className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
+      <summary className="cursor-pointer font-semibold text-zinc-800">
+        Kokoro voicepacks ({String(KOKORO_VOICEPACKS.length)})
+      </summary>
+      <ul className="mt-3 grid gap-2">
+        {KOKORO_VOICEPACKS.map((voicepack) => (
+          <li className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-2" key={voicepack.id}>
+            <code className="rounded bg-white px-2 py-1 font-mono text-[11px] text-zinc-700">
+              {voicepack.id}
+            </code>
+            <span className="min-w-0 truncate" title={kokoroVoicepackDetail(voicepack.id)}>
+              {voicepack.name} · {voicepack.locale}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function SettingsPerformanceTab({
+  job,
+  metrics,
+  presetLabel,
+  runConfiguration,
+}: Readonly<{
+  job: VoiceJob | null;
+  metrics: SystemMetrics | null;
+  presetLabel: string;
+  runConfiguration: RunConfiguration;
+}>) {
+  const gpu = metrics?.gpus?.[0];
+
+  return (
+    <PanelSection title="Performance">
+      <DiagnosticLine label="Run shape" value={presetLabel} />
+      <DiagnosticLine label="Performance mode" value={runConfiguration.performanceMode} />
+      <DiagnosticLine
+        label="GPU memory"
+        value={
+          gpu
+            ? `${String(gpu.memoryUsedMiB)}/${String(gpu.memoryTotalMiB)} MiB (${String(
+                gpu.utilizationGpuPct,
+              )}% util.)`
+            : "Unavailable"
+        }
+      />
+      <DiagnosticLine
+        label="Average latency"
+        value={
+          job?.qualityReport ? formatDuration(job.qualityReport.averageLatencyMs) : "No report yet"
+        }
+      />
+    </PanelSection>
+  );
+}
+
+function SettingsStorageTab({
+  job,
+  profileSource,
+  selectedProfile,
+}: Readonly<{
+  job: VoiceJob | null;
+  profileSource: VoiceProfileSource | null;
+  selectedProfile: VoiceProfile | null;
+}>) {
+  return (
+    <PanelSection title="Storage">
+      <DiagnosticLine label="Selected profile" value={selectedProfile?.referencePath ?? "None"} />
+      <DiagnosticLine label="Source analysis" value={profileSource?.normalizedAudio ?? "None"} />
+      <DiagnosticLine label="Completed audio" value={job?.audioPath ?? "None"} />
+      <p className="text-sm leading-6 text-zinc-600">
+        Storage locations are backend-managed and surfaced here for diagnostics.
+      </p>
+    </PanelSection>
+  );
+}
+
+function TeleprompterSettingsControls({
+  settings,
+  onChange,
+}: Readonly<{
+  settings: TeleprompterHighlightSettings;
+  onChange: (settings: TeleprompterHighlightSettings) => void;
+}>) {
+  const updateNumber = (key: keyof TeleprompterHighlightSettings, value: number) => {
+    onChange({ ...settings, [key]: value });
+  };
+  const updateEffect = (effectStyle: TeleprompterEffectStyle) => {
+    onChange({ ...settings, effectStyle });
+  };
+
+  return (
+    <div className="grid gap-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+      <div>
+        <h4 className="text-sm font-semibold text-zinc-950">Teleprompter focus</h4>
+        <p className="mt-1 text-xs leading-5 text-zinc-500">
+          Lead timing pulls the eye forward; fade timing keeps spoken words gently visible.
+        </p>
+      </div>
+      <TeleprompterRange
+        label="Lead timing"
+        max={600}
+        min={0}
+        suffix="ms"
+        value={settings.leadMs}
+        onChange={(value) => {
+          updateNumber("leadMs", value);
+        }}
+      />
+      <TeleprompterRange
+        label="Spoken fade"
+        max={2400}
+        min={120}
+        suffix="ms"
+        value={settings.spokenFadeMs}
+        onChange={(value) => {
+          updateNumber("spokenFadeMs", value);
+        }}
+      />
+      <TeleprompterRange
+        label="Upcoming window"
+        max={900}
+        min={0}
+        suffix="ms"
+        value={settings.upcomingWindowMs}
+        onChange={(value) => {
+          updateNumber("upcomingWindowMs", value);
+        }}
+      />
+      <TeleprompterRange
+        label="Upcoming glow"
+        max={0.7}
+        min={0}
+        step={0.01}
+        value={settings.upcomingIntensity}
+        onChange={(value) => {
+          updateNumber("upcomingIntensity", value);
+        }}
+      />
+      <div className="flex flex-wrap gap-2">
+        {(["spark", "classic"] as const).map((style) => (
+          <button
+            className={`rounded-md border px-3 py-2 text-xs font-semibold capitalize ${
+              settings.effectStyle === style
+                ? "border-pink-300 bg-pink-50 text-pink-800"
+                : "border-zinc-200 bg-white text-zinc-700"
+            }`}
+            key={style}
+            onClick={() => {
+              updateEffect(style);
+            }}
+            type="button"
+          >
+            {style}
+          </button>
+        ))}
+      </div>
+      <TeleprompterHighlightDemo settings={settings} />
+    </div>
+  );
+}
+
+function TeleprompterRange({
+  label,
+  max,
+  min,
+  step = 1,
+  suffix = "",
+  value,
+  onChange,
+}: Readonly<{
+  label: string;
+  max: number;
+  min: number;
+  step?: number;
+  suffix?: string;
+  value: number;
+  onChange: (value: number) => void;
+}>) {
+  return (
+    <label className="grid gap-2 text-xs font-medium text-zinc-600">
+      <span className="flex items-center justify-between gap-3">
+        <span>{label}</span>
+        <span className="font-semibold text-zinc-950">
+          {Number.isInteger(value) ? value.toString() : value.toFixed(2)}
+          {suffix}
+        </span>
+      </span>
+      <input
+        className="accent-orange-500"
+        max={max}
+        min={min}
+        onChange={(event) => {
+          onChange(Number(event.currentTarget.value));
+        }}
+        step={step}
+        type="range"
+        value={value}
+      />
+    </label>
+  );
+}
+
+function TeleprompterHighlightDemo({
+  settings,
+}: Readonly<{ settings: TeleprompterHighlightSettings }>) {
+  const [cursorMs, setCursorMs] = useState(0);
+  const sample = "Ready eyes follow the next word before it arrives.";
+  const durationMs = 5200;
+  const wordCues = useMemo(
+    () => buildTeleprompterWordCues(sample, cursorMs, durationMs, settings),
+    [cursorMs, settings],
+  );
+  const words = sample.split(" ");
+
+  useEffect(() => {
+    const interval = globalThis.setInterval(() => {
+      setCursorMs((current) => (current + 90) % durationMs);
+    }, 90);
+    return () => {
+      globalThis.clearInterval(interval);
+    };
+  }, []);
+
+  return (
+    <div className="rounded-md border border-pink-100 bg-white p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-pink-700">Highlight demo</p>
+      <p className="mt-3 whitespace-pre-wrap text-lg leading-10 text-zinc-950">
+        {words.map((word, index) => {
+          const wordCue = wordCues[index];
+          return (
+            <span
+              className={`teleprompter-word teleprompter-word--${wordCue.state}`}
+              data-effect={settings.effectStyle}
+              key={`${word}-${String(index)}`}
+              style={
+                {
+                  "--teleprompter-accent": "#cc0d55",
+                  "--teleprompter-intensity": String(wordCue.intensity),
+                } as CSSProperties
+              }
+            >
+              {word}
+              {index < words.length - 1 ? " " : ""}
+            </span>
+          );
+        })}
+      </p>
+    </div>
   );
 }
 

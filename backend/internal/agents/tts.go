@@ -34,7 +34,11 @@ func NewMockTTSAgent() *MockTTSAgent {
 	return &MockTTSAgent{}
 }
 
-func (agent *MockTTSAgent) Synthesize(_ context.Context, text string) (TTSResult, error) {
+func (agent *MockTTSAgent) Synthesize(ctx context.Context, text string) (TTSResult, error) {
+	return agent.SynthesizeWithVoice(ctx, text, "silent", "")
+}
+
+func (agent *MockTTSAgent) SynthesizeWithVoice(_ context.Context, text string, voice string, _ string) (TTSResult, error) {
 	durationMS := audio.DurationForText(text)
 	wav, err := audio.SilentWAV(durationMS)
 	if err != nil {
@@ -46,7 +50,7 @@ func (agent *MockTTSAgent) Synthesize(_ context.Context, text string) (TTSResult
 		ContentType: "audio/wav",
 		DurationMS:  durationMS,
 		Provider:    "mock",
-		Voice:       "silent",
+		Voice:       strings.TrimSpace(voice),
 	}, nil
 }
 
@@ -148,7 +152,21 @@ func NewKokoroTTSAgent(config KokoroConfig) *KokoroTTSAgent {
 }
 
 func (agent *KokoroTTSAgent) Synthesize(ctx context.Context, text string) (TTSResult, error) {
+	return agent.synthesizeWithConfig(ctx, text, agent.config)
+}
+
+func (agent *KokoroTTSAgent) SynthesizeWithVoice(ctx context.Context, text string, voice string, langCode string) (TTSResult, error) {
 	config := agent.config
+	if cleanVoice := strings.TrimSpace(voice); cleanVoice != "" {
+		config.Voice = cleanVoice
+	}
+	if cleanLangCode := strings.TrimSpace(langCode); cleanLangCode != "" {
+		config.LangCode = cleanLangCode
+	}
+	return agent.synthesizeWithConfig(ctx, text, config)
+}
+
+func (agent *KokoroTTSAgent) synthesizeWithConfig(ctx context.Context, text string, config KokoroConfig) (TTSResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.TimeoutSeconds)*time.Second)
 	defer cancel()
 

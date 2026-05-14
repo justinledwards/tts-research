@@ -12,8 +12,11 @@ export type StageStatus = "waiting" | "running" | "done" | "failed";
 
 export interface CreateVoiceJobRequest {
   text: string;
+  projectId?: string;
   voiceProfileId?: string;
   voiceLanguage?: string;
+  ttsVoice?: string;
+  ttsLanguage?: string;
   adaptiveMode?: boolean;
   runMode?: RunMode;
   performanceMode?: PerformanceMode;
@@ -23,6 +26,13 @@ export interface CreateVoiceJobRequest {
 export type RunMode = "draftPreview" | "fastCreate" | "checkedMaster" | "publishMaster";
 
 export type PerformanceMode = "balanced" | "throughput" | "quality";
+
+export interface VoiceProject {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface PipelineOptions {
   textPreprocess: boolean;
@@ -65,6 +75,8 @@ export interface VoiceProfile {
   referenceScore?: number;
   referenceSpans?: VoiceProfileReferenceSpan[];
   qualityMetrics?: VoiceProfileQualityMetrics;
+  denoise?: VoiceProfileDenoiseMetadata;
+  likeness?: VoiceProfileLikeness;
   audioFormat: string;
   status: VoiceProfileStatus;
   error?: string;
@@ -100,8 +112,36 @@ export interface VoiceProfileQualityMetrics {
   usableDurationMs: number;
   clippingRisk: number;
   noiseRisk: number;
+  noiseRiskBefore?: number;
+  noiseRiskAfter?: number;
   silenceRatio: number;
   sourceCoverage: number;
+}
+
+export interface VoiceProfileDenoiseMetadata {
+  provider: string;
+  strength: string;
+  applied: boolean;
+  rawAudio?: string;
+  cleanAudio?: string;
+  rawPath?: string;
+  cleanPath?: string;
+  noiseRiskBefore?: number;
+  noiseRiskAfter?: number;
+  snrBeforeDb?: number;
+  snrAfterDb?: number;
+  warnings?: string[];
+  reason?: string;
+}
+
+export interface VoiceProfileLikeness {
+  status: "pending" | "ready" | "failed";
+  score?: number;
+  speakerSimilarity?: number;
+  embeddingModel?: string;
+  calibrationText?: string;
+  measuredAt?: string;
+  reason?: string;
 }
 
 export interface VoiceProfileCandidate {
@@ -109,8 +149,14 @@ export interface VoiceProfileCandidate {
   speakerId: string;
   suggestedName: string;
   status: "ready" | "rejected";
+  rank?: number;
+  recommended?: boolean;
+  suitability?: "recommended" | "short_reference" | "rejected";
+  warnings?: string[];
   reason?: string;
   previewAudio?: string;
+  rawPreviewAudio?: string;
+  cleanPreviewAudio?: string;
   referenceAudio?: string;
   referenceDurationMs: number;
   referenceVersion: string;
@@ -119,8 +165,10 @@ export interface VoiceProfileCandidate {
   modelVersion?: string;
   score: number;
   totalSpeechDurationMs: number;
+  referenceSpanCount?: number;
   spans: VoiceProfileReferenceSpan[];
   qualityMetrics: VoiceProfileQualityMetrics;
+  denoise?: VoiceProfileDenoiseMetadata;
   createdAt: string;
   updatedAt: string;
 }
@@ -138,6 +186,8 @@ export interface VoiceProfileSource {
   sourceBytes: number;
   sourceDurationMs?: number;
   normalizedAudio?: string;
+  cleanedAudio?: string;
+  denoise?: VoiceProfileDenoiseMetadata;
   audioFormat: string;
   progressMessage: string;
   progressDetail?: string;
@@ -148,6 +198,18 @@ export interface VoiceProfileSource {
   modelVersion?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface VoiceProfileSourceDiagnostics {
+  mode: string;
+  model: string;
+  modelPath?: string;
+  localModelDir?: string;
+  pythonPath: string;
+  tokenConfigured: boolean;
+  localModelAvailable: boolean;
+  ffmpegAvailable: boolean;
+  setupMessage: string;
 }
 
 export interface CreateVoiceProfileSourceRequest {
@@ -245,6 +307,7 @@ export interface JobProgress {
 
 export interface VoiceJob {
   id: string;
+  projectId: string;
   status: JobStatus;
   adaptiveMode?: boolean;
   runMode?: RunMode;
@@ -265,6 +328,8 @@ export interface VoiceJob {
   durationMs: number;
   provider: string;
   voice: string;
+  ttsVoice?: string;
+  ttsLanguage?: string;
   voiceProfileName?: string;
   retries: RetryMetadata;
   voiceCheck: VoiceCheck;

@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -21,10 +22,14 @@ import (
 
 const (
 	normalizedProfileSourceFilename = "source.wav"
+	cleanedProfileSourceFilename    = "source.cleaned.wav"
 	sourceMetadataFilename          = "analysis.json"
 	profileReferenceVersion         = "v1"
 	minCandidateSpanDurationMS      = 1000
+	dynamicShortReferenceMinMS      = 8000
 	previewDurationMS               = 6000
+	referenceCrossfadeMS            = 30
+	denoiseFastPathNoiseRisk        = 0.045
 )
 
 type VoiceProfileSourceAnalyzer interface {
@@ -51,25 +56,41 @@ type VoiceProfileSourceAnalysisResult struct {
 	Spans        []DetectedSpeakerSpan `json:"spans"`
 }
 
+type VoiceProfileSourceDiagnostics struct {
+	Mode                string `json:"mode"`
+	Model               string `json:"model"`
+	ModelPath           string `json:"modelPath,omitempty"`
+	LocalModelDir       string `json:"localModelDir,omitempty"`
+	PythonPath          string `json:"pythonPath"`
+	TokenConfigured     bool   `json:"tokenConfigured"`
+	LocalModelAvailable bool   `json:"localModelAvailable"`
+	FFmpegAvailable     bool   `json:"ffmpegAvailable"`
+	SetupMessage        string `json:"setupMessage"`
+}
+
 type storedVoiceProfileSource struct {
 	VoiceProfileSource
 }
 
 type pythonProfileSourceAnalyzer struct {
-	pythonPath string
-	scriptPath string
-	model      string
-	token      string
-	strategy   string
+	pythonPath    string
+	scriptPath    string
+	model         string
+	modelPath     string
+	localModelDir string
+	token         string
+	strategy      string
 }
 
 func newPythonProfileSourceAnalyzer(options Options) VoiceProfileSourceAnalyzer {
 	return pythonProfileSourceAnalyzer{
-		pythonPath: strings.TrimSpace(options.VoiceProfileAnalysisPythonPath),
-		scriptPath: strings.TrimSpace(options.VoiceProfileAnalysisScriptPath),
-		model:      strings.TrimSpace(options.VoiceProfileDiarizationModel),
-		token:      strings.TrimSpace(options.VoiceProfileDiarizationToken),
-		strategy:   strings.TrimSpace(options.VoiceProfileAnalysisStrategyVersion),
+		pythonPath:    strings.TrimSpace(options.VoiceProfileAnalysisPythonPath),
+		scriptPath:    strings.TrimSpace(options.VoiceProfileAnalysisScriptPath),
+		model:         strings.TrimSpace(options.VoiceProfileDiarizationModel),
+		modelPath:     strings.TrimSpace(options.VoiceProfileDiarizationModelPath),
+		localModelDir: strings.TrimSpace(options.VoiceProfileDiarizationLocalModelDir),
+		token:         strings.TrimSpace(options.VoiceProfileDiarizationToken),
+		strategy:      strings.TrimSpace(options.VoiceProfileAnalysisStrategyVersion),
 	}
 }
 
@@ -77,13 +98,26 @@ func (analyzer pythonProfileSourceAnalyzer) AnalyzeVoiceProfileSource(
 	ctx context.Context,
 	request VoiceProfileSourceAnalysisRequest,
 ) (VoiceProfileSourceAnalysisResult, error) {
+	model := strings.TrimSpace(request.Model)
+	if model == "" {
+		model = analyzer.model
+	}
+	if model == "" {
+		model = defaultVoiceProfileDiarizationModel
+	}
+
+	model, isLocalModel := resolveLocalDiarizationModelPath(
+		model,
+		analyzer.modelPath,
+		analyzer.localModelDir,
+	)
 	token := strings.TrimSpace(request.Token)
 	if token == "" {
 		token = analyzer.token
 	}
-	if token == "" {
+	if token == "" && !isLocalModel {
 		return VoiceProfileSourceAnalysisResult{}, fmt.Errorf(
-			"%w: PYANNOTE_AUTH_TOKEN or HF_TOKEN is required for speaker-aware profile analysis",
+			"%w: configure PYANNOTE_AUTH_TOKEN/HF_TOKEN once or set VOICE_PROFILE_DIARIZATION_MODEL_PATH to a local pyannote Community-1 checkout",
 			ErrProfileAnalysisUnavailable,
 		)
 	}
@@ -95,13 +129,6 @@ func (analyzer pythonProfileSourceAnalyzer) AnalyzeVoiceProfileSource(
 	scriptPath := strings.TrimSpace(analyzer.scriptPath)
 	if scriptPath == "" {
 		scriptPath = defaultVoiceProfileAnalysisScriptPath
-	}
-	model := strings.TrimSpace(request.Model)
-	if model == "" {
-		model = analyzer.model
-	}
-	if model == "" {
-		model = defaultVoiceProfileDiarizationModel
 	}
 	strategy := strings.TrimSpace(request.StrategyVersion)
 	if strategy == "" {
@@ -119,29 +146,118 @@ func (analyzer pythonProfileSourceAnalyzer) AnalyzeVoiceProfileSource(
 		request.NormalizedPath,
 		"--model",
 		model,
-		"--token",
-		token,
 		"--strategy-version",
 		strategy,
 	)
-	command.Env = append(os.Environ(), "PYANNOTE_METRICS_ENABLED=0")
-	output, err := command.CombinedOutput()
+	command.Env = append(os.Environ(), "PYANNOTE_METRICS_ENABLED=0", "PYANNOTE_AUTH_TOKEN="+token)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	err := command.Run()
 	if err != nil {
+		detail := strings.TrimSpace(stderr.String())
+		if detail == "" {
+			detail = strings.TrimSpace(stdout.String())
+		}
 		return VoiceProfileSourceAnalysisResult{}, fmt.Errorf(
 			"profile analysis script failed: %w: %s",
 			err,
-			strings.TrimSpace(string(output)),
+			detail,
 		)
 	}
 
 	var result VoiceProfileSourceAnalysisResult
-	if err := json.Unmarshal(output, &result); err != nil {
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		return VoiceProfileSourceAnalysisResult{}, fmt.Errorf("parse profile analysis output: %w", err)
 	}
 	if strings.TrimSpace(result.ModelVersion) == "" {
 		result.ModelVersion = model
 	}
 	return result, nil
+}
+
+func (service *Service) GetVoiceProfileSourceDiagnostics() VoiceProfileSourceDiagnostics {
+	model := strings.TrimSpace(service.options.VoiceProfileDiarizationModel)
+	if model == "" {
+		model = defaultVoiceProfileDiarizationModel
+	}
+	modelPath, isLocalModel := resolveLocalDiarizationModelPath(
+		model,
+		service.options.VoiceProfileDiarizationModelPath,
+		service.options.VoiceProfileDiarizationLocalModelDir,
+	)
+	_, ffmpegErr := exec.LookPath("ffmpeg")
+	tokenConfigured := strings.TrimSpace(service.options.VoiceProfileDiarizationToken) != ""
+	mode := "unconfigured"
+	setupMessage := "Install pyannote.audio and configure PYANNOTE_AUTH_TOKEN/HF_TOKEN, or set VOICE_PROFILE_DIARIZATION_MODEL_PATH to a local Community-1 checkout."
+	if isLocalModel {
+		mode = "local"
+		setupMessage = "Using a local pyannote model path. Diarization runs locally without contacting Hugging Face."
+	} else if tokenConfigured {
+		mode = "local-download"
+		setupMessage = "Using Hugging Face access for local pyannote execution. Cache or clone the model to run fully offline."
+	}
+
+	return VoiceProfileSourceDiagnostics{
+		Mode:                mode,
+		Model:               model,
+		ModelPath:           modelPath,
+		LocalModelDir:       strings.TrimSpace(service.options.VoiceProfileDiarizationLocalModelDir),
+		PythonPath:          strings.TrimSpace(service.options.VoiceProfileAnalysisPythonPath),
+		TokenConfigured:     tokenConfigured,
+		LocalModelAvailable: isLocalModel,
+		FFmpegAvailable:     ffmpegErr == nil,
+		SetupMessage:        setupMessage,
+	}
+}
+
+func resolveLocalDiarizationModelPath(model string, modelPath string, localModelDir string) (string, bool) {
+	if existing := existingPath(modelPath); existing != "" {
+		return existing, true
+	}
+	if existing := existingPath(model); existing != "" {
+		return existing, true
+	}
+	localDir := strings.TrimSpace(localModelDir)
+	if localDir == "" {
+		return model, false
+	}
+	candidates := []string{
+		filepath.Join(localDir, sanitizeModelPathPart(model)),
+		filepath.Join(localDir, filepath.Base(model)),
+	}
+	for _, candidate := range candidates {
+		if existing := existingPath(candidate); existing != "" {
+			return existing, true
+		}
+	}
+	return model, false
+}
+
+func existingPath(path string) string {
+	clean := strings.TrimSpace(path)
+	if clean == "" {
+		return ""
+	}
+	info, err := os.Stat(clean)
+	if err != nil || !info.IsDir() {
+		return ""
+	}
+	abs, err := filepath.Abs(clean)
+	if err != nil {
+		return clean
+	}
+	return abs
+}
+
+func sanitizeModelPathPart(model string) string {
+	clean := strings.Trim(strings.TrimSpace(model), "/")
+	if clean == "" {
+		return "model"
+	}
+	replacer := strings.NewReplacer("/", "__", "\\", "__", ":", "_")
+	return replacer.Replace(clean)
 }
 
 func (service *Service) CreateVoiceProfileSource(
@@ -200,6 +316,7 @@ func (service *Service) CreateVoiceProfileSource(
 			ProgressMessage:  "Queued for source analysis",
 			ProgressDetail:   "Waiting to normalize uploaded media.",
 			Stages:           initialVoiceProfileSourceStages(),
+			Candidates:       []VoiceProfileCandidate{},
 			StrategyVersion:  service.options.VoiceProfileAnalysisStrategyVersion,
 			CreatedAt:        now,
 			UpdatedAt:        now,
@@ -226,16 +343,18 @@ func (service *Service) GetVoiceProfileSource(id string) (VoiceProfileSource, er
 func (service *Service) GetVoiceProfileCandidatePreview(
 	sourceID string,
 	candidateID string,
+	kind string,
 ) ([]byte, string, error) {
 	source, candidate, err := service.getVoiceProfileSourceCandidate(sourceID, candidateID)
 	if err != nil {
 		return nil, "", err
 	}
-	if source.ID == "" || strings.TrimSpace(candidate.PreviewPath) == "" {
+	previewPath := candidatePreviewPath(candidate, kind)
+	if source.ID == "" || strings.TrimSpace(previewPath) == "" {
 		return nil, "", ErrAudioNotReady
 	}
 
-	audioBytes, err := os.ReadFile(candidate.PreviewPath)
+	audioBytes, err := os.ReadFile(previewPath)
 	if err != nil {
 		return nil, "", fmt.Errorf("read profile candidate preview: %w", err)
 	}
@@ -323,6 +442,7 @@ func (service *Service) CreateVoiceProfileFromCandidate(
 			ReferenceScore:          candidate.Score,
 			ReferenceSpans:          candidate.Spans,
 			QualityMetrics:          &qualityMetrics,
+			Denoise:                 candidate.Denoise,
 			AudioFormat:             "audio/wav",
 			Status:                  VoiceProfileStatusReady,
 			DurationMS:              referenceDurationMS,
@@ -331,6 +451,8 @@ func (service *Service) CreateVoiceProfileFromCandidate(
 			ReferenceSamples:        candidate.ReferenceAudio,
 		},
 	}
+	likeness := service.measureVoiceProfileLikeness(ctx, profile.VoiceProfile, outputDir)
+	profile.Likeness = &likeness
 
 	metadataPath := filepath.Join(outputDir, "profile.json")
 	if err := writeJSON(metadataPath, profile.VoiceProfile); err != nil {
@@ -342,6 +464,69 @@ func (service *Service) CreateVoiceProfileFromCandidate(
 	return profile.VoiceProfile, nil
 }
 
+func (service *Service) measureVoiceProfileLikeness(
+	ctx context.Context,
+	profile VoiceProfile,
+	outputDir string,
+) VoiceProfileLikeness {
+	calibrationText := strings.TrimSpace(service.options.VoiceProfileLikenessCalibrationText)
+	if calibrationText == "" {
+		calibrationText = defaultVoiceProfileLikenessCalibrationText
+	}
+	withReference, ok := service.tts.(TTSWithReference)
+	if !ok {
+		return pendingVoiceProfileLikeness(
+			"Current TTS provider does not support reference synthesis for calibration.",
+			calibrationText,
+		)
+	}
+	if service.options.VoiceProfileLikenessScorer == nil {
+		return pendingVoiceProfileLikeness("No local speaker-embedding scorer is configured.", calibrationText)
+	}
+	likenessCtx, cancel := context.WithTimeout(
+		ctx,
+		time.Duration(service.options.VoiceProfileLikenessTimeoutSeconds)*time.Second,
+	)
+	defer cancel()
+
+	result, err := withReference.SynthesizeWithReference(
+		likenessCtx,
+		calibrationText,
+		profile.ReferencePath,
+		profile.Language,
+	)
+	if err != nil {
+		return failedVoiceProfileLikeness(
+			fmt.Sprintf("Calibration synthesis failed: %s", err.Error()),
+			calibrationText,
+		)
+	}
+	calibrationPath := filepath.Join(outputDir, "likeness-calibration.wav")
+	if err := os.WriteFile(calibrationPath, result.Audio, 0o644); err != nil {
+		return failedVoiceProfileLikeness(
+			fmt.Sprintf("Write calibration audio failed: %s", err.Error()),
+			calibrationText,
+		)
+	}
+
+	score, err := service.options.VoiceProfileLikenessScorer.ScoreVoiceProfileLikeness(
+		likenessCtx,
+		VoiceProfileLikenessRequest{
+			ReferencePath: profile.ReferencePath,
+			GeneratedPath: calibrationPath,
+			Model:         service.options.VoiceProfileEmbeddingModel,
+			Token:         service.options.VoiceProfileDiarizationToken,
+		},
+	)
+	if err != nil {
+		return failedVoiceProfileLikeness(
+			fmt.Sprintf("Speaker likeness scoring failed: %s", err.Error()),
+			calibrationText,
+		)
+	}
+	return readyVoiceProfileLikeness(score, calibrationText)
+}
+
 func (service *Service) runVoiceProfileSourceAnalysis(
 	ctx context.Context,
 	sourceID string,
@@ -350,6 +535,7 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 ) {
 	outputDir := filepath.Dir(originalPath)
 	normalizedPath := filepath.Join(outputDir, normalizedProfileSourceFilename)
+	cleanedPath := filepath.Join(outputDir, cleanedProfileSourceFilename)
 
 	service.updateVoiceProfileSourceByID(sourceID, func(source *storedVoiceProfileSource) {
 		source.Status = VoiceProfileSourceStatusNormalizing
@@ -365,16 +551,45 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 	}
 
 	service.updateVoiceProfileSourceByID(sourceID, func(source *storedVoiceProfileSource) {
-		source.Status = VoiceProfileSourceStatusAnalyzing
+		source.Status = VoiceProfileSourceStatusNormalizing
 		if sourceDurationMS > 0 {
 			source.SourceDurationMS = sourceDurationMS
 		}
 		source.NormalizedAudio = normalizedProfileSourceFilename
 		source.NormalizedPath = normalizedPath
 		source.AudioFormat = "audio/wav"
-		source.ProgressMessage = "Detecting speakers"
-		source.ProgressDetail = "Running local pyannote diarization over the normalized source."
+		source.ProgressMessage = "Cleaning source audio"
+		source.ProgressDetail = "Removing steady background noise before speaker analysis."
 		updateVoiceProfileSourceStage(source, "normalize", "done", "Source audio is normalized.")
+		updateVoiceProfileSourceStage(source, "denoise", "running", "Cleaning background noise.")
+	})
+
+	denoiseMetadata, err := denoiseProfileSourceAudio(
+		ctx,
+		normalizedPath,
+		cleanedPath,
+		service.options.VoiceProfileDenoiseProvider,
+		service.options.VoiceProfileDenoiseStrength,
+	)
+	if err != nil {
+		service.failVoiceProfileSource(sourceID, fmt.Errorf("denoise source audio: %w", err))
+		return
+	}
+
+	service.updateVoiceProfileSourceByID(sourceID, func(source *storedVoiceProfileSource) {
+		source.Status = VoiceProfileSourceStatusAnalyzing
+		if sourceDurationMS > 0 {
+			source.SourceDurationMS = sourceDurationMS
+		}
+		source.NormalizedAudio = normalizedProfileSourceFilename
+		source.NormalizedPath = normalizedPath
+		source.CleanedAudio = cleanedProfileSourceFilename
+		source.CleanedPath = cleanedPath
+		source.Denoise = &denoiseMetadata
+		source.AudioFormat = "audio/wav"
+		source.ProgressMessage = "Detecting speakers"
+		source.ProgressDetail = "Running local pyannote diarization over the cleaned source."
+		updateVoiceProfileSourceStage(source, "denoise", "done", denoiseMetadata.Reason)
 		updateVoiceProfileSourceStage(source, "analyze", "running", "Detecting speaker turns.")
 	})
 
@@ -382,7 +597,7 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 		ctx,
 		VoiceProfileSourceAnalysisRequest{
 			SourceID:        sourceID,
-			NormalizedPath:  normalizedPath,
+			NormalizedPath:  cleanedPath,
 			Model:           service.options.VoiceProfileDiarizationModel,
 			Token:           service.options.VoiceProfileDiarizationToken,
 			StrategyVersion: service.options.VoiceProfileAnalysisStrategyVersion,
@@ -404,10 +619,12 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 
 	candidates, err := buildVoiceProfileCandidates(
 		normalizedPath,
+		cleanedPath,
 		outputDir,
 		sourceID,
 		result,
 		service.options,
+		denoiseMetadata,
 	)
 	if err != nil {
 		service.failVoiceProfileSource(sourceID, fmt.Errorf("build voice candidates: %w", err))
@@ -541,6 +758,178 @@ func tryCopyNormalizedPCM16WAV(inputPath string, outputPath string) (bool, int, 
 	return true, audio.DurationMSForWAVData(len(data), spec), copyFile(inputPath, outputPath)
 }
 
+func denoiseProfileSourceAudio(
+	ctx context.Context,
+	rawPath string,
+	cleanPath string,
+	provider string,
+	strength string,
+) (VoiceProfileDenoiseMetadata, error) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "" {
+		provider = defaultVoiceProfileDenoiseProvider
+	}
+	strength = strings.ToLower(strings.TrimSpace(strength))
+	if strength == "" {
+		strength = defaultVoiceProfileDenoiseStrength
+	}
+
+	before := pcmNoiseSummaryForPath(rawPath)
+	metadata := VoiceProfileDenoiseMetadata{
+		Provider:        provider,
+		Strength:        strength,
+		RawAudio:        normalizedProfileSourceFilename,
+		CleanAudio:      cleanedProfileSourceFilename,
+		RawPath:         rawPath,
+		CleanPath:       cleanPath,
+		NoiseRiskBefore: before.noiseRisk,
+		SNRBeforeDB:     approximateSNRDB(before.noiseRisk),
+	}
+
+	if provider == "none" {
+		if err := copyFile(rawPath, cleanPath); err != nil {
+			return metadata, err
+		}
+		after := pcmNoiseSummaryForPath(cleanPath)
+		metadata.NoiseRiskAfter = after.noiseRisk
+		metadata.SNRAfterDB = approximateSNRDB(after.noiseRisk)
+		metadata.Reason = "Denoise disabled; using normalized audio for analysis."
+		return metadata, nil
+	}
+	if provider == "ffmpeg" && strength != "strong" && before.noiseRisk <= denoiseFastPathNoiseRisk {
+		if err := copyFile(rawPath, cleanPath); err != nil {
+			return metadata, err
+		}
+		after := pcmNoiseSummaryForPath(cleanPath)
+		metadata.Applied = false
+		metadata.NoiseRiskAfter = after.noiseRisk
+		metadata.SNRAfterDB = approximateSNRDB(after.noiseRisk)
+		metadata.Reason = "Source already measures clean; skipped denoise to preserve speech detail."
+		return metadata, nil
+	}
+	if provider != "ffmpeg" {
+		metadata.Warnings = append(metadata.Warnings, fmt.Sprintf("Unknown denoise provider %q; using normalized audio.", provider))
+		if err := copyFile(rawPath, cleanPath); err != nil {
+			return metadata, err
+		}
+		after := pcmNoiseSummaryForPath(cleanPath)
+		metadata.Provider = "none"
+		metadata.NoiseRiskAfter = after.noiseRisk
+		metadata.SNRAfterDB = approximateSNRDB(after.noiseRisk)
+		metadata.Reason = "Denoise provider was not recognized."
+		return metadata, nil
+	}
+
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		metadata.Warnings = append(metadata.Warnings, "ffmpeg was not available, so denoise fell back to normalized audio.")
+		if copyErr := copyFile(rawPath, cleanPath); copyErr != nil {
+			return metadata, copyErr
+		}
+		after := pcmNoiseSummaryForPath(cleanPath)
+		metadata.Applied = false
+		metadata.NoiseRiskAfter = after.noiseRisk
+		metadata.SNRAfterDB = approximateSNRDB(after.noiseRisk)
+		metadata.Reason = "ffmpeg denoise unavailable; using normalized audio."
+		return metadata, nil
+	}
+
+	var lastErr error
+	for _, filter := range denoiseFilterCandidates(strength) {
+		args := []string{
+			"-hide_banner",
+			"-loglevel",
+			"error",
+			"-nostdin",
+			"-y",
+			"-i",
+			rawPath,
+			"-af",
+			filter,
+			"-acodec",
+			"pcm_s16le",
+			"-ac",
+			"1",
+			"-ar",
+			"24000",
+			"-f",
+			"wav",
+			cleanPath,
+		}
+		output, err := exec.CommandContext(ctx, "ffmpeg", args...).CombinedOutput()
+		if err != nil {
+			lastErr = fmt.Errorf("ffmpeg denoise failed: %w: %s", err, strings.TrimSpace(string(output)))
+			_ = os.Remove(cleanPath)
+			continue
+		}
+		if stat, statErr := os.Stat(cleanPath); statErr == nil && stat.Size() > 0 {
+			after := pcmNoiseSummaryForPath(cleanPath)
+			metadata.Applied = true
+			metadata.NoiseRiskAfter = after.noiseRisk
+			metadata.SNRAfterDB = approximateSNRDB(after.noiseRisk)
+			metadata.Reason = "Applied conservative local ffmpeg denoise before speaker analysis."
+			return metadata, nil
+		}
+		lastErr = errors.New("ffmpeg denoise produced empty output")
+		_ = os.Remove(cleanPath)
+	}
+
+	metadata.Warnings = append(metadata.Warnings, "ffmpeg denoise failed, so analysis used normalized audio.")
+	if lastErr != nil {
+		metadata.Warnings = append(metadata.Warnings, lastErr.Error())
+	}
+	if err := copyFile(rawPath, cleanPath); err != nil {
+		return metadata, err
+	}
+	after := pcmNoiseSummaryForPath(cleanPath)
+	metadata.Applied = false
+	metadata.NoiseRiskAfter = after.noiseRisk
+	metadata.SNRAfterDB = approximateSNRDB(after.noiseRisk)
+	metadata.Reason = "Denoise fallback used normalized audio."
+	return metadata, nil
+}
+
+func denoiseFilterCandidates(strength string) []string {
+	switch strength {
+	case "gentle":
+		return []string{
+			"highpass=f=65,lowpass=f=9500,afftdn=nf=-30,loudnorm=I=-18:TP=-2:LRA=11",
+			"highpass=f=65,lowpass=f=9500,loudnorm=I=-18:TP=-2:LRA=11",
+		}
+	case "strong":
+		return []string{
+			"highpass=f=90,lowpass=f=8000,afftdn=nf=-20,loudnorm=I=-18:TP=-2:LRA=11",
+			"highpass=f=90,lowpass=f=8000,loudnorm=I=-18:TP=-2:LRA=11",
+		}
+	default:
+		return []string{
+			"highpass=f=70,lowpass=f=9000,afftdn=nf=-25,loudnorm=I=-18:TP=-2:LRA=11",
+			"highpass=f=70,lowpass=f=9000,loudnorm=I=-18:TP=-2:LRA=11",
+		}
+	}
+}
+
+type pcmNoiseSummary struct {
+	noiseRisk float64
+}
+
+func pcmNoiseSummaryForPath(path string) pcmNoiseSummary {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return pcmNoiseSummary{noiseRisk: 1}
+	}
+	spec, data, err := audio.ParsePCM16WAV(raw)
+	if err != nil {
+		return pcmNoiseSummary{noiseRisk: 1}
+	}
+	durationMS := audio.DurationMSForWAVData(len(data), spec)
+	rms, silenceRatio, _ := pcmStatsForSpan(data, spec, 0, durationMS)
+	return pcmNoiseSummary{noiseRisk: estimateNoiseRisk(rms, silenceRatio)}
+}
+
+func approximateSNRDB(noiseRisk float64) float64 {
+	return math.Round((6+30*(1-clamp01(noiseRisk)))*10) / 10
+}
+
 type candidateSpanScore struct {
 	span         DetectedSpeakerSpan
 	durationMS   int
@@ -552,21 +941,34 @@ type candidateSpanScore struct {
 }
 
 func buildVoiceProfileCandidates(
-	normalizedPath string,
+	rawPath string,
+	cleanPath string,
 	outputDir string,
 	sourceID string,
 	result VoiceProfileSourceAnalysisResult,
 	options Options,
+	denoiseMetadata VoiceProfileDenoiseMetadata,
 ) ([]VoiceProfileCandidate, error) {
-	raw, err := os.ReadFile(normalizedPath)
+	rawBytes, err := os.ReadFile(rawPath)
 	if err != nil {
 		return nil, err
 	}
-	spec, data, err := audio.ParsePCM16WAV(raw)
+	rawSpec, rawData, err := audio.ParsePCM16WAV(rawBytes)
+	if err != nil {
+		return nil, err
+	}
+	cleanBytes, err := os.ReadFile(cleanPath)
+	if err != nil {
+		return nil, err
+	}
+	spec, data, err := audio.ParsePCM16WAV(cleanBytes)
 	if err != nil {
 		return nil, err
 	}
 	sourceDurationMS := audio.DurationMSForWAVData(len(data), spec)
+	if sourceDurationMS <= 0 {
+		sourceDurationMS = audio.DurationMSForWAVData(len(rawData), rawSpec)
+	}
 
 	spansBySpeaker := map[string][]DetectedSpeakerSpan{}
 	for _, span := range result.Spans {
@@ -600,38 +1002,48 @@ func buildVoiceProfileCandidates(
 			SpeakerID:               speakerID,
 			SuggestedName:           fmt.Sprintf("Voice %d", index+1),
 			Status:                  "rejected",
+			Suitability:             "rejected",
 			Reason:                  "not enough clean single-speaker speech",
 			ReferenceVersion:        profileReferenceVersion,
 			ReferenceSampleStrategy: "speaker-aware-best-spans",
 			StrategyVersion:         options.VoiceProfileAnalysisStrategyVersion,
 			ModelVersion:            result.ModelVersion,
 			TotalSpeechDurationMS:   totalSpeechMS,
+			Denoise:                 cloneDenoiseMetadata(denoiseMetadata),
 			CreatedAt:               now,
 			UpdatedAt:               now,
 		}
 
 		maxReferenceMS := max(1000, options.VoiceProfileReferenceMaxSeconds*1000)
-		minReferenceMS := min(options.VoiceProfileReferenceMinSeconds*1000, maxReferenceMS)
+		preferredMinReferenceMS := min(options.VoiceProfileReferenceMinSeconds*1000, maxReferenceMS)
 		targetReferenceMS := clampInt(
 			options.VoiceProfileReferenceTargetSeconds*1000,
-			minReferenceMS,
+			preferredMinReferenceMS,
 			maxReferenceMS,
 		)
 		selected, metrics := selectCandidateSpans(
 			scoredSpans,
 			sourceDurationMS,
-			minReferenceMS,
+			preferredMinReferenceMS,
 			targetReferenceMS,
 			maxReferenceMS,
 		)
 		candidate.Spans = selected
 		candidate.QualityMetrics = metrics
-		candidate.Score = metrics.CleanSpeech * metrics.SingleSpeakerConfidence
+		candidate.QualityMetrics.NoiseRiskBefore = denoiseMetadata.NoiseRiskBefore
+		candidate.QualityMetrics.NoiseRiskAfter = denoiseMetadata.NoiseRiskAfter
+		candidate.Score = scoreVoiceProfileCandidate(metrics, preferredMinReferenceMS, targetReferenceMS)
 		candidate.ReferenceDurationMS = metrics.UsableDurationMS
-		if metrics.UsableDurationMS < minReferenceMS {
+		candidate.ReferenceSpanCount = len(selected)
+		shortReferenceMinMS := shortReferenceMinimumMS(sourceDurationMS, preferredMinReferenceMS)
+		meetsPreferredDuration := metrics.UsableDurationMS >= preferredMinReferenceMS
+		meetsShortDuration := metrics.UsableDurationMS >= shortReferenceMinMS
+		if !meetsPreferredDuration &&
+			(!meetsShortDuration ||
+				!isStrongShortReference(metrics, sourceDurationMS, preferredMinReferenceMS)) {
 			candidate.Reason = fmt.Sprintf(
-				"needs at least %ds of clean speech; found %s",
-				minReferenceMS/1000,
+				"needs at least %ds of clean speech or a high-quality short reference; found %s",
+				preferredMinReferenceMS/1000,
 				formatDurationMS(metrics.UsableDurationMS),
 			)
 			candidates = append(candidates, candidate)
@@ -659,9 +1071,39 @@ func buildVoiceProfileCandidates(
 		if err := os.WriteFile(previewPath, audio.BuildPCM16WAV(previewPCM, spec), 0o644); err != nil {
 			return nil, err
 		}
+		rawPreviewPath := filepath.Join(candidateDir, "preview.raw.wav")
+		rawReferencePCM := buildReferencePCM(rawData, rawSpec, selected)
+		rawPreviewPCM := trimPCMToDuration(rawReferencePCM, rawSpec, previewDurationMS)
+		if len(rawPreviewPCM) > 0 {
+			if err := os.WriteFile(rawPreviewPath, audio.BuildPCM16WAV(rawPreviewPCM, rawSpec), 0o644); err != nil {
+				return nil, err
+			}
+		}
 
 		candidate.Status = "ready"
+		candidate.Suitability = "recommended"
 		candidate.Reason = "clean single-speaker reference is ready"
+		if len(selected) > 1 {
+			candidate.Warnings = append(
+				candidate.Warnings,
+				fmt.Sprintf("Stitched %d clean same-speaker spans with short crossfades.", len(selected)),
+			)
+		}
+		if candidate.Denoise != nil {
+			candidate.Warnings = append(candidate.Warnings, candidate.Denoise.Warnings...)
+		}
+		if !meetsPreferredDuration {
+			candidate.Suitability = "short_reference"
+			candidate.Reason = "high-quality short reference is ready"
+			candidate.Warnings = append(
+				candidate.Warnings,
+				fmt.Sprintf(
+					"Short reference: %s is below the preferred %ds minimum.",
+					formatDurationMS(candidate.ReferenceDurationMS),
+					preferredMinReferenceMS/1000,
+				),
+			)
+		}
 		candidate.ReferenceAudio = referenceAudio
 		candidate.ReferencePath = referencePath
 		candidate.PreviewAudio = fmt.Sprintf(
@@ -670,12 +1112,111 @@ func buildVoiceProfileCandidates(
 			candidateID,
 		)
 		candidate.PreviewPath = previewPath
+		candidate.CleanPreviewAudio = fmt.Sprintf(
+			"/api/voice-profile-sources/%s/candidates/%s/preview.wav?kind=clean",
+			sourceID,
+			candidateID,
+		)
+		candidate.CleanPreviewPath = previewPath
+		if len(rawPreviewPCM) > 0 {
+			candidate.RawPreviewAudio = fmt.Sprintf(
+				"/api/voice-profile-sources/%s/candidates/%s/preview.wav?kind=raw",
+				sourceID,
+				candidateID,
+			)
+			candidate.RawPreviewPath = rawPreviewPath
+		}
 		candidate.ReferenceDurationMS = audio.DurationMSForWAVData(len(referencePCM), spec)
 		candidate.QualityMetrics.UsableDurationMS = candidate.ReferenceDurationMS
 		candidates = append(candidates, candidate)
 	}
 
+	rankVoiceProfileCandidates(candidates)
 	return candidates, nil
+}
+
+func shortReferenceMinimumMS(sourceDurationMS int, preferredMinReferenceMS int) int {
+	shortMinMS := min(dynamicShortReferenceMinMS, preferredMinReferenceMS)
+	if sourceDurationMS > 0 && sourceDurationMS < preferredMinReferenceMS {
+		shortMinMS = min(shortMinMS, max(6000, int(math.Round(float64(sourceDurationMS)*0.4))))
+	}
+	return shortMinMS
+}
+
+func isStrongShortReference(
+	metrics VoiceProfileQualityMetrics,
+	sourceDurationMS int,
+	preferredMinReferenceMS int,
+) bool {
+	minCleanSpeech := 0.68
+	maxNoiseRisk := 0.28
+	maxSilenceRatio := 0.35
+	minSourceCoverage := 0.0
+	if sourceDurationMS > 0 && sourceDurationMS < preferredMinReferenceMS {
+		minCleanSpeech = 0.40
+		maxNoiseRisk = 0.35
+		maxSilenceRatio = 0.50
+		minSourceCoverage = 0.35
+	}
+	return metrics.CleanSpeech >= minCleanSpeech &&
+		metrics.SingleSpeakerConfidence >= 0.75 &&
+		metrics.ClippingRisk <= 0.18 &&
+		metrics.NoiseRisk <= maxNoiseRisk &&
+		metrics.SilenceRatio <= maxSilenceRatio &&
+		metrics.SourceCoverage >= minSourceCoverage
+}
+
+func rankVoiceProfileCandidates(candidates []VoiceProfileCandidate) {
+	sort.SliceStable(candidates, func(left int, right int) bool {
+		leftReady := candidates[left].Status == "ready"
+		rightReady := candidates[right].Status == "ready"
+		if leftReady != rightReady {
+			return leftReady
+		}
+		if candidates[left].Suitability != candidates[right].Suitability {
+			if candidates[left].Suitability == "recommended" {
+				return true
+			}
+			if candidates[right].Suitability == "recommended" {
+				return false
+			}
+		}
+		return candidates[left].Score > candidates[right].Score
+	})
+	recommendedSet := false
+	for index := range candidates {
+		candidates[index].Rank = index + 1
+		candidates[index].Recommended = false
+		if candidates[index].Status == "ready" && !recommendedSet {
+			candidates[index].Recommended = true
+			recommendedSet = true
+		}
+	}
+}
+
+func scoreVoiceProfileCandidate(
+	metrics VoiceProfileQualityMetrics,
+	preferredMinReferenceMS int,
+	targetReferenceMS int,
+) float64 {
+	durationFit := 0.0
+	if targetReferenceMS > 0 {
+		durationFit = clamp01(float64(metrics.UsableDurationMS) / float64(targetReferenceMS))
+	}
+	if preferredMinReferenceMS > 0 && metrics.UsableDurationMS >= preferredMinReferenceMS {
+		durationFit = max(durationFit, 0.92)
+	}
+	noiseQuality := 1 - clamp01(metrics.NoiseRisk)
+	clippingQuality := 1 - clamp01(metrics.ClippingRisk)
+	silenceQuality := 1 - clamp01(metrics.SilenceRatio)
+	score := metrics.CleanSpeech*0.34 +
+		metrics.SingleSpeakerConfidence*0.22 +
+		durationFit*0.18 +
+		noiseQuality*0.10 +
+		clippingQuality*0.08 +
+		silenceQuality*0.05 +
+		metrics.SourceCoverage*0.03
+	return math.Round(clamp01(score)*1000) / 1000
 }
 
 func scoreSpeakerSpans(
@@ -686,32 +1227,31 @@ func scoreSpeakerSpans(
 ) []candidateSpanScore {
 	scored := make([]candidateSpanScore, 0, len(speakerSpans))
 	for _, span := range speakerSpans {
-		durationMS := span.EndMS - span.StartMS
-		if durationMS < minCandidateSpanDurationMS {
-			continue
+		for _, cleanSpan := range splitSpanAroundOtherSpeakers(span, allSpans) {
+			durationMS := cleanSpan.EndMS - cleanSpan.StartMS
+			if durationMS < minCandidateSpanDurationMS {
+				continue
+			}
+			rms, silenceRatio, clippingRisk := pcmStatsForSpan(data, spec, cleanSpan.StartMS, cleanSpan.EndMS)
+			noiseRisk := estimateNoiseRisk(rms, silenceRatio)
+			confidence := clamp01(cleanSpan.Confidence)
+			if confidence == 0 {
+				confidence = 0.75
+			}
+			cleanSpeech := confidence * (1 - clippingRisk) * (1 - noiseRisk) * (1 - silenceRatio*0.85)
+			if rms < 0.01 || silenceRatio > 0.8 || clippingRisk > 0.4 {
+				continue
+			}
+			scored = append(scored, candidateSpanScore{
+				span:         cleanSpan,
+				durationMS:   durationMS,
+				score:        clamp01(cleanSpeech),
+				rms:          rms,
+				silenceRatio: silenceRatio,
+				clippingRisk: clippingRisk,
+				noiseRisk:    noiseRisk,
+			})
 		}
-		if spanOverlapsOtherSpeaker(span, allSpans) {
-			continue
-		}
-		rms, silenceRatio, clippingRisk := pcmStatsForSpan(data, spec, span.StartMS, span.EndMS)
-		noiseRisk := estimateNoiseRisk(rms, silenceRatio)
-		confidence := clamp01(span.Confidence)
-		if confidence == 0 {
-			confidence = 0.75
-		}
-		cleanSpeech := confidence * (1 - clippingRisk) * (1 - noiseRisk) * (1 - silenceRatio*0.85)
-		if rms < 0.01 || silenceRatio > 0.8 || clippingRisk > 0.4 {
-			continue
-		}
-		scored = append(scored, candidateSpanScore{
-			span:         span,
-			durationMS:   durationMS,
-			score:        clamp01(cleanSpeech),
-			rms:          rms,
-			silenceRatio: silenceRatio,
-			clippingRisk: clippingRisk,
-			noiseRisk:    noiseRisk,
-		})
 	}
 	sort.SliceStable(scored, func(left int, right int) bool {
 		return scored[left].score > scored[right].score
@@ -727,6 +1267,7 @@ func selectCandidateSpans(
 	maxDurationMS int,
 ) ([]VoiceProfileReferenceSpan, VoiceProfileQualityMetrics) {
 	selected := make([]VoiceProfileReferenceSpan, 0)
+	available := append([]candidateSpanScore(nil), scoredSpans...)
 	usableDurationMS := 0
 	totalScore := 0.0
 	totalConfidence := 0.0
@@ -734,7 +1275,7 @@ func selectCandidateSpans(
 	totalClippingRisk := 0.0
 	totalNoiseRisk := 0.0
 
-	for _, scored := range scoredSpans {
+	for len(available) > 0 {
 		if usableDurationMS >= targetDurationMS {
 			break
 		}
@@ -742,6 +1283,13 @@ func selectCandidateSpans(
 		if remaining <= 0 {
 			break
 		}
+		bestIndex := pickDiverseSpanIndex(available, selected, sourceDurationMS)
+		if bestIndex < 0 {
+			break
+		}
+		scored := available[bestIndex]
+		available = append(available[:bestIndex], available[bestIndex+1:]...)
+
 		durationMS := scored.durationMS
 		if durationMS > remaining {
 			durationMS = remaining
@@ -788,10 +1336,44 @@ func selectCandidateSpans(
 	if sourceDurationMS > 0 {
 		metrics.SourceCoverage = clamp01(float64(usableDurationMS) / float64(sourceDurationMS))
 	}
-	if usableDurationMS < minDurationMS {
-		metrics.CleanSpeech = clamp01(metrics.CleanSpeech * 0.5)
-	}
 	return selected, metrics
+}
+
+func pickDiverseSpanIndex(
+	available []candidateSpanScore,
+	selected []VoiceProfileReferenceSpan,
+	sourceDurationMS int,
+) int {
+	bestIndex := -1
+	bestScore := -1.0
+	for index, scored := range available {
+		adjustedScore := scored.score
+		if len(selected) > 0 && sourceDurationMS > 0 {
+			adjustedScore += temporalDiversityBonus(scored.span, selected, sourceDurationMS)
+		}
+		if adjustedScore > bestScore {
+			bestScore = adjustedScore
+			bestIndex = index
+		}
+	}
+	return bestIndex
+}
+
+func temporalDiversityBonus(
+	span DetectedSpeakerSpan,
+	selected []VoiceProfileReferenceSpan,
+	sourceDurationMS int,
+) float64 {
+	center := span.StartMS + (span.EndMS-span.StartMS)/2
+	nearestDistance := sourceDurationMS
+	for _, selectedSpan := range selected {
+		selectedCenter := selectedSpan.StartMS + (selectedSpan.EndMS-selectedSpan.StartMS)/2
+		distance := absInt(center - selectedCenter)
+		if distance < nearestDistance {
+			nearestDistance = distance
+		}
+	}
+	return clamp01(float64(nearestDistance)/float64(sourceDurationMS)) * 0.12
 }
 
 func buildReferencePCM(
@@ -799,11 +1381,62 @@ func buildReferencePCM(
 	spec audio.WAVSpec,
 	spans []VoiceProfileReferenceSpan,
 ) []byte {
-	pcm := make([]byte, 0)
+	pcm := make([]byte, 0, referencePCMCapacity(spec, spans))
 	for _, span := range spans {
-		pcm = append(pcm, pcmSlice(data, spec, span.StartMS, span.EndMS)...)
+		next := pcmSlice(data, spec, span.StartMS, span.EndMS)
+		if len(pcm) == 0 {
+			pcm = append(pcm, next...)
+			continue
+		}
+		pcm = appendPCMWithCrossfade(pcm, next, spec, referenceCrossfadeMS)
 	}
 	return pcm
+}
+
+func referencePCMCapacity(spec audio.WAVSpec, spans []VoiceProfileReferenceSpan) int {
+	capacity := 0
+	for _, span := range spans {
+		capacity += bytesForDuration(spec, span.DurationMS)
+	}
+	return max(0, capacity)
+}
+
+func appendPCMWithCrossfade(base []byte, next []byte, spec audio.WAVSpec, crossfadeMS int) []byte {
+	bytesPerFrame := spec.ChannelCount * spec.BitsPerSample / 8
+	if bytesPerFrame <= 0 || spec.BitsPerSample != 16 || crossfadeMS <= 0 || len(base) == 0 || len(next) == 0 {
+		output := make([]byte, 0, len(base)+len(next))
+		output = append(output, base...)
+		output = append(output, next...)
+		return output
+	}
+
+	fadeBytes := bytesForDuration(spec, crossfadeMS)
+	fadeBytes -= fadeBytes % bytesPerFrame
+	if fadeBytes <= 0 || fadeBytes >= len(base) || fadeBytes >= len(next) {
+		output := make([]byte, 0, len(base)+len(next))
+		output = append(output, base...)
+		output = append(output, next...)
+		return output
+	}
+
+	output := make([]byte, len(base))
+	copy(output, base)
+	fadeFrames := fadeBytes / bytesPerFrame
+	for frame := 0; frame < fadeFrames; frame += 1 {
+		alpha := float64(frame+1) / float64(fadeFrames+1)
+		for channel := 0; channel < spec.ChannelCount; channel += 1 {
+			offset := frame*bytesPerFrame + channel*2
+			baseOffset := len(output) - fadeBytes + offset
+			nextOffset := offset
+			baseSample := int16(binary.LittleEndian.Uint16(output[baseOffset : baseOffset+2]))
+			nextSample := int16(binary.LittleEndian.Uint16(next[nextOffset : nextOffset+2]))
+			mixed := int(math.Round(float64(baseSample)*(1-alpha) + float64(nextSample)*alpha))
+			mixed = clampInt(mixed, -32768, 32767)
+			binary.LittleEndian.PutUint16(output[baseOffset:baseOffset+2], uint16(int16(mixed)))
+		}
+	}
+	output = append(output, next[fadeBytes:]...)
+	return output
 }
 
 func trimPCMToDuration(data []byte, spec audio.WAVSpec, durationMS int) []byte {
@@ -888,18 +1521,56 @@ func estimateNoiseRisk(rms float64, silenceRatio float64) float64 {
 	return clamp01(lowLevelRisk*0.8 + silenceRatio*0.25)
 }
 
-func spanOverlapsOtherSpeaker(span DetectedSpeakerSpan, allSpans []DetectedSpeakerSpan) bool {
+type spanInterval struct {
+	startMS int
+	endMS   int
+}
+
+func splitSpanAroundOtherSpeakers(
+	span DetectedSpeakerSpan,
+	allSpans []DetectedSpeakerSpan,
+) []DetectedSpeakerSpan {
+	intervals := []spanInterval{{startMS: span.StartMS, endMS: span.EndMS}}
 	for _, other := range allSpans {
 		if other.SpeakerID == span.SpeakerID {
 			continue
 		}
 		overlapStart := max(span.StartMS, other.StartMS)
 		overlapEnd := min(span.EndMS, other.EndMS)
-		if overlapEnd-overlapStart >= 250 {
-			return true
+		if overlapEnd-overlapStart < 250 {
+			continue
+		}
+
+		next := make([]spanInterval, 0, len(intervals)+1)
+		for _, interval := range intervals {
+			if overlapEnd <= interval.startMS || overlapStart >= interval.endMS {
+				next = append(next, interval)
+				continue
+			}
+			if overlapStart-interval.startMS >= minCandidateSpanDurationMS {
+				next = append(next, spanInterval{startMS: interval.startMS, endMS: overlapStart})
+			}
+			if interval.endMS-overlapEnd >= minCandidateSpanDurationMS {
+				next = append(next, spanInterval{startMS: overlapEnd, endMS: interval.endMS})
+			}
+		}
+		intervals = next
+		if len(intervals) == 0 {
+			return nil
 		}
 	}
-	return false
+
+	spans := make([]DetectedSpeakerSpan, 0, len(intervals))
+	for _, interval := range intervals {
+		if interval.endMS-interval.startMS < minCandidateSpanDurationMS {
+			continue
+		}
+		cleanSpan := span
+		cleanSpan.StartMS = interval.startMS
+		cleanSpan.EndMS = interval.endMS
+		spans = append(spans, cleanSpan)
+	}
+	return spans
 }
 
 func (service *Service) getVoiceProfileSourceCandidate(
@@ -916,6 +1587,27 @@ func (service *Service) getVoiceProfileSourceCandidate(
 		}
 	}
 	return VoiceProfileSource{}, VoiceProfileCandidate{}, ErrProfileCandidateNotFound
+}
+
+func candidatePreviewPath(candidate VoiceProfileCandidate, kind string) string {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "raw":
+		if strings.TrimSpace(candidate.RawPreviewPath) != "" {
+			return candidate.RawPreviewPath
+		}
+	case "clean", "":
+		if strings.TrimSpace(candidate.CleanPreviewPath) != "" {
+			return candidate.CleanPreviewPath
+		}
+	}
+	return candidate.PreviewPath
+}
+
+func cloneDenoiseMetadata(metadata VoiceProfileDenoiseMetadata) *VoiceProfileDenoiseMetadata {
+	warnings := append([]string(nil), metadata.Warnings...)
+	copy := metadata
+	copy.Warnings = warnings
+	return &copy
 }
 
 func (service *Service) updateVoiceProfileSource(source storedVoiceProfileSource) {
@@ -974,7 +1666,8 @@ func (service *Service) writeVoiceProfileSourceMetadata(source VoiceProfileSourc
 func initialVoiceProfileSourceStages() []VoiceProfileSourceStage {
 	return []VoiceProfileSourceStage{
 		{Name: "normalize", Status: "waiting", Detail: "Waiting for upload."},
-		{Name: "analyze", Status: "waiting", Detail: "Waiting for normalized audio."},
+		{Name: "denoise", Status: "waiting", Detail: "Waiting for normalized audio."},
+		{Name: "analyze", Status: "waiting", Detail: "Waiting for cleaned audio."},
 		{Name: "score", Status: "waiting", Detail: "Waiting for speaker turns."},
 	}
 }
@@ -1041,6 +1734,13 @@ func clampInt(value int, minValue int, maxValue int) int {
 	}
 	if value > maxValue {
 		return maxValue
+	}
+	return value
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
 	}
 	return value
 }

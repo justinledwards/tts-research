@@ -10,6 +10,7 @@
 .env.*
 !.env.example
 .venv/
+.venv-*/
 backend/.venv/
 backend/.venv-bonsai/
 backend/.venv-kokoclone/
@@ -54,6 +55,8 @@ backend/data/**
 !backend/data/.gitkeep
 backend/tmp/
 demo/
+model/
+voice/
 frontend/.vercel/
 
 # Tool caches

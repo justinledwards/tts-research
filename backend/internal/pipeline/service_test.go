@@ -3,6 +3,7 @@ package pipeline_test
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -59,6 +60,32 @@ func TestCreateJobCompletesWithMockAgents(t *testing.T) {
 	}
 }
 
+func TestCreateJobCanSelectProviderVoice(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:        "Read this with a selected voice.",
+		TTSVoice:    "bf_emma",
+		TTSLanguage: "b",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.TTSVoice != "bf_emma" {
+		t.Fatalf("job TTSVoice = %q, want bf_emma", completed.TTSVoice)
+	}
+	if completed.TTSLanguage != "b" {
+		t.Fatalf("job TTSLanguage = %q, want b", completed.TTSLanguage)
+	}
+	if completed.Voice != "bf_emma" {
+		t.Fatalf("completed voice = %q, want selected provider voice", completed.Voice)
+	}
+}
+
 func TestCreateJobCanSkipTextPreprocessing(t *testing.T) {
 	t.Parallel()
 
@@ -67,7 +94,7 @@ func TestCreateJobCanSkipTextPreprocessing(t *testing.T) {
 		optimizer,
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir()},
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
 	)
 
 	input := "Keep this text exactly as written."
@@ -93,6 +120,76 @@ func TestCreateJobCanSkipTextPreprocessing(t *testing.T) {
 	}
 }
 
+func TestProjectsCreateRenameAndGroupJobs(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:     3,
+			JobDataDir:     t.TempDir(),
+			ProjectDataDir: t.TempDir(),
+		},
+	)
+
+	defaultProjects := service.ListProjects()
+	if len(defaultProjects) == 0 || defaultProjects[0].ID != "default" {
+		t.Fatalf("default project should be first, got %#v", defaultProjects)
+	}
+
+	project, err := service.CreateProject("Long demo project")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	renamed, err := service.UpdateProject(project.ID, "Ozzy demo profile validation")
+	if err != nil {
+		t.Fatalf("UpdateProject returned error: %v", err)
+	}
+	if renamed.Name != "Ozzy demo profile validation" {
+		t.Fatalf("project name = %q, want renamed value", renamed.Name)
+	}
+
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		ProjectID: project.ID,
+		Text:      "Project-specific job text.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.ProjectID != project.ID {
+		t.Fatalf("job project id = %q, want %q", completed.ProjectID, project.ID)
+	}
+
+	projectJobs, err := service.ListProjectJobs(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectJobs returned error: %v", err)
+	}
+	if len(projectJobs) != 1 || projectJobs[0].ID != job.ID {
+		t.Fatalf("project jobs = %#v, want created job only", projectJobs)
+	}
+
+	defaultJob, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text: "Legacy clients should land in the default project.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	completedDefault := waitForJob(t, service, defaultJob.ID, pipeline.JobStatusCompleted)
+	if completedDefault.ProjectID != "default" {
+		t.Fatalf("default job project id = %q, want default", completedDefault.ProjectID)
+	}
+	defaultJobs, err := service.ListProjectJobs("")
+	if err != nil {
+		t.Fatalf("ListProjectJobs(default) returned error: %v", err)
+	}
+	if len(defaultJobs) != 1 || defaultJobs[0].ID != defaultJob.ID {
+		t.Fatalf("default project jobs = %#v, want legacy/default job", defaultJobs)
+	}
+}
+
 func TestCreateJobCanSkipASRCheckAndRetry(t *testing.T) {
 	t.Parallel()
 
@@ -101,7 +198,7 @@ func TestCreateJobCanSkipASRCheckAndRetry(t *testing.T) {
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		checker,
-		pipeline.Options{MaxRetries: 3, SegmentMaxRunes: 18, JobDataDir: t.TempDir()},
+		pipeline.Options{MaxRetries: 3, SegmentMaxRunes: 18, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
 	)
 
 	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
@@ -144,6 +241,7 @@ func TestCreateJobCanIgnoreSelectedVoiceProfile(t *testing.T) {
 		pipeline.Options{
 			MaxRetries:      3,
 			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
 			VoiceProfileDir: t.TempDir(),
 		},
 	)
@@ -194,7 +292,7 @@ func TestCreateJobPublishesPartialAudioWhileSynthesizing(t *testing.T) {
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{MaxRetries: 3, SegmentMaxRunes: 10, JobDataDir: t.TempDir()},
+		pipeline.Options{MaxRetries: 3, SegmentMaxRunes: 10, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
 	)
 
 	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: "first short sentence. second short sentence. third short sentence"})
@@ -238,7 +336,7 @@ func TestGetAudioSegmentReturnsOnlyWhenReady(t *testing.T) {
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{MaxRetries: 3, SegmentMaxRunes: 18, JobDataDir: t.TempDir()},
+		pipeline.Options{MaxRetries: 3, SegmentMaxRunes: 18, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
 	)
 
 	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: "first short sentence. second short sentence. third short sentence"})
@@ -291,6 +389,7 @@ func TestCreateVoiceProfileTrimsLongPCM16WAVReference(t *testing.T) {
 		agents.NewMockVoiceCheckerAgent(),
 		pipeline.Options{
 			JobDataDir:                      t.TempDir(),
+			ProjectDataDir:                  t.TempDir(),
 			VoiceProfileDir:                 t.TempDir(),
 			VoiceProfileReferenceMaxSeconds: 1,
 		},
@@ -339,6 +438,7 @@ func TestCreateVoiceProfileKeepsShortPCM16WAVReference(t *testing.T) {
 		agents.NewMockVoiceCheckerAgent(),
 		pipeline.Options{
 			JobDataDir:                      t.TempDir(),
+			ProjectDataDir:                  t.TempDir(),
 			VoiceProfileDir:                 t.TempDir(),
 			VoiceProfileReferenceMaxSeconds: 5,
 		},
@@ -420,14 +520,157 @@ func TestCreateVoiceProfileSourceBuildsCandidateReference(t *testing.T) {
 	if candidate.ReferenceDurationMS > 46_000 {
 		t.Fatalf("reference duration = %d, want close to 45s target", candidate.ReferenceDurationMS)
 	}
+	if candidate.Score < 0.70 {
+		t.Fatalf("candidate score = %f, want measurable high-quality score", candidate.Score)
+	}
 	if len(candidate.Spans) < 2 {
 		t.Fatalf("selected span count = %d, want non-contiguous best material", len(candidate.Spans))
 	}
 	if candidate.PreviewAudio == "" {
 		t.Fatal("candidate should expose a preview endpoint")
 	}
+	if ready.NormalizedPath == "" || ready.CleanedPath == "" || ready.NormalizedPath == ready.CleanedPath {
+		t.Fatalf("source should preserve raw and cleaned paths, normalized=%q cleaned=%q", ready.NormalizedPath, ready.CleanedPath)
+	}
+	if ready.Denoise == nil || ready.Denoise.Provider != "none" {
+		t.Fatalf("denoise metadata = %#v, want disabled local metadata", ready.Denoise)
+	}
+	rawPreview, rawContentType, err := service.GetVoiceProfileCandidatePreview(
+		ready.ID,
+		candidate.ID,
+		"raw",
+	)
+	if err != nil {
+		t.Fatalf("raw preview returned error: %v", err)
+	}
+	if rawContentType != "audio/wav" {
+		t.Fatalf("raw preview content type = %q, want audio/wav", rawContentType)
+	}
+	if _, _, err := audio.ParsePCM16WAV(rawPreview); err != nil {
+		t.Fatalf("raw preview should be valid WAV: %v", err)
+	}
+	cleanPreview, cleanContentType, err := service.GetVoiceProfileCandidatePreview(
+		ready.ID,
+		candidate.ID,
+		"clean",
+	)
+	if err != nil {
+		t.Fatalf("clean preview returned error: %v", err)
+	}
+	if cleanContentType != "audio/wav" {
+		t.Fatalf("clean preview content type = %q, want audio/wav", cleanContentType)
+	}
+	if _, _, err := audio.ParsePCM16WAV(cleanPreview); err != nil {
+		t.Fatalf("clean preview should be valid WAV: %v", err)
+	}
 	if _, err := os.Stat(candidate.ReferencePath); err != nil {
 		t.Fatalf("candidate reference should exist: %v", err)
+	}
+}
+
+func TestCreateVoiceProfileSourceSkipsDenoiseForAlreadyCleanAudio(t *testing.T) {
+	t.Parallel()
+
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:                         3,
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileSourceDir:              t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileSourceAnalyzer: mockProfileSourceAnalyzer{
+				result: pipeline.VoiceProfileSourceAnalysisResult{
+					ModelVersion: "mock-diarizer",
+					Spans: []pipeline.DetectedSpeakerSpan{
+						{SpeakerID: "SPEAKER_00", StartMS: 0, EndMS: 25_000, Confidence: 0.94},
+					},
+				},
+			},
+			VoiceProfileDenoiseProvider: "ffmpeg",
+			VoiceProfileDenoiseStrength: "balanced",
+		},
+	)
+
+	source, err := service.CreateVoiceProfileSource(context.Background(), sourcePath, "clean.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSource returned error: %v", err)
+	}
+
+	ready := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusReady)
+	if ready.Denoise == nil {
+		t.Fatal("expected denoise metadata")
+	}
+	if ready.Denoise.Applied {
+		t.Fatalf("denoise applied = true, want fast-path skip for clean audio: %#v", ready.Denoise)
+	}
+	if !strings.Contains(ready.Denoise.Reason, "skipped denoise") {
+		t.Fatalf("denoise reason = %q, want skip explanation", ready.Denoise.Reason)
+	}
+}
+
+func TestVoiceProfileSourceDiagnosticsUsesLocalModelPathWithoutToken(t *testing.T) {
+	t.Parallel()
+
+	localModelPath := t.TempDir()
+	fakePython := filepath.Join(t.TempDir(), "fake-python")
+	if err := os.WriteFile(
+		fakePython,
+		[]byte("#!/bin/sh\nprintf '%s\\n' '{\"modelVersion\":\"local-mock\",\"spans\":[{\"speakerId\":\"SPEAKER_00\",\"startMs\":0,\"endMs\":25000,\"confidence\":0.96}]}'\n"),
+		0o755,
+	); err != nil {
+		t.Fatalf("write fake analyzer: %v", err)
+	}
+
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileSourceDir:              t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDiarizationModelPath:   localModelPath,
+			VoiceProfileAnalysisPythonPath:     fakePython,
+			VoiceProfileAnalysisScriptPath:     "ignored.py",
+			VoiceProfileDenoiseProvider:        "none",
+		},
+	)
+
+	diagnostics := service.GetVoiceProfileSourceDiagnostics()
+	if diagnostics.Mode != "local" {
+		t.Fatalf("diagnostics mode = %q, want local", diagnostics.Mode)
+	}
+	if diagnostics.TokenConfigured {
+		t.Fatal("token should not be required when local model path exists")
+	}
+	if !diagnostics.LocalModelAvailable {
+		t.Fatal("local model path should be reported as available")
+	}
+
+	source, err := service.CreateVoiceProfileSource(
+		context.Background(),
+		sourcePath,
+		"local-speaker.wav",
+		0,
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSource returned error: %v", err)
+	}
+	ready := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusReady)
+	if len(ready.Candidates) != 1 || ready.Candidates[0].Status != "ready" {
+		t.Fatalf("ready candidates = %#v, want one local-analysis candidate", ready.Candidates)
 	}
 }
 
@@ -441,6 +684,7 @@ func TestCreateVoiceProfileSourceFailsClearlyWithoutDiarizationConfig(t *testing
 		agents.NewMockVoiceCheckerAgent(),
 		pipeline.Options{
 			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
 			VoiceProfileDir:                    t.TempDir(),
 			VoiceProfileSourceDir:              t.TempDir(),
 			VoiceProfileReferenceMinSeconds:    20,
@@ -448,6 +692,7 @@ func TestCreateVoiceProfileSourceFailsClearlyWithoutDiarizationConfig(t *testing
 			VoiceProfileReferenceMaxSeconds:    60,
 			VoiceProfileAnalysisPythonPath:     "python3",
 			VoiceProfileAnalysisScriptPath:     "./scripts/profile_analyze.py",
+			VoiceProfileDenoiseProvider:        "none",
 		},
 	)
 
@@ -460,10 +705,162 @@ func TestCreateVoiceProfileSourceFailsClearlyWithoutDiarizationConfig(t *testing
 	if err != nil {
 		t.Fatalf("CreateVoiceProfileSource returned error: %v", err)
 	}
+	sourceJSON, err := json.Marshal(source)
+	if err != nil {
+		t.Fatalf("marshal source: %v", err)
+	}
+	if !strings.Contains(string(sourceJSON), `"candidates":[]`) {
+		t.Fatalf("queued source candidates JSON = %s, want empty array", string(sourceJSON))
+	}
 
 	failed := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusFailed)
 	if !strings.Contains(failed.Error, "PYANNOTE_AUTH_TOKEN") {
 		t.Fatalf("error = %q, want clear pyannote token setup message", failed.Error)
+	}
+}
+
+func TestCreateVoiceProfileSourceRanksShortHighQualityCandidateAndRejectsWeakVoice(t *testing.T) {
+	t.Parallel()
+
+	sourcePath := writeToneWAV(t, 17_000, 9500)
+	service := newProfileSourceService(
+		t,
+		mockProfileSourceAnalyzer{
+			result: pipeline.VoiceProfileSourceAnalysisResult{
+				ModelVersion: "mock-diarizer",
+				Spans: []pipeline.DetectedSpeakerSpan{
+					{SpeakerID: "SPEAKER_00", StartMS: 0, EndMS: 12_000, Confidence: 0.98},
+					{SpeakerID: "SPEAKER_01", StartMS: 13_000, EndMS: 17_000, Confidence: 0.62},
+				},
+			},
+		},
+	)
+
+	source, err := service.CreateVoiceProfileSource(context.Background(), sourcePath, "Ozzy_Osbourne.mp4", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSource returned error: %v", err)
+	}
+
+	ready := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusReady)
+	if len(ready.Candidates) != 2 {
+		t.Fatalf("candidate count = %d, want two detected speakers", len(ready.Candidates))
+	}
+	best := ready.Candidates[0]
+	if best.SpeakerID != "SPEAKER_00" || best.Status != "ready" {
+		t.Fatalf("best candidate = %#v, want SPEAKER_00 ready", best)
+	}
+	if !best.Recommended {
+		t.Fatal("best viable short reference should be recommended")
+	}
+	if best.Suitability != "short_reference" {
+		t.Fatalf("best suitability = %q, want short_reference", best.Suitability)
+	}
+	if best.ReferenceDurationMS < 8_000 || best.ReferenceDurationMS >= 20_000 {
+		t.Fatalf("reference duration = %d, want dynamic 8-20s short reference", best.ReferenceDurationMS)
+	}
+	if len(best.Warnings) == 0 {
+		t.Fatal("short reference candidate should include a warning")
+	}
+	weak := ready.Candidates[1]
+	if weak.SpeakerID != "SPEAKER_01" || weak.Status != "rejected" {
+		t.Fatalf("weak candidate = %#v, want SPEAKER_01 rejected", weak)
+	}
+}
+
+func TestCreateVoiceProfileSourceStitchesCleanMaterialAroundOverlap(t *testing.T) {
+	t.Parallel()
+
+	sourcePath := writeToneWAV(t, 10_000, 9500)
+	service := newProfileSourceService(
+		t,
+		mockProfileSourceAnalyzer{
+			result: pipeline.VoiceProfileSourceAnalysisResult{
+				ModelVersion: "mock-diarizer",
+				Spans: []pipeline.DetectedSpeakerSpan{
+					{SpeakerID: "SPEAKER_00", StartMS: 0, EndMS: 10_000, Confidence: 0.96},
+					{SpeakerID: "SPEAKER_01", StartMS: 2_000, EndMS: 3_000, Confidence: 0.78},
+					{SpeakerID: "SPEAKER_01", StartMS: 7_000, EndMS: 8_000, Confidence: 0.78},
+				},
+			},
+		},
+	)
+
+	source, err := service.CreateVoiceProfileSource(context.Background(), sourcePath, "overlap.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSource returned error: %v", err)
+	}
+
+	ready := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusReady)
+	best := ready.Candidates[0]
+	if best.SpeakerID != "SPEAKER_00" || best.Status != "ready" {
+		t.Fatalf("best candidate = %#v, want clean parts of SPEAKER_00 ready", best)
+	}
+	if len(best.Spans) != 3 {
+		t.Fatalf("selected span count = %d, want three non-overlap spans", len(best.Spans))
+	}
+	if best.ReferenceDurationMS < 7_500 || best.ReferenceDurationMS > 8_500 {
+		t.Fatalf("reference duration = %d, want overlap removed from 10s source", best.ReferenceDurationMS)
+	}
+	if !strings.Contains(strings.Join(best.Warnings, " "), "Stitched 3 clean same-speaker spans") {
+		t.Fatalf("warnings = %#v, want stitched-span explanation", best.Warnings)
+	}
+	weak := ready.Candidates[1]
+	if weak.SpeakerID != "SPEAKER_01" || weak.Status != "rejected" {
+		t.Fatalf("weak candidate = %#v, want short overlapped speaker rejected", weak)
+	}
+}
+
+func TestCreateVoiceProfileSourceAcceptsVeryShortSourceBestSpeaker(t *testing.T) {
+	t.Parallel()
+
+	sourcePath := writeToneWAV(t, 17_000, 9500)
+	service := newProfileSourceService(
+		t,
+		mockProfileSourceAnalyzer{
+			result: pipeline.VoiceProfileSourceAnalysisResult{
+				ModelVersion: "mock-diarizer",
+				Spans: []pipeline.DetectedSpeakerSpan{
+					{SpeakerID: "SPEAKER_00", StartMS: 3_000, EndMS: 4_500, Confidence: 0.85},
+					{SpeakerID: "SPEAKER_00", StartMS: 15_000, EndMS: 17_000, Confidence: 0.85},
+					{SpeakerID: "SPEAKER_01", StartMS: 300, EndMS: 3_000, Confidence: 0.85},
+					{SpeakerID: "SPEAKER_01", StartMS: 7_200, EndMS: 8_300, Confidence: 0.85},
+					{SpeakerID: "SPEAKER_01", StartMS: 10_100, EndMS: 13_800, Confidence: 0.85},
+				},
+			},
+		},
+	)
+
+	source, err := service.CreateVoiceProfileSource(
+		context.Background(),
+		sourcePath,
+		"Ozzy_Osbourne.mp4",
+		0,
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSource returned error: %v", err)
+	}
+
+	ready := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusReady)
+	if len(ready.Candidates) != 2 {
+		t.Fatalf("candidate count = %d, want two detected speakers", len(ready.Candidates))
+	}
+	best := ready.Candidates[0]
+	if best.SpeakerID != "SPEAKER_01" || best.Status != "ready" {
+		t.Fatalf("best candidate = %#v, want short SPEAKER_01 ready", best)
+	}
+	if !best.Recommended || best.Suitability != "short_reference" {
+		t.Fatalf(
+			"best recommendation = (%v, %q), want recommended short_reference",
+			best.Recommended,
+			best.Suitability,
+		)
+	}
+	if best.ReferenceDurationMS < 6_000 || best.ReferenceDurationMS >= 20_000 {
+		t.Fatalf("reference duration = %d, want dynamic short source reference", best.ReferenceDurationMS)
+	}
+	weak := ready.Candidates[1]
+	if weak.SpeakerID != "SPEAKER_00" || weak.Status != "rejected" {
+		t.Fatalf("weak candidate = %#v, want SPEAKER_00 rejected", weak)
 	}
 }
 
@@ -579,6 +976,54 @@ func TestCreateVoiceProfileFromCandidateCopiesCompatibleReference(t *testing.T) 
 	if profile.QualityMetrics == nil || profile.QualityMetrics.CleanSpeech <= 0 {
 		t.Fatalf("profile quality metrics should be copied, got %#v", profile.QualityMetrics)
 	}
+	if profile.Denoise == nil || profile.Denoise.Provider != "none" {
+		t.Fatalf("profile denoise metadata = %#v, want copied candidate denoise metadata", profile.Denoise)
+	}
+	if profile.Likeness == nil || profile.Likeness.Status != "pending" {
+		t.Fatalf("profile likeness = %#v, want pending when reference synthesis is unavailable", profile.Likeness)
+	}
+}
+
+func TestCreateVoiceProfileFromCandidateStoresScoredLikeness(t *testing.T) {
+	t.Parallel()
+
+	sourcePath := writeToneWAV(t, 30_000, 10_000)
+	service := newProfileSourceServiceWithTTS(
+		t,
+		mockProfileSourceAnalyzer{
+			result: pipeline.VoiceProfileSourceAnalysisResult{
+				ModelVersion: "mock-diarizer",
+				Spans: []pipeline.DetectedSpeakerSpan{
+					{SpeakerID: "SPEAKER_00", StartMS: 0, EndMS: 30_000, Confidence: 0.94},
+				},
+			},
+		},
+		mockReferenceTTS{},
+		mockLikenessScorer{score: 0.87},
+	)
+
+	source, err := service.CreateVoiceProfileSource(context.Background(), sourcePath, "narrator.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSource returned error: %v", err)
+	}
+	ready := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusReady)
+	profile, err := service.CreateVoiceProfileFromCandidate(
+		context.Background(),
+		ready.ID,
+		ready.Candidates[0].ID,
+		"Narrator",
+		"en",
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileFromCandidate returned error: %v", err)
+	}
+
+	if profile.Likeness == nil || profile.Likeness.Status != "ready" {
+		t.Fatalf("profile likeness = %#v, want ready", profile.Likeness)
+	}
+	if profile.Likeness.Score < 0.86 {
+		t.Fatalf("profile likeness score = %f, want scorer value", profile.Likeness.Score)
+	}
 }
 
 func TestCreateJobPublishesSegmentTelemetry(t *testing.T) {
@@ -588,7 +1033,7 @@ func TestCreateJobPublishesSegmentTelemetry(t *testing.T) {
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{MaxRetries: 3, SegmentMaxRunes: 18, JobDataDir: t.TempDir()},
+		pipeline.Options{MaxRetries: 3, SegmentMaxRunes: 18, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
 	)
 
 	job, err := service.CreateJob(
@@ -635,6 +1080,7 @@ func TestNewServiceStudioDefaultsAutoTuneThroughput(t *testing.T) {
 			StudioSegmentWorkers:  0,
 			StudioSegmentMaxRunes: 0,
 			JobDataDir:            t.TempDir(),
+			ProjectDataDir:        t.TempDir(),
 		},
 	)
 
@@ -669,6 +1115,7 @@ func TestNewServiceStudioDefaultsAllowExplicitOverride(t *testing.T) {
 			StudioSegmentWorkers:  2,
 			StudioSegmentMaxRunes: 300,
 			JobDataDir:            t.TempDir(),
+			ProjectDataDir:        t.TempDir(),
 		},
 	)
 
@@ -702,6 +1149,7 @@ func TestNewServiceAdaptiveStudioOverrides(t *testing.T) {
 			StudioSegmentWorkersAdaptive:  5,
 			StudioSegmentMaxRunesAdaptive: 140,
 			JobDataDir:                    t.TempDir(),
+			ProjectDataDir:                t.TempDir(),
 		},
 	)
 
@@ -767,7 +1215,7 @@ func TestCreateJobMarksCheckerFailedWhenRetryLimitExhausts(t *testing.T) {
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		&alwaysRejectChecker{},
-		pipeline.Options{MaxRetries: 2, JobDataDir: t.TempDir()},
+		pipeline.Options{MaxRetries: 2, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
 	)
 
 	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: "first sentence. second sentence."})
@@ -805,7 +1253,7 @@ func TestCreateJobExposesStreamingOptimizationPreview(t *testing.T) {
 		optimizer,
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir()},
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
 	)
 
 	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: "source text"})
@@ -863,25 +1311,99 @@ func (analyzer mockProfileSourceAnalyzer) AnalyzeVoiceProfileSource(
 	return analyzer.result, nil
 }
 
+type mockLikenessScorer struct {
+	score float64
+	err   error
+}
+
+func (scorer mockLikenessScorer) ScoreVoiceProfileLikeness(
+	_ context.Context,
+	_ pipeline.VoiceProfileLikenessRequest,
+) (pipeline.VoiceProfileLikenessResult, error) {
+	if scorer.err != nil {
+		return pipeline.VoiceProfileLikenessResult{}, scorer.err
+	}
+	return pipeline.VoiceProfileLikenessResult{
+		Score:             scorer.score,
+		SpeakerSimilarity: scorer.score,
+		EmbeddingModel:    "mock-embedding",
+		Reason:            "mock speaker similarity",
+	}, nil
+}
+
+type mockReferenceTTS struct{}
+
+func (mockReferenceTTS) Synthesize(_ context.Context, text string) (agents.TTSResult, error) {
+	wav, err := audio.SilentWAV(audio.DurationForText(text))
+	if err != nil {
+		return agents.TTSResult{}, err
+	}
+	return agents.TTSResult{
+		Audio:       wav,
+		ContentType: "audio/wav",
+		DurationMS:  audio.DurationForText(text),
+		Provider:    "mock",
+		Voice:       "default",
+	}, nil
+}
+
+func (mockReferenceTTS) SynthesizeWithReference(
+	_ context.Context,
+	text string,
+	_ string,
+	_ string,
+) (agents.TTSResult, error) {
+	wav, err := audio.SilentWAV(audio.DurationForText(text))
+	if err != nil {
+		return agents.TTSResult{}, err
+	}
+	return agents.TTSResult{
+		Audio:       wav,
+		ContentType: "audio/wav",
+		DurationMS:  audio.DurationForText(text),
+		Provider:    "mock-reference",
+		Voice:       "clone",
+	}, nil
+}
+
 func newProfileSourceService(
 	t *testing.T,
 	analyzer pipeline.VoiceProfileSourceAnalyzer,
 ) *pipeline.Service {
 	t.Helper()
 
+	return newProfileSourceServiceWithTTS(
+		t,
+		analyzer,
+		agents.NewMockTTSAgent(),
+		nil,
+	)
+}
+
+func newProfileSourceServiceWithTTS(
+	t *testing.T,
+	analyzer pipeline.VoiceProfileSourceAnalyzer,
+	tts pipeline.TTSAgent,
+	likenessScorer pipeline.VoiceProfileLikenessScorer,
+) *pipeline.Service {
+	t.Helper()
+
 	return pipeline.NewService(
 		agents.NewVoiceOptimizationAgent(),
-		agents.NewMockTTSAgent(),
+		tts,
 		agents.NewMockVoiceCheckerAgent(),
 		pipeline.Options{
 			MaxRetries:                         3,
 			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
 			VoiceProfileDir:                    t.TempDir(),
 			VoiceProfileSourceDir:              t.TempDir(),
 			VoiceProfileReferenceMinSeconds:    20,
 			VoiceProfileReferenceTargetSeconds: 45,
 			VoiceProfileReferenceMaxSeconds:    60,
 			VoiceProfileSourceAnalyzer:         analyzer,
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileLikenessScorer:         likenessScorer,
 		},
 	)
 }
@@ -1064,7 +1586,7 @@ func newMockService(t *testing.T, checker pipeline.VoiceChecker) *pipeline.Servi
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		checker,
-		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir()},
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
 	)
 }
 

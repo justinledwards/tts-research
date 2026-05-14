@@ -7,6 +7,8 @@ import type {
   VoiceJob,
   VoiceProfile,
   VoiceProfileSource,
+  VoiceProfileSourceDiagnostics,
+  VoiceProject,
 } from "./types";
 
 // Vite rewrites direct import.meta.env access during dev and build.
@@ -27,6 +29,56 @@ export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<Vo
   }
 
   return response.json() as Promise<VoiceJob>;
+}
+
+export async function listProjects(): Promise<VoiceProject[]> {
+  const response = await fetch(`${apiBaseUrl}/api/projects`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProject[]>;
+}
+
+export async function createProject(name: string): Promise<VoiceProject> {
+  const response = await fetch(`${apiBaseUrl}/api/projects`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProject>;
+}
+
+export async function renameProject(id: string, name: string): Promise<VoiceProject> {
+  const response = await fetch(`${apiBaseUrl}/api/projects/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProject>;
+}
+
+export async function listProjectJobs(id: string): Promise<VoiceJob[]> {
+  const response = await fetch(`${apiBaseUrl}/api/projects/${id}/jobs`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceJob[]>;
 }
 
 export async function getVoiceJob(id: string): Promise<VoiceJob> {
@@ -92,7 +144,7 @@ export async function createVoiceProfileSource(
     throw new Error(await readError(response));
   }
 
-  return response.json() as Promise<VoiceProfileSource>;
+  return normalizeVoiceProfileSource((await response.json()) as VoiceProfileSource);
 }
 
 export async function getVoiceProfileSource(id: string): Promise<VoiceProfileSource> {
@@ -102,7 +154,30 @@ export async function getVoiceProfileSource(id: string): Promise<VoiceProfileSou
     throw new Error(await readError(response));
   }
 
-  return response.json() as Promise<VoiceProfileSource>;
+  return normalizeVoiceProfileSource((await response.json()) as VoiceProfileSource);
+}
+
+export async function getVoiceProfileSourceDiagnostics(): Promise<VoiceProfileSourceDiagnostics> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-profile-sources/diagnostics`);
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfileSourceDiagnostics>;
+}
+
+export function normalizeVoiceProfileSource(source: VoiceProfileSource): VoiceProfileSource {
+  const nullableSource = source as VoiceProfileSource & {
+    candidates?: VoiceProfileSource["candidates"] | null;
+    stages?: VoiceProfileSource["stages"] | null;
+  };
+
+  return {
+    ...source,
+    candidates: Array.isArray(nullableSource.candidates) ? nullableSource.candidates : [],
+    stages: Array.isArray(nullableSource.stages) ? nullableSource.stages : [],
+  };
 }
 
 export async function createVoiceProfileFromCandidate(
@@ -128,8 +203,12 @@ export async function createVoiceProfileFromCandidate(
   return response.json() as Promise<VoiceProfile>;
 }
 
-export function voiceProfileCandidatePreviewSource(sourceId: string, candidateId: string): string {
-  return `${apiBaseUrl}/api/voice-profile-sources/${sourceId}/candidates/${candidateId}/preview.wav`;
+export function voiceProfileCandidatePreviewSource(
+  sourceId: string,
+  candidateId: string,
+  kind: "clean" | "raw" = "clean",
+): string {
+  return `${apiBaseUrl}/api/voice-profile-sources/${sourceId}/candidates/${candidateId}/preview.wav?kind=${kind}`;
 }
 
 export async function deleteVoiceProfile(id: string): Promise<void> {

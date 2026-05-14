@@ -101,8 +101,15 @@ checker_uses_qwen() {
   [[ "$provider" == "qwen" || "$provider" == "qwen-asr" ]]
 }
 
+profile_analysis_uses_pyannote() {
+  [[ -n "${PYANNOTE_AUTH_TOKEN:-}" ||
+    -n "${HF_TOKEN:-}" ||
+    -n "${VOICE_PROFILE_DIARIZATION_MODEL_PATH:-}" ||
+    -n "${VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR:-}" ]]
+}
+
 python_runtime_needed() {
-  tts_uses_kokoro || checker_uses_qwen
+  tts_uses_kokoro || checker_uses_qwen || profile_analysis_uses_pyannote
 }
 
 local_fallback_enabled() {
@@ -260,6 +267,9 @@ sync_backend_python_deps() {
   if checker_uses_qwen; then
     sync_args+=("--extra" "qwen")
   fi
+  if profile_analysis_uses_pyannote; then
+    sync_args+=("--extra" "profile-analysis")
+  fi
 
   if [[ ${#sync_args[@]} -eq 0 ]]; then
     return 0
@@ -281,6 +291,9 @@ python_requirements_present() {
   fi
   if checker_uses_qwen; then
     required_modules+=("torch" "qwen_asr")
+  fi
+  if profile_analysis_uses_pyannote; then
+    required_modules+=("torch" "pyannote.audio" "soundfile")
   fi
 
   if [[ ${#required_modules[@]} -eq 0 ]]; then
@@ -357,12 +370,47 @@ _torch_cuda_wheel_tag() {
   return 1
 }
 
+install_flash_attention_compat_shim() {
+  local python_path="$1"
+
+  "$python_path" - <<'PY'
+import pathlib
+import sysconfig
+
+site_dir = sysconfig.get_paths().get("purelib")
+if not site_dir:
+  raise SystemExit(1)
+
+shim_path = pathlib.Path(site_dir) / "flash_attn.py"
+shim_path.write_text(
+"""from flash_attn_interface import (
+    flash_attn_func,
+    flash_attn_with_kvcache,
+    flash_attn_qkvpacked_func,
+)
+
+__all__ = [
+    "flash_attn_func",
+    "flash_attn_with_kvcache",
+    "flash_attn_qkvpacked_func",
+]
+""",
+    encoding="utf-8",
+)
+print(shim_path)
+PY
+}
+
 ensure_kokoro_flash_attention() {
   local python_path="$KOKOCLONE_PYTHON_PATH"
-  local -a install_args=( )
+  local -a primary_install_args=( )
+  local -a fallback_install_args=( )
+  local -a source_install_args=( )
   local cuda_tag
   local -a pip_cmd=( )
-  local flash_attn_pkg="flash-attn==${KOKOCLONE_FLASH_ATTENTION_VERSION:-2.8.3}"
+  local flash_attn_pkg="${KOKOCLONE_FLASH_ATTENTION_PACKAGE:-flash-attn==${KOKOCLONE_FLASH_ATTENTION_VERSION:-2.8.3}}"
+  local flash_attn_fallback_pkg="${KOKOCLONE_FLASH_ATTENTION_FALLBACK_PACKAGE:-}"
+  local flash_attn_import_module="${KOKOCLONE_FLASH_ATTENTION_IMPORT_MODULE:-flash_attn}"
 
   if [[ ! -x "$python_path" ]]; then
     echo "Unable to probe FlashAttention: backend Python runtime is missing."
@@ -392,7 +440,7 @@ ensure_kokoro_flash_attention() {
     return 0
   fi
 
-  if _python_import_probe "$python_path" flash_attn; then
+  if _python_import_probe "$python_path" "$flash_attn_import_module"; then
     KOKOCLONE_FLASH_ATTENTION_STATUS="available"
     return 0
   fi
@@ -400,31 +448,78 @@ ensure_kokoro_flash_attention() {
   echo "FlashAttention not available; attempting bootstrap install in KokoClone environment..."
 
   cuda_tag="$(_torch_cuda_wheel_tag "$python_path" || true)"
-  if [[ -n "$cuda_tag" ]]; then
-    install_args+=( "--index-url" "https://download.pytorch.org/whl/${cuda_tag}" )
-    install_args+=( "--extra-index-url" "https://pypi.org/simple" )
+  if [[ "$flash_attn_pkg" == flash-attn-3* ]]; then
+    primary_install_args=( "--index-url" "https://download.pytorch.org/whl/flash-attn-3" )
+    if [[ -n "$cuda_tag" ]]; then
+      primary_install_args+=( "--extra-index-url" "https://download.pytorch.org/whl/${cuda_tag}" )
+    fi
+    primary_install_args+=( "--extra-index-url" "https://pypi.org/simple" )
+  else
+    if [[ -n "$cuda_tag" ]]; then
+      primary_install_args=( "--index-url" "https://download.pytorch.org/whl/${cuda_tag}" )
+      primary_install_args+=( "--extra-index-url" "https://pypi.org/simple" )
+    fi
+  fi
+
+  if [[ "$flash_attn_fallback_pkg" == flash-attn-3* ]]; then
+    fallback_install_args=( "--index-url" "https://download.pytorch.org/whl/flash-attn-3" )
+    if [[ -n "$cuda_tag" ]]; then
+      fallback_install_args+=( "--extra-index-url" "https://download.pytorch.org/whl/${cuda_tag}" )
+    fi
+    fallback_install_args+=( "--extra-index-url" "https://pypi.org/simple" )
+  else
+    fallback_install_args=( "${primary_install_args[@]}" )
   fi
 
   if [[ "${KOKOCLONE_FLASH_ATTENTION_WHEEL_ONLY:-1}" == "1" ]]; then
-    install_args+=( "--only-binary=:all:" )
+    primary_install_args+=( "--only-binary=:all:" )
+    fallback_install_args+=( "--only-binary=:all:" )
   fi
 
-  pip_cmd=( run_with_mise uv pip install --python "$python_path" --no-build-isolation "${install_args[@]}" "$flash_attn_pkg" )
+  source_install_args=()
+  for arg in "${primary_install_args[@]}"; do
+    if [[ "$arg" != "--only-binary=:all:" ]]; then
+      source_install_args+=( "$arg" )
+    fi
+  done
+
+  pip_cmd=( run_with_mise uv pip install --python "$python_path" --no-build-isolation "${primary_install_args[@]}" "$flash_attn_pkg" )
   if (cd "$ROOT_DIR/backend" && "${pip_cmd[@]}"); then
-    KOKOCLONE_FLASH_ATTENTION_STATUS="installed"
-    return 0
+    if [[ "$flash_attn_import_module" == "flash_attn" ]] && [[ "$flash_attn_pkg" == flash-attn-3* ]]; then
+      install_flash_attention_compat_shim "$python_path" || true
+    fi
+    if _python_import_probe "$python_path" "$flash_attn_import_module"; then
+      KOKOCLONE_FLASH_ATTENTION_STATUS="installed"
+      return 0
+    fi
   fi
 
-  if [[ "${KOKOCLONE_ALLOW_FLASH_ATTENTION_SOURCE:-0}" == "1" ]] && [[ -n "${install_args[*]}" ]]; then
-    if (cd "$ROOT_DIR/backend" && run_with_mise uv pip install --python "$python_path" --no-build-isolation "$flash_attn_pkg"); then
-      KOKOCLONE_FLASH_ATTENTION_STATUS="installed-fallback"
-      return 0
+  if [[ -n "$flash_attn_fallback_pkg" ]]; then
+    echo "Primary FlashAttention install failed; trying fallback package: ${flash_attn_fallback_pkg}"
+    if (cd "$ROOT_DIR/backend" && run_with_mise uv pip install --python "$python_path" --no-build-isolation "${fallback_install_args[@]}" "$flash_attn_fallback_pkg"); then
+      if [[ "$flash_attn_import_module" == "flash_attn" ]] && [[ "$flash_attn_fallback_pkg" == flash-attn-3* ]]; then
+        install_flash_attention_compat_shim "$python_path" || true
+      fi
+      if _python_import_probe "$python_path" "$flash_attn_import_module"; then
+        KOKOCLONE_FLASH_ATTENTION_STATUS="installed"
+        return 0
+      fi
+    fi
+  fi
+
+  if [[ "${KOKOCLONE_ALLOW_FLASH_ATTENTION_SOURCE:-0}" == "1" ]]; then
+    if (cd "$ROOT_DIR/backend" && run_with_mise uv pip install --python "$python_path" --no-build-isolation "${source_install_args[@]}" "$flash_attn_pkg"); then
+      if _python_import_probe "$python_path" "$flash_attn_import_module"; then
+        KOKOCLONE_FLASH_ATTENTION_STATUS="installed-fallback"
+        return 0
+      fi
     fi
   fi
 
   if [[ "${KOKOCLONE_FLASH_ATTENTION_WHEEL_ONLY:-1}" == "1" ]]; then
     echo "No prebuilt flash-attn wheel matched this Python/CUDA/runtime combination."
     echo "Set KOKOCLONE_FLASH_ATTENTION_WHEEL_ONLY=0 and KOKOCLONE_ALLOW_FLASH_ATTENTION_SOURCE=1 to allow source install."
+    echo "Alternatively set KOKOCLONE_FLASH_ATTENTION_FALLBACK_PACKAGE=flash-attn-3 for wheel-only flash-attn-3 installs."
     echo "Or keep it off and continue without FlashAttention (SDPA fallback)."
   fi
 
@@ -471,22 +566,111 @@ ensure_bonsai_env() {
   return 1
 }
 
+start_service() {
+  local -n pid_ref="$1"
+  local work_dir="$2"
+  shift 2
+  local -a service_cmd=("$@")
+  local old_dir pid
+
+  old_dir="$(pwd -P)"
+  cd "$work_dir"
+  run_with_mise "${service_cmd[@]}" &
+  pid=$!
+  cd "$old_dir"
+
+  if ! kill -0 "$pid" >/dev/null 2>&1; then
+    echo "Failed to launch service command in ${work_dir}: ${service_cmd[*]}"
+    return 1
+  fi
+
+  pid_ref="$pid"
+}
+
+service_listening_on_port() {
+  local port="$1"
+
+  if command -v ss >/dev/null 2>&1; then
+    if ss -ltn "sport = :${port}" 2>/dev/null | grep -q "LISTEN"; then
+      return 0
+    fi
+    return 1
+  fi
+
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof -iTCP:"${port}" -sTCP:LISTEN -nP >/dev/null 2>&1; then
+      return 0
+    fi
+    return 1
+  fi
+
+  return 0
+}
+
+wait_for_service() {
+  local label="$1"
+  local pid="$2"
+  local port="$3"
+  local timeout="${4:-30}"
+  local elapsed=0
+
+  while (( elapsed < timeout )); do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      echo "  ${label} exited before listening on port ${port}."
+      wait "$pid" || return $?
+    fi
+
+    if service_listening_on_port "$port"; then
+      echo "  ${label} is listening on :${port} (pid ${pid})."
+      return 0
+    fi
+
+    sleep 1
+    ((elapsed++))
+  done
+
+  echo "  Timed out waiting for ${label} to listen on port ${port}."
+  return 1
+}
+
+kill_service() {
+  local pid="$1"
+  if [[ -z "$pid" ]]; then
+    return 0
+  fi
+
+  if ! kill -0 "$pid" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if command -v pkill >/dev/null 2>&1; then
+    pkill -TERM -P "$pid" >/dev/null 2>&1 || true
+  fi
+  kill "$pid" >/dev/null 2>&1 || true
+  wait "$pid" 2>/dev/null || true
+}
+
 cleanup() {
   local exit_code=$?
-  trap - EXIT INT TERM
+  trap - EXIT INT TERM HUP QUIT
 
-  if [[ -n "${BACKEND_PID:-}" ]] && kill -0 "$BACKEND_PID" >/dev/null 2>&1; then
-    kill "$BACKEND_PID" >/dev/null 2>&1 || true
+  if [[ -n "${BACKEND_PID:-}" ]]; then
+    kill_service "$BACKEND_PID"
   fi
-  if [[ -n "${FRONTEND_PID:-}" ]] && kill -0 "$FRONTEND_PID" >/dev/null 2>&1; then
-    kill "$FRONTEND_PID" >/dev/null 2>&1 || true
+  if [[ -n "${FRONTEND_PID:-}" ]]; then
+    kill_service "$FRONTEND_PID"
   fi
 
-  wait >/dev/null 2>&1 || true
+  if [[ -n "${BACKEND_PID:-}" ]]; then
+    wait "$BACKEND_PID" 2>/dev/null || true
+  fi
+  if [[ -n "${FRONTEND_PID:-}" ]]; then
+    wait "$FRONTEND_PID" 2>/dev/null || true
+  fi
   exit "$exit_code"
 }
 
-trap cleanup EXIT INT TERM
+trap cleanup EXIT INT TERM HUP QUIT
 
 load_env_file "$ROOT_DIR/.env"
 load_env_file "$ROOT_DIR/backend/.env"
@@ -512,6 +696,9 @@ export KOKORO_REFERENCE_MODULE_PATH="${KOKORO_REFERENCE_MODULE_PATH:-$(resolve_k
 export KOKORO_DEVICE="${KOKORO_DEVICE:-auto}"
 export KOKOCLONE_WORKER_COUNT="${KOKOCLONE_WORKER_COUNT:-2}"
 export KOKOCLONE_INSTALL_FLASH_ATTENTION="${KOKOCLONE_INSTALL_FLASH_ATTENTION:-1}"
+export KOKOCLONE_FLASH_ATTENTION_PACKAGE="${KOKOCLONE_FLASH_ATTENTION_PACKAGE:-flash-attn==${KOKOCLONE_FLASH_ATTENTION_VERSION:-2.8.3}}"
+export KOKOCLONE_FLASH_ATTENTION_FALLBACK_PACKAGE="${KOKOCLONE_FLASH_ATTENTION_FALLBACK_PACKAGE:-}"
+export KOKOCLONE_FLASH_ATTENTION_IMPORT_MODULE="${KOKOCLONE_FLASH_ATTENTION_IMPORT_MODULE:-flash_attn}"
 export KOKOCLONE_PYTHON_PATH="${KOKOCLONE_PYTHON_PATH:-./.venv-kokoclone/bin/python}"
 export KOKOCLONE_PYTHON_VERSION="${KOKOCLONE_PYTHON_VERSION:-3.12}"
 export KOKOCLONE_BOOTSTRAP_FLASH_ATTENTION_ON_BOOT="${KOKOCLONE_BOOTSTRAP_FLASH_ATTENTION_ON_BOOT:-0}"
@@ -530,6 +717,12 @@ export VOICE_SEGMENT_WORKERS_STUDIO="${VOICE_SEGMENT_WORKERS_STUDIO:-2}"
 export VOICE_SEGMENT_WORKERS_STUDIO_ADAPTIVE="${VOICE_SEGMENT_WORKERS_STUDIO_ADAPTIVE:-2}"
 export VOICE_SEGMENT_MAX_RUNES_STUDIO_ADAPTIVE="${VOICE_SEGMENT_MAX_RUNES_STUDIO_ADAPTIVE:-180}"
 export VOICE_PROFILE_MAX_BYTES="${VOICE_PROFILE_MAX_BYTES:-1073741824}"
+export VOICE_PROFILE_ANALYSIS_PYTHON_PATH="${VOICE_PROFILE_ANALYSIS_PYTHON_PATH:-./.venv/bin/python}"
+export VOICE_PROFILE_DENOISE_PROVIDER="${VOICE_PROFILE_DENOISE_PROVIDER:-ffmpeg}"
+export VOICE_PROFILE_DENOISE_STRENGTH="${VOICE_PROFILE_DENOISE_STRENGTH:-balanced}"
+export VOICE_PROFILE_EMBEDDING_MODEL="${VOICE_PROFILE_EMBEDDING_MODEL:-pyannote/embedding}"
+export VOICE_PROFILE_EMBEDDING_SCRIPT_PATH="${VOICE_PROFILE_EMBEDDING_SCRIPT_PATH:-./scripts/profile_likeness.py}"
+export VOICE_PROFILE_LIKENESS_TIMEOUT_SECONDS="${VOICE_PROFILE_LIKENESS_TIMEOUT_SECONDS:-120}"
 export LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE="${LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE:-1}"
 export KOKORO_DATA_DIR="${KOKORO_DATA_DIR:-}"
 export QWEN_ASR_DATA_DIR="${QWEN_ASR_DATA_DIR:-}"
@@ -580,6 +773,11 @@ if [[ "${SKIP_BOOTSTRAP:-0}" != "1" ]]; then
 
   if python_runtime_needed; then
     if ! ensure_backend_python_env; then
+      if profile_analysis_uses_pyannote; then
+        echo "Voice profile source analysis is configured, but profile-analysis Python dependencies could not be installed."
+        echo "Run: cd backend && uv sync --extra profile-analysis"
+        exit 1
+      fi
       fallback_to_mock_tts || true
       fallback_to_mock_checker || true
       if local_fallback_enabled; then
@@ -651,6 +849,7 @@ echo "  Kokoro data: ${KOKORO_DATA_DIR}"
 echo "  Qwen data: ${QWEN_ASR_DATA_DIR}"
 echo "  Job data: ${VOICE_JOB_DATA_DIR}"
 echo "  Voice profile data: ${VOICE_PROFILE_DATA_DIR}"
+echo "  Voice profile denoise: ${VOICE_PROFILE_DENOISE_PROVIDER} (${VOICE_PROFILE_DENOISE_STRENGTH})"
   if [[ "${TTS_RESEARCH_TMPFS_HF_CACHE:-0}" == "1" ]]; then
     echo "  HF cache: ${HF_HOME}"
   fi
@@ -670,17 +869,23 @@ echo "  KOKOCLONE Python: ${KOKOCLONE_PYTHON_PATH}"
 echo "  FlashAttention: ${KOKOCLONE_FLASH_ATTENTION_STATUS:-unknown}"
 echo
 
-(
-  cd "$ROOT_DIR/backend"
-  run_with_mise go run ./cmd/api
-) &
-BACKEND_PID=$!
+echo "Starting backend service..."
+start_service BACKEND_PID "$ROOT_DIR/backend" go run ./cmd/api
+echo "  backend pid: ${BACKEND_PID}"
 
-(
-  cd "$ROOT_DIR/frontend"
-  run_with_mise pnpm exec vite --host 0.0.0.0 --port "$FRONTEND_PORT"
-) &
-FRONTEND_PID=$!
+echo "Starting frontend service..."
+start_service FRONTEND_PID "$ROOT_DIR/frontend" pnpm exec vite --host 0.0.0.0 --port "$FRONTEND_PORT"
+echo "  frontend pid: ${FRONTEND_PID}"
+
+if ! wait_for_service "Backend" "$BACKEND_PID" "$BACKEND_PORT" 120; then
+  echo "Backend failed to start. Check bootstrap and startup logs above."
+  exit 1
+fi
+
+if ! wait_for_service "Frontend" "$FRONTEND_PID" "$FRONTEND_PORT" 120; then
+  echo "Frontend failed to start. Check startup logs above."
+  exit 1
+fi
 
 while true; do
   if ! kill -0 "$BACKEND_PID" >/dev/null 2>&1; then

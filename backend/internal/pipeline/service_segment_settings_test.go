@@ -17,6 +17,7 @@ func TestResolveSegmentSettings_AdaptiveModeOnlyAffectsReferenceProfiles(t *test
 			StudioSegmentWorkersAdaptive:  6,
 			StudioSegmentMaxRunesAdaptive: 120,
 			JobDataDir:                    t.TempDir(),
+			ProjectDataDir:                t.TempDir(),
 		},
 	)
 
@@ -52,6 +53,7 @@ func TestResolveSegmentSettings_PerformanceModes(t *testing.T) {
 			StudioSegmentWorkersAdaptive:  6,
 			StudioSegmentMaxRunesAdaptive: 120,
 			JobDataDir:                    t.TempDir(),
+			ProjectDataDir:                t.TempDir(),
 		},
 	)
 
@@ -68,5 +70,45 @@ func TestResolveSegmentSettings_PerformanceModes(t *testing.T) {
 	qualityWorkers, qualityRunes := service.resolveSegmentSettingsForMode(true, PerformanceModeQuality)
 	if qualityWorkers != 1 || qualityRunes != 240 {
 		t.Fatalf("quality reference settings = (%d, %d), want (1, 240)", qualityWorkers, qualityRunes)
+	}
+}
+
+func TestResolveSegmentSettings_CapsReferenceWorkersToClonePool(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(
+		nil,
+		nil,
+		nil,
+		Options{
+			SegmentWorkers:                2,
+			SegmentMaxRunes:               240,
+			StudioSegmentWorkers:          3,
+			StudioSegmentMaxRunes:         210,
+			StudioSegmentWorkersAdaptive:  6,
+			StudioSegmentMaxRunesAdaptive: 120,
+			ReferenceWorkerCount:          1,
+			JobDataDir:                    t.TempDir(),
+			ProjectDataDir:                t.TempDir(),
+		},
+	)
+
+	referenceWorkers, referenceRunes := service.resolveSegmentSettingsForMode(
+		true,
+		PerformanceModeThroughput,
+	)
+	if referenceWorkers != 1 {
+		t.Fatalf("reference workers = %d, want clone worker cap %d", referenceWorkers, 1)
+	}
+	if referenceRunes != 120 {
+		t.Fatalf("reference max runes = %d, want %d", referenceRunes, 120)
+	}
+
+	nonReferenceWorkers, _ := service.resolveSegmentSettingsForMode(
+		false,
+		PerformanceModeThroughput,
+	)
+	if nonReferenceWorkers != 2 {
+		t.Fatalf("non-reference workers = %d, want uncapped base workers %d", nonReferenceWorkers, 2)
 	}
 }

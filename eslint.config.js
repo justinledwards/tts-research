@@ -15,6 +15,8 @@ function scoped(config) {
 export default tseslint.config(
   {
     ignores: [
+      ".venv/**",
+      ".venv-*/**",
       "backend/**",
       "dist/**",
       "node_modules/**",

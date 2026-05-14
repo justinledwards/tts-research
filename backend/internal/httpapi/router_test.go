@@ -62,31 +62,102 @@ func TestCreateJobEndpoint(t *testing.T) {
 	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 }
 
-func TestListVoicesEndpoint(t *testing.T) {
+func TestProjectEndpointsCreateRenameAndListJobs(t *testing.T) {
 	t.Parallel()
 
-	app := httpapi.NewRouter(newService(t))
-	request, err := http.NewRequest(http.MethodGet, "/api/voices", nil)
+	service := newService(t)
+	app := httpapi.NewRouter(service)
+
+	createBody := bytes.NewBufferString(`{"name":"Demo project"}`)
+	createRequest, err := http.NewRequest(http.MethodPost, "/api/projects", createBody)
 	if err != nil {
 		t.Fatalf("NewRequest returned error: %v", err)
 	}
+	createRequest.Header.Set("Content-Type", "application/json")
 
-	response, err := app.Test(request)
+	createResponse, err := app.Test(createRequest)
 	if err != nil {
-		t.Fatalf("app.Test returned error: %v", err)
+		t.Fatalf("app.Test(create project) returned error: %v", err)
 	}
-	defer response.Body.Close()
+	defer createResponse.Body.Close()
+	if createResponse.StatusCode != http.StatusCreated {
+		payload, _ := io.ReadAll(createResponse.Body)
+		t.Fatalf("create status = %d, want %d, body = %s", createResponse.StatusCode, http.StatusCreated, payload)
+	}
 
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	var project pipeline.VoiceProject
+	if err := json.NewDecoder(createResponse.Body).Decode(&project); err != nil {
+		t.Fatalf("decode project: %v", err)
 	}
 
-	var voices []pipeline.Voice
-	if err := json.NewDecoder(response.Body).Decode(&voices); err != nil {
-		t.Fatalf("decode response: %v", err)
+	renameBody := bytes.NewBufferString(`{"name":"Renamed demo project"}`)
+	renameRequest, err := http.NewRequest(http.MethodPatch, "/api/projects/"+project.ID, renameBody)
+	if err != nil {
+		t.Fatalf("NewRequest(rename) returned error: %v", err)
 	}
-	if len(voices) == 0 {
-		t.Fatal("voices response should include native voices")
+	renameRequest.Header.Set("Content-Type", "application/json")
+
+	renameResponse, err := app.Test(renameRequest)
+	if err != nil {
+		t.Fatalf("app.Test(rename project) returned error: %v", err)
+	}
+	defer renameResponse.Body.Close()
+	if renameResponse.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(renameResponse.Body)
+		t.Fatalf("rename status = %d, want %d, body = %s", renameResponse.StatusCode, http.StatusOK, payload)
+	}
+
+	var renamed pipeline.VoiceProject
+	if err := json.NewDecoder(renameResponse.Body).Decode(&renamed); err != nil {
+		t.Fatalf("decode renamed project: %v", err)
+	}
+	if renamed.Name != "Renamed demo project" {
+		t.Fatalf("renamed project name = %q", renamed.Name)
+	}
+	if _, err := service.GetProject(project.ID); err != nil {
+		t.Fatalf("service should still contain project %q: %v", project.ID, err)
+	}
+
+	jobBody := bytes.NewBufferString(`{"projectId":"` + project.ID + `","text":"A project-specific job."}`)
+	jobRequest, err := http.NewRequest(http.MethodPost, "/api/voice-jobs", jobBody)
+	if err != nil {
+		t.Fatalf("NewRequest(job) returned error: %v", err)
+	}
+	jobRequest.Header.Set("Content-Type", "application/json")
+	jobResponse, err := app.Test(jobRequest)
+	if err != nil {
+		t.Fatalf("app.Test(create job) returned error: %v", err)
+	}
+	defer jobResponse.Body.Close()
+	if jobResponse.StatusCode != http.StatusCreated {
+		payload, _ := io.ReadAll(jobResponse.Body)
+		t.Fatalf("job status = %d, want %d, project = %q, body = %s", jobResponse.StatusCode, http.StatusCreated, project.ID, payload)
+	}
+	var job pipeline.VoiceJob
+	if err := json.NewDecoder(jobResponse.Body).Decode(&job); err != nil {
+		t.Fatalf("decode job: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+
+	listRequest, err := http.NewRequest(http.MethodGet, "/api/projects/"+project.ID+"/jobs", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(list jobs) returned error: %v", err)
+	}
+	listResponse, err := app.Test(listRequest)
+	if err != nil {
+		t.Fatalf("app.Test(list jobs) returned error: %v", err)
+	}
+	defer listResponse.Body.Close()
+	if listResponse.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(listResponse.Body)
+		t.Fatalf("list jobs status = %d, want %d, body = %s", listResponse.StatusCode, http.StatusOK, payload)
+	}
+	var jobs []pipeline.VoiceJob
+	if err := json.NewDecoder(listResponse.Body).Decode(&jobs); err != nil {
+		t.Fatalf("decode jobs: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].ProjectID != project.ID {
+		t.Fatalf("jobs = %#v, want one project job", jobs)
 	}
 }
 
@@ -97,7 +168,7 @@ func newService(t *testing.T) *pipeline.Service {
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir()},
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
 	)
 }
 

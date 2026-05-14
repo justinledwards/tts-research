@@ -35,6 +35,7 @@ var (
 	ErrProfileSourceNotFound      = errors.New("voice profile source not found")
 	ErrProfileCandidateNotFound   = errors.New("voice profile candidate not found")
 	ErrProfileAnalysisUnavailable = errors.New("voice profile source analysis is not configured")
+	ErrProjectNotFound            = errors.New("project not found")
 )
 
 type VoiceOptimizer interface {
@@ -53,8 +54,30 @@ type TTSAgent interface {
 	Synthesize(context.Context, string) (agents.TTSResult, error)
 }
 
+type TTSWithVoice interface {
+	SynthesizeWithVoice(context.Context, string, string, string) (agents.TTSResult, error)
+}
+
 type TTSWithReference interface {
 	SynthesizeWithReference(context.Context, string, string, string) (agents.TTSResult, error)
+}
+
+type VoiceProfileLikenessScorer interface {
+	ScoreVoiceProfileLikeness(context.Context, VoiceProfileLikenessRequest) (VoiceProfileLikenessResult, error)
+}
+
+type VoiceProfileLikenessRequest struct {
+	ReferencePath string
+	GeneratedPath string
+	Model         string
+	Token         string
+}
+
+type VoiceProfileLikenessResult struct {
+	Score             float64
+	SpeakerSimilarity float64
+	EmbeddingModel    string
+	Reason            string
 }
 
 type VoiceChecker interface {
@@ -62,26 +85,37 @@ type VoiceChecker interface {
 }
 
 type Options struct {
-	MaxRetries                          int
-	SegmentMaxRunes                     int
-	SegmentWorkers                      int
-	StudioSegmentMaxRunes               int
-	StudioSegmentWorkers                int
-	StudioSegmentWorkersAdaptive        int
-	StudioSegmentMaxRunesAdaptive       int
-	JobDataDir                          string
-	VoiceProfileDir                     string
-	VoiceProfileSourceDir               string
-	MaxProfileBytes                     int64
-	VoiceProfileReferenceMinSeconds     int
-	VoiceProfileReferenceTargetSeconds  int
-	VoiceProfileReferenceMaxSeconds     int
-	VoiceProfileDiarizationModel        string
-	VoiceProfileDiarizationToken        string
-	VoiceProfileAnalysisPythonPath      string
-	VoiceProfileAnalysisScriptPath      string
-	VoiceProfileAnalysisStrategyVersion string
-	VoiceProfileSourceAnalyzer          VoiceProfileSourceAnalyzer
+	MaxRetries                           int
+	SegmentMaxRunes                      int
+	SegmentWorkers                       int
+	StudioSegmentMaxRunes                int
+	StudioSegmentWorkers                 int
+	StudioSegmentWorkersAdaptive         int
+	StudioSegmentMaxRunesAdaptive        int
+	ReferenceWorkerCount                 int
+	JobDataDir                           string
+	ProjectDataDir                       string
+	VoiceProfileDir                      string
+	VoiceProfileSourceDir                string
+	MaxProfileBytes                      int64
+	VoiceProfileReferenceMinSeconds      int
+	VoiceProfileReferenceTargetSeconds   int
+	VoiceProfileReferenceMaxSeconds      int
+	VoiceProfileDiarizationModel         string
+	VoiceProfileDiarizationModelPath     string
+	VoiceProfileDiarizationLocalModelDir string
+	VoiceProfileDiarizationToken         string
+	VoiceProfileAnalysisPythonPath       string
+	VoiceProfileAnalysisScriptPath       string
+	VoiceProfileAnalysisStrategyVersion  string
+	VoiceProfileSourceAnalyzer           VoiceProfileSourceAnalyzer
+	VoiceProfileDenoiseProvider          string
+	VoiceProfileDenoiseStrength          string
+	VoiceProfileEmbeddingModel           string
+	VoiceProfileEmbeddingScriptPath      string
+	VoiceProfileLikenessCalibrationText  string
+	VoiceProfileLikenessTimeoutSeconds   int
+	VoiceProfileLikenessScorer           VoiceProfileLikenessScorer
 }
 
 const (
@@ -92,6 +126,7 @@ const (
 	defaultStudioAdaptiveSegmentWorkers        = 6
 	defaultStudioAdaptiveSegmentMaxRunes       = 180
 	defaultJobDataDir                          = "./data/jobs"
+	defaultProjectDataDir                      = "./data/projects"
 	defaultVoiceProfileDir                     = "./data/voice-profiles"
 	defaultVoiceProfileSourceDir               = "./data/voice-profile-sources"
 	defaultMaxProfileBytes                     = 1 << 30
@@ -102,6 +137,12 @@ const (
 	defaultVoiceProfileAnalysisPythonPath      = "python3"
 	defaultVoiceProfileAnalysisScriptPath      = "./scripts/profile_analyze.py"
 	defaultVoiceProfileAnalysisStrategyVersion = "speaker-aware-v1"
+	defaultVoiceProfileDenoiseProvider         = "ffmpeg"
+	defaultVoiceProfileDenoiseStrength         = "balanced"
+	defaultVoiceProfileEmbeddingModel          = "pyannote/embedding"
+	defaultVoiceProfileEmbeddingScriptPath     = "./scripts/profile_likeness.py"
+	defaultVoiceProfileLikenessCalibrationText = "This is a short voice clone calibration sample for measuring speaker likeness."
+	defaultVoiceProfileLikenessTimeoutSeconds  = 120
 )
 
 type storedVoiceProfile struct {
@@ -115,6 +156,7 @@ type Service struct {
 	options    Options
 	mu         sync.RWMutex
 	jobs       map[string]storedJob
+	projects   map[string]VoiceProject
 	profiles   map[string]storedVoiceProfile
 	sources    map[string]storedVoiceProfileSource
 	jobCancels map[string]context.CancelFunc
@@ -272,6 +314,9 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if strings.TrimSpace(options.JobDataDir) == "" {
 		options.JobDataDir = defaultJobDataDir
 	}
+	if strings.TrimSpace(options.ProjectDataDir) == "" {
+		options.ProjectDataDir = defaultProjectDataDir
+	}
 	if strings.TrimSpace(options.VoiceProfileDir) == "" {
 		options.VoiceProfileDir = defaultVoiceProfileDir
 	}
@@ -305,8 +350,29 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if strings.TrimSpace(options.VoiceProfileAnalysisStrategyVersion) == "" {
 		options.VoiceProfileAnalysisStrategyVersion = defaultVoiceProfileAnalysisStrategyVersion
 	}
+	if strings.TrimSpace(options.VoiceProfileDenoiseProvider) == "" {
+		options.VoiceProfileDenoiseProvider = defaultVoiceProfileDenoiseProvider
+	}
+	if strings.TrimSpace(options.VoiceProfileDenoiseStrength) == "" {
+		options.VoiceProfileDenoiseStrength = defaultVoiceProfileDenoiseStrength
+	}
+	if strings.TrimSpace(options.VoiceProfileEmbeddingModel) == "" {
+		options.VoiceProfileEmbeddingModel = defaultVoiceProfileEmbeddingModel
+	}
+	if strings.TrimSpace(options.VoiceProfileEmbeddingScriptPath) == "" {
+		options.VoiceProfileEmbeddingScriptPath = defaultVoiceProfileEmbeddingScriptPath
+	}
+	if strings.TrimSpace(options.VoiceProfileLikenessCalibrationText) == "" {
+		options.VoiceProfileLikenessCalibrationText = defaultVoiceProfileLikenessCalibrationText
+	}
+	if options.VoiceProfileLikenessTimeoutSeconds <= 0 {
+		options.VoiceProfileLikenessTimeoutSeconds = defaultVoiceProfileLikenessTimeoutSeconds
+	}
 	if options.VoiceProfileSourceAnalyzer == nil {
 		options.VoiceProfileSourceAnalyzer = newPythonProfileSourceAnalyzer(options)
+	}
+	if options.VoiceProfileLikenessScorer == nil {
+		options.VoiceProfileLikenessScorer = newPythonProfileLikenessScorer(options)
 	}
 
 	service := &Service{
@@ -315,11 +381,14 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 		checker:    checker,
 		options:    options,
 		jobs:       map[string]storedJob{},
+		projects:   map[string]VoiceProject{},
 		profiles:   map[string]storedVoiceProfile{},
 		sources:    map[string]storedVoiceProfileSource{},
 		jobCancels: map[string]context.CancelFunc{},
 	}
+	service.reloadProjects()
 	service.reloadProfiles()
+	service.reloadJobs()
 	return service
 }
 
@@ -354,6 +423,11 @@ func (service *Service) resolveSegmentSettingsForMode(isReferenceProfile bool, p
 			segmentMaxRunes = service.options.SegmentMaxRunes
 		}
 	}
+	if isReferenceProfile &&
+		service.options.ReferenceWorkerCount > 0 &&
+		segmentWorkers > service.options.ReferenceWorkerCount {
+		segmentWorkers = service.options.ReferenceWorkerCount
+	}
 
 	if segmentWorkers <= 0 {
 		segmentWorkers = defaultSegmentWorkers
@@ -372,8 +446,11 @@ func (service *Service) Options() Options {
 
 func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest) (VoiceJob, error) {
 	inputText := strings.TrimSpace(request.Text)
+	projectID := strings.TrimSpace(request.ProjectID)
 	voiceProfileID := strings.TrimSpace(request.VoiceProfileID)
 	voiceLanguage := strings.TrimSpace(request.VoiceLanguage)
+	ttsVoice := strings.TrimSpace(request.TTSVoice)
+	ttsLanguage := strings.TrimSpace(request.TTSLanguage)
 	config := resolveJobConfig(request)
 	adaptiveMode := config.performanceMode == PerformanceModeThroughput
 	maxRetries := service.options.MaxRetries
@@ -382,6 +459,12 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 	}
 	if inputText == "" {
 		return VoiceJob{}, ErrEmptyText
+	}
+	if projectID == "" {
+		projectID = defaultProjectID
+	}
+	if _, err := service.GetProject(projectID); err != nil {
+		return VoiceJob{}, err
 	}
 	if voiceProfileID != "" && !config.pipelineOptions.VoiceClone {
 		voiceProfileID = ""
@@ -410,6 +493,7 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 	job := storedJob{
 		VoiceJob: VoiceJob{
 			ID:                   newID(),
+			ProjectID:            projectID,
 			Status:               JobStatusQueued,
 			Stages:               initialStages(),
 			AdaptiveMode:         adaptiveMode,
@@ -419,6 +503,8 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 			VoiceProfileID:       voiceProfileID,
 			VoiceProfileName:     voiceProfileName,
 			VoiceProfileLanguage: voiceLanguage,
+			TTSVoice:             ttsVoice,
+			TTSLanguage:          ttsLanguage,
 			InputText:            inputText,
 			Progress: JobProgress{
 				Message: "Queued",
@@ -596,6 +682,8 @@ func (service *Service) CreateVoiceProfile(
 	profile.AudioFormat = "audio/wav"
 	profile.DurationMS = durationMS
 	profile.UpdatedAt = time.Now().UTC()
+	likeness := service.measureVoiceProfileLikeness(ctx, profile.VoiceProfile, outputDir)
+	profile.Likeness = &likeness
 
 	metadataPath := filepath.Join(outputDir, "profile.json")
 	if err := writeJSON(metadataPath, profile.VoiceProfile); err != nil {
@@ -885,6 +973,8 @@ func (service *Service) runJob(ctx context.Context, id string) {
 	profileID := strings.TrimSpace(job.VoiceProfileID)
 	profileRef := ""
 	profileLanguage := strings.TrimSpace(job.VoiceProfileLanguage)
+	ttsVoice := strings.TrimSpace(job.TTSVoice)
+	ttsLanguage := strings.TrimSpace(job.TTSLanguage)
 	if profileID != "" {
 		profile, err := service.getVoiceProfile(profileID)
 		if err != nil {
@@ -914,6 +1004,8 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		isReferenceProfile,
 		profileRef,
 		profileLanguage,
+		ttsVoice,
+		ttsLanguage,
 		config.performanceMode,
 		config.pipelineOptions,
 	)
@@ -1017,6 +1109,8 @@ func (service *Service) synthesizeUntilComplete(
 	isReferenceProfile bool,
 	profileReferencePath string,
 	profileLanguage string,
+	ttsVoice string,
+	ttsLanguage string,
 	performanceMode PerformanceMode,
 	pipelineOptions PipelineOptions,
 ) (agents.TTSResult, agents.VoiceCheckResult, error) {
@@ -1137,6 +1231,10 @@ func (service *Service) synthesizeUntilComplete(
 
 			synthesize := func() (agents.TTSResult, error) {
 				if !isReferenceProfile {
+					if withVoice, ok := service.tts.(TTSWithVoice); ok &&
+						(strings.TrimSpace(ttsVoice) != "" || strings.TrimSpace(ttsLanguage) != "") {
+						return withVoice.SynthesizeWithVoice(pipelineCtx, resumeText, ttsVoice, ttsLanguage)
+					}
 					return service.tts.Synthesize(pipelineCtx, resumeText)
 				}
 

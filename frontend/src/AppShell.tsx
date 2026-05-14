@@ -8,7 +8,9 @@ export function TopProductBar({
   activeJobId,
   canSubmit,
   isProcessing,
+  jobName,
   job,
+  projectName,
   requestState,
   runConfiguration,
   onCancel,
@@ -21,7 +23,9 @@ export function TopProductBar({
   activeJobId: string | null;
   canSubmit: boolean;
   isProcessing: boolean;
+  jobName: string;
   job: VoiceJob | null;
+  projectName: string;
   requestState: RequestState;
   runConfiguration: RunConfiguration;
   onCancel: () => void;
@@ -50,7 +54,8 @@ export function TopProductBar({
             Voice Studio
           </h1>
           <p className="hidden truncate text-xs text-zinc-500 sm:block">
-            {runPreset.label} · {describePerformanceMode(runConfiguration.performanceMode)}
+            {runPreset.label} · {describePerformanceMode(runConfiguration.performanceMode)} ·{" "}
+            {projectName} / {jobName}
           </p>
         </div>
         <StatusBadge state={requestState} />
@@ -96,7 +101,7 @@ export function TopProductBar({
           </button>
         ) : (
           <button
-            className="inline-flex h-11 items-center rounded-md bg-orange-500 px-5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none"
+            className="inline-flex h-11 items-center whitespace-nowrap rounded-md bg-orange-500 px-5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none"
             disabled={!canSubmit}
             onClick={onSubmit}
             type="button"

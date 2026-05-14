@@ -22,7 +22,7 @@ def parse_args() -> argparse.Namespace:
         default="pyannote/speaker-diarization-community-1",
         help="pyannote model or pipeline id",
     )
-    parser.add_argument("--token", required=True, help="Hugging Face or pyannote token")
+    parser.add_argument("--token", default="", help="Hugging Face or pyannote token")
     parser.add_argument("--strategy-version", default="speaker-aware-v1")
     return parser.parse_args()
 
@@ -34,9 +34,6 @@ def emit_error(message: str) -> None:
 def main() -> int:
     args = parse_args()
     token = args.token.strip() or os.environ.get("PYANNOTE_AUTH_TOKEN", "").strip()
-    if not token:
-        emit_error("PYANNOTE_AUTH_TOKEN or HF_TOKEN is required")
-        return 2
 
     try:
         import torch
@@ -47,10 +44,13 @@ def main() -> int:
         return 3
 
     try:
-        pipeline = Pipeline.from_pretrained(args.model, token=token)
+        if token:
+            pipeline = Pipeline.from_pretrained(args.model, token=token)
+        else:
+            pipeline = Pipeline.from_pretrained(args.model)
         if torch.cuda.is_available():
             pipeline.to(torch.device("cuda"))
-        with ProgressHook() as hook:
+        with ProgressHook(hidden=True) as hook:
             output = pipeline(args.audio, hook=hook)
     except Exception as exc:  # pragma: no cover - depends on model/runtime.
         emit_error(f"pyannote diarization failed: {exc}")

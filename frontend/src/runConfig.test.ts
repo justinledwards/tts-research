@@ -20,7 +20,7 @@ describe("run configuration helpers", () => {
     expect(checked.options.asrCheck).toBe(true);
     expect(checked.options.autoRetry).toBe(true);
     expect(checked.options.voiceClone).toBe(true);
-    expect(resolveRunPrimaryLabel(checked, null)).toBe("Create Checked Audio");
+    expect(resolveRunPrimaryLabel(checked, null)).toBe("Create Checked");
   });
 
   it("normalizes stored partial configuration against the preset", () => {
@@ -48,9 +48,19 @@ describe("run configuration helpers", () => {
 
   it("builds job payloads with compatibility adaptive mode and optional voice clone", () => {
     const fast = createRunConfiguration("fastCreate");
-    const fastRequest = buildCreateVoiceJobRequest("Hello", fast, "profile-1");
+    const fastRequest = buildCreateVoiceJobRequest(
+      "Hello",
+      fast,
+      "profile-1",
+      "project-1",
+      "bf_emma",
+      "b",
+    );
+    expect(fastRequest.projectId).toBe("project-1");
     expect(fastRequest.adaptiveMode).toBe(true);
     expect(fastRequest.voiceProfileId).toBe("profile-1");
+    expect(fastRequest.ttsVoice).toBe("bf_emma");
+    expect(fastRequest.ttsLanguage).toBe("b");
     expect(fastRequest.pipelineOptions?.asrCheck).toBe(false);
 
     const draft = createRunConfiguration("draftPreview");

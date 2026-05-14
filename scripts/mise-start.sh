@@ -59,8 +59,15 @@ checker_uses_qwen() {
   provider_is "qwen" "$provider" || provider_is "qwen-asr" "$provider"
 }
 
+profile_analysis_uses_pyannote() {
+  [[ -n "${PYANNOTE_AUTH_TOKEN:-}" ||
+    -n "${HF_TOKEN:-}" ||
+    -n "${VOICE_PROFILE_DIARIZATION_MODEL_PATH:-}" ||
+    -n "${VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR:-}" ]]
+}
+
 python_runtime_needed() {
-  tts_uses_kokoro || checker_uses_qwen
+  tts_uses_kokoro || checker_uses_qwen || profile_analysis_uses_pyannote
 }
 
 is_port_in_use() {
@@ -121,6 +128,8 @@ preflight_summary() {
   if python_runtime_needed; then
     echo "  - uv: $(command -v uv >/dev/null 2>&1 && echo "available" || echo "missing (required for runtime Python providers)")"
     echo "  - Kokoro FlashAttention bootstrap: install=${KOKOCLONE_INSTALL_FLASH_ATTENTION:-1}, require=${KOKOCLONE_REQUIRE_FLASH_ATTENTION:-0}"
+    echo "  - pyannote source analysis: $(profile_analysis_uses_pyannote && echo "configured" || echo "not configured")"
+    echo "  - source analysis Python: ${VOICE_PROFILE_ANALYSIS_PYTHON_PATH:-./.venv/bin/python}"
   else
     echo "  - uv: not required for mock-only configuration"
   fi
@@ -159,6 +168,26 @@ if [[ "${start_command[0]}" == "pnpm" ]]; then
       TTS_PROVIDER="kokoro"
       VOICE_CHECKER_PROVIDER="qwen"
       VOICE_OPTIMIZER_PROVIDER="rules"
+      LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE="${LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE:-0}"
+      KOKOCLONE_PYTHON_PATH="${KOKOCLONE_PYTHON_PATH:-./.venv-kokoclone/bin/python}"
+      KOKOCLONE_PYTHON_VERSION="${KOKOCLONE_PYTHON_VERSION:-3.12}"
+      KOKOCLONE_BOOTSTRAP_FLASH_ATTENTION_ON_BOOT="${KOKOCLONE_BOOTSTRAP_FLASH_ATTENTION_ON_BOOT:-1}"
+      KOKOCLONE_FLASH_ATTENTION_WHEEL_ONLY="${KOKOCLONE_FLASH_ATTENTION_WHEEL_ONLY:-1}"
+      KOKOCLONE_ALLOW_FLASH_ATTENTION_SOURCE="${KOKOCLONE_ALLOW_FLASH_ATTENTION_SOURCE:-0}"
+      KOKOCLONE_INSTALL_FLASH_ATTENTION="${KOKOCLONE_INSTALL_FLASH_ATTENTION:-1}"
+      KOKOCLONE_FLASH_ATTENTION_PACKAGE="${KOKOCLONE_FLASH_ATTENTION_PACKAGE:-flash-attn==2.8.3}"
+      KOKOCLONE_FLASH_ATTENTION_FALLBACK_PACKAGE="${KOKOCLONE_FLASH_ATTENTION_FALLBACK_PACKAGE:-flash-attn-3}"
+      KOKOCLONE_FLASH_ATTENTION_IMPORT_MODULE="${KOKOCLONE_FLASH_ATTENTION_IMPORT_MODULE:-flash_attn}"
+      export LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE \
+        KOKOCLONE_PYTHON_PATH \
+        KOKOCLONE_PYTHON_VERSION \
+        KOKOCLONE_BOOTSTRAP_FLASH_ATTENTION_ON_BOOT \
+        KOKOCLONE_FLASH_ATTENTION_WHEEL_ONLY \
+        KOKOCLONE_ALLOW_FLASH_ATTENTION_SOURCE \
+        KOKOCLONE_INSTALL_FLASH_ATTENTION \
+        KOKOCLONE_FLASH_ATTENTION_PACKAGE \
+        KOKOCLONE_FLASH_ATTENTION_FALLBACK_PACKAGE \
+        KOKOCLONE_FLASH_ATTENTION_IMPORT_MODULE
       ;;
     start:local-bonsai)
       TTS_PROVIDER="kokoro"

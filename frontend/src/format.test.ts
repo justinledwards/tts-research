@@ -1,17 +1,27 @@
 import { describe, expect, it } from "vitest";
+import { normalizeVoiceProfileSource } from "./api";
 import { formatDuration } from "./format";
+import { KOKORO_VOICEPACKS, kokoroVoicepackLabel } from "./kokoroVoices";
 import {
   calculateArrivalThroughput,
   formatBufferHealth,
   pickActiveSegmentIndex,
 } from "./studioMetrics";
-import type { VoiceJob, VoiceProfileCandidate } from "./types";
+import {
+  DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS,
+  buildTeleprompterCue,
+  buildTeleprompterWordCues,
+  normalizeTeleprompterHighlightSettings,
+  pickTeleprompterWordIndex,
+  splitTeleprompterTokens,
+} from "./teleprompter";
+import type { VoiceJob, VoiceProfileCandidate, VoiceProfileSource } from "./types";
 import {
   candidateQualityLabel,
   candidateQualityScore,
   summarizeCandidateMetrics,
 } from "./voiceProfileSourceMetrics";
-import { buildWaveformBars, waveformProgressIndex } from "./waveform";
+import { buildWaveformBarsFromSamples, waveformProgressIndex } from "./waveform";
 
 describe("formatDuration", () => {
   it("formats milliseconds as seconds", () => {
@@ -25,6 +35,7 @@ describe("formatDuration", () => {
 
 const baseJob: VoiceJob = {
   id: "job-1",
+  projectId: "default",
   status: "synthesizing",
   adaptiveMode: true,
   stages: {
@@ -87,11 +98,80 @@ describe("voice studio helpers", () => {
   });
 });
 
+describe("Kokoro voice catalog", () => {
+  it("matches the hexgrad Kokoro-82M v1.0 voicepack count and labels defaults", () => {
+    expect(KOKORO_VOICEPACKS).toHaveLength(54);
+    expect(kokoroVoicepackLabel("af_heart")).toBe("Heart (af_heart)");
+    expect(kokoroVoicepackLabel("bf_emma")).toBe("Emma (bf_emma)");
+  });
+});
+
+describe("teleprompter helpers", () => {
+  it("preserves readable spacing while tokenizing words", () => {
+    expect(splitTeleprompterTokens("Alpha  beta\nGamma")).toEqual([
+      { kind: "word", text: "Alpha", wordIndex: 0 },
+      { kind: "space", text: "  ", wordIndex: null },
+      { kind: "word", text: "beta", wordIndex: 1 },
+      { kind: "space", text: "\n", wordIndex: null },
+      { kind: "word", text: "Gamma", wordIndex: 2 },
+    ]);
+  });
+
+  it("resolves the active segment and word from the playback cursor", () => {
+    const earlyCue = buildTeleprompterCue(baseJob, 1.2);
+    expect(earlyCue?.segmentIndex).toBe(1);
+    expect(earlyCue?.activeWordIndex).toBe(0);
+
+    const lateCue = buildTeleprompterCue(baseJob, 2.6);
+    expect(lateCue?.segmentIndex).toBe(1);
+    expect(lateCue?.activeWordIndex).toBe(1);
+  });
+
+  it("keeps the final word active at the end of a segment", () => {
+    expect(pickTeleprompterWordIndex("one two three", 1)).toBe(2);
+  });
+
+  it("marks upcoming active and spoken words with configurable lead and fade", () => {
+    const settings = {
+      ...DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS,
+      leadMs: 100,
+      upcomingWindowMs: 250,
+      spokenFadeMs: 600,
+    };
+    const cues = buildTeleprompterWordCues("one two three", 660, 1500, settings);
+
+    expect(cues[0]?.state).toBe("spoken");
+    expect(cues[1]?.state).toBe("active");
+    expect(cues[2]?.state).toBe("upcoming");
+    expect(cues[2]?.intensity).toBeGreaterThan(0);
+  });
+
+  it("normalizes teleprompter preferences into safe ranges", () => {
+    expect(
+      normalizeTeleprompterHighlightSettings({
+        leadMs: 2000,
+        spokenFadeMs: 50,
+        upcomingIntensity: 4,
+        effectStyle: "classic",
+      }),
+    ).toMatchObject({
+      leadMs: 900,
+      spokenFadeMs: 120,
+      upcomingIntensity: 0.7,
+      effectStyle: "classic",
+    });
+  });
+});
+
 const baseCandidate: VoiceProfileCandidate = {
   id: "speaker-00",
   speakerId: "SPEAKER_00",
   suggestedName: "Voice 1",
   status: "ready",
+  rank: 1,
+  recommended: true,
+  suitability: "recommended",
+  warnings: [],
   referenceDurationMs: 45_000,
   referenceVersion: "v1",
   referenceSampleStrategy: "speaker-aware-best-spans",
@@ -114,17 +194,73 @@ const baseCandidate: VoiceProfileCandidate = {
 };
 
 describe("voice profile source helpers", () => {
+  it("normalizes nullable source-analysis arrays from queued API responses", () => {
+    const source = normalizeVoiceProfileSource({
+      id: "source-1",
+      status: "queued",
+      sourceFile: "demo.mp4",
+      sourceBytes: 1024,
+      audioFormat: "audio/wav",
+      progressMessage: "Queued",
+      stages: null,
+      candidates: null,
+      strategyVersion: "speaker-aware-v1",
+      createdAt: "2026-05-14T00:00:00Z",
+      updatedAt: "2026-05-14T00:00:00Z",
+    } as unknown as VoiceProfileSource);
+
+    expect(source.stages).toEqual([]);
+    expect(source.candidates).toEqual([]);
+  });
+
   it("labels strong source candidates with understandable quality language", () => {
     expect(candidateQualityScore(baseCandidate.qualityMetrics)).toBeGreaterThan(0.8);
     expect(candidateQualityLabel(baseCandidate)).toBe("Excellent");
-    expect(summarizeCandidateMetrics(baseCandidate)).toContain("single speaker");
+    expect(summarizeCandidateMetrics(baseCandidate)).toContain("recommended");
   });
 
-  it("generates stable waveform bars and progress indices", () => {
-    const bars = buildWaveformBars("job-1", 16);
+  it("labels high-quality short references separately", () => {
+    const shortCandidate: VoiceProfileCandidate = {
+      ...baseCandidate,
+      referenceDurationMs: 12_000,
+      suitability: "short_reference",
+      warnings: ["Short reference"],
+      qualityMetrics: {
+        ...baseCandidate.qualityMetrics,
+        usableDurationMs: 12_000,
+      },
+    };
+
+    expect(candidateQualityLabel(shortCandidate)).toBe("Short, high-quality");
+    expect(summarizeCandidateMetrics(shortCandidate)).toContain("short reference");
+  });
+
+  it("summarizes denoise and stitched span metadata", () => {
+    const denoisedCandidate: VoiceProfileCandidate = {
+      ...baseCandidate,
+      referenceSpanCount: 3,
+      denoise: {
+        provider: "ffmpeg",
+        strength: "balanced",
+        applied: true,
+        noiseRiskBefore: 0.44,
+        noiseRiskAfter: 0.18,
+      },
+    };
+
+    expect(summarizeCandidateMetrics(denoisedCandidate)).toContain("18% noise risk");
+    expect(summarizeCandidateMetrics(denoisedCandidate)).toContain("3 stitched spans");
+  });
+
+  it("generates waveform bars from audio samples and progress indices", () => {
+    const samples = new Float32Array(160);
+    samples.fill(0.1, 0, 80);
+    samples.fill(0.8, 80);
+
+    const bars = buildWaveformBarsFromSamples(samples, 16);
     expect(bars).toHaveLength(16);
     expect(bars.every((value) => value >= 0 && value <= 1)).toBe(true);
-    expect(buildWaveformBars("job-1", 16)).toEqual(bars);
+    expect(bars.at(-1)).toBeGreaterThan(bars[0] ?? 0);
     expect(waveformProgressIndex(0.5, bars.length)).toBe(8);
   });
 });

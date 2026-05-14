@@ -4,6 +4,9 @@ export function candidateQualityLabel(candidate: VoiceProfileCandidate): string 
   if (candidate.status !== "ready") {
     return "Needs cleaner speech";
   }
+  if (candidate.suitability === "short_reference") {
+    return "Short, high-quality";
+  }
   const score = candidateQualityScore(candidate.qualityMetrics);
   if (score >= 0.82) {
     return "Excellent";
@@ -26,11 +29,28 @@ export function candidateQualityScore(metrics: VoiceProfileQualityMetrics): numb
 
 export function summarizeCandidateMetrics(candidate: VoiceProfileCandidate): string {
   const metrics = candidate.qualityMetrics;
-  return [
+  const summary = [
     `${formatPercent(metrics.cleanSpeech)} clean`,
     `${formatPercent(metrics.singleSpeakerConfidence)} single speaker`,
     `${formatPercent(metrics.sourceCoverage)} source coverage`,
-  ].join(" · ");
+  ];
+  if (candidate.denoise?.applied) {
+    summary.push(
+      `${formatPercent(candidate.denoise.noiseRiskAfter ?? metrics.noiseRisk)} noise risk`,
+    );
+  }
+  if ((candidate.referenceSpanCount ?? candidate.spans.length) > 1) {
+    summary.push(
+      `${String(candidate.referenceSpanCount ?? candidate.spans.length)} stitched spans`,
+    );
+  }
+  if (candidate.suitability === "short_reference") {
+    summary.push("short reference");
+  }
+  if (candidate.recommended) {
+    summary.push("recommended");
+  }
+  return summary.join(" · ");
 }
 
 export function formatPercent(value: number): string {

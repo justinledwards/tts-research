@@ -58,7 +58,7 @@ export const RUN_MODE_PRESETS: RunModePreset[] = [
     mode: "checkedMaster",
     label: "Checked Master",
     description: "Balanced production pass with checker confidence and retry support.",
-    primaryLabel: "Create Checked Audio",
+    primaryLabel: "Create Checked",
     performanceMode: "balanced",
     options: {
       textPreprocess: true,
@@ -116,14 +116,24 @@ export function buildCreateVoiceJobRequest(
   text: string,
   config: RunConfiguration,
   selectedVoiceProfileId: string,
+  projectId?: string,
+  ttsVoice?: string,
+  ttsLanguage?: string,
 ): CreateVoiceJobRequest {
   const request: CreateVoiceJobRequest = {
     text,
+    projectId,
     runMode: config.runMode,
     performanceMode: config.performanceMode,
     adaptiveMode: config.performanceMode === "throughput",
     pipelineOptions: config.options,
   };
+  if (ttsVoice) {
+    request.ttsVoice = ttsVoice;
+  }
+  if (ttsLanguage) {
+    request.ttsLanguage = ttsLanguage;
+  }
   if (selectedVoiceProfileId && config.options.voiceClone) {
     request.voiceProfileId = selectedVoiceProfileId;
   }

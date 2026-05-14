@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import functools
+import inspect
 import os
 import shutil
 import json
@@ -34,6 +36,36 @@ def _load_torch():
         raise SystemExit(
             "Missing required module 'torch'. Run `python kokoro_clone.py --ensure-dependencies` first to install KokoClone dependencies."
         ) from exc
+
+
+def _patch_flash_attention_compat() -> None:
+    try:
+        import flash_attn
+    except ModuleNotFoundError:
+        return
+
+    for function_name in (
+        "flash_attn_func",
+        "flash_attn_qkvpacked_func",
+        "flash_attn_with_kvcache",
+    ):
+        function = getattr(flash_attn, function_name, None)
+        if not callable(function):
+            continue
+        try:
+            signature = inspect.signature(function)
+        except (TypeError, ValueError):
+            continue
+        if "dropout_p" in signature.parameters:
+            continue
+
+        @functools.wraps(function)
+        def wrapped(*args, _function=function, **kwargs):
+            kwargs.pop("dropout_p", None)
+            kwargs.pop("alibi_slopes", None)
+            return _function(*args, **kwargs)
+
+        setattr(flash_attn, function_name, wrapped)
 
 
 def _has_core_package(path: Path) -> bool:
@@ -513,6 +545,8 @@ def main() -> None:
                     "Please verify your environment and retry."
                 )
         return
+
+    _patch_flash_attention_compat()
 
     try:
         from core.cloner import KokoClone

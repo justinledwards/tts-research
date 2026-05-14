@@ -1,5 +1,91 @@
 # Working Log
 
+## 2026-05-15 02:54 CEST - Optimization rounds for cloning UI and natural flow
+- [x] Generate natural-flow product imagery and extract design targets.
+- [x] Voice cloning optimization rounds.
+  - [x] Round 1: measurable candidate score, denoise fast path, stitching allocation cleanup.
+  - [x] Round 2: split overlapped speaker turns and stitch remaining clean spans.
+- [x] UI optimization rounds.
+  - [x] Round 1: Kokoro voicepack selector, compact player density, dynamic queue strip.
+  - [x] Round 2: compact checked-run action label after desktop QA.
+- [x] End-to-end content flow optimization rounds.
+  - [x] Round 1: source text file drop and Markdown-to-speech cleanup.
+- [x] Commit after each meaningful optimization batch.
+- [x] Run checks and browser QA.
+
+## 2026-05-15 01:50 CEST - Fix source-analysis interpreter selection
+- [x] Reproduce startup check/analyzer interpreter mismatch.
+- [x] Default source analysis to the checked backend virtualenv in local startup.
+- [x] Surface analyzer Python path in diagnostics.
+- [x] Run checks.
+
+## 2026-05-15 01:44 CEST - Fix profile-analysis runtime bootstrap
+- [x] Reproduce why UI source analysis can miss torch.
+- [x] Add profile-analysis extras to startup bootstrap when pyannote is configured.
+- [x] Align mise preflight with pyannote profile-analysis runtime requirements.
+- [x] Verify backend profile-analysis imports and Ozzy source analysis flow.
+- [x] Run checks.
+
+## 2026-05-15 01:29 CEST - HF-token speaker analysis QA
+- [x] Run source-analysis diagnostics with a runtime-only Hugging Face token.
+- [x] Analyze the two-speaker demo fixture through the backend.
+- [x] Inspect candidate ranking, warnings, and preview/profile readiness.
+- [x] Record any setup or pipeline blockers without persisting the token.
+
+## 2026-05-15 00:44 CEST - Voice Studio UI and local analysis pass
+- [x] Add backend project persistence and project-aware jobs.
+- [x] Add local pyannote diagnostics and offline model-path support.
+- [x] Add dynamic short-reference voice candidate scoring metadata.
+- [x] Refactor left rail profile/source/script review layout.
+- [x] Add teleprompter/cinema playback controls and clipping fixes.
+- [x] Run checks and Playwright desktop/mobile QA.
+
+## 2026-05-15 00:21 CEST - Teleprompter cinema mode
+- [x] Move teleprompter to the top of the center column.
+- [x] Add full-viewport cinema teleprompter mode.
+- [x] Wire playback state into the teleprompter overlay.
+- [x] Run checks and browser sanity pass.
+- [x] Commit focused UI changes without unrelated dirty files.
+
+## 2026-05-15 00:12 CEST - Frontend startup launch reliability
+- [x] Inspect current running processes and identify why frontend port 5173 stays unused.
+- [x] Switch frontend launch command in `scripts/start.sh` to the explicit workspace `pnpm run dev` path.
+- [x] Confirm one-command startup prints and binds both backend and frontend ports with `mise start -- pnpm start:local`.
+- [ ] Cleanly shut down old orphaned `scripts/start.sh`/backend processes if startup is retried repeatedly.
+- [x] Fix startup PID-capture race by passing service PIDs by reference instead of command substitution.
+- [x] Start frontend through `pnpm exec vite` so frontend port overrides are reliably honored.
+- [ ] Document the cleanup/restart flow in the final handoff.
+
+## 2026-05-14 23:52 CEST - Demo voice profile playback validation
+- [x] Create a demo-file voice profile.
+- [x] Generate two-paragraph test audio with the default voice.
+- [x] Generate the same test audio with the demo voice profile.
+- [x] Verify playback waveform is derived from decoded audio.
+- [x] Add clone runtime compatibility guard for Kanade `dropout_p` calls.
+- [x] Record runtime pain points and performance notes.
+- [ ] Make backend CORS dev ports configurable for isolated QA instances.
+- [ ] Investigate clone throughput: demo run completed at about 0.31x realtime with one clone worker.
+
+## 2026-05-14 23:40 CEST - Teleprompter read-along layout polish
+- [x] Move project/job context out of the crowded center header.
+- [x] Replace read-along cards with a teleprompter-style panel and active word cue.
+- [x] Surface the default provider voice in the profile library.
+- [x] Add helper tests for teleprompter cue timing.
+- [x] Run frontend checks and capture UI sanity notes.
+
+## 2026-05-14 23:37 CEST - Add FlashAttention-3 fallback option with compat shim
+- [x] Add optional `KOKOCLONE_FLASH_ATTENTION_PACKAGE`/`KOKOCLONE_FLASH_ATTENTION_FALLBACK_PACKAGE` support.
+- [x] Implemented install-time compatibility shim for kanade imports when using `flash-attn-3`.
+- [ ] Verify whether `flash-attn-3` improves clone quality in practice on this setup.
+
+## 2026-05-14 23:45 CEST - Wire flash-attn-3 fallback into `start:local` defaults
+- [x] Set `KOKOCLONE_FLASH_ATTENTION_FALLBACK_PACKAGE=flash-attn-3==3.0.0` in local start defaults.
+- [ ] Verify startup completes with this path enabled.
+
+## 2026-05-14 23:27 CEST - Make local start enforce fast FlashAttention defaults
+- [x] Update `scripts/mise-start.sh` `start:local` defaults so the bootstrap flags are set unless explicitly overridden.
+- [ ] Verify no other startup path depends on legacy bootstrap defaults.
+
 ## 2026-05-14 23:18 CEST - Split KokoClone runtime from main backend env
 - [x] Add dedicated KokoClone Python interpreter config to startup bootstrap path.
 - [x] Ensure FlashAttention bootstrap and koko-clone dependency checks use the dedicated clone interpreter.
@@ -333,6 +419,26 @@
 - [ ] Improve mobile access to Help and Settings and run-config drawer scrolling.
 - [ ] Profile Draft Preview latency under explicit mock and real providers.
 
+## 2026-05-14 23:06 CEST - Demo media upload QA
+- [x] Inspect demo media metadata.
+- [x] Upload demo media through the source analysis UI.
+- [x] Verify analysis progress, errors, and candidate preview behavior.
+- [x] Capture screenshots and console/network observations.
+- [x] Record follow-up fixes from the demo pass.
+- [x] Fix queued source response/null candidate crash in the UI.
+- [x] Contain source-analysis setup errors inside the left rail on desktop and mobile.
+- [ ] Re-run candidate preview/profile creation with pyannote credentials configured.
+
+## 2026-05-14 23:21 CEST - Demo voice clone fixture tuning
+- [x] Create a repeatable demo-file voice profile through the compatibility path.
+- [x] Verify bounded reference extraction metadata from the 10-minute MP4.
+- [x] Run a cloned-voice synthesis job against the demo profile.
+- [x] Compare pipeline telemetry and UI feedback for clone effectiveness.
+- [x] Record tuning changes for source analysis and clone QA flow.
+- [x] Cap cloned-profile segment workers to the available KokoClone reference worker pool.
+- [ ] Add a first-class clone-provider health check before enabling cloned run actions.
+- [ ] Add a reusable demo-fixture QA command for profile creation plus cloned synthesis.
+
 ## 2026-05-14 22:41 CEST - Fix KokoClone env path resolution
 - [x] Validate KOKOCLONE_PYTHON_PATH-anchored venv creation path now resolves from repo root.
 - [x] Confirm startup command for split-runtime fast flash-attn path.
@@ -344,3 +450,38 @@
 ## 2026-05-14 22:43 CEST - Normalize KOKOCLONE_PYTHON_PATH and avoid backend/backend venv path
 - [x] Normalize `KOKOCLONE_PYTHON_PATH` to absolute path to avoid cwd-relative duplication under backend.
 - [x] Raise default `KOKOCLONE_PYTHON_VERSION` to 3.12 for `kanade-tokenizer` compatibility.
+
+## 2026-05-14 23:23 CEST - Ensure default local-start bootstrap settings and reliable shutdown
+- [x] Default `start:local` to fast flash bootstrap settings in `scripts/mise-start.sh`.
+- [x] Align env example values for 3.12 and fast flash bootstrap defaults.
+- [x] Improve signal/cleanup behavior so Ctrl+C terminates spawned backend/frontend services.
+
+## 2026-05-14 23:39 CEST - Enable flash-attn-3 fallback by default for local start
+- [x] Keep `flash-attn==2.8.3` primary and attempt `flash-attn-3==3.0.0` fallback when wheels are unavailable.
+- [x] Add compatibility shim for `flash-attn-3` module re-exporting expected `flash_attn` symbols.
+- [x] Update `.env.example` and `backend/.env.example` to expose `KOKOCLONE_FLASH_ATTENTION_FALLBACK_PACKAGE=flash-attn-3`.
+
+## 2026-05-14 23:45 CEST - Fix flash-attn-3 fallback index resolution
+- [x] Use `https://download.pytorch.org/whl/flash-attn-3/` index when installing `flash-attn-3`.
+- [x] Unpin fallback package to `flash-attn-3` so uv resolves index-provided wheel metadata.
+- [x] Update local-start defaults and docs to match the corrected fallback package and index path.
+
+## 2026-05-14 23:49 CEST - Improve frontend startup visibility for `mise start`
+- [x] Add explicit frontend startup logs and readiness checks in `scripts/start.sh`.
+- [x] Keep startup behavior unchanged unless actual service startup fails.
+
+## 2026-05-14 23:55 CEST - Ensure frontend starts while backend warms up
+- [x] Start frontend immediately after backend launch instead of waiting on backend port.
+- [x] Extend service startup timeout to 120s for long backend model warmup periods.
+- [x] Launch frontend via explicit `pnpm --filter @tts-research/frontend exec vite` to avoid workspace ambiguity.
+
+## 2026-05-15 02:11 CEST - Voice clone quality and teleprompter highlight demo
+- [x] Add configurable teleprompter highlight timing, persistence, and demo mode.
+- [x] Add focused-word stroke/glow highlight styling with accessible reduced-motion behavior.
+- [x] Add local denoise stage, raw/clean previews, and denoise metadata for source analysis.
+- [x] Improve same-speaker reference span stitching metadata and warnings.
+- [x] Add cloned-voice likeness metadata with pending/scored states.
+- [x] Update frontend candidate/profile UI for raw-clean preview and likeness.
+- [x] Add Kokoro voicepack catalog with human-readable names.
+- [x] Add backend and frontend tests for the quality and highlight behavior.
+- [x] Run project checks and capture QA notes.

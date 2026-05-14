@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { voiceProfileCandidatePreviewSource } from "./api";
 import { formatDuration } from "./format";
 import type {
   CreateVoiceProfileFromCandidateRequest,
   VoiceProfileCandidate,
   VoiceProfileSource,
+  VoiceProfileSourceDiagnostics,
 } from "./types";
 import {
   candidateQualityLabel,
@@ -14,6 +15,7 @@ import {
 
 export function VoiceSourceAnalysisPanel({
   createCandidateId,
+  diagnostics,
   error,
   isAnalyzing,
   source,
@@ -21,6 +23,7 @@ export function VoiceSourceAnalysisPanel({
   onCreateProfile,
 }: Readonly<{
   createCandidateId: string | null;
+  diagnostics: VoiceProfileSourceDiagnostics | null;
   error: string | null;
   isAnalyzing: boolean;
   source: VoiceProfileSource | null;
@@ -57,6 +60,13 @@ export function VoiceSourceAnalysisPanel({
     [file, onAnalyze],
   );
 
+  let sourceNotice: ReactNode = null;
+  if (isSetupError(displayError, diagnostics)) {
+    sourceNotice = <SourceAnalysisSetupCard diagnostics={diagnostics} error={displayError} />;
+  } else if (displayError) {
+    sourceNotice = <p className="break-words text-sm leading-5 text-red-700">{displayError}</p>;
+  }
+
   const handleCreate = useCallback(
     async (candidate: VoiceProfileCandidate) => {
       const fallbackName = candidate.suggestedName || candidate.speakerId || "Custom voice";
@@ -69,7 +79,7 @@ export function VoiceSourceAnalysisPanel({
   );
 
   return (
-    <section className="grid gap-3">
+    <section className="grid min-w-0 gap-3">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-zinc-950">Reference / Source Media</h2>
@@ -85,7 +95,7 @@ export function VoiceSourceAnalysisPanel({
       </div>
 
       <form
-        className="grid gap-3 rounded-lg border border-dashed border-zinc-300 bg-white p-4"
+        className="grid min-w-0 gap-3 rounded-lg border border-dashed border-zinc-300 bg-white p-4"
         onSubmit={(event) => {
           void handleAnalyze(event);
         }}
@@ -121,7 +131,7 @@ export function VoiceSourceAnalysisPanel({
       </form>
 
       {source ? <SourceProgress source={source} /> : null}
-      {displayError ? <p className="text-sm leading-5 text-red-700">{displayError}</p> : null}
+      {sourceNotice}
 
       <ReadyCandidateList
         candidateNames={candidateNames}
@@ -150,32 +160,113 @@ function sourceStatusClass(source: VoiceProfileSource): string {
   return "bg-blue-100 text-blue-700";
 }
 
-function SourceProgress({ source }: Readonly<{ source: VoiceProfileSource }>) {
+function isSetupError(
+  error: string | null,
+  diagnostics: VoiceProfileSourceDiagnostics | null,
+): boolean {
+  if (diagnostics?.mode === "unconfigured") {
+    return true;
+  }
+  if (!error) {
+    return false;
+  }
   return (
-    <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+    error.includes("PYANNOTE_AUTH_TOKEN") ||
+    error.includes("HF_TOKEN") ||
+    error.includes("VOICE_PROFILE_DIARIZATION_MODEL_PATH")
+  );
+}
+
+function SourceAnalysisSetupCard({
+  diagnostics,
+  error,
+}: Readonly<{
+  diagnostics: VoiceProfileSourceDiagnostics | null;
+  error: string | null;
+}>) {
+  return (
+    <section className="min-w-0 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+      <p className="font-semibold">Speaker analysis needs local pyannote setup</p>
+      <p className="mt-2 break-words text-xs leading-5 text-amber-900">
+        {diagnostics?.setupMessage ??
+          "Accept pyannote Community-1 terms, download or clone the model locally, then set VOICE_PROFILE_DIARIZATION_MODEL_PATH. A token is only needed for first-time model access."}
+      </p>
+      {error ? <p className="mt-2 break-words text-xs leading-5 text-red-800">{error}</p> : null}
+      <dl className="mt-3 grid gap-2 rounded-md border border-amber-200 bg-white/60 p-2 text-xs">
+        <SetupLine label="Mode" value={diagnostics?.mode ?? "unconfigured"} />
+        <SetupLine
+          label="Model"
+          value={diagnostics?.model ?? "pyannote/speaker-diarization-community-1"}
+        />
+        <SetupLine
+          label="Local model"
+          value={diagnostics?.localModelAvailable ? "available" : "not found"}
+        />
+        <SetupLine label="Python" value={diagnostics?.pythonPath ?? "pending"} />
+        <SetupLine label="ffmpeg" value={diagnostics?.ffmpegAvailable ? "available" : "missing"} />
+      </dl>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+        <a
+          className="rounded border border-amber-300 bg-white px-2 py-1 text-amber-900 hover:bg-amber-100"
+          href="https://huggingface.co/pyannote/speaker-diarization-community-1"
+          rel="noreferrer"
+          target="_blank"
+        >
+          Model terms
+        </a>
+        <a
+          className="rounded border border-amber-300 bg-white px-2 py-1 text-amber-900 hover:bg-amber-100"
+          href="https://github.com/pyannote/pyannote-audio/releases"
+          rel="noreferrer"
+          target="_blank"
+        >
+          Offline notes
+        </a>
+      </div>
+    </section>
+  );
+}
+
+function SetupLine({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="grid min-w-0 grid-cols-[6rem_minmax(0,1fr)] gap-2">
+      <dt className="text-amber-800">{label}</dt>
+      <dd className="min-w-0 truncate font-medium text-amber-950" title={value}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function SourceProgress({ source }: Readonly<{ source: VoiceProfileSource }>) {
+  const candidates = Array.isArray(source.candidates) ? source.candidates : [];
+  const stages = Array.isArray(source.stages) ? source.stages : [];
+  const readyCount = candidates.filter((candidate) => candidate.status === "ready").length;
+
+  return (
+    <section className="min-w-0 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-zinc-950">{source.sourceFile}</p>
+          <p className="truncate text-sm font-semibold text-zinc-950" title={source.sourceFile}>
+            {source.sourceFile}
+          </p>
           <p className="mt-1 text-xs text-zinc-500">
             {formatBytes(source.sourceBytes)} ·{" "}
             {source.sourceDurationMs ? formatDuration(source.sourceDurationMs) : "duration pending"}
           </p>
         </div>
-        <span className="text-xs text-zinc-500">
-          {String(source.candidates.filter((candidate) => candidate.status === "ready").length)}{" "}
-          voices
-        </span>
+        <span className="text-xs text-zinc-500">{String(readyCount)} voices</span>
       </div>
-      <p className="mt-3 text-sm font-medium text-zinc-800">{source.progressMessage}</p>
+      <p className="mt-3 break-words text-sm font-medium text-zinc-800">{source.progressMessage}</p>
       {source.progressDetail ? (
-        <p className="mt-1 text-xs leading-5 text-zinc-500">{source.progressDetail}</p>
+        <p className="mt-1 break-words text-xs leading-5 text-zinc-500">{source.progressDetail}</p>
       ) : null}
       <ol className="mt-3 grid gap-2">
-        {source.stages.map((stage) => (
-          <li className="flex items-center gap-2 text-xs text-zinc-600" key={stage.name}>
+        {stages.map((stage) => (
+          <li className="flex min-w-0 items-center gap-2 text-xs text-zinc-600" key={stage.name}>
             <span className={`h-2 w-2 rounded-full ${sourceStageClass(stage.status)}`} />
-            <span className="capitalize">{stage.name}</span>
-            <span className="truncate text-zinc-400">{stage.detail}</span>
+            <span className="shrink-0 capitalize">{stage.name}</span>
+            <span className="min-w-0 truncate text-zinc-400">{stage.detail}</span>
           </li>
         ))}
       </ol>
@@ -264,7 +355,7 @@ function RejectedCandidateList({
       </summary>
       <ul className="mt-2 grid gap-1">
         {candidates.map((candidate) => (
-          <li key={candidate.id}>
+          <li className="break-words" key={candidate.id}>
             {candidate.speakerId}: {candidate.reason ?? "Not enough clean speech"}
           </li>
         ))}
@@ -293,12 +384,31 @@ function CandidateCard({
   onNameChange: (value: string) => void;
 }>) {
   const isCreating = createCandidateId === candidate.id;
+  const [previewKind, setPreviewKind] = useState<"clean" | "raw">("clean");
+  const previewSource = voiceProfileCandidatePreviewSource(sourceId, candidate.id, previewKind);
+  const hasRawPreview = Boolean(candidate.rawPreviewAudio);
+  const denoiseLabel = candidate.denoise?.applied
+    ? `${candidate.denoise.provider} ${candidate.denoise.strength}`
+    : "raw normalized";
   return (
     <article className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-semibold text-zinc-950">{candidateQualityLabel(candidate)}</p>
-          <p className="mt-1 text-xs text-zinc-500">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <p className="font-semibold text-zinc-950">{candidateQualityLabel(candidate)}</p>
+            {candidate.recommended ? (
+              <span className="rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                Recommended
+              </span>
+            ) : null}
+            {candidate.suitability === "short_reference" ? (
+              <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                Short reference
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 truncate text-xs text-zinc-500" title={candidate.speakerId}>
+            {candidate.rank ? `#${String(candidate.rank)} · ` : ""}
             {candidate.speakerId} · {formatDuration(candidate.referenceDurationMs)} reference
           </p>
         </div>
@@ -306,15 +416,64 @@ function CandidateCard({
           {formatPercent(candidate.score)}
         </span>
       </div>
-      <audio
-        className="h-9 w-full"
-        controls
-        preload="none"
-        src={voiceProfileCandidatePreviewSource(sourceId, candidate.id)}
-      >
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-xs text-zinc-600">
+        <span className="min-w-0 truncate" title={candidate.denoise?.reason ?? denoiseLabel}>
+          Preview: {previewKind === "clean" ? "Cleaned" : "Raw"} · {denoiseLabel}
+        </span>
+        <div className="inline-flex overflow-hidden rounded border border-zinc-200 bg-white">
+          {(["clean", "raw"] as const).map((kind) => (
+            <button
+              className={`px-2 py-1 font-semibold ${
+                previewKind === kind ? "bg-orange-50 text-orange-700" : "text-zinc-500"
+              }`}
+              disabled={kind === "raw" && !hasRawPreview}
+              key={kind}
+              onClick={() => {
+                setPreviewKind(kind);
+              }}
+              type="button"
+            >
+              {kind}
+            </button>
+          ))}
+        </div>
+      </div>
+      <audio className="h-9 w-full" controls preload="none" src={previewSource}>
         <track kind="captions" />
       </audio>
-      <p className="text-xs leading-5 text-zinc-500">{summarizeCandidateMetrics(candidate)}</p>
+      <p className="break-words text-xs leading-5 text-zinc-500">
+        {summarizeCandidateMetrics(candidate)}
+      </p>
+      {candidate.denoise ? (
+        <div className="grid grid-cols-2 gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-600">
+          <MetricPill
+            label="Noise before"
+            value={formatPercent(
+              candidate.denoise.noiseRiskBefore ?? candidate.qualityMetrics.noiseRisk,
+            )}
+          />
+          <MetricPill
+            label="Noise after"
+            value={formatPercent(
+              candidate.denoise.noiseRiskAfter ?? candidate.qualityMetrics.noiseRisk,
+            )}
+          />
+          <MetricPill
+            label="Spans"
+            value={String(candidate.referenceSpanCount ?? candidate.spans.length)}
+          />
+          <MetricPill label="SNR" value={`${(candidate.denoise.snrAfterDb ?? 0).toFixed(1)} dB`} />
+        </div>
+      ) : null}
+      {candidate.warnings && candidate.warnings.length > 0 ? (
+        <ul className="grid gap-1 rounded-md bg-amber-50 p-2 text-xs leading-5 text-amber-800">
+          {candidate.warnings.map((warning) => (
+            <li className="break-words" key={warning}>
+              {warning}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-2">
         <input
           className="min-w-0 rounded-md border border-zinc-200 px-3 py-2 text-sm"
@@ -346,6 +505,17 @@ function CandidateCard({
         {isCreating ? "Creating..." : "Create Profile"}
       </button>
     </article>
+  );
+}
+
+function MetricPill({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-[11px] text-zinc-400">{label}</p>
+      <p className="truncate font-semibold text-zinc-800" title={value}>
+        {value}
+      </p>
+    </div>
   );
 }
 

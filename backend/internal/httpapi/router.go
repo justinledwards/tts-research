@@ -37,8 +37,15 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"http://localhost:5173", "http://127.0.0.1:5173"},
-		AllowMethods: []string{fiber.MethodGet, fiber.MethodPost, fiber.MethodDelete, fiber.MethodOptions},
+		AllowOrigins: []string{
+			"http://localhost:5173",
+			"http://127.0.0.1:5173",
+			"http://localhost:5174",
+			"http://127.0.0.1:5174",
+			"http://localhost:5175",
+			"http://127.0.0.1:5175",
+		},
+		AllowMethods: []string{fiber.MethodGet, fiber.MethodPost, fiber.MethodPatch, fiber.MethodDelete, fiber.MethodOptions},
 		AllowHeaders: []string{"Origin", "Content-Type", "Accept"},
 	}))
 
@@ -51,14 +58,56 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(metrics)
 	})
 
-	app.Post("/api/voice-jobs", func(ctx fiber.Ctx) error {
-		var request pipeline.CreateJobRequest
+	app.Get("/api/projects", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.ListProjects())
+	})
+
+	app.Post("/api/projects", func(ctx fiber.Ctx) error {
+		var request struct {
+			Name string `json:"name"`
+		}
 		if err := ctx.Bind().Body(&request); err != nil {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
 		}
+		project, err := service.CreateProject(request.Name)
+		if err != nil {
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.Status(fiber.StatusCreated).JSON(project)
+	})
 
+	app.Patch("/api/projects/:id", func(ctx fiber.Ctx) error {
+		var request struct {
+			Name string `json:"name"`
+		}
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		project, err := service.UpdateProject(ctx.Params("id"), request.Name)
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(project)
+	})
+
+	app.Get("/api/projects/:id/jobs", func(ctx fiber.Ctx) error {
+		jobs, err := service.ListProjectJobs(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(jobs)
+	})
+
+	app.Post("/api/voice-jobs", func(ctx fiber.Ctx) error {
+		var request pipeline.CreateJobRequest
+		if err := json.Unmarshal(ctx.Body(), &request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
 		job, err := service.CreateJob(ctx.Context(), request)
 		if err != nil {
+			if errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
 			status := fiber.StatusInternalServerError
 			if errors.Is(err, pipeline.ErrEmptyText) {
 				status = fiber.StatusBadRequest
@@ -190,6 +239,10 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(profile)
 	})
 
+	app.Get("/api/voice-profile-sources/diagnostics", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.GetVoiceProfileSourceDiagnostics())
+	})
+
 	app.Post("/api/voice-profile-sources", func(ctx fiber.Ctx) error {
 		form, err := ctx.MultipartForm()
 		if err != nil {
@@ -291,6 +344,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		audioBytes, contentType, err := service.GetVoiceProfileCandidatePreview(
 			ctx.Params("id"),
 			ctx.Params("candidateId"),
+			ctx.Query("kind", "clean"),
 		)
 		if err != nil {
 			if errors.Is(err, pipeline.ErrAudioNotReady) {
@@ -443,7 +497,8 @@ func notFound(ctx fiber.Ctx, err error) error {
 	if errors.Is(err, pipeline.ErrJobNotFound) ||
 		errors.Is(err, pipeline.ErrProfileNotFound) ||
 		errors.Is(err, pipeline.ErrProfileSourceNotFound) ||
-		errors.Is(err, pipeline.ErrProfileCandidateNotFound) {
+		errors.Is(err, pipeline.ErrProfileCandidateNotFound) ||
+		errors.Is(err, pipeline.ErrProjectNotFound) {
 		return ctx.Status(fiber.StatusNotFound).JSON(errorResponse(err.Error()))
 	}
 
