@@ -13,6 +13,8 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 )
 
+const maxSafeWorkerCount = 2
+
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	optimizer, err := optimizerFromEnv()
@@ -59,29 +61,155 @@ func main() {
 		}()
 	}
 
-	segmentMaxRunes, err := envIntWithDefault("VOICE_SEGMENT_MAX_RUNES", 220)
+	segmentMaxRunes, err := envIntWithDefault("VOICE_SEGMENT_MAX_RUNES", 300)
 	if err != nil {
 		logger.Error("invalid pipeline configuration", "error", err)
 		os.Exit(1)
 	}
-	ttsWorkerCount, err := envIntWithDefault("TTS_WORKER_COUNT", 2)
+	segmentWorkers, err := envIntWithDefault("VOICE_SEGMENT_WORKERS", 2)
 	if err != nil {
 		logger.Error("invalid pipeline configuration", "error", err)
 		os.Exit(1)
 	}
+	referenceWorkerCount, err := envIntWithDefault("KOKOCLONE_WORKER_COUNT", 2)
+	if err != nil {
+		logger.Error("invalid tts configuration", "error", err)
+		os.Exit(1)
+	}
+	studioSegmentWorkers, err := envIntWithDefault("VOICE_SEGMENT_WORKERS_STUDIO", 2)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
+	studioSegmentMaxRunes, err := envIntWithDefault("VOICE_SEGMENT_MAX_RUNES_STUDIO", 0)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
+	studioSegmentWorkersAdaptive, err := envIntWithDefault("VOICE_SEGMENT_WORKERS_STUDIO_ADAPTIVE", 2)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
+	studioSegmentMaxRunesAdaptive, err := envIntWithDefault("VOICE_SEGMENT_MAX_RUNES_STUDIO_ADAPTIVE", 0)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
+	maxProfileBytes, err := envInt64WithDefault("VOICE_PROFILE_MAX_BYTES", 1<<30)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
+	voiceProfileReferenceMaxSeconds, err := envIntWithDefault("VOICE_PROFILE_REFERENCE_MAX_SECONDS", 60)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
+	voiceProfileReferenceMinSeconds, err := envIntWithDefault("VOICE_PROFILE_REFERENCE_MIN_SECONDS", 20)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
+	voiceProfileReferenceTargetSeconds, err := envIntWithDefault("VOICE_PROFILE_REFERENCE_TARGET_SECONDS", 45)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
+	voiceProfileDiarizationToken := strings.TrimSpace(os.Getenv("PYANNOTE_AUTH_TOKEN"))
+	if voiceProfileDiarizationToken == "" {
+		voiceProfileDiarizationToken = strings.TrimSpace(os.Getenv("HF_TOKEN"))
+	}
+	segmentWorkers = clampWorkerCount("VOICE_SEGMENT_WORKERS", segmentWorkers, maxSafeWorkerCount, logger)
+	studioSegmentWorkers = clampWorkerCount("VOICE_SEGMENT_WORKERS_STUDIO", studioSegmentWorkers, maxSafeWorkerCount, logger)
+	studioSegmentWorkersAdaptive = clampWorkerCount(
+		"VOICE_SEGMENT_WORKERS_STUDIO_ADAPTIVE",
+		studioSegmentWorkersAdaptive,
+		maxSafeWorkerCount,
+		logger,
+	)
+	referenceWorkerCount = clampWorkerCount("KOKOCLONE_WORKER_COUNT", referenceWorkerCount, maxSafeWorkerCount, logger)
+
+	logger.Info(
+		"pipeline configuration",
+		"requestedSegmentWorkers",
+		segmentWorkers,
+		"requestedSegmentMaxRunes",
+		segmentMaxRunes,
+		"requestedStudioSegmentWorkers",
+		studioSegmentWorkers,
+		"requestedStudioSegmentMaxRunes",
+		studioSegmentMaxRunes,
+		"requestedStudioAdaptiveSegmentWorkers",
+		studioSegmentWorkersAdaptive,
+		"requestedStudioAdaptiveSegmentMaxRunes",
+		studioSegmentMaxRunesAdaptive,
+		"requestedReferenceWorkerCount",
+		referenceWorkerCount,
+		"voiceProfileReferenceMinSeconds",
+		voiceProfileReferenceMinSeconds,
+		"voiceProfileReferenceTargetSeconds",
+		voiceProfileReferenceTargetSeconds,
+		"voiceProfileReferenceMaxSeconds",
+		voiceProfileReferenceMaxSeconds,
+		"voiceProfileDiarizationModel",
+		envWithDefault("VOICE_PROFILE_DIARIZATION_MODEL", "pyannote/speaker-diarization-community-1"),
+		"voiceProfileDiarizationConfigured",
+		voiceProfileDiarizationToken != "",
+		"studioInheritsFromDefault",
+		studioSegmentWorkers == 0 && studioSegmentMaxRunes == 0,
+	)
 
 	service := pipeline.NewService(
 		optimizer,
 		ttsAgent,
 		checker,
 		pipeline.Options{
-			MaxRetries:      3,
-			SegmentMaxRunes: segmentMaxRunes,
-			TTSWorkerCount:  ttsWorkerCount,
-			JobDataDir:      envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
-			VoiceDataDir:    envWithDefault("VOICE_DATA_DIR", "./data/voices"),
-			FFMPEGPath:      envWithDefault("FFMPEG_PATH", "ffmpeg"),
+			MaxRetries:                          3,
+			SegmentMaxRunes:                     segmentMaxRunes,
+			SegmentWorkers:                      segmentWorkers,
+			StudioSegmentMaxRunes:               studioSegmentMaxRunes,
+			StudioSegmentWorkers:                studioSegmentWorkers,
+			StudioSegmentWorkersAdaptive:        studioSegmentWorkersAdaptive,
+			StudioSegmentMaxRunesAdaptive:       studioSegmentMaxRunesAdaptive,
+			JobDataDir:                          envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
+			VoiceProfileDir:                     envWithDefault("VOICE_PROFILE_DATA_DIR", "./data/voice-profiles"),
+			VoiceProfileSourceDir:               envWithDefault("VOICE_PROFILE_SOURCE_DATA_DIR", "./data/voice-profile-sources"),
+			MaxProfileBytes:                     maxProfileBytes,
+			VoiceProfileReferenceMinSeconds:     voiceProfileReferenceMinSeconds,
+			VoiceProfileReferenceTargetSeconds:  voiceProfileReferenceTargetSeconds,
+			VoiceProfileReferenceMaxSeconds:     voiceProfileReferenceMaxSeconds,
+			VoiceProfileDiarizationModel:        envWithDefault("VOICE_PROFILE_DIARIZATION_MODEL", "pyannote/speaker-diarization-community-1"),
+			VoiceProfileDiarizationToken:        voiceProfileDiarizationToken,
+			VoiceProfileAnalysisPythonPath:      envWithDefault("VOICE_PROFILE_ANALYSIS_PYTHON_PATH", "python3"),
+			VoiceProfileAnalysisScriptPath:      envWithDefault("VOICE_PROFILE_ANALYSIS_SCRIPT_PATH", "./scripts/profile_analyze.py"),
+			VoiceProfileAnalysisStrategyVersion: envWithDefault("VOICE_PROFILE_ANALYSIS_STRATEGY_VERSION", "speaker-aware-v1"),
 		},
+	)
+	serviceOptions := service.Options()
+
+	logger.Info(
+		"pipeline configuration (resolved)",
+		"segmentWorkers",
+		serviceOptions.SegmentWorkers,
+		"segmentMaxRunes",
+		serviceOptions.SegmentMaxRunes,
+		"studioSegmentWorkers",
+		serviceOptions.StudioSegmentWorkers,
+		"studioSegmentMaxRunes",
+		serviceOptions.StudioSegmentMaxRunes,
+		"studioAdaptiveSegmentWorkers",
+		serviceOptions.StudioSegmentWorkersAdaptive,
+		"studioAdaptiveSegmentMaxRunes",
+		serviceOptions.StudioSegmentMaxRunesAdaptive,
+		"resolvedReferenceWorkerCount",
+		referenceWorkerCount,
+		"voiceProfileReferenceMinSeconds",
+		serviceOptions.VoiceProfileReferenceMinSeconds,
+		"voiceProfileReferenceTargetSeconds",
+		serviceOptions.VoiceProfileReferenceTargetSeconds,
+		"voiceProfileReferenceMaxSeconds",
+		serviceOptions.VoiceProfileReferenceMaxSeconds,
 	)
 
 	app := httpapi.NewRouter(service)
@@ -95,7 +223,7 @@ func main() {
 }
 
 func optimizerFromEnv() (pipeline.VoiceOptimizer, error) {
-	provider := strings.ToLower(envWithDefault("VOICE_OPTIMIZER_PROVIDER", "bonsai"))
+	provider := strings.ToLower(envWithDefault("VOICE_OPTIMIZER_PROVIDER", "rules"))
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	rules := agents.NewVoiceOptimizationAgent()
 
@@ -172,7 +300,7 @@ func openRouterOptimizerConfig(apiKey string, fallback *agents.VoiceOptimization
 }
 
 func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
-	provider := strings.ToLower(envWithDefault("TTS_PROVIDER", "kokoro"))
+	provider := strings.ToLower(envWithDefault("TTS_PROVIDER", "mock"))
 
 	switch provider {
 	case "kokoro":
@@ -185,33 +313,45 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		kokoroAgent := agents.NewKokoroTTSAgent(agents.KokoroConfig{
-			PythonPath:     envWithDefault("KOKORO_PYTHON_PATH", "./.venv/bin/python"),
-			ScriptPath:     envWithDefault("KOKORO_SCRIPT_PATH", "./scripts/kokoro_synth.py"),
-			DataDir:        envWithDefault("KOKORO_DATA_DIR", "./data/kokoro"),
-			LangCode:       envWithDefault("KOKORO_LANG_CODE", "a"),
-			Voice:          envWithDefault("KOKORO_VOICE", "af_heart"),
-			Speed:          speed,
-			Device:         envWithDefault("KOKORO_DEVICE", "cpu"),
-			TimeoutSeconds: timeout,
-		})
-
-		kokocloneTimeout, err := envIntWithDefault("KOKOCLONE_TIMEOUT_SECONDS", 600)
+		referenceTimeout, err := envIntWithDefault("KOKORO_REFERENCE_TIMEOUT_SECONDS", timeout)
 		if err != nil {
 			return nil, err
 		}
-		kokocloneAgent := agents.NewKokoCloneTTSAgent(agents.KokoCloneConfig{
-			PythonPath:     envWithDefault("KOKOCLONE_PYTHON_PATH", envWithDefault("KOKORO_PYTHON_PATH", "./.venv/bin/python")),
-			ScriptPath:     envWithDefault("KOKOCLONE_SCRIPT_PATH", "./scripts/kokoclone_synth.py"),
-			DataDir:        envWithDefault("KOKOCLONE_DATA_DIR", "./data/kokoclone"),
-			RepoDir:        envWithDefault("KOKOCLONE_REPO_DIR", "./data/kokoclone/repo"),
-			RuntimeDir:     envWithDefault("KOKOCLONE_RUNTIME_DIR", "./data/kokoclone/runtime"),
-			LangCode:       envWithDefault("KOKOCLONE_LANG_CODE", "en"),
-			TimeoutSeconds: kokocloneTimeout,
-		})
+		referenceWorkerReadyTimeout, err := envIntWithDefault("KOKORO_REFERENCE_WORKER_READY_TIMEOUT_SECONDS", timeout)
+		if err != nil {
+			return nil, err
+		}
+		referencePythonPath := os.Getenv("KOKOCLONE_PYTHON_PATH")
+		if strings.TrimSpace(referencePythonPath) == "" {
+			referencePythonPath = os.Getenv("KOKORO_PYTHON_PATH")
+		}
+		if strings.TrimSpace(referencePythonPath) == "" {
+			referencePythonPath = "./.venv-kokoclone/bin/python"
+		}
+		referenceWorkerCount, err := envIntWithDefault("KOKOCLONE_WORKER_COUNT", 2)
+		if err != nil {
+			return nil, err
+		}
 
-		return agents.NewSelectableTTSAgent(kokoroAgent, kokocloneAgent), nil
+		return agents.NewKokoroTTSAgent(agents.KokoroConfig{
+			PythonPath: envWithDefault("KOKORO_PYTHON_PATH", "./.venv/bin/python"),
+			ReferencePythonPath: referencePythonPath,
+			ScriptPath: envWithDefault("KOKORO_SCRIPT_PATH", "./scripts/kokoro_synth.py"),
+			ReferenceScriptPath: envWithDefault(
+				"KOKORO_REFERENCE_SCRIPT_PATH",
+				"",
+			),
+			ReferenceModulePath:                firstEnv("KOKORO_REFERENCE_MODULE_PATH", "KOKOCLONE_MODULE_PATH", ""),
+			DataDir:                            envWithDefault("KOKORO_DATA_DIR", "./data/kokoro"),
+			LangCode:                           envWithDefault("KOKORO_LANG_CODE", "a"),
+			Voice:                              envWithDefault("KOKORO_VOICE", "af_heart"),
+			Speed:                              speed,
+			Device:                             envWithDefault("KOKORO_DEVICE", "auto"),
+			TimeoutSeconds:                     timeout,
+			ReferenceTimeoutSeconds:            referenceTimeout,
+			ReferenceWorkerReadyTimeoutSeconds: referenceWorkerReadyTimeout,
+			ReferenceWorkerCount:               referenceWorkerCount,
+		}), nil
 	case "mock":
 		return agents.NewMockTTSAgent(), nil
 	default:
@@ -219,8 +359,32 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 	}
 }
 
+func firstEnv(names ...string) string {
+	for _, name := range names {
+		if value, ok := os.LookupEnv(name); ok {
+			return value
+		}
+	}
+
+	return ""
+}
+
+func envInt64WithDefault(key string, fallback int64) (int64, error) {
+	value, ok := os.LookupEnv(key)
+	if !ok || value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer: %w", key, err)
+	}
+
+	return parsed, nil
+}
+
 func checkerFromEnv() (pipeline.VoiceChecker, error) {
-	provider := strings.ToLower(envWithDefault("VOICE_CHECKER_PROVIDER", "qwen"))
+	provider := strings.ToLower(envWithDefault("VOICE_CHECKER_PROVIDER", "mock"))
 
 	switch provider {
 	case "qwen", "qwen-asr":
@@ -295,6 +459,14 @@ func envIntWithDefault(key string, fallback int) (int, error) {
 	}
 
 	return parsed, nil
+}
+
+func clampWorkerCount(name string, requested, max int, logger *slog.Logger) int {
+	if requested > max {
+		logger.Warn("capping worker count to safe ceiling", "variable", name, "requested", requested, "effective", max)
+		return max
+	}
+	return requested
 }
 
 func envBoolWithDefault(key string, fallback bool) (bool, error) {

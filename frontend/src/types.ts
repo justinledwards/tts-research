@@ -5,27 +5,158 @@ export type JobStatus =
   | "checking"
   | "retrying"
   | "completed"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export type StageStatus = "waiting" | "running" | "done" | "failed";
 
 export interface CreateVoiceJobRequest {
   text: string;
-  voiceId?: string;
+  voiceProfileId?: string;
+  voiceLanguage?: string;
+  adaptiveMode?: boolean;
+  runMode?: RunMode;
+  performanceMode?: PerformanceMode;
+  pipelineOptions?: Partial<PipelineOptions>;
 }
 
-export type VoiceKind = "native" | "clone";
+export type RunMode = "draftPreview" | "fastCreate" | "checkedMaster" | "publishMaster";
 
-export interface Voice {
+export type PerformanceMode = "balanced" | "throughput" | "quality";
+
+export interface PipelineOptions {
+  textPreprocess: boolean;
+  voiceClone: boolean;
+  asrCheck: boolean;
+  autoRetry: boolean;
+  arrivalPlayback: boolean;
+  qualityReport: boolean;
+}
+
+export interface JobSegment {
+  index: number;
+  text: string;
+  status?: "pending" | "running" | "checking" | "ready" | "failed";
+  attempts?: number;
+  durationMs?: number;
+  latencyMs?: number;
+  similarity?: number;
+  reason?: string;
+}
+
+export type VoiceProfileStatus = "ready" | "error" | "pending";
+
+export interface VoiceProfile {
   id: string;
   name: string;
-  kind: VoiceKind;
-  provider: string;
-  langCode: string;
-  referenceAudioUrl?: string;
-  referenceAudioPath?: string;
-  sourceFilename?: string;
+  language: string;
+  sourceFile: string;
+  sourceBytes: number;
+  sourceId?: string;
+  speakerId?: string;
+  speakerName?: string;
+  sourceDurationMs?: number;
+  referenceAudio: string;
+  referencePath: string;
+  referenceDurationMs?: number;
+  referenceTrimmed: boolean;
+  referenceSampleStrategy?: string;
+  referenceVersion?: string;
+  referenceScore?: number;
+  referenceSpans?: VoiceProfileReferenceSpan[];
+  qualityMetrics?: VoiceProfileQualityMetrics;
+  audioFormat: string;
+  status: VoiceProfileStatus;
+  error?: string;
+  durationMs: number;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateVoiceProfileRequest {
+  name: string;
+  language: string;
+  file: File;
+}
+
+export type VoiceProfileSourceStatus =
+  | "queued"
+  | "normalizing"
+  | "analyzing"
+  | "scoring"
+  | "ready"
+  | "failed";
+
+export interface VoiceProfileReferenceSpan {
+  startMs: number;
+  endMs: number;
+  durationMs: number;
+  score: number;
+}
+
+export interface VoiceProfileQualityMetrics {
+  cleanSpeech: number;
+  singleSpeakerConfidence: number;
+  usableDurationMs: number;
+  clippingRisk: number;
+  noiseRisk: number;
+  silenceRatio: number;
+  sourceCoverage: number;
+}
+
+export interface VoiceProfileCandidate {
+  id: string;
+  speakerId: string;
+  suggestedName: string;
+  status: "ready" | "rejected";
+  reason?: string;
+  previewAudio?: string;
+  referenceAudio?: string;
+  referenceDurationMs: number;
+  referenceVersion: string;
+  referenceSampleStrategy: string;
+  strategyVersion: string;
+  modelVersion?: string;
+  score: number;
+  totalSpeechDurationMs: number;
+  spans: VoiceProfileReferenceSpan[];
+  qualityMetrics: VoiceProfileQualityMetrics;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VoiceProfileSourceStage {
+  name: string;
+  status: "waiting" | "running" | "done" | "failed";
+  detail?: string;
+}
+
+export interface VoiceProfileSource {
+  id: string;
+  status: VoiceProfileSourceStatus;
+  sourceFile: string;
+  sourceBytes: number;
+  sourceDurationMs?: number;
+  normalizedAudio?: string;
+  audioFormat: string;
+  progressMessage: string;
+  progressDetail?: string;
+  error?: string;
+  stages: VoiceProfileSourceStage[];
+  candidates: VoiceProfileCandidate[];
+  strategyVersion: string;
+  modelVersion?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateVoiceProfileSourceRequest {
+  file: File;
+}
+
+export interface CreateVoiceProfileFromCandidateRequest {
+  name: string;
+  language: string;
 }
 
 export interface RetryMetadata {
@@ -34,14 +165,63 @@ export interface RetryMetadata {
   segmentAttempts: number;
   currentSegment: number;
   totalSegments: number;
-  completedSegments: number;
-  workerCount: number;
 }
 
 export interface PipelineStages {
   optimization: StageStatus;
   synthesis: StageStatus;
   checker: StageStatus;
+}
+
+export interface GpuMetric {
+  index: number;
+  name: string;
+  uuid: string;
+  utilizationGpuPct: number;
+  utilizationMemPct: number;
+  memoryTotalMiB: number;
+  memoryUsedMiB: number;
+  memoryFreeMiB: number;
+  powerDrawW: number;
+  powerLimitW: number;
+  temperatureCelsius: number;
+}
+
+export interface ProcessMetrics {
+  pid: number;
+  threads: number;
+  rssBytes: number;
+  vmSizeBytes: number;
+  workingDir: string;
+  runtime: string;
+  numGoroutines: number;
+  heapAllocBytes: number;
+  totalAllocBytes: number;
+  sysBytes: number;
+}
+
+export interface HostMetrics {
+  hostname: string;
+  goMaxProcs: number;
+  cpuCount: number;
+  os: string;
+  kernel: string;
+  swapFreeBytes: number;
+  swapTotalBytes: number;
+  memTotalBytes: number;
+  memAvailableBytes: number;
+  loadAvg1: number;
+  loadAvg5: number;
+  loadAvg15: number;
+}
+
+export interface SystemMetrics {
+  collectedAt: string;
+  serviceVersion: string;
+  gpus?: GpuMetric[] | null;
+  warnings?: string[] | null;
+  process: ProcessMetrics;
+  host: HostMetrics;
 }
 
 export interface VoiceCheck {
@@ -66,22 +246,43 @@ export interface JobProgress {
 export interface VoiceJob {
   id: string;
   status: JobStatus;
+  adaptiveMode?: boolean;
+  runMode?: RunMode;
+  performanceMode?: PerformanceMode;
+  pipelineOptions?: PipelineOptions;
   stages: PipelineStages;
+  segments?: JobSegment[];
   inputText: string;
   optimizedText: string;
   optimizer: string;
   audioUrl: string;
+  audioPartialUrl?: string;
   audioPath?: string;
+  audioReadySegments?: number;
+  audioSegmentDurationsMs?: number[];
+  audioSegmentLatenciesMs?: number[];
   contentType: string;
   durationMs: number;
   provider: string;
-  voiceId: string;
   voice: string;
+  voiceProfileName?: string;
   retries: RetryMetadata;
   voiceCheck: VoiceCheck;
+  qualityReport?: JobQualityReport;
   progress: JobProgress;
   error?: string;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+}
+
+export interface JobQualityReport {
+  enabled: boolean;
+  preprocessChangedPct: number;
+  retryCount: number;
+  averageSimilarity: number;
+  averageLatencyMs: number;
+  segmentCount: number;
+  referenceProfile: boolean;
+  reason: string;
 }

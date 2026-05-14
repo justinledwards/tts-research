@@ -11,22 +11,34 @@ from typing import Any
 
 import numpy as np
 import soundfile as sf
+import torch
 from kokoro import KPipeline
 
 SAMPLE_RATE = 24_000
 REPO_ID = "hexgrad/Kokoro-82M"
 
 
+def resolve_device(device: str) -> str:
+    if device != "auto":
+        return device
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
 def main() -> None:
     args = parse_args()
+    device = resolve_device(args.device)
     text = args.text_file.read_text(encoding="utf-8").strip()
     if not text:
         raise SystemExit("text file is empty")
 
-    if args.device == "mps":
+    if device == "mps":
         os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
-    pipeline = KPipeline(lang_code=args.lang_code, repo_id=REPO_ID, device=args.device)
+    pipeline = KPipeline(lang_code=args.lang_code, repo_id=REPO_ID, device=device)
     generator = pipeline(text, voice=args.voice, speed=args.speed, split_pattern=args.split_pattern)
 
     audio_chunks: list[np.ndarray] = []
@@ -78,7 +90,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lang-code", default="a")
     parser.add_argument("--voice", default="af_heart")
     parser.add_argument("--speed", default=1.0, type=float)
-    parser.add_argument("--device", default="cpu", choices=["cpu", "mps", "cuda"])
+    parser.add_argument("--device", default="auto", choices=["auto", "cpu", "mps", "cuda"])
     parser.add_argument("--split-pattern", default=r"\n+")
     return parser.parse_args()
 

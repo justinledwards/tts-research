@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/justinedwards/tts-research/backend/internal/agents"
@@ -18,9 +19,9 @@ func TestOpenRouterVoiceOptimizationAgentUsesChatCompletions(t *testing.T) {
 	var authorization string
 	var referer string
 
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/chat/completions" {
-			t.Fatalf("path = %q, want /chat/completions", request.URL.Path)
+	client := testHTTPClient(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path != "/api/v1/chat/completions" {
+			t.Fatalf("path = %q, want /api/v1/chat/completions", request.URL.Path)
 		}
 
 		authorization = request.Header.Get("Authorization")
@@ -38,16 +39,15 @@ func TestOpenRouterVoiceOptimizationAgentUsesChatCompletions(t *testing.T) {
 		}
 		requestModel = payload.Model
 
-		response.Header().Set("Content-Type", "application/json")
-		_, _ = response.Write([]byte(`{"choices":[{"message":{"content":"CPU usage is ninety percent."}}]}`))
-	}))
-	defer server.Close()
+		return jsonResponse(`{"choices":[{"message":{"content":"CPU usage is ninety percent."}}]}`), nil
+	})
 
 	agent := agents.NewOpenRouterVoiceOptimizationAgent(agents.OpenRouterVoiceOptimizationConfig{
 		APIKey:      "test-key",
-		BaseURL:     server.URL,
+		BaseURL:     "https://openrouter.test/api/v1",
 		Model:       "openrouter/free",
 		HTTPReferer: "http://localhost:5173",
+		Client:      client,
 	})
 
 	optimized, err := agent.Optimize(context.Background(), "CPU usage is 90%.")
@@ -74,9 +74,9 @@ func TestOpenRouterVoiceOptimizationAgentStreamsChatCompletions(t *testing.T) {
 
 	var requestStream bool
 
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/chat/completions" {
-			t.Fatalf("path = %q, want /chat/completions", request.URL.Path)
+	client := testHTTPClient(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path != "/api/v1/chat/completions" {
+			t.Fatalf("path = %q, want /api/v1/chat/completions", request.URL.Path)
 		}
 
 		var payload struct {
@@ -87,25 +87,20 @@ func TestOpenRouterVoiceOptimizationAgentStreamsChatCompletions(t *testing.T) {
 		}
 		requestStream = payload.Stream
 
-		response.Header().Set("Content-Type", "text/event-stream")
-		flusher, ok := response.(http.Flusher)
-		if !ok {
-			t.Fatal("test response writer should support flushing")
-		}
-
+		var body string
 		for _, content := range []string{"CPU usage ", "is ninety percent."} {
-			_, _ = fmt.Fprintf(response, "data: {\"choices\":[{\"delta\":{\"content\":%q}}]}\n\n", content)
-			flusher.Flush()
+			body += fmt.Sprintf("data: {\"choices\":[{\"delta\":{\"content\":%q}}]}\n\n", content)
 		}
-		_, _ = response.Write([]byte("data: [DONE]\n\n"))
-	}))
-	defer server.Close()
+		body += "data: [DONE]\n\n"
+		return streamResponse(body), nil
+	})
 
 	agent := agents.NewOpenRouterVoiceOptimizationAgent(agents.OpenRouterVoiceOptimizationConfig{
 		APIKey:      "test-key",
-		BaseURL:     server.URL,
+		BaseURL:     "https://openrouter.test/api/v1",
 		Model:       "openrouter/free",
 		HTTPReferer: "http://localhost:5173",
+		Client:      client,
 	})
 
 	var streamed string
@@ -124,6 +119,32 @@ func TestOpenRouterVoiceOptimizationAgentStreamsChatCompletions(t *testing.T) {
 	}
 	if streamed != optimized {
 		t.Fatalf("streamed = %q, want %q", streamed, optimized)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (roundTrip roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return roundTrip(request)
+}
+
+func testHTTPClient(roundTrip roundTripFunc) *http.Client {
+	return &http.Client{Transport: roundTrip}
+}
+
+func jsonResponse(body string) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func streamResponse(body string) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
 	}
 }
 

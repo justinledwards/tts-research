@@ -1,8 +1,17 @@
-import type { CreateVoiceJobRequest, Voice, VoiceJob } from "./types";
+import type {
+  CreateVoiceProfileFromCandidateRequest,
+  CreateVoiceJobRequest,
+  CreateVoiceProfileRequest,
+  CreateVoiceProfileSourceRequest,
+  SystemMetrics,
+  VoiceJob,
+  VoiceProfile,
+  VoiceProfileSource,
+} from "./types";
 
 // Vite rewrites direct import.meta.env access during dev and build.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-const apiBaseUrl: string = import.meta.env.VITE_API_BASE_URL ?? "";
+export const apiBaseUrl: string = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<VoiceJob> {
   const response = await fetch(`${apiBaseUrl}/api/voice-jobs`, {
@@ -20,33 +29,6 @@ export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<Vo
   return response.json() as Promise<VoiceJob>;
 }
 
-export async function listVoices(): Promise<Voice[]> {
-  const response = await fetch(`${apiBaseUrl}/api/voices`);
-
-  if (!response.ok) {
-    throw new Error(await readError(response));
-  }
-
-  return response.json() as Promise<Voice[]>;
-}
-
-export async function uploadVoice(name: string, file: File): Promise<Voice> {
-  const formData = new FormData();
-  formData.set("name", name);
-  formData.set("file", file);
-
-  const response = await fetch(`${apiBaseUrl}/api/voices`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    throw new Error(await readError(response));
-  }
-
-  return response.json() as Promise<Voice>;
-}
-
 export async function getVoiceJob(id: string): Promise<VoiceJob> {
   const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}`);
 
@@ -55,6 +37,119 @@ export async function getVoiceJob(id: string): Promise<VoiceJob> {
   }
 
   return response.json() as Promise<VoiceJob>;
+}
+
+export async function listVoiceProfiles(): Promise<VoiceProfile[]> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-profiles`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfile[]>;
+}
+
+export async function getSystemMetrics(): Promise<SystemMetrics> {
+  const response = await fetch(`${apiBaseUrl}/api/system-metrics`);
+  if (!response.ok) {
+    throw new Error(`${String(response.status)} ${await readError(response)}`);
+  }
+
+  return response.json() as Promise<SystemMetrics>;
+}
+
+export async function createVoiceProfile(
+  request: CreateVoiceProfileRequest,
+): Promise<VoiceProfile> {
+  const formData = new FormData();
+  formData.append("name", request.name);
+  formData.append("language", request.language);
+  formData.append("file", request.file);
+
+  const response = await fetch(`${apiBaseUrl}/api/voice-profiles`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfile>;
+}
+
+export async function createVoiceProfileSource(
+  request: CreateVoiceProfileSourceRequest,
+): Promise<VoiceProfileSource> {
+  const formData = new FormData();
+  formData.append("file", request.file);
+
+  const response = await fetch(`${apiBaseUrl}/api/voice-profile-sources`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfileSource>;
+}
+
+export async function getVoiceProfileSource(id: string): Promise<VoiceProfileSource> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-profile-sources/${id}`);
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfileSource>;
+}
+
+export async function createVoiceProfileFromCandidate(
+  sourceId: string,
+  candidateId: string,
+  request: CreateVoiceProfileFromCandidateRequest,
+): Promise<VoiceProfile> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profile-sources/${sourceId}/candidates/${candidateId}/profiles`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfile>;
+}
+
+export function voiceProfileCandidatePreviewSource(sourceId: string, candidateId: string): string {
+  return `${apiBaseUrl}/api/voice-profile-sources/${sourceId}/candidates/${candidateId}/preview.wav`;
+}
+
+export async function deleteVoiceProfile(id: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-profiles/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+}
+
+export async function cancelVoiceJob(id: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/cancel`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
 }
 
 export function subscribeToVoiceJob(
@@ -68,7 +163,7 @@ export function subscribeToVoiceJob(
     const message = event as MessageEvent<string>;
     const job = JSON.parse(message.data) as VoiceJob;
     onJob(job);
-    if (job.status === "completed" || job.status === "failed") {
+    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
       eventSource.close();
     }
   });
@@ -90,13 +185,20 @@ export function subscribeToVoiceJob(
   };
 }
 
-export function audioSource(job: VoiceJob): string {
-  const version = encodeURIComponent(
-    job.completedAt ?? `${job.durationMs.toString()}-${job.retries.completedSegments.toString()}`,
-  );
-  const separator = job.audioUrl.includes("?") ? "&" : "?";
+export function audioSource(job: VoiceJob, options?: { partial: boolean }): string {
+  const usePartial = options?.partial ?? false;
+  const useStreamingPartial =
+    usePartial && job.status !== "completed" && Boolean(job.audioPartialUrl);
+  const baseUrl = useStreamingPartial ? job.audioPartialUrl : job.audioUrl;
+  if (!baseUrl) {
+    return "";
+  }
 
-  return `${apiBaseUrl}${job.audioUrl}${separator}v=${version}`;
+  if (!useStreamingPartial) {
+    return `${apiBaseUrl}${baseUrl}`;
+  }
+
+  return `${apiBaseUrl}${baseUrl}`;
 }
 
 async function readError(response: Response): Promise<string> {

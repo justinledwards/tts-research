@@ -5,10 +5,15 @@
       "**",
       "!backend/.venv",
       "!backend/.venv-bonsai",
+      "!backend/.venv-kokoclone",
+      "!backend/.venv-*",
       "!backend/go.sum",
       "!backend/data",
+      "!.playwright-cli",
+      "!demo",
       "!node_modules",
-      "!dist"
+      "!dist",
+      "!**/dist"
     ]
   },
   "formatter": {

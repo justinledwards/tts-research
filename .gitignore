@@ -12,6 +12,9 @@
 .venv/
 backend/.venv/
 backend/.venv-bonsai/
+backend/.venv-kokoclone/
+backend/.venv-*/
+backend/.koko-clone/
 
 # Logs
 *.log
@@ -50,11 +53,13 @@ backend/data/
 backend/data/**
 !backend/data/.gitkeep
 backend/tmp/
+demo/
 frontend/.vercel/
 
 # Tool caches
 .cache/
 .turbo/
+.playwright-cli/
 .playwright-mcp/
 
 # Local verification screenshots
