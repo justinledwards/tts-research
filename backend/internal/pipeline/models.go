@@ -29,20 +29,24 @@ const (
 )
 
 type CreateJobRequest struct {
-	Text            string                   `json:"text"`
-	ProjectID       string                   `json:"projectId,omitempty"`
-	BookSourceID    string                   `json:"bookSourceId,omitempty"`
-	BookScope       *BookScope               `json:"bookScope,omitempty"`
-	VoiceProfileID  string                   `json:"voiceProfileId"`
-	VoiceLanguage   string                   `json:"voiceLanguage"`
-	TTSEngine       string                   `json:"ttsEngine,omitempty"`
-	EngineOptions   map[string]string        `json:"engineOptions,omitempty"`
-	TTSVoice        string                   `json:"ttsVoice,omitempty"`
-	TTSLanguage     string                   `json:"ttsLanguage,omitempty"`
-	AdaptiveMode    bool                     `json:"adaptiveMode"`
-	RunMode         RunMode                  `json:"runMode,omitempty"`
-	PerformanceMode PerformanceMode          `json:"performanceMode,omitempty"`
-	PipelineOptions CreateJobPipelineOptions `json:"pipelineOptions,omitempty"`
+	Text             string                   `json:"text"`
+	ProjectID        string                   `json:"projectId,omitempty"`
+	BookSourceID     string                   `json:"bookSourceId,omitempty"`
+	BookScope        *BookScope               `json:"bookScope,omitempty"`
+	PreparedSourceID string                   `json:"preparedSourceId,omitempty"`
+	SelectedBlockIDs []string                 `json:"selectedBlockIds,omitempty"`
+	SourceKind       string                   `json:"sourceKind,omitempty"`
+	ProgressTargetID string                   `json:"progressTargetId,omitempty"`
+	VoiceProfileID   string                   `json:"voiceProfileId"`
+	VoiceLanguage    string                   `json:"voiceLanguage"`
+	TTSEngine        string                   `json:"ttsEngine,omitempty"`
+	EngineOptions    map[string]string        `json:"engineOptions,omitempty"`
+	TTSVoice         string                   `json:"ttsVoice,omitempty"`
+	TTSLanguage      string                   `json:"ttsLanguage,omitempty"`
+	AdaptiveMode     bool                     `json:"adaptiveMode"`
+	RunMode          RunMode                  `json:"runMode,omitempty"`
+	PerformanceMode  PerformanceMode          `json:"performanceMode,omitempty"`
+	PipelineOptions  CreateJobPipelineOptions `json:"pipelineOptions,omitempty"`
 }
 
 type VoiceProject struct {
@@ -50,6 +54,116 @@ type VoiceProject struct {
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type PreparedSourceKind string
+
+const (
+	PreparedSourceKindText PreparedSourceKind = "text"
+	PreparedSourceKindFile PreparedSourceKind = "file"
+	PreparedSourceKindURL  PreparedSourceKind = "url"
+	PreparedSourceKindBook PreparedSourceKind = "book"
+)
+
+type PreparedSourceStatus string
+
+const (
+	PreparedSourceStatusReady  PreparedSourceStatus = "ready"
+	PreparedSourceStatusFailed PreparedSourceStatus = "failed"
+)
+
+type NarrationBlockKind string
+
+const (
+	NarrationBlockKindHeading     NarrationBlockKind = "heading"
+	NarrationBlockKindSubheading  NarrationBlockKind = "subheading"
+	NarrationBlockKindBody        NarrationBlockKind = "body"
+	NarrationBlockKindQuote       NarrationBlockKind = "quote"
+	NarrationBlockKindTable       NarrationBlockKind = "table"
+	NarrationBlockKindCode        NarrationBlockKind = "code"
+	NarrationBlockKindCitation    NarrationBlockKind = "citation"
+	NarrationBlockKindFrontmatter NarrationBlockKind = "frontmatter"
+)
+
+type NarrationSpeakMode string
+
+const (
+	NarrationSpeakModeSpeak     NarrationSpeakMode = "speak"
+	NarrationSpeakModeSkip      NarrationSpeakMode = "skip"
+	NarrationSpeakModeSummarize NarrationSpeakMode = "summarize"
+)
+
+type NarrationSegment struct {
+	Index       int      `json:"index"`
+	Text        string   `json:"text"`
+	StartOffset int      `json:"startOffset"`
+	EndOffset   int      `json:"endOffset"`
+	Warnings    []string `json:"warnings,omitempty"`
+}
+
+type NarrationBlock struct {
+	ID                  string             `json:"id"`
+	Index               int                `json:"index"`
+	Kind                NarrationBlockKind `json:"kind"`
+	SpeakMode           NarrationSpeakMode `json:"speakMode"`
+	Label               string             `json:"label,omitempty"`
+	Text                string             `json:"text,omitempty"`
+	SpokenText          string             `json:"spokenText,omitempty"`
+	StartOffset         int                `json:"startOffset"`
+	EndOffset           int                `json:"endOffset"`
+	EstimatedDurationMS int                `json:"estimatedDurationMs,omitempty"`
+	Confidence          float64            `json:"confidence,omitempty"`
+	Segments            []NarrationSegment `json:"segments,omitempty"`
+	Warnings            []string           `json:"warnings,omitempty"`
+}
+
+type SkippedSourceItem struct {
+	ID     string             `json:"id"`
+	Kind   NarrationBlockKind `json:"kind"`
+	Text   string             `json:"text"`
+	Reason string             `json:"reason"`
+	Offset int                `json:"offset,omitempty"`
+}
+
+type PreparedSourceSummary struct {
+	HeadingCount         int `json:"headingCount"`
+	SpokenBlockCount     int `json:"spokenBlockCount"`
+	SkippedBlockCount    int `json:"skippedBlockCount"`
+	CitationSkipCount    int `json:"citationSkipCount"`
+	SentenceSegmentCount int `json:"sentenceSegmentCount"`
+}
+
+type PreparedSource struct {
+	ID                string                `json:"id"`
+	ProjectID         string                `json:"projectId"`
+	Status            PreparedSourceStatus  `json:"status"`
+	Kind              PreparedSourceKind    `json:"kind"`
+	SourceName        string                `json:"sourceName"`
+	SourceURL         string                `json:"sourceUrl,omitempty"`
+	SourceContentType string                `json:"sourceContentType,omitempty"`
+	SourceBytes       int64                 `json:"sourceBytes,omitempty"`
+	Title             string                `json:"title,omitempty"`
+	Text              string                `json:"text,omitempty"`
+	SpeechText        string                `json:"speechText,omitempty"`
+	WordCount         int                   `json:"wordCount"`
+	BlockCount        int                   `json:"blockCount"`
+	SegmentCount      int                   `json:"segmentCount"`
+	Summary           PreparedSourceSummary `json:"summary"`
+	Blocks            []NarrationBlock      `json:"blocks,omitempty"`
+	SkippedItems      []SkippedSourceItem   `json:"skippedItems,omitempty"`
+	Warnings          []string              `json:"warnings,omitempty"`
+	Error             string                `json:"error,omitempty"`
+	CreatedAt         time.Time             `json:"createdAt"`
+	UpdatedAt         time.Time             `json:"updatedAt"`
+}
+
+type CreatePreparedSourceRequest struct {
+	Kind              PreparedSourceKind `json:"kind"`
+	Text              string             `json:"text,omitempty"`
+	URL               string             `json:"url,omitempty"`
+	SourceName        string             `json:"sourceName,omitempty"`
+	SourceContentType string             `json:"sourceContentType,omitempty"`
+	SourceBytes       int64              `json:"sourceBytes,omitempty"`
 }
 
 type BookSourceStatus string
@@ -169,15 +283,18 @@ type BookCinemaDiagnostics struct {
 }
 
 type BookSourceScopeContent struct {
-	BookSourceID         string               `json:"bookSourceId"`
-	Scope                BookScope            `json:"scope"`
-	Text                 string               `json:"text"`
-	WordSpans            []BookSourceWordSpan `json:"wordSpans"`
-	Section              *BookSourceSection   `json:"section,omitempty"`
-	WordCount            int                  `json:"wordCount"`
-	EstimatedDurationMS  int                  `json:"estimatedDurationMs,omitempty"`
-	SourceStructureValid bool                 `json:"sourceStructureValid"`
-	Warnings             []string             `json:"warnings,omitempty"`
+	BookSourceID         string                `json:"bookSourceId"`
+	Scope                BookScope             `json:"scope"`
+	Text                 string                `json:"text"`
+	WordSpans            []BookSourceWordSpan  `json:"wordSpans"`
+	Section              *BookSourceSection    `json:"section,omitempty"`
+	WordCount            int                   `json:"wordCount"`
+	EstimatedDurationMS  int                   `json:"estimatedDurationMs,omitempty"`
+	SourceStructureValid bool                  `json:"sourceStructureValid"`
+	Blocks               []NarrationBlock      `json:"blocks,omitempty"`
+	SkippedItems         []SkippedSourceItem   `json:"skippedItems,omitempty"`
+	Summary              PreparedSourceSummary `json:"summary"`
+	Warnings             []string              `json:"warnings,omitempty"`
 }
 
 type TTSEngineVoice struct {
@@ -291,6 +408,72 @@ type ProjectBundleImportResult struct {
 	Jobs     []VoiceJob     `json:"jobs"`
 	Profiles []VoiceProfile `json:"profiles"`
 	Warnings []string       `json:"warnings,omitempty"`
+}
+
+type ProgressBookmark struct {
+	ID              string    `json:"id"`
+	Label           string    `json:"label,omitempty"`
+	CurrentTimeSec  float64   `json:"currentTimeSec"`
+	ActiveWordIndex int       `json:"activeWordIndex,omitempty"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+type PlaybackProgress struct {
+	TargetID         string             `json:"targetId"`
+	ProjectID        string             `json:"projectId"`
+	JobID            string             `json:"jobId,omitempty"`
+	BookSourceID     string             `json:"bookSourceId,omitempty"`
+	PreparedSourceID string             `json:"preparedSourceId,omitempty"`
+	BookScope        *BookScope         `json:"bookScope,omitempty"`
+	CurrentTimeSec   float64            `json:"currentTimeSec"`
+	Progress         float64            `json:"progress"`
+	ActiveWordIndex  int                `json:"activeWordIndex,omitempty"`
+	Finished         bool               `json:"finished"`
+	Hidden           bool               `json:"hidden"`
+	Bookmarks        []ProgressBookmark `json:"bookmarks,omitempty"`
+	StartedAt        *time.Time         `json:"startedAt,omitempty"`
+	FinishedAt       *time.Time         `json:"finishedAt,omitempty"`
+	CreatedAt        time.Time          `json:"createdAt"`
+	UpdatedAt        time.Time          `json:"updatedAt"`
+}
+
+type PlaybackProgressUpdate struct {
+	TargetID         string            `json:"targetId,omitempty"`
+	ProjectID        string            `json:"projectId,omitempty"`
+	JobID            string            `json:"jobId,omitempty"`
+	BookSourceID     string            `json:"bookSourceId,omitempty"`
+	PreparedSourceID string            `json:"preparedSourceId,omitempty"`
+	BookScope        *BookScope        `json:"bookScope,omitempty"`
+	CurrentTimeSec   float64           `json:"currentTimeSec"`
+	DurationSec      float64           `json:"durationSec,omitempty"`
+	Progress         float64           `json:"progress,omitempty"`
+	ActiveWordIndex  int               `json:"activeWordIndex,omitempty"`
+	Finished         bool              `json:"finished,omitempty"`
+	Hidden           *bool             `json:"hidden,omitempty"`
+	AddBookmark      *ProgressBookmark `json:"addBookmark,omitempty"`
+}
+
+type PlaybackSessionStatus string
+
+const (
+	PlaybackSessionStatusOpen   PlaybackSessionStatus = "open"
+	PlaybackSessionStatusClosed PlaybackSessionStatus = "closed"
+)
+
+type PlaybackSession struct {
+	ID               string                `json:"id"`
+	TargetID         string                `json:"targetId"`
+	ProjectID        string                `json:"projectId"`
+	JobID            string                `json:"jobId,omitempty"`
+	BookSourceID     string                `json:"bookSourceId,omitempty"`
+	PreparedSourceID string                `json:"preparedSourceId,omitempty"`
+	BookScope        *BookScope            `json:"bookScope,omitempty"`
+	CurrentTimeSec   float64               `json:"currentTimeSec"`
+	ActiveWordIndex  int                   `json:"activeWordIndex,omitempty"`
+	Status           PlaybackSessionStatus `json:"status"`
+	StartedAt        time.Time             `json:"startedAt"`
+	UpdatedAt        time.Time             `json:"updatedAt"`
+	ClosedAt         *time.Time            `json:"closedAt,omitempty"`
 }
 
 type RunMode string
@@ -544,6 +727,10 @@ type VoiceJob struct {
 	ProjectID               string            `json:"projectId"`
 	BookSourceID            string            `json:"bookSourceId,omitempty"`
 	BookScope               *BookScope        `json:"bookScope,omitempty"`
+	PreparedSourceID        string            `json:"preparedSourceId,omitempty"`
+	SelectedBlockIDs        []string          `json:"selectedBlockIds,omitempty"`
+	SourceKind              string            `json:"sourceKind,omitempty"`
+	ProgressTargetID        string            `json:"progressTargetId,omitempty"`
 	Status                  JobStatus         `json:"status"`
 	Stages                  PipelineStages    `json:"stages"`
 	AdaptiveMode            bool              `json:"adaptiveMode"`
@@ -560,6 +747,7 @@ type VoiceJob struct {
 	InputText               string            `json:"inputText"`
 	OptimizedText           string            `json:"optimizedText"`
 	Segments                []JobSegment      `json:"segments,omitempty"`
+	SegmentationWarnings    []string          `json:"segmentationWarnings,omitempty"`
 	Optimizer               string            `json:"optimizer"`
 	AudioURL                string            `json:"audioUrl"`
 	AudioPartialURL         string            `json:"audioPartialUrl,omitempty"`

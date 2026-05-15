@@ -302,10 +302,10 @@ function ThemeSettingsControls({
   onThemeChange,
 }: Readonly<{ themeName: ThemeName; onThemeChange: (theme: ThemeName) => void }>) {
   return (
-    <div className="grid gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+    <div className="grid gap-3 rounded-md border p-3 vs-border vs-surface">
       <div className="flex items-center justify-between gap-3">
-        <h4 className="text-sm font-semibold text-zinc-950">Theme</h4>
-        <span className="text-xs text-zinc-500">Saved locally</span>
+        <h4 className="text-sm font-semibold">Theme</h4>
+        <span className="vs-muted text-xs">Saved locally</span>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {VOICE_STUDIO_THEMES.map((theme) => (
@@ -313,7 +313,7 @@ function ThemeSettingsControls({
             className={`rounded-md border p-3 text-left transition ${
               themeName === theme.name
                 ? "border-orange-300 bg-orange-50 text-orange-950"
-                : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50"
+                : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
             }`}
             key={theme.name}
             onClick={() => {
@@ -323,7 +323,7 @@ function ThemeSettingsControls({
           >
             <span className="flex items-center justify-between gap-3">
               <span className="font-semibold">{theme.label}</span>
-              <span className="text-xs text-zinc-500">{theme.description}</span>
+              <span className="vs-muted text-xs">{theme.description}</span>
             </span>
             <span className="mt-3 grid grid-cols-5 gap-1">
               {[

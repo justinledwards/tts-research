@@ -37,6 +37,9 @@ var (
 	ErrProfileAnalysisUnavailable = errors.New("voice profile source analysis is not configured")
 	ErrProjectNotFound            = errors.New("project not found")
 	ErrBookSourceNotFound         = errors.New("book source not found")
+	ErrPreparedSourceNotFound     = errors.New("prepared source not found")
+	ErrProgressNotFound           = errors.New("playback progress not found")
+	ErrPlaybackSessionNotFound    = errors.New("playback session not found")
 	ErrProjectBundleInvalid       = errors.New("project bundle is invalid")
 )
 
@@ -104,6 +107,10 @@ type Options struct {
 	JobDataDir                           string
 	ProjectDataDir                       string
 	BookSourceDir                        string
+	SourcePrepDir                        string
+	ProgressDataDir                      string
+	PlaybackSessionDir                   string
+	SourceURLAllowPrivate                bool
 	BookPDFPythonPath                    string
 	BookPDFExtractorScriptPath           string
 	BookPDFRequireTextExtractor          bool
@@ -142,11 +149,14 @@ const (
 	defaultJobDataDir                          = "./data/jobs"
 	defaultProjectDataDir                      = "./data/projects"
 	defaultBookSourceDir                       = "./data/book-sources"
+	defaultSourcePrepDir                       = "./data/source-preps"
+	defaultProgressDataDir                     = "./data/progress"
+	defaultPlaybackSessionDir                  = "./data/playback-sessions"
 	defaultBookPDFPythonPath                   = "./.venv/bin/python"
 	defaultBookPDFExtractorScriptPath          = "./scripts/pdf_extract.py"
 	defaultVoiceProfileDir                     = "./data/voice-profiles"
 	defaultVoiceProfileSourceDir               = "./data/voice-profile-sources"
-	defaultMaxProfileBytes                     = 1 << 30
+	defaultMaxProfileBytes                     = 0
 	defaultVoiceProfileReferenceMinSeconds     = 20
 	defaultVoiceProfileReferenceTargetSeconds  = 45
 	defaultVoiceProfileReferenceMaxSeconds     = 60
@@ -171,19 +181,22 @@ type storedBookSource struct {
 }
 
 type Service struct {
-	optimizer  VoiceOptimizer
-	tts        TTSAgent
-	ttsEngines map[string]TTSEngineRegistration
-	defaultTTS string
-	checker    VoiceChecker
-	options    Options
-	mu         sync.RWMutex
-	jobs       map[string]storedJob
-	projects   map[string]VoiceProject
-	books      map[string]storedBookSource
-	profiles   map[string]storedVoiceProfile
-	sources    map[string]storedVoiceProfileSource
-	jobCancels map[string]context.CancelFunc
+	optimizer   VoiceOptimizer
+	tts         TTSAgent
+	ttsEngines  map[string]TTSEngineRegistration
+	defaultTTS  string
+	checker     VoiceChecker
+	options     Options
+	mu          sync.RWMutex
+	jobs        map[string]storedJob
+	projects    map[string]VoiceProject
+	books       map[string]storedBookSource
+	sourcePreps map[string]PreparedSource
+	progress    map[string]PlaybackProgress
+	sessions    map[string]PlaybackSession
+	profiles    map[string]storedVoiceProfile
+	sources     map[string]storedVoiceProfileSource
+	jobCancels  map[string]context.CancelFunc
 }
 
 type resolvedJobConfig struct {
@@ -344,6 +357,15 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if strings.TrimSpace(options.BookSourceDir) == "" {
 		options.BookSourceDir = defaultBookSourceDir
 	}
+	if strings.TrimSpace(options.SourcePrepDir) == "" {
+		options.SourcePrepDir = defaultSourcePrepDir
+	}
+	if strings.TrimSpace(options.ProgressDataDir) == "" {
+		options.ProgressDataDir = defaultProgressDataDir
+	}
+	if strings.TrimSpace(options.PlaybackSessionDir) == "" {
+		options.PlaybackSessionDir = defaultPlaybackSessionDir
+	}
 	if strings.TrimSpace(options.BookPDFPythonPath) == "" {
 		options.BookPDFPythonPath = defaultBookPDFPythonPath
 	}
@@ -356,7 +378,7 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if strings.TrimSpace(options.VoiceProfileSourceDir) == "" {
 		options.VoiceProfileSourceDir = defaultVoiceProfileSourceDir
 	}
-	if options.MaxProfileBytes <= 0 {
+	if options.MaxProfileBytes < 0 {
 		options.MaxProfileBytes = defaultMaxProfileBytes
 	}
 	if options.VoiceProfileReferenceMinSeconds <= 0 {
@@ -410,21 +432,27 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	defaultTTS, ttsEngines := initializeTTSEngines(options.DefaultTTSEngine, tts, options.TTSEngines)
 
 	service := &Service{
-		optimizer:  optimizer,
-		tts:        tts,
-		ttsEngines: ttsEngines,
-		defaultTTS: defaultTTS,
-		checker:    checker,
-		options:    options,
-		jobs:       map[string]storedJob{},
-		projects:   map[string]VoiceProject{},
-		books:      map[string]storedBookSource{},
-		profiles:   map[string]storedVoiceProfile{},
-		sources:    map[string]storedVoiceProfileSource{},
-		jobCancels: map[string]context.CancelFunc{},
+		optimizer:   optimizer,
+		tts:         tts,
+		ttsEngines:  ttsEngines,
+		defaultTTS:  defaultTTS,
+		checker:     checker,
+		options:     options,
+		jobs:        map[string]storedJob{},
+		projects:    map[string]VoiceProject{},
+		books:       map[string]storedBookSource{},
+		sourcePreps: map[string]PreparedSource{},
+		progress:    map[string]PlaybackProgress{},
+		sessions:    map[string]PlaybackSession{},
+		profiles:    map[string]storedVoiceProfile{},
+		sources:     map[string]storedVoiceProfileSource{},
+		jobCancels:  map[string]context.CancelFunc{},
 	}
 	service.reloadProjects()
 	service.reloadBookSources()
+	service.reloadSourcePreps()
+	service.reloadProgress()
+	service.reloadPlaybackSessions()
 	service.reloadProfiles()
 	service.reloadJobs()
 	return service
@@ -486,6 +514,9 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 	inputText := strings.TrimSpace(request.Text)
 	projectID := strings.TrimSpace(request.ProjectID)
 	bookSourceID := strings.TrimSpace(request.BookSourceID)
+	preparedSourceID := strings.TrimSpace(request.PreparedSourceID)
+	progressTargetID := strings.TrimSpace(request.ProgressTargetID)
+	sourceKind := strings.TrimSpace(request.SourceKind)
 	voiceProfileID := strings.TrimSpace(request.VoiceProfileID)
 	voiceLanguage := strings.TrimSpace(request.VoiceLanguage)
 	ttsEngine := normalizeTTSEngineID(request.TTSEngine)
@@ -540,6 +571,10 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 			ProjectID:            projectID,
 			BookSourceID:         bookSourceID,
 			BookScope:            cloneBookScope(request.BookScope),
+			PreparedSourceID:     preparedSourceID,
+			SelectedBlockIDs:     append([]string(nil), request.SelectedBlockIDs...),
+			SourceKind:           sourceKind,
+			ProgressTargetID:     progressTargetID,
 			Status:               JobStatusQueued,
 			Stages:               initialStages(),
 			AdaptiveMode:         adaptiveMode,
@@ -654,7 +689,7 @@ func (service *Service) CreateVoiceProfile(
 	default:
 	}
 
-	if sourceBytes > service.options.MaxProfileBytes {
+	if service.options.MaxProfileBytes > 0 && sourceBytes > service.options.MaxProfileBytes {
 		return VoiceProfile{}, fmt.Errorf("%w", ErrProfileTooLarge)
 	}
 
@@ -2170,25 +2205,23 @@ func splitTextSegments(text string, maxRunes int) []string {
 	currentParts := make([]string, 0, maxRunes/2)
 	currentRunes := 0
 	for _, piece := range pieces {
-		for _, part := range splitLongPiece(piece, maxRunes) {
-			partRunes := utf8.RuneCountInString(part)
-			if len(currentParts) == 0 {
-				currentParts = append(currentParts, part)
-				currentRunes = utf8.RuneCountInString(part)
-				continue
-			}
-
-			if currentRunes+1+partRunes > maxRunes {
-				segments = append(segments, strings.Join(currentParts, " "))
-				currentParts = currentParts[:0]
-				currentParts = append(currentParts, part)
-				currentRunes = partRunes
-				continue
-			}
-
-			currentParts = append(currentParts, part)
-			currentRunes += 1 + partRunes
+		partRunes := utf8.RuneCountInString(piece)
+		if len(currentParts) == 0 {
+			currentParts = append(currentParts, piece)
+			currentRunes = partRunes
+			continue
 		}
+
+		if currentRunes+1+partRunes > maxRunes {
+			segments = append(segments, strings.Join(currentParts, " "))
+			currentParts = currentParts[:0]
+			currentParts = append(currentParts, piece)
+			currentRunes = partRunes
+			continue
+		}
+
+		currentParts = append(currentParts, piece)
+		currentRunes += 1 + partRunes
 	}
 	if len(currentParts) > 0 {
 		segments = append(segments, strings.Join(currentParts, " "))

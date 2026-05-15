@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,6 +60,153 @@ func TestCreateJobCompletesWithMockAgents(t *testing.T) {
 	metadataPath := filepath.Join(filepath.Dir(completed.AudioPath), "metadata.json")
 	if _, err := os.Stat(metadataPath); err != nil {
 		t.Fatalf("saved metadata should exist: %v", err)
+	}
+}
+
+func TestPreparedSourceSkipsResearchCitationsAndKeepsHeadings(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceServiceWithOptions(t, pipeline.Options{StudioSegmentMaxRunes: 80})
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "deep-research-report.md",
+		Text: strings.Join([]string{
+			"# Corporate Moats in the Age of AI-Native Businesses",
+			"",
+			"## Executive summary",
+			"",
+			"The corporate moat remains useful. citeturn40search10turn37view0",
+			"",
+			"citeturn5search0turn5search2",
+			"",
+			"| Moat type | Working definition |",
+			"|---|---|",
+			"| Network effects | More users create more value. |",
+			"",
+			"```mermaid",
+			"flowchart LR",
+			"```",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if source.Summary.HeadingCount != 2 {
+		t.Fatalf("heading count = %d, want 2", source.Summary.HeadingCount)
+	}
+	if source.Summary.CitationSkipCount == 0 {
+		t.Fatal("expected inline and citation-only citations to be skipped")
+	}
+	if source.Summary.CitationSkipCount < 2 {
+		t.Fatalf("citation skip count = %d, want inline plus citation-only skips", source.Summary.CitationSkipCount)
+	}
+	if strings.Contains(source.SpeechText, "turn40search10") || strings.Contains(source.SpeechText, "cite") {
+		t.Fatalf("speech text still contains citation markup: %q", source.SpeechText)
+	}
+	if !strings.Contains(source.SpeechText, "Corporate Moats") || !strings.Contains(source.SpeechText, "Executive summary") {
+		t.Fatalf("speech text lost headings: %q", source.SpeechText)
+	}
+	if source.Summary.SentenceSegmentCount < 3 {
+		t.Fatalf("sentence segment count = %d, want at least 3", source.Summary.SentenceSegmentCount)
+	}
+}
+
+func TestPreparedSourceJobRejectsLongSentenceInsteadOfSplitting(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceServiceWithOptions(t, pipeline.Options{StudioSegmentMaxRunes: 24})
+	longSentence := strings.Repeat("word ", 20) + "end."
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		SourceName: "long sentence",
+		Text:       longSentence,
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if len(source.Blocks) == 0 || len(source.Blocks[0].Segments) != 1 {
+		t.Fatalf("long sentence should remain one segment, got %#v", source.Blocks)
+	}
+	if !strings.Contains(strings.Join(source.Blocks[0].Warnings, ","), "sentence_too_long") {
+		t.Fatalf("block warnings = %#v, want sentence_too_long", source.Blocks[0].Warnings)
+	}
+	_, err = service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err == nil || !strings.Contains(err.Error(), "too long") {
+		t.Fatalf("CreatePreparedSourceJob error = %v, want too long", err)
+	}
+}
+
+func TestPreparedSourceURLIngestHonorsPrivateNetworkDefault(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "text/markdown")
+		_, _ = writer.Write([]byte("# URL Source\n\nThis came from a readable local test URL."))
+	}))
+	defer server.Close()
+
+	blockedService := newBookSourceService(t)
+	_, blockedErr := blockedService.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind: pipeline.PreparedSourceKindURL,
+		URL:  server.URL,
+	})
+	if blockedErr == nil || !strings.Contains(blockedErr.Error(), "private or local") {
+		t.Fatalf("blocked URL error = %v, want private-network rejection", blockedErr)
+	}
+
+	allowedService := newBookSourceServiceWithOptions(t, pipeline.Options{SourceURLAllowPrivate: true})
+	source, err := allowedService.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind: pipeline.PreparedSourceKindURL,
+		URL:  server.URL,
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource(URL) returned error: %v", err)
+	}
+	if source.Kind != pipeline.PreparedSourceKindURL || !strings.Contains(source.SpeechText, "URL Source") {
+		t.Fatalf("source = %#v, want prepared URL source", source)
+	}
+}
+
+func TestPlaybackProgressSessionLifecycle(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	session, err := service.StartPlaybackSession(pipeline.PlaybackProgressUpdate{
+		TargetID:       "book:demo:chapter:1",
+		ProjectID:      "default",
+		BookSourceID:   "demo",
+		CurrentTimeSec: 12.5,
+		DurationSec:    100,
+	})
+	if err != nil {
+		t.Fatalf("StartPlaybackSession returned error: %v", err)
+	}
+	if session.Status != pipeline.PlaybackSessionStatusOpen {
+		t.Fatalf("session status = %q, want open", session.Status)
+	}
+	if _, err := service.SyncPlaybackSession(session.ID, pipeline.PlaybackProgressUpdate{
+		CurrentTimeSec: 50,
+		DurationSec:    100,
+	}); err != nil {
+		t.Fatalf("SyncPlaybackSession returned error: %v", err)
+	}
+	closed, err := service.ClosePlaybackSession(session.ID, pipeline.PlaybackProgressUpdate{
+		CurrentTimeSec: 100,
+		DurationSec:    100,
+		Finished:       true,
+	})
+	if err != nil {
+		t.Fatalf("ClosePlaybackSession returned error: %v", err)
+	}
+	if closed.Status != pipeline.PlaybackSessionStatusClosed {
+		t.Fatalf("closed status = %q, want closed", closed.Status)
+	}
+	progress, err := service.ListProjectProgress("default")
+	if err != nil {
+		t.Fatalf("ListProjectProgress returned error: %v", err)
+	}
+	if len(progress) != 1 || !progress[0].Finished || progress[0].Progress != 1 {
+		t.Fatalf("progress = %#v, want one finished item", progress)
 	}
 }
 
@@ -1102,6 +1251,74 @@ func TestCreateVoiceProfileKeepsShortPCM16WAVReference(t *testing.T) {
 	}
 }
 
+func TestVoiceProfileMaxBytesZeroMeansUnlimited(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                      t.TempDir(),
+			ProjectDataDir:                  t.TempDir(),
+			VoiceProfileDir:                 t.TempDir(),
+			VoiceProfileReferenceMaxSeconds: 5,
+			MaxProfileBytes:                 0,
+		},
+	)
+	wav, err := audio.SilentWAV(1200)
+	if err != nil {
+		t.Fatalf("SilentWAV returned error: %v", err)
+	}
+	sourcePath := filepath.Join(t.TempDir(), "unlimited-reference.wav")
+	if err := os.WriteFile(sourcePath, wav, 0o644); err != nil {
+		t.Fatalf("write source wav: %v", err)
+	}
+
+	profile, err := service.CreateVoiceProfile(
+		context.Background(),
+		"Unlimited",
+		"en",
+		sourcePath,
+		"unlimited-reference.wav",
+		1<<34,
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+	if profile.SourceBytes != 1<<34 {
+		t.Fatalf("source bytes = %d, want supplied large source size", profile.SourceBytes)
+	}
+}
+
+func TestVoiceProfilePositiveMaxBytesStillRejectsOversize(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+			VoiceProfileDir: t.TempDir(),
+			MaxProfileBytes: 4,
+		},
+	)
+
+	_, err := service.CreateVoiceProfile(
+		context.Background(),
+		"Too Large",
+		"en",
+		filepath.Join(t.TempDir(), "missing.wav"),
+		"missing.wav",
+		5,
+	)
+	if !errors.Is(err, pipeline.ErrProfileTooLarge) {
+		t.Fatalf("error = %v, want ErrProfileTooLarge", err)
+	}
+}
+
 func TestCreateVoiceProfileSourceBuildsCandidateReference(t *testing.T) {
 	t.Parallel()
 
@@ -1192,6 +1409,66 @@ func TestCreateVoiceProfileSourceBuildsCandidateReference(t *testing.T) {
 	}
 	if _, err := os.Stat(candidate.ReferencePath); err != nil {
 		t.Fatalf("candidate reference should exist: %v", err)
+	}
+}
+
+func TestVoiceProfileSourceMaxBytesZeroMeansUnlimited(t *testing.T) {
+	t.Parallel()
+
+	sourcePath := writeToneWAV(t, 10_000, 9000)
+	service := newProfileSourceService(
+		t,
+		mockProfileSourceAnalyzer{
+			result: pipeline.VoiceProfileSourceAnalysisResult{
+				ModelVersion: "mock-diarizer",
+				Spans: []pipeline.DetectedSpeakerSpan{
+					{SpeakerID: "SPEAKER_00", StartMS: 0, EndMS: 10_000, Confidence: 0.95},
+				},
+			},
+		},
+	)
+
+	source, err := service.CreateVoiceProfileSource(
+		context.Background(),
+		sourcePath,
+		"large-container.wav",
+		1<<34,
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSource returned error: %v", err)
+	}
+	if source.SourceBytes != 1<<34 {
+		t.Fatalf("source bytes = %d, want supplied large source size", source.SourceBytes)
+	}
+	_ = waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusReady)
+}
+
+func TestVoiceProfileSourcePositiveMaxBytesStillRejectsOversize(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:            t.TempDir(),
+			ProjectDataDir:        t.TempDir(),
+			VoiceProfileSourceDir: t.TempDir(),
+			MaxProfileBytes:       4,
+			VoiceProfileSourceAnalyzer: mockProfileSourceAnalyzer{
+				result: pipeline.VoiceProfileSourceAnalysisResult{},
+			},
+		},
+	)
+
+	_, err := service.CreateVoiceProfileSource(
+		context.Background(),
+		filepath.Join(t.TempDir(), "missing.wav"),
+		"missing.wav",
+		5,
+	)
+	if !errors.Is(err, pipeline.ErrProfileTooLarge) {
+		t.Fatalf("error = %v, want ErrProfileTooLarge", err)
 	}
 }
 
@@ -2214,10 +2491,13 @@ func newMockService(t *testing.T, checker pipeline.VoiceChecker) *pipeline.Servi
 		agents.NewMockTTSAgent(),
 		checker,
 		pipeline.Options{
-			MaxRetries:     3,
-			JobDataDir:     t.TempDir(),
-			ProjectDataDir: t.TempDir(),
-			BookSourceDir:  t.TempDir(),
+			MaxRetries:         3,
+			JobDataDir:         t.TempDir(),
+			ProjectDataDir:     t.TempDir(),
+			BookSourceDir:      t.TempDir(),
+			SourcePrepDir:      t.TempDir(),
+			ProgressDataDir:    t.TempDir(),
+			PlaybackSessionDir: t.TempDir(),
 		},
 	)
 }
@@ -2250,6 +2530,15 @@ func newBookSourceServiceWithOptions(t *testing.T, options pipeline.Options) *pi
 	}
 	if options.BookSourceDir == "" {
 		options.BookSourceDir = t.TempDir()
+	}
+	if options.SourcePrepDir == "" {
+		options.SourcePrepDir = t.TempDir()
+	}
+	if options.ProgressDataDir == "" {
+		options.ProgressDataDir = t.TempDir()
+	}
+	if options.PlaybackSessionDir == "" {
+		options.PlaybackSessionDir = t.TempDir()
 	}
 	return pipeline.NewService(
 		agents.NewVoiceOptimizationAgent(),

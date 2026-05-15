@@ -194,6 +194,8 @@ func (service *Service) GetBookSourceScope(id string, requested *BookScope) (Boo
 	if section != nil {
 		warnings = append(warnings, section.Warnings...)
 	}
+	blocks, skippedItems, prepWarnings := prepareNarrationBlocks(text, service.options.StudioSegmentMaxRunes)
+	warnings = append(warnings, prepWarnings...)
 	return BookSourceScopeContent{
 		BookSourceID:         book.ID,
 		Scope:                *scope,
@@ -203,7 +205,10 @@ func (service *Service) GetBookSourceScope(id string, requested *BookScope) (Boo
 		WordCount:            len(spans),
 		EstimatedDurationMS:  estimateBookDurationMS(len(spans)),
 		SourceStructureValid: strings.TrimSpace(book.StructureVersion) != "",
-		Warnings:             warnings,
+		Blocks:               blocks,
+		SkippedItems:         skippedItems,
+		Summary:              summarizePreparedSource(blocks),
+		Warnings:             uniqueStrings(warnings),
 	}, nil
 }
 
@@ -223,11 +228,34 @@ func (service *Service) CreateBookNarrationJob(
 	if err != nil {
 		return VoiceJob{}, err
 	}
+	blocks, _, warnings := prepareNarrationBlocks(narrationText, service.options.StudioSegmentMaxRunes)
+	for _, block := range blocks {
+		if block.SpeakMode == NarrationSpeakModeSkip {
+			continue
+		}
+		if hasWarning(block.Warnings, "sentence_too_long") {
+			return VoiceJob{}, fmt.Errorf("book scope contains a sentence that is too long to synthesize safely; choose a smaller scope or edit the source")
+		}
+	}
 	request.ProjectID = book.ProjectID
 	request.BookSourceID = book.ID
 	request.BookScope = scope
+	request.SourceKind = string(PreparedSourceKindBook)
+	request.ProgressTargetID = progressTargetForBookScope(book.ID, scope)
 	request.Text = narrationText
-	return service.CreateJob(ctx, request)
+	job, err := service.CreateJob(ctx, request)
+	if err != nil {
+		return VoiceJob{}, err
+	}
+	if len(warnings) > 0 {
+		service.updateJob(job.ID, func(stored *storedJob) {
+			stored.SegmentationWarnings = uniqueStrings(warnings)
+		})
+		if updated, getErr := service.GetJob(job.ID); getErr == nil {
+			job = updated
+		}
+	}
+	return job, nil
 }
 
 func (service *Service) BookCinemaDiagnostics() BookCinemaDiagnostics {
@@ -433,13 +461,19 @@ func sectionsFromPages(pages []BookSourcePage, spreadSize int) []BookSourceSecti
 		for _, page := range pages[index:min(index+spreadSize, len(pages))] {
 			wordCount += page.WordCount
 		}
+		rangeText := pagesText(pages, start, end)
+		isNarratable := wordCount > 0 && !looksLikePDFTableOfContents(rangeText)
+		role := bookSectionRoleBody
+		if !isNarratable && wordCount > 0 {
+			role = bookSectionRoleFrontmatter
+		}
 		label := pageRangeLabel(start, end)
 		sections = append(sections, BookSourceSection{
 			ID:                  fmt.Sprintf("pages-%d-%d", start, end),
 			Index:               len(sections),
 			Title:               label,
-			Role:                bookSectionRoleBody,
-			IsNarratable:        wordCount > 0,
+			Role:                role,
+			IsNarratable:        isNarratable,
 			Kind:                "pages",
 			PageStart:           start,
 			PageEnd:             end,
@@ -1112,6 +1146,23 @@ func isNarratableBookSection(role string, title string, text string) bool {
 	}
 	wordCount := len(buildBookWordSpans(text, 0, 0, 0))
 	return wordCount >= 3
+}
+
+func looksLikePDFTableOfContents(text string) bool {
+	normalized := strings.TrimSpace(text)
+	if normalized == "" {
+		return false
+	}
+	compact := strings.ToLower(strings.Join(strings.Fields(normalized), " "))
+	if strings.Contains(compact, "chapter 1 chapter 2 chapter 3") {
+		return true
+	}
+	chapterRefs := regexp.MustCompile(`(?i)\bchapter\s+\d+\b`).FindAllString(normalized, -1)
+	if len(chapterRefs) < 5 {
+		return false
+	}
+	sentenceMarks := strings.Count(normalized, ".") + strings.Count(normalized, "?") + strings.Count(normalized, "!")
+	return sentenceMarks <= len(chapterRefs)/2 && countWords(normalized) <= len(chapterRefs)*6
 }
 
 func cleanBookTitle(value string) string {

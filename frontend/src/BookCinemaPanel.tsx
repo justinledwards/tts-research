@@ -1,16 +1,31 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type {
   BookCinemaDiagnostics,
   BookScope,
   BookSource,
   BookSourceSectionRole,
   BookSourceScopeContent,
+  PlaybackProgress,
   ThemeName,
   VoiceJob,
 } from "./types";
 
 const BOOK_SOURCE_ACCEPT = ".pdf,.epub,application/pdf,application/epub+zip";
 const CINEMA_THEMES: ThemeName[] = ["light", "dark", "dawn", "night"];
+const BOOK_PAGE_VERTICAL_PADDING = 108;
+const BOOK_PAGE_HORIZONTAL_PADDING = 76;
+const BOOK_PAGE_MIN_WORDS = 18;
+const BOOK_PAGE_MAX_WORDS = 128;
+const BOOK_PAGE_DEFAULT_WORDS: Record<BookCinemaTextSize, number> = {
+  comfortable: 98,
+  large: 76,
+  giant: 54,
+};
+const BOOK_PAGE_FONT_PX: Record<BookCinemaTextSize, number> = {
+  comfortable: 20,
+  large: 24,
+  giant: 30,
+};
 
 export type BookCinemaTextSize = "comfortable" | "large" | "giant";
 
@@ -23,6 +38,26 @@ interface BookScopeOption {
   scope: BookScope;
 }
 
+export interface BookPage {
+  endWordIndex: number;
+  index: number;
+  spans: NonNullable<BookSource["wordSpans"]>;
+  startWordIndex: number;
+}
+
+export interface BookPaginationResult {
+  activePageIndex: number;
+  pages: BookPage[];
+  pagesPerSpread: 1 | 2;
+  spreadIndex: number;
+  totalPages: number;
+}
+
+interface BookPaginationOptions {
+  pagesPerSpread?: 1 | 2;
+  wordsPerPage?: number;
+}
+
 export interface BookCinemaControlsProps {
   bookSources: BookSource[];
   canCreateAudio: boolean;
@@ -32,11 +67,13 @@ export interface BookCinemaControlsProps {
   isProcessing: boolean;
   isScopeLoading: boolean;
   scopeContent: BookSourceScopeContent | null;
+  scopeProgress: PlaybackProgress | null;
   selectedBookScope: BookScope | null;
   selectedBookSourceId: string | null;
   onCreateAudio: (book: BookSource, scope: BookScope) => void;
   onImport: (file: File) => Promise<void>;
   onOpenCinema: () => void;
+  onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
   onScopeChange: (scope: BookScope) => void;
   onSelectBook: (bookId: string) => void;
   onUseText: (book: BookSource, scope: BookScope) => void;
@@ -52,11 +89,13 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
     isProcessing,
     isScopeLoading,
     scopeContent,
+    scopeProgress,
     selectedBookScope,
     selectedBookSourceId,
     onCreateAudio,
     onImport,
     onOpenCinema,
+    onResumeProgress,
     onScopeChange,
     onSelectBook,
     onUseText,
@@ -150,126 +189,296 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
       ) : null}
 
       {bookSources.length > 0 && selectedBook && scope ? (
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
-          <div className="grid min-w-0 gap-2 content-start">
-            {bookSources.map((book) => (
-              <button
-                className={`min-w-0 rounded-md border p-3 text-left transition ${
-                  selectedBook.id === book.id
-                    ? "border-orange-300 bg-orange-500/10"
-                    : "hover:bg-[var(--vs-surface)] vs-border"
-                }`}
-                key={book.id}
-                onClick={() => {
-                  onSelectBook(book.id);
-                  onScopeChange(resolveDefaultBookScope(book));
-                }}
-                type="button"
-              >
-                <span className="block truncate text-sm font-semibold" title={bookSourceName(book)}>
-                  {bookSourceName(book)}
-                </span>
-                <span className="vs-muted mt-1 block truncate text-xs" title={book.sourceFile}>
-                  {book.kind.toUpperCase()} · {formatBookCount(book)} ·{" "}
-                  {formatBytes(book.sourceBytes)}
-                </span>
-                <span
-                  className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold ${
-                    book.status === "ready"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-red-200 bg-red-50 text-red-700"
-                  }`}
-                >
-                  {book.status === "ready" ? "Ready" : "Needs attention"}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <article className="min-w-0 rounded-md border p-3 vs-surface vs-border">
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h3 className="truncate text-sm font-semibold" title={bookSourceName(selectedBook)}>
-                  {bookSourceName(selectedBook)}
-                </h3>
-                <p className="vs-muted mt-1 truncate text-xs" title={selectedBook.sourceFile}>
-                  {selectedBook.author ? `${selectedBook.author} · ` : ""}
-                  {selectedBook.sourceFile}
-                </p>
-              </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <button
-                  className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
-                  disabled={selectedBook.status !== "ready" || isScopeLoading || !scopeContent}
-                  onClick={() => {
-                    onUseText(selectedBook, scope);
-                  }}
-                  type="button"
-                >
-                  Use Text
-                </button>
-                <button
-                  className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 disabled:opacity-50"
-                  disabled={selectedBook.status !== "ready" || isScopeLoading}
-                  onClick={onOpenCinema}
-                  type="button"
-                >
-                  Cinema
-                </button>
-                <button
-                  className="h-8 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
-                  disabled={!canCreateAudio || selectedBook.status !== "ready" || isScopeLoading}
-                  onClick={() => {
-                    onCreateAudio(selectedBook, scope);
-                  }}
-                  type="button"
-                >
-                  {bookCreateLabel(scope)}
-                </button>
-              </div>
-            </div>
-            <label className="mt-3 grid gap-1 text-xs font-semibold">
-              <span className="vs-muted">Chapter / scope</span>
-              <select
-                className="min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm outline-none vs-border"
-                onChange={(event) => {
-                  const nextScope = scopeOptions.find(
-                    (option) => option.key === event.currentTarget.value,
-                  )?.scope;
-                  if (nextScope) {
-                    onScopeChange(nextScope);
-                  }
-                }}
-                value={bookScopeKey(scope)}
-              >
-                {groupedScopeOptions.map((group) => (
-                  <optgroup key={group.key} label={group.label}>
-                    {group.options.map((option) => (
-                      <option key={option.key} value={option.key}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-            <BookReadingPreview
-              book={selectedBook}
-              isLoading={isScopeLoading}
-              scope={scope}
-              scopeContent={scopeContent}
-            />
-          </article>
-        </div>
+        <BookCinemaSelectedSource
+          bookSources={bookSources}
+          canCreateAudio={canCreateAudio}
+          groupedScopeOptions={groupedScopeOptions}
+          isScopeLoading={isScopeLoading}
+          scope={scope}
+          scopeContent={scopeContent}
+          scopeOptions={scopeOptions}
+          scopeProgress={scopeProgress}
+          selectedBook={selectedBook}
+          onCreateAudio={onCreateAudio}
+          onOpenCinema={onOpenCinema}
+          onResumeProgress={onResumeProgress}
+          onScopeChange={onScopeChange}
+          onSelectBook={onSelectBook}
+          onUseText={onUseText}
+        />
       ) : (
-        <div className="rounded-md border border-dashed p-4 text-sm leading-6 vs-border">
-          <p className="font-semibold">Drop a book source here</p>
-          <p className="vs-muted mt-1 text-xs">
-            EPUB imports run fully local. PDF imports use pdftotext or the managed Python fallback.
-          </p>
-        </div>
+        <BookCinemaDropHint />
       )}
     </fieldset>
+  );
+}
+
+function BookCinemaSelectedSource({
+  bookSources,
+  canCreateAudio,
+  groupedScopeOptions,
+  isScopeLoading,
+  scope,
+  scopeContent,
+  scopeOptions,
+  scopeProgress,
+  selectedBook,
+  onCreateAudio,
+  onOpenCinema,
+  onResumeProgress,
+  onScopeChange,
+  onSelectBook,
+  onUseText,
+}: Readonly<{
+  bookSources: BookSource[];
+  canCreateAudio: boolean;
+  groupedScopeOptions: { key: string; label: string; options: BookScopeOption[] }[];
+  isScopeLoading: boolean;
+  scope: BookScope;
+  scopeContent: BookSourceScopeContent | null;
+  scopeOptions: BookScopeOption[];
+  scopeProgress: PlaybackProgress | null;
+  selectedBook: BookSource;
+  onCreateAudio: (book: BookSource, scope: BookScope) => void;
+  onOpenCinema: () => void;
+  onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
+  onScopeChange: (scope: BookScope) => void;
+  onSelectBook: (bookId: string) => void;
+  onUseText: (book: BookSource, scope: BookScope) => void;
+}>) {
+  return (
+    <div className="grid gap-3 xl:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
+      <BookSourceList
+        bookSources={bookSources}
+        selectedBookId={selectedBook.id}
+        onScopeChange={onScopeChange}
+        onSelectBook={onSelectBook}
+      />
+      <article className="min-w-0 rounded-md border p-3 vs-surface vs-border">
+        <BookScopeActionHeader
+          canCreateAudio={canCreateAudio}
+          isScopeLoading={isScopeLoading}
+          scope={scope}
+          scopeContent={scopeContent}
+          selectedBook={selectedBook}
+          onCreateAudio={onCreateAudio}
+          onOpenCinema={onOpenCinema}
+          onUseText={onUseText}
+        />
+        <BookScopeSelector
+          groupedScopeOptions={groupedScopeOptions}
+          scope={scope}
+          scopeOptions={scopeOptions}
+          onScopeChange={onScopeChange}
+        />
+        {scopeProgress ? (
+          <BookScopeProgressButton progress={scopeProgress} onResumeProgress={onResumeProgress} />
+        ) : null}
+        <BookReadingPreview
+          book={selectedBook}
+          isLoading={isScopeLoading}
+          scope={scope}
+          scopeContent={scopeContent}
+        />
+      </article>
+    </div>
+  );
+}
+
+function BookSourceList({
+  bookSources,
+  selectedBookId,
+  onScopeChange,
+  onSelectBook,
+}: Readonly<{
+  bookSources: BookSource[];
+  selectedBookId: string;
+  onScopeChange: (scope: BookScope) => void;
+  onSelectBook: (bookId: string) => void;
+}>) {
+  return (
+    <div className="grid min-w-0 gap-2 content-start">
+      {bookSources.map((book) => (
+        <button
+          className={`min-w-0 rounded-md border p-3 text-left transition ${
+            selectedBookId === book.id
+              ? "border-orange-300 bg-orange-500/10"
+              : "hover:bg-[var(--vs-surface)] vs-border"
+          }`}
+          key={book.id}
+          onClick={() => {
+            onSelectBook(book.id);
+            onScopeChange(resolveDefaultBookScope(book));
+          }}
+          type="button"
+        >
+          <span className="block truncate text-sm font-semibold" title={bookSourceName(book)}>
+            {bookSourceName(book)}
+          </span>
+          <span className="vs-muted mt-1 block truncate text-xs" title={book.sourceFile}>
+            {book.kind.toUpperCase()} · {formatBookCount(book)} · {formatBytes(book.sourceBytes)}
+          </span>
+          <BookStatusBadge status={book.status} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function BookStatusBadge({ status }: Readonly<{ status: BookSource["status"] }>) {
+  const badgeClass =
+    status === "ready"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : "border-red-200 bg-red-50 text-red-700";
+  return (
+    <span
+      className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold ${badgeClass}`}
+    >
+      {status === "ready" ? "Ready" : "Needs attention"}
+    </span>
+  );
+}
+
+function BookScopeActionHeader({
+  canCreateAudio,
+  isScopeLoading,
+  scope,
+  scopeContent,
+  selectedBook,
+  onCreateAudio,
+  onOpenCinema,
+  onUseText,
+}: Readonly<{
+  canCreateAudio: boolean;
+  isScopeLoading: boolean;
+  scope: BookScope;
+  scopeContent: BookSourceScopeContent | null;
+  selectedBook: BookSource;
+  onCreateAudio: (book: BookSource, scope: BookScope) => void;
+  onOpenCinema: () => void;
+  onUseText: (book: BookSource, scope: BookScope) => void;
+}>) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <h3 className="truncate text-sm font-semibold" title={bookSourceName(selectedBook)}>
+          {bookSourceName(selectedBook)}
+        </h3>
+        <p className="vs-muted mt-1 truncate text-xs" title={selectedBook.sourceFile}>
+          {selectedBook.author ? `${selectedBook.author} · ` : ""}
+          {selectedBook.sourceFile}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2">
+        <button
+          className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+          disabled={selectedBook.status !== "ready" || isScopeLoading || !scopeContent}
+          onClick={() => {
+            onUseText(selectedBook, scope);
+          }}
+          type="button"
+        >
+          Use Text
+        </button>
+        <button
+          className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 disabled:opacity-50"
+          disabled={selectedBook.status !== "ready" || isScopeLoading}
+          onClick={onOpenCinema}
+          type="button"
+        >
+          Cinema
+        </button>
+        <button
+          className="h-8 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          disabled={!canCreateAudio || selectedBook.status !== "ready" || isScopeLoading}
+          onClick={() => {
+            onCreateAudio(selectedBook, scope);
+          }}
+          type="button"
+        >
+          {bookCreateLabel(scope)}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BookScopeSelector({
+  groupedScopeOptions,
+  scope,
+  scopeOptions,
+  onScopeChange,
+}: Readonly<{
+  groupedScopeOptions: { key: string; label: string; options: BookScopeOption[] }[];
+  scope: BookScope;
+  scopeOptions: BookScopeOption[];
+  onScopeChange: (scope: BookScope) => void;
+}>) {
+  return (
+    <label className="mt-3 grid gap-1 text-xs font-semibold">
+      <span className="vs-muted">Chapter / scope</span>
+      <select
+        className="min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm outline-none vs-border"
+        onChange={(event) => {
+          const nextScope = scopeOptions.find(
+            (option) => option.key === event.currentTarget.value,
+          )?.scope;
+          if (nextScope) {
+            onScopeChange(nextScope);
+          }
+        }}
+        value={bookScopeKey(scope)}
+      >
+        {groupedScopeOptions.map((group) => (
+          <optgroup key={group.key} label={group.label}>
+            {group.options.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function BookScopeProgressButton({
+  progress,
+  onResumeProgress,
+}: Readonly<{
+  progress: PlaybackProgress;
+  onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
+}>) {
+  return (
+    <button
+      className="mt-3 flex w-full min-w-0 items-center justify-between gap-3 rounded-md border border-orange-300 bg-orange-500/10 px-3 py-2 text-left text-xs text-orange-600"
+      onClick={() => {
+        onResumeProgress(progress);
+      }}
+      type="button"
+    >
+      <span className="min-w-0">
+        <span className="block font-semibold">Continue this scope</span>
+        <span className="block truncate">
+          {formatProgressPercent(progress.progress)} ·{" "}
+          {formatEstimatedDuration(progress.currentTimeSec * 1000)}
+          {formatBookmarkSummary(progress.bookmarks?.length ?? 0)}
+        </span>
+      </span>
+      <span className="shrink-0 font-semibold">Resume</span>
+    </button>
+  );
+}
+
+function BookCinemaDropHint() {
+  return (
+    <div className="rounded-md border border-dashed p-4 text-sm leading-6 vs-border">
+      <p className="font-semibold">Drop a book source here</p>
+      <p className="vs-muted mt-1 text-xs">
+        EPUB imports run fully local. PDF imports use pdftotext or the managed Python fallback.
+      </p>
+    </div>
   );
 }
 
@@ -330,16 +539,19 @@ export function BookCinemaOverlay({
   job,
   playbackCursorSec,
   playbackControls,
+  progress,
   scope,
   scopeContent,
   textSize,
   themeName,
   onClose,
+  onBookmark,
   onCreateAudio,
   onPlayPause,
   onRestart,
   onScopeChange,
   onSkip,
+  onResumeProgress,
   onTextSizeChange,
   onThemeChange,
 }: Readonly<{
@@ -348,6 +560,7 @@ export function BookCinemaOverlay({
   isProcessing: boolean;
   job: VoiceJob | null;
   playbackCursorSec: number;
+  progress: PlaybackProgress | null;
   playbackControls: {
     isAvailable: boolean;
     isPlaying: boolean;
@@ -361,11 +574,13 @@ export function BookCinemaOverlay({
   textSize: BookCinemaTextSize;
   themeName: ThemeName;
   onClose: () => void;
+  onBookmark: () => void;
   onCreateAudio: (book: BookSource, scope: BookScope) => void;
   onPlayPause: () => void;
   onRestart: () => void;
   onScopeChange: (scope: BookScope) => void;
   onSkip: (seconds: number) => void;
+  onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
   onTextSizeChange: (size: BookCinemaTextSize) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
@@ -383,26 +598,20 @@ export function BookCinemaOverlay({
     normalizedScope,
     scopeContent,
   );
-  const spreadSpans = useMemo(
-    () => splitBookSpread(scopedSpans, activeWordIndex),
-    [activeWordIndex, scopedSpans],
-  );
   const queueOptions = useMemo(() => {
     const narratable = scopeOptions.filter(
       (option) => option.isNarratable && (option.wordCount ?? 0) > 0,
     );
     return narratable.length > 0 ? narratable : scopeOptions;
   }, [scopeOptions]);
-  const textSizeClass = {
-    comfortable: "text-xl sm:text-2xl",
-    large: "text-2xl sm:text-3xl",
-    giant: "text-3xl sm:text-4xl",
-  }[textSize];
   const activeJobMatchesBook =
     job !== null &&
     job.bookSourceId === book.id &&
     bookScopeKey(job.bookScope ?? normalizedScope) === bookScopeKey(normalizedScope);
   const isCancelledBookJob = activeJobMatchesBook && job.status === "cancelled";
+  const bookmarks = progress?.bookmarks ?? [];
+  const progressPercent = progress ? formatProgressPercent(progress.progress) : "0%";
+  const canBookmark = activeJobMatchesBook && playbackControls.isAvailable;
 
   return (
     <div
@@ -438,7 +647,7 @@ export function BookCinemaOverlay({
             value={bookScopeKey(normalizedScope)}
           >
             {scopeOptions.map((option) => (
-              <option className="text-zinc-950" key={option.key} value={option.key}>
+              <option key={option.key} value={option.key}>
                 {option.label}
               </option>
             ))}
@@ -471,74 +680,59 @@ export function BookCinemaOverlay({
               {formatEstimatedDuration(scopeContent?.estimatedDurationMs)}
             </p>
           </div>
+          <div className="mt-4 rounded-lg border p-4 vs-border">
+            <div className="flex items-center justify-between gap-3">
+              <p className="vs-muted text-xs font-semibold uppercase tracking-[0.2em]">Progress</p>
+              <span className="text-xs font-semibold text-orange-500">{progressPercent}</span>
+            </div>
+            <div className="mt-3 h-1.5 rounded-full bg-[var(--vs-surface)]">
+              <div
+                className="h-1.5 rounded-full vs-accent-bg"
+                style={{
+                  width: progress ? `${Math.round(progress.progress * 100).toString()}%` : "0%",
+                }}
+              />
+            </div>
+            <p className="vs-muted mt-2 text-xs">
+              {progress
+                ? `${formatEstimatedDuration(progress.currentTimeSec * 1000)} listened`
+                : "No saved progress for this scope yet."}
+            </p>
+            {bookmarks.length > 0 ? (
+              <div className="mt-3 grid gap-2">
+                {bookmarks.slice(-3).map((bookmark) => (
+                  <button
+                    className="min-w-0 rounded-md border px-3 py-2 text-left text-xs transition hover:border-orange-400 vs-border"
+                    key={bookmark.id}
+                    onClick={() => {
+                      if (progress) {
+                        onResumeProgress(progress, bookmark.currentTimeSec);
+                      }
+                    }}
+                    type="button"
+                  >
+                    <span className="block truncate font-semibold">
+                      {bookmark.label ?? formatEstimatedDuration(bookmark.currentTimeSec * 1000)}
+                    </span>
+                    <span className="vs-muted mt-1 block">
+                      {formatEstimatedDuration(bookmark.currentTimeSec * 1000)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </aside>
 
-        <section className="min-h-0 overflow-y-auto px-4 py-5 sm:px-8">
-          <div className="mx-auto max-w-5xl">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <BookPageHeading book={book} scope={normalizedScope} />
-              <div className="flex items-center gap-2 text-sm">
-                <button
-                  className="h-9 rounded-md border px-3 font-semibold vs-border"
-                  onClick={() => {
-                    onTextSizeChange(decreaseBookTextSize(textSize));
-                  }}
-                  type="button"
-                >
-                  A-
-                </button>
-                <button
-                  className="h-9 rounded-md border px-3 font-semibold vs-border"
-                  onClick={() => {
-                    onTextSizeChange(increaseBookTextSize(textSize));
-                  }}
-                  type="button"
-                >
-                  A+
-                </button>
-              </div>
-            </div>
-            <div className="grid min-h-[64vh] overflow-hidden rounded-xl border bg-[#f8f0df] text-zinc-950 shadow-2xl vs-border lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="book-cinema-page-text hidden border-r border-zinc-300/80 p-8 lg:block">
-                <BookPageHeading book={book} scope={normalizedScope} compact />
-                <p className="mt-8 font-serif text-xl leading-10">
-                  {spreadSpans.left.length > 0
-                    ? spreadSpans.left.map((span) => (
-                        <span
-                          data-book-word={span.index}
-                          key={`${book.id}-cinema-left-${String(span.index)}`}
-                          title={bookSpanTitle(span)}
-                        >
-                          {span.text}{" "}
-                        </span>
-                      ))
-                    : scopedText.split(/\s+/).slice(0, 110).join(" ")}
-                </p>
-              </div>
-              <div
-                className={`${textSizeClass} book-cinema-page-text max-h-[76vh] overflow-y-auto p-8 font-serif leading-[1.85]`}
-              >
-                <BookPageHeading book={book} scope={normalizedScope} compact />
-                <p className="mt-8">
-                  {spreadSpans.right.length > 0
-                    ? spreadSpans.right.map((span) => (
-                        <span
-                          className={
-                            span.index === activeWordIndex ? "book-cinema-word-active" : ""
-                          }
-                          data-book-word={span.index}
-                          key={`${book.id}-cinema-${String(span.index)}`}
-                          title={bookSpanTitle(span)}
-                        >
-                          {span.text}{" "}
-                        </span>
-                      ))
-                    : scopedText}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
+        <BookCinemaReaderStage
+          activeWordIndex={activeWordIndex}
+          book={book}
+          scope={normalizedScope}
+          scopedSpans={scopedSpans}
+          scopedText={scopedText}
+          textSize={textSize}
+          onTextSizeChange={onTextSizeChange}
+        />
 
         <aside className="hidden min-h-0 border-l p-5 vs-border lg:block">
           <div className="rounded-lg border p-4 vs-border">
@@ -562,6 +756,21 @@ export function BookCinemaOverlay({
             >
               {playbackControls.isPlaying ? "Ⅱ" : "▶"}
             </button>
+            <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs">
+              <span className="vs-muted truncate">
+                {progress
+                  ? `${formatEstimatedDuration(progress.currentTimeSec * 1000)} saved`
+                  : "Progress starts when playback begins"}
+              </span>
+              <button
+                className="rounded border px-2 py-1 font-semibold disabled:opacity-40 vs-border"
+                disabled={!canBookmark}
+                onClick={onBookmark}
+                type="button"
+              >
+                Bookmark
+              </button>
+            </div>
           </div>
           <div className="mt-4 rounded-lg border p-4 vs-border">
             <div className="flex items-center justify-between gap-3">
@@ -654,11 +863,19 @@ export function BookCinemaOverlay({
             value={themeName}
           >
             {CINEMA_THEMES.map((theme) => (
-              <option className="text-zinc-950" key={theme} value={theme}>
+              <option key={theme} value={theme}>
                 {theme}
               </option>
             ))}
           </select>
+          <button
+            className="h-10 rounded-md border px-4 text-sm font-semibold disabled:opacity-40 vs-border"
+            disabled={!canBookmark}
+            onClick={onBookmark}
+            type="button"
+          >
+            Bookmark
+          </button>
           <button
             className="h-10 rounded-md px-4 text-sm font-semibold text-white disabled:opacity-50 vs-accent-bg"
             disabled={!canCreateAudio || isProcessing || book.status !== "ready"}
@@ -697,6 +914,260 @@ function BookPageHeading({
       </h3>
       <p className="vs-muted mt-2 text-sm">{bookSourceName(book)}</p>
     </div>
+  );
+}
+
+function BookCinemaReaderStage({
+  activeWordIndex,
+  book,
+  scope,
+  scopedSpans,
+  scopedText,
+  textSize,
+  onTextSizeChange,
+}: Readonly<{
+  activeWordIndex: number;
+  book: BookSource;
+  scope: BookScope;
+  scopedSpans: NonNullable<BookSource["wordSpans"]>;
+  scopedText: string;
+  textSize: BookCinemaTextSize;
+  onTextSizeChange: (size: BookCinemaTextSize) => void;
+}>) {
+  const pageMetrics = useBookPageMetrics(textSize);
+  const pagination = useMemo(
+    () =>
+      paginateBookSpans(scopedSpans, activeWordIndex, {
+        pagesPerSpread: pageMetrics.pagesPerSpread,
+        wordsPerPage: pageMetrics.wordsPerPage,
+      }),
+    [activeWordIndex, pageMetrics.pagesPerSpread, pageMetrics.wordsPerPage, scopedSpans],
+  );
+  const displayedPages: (BookPage | null)[] =
+    pagination.pages.length > 0 ? pagination.pages : [null];
+
+  return (
+    <section className="min-h-0 overflow-hidden px-4 py-5 sm:px-8">
+      <div className="mx-auto flex h-full max-w-6xl flex-col overflow-hidden">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <BookPageHeading book={book} scope={scope} />
+          <BookPaginationControls
+            pagination={pagination}
+            textSize={textSize}
+            onTextSizeChange={onTextSizeChange}
+          />
+        </div>
+        <div
+          className={`book-cinema-spread grid min-h-0 flex-1 overflow-hidden rounded-xl border shadow-2xl vs-border ${
+            pagination.pagesPerSpread === 2
+              ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+              : "grid-cols-1"
+          }`}
+          data-book-pages-per-spread={pagination.pagesPerSpread}
+          ref={pageMetrics.ref}
+        >
+          {displayedPages.map((page, index) => (
+            <BookReaderPage
+              activeWordIndex={activeWordIndex}
+              book={book}
+              fallbackText={index === 0 ? scopedText : ""}
+              fontSizePx={pageMetrics.fontSizePx}
+              isActivePage={isReaderPageActive(page, activeWordIndex)}
+              isRightPage={index === 1}
+              key={`${book.id}-${bookScopeKey(scope)}-${String(page?.index ?? "fallback")}`}
+              page={page}
+              scope={scope}
+              totalPages={pagination.totalPages}
+            />
+          ))}
+          {displayedPages.length === 1 && pagination.pagesPerSpread === 2 ? (
+            <BookReaderPage
+              activeWordIndex={activeWordIndex}
+              book={book}
+              fallbackText=""
+              fontSizePx={pageMetrics.fontSizePx}
+              isActivePage={false}
+              isRightPage
+              page={null}
+              scope={scope}
+              totalPages={pagination.totalPages}
+            />
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BookPaginationControls({
+  pagination,
+  textSize,
+  onTextSizeChange,
+}: Readonly<{
+  pagination: BookPaginationResult;
+  textSize: BookCinemaTextSize;
+  onTextSizeChange: (size: BookCinemaTextSize) => void;
+}>) {
+  const firstPage = pagination.spreadIndex * pagination.pagesPerSpread + 1;
+  const lastPage =
+    pagination.pagesPerSpread === 2 && pagination.totalPages > 1
+      ? Math.min(pagination.totalPages, pagination.spreadIndex * 2 + 2)
+      : firstPage;
+
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <span className="vs-muted hidden text-xs font-semibold sm:inline">
+        Page {String(firstPage)}
+        {lastPage > firstPage ? `-${String(lastPage)}` : ""} of{" "}
+        {String(Math.max(1, pagination.totalPages))}
+      </span>
+      <button
+        className="h-9 rounded-md border px-3 font-semibold vs-border"
+        onClick={() => {
+          onTextSizeChange(decreaseBookTextSize(textSize));
+        }}
+        type="button"
+      >
+        A-
+      </button>
+      <button
+        className="h-9 rounded-md border px-3 font-semibold vs-border"
+        onClick={() => {
+          onTextSizeChange(increaseBookTextSize(textSize));
+        }}
+        type="button"
+      >
+        A+
+      </button>
+    </div>
+  );
+}
+
+function BookReaderPage({
+  activeWordIndex,
+  book,
+  fallbackText,
+  fontSizePx,
+  isActivePage,
+  isRightPage = false,
+  page,
+  scope,
+  totalPages,
+}: Readonly<{
+  activeWordIndex: number;
+  book: BookSource;
+  fallbackText: string;
+  fontSizePx: number;
+  isActivePage: boolean;
+  isRightPage?: boolean;
+  page: BookPage | null;
+  scope: BookScope;
+  totalPages: number;
+}>) {
+  const pageNumber = page ? page.index + 1 : totalPages + 1;
+  const pageLabel = page ? `Reader page ${String(pageNumber)} of ${String(totalPages)}` : "End";
+  const visibleFallback = fallbackText.split(/\s+/).filter(Boolean).slice(0, 120).join(" ");
+
+  return (
+    <article
+      className={`book-cinema-page-shell ${isRightPage ? "book-cinema-page-shell--right" : ""} ${
+        isActivePage ? "book-cinema-page-shell--active" : ""
+      }`}
+      data-book-reader-page={page?.index ?? "blank"}
+    >
+      <header className="book-cinema-page-header">
+        <span className="truncate">{bookScopeLabel(scope)}</span>
+        <span>{pageLabel}</span>
+      </header>
+      <p
+        className="book-cinema-page-copy"
+        style={{ "--book-page-font-size": `${String(fontSizePx)}px` } as CSSProperties}
+      >
+        {page && page.spans.length > 0
+          ? page.spans.map((span) => (
+              <span
+                className={span.index === activeWordIndex ? "book-cinema-word-active" : ""}
+                data-book-word={span.index}
+                key={`${book.id}-cinema-page-${String(page.index)}-${String(span.index)}`}
+                title={bookSpanTitle(span)}
+              >
+                {span.text}{" "}
+              </span>
+            ))
+          : visibleFallback}
+      </p>
+      <footer className="book-cinema-page-footer">
+        <span>{bookSourceName(book)}</span>
+        <span>{page ? String(pageNumber) : ""}</span>
+      </footer>
+    </article>
+  );
+}
+
+function useBookPageMetrics(textSize: BookCinemaTextSize): {
+  fontSizePx: number;
+  pagesPerSpread: 1 | 2;
+  ref: (node: HTMLDivElement | null) => void;
+  wordsPerPage: number;
+} {
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+  const [size, setSize] = useState({ height: 0, width: 0 });
+
+  useEffect(() => {
+    if (!element) {
+      return;
+    }
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect();
+      setSize({
+        height: Math.round(rect.height),
+        width: Math.round(rect.width),
+      });
+    };
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [element]);
+
+  return useMemo(() => {
+    const viewportWidth = size.width > 0 ? size.width : fallbackBookViewportWidth();
+    const viewportHeight = size.height > 0 ? size.height : fallbackBookViewportHeight();
+    const pagesPerSpread: 1 | 2 = viewportWidth >= 620 ? 2 : 1;
+    const pageWidth = Math.max(260, viewportWidth / pagesPerSpread - BOOK_PAGE_HORIZONTAL_PADDING);
+    const pageHeight = Math.max(280, viewportHeight - BOOK_PAGE_VERTICAL_PADDING);
+    const baseFontPx = BOOK_PAGE_FONT_PX[textSize];
+    const lineHeightPx = baseFontPx * 1.76;
+    const averageWordWidthPx = baseFontPx * 3.15;
+    const wordsPerLine = Math.max(5, Math.floor(pageWidth / averageWordWidthPx));
+    const linesPerPage = Math.max(6, Math.floor(pageHeight / lineHeightPx));
+    const estimatedWords = Math.floor(wordsPerLine * linesPerPage * 0.86);
+    return {
+      fontSizePx: baseFontPx,
+      pagesPerSpread,
+      ref: setElement,
+      wordsPerPage: clampNumber(
+        Number.isFinite(estimatedWords) ? estimatedWords : BOOK_PAGE_DEFAULT_WORDS[textSize],
+        BOOK_PAGE_MIN_WORDS,
+        BOOK_PAGE_MAX_WORDS,
+      ),
+    };
+  }, [size.height, size.width, textSize]);
+}
+
+function fallbackBookViewportWidth(): number {
+  return window.innerWidth;
+}
+
+function fallbackBookViewportHeight(): number {
+  return Math.max(420, Math.floor(window.innerHeight * 0.62));
+}
+
+function isReaderPageActive(page: BookPage | null, activeWordIndex: number): boolean {
+  return Boolean(
+    page && activeWordIndex >= page.startWordIndex && activeWordIndex <= page.endWordIndex,
   );
 }
 
@@ -952,33 +1423,60 @@ export function visibleBookSpans(
   return sourceSpans.slice(start, Math.min(sourceSpans.length, start + maxWords));
 }
 
-function splitBookSpread(
+export function paginateBookSpans(
   spans: NonNullable<BookSource["wordSpans"]>,
   activeWordIndex: number,
-): {
-  left: NonNullable<BookSource["wordSpans"]>;
-  right: NonNullable<BookSource["wordSpans"]>;
-} {
+  options: BookPaginationOptions = {},
+): BookPaginationResult {
+  const wordsPerPage = clampNumber(
+    options.wordsPerPage ?? BOOK_PAGE_DEFAULT_WORDS.large,
+    BOOK_PAGE_MIN_WORDS,
+    BOOK_PAGE_MAX_WORDS,
+  );
+  const pagesPerSpread = options.pagesPerSpread ?? 2;
   if (spans.length === 0) {
-    return { left: [], right: [] };
-  }
-  const activeOffset = spans.findIndex((span) => span.index === activeWordIndex);
-  if (activeOffset === -1) {
-    const splitAt = Math.min(100, Math.ceil(spans.length / 2));
     return {
-      left: spans.slice(0, splitAt),
-      right: spans.slice(splitAt, splitAt + 125),
+      activePageIndex: 0,
+      pages: [],
+      pagesPerSpread,
+      spreadIndex: 0,
+      totalPages: 0,
     };
   }
-  const leftStart = Math.max(0, activeOffset - 105);
+
+  const pages: BookPage[] = [];
+  for (let start = 0; start < spans.length; start += wordsPerPage) {
+    const pageSpans = spans.slice(start, start + wordsPerPage);
+    const firstSpan = pageSpans[0];
+    const lastSpan = pageSpans.at(-1) ?? firstSpan;
+    pages.push({
+      endWordIndex: lastSpan.index,
+      index: pages.length,
+      spans: pageSpans,
+      startWordIndex: firstSpan.index,
+    });
+  }
+
+  const activeOffset = spans.findIndex((span) => span.index === activeWordIndex);
+  const activePageIndex = activeOffset === -1 ? 0 : Math.floor(activeOffset / wordsPerPage);
+  const spreadIndex = Math.floor(activePageIndex / pagesPerSpread);
+  const firstPageIndex = spreadIndex * pagesPerSpread;
+
   return {
-    left: spans.slice(leftStart, activeOffset),
-    right: spans.slice(activeOffset, Math.min(spans.length, activeOffset + 130)),
+    activePageIndex,
+    pages: pages.slice(firstPageIndex, firstPageIndex + pagesPerSpread),
+    pagesPerSpread,
+    spreadIndex,
+    totalPages: pages.length,
   };
 }
 
 export function bookSourceName(book: BookSource): string {
   return nonEmptyString(book.title) ?? book.sourceFile;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 function nonEmptyString(value: string | null | undefined): string | null {
@@ -1057,6 +1555,20 @@ function formatEstimatedDuration(durationMs: number | null | undefined): string 
     return `${String(seconds)} sec`;
   }
   return `${String(minutes)}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatProgressPercent(progress: number): string {
+  if (!Number.isFinite(progress) || progress <= 0) {
+    return "0%";
+  }
+  return `${Math.round(Math.min(1, progress) * 100).toString()}%`;
+}
+
+function formatBookmarkSummary(count: number): string {
+  if (count <= 0) {
+    return "";
+  }
+  return ` · ${count.toString()} bookmark${count === 1 ? "" : "s"}`;
 }
 
 function bookSpanTitle(span: NonNullable<BookSource["wordSpans"]>[number]): string | undefined {

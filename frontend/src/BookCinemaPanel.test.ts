@@ -4,6 +4,7 @@ import {
   bookScopeOptions,
   bookScopeText,
   bookSourceName,
+  paginateBookSpans,
   resolveBookActiveWordIndex,
   resolveDefaultBookScope,
   visibleBookSpans,
@@ -92,6 +93,48 @@ describe("Book Cinema helpers", () => {
     expect(visible).toHaveLength(220);
     expect(visible[0]?.index).toBe(12);
     expect(visible.at(-1)?.index).toBe(231);
+  });
+
+  it("paginates book spreads with non-overlapping left and right pages", () => {
+    const spans =
+      makeBookSource(Array.from({ length: 90 }, (_, index) => `w${String(index)}`).join(" "))
+        .wordSpans ?? [];
+
+    const pagination = paginateBookSpans(spans, -1, { pagesPerSpread: 2, wordsPerPage: 20 });
+
+    expect(pagination.totalPages).toBe(5);
+    expect(pagination.pages).toHaveLength(2);
+    expect(pagination.pages[0]?.spans[0]?.index).toBe(0);
+    expect(pagination.pages[0]?.spans.at(-1)?.index).toBe(19);
+    expect(pagination.pages[1]?.spans[0]?.index).toBe(20);
+    expect(pagination.pages[1]?.spans.at(-1)?.index).toBe(39);
+  });
+
+  it("selects the spread containing the active word", () => {
+    const spans =
+      makeBookSource(Array.from({ length: 110 }, (_, index) => `w${String(index)}`).join(" "))
+        .wordSpans ?? [];
+
+    const pagination = paginateBookSpans(spans, 84, { pagesPerSpread: 2, wordsPerPage: 20 });
+
+    expect(pagination.activePageIndex).toBe(4);
+    expect(pagination.spreadIndex).toBe(2);
+    expect(pagination.pages[0]?.spans[0]?.index).toBe(80);
+    expect(pagination.pages[0]?.spans.at(-1)?.index).toBe(99);
+    expect(pagination.pages[1]?.spans[0]?.index).toBe(100);
+  });
+
+  it("supports single-page pagination for narrow cinema viewports", () => {
+    const spans =
+      makeBookSource(Array.from({ length: 75 }, (_, index) => `w${String(index)}`).join(" "))
+        .wordSpans ?? [];
+
+    const pagination = paginateBookSpans(spans, 47, { pagesPerSpread: 1, wordsPerPage: 18 });
+
+    expect(pagination.pagesPerSpread).toBe(1);
+    expect(pagination.pages).toHaveLength(1);
+    expect(pagination.pages[0]?.spans[0]?.index).toBe(36);
+    expect(pagination.pages[0]?.spans.at(-1)?.index).toBe(53);
   });
 
   it("falls back to source filename when metadata has no title", () => {

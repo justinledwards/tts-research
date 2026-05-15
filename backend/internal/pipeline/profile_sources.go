@@ -269,7 +269,7 @@ func (service *Service) CreateVoiceProfileSource(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if sourceBytes > service.options.MaxProfileBytes {
+	if service.options.MaxProfileBytes > 0 && sourceBytes > service.options.MaxProfileBytes {
 		return VoiceProfileSource{}, fmt.Errorf("%w", ErrProfileTooLarge)
 	}
 

@@ -97,7 +97,7 @@ func main() {
 		logger.Error("invalid pipeline configuration", "error", err)
 		os.Exit(1)
 	}
-	maxProfileBytes, err := envInt64WithDefault("VOICE_PROFILE_MAX_BYTES", 1<<30)
+	maxProfileBytes, err := envInt64WithDefault("VOICE_PROFILE_MAX_BYTES", 0)
 	if err != nil {
 		logger.Error("invalid pipeline configuration", "error", err)
 		os.Exit(1)
@@ -129,6 +129,11 @@ func main() {
 	bookPDFRequireTextExtractor, err := envBoolWithDefault("VOICE_BOOK_PDF_REQUIRE_TEXT_EXTRACTOR", false)
 	if err != nil {
 		logger.Error("invalid book source configuration", "error", err)
+		os.Exit(1)
+	}
+	sourceURLAllowPrivate, err := envBoolWithDefault("VOICE_SOURCE_URL_ALLOW_PRIVATE", false)
+	if err != nil {
+		logger.Error("invalid source URL configuration", "error", err)
 		os.Exit(1)
 	}
 	segmentWorkers = clampWorkerCount("VOICE_SEGMENT_WORKERS", segmentWorkers, maxSafeWorkerCount, logger)
@@ -203,6 +208,10 @@ func main() {
 			JobDataDir:                           envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
 			ProjectDataDir:                       envWithDefault("VOICE_PROJECT_DATA_DIR", "./data/projects"),
 			BookSourceDir:                        envWithDefault("VOICE_BOOK_SOURCE_DATA_DIR", "./data/book-sources"),
+			SourcePrepDir:                        envWithDefault("VOICE_SOURCE_PREP_DATA_DIR", "./data/source-preps"),
+			ProgressDataDir:                      envWithDefault("VOICE_PROGRESS_DATA_DIR", "./data/progress"),
+			PlaybackSessionDir:                   envWithDefault("VOICE_PLAYBACK_SESSION_DATA_DIR", "./data/playback-sessions"),
+			SourceURLAllowPrivate:                sourceURLAllowPrivate,
 			BookPDFPythonPath:                    envWithDefault("VOICE_BOOK_PDF_PYTHON_PATH", "./.venv/bin/python"),
 			BookPDFExtractorScriptPath:           envWithDefault("VOICE_BOOK_PDF_EXTRACTOR_SCRIPT_PATH", "./scripts/pdf_extract.py"),
 			BookPDFRequireTextExtractor:          bookPDFRequireTextExtractor,

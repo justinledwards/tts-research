@@ -18,6 +18,11 @@ export interface VoiceStudioTheme {
     generating: string;
     queued: string;
   };
+  book: {
+    ink: string;
+    muted: string;
+    paper: string;
+  };
 }
 
 export const VOICE_STUDIO_THEMES: VoiceStudioTheme[] = [
@@ -37,6 +42,11 @@ export const VOICE_STUDIO_THEMES: VoiceStudioTheme[] = [
       generating: "#2563eb",
       queued: "#f59e0b",
     },
+    book: {
+      ink: "#1f2937",
+      muted: "#776b58",
+      paper: "#f8f0df",
+    },
   },
   {
     name: "dark",
@@ -53,6 +63,11 @@ export const VOICE_STUDIO_THEMES: VoiceStudioTheme[] = [
       success: "#22c55e",
       generating: "#3b82f6",
       queued: "#fbbf24",
+    },
+    book: {
+      ink: "#ece7dc",
+      muted: "#a9a193",
+      paper: "#15181d",
     },
   },
   {
@@ -71,6 +86,11 @@ export const VOICE_STUDIO_THEMES: VoiceStudioTheme[] = [
       generating: "#3656f4",
       queued: "#f59e0b",
     },
+    book: {
+      ink: "#261b13",
+      muted: "#7c6d5a",
+      paper: "#fbecd6",
+    },
   },
   {
     name: "night",
@@ -87,6 +107,11 @@ export const VOICE_STUDIO_THEMES: VoiceStudioTheme[] = [
       success: "#22c55e",
       generating: "#60a5fa",
       queued: "#fbbf24",
+    },
+    book: {
+      ink: "#e9e4d6",
+      muted: "#a49d8f",
+      paper: "#0c1020",
     },
   },
 ];

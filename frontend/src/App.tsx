@@ -13,9 +13,13 @@ import {
   apiBaseUrl,
   audioSource,
   cancelVoiceJob,
+  closePlaybackSession,
   createBookNarrationJob,
   createBookSource,
+  createBookSourceFromUrl,
   createProject,
+  createPreparedSource,
+  createPreparedSourceJob,
   createVoiceJob,
   createVoiceProfileFromCandidate,
   createVoiceProfileSource,
@@ -26,13 +30,19 @@ import {
   getVoiceJob,
   getVoiceProfileSource,
   getVoiceProfileSourceDiagnostics,
+  isApiNotFoundError,
+  listPreparedSources,
   listProjectBookSources,
+  listProjectProgress,
   listTTSEngines,
   listProjectJobs,
   listProjects,
   listVoiceProfiles,
   renameProject,
+  startPlaybackSession,
   subscribeToVoiceJob,
+  syncPlaybackSession,
+  updatePlaybackProgress,
 } from "./api";
 import { formatDuration } from "./format";
 import {
@@ -82,6 +92,9 @@ import type {
   BookSourceScopeContent,
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
+  PlaybackProgress,
+  PlaybackSession,
+  PreparedSource,
   ProjectBundleImportResult,
   StageStatus,
   SystemMetrics,
@@ -101,7 +114,8 @@ import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./wave
 const DEFAULT_PROJECT_NAME = "The Future of Clean Energy";
 const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
 const DEFAULT_KOKORO_VOICE_ID = "af_heart";
-const SOURCE_TEXT_FILE_ACCEPT = ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm";
+const SOURCE_TEXT_FILE_ACCEPT =
+  ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,application/pdf,application/epub+zip";
 const SOURCE_TEXT_FILE_EXTENSIONS = new Set([
   "txt",
   "md",
@@ -133,6 +147,7 @@ interface PlaybackController {
   pause: () => void;
   restart: () => Promise<void> | void;
   skipBy?: (seconds: number) => void;
+  seekTo?: (seconds: number) => void;
 }
 
 interface WritableRef<T> {
@@ -148,6 +163,7 @@ const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   pause: () => false,
   restart: () => Promise.resolve(),
   skipBy: undefined,
+  seekTo: undefined,
 };
 
 function createPipelineBase(job?: VoiceJob): PipelineStepState {
@@ -718,7 +734,7 @@ function CinemaTeleprompterOverlay({
               value={themeName}
             >
               {VOICE_STUDIO_THEMES.map((theme) => (
-                <option className="text-zinc-950" key={theme.name} value={theme.name}>
+                <option key={theme.name} value={theme.name}>
                   {theme.label}
                 </option>
               ))}
@@ -877,6 +893,22 @@ type AudioPlaybackMode = "arrival" | "completed";
 
 const VOICE_PROFILE_ID_STORAGE_KEY = "tts-active-voice-profile-id";
 
+function formatErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function bookScopeContentMatches(
+  content: BookSourceScopeContent | null,
+  bookId: string,
+  scope: BookScope,
+): boolean {
+  return content?.bookSourceId === bookId && bookScopeKey(content.scope) === bookScopeKey(scope);
+}
+
+function removeBookSourceById(bookId: string): (books: BookSource[]) => BookSource[] {
+  return (books) => books.filter((book) => book.id !== bookId);
+}
+
 export function App() {
   const [text, setText] = useState("");
   const [job, setJob] = useState<VoiceJob | null>(null);
@@ -911,6 +943,16 @@ export function App() {
   const [selectedBookScope, setSelectedBookScope] = useState<BookScope | null>(null);
   const [bookScopeContent, setBookScopeContent] = useState<BookSourceScopeContent | null>(null);
   const [isLoadingBookScope, setIsLoadingBookScope] = useState(false);
+  const [preparedSources, setPreparedSources] = useState<PreparedSource[]>([]);
+  const [selectedPreparedSourceId, setSelectedPreparedSourceId] = useState<string | null>(null);
+  const [isPreparingSource, setIsPreparingSource] = useState(false);
+  const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
+  const [projectProgress, setProjectProgress] = useState<PlaybackProgress[]>([]);
+  const [activePlaybackSession, setActivePlaybackSession] = useState<PlaybackSession | null>(null);
+  const [pendingPlaybackResume, setPendingPlaybackResume] = useState<{
+    autoplay: boolean;
+    seconds: number;
+  } | null>(null);
   const [bookCinemaDiagnostics, setBookCinemaDiagnostics] = useState<BookCinemaDiagnostics | null>(
     null,
   );
@@ -993,11 +1035,32 @@ export function App() {
         : (bookSources[0] ?? null),
     [bookSources, selectedBookSourceId],
   );
+  const selectedPreparedSource = useMemo(
+    () =>
+      selectedPreparedSourceId
+        ? (preparedSources.find((source) => source.id === selectedPreparedSourceId) ?? null)
+        : (preparedSources[0] ?? null),
+    [preparedSources, selectedPreparedSourceId],
+  );
+  const latestProgress = (() => {
+    const unfinishedProgress = projectProgress.find((progress) => !progress.finished);
+    if (unfinishedProgress) {
+      return unfinishedProgress;
+    }
+    return projectProgress.length > 0 ? projectProgress[0] : null;
+  })();
   const effectiveBookScope = useMemo(
     () =>
       selectedBookSource ? normalizeBookScopeForBook(selectedBookSource, selectedBookScope) : null,
     [selectedBookScope, selectedBookSource],
   );
+  const selectedBookProgress = useMemo(() => {
+    if (!selectedBookSource || !effectiveBookScope) {
+      return null;
+    }
+    const targetId = progressTargetIdForBookScope(selectedBookSource.id, effectiveBookScope);
+    return projectProgress.find((progress) => progress.targetId === targetId) ?? null;
+  }, [effectiveBookScope, projectProgress, selectedBookSource]);
   const canOpenBookCinema = selectedBookSource?.status === "ready";
   const studioPipelineHint = getStudioPipelineHint({
     hasLoadedProfiles: hasLoadedVoiceProfiles,
@@ -1068,33 +1131,82 @@ export function App() {
     }
   }, []);
 
-  const refreshBookSources = useCallback(async (projectId: string) => {
+  const refreshBookSources = useCallback(
+    async (projectId: string) => {
+      if (projectId.trim().length === 0) {
+        setBookSources([]);
+        setSelectedBookSourceId(null);
+        setSelectedBookScope(null);
+        setBookScopeContent(null);
+        return;
+      }
+      try {
+        const books = await listProjectBookSources(projectId);
+        setBookSources(books);
+        setSelectedBookSourceId((currentId) => {
+          if (currentId && books.some((book) => book.id === currentId)) {
+            return currentId;
+          }
+          return books[0]?.id ?? null;
+        });
+        setSelectedBookScope((currentScope) => currentScope);
+        setBookSourceError(null);
+      } catch (caughtError) {
+        setBookSources([]);
+        setSelectedBookSourceId(null);
+        setSelectedBookScope(null);
+        setBookScopeContent(null);
+        if (isApiNotFoundError(caughtError)) {
+          setBookSourceError(null);
+          void refreshProjects();
+          return;
+        }
+        setBookSourceError(formatErrorMessage(caughtError, "Unable to load book sources"));
+      }
+    },
+    [refreshProjects],
+  );
+
+  const refreshPreparedSources = useCallback(
+    async (projectId: string) => {
+      if (projectId.trim().length === 0) {
+        setPreparedSources([]);
+        setSelectedPreparedSourceId(null);
+        return;
+      }
+      try {
+        const sources = await listPreparedSources(projectId);
+        setPreparedSources(sources);
+        setSelectedPreparedSourceId((currentId) => {
+          if (currentId && sources.some((source) => source.id === currentId)) {
+            return currentId;
+          }
+          return sources[0]?.id ?? null;
+        });
+        setSourcePrepError(null);
+      } catch (caughtError) {
+        setPreparedSources([]);
+        setSelectedPreparedSourceId(null);
+        if (isApiNotFoundError(caughtError)) {
+          setSourcePrepError(null);
+          void refreshProjects();
+          return;
+        }
+        setSourcePrepError(formatErrorMessage(caughtError, "Unable to load prepared sources"));
+      }
+    },
+    [refreshProjects],
+  );
+
+  const refreshProjectProgress = useCallback(async (projectId: string) => {
     if (projectId.trim().length === 0) {
-      setBookSources([]);
-      setSelectedBookSourceId(null);
-      setSelectedBookScope(null);
-      setBookScopeContent(null);
+      setProjectProgress([]);
       return;
     }
     try {
-      const books = await listProjectBookSources(projectId);
-      setBookSources(books);
-      setSelectedBookSourceId((currentId) => {
-        if (currentId && books.some((book) => book.id === currentId)) {
-          return currentId;
-        }
-        return books[0]?.id ?? null;
-      });
-      setSelectedBookScope((currentScope) => currentScope);
-      setBookSourceError(null);
-    } catch (caughtError) {
-      setBookSources([]);
-      setSelectedBookSourceId(null);
-      setSelectedBookScope(null);
-      setBookScopeContent(null);
-      setBookSourceError(
-        caughtError instanceof Error ? caughtError.message : "Unable to load book sources",
-      );
+      setProjectProgress(await listProjectProgress(projectId));
+    } catch {
+      setProjectProgress([]);
     }
   }, []);
 
@@ -1149,6 +1261,18 @@ export function App() {
     setPlaybackControls(DISABLED_PLAYBACK_CONTROLLER);
   }, []);
 
+  const clearMissingBookSource = useCallback((bookId: string | null) => {
+    if (bookId) {
+      setBookSources(removeBookSourceById(bookId));
+    }
+    setSelectedBookSourceId(null);
+    setSelectedBookScope(null);
+    setBookScopeContent(null);
+    setBookSourceError(
+      "That book source is no longer available in this project. Import it again or select another source.",
+    );
+  }, []);
+
   const applyJobStatusState = useCallback((nextJob: VoiceJob) => {
     if (nextJob.status === "completed") {
       setRequestState("complete");
@@ -1181,6 +1305,12 @@ export function App() {
       setSelectedBookSourceId(null);
       setSelectedBookScope(null);
       setBookScopeContent(null);
+      setPreparedSources([]);
+      setSelectedPreparedSourceId(null);
+      setSourcePrepError(null);
+      setProjectProgress([]);
+      setActivePlaybackSession(null);
+      setPendingPlaybackResume(null);
       setBookSourceError(null);
       setIsBookCinemaOpen(false);
       resetPlaybackSurface();
@@ -1197,6 +1327,8 @@ export function App() {
       setSelectedBookSourceId(null);
       setSelectedBookScope(null);
       setBookScopeContent(null);
+      setActivePlaybackSession(null);
+      setPendingPlaybackResume(null);
       resetPlaybackSurface();
       const savedState = loadProjectWorkspaceState(projectId);
       setText(savedState.text);
@@ -1331,6 +1463,25 @@ export function App() {
     [applyVoiceJobToState],
   );
 
+  const handleResumeProgress = useCallback(
+    async (progress: PlaybackProgress, seconds = progress.currentTimeSec) => {
+      if (progress.bookSourceId) {
+        setSelectedBookSourceId(progress.bookSourceId);
+        setSelectedBookScope(progress.bookScope ?? null);
+        setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
+        setIsBookCinemaOpen(true);
+      }
+      if (progress.preparedSourceId) {
+        setSelectedPreparedSourceId(progress.preparedSourceId);
+      }
+      if (progress.jobId && progress.jobId !== job?.id) {
+        await handleSelectJob(progress.jobId);
+      }
+      setPendingPlaybackResume({ autoplay: true, seconds: Math.max(0, seconds) });
+    },
+    [handleSelectJob, job?.id, themeName],
+  );
+
   const handleBundleImported = useCallback(
     async (result: ProjectBundleImportResult) => {
       setProjects((currentProjects) => [
@@ -1374,6 +1525,13 @@ export function App() {
           setText(bookScopeText(book, defaultScope));
         }
       } catch (caughtError) {
+        if (isApiNotFoundError(caughtError)) {
+          setBookSourceError(
+            "The selected project is no longer available. I refreshed the workspace; choose a project and import again.",
+          );
+          void refreshProjects();
+          return;
+        }
         setBookSourceError(
           caughtError instanceof Error ? caughtError.message : "Unable to import book source",
         );
@@ -1381,8 +1539,105 @@ export function App() {
         setIsImportingBookSource(false);
       }
     },
-    [activeProjectId],
+    [activeProjectId, refreshProjects],
   );
+
+  const handlePrepareSourceFile = useCallback(
+    async (file: File) => {
+      setIsPreparingSource(true);
+      setSourcePrepError(null);
+      try {
+        const extension = file.name.toLowerCase().split(".").pop() ?? "";
+        if (extension === "pdf" || extension === "epub") {
+          const book = await createBookSource(activeProjectId, file);
+          setBookSources((currentBooks) => [
+            book,
+            ...currentBooks.filter((item) => item.id !== book.id),
+          ]);
+          setSelectedBookSourceId(book.id);
+          setSelectedBookScope(resolveDefaultBookScope(book));
+          return;
+        }
+        const source = await createPreparedSource(activeProjectId, file);
+        setPreparedSources((currentSources) => [
+          source,
+          ...currentSources.filter((item) => item.id !== source.id),
+        ]);
+        setSelectedPreparedSourceId(source.id);
+        if (source.speechText) {
+          setText(source.speechText);
+        }
+      } catch (caughtError) {
+        if (isApiNotFoundError(caughtError)) {
+          setSourcePrepError(
+            "The selected project is no longer available. I refreshed the workspace; choose a project and prepare the file again.",
+          );
+          void refreshProjects();
+          return;
+        }
+        setSourcePrepError(
+          caughtError instanceof Error ? caughtError.message : "Unable to prepare source file",
+        );
+      } finally {
+        setIsPreparingSource(false);
+      }
+    },
+    [activeProjectId, refreshProjects],
+  );
+
+  const handlePrepareSourceUrl = useCallback(
+    async (url: string) => {
+      setIsPreparingSource(true);
+      setSourcePrepError(null);
+      try {
+        const lowerURL = url.toLowerCase().split("?")[0] ?? "";
+        if (lowerURL.endsWith(".pdf") || lowerURL.endsWith(".epub")) {
+          const book = await createBookSourceFromUrl(activeProjectId, url);
+          setBookSources((currentBooks) => [
+            book,
+            ...currentBooks.filter((item) => item.id !== book.id),
+          ]);
+          setSelectedBookSourceId(book.id);
+          setSelectedBookScope(resolveDefaultBookScope(book));
+          return;
+        }
+        const source = await createPreparedSource(activeProjectId, {
+          kind: "url",
+          url,
+          sourceName: url,
+        });
+        setPreparedSources((currentSources) => [
+          source,
+          ...currentSources.filter((item) => item.id !== source.id),
+        ]);
+        setSelectedPreparedSourceId(source.id);
+        if (source.speechText) {
+          setText(source.speechText);
+        }
+      } catch (caughtError) {
+        if (isApiNotFoundError(caughtError)) {
+          setSourcePrepError(
+            "The selected project is no longer available. I refreshed the workspace; choose a project and prepare the URL again.",
+          );
+          void refreshProjects();
+          return;
+        }
+        setSourcePrepError(
+          caughtError instanceof Error ? caughtError.message : "Unable to prepare source URL",
+        );
+      } finally {
+        setIsPreparingSource(false);
+      }
+    },
+    [activeProjectId, refreshProjects],
+  );
+
+  const handleUsePreparedSource = useCallback((source: PreparedSource) => {
+    setSelectedPreparedSourceId(source.id);
+    if (source.speechText) {
+      setText(source.speechText);
+    }
+  }, []);
 
   const handleUseBookText = useCallback(
     (book: BookSource, scope: BookScope) => {
@@ -1432,6 +1687,43 @@ export function App() {
     [playbackControls],
   );
 
+  const handleAddPlaybackBookmark = useCallback(async () => {
+    if (!job) {
+      return;
+    }
+    const targetId = progressTargetIdForJob(job);
+    if (!targetId) {
+      return;
+    }
+    const currentTimeSec = Math.max(0, playbackCursorSec);
+    const durationSec = job.durationMs > 0 ? job.durationMs / 1000 : undefined;
+    try {
+      const progress = await updatePlaybackProgress(targetId, {
+        activeWordIndex: activeWordIndexForProgress(job, currentTimeSec),
+        addBookmark: {
+          activeWordIndex: activeWordIndexForProgress(job, currentTimeSec),
+          createdAt: new Date().toISOString(),
+          currentTimeSec,
+          id: `bookmark-${Date.now().toString(36)}`,
+          label: formatDuration(Math.round(currentTimeSec * 1000)),
+        },
+        bookScope: job.bookScope,
+        bookSourceId: job.bookSourceId,
+        currentTimeSec,
+        durationSec,
+        jobId: job.id,
+        preparedSourceId: job.preparedSourceId,
+        projectId: job.projectId,
+      });
+      setProjectProgress((currentProgress) => [
+        progress,
+        ...currentProgress.filter((item) => item.targetId !== progress.targetId),
+      ]);
+    } catch {
+      setError("Unable to save bookmark.");
+    }
+  }, [job, playbackCursorSec]);
+
   useEffect(() => {
     const cachedProfileId = localStorage.getItem(VOICE_PROFILE_ID_STORAGE_KEY);
     if (cachedProfileId) {
@@ -1455,8 +1747,17 @@ export function App() {
     migrateLegacyWorkspaceState(activeProjectId);
     void refreshProjectJobs(activeProjectId);
     void refreshBookSources(activeProjectId);
+    void refreshPreparedSources(activeProjectId);
+    void refreshProjectProgress(activeProjectId);
     void restoreProjectWorkspace(activeProjectId);
-  }, [activeProjectId, refreshBookSources, refreshProjectJobs, restoreProjectWorkspace]);
+  }, [
+    activeProjectId,
+    refreshBookSources,
+    refreshPreparedSources,
+    refreshProjectJobs,
+    refreshProjectProgress,
+    restoreProjectWorkspace,
+  ]);
 
   useEffect(() => {
     if (!selectedBookSource) {
@@ -1491,9 +1792,11 @@ export function App() {
           return;
         }
         setBookScopeContent(null);
-        setBookSourceError(
-          caughtError instanceof Error ? caughtError.message : "Unable to load selected book scope",
-        );
+        if (isApiNotFoundError(caughtError)) {
+          clearMissingBookSource(selectedBookSource.id);
+          return;
+        }
+        setBookSourceError(formatErrorMessage(caughtError, "Unable to load selected book scope"));
       })
       .finally(() => {
         if (isCurrent) {
@@ -1503,7 +1806,7 @@ export function App() {
     return () => {
       isCurrent = false;
     };
-  }, [effectiveBookScope, selectedBookSource]);
+  }, [clearMissingBookSource, effectiveBookScope, selectedBookSource]);
 
   useEffect(() => {
     if (!selectedVoiceProfileId) {
@@ -1655,10 +1958,29 @@ export function App() {
     const hasJob = Boolean(job?.id);
     setPlaybackCursorSec(0);
     setPlaybackControls(DISABLED_PLAYBACK_CONTROLLER);
+    setActivePlaybackSession(null);
+    setPendingPlaybackResume(null);
     if (hasJob) {
       setIsPlaybackActive(false);
     }
   }, [job?.id]);
+
+  useEffect(() => {
+    if (!pendingPlaybackResume || !playbackControls.isAvailable) {
+      return;
+    }
+    const targetSeconds = Math.max(0, pendingPlaybackResume.seconds);
+    if (playbackControls.seekTo) {
+      playbackControls.seekTo(targetSeconds);
+    } else if (playbackControls.skipBy) {
+      playbackControls.skipBy(targetSeconds - playbackCursorSec);
+    }
+    setPlaybackCursorSec(targetSeconds);
+    if (pendingPlaybackResume.autoplay) {
+      void playbackControls.play();
+    }
+    setPendingPlaybackResume(null);
+  }, [pendingPlaybackResume, playbackControls, playbackCursorSec]);
 
   useEffect(() => {
     const restoreJobId = new URLSearchParams(globalThis.location.search).get("jobId");
@@ -1733,6 +2055,81 @@ export function App() {
       globalThis.clearInterval(interval);
     };
   }, [isProcessing]);
+
+  useEffect(() => {
+    if (!job || !isPlaybackActive || activePlaybackSession) {
+      return;
+    }
+    const targetId = progressTargetIdForJob(job);
+    if (!targetId) {
+      return;
+    }
+    let isCancelled = false;
+    void startPlaybackSession({
+      targetId,
+      projectId: job.projectId,
+      jobId: job.id,
+      bookSourceId: job.bookSourceId,
+      preparedSourceId: job.preparedSourceId,
+      bookScope: job.bookScope,
+      currentTimeSec: playbackCursorSec,
+      durationSec: job.durationMs > 0 ? job.durationMs / 1000 : undefined,
+      activeWordIndex: activeWordIndexForProgress(job, playbackCursorSec),
+    })
+      .then((session) => {
+        if (!isCancelled) {
+          setActivePlaybackSession(session);
+        }
+      })
+      .catch(() => {
+        // Progress sync should never interrupt playback.
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [activePlaybackSession, isPlaybackActive, job, playbackCursorSec]);
+
+  useEffect(() => {
+    if (!activePlaybackSession || !job) {
+      return;
+    }
+    const sync = () => {
+      void syncPlaybackSession(activePlaybackSession.id, {
+        currentTimeSec: playbackCursorSec,
+        durationSec: job.durationMs > 0 ? job.durationMs / 1000 : undefined,
+        activeWordIndex: activeWordIndexForProgress(job, playbackCursorSec),
+        finished:
+          job.status === "completed" &&
+          job.durationMs > 0 &&
+          playbackCursorSec >= job.durationMs / 1000 - 0.2,
+      }).then(() => {
+        void refreshProjectProgress(job.projectId);
+      });
+    };
+    const interval = globalThis.setInterval(sync, 15_000);
+    return () => {
+      globalThis.clearInterval(interval);
+    };
+  }, [activePlaybackSession, job, playbackCursorSec, refreshProjectProgress]);
+
+  useEffect(() => {
+    if (isPlaybackActive || !activePlaybackSession || !job) {
+      return;
+    }
+    const session = activePlaybackSession;
+    setActivePlaybackSession(null);
+    void closePlaybackSession(session.id, {
+      currentTimeSec: playbackCursorSec,
+      durationSec: job.durationMs > 0 ? job.durationMs / 1000 : undefined,
+      activeWordIndex: activeWordIndexForProgress(job, playbackCursorSec),
+      finished:
+        job.status === "completed" &&
+        job.durationMs > 0 &&
+        playbackCursorSec >= job.durationMs / 1000 - 0.2,
+    }).then(() => {
+      void refreshProjectProgress(job.projectId);
+    });
+  }, [activePlaybackSession, isPlaybackActive, job, playbackCursorSec, refreshProjectProgress]);
 
   useEffect(() => {
     if (!isProcessing && !isSettingsOpen && !isWorkspaceOpen) {
@@ -1848,27 +2245,35 @@ export function App() {
     }
   }
 
+  async function loadBookNarrationText(book: BookSource, scope: BookScope): Promise<string | null> {
+    const existingText = bookScopeContentMatches(bookScopeContent, book.id, scope)
+      ? (bookScopeContent?.text ?? "")
+      : bookScopeText(book, scope);
+    if (existingText.trim()) {
+      return existingText;
+    }
+    try {
+      const content = await getBookSourceScope(book.id, scope);
+      setBookScopeContent(content);
+      return content.text;
+    } catch (caughtError) {
+      if (isApiNotFoundError(caughtError)) {
+        clearMissingBookSource(book.id);
+      } else {
+        setBookSourceError(formatErrorMessage(caughtError, "Unable to load book narration text"));
+      }
+      return null;
+    }
+  }
+
   async function submitBookNarrationJob(book: BookSource, scope: BookScope) {
     if (book.status !== "ready") {
       setBookSourceError(book.error ?? "Book source is not ready for narration.");
       return;
     }
-    let scopedText =
-      bookScopeContent?.bookSourceId === book.id &&
-      bookScopeKey(bookScopeContent.scope) === bookScopeKey(scope)
-        ? bookScopeContent.text
-        : bookScopeText(book, scope);
-    if (!scopedText.trim()) {
-      try {
-        const content = await getBookSourceScope(book.id, scope);
-        setBookScopeContent(content);
-        scopedText = content.text;
-      } catch (caughtError) {
-        setBookSourceError(
-          caughtError instanceof Error ? caughtError.message : "Unable to load book narration text",
-        );
-        return;
-      }
+    const scopedText = await loadBookNarrationText(book, scope);
+    if (!scopedText) {
+      return;
     }
     const request = {
       ...buildVoiceJobRequest(scopedText),
@@ -1895,6 +2300,45 @@ export function App() {
       setRequestState("error");
       setBookSourceError(
         caughtError instanceof Error ? caughtError.message : "Unable to create book narration",
+      );
+    }
+  }
+
+  async function submitPreparedSourceJob(source: PreparedSource) {
+    if (source.status !== "ready") {
+      setSourcePrepError(source.error ?? "Prepared source is not ready for narration.");
+      return;
+    }
+    const speechText = source.speechText ?? "";
+    if (!speechText.trim()) {
+      setSourcePrepError("Prepared source has no speakable blocks.");
+      return;
+    }
+    const request = {
+      ...buildVoiceJobRequest(speechText),
+      preparedSourceId: source.id,
+      selectedBlockIds:
+        source.blocks?.filter((block) => block.speakMode !== "skip").map((block) => block.id) ?? [],
+      sourceKind: source.kind,
+      progressTargetId: `prepared:${source.id}`,
+    };
+    setRequestState("running");
+    setError(null);
+    setSourcePrepError(null);
+    setPlaybackCursorSec(0);
+    setIsPlaybackActive(false);
+    setSelectedPreparedSourceId(source.id);
+    setText(speechText);
+
+    try {
+      const nextJob = await createPreparedSourceJob(source.id, request);
+      setJob(nextJob);
+      void refreshProjectJobs(nextJob.projectId || activeProjectId);
+      setRequestState(nextJob.status === "completed" ? "complete" : "running");
+    } catch (caughtError) {
+      setRequestState("error");
+      setSourcePrepError(
+        caughtError instanceof Error ? caughtError.message : "Unable to create prepared narration",
       );
     }
   }
@@ -2056,6 +2500,7 @@ export function App() {
           job={job}
           playbackControls={playbackControls}
           playbackCursorSec={playbackCursorSec}
+          progress={selectedBookProgress}
           scope={effectiveBookScope}
           scopeContent={bookScopeContent}
           textSize={bookCinemaTextSize}
@@ -2066,10 +2511,16 @@ export function App() {
           onCreateAudio={(book, scope) => {
             void submitBookNarrationJob(book, scope);
           }}
+          onBookmark={() => {
+            void handleAddPlaybackBookmark();
+          }}
           onPlayPause={handleBookCinemaPlayPause}
           onRestart={handleBookCinemaRestart}
           onScopeChange={setSelectedBookScope}
           onSkip={handleBookCinemaSkip}
+          onResumeProgress={(progress, seconds) => {
+            void handleResumeProgress(progress, seconds);
+          }}
           onTextSizeChange={setBookCinemaTextSize}
           onThemeChange={setBookCinemaThemeName}
         />
@@ -2129,6 +2580,7 @@ export function App() {
                 isProcessing={isProcessing}
                 isScopeLoading={isLoadingBookScope}
                 scopeContent={bookScopeContent}
+                scopeProgress={selectedBookProgress}
                 selectedBookScope={effectiveBookScope}
                 selectedBookSourceId={selectedBookSourceId}
                 onCreateAudio={(book, scope) => {
@@ -2139,16 +2591,33 @@ export function App() {
                   setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
                   setIsBookCinemaOpen(true);
                 }}
+                onResumeProgress={(progress, seconds) => {
+                  void handleResumeProgress(progress, seconds);
+                }}
                 onScopeChange={setSelectedBookScope}
                 onSelectBook={setSelectedBookSourceId}
                 onUseText={handleUseBookText}
               />
             }
             canSubmit={canSubmit}
+            isPreparingSource={isPreparingSource}
             isProcessing={isProcessing}
+            latestProgress={latestProgress}
+            preparedSources={preparedSources}
+            selectedPreparedSource={selectedPreparedSource}
+            sourcePrepError={sourcePrepError}
             text={text}
+            onCreatePreparedAudio={(source) => {
+              void submitPreparedSourceJob(source);
+            }}
+            onPrepareFile={handlePrepareSourceFile}
+            onPrepareUrl={handlePrepareSourceUrl}
             onSubmit={handleSubmit}
             onTextChange={setText}
+            onResumeProgress={(progress) => {
+              void handleResumeProgress(progress);
+            }}
+            onUsePreparedSource={handleUsePreparedSource}
           />
           <SourceMetadataStrip job={job} text={text} />
           <PipelineStageCards pipeline={ttsPipeline} job={job} hint={ttsPipelineHint} />
@@ -2339,22 +2808,43 @@ function SourceTextPanel({
   bookControls,
   canSubmit,
   isProcessing,
+  isPreparingSource,
+  latestProgress,
+  preparedSources,
+  selectedPreparedSource,
+  sourcePrepError,
   text,
+  onCreatePreparedAudio,
+  onPrepareFile,
+  onPrepareUrl,
+  onResumeProgress,
   onSubmit,
   onTextChange,
+  onUsePreparedSource,
 }: Readonly<{
   bookControls: ReactNode;
   canSubmit: boolean;
   isProcessing: boolean;
+  isPreparingSource: boolean;
+  latestProgress: PlaybackProgress | null;
+  preparedSources: PreparedSource[];
+  selectedPreparedSource: PreparedSource | null;
+  sourcePrepError: string | null;
   text: string;
+  onCreatePreparedAudio: (source: PreparedSource) => void;
+  onPrepareFile: (file: File) => Promise<void>;
+  onPrepareUrl: (url: string) => Promise<void>;
+  onResumeProgress: (progress: PlaybackProgress) => void;
   onSubmit: (event: React.SyntheticEvent<HTMLFormElement>) => void;
   onTextChange: (text: string) => void;
+  onUsePreparedSource: (source: PreparedSource) => void;
 }>) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [sourceFileLabel, setSourceFileLabel] = useState<string | null>(null);
   const [sourceFileError, setSourceFileError] = useState<string | null>(null);
   const [sourceMode, setSourceMode] = useState<"book" | "file" | "text">("text");
+  const [sourceUrl, setSourceUrl] = useState("");
 
   const loadSourceFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -2363,13 +2853,20 @@ function SourceTextPanel({
       }
 
       setSourceFileError(null);
-      const fileArray = [...files].filter((file) => isSupportedSourceTextFile(file));
+      const fileArray = [...files].filter((file) =>
+        sourceMode === "file" ? isSupportedSourcePrepFile(file) : isSupportedSourceTextFile(file),
+      );
       if (fileArray.length === 0) {
-        setSourceFileError("Drop a text, Markdown, HTML, CSV, JSON, or log file.");
+        setSourceFileError("Drop a text, HTML, PDF, EPUB, CSV, JSON, or log file.");
         return;
       }
 
       try {
+        if (sourceMode === "file") {
+          await onPrepareFile(fileArray[0]);
+          setSourceFileLabel(formatSourceTextFileLabel(fileArray));
+          return;
+        }
         const parts = await Promise.all(fileArray.map((file) => file.text()));
         onTextChange(
           parts
@@ -2382,7 +2879,7 @@ function SourceTextPanel({
         setSourceFileError("Unable to read that file locally.");
       }
     },
-    [isProcessing, onTextChange],
+    [isProcessing, onPrepareFile, onTextChange, sourceMode],
   );
 
   return (
@@ -2427,14 +2924,51 @@ function SourceTextPanel({
               }}
               type="button"
             >
-              {mode === "file" ? "Markdown/File" : mode}
+              {mode === "file" ? "File / URL" : mode}
             </button>
           ))}
         </div>
       </div>
-      {sourceMode === "book" ? (
-        bookControls
-      ) : (
+      {sourceMode === "book" ? bookControls : null}
+      {sourceMode === "file" ? (
+        <SourcePrepReview
+          isPreparing={isPreparingSource}
+          latestProgress={latestProgress}
+          preparedSources={preparedSources}
+          selectedPreparedSource={selectedPreparedSource}
+          sourceFileError={sourceFileError}
+          sourceFileLabel={sourceFileLabel}
+          sourcePrepError={sourcePrepError}
+          sourceUrl={sourceUrl}
+          onBrowse={() => {
+            fileInputRef.current?.click();
+          }}
+          onCreatePreparedAudio={onCreatePreparedAudio}
+          onPrepareUrl={() => {
+            if (sourceUrl.trim()) {
+              void onPrepareUrl(sourceUrl.trim());
+            }
+          }}
+          onResumeProgress={onResumeProgress}
+          onSourceUrlChange={setSourceUrl}
+          onUsePreparedSource={onUsePreparedSource}
+        >
+          <input
+            ref={fileInputRef}
+            accept={SOURCE_TEXT_FILE_ACCEPT}
+            className="sr-only"
+            type="file"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.item(0);
+              if (file) {
+                void loadSourceFiles([file]);
+              }
+              event.currentTarget.value = "";
+            }}
+          />
+        </SourcePrepReview>
+      ) : null}
+      {sourceMode === "text" ? (
         <>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
             <span className="min-w-0 flex-1 basis-48 truncate" title={sourceFileLabel ?? undefined}>
@@ -2473,17 +3007,13 @@ function SourceTextPanel({
                 onTextChange(event.currentTarget.value);
               }
             }}
-            placeholder={
-              sourceMode === "file"
-                ? "Drop or browse a Markdown/text file. Headings and formatting are preserved for script preprocessing."
-                : "Paste the text you want to listen to."
-            }
+            placeholder="Paste the text you want to listen to."
             readOnly={isProcessing}
             spellCheck={false}
             value={text}
           />
         </>
-      )}
+      ) : null}
       <button className="sr-only" disabled={!canSubmit} type="submit">
         Create & Listen
       </button>
@@ -2497,6 +3027,237 @@ function isSupportedSourceTextFile(file: File): boolean {
   }
   const extension = file.name.toLowerCase().split(".").pop() ?? "";
   return SOURCE_TEXT_FILE_EXTENSIONS.has(extension);
+}
+
+function speakModeClass(mode: string): string {
+  if (mode === "skip") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (mode === "summarize") {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function SourcePrepReview({
+  children,
+  isPreparing,
+  latestProgress,
+  preparedSources,
+  selectedPreparedSource,
+  sourceFileError,
+  sourceFileLabel,
+  sourcePrepError,
+  sourceUrl,
+  onBrowse,
+  onCreatePreparedAudio,
+  onPrepareUrl,
+  onResumeProgress,
+  onSourceUrlChange,
+  onUsePreparedSource,
+}: Readonly<{
+  children: ReactNode;
+  isPreparing: boolean;
+  latestProgress: PlaybackProgress | null;
+  preparedSources: PreparedSource[];
+  selectedPreparedSource: PreparedSource | null;
+  sourceFileError: string | null;
+  sourceFileLabel: string | null;
+  sourcePrepError: string | null;
+  sourceUrl: string;
+  onBrowse: () => void;
+  onCreatePreparedAudio: (source: PreparedSource) => void;
+  onPrepareUrl: () => void;
+  onResumeProgress: (progress: PlaybackProgress) => void;
+  onSourceUrlChange: (url: string) => void;
+  onUsePreparedSource: (source: PreparedSource) => void;
+}>) {
+  const source = selectedPreparedSource;
+  const blocks = source?.blocks ?? [];
+  const visibleBlocks = blocks.slice(0, 9);
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+          <input
+            className="h-10 min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+            onChange={(event) => {
+              onSourceUrlChange(event.currentTarget.value);
+            }}
+            placeholder="Paste a readable web page, raw text, PDF, or EPUB URL"
+            type="url"
+            value={sourceUrl}
+          />
+          <button
+            className="h-10 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-50"
+            disabled={isPreparing || sourceUrl.trim().length === 0}
+            onClick={onPrepareUrl}
+            type="button"
+          >
+            {isPreparing ? "Preparing..." : "Fetch & Prepare"}
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
+          <span className="min-w-0 flex-1 truncate" title={sourceFileLabel ?? undefined}>
+            {sourceFileLabel ??
+              "Drop a file here, or browse for text, PDF, EPUB, HTML, CSV, JSON, or logs"}
+          </span>
+          <button
+            className="rounded border border-zinc-200 bg-white px-3 py-1.5 font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50"
+            disabled={isPreparing}
+            onClick={onBrowse}
+            type="button"
+          >
+            Browse File
+          </button>
+          {children}
+        </div>
+        {sourceFileError || sourcePrepError ? (
+          <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {sourceFileError ?? sourcePrepError}
+          </p>
+        ) : null}
+      </div>
+
+      {latestProgress ? (
+        <button
+          className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-left text-sm text-orange-950"
+          onClick={() => {
+            onResumeProgress(latestProgress);
+          }}
+          type="button"
+        >
+          <span className="min-w-0">
+            <span className="block font-semibold">Continue Listening</span>
+            <span className="block truncate text-xs text-orange-800">
+              {latestProgress.bookScope?.label ??
+                latestProgress.preparedSourceId ??
+                latestProgress.jobId}
+            </span>
+          </span>
+          <span className="shrink-0 text-xs font-semibold">
+            {formatPercentage(latestProgress.progress)}
+          </span>
+        </button>
+      ) : null}
+
+      {preparedSources.length > 0 ? (
+        <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_240px]">
+          <div className="grid min-w-0 gap-2 content-start">
+            {preparedSources.slice(0, 5).map((item) => (
+              <button
+                className={`min-w-0 rounded-md border p-3 text-left transition ${
+                  item.id === source?.id
+                    ? "border-orange-300 bg-orange-500/10"
+                    : "border-zinc-200 bg-white hover:border-zinc-300"
+                }`}
+                key={item.id}
+                onClick={() => {
+                  onUsePreparedSource(item);
+                }}
+                type="button"
+              >
+                <span
+                  className="block truncate text-sm font-semibold"
+                  title={item.title ?? item.sourceName}
+                >
+                  {item.title ?? item.sourceName}
+                </span>
+                <span className="mt-1 block truncate text-xs text-zinc-500" title={item.sourceName}>
+                  {item.kind.toUpperCase()} · {item.wordCount.toLocaleString()} words
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="min-w-0 rounded-lg border border-zinc-200 bg-white">
+            <div className="flex min-w-0 items-start justify-between gap-3 border-b border-zinc-200 p-4">
+              <div className="min-w-0">
+                <h3
+                  className="truncate text-sm font-semibold"
+                  title={source?.title ?? source?.sourceName}
+                >
+                  {source?.title ?? "Prepared Source"}
+                </h3>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {String(source?.summary.sentenceSegmentCount ?? 0)} sentence-safe segments ·{" "}
+                  {String(source?.summary.citationSkipCount ?? 0)} citations skipped
+                </p>
+              </div>
+              {source ? (
+                <button
+                  className="h-9 shrink-0 rounded-md bg-orange-600 px-3 text-xs font-semibold text-white shadow-sm shadow-orange-500/20 disabled:opacity-50"
+                  disabled={isPreparing}
+                  onClick={() => {
+                    onCreatePreparedAudio(source);
+                  }}
+                  type="button"
+                >
+                  Create & Listen
+                </button>
+              ) : null}
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {visibleBlocks.map((block) => (
+                <div
+                  className="grid grid-cols-[72px_minmax(0,1fr)_84px] gap-3 border-b border-zinc-100 px-4 py-3 text-sm last:border-b-0"
+                  key={block.id}
+                >
+                  <span className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                    {block.kind}
+                  </span>
+                  <span className="min-w-0">
+                    <span
+                      className="block truncate font-medium"
+                      title={block.spokenText ?? block.text}
+                    >
+                      {block.spokenText ?? block.text ?? block.label}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-zinc-500">
+                      {String(block.segments?.length ?? 0)} segments ·{" "}
+                      {formatDuration(block.estimatedDurationMs ?? 0)}
+                    </span>
+                  </span>
+                  <span
+                    className={`justify-self-end rounded-full border px-2 py-1 text-[0.68rem] font-semibold ${speakModeClass(block.speakMode)}`}
+                  >
+                    {block.speakMode}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              Preview & Rules
+            </p>
+            <dl className="mt-3 grid gap-3">
+              <Metric label="Headings" value={String(source?.summary.headingCount ?? 0)} />
+              <Metric label="Speak Blocks" value={String(source?.summary.spokenBlockCount ?? 0)} />
+              <Metric label="Skipped" value={String(source?.summary.skippedBlockCount ?? 0)} />
+            </dl>
+            <p className="mt-4 rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-600">
+              Headings are emphasized as separate blocks, citation junk is skipped, and segments
+              only break at sentence boundaries.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-zinc-200 bg-white p-5 text-sm text-zinc-600">
+          Prepare a file or URL to review headings, skipped citations, and sentence-safe narration
+          blocks before generating audio.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isSupportedSourcePrepFile(file: File): boolean {
+  if (isSupportedSourceTextFile(file)) {
+    return true;
+  }
+  const extension = file.name.toLowerCase().split(".").pop() ?? "";
+  return extension === "pdf" || extension === "epub";
 }
 
 function formatSourceTextFileLabel(files: File[]): string {
@@ -3489,6 +4250,7 @@ function useCompletedSeekControls({
     handleSeekPointerCommit: handleSeekCommit,
     handleSeekStart,
     handleSeekTouchCommit: handleSeekCommit,
+    seekTo: commitSeek,
     skipBy,
   };
 }
@@ -3663,6 +4425,7 @@ function useCompletedPlaybackControllerRegistration({
   onPlaybackControlsChange,
   playCompletedAudio,
   restartCompletedAudio,
+  seekTo,
   skipBy,
 }: {
   audioRef: WritableRef<HTMLAudioElement | null>;
@@ -3671,6 +4434,7 @@ function useCompletedPlaybackControllerRegistration({
   onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
   playCompletedAudio: () => Promise<void> | void;
   restartCompletedAudio: () => Promise<void> | void;
+  seekTo: (seconds: number) => void;
   skipBy: (seconds: number) => void;
 }) {
   useEffect(() => {
@@ -3686,6 +4450,7 @@ function useCompletedPlaybackControllerRegistration({
       },
       play: playCompletedAudio,
       restart: restartCompletedAudio,
+      seekTo,
       skipBy,
     });
     return () => {
@@ -3698,6 +4463,7 @@ function useCompletedPlaybackControllerRegistration({
     onPlaybackControlsChange,
     playCompletedAudio,
     restartCompletedAudio,
+    seekTo,
     skipBy,
   ]);
 }
@@ -3810,6 +4576,7 @@ function CompletedAudioPlayer({
     handleSeekPointerCommit,
     handleSeekStart,
     handleSeekTouchCommit,
+    seekTo,
     skipBy,
   } = useCompletedSeekControls({
     audioRef,
@@ -3839,6 +4606,7 @@ function CompletedAudioPlayer({
     onPlaybackControlsChange,
     playCompletedAudio,
     restartCompletedAudio,
+    seekTo,
     skipBy,
   });
 
@@ -4593,13 +5361,20 @@ function ArrivalAudioPlayerQueue({
     }
   }, []);
 
-  const skipBy = useCallback(
+  const seekTo = useCallback(
     (seconds: number) => {
-      const next = clampCursor(cursorSecRef.current + seconds);
+      const next = clampCursor(seconds);
       publishCursor(next);
       void commitSeek(next);
     },
     [clampCursor, commitSeek, publishCursor],
+  );
+
+  const skipBy = useCallback(
+    (seconds: number) => {
+      seekTo(cursorSecRef.current + seconds);
+    },
+    [seekTo],
   );
 
   const restartArrivalPlayback = useCallback(async () => {
@@ -4622,6 +5397,7 @@ function ArrivalAudioPlayerQueue({
       pause: pausePlayback,
       play: beginPlayback,
       restart: restartArrivalPlayback,
+      seekTo,
       skipBy,
     });
     return () => {
@@ -4634,6 +5410,7 @@ function ArrivalAudioPlayerQueue({
     onPlaybackControlsChange,
     pausePlayback,
     restartArrivalPlayback,
+    seekTo,
     skipBy,
   ]);
 
@@ -5062,6 +5839,32 @@ function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
       <dd className="mt-1 break-words font-medium text-zinc-900">{value}</dd>
     </div>
   );
+}
+
+function progressTargetIdForJob(job: VoiceJob): string {
+  if (job.progressTargetId) {
+    return job.progressTargetId;
+  }
+  if (job.bookSourceId && job.bookScope) {
+    return progressTargetIdForBookScope(job.bookSourceId, job.bookScope);
+  }
+  if (job.preparedSourceId) {
+    return `prepared:${job.preparedSourceId}`;
+  }
+  return job.id ? `job:${job.id}` : "";
+}
+
+function progressTargetIdForBookScope(bookSourceId: string, scope: BookScope): string {
+  return `book:${bookSourceId}:${bookScopeKey(scope)}`;
+}
+
+function activeWordIndexForProgress(job: VoiceJob, cursorSec: number): number {
+  const durationSec = job.durationMs > 0 ? job.durationMs / 1000 : 0;
+  const wordCount = job.optimizedText.trim().split(/\s+/).filter(Boolean).length;
+  if (durationSec <= 0 || wordCount <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(wordCount - 1, Math.floor((cursorSec / durationSec) * wordCount)));
 }
 
 function formatSimilarity(value: number): string {

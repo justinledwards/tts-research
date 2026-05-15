@@ -1,5 +1,13 @@
 # Working Log
 
+## 2026-05-15 21:58 CEST - Streamlined source prep, progress sync, and concept fidelity pass
+- [x] source model/API slice
+- [x] sentence-safe source preparation and markdown cleanup
+- [x] local progress sync and playback sessions
+- [x] Source Intake and Source Prep UI concept fidelity
+- [x] Book Cinema/player progress polish
+- [x] E2E, screenshots, checks, and commit slices
+
 ## 2026-05-15 18:50 CEST - Book Cinema teleprompter integration and EPUB/PDF E2E reliability
 - [x] Backend request-lifetime cancellation fix.
 - [x] Book narration scopes and job metadata.
@@ -521,3 +529,11 @@
 - [x] guided Book Cinema visual polish and dynamic queue
 - [x] frontend/backend tests and E2E coverage
 - [x] checks, visual QA, and commit slices
+
+## 2026-05-15 23:25 CEST - Book Cinema pagination, theme cleanup, and intake reliability
+- [x] Replace mirrored Book Cinema spread with contiguous fitted pages.
+- [x] Remove Book Cinema scrollbars and align page styling across themes.
+- [x] Handle stale Source Intake and Book Intake 404s without raw errors.
+- [x] Remove default voice reference media upload size cap.
+- [x] Add focused frontend/backend regression tests.
+- [x] Run checks and visual QA.

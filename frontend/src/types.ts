@@ -15,6 +15,10 @@ export interface CreateVoiceJobRequest {
   projectId?: string;
   bookSourceId?: string;
   bookScope?: BookScope;
+  preparedSourceId?: string;
+  selectedBlockIds?: string[];
+  sourceKind?: string;
+  progressTargetId?: string;
   voiceProfileId?: string;
   voiceLanguage?: string;
   ttsEngine?: string;
@@ -149,7 +153,155 @@ export interface BookSourceScopeContent {
   wordCount: number;
   estimatedDurationMs?: number;
   sourceStructureValid: boolean;
+  blocks?: NarrationBlock[];
+  skippedItems?: SkippedSourceItem[];
+  summary?: PreparedSourceSummary;
   warnings?: string[];
+}
+
+export type PreparedSourceKind = "text" | "file" | "url" | "book";
+export type PreparedSourceStatus = "ready" | "failed";
+export type NarrationBlockKind =
+  | "heading"
+  | "subheading"
+  | "body"
+  | "quote"
+  | "table"
+  | "code"
+  | "citation"
+  | "frontmatter";
+export type NarrationSpeakMode = "speak" | "skip" | "summarize";
+
+export interface NarrationSegment {
+  index: number;
+  text: string;
+  startOffset: number;
+  endOffset: number;
+  warnings?: string[];
+}
+
+export interface NarrationBlock {
+  id: string;
+  index: number;
+  kind: NarrationBlockKind;
+  speakMode: NarrationSpeakMode;
+  label?: string;
+  text?: string;
+  spokenText?: string;
+  startOffset: number;
+  endOffset: number;
+  estimatedDurationMs?: number;
+  confidence?: number;
+  segments?: NarrationSegment[];
+  warnings?: string[];
+}
+
+export interface SkippedSourceItem {
+  id: string;
+  kind: NarrationBlockKind;
+  text: string;
+  reason: string;
+  offset?: number;
+}
+
+export interface PreparedSourceSummary {
+  headingCount: number;
+  spokenBlockCount: number;
+  skippedBlockCount: number;
+  citationSkipCount: number;
+  sentenceSegmentCount: number;
+}
+
+export interface PreparedSource {
+  id: string;
+  projectId: string;
+  status: PreparedSourceStatus;
+  kind: PreparedSourceKind;
+  sourceName: string;
+  sourceUrl?: string;
+  sourceContentType?: string;
+  sourceBytes?: number;
+  title?: string;
+  text?: string;
+  speechText?: string;
+  wordCount: number;
+  blockCount: number;
+  segmentCount: number;
+  summary: PreparedSourceSummary;
+  blocks?: NarrationBlock[];
+  skippedItems?: SkippedSourceItem[];
+  warnings?: string[];
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePreparedSourceRequest {
+  kind: PreparedSourceKind;
+  text?: string;
+  url?: string;
+  sourceName?: string;
+  sourceContentType?: string;
+  sourceBytes?: number;
+}
+
+export interface ProgressBookmark {
+  id: string;
+  label?: string;
+  currentTimeSec: number;
+  activeWordIndex?: number;
+  createdAt: string;
+}
+
+export interface PlaybackProgress {
+  targetId: string;
+  projectId: string;
+  jobId?: string;
+  bookSourceId?: string;
+  preparedSourceId?: string;
+  bookScope?: BookScope;
+  currentTimeSec: number;
+  progress: number;
+  activeWordIndex?: number;
+  finished: boolean;
+  hidden: boolean;
+  bookmarks?: ProgressBookmark[];
+  startedAt?: string;
+  finishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlaybackProgressUpdate {
+  targetId?: string;
+  projectId?: string;
+  jobId?: string;
+  bookSourceId?: string;
+  preparedSourceId?: string;
+  bookScope?: BookScope;
+  currentTimeSec: number;
+  durationSec?: number;
+  progress?: number;
+  activeWordIndex?: number;
+  finished?: boolean;
+  hidden?: boolean;
+  addBookmark?: ProgressBookmark;
+}
+
+export interface PlaybackSession {
+  id: string;
+  targetId: string;
+  projectId: string;
+  jobId?: string;
+  bookSourceId?: string;
+  preparedSourceId?: string;
+  bookScope?: BookScope;
+  currentTimeSec: number;
+  activeWordIndex?: number;
+  status: "open" | "closed";
+  startedAt: string;
+  updatedAt: string;
+  closedAt?: string;
 }
 
 export interface TTSEngineVoice {
@@ -532,6 +684,10 @@ export interface VoiceJob {
   projectId: string;
   bookSourceId?: string;
   bookScope?: BookScope;
+  preparedSourceId?: string;
+  selectedBlockIds?: string[];
+  sourceKind?: string;
+  progressTargetId?: string;
   status: JobStatus;
   adaptiveMode?: boolean;
   runMode?: RunMode;
@@ -539,6 +695,7 @@ export interface VoiceJob {
   pipelineOptions?: PipelineOptions;
   stages: PipelineStages;
   segments?: JobSegment[];
+  segmentationWarnings?: string[];
   inputText: string;
   optimizedText: string;
   optimizer: string;

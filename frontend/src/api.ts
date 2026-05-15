@@ -4,10 +4,15 @@ import type {
   BookScope,
   BookSourceScopeContent,
   BundleImportMode,
+  CreatePreparedSourceRequest,
   CreateVoiceProfileFromCandidateRequest,
   CreateVoiceJobRequest,
   CreateVoiceProfileRequest,
   CreateVoiceProfileSourceRequest,
+  PlaybackProgress,
+  PlaybackProgressUpdate,
+  PlaybackSession,
+  PreparedSource,
   ProjectBundleImportResult,
   ProjectBundlePreview,
   ProjectBundleSummary,
@@ -23,6 +28,26 @@ import type {
 // Vite rewrites direct import.meta.env access during dev and build.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const apiBaseUrl: string = import.meta.env.VITE_API_BASE_URL ?? "";
+
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
+
+export function isApiNotFoundError(error: unknown): boolean {
+  if (error instanceof ApiRequestError) {
+    return error.status === 404;
+  }
+  if (error instanceof Error && "status" in error) {
+    return (error as { status?: unknown }).status === 404;
+  }
+  return error instanceof Error && /\b404\b/.test(error.message);
+}
 
 export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<VoiceJob> {
   const response = await fetch(`${apiBaseUrl}/api/voice-jobs`, {
@@ -52,7 +77,7 @@ export async function getBookCinemaDiagnostics(): Promise<BookCinemaDiagnostics>
 export async function listProjectBookSources(projectId: string): Promise<BookSource[]> {
   const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/book-sources?summary=1`);
   if (!response.ok) {
-    throw new Error(await readError(response));
+    throw await apiError(response);
   }
 
   return response.json() as Promise<BookSource[]>;
@@ -78,7 +103,7 @@ export async function getBookSourceScope(
   }
   const response = await fetch(`${apiBaseUrl}/api/book-sources/${bookSourceId}/scope?${query}`);
   if (!response.ok) {
-    throw new Error(await readError(response));
+    throw await apiError(response);
   }
 
   return response.json() as Promise<BookSourceScopeContent>;
@@ -93,10 +118,132 @@ export async function createBookSource(projectId: string, file: File): Promise<B
   });
 
   if (!response.ok) {
-    throw new Error(await readError(response));
+    throw await apiError(response);
   }
 
   return response.json() as Promise<BookSource>;
+}
+
+export async function createBookSourceFromUrl(projectId: string, url: string): Promise<BookSource> {
+  const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/book-sources`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<BookSource>;
+}
+
+export async function listPreparedSources(projectId: string): Promise<PreparedSource[]> {
+  const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/source-preps`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PreparedSource[]>;
+}
+
+export async function createPreparedSource(
+  projectId: string,
+  request: CreatePreparedSourceRequest | File,
+): Promise<PreparedSource> {
+  const init: RequestInit = { method: "POST" };
+  if (request instanceof File) {
+    const formData = new FormData();
+    formData.append("file", request);
+    init.body = formData;
+  } else {
+    init.headers = { "Content-Type": "application/json" };
+    init.body = JSON.stringify(request);
+  }
+  const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/source-preps`, init);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PreparedSource>;
+}
+
+export async function createPreparedSourceJob(
+  preparedSourceId: string,
+  request: CreateVoiceJobRequest,
+): Promise<VoiceJob> {
+  const response = await fetch(`${apiBaseUrl}/api/source-preps/${preparedSourceId}/voice-jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<VoiceJob>;
+}
+
+export async function listProjectProgress(projectId: string): Promise<PlaybackProgress[]> {
+  const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/progress`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<PlaybackProgress[]>;
+}
+
+export async function updatePlaybackProgress(
+  targetId: string,
+  request: PlaybackProgressUpdate,
+): Promise<PlaybackProgress> {
+  const response = await fetch(`${apiBaseUrl}/api/progress/${encodeURIComponent(targetId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<PlaybackProgress>;
+}
+
+export async function startPlaybackSession(
+  request: PlaybackProgressUpdate,
+): Promise<PlaybackSession> {
+  const response = await fetch(`${apiBaseUrl}/api/playback-sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<PlaybackSession>;
+}
+
+export async function syncPlaybackSession(
+  id: string,
+  request: PlaybackProgressUpdate,
+): Promise<PlaybackSession> {
+  const response = await fetch(`${apiBaseUrl}/api/playback-sessions/${id}/sync`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<PlaybackSession>;
+}
+
+export async function closePlaybackSession(
+  id: string,
+  request: PlaybackProgressUpdate,
+): Promise<PlaybackSession> {
+  const response = await fetch(`${apiBaseUrl}/api/playback-sessions/${id}/close`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<PlaybackSession>;
 }
 
 export async function createBookNarrationJob(
@@ -433,4 +580,8 @@ async function readError(response: Response): Promise<string> {
   } catch {
     return `Request failed with ${String(response.status)}`;
   }
+}
+
+async function apiError(response: Response): Promise<ApiRequestError> {
+  return new ApiRequestError(response.status, await readError(response));
 }

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createServer } from "node:http";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -11,6 +12,7 @@ const appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://localhost:5173";
 const screenshotsDir = process.env.E2E_SCREENSHOT_DIR ?? path.join(rootDir, "output", "playwright");
 const projectName = `Book Cinema E2E ${new Date().toISOString()}`;
 const activeProjectKey = "tts-active-project-id";
+const deepResearchReportFixture = path.join(rootDir, "demo", "deep-research-report.md");
 
 const fixtures = [
   {
@@ -92,6 +94,7 @@ async function main() {
     headers: { "Content-Type": "application/json" },
   });
   assert(project.id, "Project creation did not return an id.");
+  await runSourcePrepE2E(project.id);
 
   const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
   try {
@@ -197,6 +200,11 @@ async function loadPlaywright() {
 }
 
 async function ensureFixtures() {
+  try {
+    await stat(deepResearchReportFixture);
+  } catch {
+    throw new Error(`Missing source prep fixture: ${deepResearchReportFixture}`);
+  }
   for (const fixture of fixtures) {
     try {
       await stat(fixture.file);
@@ -210,6 +218,50 @@ async function assertServerReady() {
   await apiJson("/api/projects");
 }
 
+async function runSourcePrepE2E(projectId) {
+  const markdownSource = await uploadPreparedSource(projectId, deepResearchReportFixture);
+  verifyPreparedResearchSource(markdownSource, "deep research Markdown fixture");
+  const selectedBlockIds = selectPreparedNarrationBlocks(markdownSource);
+  assert(selectedBlockIds.length > 0, "Prepared Markdown source has no narratable blocks.");
+  const job = await createPreparedNarrationJob(projectId, markdownSource.id, selectedBlockIds);
+  const completedJob = await waitForJob(job.id);
+  assert(
+    completedJob.preparedSourceId === markdownSource.id,
+    "Prepared source job did not store preparedSourceId.",
+  );
+  assert(
+    completedJob.error !== "cancelled by request",
+    "Prepared source job was incorrectly cancelled by request context.",
+  );
+
+  const urlServer = await startLocalReadableServer();
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/source-preps`, {
+      body: JSON.stringify({
+        kind: "url",
+        url: urlServer.url,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    if (response.ok) {
+      const urlSource = await response.json();
+      verifyPreparedResearchSource(urlSource, "local readable URL fixture");
+      console.log("Local readable URL source prep E2E passed.");
+    } else {
+      const body = await response.text();
+      assert(
+        /private|local|network|address/i.test(body),
+        `Local URL source prep failed unexpectedly: ${body}`,
+      );
+      console.log("Local readable URL source prep was rejected by private-network protection.");
+    }
+  } finally {
+    await urlServer.close();
+  }
+  console.log("Markdown source prep E2E passed.");
+}
+
 async function uploadBook(projectId, filePath) {
   const bytes = await readFile(filePath);
   const body = new FormData();
@@ -218,6 +270,97 @@ async function uploadBook(projectId, filePath) {
     body,
     method: "POST",
   });
+}
+
+async function uploadPreparedSource(projectId, filePath) {
+  const bytes = await readFile(filePath);
+  const body = new FormData();
+  body.set("file", new Blob([bytes], { type: "text/markdown" }), path.basename(filePath));
+  return apiJson(`/api/projects/${projectId}/source-preps`, {
+    body,
+    method: "POST",
+  });
+}
+
+function verifyPreparedResearchSource(source, label) {
+  assert(source.status === "ready", `${label} source prep is not ready.`);
+  assert(source.summary?.headingCount > 0, `${label} has no heading blocks.`);
+  assert(source.summary?.citationSkipCount > 0, `${label} did not skip citations.`);
+  assert(
+    source.blocks?.some((block) => block.kind === "heading" && block.speakMode === "speak"),
+    `${label} did not preserve headings as speakable blocks.`,
+  );
+  assert(
+    source.skippedItems?.some((item) => item.kind === "citation"),
+    `${label} did not record skipped citation items.`,
+  );
+  assert(!/turn\d+search\d+/i.test(source.speechText ?? ""), `${label} still speaks turn ids.`);
+  assert(!/```/.test(source.speechText ?? ""), `${label} still speaks fenced code syntax.`);
+}
+
+function selectPreparedNarrationBlocks(source) {
+  return (source.blocks ?? [])
+    .filter(
+      (block) =>
+        block.speakMode !== "skip" && !(block.warnings ?? []).includes("sentence_too_long"),
+    )
+    .slice(0, 3)
+    .map((block) => block.id);
+}
+
+async function createPreparedNarrationJob(projectId, preparedSourceId, selectedBlockIds) {
+  return apiJson(`/api/source-preps/${preparedSourceId}/voice-jobs`, {
+    body: JSON.stringify({
+      performanceMode: "throughput",
+      pipelineOptions: {
+        arrivalPlayback: true,
+        asrCheck: false,
+        autoRetry: false,
+        qualityReport: false,
+        textPreprocess: false,
+        voiceClone: false,
+      },
+      preparedSourceId,
+      progressTargetId: `prepared:${preparedSourceId}`,
+      projectId,
+      runMode: "draftPreview",
+      selectedBlockIds,
+      sourceKind: "file",
+      text: "",
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+}
+
+async function startLocalReadableServer() {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, {
+      "Content-Type": "text/markdown; charset=utf-8",
+    });
+    response.end(
+      `# Local Source Prep\n\nThis paragraph should be spoken naturally. turn99search1 should not.\n\nturn99search1\n\n| raw | table |\n| --- | --- |\n| skip | this |\n`,
+    );
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert(address && typeof address === "object", "Local URL test server did not expose a port.");
+  return {
+    url: `http://127.0.0.1:${String(address.port)}/source.md`,
+    close: () =>
+      new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      }),
+  };
 }
 
 async function createNarrationJob(projectId, bookSourceId, bookScope) {
@@ -283,11 +426,13 @@ function scopeFromSection(section) {
 }
 
 function pickPDFNarrationScope(book, failureMessage) {
-  const section = book.sections?.find((item) => item.isNarratable && item.wordCount >= 20);
+  const section = book.sections?.find(
+    (item) => item.isNarratable && item.wordCount >= 80 && (item.pageStart ?? 0) >= 7,
+  );
   if (section) {
     return scopeFromSection(section);
   }
-  const page = book.pages?.find((item) => item.wordCount >= 20);
+  const page = book.pages?.find((item) => item.wordCount >= 80 && item.index >= 7);
   assert(page, failureMessage);
   const pageEnd = Math.min(page.index + 1, book.pages.length);
   return {

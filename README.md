@@ -164,7 +164,7 @@ Users can preview, name, and create one or more profiles from the detected speak
 Speaker-aware analysis requires `PYANNOTE_AUTH_TOKEN` or `HF_TOKEN`; without a token the source analysis fails clearly and does not create lower-quality profiles silently.
 Install the optional Python stack with `uv sync --extra profile-analysis` inside `backend/`.
 Reference candidates target `VOICE_PROFILE_REFERENCE_TARGET_SECONDS` (default `45`) and must fall between `VOICE_PROFILE_REFERENCE_MIN_SECONDS` (default `20`) and `VOICE_PROFILE_REFERENCE_MAX_SECONDS` (default `60`).
-The upload cap is `VOICE_PROFILE_MAX_BYTES` (default `1073741824`, i.e. 1 GiB).  
+Set `VOICE_PROFILE_MAX_BYTES` to a positive byte count to enforce a local upload cap; the default `0` leaves reference media size up to disk/runtime capacity.  
 Profile metadata includes source duration, reference duration, selected span manifest, source speaker, reference score, and clone-quality metrics.
 
 ## Voice Optimization

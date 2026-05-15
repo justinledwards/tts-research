@@ -19,11 +19,11 @@ import (
 )
 
 func NewRouter(service *pipeline.Service) *fiber.App {
-	bodyLimit := 0
+	maxInt := int64(int(^uint(0) >> 1))
+	bodyLimit := int(maxInt)
 	if maxProfileBytes := service.MaxProfileBytes(); maxProfileBytes > 0 {
 		const bodyPadding = 1024 * 1024
 		maxLimit := maxProfileBytes + int64(bodyPadding)
-		maxInt := int64(int(^uint(0) >> 1))
 		if maxLimit > maxInt {
 			bodyLimit = int(maxInt)
 		} else {
@@ -99,6 +99,14 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(jobs)
 	})
 
+	app.Get("/api/projects/:id/progress", func(ctx fiber.Ctx) error {
+		progress, err := service.ListProjectProgress(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(progress)
+	})
+
 	app.Get("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
 		summary := strings.EqualFold(ctx.Query("summary"), "1") ||
 			strings.EqualFold(ctx.Query("summary"), "true")
@@ -118,6 +126,22 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Post("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
+		if strings.Contains(ctx.Get(fiber.HeaderContentType), "application/json") {
+			var request struct {
+				URL string `json:"url"`
+			}
+			if err := ctx.Bind().Body(&request); err != nil {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+			}
+			book, err := service.CreateBookSourceFromURL(ctx.Context(), ctx.Params("id"), request.URL)
+			if err != nil {
+				if errors.Is(err, pipeline.ErrProjectNotFound) {
+					return notFound(ctx, err)
+				}
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusCreated).JSON(book)
+		}
 		tempPath, filename, size, cleanup, err := saveUploadedBook(ctx)
 		if err != nil {
 			return err
@@ -131,6 +155,87 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 		}
 		return ctx.Status(fiber.StatusCreated).JSON(book)
+	})
+
+	app.Get("/api/projects/:id/source-preps", func(ctx fiber.Ctx) error {
+		sources, err := service.ListProjectPreparedSources(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(sources)
+	})
+
+	app.Post("/api/projects/:id/source-preps", func(ctx fiber.Ctx) error {
+		var request pipeline.CreatePreparedSourceRequest
+		if strings.Contains(ctx.Get(fiber.HeaderContentType), "multipart/form-data") {
+			tempPath, filename, size, cleanup, err := saveUploadedSource(ctx)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			bytes, err := os.ReadFile(tempPath)
+			if err != nil {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("unable to read uploaded source"))
+			}
+			request = pipeline.CreatePreparedSourceRequest{
+				Kind:        pipeline.PreparedSourceKindFile,
+				Text:        string(bytes),
+				SourceName:  filename,
+				SourceBytes: size,
+			}
+		} else {
+			if err := ctx.Bind().Body(&request); err != nil {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+			}
+		}
+		source, err := service.CreatePreparedSource(ctx.Context(), ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrEmptyText) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.Status(fiber.StatusCreated).JSON(source)
+	})
+
+	app.Get("/api/source-preps/:id", func(ctx fiber.Ctx) error {
+		source, err := service.GetPreparedSource(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(source)
+	})
+
+	app.Get("/api/source-preps/:id/blocks/:blockId", func(ctx fiber.Ctx) error {
+		block, err := service.GetPreparedSourceBlock(ctx.Params("id"), ctx.Params("blockId"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusNotFound).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(block)
+	})
+
+	app.Post("/api/source-preps/:id/voice-jobs", func(ctx fiber.Ctx) error {
+		var request pipeline.CreateJobRequest
+		if err := json.Unmarshal(ctx.Body(), &request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		job, err := service.CreatePreparedSourceJob(ctx.Context(), ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) || errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrEmptyText) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.Status(fiber.StatusCreated).JSON(job)
 	})
 
 	app.Get("/api/book-sources/:id", func(ctx fiber.Ctx) error {
@@ -246,6 +351,60 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		}
 
 		return ctx.Status(fiber.StatusCreated).JSON(job)
+	})
+
+	app.Patch("/api/progress/:targetId", func(ctx fiber.Ctx) error {
+		var request pipeline.PlaybackProgressUpdate
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		progress, err := service.UpdatePlaybackProgress(ctx.Params("targetId"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(progress)
+	})
+
+	app.Post("/api/playback-sessions", func(ctx fiber.Ctx) error {
+		var request pipeline.PlaybackProgressUpdate
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		session, err := service.StartPlaybackSession(request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.Status(fiber.StatusCreated).JSON(session)
+	})
+
+	app.Patch("/api/playback-sessions/:id/sync", func(ctx fiber.Ctx) error {
+		var request pipeline.PlaybackProgressUpdate
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		session, err := service.SyncPlaybackSession(ctx.Params("id"), request)
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(session)
+	})
+
+	app.Post("/api/playback-sessions/:id/close", func(ctx fiber.Ctx) error {
+		var request pipeline.PlaybackProgressUpdate
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		session, err := service.ClosePlaybackSession(ctx.Params("id"), request)
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(session)
 	})
 
 	app.Get("/api/voice-jobs/:id", func(ctx fiber.Ctx) error {
@@ -663,7 +822,10 @@ func notFound(ctx fiber.Ctx, err error) error {
 		errors.Is(err, pipeline.ErrProfileSourceNotFound) ||
 		errors.Is(err, pipeline.ErrProfileCandidateNotFound) ||
 		errors.Is(err, pipeline.ErrProjectNotFound) ||
-		errors.Is(err, pipeline.ErrBookSourceNotFound) {
+		errors.Is(err, pipeline.ErrBookSourceNotFound) ||
+		errors.Is(err, pipeline.ErrPreparedSourceNotFound) ||
+		errors.Is(err, pipeline.ErrProgressNotFound) ||
+		errors.Is(err, pipeline.ErrPlaybackSessionNotFound) {
 		return ctx.Status(fiber.StatusNotFound).JSON(errorResponse(err.Error()))
 	}
 
@@ -756,6 +918,52 @@ func saveUploadedBook(ctx fiber.Ctx) (string, string, int64, func(), error) {
 	if err := tempInput.Close(); err != nil {
 		cleanup()
 		return "", "", 0, nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize uploaded book"))
+	}
+	return tempPath, file.Filename, copied, cleanup, nil
+}
+
+func saveUploadedSource(ctx fiber.Ctx) (string, string, int64, func(), error) {
+	form, err := ctx.MultipartForm()
+	if err != nil {
+		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid multipart form data"))
+	}
+	fileHeaders := form.File["file"]
+	if len(fileHeaders) == 0 {
+		fileHeaders = form.File["source"]
+	}
+	if len(fileHeaders) == 0 {
+		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("missing source file"))
+	}
+	file := fileHeaders[0]
+	sourceFile, err := file.Open()
+	if err != nil {
+		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("could not read uploaded source"))
+	}
+	defer func() {
+		_ = sourceFile.Close()
+	}()
+	tempInput, err := os.CreateTemp("", "voice-studio-source-*"+filepath.Ext(file.Filename))
+	if err != nil {
+		return "", "", 0, nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not create source temp file"))
+	}
+	tempPath := tempInput.Name()
+	cleanup := func() {
+		_ = os.Remove(tempPath)
+	}
+	copied, err := io.Copy(tempInput, sourceFile)
+	if err != nil {
+		_ = tempInput.Close()
+		cleanup()
+		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("unable to save uploaded source"))
+	}
+	if copied == 0 {
+		_ = tempInput.Close()
+		cleanup()
+		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("uploaded source is empty"))
+	}
+	if err := tempInput.Close(); err != nil {
+		cleanup()
+		return "", "", 0, nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize uploaded source"))
 	}
 	return tempPath, file.Filename, copied, cleanup, nil
 }

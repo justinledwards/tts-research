@@ -24,4 +24,14 @@ describe("Voice Studio themes", () => {
     expect(dark.swatches.surface).not.toBe(night.swatches.surface);
     expect(night.description).toContain("reading");
   });
+
+  it("defines readable book reader colors for every theme", () => {
+    for (const theme of VOICE_STUDIO_THEMES) {
+      expect(theme.book.paper).toMatch(/^#/);
+      expect(theme.book.ink).toMatch(/^#/);
+      expect(theme.book.paper).not.toBe(theme.book.ink);
+    }
+    expect(getTheme("dark").book.paper).not.toBe(getTheme("night").book.paper);
+    expect(getTheme("light").book.ink).not.toBe(getTheme("dark").book.ink);
+  });
 });
