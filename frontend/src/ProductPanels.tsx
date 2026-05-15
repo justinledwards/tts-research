@@ -8,8 +8,10 @@ import {
   type TeleprompterEffectStyle,
   type TeleprompterHighlightSettings,
 } from "./teleprompter";
+import { VOICE_STUDIO_THEMES } from "./theme";
 import type {
   SystemMetrics,
+  ThemeName,
   VoiceJob,
   VoiceProfile,
   VoiceProfileSource,
@@ -108,8 +110,10 @@ export function SettingsPanel({
   runConfiguration,
   selectedProfile,
   teleprompterSettings,
+  themeName,
   onClose,
   onTeleprompterSettingsChange,
+  onThemeChange,
 }: Readonly<{
   isOpen: boolean;
   job: VoiceJob | null;
@@ -120,8 +124,10 @@ export function SettingsPanel({
   runConfiguration: RunConfiguration;
   selectedProfile: VoiceProfile | null;
   teleprompterSettings: TeleprompterHighlightSettings;
+  themeName: ThemeName;
   onClose: () => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
+  onThemeChange: (theme: ThemeName) => void;
 }>) {
   useEscapeClose(isOpen, onClose);
   const [activeTab, setActiveTab] = useState<
@@ -162,7 +168,9 @@ export function SettingsPanel({
         runConfiguration={runConfiguration}
         selectedProfile={selectedProfile}
         teleprompterSettings={teleprompterSettings}
+        themeName={themeName}
         onTeleprompterSettingsChange={onTeleprompterSettingsChange}
+        onThemeChange={onThemeChange}
       />
     </PanelShell>
   );
@@ -178,7 +186,9 @@ function SettingsTabContent({
   runConfiguration,
   selectedProfile,
   teleprompterSettings,
+  themeName,
   onTeleprompterSettingsChange,
+  onThemeChange,
 }: Readonly<{
   activeTab: "preferences" | "providers" | "performance" | "storage";
   job: VoiceJob | null;
@@ -189,7 +199,9 @@ function SettingsTabContent({
   runConfiguration: RunConfiguration;
   selectedProfile: VoiceProfile | null;
   teleprompterSettings: TeleprompterHighlightSettings;
+  themeName: ThemeName;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
+  onThemeChange: (theme: ThemeName) => void;
 }>) {
   const preset = getRunModePreset(runConfiguration.runMode);
 
@@ -199,7 +211,9 @@ function SettingsTabContent({
         presetLabel={preset.label}
         runConfiguration={runConfiguration}
         teleprompterSettings={teleprompterSettings}
+        themeName={themeName}
         onTeleprompterSettingsChange={onTeleprompterSettingsChange}
+        onThemeChange={onThemeChange}
       />
     );
   }
@@ -235,12 +249,16 @@ function SettingsPreferencesTab({
   presetLabel,
   runConfiguration,
   teleprompterSettings,
+  themeName,
   onTeleprompterSettingsChange,
+  onThemeChange,
 }: Readonly<{
   presetLabel: string;
   runConfiguration: RunConfiguration;
   teleprompterSettings: TeleprompterHighlightSettings;
+  themeName: ThemeName;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
+  onThemeChange: (theme: ThemeName) => void;
 }>) {
   return (
     <PanelSection title="Preferences">
@@ -261,7 +279,59 @@ function SettingsPreferencesTab({
         settings={teleprompterSettings}
         onChange={onTeleprompterSettingsChange}
       />
+      <ThemeSettingsControls themeName={themeName} onThemeChange={onThemeChange} />
     </PanelSection>
+  );
+}
+
+function ThemeSettingsControls({
+  themeName,
+  onThemeChange,
+}: Readonly<{ themeName: ThemeName; onThemeChange: (theme: ThemeName) => void }>) {
+  return (
+    <div className="grid gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-zinc-950">Theme</h4>
+        <span className="text-xs text-zinc-500">Saved locally</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {VOICE_STUDIO_THEMES.map((theme) => (
+          <button
+            className={`rounded-md border p-3 text-left transition ${
+              themeName === theme.name
+                ? "border-orange-300 bg-orange-50 text-orange-950"
+                : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50"
+            }`}
+            key={theme.name}
+            onClick={() => {
+              onThemeChange(theme.name);
+            }}
+            type="button"
+          >
+            <span className="flex items-center justify-between gap-3">
+              <span className="font-semibold">{theme.label}</span>
+              <span className="text-xs text-zinc-500">{theme.description}</span>
+            </span>
+            <span className="mt-3 grid grid-cols-5 gap-1">
+              {[
+                theme.swatches.background,
+                theme.swatches.surface,
+                theme.swatches.text,
+                theme.swatches.accent,
+                theme.swatches.generating,
+              ].map((color) => (
+                <span
+                  aria-hidden="true"
+                  className="h-4 rounded border border-black/10"
+                  key={`${theme.name}-${color}`}
+                  style={{ background: color }}
+                />
+              ))}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

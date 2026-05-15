@@ -34,6 +34,83 @@ export interface VoiceProject {
   updatedAt: string;
 }
 
+export type ThemeName = "light" | "dark" | "dawn" | "night";
+
+export interface ProjectBundleContentItem {
+  key: string;
+  label: string;
+  included: boolean;
+  required: boolean;
+  estimatedBytes?: number;
+}
+
+export interface ProjectBundleQuality {
+  overallScore: number;
+  averageLikeness?: number;
+  checkerConfidence?: number;
+  generatedDurationMs: number;
+  warningCount: number;
+}
+
+export interface ProjectBundleFile {
+  role: string;
+  path: string;
+  bytes: number;
+  sha256?: string;
+}
+
+export interface ProjectBundleManifest {
+  version: string;
+  createdAt: string;
+  appVersion: string;
+  project: VoiceProject;
+  jobs: VoiceJob[];
+  profiles: VoiceProfile[];
+  files: ProjectBundleFile[];
+  providerVersions?: Record<string, string>;
+  quality: ProjectBundleQuality;
+  hashes?: Record<string, string>;
+}
+
+export interface ProjectBundleSummary {
+  projectId: string;
+  projectName: string;
+  version: string;
+  fileName: string;
+  estimatedBytes: number;
+  chapterCount: number;
+  profileCount: number;
+  generatedAudio: number;
+  durationMs: number;
+  contents: ProjectBundleContentItem[];
+  warnings?: string[];
+  createdAt: string;
+}
+
+export interface ProjectBundlePreview {
+  valid: boolean;
+  version?: string;
+  projectName?: string;
+  chapterCount?: number;
+  profileCount?: number;
+  generatedAudio?: number;
+  estimatedBytes?: number;
+  quality: ProjectBundleQuality;
+  compatibility: string[];
+  warnings?: string[];
+  errors?: string[];
+  manifest?: ProjectBundleManifest;
+}
+
+export type BundleImportMode = "copy" | "merge" | "replace";
+
+export interface ProjectBundleImportResult {
+  project: VoiceProject;
+  jobs: VoiceJob[];
+  profiles: VoiceProfile[];
+  warnings?: string[];
+}
+
 export interface PipelineOptions {
   textPreprocess: boolean;
   voiceClone: boolean;

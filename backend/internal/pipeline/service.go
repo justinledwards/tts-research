@@ -36,6 +36,7 @@ var (
 	ErrProfileCandidateNotFound   = errors.New("voice profile candidate not found")
 	ErrProfileAnalysisUnavailable = errors.New("voice profile source analysis is not configured")
 	ErrProjectNotFound            = errors.New("project not found")
+	ErrProjectBundleInvalid       = errors.New("project bundle is invalid")
 )
 
 type VoiceOptimizer interface {

@@ -1,5 +1,15 @@
 # Working Log
 
+## 2026-05-15 11:32 CEST - Concept-fidelity product pass
+- [x] Backend portable bundle API.
+- [x] Theme system and product shell controls.
+- [x] Top-bar project/chapter import/export controls.
+- [x] Teleprompter and cinema fidelity.
+- [x] Compact audio player and dynamic queue polish.
+- [x] Workspace library, import, export, and report UI.
+- [x] Tests and visual QA.
+- [ ] Commit revertable implementation slices.
+
 ## 2026-05-15 02:54 CEST - Optimization rounds for cloning UI and natural flow
 - [x] Generate natural-flow product imagery and extract design targets.
 - [x] Voice cloning optimization rounds.

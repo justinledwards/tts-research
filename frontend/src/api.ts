@@ -1,8 +1,12 @@
 import type {
+  BundleImportMode,
   CreateVoiceProfileFromCandidateRequest,
   CreateVoiceJobRequest,
   CreateVoiceProfileRequest,
   CreateVoiceProfileSourceRequest,
+  ProjectBundleImportResult,
+  ProjectBundlePreview,
+  ProjectBundleSummary,
   SystemMetrics,
   VoiceJob,
   VoiceProfile,
@@ -79,6 +83,56 @@ export async function listProjectJobs(id: string): Promise<VoiceJob[]> {
   }
 
   return response.json() as Promise<VoiceJob[]>;
+}
+
+export async function getProjectBundleSummary(id: string): Promise<ProjectBundleSummary> {
+  const response = await fetch(`${apiBaseUrl}/api/projects/${id}/bundle/summary`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<ProjectBundleSummary>;
+}
+
+export function projectBundleDownloadUrl(id: string): string {
+  return `${apiBaseUrl}/api/projects/${id}/bundle`;
+}
+
+export async function previewProjectBundle(file: File): Promise<ProjectBundlePreview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/api/project-bundles/preview`, {
+    method: "POST",
+    body: formData,
+  });
+  const payload = (await response.json()) as ProjectBundlePreview | { error?: string };
+  if (!response.ok) {
+    if ("valid" in payload) {
+      return payload;
+    }
+    throw new Error(payload.error ?? `Request failed with ${String(response.status)}`);
+  }
+  return payload as ProjectBundlePreview;
+}
+
+export async function importProjectBundle(
+  file: File,
+  mode: BundleImportMode,
+  projectId?: string,
+): Promise<ProjectBundleImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("mode", mode);
+  if (projectId) {
+    formData.append("projectId", projectId);
+  }
+  const response = await fetch(`${apiBaseUrl}/api/project-bundles/import`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<ProjectBundleImportResult>;
 }
 
 export async function getVoiceJob(id: string): Promise<VoiceJob> {

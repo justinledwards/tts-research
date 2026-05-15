@@ -48,6 +48,92 @@ type VoiceProject struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type ProjectBundleContentItem struct {
+	Key            string `json:"key"`
+	Label          string `json:"label"`
+	Included       bool   `json:"included"`
+	Required       bool   `json:"required"`
+	EstimatedBytes int64  `json:"estimatedBytes,omitempty"`
+}
+
+type ProjectBundleSummary struct {
+	ProjectID      string                     `json:"projectId"`
+	ProjectName    string                     `json:"projectName"`
+	Version        string                     `json:"version"`
+	FileName       string                     `json:"fileName"`
+	EstimatedBytes int64                      `json:"estimatedBytes"`
+	ChapterCount   int                        `json:"chapterCount"`
+	ProfileCount   int                        `json:"profileCount"`
+	GeneratedAudio int                        `json:"generatedAudio"`
+	DurationMS     int                        `json:"durationMs"`
+	Contents       []ProjectBundleContentItem `json:"contents"`
+	Warnings       []string                   `json:"warnings,omitempty"`
+	CreatedAt      time.Time                  `json:"createdAt"`
+}
+
+type ProjectBundleFile struct {
+	Role   string `json:"role"`
+	Path   string `json:"path"`
+	Bytes  int64  `json:"bytes"`
+	SHA256 string `json:"sha256,omitempty"`
+}
+
+type ProjectBundleManifest struct {
+	Version          string               `json:"version"`
+	CreatedAt        time.Time            `json:"createdAt"`
+	AppVersion       string               `json:"appVersion"`
+	Project          VoiceProject         `json:"project"`
+	Jobs             []VoiceJob           `json:"jobs"`
+	Profiles         []VoiceProfile       `json:"profiles"`
+	Files            []ProjectBundleFile  `json:"files"`
+	ProviderVersions map[string]string    `json:"providerVersions,omitempty"`
+	Quality          ProjectBundleQuality `json:"quality"`
+	Hashes           map[string]string    `json:"hashes,omitempty"`
+}
+
+type ProjectBundleQuality struct {
+	OverallScore        int     `json:"overallScore"`
+	AverageLikeness     float64 `json:"averageLikeness,omitempty"`
+	CheckerConfidence   float64 `json:"checkerConfidence,omitempty"`
+	GeneratedDurationMS int     `json:"generatedDurationMs"`
+	WarningCount        int     `json:"warningCount"`
+}
+
+type ProjectBundlePreview struct {
+	Valid          bool                   `json:"valid"`
+	Version        string                 `json:"version,omitempty"`
+	ProjectName    string                 `json:"projectName,omitempty"`
+	ChapterCount   int                    `json:"chapterCount,omitempty"`
+	ProfileCount   int                    `json:"profileCount,omitempty"`
+	GeneratedAudio int                    `json:"generatedAudio,omitempty"`
+	EstimatedBytes int64                  `json:"estimatedBytes,omitempty"`
+	Quality        ProjectBundleQuality   `json:"quality"`
+	Compatibility  []string               `json:"compatibility"`
+	Warnings       []string               `json:"warnings,omitempty"`
+	Errors         []string               `json:"errors,omitempty"`
+	Manifest       *ProjectBundleManifest `json:"manifest,omitempty"`
+}
+
+type BundleImportMode string
+
+const (
+	BundleImportModeCopy    BundleImportMode = "copy"
+	BundleImportModeMerge   BundleImportMode = "merge"
+	BundleImportModeReplace BundleImportMode = "replace"
+)
+
+type ProjectBundleImportRequest struct {
+	Mode      BundleImportMode `json:"mode"`
+	ProjectID string           `json:"projectId,omitempty"`
+}
+
+type ProjectBundleImportResult struct {
+	Project  VoiceProject   `json:"project"`
+	Jobs     []VoiceJob     `json:"jobs"`
+	Profiles []VoiceProfile `json:"profiles"`
+	Warnings []string       `json:"warnings,omitempty"`
+}
+
 type RunMode string
 
 const (

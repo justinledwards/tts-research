@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { type RequestState, TopProductBar } from "./AppShell";
+import { BundleFlowPanel, type BundlePanelMode } from "./BundlePanels";
 import {
   apiBaseUrl,
   audioSource,
@@ -44,11 +45,14 @@ import {
   type TeleprompterCue,
   type TeleprompterHighlightSettings,
 } from "./teleprompter";
+import { THEME_STORAGE_KEY, VOICE_STUDIO_THEMES, normalizeThemeName } from "./theme";
 import type {
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
+  ProjectBundleImportResult,
   StageStatus,
   SystemMetrics,
+  ThemeName,
   VoiceJob,
   VoiceProfile,
   VoiceProfileCandidate,
@@ -95,6 +99,7 @@ interface PlaybackController {
   play: () => Promise<void> | void;
   pause: () => void;
   restart: () => Promise<void> | void;
+  skipBy?: (seconds: number) => void;
 }
 
 interface WritableRef<T> {
@@ -109,6 +114,7 @@ const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   play: () => Promise.resolve(),
   pause: () => false,
   restart: () => Promise.resolve(),
+  skipBy: undefined,
 };
 
 function createPipelineBase(job?: VoiceJob): PipelineStepState {
@@ -255,22 +261,43 @@ function TeleprompterPanel({
   playbackControls,
   playbackCursorSec,
   settings,
+  themeName,
+  onOpenSettings,
 }: Readonly<{
   isPlaybackActive: boolean;
   job: VoiceJob | null;
   playbackControls: PlaybackController;
   playbackCursorSec: number;
   settings: TeleprompterHighlightSettings;
+  themeName: ThemeName;
+  onOpenSettings: () => void;
 }>) {
   const [isCinemaOpen, setIsCinemaOpen] = useState(false);
   const [cinemaTextSize, setCinemaTextSize] = useState<CinemaTextSize>("large");
+  const [cinemaThemeName, setCinemaThemeName] = useState<ThemeName>("night");
+  const [isContextVisible, setIsContextVisible] = useState(false);
+  const [isFocusEnabled, setIsFocusEnabled] = useState(true);
+  const effectiveSettings = useMemo(
+    () =>
+      isFocusEnabled
+        ? settings
+        : {
+            ...settings,
+            activeIntensity: 0.35,
+            upcomingIntensity: 0,
+            spokenIntensity: 0,
+            effectStyle: "classic" as const,
+          },
+    [isFocusEnabled, settings],
+  );
   const cue = useMemo(
-    () => buildTeleprompterCue(job, playbackCursorSec, settings),
-    [job, playbackCursorSec, settings],
+    () => buildTeleprompterCue(job, playbackCursorSec, effectiveSettings),
+    [effectiveSettings, job, playbackCursorSec],
   );
   const handleOpenCinema = useCallback(() => {
+    setCinemaThemeName(themeName === "light" ? "night" : themeName);
     setIsCinemaOpen(true);
-  }, []);
+  }, [themeName]);
   const handleCloseCinema = useCallback(() => {
     setIsCinemaOpen(false);
   }, []);
@@ -290,21 +317,27 @@ function TeleprompterPanel({
     }
     void playbackControls.restart();
   }, [playbackControls]);
+  const handleSkip = useCallback(
+    (seconds: number) => {
+      playbackControls.skipBy?.(seconds);
+    },
+    [playbackControls],
+  );
 
   if (!cue) {
     return (
-      <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+      <section className="rounded-lg border p-5 shadow-sm vs-raised">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-sm font-semibold text-zinc-950">Teleprompter</h2>
+          <h2 className="text-sm font-semibold">Teleprompter</h2>
           <button
-            className="h-8 rounded-md border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold text-zinc-400"
+            className="h-8 rounded-md border px-3 text-xs font-semibold opacity-50 vs-border"
             disabled
             type="button"
           >
             Cinema
           </button>
         </div>
-        <p className="mt-4 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 p-6 text-sm leading-6 text-zinc-500">
+        <p className="vs-muted mt-4 rounded-lg border border-dashed p-6 text-sm leading-6 vs-border">
           Generate audio to see a listener-friendly script with word-level focus.
         </p>
       </section>
@@ -314,21 +347,36 @@ function TeleprompterPanel({
   const currentWordLabel = teleprompterWordLabel(cue);
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <section className="rounded-xl border p-4 shadow-sm vs-raised sm:p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-zinc-950">Teleprompter</h2>
-          <p className="mt-1 text-xs text-zinc-500">Word focus follows the audio cursor.</p>
-        </div>
-        <div className="text-left text-xs text-zinc-500 sm:text-right">
-          <p>
-            Segment {String(cue.segmentIndex + 1)} of {String(cue.segmentCount)}
+          <h2 className="text-base font-semibold">Teleprompter</h2>
+          <p className="vs-muted mt-1 text-xs">
+            Segment {String(cue.segmentIndex + 1)} of {String(cue.segmentCount)} ·{" "}
+            {currentWordLabel} words
           </p>
-          <p>{currentWordLabel} words</p>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap">
+        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:shrink-0 lg:flex-nowrap">
           <button
-            className="h-8 rounded-md border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
+            className={teleprompterToggleClass(isFocusEnabled)}
+            onClick={() => {
+              setIsFocusEnabled((current) => !current);
+            }}
+            type="button"
+          >
+            Focus
+          </button>
+          <button
+            className={teleprompterToggleClass(isContextVisible)}
+            onClick={() => {
+              setIsContextVisible((current) => !current);
+            }}
+            type="button"
+          >
+            Context
+          </button>
+          <button
+            className="h-8 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
             disabled={!playbackControls.isAvailable}
             onClick={handleRestart}
             type="button"
@@ -336,7 +384,7 @@ function TeleprompterPanel({
             Restart
           </button>
           <button
-            className="h-8 rounded-md bg-orange-500 px-3 text-xs font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
+            className="h-8 rounded-md px-3 text-xs font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40 vs-accent-bg"
             disabled={!playbackControls.isAvailable}
             onClick={handlePlayPause}
             type="button"
@@ -344,7 +392,7 @@ function TeleprompterPanel({
             {playbackControls.isPlaying ? "Pause" : "Play"}
           </button>
           <button
-            className="h-8 rounded-md border border-orange-200 bg-orange-50 px-3 text-xs font-semibold text-orange-700 transition hover:border-orange-300 hover:bg-orange-100"
+            className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
             onClick={handleOpenCinema}
             type="button"
           >
@@ -353,35 +401,98 @@ function TeleprompterPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 rounded-lg border border-orange-100 bg-[#fffaf5] p-5 sm:p-7">
-        <p className="min-h-6 truncate text-sm leading-6 text-zinc-400">
-          {cue.previousText ?? "Start of script"}
-        </p>
-        <TeleprompterWords cue={cue} settings={settings} variant="panel" />
-        <p className="min-h-6 truncate text-sm leading-6 text-zinc-400">
-          {cue.nextText ?? "End of script"}
-        </p>
-        <div className="h-1.5 overflow-hidden rounded-full bg-orange-100">
+      <div className="mt-4 grid gap-4 rounded-xl border border-orange-500/20 bg-orange-500/[0.055] p-5 sm:p-7">
+        {isContextVisible ? <TeleprompterContext cue={cue} /> : null}
+        <TeleprompterWords cue={cue} settings={effectiveSettings} variant="panel" />
+        <div className="h-1.5 overflow-hidden rounded-full bg-orange-500/15">
           <div
-            className="h-full rounded-full bg-orange-500 transition-[width]"
+            className="h-full rounded-full transition-[width] vs-accent-bg"
             style={{ width: `${String(Math.round(cue.segmentProgress * 100))}%` }}
           />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+          <button
+            className="vs-muted rounded-md border px-3 py-1.5 font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-40 vs-border"
+            disabled={!playbackControls.skipBy}
+            onClick={() => {
+              handleSkip(-10);
+            }}
+            type="button"
+          >
+            10s back
+          </button>
+          <span className="vs-muted">
+            {isFocusEnabled
+              ? `Lead ${String(settings.leadMs)}ms · fade ${String(settings.spokenFadeMs)}ms`
+              : "Focus highlighting muted"}
+          </span>
+          <button
+            className="vs-muted rounded-md border px-3 py-1.5 font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-40 vs-border"
+            disabled={!playbackControls.skipBy}
+            onClick={() => {
+              handleSkip(10);
+            }}
+            type="button"
+          >
+            10s forward
+          </button>
         </div>
       </div>
       {isCinemaOpen ? (
         <CinemaTeleprompterOverlay
           cue={cue}
-          settings={settings}
+          isContextVisible={isContextVisible}
+          isFocusEnabled={isFocusEnabled}
+          settings={effectiveSettings}
+          themeName={cinemaThemeName}
           playbackControls={playbackControls}
           textSize={cinemaTextSize}
           isPlaybackActive={isPlaybackActive}
           onClose={handleCloseCinema}
+          onContextToggle={() => {
+            setIsContextVisible((current) => !current);
+          }}
+          onFocusSettingsOpen={onOpenSettings}
+          onFocusToggle={() => {
+            setIsFocusEnabled((current) => !current);
+          }}
           onPlayPause={handlePlayPause}
           onRestart={handleRestart}
+          onSkip={handleSkip}
+          onThemeChange={setCinemaThemeName}
           onTextSizeChange={setCinemaTextSize}
         />
       ) : null}
     </section>
+  );
+}
+
+function teleprompterToggleClass(isActive: boolean): string {
+  return `h-8 rounded-md border px-3 text-xs font-semibold transition vs-border ${
+    isActive
+      ? "border-orange-300 bg-orange-500/10 text-orange-600"
+      : "vs-muted hover:bg-[var(--vs-surface)]"
+  }`;
+}
+
+function TeleprompterContext({ cue }: Readonly<{ cue: TeleprompterCue }>) {
+  return (
+    <div className="grid gap-2 rounded-lg border bg-[var(--vs-raised)] p-3 text-xs vs-border md:grid-cols-3">
+      <ContextSnippet label="Previous" value={cue.previousText ?? "Start of script"} />
+      <ContextSnippet label="Current" value={cue.currentText} />
+      <ContextSnippet label="Next" value={cue.nextText ?? "End of script"} />
+    </div>
+  );
+}
+
+function ContextSnippet({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="min-w-0">
+      <p className="vs-muted font-semibold uppercase tracking-wide">{label}</p>
+      <p className="mt-1 line-clamp-2 break-words leading-5" title={value}>
+        {value}
+      </p>
+    </div>
   );
 }
 
@@ -405,16 +516,16 @@ function TeleprompterWords({
   const activeWordRef = useRef<HTMLSpanElement | null>(null);
   const cinemaTextClassBySize: Record<CinemaTextSize, string> = {
     comfortable:
-      "whitespace-pre-wrap text-[1.45rem] leading-[1.8] text-white sm:text-[1.9rem] lg:text-[2.35rem]",
+      "whitespace-pre-wrap text-[1.45rem] leading-[1.8] text-[var(--vs-text)] sm:text-[1.9rem] lg:text-[2.35rem]",
     large:
-      "whitespace-pre-wrap text-[1.8rem] leading-[1.82] text-white sm:text-[2.35rem] lg:text-[3rem]",
+      "whitespace-pre-wrap text-[1.8rem] leading-[1.82] text-[var(--vs-text)] sm:text-[2.35rem] lg:text-[3rem]",
     giant:
-      "whitespace-pre-wrap text-[2.1rem] leading-[1.86] text-white sm:text-[2.8rem] lg:text-[3.55rem]",
+      "whitespace-pre-wrap text-[2.1rem] leading-[1.86] text-[var(--vs-text)] sm:text-[2.8rem] lg:text-[3.55rem]",
   };
   const textClass =
     variant === "cinema"
       ? cinemaTextClassBySize[textSize]
-      : "whitespace-pre-wrap text-[1.35rem] leading-[2.1] text-zinc-950 sm:text-2xl";
+      : "whitespace-pre-wrap text-[1.22rem] leading-[1.95] text-[var(--vs-text)] sm:text-[1.9rem]";
   const wordClass = variant === "cinema" ? "rounded-lg px-2 py-1" : "rounded px-1 py-0.5";
   const activeWordIndex = cue.activeWordIndex;
   const wordCueByIndex = useMemo(
@@ -473,23 +584,39 @@ function TeleprompterWords({
 
 function CinemaTeleprompterOverlay({
   cue,
+  isContextVisible,
+  isFocusEnabled,
   isPlaybackActive,
   playbackControls,
   settings,
+  themeName,
   textSize,
   onClose,
+  onContextToggle,
+  onFocusSettingsOpen,
+  onFocusToggle,
   onPlayPause,
   onRestart,
+  onSkip,
+  onThemeChange,
   onTextSizeChange,
 }: Readonly<{
   cue: TeleprompterCue;
+  isContextVisible: boolean;
+  isFocusEnabled: boolean;
   isPlaybackActive: boolean;
   playbackControls: PlaybackController;
   settings: TeleprompterHighlightSettings;
+  themeName: ThemeName;
   textSize: CinemaTextSize;
   onClose: () => void;
+  onContextToggle: () => void;
+  onFocusSettingsOpen: () => void;
+  onFocusToggle: () => void;
   onPlayPause: () => void;
   onRestart: () => void;
+  onSkip: (seconds: number) => void;
+  onThemeChange: (theme: ThemeName) => void;
   onTextSizeChange: (size: CinemaTextSize) => void;
 }>) {
   useEffect(() => {
@@ -512,12 +639,13 @@ function CinemaTeleprompterOverlay({
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-white"
+      className="vs-app fixed inset-0 z-50 flex flex-col"
+      data-theme={themeName}
       role="dialog"
     >
-      <header className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4 sm:px-8">
+      <header className="flex items-center justify-between gap-4 border-b px-5 py-4 vs-border sm:px-8">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-300">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-500">
             Cinema Teleprompter
           </p>
           <h2 className="mt-1 text-lg font-semibold sm:text-xl">
@@ -529,17 +657,33 @@ function CinemaTeleprompterOverlay({
             className={`rounded-full border px-3 py-1 text-xs font-semibold ${
               isPlaybackActive
                 ? "border-orange-400 bg-orange-500 text-white"
-                : "border-white/15 bg-white/5 text-zinc-300"
+                : "vs-muted bg-[var(--vs-surface)] vs-border"
             }`}
           >
             {isPlaybackActive ? "Playing" : "Paused"}
           </span>
-          <span className="hidden text-sm text-zinc-400 sm:inline">
+          <span className="vs-muted hidden text-sm sm:inline">
             Segment {String(cue.segmentIndex + 1)} / {String(cue.segmentCount)} ·{" "}
             {teleprompterWordLabel(cue)} words
           </span>
+          <label className="hidden items-center gap-2 rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border sm:flex">
+            Theme
+            <select
+              className="bg-transparent text-sm font-semibold outline-none"
+              onChange={(event) => {
+                onThemeChange(normalizeThemeName(event.currentTarget.value));
+              }}
+              value={themeName}
+            >
+              {VOICE_STUDIO_THEMES.map((theme) => (
+                <option className="text-zinc-950" key={theme.name} value={theme.name}>
+                  {theme.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
-            className="h-10 rounded-md border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
+            className="h-10 rounded-md border px-4 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
             onClick={onClose}
             type="button"
           >
@@ -548,22 +692,38 @@ function CinemaTeleprompterOverlay({
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col justify-center px-5 py-6 sm:px-10 lg:px-20">
-        <div className="mx-auto grid min-h-0 w-full max-w-6xl gap-6">
-          <p className="line-clamp-2 text-lg leading-8 text-zinc-500 sm:text-2xl">
-            {cue.previousText ?? "Start of script"}
-          </p>
-          <div className="max-h-[62vh] min-h-0 overflow-y-auto rounded-xl border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/30 sm:p-8">
+        <div className="mx-auto grid min-h-0 w-full max-w-6xl gap-4">
+          {isContextVisible ? <TeleprompterContext cue={cue} /> : null}
+          <div className="max-h-[68vh] min-h-0 overflow-y-auto rounded-xl border bg-[var(--vs-raised)] p-5 shadow-2xl sm:p-8">
             <TeleprompterWords cue={cue} settings={settings} textSize={textSize} variant="cinema" />
           </div>
-          <p className="line-clamp-2 text-lg leading-8 text-zinc-500 sm:text-2xl">
-            {cue.nextText ?? "End of script"}
-          </p>
         </div>
       </main>
-      <footer className="border-t border-white/10 px-5 py-5 sm:px-8">
-        <div className="mb-5 flex flex-wrap items-center justify-center gap-3">
+      <footer className="border-t px-5 py-5 vs-border sm:px-8">
+        <div className="mb-5 flex flex-wrap items-center justify-center gap-2 sm:gap-3">
           <button
-            className="h-10 rounded-md border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:text-zinc-500"
+            className={cinemaToggleClass(isFocusEnabled)}
+            onClick={onFocusToggle}
+            type="button"
+          >
+            Focus
+          </button>
+          <button
+            className={cinemaToggleClass(isContextVisible)}
+            onClick={onContextToggle}
+            type="button"
+          >
+            Context
+          </button>
+          <button
+            className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+            onClick={onFocusSettingsOpen}
+            type="button"
+          >
+            Settings
+          </button>
+          <button
+            className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
             disabled={!playbackControls.isAvailable}
             onClick={onRestart}
             type="button"
@@ -571,44 +731,104 @@ function CinemaTeleprompterOverlay({
             Restart
           </button>
           <button
-            className="h-12 min-w-28 rounded-full bg-orange-500 px-6 text-base font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-700"
+            className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
+            disabled={!playbackControls.skipBy}
+            onClick={() => {
+              onSkip(-10);
+            }}
+            type="button"
+          >
+            -10s
+          </button>
+          <button
+            className="h-12 min-w-28 rounded-full px-6 text-base font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 vs-accent-bg"
             disabled={!playbackControls.isAvailable}
             onClick={onPlayPause}
             type="button"
           >
             {playbackControls.isPlaying ? "Pause" : "Play"}
           </button>
-          <div className="inline-flex overflow-hidden rounded-md border border-white/15 bg-white/5 p-1">
-            {(["comfortable", "large", "giant"] as const).map((size) => (
-              <button
-                className={`h-8 px-3 text-xs font-semibold capitalize ${
-                  textSize === size
-                    ? "rounded bg-white text-zinc-950"
-                    : "text-zinc-300 hover:text-white"
-                }`}
-                key={size}
-                onClick={() => {
-                  onTextSizeChange(size);
-                }}
-                type="button"
-              >
-                {size}
-              </button>
-            ))}
-          </div>
+          <button
+            className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
+            disabled={!playbackControls.skipBy}
+            onClick={() => {
+              onSkip(10);
+            }}
+            type="button"
+          >
+            +10s
+          </button>
+          <button
+            className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
+            disabled={!playbackControls.skipBy}
+            onClick={() => {
+              onSkip(-30);
+            }}
+            type="button"
+          >
+            Prev segment
+          </button>
+          <button
+            className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
+            disabled={!playbackControls.skipBy}
+            onClick={() => {
+              onSkip(30);
+            }}
+            type="button"
+          >
+            Next segment
+          </button>
+          <button
+            className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+            onClick={() => {
+              onTextSizeChange(decreaseCinemaTextSize(textSize));
+            }}
+            type="button"
+          >
+            A-
+          </button>
+          <button
+            className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+            onClick={() => {
+              onTextSizeChange(increaseCinemaTextSize(textSize));
+            }}
+            type="button"
+          >
+            A+
+          </button>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+        <div className="h-2 overflow-hidden rounded-full bg-orange-500/15">
           <div
-            className="h-full rounded-full bg-orange-500 transition-[width]"
+            className="h-full rounded-full transition-[width] vs-accent-bg"
             style={{ width: `${String(Math.round(cue.segmentProgress * 100))}%` }}
           />
         </div>
-        <p className="mt-3 text-center text-xs text-zinc-500">
-          Press Escape to return to the studio.
-        </p>
+        <p className="vs-muted mt-3 text-center text-xs">Press Escape to return to the studio.</p>
       </footer>
     </div>
   );
+}
+
+function cinemaToggleClass(isActive: boolean): string {
+  return `h-10 rounded-md border px-3 text-sm font-semibold transition vs-border ${
+    isActive
+      ? "border-orange-300 bg-orange-500/10 text-orange-600"
+      : "vs-muted hover:bg-[var(--vs-surface)]"
+  }`;
+}
+
+function decreaseCinemaTextSize(size: CinemaTextSize): CinemaTextSize {
+  if (size === "giant") {
+    return "large";
+  }
+  return "comfortable";
+}
+
+function increaseCinemaTextSize(size: CinemaTextSize): CinemaTextSize {
+  if (size === "comfortable") {
+    return "large";
+  }
+  return "giant";
 }
 
 type AudioPlaybackMode = "arrival" | "completed";
@@ -678,10 +898,15 @@ export function App() {
       }
     },
   );
+  const [themeName, setThemeName] = useState<ThemeName>(() =>
+    normalizeThemeName(localStorage.getItem(THEME_STORAGE_KEY)),
+  );
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [isRunConfigOpen, setIsRunConfigOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [bundlePanelMode, setBundlePanelMode] = useState<BundlePanelMode>("export");
+  const [isBundlePanelOpen, setIsBundlePanelOpen] = useState(false);
   const [playbackCursorSec, setPlaybackCursorSec] = useState(0);
   const [isPlaybackActive, setIsPlaybackActive] = useState(false);
   const [playbackControls, setPlaybackControls] = useState<PlaybackController>(
@@ -843,6 +1068,77 @@ export function App() {
     }
   }, []);
 
+  const applyVoiceJobToState = useCallback(
+    (nextJob: VoiceJob) => {
+      setJob(nextJob);
+      if (nextJob.projectId) {
+        selectProject(nextJob.projectId);
+      }
+      if (typeof nextJob.inputText === "string") {
+        setText(nextJob.inputText);
+        localStorage.setItem(SOURCE_TEXT_DRAFT_STORAGE_KEY, nextJob.inputText);
+      }
+      if (nextJob.status === "completed") {
+        setRequestState("complete");
+        setError(null);
+        return;
+      }
+      if (nextJob.status === "failed") {
+        setRequestState("error");
+        setError(nextJob.error ?? "Voice job failed");
+        return;
+      }
+      if (nextJob.status === "cancelled") {
+        setRequestState("cancelled");
+        setError(nextJob.error ?? "Voice job cancelled");
+        return;
+      }
+      setRequestState("running");
+      setError(null);
+    },
+    [selectProject],
+  );
+
+  const handleSelectJob = useCallback(
+    async (jobId: string) => {
+      if (!jobId) {
+        return;
+      }
+      try {
+        const nextJob = await getVoiceJob(jobId);
+        applyVoiceJobToState(nextJob);
+      } catch (caughtError) {
+        setProjectError(caughtError instanceof Error ? caughtError.message : "Unable to load job");
+      }
+    },
+    [applyVoiceJobToState],
+  );
+
+  const handleBundleImported = useCallback(
+    async (result: ProjectBundleImportResult) => {
+      setProjects((currentProjects) => [
+        result.project,
+        ...currentProjects.filter((project) => project.id !== result.project.id),
+      ]);
+      selectProject(result.project.id);
+      if (result.profiles.length > 0) {
+        setVoiceProfiles((currentProfiles) => {
+          const importedIds = new Set(result.profiles.map((profile) => profile.id));
+          return [
+            ...result.profiles,
+            ...currentProfiles.filter((profile) => !importedIds.has(profile.id)),
+          ];
+        });
+      }
+      await Promise.all([
+        refreshProjects(),
+        refreshVoiceProfiles(),
+        refreshProjectJobs(result.project.id),
+      ]);
+    },
+    [refreshProjectJobs, refreshProjects, refreshVoiceProfiles, selectProject],
+  );
+
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
     setPlaybackControls(controls ?? DISABLED_PLAYBACK_CONTROLLER);
   }, []);
@@ -988,6 +1284,10 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(TELEPROMPTER_SETTINGS_STORAGE_KEY, JSON.stringify(teleprompterSettings));
   }, [teleprompterSettings]);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_STORAGE_KEY, themeName);
+  }, [themeName]);
 
   useEffect(() => {
     if (job?.id) {
@@ -1209,21 +1509,36 @@ export function App() {
   const studioProjectName = activeProject?.name ?? DEFAULT_PROJECT_NAME;
 
   return (
-    <main className="min-h-screen bg-[#f7f8f7] text-zinc-950">
+    <main className="vs-app" data-theme={themeName}>
       <TopProductBar
         activeJobId={activeJobId}
+        activeProjectId={activeProjectId}
         canSubmit={canSubmit}
         isProcessing={isProcessing}
         job={job}
         jobName={studioJobName}
+        projectJobs={projectJobs}
         projectName={studioProjectName}
+        projects={projects}
         requestState={requestState}
         onCancel={() => {
           void handleCancelVoiceJob();
         }}
+        onExportOpen={() => {
+          setBundlePanelMode("export");
+          setIsBundlePanelOpen(true);
+        }}
         onHelpOpen={() => {
           setIsHelpOpen(true);
         }}
+        onImportOpen={() => {
+          setBundlePanelMode("import");
+          setIsBundlePanelOpen(true);
+        }}
+        onJobSelect={(jobId) => {
+          void handleSelectJob(jobId);
+        }}
+        onProjectSelect={selectProject}
         onRunConfigOpen={() => {
           setIsRunConfigOpen(true);
         }}
@@ -1241,7 +1556,9 @@ export function App() {
 
       <WorkspaceDrawer
         activeProjectId={activeProjectId}
+        canSubmit={canSubmit}
         isOpen={isWorkspaceOpen}
+        isProcessing={isProcessing}
         job={job}
         metrics={systemMetrics}
         metricsError={systemMetricsError}
@@ -1251,9 +1568,23 @@ export function App() {
         profileSource={profileSource}
         profiles={voiceProfiles}
         selectedProfileId={selectedVoiceProfileId}
+        onCreateAudio={() => {
+          setIsWorkspaceOpen(false);
+          void submitVoiceJob();
+        }}
         onCreateProject={handleCreateProject}
         onClose={() => {
           setIsWorkspaceOpen(false);
+        }}
+        onExportOpen={() => {
+          setIsWorkspaceOpen(false);
+          setBundlePanelMode("export");
+          setIsBundlePanelOpen(true);
+        }}
+        onImportOpen={() => {
+          setIsWorkspaceOpen(false);
+          setBundlePanelMode("import");
+          setIsBundlePanelOpen(true);
         }}
         onOpenSettings={() => {
           setIsWorkspaceOpen(false);
@@ -1298,16 +1629,29 @@ export function App() {
         runConfiguration={runConfiguration}
         selectedProfile={selectedVoiceProfile}
         teleprompterSettings={teleprompterSettings}
+        themeName={themeName}
         onClose={() => {
           setIsSettingsOpen(false);
         }}
         onTeleprompterSettingsChange={(settings) => {
           setTeleprompterSettings(normalizeTeleprompterHighlightSettings(settings));
         }}
+        onThemeChange={setThemeName}
+      />
+      <BundleFlowPanel
+        activeProjectId={activeProjectId}
+        activeProjectName={studioProjectName}
+        isOpen={isBundlePanelOpen}
+        mode={bundlePanelMode}
+        projects={projects}
+        onClose={() => {
+          setIsBundlePanelOpen(false);
+        }}
+        onImported={handleBundleImported}
       />
 
-      <section className="grid min-h-[calc(100vh-58px)] grid-cols-1 border-t border-zinc-200 lg:grid-cols-[375px_minmax(0,1fr)_430px]">
-        <aside className="flex min-w-0 flex-col overflow-hidden border-zinc-200 bg-white lg:border-r">
+      <section className="grid min-h-[calc(100vh-58px)] grid-cols-1 border-t lg:grid-cols-[375px_minmax(0,1fr)_430px] vs-border">
+        <aside className="vs-raised order-3 flex min-w-0 flex-col overflow-hidden border-zinc-200 lg:order-none lg:border-r">
           <VoiceStudioPanel
             error={profileError}
             job={job}
@@ -1332,14 +1676,26 @@ export function App() {
           />
         </aside>
 
-        <section className="flex min-w-0 flex-col gap-6 p-5 xl:p-6">
+        <section className="order-1 flex min-w-0 flex-col gap-6 p-5 lg:order-none xl:p-6">
           <TeleprompterPanel
             isPlaybackActive={isPlaybackActive}
             job={job}
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
             settings={teleprompterSettings}
+            themeName={themeName}
+            onOpenSettings={() => {
+              setIsSettingsOpen(true);
+            }}
           />
+          <SourceTextPanel
+            canSubmit={canSubmit}
+            isProcessing={isProcessing}
+            text={text}
+            onSubmit={handleSubmit}
+            onTextChange={setText}
+          />
+          <SourceMetadataStrip job={job} text={text} />
           <PipelineStageCards pipeline={ttsPipeline} job={job} hint={ttsPipelineHint} />
           <RelevantMetricsPanel
             job={job}
@@ -1351,17 +1707,9 @@ export function App() {
               {error}
             </section>
           ) : null}
-          <SourceTextPanel
-            canSubmit={canSubmit}
-            isProcessing={isProcessing}
-            text={text}
-            onSubmit={handleSubmit}
-            onTextChange={setText}
-          />
-          <SourceMetadataStrip job={job} text={text} />
         </section>
 
-        <aside className="flex min-w-0 flex-col gap-4 border-zinc-200 bg-white p-5 lg:border-l">
+        <aside className="vs-raised order-2 flex min-w-0 flex-col gap-4 border-zinc-200 p-5 lg:order-none lg:border-l">
           <AudioPanel
             job={job}
             onPlaybackCursorChange={setPlaybackCursorSec}
@@ -2011,12 +2359,12 @@ function AudioPanel({
 
   if (!job) {
     return (
-      <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-zinc-950">Audio Player</h2>
-        <div className="mt-4 grid h-36 place-items-center rounded-md border border-dashed border-zinc-200 bg-zinc-50 px-5 text-center">
+      <section className="min-w-0 rounded-xl border p-4 shadow-sm vs-raised">
+        <h2 className="text-sm font-semibold">Audio Player</h2>
+        <div className="mt-4 grid h-28 place-items-center rounded-md border border-dashed px-5 text-center vs-border">
           <div>
-            <p className="text-sm font-semibold text-zinc-700">No audio generated yet</p>
-            <p className="mt-2 text-xs text-zinc-500">
+            <p className="text-sm font-semibold">No audio generated yet</p>
+            <p className="vs-muted mt-2 text-xs">
               Choose a run mode, then create audio to start buffering playback.
             </p>
           </div>
@@ -2054,6 +2402,7 @@ function StreamingAudioPanel({
     job.status === "completed" ? "completed" : "arrival",
   );
   const [isStreamingPlaying, setIsStreamingPlaying] = useState(false);
+  const [panelCursorSec, setPanelCursorSec] = useState(0);
 
   const isModeAvailable: Record<AudioPlaybackMode, boolean> = {
     arrival: true,
@@ -2069,14 +2418,14 @@ function StreamingAudioPanel({
   const modeButtonClass = useCallback(
     (mode: AudioPlaybackMode, isAvailable: boolean) => {
       if (playMode === mode) {
-        return "inline-flex h-9 min-w-24 items-center justify-center rounded border border-orange-500 bg-white px-4 text-sm font-medium text-orange-600";
+        return "inline-flex h-8 min-w-[4.4rem] items-center justify-center rounded border border-orange-500 bg-orange-500/10 px-2 text-xs font-semibold text-orange-600";
       }
 
       if (!isAvailable) {
-        return "inline-flex h-9 min-w-24 items-center justify-center rounded border border-transparent bg-zinc-100 px-4 text-sm font-medium text-zinc-400";
+        return "inline-flex h-8 min-w-[4.4rem] items-center justify-center rounded border border-transparent px-2 text-xs font-semibold opacity-40";
       }
 
-      return "inline-flex h-9 min-w-24 items-center justify-center rounded border border-transparent bg-zinc-50 px-4 text-sm font-medium text-zinc-600 transition hover:bg-white";
+      return "vs-muted inline-flex h-8 min-w-[4.4rem] items-center justify-center rounded border border-transparent px-2 text-xs font-semibold transition hover:bg-[var(--vs-raised)]";
     },
     [playMode],
   );
@@ -2096,6 +2445,13 @@ function StreamingAudioPanel({
     },
     [onPlaybackStateChange],
   );
+  const handlePlaybackCursorChange = useCallback(
+    (cursorSec: number) => {
+      setPanelCursorSec(cursorSec);
+      onPlaybackCursorChange?.(cursorSec);
+    },
+    [onPlaybackCursorChange],
+  );
 
   useEffect(() => {
     return () => {
@@ -2111,41 +2467,47 @@ function StreamingAudioPanel({
   }, [isStreamingPlaying, job.status]);
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-950">Audio Player</h2>
-          <p className="mt-1 text-xs text-zinc-500">
+    <section className="min-w-0 overflow-hidden rounded-xl border p-4 shadow-sm vs-raised">
+      <div className="grid gap-3">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">Audio Player</h2>
+            <p className="vs-muted mt-1 truncate text-xs">
+              {job.voice ? kokoroVoicepackLabel(job.voice) : job.provider || "tts"} ·{" "}
+              {formatDuration(job.durationMs)}
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full border border-orange-300 bg-orange-500/10 px-2.5 py-1 text-xs font-semibold text-orange-600">
+            {job.status}
+          </span>
+        </div>
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <p className="vs-muted min-w-0 truncate text-xs">
             {playModeLabel[playMode]} mode · {String(readySegments)} segment
             {readySegments === 1 ? "" : "s"} ready
           </p>
-        </div>
-        <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-          {job.status}
-        </span>
-      </div>
-      <div className="mt-3 flex justify-end">
-        <div className="inline-flex overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 p-1">
-          {(["arrival", "completed"] as const).map((mode) => {
-            const isAvailable = isModeAvailable[mode];
-            return (
-              <button
-                className={modeButtonClass(mode, isAvailable)}
-                disabled={isModeDisabled(mode)}
-                key={mode}
-                onClick={() => {
-                  setPlayMode(mode);
-                }}
-                type="button"
-              >
-                {playModeLabel[mode]}
-              </button>
-            );
-          })}
+          <div className="inline-flex shrink-0 overflow-hidden rounded-md border p-1 vs-border">
+            {(["arrival", "completed"] as const).map((mode) => {
+              const isAvailable = isModeAvailable[mode];
+              return (
+                <button
+                  className={modeButtonClass(mode, isAvailable)}
+                  disabled={isModeDisabled(mode)}
+                  key={mode}
+                  onClick={() => {
+                    setPlayMode(mode);
+                  }}
+                  type="button"
+                >
+                  {playModeLabel[mode]}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="mt-3">
+      <div className="mt-4">
         {isCompletedMode ? (
           <CompletedAudioPlayer
             key={`completed-${job.id}`}
@@ -2153,7 +2515,7 @@ function StreamingAudioPanel({
             src={canPlayCompleted ? audioSource(job) : ""}
             onPlaybackControlsChange={onPlaybackControlsChange}
             onPlaybackStateChange={handlePlaybackStateChange}
-            onPlaybackCursorChange={onPlaybackCursorChange}
+            onPlaybackCursorChange={handlePlaybackCursorChange}
           />
         ) : null}
         {isArrivalMode ? (
@@ -2163,23 +2525,31 @@ function StreamingAudioPanel({
             canPlay={canPlayArrival}
             onPlaybackControlsChange={onPlaybackControlsChange}
             onPlaybackStateChange={handlePlaybackStateChange}
-            onPlaybackCursorChange={onPlaybackCursorChange}
+            onPlaybackCursorChange={handlePlaybackCursorChange}
           />
         ) : null}
       </div>
-      <QueueBufferPanel job={job} />
+      <QueueBufferPanel currentTimeSec={panelCursorSec} job={job} />
     </section>
   );
 }
 
-function queueBlockClass(segmentIndex: number, ready: number, generating: number): string {
+function queueBlockClass(
+  segmentIndex: number,
+  ready: number,
+  generating: number,
+  playing: number,
+): string {
+  if (segmentIndex === playing) {
+    return "bg-orange-600 ring-2 ring-orange-200";
+  }
   if (segmentIndex <= ready) {
-    return "bg-orange-500";
+    return "bg-orange-400";
   }
   if (segmentIndex === generating) {
-    return "bg-zinc-950";
+    return "bg-[var(--vs-generating)]";
   }
-  return "bg-zinc-300";
+  return "bg-[var(--vs-border)]";
 }
 
 function queueBlockSegmentIndex(
@@ -2193,7 +2563,10 @@ function queueBlockSegmentIndex(
   return Math.max(1, Math.ceil(((blockIndex + 1) / visibleBlocks) * totalSegments));
 }
 
-function QueueBufferPanel({ job }: Readonly<{ job: VoiceJob }>) {
+function QueueBufferPanel({
+  currentTimeSec,
+  job,
+}: Readonly<{ currentTimeSec: number; job: VoiceJob }>) {
   const total = Math.max(
     job.retries.totalSegments,
     job.segments?.length ?? 0,
@@ -2203,48 +2576,75 @@ function QueueBufferPanel({ job }: Readonly<{ job: VoiceJob }>) {
   const ready = Math.max(0, job.audioReadySegments ?? 0);
   const generating =
     job.status === "completed" ? 0 : Math.max(ready + 1, job.progress.currentSegment ?? 0);
-  const visibleBlocks = Math.min(48, Math.max(1, total));
+  const playing = resolvePlayingSegmentIndex(job, currentTimeSec);
+  const visibleBlocks = Math.min(24, Math.max(1, total));
 
   return (
-    <section className="mt-3 border-t border-zinc-200 pt-3">
+    <section className="mt-4 border-t pt-3 vs-border">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-zinc-950">Queue & Buffer</h3>
-        <p className="text-xs text-orange-700">
+        <h3 className="text-sm font-semibold">Queue</h3>
+        <p className="text-xs font-semibold text-orange-600">
           {String(ready)} / {String(total)} ready
         </p>
       </div>
       <div
-        className="mt-3 grid gap-1"
+        className="mt-3 grid gap-1.5"
         style={{ gridTemplateColumns: `repeat(${String(visibleBlocks)}, minmax(0, 1fr))` }}
       >
         {Array.from({ length: visibleBlocks }).map((_, index) => {
           const segmentIndex = queueBlockSegmentIndex(index, visibleBlocks, total);
-          const blockClass = queueBlockClass(segmentIndex, ready, generating);
+          const blockClass = queueBlockClass(segmentIndex, ready, generating, playing);
           return (
             <span
               aria-hidden="true"
-              className={`h-3 rounded-sm ${blockClass}`}
+              className={`h-5 rounded ${blockClass}`}
               key={`queue-${String(index)}`}
+              title={`Segment ${String(segmentIndex)}`}
             />
           );
         })}
       </div>
-      <div className="mt-3 flex flex-wrap gap-3 text-xs text-zinc-500">
+      <div className="vs-muted mt-3 flex flex-wrap gap-3 text-xs">
         <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-orange-500" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-orange-600" />
+          Playing
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-sm bg-orange-400" />
           Buffered
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-zinc-950" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--vs-generating)]" />
           Generating
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-zinc-300" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--vs-border)]" />
           Pending
         </span>
       </div>
     </section>
   );
+}
+
+function resolvePlayingSegmentIndex(job: VoiceJob, currentTimeSec: number): number {
+  if (currentTimeSec <= 0) {
+    return job.status === "completed" ? 0 : Math.max(1, job.progress.currentSegment ?? 0);
+  }
+  const durations = job.audioSegmentDurationsMs ?? [];
+  if (durations.length === 0) {
+    return Math.max(1, job.progress.currentSegment ?? 0);
+  }
+  let cursorMs = currentTimeSec * 1000;
+  for (const [index, durationMs] of durations.entries()) {
+    if (!Number.isFinite(durationMs) || durationMs <= 0) {
+      continue;
+    }
+    if (cursorMs <= durationMs) {
+      return index + 1;
+    }
+    cursorMs -= durationMs;
+  }
+  return Math.min(durations.length, Math.max(1, job.audioReadySegments ?? 1));
 }
 
 function WaveformDisplay({
@@ -2259,17 +2659,17 @@ function WaveformDisplay({
 
   return (
     <div
-      className="grid h-16 min-w-0 items-center gap-px rounded-md bg-white py-2"
+      className="grid h-12 min-w-0 items-center gap-px rounded-md bg-[var(--vs-surface)] py-1.5"
       style={{ gridTemplateColumns: `repeat(${String(displayBars.length)}, minmax(0, 1fr))` }}
     >
       {displayBars.map((height, index) => (
         <span
           aria-hidden="true"
-          className={`w-full rounded-full ${index < activeIndex ? "bg-orange-500" : "bg-zinc-300"}`}
+          className={`w-full rounded-full ${index < activeIndex ? "bg-orange-500" : "bg-[var(--vs-border)]"}`}
           data-waveform-bar={index}
           data-waveform-value={height.toFixed(4)}
           key={`waveform-${String(index)}`}
-          style={{ height: `${Math.round(7 + height * 44).toString()}px` }}
+          style={{ height: `${Math.round(5 + height * 34).toString()}px` }}
         />
       ))}
     </div>
@@ -2288,7 +2688,7 @@ function TransportButton({
   return (
     <button
       aria-label={label}
-      className="grid h-10 w-10 place-items-center rounded-full text-lg text-zinc-950 hover:bg-zinc-100"
+      className="grid h-9 w-9 place-items-center rounded-full text-base hover:bg-[var(--vs-surface)]"
       onClick={onClick}
       type="button"
     >
@@ -2309,16 +2709,18 @@ function PlayerStatusLine({
   segment: string;
 }>) {
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 overflow-hidden text-sm">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 overflow-hidden text-xs">
       <span className="inline-flex min-w-0 items-center gap-2 font-medium text-orange-600">
-        <span className="h-3 w-3 rounded-sm bg-orange-500" />
+        <span className="h-2.5 w-2.5 rounded-sm bg-orange-500" />
         {isLive ? "Playing (live)" : "Ready"}
       </span>
-      <span className="text-zinc-500">
+      <span className="vs-muted">
         {formatDuration(Math.round(currentTimeSec * 1000))} /{" "}
         {formatDuration(Math.round(durationSec * 1000))}
       </span>
-      <span className="shrink-0 text-xs text-zinc-500">{segment}</span>
+      <span className="vs-muted col-span-2 truncate" title={segment}>
+        {segment}
+      </span>
     </div>
   );
 }
@@ -2774,6 +3176,7 @@ function useCompletedPlaybackControllerRegistration({
   onPlaybackControlsChange,
   playCompletedAudio,
   restartCompletedAudio,
+  skipBy,
 }: {
   audioRef: WritableRef<HTMLAudioElement | null>;
   canPlayCompleted: boolean;
@@ -2781,6 +3184,7 @@ function useCompletedPlaybackControllerRegistration({
   onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
   playCompletedAudio: () => Promise<void> | void;
   restartCompletedAudio: () => Promise<void> | void;
+  skipBy: (seconds: number) => void;
 }) {
   useEffect(() => {
     if (!canPlayCompleted) {
@@ -2795,6 +3199,7 @@ function useCompletedPlaybackControllerRegistration({
       },
       play: playCompletedAudio,
       restart: restartCompletedAudio,
+      skipBy,
     });
     return () => {
       onPlaybackControlsChange?.(null);
@@ -2806,6 +3211,7 @@ function useCompletedPlaybackControllerRegistration({
     onPlaybackControlsChange,
     playCompletedAudio,
     restartCompletedAudio,
+    skipBy,
   ]);
 }
 
@@ -2946,6 +3352,7 @@ function CompletedAudioPlayer({
     onPlaybackControlsChange,
     playCompletedAudio,
     restartCompletedAudio,
+    skipBy,
   });
 
   useCompletedAudioElementSource({ audioRef, canPlayCompleted, src, volume });
@@ -3070,8 +3477,8 @@ function CompletedAudioReadyView({
   waveformBars: number[];
 }>) {
   return (
-    <div className="grid gap-4">
-      <div className="grid gap-3">
+    <div className="grid gap-3">
+      <div className="grid gap-2.5">
         <PlayerStatusLine
           currentTimeSec={currentTimeSec}
           durationSec={durationSec > 0 ? durationSec : durationMs / 1000}
@@ -3122,10 +3529,17 @@ function CompletedAudioReadyView({
         <track kind="captions" />
       </audio>
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
-      <div className="grid grid-cols-3 gap-3 rounded-md bg-zinc-50 p-3 text-xs text-zinc-600">
-        <span>{formatDuration(durationMs)} total</span>
-        <span>{formatSimilarity(job.voiceCheck.similarity)} checker</span>
-        <span>{job.voice ? kokoroVoicepackLabel(job.voice) : job.provider || "tts"} voice</span>
+      <div className="grid grid-cols-3 gap-2 rounded-md border p-2 text-xs vs-surface">
+        <span className="truncate" title={formatDuration(durationMs)}>
+          {formatDuration(durationMs)}
+        </span>
+        <span className="truncate">{formatSimilarity(job.voiceCheck.similarity)} match</span>
+        <span
+          className="truncate"
+          title={job.voice ? kokoroVoicepackLabel(job.voice) : job.provider || "tts"}
+        >
+          {job.voice ? kokoroVoicepackLabel(job.voice) : job.provider || "tts"}
+        </span>
       </div>
     </div>
   );
@@ -3141,7 +3555,7 @@ function CompletedTransportControls({
   onSkip: (seconds: number) => void;
 }>) {
   return (
-    <div className="flex items-center justify-center gap-3">
+    <div className="flex items-center justify-center gap-2">
       <TransportButton
         label="Back 10 seconds"
         onClick={() => {
@@ -3160,7 +3574,7 @@ function CompletedTransportControls({
       </TransportButton>
       <button
         aria-label={isPlaying ? "Pause" : "Play"}
-        className="grid h-12 w-12 place-items-center rounded-full bg-orange-500 text-xl font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600"
+        className="grid h-12 w-12 place-items-center rounded-full text-xl font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 vs-accent-bg"
         onClick={() => {
           void onPlayToggle();
         }}
@@ -3196,7 +3610,7 @@ function CompletedVolumeControl({
   onVolumeChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }>) {
   return (
-    <div className="flex items-center gap-3 text-sm text-zinc-500">
+    <div className="vs-muted flex items-center gap-3 text-xs">
       <span className="text-lg">♩</span>
       <input
         className="h-1 flex-1 cursor-pointer accent-orange-500"
@@ -3208,7 +3622,7 @@ function CompletedVolumeControl({
         value={volume}
       />
       <span className="w-10 text-right">{Math.round(volume * 100).toString()}%</span>
-      <span className="text-lg text-zinc-800">⚙</span>
+      <span className="text-base">⚙</span>
     </div>
   );
 }
@@ -3721,6 +4135,7 @@ function ArrivalAudioPlayerQueue({
       pause: pausePlayback,
       play: beginPlayback,
       restart: restartArrivalPlayback,
+      skipBy,
     });
     return () => {
       onPlaybackControlsChange?.(null);
@@ -3732,6 +4147,7 @@ function ArrivalAudioPlayerQueue({
     onPlaybackControlsChange,
     pausePlayback,
     restartArrivalPlayback,
+    skipBy,
   ]);
 
   const refreshBufferedDuration = useCallback(() => {

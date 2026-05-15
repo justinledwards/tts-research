@@ -231,6 +231,140 @@ func TestCreateJobCanSkipASRCheckAndRetry(t *testing.T) {
 	}
 }
 
+func TestProjectBundleSummaryExportAndPreview(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("Bundle QA")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		ProjectID: project.ID,
+		Text:      "Export this project as a portable bundle.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+
+	summary, err := service.GetProjectBundleSummary(project.ID)
+	if err != nil {
+		t.Fatalf("GetProjectBundleSummary returned error: %v", err)
+	}
+	if summary.ProjectID != project.ID || summary.ChapterCount != 1 || summary.GeneratedAudio != 1 {
+		t.Fatalf("summary = %#v, want project, one chapter, generated audio", summary)
+	}
+	if summary.EstimatedBytes <= 0 {
+		t.Fatalf("estimated bundle bytes = %d, want positive", summary.EstimatedBytes)
+	}
+
+	bundle, filename, err := service.ExportProjectBundle(project.ID)
+	if err != nil {
+		t.Fatalf("ExportProjectBundle returned error: %v", err)
+	}
+	if !strings.HasSuffix(filename, ".voice-studio.zip") {
+		t.Fatalf("filename = %q, want voice studio bundle extension", filename)
+	}
+	bundlePath := filepath.Join(t.TempDir(), filename)
+	if err := os.WriteFile(bundlePath, bundle, 0o644); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	preview, err := service.PreviewProjectBundle(bundlePath)
+	if err != nil {
+		t.Fatalf("PreviewProjectBundle returned error: %v", err)
+	}
+	if !preview.Valid || preview.ProjectName != project.Name || preview.ChapterCount != 1 {
+		t.Fatalf("preview = %#v, want valid project preview", preview)
+	}
+	if preview.Manifest == nil || len(preview.Manifest.Jobs) != 1 || preview.Manifest.Jobs[0].ID != completed.ID {
+		t.Fatalf("preview manifest = %#v, want exported completed job", preview.Manifest)
+	}
+}
+
+func TestProjectBundleImportCopyAndReplace(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("Portable Book")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		ProjectID: project.ID,
+		Text:      "A portable chapter.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	bundle, filename, err := service.ExportProjectBundle(project.ID)
+	if err != nil {
+		t.Fatalf("ExportProjectBundle returned error: %v", err)
+	}
+	bundlePath := filepath.Join(t.TempDir(), filename)
+	if err := os.WriteFile(bundlePath, bundle, 0o644); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+
+	copied, err := service.ImportProjectBundle(
+		bundlePath,
+		pipeline.ProjectBundleImportRequest{Mode: pipeline.BundleImportModeCopy},
+	)
+	if err != nil {
+		t.Fatalf("ImportProjectBundle(copy) returned error: %v", err)
+	}
+	if copied.Project.ID == project.ID {
+		t.Fatal("copy import should create a new project id")
+	}
+	if !strings.Contains(copied.Project.Name, "Imported") {
+		t.Fatalf("copy project name = %q, want imported copy name", copied.Project.Name)
+	}
+	if len(copied.Jobs) != 1 || copied.Jobs[0].ID == completed.ID {
+		t.Fatalf("copied jobs = %#v, want one new job id", copied.Jobs)
+	}
+	originalJobs, err := service.ListProjectJobs(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectJobs(original) returned error: %v", err)
+	}
+	if len(originalJobs) != 1 || originalJobs[0].ID != completed.ID {
+		t.Fatalf("original jobs = %#v, want original untouched", originalJobs)
+	}
+
+	target, err := service.CreateProject("Replace Target")
+	if err != nil {
+		t.Fatalf("CreateProject(target) returned error: %v", err)
+	}
+	oldJob, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		ProjectID: target.ID,
+		Text:      "This job should be replaced.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(old) returned error: %v", err)
+	}
+	waitForJob(t, service, oldJob.ID, pipeline.JobStatusCompleted)
+	replaced, err := service.ImportProjectBundle(
+		bundlePath,
+		pipeline.ProjectBundleImportRequest{
+			Mode:      pipeline.BundleImportModeReplace,
+			ProjectID: target.ID,
+		},
+	)
+	if err != nil {
+		t.Fatalf("ImportProjectBundle(replace) returned error: %v", err)
+	}
+	if replaced.Project.ID != target.ID {
+		t.Fatalf("replace project id = %q, want %q", replaced.Project.ID, target.ID)
+	}
+	targetJobs, err := service.ListProjectJobs(target.ID)
+	if err != nil {
+		t.Fatalf("ListProjectJobs(replaced) returned error: %v", err)
+	}
+	if len(targetJobs) != 1 || targetJobs[0].ID == oldJob.ID {
+		t.Fatalf("replaced project jobs = %#v, want old job removed and bundle job imported", targetJobs)
+	}
+}
+
 func TestCreateJobCanIgnoreSelectedVoiceProfile(t *testing.T) {
 	t.Parallel()
 

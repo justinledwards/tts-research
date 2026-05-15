@@ -98,6 +98,61 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(jobs)
 	})
 
+	app.Get("/api/projects/:id/bundle/summary", func(ctx fiber.Ctx) error {
+		summary, err := service.GetProjectBundleSummary(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(summary)
+	})
+
+	app.Get("/api/projects/:id/bundle", func(ctx fiber.Ctx) error {
+		bundle, filename, err := service.ExportProjectBundle(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		ctx.Set(fiber.HeaderContentType, "application/zip")
+		ctx.Set(fiber.HeaderContentDisposition, fmt.Sprintf(`attachment; filename="%s"`, filename))
+		return ctx.Send(bundle)
+	})
+
+	app.Post("/api/project-bundles/preview", func(ctx fiber.Ctx) error {
+		tempPath, cleanup, err := saveUploadedBundle(ctx)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		preview, err := service.PreviewProjectBundle(tempPath)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		if !preview.Valid {
+			return ctx.Status(fiber.StatusBadRequest).JSON(preview)
+		}
+		return ctx.JSON(preview)
+	})
+
+	app.Post("/api/project-bundles/import", func(ctx fiber.Ctx) error {
+		tempPath, cleanup, err := saveUploadedBundle(ctx)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		mode := pipeline.BundleImportMode(strings.TrimSpace(ctx.FormValue("mode")))
+		projectID := strings.TrimSpace(ctx.FormValue("projectId"))
+		result, err := service.ImportProjectBundle(
+			tempPath,
+			pipeline.ProjectBundleImportRequest{Mode: mode, ProjectID: projectID},
+		)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.Status(fiber.StatusCreated).JSON(result)
+	})
+
 	app.Post("/api/voice-jobs", func(ctx fiber.Ctx) error {
 		var request pipeline.CreateJobRequest
 		if err := json.Unmarshal(ctx.Body(), &request); err != nil {
@@ -507,6 +562,46 @@ func notFound(ctx fiber.Ctx, err error) error {
 
 func errorResponse(message string) fiber.Map {
 	return fiber.Map{"error": message}
+}
+
+func saveUploadedBundle(ctx fiber.Ctx) (string, func(), error) {
+	form, err := ctx.MultipartForm()
+	if err != nil {
+		return "", nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid multipart form data"))
+	}
+	fileHeaders := form.File["file"]
+	if len(fileHeaders) == 0 {
+		fileHeaders = form.File["bundle"]
+	}
+	if len(fileHeaders) == 0 {
+		return "", nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("missing project bundle file"))
+	}
+	file := fileHeaders[0]
+	sourceFile, err := file.Open()
+	if err != nil {
+		return "", nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("could not read uploaded bundle"))
+	}
+	defer func() {
+		_ = sourceFile.Close()
+	}()
+	tempInput, err := os.CreateTemp("", "voice-studio-bundle-*"+filepath.Ext(file.Filename))
+	if err != nil {
+		return "", nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not create bundle temp file"))
+	}
+	tempPath := tempInput.Name()
+	cleanup := func() {
+		_ = os.Remove(tempPath)
+	}
+	if _, err := io.Copy(tempInput, sourceFile); err != nil {
+		_ = tempInput.Close()
+		cleanup()
+		return "", nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("unable to save uploaded bundle"))
+	}
+	if err := tempInput.Close(); err != nil {
+		cleanup()
+		return "", nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize uploaded bundle"))
+	}
+	return tempPath, cleanup, nil
 }
 
 func writeSSE(writer *bufio.Writer, event string, payload any) error {
