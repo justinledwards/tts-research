@@ -32,6 +32,33 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
+func TestTTSEnginesEndpoint(t *testing.T) {
+	t.Parallel()
+
+	app := httpapi.NewRouter(newService(t))
+	request, err := http.NewRequest(http.MethodGet, "/api/tts-engines", nil)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	var engines []pipeline.TTSEngineDiagnostics
+	if err := json.NewDecoder(response.Body).Decode(&engines); err != nil {
+		t.Fatalf("decode engines: %v", err)
+	}
+	if len(engines) == 0 || engines[0].ID != pipeline.TTSEngineAuto {
+		t.Fatalf("engines = %#v, want auto diagnostics first", engines)
+	}
+}
+
 func TestCreateJobEndpoint(t *testing.T) {
 	t.Parallel()
 

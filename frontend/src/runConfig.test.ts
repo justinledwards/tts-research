@@ -14,19 +14,24 @@ describe("run configuration helpers", () => {
     expect(draft.options.asrCheck).toBe(false);
     expect(draft.options.autoRetry).toBe(false);
     expect(draft.options.voiceClone).toBe(false);
-    expect(resolveRunPrimaryLabel(draft, null)).toBe("Create Preview");
+    expect(draft.ttsEngine).toBe("auto");
+    expect(resolveRunPrimaryLabel(draft, null)).toBe("Create & Listen");
 
     const checked = createRunConfiguration("checkedMaster");
     expect(checked.options.asrCheck).toBe(true);
     expect(checked.options.autoRetry).toBe(true);
     expect(checked.options.voiceClone).toBe(true);
-    expect(resolveRunPrimaryLabel(checked, null)).toBe("Create Checked");
+    expect(resolveRunPrimaryLabel(checked, null)).toBe("Create & Listen");
   });
 
-  it("normalizes stored partial configuration against the preset", () => {
+  it("normalizes stored partial configuration and engine choice against the preset", () => {
     const config = normalizeRunConfiguration({
       runMode: "fastCreate",
       performanceMode: "quality",
+      ttsEngine: "supertonic-3",
+      engineOptions: {
+        lang: "sv",
+      },
       options: {
         textPreprocess: false,
       },
@@ -34,6 +39,8 @@ describe("run configuration helpers", () => {
 
     expect(config.runMode).toBe("fastCreate");
     expect(config.performanceMode).toBe("quality");
+    expect(config.ttsEngine).toBe("supertonic-3");
+    expect(config.engineOptions.lang).toBe("sv");
     expect(config.options.textPreprocess).toBe(false);
     expect(config.options.asrCheck).toBe(false);
     expect(config.options.qualityReport).toBe(true);
@@ -59,6 +66,7 @@ describe("run configuration helpers", () => {
     expect(fastRequest.projectId).toBe("project-1");
     expect(fastRequest.adaptiveMode).toBe(true);
     expect(fastRequest.voiceProfileId).toBe("profile-1");
+    expect(fastRequest.ttsEngine).toBe("auto");
     expect(fastRequest.ttsVoice).toBe("bf_emma");
     expect(fastRequest.ttsLanguage).toBe("b");
     expect(fastRequest.pipelineOptions?.asrCheck).toBe(false);

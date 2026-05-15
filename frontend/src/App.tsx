@@ -14,6 +14,7 @@ import {
   getVoiceJob,
   getVoiceProfileSource,
   getVoiceProfileSourceDiagnostics,
+  listTTSEngines,
   listProjectJobs,
   listProjects,
   listVoiceProfiles,
@@ -36,6 +37,13 @@ import {
   RUN_CONFIG_STORAGE_KEY,
   type RunConfiguration,
 } from "./runConfig";
+import {
+  ACTIVE_PROJECT_ID_STORAGE_KEY,
+  clearProjectWorkspaceState,
+  loadProjectWorkspaceState,
+  migrateLegacyWorkspaceState,
+  saveProjectWorkspaceState,
+} from "./projectState";
 import { calculateArrivalThroughput, formatBufferHealth } from "./studioMetrics";
 import {
   DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS,
@@ -53,6 +61,7 @@ import type {
   StageStatus,
   SystemMetrics,
   ThemeName,
+  TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
   VoiceProfileCandidate,
@@ -65,7 +74,6 @@ import { WorkspaceDrawer } from "./WorkspaceDrawer";
 import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
 
 const DEFAULT_PROJECT_NAME = "The Future of Clean Energy";
-const SOURCE_TEXT_DRAFT_STORAGE_KEY = "tts-source-text";
 const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
 const DEFAULT_KOKORO_VOICE_ID = "af_heart";
 const SOURCE_TEXT_FILE_ACCEPT = ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm";
@@ -833,18 +841,10 @@ function increaseCinemaTextSize(size: CinemaTextSize): CinemaTextSize {
 
 type AudioPlaybackMode = "arrival" | "completed";
 
-const JOB_ID_STORAGE_KEY = "tts-active-job-id";
 const VOICE_PROFILE_ID_STORAGE_KEY = "tts-active-voice-profile-id";
-const ACTIVE_PROJECT_ID_STORAGE_KEY = "tts-active-project-id";
 
 export function App() {
-  const [text, setText] = useState(() => {
-    const savedText = localStorage.getItem(SOURCE_TEXT_DRAFT_STORAGE_KEY);
-    if (savedText === null) {
-      return "";
-    }
-    return savedText;
-  });
+  const [text, setText] = useState("");
   const [job, setJob] = useState<VoiceJob | null>(null);
   const [requestState, setRequestState] = useState<RequestState>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -870,6 +870,7 @@ export function App() {
   const [activeProjectId, setActiveProjectId] = useState(
     () => localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default",
   );
+  const [projectStateReadyId, setProjectStateReadyId] = useState<string | null>(null);
   const [projectJobs, setProjectJobs] = useState<VoiceJob[]>([]);
   const [projectError, setProjectError] = useState<string | null>(null);
   const [runConfiguration, setRunConfiguration] = useState<RunConfiguration>(() => {
@@ -915,6 +916,8 @@ export function App() {
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
   const [systemMetricsError, setSystemMetricsError] = useState<string | null>(null);
   const [systemMetricsUnavailable, setSystemMetricsUnavailable] = useState(false);
+  const [ttsEngines, setTTSEngines] = useState<TTSEngineDiagnostics[]>([]);
+  const [ttsEngineError, setTTSEngineError] = useState<string | null>(null);
 
   const isProcessing = requestState === "running";
   const canSubmit = useMemo(() => text.trim().length > 0 && !isProcessing, [text, isProcessing]);
@@ -1014,6 +1017,18 @@ export function App() {
     }
   }, []);
 
+  const refreshTTSEngines = useCallback(async () => {
+    try {
+      const engines = await listTTSEngines();
+      setTTSEngines(engines);
+      setTTSEngineError(null);
+    } catch (caughtError) {
+      setTTSEngineError(
+        caughtError instanceof Error ? caughtError.message : "Unable to load TTS engines",
+      );
+    }
+  }, []);
+
   const selectVoiceProfile = useCallback((profileId: string) => {
     setSelectedVoiceProfileId(profileId);
     localStorage.setItem(VOICE_PROFILE_ID_STORAGE_KEY, profileId);
@@ -1030,10 +1045,97 @@ export function App() {
     localStorage.setItem(KOKORO_VOICE_STORAGE_KEY, nextVoiceId);
   }, []);
 
-  const selectProject = useCallback((projectId: string) => {
-    setActiveProjectId(projectId);
-    localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, projectId);
+  const resetPlaybackSurface = useCallback(() => {
+    setPlaybackCursorSec(0);
+    setIsPlaybackActive(false);
+    setPlaybackControls(DISABLED_PLAYBACK_CONTROLLER);
   }, []);
+
+  const applyJobStatusState = useCallback((nextJob: VoiceJob) => {
+    if (nextJob.status === "completed") {
+      setRequestState("complete");
+      setError(null);
+      return;
+    }
+    if (nextJob.status === "failed") {
+      setRequestState("error");
+      setError(nextJob.error ?? "Voice job failed");
+      return;
+    }
+    if (nextJob.status === "cancelled") {
+      setRequestState("cancelled");
+      setError(nextJob.error ?? "Voice job cancelled");
+      return;
+    }
+    setRequestState("running");
+    setError(null);
+  }, []);
+
+  const clearVisibleProjectWorkspace = useCallback(
+    (projectId: string) => {
+      clearProjectWorkspaceState(projectId);
+      setText("");
+      setJob(null);
+      setRequestState("idle");
+      setError(null);
+      setProfileSource(null);
+      resetPlaybackSurface();
+      setProjectStateReadyId(projectId);
+    },
+    [resetPlaybackSurface],
+  );
+
+  const restoreProjectWorkspace = useCallback(
+    async (projectId: string) => {
+      setProjectStateReadyId(null);
+      setError(null);
+      setProfileSource(null);
+      resetPlaybackSurface();
+      const savedState = loadProjectWorkspaceState(projectId);
+      setText(savedState.text);
+
+      if (!savedState.jobId) {
+        setJob(null);
+        setRequestState("idle");
+        setProjectStateReadyId(projectId);
+        return;
+      }
+
+      try {
+        const restoredJob = await getVoiceJob(savedState.jobId);
+        if ((restoredJob.projectId || "default") !== projectId) {
+          throw new Error("Stored job belongs to another project.");
+        }
+        setJob(restoredJob);
+        if (typeof restoredJob.inputText === "string") {
+          setText(restoredJob.inputText);
+        }
+        applyJobStatusState(restoredJob);
+      } catch {
+        saveProjectWorkspaceState(projectId, { text: savedState.text, jobId: null });
+        setJob(null);
+        setRequestState("idle");
+      } finally {
+        setProjectStateReadyId(projectId);
+      }
+    },
+    [applyJobStatusState, resetPlaybackSurface],
+  );
+
+  const selectProject = useCallback(
+    (projectId: string) => {
+      if (projectId === activeProjectId) {
+        return;
+      }
+      if (projectStateReadyId === activeProjectId) {
+        saveProjectWorkspaceState(activeProjectId, { text, jobId: job?.id ?? null });
+      }
+      setProjectStateReadyId(null);
+      setActiveProjectId(projectId);
+      localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, projectId);
+    },
+    [activeProjectId, job?.id, projectStateReadyId, text],
+  );
 
   const handleCreateProject = useCallback(
     async (name: string) => {
@@ -1044,14 +1146,16 @@ export function App() {
           project,
           ...currentProjects.filter((item) => item.id !== project.id),
         ]);
+        clearProjectWorkspaceState(project.id);
         selectProject(project.id);
+        clearVisibleProjectWorkspace(project.id);
       } catch (caughtError) {
         setProjectError(
           caughtError instanceof Error ? caughtError.message : "Unable to create project",
         );
       }
     },
-    [selectProject],
+    [clearVisibleProjectWorkspace, selectProject],
   );
 
   const handleRenameProject = useCallback(async (id: string, name: string) => {
@@ -1070,33 +1174,23 @@ export function App() {
 
   const applyVoiceJobToState = useCallback(
     (nextJob: VoiceJob) => {
+      const nextProjectId = nextJob.projectId || activeProjectId;
       setJob(nextJob);
-      if (nextJob.projectId) {
-        selectProject(nextJob.projectId);
+      if (nextProjectId !== activeProjectId) {
+        setActiveProjectId(nextProjectId);
+        localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, nextProjectId);
       }
+      setProjectStateReadyId(nextProjectId);
+      saveProjectWorkspaceState(nextProjectId, {
+        text: typeof nextJob.inputText === "string" ? nextJob.inputText : text,
+        jobId: nextJob.id,
+      });
       if (typeof nextJob.inputText === "string") {
         setText(nextJob.inputText);
-        localStorage.setItem(SOURCE_TEXT_DRAFT_STORAGE_KEY, nextJob.inputText);
       }
-      if (nextJob.status === "completed") {
-        setRequestState("complete");
-        setError(null);
-        return;
-      }
-      if (nextJob.status === "failed") {
-        setRequestState("error");
-        setError(nextJob.error ?? "Voice job failed");
-        return;
-      }
-      if (nextJob.status === "cancelled") {
-        setRequestState("cancelled");
-        setError(nextJob.error ?? "Voice job cancelled");
-        return;
-      }
-      setRequestState("running");
-      setError(null);
+      applyJobStatusState(nextJob);
     },
-    [selectProject],
+    [activeProjectId, applyJobStatusState, text],
   );
 
   const handleSelectJob = useCallback(
@@ -1151,12 +1245,15 @@ export function App() {
     void refreshVoiceProfiles();
     void refreshProjects();
     void refreshProfileSourceDiagnostics();
-  }, [refreshProfileSourceDiagnostics, refreshProjects, refreshVoiceProfiles]);
+    void refreshTTSEngines();
+  }, [refreshProfileSourceDiagnostics, refreshProjects, refreshTTSEngines, refreshVoiceProfiles]);
 
   useEffect(() => {
     localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, activeProjectId);
+    migrateLegacyWorkspaceState(activeProjectId);
     void refreshProjectJobs(activeProjectId);
-  }, [activeProjectId, refreshProjectJobs]);
+    void restoreProjectWorkspace(activeProjectId);
+  }, [activeProjectId, refreshProjectJobs, restoreProjectWorkspace]);
 
   useEffect(() => {
     if (!selectedVoiceProfileId) {
@@ -1274,8 +1371,11 @@ export function App() {
   }, [profileSource, refreshProfileSourceDiagnostics]);
 
   useEffect(() => {
-    localStorage.setItem(SOURCE_TEXT_DRAFT_STORAGE_KEY, text);
-  }, [text]);
+    if (projectStateReadyId !== activeProjectId) {
+      return;
+    }
+    saveProjectWorkspaceState(activeProjectId, { text, jobId: job?.id ?? null });
+  }, [activeProjectId, job?.id, projectStateReadyId, text]);
 
   useEffect(() => {
     localStorage.setItem(RUN_CONFIG_STORAGE_KEY, JSON.stringify(runConfiguration));
@@ -1290,12 +1390,6 @@ export function App() {
   }, [themeName]);
 
   useEffect(() => {
-    if (job?.id) {
-      localStorage.setItem(JOB_ID_STORAGE_KEY, job.id);
-    }
-  }, [job?.id]);
-
-  useEffect(() => {
     const hasJob = Boolean(job?.id);
     setPlaybackCursorSec(0);
     setPlaybackControls(DISABLED_PLAYBACK_CONTROLLER);
@@ -1305,9 +1399,7 @@ export function App() {
   }, [job?.id]);
 
   useEffect(() => {
-    const restoreJobId =
-      new URLSearchParams(globalThis.location.search).get("jobId") ??
-      localStorage.getItem(JOB_ID_STORAGE_KEY);
+    const restoreJobId = new URLSearchParams(globalThis.location.search).get("jobId");
 
     if (!restoreJobId) {
       return;
@@ -1316,41 +1408,14 @@ export function App() {
     const restore = async () => {
       try {
         const restoredJob = await getVoiceJob(restoreJobId);
-        setJob(restoredJob);
-        if (restoredJob.projectId) {
-          selectProject(restoredJob.projectId);
-        }
-        if (typeof restoredJob.inputText === "string") {
-          setText(restoredJob.inputText);
-          localStorage.setItem(SOURCE_TEXT_DRAFT_STORAGE_KEY, restoredJob.inputText);
-        }
-        if (restoredJob.status === "completed") {
-          setRequestState("complete");
-          setError(null);
-          return;
-        }
-
-        if (restoredJob.status === "failed") {
-          setRequestState("error");
-          setError(restoredJob.error ?? "Voice job failed");
-          return;
-        }
-
-        if (restoredJob.status === "cancelled") {
-          setRequestState("cancelled");
-          setError(restoredJob.error ?? "Voice job cancelled");
-          return;
-        }
-
-        setRequestState("running");
-        setError(null);
+        applyVoiceJobToState(restoredJob);
       } catch {
-        localStorage.removeItem(JOB_ID_STORAGE_KEY);
+        setError("Unable to restore the requested job.");
       }
     };
 
     void restore();
-  }, [selectProject]);
+  }, [applyVoiceJobToState]);
 
   useEffect(() => {
     if (!activeJobId) {
@@ -1480,13 +1545,20 @@ export function App() {
 
   async function submitVoiceJob() {
     const selectedKokoroVoice = findKokoroVoicepack(selectedKokoroVoiceId);
+    const isSupertonicRun = runConfiguration.ttsEngine === "supertonic-3";
+    const selectedProviderVoice = isSupertonicRun
+      ? (runConfiguration.engineOptions.voiceStyle ?? "M1")
+      : selectedKokoroVoice?.id;
+    const selectedProviderLanguage = isSupertonicRun
+      ? (runConfiguration.engineOptions.lang ?? "sv")
+      : selectedKokoroVoice?.langCode;
     const request: CreateVoiceJobRequest = buildCreateVoiceJobRequest(
       text,
       runConfiguration,
       selectedVoiceProfileId,
       activeProjectId,
-      selectedKokoroVoice?.id,
-      selectedKokoroVoice?.langCode,
+      selectedProviderVoice,
+      selectedProviderLanguage,
     );
 
     setRequestState("running");
@@ -1600,6 +1672,8 @@ export function App() {
         job={job}
         runConfiguration={runConfiguration}
         selectedProfileName={selectedVoiceProfile?.name ?? null}
+        ttsEngineError={ttsEngineError}
+        ttsEngines={ttsEngines}
         onChange={setRunConfiguration}
         onClose={() => {
           setIsRunConfigOpen(false);
@@ -1630,6 +1704,8 @@ export function App() {
         selectedProfile={selectedVoiceProfile}
         teleprompterSettings={teleprompterSettings}
         themeName={themeName}
+        ttsEngineError={ttsEngineError}
+        ttsEngines={ttsEngines}
         onClose={() => {
           setIsSettingsOpen(false);
         }}
@@ -1998,7 +2074,7 @@ function SourceTextPanel({
         value={text}
       />
       <button className="sr-only" disabled={!canSubmit} type="submit">
-        Create checked audio
+        Create & Listen
       </button>
     </form>
   );

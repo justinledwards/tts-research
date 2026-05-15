@@ -195,16 +195,20 @@ textarea {
 }
 
 .teleprompter-word--active {
-  color: white;
+  color: inherit;
   text-shadow:
-    0 1px 10px color-mix(in srgb, var(--teleprompter-accent) 42%, black),
-    0 0 18px color-mix(in srgb, var(--teleprompter-accent) 30%, transparent);
-  -webkit-text-stroke-color: color-mix(in srgb, var(--teleprompter-accent) 28%, #f4e1e8);
-  -webkit-text-stroke-width: calc(0.015em + var(--teleprompter-intensity) * 0.022em);
+    0 0 0.42em color-mix(in srgb, var(--teleprompter-accent) 34%, transparent),
+    0 0 0.08em color-mix(in srgb, var(--teleprompter-accent) 42%, transparent);
+  -webkit-text-stroke-color: color-mix(in srgb, var(--teleprompter-accent) 58%, currentColor);
+  -webkit-text-stroke-width: calc(0.006em + var(--teleprompter-intensity) * 0.012em);
+  text-decoration-color: color-mix(in srgb, var(--teleprompter-accent) 72%, transparent);
+  text-decoration-line: underline;
+  text-decoration-thickness: calc(0.045em + var(--teleprompter-intensity) * 0.035em);
+  text-underline-offset: 0.16em;
 }
 
 .teleprompter-word--active::after {
-  opacity: calc(0.58 + var(--teleprompter-intensity) * 0.22);
+  opacity: calc(0.28 + var(--teleprompter-intensity) * 0.2);
   transform: scale(1);
 }
 

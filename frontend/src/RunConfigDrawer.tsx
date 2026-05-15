@@ -7,7 +7,13 @@ import {
   getRunModePreset,
   resolveRunPrimaryLabel,
 } from "./runConfig";
-import type { PerformanceMode, PipelineOptions, RunMode, VoiceJob } from "./types";
+import type {
+  PerformanceMode,
+  PipelineOptions,
+  RunMode,
+  TTSEngineDiagnostics,
+  VoiceJob,
+} from "./types";
 
 const OPTION_LABELS: Record<keyof PipelineOptions, { label: string; detail: string }> = {
   textPreprocess: {
@@ -42,6 +48,8 @@ export function RunConfigDrawer({
   job,
   runConfiguration,
   selectedProfileName,
+  ttsEngineError,
+  ttsEngines,
   onChange,
   onClose,
   onSubmit,
@@ -51,6 +59,8 @@ export function RunConfigDrawer({
   job: VoiceJob | null;
   runConfiguration: RunConfiguration;
   selectedProfileName: string | null;
+  ttsEngineError: string | null;
+  ttsEngines: TTSEngineDiagnostics[];
   onChange: (configuration: RunConfiguration) => void;
   onClose: () => void;
   onSubmit: () => void;
@@ -80,6 +90,33 @@ export function RunConfigDrawer({
     onChange({
       ...runConfiguration,
       performanceMode: mode,
+    });
+  };
+
+  const updateTTSEngine = (engineId: string) => {
+    const selectedEngine = ttsEngines.find((engine) => engine.id === engineId);
+    const firstVoice = selectedEngine?.voices?.[0]?.id;
+    onChange({
+      ...runConfiguration,
+      ttsEngine: engineId,
+      engineOptions:
+        engineId === "supertonic-3"
+          ? {
+              ...runConfiguration.engineOptions,
+              voiceStyle: runConfiguration.engineOptions.voiceStyle ?? firstVoice ?? "M1",
+              lang: runConfiguration.engineOptions.lang ?? "sv",
+            }
+          : {},
+    });
+  };
+
+  const updateEngineOption = (key: string, value: string) => {
+    onChange({
+      ...runConfiguration,
+      engineOptions: {
+        ...runConfiguration.engineOptions,
+        [key]: value,
+      },
     });
   };
 
@@ -130,6 +167,39 @@ export function RunConfigDrawer({
                   </span>
                 </button>
               ))}
+            </div>
+          </section>
+
+          <section className="mt-7">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Narration Engine
+            </h3>
+            <div className="mt-3 grid gap-3">
+              <select
+                className="w-full rounded-md border border-zinc-200 bg-white px-3 py-3 text-sm font-semibold text-zinc-900 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+                onChange={(event) => {
+                  updateTTSEngine(event.currentTarget.value);
+                }}
+                value={runConfiguration.ttsEngine}
+              >
+                {(ttsEngines.length > 0 ? ttsEngines : fallbackTTSEngines()).map((engine) => (
+                  <option key={engine.id} value={engine.id}>
+                    {engine.label} · {engine.status}
+                  </option>
+                ))}
+              </select>
+              <EngineDiagnosticsCard
+                engine={findEngine(ttsEngines, runConfiguration.ttsEngine)}
+                error={ttsEngineError}
+              />
+              {runConfiguration.ttsEngine === "supertonic-3" ? (
+                <SupertonicOptions
+                  engine={findEngine(ttsEngines, "supertonic-3")}
+                  language={runConfiguration.engineOptions.lang ?? "sv"}
+                  voiceStyle={runConfiguration.engineOptions.voiceStyle ?? "M1"}
+                  onOptionChange={updateEngineOption}
+                />
+              ) : null}
             </div>
           </section>
 
@@ -218,6 +288,122 @@ export function RunConfigDrawer({
       </aside>
     </div>
   );
+}
+
+function EngineDiagnosticsCard({
+  engine,
+  error,
+}: Readonly<{ engine: TTSEngineDiagnostics | undefined; error: string | null }>) {
+  if (error) {
+    return (
+      <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>
+    );
+  }
+  if (!engine) {
+    return (
+      <p className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+        Engine diagnostics are loading.
+      </p>
+    );
+  }
+  return (
+    <div className="grid gap-1 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm">
+      <p className="font-semibold text-zinc-950">
+        {engine.label} · {engine.status}
+      </p>
+      <p className="leading-5 text-zinc-600">{engine.reason ?? engine.setup ?? "Ready."}</p>
+      <p className="text-xs text-zinc-500">
+        {engine.local ? "Local" : "Remote"} · {engine.estimatedVram ?? "fit unknown"}
+        {engine.supportsSwedish ? " · Swedish" : ""}
+      </p>
+    </div>
+  );
+}
+
+function SupertonicOptions({
+  engine,
+  language,
+  voiceStyle,
+  onOptionChange,
+}: Readonly<{
+  engine: TTSEngineDiagnostics | undefined;
+  language: string;
+  voiceStyle: string;
+  onOptionChange: (key: string, value: string) => void;
+}>) {
+  const voices = engine?.voices ?? fallbackSupertonicVoices();
+  return (
+    <div className="grid gap-3 rounded-md border border-orange-200 bg-orange-50 p-3">
+      <label className="grid gap-1 text-sm font-semibold text-orange-950">
+        Voice style
+        <select
+          className="rounded-md border border-orange-200 bg-white px-3 py-2 text-zinc-900"
+          onChange={(event) => {
+            onOptionChange("voiceStyle", event.currentTarget.value);
+          }}
+          value={voiceStyle}
+        >
+          {voices.map((voice) => (
+            <option key={voice.id} value={voice.id}>
+              {voice.name} {voice.gender ? `· ${voice.gender}` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1 text-sm font-semibold text-orange-950">
+        Language
+        <select
+          className="rounded-md border border-orange-200 bg-white px-3 py-2 text-zinc-900"
+          onChange={(event) => {
+            onOptionChange("lang", event.currentTarget.value);
+          }}
+          value={language}
+        >
+          <option value="sv">Swedish · sv</option>
+          <option value="en">English · en</option>
+          <option value="da">Danish · da</option>
+          <option value="de">German · de</option>
+          <option value="fi">Finnish · fi</option>
+          <option value="fr">French · fr</option>
+        </select>
+      </label>
+      <p className="text-xs leading-5 text-orange-900">
+        Swedish smoke text: Det var en kylig kväll i Stockholm. Ljuset från gatlyktorna speglade sig
+        i vattnet medan hon öppnade boken och började läsa.
+      </p>
+    </div>
+  );
+}
+
+function findEngine(
+  engines: TTSEngineDiagnostics[],
+  engineId: string,
+): TTSEngineDiagnostics | undefined {
+  return engines.find((engine) => engine.id === engineId);
+}
+
+function fallbackTTSEngines(): TTSEngineDiagnostics[] {
+  return [
+    {
+      id: "auto",
+      label: "Auto",
+      status: "ready",
+      default: false,
+      local: true,
+      experimental: false,
+      supportsVoice: true,
+      supportsReference: true,
+      supportsSwedish: false,
+    },
+  ];
+}
+
+function fallbackSupertonicVoices(): { id: string; name: string; gender?: string }[] {
+  return ["M1", "M2", "M3", "M4", "M5", "F1", "F2", "F3", "F4", "F5"].map((id) => ({
+    id,
+    name: id,
+    gender: id.startsWith("M") ? "male" : "female",
+  }));
 }
 
 function DrawerFact({ label, value }: Readonly<{ label: string; value: string }>) {

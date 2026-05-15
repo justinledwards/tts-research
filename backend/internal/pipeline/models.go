@@ -33,6 +33,8 @@ type CreateJobRequest struct {
 	ProjectID       string                   `json:"projectId,omitempty"`
 	VoiceProfileID  string                   `json:"voiceProfileId"`
 	VoiceLanguage   string                   `json:"voiceLanguage"`
+	TTSEngine       string                   `json:"ttsEngine,omitempty"`
+	EngineOptions   map[string]string        `json:"engineOptions,omitempty"`
 	TTSVoice        string                   `json:"ttsVoice,omitempty"`
 	TTSLanguage     string                   `json:"ttsLanguage,omitempty"`
 	AdaptiveMode    bool                     `json:"adaptiveMode"`
@@ -46,6 +48,32 @@ type VoiceProject struct {
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type TTSEngineVoice struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Gender      string `json:"gender,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+type TTSEngineDiagnostics struct {
+	ID                string            `json:"id"`
+	Label             string            `json:"label"`
+	Status            string            `json:"status"`
+	Default           bool              `json:"default"`
+	Local             bool              `json:"local"`
+	Experimental      bool              `json:"experimental"`
+	SupportsVoice     bool              `json:"supportsVoice"`
+	SupportsReference bool              `json:"supportsReference"`
+	SupportsSwedish   bool              `json:"supportsSwedish"`
+	Languages         []string          `json:"languages,omitempty"`
+	Voices            []TTSEngineVoice  `json:"voices,omitempty"`
+	EstimatedVRAM     string            `json:"estimatedVram,omitempty"`
+	ModelCache        string            `json:"modelCache,omitempty"`
+	Reason            string            `json:"reason,omitempty"`
+	Setup             string            `json:"setup,omitempty"`
+	Metadata          map[string]string `json:"metadata,omitempty"`
 }
 
 type ProjectBundleContentItem struct {
@@ -392,6 +420,8 @@ type VoiceJob struct {
 	VoiceProfileID          string            `json:"voiceProfileId,omitempty"`
 	VoiceProfileName        string            `json:"voiceProfileName,omitempty"`
 	VoiceProfileLanguage    string            `json:"voiceProfileLanguage,omitempty"`
+	TTSEngine               string            `json:"ttsEngine,omitempty"`
+	EngineOptions           map[string]string `json:"engineOptions,omitempty"`
 	TTSVoice                string            `json:"ttsVoice,omitempty"`
 	TTSLanguage             string            `json:"ttsLanguage,omitempty"`
 	InputText               string            `json:"inputText"`

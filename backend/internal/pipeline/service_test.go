@@ -86,6 +86,117 @@ func TestCreateJobCanSelectProviderVoice(t *testing.T) {
 	}
 }
 
+func TestCreateJobCanSelectRegisteredTTSEngine(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:     3,
+			JobDataDir:     t.TempDir(),
+			ProjectDataDir: t.TempDir(),
+			TTSEngines: []pipeline.TTSEngineRegistration{
+				{
+					ID:    pipeline.TTSEngineSupertonic,
+					Agent: agents.NewMockTTSAgent(),
+					Diagnostics: pipeline.TTSEngineDiagnostics{
+						ID:              pipeline.TTSEngineSupertonic,
+						Label:           "Supertonic 3",
+						Status:          "ready",
+						SupportsVoice:   true,
+						SupportsSwedish: true,
+					},
+				},
+			},
+		},
+	)
+
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:        "Det var en kylig kväll i Stockholm.",
+		TTSEngine:   pipeline.TTSEngineSupertonic,
+		TTSVoice:    "F1",
+		TTSLanguage: "sv",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.TTSEngine != pipeline.TTSEngineSupertonic {
+		t.Fatalf("tts engine = %q, want %q", completed.TTSEngine, pipeline.TTSEngineSupertonic)
+	}
+	if completed.TTSLanguage != "sv" {
+		t.Fatalf("tts language = %q, want sv", completed.TTSLanguage)
+	}
+	if completed.Voice != "F1" {
+		t.Fatalf("voice = %q, want F1", completed.Voice)
+	}
+}
+
+func TestCreateJobRejectsUnavailableTTSEngine(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	_, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:      "Try an unavailable engine.",
+		TTSEngine: "scenema-audio",
+	})
+	if err == nil {
+		t.Fatal("CreateJob returned nil error, want unavailable engine error")
+	}
+	if !strings.Contains(err.Error(), "tts engine") {
+		t.Fatalf("error = %q, want tts engine message", err.Error())
+	}
+}
+
+func TestListTTSEnginesIncludesAutoAndDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:     3,
+			JobDataDir:     t.TempDir(),
+			ProjectDataDir: t.TempDir(),
+			TTSEngines: []pipeline.TTSEngineRegistration{
+				{
+					ID: pipeline.TTSEngineSupertonic,
+					Diagnostics: pipeline.TTSEngineDiagnostics{
+						ID:              pipeline.TTSEngineSupertonic,
+						Label:           "Supertonic 3",
+						Status:          "unavailable",
+						SupportsSwedish: true,
+					},
+				},
+			},
+		},
+	)
+
+	engines := service.ListTTSEngines()
+	if len(engines) < 2 {
+		t.Fatalf("engines = %#v, want auto and at least one concrete engine", engines)
+	}
+	if engines[0].ID != pipeline.TTSEngineAuto {
+		t.Fatalf("first engine = %q, want auto", engines[0].ID)
+	}
+	var foundSupertonic bool
+	for _, engine := range engines {
+		if engine.ID == pipeline.TTSEngineSupertonic {
+			foundSupertonic = true
+			if !engine.SupportsSwedish {
+				t.Fatal("Supertonic diagnostics should mark Swedish support")
+			}
+		}
+	}
+	if !foundSupertonic {
+		t.Fatalf("engines = %#v, want Supertonic diagnostics", engines)
+	}
+}
+
 func TestCreateJobCanSkipTextPreprocessing(t *testing.T) {
 	t.Parallel()
 

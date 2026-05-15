@@ -58,6 +58,10 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(metrics)
 	})
 
+	app.Get("/api/tts-engines", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.ListTTSEngines())
+	})
+
 	app.Get("/api/projects", func(ctx fiber.Ctx) error {
 		return ctx.JSON(service.ListProjects())
 	})

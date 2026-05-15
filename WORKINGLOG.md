@@ -1,5 +1,15 @@
 # Working Log
 
+## 2026-05-15 17:18 CEST - UI ergonomics, Book Cinema, and model evaluation pass
+- [x] Project-scoped drafts and blank new project behavior.
+- [x] Teleprompter highlight ergonomics.
+- [ ] Compact player ergonomics.
+- [x] TTS engine registry with Supertonic and experimental model diagnostics.
+- [x] Supertonic Swedish synthesis adapter.
+- [ ] Book Cinema source foundation for PDF and EPUB.
+- [ ] Frontend model selector and Book Cinema surfaces.
+- [ ] Tests, Playwright QA, and revertable commits.
+
 ## 2026-05-15 11:32 CEST - Concept-fidelity product pass
 - [x] Backend portable bundle API.
 - [x] Theme system and product shell controls.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -209,6 +210,8 @@ func main() {
 			VoiceProfileEmbeddingScriptPath:      envWithDefault("VOICE_PROFILE_EMBEDDING_SCRIPT_PATH", "./scripts/profile_likeness.py"),
 			VoiceProfileLikenessCalibrationText:  envWithDefault("VOICE_PROFILE_LIKENESS_CALIBRATION_TEXT", "This is a short voice clone calibration sample for measuring speaker likeness."),
 			VoiceProfileLikenessTimeoutSeconds:   voiceProfileLikenessTimeoutSeconds,
+			DefaultTTSEngine:                     envWithDefault("TTS_DEFAULT_ENGINE", envWithDefault("TTS_PROVIDER", "mock")),
+			TTSEngines:                           ttsEngineRegistrationsFromEnv(ttsAgent),
 		},
 	)
 	serviceOptions := service.Options()
@@ -382,6 +385,188 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 	default:
 		return nil, fmt.Errorf("unsupported TTS_PROVIDER %q", provider)
 	}
+}
+
+func ttsEngineRegistrationsFromEnv(defaultAgent pipeline.TTSAgent) []pipeline.TTSEngineRegistration {
+	provider := strings.ToLower(envWithDefault("TTS_PROVIDER", "mock"))
+	registrations := make([]pipeline.TTSEngineRegistration, 0, 6)
+	switch provider {
+	case "kokoro":
+		registrations = append(registrations, pipeline.TTSEngineRegistration{
+			ID:    pipeline.TTSEngineKokoro,
+			Agent: defaultAgent,
+			Diagnostics: pipeline.TTSEngineDiagnostics{
+				ID:            pipeline.TTSEngineKokoro,
+				Label:         "Kokoro",
+				Status:        "ready",
+				Local:         true,
+				SupportsVoice: true,
+				Languages:     []string{"en", "ja", "zh", "es", "fr", "hi", "it", "pt"},
+				ModelCache:    envWithDefault("KOKORO_DATA_DIR", "./data/kokoro"),
+				Setup:         "Fast local long-form voicepack synthesis.",
+			},
+		})
+	case "mock":
+		registrations = append(registrations, pipeline.TTSEngineRegistration{
+			ID:    "mock",
+			Agent: defaultAgent,
+			Diagnostics: pipeline.TTSEngineDiagnostics{
+				ID:     "mock",
+				Label:  "Mock TTS",
+				Status: "ready",
+				Local:  true,
+				Setup:  "Silent WAV generator for tests and offline UI development.",
+			},
+		})
+	}
+	if _, ok := defaultAgent.(pipeline.TTSWithReference); ok {
+		registrations = append(registrations, pipeline.TTSEngineRegistration{
+			ID:    pipeline.TTSEngineKokoroClone,
+			Agent: defaultAgent,
+			Diagnostics: pipeline.TTSEngineDiagnostics{
+				ID:                pipeline.TTSEngineKokoroClone,
+				Label:             "Kokoro Clone",
+				Status:            "ready",
+				Local:             true,
+				SupportsVoice:     true,
+				SupportsReference: true,
+				Languages:         []string{"en"},
+				ModelCache:        envWithDefault("KOKORO_DATA_DIR", "./data/kokoro"),
+				Setup:             "Uses selected Voice Profile reference audio through the KokoClone worker.",
+			},
+		})
+	}
+	registrations = append(registrations, supertonicRegistrationFromEnv())
+	registrations = append(registrations, experimentalEngineRegistration(
+		"dramabox",
+		"DramaBox Experimental",
+		"~24 GB peak VRAM",
+		"Set DRAMABOX_BASE_URL to a warm DramaBox server. Local startup is disabled on small GPUs.",
+	))
+	registrations = append(registrations, experimentalEngineRegistration(
+		"scenema-audio",
+		"Scenema Audio Experimental",
+		"16 GB+ VRAM plus large model cache",
+		"Set SCENEMA_AUDIO_BASE_URL to a running Scenema Audio HTTP service.",
+	))
+	return registrations
+}
+
+func supertonicRegistrationFromEnv() pipeline.TTSEngineRegistration {
+	pythonPath := envWithDefault("SUPERTONIC_PYTHON", "./.venv-supertonic/bin/python")
+	scriptPath := envWithDefault("SUPERTONIC_SCRIPT_PATH", "./scripts/supertonic_synth.py")
+	modelDir := strings.TrimSpace(os.Getenv("SUPERTONIC_MODEL_DIR"))
+	autoDownload, err := envBoolWithDefault("SUPERTONIC_AUTO_DOWNLOAD", false)
+	if err != nil {
+		autoDownload = false
+	}
+	timeout, err := envIntWithDefault("SUPERTONIC_TIMEOUT_SECONDS", 180)
+	if err != nil {
+		timeout = 180
+	}
+
+	status := "unavailable"
+	reason := "Supertonic runtime is not installed."
+	if executableAvailable(pythonPath) && fileAvailable(scriptPath) {
+		status = "ready"
+		reason = "Ready for local ONNX synthesis."
+	}
+	var agent pipeline.TTSAgent
+	if status == "ready" {
+		agent = agents.NewSupertonicTTSAgent(agents.SupertonicConfig{
+			PythonPath:     pythonPath,
+			ScriptPath:     scriptPath,
+			ModelDir:       modelDir,
+			DefaultVoice:   envWithDefault("SUPERTONIC_DEFAULT_VOICE", "M1"),
+			DefaultLang:    envWithDefault("SUPERTONIC_DEFAULT_LANG", "sv"),
+			AutoDownload:   autoDownload,
+			TimeoutSeconds: timeout,
+		})
+	}
+
+	return pipeline.TTSEngineRegistration{
+		ID:    pipeline.TTSEngineSupertonic,
+		Agent: agent,
+		Diagnostics: pipeline.TTSEngineDiagnostics{
+			ID:              pipeline.TTSEngineSupertonic,
+			Label:           "Supertonic 3",
+			Status:          status,
+			Local:           true,
+			SupportsVoice:   true,
+			SupportsSwedish: true,
+			Languages: []string{
+				"en", "ko", "ja", "ar", "bg", "cs", "da", "de", "el", "es", "et", "fi", "fr",
+				"hi", "hr", "hu", "id", "it", "lt", "lv", "nl", "pl", "pt", "ro", "ru", "sk",
+				"sl", "sv", "tr", "uk", "vi",
+			},
+			Voices:        supertonicVoices(),
+			EstimatedVRAM: "CPU/ONNX; no GPU required",
+			ModelCache:    modelDir,
+			Reason:        reason,
+			Setup:         "Create .venv-supertonic, install `supertonic`, and set SUPERTONIC_AUTO_DOWNLOAD=true for first model fetch.",
+			Metadata: map[string]string{
+				"python":       pythonPath,
+				"script":       scriptPath,
+				"autoDownload": strconv.FormatBool(autoDownload),
+			},
+		},
+	}
+}
+
+func experimentalEngineRegistration(id string, label string, estimatedVRAM string, setup string) pipeline.TTSEngineRegistration {
+	baseURLEnv := strings.ToUpper(strings.ReplaceAll(id, "-", "_")) + "_BASE_URL"
+	baseURL := strings.TrimSpace(os.Getenv(baseURLEnv))
+	status := "unavailable"
+	reason := "No warm server endpoint configured."
+	if baseURL != "" {
+		status = "configured"
+		reason = "Endpoint configured; adapter implementation is diagnostics-gated."
+	}
+	return pipeline.TTSEngineRegistration{
+		ID: id,
+		Diagnostics: pipeline.TTSEngineDiagnostics{
+			ID:              id,
+			Label:           label,
+			Status:          status,
+			Local:           false,
+			Experimental:    true,
+			SupportsVoice:   true,
+			EstimatedVRAM:   estimatedVRAM,
+			ModelCache:      baseURL,
+			Reason:          reason,
+			Setup:           setup,
+			SupportsSwedish: false,
+		},
+	}
+}
+
+func supertonicVoices() []pipeline.TTSEngineVoice {
+	return []pipeline.TTSEngineVoice{
+		{ID: "M1", Name: "M1", Gender: "male", Description: "General male voice style"},
+		{ID: "M2", Name: "M2", Gender: "male", Description: "General male voice style"},
+		{ID: "M3", Name: "M3", Gender: "male", Description: "General male voice style"},
+		{ID: "M4", Name: "M4", Gender: "male", Description: "General male voice style"},
+		{ID: "M5", Name: "M5", Gender: "male", Description: "General male voice style"},
+		{ID: "F1", Name: "F1", Gender: "female", Description: "General female voice style"},
+		{ID: "F2", Name: "F2", Gender: "female", Description: "General female voice style"},
+		{ID: "F3", Name: "F3", Gender: "female", Description: "General female voice style"},
+		{ID: "F4", Name: "F4", Gender: "female", Description: "General female voice style"},
+		{ID: "F5", Name: "F5", Gender: "female", Description: "General female voice style"},
+	}
+}
+
+func executableAvailable(path string) bool {
+	if strings.Contains(path, "/") {
+		info, err := os.Stat(path)
+		return err == nil && !info.IsDir()
+	}
+	_, err := exec.LookPath(path)
+	return err == nil
+}
+
+func fileAvailable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func firstEnv(names ...string) string {

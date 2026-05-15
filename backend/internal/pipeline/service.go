@@ -63,6 +63,12 @@ type TTSWithReference interface {
 	SynthesizeWithReference(context.Context, string, string, string) (agents.TTSResult, error)
 }
 
+type TTSEngineRegistration struct {
+	ID          string
+	Agent       TTSAgent
+	Diagnostics TTSEngineDiagnostics
+}
+
 type VoiceProfileLikenessScorer interface {
 	ScoreVoiceProfileLikeness(context.Context, VoiceProfileLikenessRequest) (VoiceProfileLikenessResult, error)
 }
@@ -117,6 +123,8 @@ type Options struct {
 	VoiceProfileLikenessCalibrationText  string
 	VoiceProfileLikenessTimeoutSeconds   int
 	VoiceProfileLikenessScorer           VoiceProfileLikenessScorer
+	DefaultTTSEngine                     string
+	TTSEngines                           []TTSEngineRegistration
 }
 
 const (
@@ -153,6 +161,8 @@ type storedVoiceProfile struct {
 type Service struct {
 	optimizer  VoiceOptimizer
 	tts        TTSAgent
+	ttsEngines map[string]TTSEngineRegistration
+	defaultTTS string
 	checker    VoiceChecker
 	options    Options
 	mu         sync.RWMutex
@@ -375,10 +385,13 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if options.VoiceProfileLikenessScorer == nil {
 		options.VoiceProfileLikenessScorer = newPythonProfileLikenessScorer(options)
 	}
+	defaultTTS, ttsEngines := initializeTTSEngines(options.DefaultTTSEngine, tts, options.TTSEngines)
 
 	service := &Service{
 		optimizer:  optimizer,
 		tts:        tts,
+		ttsEngines: ttsEngines,
+		defaultTTS: defaultTTS,
 		checker:    checker,
 		options:    options,
 		jobs:       map[string]storedJob{},
@@ -450,6 +463,8 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 	projectID := strings.TrimSpace(request.ProjectID)
 	voiceProfileID := strings.TrimSpace(request.VoiceProfileID)
 	voiceLanguage := strings.TrimSpace(request.VoiceLanguage)
+	ttsEngine := normalizeTTSEngineID(request.TTSEngine)
+	engineOptions := sanitizeEngineOptions(request.EngineOptions)
 	ttsVoice := strings.TrimSpace(request.TTSVoice)
 	ttsLanguage := strings.TrimSpace(request.TTSLanguage)
 	config := resolveJobConfig(request)
@@ -483,6 +498,9 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 			voiceLanguage = profile.Language
 		}
 	}
+	if _, _, err := service.resolveTTSEngine(ttsEngine, voiceProfileID != ""); err != nil {
+		return VoiceJob{}, err
+	}
 
 	now := time.Now().UTC()
 	voiceProfileName := ""
@@ -504,6 +522,8 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 			VoiceProfileID:       voiceProfileID,
 			VoiceProfileName:     voiceProfileName,
 			VoiceProfileLanguage: voiceLanguage,
+			TTSEngine:            ttsEngine,
+			EngineOptions:        engineOptions,
 			TTSVoice:             ttsVoice,
 			TTSLanguage:          ttsLanguage,
 			InputText:            inputText,
@@ -976,6 +996,7 @@ func (service *Service) runJob(ctx context.Context, id string) {
 	profileLanguage := strings.TrimSpace(job.VoiceProfileLanguage)
 	ttsVoice := strings.TrimSpace(job.TTSVoice)
 	ttsLanguage := strings.TrimSpace(job.TTSLanguage)
+	ttsEngine := strings.TrimSpace(job.TTSEngine)
 	if profileID != "" {
 		profile, err := service.getVoiceProfile(profileID)
 		if err != nil {
@@ -1007,6 +1028,7 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		profileLanguage,
 		ttsVoice,
 		ttsLanguage,
+		ttsEngine,
 		config.performanceMode,
 		config.pipelineOptions,
 	)
@@ -1112,6 +1134,7 @@ func (service *Service) synthesizeUntilComplete(
 	profileLanguage string,
 	ttsVoice string,
 	ttsLanguage string,
+	ttsEngine string,
 	performanceMode PerformanceMode,
 	pipelineOptions PipelineOptions,
 ) (agents.TTSResult, agents.VoiceCheckResult, error) {
@@ -1231,25 +1254,24 @@ func (service *Service) synthesizeUntilComplete(
 			})
 
 			synthesize := func() (agents.TTSResult, error) {
-				if !isReferenceProfile {
-					if withVoice, ok := service.tts.(TTSWithVoice); ok &&
-						(strings.TrimSpace(ttsVoice) != "" || strings.TrimSpace(ttsLanguage) != "") {
-						return withVoice.SynthesizeWithVoice(pipelineCtx, resumeText, ttsVoice, ttsLanguage)
-					}
-					return service.tts.Synthesize(pipelineCtx, resumeText)
+				resolvedEngine, agent, err := service.resolveTTSEngine(ttsEngine, isReferenceProfile)
+				if err != nil {
+					return agents.TTSResult{}, err
 				}
-
-				withReference, ok := service.tts.(TTSWithReference)
-				if !ok {
-					return agents.TTSResult{}, ErrProfileUnsupported
-				}
-
-				return withReference.SynthesizeWithReference(
+				result, err := synthesizeWithAgent(
 					pipelineCtx,
+					agent,
 					resumeText,
+					isReferenceProfile,
 					profileReferencePath,
 					profileLanguage,
+					ttsVoice,
+					ttsLanguage,
 				)
+				if result.Provider == "" {
+					result.Provider = resolvedEngine
+				}
+				return result, err
 			}
 
 			result, err := synthesize()

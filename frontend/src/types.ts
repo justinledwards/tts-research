@@ -15,6 +15,8 @@ export interface CreateVoiceJobRequest {
   projectId?: string;
   voiceProfileId?: string;
   voiceLanguage?: string;
+  ttsEngine?: string;
+  engineOptions?: Partial<Record<string, string>>;
   ttsVoice?: string;
   ttsLanguage?: string;
   adaptiveMode?: boolean;
@@ -32,6 +34,32 @@ export interface VoiceProject {
   name: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TTSEngineVoice {
+  id: string;
+  name: string;
+  gender?: string;
+  description?: string;
+}
+
+export interface TTSEngineDiagnostics {
+  id: string;
+  label: string;
+  status: string;
+  default: boolean;
+  local: boolean;
+  experimental: boolean;
+  supportsVoice: boolean;
+  supportsReference: boolean;
+  supportsSwedish: boolean;
+  languages?: string[];
+  voices?: TTSEngineVoice[];
+  estimatedVram?: string;
+  modelCache?: string;
+  reason?: string;
+  setup?: string;
+  metadata?: Record<string, string>;
 }
 
 export type ThemeName = "light" | "dark" | "dawn" | "night";
@@ -408,6 +436,8 @@ export interface VoiceJob {
   ttsVoice?: string;
   ttsLanguage?: string;
   voiceProfileName?: string;
+  ttsEngine?: string;
+  engineOptions?: Partial<Record<string, string>>;
   retries: RetryMetadata;
   voiceCheck: VoiceCheck;
   qualityReport?: JobQualityReport;

@@ -8,6 +8,7 @@ import type {
   ProjectBundlePreview,
   ProjectBundleSummary,
   SystemMetrics,
+  TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
   VoiceProfileSource,
@@ -161,6 +162,15 @@ export async function getSystemMetrics(): Promise<SystemMetrics> {
   }
 
   return response.json() as Promise<SystemMetrics>;
+}
+
+export async function listTTSEngines(): Promise<TTSEngineDiagnostics[]> {
+  const response = await fetch(`${apiBaseUrl}/api/tts-engines`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<TTSEngineDiagnostics[]>;
 }
 
 export async function createVoiceProfile(

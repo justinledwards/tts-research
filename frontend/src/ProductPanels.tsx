@@ -12,6 +12,7 @@ import { VOICE_STUDIO_THEMES } from "./theme";
 import type {
   SystemMetrics,
   ThemeName,
+  TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
   VoiceProfileSource,
@@ -111,6 +112,8 @@ export function SettingsPanel({
   selectedProfile,
   teleprompterSettings,
   themeName,
+  ttsEngineError,
+  ttsEngines,
   onClose,
   onTeleprompterSettingsChange,
   onThemeChange,
@@ -125,6 +128,8 @@ export function SettingsPanel({
   selectedProfile: VoiceProfile | null;
   teleprompterSettings: TeleprompterHighlightSettings;
   themeName: ThemeName;
+  ttsEngineError: string | null;
+  ttsEngines: TTSEngineDiagnostics[];
   onClose: () => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
@@ -169,6 +174,8 @@ export function SettingsPanel({
         selectedProfile={selectedProfile}
         teleprompterSettings={teleprompterSettings}
         themeName={themeName}
+        ttsEngineError={ttsEngineError}
+        ttsEngines={ttsEngines}
         onTeleprompterSettingsChange={onTeleprompterSettingsChange}
         onThemeChange={onThemeChange}
       />
@@ -187,6 +194,8 @@ function SettingsTabContent({
   selectedProfile,
   teleprompterSettings,
   themeName,
+  ttsEngineError,
+  ttsEngines,
   onTeleprompterSettingsChange,
   onThemeChange,
 }: Readonly<{
@@ -200,6 +209,8 @@ function SettingsTabContent({
   selectedProfile: VoiceProfile | null;
   teleprompterSettings: TeleprompterHighlightSettings;
   themeName: ThemeName;
+  ttsEngineError: string | null;
+  ttsEngines: TTSEngineDiagnostics[];
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
@@ -225,6 +236,8 @@ function SettingsTabContent({
         metrics={metrics}
         metricsError={metricsError}
         profileSourceDiagnostics={profileSourceDiagnostics}
+        ttsEngineError={ttsEngineError}
+        ttsEngines={ttsEngines}
       />
     );
   }
@@ -340,15 +353,20 @@ function SettingsProvidersTab({
   metrics,
   metricsError,
   profileSourceDiagnostics,
+  ttsEngineError,
+  ttsEngines,
 }: Readonly<{
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
   metricsError: string | null;
   profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
+  ttsEngineError: string | null;
+  ttsEngines: TTSEngineDiagnostics[];
 }>) {
   return (
     <PanelSection title="Providers">
       <DiagnosticLine label="Backend" value={metrics ? "Online" : (metricsError ?? "Pending")} />
+      <DiagnosticLine label="Narration engine" value={job?.ttsEngine ?? "Auto until a job runs"} />
       <DiagnosticLine label="TTS provider" value={job?.provider ?? "Resolved when a job runs"} />
       <DiagnosticLine
         label="Kokoro voice"
@@ -379,8 +397,40 @@ function SettingsProvidersTab({
           {profileSourceDiagnostics.setupMessage}
         </p>
       ) : null}
+      <TTSEngineDiagnosticsList engines={ttsEngines} error={ttsEngineError} />
       <KokoroVoicepackDetails />
     </PanelSection>
+  );
+}
+
+function TTSEngineDiagnosticsList({
+  engines,
+  error,
+}: Readonly<{ engines: TTSEngineDiagnostics[]; error: string | null }>) {
+  if (error) {
+    return <p className="text-sm leading-6 text-red-700">{error}</p>;
+  }
+  return (
+    <details className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
+      <summary className="cursor-pointer font-semibold text-zinc-800">
+        Narration engines ({String(engines.length)})
+      </summary>
+      <ul className="mt-3 grid gap-2">
+        {engines.map((engine) => (
+          <li className="grid gap-1 rounded border border-zinc-200 bg-white p-2" key={engine.id}>
+            <span className="flex items-center justify-between gap-2">
+              <span className="font-semibold text-zinc-900">{engine.label}</span>
+              <span className="text-zinc-500">{engine.status}</span>
+            </span>
+            <span className="break-words">
+              {engine.supportsSwedish ? "Swedish · " : ""}
+              {engine.estimatedVram ?? (engine.local ? "local" : "remote")}
+            </span>
+            {engine.reason ? <span className="break-words">{engine.reason}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
