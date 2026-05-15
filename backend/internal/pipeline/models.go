@@ -109,6 +109,9 @@ type NarrationBlock struct {
 	Label               string             `json:"label,omitempty"`
 	Text                string             `json:"text,omitempty"`
 	SpokenText          string             `json:"spokenText,omitempty"`
+	Emphasis            string             `json:"emphasis,omitempty"`
+	PauseBeforeMS       int                `json:"pauseBeforeMs,omitempty"`
+	PauseAfterMS        int                `json:"pauseAfterMs,omitempty"`
 	StartOffset         int                `json:"startOffset"`
 	EndOffset           int                `json:"endOffset"`
 	EstimatedDurationMS int                `json:"estimatedDurationMs,omitempty"`
@@ -134,27 +137,31 @@ type PreparedSourceSummary struct {
 }
 
 type PreparedSource struct {
-	ID                string                `json:"id"`
-	ProjectID         string                `json:"projectId"`
-	Status            PreparedSourceStatus  `json:"status"`
-	Kind              PreparedSourceKind    `json:"kind"`
-	SourceName        string                `json:"sourceName"`
-	SourceURL         string                `json:"sourceUrl,omitempty"`
-	SourceContentType string                `json:"sourceContentType,omitempty"`
-	SourceBytes       int64                 `json:"sourceBytes,omitempty"`
-	Title             string                `json:"title,omitempty"`
-	Text              string                `json:"text,omitempty"`
-	SpeechText        string                `json:"speechText,omitempty"`
-	WordCount         int                   `json:"wordCount"`
-	BlockCount        int                   `json:"blockCount"`
-	SegmentCount      int                   `json:"segmentCount"`
-	Summary           PreparedSourceSummary `json:"summary"`
-	Blocks            []NarrationBlock      `json:"blocks,omitempty"`
-	SkippedItems      []SkippedSourceItem   `json:"skippedItems,omitempty"`
-	Warnings          []string              `json:"warnings,omitempty"`
-	Error             string                `json:"error,omitempty"`
-	CreatedAt         time.Time             `json:"createdAt"`
-	UpdatedAt         time.Time             `json:"updatedAt"`
+	ID                  string                `json:"id"`
+	ProjectID           string                `json:"projectId"`
+	Status              PreparedSourceStatus  `json:"status"`
+	Kind                PreparedSourceKind    `json:"kind"`
+	SourceName          string                `json:"sourceName"`
+	SourceURL           string                `json:"sourceUrl,omitempty"`
+	SourceContentType   string                `json:"sourceContentType,omitempty"`
+	SourceBytes         int64                 `json:"sourceBytes,omitempty"`
+	PreprocessorID      string                `json:"preprocessorId,omitempty"`
+	PreprocessorVersion string                `json:"preprocessorVersion,omitempty"`
+	SourceFormat        string                `json:"sourceFormat,omitempty"`
+	RenderMode          string                `json:"renderMode,omitempty"`
+	Title               string                `json:"title,omitempty"`
+	Text                string                `json:"text,omitempty"`
+	SpeechText          string                `json:"speechText,omitempty"`
+	WordCount           int                   `json:"wordCount"`
+	BlockCount          int                   `json:"blockCount"`
+	SegmentCount        int                   `json:"segmentCount"`
+	Summary             PreparedSourceSummary `json:"summary"`
+	Blocks              []NarrationBlock      `json:"blocks,omitempty"`
+	SkippedItems        []SkippedSourceItem   `json:"skippedItems,omitempty"`
+	Warnings            []string              `json:"warnings,omitempty"`
+	Error               string                `json:"error,omitempty"`
+	CreatedAt           time.Time             `json:"createdAt"`
+	UpdatedAt           time.Time             `json:"updatedAt"`
 }
 
 type CreatePreparedSourceRequest struct {
@@ -164,6 +171,34 @@ type CreatePreparedSourceRequest struct {
 	SourceName        string             `json:"sourceName,omitempty"`
 	SourceContentType string             `json:"sourceContentType,omitempty"`
 	SourceBytes       int64              `json:"sourceBytes,omitempty"`
+}
+
+type ProjectStorageDownload struct {
+	Kind      string `json:"kind"`
+	Label     string `json:"label"`
+	URL       string `json:"url"`
+	FileName  string `json:"fileName"`
+	Bytes     int64  `json:"bytes,omitempty"`
+	JobID     string `json:"jobId,omitempty"`
+	Segment   int    `json:"segment,omitempty"`
+	Available bool   `json:"available"`
+}
+
+type ProjectStorageSummary struct {
+	ProjectID           string                   `json:"projectId"`
+	ProjectName         string                   `json:"projectName"`
+	GeneratedAudioBytes int64                    `json:"generatedAudioBytes"`
+	BookSourceBytes     int64                    `json:"bookSourceBytes"`
+	PreparedSourceBytes int64                    `json:"preparedSourceBytes"`
+	JobBytes            int64                    `json:"jobBytes"`
+	TotalBytes          int64                    `json:"totalBytes"`
+	JobCount            int                      `json:"jobCount"`
+	BookSourceCount     int                      `json:"bookSourceCount"`
+	PreparedSourceCount int                      `json:"preparedSourceCount"`
+	Downloads           []ProjectStorageDownload `json:"downloads"`
+	Directories         map[string]string        `json:"directories,omitempty"`
+	Warnings            []string                 `json:"warnings,omitempty"`
+	UpdatedAt           time.Time                `json:"updatedAt"`
 }
 
 type BookSourceStatus string

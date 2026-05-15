@@ -369,6 +369,66 @@ select {
   color: #111827;
 }
 
+.prose-markdown :where(h1, h2, h3) {
+  margin: 0.9rem 0 0.45rem;
+  color: var(--vs-text);
+  font-weight: 720;
+  line-height: 1.2;
+}
+
+.prose-markdown h1 {
+  font-size: 1.28rem;
+}
+
+.prose-markdown h2 {
+  font-size: 1.08rem;
+}
+
+.prose-markdown h3 {
+  font-size: 1rem;
+}
+
+.prose-markdown :where(p, ul, ol, blockquote, table, pre) {
+  margin: 0.55rem 0;
+}
+
+.prose-markdown :where(ul, ol) {
+  padding-left: 1.2rem;
+}
+
+.prose-markdown blockquote {
+  border-left: 3px solid var(--vs-border);
+  padding-left: 0.8rem;
+  color: var(--vs-muted);
+}
+
+.prose-markdown code {
+  border-radius: 0.25rem;
+  background: var(--vs-surface);
+  padding: 0.08rem 0.25rem;
+  font-size: 0.88em;
+}
+
+.prose-markdown pre {
+  overflow: auto;
+  border: 1px solid var(--vs-border);
+  border-radius: 0.45rem;
+  background: var(--vs-surface);
+  padding: 0.75rem;
+}
+
+.prose-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88em;
+}
+
+.prose-markdown :where(th, td) {
+  border: 1px solid var(--vs-border);
+  padding: 0.35rem 0.45rem;
+  text-align: left;
+}
+
 .book-cinema-word-active {
   position: relative;
   isolation: isolate;

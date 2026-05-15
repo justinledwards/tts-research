@@ -117,10 +117,17 @@ export function VoiceSourceAnalysisPanel({
         >
           {file ? "Replace Source" : "Browse Source"}
         </label>
-        <div className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-          <span className="truncate">{file?.name ?? "WAV, MP3, M4A, MP4, MOV up to 1GB"}</span>
-          <span>{file ? formatBytes(file.size) : "No file"}</span>
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+          <span className="min-w-0 truncate" title={file?.name ?? "Audio/video source"}>
+            {file?.name ?? "Audio/video source"}
+          </span>
+          <span className="shrink-0 whitespace-nowrap text-zinc-500">
+            {file ? formatBytes(file.size) : "No file selected"}
+          </span>
         </div>
+        <p className="-mt-1 min-w-0 text-xs leading-5 text-zinc-500">
+          Local uploads are limited by available disk/runtime, not a fixed app cap.
+        </p>
         <button
           className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-zinc-300"
           disabled={!file || isAnalyzing}

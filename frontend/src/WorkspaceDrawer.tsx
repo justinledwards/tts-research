@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatDuration } from "./format";
 import type {
   BookSource,
@@ -12,9 +12,7 @@ import type {
 export function WorkspaceDrawer({
   activeProjectId,
   bookSources,
-  canSubmit,
   isOpen,
-  isProcessing,
   job,
   metrics,
   metricsError,
@@ -25,8 +23,8 @@ export function WorkspaceDrawer({
   profiles,
   selectedProfileId,
   onCreateProject,
-  onCreateAudio,
   onClose,
+  onDeleteProject,
   onExportOpen,
   onImportOpen,
   onOpenSettings,
@@ -36,9 +34,7 @@ export function WorkspaceDrawer({
 }: Readonly<{
   activeProjectId: string;
   bookSources: BookSource[];
-  canSubmit: boolean;
   isOpen: boolean;
-  isProcessing: boolean;
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
   metricsError: string | null;
@@ -49,8 +45,8 @@ export function WorkspaceDrawer({
   profiles: VoiceProfile[];
   selectedProfileId: string;
   onCreateProject: (name: string) => Promise<void>;
-  onCreateAudio: () => void;
   onClose: () => void;
+  onDeleteProject: (id: string) => Promise<void>;
   onExportOpen: () => void;
   onImportOpen: () => void;
   onOpenSettings: () => void;
@@ -59,16 +55,7 @@ export function WorkspaceDrawer({
   onSelectProfile: (profileId: string) => void;
 }>) {
   useEscapeClose(isOpen, onClose);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [renameName, setRenameName] = useState("");
-  const [isSavingProject, setIsSavingProject] = useState(false);
-  const activeProject = useMemo<VoiceProject | null>(() => {
-    const selectedProject = projects.find((project) => project.id === activeProjectId);
-    if (selectedProject) {
-      return selectedProject;
-    }
-    return projects.length > 0 ? projects[0] : null;
-  }, [activeProjectId, projects]);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
   const visibleJobs = useMemo(() => {
     if (!job) {
       return projectJobs;
@@ -78,12 +65,6 @@ export function WorkspaceDrawer({
     }
     return [job, ...projectJobs];
   }, [job, projectJobs]);
-
-  useEffect(() => {
-    if (activeProject) {
-      setRenameName(activeProject.name);
-    }
-  }, [activeProject]);
 
   if (!isOpen) {
     return null;
@@ -118,11 +99,11 @@ export function WorkspaceDrawer({
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[180px_minmax(0,1fr)]">
-          <nav className="border-b p-4 vs-border md:border-r md:border-b-0">
-            <div className="grid grid-cols-5 gap-2 md:grid-cols-1">
+          <nav className="overflow-x-auto border-b p-4 vs-border md:overflow-visible md:border-r md:border-b-0">
+            <div className="flex min-w-max gap-2 md:grid md:min-w-0 md:grid-cols-1">
               {["Projects", "Voices", "Sources", "Imports", "Reports"].map((item, index) => (
                 <a
-                  className={`truncate rounded-md px-3 py-2 text-sm font-semibold transition ${
+                  className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition ${
                     index === 0
                       ? "bg-orange-500 text-white"
                       : "vs-muted hover:bg-[var(--vs-surface)] hover:text-[var(--vs-text)]"
@@ -137,38 +118,55 @@ export function WorkspaceDrawer({
           </nav>
 
           <div className="min-h-0 overflow-y-auto p-5">
-            <WorkspaceSection id="workspace-projects" title="Projects">
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-                <div className="grid gap-3">
-                  {projects.map((project) => (
+            <WorkspaceSection
+              actions={
+                <button
+                  className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
+                  disabled={isCreatingProject}
+                  onClick={() => {
+                    setIsCreatingProject(true);
+                  }}
+                  type="button"
+                >
+                  New Project
+                </button>
+              }
+              id="workspace-projects"
+              title={`Projects (${projects.length.toString()})`}
+            >
+              <div className="grid gap-3">
+                {isCreatingProject ? (
+                  <CreateProjectRow
+                    onCancel={() => {
+                      setIsCreatingProject(false);
+                    }}
+                    onCreateProject={onCreateProject}
+                    onCreated={() => {
+                      setIsCreatingProject(false);
+                    }}
+                  />
+                ) : null}
+                {projectError ? (
+                  <p className="break-words rounded-md border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-700">
+                    {projectError}
+                  </p>
+                ) : null}
+                {projects.length > 0 ? (
+                  projects.map((project) => (
                     <ProjectLibraryRow
                       activeProjectId={activeProjectId}
                       key={project.id}
                       project={project}
                       visibleJobs={project.id === activeProjectId ? visibleJobs : []}
+                      onDeleteProject={onDeleteProject}
+                      onExportProject={onExportOpen}
+                      onRenameProject={onRenameProject}
                       onSelectProject={onSelectProject}
                     />
-                  ))}
-                </div>
-                <CurrentProjectPanel
-                  activeProject={activeProject}
-                  canSubmit={canSubmit}
-                  isSavingProject={isSavingProject}
-                  isProcessing={isProcessing}
-                  job={job}
-                  newProjectName={newProjectName}
-                  projectError={projectError}
-                  renameName={renameName}
-                  visibleJobs={visibleJobs}
-                  onClose={onClose}
-                  onCreateAudio={onCreateAudio}
-                  onCreateProject={onCreateProject}
-                  onExportOpen={onExportOpen}
-                  onRenameNameChange={setRenameName}
-                  onRenameProject={onRenameProject}
-                  onSavingProjectChange={setIsSavingProject}
-                  onNewProjectNameChange={setNewProjectName}
-                />
+                  ))
+                ) : (
+                  <EmptyDrawerText>No projects yet. Create one to start fresh.</EmptyDrawerText>
+                )}
               </div>
             </WorkspaceSection>
 
@@ -304,201 +302,342 @@ export function WorkspaceDrawer({
   );
 }
 
+function CreateProjectRow({
+  onCancel,
+  onCreateProject,
+  onCreated,
+}: Readonly<{
+  onCancel: () => void;
+  onCreateProject: (name: string) => Promise<void>;
+  onCreated: () => void;
+}>) {
+  const [name, setName] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const submitCreate = () => {
+    const nextName = name.trim();
+    if (nextName.length === 0 || isSaving) {
+      return;
+    }
+    setIsSaving(true);
+    void onCreateProject(nextName)
+      .then(() => {
+        setName("");
+        onCreated();
+      })
+      .finally(() => {
+        setIsSaving(false);
+      });
+  };
+
+  return (
+    <form
+      className="grid min-w-0 gap-3 rounded-md border border-orange-200 bg-orange-500/5 p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submitCreate();
+      }}
+    >
+      <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <input
+          aria-label="New project name"
+          className="min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm font-semibold vs-border"
+          onChange={(event) => {
+            setName(event.currentTarget.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              onCancel();
+            }
+          }}
+          placeholder="Project name"
+          ref={inputRef}
+          title={name}
+          value={name}
+        />
+        <button
+          className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          disabled={name.trim().length === 0 || isSaving}
+          type="submit"
+        >
+          {isSaving ? "Creating..." : "Create"}
+        </button>
+        <button
+          className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+          disabled={isSaving}
+          onClick={onCancel}
+          type="button"
+        >
+          Cancel
+        </button>
+      </div>
+      <p className="vs-muted text-xs">
+        New projects start blank for source text, chapters, playback, and staged sources.
+      </p>
+    </form>
+  );
+}
+
 function ProjectLibraryRow({
   activeProjectId,
   project,
   visibleJobs,
+  onDeleteProject,
+  onExportProject,
+  onRenameProject,
   onSelectProject,
 }: Readonly<{
   activeProjectId: string;
   project: VoiceProject;
   visibleJobs: VoiceJob[];
+  onDeleteProject: (id: string) => Promise<void>;
+  onExportProject: () => void;
+  onRenameProject: (id: string, name: string) => Promise<void>;
   onSelectProject: (id: string) => void;
 }>) {
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [draftName, setDraftName] = useState(project.name);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
   const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
   const primaryVoice =
     visibleJobs.find((item) => item.voiceProfileName)?.voiceProfileName ?? "Default";
   const qualityScore = resolveProjectQualityScore(visibleJobs);
   const isActive = project.id === activeProjectId;
+  const isDefault = project.id === "default";
+
+  useEffect(() => {
+    if (!isEditingName) {
+      setDraftName(project.name);
+    }
+  }, [isEditingName, project.name]);
+
+  useEffect(() => {
+    if (isEditingName) {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    }
+  }, [isEditingName]);
+
+  const submitRename = () => {
+    const nextName = draftName.trim();
+    if (nextName.length === 0 || isSavingName) {
+      return;
+    }
+    if (nextName === project.name) {
+      setIsEditingName(false);
+      return;
+    }
+    setIsSavingName(true);
+    void onRenameProject(project.id, nextName).finally(() => {
+      setIsSavingName(false);
+      setIsEditingName(false);
+    });
+  };
+
   return (
-    <button
-      className={`grid min-w-0 gap-3 rounded-lg border p-4 text-left transition ${
-        isActive ? "border-orange-300 bg-orange-500/10" : "vs-raised hover:bg-[var(--vs-surface)]"
+    <div
+      className={`relative grid min-w-0 gap-3 overflow-hidden rounded-md border p-3 pl-4 text-left transition ${
+        isActive ? "border-orange-300 bg-orange-500/5" : "vs-raised hover:bg-[var(--vs-surface)]"
       }`}
-      onClick={() => {
-        onSelectProject(project.id);
-      }}
-      type="button"
     >
-      <div className="flex min-w-0 items-start justify-between gap-3">
+      {isActive ? <span className="absolute inset-y-0 left-0 w-1 bg-orange-500" /> : null}
+      <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div className="min-w-0">
-          <p className="truncate text-base font-semibold" title={project.name}>
-            {project.name}
-          </p>
-          <p className="vs-muted mt-1 truncate text-xs" title={project.id}>
-            Updated {formatDate(project.updatedAt)}
+          {isEditingName ? (
+            <form
+              className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitRename();
+              }}
+            >
+              <input
+                aria-label={`Rename ${project.name}`}
+                className="min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm font-semibold vs-border"
+                onChange={(event) => {
+                  setDraftName(event.currentTarget.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setDraftName(project.name);
+                    setIsEditingName(false);
+                  }
+                }}
+                ref={nameInputRef}
+                title={draftName}
+                value={draftName}
+              />
+              <button
+                className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
+                disabled={draftName.trim().length === 0 || isSavingName}
+                type="submit"
+              >
+                Save
+              </button>
+              <button
+                className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+                disabled={isSavingName}
+                onClick={() => {
+                  setDraftName(project.name);
+                  setIsEditingName(false);
+                }}
+                type="button"
+              >
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                className="min-w-0 truncate text-left text-base font-semibold hover:text-orange-700"
+                onClick={() => {
+                  onSelectProject(project.id);
+                }}
+                title={project.name}
+                type="button"
+              >
+                {project.name}
+              </button>
+              <button
+                aria-label={`Rename ${project.name}`}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md border text-xs hover:bg-[var(--vs-raised)] vs-border"
+                onClick={() => {
+                  setDraftName(project.name);
+                  setIsEditingName(true);
+                }}
+                title="Rename project"
+                type="button"
+              >
+                ✎
+              </button>
+            </div>
+          )}
+          <p className="vs-muted mt-1 flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-xs">
+            <span>{visibleJobs.length.toString()} chapters</span>
+            <span>·</span>
+            <span>{formatDuration(generatedDurationMs)}</span>
+            <span>·</span>
+            <span className="min-w-0 truncate" title={primaryVoice}>
+              {primaryVoice}
+            </span>
+            <span>·</span>
+            <span>{qualityScore}</span>
+            <span>·</span>
+            <span>Updated {formatDate(project.updatedAt)}</span>
           </p>
         </div>
-        <span className="shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold vs-border">
-          {isActive ? "Open" : "Select"}
-        </span>
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
+          {isDefault ? (
+            <span
+              className="rounded-full border px-2.5 py-1 text-xs font-semibold vs-border"
+              title="The default project can be renamed or reused, but it cannot be deleted."
+            >
+              Default
+            </span>
+          ) : null}
+          <button
+            aria-label={isActive ? `Current project ${project.name}` : `Open ${project.name}`}
+            className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+            onClick={() => {
+              onSelectProject(project.id);
+            }}
+            type="button"
+          >
+            {isActive ? "Current" : "Open"}
+          </button>
+          <button
+            aria-label={`Export ${project.name}`}
+            className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:cursor-not-allowed disabled:opacity-45 vs-border"
+            disabled={!isActive}
+            onClick={onExportProject}
+            title={isActive ? "Export this project" : "Open this project before exporting"}
+            type="button"
+          >
+            Export
+          </button>
+          <button
+            aria-label={`Delete ${project.name}`}
+            className="h-8 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={isDefault || isDeleting}
+            onClick={() => {
+              setIsConfirmingDelete(true);
+            }}
+            title={
+              isDefault
+                ? "The default project is protected. Rename or reuse it instead."
+                : "Delete project"
+            }
+            type="button"
+          >
+            {isDefault ? "Protected" : "Delete"}
+          </button>
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
-        <LibraryStat label="Chapters" value={String(visibleJobs.length)} />
-        <LibraryStat label="Duration" value={formatDuration(generatedDurationMs)} />
-        <LibraryStat label="Voice" value={primaryVoice} />
-        <LibraryStat label="Quality" value={qualityScore} />
-      </div>
-    </button>
-  );
-}
-
-function CurrentProjectPanel({
-  activeProject,
-  canSubmit,
-  isSavingProject,
-  isProcessing,
-  job,
-  newProjectName,
-  projectError,
-  renameName,
-  visibleJobs,
-  onClose,
-  onCreateAudio,
-  onCreateProject,
-  onExportOpen,
-  onNewProjectNameChange,
-  onRenameNameChange,
-  onRenameProject,
-  onSavingProjectChange,
-}: Readonly<{
-  activeProject: VoiceProject | null;
-  canSubmit: boolean;
-  isSavingProject: boolean;
-  isProcessing: boolean;
-  job: VoiceJob | null;
-  newProjectName: string;
-  projectError: string | null;
-  renameName: string;
-  visibleJobs: VoiceJob[];
-  onClose: () => void;
-  onCreateAudio: () => void;
-  onCreateProject: (name: string) => Promise<void>;
-  onExportOpen: () => void;
-  onNewProjectNameChange: (name: string) => void;
-  onRenameNameChange: (name: string) => void;
-  onRenameProject: (id: string, name: string) => Promise<void>;
-  onSavingProjectChange: (isSaving: boolean) => void;
-}>) {
-  const nextAction = resolveNextBestAction(job, visibleJobs);
-  const canCreateAudio = canSubmit && !isProcessing;
-  return (
-    <aside className="grid min-w-0 gap-4 rounded-lg border p-4 vs-surface">
-      <div>
-        <p className="vs-muted text-xs font-semibold uppercase tracking-wide">Current project</p>
-        <h3 className="mt-1 truncate text-lg font-semibold" title={activeProject?.name}>
-          {activeProject?.name ?? "Default project"}
-        </h3>
-        <p className="vs-muted mt-1 text-sm">{nextAction}</p>
-      </div>
-      <form
-        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!activeProject || renameName.trim().length === 0) {
-            return;
-          }
-          onSavingProjectChange(true);
-          void onRenameProject(activeProject.id, renameName).finally(() => {
-            onSavingProjectChange(false);
-          });
-        }}
-      >
-        <input
-          aria-label="Rename project"
-          className="min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm vs-border"
-          onChange={(event) => {
-            onRenameNameChange(event.currentTarget.value);
-          }}
-          title={renameName}
-          value={renameName}
-        />
-        <button
-          className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
-          disabled={!activeProject || isSavingProject}
-          type="submit"
-        >
-          Rename
-        </button>
-      </form>
-      <form
-        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const name = newProjectName.trim();
-          if (name.length === 0) {
-            return;
-          }
-          onSavingProjectChange(true);
-          void onCreateProject(name)
-            .then(() => {
-              onNewProjectNameChange("");
-            })
-            .finally(() => {
-              onSavingProjectChange(false);
-            });
-        }}
-      >
-        <input
-          aria-label="New project name"
-          className="min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm vs-border"
-          onChange={(event) => {
-            onNewProjectNameChange(event.currentTarget.value);
-          }}
-          placeholder="New project"
-          title={newProjectName}
-          value={newProjectName}
-        />
-        <button
-          className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
-          disabled={newProjectName.trim().length === 0 || isSavingProject}
-          type="submit"
-        >
-          New
-        </button>
-      </form>
-      {projectError ? (
-        <p className="break-words text-xs leading-5 text-red-700">{projectError}</p>
+      {isConfirmingDelete ? (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+          <p className="font-semibold">Delete “{project.name}”?</p>
+          <p className="mt-1 text-xs leading-5">
+            This removes this project’s jobs, generated audio, books, prepared sources, and
+            listening progress. Voice profiles stay in your library.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              className="h-8 rounded-md bg-red-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
+              disabled={isDeleting}
+              onClick={() => {
+                setIsDeleting(true);
+                void onDeleteProject(project.id).finally(() => {
+                  setIsDeleting(false);
+                  setIsConfirmingDelete(false);
+                });
+              }}
+              type="button"
+            >
+              {isDeleting ? "Deleting..." : "Delete project"}
+            </button>
+            <button
+              className="h-8 rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-700"
+              disabled={isDeleting}
+              onClick={() => {
+                setIsConfirmingDelete(false);
+              }}
+              type="button"
+            >
+              Keep project
+            </button>
+          </div>
+        </div>
       ) : null}
-      <div className="grid gap-2">
-        <button
-          className="h-10 rounded-md text-sm font-semibold text-white vs-accent-bg"
-          disabled={job?.status !== "completed" && !canCreateAudio}
-          onClick={job?.status === "completed" ? onClose : onCreateAudio}
-          type="button"
-        >
-          {job?.status === "completed" ? "Continue Listening" : "Create Audio"}
-        </button>
-        <button
-          className="h-10 rounded-md border text-sm font-semibold hover:bg-[var(--vs-raised)] vs-border"
-          onClick={onExportOpen}
-          type="button"
-        >
-          Export Bundle
-        </button>
-      </div>
-    </aside>
+    </div>
   );
 }
 
 function WorkspaceSection({
+  actions,
   children,
   id,
   title,
-}: Readonly<{ children: ReactNode; id: string; title: string }>) {
+}: Readonly<{ actions?: ReactNode; children: ReactNode; id: string; title: string }>) {
   return (
     <section className="mb-8 scroll-mt-6 last:mb-0" id={id}>
-      <h3 className="vs-muted mb-3 text-xs font-semibold uppercase tracking-wide">{title}</h3>
+      <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+        <h3 className="vs-muted min-w-0 truncate text-xs font-semibold uppercase tracking-wide">
+          {title}
+        </h3>
+        {actions}
+      </div>
       {children}
     </section>
   );
@@ -507,17 +646,6 @@ function WorkspaceSection({
 function EmptyDrawerText({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <p className="vs-muted rounded-md border border-dashed p-4 text-sm vs-border">{children}</p>
-  );
-}
-
-function LibraryStat({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <span className="min-w-0 rounded-md border px-2 py-1.5 vs-border">
-      <span className="vs-muted block uppercase tracking-wide">{label}</span>
-      <span className="block truncate font-semibold" title={value}>
-        {value}
-      </span>
-    </span>
   );
 }
 
@@ -530,19 +658,6 @@ function resolveProjectQualityScore(jobs: VoiceJob[]): string {
   }
   const average = scores.reduce((sum, value) => sum + value, 0) / scores.length;
   return `${Math.round(average * 100).toString()}%`;
-}
-
-function resolveNextBestAction(job: VoiceJob | null, jobs: VoiceJob[]): string {
-  if (job?.status === "completed") {
-    return "Continue listening or export the finished bundle.";
-  }
-  if (job && job.status !== "failed" && job.status !== "cancelled") {
-    return "Keep the studio open while audio arrives.";
-  }
-  if (jobs.length > 0) {
-    return "Review quality, continue a chapter, or create the next one.";
-  }
-  return "Add source text and create the first listenable chapter.";
 }
 
 function formatDate(value: string): string {
@@ -563,6 +678,14 @@ function useEscapeClose(isOpen: boolean, onClose: () => void) {
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
       if (event.key === "Escape") {
         onClose();
       }

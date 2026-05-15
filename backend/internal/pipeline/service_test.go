@@ -106,6 +106,12 @@ func TestPreparedSourceSkipsResearchCitationsAndKeepsHeadings(t *testing.T) {
 	if !strings.Contains(source.SpeechText, "Corporate Moats") || !strings.Contains(source.SpeechText, "Executive summary") {
 		t.Fatalf("speech text lost headings: %q", source.SpeechText)
 	}
+	if source.PreprocessorID != "markdown-gfm" || source.RenderMode != "markdown" || source.SourceFormat != "markdown" {
+		t.Fatalf("source preprocessor metadata = %q/%q/%q", source.PreprocessorID, source.RenderMode, source.SourceFormat)
+	}
+	if source.Blocks[0].Emphasis != "heading" || source.Blocks[0].PauseAfterMS == 0 {
+		t.Fatalf("heading block should carry emphasis/pause metadata: %#v", source.Blocks[0])
+	}
 	if source.Summary.SentenceSegmentCount < 3 {
 		t.Fatalf("sentence segment count = %d, want at least 3", source.Summary.SentenceSegmentCount)
 	}
@@ -482,6 +488,65 @@ func TestProjectsCreateRenameAndGroupJobs(t *testing.T) {
 	}
 	if len(defaultJobs) != 1 || defaultJobs[0].ID != defaultJob.ID {
 		t.Fatalf("default project jobs = %#v, want legacy/default job", defaultJobs)
+	}
+}
+
+func TestProjectDeleteAndStorageSummary(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	project, err := service.CreateProject("Delete me")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	source, err := service.CreatePreparedSource(context.Background(), project.ID, pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "notes.md",
+		Text:       "# Notes\n\nThis is narration-ready source text.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.AudioPath == "" {
+		t.Fatal("completed job should have audio path")
+	}
+	if _, err := service.UpdatePlaybackProgress("prepared:"+source.ID, pipeline.PlaybackProgressUpdate{
+		ProjectID:        project.ID,
+		PreparedSourceID: source.ID,
+		JobID:            completed.ID,
+		CurrentTimeSec:   1,
+		Progress:         0.5,
+	}); err != nil {
+		t.Fatalf("UpdatePlaybackProgress returned error: %v", err)
+	}
+
+	storage, err := service.GetProjectStorageSummary(project.ID)
+	if err != nil {
+		t.Fatalf("GetProjectStorageSummary returned error: %v", err)
+	}
+	if storage.JobCount != 1 || storage.PreparedSourceCount != 1 || storage.GeneratedAudioBytes == 0 {
+		t.Fatalf("storage summary = %#v, want project job/source/audio totals", storage)
+	}
+	if len(storage.Downloads) == 0 || storage.Downloads[0].URL == "" {
+		t.Fatalf("storage downloads = %#v, want audio download", storage.Downloads)
+	}
+
+	if err := service.DeleteProject("default"); !errors.Is(err, pipeline.ErrProjectProtected) {
+		t.Fatalf("DeleteProject(default) error = %v, want protected", err)
+	}
+	if err := service.DeleteProject(project.ID); err != nil {
+		t.Fatalf("DeleteProject returned error: %v", err)
+	}
+	if _, err := service.GetProject(project.ID); !errors.Is(err, pipeline.ErrProjectNotFound) {
+		t.Fatalf("GetProject deleted error = %v, want not found", err)
+	}
+	if _, err := service.GetPreparedSource(source.ID); !errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+		t.Fatalf("GetPreparedSource deleted error = %v, want not found", err)
 	}
 }
 

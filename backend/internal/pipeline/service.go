@@ -36,6 +36,7 @@ var (
 	ErrProfileCandidateNotFound   = errors.New("voice profile candidate not found")
 	ErrProfileAnalysisUnavailable = errors.New("voice profile source analysis is not configured")
 	ErrProjectNotFound            = errors.New("project not found")
+	ErrProjectProtected           = errors.New("default project cannot be deleted")
 	ErrBookSourceNotFound         = errors.New("book source not found")
 	ErrPreparedSourceNotFound     = errors.New("prepared source not found")
 	ErrProgressNotFound           = errors.New("playback progress not found")

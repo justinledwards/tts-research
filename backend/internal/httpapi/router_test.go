@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"testing"
@@ -185,6 +186,57 @@ func TestProjectEndpointsCreateRenameAndListJobs(t *testing.T) {
 	}
 	if len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].ProjectID != project.ID {
 		t.Fatalf("jobs = %#v, want one project job", jobs)
+	}
+
+	storageRequest, err := http.NewRequest(http.MethodGet, "/api/projects/"+project.ID+"/storage", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(storage) returned error: %v", err)
+	}
+	storageResponse, err := app.Test(storageRequest)
+	if err != nil {
+		t.Fatalf("app.Test(storage) returned error: %v", err)
+	}
+	defer storageResponse.Body.Close()
+	if storageResponse.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(storageResponse.Body)
+		t.Fatalf("storage status = %d, want %d, body = %s", storageResponse.StatusCode, http.StatusOK, payload)
+	}
+	var storage pipeline.ProjectStorageSummary
+	if err := json.NewDecoder(storageResponse.Body).Decode(&storage); err != nil {
+		t.Fatalf("decode storage: %v", err)
+	}
+	if storage.ProjectID != project.ID || len(storage.Downloads) == 0 {
+		t.Fatalf("storage = %#v, want downloads for project", storage)
+	}
+
+	deleteDefaultRequest, err := http.NewRequest(http.MethodDelete, "/api/projects/default", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(delete default) returned error: %v", err)
+	}
+	deleteDefaultResponse, err := app.Test(deleteDefaultRequest)
+	if err != nil {
+		t.Fatalf("app.Test(delete default) returned error: %v", err)
+	}
+	defer deleteDefaultResponse.Body.Close()
+	if deleteDefaultResponse.StatusCode != http.StatusConflict {
+		t.Fatalf("delete default status = %d, want %d", deleteDefaultResponse.StatusCode, http.StatusConflict)
+	}
+
+	deleteRequest, err := http.NewRequest(http.MethodDelete, "/api/projects/"+project.ID, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(delete) returned error: %v", err)
+	}
+	deleteResponse, err := app.Test(deleteRequest)
+	if err != nil {
+		t.Fatalf("app.Test(delete) returned error: %v", err)
+	}
+	defer deleteResponse.Body.Close()
+	if deleteResponse.StatusCode != http.StatusNoContent {
+		payload, _ := io.ReadAll(deleteResponse.Body)
+		t.Fatalf("delete status = %d, want %d, body = %s", deleteResponse.StatusCode, http.StatusNoContent, payload)
+	}
+	if _, err := service.GetProject(project.ID); !errors.Is(err, pipeline.ErrProjectNotFound) {
+		t.Fatalf("GetProject deleted error = %v, want not found", err)
 	}
 }
 

@@ -160,11 +160,13 @@ export function TopProductBar({
       </div>
       <div className="hidden items-center justify-end gap-2 md:flex">
         <button
-          className="inline-flex h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised"
+          aria-label="Open help"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md border text-sm font-semibold shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised"
           onClick={onHelpOpen}
+          title="Open help"
           type="button"
         >
-          ? Help
+          ?
         </button>
         <button
           className="inline-flex h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised"

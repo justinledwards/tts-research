@@ -16,6 +16,7 @@ import type {
   ProjectBundleImportResult,
   ProjectBundlePreview,
   ProjectBundleSummary,
+  ProjectStorageSummary,
   SystemMetrics,
   TTSEngineDiagnostics,
   VoiceJob,
@@ -179,6 +180,14 @@ export async function createPreparedSourceJob(
   return response.json() as Promise<VoiceJob>;
 }
 
+export async function getPreparedSource(id: string): Promise<PreparedSource> {
+  const response = await fetch(`${apiBaseUrl}/api/source-preps/${id}`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PreparedSource>;
+}
+
 export async function listProjectProgress(projectId: string): Promise<PlaybackProgress[]> {
   const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/progress`);
   if (!response.ok) {
@@ -306,6 +315,23 @@ export async function renameProject(id: string, name: string): Promise<VoiceProj
   return response.json() as Promise<VoiceProject>;
 }
 
+export async function deleteProject(id: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/projects/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    if (response.status === 405) {
+      const allowed = response.headers.get("Allow");
+      const suffix = allowed ? ` The running backend only allows: ${allowed}.` : "";
+      throw new Error(
+        `Project deletion is not available from the running backend.${suffix} Restart the backend with mise start -- pnpm start:local so the current API routes are loaded.`,
+      );
+    }
+    throw new Error(await readError(response));
+  }
+}
+
 export async function listProjectJobs(id: string): Promise<VoiceJob[]> {
   const response = await fetch(`${apiBaseUrl}/api/projects/${id}/jobs`);
   if (!response.ok) {
@@ -313,6 +339,15 @@ export async function listProjectJobs(id: string): Promise<VoiceJob[]> {
   }
 
   return response.json() as Promise<VoiceJob[]>;
+}
+
+export async function getProjectStorageSummary(id: string): Promise<ProjectStorageSummary> {
+  const response = await fetch(`${apiBaseUrl}/api/projects/${id}/storage`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<ProjectStorageSummary>;
 }
 
 export async function getProjectBundleSummary(id: string): Promise<ProjectBundleSummary> {
@@ -571,6 +606,17 @@ export function audioSource(job: VoiceJob, options?: { partial: boolean }): stri
   }
 
   return `${apiBaseUrl}${baseUrl}`;
+}
+
+export function backendAssetUrl(path: string): string {
+  if (!path) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${apiBaseUrl}${normalizedPath}`;
 }
 
 async function readError(response: Response): Promise<string> {

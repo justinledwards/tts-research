@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { backendAssetUrl } from "./api";
 import { formatDuration } from "./format";
 import { KOKORO_VOICEPACKS, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
 import type { RunConfiguration } from "./runConfig";
-import { describePerformanceMode, getRunModePreset } from "./runConfig";
+import {
+  RUN_MODE_PRESETS,
+  createRunConfiguration,
+  describePerformanceMode,
+  getRunModePreset,
+} from "./runConfig";
 import {
   buildTeleprompterWordCues,
   type TeleprompterEffectStyle,
@@ -17,6 +23,7 @@ import type {
   VoiceProfile,
   VoiceProfileSource,
   VoiceProfileSourceDiagnostics,
+  ProjectStorageSummary,
 } from "./types";
 
 export function HelpPanel({
@@ -108,6 +115,8 @@ export function SettingsPanel({
   metricsError,
   profileSourceDiagnostics,
   profileSource,
+  projectStorage,
+  projectStorageError,
   runConfiguration,
   selectedProfile,
   teleprompterSettings,
@@ -115,6 +124,7 @@ export function SettingsPanel({
   ttsEngineError,
   ttsEngines,
   onClose,
+  onRunConfigurationChange,
   onTeleprompterSettingsChange,
   onThemeChange,
 }: Readonly<{
@@ -124,6 +134,8 @@ export function SettingsPanel({
   metricsError: string | null;
   profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
   profileSource: VoiceProfileSource | null;
+  projectStorage: ProjectStorageSummary | null;
+  projectStorageError: string | null;
   runConfiguration: RunConfiguration;
   selectedProfile: VoiceProfile | null;
   teleprompterSettings: TeleprompterHighlightSettings;
@@ -131,6 +143,7 @@ export function SettingsPanel({
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
   onClose: () => void;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
@@ -150,7 +163,7 @@ export function SettingsPanel({
             className={`rounded-md border px-3 py-2 text-sm font-semibold capitalize ${
               activeTab === tab
                 ? "border-orange-300 bg-orange-50 text-orange-900"
-                : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
             }`}
             key={tab}
             onClick={() => {
@@ -170,12 +183,15 @@ export function SettingsPanel({
         metricsError={metricsError}
         profileSource={profileSource}
         profileSourceDiagnostics={profileSourceDiagnostics}
+        projectStorage={projectStorage}
+        projectStorageError={projectStorageError}
         runConfiguration={runConfiguration}
         selectedProfile={selectedProfile}
         teleprompterSettings={teleprompterSettings}
         themeName={themeName}
         ttsEngineError={ttsEngineError}
         ttsEngines={ttsEngines}
+        onRunConfigurationChange={onRunConfigurationChange}
         onTeleprompterSettingsChange={onTeleprompterSettingsChange}
         onThemeChange={onThemeChange}
       />
@@ -190,12 +206,15 @@ function SettingsTabContent({
   metricsError,
   profileSource,
   profileSourceDiagnostics,
+  projectStorage,
+  projectStorageError,
   runConfiguration,
   selectedProfile,
   teleprompterSettings,
   themeName,
   ttsEngineError,
   ttsEngines,
+  onRunConfigurationChange,
   onTeleprompterSettingsChange,
   onThemeChange,
 }: Readonly<{
@@ -205,12 +224,15 @@ function SettingsTabContent({
   metricsError: string | null;
   profileSource: VoiceProfileSource | null;
   profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
+  projectStorage: ProjectStorageSummary | null;
+  projectStorageError: string | null;
   runConfiguration: RunConfiguration;
   selectedProfile: VoiceProfile | null;
   teleprompterSettings: TeleprompterHighlightSettings;
   themeName: ThemeName;
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
@@ -236,8 +258,10 @@ function SettingsTabContent({
         metrics={metrics}
         metricsError={metricsError}
         profileSourceDiagnostics={profileSourceDiagnostics}
+        runConfiguration={runConfiguration}
         ttsEngineError={ttsEngineError}
         ttsEngines={ttsEngines}
+        onRunConfigurationChange={onRunConfigurationChange}
       />
     );
   }
@@ -249,12 +273,19 @@ function SettingsTabContent({
         metrics={metrics}
         presetLabel={preset.label}
         runConfiguration={runConfiguration}
+        onRunConfigurationChange={onRunConfigurationChange}
       />
     );
   }
 
   return (
-    <SettingsStorageTab job={job} profileSource={profileSource} selectedProfile={selectedProfile} />
+    <SettingsStorageTab
+      job={job}
+      profileSource={profileSource}
+      projectStorage={projectStorage}
+      projectStorageError={projectStorageError}
+      selectedProfile={selectedProfile}
+    />
   );
 }
 
@@ -284,7 +315,7 @@ function SettingsPreferencesTab({
         label="Arrival playback"
         value={runConfiguration.options.arrivalPlayback ? "On" : "Off"}
       />
-      <p className="text-sm leading-6 text-zinc-600">
+      <p className="vs-muted text-sm leading-6">
         Preferences are saved locally in this browser. Runtime provider configuration remains
         read-only in this pass.
       </p>
@@ -353,20 +384,46 @@ function SettingsProvidersTab({
   metrics,
   metricsError,
   profileSourceDiagnostics,
+  runConfiguration,
   ttsEngineError,
   ttsEngines,
+  onRunConfigurationChange,
 }: Readonly<{
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
   metricsError: string | null;
   profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
+  runConfiguration: RunConfiguration;
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
+  const updateEngine = (engineId: string) => {
+    const engine = ttsEngines.find((item) => item.id === engineId);
+    if (engine && engine.status !== "ready") {
+      return;
+    }
+    onRunConfigurationChange({
+      ...runConfiguration,
+      ttsEngine: engineId,
+      engineOptions:
+        engineId === "supertonic-3"
+          ? {
+              ...runConfiguration.engineOptions,
+              voiceStyle:
+                runConfiguration.engineOptions.voiceStyle ?? engine?.voices?.[0]?.id ?? "M1",
+              lang: runConfiguration.engineOptions.lang ?? "sv",
+            }
+          : {},
+    });
+  };
   return (
     <PanelSection title="Providers">
       <DiagnosticLine label="Backend" value={metrics ? "Online" : (metricsError ?? "Pending")} />
-      <DiagnosticLine label="Narration engine" value={job?.ttsEngine ?? "Auto until a job runs"} />
+      <DiagnosticLine
+        label="Narration engine"
+        value={runConfiguration.ttsEngine === "auto" ? "Auto" : runConfiguration.ttsEngine}
+      />
       <DiagnosticLine label="TTS provider" value={job?.provider ?? "Resolved when a job runs"} />
       <DiagnosticLine
         label="Kokoro voice"
@@ -397,7 +454,12 @@ function SettingsProvidersTab({
           {profileSourceDiagnostics.setupMessage}
         </p>
       ) : null}
-      <TTSEngineDiagnosticsList engines={ttsEngines} error={ttsEngineError} />
+      <TTSEngineDiagnosticsList
+        engines={ttsEngines}
+        error={ttsEngineError}
+        selectedEngine={runConfiguration.ttsEngine}
+        onSelectEngine={updateEngine}
+      />
       <KokoroVoicepackDetails />
     </PanelSection>
   );
@@ -406,44 +468,79 @@ function SettingsProvidersTab({
 function TTSEngineDiagnosticsList({
   engines,
   error,
-}: Readonly<{ engines: TTSEngineDiagnostics[]; error: string | null }>) {
+  selectedEngine,
+  onSelectEngine,
+}: Readonly<{
+  engines: TTSEngineDiagnostics[];
+  error: string | null;
+  selectedEngine: string;
+  onSelectEngine: (engineId: string) => void;
+}>) {
   if (error) {
     return <p className="text-sm leading-6 text-red-700">{error}</p>;
   }
   return (
-    <details className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
-      <summary className="cursor-pointer font-semibold text-zinc-800">
-        Narration engines ({String(engines.length)})
-      </summary>
-      <ul className="mt-3 grid gap-2">
+    <div className="grid gap-3 rounded-md border p-3 text-xs vs-border vs-surface">
+      <div>
+        <h4 className="text-sm font-semibold">Narration Engine</h4>
+        <p className="vs-muted mt-1 text-xs leading-5">
+          Ready engines can be selected here. Unavailable engines show what needs setup first.
+        </p>
+      </div>
+      <ul className="grid gap-2">
         {engines.map((engine) => (
-          <li className="grid gap-1 rounded border border-zinc-200 bg-white p-2" key={engine.id}>
-            <span className="flex items-center justify-between gap-2">
-              <span className="font-semibold text-zinc-900">{engine.label}</span>
-              <span className="text-zinc-500">{engine.status}</span>
-            </span>
-            <span className="break-words">
-              {engine.supportsSwedish ? "Swedish · " : ""}
-              {engine.estimatedVram ?? (engine.local ? "local" : "remote")}
-            </span>
-            {engine.reason ? <span className="break-words">{engine.reason}</span> : null}
+          <li key={engine.id}>
+            <button
+              className={`grid w-full gap-2 rounded-md border p-3 text-left transition ${
+                selectedEngine === engine.id
+                  ? "border-orange-300 bg-orange-500/10"
+                  : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
+              }`}
+              disabled={engine.status !== "ready"}
+              onClick={() => {
+                onSelectEngine(engine.id);
+              }}
+              type="button"
+            >
+              <span className="flex min-w-0 items-center justify-between gap-2">
+                <span className="min-w-0 truncate font-semibold" title={engine.label}>
+                  {engine.label}
+                </span>
+                <span
+                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${
+                    engine.status === "ready"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                      : "border-amber-300 bg-amber-50 text-amber-800"
+                  }`}
+                >
+                  {engine.status}
+                </span>
+              </span>
+              <span className="vs-muted break-words">
+                {engine.supportsSwedish ? "Swedish · " : ""}
+                {engine.estimatedVram ?? (engine.local ? "local" : "remote")}
+              </span>
+              {engine.reason || engine.setup ? (
+                <span className="vs-muted break-words">{engine.reason ?? engine.setup}</span>
+              ) : null}
+            </button>
           </li>
         ))}
       </ul>
-    </details>
+    </div>
   );
 }
 
 function KokoroVoicepackDetails() {
   return (
-    <details className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
-      <summary className="cursor-pointer font-semibold text-zinc-800">
+    <details className="rounded-md border p-3 text-xs vs-border vs-surface">
+      <summary className="cursor-pointer font-semibold">
         Kokoro voicepacks ({String(KOKORO_VOICEPACKS.length)})
       </summary>
       <ul className="mt-3 grid gap-2">
         {KOKORO_VOICEPACKS.map((voicepack) => (
           <li className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-2" key={voicepack.id}>
-            <code className="rounded bg-white px-2 py-1 font-mono text-[11px] text-zinc-700">
+            <code className="rounded bg-[var(--vs-raised)] px-2 py-1 font-mono text-[11px]">
               {voicepack.id}
             </code>
             <span className="min-w-0 truncate" title={kokoroVoicepackDetail(voicepack.id)}>
@@ -461,18 +558,75 @@ function SettingsPerformanceTab({
   metrics,
   presetLabel,
   runConfiguration,
+  onRunConfigurationChange,
 }: Readonly<{
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
   presetLabel: string;
   runConfiguration: RunConfiguration;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
   const gpu = metrics?.gpus?.[0];
 
   return (
     <PanelSection title="Performance">
-      <DiagnosticLine label="Run shape" value={presetLabel} />
-      <DiagnosticLine label="Performance mode" value={runConfiguration.performanceMode} />
+      <div className="grid gap-3">
+        <div>
+          <h4 className="text-sm font-semibold">Run shape</h4>
+          <p className="vs-muted mt-1 text-sm leading-6">
+            {presetLabel} controls which checks run. Performance controls how aggressively segments
+            are generated.
+          </p>
+        </div>
+        <div className="grid gap-2">
+          {RUN_MODE_PRESETS.map((preset) => (
+            <button
+              className={`rounded-md border p-3 text-left transition ${
+                preset.mode === runConfiguration.runMode
+                  ? "border-orange-300 bg-orange-500/10"
+                  : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
+              }`}
+              key={preset.mode}
+              onClick={() => {
+                const nextConfig = createRunConfiguration(preset.mode);
+                onRunConfigurationChange({
+                  ...nextConfig,
+                  ttsEngine: runConfiguration.ttsEngine,
+                  engineOptions: runConfiguration.engineOptions,
+                });
+              }}
+              type="button"
+            >
+              <span className="flex items-center justify-between gap-3">
+                <span className="font-semibold">{preset.label}</span>
+                <span className="vs-muted text-xs">{preset.primaryLabel}</span>
+              </span>
+              <span className="vs-muted mt-1 block text-xs leading-5">{preset.description}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-2">
+        {(["balanced", "throughput", "quality"] as const).map((mode) => (
+          <button
+            className={`rounded-md border p-3 text-left capitalize transition ${
+              mode === runConfiguration.performanceMode
+                ? "border-orange-300 bg-orange-500/10"
+                : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
+            }`}
+            key={mode}
+            onClick={() => {
+              onRunConfigurationChange({ ...runConfiguration, performanceMode: mode });
+            }}
+            type="button"
+          >
+            <span className="font-semibold">{mode}</span>
+            <span className="vs-muted mt-1 block text-xs leading-5">
+              {describePerformanceMode(mode)}
+            </span>
+          </button>
+        ))}
+      </div>
       <DiagnosticLine
         label="GPU memory"
         value={
@@ -496,21 +650,94 @@ function SettingsPerformanceTab({
 function SettingsStorageTab({
   job,
   profileSource,
+  projectStorage,
+  projectStorageError,
   selectedProfile,
 }: Readonly<{
   job: VoiceJob | null;
   profileSource: VoiceProfileSource | null;
+  projectStorage: ProjectStorageSummary | null;
+  projectStorageError: string | null;
   selectedProfile: VoiceProfile | null;
 }>) {
   return (
     <PanelSection title="Storage">
-      <DiagnosticLine label="Selected profile" value={selectedProfile?.referencePath ?? "None"} />
-      <DiagnosticLine label="Source analysis" value={profileSource?.normalizedAudio ?? "None"} />
-      <DiagnosticLine label="Completed audio" value={job?.audioPath ?? "None"} />
-      <p className="text-sm leading-6 text-zinc-600">
-        Storage locations are backend-managed and surfaced here for diagnostics.
-      </p>
+      {projectStorageError ? (
+        <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {projectStorageError}
+        </p>
+      ) : null}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <StorageStat
+          label="Generated audio"
+          value={formatBytes(projectStorage?.generatedAudioBytes ?? 0)}
+        />
+        <StorageStat label="Project total" value={formatBytes(projectStorage?.totalBytes ?? 0)} />
+        <StorageStat
+          label="Book/source data"
+          value={formatBytes(
+            (projectStorage?.bookSourceBytes ?? 0) + (projectStorage?.preparedSourceBytes ?? 0),
+          )}
+        />
+        <StorageStat label="Jobs" value={String(projectStorage?.jobCount ?? 0)} />
+      </div>
+      {projectStorage?.downloads && projectStorage.downloads.length > 0 ? (
+        <div className="grid gap-2">
+          <h4 className="text-sm font-semibold">Audio Downloads</h4>
+          {projectStorage.downloads.slice(0, 12).map((download) => (
+            <a
+              className={`flex min-w-0 items-center justify-between gap-3 rounded-md border p-3 text-sm font-semibold transition ${
+                download.available
+                  ? "vs-border vs-raised hover:bg-[var(--vs-surface)]"
+                  : "pointer-events-none opacity-45 vs-border vs-surface"
+              }`}
+              download={download.fileName}
+              href={backendAssetUrl(download.url)}
+              key={`${download.kind}-${download.jobId ?? ""}-${String(download.segment ?? 0)}`}
+            >
+              <span className="min-w-0 truncate" title={download.label}>
+                {download.label}
+              </span>
+              <span className="vs-muted shrink-0 text-xs">
+                {download.bytes ? formatBytes(download.bytes) : "WAV"}
+              </span>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p className="vs-muted rounded-md border border-dashed p-3 text-sm vs-border">
+          Create audio to unlock direct WAV downloads here.
+        </p>
+      )}
+      <details className="rounded-md border p-3 text-xs vs-border vs-surface">
+        <summary className="cursor-pointer font-semibold">Technical storage details</summary>
+        <dl className="mt-3 grid gap-2">
+          <DiagnosticLine
+            label="Selected profile"
+            value={selectedProfile?.referencePath ?? "None"}
+          />
+          <DiagnosticLine
+            label="Source analysis"
+            value={profileSource?.normalizedAudio ?? "None"}
+          />
+          <DiagnosticLine label="Completed audio" value={job?.audioPath ?? "None"} />
+          {Object.entries(projectStorage?.directories ?? {}).map(([label, path]) => (
+            <DiagnosticLine key={label} label={label} value={path} />
+          ))}
+        </dl>
+      </details>
     </PanelSection>
+  );
+}
+
+function StorageStat({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="rounded-md border p-3 vs-border vs-surface">
+      <dt className="vs-muted text-xs font-semibold uppercase tracking-wide">{label}</dt>
+      <dd className="mt-1 truncate text-sm font-semibold" title={value}>
+        {value}
+      </dd>
+    </div>
   );
 }
 
@@ -529,10 +756,10 @@ function TeleprompterSettingsControls({
   };
 
   return (
-    <div className="grid gap-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+    <div className="grid gap-4 rounded-md border p-3 vs-border vs-surface">
       <div>
-        <h4 className="text-sm font-semibold text-zinc-950">Teleprompter focus</h4>
-        <p className="mt-1 text-xs leading-5 text-zinc-500">
+        <h4 className="text-sm font-semibold">Teleprompter focus</h4>
+        <p className="vs-muted mt-1 text-xs leading-5">
           Lead timing pulls the eye forward; fade timing keeps spoken words gently visible.
         </p>
       </div>
@@ -581,8 +808,8 @@ function TeleprompterSettingsControls({
           <button
             className={`rounded-md border px-3 py-2 text-xs font-semibold capitalize ${
               settings.effectStyle === style
-                ? "border-pink-300 bg-pink-50 text-pink-800"
-                : "border-zinc-200 bg-white text-zinc-700"
+                ? "border-orange-300 bg-orange-500/10 text-[var(--vs-text)]"
+                : "vs-border vs-raised"
             }`}
             key={style}
             onClick={() => {
@@ -590,7 +817,7 @@ function TeleprompterSettingsControls({
             }}
             type="button"
           >
-            {style}
+            {style === "spark" ? "Spark Demo" : "Outline Glow"}
           </button>
         ))}
       </div>
@@ -617,10 +844,10 @@ function TeleprompterRange({
   onChange: (value: number) => void;
 }>) {
   return (
-    <label className="grid gap-2 text-xs font-medium text-zinc-600">
+    <label className="vs-muted grid gap-2 text-xs font-medium">
       <span className="flex items-center justify-between gap-3">
         <span>{label}</span>
-        <span className="font-semibold text-zinc-950">
+        <span className="font-semibold text-[var(--vs-text)]">
           {Number.isInteger(value) ? value.toString() : value.toFixed(2)}
           {suffix}
         </span>
@@ -662,9 +889,9 @@ function TeleprompterHighlightDemo({
   }, []);
 
   return (
-    <div className="rounded-md border border-pink-100 bg-white p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-pink-700">Highlight demo</p>
-      <p className="mt-3 whitespace-pre-wrap text-lg leading-10 text-zinc-950">
+    <div className="rounded-md border p-3 vs-border vs-raised">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#cc0d55]">Highlight demo</p>
+      <p className="mt-3 whitespace-pre-wrap text-lg leading-10">
         {words.map((word, index) => {
           const wordCue = wordCues[index];
           return (
@@ -704,16 +931,16 @@ function PanelShell({
     <div className="fixed inset-0 z-50 bg-zinc-950/25" role="presentation">
       <aside
         aria-label={label}
-        className="ml-auto flex h-full w-full max-w-[520px] flex-col border-l border-zinc-200 bg-white shadow-2xl md:w-[500px]"
+        className="vs-app ml-auto flex h-full w-full max-w-[520px] flex-col border-l shadow-2xl md:w-[500px] vs-border"
       >
-        <header className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
+        <header className="flex items-center justify-between border-b px-5 py-4 vs-border">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</p>
-            <h2 className="text-lg font-semibold text-zinc-950">{title}</h2>
+            <p className="vs-muted text-xs font-medium uppercase tracking-wide">{label}</p>
+            <h2 className="text-lg font-semibold">{title}</h2>
           </div>
           <button
             aria-label={`Close ${label}`}
-            className="grid h-9 w-9 place-items-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+            className="grid h-9 w-9 place-items-center rounded-md border hover:bg-[var(--vs-surface)] vs-border"
             onClick={onClose}
             type="button"
           >
@@ -729,8 +956,8 @@ function PanelShell({
 function PanelSection({ children, title }: Readonly<{ children: ReactNode; title: string }>) {
   return (
     <section className="mt-6 first:mt-0">
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</h3>
-      <div className="grid gap-3 rounded-md border border-zinc-200 bg-white p-4">{children}</div>
+      <h3 className="vs-muted mb-3 text-xs font-semibold uppercase tracking-wide">{title}</h3>
+      <div className="grid gap-3 rounded-md border p-4 vs-border vs-raised">{children}</div>
     </section>
   );
 }
@@ -738,8 +965,8 @@ function PanelSection({ children, title }: Readonly<{ children: ReactNode; title
 function GuideStep({ detail, title }: Readonly<{ detail: string; title: string }>) {
   return (
     <div>
-      <p className="text-sm font-semibold text-zinc-950">{title}</p>
-      <p className="mt-1 text-sm leading-6 text-zinc-600">{detail}</p>
+      <p className="text-sm font-semibold">{title}</p>
+      <p className="vs-muted mt-1 text-sm leading-6">{detail}</p>
     </div>
   );
 }
@@ -747,10 +974,24 @@ function GuideStep({ detail, title }: Readonly<{ detail: string; title: string }
 function DiagnosticLine({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="flex items-start justify-between gap-4 text-sm">
-      <dt className="text-zinc-500">{label}</dt>
-      <dd className="max-w-[65%] text-right font-medium text-zinc-900">{value}</dd>
+      <dt className="vs-muted">{label}</dt>
+      <dd className="max-w-[65%] break-words text-right font-medium">{value}</dd>
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 function explainCurrentState(job: VoiceJob | null, source: VoiceProfileSource | null): string {

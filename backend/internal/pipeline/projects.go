@@ -84,12 +84,26 @@ func (service *Service) UpdateProject(id string, name string) (VoiceProject, err
 	service.mu.Lock()
 	project, ok := service.projects[cleanID]
 	if !ok {
+		for _, candidate := range service.projects {
+			if candidate.ID == cleanID {
+				project = candidate
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
 		service.mu.Unlock()
 		return VoiceProject{}, ErrProjectNotFound
 	}
 	project.Name = cleanProjectName(name)
 	project.UpdatedAt = time.Now().UTC()
-	service.projects[cleanID] = project
+	for key, candidate := range service.projects {
+		if key == cleanID || candidate.ID == project.ID {
+			delete(service.projects, key)
+		}
+	}
+	service.projects[project.ID] = project
 	service.mu.Unlock()
 
 	if err := service.writeProject(project); err != nil {

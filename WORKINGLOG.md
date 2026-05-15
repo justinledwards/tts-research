@@ -537,3 +537,31 @@
 - [x] Remove default voice reference media upload size cap.
 - [x] Add focused frontend/backend regression tests.
 - [x] Run checks and visual QA.
+
+## 2026-05-16 00:06 CEST - Workspace library, settings clarity, export flow, and markdown prep
+- [x] Add project delete and storage summary APIs.
+- [x] Improve Workspace Library project actions and deletion flow.
+- [x] Clarify Settings provider, performance, preference, and storage tabs.
+- [x] Replace Help text button and repair export/import step flows.
+- [x] Modularize Markdown source preprocessing and rendering.
+- [x] Add tests, run checks, and perform browser QA.
+
+## 2026-05-16 00:52 CEST - Reference source media overflow fix
+- [x] Split source media status row into safe label and status text.
+- [x] Run checks and browser overflow QA.
+
+## 2026-05-16 01:09 CEST - Workspace library ergonomics overhaul
+- [x] Move project creation into the project list.
+- [x] Move project rename into each project row.
+- [x] Remove disconnected current-project side panel.
+- [x] Run checks and desktop/mobile browser QA.
+
+## 2026-05-16 01:10 CEST - Workspace project delete validation
+- [x] Reproduce project deletion from the Workspace Library.
+- [x] Fix confirmed deletion blockers.
+- [x] Run checks and browser QA.
+
+## 2026-05-16 01:18 CEST - Stale backend project delete diagnostics
+- [x] Confirm localhost:8080 is running an older backend without DELETE project route.
+- [x] Add clear frontend error for stale 405 project delete responses.
+- [x] Run focused and full checks.

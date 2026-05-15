@@ -42,6 +42,34 @@ export interface VoiceProject {
   updatedAt: string;
 }
 
+export interface ProjectStorageDownload {
+  kind: string;
+  label: string;
+  url: string;
+  fileName: string;
+  bytes?: number;
+  jobId?: string;
+  segment?: number;
+  available: boolean;
+}
+
+export interface ProjectStorageSummary {
+  projectId: string;
+  projectName: string;
+  generatedAudioBytes: number;
+  bookSourceBytes: number;
+  preparedSourceBytes: number;
+  jobBytes: number;
+  totalBytes: number;
+  jobCount: number;
+  bookSourceCount: number;
+  preparedSourceCount: number;
+  downloads: ProjectStorageDownload[];
+  directories?: Record<string, string>;
+  warnings?: string[];
+  updatedAt: string;
+}
+
 export type BookSourceStatus = "ready" | "failed";
 
 export type BookSourceKind = "pdf" | "epub";
@@ -188,6 +216,9 @@ export interface NarrationBlock {
   label?: string;
   text?: string;
   spokenText?: string;
+  emphasis?: string;
+  pauseBeforeMs?: number;
+  pauseAfterMs?: number;
   startOffset: number;
   endOffset: number;
   estimatedDurationMs?: number;
@@ -221,6 +252,10 @@ export interface PreparedSource {
   sourceUrl?: string;
   sourceContentType?: string;
   sourceBytes?: number;
+  preprocessorId?: string;
+  preprocessorVersion?: string;
+  sourceFormat?: string;
+  renderMode?: string;
   title?: string;
   text?: string;
   speechText?: string;

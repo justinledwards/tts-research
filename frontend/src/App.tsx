@@ -7,6 +7,8 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { type RequestState, TopProductBar } from "./AppShell";
 import { BundleFlowPanel, type BundlePanelMode } from "./BundlePanels";
 import {
@@ -23,9 +25,12 @@ import {
   createVoiceJob,
   createVoiceProfileFromCandidate,
   createVoiceProfileSource,
+  deleteProject,
   deleteVoiceProfile,
+  getPreparedSource,
   getBookCinemaDiagnostics,
   getBookSourceScope,
+  getProjectStorageSummary,
   getSystemMetrics,
   getVoiceJob,
   getVoiceProfileSource,
@@ -96,6 +101,7 @@ import type {
   PlaybackSession,
   PreparedSource,
   ProjectBundleImportResult,
+  ProjectStorageSummary,
   StageStatus,
   SystemMetrics,
   ThemeName,
@@ -948,6 +954,8 @@ export function App() {
   const [isPreparingSource, setIsPreparingSource] = useState(false);
   const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
   const [projectProgress, setProjectProgress] = useState<PlaybackProgress[]>([]);
+  const [projectStorage, setProjectStorage] = useState<ProjectStorageSummary | null>(null);
+  const [projectStorageError, setProjectStorageError] = useState<string | null>(null);
   const [activePlaybackSession, setActivePlaybackSession] = useState<PlaybackSession | null>(null);
   const [pendingPlaybackResume, setPendingPlaybackResume] = useState<{
     autoplay: boolean;
@@ -1210,6 +1218,22 @@ export function App() {
     }
   }, []);
 
+  const refreshProjectStorage = useCallback(async (projectId: string) => {
+    if (projectId.trim().length === 0) {
+      setProjectStorage(null);
+      return;
+    }
+    try {
+      setProjectStorage(await getProjectStorageSummary(projectId));
+      setProjectStorageError(null);
+    } catch (caughtError) {
+      setProjectStorage(null);
+      setProjectStorageError(
+        caughtError instanceof Error ? caughtError.message : "Unable to load project storage",
+      );
+    }
+  }, []);
+
   const refreshBookCinemaDiagnostics = useCallback(async () => {
     try {
       setBookCinemaDiagnostics(await getBookCinemaDiagnostics());
@@ -1423,6 +1447,30 @@ export function App() {
     }
   }, []);
 
+  const handleDeleteProject = useCallback(
+    async (id: string) => {
+      setProjectError(null);
+      try {
+        await deleteProject(id);
+        clearProjectWorkspaceState(id);
+        const remainingProjects = projects.filter((project) => project.id !== id);
+        setProjects(remainingProjects);
+        if (id === activeProjectId) {
+          const nextProjectId = remainingProjects[0]?.id ?? "default";
+          clearVisibleProjectWorkspace(nextProjectId);
+          setActiveProjectId(nextProjectId);
+          localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, nextProjectId);
+        }
+        void refreshProjects();
+      } catch (caughtError) {
+        setProjectError(
+          caughtError instanceof Error ? caughtError.message : "Unable to delete project",
+        );
+      }
+    },
+    [activeProjectId, clearVisibleProjectWorkspace, projects, refreshProjects],
+  );
+
   const applyVoiceJobToState = useCallback(
     (nextJob: VoiceJob) => {
       const nextProjectId = nextJob.projectId || activeProjectId;
@@ -1632,10 +1680,25 @@ export function App() {
     [activeProjectId, refreshProjects],
   );
 
-  const handleUsePreparedSource = useCallback((source: PreparedSource) => {
+  const handleUsePreparedSource = useCallback(async (source: PreparedSource) => {
     setSelectedPreparedSourceId(source.id);
-    if (source.speechText) {
-      setText(source.speechText);
+    let nextSource = source;
+    if (!source.text && !source.speechText) {
+      try {
+        nextSource = await getPreparedSource(source.id);
+        setPreparedSources((currentSources) => [
+          nextSource,
+          ...currentSources.filter((item) => item.id !== nextSource.id),
+        ]);
+      } catch (caughtError) {
+        setSourcePrepError(
+          caughtError instanceof Error ? caughtError.message : "Unable to load prepared source",
+        );
+        return;
+      }
+    }
+    if (nextSource.speechText) {
+      setText(nextSource.speechText);
     }
   }, []);
 
@@ -1749,6 +1812,7 @@ export function App() {
     void refreshBookSources(activeProjectId);
     void refreshPreparedSources(activeProjectId);
     void refreshProjectProgress(activeProjectId);
+    void refreshProjectStorage(activeProjectId);
     void restoreProjectWorkspace(activeProjectId);
   }, [
     activeProjectId,
@@ -1756,6 +1820,7 @@ export function App() {
     refreshPreparedSources,
     refreshProjectJobs,
     refreshProjectProgress,
+    refreshProjectStorage,
     restoreProjectWorkspace,
   ]);
 
@@ -2020,6 +2085,7 @@ export function App() {
         if (nextJob.status === "completed") {
           setRequestState("complete");
           void refreshProjectJobs(nextJob.projectId || activeProjectId);
+          void refreshProjectStorage(nextJob.projectId || activeProjectId);
         }
         if (nextJob.status === "failed") {
           setRequestState("error");
@@ -2040,7 +2106,7 @@ export function App() {
         setError(caughtError.message);
       },
     );
-  }, [activeJobId, activeProjectId, refreshProjectJobs]);
+  }, [activeJobId, activeProjectId, refreshProjectJobs, refreshProjectStorage]);
 
   useEffect(() => {
     if (!isProcessing) {
@@ -2395,9 +2461,7 @@ export function App() {
       <WorkspaceDrawer
         activeProjectId={activeProjectId}
         bookSources={bookSources}
-        canSubmit={canSubmit}
         isOpen={isWorkspaceOpen}
-        isProcessing={isProcessing}
         job={job}
         metrics={systemMetrics}
         metricsError={systemMetricsError}
@@ -2407,10 +2471,7 @@ export function App() {
         profileSource={profileSource}
         profiles={voiceProfiles}
         selectedProfileId={selectedVoiceProfileId}
-        onCreateAudio={() => {
-          setIsWorkspaceOpen(false);
-          void submitVoiceJob();
-        }}
+        onDeleteProject={handleDeleteProject}
         onCreateProject={handleCreateProject}
         onClose={() => {
           setIsWorkspaceOpen(false);
@@ -2467,12 +2528,15 @@ export function App() {
         metricsError={systemMetricsError}
         profileSourceDiagnostics={profileSourceDiagnostics}
         profileSource={profileSource}
+        projectStorage={projectStorage}
+        projectStorageError={projectStorageError}
         runConfiguration={runConfiguration}
         selectedProfile={selectedVoiceProfile}
         teleprompterSettings={teleprompterSettings}
         themeName={themeName}
         ttsEngineError={ttsEngineError}
         ttsEngines={ttsEngines}
+        onRunConfigurationChange={setRunConfiguration}
         onClose={() => {
           setIsSettingsOpen(false);
         }}
@@ -2837,7 +2901,7 @@ function SourceTextPanel({
   onResumeProgress: (progress: PlaybackProgress) => void;
   onSubmit: (event: React.SyntheticEvent<HTMLFormElement>) => void;
   onTextChange: (text: string) => void;
-  onUsePreparedSource: (source: PreparedSource) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
 }>) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -2951,7 +3015,9 @@ function SourceTextPanel({
           }}
           onResumeProgress={onResumeProgress}
           onSourceUrlChange={setSourceUrl}
-          onUsePreparedSource={onUsePreparedSource}
+          onUsePreparedSource={(source) => {
+            void onUsePreparedSource(source);
+          }}
         >
           <input
             ref={fileInputRef}
@@ -3234,12 +3300,14 @@ function SourcePrepReview({
             <dl className="mt-3 grid gap-3">
               <Metric label="Headings" value={String(source?.summary.headingCount ?? 0)} />
               <Metric label="Speak Blocks" value={String(source?.summary.spokenBlockCount ?? 0)} />
-              <Metric label="Skipped" value={String(source?.summary.skippedBlockCount ?? 0)} />
+              <Metric label="Citations" value={String(source?.summary.citationSkipCount ?? 0)} />
+              <Metric label="Skipped Items" value={String(source?.skippedItems?.length ?? 0)} />
             </dl>
             <p className="mt-4 rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-600">
               Headings are emphasized as separate blocks, citation junk is skipped, and segments
               only break at sentence boundaries.
             </p>
+            <PreparedSourceMarkdownPreview source={source} />
           </div>
         </div>
       ) : (
@@ -3248,6 +3316,33 @@ function SourcePrepReview({
           blocks before generating audio.
         </div>
       )}
+    </div>
+  );
+}
+
+function PreparedSourceMarkdownPreview({ source }: Readonly<{ source: PreparedSource | null }>) {
+  if (!source) {
+    return null;
+  }
+  if (source.renderMode !== "markdown" || !source.text) {
+    return (
+      <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs leading-5 text-zinc-600">
+        <p className="font-semibold text-zinc-800">Rendered preview</p>
+        <p className="mt-1">
+          Select the source to load the full Markdown preview. Narration blocks remain visible in
+          the review list.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4 max-h-72 overflow-y-auto rounded-md border border-zinc-200 bg-white p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+        Markdown Preview
+      </p>
+      <div className="prose-markdown text-sm leading-6 text-zinc-800">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{source.text}</ReactMarkdown>
+      </div>
     </div>
   );
 }

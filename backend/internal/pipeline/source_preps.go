@@ -20,6 +20,12 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
 )
 
 const (
@@ -35,6 +41,17 @@ type fetchedReadableSource struct {
 	Filename    string
 	ContentType string
 	Bytes       []byte
+}
+
+type sourcePreprocessResult struct {
+	Blocks              []NarrationBlock
+	SkippedItems        []SkippedSourceItem
+	Warnings            []string
+	PreprocessorID      string
+	PreprocessorVersion string
+	SourceFormat        string
+	RenderMode          string
+	Title               string
 }
 
 var (
@@ -102,12 +119,19 @@ func (service *Service) CreatePreparedSource(
 		SourceURL:         sourceURL,
 		SourceContentType: contentType,
 		SourceBytes:       sourceBytes,
-		Title:             inferPreparedSourceTitle(sourceText, sourceName),
 		Text:              sourceText,
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
-	prepared.Blocks, prepared.SkippedItems, prepared.Warnings = prepareNarrationBlocks(sourceText, service.options.StudioSegmentMaxRunes)
+	preprocessed := preprocessReadableSource(sourceText, sourceName, contentType, service.options.StudioSegmentMaxRunes)
+	prepared.PreprocessorID = preprocessed.PreprocessorID
+	prepared.PreprocessorVersion = preprocessed.PreprocessorVersion
+	prepared.SourceFormat = preprocessed.SourceFormat
+	prepared.RenderMode = preprocessed.RenderMode
+	prepared.Title = firstNonEmpty(preprocessed.Title, inferPreparedSourceTitle(sourceText, sourceName))
+	prepared.Blocks = preprocessed.Blocks
+	prepared.SkippedItems = preprocessed.SkippedItems
+	prepared.Warnings = preprocessed.Warnings
 	prepared.SpeechText = preparedSourceSpeechText(prepared.Blocks)
 	prepared.WordCount = countWords(prepared.SpeechText)
 	prepared.BlockCount = len(prepared.Blocks)
@@ -391,6 +415,107 @@ func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL strin
 }
 
 func prepareNarrationBlocks(input string, maxRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
+	result := preprocessReadableSource(input, "book-scope.md", "text/markdown", maxRunes)
+	return result.Blocks, result.SkippedItems, result.Warnings
+}
+
+func preprocessReadableSource(input string, sourceName string, contentType string, maxRunes int) sourcePreprocessResult {
+	sourceFormat := detectPreparedSourceFormat(sourceName, contentType, input)
+	switch sourceFormat {
+	case "html":
+		blocks, skipped, warnings := preparePlainNarrationBlocks(normalizeReadableSourceText(input), maxRunes)
+		return sourcePreprocessResult{
+			Blocks:              blocks,
+			SkippedItems:        skipped,
+			Warnings:            warnings,
+			PreprocessorID:      "html-readable",
+			PreprocessorVersion: "html-readable-v1",
+			SourceFormat:        sourceFormat,
+			RenderMode:          "blocks",
+			Title:               inferPreparedSourceTitle(normalizeReadableSourceText(input), sourceName),
+		}
+	case "structured":
+		blocks, skipped, warnings := preparePlainNarrationBlocks(input, maxRunes)
+		return sourcePreprocessResult{
+			Blocks:              blocks,
+			SkippedItems:        skipped,
+			Warnings:            warnings,
+			PreprocessorID:      "structured-readable",
+			PreprocessorVersion: "structured-readable-v1",
+			SourceFormat:        sourceFormat,
+			RenderMode:          "blocks",
+			Title:               inferPreparedSourceTitle(input, sourceName),
+		}
+	case "plain":
+		blocks, skipped, warnings := preparePlainNarrationBlocks(input, maxRunes)
+		return sourcePreprocessResult{
+			Blocks:              blocks,
+			SkippedItems:        skipped,
+			Warnings:            warnings,
+			PreprocessorID:      "plain-text",
+			PreprocessorVersion: "plain-text-v1",
+			SourceFormat:        sourceFormat,
+			RenderMode:          "blocks",
+			Title:               inferPreparedSourceTitle(input, sourceName),
+		}
+	default:
+		blocks, skipped, warnings := prepareMarkdownNarrationBlocks(input, maxRunes)
+		return sourcePreprocessResult{
+			Blocks:              blocks,
+			SkippedItems:        skipped,
+			Warnings:            warnings,
+			PreprocessorID:      "markdown-gfm",
+			PreprocessorVersion: "markdown-gfm-v1",
+			SourceFormat:        "markdown",
+			RenderMode:          "markdown",
+			Title:               firstNonEmpty(markdownFirstHeading(input), inferPreparedSourceTitle(input, sourceName)),
+		}
+	}
+}
+
+func preparePlainNarrationBlocks(input string, maxRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
+	if maxRunes <= 0 {
+		maxRunes = defaultStudioSegmentMaxRunes
+	}
+	text := normalizeReadableSourceText(input)
+	paragraphs := strings.Split(text, "\n\n")
+	blocks := make([]NarrationBlock, 0)
+	skipped := make([]SkippedSourceItem, 0)
+	warnings := make([]string, 0)
+	offsetCursor := 0
+	for _, paragraph := range paragraphs {
+		raw := strings.TrimSpace(paragraph)
+		if raw == "" {
+			offsetCursor += len(paragraph) + 2
+			continue
+		}
+		start := strings.Index(text[offsetCursor:], raw)
+		if start >= 0 {
+			start += offsetCursor
+		} else {
+			start = offsetCursor
+		}
+		end := start + len(raw)
+		clean := cleanMarkdownInline(raw)
+		kind := NarrationBlockKindBody
+		mode := NarrationSpeakModeSpeak
+		if markdownRawURLLine.MatchString(clean) || shouldSkipCitationBlock(clean) {
+			kind = NarrationBlockKindCitation
+			mode = NarrationSpeakModeSkip
+		}
+		block := newNarrationBlock(len(blocks), kind, mode, labelForBlock(kind, clean), raw, clean, start, end, maxRunes)
+		if mode == NarrationSpeakModeSkip {
+			block.Warnings = append(block.Warnings, "citation_skipped")
+			skipped = append(skipped, skippedSourceItem(block, "citation or raw URL skipped"))
+		}
+		blocks = append(blocks, block)
+		warnings = append(warnings, block.Warnings...)
+		offsetCursor = end
+	}
+	return blocks, skipped, uniqueStrings(warnings)
+}
+
+func prepareMarkdownNarrationBlocks(input string, maxRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
 	if maxRunes <= 0 {
 		maxRunes = defaultStudioSegmentMaxRunes
 	}
@@ -546,6 +671,7 @@ func newNarrationBlock(index int, kind NarrationBlockKind, mode NarrationSpeakMo
 	if mode == NarrationSpeakModeSkip {
 		segments = nil
 	}
+	emphasis, pauseBefore, pauseAfter := narrationEmphasis(kind, mode)
 	return NarrationBlock{
 		ID:                  fmt.Sprintf("block-%04d", index+1),
 		Index:               index + 1,
@@ -554,12 +680,29 @@ func newNarrationBlock(index int, kind NarrationBlockKind, mode NarrationSpeakMo
 		Label:               strings.TrimSpace(label),
 		Text:                strings.TrimSpace(text),
 		SpokenText:          strings.TrimSpace(spokenText),
+		Emphasis:            emphasis,
+		PauseBeforeMS:       pauseBefore,
+		PauseAfterMS:        pauseAfter,
 		StartOffset:         startOffset,
 		EndOffset:           endOffset,
 		EstimatedDurationMS: estimateBookDurationMS(countWords(spokenText)),
 		Confidence:          confidenceForBlock(kind, mode),
 		Segments:            segments,
 		Warnings:            warnings,
+	}
+}
+
+func narrationEmphasis(kind NarrationBlockKind, mode NarrationSpeakMode) (string, int, int) {
+	if mode != NarrationSpeakModeSpeak {
+		return "", 0, 0
+	}
+	switch kind {
+	case NarrationBlockKindHeading:
+		return "heading", 420, 520
+	case NarrationBlockKindSubheading:
+		return "subheading", 280, 360
+	default:
+		return "", 0, 0
 	}
 }
 
@@ -745,12 +888,66 @@ func skippedSourceItem(block NarrationBlock, reason string) SkippedSourceItem {
 }
 
 func inferPreparedSourceTitle(text string, fallback string) string {
+	if title := markdownFirstHeading(text); title != "" {
+		return title
+	}
 	for _, line := range strings.Split(text, "\n") {
 		if matches := markdownHeadingLine.FindStringSubmatch(strings.TrimSpace(line)); len(matches) == 3 {
 			return cleanMarkdownInline(matches[2])
 		}
 	}
 	return strings.TrimSpace(fallback)
+}
+
+func detectPreparedSourceFormat(sourceName string, contentType string, input string) string {
+	lowerName := strings.ToLower(strings.TrimSpace(sourceName))
+	lowerType := strings.ToLower(strings.TrimSpace(contentType))
+	switch {
+	case strings.Contains(lowerType, "markdown") || strings.HasSuffix(lowerName, ".md") || strings.HasSuffix(lowerName, ".markdown"):
+		return "markdown"
+	case strings.Contains(lowerType, "html") || strings.HasSuffix(lowerName, ".html") || strings.HasSuffix(lowerName, ".htm"):
+		return "html"
+	case strings.HasSuffix(lowerName, ".csv") || strings.HasSuffix(lowerName, ".json") || strings.HasSuffix(lowerName, ".log"):
+		return "structured"
+	case strings.Contains(strings.TrimSpace(input), "\n# ") || strings.HasPrefix(strings.TrimSpace(input), "# "):
+		return "markdown"
+	default:
+		return "plain"
+	}
+}
+
+func markdownFirstHeading(input string) string {
+	source := []byte(input)
+	reader := text.NewReader(source)
+	document := goldmark.New(
+		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+	).Parser().Parse(reader)
+	title := ""
+	_ = ast.Walk(document, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if title != "" || !entering {
+			return ast.WalkContinue, nil
+		}
+		heading, ok := node.(*ast.Heading)
+		if !ok || heading.Level > 3 {
+			return ast.WalkContinue, nil
+		}
+		title = cleanMarkdownInline(string(heading.Text(source)))
+		if title != "" {
+			return ast.WalkStop, nil
+		}
+		return ast.WalkContinue, nil
+	})
+	return title
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func labelForBlock(kind NarrationBlockKind, text string) string {

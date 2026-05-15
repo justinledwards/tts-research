@@ -91,12 +91,31 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(project)
 	})
 
+	app.Delete("/api/projects/:id", func(ctx fiber.Ctx) error {
+		err := service.DeleteProject(ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProjectProtected) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return notFound(ctx, err)
+		}
+		return ctx.SendStatus(fiber.StatusNoContent)
+	})
+
 	app.Get("/api/projects/:id/jobs", func(ctx fiber.Ctx) error {
 		jobs, err := service.ListProjectJobs(ctx.Params("id"))
 		if err != nil {
 			return notFound(ctx, err)
 		}
 		return ctx.JSON(jobs)
+	})
+
+	app.Get("/api/projects/:id/storage", func(ctx fiber.Ctx) error {
+		summary, err := service.GetProjectStorageSummary(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(summary)
 	})
 
 	app.Get("/api/projects/:id/progress", func(ctx fiber.Ctx) error {
