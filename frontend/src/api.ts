@@ -1,4 +1,5 @@
 import type {
+  BookSource,
   BundleImportMode,
   CreateVoiceProfileFromCandidateRequest,
   CreateVoiceJobRequest,
@@ -22,6 +23,49 @@ export const apiBaseUrl: string = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<VoiceJob> {
   const response = await fetch(`${apiBaseUrl}/api/voice-jobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceJob>;
+}
+
+export async function listProjectBookSources(projectId: string): Promise<BookSource[]> {
+  const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/book-sources`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<BookSource[]>;
+}
+
+export async function createBookSource(projectId: string, file: File): Promise<BookSource> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/book-sources`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<BookSource>;
+}
+
+export async function createBookNarrationJob(
+  bookSourceId: string,
+  request: CreateVoiceJobRequest,
+): Promise<VoiceJob> {
+  const response = await fetch(`${apiBaseUrl}/api/book-sources/${bookSourceId}/voice-jobs`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

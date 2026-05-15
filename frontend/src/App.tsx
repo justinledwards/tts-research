@@ -5,6 +5,8 @@ import {
   apiBaseUrl,
   audioSource,
   cancelVoiceJob,
+  createBookNarrationJob,
+  createBookSource,
   createProject,
   createVoiceJob,
   createVoiceProfileFromCandidate,
@@ -14,6 +16,7 @@ import {
   getVoiceJob,
   getVoiceProfileSource,
   getVoiceProfileSourceDiagnostics,
+  listProjectBookSources,
   listTTSEngines,
   listProjectJobs,
   listProjects,
@@ -22,6 +25,7 @@ import {
   subscribeToVoiceJob,
 } from "./api";
 import { formatDuration } from "./format";
+import { BookCinemaPanel } from "./BookCinemaPanel";
 import { HelpPanel, SettingsPanel } from "./ProductPanels";
 import { RunConfigDrawer } from "./RunConfigDrawer";
 import {
@@ -55,6 +59,7 @@ import {
 } from "./teleprompter";
 import { THEME_STORAGE_KEY, VOICE_STUDIO_THEMES, normalizeThemeName } from "./theme";
 import type {
+  BookSource,
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
   ProjectBundleImportResult,
@@ -872,6 +877,10 @@ export function App() {
   );
   const [projectStateReadyId, setProjectStateReadyId] = useState<string | null>(null);
   const [projectJobs, setProjectJobs] = useState<VoiceJob[]>([]);
+  const [bookSources, setBookSources] = useState<BookSource[]>([]);
+  const [selectedBookSourceId, setSelectedBookSourceId] = useState<string | null>(null);
+  const [isImportingBookSource, setIsImportingBookSource] = useState(false);
+  const [bookSourceError, setBookSourceError] = useState<string | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
   const [runConfiguration, setRunConfiguration] = useState<RunConfiguration>(() => {
     const savedConfiguration = localStorage.getItem(RUN_CONFIG_STORAGE_KEY);
@@ -1008,6 +1017,31 @@ export function App() {
     }
   }, []);
 
+  const refreshBookSources = useCallback(async (projectId: string) => {
+    if (projectId.trim().length === 0) {
+      setBookSources([]);
+      setSelectedBookSourceId(null);
+      return;
+    }
+    try {
+      const books = await listProjectBookSources(projectId);
+      setBookSources(books);
+      setSelectedBookSourceId((currentId) => {
+        if (currentId && books.some((book) => book.id === currentId)) {
+          return currentId;
+        }
+        return books[0]?.id ?? null;
+      });
+      setBookSourceError(null);
+    } catch (caughtError) {
+      setBookSources([]);
+      setSelectedBookSourceId(null);
+      setBookSourceError(
+        caughtError instanceof Error ? caughtError.message : "Unable to load book sources",
+      );
+    }
+  }, []);
+
   const refreshProfileSourceDiagnostics = useCallback(async () => {
     try {
       const diagnostics = await getVoiceProfileSourceDiagnostics();
@@ -1079,6 +1113,9 @@ export function App() {
       setRequestState("idle");
       setError(null);
       setProfileSource(null);
+      setBookSources([]);
+      setSelectedBookSourceId(null);
+      setBookSourceError(null);
       resetPlaybackSurface();
       setProjectStateReadyId(projectId);
     },
@@ -1090,6 +1127,7 @@ export function App() {
       setProjectStateReadyId(null);
       setError(null);
       setProfileSource(null);
+      setSelectedBookSourceId(null);
       resetPlaybackSurface();
       const savedState = loadProjectWorkspaceState(projectId);
       setText(savedState.text);
@@ -1225,13 +1263,49 @@ export function App() {
         });
       }
       await Promise.all([
+        refreshBookSources(result.project.id),
         refreshProjects(),
         refreshVoiceProfiles(),
         refreshProjectJobs(result.project.id),
       ]);
     },
-    [refreshProjectJobs, refreshProjects, refreshVoiceProfiles, selectProject],
+    [refreshBookSources, refreshProjectJobs, refreshProjects, refreshVoiceProfiles, selectProject],
   );
+
+  const handleImportBookSource = useCallback(
+    async (file: File) => {
+      setIsImportingBookSource(true);
+      setBookSourceError(null);
+      try {
+        const book = await createBookSource(activeProjectId, file);
+        setBookSources((currentBooks) => [
+          book,
+          ...currentBooks.filter((item) => item.id !== book.id),
+        ]);
+        setSelectedBookSourceId(book.id);
+        if (book.status === "ready" && book.text) {
+          setText(book.text);
+        }
+      } catch (caughtError) {
+        setBookSourceError(
+          caughtError instanceof Error ? caughtError.message : "Unable to import book source",
+        );
+      } finally {
+        setIsImportingBookSource(false);
+      }
+    },
+    [activeProjectId],
+  );
+
+  const handleUseBookText = useCallback((book: BookSource) => {
+    if (book.status !== "ready" || !book.text) {
+      setBookSourceError(book.error ?? "Book source is not ready yet.");
+      return;
+    }
+    setSelectedBookSourceId(book.id);
+    setText(book.text);
+    setBookSourceError(null);
+  }, []);
 
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
     setPlaybackControls(controls ?? DISABLED_PLAYBACK_CONTROLLER);
@@ -1252,8 +1326,9 @@ export function App() {
     localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, activeProjectId);
     migrateLegacyWorkspaceState(activeProjectId);
     void refreshProjectJobs(activeProjectId);
+    void refreshBookSources(activeProjectId);
     void restoreProjectWorkspace(activeProjectId);
-  }, [activeProjectId, refreshProjectJobs, restoreProjectWorkspace]);
+  }, [activeProjectId, refreshBookSources, refreshProjectJobs, restoreProjectWorkspace]);
 
   useEffect(() => {
     if (!selectedVoiceProfileId) {
@@ -1543,7 +1618,7 @@ export function App() {
     }
   }
 
-  async function submitVoiceJob() {
+  function buildVoiceJobRequest(sourceText: string): CreateVoiceJobRequest {
     const selectedKokoroVoice = findKokoroVoicepack(selectedKokoroVoiceId);
     const isSupertonicRun = runConfiguration.ttsEngine === "supertonic-3";
     const selectedProviderVoice = isSupertonicRun
@@ -1553,13 +1628,18 @@ export function App() {
       ? (runConfiguration.engineOptions.lang ?? "sv")
       : selectedKokoroVoice?.langCode;
     const request: CreateVoiceJobRequest = buildCreateVoiceJobRequest(
-      text,
+      sourceText,
       runConfiguration,
       selectedVoiceProfileId,
       activeProjectId,
       selectedProviderVoice,
       selectedProviderLanguage,
     );
+    return request;
+  }
+
+  async function submitVoiceJob() {
+    const request = buildVoiceJobRequest(text);
 
     setRequestState("running");
     setError(null);
@@ -1574,6 +1654,33 @@ export function App() {
     } catch (caughtError) {
       setRequestState("error");
       setError(caughtError instanceof Error ? caughtError.message : "Unable to create voice job");
+    }
+  }
+
+  async function submitBookNarrationJob(book: BookSource) {
+    if (book.status !== "ready" || !book.text) {
+      setBookSourceError(book.error ?? "Book source is not ready for narration.");
+      return;
+    }
+    const request = buildVoiceJobRequest(book.text);
+    setRequestState("running");
+    setError(null);
+    setBookSourceError(null);
+    setPlaybackCursorSec(0);
+    setIsPlaybackActive(false);
+    setSelectedBookSourceId(book.id);
+    setText(book.text);
+
+    try {
+      const nextJob = await createBookNarrationJob(book.id, request);
+      setJob(nextJob);
+      void refreshProjectJobs(nextJob.projectId || activeProjectId);
+      setRequestState(nextJob.status === "completed" ? "complete" : "running");
+    } catch (caughtError) {
+      setRequestState("error");
+      setBookSourceError(
+        caughtError instanceof Error ? caughtError.message : "Unable to create book narration",
+      );
     }
   }
 
@@ -1628,6 +1735,7 @@ export function App() {
 
       <WorkspaceDrawer
         activeProjectId={activeProjectId}
+        bookSources={bookSources}
         canSubmit={canSubmit}
         isOpen={isWorkspaceOpen}
         isProcessing={isProcessing}
@@ -1726,7 +1834,7 @@ export function App() {
         onImported={handleBundleImported}
       />
 
-      <section className="grid min-h-[calc(100vh-58px)] grid-cols-1 border-t lg:grid-cols-[375px_minmax(0,1fr)_430px] vs-border">
+      <section className="grid min-h-[calc(100vh-58px)] grid-cols-1 border-t lg:grid-cols-[340px_minmax(0,1fr)_360px] vs-border">
         <aside className="vs-raised order-3 flex min-w-0 flex-col overflow-hidden border-zinc-200 lg:order-none lg:border-r">
           <VoiceStudioPanel
             error={profileError}
@@ -1752,7 +1860,7 @@ export function App() {
           />
         </aside>
 
-        <section className="order-1 flex min-w-0 flex-col gap-6 p-5 lg:order-none xl:p-6">
+        <section className="order-1 flex min-w-0 flex-col gap-5 p-5 lg:order-none xl:p-6">
           <TeleprompterPanel
             isPlaybackActive={isPlaybackActive}
             job={job}
@@ -1763,6 +1871,22 @@ export function App() {
             onOpenSettings={() => {
               setIsSettingsOpen(true);
             }}
+          />
+          <BookCinemaPanel
+            bookSources={bookSources}
+            canCreateAudio={!isProcessing}
+            error={bookSourceError}
+            isImporting={isImportingBookSource}
+            isProcessing={isProcessing}
+            job={job}
+            playbackCursorSec={playbackCursorSec}
+            selectedBookSourceId={selectedBookSourceId}
+            onCreateAudio={(book) => {
+              void submitBookNarrationJob(book);
+            }}
+            onImport={handleImportBookSource}
+            onSelectBook={setSelectedBookSourceId}
+            onUseText={handleUseBookText}
           />
           <SourceTextPanel
             canSubmit={canSubmit}
@@ -2435,9 +2559,9 @@ function AudioPanel({
 
   if (!job) {
     return (
-      <section className="min-w-0 rounded-xl border p-4 shadow-sm vs-raised">
+      <section className="min-w-0 rounded-lg border p-3 shadow-sm vs-raised">
         <h2 className="text-sm font-semibold">Audio Player</h2>
-        <div className="mt-4 grid h-28 place-items-center rounded-md border border-dashed px-5 text-center vs-border">
+        <div className="mt-3 grid h-24 place-items-center rounded-md border border-dashed px-4 text-center vs-border">
           <div>
             <p className="text-sm font-semibold">No audio generated yet</p>
             <p className="vs-muted mt-2 text-xs">
@@ -2494,14 +2618,14 @@ function StreamingAudioPanel({
   const modeButtonClass = useCallback(
     (mode: AudioPlaybackMode, isAvailable: boolean) => {
       if (playMode === mode) {
-        return "inline-flex h-8 min-w-[4.4rem] items-center justify-center rounded border border-orange-500 bg-orange-500/10 px-2 text-xs font-semibold text-orange-600";
+        return "inline-flex h-7 min-w-[3.9rem] items-center justify-center rounded border border-orange-500 bg-orange-500/10 px-2 text-xs font-semibold text-orange-600";
       }
 
       if (!isAvailable) {
-        return "inline-flex h-8 min-w-[4.4rem] items-center justify-center rounded border border-transparent px-2 text-xs font-semibold opacity-40";
+        return "inline-flex h-7 min-w-[3.9rem] items-center justify-center rounded border border-transparent px-2 text-xs font-semibold opacity-40";
       }
 
-      return "vs-muted inline-flex h-8 min-w-[4.4rem] items-center justify-center rounded border border-transparent px-2 text-xs font-semibold transition hover:bg-[var(--vs-raised)]";
+      return "vs-muted inline-flex h-7 min-w-[3.9rem] items-center justify-center rounded border border-transparent px-2 text-xs font-semibold transition hover:bg-[var(--vs-raised)]";
     },
     [playMode],
   );
@@ -2543,8 +2667,8 @@ function StreamingAudioPanel({
   }, [isStreamingPlaying, job.status]);
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-xl border p-4 shadow-sm vs-raised">
-      <div className="grid gap-3">
+    <section className="min-w-0 overflow-hidden rounded-lg border p-3 shadow-sm vs-raised">
+      <div className="grid gap-2.5">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold">Audio Player</h2>
@@ -2553,7 +2677,7 @@ function StreamingAudioPanel({
               {formatDuration(job.durationMs)}
             </p>
           </div>
-          <span className="shrink-0 rounded-full border border-orange-300 bg-orange-500/10 px-2.5 py-1 text-xs font-semibold text-orange-600">
+          <span className="shrink-0 rounded-full border border-orange-300 bg-orange-500/10 px-2 py-0.5 text-[0.68rem] font-semibold text-orange-600">
             {job.status}
           </span>
         </div>
@@ -2562,7 +2686,7 @@ function StreamingAudioPanel({
             {playModeLabel[playMode]} mode · {String(readySegments)} segment
             {readySegments === 1 ? "" : "s"} ready
           </p>
-          <div className="inline-flex shrink-0 overflow-hidden rounded-md border p-1 vs-border">
+          <div className="inline-flex shrink-0 overflow-hidden rounded-md border p-0.5 vs-border">
             {(["arrival", "completed"] as const).map((mode) => {
               const isAvailable = isModeAvailable[mode];
               return (
@@ -2583,7 +2707,7 @@ function StreamingAudioPanel({
         </div>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-3">
         {isCompletedMode ? (
           <CompletedAudioPlayer
             key={`completed-${job.id}`}
@@ -2656,7 +2780,7 @@ function QueueBufferPanel({
   const visibleBlocks = Math.min(24, Math.max(1, total));
 
   return (
-    <section className="mt-4 border-t pt-3 vs-border">
+    <section className="mt-3 border-t pt-3 vs-border">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold">Queue</h3>
         <p className="text-xs font-semibold text-orange-600">
@@ -2673,14 +2797,14 @@ function QueueBufferPanel({
           return (
             <span
               aria-hidden="true"
-              className={`h-5 rounded ${blockClass}`}
+              className={`h-3.5 rounded ${blockClass}`}
               key={`queue-${String(index)}`}
               title={`Segment ${String(segmentIndex)}`}
             />
           );
         })}
       </div>
-      <div className="vs-muted mt-3 flex flex-wrap gap-3 text-xs">
+      <div className="vs-muted mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs">
         <span className="inline-flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-sm bg-orange-600" />
           Playing
@@ -2735,7 +2859,7 @@ function WaveformDisplay({
 
   return (
     <div
-      className="grid h-12 min-w-0 items-center gap-px rounded-md bg-[var(--vs-surface)] py-1.5"
+      className="grid h-10 min-w-0 items-center gap-px rounded-md bg-[var(--vs-surface)] py-1"
       style={{ gridTemplateColumns: `repeat(${String(displayBars.length)}, minmax(0, 1fr))` }}
     >
       {displayBars.map((height, index) => (
@@ -2745,7 +2869,7 @@ function WaveformDisplay({
           data-waveform-bar={index}
           data-waveform-value={height.toFixed(4)}
           key={`waveform-${String(index)}`}
-          style={{ height: `${Math.round(5 + height * 34).toString()}px` }}
+          style={{ height: `${Math.round(4 + height * 29).toString()}px` }}
         />
       ))}
     </div>
@@ -2764,7 +2888,7 @@ function TransportButton({
   return (
     <button
       aria-label={label}
-      className="grid h-9 w-9 place-items-center rounded-full text-base hover:bg-[var(--vs-surface)]"
+      className="grid h-8 w-8 place-items-center rounded-full text-sm hover:bg-[var(--vs-surface)]"
       onClick={onClick}
       type="button"
     >
@@ -3553,7 +3677,7 @@ function CompletedAudioReadyView({
   waveformBars: number[];
 }>) {
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-2.5">
       <div className="grid gap-2.5">
         <PlayerStatusLine
           currentTimeSec={currentTimeSec}
@@ -3605,7 +3729,7 @@ function CompletedAudioReadyView({
         <track kind="captions" />
       </audio>
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
-      <div className="grid grid-cols-3 gap-2 rounded-md border p-2 text-xs vs-surface">
+      <div className="grid grid-cols-3 gap-2 rounded-md border p-2 text-[0.7rem] vs-surface">
         <span className="truncate" title={formatDuration(durationMs)}>
           {formatDuration(durationMs)}
         </span>
@@ -3631,7 +3755,7 @@ function CompletedTransportControls({
   onSkip: (seconds: number) => void;
 }>) {
   return (
-    <div className="flex items-center justify-center gap-2">
+    <div className="flex items-center justify-center gap-1.5">
       <TransportButton
         label="Back 10 seconds"
         onClick={() => {
@@ -3650,7 +3774,7 @@ function CompletedTransportControls({
       </TransportButton>
       <button
         aria-label={isPlaying ? "Pause" : "Play"}
-        className="grid h-12 w-12 place-items-center rounded-full text-xl font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 vs-accent-bg"
+        className="grid h-11 w-11 place-items-center rounded-full text-lg font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 vs-accent-bg"
         onClick={() => {
           void onPlayToggle();
         }}
@@ -3686,8 +3810,8 @@ function CompletedVolumeControl({
   onVolumeChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }>) {
   return (
-    <div className="vs-muted flex items-center gap-3 text-xs">
-      <span className="text-lg">♩</span>
+    <div className="vs-muted flex items-center gap-2.5 text-xs">
+      <span className="text-base">♩</span>
       <input
         className="h-1 flex-1 cursor-pointer accent-orange-500"
         max={1}
@@ -3698,7 +3822,7 @@ function CompletedVolumeControl({
         value={volume}
       />
       <span className="w-10 text-right">{Math.round(volume * 100).toString()}%</span>
-      <span className="text-base">⚙</span>
+      <span className="text-sm">⚙</span>
     </div>
   );
 }
@@ -4506,8 +4630,8 @@ function ArrivalAudioPlayerQueue({
   const showArrivalPendingMessage = !canPlay;
 
   return (
-    <div className="grid gap-4">
-      <div className="grid gap-3">
+    <div className="grid gap-3">
+      <div className="grid gap-2.5">
         <PlayerStatusLine
           currentTimeSec={sliderValue}
           durationSec={Math.max(totalDurationSec, 0)}
@@ -4536,7 +4660,7 @@ function ArrivalAudioPlayerQueue({
           type="range"
           value={String(sliderValue)}
         />
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-1.5">
           <TransportButton
             label="Back 10 seconds"
             onClick={() => {
@@ -4555,7 +4679,7 @@ function ArrivalAudioPlayerQueue({
           </TransportButton>
           <button
             aria-label={isPlaying ? "Pause" : "Play"}
-            className="grid h-12 w-12 place-items-center rounded-full bg-orange-500 text-xl font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600"
+            className="grid h-11 w-11 place-items-center rounded-full bg-orange-500 text-lg font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600"
             onClick={() => {
               void handlePlayToggle();
             }}
@@ -4580,8 +4704,8 @@ function ArrivalAudioPlayerQueue({
             10↷
           </TransportButton>
         </div>
-        <div className="flex items-center gap-3 text-sm text-zinc-500">
-          <span className="text-lg">♩</span>
+        <div className="vs-muted flex items-center gap-2.5 text-xs">
+          <span className="text-base">♩</span>
           <input
             className="h-1 flex-1 cursor-pointer accent-orange-500"
             max={1}
@@ -4592,11 +4716,11 @@ function ArrivalAudioPlayerQueue({
             value={volume}
           />
           <span className="w-10 text-right">{Math.round(volume * 100).toString()}%</span>
-          <span className="text-lg text-zinc-800">⚙</span>
+          <span className="text-sm">⚙</span>
         </div>
       </div>
       {showArrivalPendingMessage ? (
-        <p className="text-sm leading-6 text-zinc-600">
+        <p className="vs-muted text-xs leading-5">
           Arrival playback will begin when the first segment arrives.
         </p>
       ) : null}

@@ -36,6 +36,54 @@ export interface VoiceProject {
   updatedAt: string;
 }
 
+export type BookSourceStatus = "ready" | "failed";
+
+export type BookSourceKind = "pdf" | "epub";
+
+export interface BookSourcePage {
+  index: number;
+  label: string;
+  text: string;
+  wordCount: number;
+}
+
+export interface BookSourceChapter {
+  index: number;
+  title: string;
+  text: string;
+  wordCount: number;
+}
+
+export interface BookSourceWordSpan {
+  index: number;
+  text: string;
+  pageIndex?: number;
+  chapter?: number;
+  startOffset: number;
+  endOffset: number;
+}
+
+export interface BookSource {
+  id: string;
+  projectId: string;
+  status: BookSourceStatus;
+  kind: BookSourceKind;
+  sourceFile: string;
+  sourceBytes: number;
+  title?: string;
+  author?: string;
+  text?: string;
+  wordCount: number;
+  pageCount: number;
+  chapterCount: number;
+  pages?: BookSourcePage[];
+  chapters?: BookSourceChapter[];
+  wordSpans?: BookSourceWordSpan[];
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TTSEngineVoice {
   id: string;
   name: string;
@@ -94,6 +142,7 @@ export interface ProjectBundleManifest {
   project: VoiceProject;
   jobs: VoiceJob[];
   profiles: VoiceProfile[];
+  books?: BookSource[];
   files: ProjectBundleFile[];
   providerVersions?: Record<string, string>;
   quality: ProjectBundleQuality;

@@ -36,6 +36,7 @@ var (
 	ErrProfileCandidateNotFound   = errors.New("voice profile candidate not found")
 	ErrProfileAnalysisUnavailable = errors.New("voice profile source analysis is not configured")
 	ErrProjectNotFound            = errors.New("project not found")
+	ErrBookSourceNotFound         = errors.New("book source not found")
 	ErrProjectBundleInvalid       = errors.New("project bundle is invalid")
 )
 
@@ -102,6 +103,7 @@ type Options struct {
 	ReferenceWorkerCount                 int
 	JobDataDir                           string
 	ProjectDataDir                       string
+	BookSourceDir                        string
 	VoiceProfileDir                      string
 	VoiceProfileSourceDir                string
 	MaxProfileBytes                      int64
@@ -136,6 +138,7 @@ const (
 	defaultStudioAdaptiveSegmentMaxRunes       = 180
 	defaultJobDataDir                          = "./data/jobs"
 	defaultProjectDataDir                      = "./data/projects"
+	defaultBookSourceDir                       = "./data/book-sources"
 	defaultVoiceProfileDir                     = "./data/voice-profiles"
 	defaultVoiceProfileSourceDir               = "./data/voice-profile-sources"
 	defaultMaxProfileBytes                     = 1 << 30
@@ -158,6 +161,10 @@ type storedVoiceProfile struct {
 	VoiceProfile
 }
 
+type storedBookSource struct {
+	BookSource
+}
+
 type Service struct {
 	optimizer  VoiceOptimizer
 	tts        TTSAgent
@@ -168,6 +175,7 @@ type Service struct {
 	mu         sync.RWMutex
 	jobs       map[string]storedJob
 	projects   map[string]VoiceProject
+	books      map[string]storedBookSource
 	profiles   map[string]storedVoiceProfile
 	sources    map[string]storedVoiceProfileSource
 	jobCancels map[string]context.CancelFunc
@@ -328,6 +336,9 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if strings.TrimSpace(options.ProjectDataDir) == "" {
 		options.ProjectDataDir = defaultProjectDataDir
 	}
+	if strings.TrimSpace(options.BookSourceDir) == "" {
+		options.BookSourceDir = defaultBookSourceDir
+	}
 	if strings.TrimSpace(options.VoiceProfileDir) == "" {
 		options.VoiceProfileDir = defaultVoiceProfileDir
 	}
@@ -396,11 +407,13 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 		options:    options,
 		jobs:       map[string]storedJob{},
 		projects:   map[string]VoiceProject{},
+		books:      map[string]storedBookSource{},
 		profiles:   map[string]storedVoiceProfile{},
 		sources:    map[string]storedVoiceProfileSource{},
 		jobCancels: map[string]context.CancelFunc{},
 	}
 	service.reloadProjects()
+	service.reloadBookSources()
 	service.reloadProfiles()
 	service.reloadJobs()
 	return service

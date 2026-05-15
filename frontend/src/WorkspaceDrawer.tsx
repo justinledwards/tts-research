@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatDuration } from "./format";
 import type {
+  BookSource,
   SystemMetrics,
   VoiceJob,
   VoiceProfile,
@@ -10,6 +11,7 @@ import type {
 
 export function WorkspaceDrawer({
   activeProjectId,
+  bookSources,
   canSubmit,
   isOpen,
   isProcessing,
@@ -33,6 +35,7 @@ export function WorkspaceDrawer({
   onSelectProfile,
 }: Readonly<{
   activeProjectId: string;
+  bookSources: BookSource[];
   canSubmit: boolean;
   isOpen: boolean;
   isProcessing: boolean;
@@ -202,28 +205,53 @@ export function WorkspaceDrawer({
             </WorkspaceSection>
 
             <WorkspaceSection id="workspace-sources" title="Sources">
-              {profileSource ? (
-                <div className="rounded-md border p-4 vs-raised">
-                  <div className="flex min-w-0 items-center justify-between gap-3">
-                    <p
-                      className="min-w-0 truncate text-sm font-semibold"
-                      title={profileSource.sourceFile}
-                    >
-                      {profileSource.sourceFile}
+              <div className="grid gap-3">
+                {profileSource ? (
+                  <div className="rounded-md border p-4 vs-raised">
+                    <div className="flex min-w-0 items-center justify-between gap-3">
+                      <p
+                        className="min-w-0 truncate text-sm font-semibold"
+                        title={profileSource.sourceFile}
+                      >
+                        {profileSource.sourceFile}
+                      </p>
+                      <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs vs-border">
+                        {profileSource.status}
+                      </span>
+                    </div>
+                    <p className="vs-muted mt-2 text-xs">
+                      {profileSource.candidates.length} detected voice
+                      {profileSource.candidates.length === 1 ? "" : "s"} ·{" "}
+                      {profileSource.progressMessage}
                     </p>
-                    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs vs-border">
-                      {profileSource.status}
-                    </span>
                   </div>
-                  <p className="vs-muted mt-2 text-xs">
-                    {profileSource.candidates.length} detected voice
-                    {profileSource.candidates.length === 1 ? "" : "s"} ·{" "}
-                    {profileSource.progressMessage}
-                  </p>
-                </div>
-              ) : (
-                <EmptyDrawerText>No source analysis staged.</EmptyDrawerText>
-              )}
+                ) : null}
+                {bookSources.length > 0 ? (
+                  <div className="grid gap-2">
+                    {bookSources.slice(0, 5).map((book) => (
+                      <div className="min-w-0 rounded-md border p-3 vs-raised" key={book.id}>
+                        <div className="flex min-w-0 items-center justify-between gap-3">
+                          <p
+                            className="min-w-0 truncate text-sm font-semibold"
+                            title={book.title ?? book.sourceFile}
+                          >
+                            {book.title ?? book.sourceFile}
+                          </p>
+                          <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
+                            {book.kind}
+                          </span>
+                        </div>
+                        <p className="vs-muted mt-1 truncate text-xs" title={book.sourceFile}>
+                          {book.wordCount.toLocaleString()} words · {book.status}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {!profileSource && bookSources.length === 0 ? (
+                  <EmptyDrawerText>No source analysis or book source staged.</EmptyDrawerText>
+                ) : null}
+              </div>
             </WorkspaceSection>
 
             <WorkspaceSection id="workspace-imports" title="Imports">

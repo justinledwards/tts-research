@@ -191,6 +191,7 @@ func main() {
 			ReferenceWorkerCount:                 referenceWorkerCount,
 			JobDataDir:                           envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
 			ProjectDataDir:                       envWithDefault("VOICE_PROJECT_DATA_DIR", "./data/projects"),
+			BookSourceDir:                        envWithDefault("VOICE_BOOK_SOURCE_DATA_DIR", "./data/book-sources"),
 			VoiceProfileDir:                      envWithDefault("VOICE_PROFILE_DATA_DIR", "./data/voice-profiles"),
 			VoiceProfileSourceDir:                envWithDefault("VOICE_PROFILE_SOURCE_DATA_DIR", "./data/voice-profile-sources"),
 			MaxProfileBytes:                      maxProfileBytes,

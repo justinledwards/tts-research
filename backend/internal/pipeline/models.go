@@ -50,6 +50,64 @@ type VoiceProject struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type BookSourceStatus string
+
+const (
+	BookSourceStatusReady  BookSourceStatus = "ready"
+	BookSourceStatusFailed BookSourceStatus = "failed"
+)
+
+type BookSourceKind string
+
+const (
+	BookSourceKindPDF  BookSourceKind = "pdf"
+	BookSourceKindEPUB BookSourceKind = "epub"
+)
+
+type BookSourcePage struct {
+	Index     int    `json:"index"`
+	Label     string `json:"label"`
+	Text      string `json:"text"`
+	WordCount int    `json:"wordCount"`
+}
+
+type BookSourceChapter struct {
+	Index     int    `json:"index"`
+	Title     string `json:"title"`
+	Text      string `json:"text"`
+	WordCount int    `json:"wordCount"`
+}
+
+type BookSourceWordSpan struct {
+	Index       int    `json:"index"`
+	Text        string `json:"text"`
+	PageIndex   int    `json:"pageIndex,omitempty"`
+	Chapter     int    `json:"chapter,omitempty"`
+	StartOffset int    `json:"startOffset"`
+	EndOffset   int    `json:"endOffset"`
+}
+
+type BookSource struct {
+	ID           string               `json:"id"`
+	ProjectID    string               `json:"projectId"`
+	Status       BookSourceStatus     `json:"status"`
+	Kind         BookSourceKind       `json:"kind"`
+	SourceFile   string               `json:"sourceFile"`
+	SourceBytes  int64                `json:"sourceBytes"`
+	Title        string               `json:"title,omitempty"`
+	Author       string               `json:"author,omitempty"`
+	Text         string               `json:"text,omitempty"`
+	WordCount    int                  `json:"wordCount"`
+	PageCount    int                  `json:"pageCount"`
+	ChapterCount int                  `json:"chapterCount"`
+	Pages        []BookSourcePage     `json:"pages,omitempty"`
+	Chapters     []BookSourceChapter  `json:"chapters,omitempty"`
+	WordSpans    []BookSourceWordSpan `json:"wordSpans,omitempty"`
+	Error        string               `json:"error,omitempty"`
+	CreatedAt    time.Time            `json:"createdAt"`
+	UpdatedAt    time.Time            `json:"updatedAt"`
+}
+
 type TTSEngineVoice struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -113,6 +171,7 @@ type ProjectBundleManifest struct {
 	Project          VoiceProject         `json:"project"`
 	Jobs             []VoiceJob           `json:"jobs"`
 	Profiles         []VoiceProfile       `json:"profiles"`
+	Books            []BookSource         `json:"books,omitempty"`
 	Files            []ProjectBundleFile  `json:"files"`
 	ProviderVersions map[string]string    `json:"providerVersions,omitempty"`
 	Quality          ProjectBundleQuality `json:"quality"`

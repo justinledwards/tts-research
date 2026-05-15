@@ -174,6 +174,9 @@ func (service *Service) ImportProjectBundle(bundlePath string, request ProjectBu
 		if err := service.removeProjectJobs(targetProject.ID); err != nil {
 			return ProjectBundleImportResult{}, err
 		}
+		if err := service.removeProjectBookSources(targetProject.ID); err != nil {
+			return ProjectBundleImportResult{}, err
+		}
 	}
 
 	reader, err := zip.OpenReader(bundlePath)
@@ -194,6 +197,12 @@ func (service *Service) ImportProjectBundle(bundlePath string, request ProjectBu
 			return ProjectBundleImportResult{}, copyErr
 		}
 		importedProfiles = append(importedProfiles, imported)
+	}
+
+	for _, book := range preview.Manifest.Books {
+		if copyErr := service.importBundleBookSource(book, targetProject.ID); copyErr != nil {
+			return ProjectBundleImportResult{}, copyErr
+		}
 	}
 
 	importedJobs := make([]VoiceJob, 0, len(preview.Manifest.Jobs))
@@ -227,6 +236,10 @@ func (service *Service) buildProjectBundleManifest(projectID string) (ProjectBun
 		return ProjectBundleManifest{}, nil, err
 	}
 	jobs, err := service.ListProjectJobs(project.ID)
+	if err != nil {
+		return ProjectBundleManifest{}, nil, err
+	}
+	books, err := service.ListProjectBookSources(project.ID)
 	if err != nil {
 		return ProjectBundleManifest{}, nil, err
 	}
@@ -285,6 +298,7 @@ func (service *Service) buildProjectBundleManifest(projectID string) (ProjectBun
 		Project:    project,
 		Jobs:       jobs,
 		Profiles:   profiles,
+		Books:      books,
 		Files:      manifestFiles,
 		ProviderVersions: map[string]string{
 			"tts":         "kokoro",
@@ -637,6 +651,9 @@ func bundleManifestWarnings(manifest ProjectBundleManifest) []string {
 	warnings := make([]string, 0)
 	if len(manifest.Jobs) == 0 {
 		warnings = append(warnings, "Project has no jobs yet.")
+	}
+	if len(manifest.Books) > 0 {
+		warnings = append(warnings, "Book source metadata is included without raw uploaded PDF/EPUB files.")
 	}
 	if manifest.Quality.WarningCount > 0 {
 		warnings = append(warnings, fmt.Sprintf("%d job warning(s) are included in the quality report.", manifest.Quality.WarningCount))

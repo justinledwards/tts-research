@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -358,6 +359,15 @@ func TestProjectBundleSummaryExportAndPreview(t *testing.T) {
 		t.Fatalf("CreateJob returned error: %v", err)
 	}
 	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	epubPath := writeTestEPUB(t, "bundle.epub")
+	epubInfo, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat EPUB returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), project.ID, epubPath, "bundle.epub", epubInfo.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
 
 	summary, err := service.GetProjectBundleSummary(project.ID)
 	if err != nil {
@@ -391,6 +401,9 @@ func TestProjectBundleSummaryExportAndPreview(t *testing.T) {
 	if preview.Manifest == nil || len(preview.Manifest.Jobs) != 1 || preview.Manifest.Jobs[0].ID != completed.ID {
 		t.Fatalf("preview manifest = %#v, want exported completed job", preview.Manifest)
 	}
+	if len(preview.Manifest.Books) != 1 || preview.Manifest.Books[0].ID != book.ID {
+		t.Fatalf("preview books = %#v, want exported book metadata", preview.Manifest.Books)
+	}
 }
 
 func TestProjectBundleImportCopyAndReplace(t *testing.T) {
@@ -409,6 +422,14 @@ func TestProjectBundleImportCopyAndReplace(t *testing.T) {
 		t.Fatalf("CreateJob returned error: %v", err)
 	}
 	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	epubPath := writeTestEPUB(t, "portable.epub")
+	epubInfo, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat EPUB returned error: %v", err)
+	}
+	if _, err := service.CreateBookSource(context.Background(), project.ID, epubPath, "portable.epub", epubInfo.Size()); err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
 	bundle, filename, err := service.ExportProjectBundle(project.ID)
 	if err != nil {
 		t.Fatalf("ExportProjectBundle returned error: %v", err)
@@ -433,6 +454,13 @@ func TestProjectBundleImportCopyAndReplace(t *testing.T) {
 	}
 	if len(copied.Jobs) != 1 || copied.Jobs[0].ID == completed.ID {
 		t.Fatalf("copied jobs = %#v, want one new job id", copied.Jobs)
+	}
+	copiedBooks, err := service.ListProjectBookSources(copied.Project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectBookSources(copied) returned error: %v", err)
+	}
+	if len(copiedBooks) != 1 || copiedBooks[0].ProjectID != copied.Project.ID {
+		t.Fatalf("copied books = %#v, want one imported book source", copiedBooks)
 	}
 	originalJobs, err := service.ListProjectJobs(project.ID)
 	if err != nil {
@@ -473,6 +501,104 @@ func TestProjectBundleImportCopyAndReplace(t *testing.T) {
 	}
 	if len(targetJobs) != 1 || targetJobs[0].ID == oldJob.ID {
 		t.Fatalf("replaced project jobs = %#v, want old job removed and bundle job imported", targetJobs)
+	}
+}
+
+func TestCreateBookSourceImportsEPUBWordSpans(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	epubPath := writeTestEPUB(t, "book.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "book.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	if book.Status != pipeline.BookSourceStatusReady {
+		t.Fatalf("book status = %q, want ready: %s", book.Status, book.Error)
+	}
+	if book.Kind != pipeline.BookSourceKindEPUB {
+		t.Fatalf("book kind = %q, want epub", book.Kind)
+	}
+	if book.Title != "Northern Lights" {
+		t.Fatalf("book title = %q", book.Title)
+	}
+	if book.Author != "Ada Reader" {
+		t.Fatalf("book author = %q", book.Author)
+	}
+	if book.ChapterCount != 2 {
+		t.Fatalf("chapter count = %d, want 2", book.ChapterCount)
+	}
+	if book.WordCount == 0 || len(book.WordSpans) == 0 {
+		t.Fatal("book should include word spans for the text layer")
+	}
+	if !strings.Contains(book.Text, "Stockholm") || !strings.Contains(book.Text, "second chapter") {
+		t.Fatalf("book text did not include expected chapter content: %q", book.Text)
+	}
+	if strings.Contains(book.Text, "Opening\nOpening") {
+		t.Fatalf("book text should not include hidden HTML title metadata: %q", book.Text)
+	}
+
+	books, err := service.ListProjectBookSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectBookSources returned error: %v", err)
+	}
+	if len(books) != 1 || books[0].ID != book.ID {
+		t.Fatalf("project books = %#v, want imported book", books)
+	}
+}
+
+func TestCreateBookNarrationJobUsesBookText(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	epubPath := writeTestEPUB(t, "narration.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "narration.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+
+	job, err := service.CreateBookNarrationJob(
+		context.Background(),
+		book.ID,
+		pipeline.CreateJobRequest{
+			RunMode: pipeline.RunModeDraftPreview,
+			PipelineOptions: pipeline.CreateJobPipelineOptions{
+				ASRCheck:  boolPtr(false),
+				AutoRetry: boolPtr(false),
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateBookNarrationJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.ProjectID != book.ProjectID {
+		t.Fatalf("job project = %q, want %q", completed.ProjectID, book.ProjectID)
+	}
+	if completed.InputText != book.Text {
+		t.Fatalf("job input text = %q, want book text %q", completed.InputText, book.Text)
+	}
+}
+
+func TestCreateBookSourceRejectsUnsupportedTypes(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	sourcePath := filepath.Join(t.TempDir(), "notes.txt")
+	if err := os.WriteFile(sourcePath, []byte("not a book container"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	if _, err := service.CreateBookSource(context.Background(), "default", sourcePath, "notes.txt", 20); err == nil {
+		t.Fatal("CreateBookSource should reject unsupported book source types")
 	}
 }
 
@@ -1831,8 +1957,83 @@ func newMockService(t *testing.T, checker pipeline.VoiceChecker) *pipeline.Servi
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		checker,
-		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+		pipeline.Options{
+			MaxRetries:     3,
+			JobDataDir:     t.TempDir(),
+			ProjectDataDir: t.TempDir(),
+			BookSourceDir:  t.TempDir(),
+		},
 	)
+}
+
+func newBookSourceService(t *testing.T) *pipeline.Service {
+	t.Helper()
+
+	return pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:     3,
+			JobDataDir:     t.TempDir(),
+			ProjectDataDir: t.TempDir(),
+			BookSourceDir:  t.TempDir(),
+		},
+	)
+}
+
+func writeTestEPUB(t *testing.T, filename string) string {
+	t.Helper()
+
+	outputPath := filepath.Join(t.TempDir(), filename)
+	file, err := os.Create(outputPath)
+	if err != nil {
+		t.Fatalf("Create EPUB returned error: %v", err)
+	}
+	zipWriter := zip.NewWriter(file)
+	files := map[string]string{
+		"META-INF/container.xml": `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OPS/package.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`,
+		"OPS/package.opf": `<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <metadata>
+    <dc:title>Northern Lights</dc:title>
+    <dc:creator>Ada Reader</dc:creator>
+  </metadata>
+  <manifest>
+    <item id="chapter-one" href="chapter-one.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter-two" href="chapter-two.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="chapter-one"/>
+    <itemref idref="chapter-two"/>
+  </spine>
+</package>`,
+		"OPS/chapter-one.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Opening</title></head>
+<body><h1>Opening</h1><p>Det var en kylig kväll i Stockholm.</p></body></html>`,
+		"OPS/chapter-two.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Second Chapter</title></head>
+<body><h1>Second Chapter</h1><p>The second chapter keeps the reader moving.</p></body></html>`,
+	}
+	for path, body := range files {
+		writer, createErr := zipWriter.Create(path)
+		if createErr != nil {
+			t.Fatalf("Create zip file returned error: %v", createErr)
+		}
+		if _, writeErr := writer.Write([]byte(body)); writeErr != nil {
+			t.Fatalf("Write zip file returned error: %v", writeErr)
+		}
+	}
+	if err := zipWriter.Close(); err != nil {
+		t.Fatalf("Close zip writer returned error: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close EPUB returned error: %v", err)
+	}
+	return outputPath
 }
 
 func waitForJob(t *testing.T, service *pipeline.Service, id string, status pipeline.JobStatus) pipeline.VoiceJob {

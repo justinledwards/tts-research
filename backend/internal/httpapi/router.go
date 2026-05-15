@@ -102,6 +102,57 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(jobs)
 	})
 
+	app.Get("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
+		books, err := service.ListProjectBookSources(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(books)
+	})
+
+	app.Post("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
+		tempPath, filename, size, cleanup, err := saveUploadedBook(ctx)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		book, err := service.CreateBookSource(ctx.Context(), ctx.Params("id"), tempPath, filename, size)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.Status(fiber.StatusCreated).JSON(book)
+	})
+
+	app.Get("/api/book-sources/:id", func(ctx fiber.Ctx) error {
+		book, err := service.GetBookSource(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(book)
+	})
+
+	app.Post("/api/book-sources/:id/voice-jobs", func(ctx fiber.Ctx) error {
+		var request pipeline.CreateJobRequest
+		if err := json.Unmarshal(ctx.Body(), &request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		job, err := service.CreateBookNarrationJob(ctx.Context(), ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrBookSourceNotFound) || errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			status := fiber.StatusInternalServerError
+			if errors.Is(err, pipeline.ErrEmptyText) {
+				status = fiber.StatusBadRequest
+			}
+			return ctx.Status(status).JSON(errorResponse(err.Error()))
+		}
+		return ctx.Status(fiber.StatusCreated).JSON(job)
+	})
+
 	app.Get("/api/projects/:id/bundle/summary", func(ctx fiber.Ctx) error {
 		summary, err := service.GetProjectBundleSummary(ctx.Params("id"))
 		if err != nil {
@@ -557,7 +608,8 @@ func notFound(ctx fiber.Ctx, err error) error {
 		errors.Is(err, pipeline.ErrProfileNotFound) ||
 		errors.Is(err, pipeline.ErrProfileSourceNotFound) ||
 		errors.Is(err, pipeline.ErrProfileCandidateNotFound) ||
-		errors.Is(err, pipeline.ErrProjectNotFound) {
+		errors.Is(err, pipeline.ErrProjectNotFound) ||
+		errors.Is(err, pipeline.ErrBookSourceNotFound) {
 		return ctx.Status(fiber.StatusNotFound).JSON(errorResponse(err.Error()))
 	}
 
@@ -606,6 +658,52 @@ func saveUploadedBundle(ctx fiber.Ctx) (string, func(), error) {
 		return "", nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize uploaded bundle"))
 	}
 	return tempPath, cleanup, nil
+}
+
+func saveUploadedBook(ctx fiber.Ctx) (string, string, int64, func(), error) {
+	form, err := ctx.MultipartForm()
+	if err != nil {
+		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid multipart form data"))
+	}
+	fileHeaders := form.File["file"]
+	if len(fileHeaders) == 0 {
+		fileHeaders = form.File["book"]
+	}
+	if len(fileHeaders) == 0 {
+		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("missing book source file"))
+	}
+	file := fileHeaders[0]
+	sourceFile, err := file.Open()
+	if err != nil {
+		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("could not read uploaded book"))
+	}
+	defer func() {
+		_ = sourceFile.Close()
+	}()
+	tempInput, err := os.CreateTemp("", "voice-studio-book-*"+filepath.Ext(file.Filename))
+	if err != nil {
+		return "", "", 0, nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not create book temp file"))
+	}
+	tempPath := tempInput.Name()
+	cleanup := func() {
+		_ = os.Remove(tempPath)
+	}
+	copied, err := io.Copy(tempInput, sourceFile)
+	if err != nil {
+		_ = tempInput.Close()
+		cleanup()
+		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("unable to save uploaded book"))
+	}
+	if copied == 0 {
+		_ = tempInput.Close()
+		cleanup()
+		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("uploaded book is empty"))
+	}
+	if err := tempInput.Close(); err != nil {
+		cleanup()
+		return "", "", 0, nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize uploaded book"))
+	}
+	return tempPath, file.Filename, copied, cleanup, nil
 }
 
 func writeSSE(writer *bufio.Writer, event string, payload any) error {
