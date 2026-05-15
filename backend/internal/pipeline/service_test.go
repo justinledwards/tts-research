@@ -61,6 +61,40 @@ func TestCreateJobCompletesWithMockAgents(t *testing.T) {
 	}
 }
 
+func TestCreateJobOutlivesRequestContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	ctx, cancel := context.WithCancel(context.Background())
+	job, err := service.CreateJob(ctx, pipeline.CreateJobRequest{Text: "This job should outlive its HTTP request."})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	cancel()
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.Error == "cancelled by request" {
+		t.Fatal("request context cancellation should not mark the background job as user-cancelled")
+	}
+}
+
+func TestCancelJobMarksExplicitUserCancellation(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: strings.Repeat("cancel me. ", 200)})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob returned error: %v", err)
+	}
+	cancelled := waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
+	if cancelled.Error != "cancelled by request" {
+		t.Fatalf("cancelled job error = %q, want explicit request reason", cancelled.Error)
+	}
+}
+
 func TestCreateJobCanSelectProviderVoice(t *testing.T) {
 	t.Parallel()
 
@@ -552,6 +586,114 @@ func TestCreateBookSourceImportsEPUBWordSpans(t *testing.T) {
 	}
 }
 
+func TestBookSourceSummaryAndScopeContent(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	epubPath := writeStructuredTestEPUB(t, "structured.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "structured.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+
+	summaries, err := service.ListProjectBookSourcesSummary("default")
+	if err != nil {
+		t.Fatalf("ListProjectBookSourcesSummary returned error: %v", err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("summary count = %d, want 1", len(summaries))
+	}
+	summary := summaries[0]
+	if summary.Text != "" || len(summary.WordSpans) != 0 {
+		t.Fatalf("summary should omit full text and spans: text=%q spans=%d", summary.Text, len(summary.WordSpans))
+	}
+	if len(summary.Chapters) < 3 || summary.Chapters[0].Text != "" {
+		t.Fatalf("summary should keep structure without chapter text: %#v", summary.Chapters)
+	}
+	if summary.DefaultSectionID == "" || len(summary.Sections) == 0 {
+		t.Fatalf("summary should include section metadata: %#v", summary)
+	}
+
+	content, err := service.GetBookSourceScope(book.ID, &pipeline.BookScope{
+		Type:         pipeline.BookScopeTypeChapter,
+		ChapterIndex: 2,
+	})
+	if err != nil {
+		t.Fatalf("GetBookSourceScope returned error: %v", err)
+	}
+	if !strings.Contains(content.Text, "The first real chapter") || strings.Contains(content.Text, "Copyright") {
+		t.Fatalf("scoped text = %q, want only selected narratable chapter", content.Text)
+	}
+	if content.Section == nil || content.Section.Role != "body" || !content.Section.IsNarratable {
+		t.Fatalf("scope section = %#v, want narratable body section", content.Section)
+	}
+	if len(content.WordSpans) == 0 || content.WordCount != len(content.WordSpans) {
+		t.Fatalf("scope spans = %d wordCount = %d", len(content.WordSpans), content.WordCount)
+	}
+}
+
+func TestStructuredEPUBUsesNavLabelsAndNarratableDefault(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	epubPath := writeStructuredTestEPUB(t, "nav-labels.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "nav-labels.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	if book.ChapterCount != 2 {
+		t.Fatalf("chapter count = %d, want only 2 narratable body chapters", book.ChapterCount)
+	}
+	if book.DefaultSectionID == "" {
+		t.Fatal("book should select a default narratable body section")
+	}
+	if len(book.Chapters) != 4 {
+		t.Fatalf("chapter entries = %d, want visible front/body/back sections", len(book.Chapters))
+	}
+	if book.Chapters[1].Title != "Chapter 1: A Clean Start" {
+		t.Fatalf("chapter label = %q, want nav label", book.Chapters[1].Title)
+	}
+	if book.Chapters[0].Role != "frontmatter" || book.Chapters[0].IsNarratable {
+		t.Fatalf("frontmatter chapter = %#v, want visible but non-narratable", book.Chapters[0])
+	}
+	if book.Chapters[3].Role != "backmatter" || book.Chapters[3].IsNarratable {
+		t.Fatalf("backmatter chapter = %#v, want visible but non-narratable", book.Chapters[3])
+	}
+}
+
+func TestProjectHailMaryEPUBDemoStructureIfAvailable(t *testing.T) {
+	t.Parallel()
+
+	epubPath := filepath.Join("..", "demo", "_OceanofPDF.com_Project_Hail_Mary_-_y_Weir.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Skipf("Project Hail Mary demo fixture unavailable: %v", err)
+	}
+	service := newBookSourceService(t)
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, filepath.Base(epubPath), info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource(Project Hail Mary) returned error: %v", err)
+	}
+	if book.ChapterCount != 30 {
+		t.Fatalf("Project Hail Mary body chapter count = %d, want 30", book.ChapterCount)
+	}
+	defaultSection := findTestSection(book.Sections, book.DefaultSectionID)
+	if defaultSection == nil || defaultSection.Title != "Chapter 1" || defaultSection.Role != "body" {
+		t.Fatalf("default section = %#v, want Chapter 1 body", defaultSection)
+	}
+	if strings.Contains(book.Text, "OceanofPDF.com") {
+		t.Fatal("book text should not include OceanofPDF watermark")
+	}
+}
+
 func TestCreateBookNarrationJobUsesBookText(t *testing.T) {
 	t.Parallel()
 
@@ -586,6 +728,120 @@ func TestCreateBookNarrationJobUsesBookText(t *testing.T) {
 	}
 	if completed.InputText != book.Text {
 		t.Fatalf("job input text = %q, want book text %q", completed.InputText, book.Text)
+	}
+}
+
+func TestCreateBookNarrationJobUsesChapterScope(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	epubPath := writeTestEPUB(t, "chapter-scope.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "chapter-scope.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+
+	job, err := service.CreateBookNarrationJob(
+		context.Background(),
+		book.ID,
+		pipeline.CreateJobRequest{
+			BookScope: &pipeline.BookScope{
+				Type:         pipeline.BookScopeTypeChapter,
+				ChapterIndex: 2,
+			},
+			RunMode: pipeline.RunModeDraftPreview,
+			PipelineOptions: pipeline.CreateJobPipelineOptions{
+				ASRCheck:  boolPtr(false),
+				AutoRetry: boolPtr(false),
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateBookNarrationJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.BookSourceID != book.ID {
+		t.Fatalf("job book source = %q, want %q", completed.BookSourceID, book.ID)
+	}
+	if completed.BookScope == nil || completed.BookScope.Type != pipeline.BookScopeTypeChapter || completed.BookScope.ChapterIndex != 2 {
+		t.Fatalf("job book scope = %#v, want chapter 2", completed.BookScope)
+	}
+	if !strings.Contains(completed.InputText, "The second chapter") || strings.Contains(completed.InputText, "Det var en kylig") {
+		t.Fatalf("job input text = %q, want only chapter 2 text", completed.InputText)
+	}
+}
+
+func TestCreateBookNarrationJobUsesPDFPageScopeWithPythonFallback(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceServiceWithPDFScript(t, writeTestPDFExtractorScript(t))
+	pdfPath := filepath.Join(t.TempDir(), "sample.pdf")
+	if err := os.WriteFile(pdfPath, []byte("%PDF-1.4\n% fake text-layer fixture"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", pdfPath, "sample.pdf", 32)
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	if book.PageCount != 3 {
+		t.Fatalf("book page count = %d, want 3", book.PageCount)
+	}
+	content, err := service.GetBookSourceScope(book.ID, &pipeline.BookScope{
+		Type:      pipeline.BookScopeTypePages,
+		PageStart: 2,
+		PageEnd:   3,
+	})
+	if err != nil {
+		t.Fatalf("GetBookSourceScope returned error: %v", err)
+	}
+	if len(content.WordSpans) == 0 || content.WordCount != len(content.WordSpans) {
+		t.Fatalf("PDF scoped spans = %d wordCount = %d, want spans for selected pages", len(content.WordSpans), content.WordCount)
+	}
+
+	job, err := service.CreateBookNarrationJob(
+		context.Background(),
+		book.ID,
+		pipeline.CreateJobRequest{
+			BookScope: &pipeline.BookScope{
+				Type:      pipeline.BookScopeTypePages,
+				PageStart: 2,
+				PageEnd:   3,
+			},
+			RunMode: pipeline.RunModeDraftPreview,
+			PipelineOptions: pipeline.CreateJobPipelineOptions{
+				ASRCheck:  boolPtr(false),
+				AutoRetry: boolPtr(false),
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateBookNarrationJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.BookScope == nil || completed.BookScope.Type != pipeline.BookScopeTypePages || completed.BookScope.PageStart != 2 || completed.BookScope.PageEnd != 3 {
+		t.Fatalf("job book scope = %#v, want pages 2-3", completed.BookScope)
+	}
+	if strings.Contains(completed.InputText, "first page") ||
+		!strings.Contains(completed.InputText, "second page") ||
+		!strings.Contains(completed.InputText, "third page") {
+		t.Fatalf("job input text = %q, want only pages 2-3", completed.InputText)
+	}
+}
+
+func TestBookCinemaDiagnosticsReportsPythonFallback(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceServiceWithPDFScript(t, writeTestPDFExtractorScript(t))
+	diagnostics := service.BookCinemaDiagnostics()
+	if !diagnostics.PDFExtractorAvailable {
+		t.Fatalf("expected a PDF extractor to be available: %#v", diagnostics)
+	}
+	if !diagnostics.PythonFallbackAvailable {
+		t.Fatalf("expected python fallback to be available: %#v", diagnostics)
 	}
 }
 
@@ -1969,17 +2225,55 @@ func newMockService(t *testing.T, checker pipeline.VoiceChecker) *pipeline.Servi
 func newBookSourceService(t *testing.T) *pipeline.Service {
 	t.Helper()
 
+	return newBookSourceServiceWithOptions(t, pipeline.Options{})
+}
+
+func newBookSourceServiceWithPDFScript(t *testing.T, scriptPath string) *pipeline.Service {
+	t.Helper()
+
+	return newBookSourceServiceWithOptions(t, pipeline.Options{
+		BookPDFPythonPath:          "/bin/sh",
+		BookPDFExtractorScriptPath: scriptPath,
+	})
+}
+
+func newBookSourceServiceWithOptions(t *testing.T, options pipeline.Options) *pipeline.Service {
+	t.Helper()
+	if options.MaxRetries == 0 {
+		options.MaxRetries = 3
+	}
+	if options.JobDataDir == "" {
+		options.JobDataDir = t.TempDir()
+	}
+	if options.ProjectDataDir == "" {
+		options.ProjectDataDir = t.TempDir()
+	}
+	if options.BookSourceDir == "" {
+		options.BookSourceDir = t.TempDir()
+	}
 	return pipeline.NewService(
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{
-			MaxRetries:     3,
-			JobDataDir:     t.TempDir(),
-			ProjectDataDir: t.TempDir(),
-			BookSourceDir:  t.TempDir(),
-		},
+		options,
 	)
+}
+
+func writeTestPDFExtractorScript(t *testing.T) string {
+	t.Helper()
+	scriptPath := filepath.Join(t.TempDir(), "pdf_extract_fixture.sh")
+	body := `#!/bin/sh
+if [ "${1:-}" = "--check" ]; then
+  exit 0
+fi
+cat <<'JSON'
+{"title":"PDF Fixture","pages":[{"label":"Page 1","text":"This is the first page."},{"label":"Page 2","text":"This is the second page."},{"label":"Page 3","text":"This is the third page."}]}
+JSON
+`
+	if err := os.WriteFile(scriptPath, []byte(body), 0o755); err != nil {
+		t.Fatalf("WriteFile script returned error: %v", err)
+	}
+	return scriptPath
 }
 
 func writeTestEPUB(t *testing.T, filename string) string {
@@ -2034,6 +2328,90 @@ func writeTestEPUB(t *testing.T, filename string) string {
 		t.Fatalf("Close EPUB returned error: %v", err)
 	}
 	return outputPath
+}
+
+func writeStructuredTestEPUB(t *testing.T, filename string) string {
+	t.Helper()
+
+	outputPath := filepath.Join(t.TempDir(), filename)
+	file, err := os.Create(outputPath)
+	if err != nil {
+		t.Fatalf("Create EPUB returned error: %v", err)
+	}
+	zipWriter := zip.NewWriter(file)
+	files := map[string]string{
+		"META-INF/container.xml": `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="EPUB/package.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`,
+		"EPUB/package.opf": `<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <metadata>
+    <dc:title>Structured Book</dc:title>
+    <dc:creator>Reader Example</dc:creator>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="copyright" href="copyright.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter-one" href="chapter-one.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter-two" href="chapter-two.xhtml" media-type="application/xhtml+xml"/>
+    <item id="about" href="about.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="copyright"/>
+    <itemref idref="chapter-one"/>
+    <itemref idref="chapter-two"/>
+    <itemref idref="about"/>
+  </spine>
+</package>`,
+		"EPUB/nav.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body><nav epub:type="toc">
+<ol>
+<li><a href="copyright.xhtml">Copyright</a></li>
+<li><a href="chapter-one.xhtml">Chapter 1: A Clean Start</a></li>
+<li><a href="chapter-two.xhtml">Chapter 2: A Wider Sky</a></li>
+<li><a href="about.xhtml">About the Author</a></li>
+</ol>
+</nav></body></html>`,
+		"EPUB/copyright.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Copyright</title></head>
+<body><h1>Copyright</h1><p>Copyright page. Not for narration.</p></body></html>`,
+		"EPUB/chapter-one.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Raw One</title></head>
+<body><h1>Raw One</h1><p>The first real chapter starts with clean narration text for the reader.</p></body></html>`,
+		"EPUB/chapter-two.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Raw Two</title></head>
+<body><h1>Raw Two</h1><p>The second real chapter keeps the guided cinema moving forward.</p></body></html>`,
+		"EPUB/about.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>About</title></head>
+<body><h1>About the Author</h1><p>Back matter. Not for narration.</p></body></html>`,
+	}
+	for path, body := range files {
+		writer, createErr := zipWriter.Create(path)
+		if createErr != nil {
+			t.Fatalf("Create zip file returned error: %v", createErr)
+		}
+		if _, writeErr := writer.Write([]byte(body)); writeErr != nil {
+			t.Fatalf("Write zip file returned error: %v", writeErr)
+		}
+	}
+	if err := zipWriter.Close(); err != nil {
+		t.Fatalf("Close zip writer returned error: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close EPUB returned error: %v", err)
+	}
+	return outputPath
+}
+
+func findTestSection(sections []pipeline.BookSourceSection, id string) *pipeline.BookSourceSection {
+	for _, section := range sections {
+		if section.ID == id {
+			nextSection := section
+			return &nextSection
+		}
+	}
+	return nil
 }
 
 func waitForJob(t *testing.T, service *pipeline.Service, id string, status pipeline.JobStatus) pipeline.VoiceJob {

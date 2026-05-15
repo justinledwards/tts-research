@@ -1,5 +1,8 @@
 import type {
   BookSource,
+  BookCinemaDiagnostics,
+  BookScope,
+  BookSourceScopeContent,
   BundleImportMode,
   CreateVoiceProfileFromCandidateRequest,
   CreateVoiceJobRequest,
@@ -37,13 +40,48 @@ export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<Vo
   return response.json() as Promise<VoiceJob>;
 }
 
+export async function getBookCinemaDiagnostics(): Promise<BookCinemaDiagnostics> {
+  const response = await fetch(`${apiBaseUrl}/api/book-cinema/diagnostics`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<BookCinemaDiagnostics>;
+}
+
 export async function listProjectBookSources(projectId: string): Promise<BookSource[]> {
-  const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/book-sources`);
+  const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/book-sources?summary=1`);
   if (!response.ok) {
     throw new Error(await readError(response));
   }
 
   return response.json() as Promise<BookSource[]>;
+}
+
+export async function getBookSourceScope(
+  bookSourceId: string,
+  scope: BookScope,
+): Promise<BookSourceScopeContent> {
+  const query = new URLSearchParams();
+  query.set("type", scope.type);
+  if (scope.chapterIndex !== undefined) {
+    query.set("chapterIndex", String(scope.chapterIndex));
+  }
+  if (scope.pageStart !== undefined) {
+    query.set("pageStart", String(scope.pageStart));
+  }
+  if (scope.pageEnd !== undefined) {
+    query.set("pageEnd", String(scope.pageEnd));
+  }
+  if (scope.label) {
+    query.set("label", scope.label);
+  }
+  const response = await fetch(`${apiBaseUrl}/api/book-sources/${bookSourceId}/scope?${query}`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<BookSourceScopeContent>;
 }
 
 export async function createBookSource(projectId: string, file: File): Promise<BookSource> {

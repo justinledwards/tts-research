@@ -104,6 +104,9 @@ type Options struct {
 	JobDataDir                           string
 	ProjectDataDir                       string
 	BookSourceDir                        string
+	BookPDFPythonPath                    string
+	BookPDFExtractorScriptPath           string
+	BookPDFRequireTextExtractor          bool
 	VoiceProfileDir                      string
 	VoiceProfileSourceDir                string
 	MaxProfileBytes                      int64
@@ -139,6 +142,8 @@ const (
 	defaultJobDataDir                          = "./data/jobs"
 	defaultProjectDataDir                      = "./data/projects"
 	defaultBookSourceDir                       = "./data/book-sources"
+	defaultBookPDFPythonPath                   = "./.venv/bin/python"
+	defaultBookPDFExtractorScriptPath          = "./scripts/pdf_extract.py"
 	defaultVoiceProfileDir                     = "./data/voice-profiles"
 	defaultVoiceProfileSourceDir               = "./data/voice-profile-sources"
 	defaultMaxProfileBytes                     = 1 << 30
@@ -339,6 +344,12 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if strings.TrimSpace(options.BookSourceDir) == "" {
 		options.BookSourceDir = defaultBookSourceDir
 	}
+	if strings.TrimSpace(options.BookPDFPythonPath) == "" {
+		options.BookPDFPythonPath = defaultBookPDFPythonPath
+	}
+	if strings.TrimSpace(options.BookPDFExtractorScriptPath) == "" {
+		options.BookPDFExtractorScriptPath = defaultBookPDFExtractorScriptPath
+	}
 	if strings.TrimSpace(options.VoiceProfileDir) == "" {
 		options.VoiceProfileDir = defaultVoiceProfileDir
 	}
@@ -474,6 +485,7 @@ func (service *Service) Options() Options {
 func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest) (VoiceJob, error) {
 	inputText := strings.TrimSpace(request.Text)
 	projectID := strings.TrimSpace(request.ProjectID)
+	bookSourceID := strings.TrimSpace(request.BookSourceID)
 	voiceProfileID := strings.TrimSpace(request.VoiceProfileID)
 	voiceLanguage := strings.TrimSpace(request.VoiceLanguage)
 	ttsEngine := normalizeTTSEngineID(request.TTSEngine)
@@ -526,6 +538,8 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 		VoiceJob: VoiceJob{
 			ID:                   newID(),
 			ProjectID:            projectID,
+			BookSourceID:         bookSourceID,
+			BookScope:            cloneBookScope(request.BookScope),
 			Status:               JobStatusQueued,
 			Stages:               initialStages(),
 			AdaptiveMode:         adaptiveMode,
@@ -553,7 +567,7 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 		},
 	}
 	service.save(job)
-	runCtx, cancel := context.WithCancel(ctx)
+	runCtx, cancel := context.WithCancel(context.Background())
 	service.registerJobCancel(job.ID, cancel)
 	go service.runJob(runCtx, job.ID)
 

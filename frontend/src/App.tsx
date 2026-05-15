@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { type RequestState, TopProductBar } from "./AppShell";
 import { BundleFlowPanel, type BundlePanelMode } from "./BundlePanels";
 import {
@@ -12,6 +20,8 @@ import {
   createVoiceProfileFromCandidate,
   createVoiceProfileSource,
   deleteVoiceProfile,
+  getBookCinemaDiagnostics,
+  getBookSourceScope,
   getSystemMetrics,
   getVoiceJob,
   getVoiceProfileSource,
@@ -25,7 +35,14 @@ import {
   subscribeToVoiceJob,
 } from "./api";
 import { formatDuration } from "./format";
-import { BookCinemaPanel } from "./BookCinemaPanel";
+import {
+  BookCinemaOverlay,
+  BookCinemaPanel,
+  bookScopeKey,
+  bookScopeText,
+  normalizeBookScopeForBook,
+  resolveDefaultBookScope,
+} from "./BookCinemaPanel";
 import { HelpPanel, SettingsPanel } from "./ProductPanels";
 import { RunConfigDrawer } from "./RunConfigDrawer";
 import {
@@ -60,6 +77,9 @@ import {
 import { THEME_STORAGE_KEY, VOICE_STUDIO_THEMES, normalizeThemeName } from "./theme";
 import type {
   BookSource,
+  BookCinemaDiagnostics,
+  BookScope,
+  BookSourceScopeContent,
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
   ProjectBundleImportResult,
@@ -269,16 +289,20 @@ function upsertVoiceProfileByCreatedAt(
 }
 
 function TeleprompterPanel({
+  canOpenBookCinema,
   isPlaybackActive,
   job,
+  onOpenBookCinema,
   playbackControls,
   playbackCursorSec,
   settings,
   themeName,
   onOpenSettings,
 }: Readonly<{
+  canOpenBookCinema: boolean;
   isPlaybackActive: boolean;
   job: VoiceJob | null;
+  onOpenBookCinema: () => void;
   playbackControls: PlaybackController;
   playbackCursorSec: number;
   settings: TeleprompterHighlightSettings;
@@ -308,9 +332,13 @@ function TeleprompterPanel({
     [effectiveSettings, job, playbackCursorSec],
   );
   const handleOpenCinema = useCallback(() => {
+    if (canOpenBookCinema) {
+      onOpenBookCinema();
+      return;
+    }
     setCinemaThemeName(themeName === "light" ? "night" : themeName);
     setIsCinemaOpen(true);
-  }, [themeName]);
+  }, [canOpenBookCinema, onOpenBookCinema, themeName]);
   const handleCloseCinema = useCallback(() => {
     setIsCinemaOpen(false);
   }, []);
@@ -343,8 +371,9 @@ function TeleprompterPanel({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold">Teleprompter</h2>
           <button
-            className="h-8 rounded-md border px-3 text-xs font-semibold opacity-50 vs-border"
-            disabled
+            className="h-8 rounded-md border px-3 text-xs font-semibold transition disabled:opacity-50 vs-border"
+            disabled={!canOpenBookCinema}
+            onClick={handleOpenCinema}
             type="button"
           >
             Cinema
@@ -879,6 +908,15 @@ export function App() {
   const [projectJobs, setProjectJobs] = useState<VoiceJob[]>([]);
   const [bookSources, setBookSources] = useState<BookSource[]>([]);
   const [selectedBookSourceId, setSelectedBookSourceId] = useState<string | null>(null);
+  const [selectedBookScope, setSelectedBookScope] = useState<BookScope | null>(null);
+  const [bookScopeContent, setBookScopeContent] = useState<BookSourceScopeContent | null>(null);
+  const [isLoadingBookScope, setIsLoadingBookScope] = useState(false);
+  const [bookCinemaDiagnostics, setBookCinemaDiagnostics] = useState<BookCinemaDiagnostics | null>(
+    null,
+  );
+  const [isBookCinemaOpen, setIsBookCinemaOpen] = useState(false);
+  const [bookCinemaTextSize, setBookCinemaTextSize] = useState<CinemaTextSize>("large");
+  const [bookCinemaThemeName, setBookCinemaThemeName] = useState<ThemeName>("night");
   const [isImportingBookSource, setIsImportingBookSource] = useState(false);
   const [bookSourceError, setBookSourceError] = useState<string | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
@@ -948,6 +986,19 @@ export function App() {
     }
     return projects.length > 0 ? projects[0] : null;
   }, [activeProjectId, projects]);
+  const selectedBookSource = useMemo(
+    () =>
+      selectedBookSourceId
+        ? (bookSources.find((book) => book.id === selectedBookSourceId) ?? null)
+        : (bookSources[0] ?? null),
+    [bookSources, selectedBookSourceId],
+  );
+  const effectiveBookScope = useMemo(
+    () =>
+      selectedBookSource ? normalizeBookScopeForBook(selectedBookSource, selectedBookScope) : null,
+    [selectedBookScope, selectedBookSource],
+  );
+  const canOpenBookCinema = selectedBookSource?.status === "ready";
   const studioPipelineHint = getStudioPipelineHint({
     hasLoadedProfiles: hasLoadedVoiceProfiles,
     isLoadingProfiles,
@@ -1021,6 +1072,8 @@ export function App() {
     if (projectId.trim().length === 0) {
       setBookSources([]);
       setSelectedBookSourceId(null);
+      setSelectedBookScope(null);
+      setBookScopeContent(null);
       return;
     }
     try {
@@ -1032,13 +1085,24 @@ export function App() {
         }
         return books[0]?.id ?? null;
       });
+      setSelectedBookScope((currentScope) => currentScope);
       setBookSourceError(null);
     } catch (caughtError) {
       setBookSources([]);
       setSelectedBookSourceId(null);
+      setSelectedBookScope(null);
+      setBookScopeContent(null);
       setBookSourceError(
         caughtError instanceof Error ? caughtError.message : "Unable to load book sources",
       );
+    }
+  }, []);
+
+  const refreshBookCinemaDiagnostics = useCallback(async () => {
+    try {
+      setBookCinemaDiagnostics(await getBookCinemaDiagnostics());
+    } catch {
+      setBookCinemaDiagnostics(null);
     }
   }, []);
 
@@ -1115,7 +1179,10 @@ export function App() {
       setProfileSource(null);
       setBookSources([]);
       setSelectedBookSourceId(null);
+      setSelectedBookScope(null);
+      setBookScopeContent(null);
       setBookSourceError(null);
+      setIsBookCinemaOpen(false);
       resetPlaybackSurface();
       setProjectStateReadyId(projectId);
     },
@@ -1128,9 +1195,13 @@ export function App() {
       setError(null);
       setProfileSource(null);
       setSelectedBookSourceId(null);
+      setSelectedBookScope(null);
+      setBookScopeContent(null);
       resetPlaybackSurface();
       const savedState = loadProjectWorkspaceState(projectId);
       setText(savedState.text);
+      setSelectedBookSourceId(savedState.bookSourceId);
+      setSelectedBookScope(savedState.bookScope);
 
       if (!savedState.jobId) {
         setJob(null);
@@ -1150,7 +1221,12 @@ export function App() {
         }
         applyJobStatusState(restoredJob);
       } catch {
-        saveProjectWorkspaceState(projectId, { text: savedState.text, jobId: null });
+        saveProjectWorkspaceState(projectId, {
+          bookScope: savedState.bookScope,
+          bookSourceId: savedState.bookSourceId,
+          text: savedState.text,
+          jobId: null,
+        });
         setJob(null);
         setRequestState("idle");
       } finally {
@@ -1166,13 +1242,18 @@ export function App() {
         return;
       }
       if (projectStateReadyId === activeProjectId) {
-        saveProjectWorkspaceState(activeProjectId, { text, jobId: job?.id ?? null });
+        saveProjectWorkspaceState(activeProjectId, {
+          bookScope: selectedBookScope,
+          bookSourceId: selectedBookSourceId,
+          text,
+          jobId: job?.id ?? null,
+        });
       }
       setProjectStateReadyId(null);
       setActiveProjectId(projectId);
       localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, projectId);
     },
-    [activeProjectId, job?.id, projectStateReadyId, text],
+    [activeProjectId, job?.id, projectStateReadyId, selectedBookScope, selectedBookSourceId, text],
   );
 
   const handleCreateProject = useCallback(
@@ -1214,12 +1295,16 @@ export function App() {
     (nextJob: VoiceJob) => {
       const nextProjectId = nextJob.projectId || activeProjectId;
       setJob(nextJob);
+      setSelectedBookSourceId(nextJob.bookSourceId ?? null);
+      setSelectedBookScope(nextJob.bookScope ?? null);
       if (nextProjectId !== activeProjectId) {
         setActiveProjectId(nextProjectId);
         localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, nextProjectId);
       }
       setProjectStateReadyId(nextProjectId);
       saveProjectWorkspaceState(nextProjectId, {
+        bookScope: nextJob.bookScope ?? null,
+        bookSourceId: nextJob.bookSourceId ?? null,
         text: typeof nextJob.inputText === "string" ? nextJob.inputText : text,
         jobId: nextJob.id,
       });
@@ -1283,8 +1368,10 @@ export function App() {
           ...currentBooks.filter((item) => item.id !== book.id),
         ]);
         setSelectedBookSourceId(book.id);
-        if (book.status === "ready" && book.text) {
-          setText(book.text);
+        const defaultScope = resolveDefaultBookScope(book);
+        setSelectedBookScope(defaultScope);
+        if (book.status === "ready") {
+          setText(bookScopeText(book, defaultScope));
         }
       } catch (caughtError) {
         setBookSourceError(
@@ -1297,19 +1384,53 @@ export function App() {
     [activeProjectId],
   );
 
-  const handleUseBookText = useCallback((book: BookSource) => {
-    if (book.status !== "ready" || !book.text) {
-      setBookSourceError(book.error ?? "Book source is not ready yet.");
-      return;
-    }
-    setSelectedBookSourceId(book.id);
-    setText(book.text);
-    setBookSourceError(null);
-  }, []);
+  const handleUseBookText = useCallback(
+    (book: BookSource, scope: BookScope) => {
+      const scopedText =
+        bookScopeContent?.bookSourceId === book.id &&
+        bookScopeKey(bookScopeContent.scope) === bookScopeKey(scope)
+          ? bookScopeContent.text
+          : bookScopeText(book, scope);
+      if (book.status !== "ready" || !scopedText.trim()) {
+        setBookSourceError(book.error ?? "Book source is not ready yet.");
+        return;
+      }
+      setSelectedBookSourceId(book.id);
+      setSelectedBookScope(scope);
+      setText(scopedText);
+      setBookSourceError(null);
+    },
+    [bookScopeContent],
+  );
 
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
     setPlaybackControls(controls ?? DISABLED_PLAYBACK_CONTROLLER);
   }, []);
+
+  const handleBookCinemaPlayPause = useCallback(() => {
+    if (!playbackControls.isAvailable) {
+      return;
+    }
+    if (playbackControls.isPlaying) {
+      playbackControls.pause();
+      return;
+    }
+    void playbackControls.play();
+  }, [playbackControls]);
+
+  const handleBookCinemaRestart = useCallback(() => {
+    if (!playbackControls.isAvailable) {
+      return;
+    }
+    void playbackControls.restart();
+  }, [playbackControls]);
+
+  const handleBookCinemaSkip = useCallback(
+    (seconds: number) => {
+      playbackControls.skipBy?.(seconds);
+    },
+    [playbackControls],
+  );
 
   useEffect(() => {
     const cachedProfileId = localStorage.getItem(VOICE_PROFILE_ID_STORAGE_KEY);
@@ -1319,8 +1440,15 @@ export function App() {
     void refreshVoiceProfiles();
     void refreshProjects();
     void refreshProfileSourceDiagnostics();
+    void refreshBookCinemaDiagnostics();
     void refreshTTSEngines();
-  }, [refreshProfileSourceDiagnostics, refreshProjects, refreshTTSEngines, refreshVoiceProfiles]);
+  }, [
+    refreshBookCinemaDiagnostics,
+    refreshProfileSourceDiagnostics,
+    refreshProjects,
+    refreshTTSEngines,
+    refreshVoiceProfiles,
+  ]);
 
   useEffect(() => {
     localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, activeProjectId);
@@ -1329,6 +1457,53 @@ export function App() {
     void refreshBookSources(activeProjectId);
     void restoreProjectWorkspace(activeProjectId);
   }, [activeProjectId, refreshBookSources, refreshProjectJobs, restoreProjectWorkspace]);
+
+  useEffect(() => {
+    if (!selectedBookSource) {
+      setSelectedBookScope(null);
+      setBookScopeContent(null);
+      return;
+    }
+    const normalizedScope = normalizeBookScopeForBook(selectedBookSource, selectedBookScope);
+    if (JSON.stringify(normalizedScope) !== JSON.stringify(selectedBookScope)) {
+      setSelectedBookScope(normalizedScope);
+    }
+  }, [selectedBookScope, selectedBookSource]);
+
+  useEffect(() => {
+    if (selectedBookSource?.status !== "ready" || !effectiveBookScope) {
+      setBookScopeContent(null);
+      setIsLoadingBookScope(false);
+      return;
+    }
+    let isCurrent = true;
+    setIsLoadingBookScope(true);
+    void getBookSourceScope(selectedBookSource.id, effectiveBookScope)
+      .then((content) => {
+        if (!isCurrent) {
+          return;
+        }
+        setBookScopeContent(content);
+        setBookSourceError(null);
+      })
+      .catch((caughtError: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+        setBookScopeContent(null);
+        setBookSourceError(
+          caughtError instanceof Error ? caughtError.message : "Unable to load selected book scope",
+        );
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsLoadingBookScope(false);
+        }
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [effectiveBookScope, selectedBookSource]);
 
   useEffect(() => {
     if (!selectedVoiceProfileId) {
@@ -1449,8 +1624,20 @@ export function App() {
     if (projectStateReadyId !== activeProjectId) {
       return;
     }
-    saveProjectWorkspaceState(activeProjectId, { text, jobId: job?.id ?? null });
-  }, [activeProjectId, job?.id, projectStateReadyId, text]);
+    saveProjectWorkspaceState(activeProjectId, {
+      bookScope: selectedBookScope,
+      bookSourceId: selectedBookSourceId,
+      text,
+      jobId: job?.id ?? null,
+    });
+  }, [
+    activeProjectId,
+    job?.id,
+    projectStateReadyId,
+    selectedBookScope,
+    selectedBookSourceId,
+    text,
+  ]);
 
   useEffect(() => {
     localStorage.setItem(RUN_CONFIG_STORAGE_KEY, JSON.stringify(runConfiguration));
@@ -1501,6 +1688,10 @@ export function App() {
       activeJobId,
       (nextJob) => {
         setJob(nextJob);
+        if (nextJob.bookSourceId) {
+          setSelectedBookSourceId(nextJob.bookSourceId);
+          setSelectedBookScope(nextJob.bookScope ?? null);
+        }
         if (nextJob.status !== "failed") {
           setError(null);
         }
@@ -1657,23 +1848,47 @@ export function App() {
     }
   }
 
-  async function submitBookNarrationJob(book: BookSource) {
-    if (book.status !== "ready" || !book.text) {
+  async function submitBookNarrationJob(book: BookSource, scope: BookScope) {
+    if (book.status !== "ready") {
       setBookSourceError(book.error ?? "Book source is not ready for narration.");
       return;
     }
-    const request = buildVoiceJobRequest(book.text);
+    let scopedText =
+      bookScopeContent?.bookSourceId === book.id &&
+      bookScopeKey(bookScopeContent.scope) === bookScopeKey(scope)
+        ? bookScopeContent.text
+        : bookScopeText(book, scope);
+    if (!scopedText.trim()) {
+      try {
+        const content = await getBookSourceScope(book.id, scope);
+        setBookScopeContent(content);
+        scopedText = content.text;
+      } catch (caughtError) {
+        setBookSourceError(
+          caughtError instanceof Error ? caughtError.message : "Unable to load book narration text",
+        );
+        return;
+      }
+    }
+    const request = {
+      ...buildVoiceJobRequest(scopedText),
+      bookSourceId: book.id,
+      bookScope: scope,
+    };
     setRequestState("running");
     setError(null);
     setBookSourceError(null);
     setPlaybackCursorSec(0);
     setIsPlaybackActive(false);
     setSelectedBookSourceId(book.id);
-    setText(book.text);
+    setSelectedBookScope(scope);
+    setText(scopedText);
 
     try {
       const nextJob = await createBookNarrationJob(book.id, request);
       setJob(nextJob);
+      setSelectedBookSourceId(nextJob.bookSourceId ?? book.id);
+      setSelectedBookScope(nextJob.bookScope ?? scope);
       void refreshProjectJobs(nextJob.projectId || activeProjectId);
       setRequestState(nextJob.status === "completed" ? "complete" : "running");
     } catch (caughtError) {
@@ -1833,6 +2048,32 @@ export function App() {
         }}
         onImported={handleBundleImported}
       />
+      {isBookCinemaOpen && selectedBookSource && effectiveBookScope ? (
+        <BookCinemaOverlay
+          book={selectedBookSource}
+          canCreateAudio={!isProcessing}
+          isProcessing={isProcessing}
+          job={job}
+          playbackControls={playbackControls}
+          playbackCursorSec={playbackCursorSec}
+          scope={effectiveBookScope}
+          scopeContent={bookScopeContent}
+          textSize={bookCinemaTextSize}
+          themeName={bookCinemaThemeName}
+          onClose={() => {
+            setIsBookCinemaOpen(false);
+          }}
+          onCreateAudio={(book, scope) => {
+            void submitBookNarrationJob(book, scope);
+          }}
+          onPlayPause={handleBookCinemaPlayPause}
+          onRestart={handleBookCinemaRestart}
+          onScopeChange={setSelectedBookScope}
+          onSkip={handleBookCinemaSkip}
+          onTextSizeChange={setBookCinemaTextSize}
+          onThemeChange={setBookCinemaThemeName}
+        />
+      ) : null}
 
       <section className="grid min-h-[calc(100vh-58px)] grid-cols-1 border-t lg:grid-cols-[340px_minmax(0,1fr)_360px] vs-border">
         <aside className="vs-raised order-3 flex min-w-0 flex-col overflow-hidden border-zinc-200 lg:order-none lg:border-r">
@@ -1862,8 +2103,13 @@ export function App() {
 
         <section className="order-1 flex min-w-0 flex-col gap-5 p-5 lg:order-none xl:p-6">
           <TeleprompterPanel
+            canOpenBookCinema={canOpenBookCinema}
             isPlaybackActive={isPlaybackActive}
             job={job}
+            onOpenBookCinema={() => {
+              setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
+              setIsBookCinemaOpen(true);
+            }}
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
             settings={teleprompterSettings}
@@ -1872,23 +2118,32 @@ export function App() {
               setIsSettingsOpen(true);
             }}
           />
-          <BookCinemaPanel
-            bookSources={bookSources}
-            canCreateAudio={!isProcessing}
-            error={bookSourceError}
-            isImporting={isImportingBookSource}
-            isProcessing={isProcessing}
-            job={job}
-            playbackCursorSec={playbackCursorSec}
-            selectedBookSourceId={selectedBookSourceId}
-            onCreateAudio={(book) => {
-              void submitBookNarrationJob(book);
-            }}
-            onImport={handleImportBookSource}
-            onSelectBook={setSelectedBookSourceId}
-            onUseText={handleUseBookText}
-          />
           <SourceTextPanel
+            bookControls={
+              <BookCinemaPanel
+                bookSources={bookSources}
+                canCreateAudio={!isProcessing}
+                diagnostics={bookCinemaDiagnostics}
+                error={bookSourceError}
+                isImporting={isImportingBookSource}
+                isProcessing={isProcessing}
+                isScopeLoading={isLoadingBookScope}
+                scopeContent={bookScopeContent}
+                selectedBookScope={effectiveBookScope}
+                selectedBookSourceId={selectedBookSourceId}
+                onCreateAudio={(book, scope) => {
+                  void submitBookNarrationJob(book, scope);
+                }}
+                onImport={handleImportBookSource}
+                onOpenCinema={() => {
+                  setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
+                  setIsBookCinemaOpen(true);
+                }}
+                onScopeChange={setSelectedBookScope}
+                onSelectBook={setSelectedBookSourceId}
+                onUseText={handleUseBookText}
+              />
+            }
             canSubmit={canSubmit}
             isProcessing={isProcessing}
             text={text}
@@ -2081,12 +2336,14 @@ function ProductMetric({
 }
 
 function SourceTextPanel({
+  bookControls,
   canSubmit,
   isProcessing,
   text,
   onSubmit,
   onTextChange,
 }: Readonly<{
+  bookControls: ReactNode;
   canSubmit: boolean;
   isProcessing: boolean;
   text: string;
@@ -2097,6 +2354,7 @@ function SourceTextPanel({
   const [isDragActive, setIsDragActive] = useState(false);
   const [sourceFileLabel, setSourceFileLabel] = useState<string | null>(null);
   const [sourceFileError, setSourceFileError] = useState<string | null>(null);
+  const [sourceMode, setSourceMode] = useState<"book" | "file" | "text">("text");
 
   const loadSourceFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -2148,55 +2406,84 @@ function SourceTextPanel({
         void loadSourceFiles(event.dataTransfer.files);
       }}
     >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <label className="text-sm font-semibold text-zinc-950" htmlFor="source-text">
-          Source Text
-        </label>
-        <p className="text-xs text-zinc-500">
-          {text.trim().length.toLocaleString()} characters queued
-        </p>
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <label className="text-sm font-semibold text-zinc-950" htmlFor="source-text">
+            Source Intake
+          </label>
+          <p className="mt-1 text-xs text-zinc-500">
+            {text.trim().length.toLocaleString()} characters queued
+          </p>
+        </div>
+        <div className="grid grid-cols-3 rounded-md border border-zinc-200 bg-zinc-50 p-1 text-xs font-semibold text-zinc-600">
+          {(["text", "book", "file"] as const).map((mode) => (
+            <button
+              className={`rounded px-3 py-1.5 capitalize transition ${
+                sourceMode === mode ? "bg-white text-orange-700 shadow-sm" : "hover:text-zinc-900"
+              }`}
+              key={mode}
+              onClick={() => {
+                setSourceMode(mode);
+              }}
+              type="button"
+            >
+              {mode === "file" ? "Markdown/File" : mode}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-        <span className="min-w-0 flex-1 basis-48 truncate" title={sourceFileLabel ?? undefined}>
-          {sourceFileLabel ?? "Drop text or Markdown files here"}
-        </span>
-        <button
-          className="rounded border border-zinc-200 bg-white px-3 py-1.5 font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50"
-          disabled={isProcessing}
-          onClick={() => {
-            fileInputRef.current?.click();
-          }}
-          type="button"
-        >
-          Browse Text
-        </button>
-        <input
-          ref={fileInputRef}
-          accept={SOURCE_TEXT_FILE_ACCEPT}
-          className="sr-only"
-          multiple
-          type="file"
-          onChange={(event) => {
-            if (event.currentTarget.files) {
-              void loadSourceFiles(event.currentTarget.files);
+      {sourceMode === "book" ? (
+        bookControls
+      ) : (
+        <>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+            <span className="min-w-0 flex-1 basis-48 truncate" title={sourceFileLabel ?? undefined}>
+              {sourceFileLabel ?? "Drop text or Markdown files here"}
+            </span>
+            <button
+              className="rounded border border-zinc-200 bg-white px-3 py-1.5 font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50"
+              disabled={isProcessing}
+              onClick={() => {
+                fileInputRef.current?.click();
+              }}
+              type="button"
+            >
+              Browse Text
+            </button>
+            <input
+              ref={fileInputRef}
+              accept={SOURCE_TEXT_FILE_ACCEPT}
+              className="sr-only"
+              multiple
+              type="file"
+              onChange={(event) => {
+                if (event.currentTarget.files) {
+                  void loadSourceFiles(event.currentTarget.files);
+                }
+                event.currentTarget.value = "";
+              }}
+            />
+          </div>
+          {sourceFileError ? <p className="mb-3 text-xs text-red-700">{sourceFileError}</p> : null}
+          <textarea
+            className="min-h-[180px] w-full resize-y rounded-md border border-zinc-200 bg-zinc-50 p-4 font-mono text-sm leading-6 text-zinc-900 outline-none transition read-only:bg-zinc-100 read-only:text-zinc-500 focus:border-orange-400 focus:bg-white focus:ring-2 focus:ring-orange-100"
+            id="source-text"
+            onChange={(event) => {
+              if (!isProcessing) {
+                onTextChange(event.currentTarget.value);
+              }
+            }}
+            placeholder={
+              sourceMode === "file"
+                ? "Drop or browse a Markdown/text file. Headings and formatting are preserved for script preprocessing."
+                : "Paste the text you want to listen to."
             }
-            event.currentTarget.value = "";
-          }}
-        />
-      </div>
-      {sourceFileError ? <p className="mb-3 text-xs text-red-700">{sourceFileError}</p> : null}
-      <textarea
-        className="min-h-[180px] w-full resize-y rounded-md border border-zinc-200 bg-zinc-50 p-4 font-mono text-sm leading-6 text-zinc-900 outline-none transition read-only:bg-zinc-100 read-only:text-zinc-500 focus:border-orange-400 focus:bg-white focus:ring-2 focus:ring-orange-100"
-        id="source-text"
-        onChange={(event) => {
-          if (!isProcessing) {
-            onTextChange(event.currentTarget.value);
-          }
-        }}
-        readOnly={isProcessing}
-        spellCheck={false}
-        value={text}
-      />
+            readOnly={isProcessing}
+            spellCheck={false}
+            value={text}
+          />
+        </>
+      )}
       <button className="sr-only" disabled={!canSubmit} type="submit">
         Create & Listen
       </button>

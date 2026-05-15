@@ -36,16 +36,25 @@ describe("project workspace state", () => {
 
   it("starts a project blank when no scoped state exists", () => {
     expect(loadProjectWorkspaceState("new-project")).toMatchObject({
+      bookScope: null,
+      bookSourceId: null,
       jobId: null,
       text: "",
     });
   });
 
-  it("saves draft text and active job per project", () => {
-    saveProjectWorkspaceState("alpha", { jobId: "job-1", text: "Alpha text" });
+  it("saves draft text, active job, and selected book state per project", () => {
+    saveProjectWorkspaceState("alpha", {
+      bookScope: { type: "chapter", chapterIndex: 2, label: "Chapter 2" },
+      bookSourceId: "book-1",
+      jobId: "job-1",
+      text: "Alpha text",
+    });
     saveProjectWorkspaceState("beta", { jobId: null, text: "Beta text" });
 
     expect(loadProjectWorkspaceState("alpha")).toMatchObject({
+      bookScope: { type: "chapter", chapterIndex: 2, label: "Chapter 2" },
+      bookSourceId: "book-1",
       jobId: "job-1",
       text: "Alpha text",
     });
@@ -84,6 +93,8 @@ describe("project workspace state", () => {
     clearProjectWorkspaceState("fresh");
 
     expect(loadProjectWorkspaceState("fresh")).toMatchObject({
+      bookScope: null,
+      bookSourceId: null,
       jobId: null,
       text: "",
     });

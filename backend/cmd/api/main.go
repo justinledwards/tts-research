@@ -126,6 +126,11 @@ func main() {
 	if voiceProfileDiarizationToken == "" {
 		voiceProfileDiarizationToken = strings.TrimSpace(os.Getenv("HF_TOKEN"))
 	}
+	bookPDFRequireTextExtractor, err := envBoolWithDefault("VOICE_BOOK_PDF_REQUIRE_TEXT_EXTRACTOR", false)
+	if err != nil {
+		logger.Error("invalid book source configuration", "error", err)
+		os.Exit(1)
+	}
 	segmentWorkers = clampWorkerCount("VOICE_SEGMENT_WORKERS", segmentWorkers, maxSafeWorkerCount, logger)
 	studioSegmentWorkers = clampWorkerCount("VOICE_SEGMENT_WORKERS_STUDIO", studioSegmentWorkers, maxSafeWorkerCount, logger)
 	studioSegmentWorkersAdaptive = clampWorkerCount(
@@ -172,6 +177,12 @@ func main() {
 		envWithDefault("VOICE_PROFILE_DENOISE_PROVIDER", "ffmpeg"),
 		"voiceProfileDenoiseStrength",
 		envWithDefault("VOICE_PROFILE_DENOISE_STRENGTH", "balanced"),
+		"bookPdfPythonPath",
+		envWithDefault("VOICE_BOOK_PDF_PYTHON_PATH", "./.venv/bin/python"),
+		"bookPdfExtractorScript",
+		envWithDefault("VOICE_BOOK_PDF_EXTRACTOR_SCRIPT_PATH", "./scripts/pdf_extract.py"),
+		"bookPdfRequireTextExtractor",
+		bookPDFRequireTextExtractor,
 		"studioInheritsFromDefault",
 		studioSegmentWorkers == 0 && studioSegmentMaxRunes == 0,
 	)
@@ -192,6 +203,9 @@ func main() {
 			JobDataDir:                           envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
 			ProjectDataDir:                       envWithDefault("VOICE_PROJECT_DATA_DIR", "./data/projects"),
 			BookSourceDir:                        envWithDefault("VOICE_BOOK_SOURCE_DATA_DIR", "./data/book-sources"),
+			BookPDFPythonPath:                    envWithDefault("VOICE_BOOK_PDF_PYTHON_PATH", "./.venv/bin/python"),
+			BookPDFExtractorScriptPath:           envWithDefault("VOICE_BOOK_PDF_EXTRACTOR_SCRIPT_PATH", "./scripts/pdf_extract.py"),
+			BookPDFRequireTextExtractor:          bookPDFRequireTextExtractor,
 			VoiceProfileDir:                      envWithDefault("VOICE_PROFILE_DATA_DIR", "./data/voice-profiles"),
 			VoiceProfileSourceDir:                envWithDefault("VOICE_PROFILE_SOURCE_DATA_DIR", "./data/voice-profile-sources"),
 			MaxProfileBytes:                      maxProfileBytes,

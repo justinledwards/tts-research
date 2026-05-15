@@ -67,3 +67,4 @@ frontend/.vercel/
 
 # Local verification screenshots
 /tts-research-*.png
+/output/playwright/

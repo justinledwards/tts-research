@@ -37,14 +37,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:5173",
-			"http://127.0.0.1:5173",
-			"http://localhost:5174",
-			"http://127.0.0.1:5174",
-			"http://localhost:5175",
-			"http://127.0.0.1:5175",
-		},
+		AllowOrigins: corsAllowedOrigins(),
 		AllowMethods: []string{fiber.MethodGet, fiber.MethodPost, fiber.MethodPatch, fiber.MethodDelete, fiber.MethodOptions},
 		AllowHeaders: []string{"Origin", "Content-Type", "Accept"},
 	}))
@@ -60,6 +53,10 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 
 	app.Get("/api/tts-engines", func(ctx fiber.Ctx) error {
 		return ctx.JSON(service.ListTTSEngines())
+	})
+
+	app.Get("/api/book-cinema/diagnostics", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.BookCinemaDiagnostics())
 	})
 
 	app.Get("/api/projects", func(ctx fiber.Ctx) error {
@@ -103,7 +100,17 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Get("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
-		books, err := service.ListProjectBookSources(ctx.Params("id"))
+		summary := strings.EqualFold(ctx.Query("summary"), "1") ||
+			strings.EqualFold(ctx.Query("summary"), "true")
+		var (
+			books []pipeline.BookSource
+			err   error
+		)
+		if summary {
+			books, err = service.ListProjectBookSourcesSummary(ctx.Params("id"))
+		} else {
+			books, err = service.ListProjectBookSources(ctx.Params("id"))
+		}
 		if err != nil {
 			return notFound(ctx, err)
 		}
@@ -132,6 +139,18 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return notFound(ctx, err)
 		}
 		return ctx.JSON(book)
+	})
+
+	app.Get("/api/book-sources/:id/scope", func(ctx fiber.Ctx) error {
+		scope := bookScopeFromQuery(ctx)
+		content, err := service.GetBookSourceScope(ctx.Params("id"), scope)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrBookSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(content)
 	})
 
 	app.Post("/api/book-sources/:id/voice-jobs", func(ctx fiber.Ctx) error {
@@ -603,6 +622,41 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	return app
 }
 
+func corsAllowedOrigins() []string {
+	origins := []string{
+		"http://localhost:5173",
+		"http://127.0.0.1:5173",
+		"http://localhost:5174",
+		"http://127.0.0.1:5174",
+		"http://localhost:5175",
+		"http://127.0.0.1:5175",
+	}
+	seen := make(map[string]struct{}, len(origins)+4)
+	for _, origin := range origins {
+		seen[origin] = struct{}{}
+	}
+
+	if frontendPort := strings.TrimSpace(os.Getenv("FRONTEND_PORT")); frontendPort != "" {
+		addOrigin(&origins, seen, "http://localhost:"+frontendPort)
+		addOrigin(&origins, seen, "http://127.0.0.1:"+frontendPort)
+	}
+	for _, origin := range strings.Split(os.Getenv("VOICE_CORS_ORIGINS"), ",") {
+		addOrigin(&origins, seen, strings.TrimSpace(origin))
+	}
+	return origins
+}
+
+func addOrigin(origins *[]string, seen map[string]struct{}, origin string) {
+	if origin == "" {
+		return
+	}
+	if _, ok := seen[origin]; ok {
+		return
+	}
+	seen[origin] = struct{}{}
+	*origins = append(*origins, origin)
+}
+
 func notFound(ctx fiber.Ctx, err error) error {
 	if errors.Is(err, pipeline.ErrJobNotFound) ||
 		errors.Is(err, pipeline.ErrProfileNotFound) ||
@@ -704,6 +758,31 @@ func saveUploadedBook(ctx fiber.Ctx) (string, string, int64, func(), error) {
 		return "", "", 0, nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize uploaded book"))
 	}
 	return tempPath, file.Filename, copied, cleanup, nil
+}
+
+func bookScopeFromQuery(ctx fiber.Ctx) *pipeline.BookScope {
+	scopeType := pipeline.BookScopeType(strings.TrimSpace(ctx.Query("type")))
+	if scopeType == "" {
+		scopeType = pipeline.BookScopeTypeChapter
+	}
+	scope := &pipeline.BookScope{Type: scopeType, Label: strings.TrimSpace(ctx.Query("label"))}
+	switch scopeType {
+	case pipeline.BookScopeTypeChapter:
+		if value, err := strconv.Atoi(strings.TrimSpace(ctx.Query("chapterIndex"))); err == nil {
+			scope.ChapterIndex = value
+		}
+	case pipeline.BookScopeTypePages:
+		if value, err := strconv.Atoi(strings.TrimSpace(ctx.Query("pageStart"))); err == nil {
+			scope.PageStart = value
+		}
+		if value, err := strconv.Atoi(strings.TrimSpace(ctx.Query("pageEnd"))); err == nil {
+			scope.PageEnd = value
+		}
+	case pipeline.BookScopeTypeBook:
+	default:
+		scope.Type = pipeline.BookScopeTypeBook
+	}
+	return scope
 }
 
 func writeSSE(writer *bufio.Writer, event string, payload any) error {

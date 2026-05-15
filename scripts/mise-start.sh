@@ -66,8 +66,12 @@ profile_analysis_uses_pyannote() {
     -n "${VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR:-}" ]]
 }
 
+book_pdf_python_fallback_enabled() {
+  [[ "${VOICE_BOOK_PDF_ENABLE_PYTHON_FALLBACK:-1}" == "1" ]]
+}
+
 python_runtime_needed() {
-  tts_uses_kokoro || checker_uses_qwen || profile_analysis_uses_pyannote
+  tts_uses_kokoro || checker_uses_qwen || profile_analysis_uses_pyannote || book_pdf_python_fallback_enabled
 }
 
 is_port_in_use() {
@@ -124,6 +128,7 @@ preflight_summary() {
   echo "  - git: $(command -v git >/dev/null 2>&1 && echo "available" || echo "missing")"
   echo "  - ffmpeg: $(command -v ffmpeg >/dev/null 2>&1 && echo "available" || echo "missing")"
   echo "  - ffprobe: $(command -v ffprobe >/dev/null 2>&1 && echo "available" || echo "missing")"
+  echo "  - pdftotext: $(command -v pdftotext >/dev/null 2>&1 && echo "available" || echo "missing (PDF fallback will use managed Python if available)")"
 
   if python_runtime_needed; then
     echo "  - uv: $(command -v uv >/dev/null 2>&1 && echo "available" || echo "missing (required for runtime Python providers)")"
@@ -262,6 +267,12 @@ preflight_summary
 
 if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
   echo "Warning: ffmpeg/ffprobe are not both available. Non-WAV profile uploads will fail until both are installed."
+  echo
+fi
+
+if ! command -v pdftotext >/dev/null 2>&1; then
+  echo "Warning: pdftotext is not available. Book Cinema PDF import will use the managed Python fallback when installed."
+  echo "Set VOICE_BOOK_PDF_REQUIRE_TEXT_EXTRACTOR=1 to fail startup if no PDF text extractor is available."
   echo
 fi
 

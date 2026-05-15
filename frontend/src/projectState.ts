@@ -1,3 +1,5 @@
+import type { BookScope } from "./types";
+
 export const ACTIVE_PROJECT_ID_STORAGE_KEY = "tts-active-project-id";
 export const LEGACY_SOURCE_TEXT_DRAFT_STORAGE_KEY = "tts-source-text";
 export const LEGACY_JOB_ID_STORAGE_KEY = "tts-active-job-id";
@@ -5,6 +7,8 @@ export const LEGACY_JOB_ID_STORAGE_KEY = "tts-active-job-id";
 export interface ProjectWorkspaceState {
   text: string;
   jobId: string | null;
+  bookSourceId: string | null;
+  bookScope: BookScope | null;
   updatedAt: string;
 }
 
@@ -18,6 +22,8 @@ export function blankProjectWorkspaceState(): ProjectWorkspaceState {
   return {
     text: "",
     jobId: null,
+    bookSourceId: null,
+    bookScope: null,
     updatedAt: new Date(0).toISOString(),
   };
 }
@@ -37,7 +43,8 @@ export function loadProjectWorkspaceState(projectId: string): ProjectWorkspaceSt
 
 export function saveProjectWorkspaceState(
   projectId: string,
-  state: Pick<ProjectWorkspaceState, "text"> & Partial<Pick<ProjectWorkspaceState, "jobId">>,
+  state: Pick<ProjectWorkspaceState, "text"> &
+    Partial<Pick<ProjectWorkspaceState, "jobId" | "bookSourceId" | "bookScope">>,
 ): void {
   localStorage.setItem(
     projectWorkspaceStateKey(projectId),
@@ -91,10 +98,41 @@ function normalizeProjectWorkspaceState(value: unknown): ProjectWorkspaceState {
       typeof candidate.jobId === "string" && candidate.jobId.trim().length > 0
         ? candidate.jobId
         : null,
+    bookSourceId:
+      typeof candidate.bookSourceId === "string" && candidate.bookSourceId.trim().length > 0
+        ? candidate.bookSourceId
+        : null,
+    bookScope: normalizeBookScope(candidate.bookScope),
     updatedAt:
       typeof candidate.updatedAt === "string" && candidate.updatedAt.trim().length > 0
         ? candidate.updatedAt
         : new Date(0).toISOString(),
+  };
+}
+
+function normalizeBookScope(value: unknown): BookScope | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const candidate = value as Partial<BookScope>;
+  if (candidate.type !== "book" && candidate.type !== "chapter" && candidate.type !== "pages") {
+    return null;
+  }
+  return {
+    type: candidate.type,
+    chapterIndex:
+      typeof candidate.chapterIndex === "number" && Number.isFinite(candidate.chapterIndex)
+        ? candidate.chapterIndex
+        : undefined,
+    pageStart:
+      typeof candidate.pageStart === "number" && Number.isFinite(candidate.pageStart)
+        ? candidate.pageStart
+        : undefined,
+    pageEnd:
+      typeof candidate.pageEnd === "number" && Number.isFinite(candidate.pageEnd)
+        ? candidate.pageEnd
+        : undefined,
+    label: typeof candidate.label === "string" ? candidate.label : undefined,
   };
 }
 

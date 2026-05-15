@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { bookSourceName, resolveBookActiveWordIndex, visibleBookSpans } from "./BookCinemaPanel";
+import {
+  bookScopeKey,
+  bookScopeOptions,
+  bookScopeText,
+  bookSourceName,
+  resolveBookActiveWordIndex,
+  resolveDefaultBookScope,
+  visibleBookSpans,
+} from "./BookCinemaPanel";
 import type { BookSource, VoiceJob } from "./types";
 
 describe("Book Cinema helpers", () => {
@@ -17,6 +25,62 @@ describe("Book Cinema helpers", () => {
     const job = makeVoiceJob("different text", 4000);
 
     expect(resolveBookActiveWordIndex(book, job, 2)).toBe(-1);
+  });
+
+  it("defaults EPUB narration to the first chapter", () => {
+    const book = makeBookSource("one two three four");
+    const scope = resolveDefaultBookScope(book);
+
+    expect(bookScopeKey(scope)).toBe("chapter:1");
+    expect(bookScopeText(book, scope)).toBe("one two three four");
+  });
+
+  it("prefers structured default sections over raw chapter order", () => {
+    const book = {
+      ...makeBookSource("copyright words one two"),
+      defaultSectionId: "body-2",
+      sections: [
+        {
+          id: "front-1",
+          index: 0,
+          title: "Copyright",
+          role: "frontmatter" as const,
+          isNarratable: false,
+          kind: "chapter",
+          chapterIndex: 1,
+          wordCount: 4,
+        },
+        {
+          id: "body-2",
+          index: 1,
+          title: "Chapter 1",
+          role: "body" as const,
+          isNarratable: true,
+          kind: "chapter",
+          chapterIndex: 2,
+          wordCount: 5,
+        },
+      ],
+      chapters: [
+        { index: 1, title: "Copyright", text: "copyright words one two", wordCount: 4 },
+        { index: 2, title: "Chapter 1", text: "chapter words one two three", wordCount: 5 },
+      ],
+    };
+
+    expect(bookScopeKey(resolveDefaultBookScope(book))).toBe("chapter:2");
+    expect(bookScopeOptions(book).map((option) => option.label)).toEqual([
+      "Copyright",
+      "Chapter 1",
+    ]);
+  });
+
+  it("creates two-page PDF range options", () => {
+    const book = makePDFBookSource();
+    const options = bookScopeOptions(book);
+
+    expect(options.map((option) => option.key)).toEqual(["pages:1-2", "pages:3-3"]);
+    expect(bookScopeText(book, options[0]?.scope ?? { type: "book" })).toContain("Page one");
+    expect(bookScopeText(book, options[0]?.scope ?? { type: "book" })).toContain("Page two");
   });
 
   it("keeps the visible book span window close to the active word", () => {
@@ -62,6 +126,46 @@ function makeBookSource(text: string): BookSource {
         endOffset: startOffset + word.length,
       };
     }),
+    createdAt: "2026-05-15T00:00:00Z",
+    updatedAt: "2026-05-15T00:00:00Z",
+  };
+}
+
+function makePDFBookSource(): BookSource {
+  const pages = [
+    { index: 1, label: "Page 1", text: "Page one text", wordCount: 3 },
+    { index: 2, label: "Page 2", text: "Page two text", wordCount: 3 },
+    { index: 3, label: "Page 3", text: "Page three text", wordCount: 3 },
+  ];
+  const text = pages.map((page) => page.text).join("\n\n");
+  let offset = 0;
+  const wordSpans = pages.flatMap((page) =>
+    page.text.split(/\s+/).map((word, localIndex) => {
+      const startOffset = offset;
+      offset += word.length + 1;
+      return {
+        index: (page.index - 1) * 3 + localIndex,
+        text: word,
+        pageIndex: page.index,
+        startOffset,
+        endOffset: startOffset + word.length,
+      };
+    }),
+  );
+  return {
+    id: "pdf-1",
+    projectId: "default",
+    status: "ready",
+    kind: "pdf",
+    sourceFile: "demo.pdf",
+    sourceBytes: 128,
+    title: "Demo PDF",
+    text,
+    wordCount: wordSpans.length,
+    pageCount: pages.length,
+    chapterCount: 0,
+    pages,
+    wordSpans,
     createdAt: "2026-05-15T00:00:00Z",
     updatedAt: "2026-05-15T00:00:00Z",
   };

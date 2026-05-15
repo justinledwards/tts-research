@@ -13,6 +13,8 @@ export type StageStatus = "waiting" | "running" | "done" | "failed";
 export interface CreateVoiceJobRequest {
   text: string;
   projectId?: string;
+  bookSourceId?: string;
+  bookScope?: BookScope;
   voiceProfileId?: string;
   voiceLanguage?: string;
   ttsEngine?: string;
@@ -43,15 +45,24 @@ export type BookSourceKind = "pdf" | "epub";
 export interface BookSourcePage {
   index: number;
   label: string;
-  text: string;
+  text?: string;
   wordCount: number;
+  sectionId?: string;
 }
 
 export interface BookSourceChapter {
   index: number;
+  id?: string;
   title: string;
-  text: string;
+  text?: string;
   wordCount: number;
+  role?: BookSourceSectionRole;
+  isNarratable?: boolean;
+  pageStart?: number;
+  pageEnd?: number;
+  sourceHref?: string;
+  estimatedDurationMs?: number;
+  warnings?: string[];
 }
 
 export interface BookSourceWordSpan {
@@ -61,6 +72,24 @@ export interface BookSourceWordSpan {
   chapter?: number;
   startOffset: number;
   endOffset: number;
+}
+
+export type BookSourceSectionRole = "frontmatter" | "body" | "backmatter" | "appendix";
+
+export interface BookSourceSection {
+  id: string;
+  index: number;
+  title: string;
+  role: BookSourceSectionRole;
+  isNarratable: boolean;
+  kind: string;
+  chapterIndex?: number;
+  pageStart?: number;
+  pageEnd?: number;
+  sourceHref?: string;
+  wordCount: number;
+  estimatedDurationMs?: number;
+  warnings?: string[];
 }
 
 export interface BookSource {
@@ -76,12 +105,51 @@ export interface BookSource {
   wordCount: number;
   pageCount: number;
   chapterCount: number;
+  structureVersion?: string;
+  defaultSectionId?: string;
+  readingOrder?: string[];
+  sections?: BookSourceSection[];
   pages?: BookSourcePage[];
   chapters?: BookSourceChapter[];
   wordSpans?: BookSourceWordSpan[];
+  warnings?: string[];
   error?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type BookScopeType = "book" | "chapter" | "pages";
+
+export interface BookScope {
+  type: BookScopeType;
+  chapterIndex?: number;
+  pageStart?: number;
+  pageEnd?: number;
+  label?: string;
+}
+
+export interface BookCinemaDiagnostics {
+  pdfExtractor: string;
+  pdfExtractorAvailable: boolean;
+  pdfStrict: boolean;
+  pdfSetup?: string;
+  pdftotextAvailable: boolean;
+  pythonFallbackAvailable: boolean;
+  pythonFallbackConfigured: boolean;
+  pythonPath?: string;
+  pythonScript?: string;
+}
+
+export interface BookSourceScopeContent {
+  bookSourceId: string;
+  scope: BookScope;
+  text: string;
+  wordSpans: BookSourceWordSpan[];
+  section?: BookSourceSection;
+  wordCount: number;
+  estimatedDurationMs?: number;
+  sourceStructureValid: boolean;
+  warnings?: string[];
 }
 
 export interface TTSEngineVoice {
@@ -462,6 +530,8 @@ export interface JobProgress {
 export interface VoiceJob {
   id: string;
   projectId: string;
+  bookSourceId?: string;
+  bookScope?: BookScope;
   status: JobStatus;
   adaptiveMode?: boolean;
   runMode?: RunMode;

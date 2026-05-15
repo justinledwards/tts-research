@@ -108,8 +108,12 @@ profile_analysis_uses_pyannote() {
     -n "${VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR:-}" ]]
 }
 
+book_pdf_python_fallback_enabled() {
+  [[ "${VOICE_BOOK_PDF_ENABLE_PYTHON_FALLBACK:-1}" == "1" ]]
+}
+
 python_runtime_needed() {
-  tts_uses_kokoro || checker_uses_qwen || profile_analysis_uses_pyannote
+  tts_uses_kokoro || checker_uses_qwen || profile_analysis_uses_pyannote || book_pdf_python_fallback_enabled
 }
 
 local_fallback_enabled() {
@@ -270,6 +274,9 @@ sync_backend_python_deps() {
   if profile_analysis_uses_pyannote; then
     sync_args+=("--extra" "profile-analysis")
   fi
+  if book_pdf_python_fallback_enabled; then
+    sync_args+=("--extra" "book")
+  fi
 
   if [[ ${#sync_args[@]} -eq 0 ]]; then
     return 0
@@ -295,6 +302,9 @@ python_requirements_present() {
   if profile_analysis_uses_pyannote; then
     required_modules+=("torch" "pyannote.audio" "soundfile")
   fi
+  if book_pdf_python_fallback_enabled; then
+    required_modules+=("pypdf")
+  fi
 
   if [[ ${#required_modules[@]} -eq 0 ]]; then
     return 0
@@ -312,6 +322,17 @@ python_requirements_present() {
   done
 
   return 0
+}
+
+book_pdf_text_extractor_available() {
+  if command -v pdftotext >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ -x "$ROOT_DIR/backend/.venv/bin/python" ]] &&
+    "$ROOT_DIR/backend/.venv/bin/python" "$ROOT_DIR/backend/scripts/pdf_extract.py" --check >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
 }
 
 ensure_kokoro_reference_dependencies() {
@@ -723,6 +744,10 @@ export VOICE_PROFILE_DENOISE_STRENGTH="${VOICE_PROFILE_DENOISE_STRENGTH:-balance
 export VOICE_PROFILE_EMBEDDING_MODEL="${VOICE_PROFILE_EMBEDDING_MODEL:-pyannote/embedding}"
 export VOICE_PROFILE_EMBEDDING_SCRIPT_PATH="${VOICE_PROFILE_EMBEDDING_SCRIPT_PATH:-./scripts/profile_likeness.py}"
 export VOICE_PROFILE_LIKENESS_TIMEOUT_SECONDS="${VOICE_PROFILE_LIKENESS_TIMEOUT_SECONDS:-120}"
+export VOICE_BOOK_PDF_ENABLE_PYTHON_FALLBACK="${VOICE_BOOK_PDF_ENABLE_PYTHON_FALLBACK:-1}"
+export VOICE_BOOK_PDF_PYTHON_PATH="${VOICE_BOOK_PDF_PYTHON_PATH:-./.venv/bin/python}"
+export VOICE_BOOK_PDF_EXTRACTOR_SCRIPT_PATH="${VOICE_BOOK_PDF_EXTRACTOR_SCRIPT_PATH:-./scripts/pdf_extract.py}"
+export VOICE_BOOK_PDF_REQUIRE_TEXT_EXTRACTOR="${VOICE_BOOK_PDF_REQUIRE_TEXT_EXTRACTOR:-0}"
 export LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE="${LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE:-1}"
 export KOKORO_DATA_DIR="${KOKORO_DATA_DIR:-}"
 export QWEN_ASR_DATA_DIR="${QWEN_ASR_DATA_DIR:-}"
@@ -822,6 +847,12 @@ if [[ "${SKIP_BOOTSTRAP:-0}" != "1" ]]; then
     echo "Skipping backend Python environment bootstrap (mock-only providers)."
   fi
 
+  if [[ "${VOICE_BOOK_PDF_REQUIRE_TEXT_EXTRACTOR}" == "1" ]] && ! book_pdf_text_extractor_available; then
+    echo "VOICE_BOOK_PDF_REQUIRE_TEXT_EXTRACTOR=1 but no PDF text extractor is available."
+    echo "Install poppler-utils for pdftotext or keep VOICE_BOOK_PDF_ENABLE_PYTHON_FALLBACK=1 so pypdf is bootstrapped."
+    exit 1
+  fi
+
   if optimizer_uses_bonsai; then
     if ! ensure_bonsai_env; then
       if ! fallback_to_mock_optimizer; then
@@ -850,6 +881,15 @@ echo "  Qwen data: ${QWEN_ASR_DATA_DIR}"
 echo "  Job data: ${VOICE_JOB_DATA_DIR}"
 echo "  Voice profile data: ${VOICE_PROFILE_DATA_DIR}"
 echo "  Voice profile denoise: ${VOICE_PROFILE_DENOISE_PROVIDER} (${VOICE_PROFILE_DENOISE_STRENGTH})"
+  if book_pdf_text_extractor_available; then
+    if command -v pdftotext >/dev/null 2>&1; then
+      echo "  Book PDF extractor: pdftotext"
+    else
+      echo "  Book PDF extractor: python fallback"
+    fi
+  else
+    echo "  Book PDF extractor: unavailable"
+  fi
   if [[ "${TTS_RESEARCH_TMPFS_HF_CACHE:-0}" == "1" ]]; then
     echo "  HF cache: ${HF_HOME}"
   fi

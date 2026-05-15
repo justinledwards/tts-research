@@ -31,6 +31,8 @@ const (
 type CreateJobRequest struct {
 	Text            string                   `json:"text"`
 	ProjectID       string                   `json:"projectId,omitempty"`
+	BookSourceID    string                   `json:"bookSourceId,omitempty"`
+	BookScope       *BookScope               `json:"bookScope,omitempty"`
 	VoiceProfileID  string                   `json:"voiceProfileId"`
 	VoiceLanguage   string                   `json:"voiceLanguage"`
 	TTSEngine       string                   `json:"ttsEngine,omitempty"`
@@ -67,15 +69,24 @@ const (
 type BookSourcePage struct {
 	Index     int    `json:"index"`
 	Label     string `json:"label"`
-	Text      string `json:"text"`
+	Text      string `json:"text,omitempty"`
 	WordCount int    `json:"wordCount"`
+	SectionID string `json:"sectionId,omitempty"`
 }
 
 type BookSourceChapter struct {
-	Index     int    `json:"index"`
-	Title     string `json:"title"`
-	Text      string `json:"text"`
-	WordCount int    `json:"wordCount"`
+	Index               int      `json:"index"`
+	ID                  string   `json:"id,omitempty"`
+	Title               string   `json:"title"`
+	Text                string   `json:"text,omitempty"`
+	WordCount           int      `json:"wordCount"`
+	Role                string   `json:"role,omitempty"`
+	IsNarratable        bool     `json:"isNarratable"`
+	PageStart           int      `json:"pageStart,omitempty"`
+	PageEnd             int      `json:"pageEnd,omitempty"`
+	SourceHref          string   `json:"sourceHref,omitempty"`
+	EstimatedDurationMS int      `json:"estimatedDurationMs,omitempty"`
+	Warnings            []string `json:"warnings,omitempty"`
 }
 
 type BookSourceWordSpan struct {
@@ -87,25 +98,86 @@ type BookSourceWordSpan struct {
 	EndOffset   int    `json:"endOffset"`
 }
 
+type BookSourceSection struct {
+	ID                  string   `json:"id"`
+	Index               int      `json:"index"`
+	Title               string   `json:"title"`
+	Role                string   `json:"role"`
+	IsNarratable        bool     `json:"isNarratable"`
+	Kind                string   `json:"kind"`
+	ChapterIndex        int      `json:"chapterIndex,omitempty"`
+	PageStart           int      `json:"pageStart,omitempty"`
+	PageEnd             int      `json:"pageEnd,omitempty"`
+	SourceHref          string   `json:"sourceHref,omitempty"`
+	WordCount           int      `json:"wordCount"`
+	EstimatedDurationMS int      `json:"estimatedDurationMs,omitempty"`
+	Warnings            []string `json:"warnings,omitempty"`
+}
+
 type BookSource struct {
-	ID           string               `json:"id"`
-	ProjectID    string               `json:"projectId"`
-	Status       BookSourceStatus     `json:"status"`
-	Kind         BookSourceKind       `json:"kind"`
-	SourceFile   string               `json:"sourceFile"`
-	SourceBytes  int64                `json:"sourceBytes"`
-	Title        string               `json:"title,omitempty"`
-	Author       string               `json:"author,omitempty"`
-	Text         string               `json:"text,omitempty"`
-	WordCount    int                  `json:"wordCount"`
-	PageCount    int                  `json:"pageCount"`
-	ChapterCount int                  `json:"chapterCount"`
-	Pages        []BookSourcePage     `json:"pages,omitempty"`
-	Chapters     []BookSourceChapter  `json:"chapters,omitempty"`
-	WordSpans    []BookSourceWordSpan `json:"wordSpans,omitempty"`
-	Error        string               `json:"error,omitempty"`
-	CreatedAt    time.Time            `json:"createdAt"`
-	UpdatedAt    time.Time            `json:"updatedAt"`
+	ID               string               `json:"id"`
+	ProjectID        string               `json:"projectId"`
+	Status           BookSourceStatus     `json:"status"`
+	Kind             BookSourceKind       `json:"kind"`
+	SourceFile       string               `json:"sourceFile"`
+	SourceBytes      int64                `json:"sourceBytes"`
+	Title            string               `json:"title,omitempty"`
+	Author           string               `json:"author,omitempty"`
+	Text             string               `json:"text,omitempty"`
+	WordCount        int                  `json:"wordCount"`
+	PageCount        int                  `json:"pageCount"`
+	ChapterCount     int                  `json:"chapterCount"`
+	StructureVersion string               `json:"structureVersion,omitempty"`
+	DefaultSectionID string               `json:"defaultSectionId,omitempty"`
+	ReadingOrder     []string             `json:"readingOrder,omitempty"`
+	Sections         []BookSourceSection  `json:"sections,omitempty"`
+	Pages            []BookSourcePage     `json:"pages,omitempty"`
+	Chapters         []BookSourceChapter  `json:"chapters,omitempty"`
+	WordSpans        []BookSourceWordSpan `json:"wordSpans,omitempty"`
+	Warnings         []string             `json:"warnings,omitempty"`
+	Error            string               `json:"error,omitempty"`
+	CreatedAt        time.Time            `json:"createdAt"`
+	UpdatedAt        time.Time            `json:"updatedAt"`
+}
+
+type BookScopeType string
+
+const (
+	BookScopeTypeBook    BookScopeType = "book"
+	BookScopeTypeChapter BookScopeType = "chapter"
+	BookScopeTypePages   BookScopeType = "pages"
+)
+
+type BookScope struct {
+	Type         BookScopeType `json:"type"`
+	ChapterIndex int           `json:"chapterIndex,omitempty"`
+	PageStart    int           `json:"pageStart,omitempty"`
+	PageEnd      int           `json:"pageEnd,omitempty"`
+	Label        string        `json:"label,omitempty"`
+}
+
+type BookCinemaDiagnostics struct {
+	PDFExtractor             string `json:"pdfExtractor"`
+	PDFExtractorAvailable    bool   `json:"pdfExtractorAvailable"`
+	PDFStrict                bool   `json:"pdfStrict"`
+	PDFSetup                 string `json:"pdfSetup,omitempty"`
+	PDFToTextAvailable       bool   `json:"pdftotextAvailable"`
+	PythonFallbackAvailable  bool   `json:"pythonFallbackAvailable"`
+	PythonFallbackConfigured bool   `json:"pythonFallbackConfigured"`
+	PythonPath               string `json:"pythonPath,omitempty"`
+	PythonScript             string `json:"pythonScript,omitempty"`
+}
+
+type BookSourceScopeContent struct {
+	BookSourceID         string               `json:"bookSourceId"`
+	Scope                BookScope            `json:"scope"`
+	Text                 string               `json:"text"`
+	WordSpans            []BookSourceWordSpan `json:"wordSpans"`
+	Section              *BookSourceSection   `json:"section,omitempty"`
+	WordCount            int                  `json:"wordCount"`
+	EstimatedDurationMS  int                  `json:"estimatedDurationMs,omitempty"`
+	SourceStructureValid bool                 `json:"sourceStructureValid"`
+	Warnings             []string             `json:"warnings,omitempty"`
 }
 
 type TTSEngineVoice struct {
@@ -470,6 +542,8 @@ type JobProgress struct {
 type VoiceJob struct {
 	ID                      string            `json:"id"`
 	ProjectID               string            `json:"projectId"`
+	BookSourceID            string            `json:"bookSourceId,omitempty"`
+	BookScope               *BookScope        `json:"bookScope,omitempty"`
 	Status                  JobStatus         `json:"status"`
 	Stages                  PipelineStages    `json:"stages"`
 	AdaptiveMode            bool              `json:"adaptiveMode"`

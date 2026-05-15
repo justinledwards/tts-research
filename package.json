@@ -15,7 +15,8 @@
     "format:check": "biome format .",
     "lint": "biome lint . && eslint .",
     "typecheck": "pnpm --filter @tts-research/frontend typecheck",
-    "test": "pnpm --filter @tts-research/backend test && pnpm --filter @tts-research/frontend test"
+    "test": "pnpm --filter @tts-research/backend test && pnpm --filter @tts-research/frontend test",
+    "e2e:book-cinema": "node scripts/e2e-book-cinema.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
@@ -24,6 +25,7 @@
     "eslint-plugin-sonarjs": "^4.0.3",
     "eslint-plugin-unicorn": "^64.0.0",
     "husky": "^9.1.7",
+    "playwright": "^1.60.0",
     "typescript-eslint": "^8.48.0"
   }
 }

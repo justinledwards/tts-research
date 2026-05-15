@@ -248,6 +248,12 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.book-cinema-page-text {
+  color: #1f2937;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
 .book-cinema-word-active {
   position: relative;
   isolation: isolate;

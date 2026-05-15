@@ -1,5 +1,13 @@
 # Working Log
 
+## 2026-05-15 18:50 CEST - Book Cinema teleprompter integration and EPUB/PDF E2E reliability
+- [x] Backend request-lifetime cancellation fix.
+- [x] Book narration scopes and job metadata.
+- [x] PDF extractor fallback and diagnostics.
+- [x] Teleprompter-integrated Book Cinema UI.
+- [x] EPUB and PDF E2E tests with demo fixtures.
+- [x] Checks, Playwright QA, and commits.
+
 ## 2026-05-15 17:18 CEST - UI ergonomics, Book Cinema, and model evaluation pass
 - [x] Project-scoped drafts and blank new project behavior.
 - [x] Teleprompter highlight ergonomics.
@@ -506,3 +514,10 @@
 - [x] Add Kokoro voicepack catalog with human-readable names.
 - [x] Add backend and frontend tests for the quality and highlight behavior.
 - [x] Run project checks and capture QA notes.
+## 2026-05-15 20:22 CEST - Book library organization and guided Book Cinema polish
+- [x] backend book structure model and scoped content APIs
+- [x] EPUB/PDF preprocessing for organized narratable sections
+- [x] source text area book intake and selector
+- [x] guided Book Cinema visual polish and dynamic queue
+- [x] frontend/backend tests and E2E coverage
+- [x] checks, visual QA, and commit slices
