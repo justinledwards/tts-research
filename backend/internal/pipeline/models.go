@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"io"
 	"time"
 
 	"github.com/justinedwards/tts-research/backend/internal/audio"
@@ -30,6 +31,7 @@ const (
 
 type CreateJobRequest struct {
 	Text             string                   `json:"text"`
+	VoiceID          string                   `json:"voiceId,omitempty"`
 	ProjectID        string                   `json:"projectId,omitempty"`
 	BookSourceID     string                   `json:"bookSourceId,omitempty"`
 	BookScope        *BookScope               `json:"bookScope,omitempty"`
@@ -47,6 +49,32 @@ type CreateJobRequest struct {
 	RunMode          RunMode                  `json:"runMode,omitempty"`
 	PerformanceMode  PerformanceMode          `json:"performanceMode,omitempty"`
 	PipelineOptions  CreateJobPipelineOptions `json:"pipelineOptions,omitempty"`
+}
+
+type VoiceKind string
+
+const (
+	VoiceKindNative VoiceKind = "native"
+	VoiceKindClone  VoiceKind = "clone"
+)
+
+type Voice struct {
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	Kind               VoiceKind `json:"kind"`
+	Provider           string    `json:"provider"`
+	LangCode           string    `json:"langCode"`
+	ReferenceAudioURL  string    `json:"referenceAudioUrl,omitempty"`
+	ReferenceAudioPath string    `json:"referenceAudioPath,omitempty"`
+	SourceFilename     string    `json:"sourceFilename,omitempty"`
+	CreatedAt          time.Time `json:"createdAt"`
+}
+
+type VoiceUpload struct {
+	Name        string
+	Filename    string
+	ContentType string
+	Reader      io.Reader
 }
 
 type VoiceProject struct {
@@ -775,6 +803,7 @@ type VoiceJob struct {
 	VoiceProfileID          string            `json:"voiceProfileId,omitempty"`
 	VoiceProfileName        string            `json:"voiceProfileName,omitempty"`
 	VoiceProfileLanguage    string            `json:"voiceProfileLanguage,omitempty"`
+	VoiceID                 string            `json:"voiceId,omitempty"`
 	TTSEngine               string            `json:"ttsEngine,omitempty"`
 	EngineOptions           map[string]string `json:"engineOptions,omitempty"`
 	TTSVoice                string            `json:"ttsVoice,omitempty"`

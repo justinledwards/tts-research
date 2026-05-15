@@ -53,6 +53,9 @@ backend/data/
 !backend/data/
 backend/data/**
 !backend/data/.gitkeep
+backend/model/
+backend/voice/
+backend/model-cache/
 backend/tmp/
 demo/
 model/
@@ -62,9 +65,11 @@ frontend/.vercel/
 # Tool caches
 .cache/
 .turbo/
+.upstreams/
 .playwright-cli/
 .playwright-mcp/
 
 # Local verification screenshots
 /tts-research-*.png
+/output/
 /output/playwright/

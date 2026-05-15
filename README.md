@@ -12,8 +12,12 @@ A research scaffold for converting technical or long-form text into accurate lis
 
 ```sh
 mise install
+mise setup
 mise start
 ```
+
+Use `mise doctor` for the built-in mise health check, then `mise run doctor` for Voice Studio runtime directories, provider setup, and tracked artifact hygiene.
+Provider setup and repo cleanup details live in [docs/runtime-setup.md](docs/runtime-setup.md) and [docs/repo-hygiene.md](docs/repo-hygiene.md).
 
 ### Fast Resume (local providers, no fallback)
 
@@ -27,7 +31,7 @@ The frontend listens on `http://localhost:5173`.
 The default startup path is self-contained: rules-based optimization, mock TTS, and mock checking.
 That gives you a usable full stack without external providers or model downloads.
 
-`mise start` runs a preflight check and then starts the same stack as `pnpm start`.  
+`mise start` runs a preflight check and then starts the same stack as `pnpm start`.
 Pass an alternate startup command with `--`:
 
 ```sh
@@ -47,6 +51,8 @@ This local startup path also provisions optional KokoClone dependencies required
 Use `pnpm start:local-bonsai` for Bonsai optimization on macOS.
 Use `pnpm start:mock` for an explicit mock-only mode.
 Reference-voice synthesis requirements are resolved from your KokoClone checkout (`.koko-clone`) and automatically installed when missing, then cached in the active backend environment.
+Use `mise setup:supertonic` to install the isolated Supertonic 3 runtime and run a Swedish smoke synthesis in ignored local output.
+Use `mise setup:dramabox` to clone DramaBox as an ignored upstream and report diagnostics; local inference stays gated unless you explicitly opt into heavy dependency install or configure `DRAMABOX_BASE_URL`.
 Use targeted provider flags to avoid installing unnecessary providers for local work:
 
 ```sh
@@ -121,7 +127,7 @@ pnpm check
 4. The pipeline retries bounded cutoff recovery work when audio appears incomplete.
 
 Long optimized text is split into smaller synthesis/checking segments with `VOICE_SEGMENT_MAX_RUNES`, which defaults to `300`.
-Reference-voice cloning jobs use `VOICE_SEGMENT_WORKERS_STUDIO` / `VOICE_SEGMENT_MAX_RUNES_STUDIO` for throughput tuning.  
+Reference-voice cloning jobs use `VOICE_SEGMENT_WORKERS_STUDIO` / `VOICE_SEGMENT_MAX_RUNES_STUDIO` for throughput tuning.
 By default, studio concurrency is capped at 2 workers to avoid memory pressure; tune it with `VOICE_SEGMENT_WORKERS` / `VOICE_SEGMENT_WORKERS_STUDIO` and adaptive counterparts if your GPU headroom allows.
 The frontend subscribes to `GET /api/voice-jobs/:id/events` for server-sent progress updates while each segment runs.
 Completed job audio is saved as `audio.wav` under `backend/data/jobs/<job-id>/` by default, with `metadata.json` next to it.
@@ -164,7 +170,7 @@ Users can preview, name, and create one or more profiles from the detected speak
 Speaker-aware analysis requires `PYANNOTE_AUTH_TOKEN` or `HF_TOKEN`; without a token the source analysis fails clearly and does not create lower-quality profiles silently.
 Install the optional Python stack with `uv sync --extra profile-analysis` inside `backend/`.
 Reference candidates target `VOICE_PROFILE_REFERENCE_TARGET_SECONDS` (default `45`) and must fall between `VOICE_PROFILE_REFERENCE_MIN_SECONDS` (default `20`) and `VOICE_PROFILE_REFERENCE_MAX_SECONDS` (default `60`).
-Set `VOICE_PROFILE_MAX_BYTES` to a positive byte count to enforce a local upload cap; the default `0` leaves reference media size up to disk/runtime capacity.  
+Set `VOICE_PROFILE_MAX_BYTES` to a positive byte count to enforce a local upload cap; the default `0` leaves reference media size up to disk/runtime capacity.
 Profile metadata includes source duration, reference duration, selected span manifest, source speaker, reference score, and clone-quality metrics.
 
 ## Voice Optimization

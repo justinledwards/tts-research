@@ -55,6 +55,50 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(service.ListTTSEngines())
 	})
 
+	app.Get("/api/voices", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.ListVoices())
+	})
+
+	app.Post("/api/voices", func(ctx fiber.Ctx) error {
+		fileHeader, err := ctx.FormFile("file")
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("voice file is required"))
+		}
+		file, err := fileHeader.Open()
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("unable to read voice file"))
+		}
+		defer func() {
+			_ = file.Close()
+		}()
+
+		voice, err := service.CreateCloneVoice(ctx.Context(), pipeline.VoiceUpload{
+			Name:        ctx.FormValue("name"),
+			Filename:    fileHeader.Filename,
+			ContentType: fileHeader.Header.Get("Content-Type"),
+			Reader:      file,
+		})
+		if err != nil {
+			status := fiber.StatusInternalServerError
+			if errors.Is(err, pipeline.ErrInvalidVoice) {
+				status = fiber.StatusBadRequest
+			}
+			return ctx.Status(status).JSON(errorResponse(err.Error()))
+		}
+
+		return ctx.Status(fiber.StatusCreated).JSON(voice)
+	})
+
+	app.Get("/api/voices/:id/reference-audio", func(ctx fiber.Ctx) error {
+		audioBytes, contentType, err := service.GetVoiceReferenceAudio(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		ctx.Set(fiber.HeaderContentType, contentType)
+		ctx.Set(fiber.HeaderCacheControl, "no-store")
+		return ctx.Send(audioBytes)
+	})
+
 	app.Get("/api/book-cinema/diagnostics", func(ctx fiber.Ctx) error {
 		return ctx.JSON(service.BookCinemaDiagnostics())
 	})
@@ -212,7 +256,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			if errors.Is(err, pipeline.ErrProjectNotFound) {
 				return notFound(ctx, err)
 			}
-			if errors.Is(err, pipeline.ErrEmptyText) {
+			if errors.Is(err, pipeline.ErrEmptyText) || errors.Is(err, pipeline.ErrVoiceNotFound) {
 				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 			}
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
@@ -249,7 +293,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) || errors.Is(err, pipeline.ErrProjectNotFound) {
 				return notFound(ctx, err)
 			}
-			if errors.Is(err, pipeline.ErrEmptyText) {
+			if errors.Is(err, pipeline.ErrEmptyText) || errors.Is(err, pipeline.ErrVoiceNotFound) {
 				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 			}
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
@@ -288,7 +332,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 				return notFound(ctx, err)
 			}
 			status := fiber.StatusInternalServerError
-			if errors.Is(err, pipeline.ErrEmptyText) {
+			if errors.Is(err, pipeline.ErrEmptyText) || errors.Is(err, pipeline.ErrVoiceNotFound) {
 				status = fiber.StatusBadRequest
 			}
 			return ctx.Status(status).JSON(errorResponse(err.Error()))
@@ -362,7 +406,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 				return notFound(ctx, err)
 			}
 			status := fiber.StatusInternalServerError
-			if errors.Is(err, pipeline.ErrEmptyText) {
+			if errors.Is(err, pipeline.ErrEmptyText) || errors.Is(err, pipeline.ErrVoiceNotFound) {
 				status = fiber.StatusBadRequest
 			}
 
@@ -837,6 +881,7 @@ func addOrigin(origins *[]string, seen map[string]struct{}, origin string) {
 
 func notFound(ctx fiber.Ctx, err error) error {
 	if errors.Is(err, pipeline.ErrJobNotFound) ||
+		errors.Is(err, pipeline.ErrVoiceNotFound) ||
 		errors.Is(err, pipeline.ErrProfileNotFound) ||
 		errors.Is(err, pipeline.ErrProfileSourceNotFound) ||
 		errors.Is(err, pipeline.ErrProfileCandidateNotFound) ||

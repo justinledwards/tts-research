@@ -211,6 +211,8 @@ func main() {
 			SourcePrepDir:                        envWithDefault("VOICE_SOURCE_PREP_DATA_DIR", "./data/source-preps"),
 			ProgressDataDir:                      envWithDefault("VOICE_PROGRESS_DATA_DIR", "./data/progress"),
 			PlaybackSessionDir:                   envWithDefault("VOICE_PLAYBACK_SESSION_DATA_DIR", "./data/playback-sessions"),
+			VoiceDataDir:                         envWithDefault("VOICE_DATA_DIR", "./data/voices"),
+			FFMPEGPath:                           envWithDefault("FFMPEG_PATH", "ffmpeg"),
 			SourceURLAllowPrivate:                sourceURLAllowPrivate,
 			BookPDFPythonPath:                    envWithDefault("VOICE_BOOK_PDF_PYTHON_PATH", "./.venv/bin/python"),
 			BookPDFExtractorScriptPath:           envWithDefault("VOICE_BOOK_PDF_EXTRACTOR_SCRIPT_PATH", "./scripts/pdf_extract.py"),

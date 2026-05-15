@@ -6,3 +6,11 @@ uv = "0.11.13"
 
 [tasks]
 start = "bash ./scripts/mise-start.sh"
+setup = "bash ./scripts/runtime-setup.sh setup"
+"setup:supertonic" = "bash ./scripts/runtime-setup.sh setup-supertonic"
+"setup:dramabox" = "bash ./scripts/runtime-setup.sh setup-dramabox"
+doctor = "bash ./scripts/runtime-setup.sh doctor"
+"audit:artifacts" = "bash ./scripts/runtime-setup.sh audit-artifacts"
+"audit:secrets" = "bash ./scripts/runtime-setup.sh audit-secrets"
+"clean:history-plan" = "bash ./scripts/runtime-setup.sh clean-history-plan"
+"clean:history:rewrite" = "bash ./scripts/runtime-setup.sh clean-history-rewrite"

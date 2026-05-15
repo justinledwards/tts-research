@@ -25,6 +25,8 @@ import (
 var (
 	ErrEmptyText                  = errors.New("text is required")
 	ErrJobNotFound                = errors.New("voice job not found")
+	ErrVoiceNotFound              = errors.New("voice not found")
+	ErrInvalidVoice               = errors.New("voice upload is invalid")
 	ErrProfileNotFound            = errors.New("voice profile not found")
 	ErrAudioNotReady              = errors.New("voice job audio is not ready")
 	ErrRetryExhaust               = errors.New("voice checker did not confirm complete audio before retry limit")
@@ -111,6 +113,8 @@ type Options struct {
 	SourcePrepDir                        string
 	ProgressDataDir                      string
 	PlaybackSessionDir                   string
+	VoiceDataDir                         string
+	FFMPEGPath                           string
 	SourceURLAllowPrivate                bool
 	BookPDFPythonPath                    string
 	BookPDFExtractorScriptPath           string
@@ -153,6 +157,8 @@ const (
 	defaultSourcePrepDir                       = "./data/source-preps"
 	defaultProgressDataDir                     = "./data/progress"
 	defaultPlaybackSessionDir                  = "./data/playback-sessions"
+	defaultVoiceDataDir                        = "./data/voices"
+	defaultFFMPEGPath                          = "ffmpeg"
 	defaultBookPDFPythonPath                   = "./.venv/bin/python"
 	defaultBookPDFExtractorScriptPath          = "./scripts/pdf_extract.py"
 	defaultVoiceProfileDir                     = "./data/voice-profiles"
@@ -197,6 +203,7 @@ type Service struct {
 	sessions    map[string]PlaybackSession
 	profiles    map[string]storedVoiceProfile
 	sources     map[string]storedVoiceProfileSource
+	voices      map[string]Voice
 	jobCancels  map[string]context.CancelFunc
 }
 
@@ -367,6 +374,12 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if strings.TrimSpace(options.PlaybackSessionDir) == "" {
 		options.PlaybackSessionDir = defaultPlaybackSessionDir
 	}
+	if strings.TrimSpace(options.VoiceDataDir) == "" {
+		options.VoiceDataDir = defaultVoiceDataDir
+	}
+	if strings.TrimSpace(options.FFMPEGPath) == "" {
+		options.FFMPEGPath = defaultFFMPEGPath
+	}
 	if strings.TrimSpace(options.BookPDFPythonPath) == "" {
 		options.BookPDFPythonPath = defaultBookPDFPythonPath
 	}
@@ -447,8 +460,10 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 		sessions:    map[string]PlaybackSession{},
 		profiles:    map[string]storedVoiceProfile{},
 		sources:     map[string]storedVoiceProfileSource{},
+		voices:      map[string]Voice{},
 		jobCancels:  map[string]context.CancelFunc{},
 	}
+	service.loadCloneVoices()
 	service.reloadProjects()
 	service.reloadBookSources()
 	service.reloadSourcePreps()
@@ -525,6 +540,9 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 	ttsVoice := strings.TrimSpace(request.TTSVoice)
 	ttsLanguage := strings.TrimSpace(request.TTSLanguage)
 	config := resolveJobConfig(request)
+	voiceID := strings.TrimSpace(request.VoiceID)
+	var selectedVoice Voice
+	usesCloneVoice := false
 	adaptiveMode := config.performanceMode == PerformanceModeThroughput
 	maxRetries := service.options.MaxRetries
 	if !config.pipelineOptions.AutoRetry {
@@ -539,9 +557,40 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 	if _, err := service.GetProject(projectID); err != nil {
 		return VoiceJob{}, err
 	}
+	if voiceID != "" {
+		voice, err := service.ResolveVoice(voiceID)
+		if err != nil {
+			return VoiceJob{}, err
+		}
+		selectedVoice = voice
+		switch voice.Kind {
+		case VoiceKindNative:
+			if (ttsEngine == TTSEngineKokoro || ttsEngine == TTSEngineAuto) && ttsVoice == "" {
+				ttsVoice = voiceSynthesisName(voice)
+			}
+			if (ttsEngine == TTSEngineKokoro || ttsEngine == TTSEngineAuto) && ttsLanguage == "" {
+				ttsLanguage = voice.LangCode
+			}
+		case VoiceKindClone:
+			usesCloneVoice = true
+			if normalizeTTSEngineID(request.TTSEngine) == TTSEngineAuto {
+				ttsEngine = TTSEngineKokoroClone
+			}
+			if voiceLanguage == "" {
+				voiceLanguage = voice.LangCode
+			}
+		}
+	}
 	if voiceProfileID != "" && !config.pipelineOptions.VoiceClone {
 		voiceProfileID = ""
 		voiceLanguage = ""
+	}
+	if usesCloneVoice && !config.pipelineOptions.VoiceClone {
+		usesCloneVoice = false
+		voiceID = ""
+		if normalizeTTSEngineID(request.TTSEngine) == TTSEngineAuto {
+			ttsEngine = TTSEngineAuto
+		}
 	}
 	if voiceProfileID != "" {
 		profile, err := service.GetVoiceProfile(voiceProfileID)
@@ -555,7 +604,7 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 			voiceLanguage = profile.Language
 		}
 	}
-	if _, _, err := service.resolveTTSEngine(ttsEngine, voiceProfileID != ""); err != nil {
+	if _, _, err := service.resolveTTSEngine(ttsEngine, voiceProfileID != "" || usesCloneVoice); err != nil {
 		return VoiceJob{}, err
 	}
 
@@ -564,6 +613,8 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 	if voiceProfileID != "" {
 		profile, _ := service.GetVoiceProfile(voiceProfileID)
 		voiceProfileName = profile.Name
+	} else if usesCloneVoice {
+		voiceProfileName = selectedVoice.Name
 	}
 
 	job := storedJob{
@@ -585,6 +636,7 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 			VoiceProfileID:       voiceProfileID,
 			VoiceProfileName:     voiceProfileName,
 			VoiceProfileLanguage: voiceLanguage,
+			VoiceID:              voiceID,
 			TTSEngine:            ttsEngine,
 			EngineOptions:        engineOptions,
 			TTSVoice:             ttsVoice,
@@ -1060,6 +1112,27 @@ func (service *Service) runJob(ctx context.Context, id string) {
 	ttsVoice := strings.TrimSpace(job.TTSVoice)
 	ttsLanguage := strings.TrimSpace(job.TTSLanguage)
 	ttsEngine := strings.TrimSpace(job.TTSEngine)
+	if strings.TrimSpace(job.VoiceID) != "" {
+		voice, err := service.ResolveVoice(job.VoiceID)
+		if err != nil {
+			service.failJobByID(id, err)
+			return
+		}
+		switch voice.Kind {
+		case VoiceKindNative:
+			if ttsVoice == "" {
+				ttsVoice = voiceSynthesisName(voice)
+			}
+			if ttsLanguage == "" {
+				ttsLanguage = voice.LangCode
+			}
+		case VoiceKindClone:
+			if profileID == "" {
+				profileRef = voice.ReferenceAudioPath
+				profileLanguage = voice.LangCode
+			}
+		}
+	}
 	if profileID != "" {
 		profile, err := service.getVoiceProfile(profileID)
 		if err != nil {
@@ -2175,7 +2248,7 @@ func buildQualityReport(job VoiceJob, options PipelineOptions, check agents.Voic
 		AverageSimilarity:    averageSimilarity,
 		AverageLatencyMS:     averageLatencyMS,
 		SegmentCount:         segmentCount,
-		ReferenceProfile:     job.VoiceProfileID != "",
+		ReferenceProfile:     job.VoiceProfileID != "" || strings.HasPrefix(job.VoiceID, "clone_"),
 		Reason:               reason,
 	}
 }

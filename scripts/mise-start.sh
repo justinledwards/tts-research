@@ -135,6 +135,8 @@ preflight_summary() {
     echo "  - Kokoro FlashAttention bootstrap: install=${KOKOCLONE_INSTALL_FLASH_ATTENTION:-1}, require=${KOKOCLONE_REQUIRE_FLASH_ATTENTION:-0}"
     echo "  - pyannote source analysis: $(profile_analysis_uses_pyannote && echo "configured" || echo "not configured")"
     echo "  - source analysis Python: ${VOICE_PROFILE_ANALYSIS_PYTHON_PATH:-./.venv/bin/python}"
+    echo "  - Supertonic 3: ${SUPERTONIC_PYTHON:-./.venv-supertonic/bin/python}"
+    echo "  - DramaBox: ${DRAMABOX_BASE_URL:-not configured (warm server preferred)}"
   else
     echo "  - uv: not required for mock-only configuration"
   fi

@@ -12,6 +12,7 @@ export type StageStatus = "waiting" | "running" | "done" | "failed";
 
 export interface CreateVoiceJobRequest {
   text: string;
+  voiceId?: string;
   projectId?: string;
   bookSourceId?: string;
   bookScope?: BookScope;
@@ -40,6 +41,19 @@ export interface VoiceProject {
   name: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type VoiceKind = "native" | "clone";
+
+export interface Voice {
+  id: string;
+  name: string;
+  kind: VoiceKind;
+  provider: string;
+  langCode: string;
+  referenceAudioUrl?: string;
+  sourceFilename?: string;
+  createdAt: string;
 }
 
 export interface ProjectStorageDownload {
@@ -744,6 +758,7 @@ export interface VoiceJob {
   durationMs: number;
   provider: string;
   voice: string;
+  voiceId?: string;
   ttsVoice?: string;
   ttsLanguage?: string;
   voiceProfileName?: string;

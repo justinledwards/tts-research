@@ -60,6 +60,34 @@ func TestTTSEnginesEndpoint(t *testing.T) {
 	}
 }
 
+func TestListVoicesEndpoint(t *testing.T) {
+	t.Parallel()
+
+	app := httpapi.NewRouter(newService(t))
+	request, err := http.NewRequest(http.MethodGet, "/api/voices", nil)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+
+	var voices []pipeline.Voice
+	if err := json.NewDecoder(response.Body).Decode(&voices); err != nil {
+		t.Fatalf("decode voices: %v", err)
+	}
+	if len(voices) == 0 || voices[0].Kind != pipeline.VoiceKindNative {
+		t.Fatalf("voices = %#v, want native voices", voices)
+	}
+}
+
 func TestCreateJobEndpoint(t *testing.T) {
 	t.Parallel()
 

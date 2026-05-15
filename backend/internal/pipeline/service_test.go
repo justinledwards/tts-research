@@ -2,6 +2,7 @@ package pipeline_test
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -273,6 +274,81 @@ func TestCreateJobCanSelectProviderVoice(t *testing.T) {
 	}
 	if completed.Voice != "bf_emma" {
 		t.Fatalf("completed voice = %q, want selected provider voice", completed.Voice)
+	}
+}
+
+func TestCreateJobCanSelectNativeVoiceID(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:    "Read this with the upstream voice id surface.",
+		VoiceID: "kokoro:bm_lewis",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.VoiceID != "kokoro:bm_lewis" {
+		t.Fatalf("job VoiceID = %q, want kokoro:bm_lewis", completed.VoiceID)
+	}
+	if completed.TTSVoice != "bm_lewis" {
+		t.Fatalf("job TTSVoice = %q, want bm_lewis", completed.TTSVoice)
+	}
+	if completed.TTSLanguage != "b" {
+		t.Fatalf("job TTSLanguage = %q, want b", completed.TTSLanguage)
+	}
+	if completed.Voice != "bm_lewis" {
+		t.Fatalf("completed voice = %q, want selected native voice", completed.Voice)
+	}
+}
+
+func TestCreateJobCanSelectCloneVoiceID(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		mockReferenceTTS{},
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:     3,
+			JobDataDir:     t.TempDir(),
+			ProjectDataDir: t.TempDir(),
+			VoiceDataDir:   t.TempDir(),
+		},
+	)
+	referenceWAV, err := audio.SilentWAV(1000)
+	if err != nil {
+		t.Fatalf("SilentWAV returned error: %v", err)
+	}
+	voice, err := service.CreateCloneVoice(context.Background(), pipeline.VoiceUpload{
+		Name:     "Uploaded clone",
+		Filename: "reference.wav",
+		Reader:   bytes.NewReader(referenceWAV),
+	})
+	if err != nil {
+		t.Fatalf("CreateCloneVoice returned error: %v", err)
+	}
+
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:    "Read this with the uploaded clone voice.",
+		VoiceID: voice.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.VoiceID != voice.ID {
+		t.Fatalf("job VoiceID = %q, want %q", completed.VoiceID, voice.ID)
+	}
+	if completed.Provider != "mock-reference" {
+		t.Fatalf("provider = %q, want mock-reference", completed.Provider)
+	}
+	if completed.QualityReport == nil || !completed.QualityReport.ReferenceProfile {
+		t.Fatalf("quality report = %#v, want reference synthesis marked", completed.QualityReport)
 	}
 }
 

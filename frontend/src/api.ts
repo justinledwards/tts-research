@@ -19,6 +19,7 @@ import type {
   ProjectStorageSummary,
   SystemMetrics,
   TTSEngineDiagnostics,
+  Voice,
   VoiceJob,
   VoiceProfile,
   VoiceProfileSource,
@@ -435,6 +436,35 @@ export async function listTTSEngines(): Promise<TTSEngineDiagnostics[]> {
   }
 
   return response.json() as Promise<TTSEngineDiagnostics[]>;
+}
+
+export async function listVoices(): Promise<Voice[]> {
+  const response = await fetch(`${apiBaseUrl}/api/voices`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<Voice[]>;
+}
+
+export async function createCloneVoice(name: string, file: File): Promise<Voice> {
+  const formData = new FormData();
+  formData.append("name", name);
+  formData.append("file", file);
+
+  const response = await fetch(`${apiBaseUrl}/api/voices`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<Voice>;
+}
+
+export function voiceReferenceAudioUrl(id: string): string {
+  return `${apiBaseUrl}/api/voices/${encodeURIComponent(id)}/reference-audio`;
 }
 
 export async function createVoiceProfile(
