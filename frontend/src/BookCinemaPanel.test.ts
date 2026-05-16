@@ -4,6 +4,8 @@ import {
   bookScopeOptions,
   bookScopeText,
   bookSourceName,
+  BOOK_SOURCE_ACCEPT,
+  isSupportedBookSource,
   paginateBookSpans,
   resolveBookActiveWordIndex,
   resolveDisplayedBookActiveWordIndex,
@@ -158,6 +160,18 @@ describe("Book Cinema helpers", () => {
 
   it("falls back to source filename when metadata has no title", () => {
     expect(bookSourceName({ ...makeBookSource("hello"), title: "" })).toBe("demo.epub");
+  });
+
+  it("accepts EPUB, PDF, DOCX, HTML, and zipped HTML packages", () => {
+    expect(BOOK_SOURCE_ACCEPT).toContain(".docx");
+    expect(BOOK_SOURCE_ACCEPT).toContain(".html");
+    expect(BOOK_SOURCE_ACCEPT).toContain(".zip");
+    expect(isSupportedBookSource(new File([""], "fixture.docx"))).toBe(true);
+    expect(isSupportedBookSource(new File([""], "article.html", { type: "text/html" }))).toBe(true);
+    expect(isSupportedBookSource(new File([""], "package.zip", { type: "application/zip" }))).toBe(
+      true,
+    );
+    expect(isSupportedBookSource(new File([""], "notes.txt"))).toBe(false);
   });
 });
 

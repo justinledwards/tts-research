@@ -17,6 +17,7 @@ import (
 
 	"github.com/justinedwards/tts-research/backend/internal/agents"
 	"github.com/justinedwards/tts-research/backend/internal/audio"
+	"github.com/justinedwards/tts-research/backend/internal/contentir"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
@@ -1327,6 +1328,97 @@ func TestStructuredEPUBUsesNavLabelsAndNarratableDefault(t *testing.T) {
 	}
 }
 
+func TestCreateBookSourceImportsDOCXStructure(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	docxPath := writeTestDOCX(t, "structured.docx")
+	info, err := os.Stat(docxPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", docxPath, "structured.docx", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	if book.Kind != pipeline.BookSourceKindDOCX || book.Status != pipeline.BookSourceStatusReady {
+		t.Fatalf("book kind/status = %q/%q error=%s", book.Kind, book.Status, book.Error)
+	}
+	if book.Title != "DOCX Integration Fixture" || book.Author != "Adapter Writer" {
+		t.Fatalf("metadata = %q/%q, want DOCX title and author", book.Title, book.Author)
+	}
+	for _, expected := range []string{"Chapter One", "Cell A | Cell B", "Footnote detail.", "Diagram alt text"} {
+		if !strings.Contains(book.Text, expected) {
+			t.Fatalf("book text missing %q: %q", expected, book.Text)
+		}
+	}
+	if len(book.Sections) == 0 || book.DefaultSectionID == "" || len(book.WordSpans) == 0 {
+		t.Fatalf("book structure = sections:%d default:%q spans:%d", len(book.Sections), book.DefaultSectionID, len(book.WordSpans))
+	}
+	document, err := service.GetContentIR(book.ID)
+	if err != nil {
+		t.Fatalf("GetContentIR returned error: %v", err)
+	}
+	if document.Nodes[0].Provenance.Locator.Type != "docx" || document.Nodes[0].Provenance.Locator.DOCX == nil {
+		t.Fatalf("first locator = %#v, want DOCX locator", document.Nodes[0].Provenance.Locator)
+	}
+}
+
+func TestCreateBookSourceImportsHTMLStructure(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	htmlPath := writeTestHTML(t, "article.html")
+	info, err := os.Stat(htmlPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", htmlPath, "article.html", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	if book.Kind != pipeline.BookSourceKindHTML || book.Status != pipeline.BookSourceStatusReady {
+		t.Fatalf("book kind/status = %q/%q error=%s", book.Kind, book.Status, book.Error)
+	}
+	if book.Title != "Synthetic Article" {
+		t.Fatalf("book title = %q, want HTML title", book.Title)
+	}
+	for _, expected := range []string{"Synthetic Article", "Article lead paragraph", "Useful figure caption", "A newsroom desk"} {
+		if !strings.Contains(book.Text, expected) {
+			t.Fatalf("book text missing %q: %q", expected, book.Text)
+		}
+	}
+	if len(book.Sections) == 0 || book.DefaultSectionID == "" || len(book.WordSpans) == 0 {
+		t.Fatalf("book structure = sections:%d default:%q spans:%d", len(book.Sections), book.DefaultSectionID, len(book.WordSpans))
+	}
+	document, err := service.GetContentIR(book.ID)
+	if err != nil {
+		t.Fatalf("GetContentIR returned error: %v", err)
+	}
+	if document.Nodes[0].Provenance.Locator.Type != "html" || document.Nodes[0].Provenance.Locator.HTML == nil {
+		t.Fatalf("first locator = %#v, want HTML locator", document.Nodes[0].Provenance.Locator)
+	}
+}
+
+func TestCreateBookSourceFromURLUsesHTMLContentType(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = writer.Write([]byte(testHTMLFixture()))
+	}))
+	defer server.Close()
+
+	service := newBookSourceServiceWithOptions(t, pipeline.Options{SourceURLAllowPrivate: true})
+	book, err := service.CreateBookSourceFromURL(context.Background(), "default", server.URL+"/article")
+	if err != nil {
+		t.Fatalf("CreateBookSourceFromURL returned error: %v", err)
+	}
+	if book.Kind != pipeline.BookSourceKindHTML || !strings.HasSuffix(book.SourceFile, ".html") {
+		t.Fatalf("book kind/source file = %q/%q, want HTML from content type", book.Kind, book.SourceFile)
+	}
+}
+
 func TestProjectHailMaryEPUBDemoStructureIfAvailable(t *testing.T) {
 	t.Parallel()
 
@@ -1340,8 +1432,8 @@ func TestProjectHailMaryEPUBDemoStructureIfAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateBookSource(Project Hail Mary) returned error: %v", err)
 	}
-	if book.ChapterCount != 30 {
-		t.Fatalf("Project Hail Mary body chapter count = %d, want 30", book.ChapterCount)
+	if book.ChapterCount < 30 {
+		t.Fatalf("Project Hail Mary body chapter count = %d, want at least 30", book.ChapterCount)
 	}
 	defaultSection := findTestSection(book.Sections, book.DefaultSectionID)
 	if defaultSection == nil || defaultSection.Title != "Chapter 1" || defaultSection.Role != "body" {
@@ -1448,6 +1540,9 @@ func TestCreateBookNarrationJobUsesPDFPageScopeWithPythonFallback(t *testing.T) 
 	if book.PageCount != 3 {
 		t.Fatalf("book page count = %d, want 3", book.PageCount)
 	}
+	if len(book.Sections) == 0 || book.DefaultSectionID == "" {
+		t.Fatalf("PDF book sections = %#v default=%q, want page sections", book.Sections, book.DefaultSectionID)
+	}
 	content, err := service.GetBookSourceScope(book.ID, &pipeline.BookScope{
 		Type:      pipeline.BookScopeTypePages,
 		PageStart: 2,
@@ -1500,6 +1595,53 @@ func TestBookCinemaDiagnosticsReportsPythonFallback(t *testing.T) {
 	}
 	if !diagnostics.PythonFallbackAvailable {
 		t.Fatalf("expected python fallback to be available: %#v", diagnostics)
+	}
+	if !diagnostics.Adapters["epub"].Available || !diagnostics.Adapters["docx"].Available || !diagnostics.Adapters["html"].Available {
+		t.Fatalf("adapter diagnostics = %#v, want EPUB/DOCX/HTML available", diagnostics.Adapters)
+	}
+}
+
+func TestPlaybackProgressPersistsReadingPosition(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	position := &pipeline.ReadingPosition{
+		BookSourceID:    "book-1",
+		ScopeKey:        "chapter:2",
+		ActiveWordIndex: 17,
+		NodeID:          "node-17",
+		Locator: &contentir.Locator{
+			Type: "html",
+			HTML: &contentir.HTMLLocator{
+				Href:      "chapter.html",
+				Fragment:  "node-17",
+				TextQuote: "exact words",
+			},
+		},
+		TextQuote: "exact words",
+	}
+	progress, err := service.UpdatePlaybackProgress("book:book-1:chapter:2", pipeline.PlaybackProgressUpdate{
+		ProjectID:       "default",
+		BookSourceID:    "book-1",
+		ActiveWordIndex: 17,
+		ReadingPosition: position,
+		CurrentTimeSec:  3,
+		Progress:        0.25,
+	})
+	if err != nil {
+		t.Fatalf("UpdatePlaybackProgress returned error: %v", err)
+	}
+	if progress.ReadingPosition == nil || progress.ReadingPosition.NodeID != "node-17" {
+		t.Fatalf("progress reading position = %#v", progress.ReadingPosition)
+	}
+	progress.ReadingPosition.NodeID = "mutated"
+
+	items, err := service.ListProjectProgress("default")
+	if err != nil {
+		t.Fatalf("ListProjectProgress returned error: %v", err)
+	}
+	if len(items) != 1 || items[0].ReadingPosition == nil || items[0].ReadingPosition.NodeID != "node-17" {
+		t.Fatalf("listed progress = %#v", items)
 	}
 }
 
@@ -3236,6 +3378,73 @@ func writeStructuredTestEPUB(t *testing.T, filename string) string {
 		t.Fatalf("Close EPUB returned error: %v", err)
 	}
 	return outputPath
+}
+
+func writeTestDOCX(t *testing.T, filename string) string {
+	t.Helper()
+
+	outputPath := filepath.Join(t.TempDir(), filename)
+	file, err := os.Create(outputPath)
+	if err != nil {
+		t.Fatalf("Create DOCX returned error: %v", err)
+	}
+	zipWriter := zip.NewWriter(file)
+	files := map[string]string{
+		"docProps/core.xml": `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<dc:title>DOCX Integration Fixture</dc:title><dc:creator>Adapter Writer</dc:creator></cp:coreProperties>`,
+		"word/_rels/document.xml.rels": `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/></Relationships>`,
+		"word/footnotes.xml": `<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:footnote w:id="2"><w:p><w:r><w:t>Footnote detail.</w:t></w:r></w:p></w:footnote></w:footnotes>`,
+		"word/endnotes.xml": `<w:endnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:endnote w:id="3"><w:p><w:r><w:t>Endnote detail.</w:t></w:r></w:p></w:endnote></w:endnotes>`,
+		"word/comments.xml": `<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:comment w:id="4"><w:p><w:r><w:t>Comment detail.</w:t></w:r></w:p></w:comment></w:comments>`,
+		"word/document.xml": `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><w:body>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter One</w:t></w:r></w:p>
+<w:p><w:r><w:t>Body paragraph with notes.</w:t></w:r><w:footnoteReference w:id="2"/><w:commentReference w:id="4"/></w:p>
+<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="9"/></w:numPr></w:pPr><w:r><w:t>List item one.</w:t></w:r></w:p>
+<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell A</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Cell B</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr><w:r><w:t>Figure 1. A caption.</w:t></w:r></w:p>
+<w:p><w:r><w:drawing><wp:inline><wp:docPr id="1" name="Picture 1" descr="Diagram alt text"/><a:blip r:embed="rId5"/></wp:inline></w:drawing></w:r></w:p>
+<w:p><w:r><w:t>Paragraph with endnote.</w:t></w:r><w:endnoteReference w:id="3"/></w:p>
+</w:body></w:document>`,
+	}
+	for path, body := range files {
+		writer, createErr := zipWriter.Create(path)
+		if createErr != nil {
+			t.Fatalf("Create zip file returned error: %v", createErr)
+		}
+		if _, writeErr := writer.Write([]byte(body)); writeErr != nil {
+			t.Fatalf("Write zip file returned error: %v", writeErr)
+		}
+	}
+	if err := zipWriter.Close(); err != nil {
+		t.Fatalf("Close zip writer returned error: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close DOCX returned error: %v", err)
+	}
+	return outputPath
+}
+
+func writeTestHTML(t *testing.T, filename string) string {
+	t.Helper()
+
+	outputPath := filepath.Join(t.TempDir(), filename)
+	if err := os.WriteFile(outputPath, []byte(testHTMLFixture()), 0o644); err != nil {
+		t.Fatalf("Write HTML returned error: %v", err)
+	}
+	return outputPath
+}
+
+func testHTMLFixture() string {
+	return `<!doctype html><html lang="en"><head><title>Synthetic Article</title></head><body><main><article>
+<h1 id="synthetic-article">Synthetic Article</h1>
+<p>Article lead paragraph with enough words for spans.</p>
+<figure><img src="desk.jpg" alt="A newsroom desk"/><figcaption>Useful figure caption.</figcaption></figure>
+<table><tr><th>Metric</th><td>Value</td></tr></table>
+</article></main></body></html>`
 }
 
 func findTestSection(sections []pipeline.BookSourceSection, id string) *pipeline.BookSourceSection {

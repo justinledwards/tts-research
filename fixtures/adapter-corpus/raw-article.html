@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Synthetic Daily Article</title>
+    <meta name="description" content="Adapter fixture for semantic HTML extraction." />
+  </head>
+  <body>
+    <article>
+      <h1 id="daily-briefing">Synthetic Daily Article</h1>
+      <p>This compact article exercises paragraph extraction and stable fragments.</p>
+      <figure>
+        <img src="images/briefing.jpg" alt="A newsroom desk with notes and headphones" />
+        <figcaption>A synthetic caption that should become a caption node.</figcaption>
+      </figure>
+      <h2>Observed Signals</h2>
+      <ul>
+        <li>Headings become structured sections.</li>
+        <li>Lists remain explicit list nodes.</li>
+      </ul>
+      <table>
+        <tr><th>Signal</th><th>Status</th></tr>
+        <tr><td>Captions</td><td>Present</td></tr>
+      </table>
+    </article>
+  </body>
+</html>

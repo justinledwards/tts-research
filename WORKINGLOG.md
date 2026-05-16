@@ -121,3 +121,20 @@
 - [x] Iterate on UX polish if needed
 - [x] Run validation after UX pass
 - [x] Commit Markdown adapter v2 package
+
+## 2026-05-16 22:18 CEST - EPUB, DOCX and HTML ingestion
+
+- [x] Add shared EPUB, DOCX, and HTML adapter CLIs
+- [x] Integrate adapter diagnostics and capability APIs
+- [x] Route Book Cinema imports through IR-backed adapters
+- [x] Add deep-link reading position support
+- [x] Add fixtures, regression tests, and validation script
+- [x] Run local checks and Book Cinema regression
+- [x] Note mise doctor shim warning
+
+## 2026-05-16 23:10 CEST - EPUB, DOCX and HTML ergonomics QA
+
+- [x] Review rendered ingestion and Book Cinema UX
+- [x] Iterate on polish if needed
+- [x] Rerun validation after polish
+- [x] Commit EPUB, DOCX and HTML ingestion package

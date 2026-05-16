@@ -1,4 +1,4 @@
-import type { BookScope } from "./types";
+import type { BookScope, ReadingPosition } from "./types";
 
 export const ACTIVE_PROJECT_ID_STORAGE_KEY = "tts-active-project-id";
 export const LEGACY_SOURCE_TEXT_DRAFT_STORAGE_KEY = "tts-source-text";
@@ -9,6 +9,7 @@ export interface ProjectWorkspaceState {
   jobId: string | null;
   bookSourceId: string | null;
   bookScope: BookScope | null;
+  readingPosition: ReadingPosition | null;
   updatedAt: string;
 }
 
@@ -24,6 +25,7 @@ export function blankProjectWorkspaceState(): ProjectWorkspaceState {
     jobId: null,
     bookSourceId: null,
     bookScope: null,
+    readingPosition: null,
     updatedAt: new Date(0).toISOString(),
   };
 }
@@ -44,7 +46,9 @@ export function loadProjectWorkspaceState(projectId: string): ProjectWorkspaceSt
 export function saveProjectWorkspaceState(
   projectId: string,
   state: Pick<ProjectWorkspaceState, "text"> &
-    Partial<Pick<ProjectWorkspaceState, "jobId" | "bookSourceId" | "bookScope">>,
+    Partial<
+      Pick<ProjectWorkspaceState, "jobId" | "bookSourceId" | "bookScope" | "readingPosition">
+    >,
 ): void {
   localStorage.setItem(
     projectWorkspaceStateKey(projectId),
@@ -103,10 +107,41 @@ function normalizeProjectWorkspaceState(value: unknown): ProjectWorkspaceState {
         ? candidate.bookSourceId
         : null,
     bookScope: normalizeBookScope(candidate.bookScope),
+    readingPosition: normalizeReadingPosition(candidate.readingPosition),
     updatedAt:
       typeof candidate.updatedAt === "string" && candidate.updatedAt.trim().length > 0
         ? candidate.updatedAt
         : new Date(0).toISOString(),
+  };
+}
+
+function normalizeReadingPosition(value: unknown): ReadingPosition | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const candidate = value as Partial<ReadingPosition>;
+  return {
+    activeWordIndex:
+      typeof candidate.activeWordIndex === "number" && Number.isFinite(candidate.activeWordIndex)
+        ? candidate.activeWordIndex
+        : undefined,
+    bookSourceId:
+      typeof candidate.bookSourceId === "string" && candidate.bookSourceId.trim().length > 0
+        ? candidate.bookSourceId
+        : undefined,
+    locator: candidate.locator,
+    nodeId:
+      typeof candidate.nodeId === "string" && candidate.nodeId.trim().length > 0
+        ? candidate.nodeId
+        : undefined,
+    scopeKey:
+      typeof candidate.scopeKey === "string" && candidate.scopeKey.trim().length > 0
+        ? candidate.scopeKey
+        : undefined,
+    textQuote:
+      typeof candidate.textQuote === "string" && candidate.textQuote.trim().length > 0
+        ? candidate.textQuote
+        : undefined,
   };
 }
 

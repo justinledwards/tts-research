@@ -18,7 +18,7 @@ func (service *Service) ListProjectProgress(projectID string) ([]PlaybackProgres
 	items := make([]PlaybackProgress, 0)
 	for _, progress := range service.progress {
 		if progress.ProjectID == project.ID && !progress.Hidden {
-			items = append(items, progress)
+			items = append(items, clonePlaybackProgress(progress))
 		}
 	}
 	service.mu.RUnlock()
@@ -79,6 +79,9 @@ func (service *Service) UpdatePlaybackProgress(targetID string, update PlaybackP
 	if update.ActiveWordIndex >= 0 {
 		progress.ActiveWordIndex = update.ActiveWordIndex
 	}
+	if update.ReadingPosition != nil {
+		progress.ReadingPosition = cloneReadingPosition(update.ReadingPosition)
+	}
 	if update.Hidden != nil {
 		progress.Hidden = *update.Hidden
 	}
@@ -110,7 +113,7 @@ func (service *Service) UpdatePlaybackProgress(targetID string, update PlaybackP
 	if err := service.writePlaybackProgress(progress); err != nil {
 		return PlaybackProgress{}, err
 	}
-	return progress, nil
+	return clonePlaybackProgress(progress), nil
 }
 
 func (service *Service) StartPlaybackSession(update PlaybackProgressUpdate) (PlaybackSession, error) {
@@ -136,6 +139,7 @@ func (service *Service) StartPlaybackSession(update PlaybackProgressUpdate) (Pla
 		BookScope:        cloneBookScope(update.BookScope),
 		CurrentTimeSec:   update.CurrentTimeSec,
 		ActiveWordIndex:  update.ActiveWordIndex,
+		ReadingPosition:  cloneReadingPosition(update.ReadingPosition),
 		Status:           PlaybackSessionStatusOpen,
 		StartedAt:        now,
 		UpdatedAt:        now,
@@ -164,6 +168,9 @@ func (service *Service) SyncPlaybackSession(id string, update PlaybackProgressUp
 	if update.ActiveWordIndex >= 0 {
 		session.ActiveWordIndex = update.ActiveWordIndex
 	}
+	if update.ReadingPosition != nil {
+		session.ReadingPosition = cloneReadingPosition(update.ReadingPosition)
+	}
 	session.UpdatedAt = time.Now().UTC()
 	service.mu.Lock()
 	service.sessions[session.ID] = session
@@ -177,6 +184,7 @@ func (service *Service) SyncPlaybackSession(id string, update PlaybackProgressUp
 	update.BookSourceID = session.BookSourceID
 	update.PreparedSourceID = session.PreparedSourceID
 	update.BookScope = cloneBookScope(session.BookScope)
+	update.ReadingPosition = cloneReadingPosition(session.ReadingPosition)
 	_, _ = service.UpdatePlaybackProgress(session.TargetID, update)
 	return session, nil
 }
@@ -197,6 +205,20 @@ func (service *Service) ClosePlaybackSession(id string, update PlaybackProgressU
 		return PlaybackSession{}, err
 	}
 	return session, nil
+}
+
+func clonePlaybackProgress(progress PlaybackProgress) PlaybackProgress {
+	progress.BookScope = cloneBookScope(progress.BookScope)
+	progress.ReadingPosition = cloneReadingPosition(progress.ReadingPosition)
+	if len(progress.Bookmarks) > 0 {
+		bookmarks := make([]ProgressBookmark, len(progress.Bookmarks))
+		copy(bookmarks, progress.Bookmarks)
+		for index := range bookmarks {
+			bookmarks[index].ReadingPosition = cloneReadingPosition(bookmarks[index].ReadingPosition)
+		}
+		progress.Bookmarks = bookmarks
+	}
+	return progress
 }
 
 func (service *Service) reloadProgress() {

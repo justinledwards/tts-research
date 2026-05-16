@@ -66,6 +66,53 @@ func TestTTSEnginesEndpoint(t *testing.T) {
 	}
 }
 
+func TestAdapterCapabilityEndpoints(t *testing.T) {
+	t.Parallel()
+
+	app := httpapi.NewRouter(newService(t))
+	capabilityRequest, err := http.NewRequest(http.MethodGet, "/api/adapters/capabilities", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(capabilities) returned error: %v", err)
+	}
+	capabilityResponse, err := app.Test(capabilityRequest)
+	if err != nil {
+		t.Fatalf("app.Test(capabilities) returned error: %v", err)
+	}
+	defer capabilityResponse.Body.Close()
+	if capabilityResponse.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(capabilityResponse.Body)
+		t.Fatalf("capabilities status = %d, want %d, body = %s", capabilityResponse.StatusCode, http.StatusOK, payload)
+	}
+	var capabilities []pipeline.AdapterCapability
+	if err := json.NewDecoder(capabilityResponse.Body).Decode(&capabilities); err != nil {
+		t.Fatalf("decode capabilities: %v", err)
+	}
+	if !hasAdapterCapability(capabilities, "epub") || !hasAdapterCapability(capabilities, "docx") || !hasAdapterCapability(capabilities, "html") {
+		t.Fatalf("capabilities = %#v, want EPUB/DOCX/HTML", capabilities)
+	}
+
+	diagnosticsRequest, err := http.NewRequest(http.MethodGet, "/api/adapters/diagnostics", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(diagnostics) returned error: %v", err)
+	}
+	diagnosticsResponse, err := app.Test(diagnosticsRequest)
+	if err != nil {
+		t.Fatalf("app.Test(diagnostics) returned error: %v", err)
+	}
+	defer diagnosticsResponse.Body.Close()
+	if diagnosticsResponse.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(diagnosticsResponse.Body)
+		t.Fatalf("diagnostics status = %d, want %d, body = %s", diagnosticsResponse.StatusCode, http.StatusOK, payload)
+	}
+	var diagnostics map[string]pipeline.AdapterDiagnostics
+	if err := json.NewDecoder(diagnosticsResponse.Body).Decode(&diagnostics); err != nil {
+		t.Fatalf("decode diagnostics: %v", err)
+	}
+	if !diagnostics["epub"].Available || !diagnostics["docx"].Available || !diagnostics["html"].Available {
+		t.Fatalf("diagnostics = %#v, want adapters available", diagnostics)
+	}
+}
+
 func TestListVoicesEndpoint(t *testing.T) {
 	t.Parallel()
 
@@ -450,6 +497,15 @@ func writeRouterTestEPUB(t *testing.T) string {
 		t.Fatalf("Close EPUB returned error: %v", err)
 	}
 	return outputPath
+}
+
+func hasAdapterCapability(capabilities []pipeline.AdapterCapability, adapterID string) bool {
+	for _, capability := range capabilities {
+		if capability.AdapterID == adapterID {
+			return true
+		}
+	}
+	return false
 }
 
 func waitForJob(t *testing.T, service *pipeline.Service, id string, status pipeline.JobStatus) {

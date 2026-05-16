@@ -10,7 +10,8 @@ import type {
   VoiceJob,
 } from "./types";
 
-const BOOK_SOURCE_ACCEPT = ".pdf,.epub,application/pdf,application/epub+zip";
+export const BOOK_SOURCE_ACCEPT =
+  ".pdf,.epub,.docx,.html,.htm,.zip,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/html,application/xhtml+xml,application/zip";
 const CINEMA_THEMES: ThemeName[] = ["light", "dark", "dawn", "night"];
 const BOOK_PAGE_VERTICAL_PADDING = 108;
 const BOOK_PAGE_HORIZONTAL_PADDING = 76;
@@ -115,7 +116,7 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
       return;
     }
     if (!isSupportedBookSource(file)) {
-      setLocalError("Upload a PDF or EPUB book source.");
+      setLocalError("Upload a PDF, EPUB, DOCX, HTML, or zipped HTML book source.");
       return;
     }
     await onImport(file);
@@ -146,10 +147,11 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
         <div className="min-w-0">
           <h3 className="text-sm font-semibold">Book Cinema</h3>
           <p className="vs-muted mt-1 text-xs leading-5">
-            Import EPUB or PDF, pick a chapter/page range, then enter Cinema from this teleprompter.
+            Import EPUB, PDF, DOCX, or HTML, pick a scope, then enter Cinema from this teleprompter.
           </p>
           <p className="vs-muted mt-1 text-[0.7rem]">
-            PDF extractor: {diagnostics?.pdfExtractor ?? "checking"}
+            PDF extractor: {diagnostics?.pdfExtractor ?? "checking"} · Adapters:{" "}
+            {formatAdapterDiagnostics(diagnostics)}
           </p>
         </div>
         <button
@@ -354,7 +356,7 @@ function BookScopeActionHeader({
   onUseText: (book: BookSource, scope: BookScope) => void;
 }>) {
   return (
-    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex min-w-0 flex-col gap-3">
       <div className="min-w-0">
         <h3 className="truncate text-sm font-semibold" title={bookSourceName(selectedBook)}>
           {bookSourceName(selectedBook)}
@@ -364,7 +366,7 @@ function BookScopeActionHeader({
           {selectedBook.sourceFile}
         </p>
       </div>
-      <div className="flex shrink-0 flex-wrap gap-2">
+      <div className="flex min-w-0 flex-wrap gap-2">
         <button
           className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
           onClick={() => {
@@ -452,7 +454,8 @@ function BookCinemaDropHint() {
     <div className="rounded-md border border-dashed p-4 text-sm leading-6 vs-border">
       <p className="font-semibold">Drop a book source here</p>
       <p className="vs-muted mt-1 text-xs">
-        EPUB imports run fully local. PDF imports use pdftotext or the managed Python fallback.
+        EPUB, DOCX, and HTML imports run through local IR adapters. PDF imports use pdftotext or the
+        managed Python fallback.
       </p>
     </div>
   );
@@ -1544,7 +1547,7 @@ function groupBookScopeOptions(options: BookScopeOption[]): {
   const labels: Record<BookScopeOption["group"], string> = {
     appendix: "Appendix",
     backmatter: "Back matter",
-    body: "Chapters",
+    body: "Main sections",
     frontmatter: "Front matter",
     full: "Full source",
     pages: "Page ranges",
@@ -1568,7 +1571,7 @@ function groupBookScopeOptions(options: BookScopeOption[]): {
 
 function bookCreateLabel(scope: BookScope): string {
   if (scope.type === "chapter") {
-    return "Create Current Chapter";
+    return "Create Scope Audio";
   }
   if (scope.type === "pages") {
     return "Create Page Range";
@@ -1614,6 +1617,9 @@ function formatBookCount(book: BookSource): string {
   if (book.kind === "pdf" && book.pageCount > 0) {
     return `${book.pageCount.toLocaleString()} pages · ${book.wordCount.toLocaleString()} words`;
   }
+  if ((book.kind === "docx" || book.kind === "html") && (book.sections ?? []).length > 0) {
+    return `${(book.sections ?? []).length.toLocaleString()} sections · ${book.wordCount.toLocaleString()} words`;
+  }
   if (book.chapterCount > 0) {
     return `${book.chapterCount.toLocaleString()} chapters · ${book.wordCount.toLocaleString()} words`;
   }
@@ -1623,9 +1629,20 @@ function formatBookCount(book: BookSource): string {
   return `${book.wordCount.toLocaleString()} words`;
 }
 
-function isSupportedBookSource(file: File): boolean {
+export function isSupportedBookSource(file: File): boolean {
   const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  return extension === "pdf" || extension === "epub";
+  return ["pdf", "epub", "docx", "html", "htm", "zip"].includes(extension);
+}
+
+function formatAdapterDiagnostics(diagnostics: BookCinemaDiagnostics | null): string {
+  const adapters = diagnostics?.adapters;
+  if (!adapters) {
+    return "checking";
+  }
+  const available = Object.values(adapters)
+    .filter((adapter) => adapter.available)
+    .map((adapter) => adapter.adapterId.toUpperCase());
+  return available.length > 0 ? available.join(", ") : "unavailable";
 }
 
 function formatBytes(bytes: number): string {

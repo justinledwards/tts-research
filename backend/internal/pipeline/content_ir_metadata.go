@@ -146,6 +146,10 @@ func (service *Service) writeBookSourceContentIR(book BookSource) error {
 	return service.writeContentIR(service.bookSourceDataDir(book.ID), BookSourceToIR(book, time.Now().UTC()))
 }
 
+func (service *Service) writeBookSourceContentIRDocument(bookID string, document contentir.Document) error {
+	return service.writeContentIR(service.bookSourceDataDir(bookID), document)
+}
+
 func (service *Service) writeContentIR(outputDir string, document contentir.Document) error {
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return err

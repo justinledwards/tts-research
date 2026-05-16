@@ -104,6 +104,14 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(service.BookCinemaDiagnostics())
 	})
 
+	app.Get("/api/adapters/capabilities", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.AdapterCapabilities())
+	})
+
+	app.Get("/api/adapters/diagnostics", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.AdapterDiagnostics())
+	})
+
 	app.Get("/api/content-ir/:id", func(ctx fiber.Ctx) error {
 		document, err := service.GetContentIR(ctx.Params("id"))
 		if err != nil {

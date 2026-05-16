@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/justinedwards/tts-research/backend/internal/audio"
+	"github.com/justinedwards/tts-research/backend/internal/contentir"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
@@ -286,6 +287,8 @@ type BookSourceKind string
 const (
 	BookSourceKindPDF  BookSourceKind = "pdf"
 	BookSourceKindEPUB BookSourceKind = "epub"
+	BookSourceKindDOCX BookSourceKind = "docx"
+	BookSourceKindHTML BookSourceKind = "html"
 )
 
 type BookSourcePage struct {
@@ -379,15 +382,32 @@ type BookScope struct {
 }
 
 type BookCinemaDiagnostics struct {
-	PDFExtractor             string `json:"pdfExtractor"`
-	PDFExtractorAvailable    bool   `json:"pdfExtractorAvailable"`
-	PDFStrict                bool   `json:"pdfStrict"`
-	PDFSetup                 string `json:"pdfSetup,omitempty"`
-	PDFToTextAvailable       bool   `json:"pdftotextAvailable"`
-	PythonFallbackAvailable  bool   `json:"pythonFallbackAvailable"`
-	PythonFallbackConfigured bool   `json:"pythonFallbackConfigured"`
-	PythonPath               string `json:"pythonPath,omitempty"`
-	PythonScript             string `json:"pythonScript,omitempty"`
+	PDFExtractor             string                        `json:"pdfExtractor"`
+	PDFExtractorAvailable    bool                          `json:"pdfExtractorAvailable"`
+	PDFStrict                bool                          `json:"pdfStrict"`
+	PDFSetup                 string                        `json:"pdfSetup,omitempty"`
+	PDFToTextAvailable       bool                          `json:"pdftotextAvailable"`
+	PythonFallbackAvailable  bool                          `json:"pythonFallbackAvailable"`
+	PythonFallbackConfigured bool                          `json:"pythonFallbackConfigured"`
+	PythonPath               string                        `json:"pythonPath,omitempty"`
+	PythonScript             string                        `json:"pythonScript,omitempty"`
+	Adapters                 map[string]AdapterDiagnostics `json:"adapters,omitempty"`
+}
+
+type AdapterCapability struct {
+	AdapterID   string         `json:"adapterId"`
+	Extensions  []string       `json:"extensions"`
+	MimeTypes   []string       `json:"mimeTypes"`
+	SourceKinds []string       `json:"sourceKinds"`
+	Features    map[string]any `json:"features"`
+}
+
+type AdapterDiagnostics struct {
+	AdapterID string   `json:"adapterId"`
+	Available bool     `json:"available"`
+	Status    string   `json:"status"`
+	CLIPath   string   `json:"cliPath,omitempty"`
+	Warnings  []string `json:"warnings,omitempty"`
 }
 
 type BookSourceScopeContent struct {
@@ -519,11 +539,21 @@ type ProjectBundleImportResult struct {
 }
 
 type ProgressBookmark struct {
-	ID              string    `json:"id"`
-	Label           string    `json:"label,omitempty"`
-	CurrentTimeSec  float64   `json:"currentTimeSec"`
-	ActiveWordIndex int       `json:"activeWordIndex,omitempty"`
-	CreatedAt       time.Time `json:"createdAt"`
+	ID              string           `json:"id"`
+	Label           string           `json:"label,omitempty"`
+	CurrentTimeSec  float64          `json:"currentTimeSec"`
+	ActiveWordIndex int              `json:"activeWordIndex,omitempty"`
+	ReadingPosition *ReadingPosition `json:"readingPosition,omitempty"`
+	CreatedAt       time.Time        `json:"createdAt"`
+}
+
+type ReadingPosition struct {
+	BookSourceID    string             `json:"bookSourceId,omitempty"`
+	ScopeKey        string             `json:"scopeKey,omitempty"`
+	ActiveWordIndex int                `json:"activeWordIndex,omitempty"`
+	NodeID          string             `json:"nodeId,omitempty"`
+	Locator         *contentir.Locator `json:"locator,omitempty"`
+	TextQuote       string             `json:"textQuote,omitempty"`
 }
 
 type PlaybackProgress struct {
@@ -536,6 +566,7 @@ type PlaybackProgress struct {
 	CurrentTimeSec   float64            `json:"currentTimeSec"`
 	Progress         float64            `json:"progress"`
 	ActiveWordIndex  int                `json:"activeWordIndex,omitempty"`
+	ReadingPosition  *ReadingPosition   `json:"readingPosition,omitempty"`
 	Finished         bool               `json:"finished"`
 	Hidden           bool               `json:"hidden"`
 	Bookmarks        []ProgressBookmark `json:"bookmarks,omitempty"`
@@ -556,6 +587,7 @@ type PlaybackProgressUpdate struct {
 	DurationSec      float64           `json:"durationSec,omitempty"`
 	Progress         float64           `json:"progress,omitempty"`
 	ActiveWordIndex  int               `json:"activeWordIndex,omitempty"`
+	ReadingPosition  *ReadingPosition  `json:"readingPosition,omitempty"`
 	Finished         bool              `json:"finished,omitempty"`
 	Hidden           *bool             `json:"hidden,omitempty"`
 	AddBookmark      *ProgressBookmark `json:"addBookmark,omitempty"`
@@ -578,6 +610,7 @@ type PlaybackSession struct {
 	BookScope        *BookScope            `json:"bookScope,omitempty"`
 	CurrentTimeSec   float64               `json:"currentTimeSec"`
 	ActiveWordIndex  int                   `json:"activeWordIndex,omitempty"`
+	ReadingPosition  *ReadingPosition      `json:"readingPosition,omitempty"`
 	Status           PlaybackSessionStatus `json:"status"`
 	StartedAt        time.Time             `json:"startedAt"`
 	UpdatedAt        time.Time             `json:"updatedAt"`

@@ -115,6 +115,7 @@ import type {
   PlaybackSession,
   PreparedSource,
   ProjectBundleImportResult,
+  ReadingPosition,
   ProjectStorageSummary,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
@@ -160,7 +161,7 @@ const DEFAULT_PROJECT_NAME = "The Future of Clean Energy";
 const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
 const DEFAULT_KOKORO_VOICE_ID = "af_heart";
 const SOURCE_TEXT_FILE_ACCEPT =
-  ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,application/pdf,application/epub+zip";
+  ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,.zip,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip";
 const SOURCE_TEXT_FILE_EXTENSIONS = new Set([
   "txt",
   "md",
@@ -1341,6 +1342,9 @@ export function App() {
   const [isSpeechPolicyPreviewing, setIsSpeechPolicyPreviewing] = useState(false);
   const [jobPreparedSource, setJobPreparedSource] = useState<PreparedSource | null>(null);
   const [projectProgress, setProjectProgress] = useState<PlaybackProgress[]>([]);
+  const [hashReadingPosition, setHashReadingPosition] = useState<ReadingPosition | null>(() =>
+    parseBookCinemaHash(globalThis.location.hash),
+  );
   const [projectStorage, setProjectStorage] = useState<ProjectStorageSummary | null>(null);
   const [projectStorageError, setProjectStorageError] = useState<string | null>(null);
   const [activePlaybackSession, setActivePlaybackSession] = useState<PlaybackSession | null>(null);
@@ -1591,6 +1595,35 @@ export function App() {
     const targetId = progressTargetIdForBookScope(selectedBookSource.id, effectiveBookScope);
     return projectProgress.find((progress) => progress.targetId === targetId) ?? null;
   }, [effectiveBookScope, projectProgress, selectedBookSource]);
+  const currentReadingPosition = useMemo<ReadingPosition | null>(() => {
+    if (!selectedBookSource || !effectiveBookScope) {
+      return null;
+    }
+    const scopeKey = bookScopeKey(effectiveBookScope);
+    if (
+      hashReadingPosition?.bookSourceId === selectedBookSource.id &&
+      hashReadingPosition.scopeKey === scopeKey
+    ) {
+      return hashReadingPosition;
+    }
+    return {
+      activeWordIndex: selectedBookProgress?.activeWordIndex ?? 0,
+      bookSourceId: selectedBookSource.id,
+      scopeKey,
+    };
+  }, [effectiveBookScope, hashReadingPosition, selectedBookProgress, selectedBookSource]);
+  const hashProgress = useMemo(
+    () =>
+      selectedBookSource && effectiveBookScope
+        ? playbackProgressFromReadingPosition(
+            hashReadingPosition,
+            selectedBookSource.id,
+            bookScopeKey(effectiveBookScope),
+            activeProjectId,
+          )
+        : null,
+    [activeProjectId, effectiveBookScope, hashReadingPosition, selectedBookSource],
+  );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
   const studioPipelineHint = getStudioPipelineHint({
     hasLoadedProfiles: hasLoadedVoiceProfiles,
@@ -1601,6 +1634,32 @@ export function App() {
   const ttsPipelineHint = isProcessing
     ? (job?.progress.message ?? "TTS pipeline is processing the current job.")
     : "Start a job to see live TTS pipeline status.";
+
+  useEffect(() => {
+    const syncHashPosition = () => {
+      setHashReadingPosition(parseBookCinemaHash(globalThis.location.hash));
+    };
+    globalThis.addEventListener("hashchange", syncHashPosition);
+    return () => {
+      globalThis.removeEventListener("hashchange", syncHashPosition);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hashReadingPosition?.bookSourceId) {
+      return;
+    }
+    const book = bookSources.find((item) => item.id === hashReadingPosition.bookSourceId);
+    if (!book) {
+      return;
+    }
+    setSelectedBookSourceId(book.id);
+    setSelectedBookScope(scopeFromBookScopeKey(book, hashReadingPosition.scopeKey));
+    if (book.status === "ready") {
+      setIsBookCinemaOpen(true);
+    }
+  }, [bookSources, hashReadingPosition]);
+
   const refreshVoiceProfiles = useCallback(async () => {
     setIsLoadingProfiles(true);
     setProfileError(null);
@@ -2048,6 +2107,7 @@ export function App() {
         saveProjectWorkspaceState(projectId, {
           bookScope: savedState.bookScope,
           bookSourceId: savedState.bookSourceId,
+          readingPosition: savedState.readingPosition,
           text: savedState.text,
           jobId: null,
         });
@@ -2069,6 +2129,7 @@ export function App() {
         saveProjectWorkspaceState(activeProjectId, {
           bookScope: selectedBookScope,
           bookSourceId: selectedBookSourceId,
+          readingPosition: currentReadingPosition,
           text,
           jobId: job?.id ?? null,
         });
@@ -2077,7 +2138,15 @@ export function App() {
       setActiveProjectId(projectId);
       localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, projectId);
     },
-    [activeProjectId, job?.id, projectStateReadyId, selectedBookScope, selectedBookSourceId, text],
+    [
+      activeProjectId,
+      currentReadingPosition,
+      job?.id,
+      projectStateReadyId,
+      selectedBookScope,
+      selectedBookSourceId,
+      text,
+    ],
   );
 
   const handleCreateProject = useCallback(
@@ -2153,6 +2222,14 @@ export function App() {
       saveProjectWorkspaceState(nextProjectId, {
         bookScope: nextJob.bookScope ?? null,
         bookSourceId: nextJob.bookSourceId ?? null,
+        readingPosition:
+          nextJob.bookSourceId && nextJob.bookScope
+            ? {
+                activeWordIndex: 0,
+                bookSourceId: nextJob.bookSourceId,
+                scopeKey: bookScopeKey(nextJob.bookScope),
+              }
+            : null,
         text: typeof nextJob.inputText === "string" ? nextJob.inputText : text,
         jobId: nextJob.id,
       });
@@ -2278,7 +2355,7 @@ export function App() {
       setSourcePrepError(null);
       try {
         const extension = file.name.toLowerCase().split(".").pop() ?? "";
-        if (extension === "pdf" || extension === "epub") {
+        if (isBookSourceExtension(extension)) {
           const book = await createBookSource(activeProjectId, file);
           setBookSources((currentBooks) => [
             book,
@@ -2321,7 +2398,7 @@ export function App() {
       setSourcePrepError(null);
       try {
         const lowerURL = url.toLowerCase().split("?")[0] ?? "";
-        if (lowerURL.endsWith(".pdf") || lowerURL.endsWith(".epub")) {
+        if (isBookSourceURL(lowerURL)) {
           const book = await createBookSourceFromUrl(activeProjectId, url);
           setBookSources((currentBooks) => [
             book,
@@ -2480,6 +2557,46 @@ export function App() {
     [bookScopeContent, effectiveBookScope, selectedBookSource],
   );
 
+  const readingPositionForPlaybackProgress = useCallback(
+    (currentJob: VoiceJob, currentTimeSec: number): ReadingPosition | undefined => {
+      if (!selectedBookSource || currentJob.bookSourceId !== selectedBookSource.id) {
+        return undefined;
+      }
+      const scope = currentJob.bookScope ?? effectiveBookScope;
+      if (!scope) {
+        return undefined;
+      }
+      return {
+        activeWordIndex: activeWordIndexForPlaybackProgress(currentJob, currentTimeSec),
+        bookSourceId: selectedBookSource.id,
+        scopeKey: bookScopeKey(scope),
+      };
+    },
+    [activeWordIndexForPlaybackProgress, effectiveBookScope, selectedBookSource],
+  );
+
+  useEffect(() => {
+    if (!isBookCinemaOpen || !selectedBookSource || !effectiveBookScope) {
+      return;
+    }
+    let readingPosition: ReadingPosition | null | undefined = currentReadingPosition;
+    if (job?.bookSourceId === selectedBookSource.id) {
+      readingPosition = readingPositionForPlaybackProgress(job, playbackCursorSec);
+    }
+    if (!readingPosition) {
+      return;
+    }
+    replaceBookCinemaHash(readingPosition);
+  }, [
+    currentReadingPosition,
+    effectiveBookScope,
+    isBookCinemaOpen,
+    job,
+    playbackCursorSec,
+    readingPositionForPlaybackProgress,
+    selectedBookSource,
+  ]);
+
   const handleAddPlaybackBookmark = useCallback(async () => {
     if (!job) {
       return;
@@ -2490,6 +2607,7 @@ export function App() {
     }
     const currentTimeSec = Math.max(0, playbackCursorSec);
     const durationSec = job.durationMs > 0 ? job.durationMs / 1000 : undefined;
+    const readingPosition = readingPositionForPlaybackProgress(job, currentTimeSec);
     try {
       const progress = await updatePlaybackProgress(targetId, {
         activeWordIndex: activeWordIndexForPlaybackProgress(job, currentTimeSec),
@@ -2499,6 +2617,7 @@ export function App() {
           currentTimeSec,
           id: `bookmark-${Date.now().toString(36)}`,
           label: formatDuration(Math.round(currentTimeSec * 1000)),
+          readingPosition,
         },
         bookScope: job.bookScope,
         bookSourceId: job.bookSourceId,
@@ -2507,6 +2626,7 @@ export function App() {
         jobId: job.id,
         preparedSourceId: job.preparedSourceId,
         projectId: job.projectId,
+        readingPosition,
       });
       setProjectProgress((currentProgress) => [
         progress,
@@ -2515,7 +2635,12 @@ export function App() {
     } catch {
       setError("Unable to save bookmark.");
     }
-  }, [activeWordIndexForPlaybackProgress, job, playbackCursorSec]);
+  }, [
+    activeWordIndexForPlaybackProgress,
+    job,
+    playbackCursorSec,
+    readingPositionForPlaybackProgress,
+  ]);
 
   useEffect(() => {
     const cachedProfileId = localStorage.getItem(VOICE_PROFILE_ID_STORAGE_KEY);
@@ -2730,12 +2855,14 @@ export function App() {
     saveProjectWorkspaceState(activeProjectId, {
       bookScope: selectedBookScope,
       bookSourceId: selectedBookSourceId,
+      readingPosition: currentReadingPosition,
       text,
       jobId: job?.id ?? null,
     });
   }, [
     activeProjectId,
     job?.id,
+    currentReadingPosition,
     projectStateReadyId,
     selectedBookScope,
     selectedBookSourceId,
@@ -2876,6 +3003,7 @@ export function App() {
       currentTimeSec: playbackCursorSec,
       durationSec: job.durationMs > 0 ? job.durationMs / 1000 : undefined,
       activeWordIndex: activeWordIndexForPlaybackProgress(job, playbackCursorSec),
+      readingPosition: readingPositionForPlaybackProgress(job, playbackCursorSec),
     })
       .then((session) => {
         if (!isCancelled) {
@@ -2894,6 +3022,7 @@ export function App() {
     isPlaybackActive,
     job,
     playbackCursorSec,
+    readingPositionForPlaybackProgress,
   ]);
 
   useEffect(() => {
@@ -2905,6 +3034,7 @@ export function App() {
         currentTimeSec: playbackCursorSec,
         durationSec: job.durationMs > 0 ? job.durationMs / 1000 : undefined,
         activeWordIndex: activeWordIndexForPlaybackProgress(job, playbackCursorSec),
+        readingPosition: readingPositionForPlaybackProgress(job, playbackCursorSec),
         finished:
           job.status === "completed" &&
           job.durationMs > 0 &&
@@ -2922,6 +3052,7 @@ export function App() {
     activeWordIndexForPlaybackProgress,
     job,
     playbackCursorSec,
+    readingPositionForPlaybackProgress,
     refreshProjectProgress,
   ]);
 
@@ -2935,6 +3066,7 @@ export function App() {
       currentTimeSec: playbackCursorSec,
       durationSec: job.durationMs > 0 ? job.durationMs / 1000 : undefined,
       activeWordIndex: activeWordIndexForPlaybackProgress(job, playbackCursorSec),
+      readingPosition: readingPositionForPlaybackProgress(job, playbackCursorSec),
       finished:
         job.status === "completed" &&
         job.durationMs > 0 &&
@@ -2948,6 +3080,7 @@ export function App() {
     isPlaybackActive,
     job,
     playbackCursorSec,
+    readingPositionForPlaybackProgress,
     refreshProjectProgress,
   ]);
 
@@ -3336,7 +3469,7 @@ export function App() {
           job={job}
           playbackControls={playbackControls}
           playbackCursorSec={playbackCursorSec}
-          progress={selectedBookProgress}
+          progress={selectedBookProgress ?? hashProgress}
           scope={effectiveBookScope}
           scopeContent={bookScopeContent}
           textSize={bookCinemaTextSize}
@@ -4818,7 +4951,17 @@ function isSupportedSourcePrepFile(file: File): boolean {
     return true;
   }
   const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  return extension === "pdf" || extension === "epub";
+  return isBookSourceExtension(extension);
+}
+
+function isBookSourceExtension(extension: string): boolean {
+  return ["pdf", "epub", "docx", "html", "htm", "zip"].includes(extension);
+}
+
+function isBookSourceURL(lowerURL: string): boolean {
+  return [".pdf", ".epub", ".docx", ".html", ".htm", ".zip"].some((extension) =>
+    lowerURL.endsWith(extension),
+  );
 }
 
 function formatSourceTextFileLabel(files: File[]): string {
@@ -7464,6 +7607,106 @@ function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
       <dd className="mt-1 break-words font-medium text-zinc-900">{value}</dd>
     </div>
   );
+}
+
+function parseBookCinemaHash(hash: string): ReadingPosition | null {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  const params = new URLSearchParams(raw);
+  if (params.get("cinema") !== "book") {
+    return null;
+  }
+  const bookSourceId = params.get("book")?.trim();
+  if (!bookSourceId) {
+    return null;
+  }
+  const parsedWord = Number(params.get("word") ?? "0");
+  return {
+    activeWordIndex: Number.isFinite(parsedWord) ? Math.max(0, Math.round(parsedWord)) : 0,
+    bookSourceId,
+    nodeId: params.get("node") ?? undefined,
+    scopeKey: params.get("scope") ?? undefined,
+  };
+}
+
+function replaceBookCinemaHash(position: ReadingPosition): void {
+  if (!position.bookSourceId || !position.scopeKey) {
+    return;
+  }
+  const params = new URLSearchParams();
+  params.set("cinema", "book");
+  params.set("book", position.bookSourceId);
+  params.set("scope", position.scopeKey);
+  params.set("word", String(Math.max(0, position.activeWordIndex ?? 0)));
+  if (position.nodeId) {
+    params.set("node", position.nodeId);
+  }
+  const nextHash = `#${params.toString()}`;
+  if (globalThis.location.hash !== nextHash) {
+    globalThis.history.replaceState(null, "", nextHash);
+  }
+}
+
+function scopeFromBookScopeKey(book: BookSource, key: string | undefined): BookScope {
+  if (!key) {
+    return resolveDefaultBookScope(book);
+  }
+  if (key === "book") {
+    return { type: "book", label: "Full book" };
+  }
+  const chapter = /^chapter:(\d+)$/.exec(key);
+  if (chapter) {
+    const chapterIndex = Number(chapter[1]);
+    const sourceChapter = book.chapters?.find((item) => item.index === chapterIndex);
+    return {
+      type: "chapter",
+      chapterIndex,
+      label: sourceChapter?.title ?? `Chapter ${String(chapterIndex)}`,
+    };
+  }
+  const pages = /^pages:(\d+)-(\d+)$/.exec(key);
+  if (pages) {
+    const pageStart = Number(pages[1]);
+    const pageEnd = Number(pages[2]);
+    return {
+      type: "pages",
+      pageStart,
+      pageEnd,
+      label:
+        pageStart === pageEnd
+          ? `Page ${String(pageStart)}`
+          : `Pages ${String(pageStart)}-${String(pageEnd)}`,
+    };
+  }
+  return resolveDefaultBookScope(book);
+}
+
+function playbackProgressFromReadingPosition(
+  position: ReadingPosition | null,
+  bookSourceId: string,
+  scopeKey: string,
+  projectId: string,
+): PlaybackProgress | null {
+  if (
+    position?.bookSourceId !== bookSourceId ||
+    position.scopeKey !== scopeKey ||
+    position.activeWordIndex === undefined
+  ) {
+    return null;
+  }
+  const timestamp = new Date(0).toISOString();
+  return {
+    activeWordIndex: position.activeWordIndex,
+    bookSourceId,
+    createdAt: timestamp,
+    currentTimeSec: 0,
+    finished: false,
+    hidden: false,
+    progress: 0,
+    projectId,
+    readingPosition: position,
+    targetId: `hash:${bookSourceId}:${scopeKey}`,
+    updatedAt: timestamp,
+  };
 }
 
 function progressTargetIdForJob(job: VoiceJob): string {

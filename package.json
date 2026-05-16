@@ -16,9 +16,10 @@
     "lint": "biome lint . && eslint .",
     "typecheck": "pnpm --filter @tts-research/frontend typecheck",
     "test": "pnpm test:markdown-adapter && pnpm --filter @tts-research/backend test && pnpm --filter @tts-research/frontend test",
-    "test:markdown-adapter": "node --test adapters/markdown/*.test.js",
+    "test:markdown-adapter": "node --test \"adapters/**/*.test.js\"",
     "bench:markdown": "node adapters/markdown/bench.js",
-    "e2e:book-cinema": "node scripts/e2e-book-cinema.mjs"
+    "e2e:book-cinema": "node scripts/e2e-book-cinema.mjs",
+    "validate:live-ingestion": "node scripts/validate-live-ingestion.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
@@ -33,7 +34,10 @@
     "typescript-eslint": "^8.48.0"
   },
   "dependencies": {
+    "fast-xml-parser": "^5.8.0",
+    "jszip": "^3.10.1",
     "mdast-util-to-string": "^4.0.0",
+    "parse5": "^8.0.1",
     "remark-directive": "^4.0.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",

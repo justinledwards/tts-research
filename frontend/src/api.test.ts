@@ -5,6 +5,8 @@ import {
   createCustomSpeechPolicyProfile,
   createPreparedSource,
   deleteProject,
+  getAdapterCapabilities,
+  getAdapterDiagnostics,
   previewContentIRSpeechPolicy,
   isApiNotFoundError,
   previewPreparedSourceSpeechPolicy,
@@ -135,6 +137,49 @@ describe("API errors", () => {
       const formData = requestInit?.body as FormData;
       expect(formData.get("markdownParseMode")).toBe("legacy");
       expect(formData.get("file")).toBeInstanceOf(File);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("fetches adapter capability and diagnostic endpoints", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: string[] = [];
+    globalThis.fetch = (input) => {
+      const url = fetchInputUrl(input);
+      requests.push(url);
+      if (url.endsWith("/api/adapters/capabilities")) {
+        return Promise.resolve(
+          Response.json([
+            {
+              adapterId: "html",
+              extensions: [".html"],
+              mimeTypes: ["text/html"],
+              sourceKinds: ["url"],
+              features: { semanticBlocks: true },
+            },
+          ]),
+        );
+      }
+      return Promise.resolve(
+        Response.json({
+          html: {
+            adapterId: "html",
+            available: true,
+            status: "available",
+            cliPath: "/repo/adapters/html/cli.js",
+            warnings: [],
+          },
+        }),
+      );
+    };
+
+    try {
+      const capabilities = await getAdapterCapabilities();
+      const diagnostics = await getAdapterDiagnostics();
+      expect(capabilities[0]?.adapterId).toBe("html");
+      expect(diagnostics.html.available).toBe(true);
+      expect(requests).toEqual(["/api/adapters/capabilities", "/api/adapters/diagnostics"]);
     } finally {
       globalThis.fetch = originalFetch;
     }

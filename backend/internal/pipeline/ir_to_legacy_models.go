@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
@@ -22,8 +24,17 @@ func PreparedSourceFromIR(document contentir.Document, source PreparedSource) Pr
 }
 
 func BookSourceFromIR(document contentir.Document, book BookSource) BookSource {
+	book.Title = firstNonEmpty(metadataValueString(document.Metadata, "title"), book.Title)
+	book.Author = firstNonEmpty(
+		metadataValueString(document.Metadata, "author"),
+		metadataValueString(document.Metadata, "creator"),
+		book.Author,
+	)
 	if document.SourceType == "bookSource" && nodesHavePDFLocators(document.Nodes) {
 		return pdfBookSourceFromIR(document, book)
+	}
+	if sections := bookSectionsFromIRMetadata(document.Metadata); len(sections) > 0 {
+		return structuredBookSourceFromIR(document, book, sections)
 	}
 	return chapterBookSourceFromIR(document, book)
 }
@@ -70,6 +81,10 @@ func pdfBookSourceFromIR(document contentir.Document, book BookSource) BookSourc
 	book.WordCount = len(book.WordSpans)
 	book.PageCount = len(book.Pages)
 	book.ChapterCount = countNarratableChapters(book.Chapters)
+	book.Sections = sectionsFromPages(book.Pages, 2)
+	book.StructureVersion = bookSourceStructureVersion
+	book.ReadingOrder = sectionReadingOrder(book.Sections)
+	book.DefaultSectionID = firstNarratableSectionID(book.Sections)
 	return book
 }
 
@@ -87,6 +102,52 @@ func chapterBookSourceFromIR(document contentir.Document, book BookSource) BookS
 	book.WordCount = len(book.WordSpans)
 	book.ChapterCount = countNarratableChapters(book.Chapters)
 	book.Sections = sectionsFromChapters(book.Chapters)
+	book.ReadingOrder = sectionReadingOrder(book.Sections)
+	book.DefaultSectionID = firstNarratableSectionID(book.Sections)
+	return book
+}
+
+func structuredBookSourceFromIR(
+	document contentir.Document,
+	book BookSource,
+	sections []BookSourceSection,
+) BookSource {
+	chapters := make([]BookSourceChapter, 0, len(sections))
+	textParts := make([]string, 0, len(sections))
+	for _, section := range sections {
+		nodes := nodesForSection(document.Nodes, section.ID)
+		if len(nodes) == 0 {
+			continue
+		}
+		text := strings.TrimSpace(textFromIRNodes(nodes))
+		if text == "" {
+			continue
+		}
+		chapterIndex := section.ChapterIndex
+		if chapterIndex <= 0 {
+			chapterIndex = len(chapters) + 1
+		}
+		chapter := BookSourceChapter{
+			Index:               chapterIndex,
+			ID:                  firstNonEmpty(section.ID, nodes[0].NodeID),
+			Title:               firstNonEmpty(section.Title, chapterTitle(firstLine(text), chapterIndex)),
+			Text:                text,
+			WordCount:           countWords(text),
+			Role:                firstNonEmpty(section.Role, "body"),
+			IsNarratable:        section.IsNarratable,
+			SourceHref:          firstNonEmpty(section.SourceHref, htmlHrefFromIRNode(nodes[0])),
+			EstimatedDurationMS: estimateBookDurationMS(countWords(text)),
+		}
+		chapters = append(chapters, chapter)
+		textParts = append(textParts, text)
+	}
+	book.Chapters = chapters
+	book.Text = strings.Join(textParts, "\n\n")
+	book.WordSpans = spansFromChapters(chapters)
+	book.WordCount = len(book.WordSpans)
+	book.ChapterCount = countNarratableChapters(book.Chapters)
+	book.Sections = normalizeIRBookSections(sections, chapters)
+	book.StructureVersion = bookSourceStructureVersion
 	book.ReadingOrder = sectionReadingOrder(book.Sections)
 	book.DefaultSectionID = firstNarratableSectionID(book.Sections)
 	return book
@@ -164,4 +225,148 @@ func htmlHrefFromIRNode(node contentir.Node) string {
 		return ""
 	}
 	return node.Provenance.Locator.HTML.Href
+}
+
+func textFromIRNodes(nodes []contentir.Node) string {
+	parts := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		text := strings.TrimSpace(firstNonEmpty(node.SpeechText, node.DisplayText, node.NormalisedText))
+		if text != "" {
+			parts = append(parts, text)
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func nodesForSection(nodes []contentir.Node, sectionID string) []contentir.Node {
+	filtered := make([]contentir.Node, 0)
+	for _, node := range nodes {
+		if metadataValueString(node.Metadata, "sectionId") == sectionID {
+			filtered = append(filtered, node)
+		}
+	}
+	return filtered
+}
+
+func bookSectionsFromIRMetadata(metadata contentir.Metadata) []BookSourceSection {
+	raw, ok := metadata["sections"]
+	if !ok {
+		return nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	sections := make([]BookSourceSection, 0, len(items))
+	for index, item := range items {
+		value, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		section := BookSourceSection{
+			ID:                  firstNonEmpty(metadataValueString(value, "id"), fmt.Sprintf("section-%04d", index+1)),
+			Index:               metadataValueInt(value, "index", index),
+			Title:               firstNonEmpty(metadataValueString(value, "title"), "Section"),
+			Role:                firstNonEmpty(metadataValueString(value, "role"), "body"),
+			IsNarratable:        metadataValueBool(value, "isNarratable", true),
+			Kind:                firstNonEmpty(metadataValueString(value, "kind"), "chapter"),
+			ChapterIndex:        metadataValueInt(value, "chapterIndex", index+1),
+			PageStart:           metadataValueInt(value, "pageStart", 0),
+			PageEnd:             metadataValueInt(value, "pageEnd", 0),
+			SourceHref:          metadataValueString(value, "sourceHref"),
+			WordCount:           metadataValueInt(value, "wordCount", 0),
+			EstimatedDurationMS: metadataValueInt(value, "estimatedDurationMs", 0),
+			Warnings:            metadataValueStringSlice(value, "warnings"),
+		}
+		sections = append(sections, section)
+	}
+	return sections
+}
+
+func normalizeIRBookSections(sections []BookSourceSection, chapters []BookSourceChapter) []BookSourceSection {
+	chapterByID := map[string]BookSourceChapter{}
+	for _, chapter := range chapters {
+		chapterByID[chapter.ID] = chapter
+	}
+	normalized := make([]BookSourceSection, 0, len(sections))
+	for index, section := range sections {
+		chapter, ok := chapterByID[section.ID]
+		if ok {
+			section.ChapterIndex = chapter.Index
+			section.WordCount = chapter.WordCount
+			section.EstimatedDurationMS = chapter.EstimatedDurationMS
+		}
+		if section.Index < 0 {
+			section.Index = index
+		}
+		normalized = append(normalized, section)
+	}
+	return normalized
+}
+
+func metadataValueString(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	value, ok := metadata[key]
+	if !ok {
+		return ""
+	}
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case fmt.Stringer:
+		return strings.TrimSpace(typed.String())
+	default:
+		return ""
+	}
+}
+
+func metadataValueInt(metadata map[string]any, key string, fallback int) int {
+	if metadata == nil {
+		return fallback
+	}
+	switch value := metadata[key].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	case json.Number:
+		parsed, err := value.Int64()
+		if err == nil {
+			return int(parsed)
+		}
+	}
+	return fallback
+}
+
+func metadataValueBool(metadata map[string]any, key string, fallback bool) bool {
+	if metadata == nil {
+		return fallback
+	}
+	value, ok := metadata[key].(bool)
+	if !ok {
+		return fallback
+	}
+	return value
+}
+
+func metadataValueStringSlice(metadata map[string]any, key string) []string {
+	raw, ok := metadata[key]
+	if !ok {
+		return nil
+	}
+	values, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	output := make([]string, 0, len(values))
+	for _, value := range values {
+		if text, ok := value.(string); ok && strings.TrimSpace(text) != "" {
+			output = append(output, strings.TrimSpace(text))
+		}
+	}
+	return output
 }

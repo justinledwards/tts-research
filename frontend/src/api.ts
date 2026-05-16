@@ -3,6 +3,8 @@ import type {
   BookCinemaDiagnostics,
   BookScope,
   BookSourceScopeContent,
+  AdapterCapability,
+  AdapterDiagnostics,
   BundleImportMode,
   CreatePreparedSourceRequest,
   CreateVoiceProfileFromCandidateRequest,
@@ -80,6 +82,24 @@ export async function getBookCinemaDiagnostics(): Promise<BookCinemaDiagnostics>
   }
 
   return response.json() as Promise<BookCinemaDiagnostics>;
+}
+
+export async function getAdapterCapabilities(): Promise<AdapterCapability[]> {
+  const response = await fetch(`${apiBaseUrl}/api/adapters/capabilities`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<AdapterCapability[]>;
+}
+
+export async function getAdapterDiagnostics(): Promise<Record<string, AdapterDiagnostics>> {
+  const response = await fetch(`${apiBaseUrl}/api/adapters/diagnostics`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<Record<string, AdapterDiagnostics>>;
 }
 
 export async function getContentIR(id: string): Promise<ContentIRDocument> {

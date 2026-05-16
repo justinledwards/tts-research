@@ -1,3 +1,5 @@
+import type { ContentIRLocator } from "./content-ir";
+
 export type JobStatus =
   | "queued"
   | "optimizing"
@@ -169,7 +171,7 @@ export interface ProjectStorageSummary {
 
 export type BookSourceStatus = "ready" | "failed";
 
-export type BookSourceKind = "pdf" | "epub";
+export type BookSourceKind = "pdf" | "epub" | "docx" | "html";
 
 export interface BookSourcePage {
   index: number;
@@ -267,6 +269,23 @@ export interface BookCinemaDiagnostics {
   pythonFallbackConfigured: boolean;
   pythonPath?: string;
   pythonScript?: string;
+  adapters?: Record<string, AdapterDiagnostics>;
+}
+
+export interface AdapterCapability {
+  adapterId: string;
+  extensions: string[];
+  mimeTypes: string[];
+  sourceKinds: string[];
+  features: Record<string, unknown>;
+}
+
+export interface AdapterDiagnostics {
+  adapterId: string;
+  available: boolean;
+  status: string;
+  cliPath?: string;
+  warnings?: string[];
 }
 
 export interface BookSourceScopeContent {
@@ -396,7 +415,17 @@ export interface ProgressBookmark {
   label?: string;
   currentTimeSec: number;
   activeWordIndex?: number;
+  readingPosition?: ReadingPosition;
   createdAt: string;
+}
+
+export interface ReadingPosition {
+  bookSourceId?: string;
+  scopeKey?: string;
+  activeWordIndex?: number;
+  nodeId?: string;
+  locator?: ContentIRLocator;
+  textQuote?: string;
 }
 
 export interface PlaybackProgress {
@@ -409,6 +438,7 @@ export interface PlaybackProgress {
   currentTimeSec: number;
   progress: number;
   activeWordIndex?: number;
+  readingPosition?: ReadingPosition;
   finished: boolean;
   hidden: boolean;
   bookmarks?: ProgressBookmark[];
@@ -429,6 +459,7 @@ export interface PlaybackProgressUpdate {
   durationSec?: number;
   progress?: number;
   activeWordIndex?: number;
+  readingPosition?: ReadingPosition;
   finished?: boolean;
   hidden?: boolean;
   addBookmark?: ProgressBookmark;
@@ -444,6 +475,7 @@ export interface PlaybackSession {
   bookScope?: BookScope;
   currentTimeSec: number;
   activeWordIndex?: number;
+  readingPosition?: ReadingPosition;
   status: "open" | "closed";
   startedAt: string;
   updatedAt: string;

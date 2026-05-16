@@ -9,14 +9,14 @@
   "generatedAt": "2026-05-16T12:00:00Z",
   "nodes": [
     {
-      "nodeId": "epub-1",
+      "nodeId": "epub-0001",
       "parentId": "",
       "orderKey": "00000001",
       "kind": "chapter",
       "role": "body",
-      "displayText": "Opening\nContent IR keeps structure and spoken text together.",
+      "displayText": "Opening\n\nContent IR keeps structure and spoken text together.",
       "normalisedText": "Opening Content IR keeps structure and spoken text together.",
-      "speechText": "Opening\nContent IR keeps structure and spoken text together.",
+      "speechText": "Opening\n\nContent IR keeps structure and spoken text together.",
       "lang": "und",
       "script": "Latn",
       "dir": "ltr",
@@ -34,7 +34,7 @@
         },
         "offsets": {
           "start": 0,
-          "end": 60
+          "end": 61
         }
       },
       "ui": {

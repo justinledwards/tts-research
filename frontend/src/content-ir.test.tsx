@@ -32,6 +32,15 @@ describe("Content IR UI helpers", () => {
         html: { href: "OPS/chapter.xhtml", fragment: "p1" },
       }),
     ).toBe("OPS/chapter.xhtml#p1");
+    expect(
+      formatContentIRLocator({
+        type: "html",
+        html: { href: "https://example.test/article", fragment: "lead" },
+      }),
+    ).toBe("https://example.test/article#lead");
+    expect(formatContentIRLocator({ type: "docx", docx: { paragraphIndex: 4 } })).toBe(
+      "paragraph 5",
+    );
   });
 
   it("renders loading, error, and document drawer states", () => {

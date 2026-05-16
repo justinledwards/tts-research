@@ -104,33 +104,26 @@ func (service *Service) CreateBookSource(
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	extraction, extractErr := service.extractBookSource(ctx, kind, uploadPath, sourceFileName)
+	document, extractErr := service.extractBookSourceIR(ctx, kind, uploadPath, sourceFileName, book, now)
 	if extractErr != nil {
 		book.Status = BookSourceStatusFailed
 		book.Error = extractErr.Error()
 	} else {
-		book.Title = extraction.title
-		book.Author = extraction.author
-		book.Text = extraction.text
-		book.Pages = extraction.pages
-		book.Chapters = extraction.chapters
-		book.StructureVersion = extraction.structureVersion()
-		book.DefaultSectionID = extraction.defaultSectionID
-		book.ReadingOrder = extraction.readingOrder
-		book.Sections = extraction.sections
-		book.Warnings = extraction.warnings
-		book.WordSpans = extraction.spans
-		book.WordCount = len(extraction.spans)
-		book.PageCount = len(extraction.pages)
-		book.ChapterCount = countNarratableChapters(extraction.chapters)
+		book = BookSourceFromIR(document, book)
 	}
 
 	service.updateBookSource(storedBookSource{BookSource: book})
 	if err := service.writeBookSourceMetadata(book); err != nil {
 		return BookSource{}, err
 	}
-	if err := service.writeBookSourceContentIR(book); err != nil {
-		return BookSource{}, err
+	if extractErr == nil {
+		if err := service.writeBookSourceContentIRDocument(book.ID, document); err != nil {
+			return BookSource{}, err
+		}
+	} else {
+		if err := service.writeBookSourceContentIR(book); err != nil {
+			return BookSource{}, err
+		}
 	}
 	return book, nil
 }
@@ -285,6 +278,7 @@ func (service *Service) BookCinemaDiagnostics() BookCinemaDiagnostics {
 		PythonFallbackConfigured: strings.TrimSpace(service.options.BookPDFPythonPath) != "" && strings.TrimSpace(service.options.BookPDFExtractorScriptPath) != "",
 		PythonPath:               service.options.BookPDFPythonPath,
 		PythonScript:             service.options.BookPDFExtractorScriptPath,
+		Adapters:                 service.AdapterDiagnostics(),
 	}
 }
 
@@ -373,6 +367,18 @@ func cloneBookScope(scope *BookScope) *BookScope {
 		return nil
 	}
 	cloned := *scope
+	return &cloned
+}
+
+func cloneReadingPosition(position *ReadingPosition) *ReadingPosition {
+	if position == nil {
+		return nil
+	}
+	cloned := *position
+	if position.Locator != nil {
+		locator := *position.Locator
+		cloned.Locator = &locator
+	}
 	return &cloned
 }
 
@@ -701,8 +707,12 @@ func detectBookSourceKind(sourceFileName string) (BookSourceKind, error) {
 		return BookSourceKindPDF, nil
 	case ".epub":
 		return BookSourceKindEPUB, nil
+	case ".docx":
+		return BookSourceKindDOCX, nil
+	case ".html", ".htm", ".zip":
+		return BookSourceKindHTML, nil
 	default:
-		return "", fmt.Errorf("unsupported book source type; upload a PDF or EPUB")
+		return "", fmt.Errorf("unsupported book source type; upload a PDF, EPUB, DOCX, HTML, or zipped HTML package")
 	}
 }
 
@@ -717,6 +727,8 @@ func extractBookSource(
 		return extractPDFBookSource(ctx, sourcePath, sourceFileName)
 	case BookSourceKindEPUB:
 		return extractEPUBBookSource(sourcePath, sourceFileName)
+	case BookSourceKindDOCX, BookSourceKindHTML:
+		return bookSourceExtraction{}, fmt.Errorf("adapter-backed book source extraction requires service context")
 	default:
 		return bookSourceExtraction{}, fmt.Errorf("unsupported book source type")
 	}
@@ -733,6 +745,8 @@ func (service *Service) extractBookSource(
 		return service.extractPDFBookSource(ctx, sourcePath, sourceFileName)
 	case BookSourceKindEPUB:
 		return extractEPUBBookSource(sourcePath, sourceFileName)
+	case BookSourceKindDOCX, BookSourceKindHTML:
+		return bookSourceExtraction{}, fmt.Errorf("adapter-backed book source extraction uses Content IR")
 	default:
 		return bookSourceExtraction{}, fmt.Errorf("unsupported book source type")
 	}

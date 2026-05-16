@@ -48,6 +48,14 @@ describe("project workspace state", () => {
       bookScope: { type: "chapter", chapterIndex: 2, label: "Chapter 2" },
       bookSourceId: "book-1",
       jobId: "job-1",
+      readingPosition: {
+        activeWordIndex: 12,
+        bookSourceId: "book-1",
+        locator: { type: "html", html: { href: "chapter.html", fragment: "p12" } },
+        nodeId: "p12",
+        scopeKey: "chapter:2",
+        textQuote: "exact text",
+      },
       text: "Alpha text",
     });
     saveProjectWorkspaceState("beta", { jobId: null, text: "Beta text" });
@@ -56,6 +64,12 @@ describe("project workspace state", () => {
       bookScope: { type: "chapter", chapterIndex: 2, label: "Chapter 2" },
       bookSourceId: "book-1",
       jobId: "job-1",
+      readingPosition: {
+        activeWordIndex: 12,
+        bookSourceId: "book-1",
+        nodeId: "p12",
+        scopeKey: "chapter:2",
+      },
       text: "Alpha text",
     });
     expect(loadProjectWorkspaceState("beta")).toMatchObject({
