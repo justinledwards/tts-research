@@ -106,6 +106,7 @@ import type {
   BookSource,
   BookCinemaDiagnostics,
   BookScope,
+  BookSourceImportOptions,
   BookSourceScopeContent,
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
@@ -161,7 +162,7 @@ const DEFAULT_PROJECT_NAME = "The Future of Clean Energy";
 const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
 const DEFAULT_KOKORO_VOICE_ID = "af_heart";
 const SOURCE_TEXT_FILE_ACCEPT =
-  ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,.zip,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip";
+  ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,image/png,image/jpeg,image/tiff,image/webp";
 const SOURCE_TEXT_FILE_EXTENSIONS = new Set([
   "txt",
   "md",
@@ -2316,11 +2317,11 @@ export function App() {
   );
 
   const handleImportBookSource = useCallback(
-    async (file: File) => {
+    async (files: File[], options: BookSourceImportOptions = {}) => {
       setIsImportingBookSource(true);
       setBookSourceError(null);
       try {
-        const book = await createBookSource(activeProjectId, file);
+        const book = await createBookSource(activeProjectId, files, options);
         setBookSources((currentBooks) => [
           book,
           ...currentBooks.filter((item) => item.id !== book.id),
@@ -4955,13 +4956,39 @@ function isSupportedSourcePrepFile(file: File): boolean {
 }
 
 function isBookSourceExtension(extension: string): boolean {
-  return ["pdf", "epub", "docx", "html", "htm", "zip"].includes(extension);
+  return [
+    "pdf",
+    "epub",
+    "docx",
+    "html",
+    "htm",
+    "zip",
+    "png",
+    "jpg",
+    "jpeg",
+    "tif",
+    "tiff",
+    "bmp",
+    "webp",
+  ].includes(extension);
 }
 
 function isBookSourceURL(lowerURL: string): boolean {
-  return [".pdf", ".epub", ".docx", ".html", ".htm", ".zip"].some((extension) =>
-    lowerURL.endsWith(extension),
-  );
+  return [
+    ".pdf",
+    ".epub",
+    ".docx",
+    ".html",
+    ".htm",
+    ".zip",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tif",
+    ".tiff",
+    ".bmp",
+    ".webp",
+  ].some((extension) => lowerURL.endsWith(extension));
 }
 
 function formatSourceTextFileLabel(files: File[]): string {

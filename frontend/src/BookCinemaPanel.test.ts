@@ -5,6 +5,7 @@ import {
   bookScopeText,
   bookSourceName,
   BOOK_SOURCE_ACCEPT,
+  isSupportedBookSourceBatch,
   isSupportedBookSource,
   paginateBookSpans,
   resolveBookActiveWordIndex,
@@ -162,15 +163,29 @@ describe("Book Cinema helpers", () => {
     expect(bookSourceName({ ...makeBookSource("hello"), title: "" })).toBe("demo.epub");
   });
 
-  it("accepts EPUB, PDF, DOCX, HTML, and zipped HTML packages", () => {
+  it("accepts EPUB, PDF, DOCX, HTML, images, and zipped HTML packages", () => {
     expect(BOOK_SOURCE_ACCEPT).toContain(".docx");
     expect(BOOK_SOURCE_ACCEPT).toContain(".html");
     expect(BOOK_SOURCE_ACCEPT).toContain(".zip");
+    expect(BOOK_SOURCE_ACCEPT).toContain(".png");
     expect(isSupportedBookSource(new File([""], "fixture.docx"))).toBe(true);
     expect(isSupportedBookSource(new File([""], "article.html", { type: "text/html" }))).toBe(true);
+    expect(isSupportedBookSource(new File([""], "page.png", { type: "image/png" }))).toBe(true);
     expect(isSupportedBookSource(new File([""], "package.zip", { type: "application/zip" }))).toBe(
       true,
     );
+    expect(
+      isSupportedBookSourceBatch([
+        new File([""], "page-001.png", { type: "image/png" }),
+        new File([""], "page-002.jpg", { type: "image/jpeg" }),
+      ]),
+    ).toBe(true);
+    expect(
+      isSupportedBookSourceBatch([
+        new File([""], "page-001.png", { type: "image/png" }),
+        new File([""], "book.pdf", { type: "application/pdf" }),
+      ]),
+    ).toBe(false);
     expect(isSupportedBookSource(new File([""], "notes.txt"))).toBe(false);
   });
 });

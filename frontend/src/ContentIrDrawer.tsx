@@ -184,6 +184,11 @@ function ContentIRNodeCard({ node }: Readonly<{ node: ContentIRNode }>) {
       <dl className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)]">
         <MetadataItem label="Offsets" value={formatOffsets(node)} />
         <MetadataItem label="Policy" value={formatSpeechPolicy(policy)} />
+        <MetadataItem
+          label="Confidence"
+          value={`${Math.round(node.confidence * 100).toString()}%`}
+        />
+        <MetadataItem label="Extractor" value={formatExtractor(node)} />
       </dl>
       <p className="max-h-24 overflow-hidden break-words rounded-md bg-[var(--vs-surface)] p-3 text-sm leading-6">
         {preview || "No spoken text"}
@@ -238,6 +243,14 @@ function formatOffsets(node: ContentIRNode): string {
   return `${node.provenance.offsets.start.toLocaleString()}-${node.provenance.offsets.end.toLocaleString()}`;
 }
 
+function formatExtractor(node: ContentIRNode): string {
+  const extraction = node.provenance.extraction;
+  if (!extraction) {
+    return node.adapterVersion;
+  }
+  return `${extraction.extractor} · ${extraction.supportTier}`;
+}
+
 function contentIRNodeSearchText(node: ContentIRNode): string {
   return [
     node.nodeId,
@@ -248,6 +261,8 @@ function contentIRNodeSearchText(node: ContentIRNode): string {
     node.speech.speechPolicy.mode,
     node.speech.speechPolicy.elementMode,
     node.speech.speechPolicy.explanation,
+    node.provenance.extraction?.extractor,
+    node.provenance.extraction?.supportTier,
     formatContentIRLocator(node.provenance.locator),
     node.warnings.join(" "),
   ]

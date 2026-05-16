@@ -71,14 +71,30 @@ func (service *Service) CreateBookSource(
 	sourceFileName string,
 	sourceBytes int64,
 ) (BookSource, error) {
+	return service.CreateBookSourceWithOptions(ctx, projectID, []BookSourceUpload{{
+		Path:     sourcePath,
+		Filename: sourceFileName,
+		Bytes:    sourceBytes,
+	}}, BookSourceImportOptions{})
+}
+
+func (service *Service) CreateBookSourceWithOptions(
+	ctx context.Context,
+	projectID string,
+	uploads []BookSourceUpload,
+	options BookSourceImportOptions,
+) (BookSource, error) {
 	project, err := service.GetProject(projectID)
 	if err != nil {
 		return BookSource{}, err
 	}
-	kind, err := detectBookSourceKind(sourceFileName)
+	kind, err := detectBookSourceKindFromUploads(uploads)
 	if err != nil {
 		return BookSource{}, err
 	}
+	options = normalizeBookSourceImportOptions(options)
+	sourceFileName := bookSourceUploadName(uploads, kind)
+	sourceBytes := bookSourceUploadBytes(uploads)
 
 	now := time.Now().UTC()
 	bookID := newID()
@@ -89,9 +105,13 @@ func (service *Service) CreateBookSource(
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return BookSource{}, err
 	}
-	uploadPath := filepath.Join(outputDir, "source"+strings.ToLower(filepath.Ext(sourceFileName)))
-	if err := copyFile(sourcePath, uploadPath); err != nil {
-		return BookSource{}, fmt.Errorf("store book source: %w", err)
+	sourcePaths := make([]string, 0, len(uploads))
+	for index, upload := range uploads {
+		uploadPath := filepath.Join(outputDir, storedBookSourceFilename(upload.Filename, index, len(uploads)))
+		if err := copyFile(upload.Path, uploadPath); err != nil {
+			return BookSource{}, fmt.Errorf("store book source: %w", err)
+		}
+		sourcePaths = append(sourcePaths, uploadPath)
 	}
 
 	book := BookSource{
@@ -104,7 +124,7 @@ func (service *Service) CreateBookSource(
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	document, extractErr := service.extractBookSourceIR(ctx, kind, uploadPath, sourceFileName, book, now)
+	document, extractErr := service.extractBookSourceIR(ctx, kind, sourcePaths, sourceFileName, book, now, options)
 	if extractErr != nil {
 		book.Status = BookSourceStatusFailed
 		book.Error = extractErr.Error()
@@ -591,11 +611,11 @@ func commandAvailable(commandName string) bool {
 }
 
 func (service *Service) pythonPDFExtractorAvailable() bool {
-	pythonPath := strings.TrimSpace(service.options.BookPDFPythonPath)
-	scriptPath := strings.TrimSpace(service.options.BookPDFExtractorScriptPath)
-	if pythonPath == "" || scriptPath == "" {
+	scriptPath, err := service.pdfAdapterCLIPath()
+	if err != nil {
 		return false
 	}
+	pythonPath := service.pdfAdapterPythonPath()
 	command := exec.Command(pythonPath, scriptPath, "--check")
 	return command.Run() == nil
 }
@@ -711,8 +731,98 @@ func detectBookSourceKind(sourceFileName string) (BookSourceKind, error) {
 		return BookSourceKindDOCX, nil
 	case ".html", ".htm", ".zip":
 		return BookSourceKindHTML, nil
+	case ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp":
+		return BookSourceKindImage, nil
 	default:
-		return "", fmt.Errorf("unsupported book source type; upload a PDF, EPUB, DOCX, HTML, or zipped HTML package")
+		return "", fmt.Errorf("unsupported book source type; upload a PDF, EPUB, DOCX, HTML, zipped HTML package, or image")
+	}
+}
+
+func detectBookSourceKindFromUploads(uploads []BookSourceUpload) (BookSourceKind, error) {
+	if len(uploads) == 0 {
+		return "", fmt.Errorf("book source upload is required")
+	}
+	if len(uploads) == 1 {
+		return detectBookSourceKind(uploads[0].Filename)
+	}
+	for _, upload := range uploads {
+		kind, err := detectBookSourceKind(upload.Filename)
+		if err != nil {
+			return "", err
+		}
+		if kind != BookSourceKindImage {
+			return "", fmt.Errorf("multiple book source files must be ordered images")
+		}
+	}
+	return BookSourceKindImage, nil
+}
+
+func normalizeBookSourceImportOptions(options BookSourceImportOptions) BookSourceImportOptions {
+	return BookSourceImportOptions{
+		ImportProfile: normalizeBookImportProfile(options.ImportProfile),
+		PDFTableMode:  normalizePDFTableMode(options.PDFTableMode),
+	}
+}
+
+func normalizeBookImportProfile(profile BookImportProfile) BookImportProfile {
+	switch profile {
+	case BookImportProfileScholarly:
+		return BookImportProfileScholarly
+	default:
+		return BookImportProfileAuto
+	}
+}
+
+func normalizePDFTableMode(mode PDFTableMode) PDFTableMode {
+	switch mode {
+	case PDFTableModeOff, PDFTableModeStructured:
+		return mode
+	default:
+		return PDFTableModeAuto
+	}
+}
+
+func bookSourceUploadName(uploads []BookSourceUpload, kind BookSourceKind) string {
+	if len(uploads) == 1 {
+		return strings.TrimSpace(uploads[0].Filename)
+	}
+	if kind == BookSourceKindImage {
+		return fmt.Sprintf("%d image pages", len(uploads))
+	}
+	return "Book source"
+}
+
+func bookSourceUploadBytes(uploads []BookSourceUpload) int64 {
+	var total int64
+	for _, upload := range uploads {
+		total += upload.Bytes
+	}
+	return total
+}
+
+func storedBookSourceFilename(filename string, index int, total int) string {
+	extension := strings.ToLower(filepath.Ext(filename))
+	if extension == "" {
+		extension = ".bin"
+	}
+	if total <= 1 {
+		return "source" + extension
+	}
+	return fmt.Sprintf("source-%04d%s", index+1, extension)
+}
+
+func imageExtensionForContentType(contentType string) string {
+	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/tiff":
+		return ".tiff"
+	case "image/bmp":
+		return ".bmp"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".png"
 	}
 }
 

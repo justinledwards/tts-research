@@ -91,7 +91,20 @@
         "format": { "type": "string", "minLength": 1 },
         "sourceId": { "type": "string", "minLength": 1 },
         "locator": { "$ref": "#/$defs/locator" },
-        "offsets": { "$ref": "#/$defs/offsets" }
+        "offsets": { "$ref": "#/$defs/offsets" },
+        "extraction": { "$ref": "#/$defs/extractionProvenance" }
+      }
+    },
+    "extractionProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extractor", "extractorVersion", "supportTier", "step", "confidence"],
+      "properties": {
+        "extractor": { "type": "string" },
+        "extractorVersion": { "type": "string" },
+        "supportTier": { "type": "string" },
+        "step": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
     "offsets": {

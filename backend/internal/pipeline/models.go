@@ -285,11 +285,38 @@ const (
 type BookSourceKind string
 
 const (
-	BookSourceKindPDF  BookSourceKind = "pdf"
-	BookSourceKindEPUB BookSourceKind = "epub"
-	BookSourceKindDOCX BookSourceKind = "docx"
-	BookSourceKindHTML BookSourceKind = "html"
+	BookSourceKindPDF   BookSourceKind = "pdf"
+	BookSourceKindEPUB  BookSourceKind = "epub"
+	BookSourceKindDOCX  BookSourceKind = "docx"
+	BookSourceKindHTML  BookSourceKind = "html"
+	BookSourceKindImage BookSourceKind = "image"
 )
+
+type BookImportProfile string
+
+const (
+	BookImportProfileAuto      BookImportProfile = "auto"
+	BookImportProfileScholarly BookImportProfile = "scholarly"
+)
+
+type PDFTableMode string
+
+const (
+	PDFTableModeAuto       PDFTableMode = "auto"
+	PDFTableModeOff        PDFTableMode = "off"
+	PDFTableModeStructured PDFTableMode = "structured"
+)
+
+type BookSourceImportOptions struct {
+	ImportProfile BookImportProfile `json:"importProfile,omitempty"`
+	PDFTableMode  PDFTableMode      `json:"pdfTableMode,omitempty"`
+}
+
+type BookSourceUpload struct {
+	Path     string
+	Filename string
+	Bytes    int64
+}
 
 type BookSourcePage struct {
 	Index     int    `json:"index"`
@@ -340,29 +367,48 @@ type BookSourceSection struct {
 }
 
 type BookSource struct {
-	ID               string               `json:"id"`
-	ProjectID        string               `json:"projectId"`
-	Status           BookSourceStatus     `json:"status"`
-	Kind             BookSourceKind       `json:"kind"`
-	SourceFile       string               `json:"sourceFile"`
-	SourceBytes      int64                `json:"sourceBytes"`
-	Title            string               `json:"title,omitempty"`
-	Author           string               `json:"author,omitempty"`
-	Text             string               `json:"text,omitempty"`
-	WordCount        int                  `json:"wordCount"`
-	PageCount        int                  `json:"pageCount"`
-	ChapterCount     int                  `json:"chapterCount"`
-	StructureVersion string               `json:"structureVersion,omitempty"`
-	DefaultSectionID string               `json:"defaultSectionId,omitempty"`
-	ReadingOrder     []string             `json:"readingOrder,omitempty"`
-	Sections         []BookSourceSection  `json:"sections,omitempty"`
-	Pages            []BookSourcePage     `json:"pages,omitempty"`
-	Chapters         []BookSourceChapter  `json:"chapters,omitempty"`
-	WordSpans        []BookSourceWordSpan `json:"wordSpans,omitempty"`
+	ID               string                `json:"id"`
+	ProjectID        string                `json:"projectId"`
+	Status           BookSourceStatus      `json:"status"`
+	Kind             BookSourceKind        `json:"kind"`
+	SourceFile       string                `json:"sourceFile"`
+	SourceBytes      int64                 `json:"sourceBytes"`
+	Title            string                `json:"title,omitempty"`
+	Author           string                `json:"author,omitempty"`
+	Text             string                `json:"text,omitempty"`
+	WordCount        int                   `json:"wordCount"`
+	PageCount        int                   `json:"pageCount"`
+	ChapterCount     int                   `json:"chapterCount"`
+	StructureVersion string                `json:"structureVersion,omitempty"`
+	DefaultSectionID string                `json:"defaultSectionId,omitempty"`
+	ReadingOrder     []string              `json:"readingOrder,omitempty"`
+	Sections         []BookSourceSection   `json:"sections,omitempty"`
+	Pages            []BookSourcePage      `json:"pages,omitempty"`
+	Chapters         []BookSourceChapter   `json:"chapters,omitempty"`
+	WordSpans        []BookSourceWordSpan  `json:"wordSpans,omitempty"`
+	Warnings         []string              `json:"warnings,omitempty"`
+	Ingestion        *IngestionDiagnostics `json:"ingestion,omitempty"`
+	Error            string                `json:"error,omitempty"`
+	CreatedAt        time.Time             `json:"createdAt"`
+	UpdatedAt        time.Time             `json:"updatedAt"`
+}
+
+type IngestionDiagnostics struct {
+	SupportTier      string               `json:"supportTier,omitempty"`
+	SupportTierLabel string               `json:"supportTierLabel,omitempty"`
+	Confidence       float64              `json:"confidence,omitempty"`
+	ImportProfile    string               `json:"importProfile,omitempty"`
+	PDFTableMode     string               `json:"pdfTableMode,omitempty"`
+	ExtractorChain   []ExtractorChainStep `json:"extractorChain,omitempty"`
 	Warnings         []string             `json:"warnings,omitempty"`
-	Error            string               `json:"error,omitempty"`
-	CreatedAt        time.Time            `json:"createdAt"`
-	UpdatedAt        time.Time            `json:"updatedAt"`
+}
+
+type ExtractorChainStep struct {
+	ID         string   `json:"id"`
+	Label      string   `json:"label"`
+	Status     string   `json:"status"`
+	Confidence float64  `json:"confidence,omitempty"`
+	Warnings   []string `json:"warnings,omitempty"`
 }
 
 type BookScopeType string
@@ -403,11 +449,17 @@ type AdapterCapability struct {
 }
 
 type AdapterDiagnostics struct {
-	AdapterID string   `json:"adapterId"`
-	Available bool     `json:"available"`
-	Status    string   `json:"status"`
-	CLIPath   string   `json:"cliPath,omitempty"`
-	Warnings  []string `json:"warnings,omitempty"`
+	AdapterID string                            `json:"adapterId"`
+	Available bool                              `json:"available"`
+	Status    string                            `json:"status"`
+	CLIPath   string                            `json:"cliPath,omitempty"`
+	Warnings  []string                          `json:"warnings,omitempty"`
+	Tools     map[string]AdapterToolDiagnostics `json:"tools,omitempty"`
+}
+
+type AdapterToolDiagnostics struct {
+	Available bool   `json:"available"`
+	Status    string `json:"status"`
 }
 
 type BookSourceScopeContent struct {

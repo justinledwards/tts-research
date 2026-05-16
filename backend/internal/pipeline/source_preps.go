@@ -168,6 +168,15 @@ func (service *Service) CreatePreparedSource(
 }
 
 func (service *Service) CreateBookSourceFromURL(ctx context.Context, projectID string, rawURL string) (BookSource, error) {
+	return service.CreateBookSourceFromURLWithOptions(ctx, projectID, rawURL, BookSourceImportOptions{})
+}
+
+func (service *Service) CreateBookSourceFromURLWithOptions(
+	ctx context.Context,
+	projectID string,
+	rawURL string,
+	options BookSourceImportOptions,
+) (BookSource, error) {
 	fetched, err := service.fetchReadableSourceURL(ctx, rawURL)
 	if err != nil {
 		return BookSource{}, err
@@ -184,10 +193,12 @@ func (service *Service) CreateBookSourceFromURL(ctx context.Context, projectID s
 			fetched.Filename = ensureFilenameExtension(fetched.Filename, ".html")
 		} else if strings.Contains(fetched.ContentType, "zip") {
 			fetched.Filename = ensureFilenameExtension(fetched.Filename, ".zip")
+		} else if strings.HasPrefix(fetched.ContentType, "image/") {
+			fetched.Filename = ensureFilenameExtension(fetched.Filename, imageExtensionForContentType(fetched.ContentType))
 		}
 		kind, err = detectBookSourceKind(fetched.Filename)
 		if err != nil {
-			return BookSource{}, fmt.Errorf("URL does not point to a PDF, EPUB, DOCX, or HTML book source")
+			return BookSource{}, fmt.Errorf("URL does not point to a PDF, EPUB, DOCX, HTML, or image book source")
 		}
 	}
 
@@ -207,7 +218,11 @@ func (service *Service) CreateBookSourceFromURL(ctx context.Context, projectID s
 		return BookSource{}, err
 	}
 	_ = kind
-	return service.CreateBookSource(ctx, projectID, tempPath, fetched.Filename, int64(len(fetched.Bytes)))
+	return service.CreateBookSourceWithOptions(ctx, projectID, []BookSourceUpload{{
+		Path:     tempPath,
+		Filename: fetched.Filename,
+		Bytes:    int64(len(fetched.Bytes)),
+	}}, options)
 }
 
 func (service *Service) ListProjectPreparedSources(projectID string) ([]PreparedSource, error) {

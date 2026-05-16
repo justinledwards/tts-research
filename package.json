@@ -15,8 +15,9 @@
     "format:check": "biome format .",
     "lint": "biome lint . && eslint .",
     "typecheck": "pnpm --filter @tts-research/frontend typecheck",
-    "test": "pnpm test:markdown-adapter && pnpm --filter @tts-research/backend test && pnpm --filter @tts-research/frontend test",
+    "test": "pnpm test:markdown-adapter && pnpm test:pdf-adapter && pnpm --filter @tts-research/backend test && pnpm --filter @tts-research/frontend test",
     "test:markdown-adapter": "node --test \"adapters/**/*.test.js\"",
+    "test:pdf-adapter": "python3 -m unittest adapters.pdf.pdf_adapter_test",
     "bench:markdown": "node adapters/markdown/bench.js",
     "e2e:book-cinema": "node scripts/e2e-book-cinema.mjs",
     "validate:live-ingestion": "node scripts/validate-live-ingestion.mjs"

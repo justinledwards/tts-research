@@ -1585,6 +1585,87 @@ func TestCreateBookNarrationJobUsesPDFPageScopeWithPythonFallback(t *testing.T) 
 	}
 }
 
+func TestCreateBookSourceImportsImageBatchWithOCRDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	dir := t.TempDir()
+	firstPath := filepath.Join(dir, "page-001.png")
+	secondPath := filepath.Join(dir, "page-002.png")
+	if err := os.WriteFile(firstPath, []byte("TTS_RESEARCH_IMAGE_TEXT: first image batch page"), 0o644); err != nil {
+		t.Fatalf("WriteFile first image returned error: %v", err)
+	}
+	if err := os.WriteFile(secondPath, []byte("TTS_RESEARCH_IMAGE_TEXT: second image batch page"), 0o644); err != nil {
+		t.Fatalf("WriteFile second image returned error: %v", err)
+	}
+	book, err := service.CreateBookSourceWithOptions(context.Background(), "default", []pipeline.BookSourceUpload{
+		{Path: firstPath, Filename: "page-001.png", Bytes: 42},
+		{Path: secondPath, Filename: "page-002.png", Bytes: 43},
+	}, pipeline.BookSourceImportOptions{})
+	if err != nil {
+		t.Fatalf("CreateBookSourceWithOptions returned error: %v", err)
+	}
+	if book.Kind != pipeline.BookSourceKindImage || book.PageCount != 2 {
+		t.Fatalf("book kind/page count = %s/%d, want image/2", book.Kind, book.PageCount)
+	}
+	if book.Ingestion == nil || book.Ingestion.SupportTier != "D" {
+		t.Fatalf("ingestion = %#v, want tier D", book.Ingestion)
+	}
+	if !strings.Contains(book.Text, "first image batch page") || !strings.Contains(book.Text, "second image batch page") {
+		t.Fatalf("book text = %q, want ordered OCR text", book.Text)
+	}
+	document, err := service.GetContentIR(book.ID)
+	if err != nil {
+		t.Fatalf("GetContentIR returned error: %v", err)
+	}
+	if len(document.Nodes) != 2 || document.Nodes[0].Provenance.Locator.OCR == nil {
+		t.Fatalf("content IR OCR nodes = %#v, want OCR provenance", document.Nodes)
+	}
+}
+
+func TestCreateBookSourceUsesScholarlyImportProfile(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	pdfPath := filepath.Join(t.TempDir(), "scholarly.pdf")
+	fixture := `%PDF-1.4
+TTS_RESEARCH_PDF_FIXTURE: {
+  "title": "Scholarly Import",
+  "pages": [{"index": 1, "text": "Fallback page text."}],
+  "scholarly": {
+    "title": "Scholarly Import",
+    "pages": [{
+      "index": 1,
+      "blocks": [
+        {"kind": "body", "text": "Scholarly prose survives for playback.", "confidence": 0.88},
+        {"kind": "bibliography", "text": "Bibliography entry should not become prose playback.", "confidence": 0.78}
+      ]
+    }]
+  }
+}
+%%EOF`
+	if err := os.WriteFile(pdfPath, []byte(fixture), 0o644); err != nil {
+		t.Fatalf("WriteFile scholarly fixture returned error: %v", err)
+	}
+	book, err := service.CreateBookSourceWithOptions(context.Background(), "default", []pipeline.BookSourceUpload{{
+		Path:     pdfPath,
+		Filename: "scholarly.pdf",
+		Bytes:    int64(len(fixture)),
+	}}, pipeline.BookSourceImportOptions{
+		ImportProfile: pipeline.BookImportProfileScholarly,
+		PDFTableMode:  pipeline.PDFTableModeStructured,
+	})
+	if err != nil {
+		t.Fatalf("CreateBookSourceWithOptions returned error: %v", err)
+	}
+	if book.Ingestion == nil || book.Ingestion.SupportTier != "E" || book.Ingestion.ImportProfile != "scholarly" {
+		t.Fatalf("ingestion = %#v, want scholarly tier E", book.Ingestion)
+	}
+	if !strings.Contains(book.Text, "Scholarly prose survives") || strings.Contains(book.Text, "Bibliography entry") {
+		t.Fatalf("book text = %q, want bibliography kept out of playback prose", book.Text)
+	}
+}
+
 func TestBookCinemaDiagnosticsReportsPythonFallback(t *testing.T) {
 	t.Parallel()
 
@@ -3243,7 +3324,7 @@ if [ "${1:-}" = "--check" ]; then
   exit 0
 fi
 cat <<'JSON'
-{"title":"PDF Fixture","pages":[{"label":"Page 1","text":"This is the first page."},{"label":"Page 2","text":"This is the second page."},{"label":"Page 3","text":"This is the third page."}]}
+{"adapterVersion":"pdf-adapter-test","document":{"schemaVersion":"content-ir.v1","id":"fixture","sourceType":"bookSource","sourceId":"fixture","projectId":"default","sourceName":"fixture.pdf","adapterVersion":"pdf-adapter-test","generatedAt":"2026-05-16T12:00:00Z","metadata":{"title":"PDF Fixture","supportTier":"B","supportTierLabel":"Tier B: born-digital PDF","confidence":0.9,"extractorChain":[{"id":"detect","label":"Detect format and text-layer health","status":"done","confidence":1},{"id":"fixture","label":"Fixture extractor","status":"done","confidence":0.9}],"warnings":[]},"nodes":[{"nodeId":"page-0001","parentId":"","orderKey":"00000001","kind":"body","role":"body","displayText":"This is the first page.","normalisedText":"This is the first page.","speechText":"This is the first page.","lang":"und","script":"Latn","dir":"ltr","provenance":{"format":"pdf","sourceId":"fixture","locator":{"type":"pdf","pdf":{"pageIndex":0,"readingOrderIndex":0}},"offsets":{"start":0,"end":23},"extraction":{"extractor":"fixture","extractorVersion":"pdf-adapter-test","supportTier":"B","step":"Fixture extractor","confidence":0.9}},"ui":{"progressionHint":"linear","highlightUnitHint":"node"},"speech":{"policyHint":{"mode":"speak","emphasis":"","pauseBeforeMs":0,"pauseAfterMs":0},"speechPolicy":{"profile":"Enterprise","mode":"speak","explanation":"fixture"}},"warnings":[],"confidence":0.9,"rights":{"status":"unknown","notes":""},"adapterVersion":"pdf-adapter-test"},{"nodeId":"page-0002","parentId":"","orderKey":"00000002","kind":"body","role":"body","displayText":"This is the second page.","normalisedText":"This is the second page.","speechText":"This is the second page.","lang":"und","script":"Latn","dir":"ltr","provenance":{"format":"pdf","sourceId":"fixture","locator":{"type":"pdf","pdf":{"pageIndex":1,"readingOrderIndex":0}},"offsets":{"start":25,"end":49},"extraction":{"extractor":"fixture","extractorVersion":"pdf-adapter-test","supportTier":"B","step":"Fixture extractor","confidence":0.9}},"ui":{"progressionHint":"linear","highlightUnitHint":"node"},"speech":{"policyHint":{"mode":"speak","emphasis":"","pauseBeforeMs":0,"pauseAfterMs":0},"speechPolicy":{"profile":"Enterprise","mode":"speak","explanation":"fixture"}},"warnings":[],"confidence":0.9,"rights":{"status":"unknown","notes":""},"adapterVersion":"pdf-adapter-test"},{"nodeId":"page-0003","parentId":"","orderKey":"00000003","kind":"body","role":"body","displayText":"This is the third page.","normalisedText":"This is the third page.","speechText":"This is the third page.","lang":"und","script":"Latn","dir":"ltr","provenance":{"format":"pdf","sourceId":"fixture","locator":{"type":"pdf","pdf":{"pageIndex":2,"readingOrderIndex":0}},"offsets":{"start":51,"end":74},"extraction":{"extractor":"fixture","extractorVersion":"pdf-adapter-test","supportTier":"B","step":"Fixture extractor","confidence":0.9}},"ui":{"progressionHint":"linear","highlightUnitHint":"node"},"speech":{"policyHint":{"mode":"speak","emphasis":"","pauseBeforeMs":0,"pauseAfterMs":0},"speechPolicy":{"profile":"Enterprise","mode":"speak","explanation":"fixture"}},"warnings":[],"confidence":0.9,"rights":{"status":"unknown","notes":""},"adapterVersion":"pdf-adapter-test"}]},"metadata":{"title":"PDF Fixture","supportTier":"B","supportTierLabel":"Tier B: born-digital PDF","confidence":0.9,"warnings":[]},"title":"PDF Fixture","warnings":[]}
 JSON
 `
 	if err := os.WriteFile(scriptPath, []byte(body), 0o755); err != nil {

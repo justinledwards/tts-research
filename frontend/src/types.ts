@@ -171,7 +171,15 @@ export interface ProjectStorageSummary {
 
 export type BookSourceStatus = "ready" | "failed";
 
-export type BookSourceKind = "pdf" | "epub" | "docx" | "html";
+export type BookSourceKind = "pdf" | "epub" | "docx" | "html" | "image";
+
+export type BookImportProfile = "auto" | "scholarly";
+export type PDFTableMode = "auto" | "off" | "structured";
+
+export interface BookSourceImportOptions {
+  importProfile?: BookImportProfile;
+  pdfTableMode?: PDFTableMode;
+}
 
 export interface BookSourcePage {
   index: number;
@@ -244,9 +252,28 @@ export interface BookSource {
   chapters?: BookSourceChapter[];
   wordSpans?: BookSourceWordSpan[];
   warnings?: string[];
+  ingestion?: IngestionDiagnostics;
   error?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface IngestionDiagnostics {
+  supportTier?: string;
+  supportTierLabel?: string;
+  confidence?: number;
+  importProfile?: string;
+  pdfTableMode?: string;
+  extractorChain?: ExtractorChainStep[];
+  warnings?: string[];
+}
+
+export interface ExtractorChainStep {
+  id: string;
+  label: string;
+  status: string;
+  confidence?: number;
+  warnings?: string[];
 }
 
 export type BookScopeType = "book" | "chapter" | "pages";
@@ -286,6 +313,12 @@ export interface AdapterDiagnostics {
   status: string;
   cliPath?: string;
   warnings?: string[];
+  tools?: Record<string, AdapterToolDiagnostics>;
+}
+
+export interface AdapterToolDiagnostics {
+  available: boolean;
+  status: string;
 }
 
 export interface BookSourceScopeContent {

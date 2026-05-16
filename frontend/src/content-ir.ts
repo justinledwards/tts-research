@@ -40,11 +40,20 @@ export interface ContentIRProvenance {
   sourceId: string;
   locator: ContentIRLocator;
   offsets: ContentIROffsets;
+  extraction?: ContentIRExtractionProvenance;
 }
 
 export interface ContentIROffsets {
   start: number;
   end: number;
+}
+
+export interface ContentIRExtractionProvenance {
+  extractor: string;
+  extractorVersion: string;
+  supportTier: string;
+  step: string;
+  confidence: number;
 }
 
 export interface ContentIRLocator {

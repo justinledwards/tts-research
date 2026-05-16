@@ -3,6 +3,7 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
@@ -30,8 +31,10 @@ func BookSourceFromIR(document contentir.Document, book BookSource) BookSource {
 		metadataValueString(document.Metadata, "creator"),
 		book.Author,
 	)
-	if document.SourceType == "bookSource" && nodesHavePDFLocators(document.Nodes) {
-		return pdfBookSourceFromIR(document, book)
+	book.Ingestion = ingestionDiagnosticsFromIRMetadata(document.Metadata)
+	book.Warnings = uniqueStrings(append(metadataValueStringSlice(document.Metadata, "warnings"), nodeWarnings(document.Nodes)...))
+	if document.SourceType == "bookSource" && nodesHavePageLocators(document.Nodes) {
+		return pagedBookSourceFromIR(document, book)
 	}
 	if sections := bookSectionsFromIRMetadata(document.Metadata); len(sections) > 0 {
 		return structuredBookSourceFromIR(document, book, sections)
@@ -67,11 +70,21 @@ func narrationBlockFromIRNode(node contentir.Node, index int) NarrationBlock {
 	return block
 }
 
-func pdfBookSourceFromIR(document contentir.Document, book BookSource) BookSource {
-	pages := make([]BookSourcePage, 0, len(document.Nodes))
-	textParts := make([]string, 0, len(document.Nodes))
+func pagedBookSourceFromIR(document contentir.Document, book BookSource) BookSource {
+	nodesByPage := map[int][]contentir.Node{}
+	pageIndexes := make([]int, 0)
 	for _, node := range document.Nodes {
-		page := pageFromIRNode(node, len(pages)+1)
+		pageIndex := pageIndexFromIRNode(node)
+		if _, ok := nodesByPage[pageIndex]; !ok {
+			pageIndexes = append(pageIndexes, pageIndex)
+		}
+		nodesByPage[pageIndex] = append(nodesByPage[pageIndex], node)
+	}
+	sort.Ints(pageIndexes)
+	pages := make([]BookSourcePage, 0, len(pageIndexes))
+	textParts := make([]string, 0, len(pageIndexes))
+	for _, pageIndex := range pageIndexes {
+		page := pageFromIRNodes(nodesByPage[pageIndex], pageIndex)
 		pages = append(pages, page)
 		textParts = append(textParts, page.Text)
 	}
@@ -153,12 +166,8 @@ func structuredBookSourceFromIR(
 	return book
 }
 
-func pageFromIRNode(node contentir.Node, fallbackIndex int) BookSourcePage {
-	pageIndex := fallbackIndex
-	if node.Provenance.Locator.PDF != nil {
-		pageIndex = node.Provenance.Locator.PDF.PageIndex + 1
-	}
-	text := strings.TrimSpace(firstNonEmpty(node.SpeechText, node.DisplayText))
+func pageFromIRNodes(nodes []contentir.Node, pageIndex int) BookSourcePage {
+	text := strings.TrimSpace(textFromIRNodes(nodes))
 	return BookSourcePage{Index: pageIndex, Label: pageRangeLabel(pageIndex, pageIndex), Text: text, WordCount: countWords(text)}
 }
 
@@ -202,13 +211,31 @@ func spansFromChapters(chapters []BookSourceChapter) []BookSourceWordSpan {
 	return normalizeBookSpanIndexes(spans)
 }
 
-func nodesHavePDFLocators(nodes []contentir.Node) bool {
+func nodesHavePageLocators(nodes []contentir.Node) bool {
 	for _, node := range nodes {
-		if node.Provenance.Locator.PDF != nil {
+		if node.Provenance.Locator.PDF != nil || node.Provenance.Locator.OCR != nil {
 			return true
 		}
 	}
 	return false
+}
+
+func pageIndexFromIRNode(node contentir.Node) int {
+	if node.Provenance.Locator.PDF != nil {
+		return node.Provenance.Locator.PDF.PageIndex + 1
+	}
+	if node.Provenance.Locator.OCR != nil {
+		return node.Provenance.Locator.OCR.PageIndex + 1
+	}
+	return metadataValueInt(node.Metadata, "pageIndex", 1)
+}
+
+func nodeWarnings(nodes []contentir.Node) []string {
+	warnings := make([]string, 0)
+	for _, node := range nodes {
+		warnings = append(warnings, node.Warnings...)
+	}
+	return warnings
 }
 
 func firstLine(value string) string {
@@ -230,6 +257,9 @@ func htmlHrefFromIRNode(node contentir.Node) string {
 func textFromIRNodes(nodes []contentir.Node) string {
 	parts := make([]string, 0, len(nodes))
 	for _, node := range nodes {
+		if (node.Kind == "bibliography" || node.Kind == "citation") && strings.TrimSpace(node.SpeechText) == "" {
+			continue
+		}
 		text := strings.TrimSpace(firstNonEmpty(node.SpeechText, node.DisplayText, node.NormalisedText))
 		if text != "" {
 			parts = append(parts, text)
@@ -281,6 +311,51 @@ func bookSectionsFromIRMetadata(metadata contentir.Metadata) []BookSourceSection
 		sections = append(sections, section)
 	}
 	return sections
+}
+
+func ingestionDiagnosticsFromIRMetadata(metadata contentir.Metadata) *IngestionDiagnostics {
+	if metadata == nil {
+		return nil
+	}
+	supportTier := metadataValueString(metadata, "supportTier")
+	if supportTier == "" {
+		return nil
+	}
+	return &IngestionDiagnostics{
+		SupportTier:      supportTier,
+		SupportTierLabel: metadataValueString(metadata, "supportTierLabel"),
+		Confidence:       metadataValueFloat(metadata, "confidence", 0),
+		ImportProfile:    metadataValueString(metadata, "importProfile"),
+		PDFTableMode:     metadataValueString(metadata, "pdfTableMode"),
+		ExtractorChain:   extractorChainFromIRMetadata(metadata),
+		Warnings:         metadataValueStringSlice(metadata, "warnings"),
+	}
+}
+
+func extractorChainFromIRMetadata(metadata contentir.Metadata) []ExtractorChainStep {
+	raw, ok := metadata["extractorChain"]
+	if !ok {
+		return nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	steps := make([]ExtractorChainStep, 0, len(items))
+	for _, item := range items {
+		value, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		steps = append(steps, ExtractorChainStep{
+			ID:         metadataValueString(value, "id"),
+			Label:      metadataValueString(value, "label"),
+			Status:     metadataValueString(value, "status"),
+			Confidence: metadataValueFloat(value, "confidence", 0),
+			Warnings:   metadataValueStringSlice(value, "warnings"),
+		})
+	}
+	return steps
 }
 
 func normalizeIRBookSections(sections []BookSourceSection, chapters []BookSourceChapter) []BookSourceSection {
@@ -337,6 +412,28 @@ func metadataValueInt(metadata map[string]any, key string, fallback int) int {
 		parsed, err := value.Int64()
 		if err == nil {
 			return int(parsed)
+		}
+	}
+	return fallback
+}
+
+func metadataValueFloat(metadata map[string]any, key string, fallback float64) float64 {
+	if metadata == nil {
+		return fallback
+	}
+	switch value := metadata[key].(type) {
+	case float64:
+		return value
+	case float32:
+		return float64(value)
+	case int:
+		return float64(value)
+	case int64:
+		return float64(value)
+	case json.Number:
+		parsed, err := value.Float64()
+		if err == nil {
+			return parsed
 		}
 	}
 	return fallback

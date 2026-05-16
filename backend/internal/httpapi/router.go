@@ -299,12 +299,17 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	app.Post("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
 		if strings.Contains(ctx.Get(fiber.HeaderContentType), "application/json") {
 			var request struct {
-				URL string `json:"url"`
+				URL           string                     `json:"url"`
+				ImportProfile pipeline.BookImportProfile `json:"importProfile,omitempty"`
+				PDFTableMode  pipeline.PDFTableMode      `json:"pdfTableMode,omitempty"`
 			}
 			if err := ctx.Bind().Body(&request); err != nil {
 				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
 			}
-			book, err := service.CreateBookSourceFromURL(ctx.Context(), ctx.Params("id"), request.URL)
+			book, err := service.CreateBookSourceFromURLWithOptions(ctx.Context(), ctx.Params("id"), request.URL, pipeline.BookSourceImportOptions{
+				ImportProfile: request.ImportProfile,
+				PDFTableMode:  request.PDFTableMode,
+			})
 			if err != nil {
 				if errors.Is(err, pipeline.ErrProjectNotFound) {
 					return notFound(ctx, err)
@@ -313,12 +318,12 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			}
 			return ctx.Status(fiber.StatusCreated).JSON(book)
 		}
-		tempPath, filename, size, cleanup, err := saveUploadedBook(ctx)
+		uploads, options, cleanup, err := saveUploadedBooks(ctx)
 		if err != nil {
 			return err
 		}
 		defer cleanup()
-		book, err := service.CreateBookSource(ctx.Context(), ctx.Params("id"), tempPath, filename, size)
+		book, err := service.CreateBookSourceWithOptions(ctx.Context(), ctx.Params("id"), uploads, options)
 		if err != nil {
 			if errors.Is(err, pipeline.ErrProjectNotFound) {
 				return notFound(ctx, err)
@@ -1065,50 +1070,72 @@ func saveUploadedBundle(ctx fiber.Ctx) (string, func(), error) {
 	return tempPath, cleanup, nil
 }
 
-func saveUploadedBook(ctx fiber.Ctx) (string, string, int64, func(), error) {
+func saveUploadedBooks(ctx fiber.Ctx) ([]pipeline.BookSourceUpload, pipeline.BookSourceImportOptions, func(), error) {
 	form, err := ctx.MultipartForm()
 	if err != nil {
-		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid multipart form data"))
+		return nil, pipeline.BookSourceImportOptions{}, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid multipart form data"))
 	}
 	fileHeaders := form.File["file"]
 	if len(fileHeaders) == 0 {
 		fileHeaders = form.File["book"]
 	}
 	if len(fileHeaders) == 0 {
-		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("missing book source file"))
+		return nil, pipeline.BookSourceImportOptions{}, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("missing book source file"))
 	}
-	file := fileHeaders[0]
-	sourceFile, err := file.Open()
-	if err != nil {
-		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("could not read uploaded book"))
-	}
-	defer func() {
-		_ = sourceFile.Close()
-	}()
-	tempInput, err := os.CreateTemp("", "voice-studio-book-*"+filepath.Ext(file.Filename))
-	if err != nil {
-		return "", "", 0, nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not create book temp file"))
-	}
-	tempPath := tempInput.Name()
+	tempPaths := make([]string, 0, len(fileHeaders))
+	uploads := make([]pipeline.BookSourceUpload, 0, len(fileHeaders))
 	cleanup := func() {
-		_ = os.Remove(tempPath)
+		for _, tempPath := range tempPaths {
+			_ = os.Remove(tempPath)
+		}
 	}
-	copied, err := io.Copy(tempInput, sourceFile)
-	if err != nil {
-		_ = tempInput.Close()
-		cleanup()
-		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("unable to save uploaded book"))
+	for _, file := range fileHeaders {
+		sourceFile, err := file.Open()
+		if err != nil {
+			cleanup()
+			return nil, pipeline.BookSourceImportOptions{}, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("could not read uploaded book"))
+		}
+		tempInput, err := os.CreateTemp("", "voice-studio-book-*"+filepath.Ext(file.Filename))
+		if err != nil {
+			_ = sourceFile.Close()
+			cleanup()
+			return nil, pipeline.BookSourceImportOptions{}, nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not create book temp file"))
+		}
+		tempPath := tempInput.Name()
+		tempPaths = append(tempPaths, tempPath)
+		copied, err := io.Copy(tempInput, sourceFile)
+		_ = sourceFile.Close()
+		if err != nil {
+			_ = tempInput.Close()
+			cleanup()
+			return nil, pipeline.BookSourceImportOptions{}, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("unable to save uploaded book"))
+		}
+		if copied == 0 {
+			_ = tempInput.Close()
+			cleanup()
+			return nil, pipeline.BookSourceImportOptions{}, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("uploaded book is empty"))
+		}
+		if err := tempInput.Close(); err != nil {
+			cleanup()
+			return nil, pipeline.BookSourceImportOptions{}, nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize uploaded book"))
+		}
+		uploads = append(uploads, pipeline.BookSourceUpload{
+			Path:     tempPath,
+			Filename: file.Filename,
+			Bytes:    copied,
+		})
 	}
-	if copied == 0 {
-		_ = tempInput.Close()
-		cleanup()
-		return "", "", 0, nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("uploaded book is empty"))
+	return uploads, pipeline.BookSourceImportOptions{
+		ImportProfile: pipeline.BookImportProfile(firstFormValue(form.Value["importProfile"])),
+		PDFTableMode:  pipeline.PDFTableMode(firstFormValue(form.Value["pdfTableMode"])),
+	}, cleanup, nil
+}
+
+func firstFormValue(values []string) string {
+	if len(values) == 0 {
+		return ""
 	}
-	if err := tempInput.Close(); err != nil {
-		cleanup()
-		return "", "", 0, nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize uploaded book"))
-	}
-	return tempPath, file.Filename, copied, cleanup, nil
+	return values[0]
 }
 
 func saveUploadedSource(ctx fiber.Ctx) (string, string, int64, func(), error) {

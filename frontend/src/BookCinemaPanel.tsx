@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type {
   BookCinemaDiagnostics,
+  BookImportProfile,
   BookScope,
   BookSource,
+  BookSourceImportOptions,
   BookSourceSectionRole,
   BookSourceScopeContent,
+  PDFTableMode,
   PlaybackProgress,
   ThemeName,
   VoiceJob,
 } from "./types";
 
 export const BOOK_SOURCE_ACCEPT =
-  ".pdf,.epub,.docx,.html,.htm,.zip,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/html,application/xhtml+xml,application/zip";
+  ".pdf,.epub,.docx,.html,.htm,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/html,application/xhtml+xml,application/zip,image/png,image/jpeg,image/tiff,image/webp";
 const CINEMA_THEMES: ThemeName[] = ["light", "dark", "dawn", "night"];
 const BOOK_PAGE_VERTICAL_PADDING = 108;
 const BOOK_PAGE_HORIZONTAL_PADDING = 76;
@@ -71,7 +74,7 @@ export interface BookCinemaControlsProps {
   selectedBookScope: BookScope | null;
   selectedBookSourceId: string | null;
   onCreateAudio: (book: BookSource, scope: BookScope) => void;
-  onImport: (file: File) => Promise<void>;
+  onImport: (files: File[], options: BookSourceImportOptions) => Promise<void>;
   onInspectStructure: (book: BookSource) => void;
   onOpenCinema: () => void;
   onScopeChange: (scope: BookScope) => void;
@@ -102,6 +105,8 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [importProfile, setImportProfile] = useState<BookImportProfile>("auto");
+  const [pdfTableMode, setPDFTableMode] = useState<PDFTableMode>("auto");
   const selectedBook = useSelectedBook(bookSources, selectedBookSourceId);
   const scope = selectedBook ? normalizeBookScopeForBook(selectedBook, selectedBookScope) : null;
   const scopeOptions = useMemo(
@@ -110,16 +115,17 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
   );
   const groupedScopeOptions = useMemo(() => groupBookScopeOptions(scopeOptions), [scopeOptions]);
 
-  const importFile = async (file: File | null | undefined) => {
+  const importFiles = async (files: FileList | File[] | null | undefined) => {
     setLocalError(null);
-    if (!file) {
+    const fileArray = files ? [...files] : [];
+    if (fileArray.length === 0) {
       return;
     }
-    if (!isSupportedBookSource(file)) {
-      setLocalError("Upload a PDF, EPUB, DOCX, HTML, or zipped HTML book source.");
+    if (!isSupportedBookSourceBatch(fileArray)) {
+      setLocalError("Upload one book source or an ordered batch of image pages.");
       return;
     }
-    await onImport(file);
+    await onImport(fileArray, { importProfile, pdfTableMode });
   };
 
   return (
@@ -139,7 +145,7 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
       onDrop={(event) => {
         event.preventDefault();
         setIsDragActive(false);
-        void importFile(event.dataTransfer.files.item(0));
+        void importFiles(event.dataTransfer.files);
       }}
     >
       <legend className="sr-only">Book Cinema source import</legend>
@@ -154,23 +160,54 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
             {formatAdapterDiagnostics(diagnostics)}
           </p>
         </div>
-        <button
-          className="h-9 shrink-0 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
-          disabled={isImporting || isProcessing}
-          onClick={() => {
-            inputRef.current?.click();
-          }}
-          type="button"
-        >
-          {isImporting ? "Importing..." : "Import Book"}
-        </button>
+        <div className="grid shrink-0 gap-2 sm:grid-cols-[9rem_9rem_auto] sm:items-end">
+          <label className="grid gap-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] vs-muted">
+            <span>Profile</span>
+            <select
+              className="h-9 rounded-md border bg-[var(--vs-surface)] px-2 text-xs font-medium normal-case tracking-normal text-[var(--vs-text)] vs-border"
+              onChange={(event) => {
+                setImportProfile(event.currentTarget.value as BookImportProfile);
+              }}
+              value={importProfile}
+            >
+              <option value="auto">Auto</option>
+              <option value="scholarly">Scholarly</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] vs-muted">
+            <span>Tables</span>
+            <select
+              className="h-9 rounded-md border bg-[var(--vs-surface)] px-2 text-xs font-medium normal-case tracking-normal text-[var(--vs-text)] vs-border"
+              onChange={(event) => {
+                setPDFTableMode(event.currentTarget.value as PDFTableMode);
+              }}
+              value={pdfTableMode}
+            >
+              <option value="auto">Auto</option>
+              <option value="structured">Structured</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <button
+            className="h-9 shrink-0 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
+            disabled={isImporting || isProcessing}
+            onClick={() => {
+              inputRef.current?.click();
+            }}
+            type="button"
+          >
+            {isImporting ? "Importing..." : "Import Book"}
+          </button>
+        </div>
         <input
+          aria-label="Book source files"
           accept={BOOK_SOURCE_ACCEPT}
           className="sr-only"
           ref={inputRef}
           type="file"
+          multiple
           onChange={(event) => {
-            void importFile(event.currentTarget.files?.item(0));
+            void importFiles(event.currentTarget.files);
             event.currentTarget.value = "";
           }}
         />
@@ -263,6 +300,7 @@ function BookCinemaSelectedSource({
           onOpenCinema={onOpenCinema}
           onUseText={onUseText}
         />
+        <BookIngestionDiagnostics book={selectedBook} />
         <BookScopeSelector
           groupedScopeOptions={groupedScopeOptions}
           scope={scope}
@@ -313,6 +351,11 @@ function BookSourceList({
           <span className="vs-muted mt-1 block truncate text-xs" title={book.sourceFile}>
             {book.kind.toUpperCase()} · {formatBookCount(book)} · {formatBytes(book.sourceBytes)}
           </span>
+          {book.ingestion?.supportTierLabel ? (
+            <span className="vs-muted mt-1 block truncate text-[0.68rem]">
+              {book.ingestion.supportTierLabel}
+            </span>
+          ) : null}
           <BookStatusBadge status={book.status} />
         </button>
       ))}
@@ -331,6 +374,64 @@ function BookStatusBadge({ status }: Readonly<{ status: BookSource["status"] }>)
     >
       {status === "ready" ? "Ready" : "Needs attention"}
     </span>
+  );
+}
+
+function BookIngestionDiagnostics({ book }: Readonly<{ book: BookSource }>) {
+  const ingestion = book.ingestion;
+  if (!ingestion) {
+    return null;
+  }
+  const confidence =
+    typeof ingestion.confidence === "number" && Number.isFinite(ingestion.confidence)
+      ? `${Math.round(ingestion.confidence * 100).toString()}%`
+      : "n/a";
+  const warnings = [...(ingestion.warnings ?? []), ...(book.warnings ?? [])].filter(Boolean);
+  return (
+    <section className="my-3 grid gap-2 rounded-md border bg-[var(--vs-raised)] p-3 text-xs vs-border">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="rounded border px-2 py-1 font-semibold uppercase tracking-[0.12em] vs-border">
+          {ingestion.supportTier ?? "tier"}
+        </span>
+        <span className="min-w-0 font-semibold">{ingestion.supportTierLabel ?? "Detected"}</span>
+        <span className="vs-muted">Confidence {confidence}</span>
+        {ingestion.importProfile ? (
+          <span className="vs-muted">{ingestion.importProfile}</span>
+        ) : null}
+        {ingestion.pdfTableMode ? (
+          <span className="vs-muted">tables {ingestion.pdfTableMode}</span>
+        ) : null}
+      </div>
+      {(ingestion.extractorChain ?? []).length > 0 ? (
+        <div className="grid gap-1">
+          {(ingestion.extractorChain ?? []).map((step) => (
+            <div className="flex min-w-0 items-center justify-between gap-3" key={step.id}>
+              <span className="min-w-0 truncate" title={step.label}>
+                {step.label}
+              </span>
+              <span className="vs-muted shrink-0">
+                {step.status}
+                {typeof step.confidence === "number"
+                  ? ` · ${Math.round(step.confidence * 100).toString()}%`
+                  : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {warnings.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {[...new Set(warnings)].map((warning) => (
+            <span
+              className="rounded-full bg-amber-50 px-2 py-1 font-semibold text-amber-700"
+              key={warning}
+            >
+              {warning}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -454,8 +555,8 @@ function BookCinemaDropHint() {
     <div className="rounded-md border border-dashed p-4 text-sm leading-6 vs-border">
       <p className="font-semibold">Drop a book source here</p>
       <p className="vs-muted mt-1 text-xs">
-        EPUB, DOCX, and HTML imports run through local IR adapters. PDF imports use pdftotext or the
-        managed Python fallback.
+        EPUB, DOCX, HTML, PDFs, scanned documents, and ordered image pages run through local IR
+        adapters.
       </p>
     </div>
   );
@@ -1631,7 +1732,40 @@ function formatBookCount(book: BookSource): string {
 
 export function isSupportedBookSource(file: File): boolean {
   const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  return ["pdf", "epub", "docx", "html", "htm", "zip"].includes(extension);
+  return isBookSourceExtension(extension);
+}
+
+export function isSupportedBookSourceBatch(files: File[]): boolean {
+  if (files.length === 0) {
+    return false;
+  }
+  if (files.length === 1) {
+    return isSupportedBookSource(files[0]);
+  }
+  return files.every((file) => isImageBookSource(file));
+}
+
+function isImageBookSource(file: File): boolean {
+  const extension = file.name.toLowerCase().split(".").pop() ?? "";
+  return ["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"].includes(extension);
+}
+
+function isBookSourceExtension(extension: string): boolean {
+  return [
+    "pdf",
+    "epub",
+    "docx",
+    "html",
+    "htm",
+    "zip",
+    "png",
+    "jpg",
+    "jpeg",
+    "tif",
+    "tiff",
+    "bmp",
+    "webp",
+  ].includes(extension);
 }
 
 function formatAdapterDiagnostics(diagnostics: BookCinemaDiagnostics | null): string {

@@ -83,11 +83,26 @@ DRAMABOX_INSTALL_DEPS=1 mise setup:dramabox
 
 Any upstream repository used for evaluation belongs under `.upstreams/` and stays ignored. Do not patch upstream install scripts in place for this app. If a platform-specific upstream needs changes, make a separate fork or a local patch file and document it before applying.
 
-## PDF Text Extraction
+## PDF, OCR, Image, And Scholarly Extraction
 
-`mise start -- pnpm start:local` checks `pdftotext`. If it is missing, startup continues and the backend uses the managed Python fallback when available. Set strict mode when a host must fail fast:
+Book Cinema routes PDFs and standalone image batches through `adapters/pdf/cli.py`. The adapter uses
+a tiered local pipeline: tagged PDFs, born-digital geometry extraction, OCR for scanned sources,
+ordered image OCR, and an opt-in scholarly profile for GROBID-style extraction.
+
+`mise start -- pnpm start:local` checks `pdftotext` and the managed Python adapter. Optional local
+tools improve coverage when installed: PyMuPDF, pdfplumber, OCRmyPDF, Tesseract, GROBID,
+layoutparser, and docTR. Missing optional tools are reported in adapter diagnostics instead of
+blocking non-OCR imports.
+
+Set strict mode when a host must fail fast:
 
 ```sh
 export VOICE_BOOK_PDF_REQUIRE_TEXT_EXTRACTOR=1
 mise start -- pnpm start:local
+```
+
+Run the offline adapter fixture suite with:
+
+```sh
+pnpm test:pdf-adapter
 ```

@@ -138,3 +138,12 @@
 - [x] Iterate on polish if needed
 - [x] Rerun validation after polish
 - [x] Commit EPUB, DOCX and HTML ingestion package
+
+## 2026-05-16 23:31 CEST - Workstream Epsilon PDF OCR image scholarly ingestion
+
+- [x] Add tiered PDF and image adapter pipeline
+- [x] Integrate import options, diagnostics, and provenance in backend
+- [x] Add frontend import controls and diagnostics panel
+- [x] Add fixtures and regression coverage
+- [x] Validate free-text source intake remains visible and editable
+- [x] Run local validation

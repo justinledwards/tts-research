@@ -27,48 +27,95 @@ type adapterCLIResult struct {
 }
 
 type adapterCLIPayload struct {
-	GeneratedAt time.Time `json:"generatedAt"`
-	ProjectID   string    `json:"projectId"`
-	SourceID    string    `json:"sourceId"`
-	SourceName  string    `json:"sourceName"`
-	SourcePath  string    `json:"sourcePath"`
-	SourceType  string    `json:"sourceType"`
+	GeneratedAt   time.Time `json:"generatedAt"`
+	ImportProfile string    `json:"importProfile,omitempty"`
+	PDFTableMode  string    `json:"pdfTableMode,omitempty"`
+	ProjectID     string    `json:"projectId"`
+	SourceID      string    `json:"sourceId"`
+	SourceName    string    `json:"sourceName"`
+	SourcePath    string    `json:"sourcePath"`
+	SourcePaths   []string  `json:"sourcePaths,omitempty"`
+	SourceType    string    `json:"sourceType"`
 }
 
 func (service *Service) extractBookSourceIR(
 	ctx context.Context,
 	kind BookSourceKind,
-	sourcePath string,
+	sourcePaths []string,
 	sourceFileName string,
 	book BookSource,
 	generatedAt time.Time,
+	options BookSourceImportOptions,
 ) (contentir.Document, error) {
 	switch kind {
-	case BookSourceKindPDF:
-		extraction, err := service.extractPDFBookSource(ctx, sourcePath, sourceFileName)
-		if err != nil {
-			return contentir.Document{}, err
-		}
-		book.Title = extraction.title
-		book.Author = extraction.author
-		book.Text = extraction.text
-		book.Pages = extraction.pages
-		book.Chapters = extraction.chapters
-		book.StructureVersion = extraction.structureVersion()
-		book.DefaultSectionID = extraction.defaultSectionID
-		book.ReadingOrder = extraction.readingOrder
-		book.Sections = extraction.sections
-		book.Warnings = extraction.warnings
-		book.WordSpans = extraction.spans
-		book.WordCount = len(extraction.spans)
-		book.PageCount = len(extraction.pages)
-		book.ChapterCount = countNarratableChapters(extraction.chapters)
-		return BookSourceToIR(book, generatedAt), nil
+	case BookSourceKindPDF, BookSourceKindImage:
+		return service.runPDFAdapter(ctx, sourcePaths, sourceFileName, book, generatedAt, options)
 	case BookSourceKindEPUB, BookSourceKindDOCX, BookSourceKindHTML:
-		return service.runBookAdapter(ctx, kind, sourcePath, sourceFileName, book, generatedAt)
+		if len(sourcePaths) == 0 {
+			return contentir.Document{}, fmt.Errorf("%s adapter requires a source file", kind)
+		}
+		return service.runBookAdapter(ctx, kind, sourcePaths[0], sourceFileName, book, generatedAt)
 	default:
 		return contentir.Document{}, fmt.Errorf("unsupported book source type")
 	}
+}
+
+func (service *Service) runPDFAdapter(
+	ctx context.Context,
+	sourcePaths []string,
+	sourceFileName string,
+	book BookSource,
+	generatedAt time.Time,
+	options BookSourceImportOptions,
+) (contentir.Document, error) {
+	if len(sourcePaths) == 0 {
+		return contentir.Document{}, fmt.Errorf("PDF adapter requires at least one source file")
+	}
+	scriptPath, err := service.pdfAdapterCLIPath()
+	if err != nil {
+		return contentir.Document{}, err
+	}
+	pythonPath := service.pdfAdapterPythonPath()
+	payload, err := json.Marshal(adapterCLIPayload{
+		GeneratedAt:   generatedAt,
+		ImportProfile: string(normalizeBookImportProfile(options.ImportProfile)),
+		PDFTableMode:  string(normalizePDFTableMode(options.PDFTableMode)),
+		ProjectID:     book.ProjectID,
+		SourceID:      book.ID,
+		SourceName:    sourceFileName,
+		SourcePath:    sourcePaths[0],
+		SourcePaths:   sourcePaths,
+		SourceType:    "bookSource",
+	})
+	if err != nil {
+		return contentir.Document{}, err
+	}
+	command := exec.CommandContext(ctx, pythonPath, scriptPath)
+	command.Stdin = bytes.NewReader(payload)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return contentir.Document{}, fmt.Errorf("pdf adapter failed: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	var result adapterCLIResult
+	if err := json.Unmarshal(output, &result); err != nil {
+		return contentir.Document{}, fmt.Errorf("decode pdf adapter output: %w", err)
+	}
+	document := result.Document
+	if document.SchemaVersion == "" || len(document.Nodes) == 0 {
+		return contentir.Document{}, fmt.Errorf("pdf adapter returned no Content IR nodes")
+	}
+	document.ID = book.ID
+	document.SourceID = book.ID
+	document.ProjectID = book.ProjectID
+	document.SourceName = sourceFileName
+	document.SourceType = "bookSource"
+	if document.AdapterVersion == "" {
+		document.AdapterVersion = firstNonEmpty(result.AdapterVersion, "pdf-adapter-v1")
+	}
+	if document.GeneratedAt.IsZero() {
+		document.GeneratedAt = generatedAt.UTC()
+	}
+	return document, nil
 }
 
 func (service *Service) runBookAdapter(
@@ -125,6 +172,23 @@ func (service *Service) runBookAdapter(
 func (service *Service) AdapterCapabilities() []AdapterCapability {
 	return []AdapterCapability{
 		{
+			AdapterID:   "pdf",
+			Extensions:  []string{".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"},
+			MimeTypes:   []string{"application/pdf", "image/png", "image/jpeg", "image/tiff", "image/webp"},
+			SourceKinds: []string{"file", "url", "bookSource"},
+			Features: map[string]any{
+				"bibliography":     true,
+				"confidence":       true,
+				"extractorChain":   true,
+				"figures":          true,
+				"ocr":              true,
+				"supportTiers":     []string{"A", "B", "C", "D", "E"},
+				"tables":           true,
+				"taggedPDF":        true,
+				"imageBatchImport": true,
+			},
+		},
+		{
 			AdapterID:   "epub",
 			Extensions:  []string{".epub"},
 			MimeTypes:   []string{"application/epub+zip"},
@@ -177,6 +241,10 @@ func (service *Service) AdapterCapabilities() []AdapterCapability {
 func (service *Service) AdapterDiagnostics() map[string]AdapterDiagnostics {
 	diagnostics := map[string]AdapterDiagnostics{}
 	for _, capability := range service.AdapterCapabilities() {
+		if capability.AdapterID == "pdf" {
+			diagnostics[capability.AdapterID] = service.pdfAdapterDiagnostics()
+			continue
+		}
 		cliPath, err := adapterCLIPath(capability.AdapterID)
 		status := "available"
 		warnings := []string{}
@@ -197,6 +265,103 @@ func (service *Service) AdapterDiagnostics() map[string]AdapterDiagnostics {
 		}
 	}
 	return diagnostics
+}
+
+func (service *Service) pdfAdapterDiagnostics() AdapterDiagnostics {
+	scriptPath, err := service.pdfAdapterCLIPath()
+	warnings := []string{}
+	if err != nil {
+		warnings = append(warnings, err.Error())
+	}
+	pythonPath := service.pdfAdapterPythonPath()
+	pythonAvailable := commandAvailable(pythonPath)
+	if !pythonAvailable {
+		warnings = append(warnings, "python executable is not available")
+	}
+	pymupdfAvailable := service.pythonModuleAvailable("fitz")
+	pdfplumberAvailable := service.pythonModuleAvailable("pdfplumber")
+	ocrmypdfAvailable := commandAvailable("ocrmypdf")
+	tesseractAvailable := commandAvailable("tesseract")
+	pdftotextAvailable := commandAvailable("pdftotext")
+	tools := map[string]AdapterToolDiagnostics{
+		"python":     adapterToolStatus(pythonAvailable),
+		"pymupdf":    adapterToolStatus(pymupdfAvailable),
+		"pdfplumber": adapterToolStatus(pdfplumberAvailable),
+		"ocrmypdf":   adapterToolStatus(ocrmypdfAvailable),
+		"tesseract":  adapterToolStatus(tesseractAvailable),
+		"grobid":     adapterToolStatus(commandAvailable("grobid")),
+		"pdftotext":  adapterToolStatus(pdftotextAvailable),
+	}
+	extractorAvailable := pymupdfAvailable || pdftotextAvailable || ocrmypdfAvailable || tesseractAvailable
+	if !extractorAvailable {
+		warnings = append(warnings, "no PDF text or OCR extractor is available")
+	}
+	available := err == nil && pythonAvailable && extractorAvailable
+	status := "available"
+	if !available {
+		status = "missing"
+	}
+	return AdapterDiagnostics{
+		AdapterID: "pdf",
+		Available: available,
+		Status:    status,
+		CLIPath:   scriptPath,
+		Warnings:  warnings,
+		Tools:     tools,
+	}
+}
+
+func adapterToolStatus(available bool) AdapterToolDiagnostics {
+	status := "missing"
+	if available {
+		status = "available"
+	}
+	return AdapterToolDiagnostics{Available: available, Status: status}
+}
+
+func (service *Service) pythonModuleAvailable(moduleName string) bool {
+	pythonPath := service.pdfAdapterPythonPath()
+	if !commandAvailable(pythonPath) {
+		return false
+	}
+	command := exec.Command(pythonPath, "-c", "import "+moduleName)
+	return command.Run() == nil
+}
+
+func (service *Service) pdfAdapterPythonPath() string {
+	configured := strings.TrimSpace(service.options.BookPDFPythonPath)
+	if configured != "" && commandAvailable(configured) {
+		return configured
+	}
+	if python3, err := exec.LookPath("python3"); err == nil {
+		return python3
+	}
+	if configured != "" {
+		return configured
+	}
+	return "python3"
+}
+
+func (service *Service) pdfAdapterCLIPath() (string, error) {
+	scriptPath := strings.TrimSpace(service.options.BookPDFExtractorScriptPath)
+	if scriptPath == "" {
+		scriptPath = defaultBookPDFExtractorScriptPath
+	}
+	if filepath.IsAbs(scriptPath) {
+		if _, err := os.Stat(scriptPath); err != nil {
+			return scriptPath, err
+		}
+		return scriptPath, nil
+	}
+	root, err := repositoryRoot()
+	if err != nil {
+		return scriptPath, err
+	}
+	absPath := filepath.Join(root, scriptPath)
+	if _, err := os.Stat(absPath); err != nil {
+		return absPath, err
+	}
+	return absPath, nil
 }
 
 func adapterCLIPath(adapterID string) (string, error) {

@@ -1,0 +1,26 @@
+%PDF-1.4
+% TTS_RESEARCH_PDF_FIXTURE: {
+%   "title": "Scholarly Fixture",
+%   "tagged": false,
+%   "pages": [
+%     {"index": 1, "label": "Page 1", "text": "Fallback scholarly page text."}
+%   ],
+%   "scholarly": {
+%     "title": "Scholarly Fixture",
+%     "author": "Ada Researcher",
+%     "pages": [
+%       {
+%         "index": 1,
+%         "label": "Scholarly",
+%         "blocks": [
+%           {"kind": "body", "text": "This paper introduces a small offline fixture for scholarly ingestion.", "confidence": 0.88},
+%           {"kind": "figure", "text": "Figure 1 shows the fixture extraction pipeline.", "confidence": 0.82},
+%           {"kind": "table", "text": "Table 1 | Fixture rows", "confidence": 0.8},
+%           {"kind": "bibliography", "text": "Researcher, A. Fixture Studies. 2026.", "confidence": 0.78}
+%         ]
+%       }
+%     ]
+%   }
+% }
+%%EOF
+

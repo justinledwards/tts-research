@@ -1,5 +1,6 @@
 import type {
   BookSource,
+  BookSourceImportOptions,
   BookCinemaDiagnostics,
   BookScope,
   BookSourceScopeContent,
@@ -268,9 +269,21 @@ export async function getBookSourceScope(
   return response.json() as Promise<BookSourceScopeContent>;
 }
 
-export async function createBookSource(projectId: string, file: File): Promise<BookSource> {
+export async function createBookSource(
+  projectId: string,
+  files: File | File[],
+  options: BookSourceImportOptions = {},
+): Promise<BookSource> {
   const formData = new FormData();
-  formData.append("file", file);
+  for (const file of Array.isArray(files) ? files : [files]) {
+    formData.append("file", file);
+  }
+  if (options.importProfile) {
+    formData.append("importProfile", options.importProfile);
+  }
+  if (options.pdfTableMode) {
+    formData.append("pdfTableMode", options.pdfTableMode);
+  }
   const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/book-sources`, {
     method: "POST",
     body: formData,
@@ -283,11 +296,15 @@ export async function createBookSource(projectId: string, file: File): Promise<B
   return response.json() as Promise<BookSource>;
 }
 
-export async function createBookSourceFromUrl(projectId: string, url: string): Promise<BookSource> {
+export async function createBookSourceFromUrl(
+  projectId: string,
+  url: string,
+  options: BookSourceImportOptions = {},
+): Promise<BookSource> {
   const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/book-sources`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, ...options }),
   });
   if (!response.ok) {
     throw await apiError(response);

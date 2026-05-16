@@ -165,7 +165,7 @@ const (
 	defaultVoiceDataDir                        = "./data/voices"
 	defaultFFMPEGPath                          = "ffmpeg"
 	defaultBookPDFPythonPath                   = "./.venv/bin/python"
-	defaultBookPDFExtractorScriptPath          = "./scripts/pdf_extract.py"
+	defaultBookPDFExtractorScriptPath          = "./adapters/pdf/cli.py"
 	defaultVoiceProfileDir                     = "./data/voice-profiles"
 	defaultVoiceProfileSourceDir               = "./data/voice-profile-sources"
 	defaultMaxProfileBytes                     = 0
