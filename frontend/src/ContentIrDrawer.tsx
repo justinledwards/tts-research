@@ -62,13 +62,24 @@ export function ContentIRDrawer({
 
 function ContentIRDocumentView({ document }: Readonly<{ document: ContentIRDocument }>) {
   const [query, setQuery] = useState("");
+  const [kindFilter, setKindFilter] = useState("");
+  const [modeFilter, setModeFilter] = useState("");
+  const kinds = useMemo(
+    () => uniqueSortedStrings(document.nodes.map((node) => node.kind)),
+    [document.nodes],
+  );
   const filteredNodes = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return document.nodes;
-    }
-    return document.nodes.filter((node) => contentIRNodeSearchText(node).includes(normalizedQuery));
-  }, [document.nodes, query]);
+    return document.nodes.filter((node) => {
+      if (kindFilter && node.kind !== kindFilter) {
+        return false;
+      }
+      if (modeFilter && node.speech.speechPolicy.mode !== modeFilter) {
+        return false;
+      }
+      return !normalizedQuery || contentIRNodeSearchText(node).includes(normalizedQuery);
+    });
+  }, [document.nodes, kindFilter, modeFilter, query]);
   const noteCount = document.nodes.filter((node) => node.warnings.length > 0).length;
 
   return (
@@ -80,7 +91,7 @@ function ContentIRDocumentView({ document }: Readonly<{ document: ContentIRDocum
         <MetadataItem label="Nodes" value={document.nodes.length.toLocaleString()} />
       </dl>
 
-      <div className="sticky top-0 z-10 grid gap-3 border-b bg-[var(--vs-raised)] pb-4 vs-border sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="sticky top-0 z-10 grid gap-3 border-b bg-[var(--vs-raised)] pb-4 vs-border lg:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] lg:items-center">
         <input
           className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm outline-none focus:border-orange-300 vs-border"
           onChange={(event) => {
@@ -90,6 +101,36 @@ function ContentIRDocumentView({ document }: Readonly<{ document: ContentIRDocum
           type="search"
           value={query}
         />
+        <select
+          className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm outline-none focus:border-orange-300 vs-border"
+          onChange={(event) => {
+            setKindFilter(event.currentTarget.value);
+          }}
+          value={kindFilter}
+        >
+          <option value="">All kinds</option>
+          {kinds.map((kind) => (
+            <option key={kind} value={kind}>
+              {kind}
+            </option>
+          ))}
+        </select>
+        <select
+          className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm outline-none focus:border-orange-300 vs-border"
+          onChange={(event) => {
+            setModeFilter(event.currentTarget.value);
+          }}
+          value={modeFilter}
+        >
+          <option value="">All modes</option>
+          <option value="speak">Speak</option>
+          <option value="summarise">Summarise</option>
+          <option value="literal">Literal</option>
+          <option value="skip">Skip</option>
+          <option value="onDemand">On demand</option>
+          <option value="describeShort">Describe short</option>
+          <option value="describeLong">Describe long</option>
+        </select>
         <p className="vs-muted text-xs font-semibold">
           {filteredNodes.length.toLocaleString()} shown · {noteCount.toLocaleString()} with notes
         </p>
@@ -105,8 +146,21 @@ function ContentIRDocumentView({ document }: Readonly<{ document: ContentIRDocum
   );
 }
 
+function uniqueSortedStrings(values: readonly string[]): string[] {
+  const sorted: string[] = [];
+  for (const value of new Set(values)) {
+    const insertIndex = sorted.findIndex((item) => value.localeCompare(item) < 0);
+    if (insertIndex === -1) {
+      sorted.push(value);
+    } else {
+      sorted.splice(insertIndex, 0, value);
+    }
+  }
+  return sorted;
+}
+
 function ContentIRNodeCard({ node }: Readonly<{ node: ContentIRNode }>) {
-  const policy = node.speech.policyHint;
+  const policy = node.speech.speechPolicy;
   const locator = formatContentIRLocator(node.provenance.locator);
   const preview = contentIRNodePreview(node);
   return (
@@ -146,6 +200,11 @@ function ContentIRNodeCard({ node }: Readonly<{ node: ContentIRNode }>) {
           ))}
         </div>
       ) : null}
+      {policy.explanation ? (
+        <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+          {policy.explanation}
+        </p>
+      ) : null}
     </article>
   );
 }
@@ -170,14 +229,8 @@ function DrawerMessage({
   return <p className={`rounded-md border p-4 text-sm ${className}`}>{children}</p>;
 }
 
-function formatSpeechPolicy(policy: ContentIRNode["speech"]["policyHint"]): string {
-  const parts = [policy.mode];
-  if (policy.emphasis) {
-    parts.push(policy.emphasis);
-  }
-  if (policy.pauseBeforeMs > 0 || policy.pauseAfterMs > 0) {
-    parts.push(`${policy.pauseBeforeMs.toString()}ms/${policy.pauseAfterMs.toString()}ms`);
-  }
+function formatSpeechPolicy(policy: ContentIRNode["speech"]["speechPolicy"]): string {
+  const parts = [policy.profile, policy.elementMode ?? policy.mode, policy.mode].filter(Boolean);
   return parts.join(" · ");
 }
 
@@ -192,6 +245,9 @@ function contentIRNodeSearchText(node: ContentIRNode): string {
     node.role,
     node.speechText,
     node.displayText,
+    node.speech.speechPolicy.mode,
+    node.speech.speechPolicy.elementMode,
+    node.speech.speechPolicy.explanation,
     formatContentIRLocator(node.provenance.locator),
     node.warnings.join(" "),
   ]

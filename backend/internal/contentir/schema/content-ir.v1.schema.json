@@ -227,9 +227,10 @@
     "speech": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["policyHint"],
+      "required": ["policyHint", "speechPolicy"],
       "properties": {
-        "policyHint": { "$ref": "#/$defs/speechPolicyHint" }
+        "policyHint": { "$ref": "#/$defs/speechPolicyHint" },
+        "speechPolicy": { "$ref": "#/$defs/speechPolicy" }
       }
     },
     "speechPolicyHint": {
@@ -241,6 +242,18 @@
         "emphasis": { "type": "string" },
         "pauseBeforeMs": { "type": "integer" },
         "pauseAfterMs": { "type": "integer" }
+      }
+    },
+    "speechPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "mode", "explanation"],
+      "properties": {
+        "profile": { "type": "string", "minLength": 1 },
+        "element": { "type": "string" },
+        "elementMode": { "type": "string" },
+        "mode": { "type": "string", "minLength": 1 },
+        "explanation": { "type": "string" }
       }
     },
     "rights": {

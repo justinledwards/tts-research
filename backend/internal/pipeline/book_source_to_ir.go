@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 func BookSourceToIR(book BookSource, generatedAt time.Time) contentir.Document {
@@ -144,6 +145,11 @@ func bookNode(descriptor contentIRSourceDescriptor, payload bookNodePayload) con
 		UI:             contentir.DefaultUIHints("linear"),
 		Speech: contentir.SpeechMetadata{
 			PolicyHint: contentir.NewSpeechPolicyHint("speak", "", 0, 0),
+			SpeechPolicy: policy.NewEvaluator(policy.DefaultProfileName, policy.Overrides{}).Evaluate(policy.Element{
+				Kind: string(payload.kind),
+				Role: role,
+				Text: payload.displayText,
+			}).Policy,
 		},
 		Warnings:       contentIRStringSlice(payload.warnings),
 		Confidence:     payload.confidence,

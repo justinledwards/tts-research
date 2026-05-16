@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/justinedwards/tts-research/backend/internal/audio"
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 type JobStatus string
@@ -30,25 +31,27 @@ const (
 )
 
 type CreateJobRequest struct {
-	Text             string                   `json:"text"`
-	VoiceID          string                   `json:"voiceId,omitempty"`
-	ProjectID        string                   `json:"projectId,omitempty"`
-	BookSourceID     string                   `json:"bookSourceId,omitempty"`
-	BookScope        *BookScope               `json:"bookScope,omitempty"`
-	PreparedSourceID string                   `json:"preparedSourceId,omitempty"`
-	SelectedBlockIDs []string                 `json:"selectedBlockIds,omitempty"`
-	SourceKind       string                   `json:"sourceKind,omitempty"`
-	ProgressTargetID string                   `json:"progressTargetId,omitempty"`
-	VoiceProfileID   string                   `json:"voiceProfileId"`
-	VoiceLanguage    string                   `json:"voiceLanguage"`
-	TTSEngine        string                   `json:"ttsEngine,omitempty"`
-	EngineOptions    map[string]string        `json:"engineOptions,omitempty"`
-	TTSVoice         string                   `json:"ttsVoice,omitempty"`
-	TTSLanguage      string                   `json:"ttsLanguage,omitempty"`
-	AdaptiveMode     bool                     `json:"adaptiveMode"`
-	RunMode          RunMode                  `json:"runMode,omitempty"`
-	PerformanceMode  PerformanceMode          `json:"performanceMode,omitempty"`
-	PipelineOptions  CreateJobPipelineOptions `json:"pipelineOptions,omitempty"`
+	Text                  string                   `json:"text"`
+	VoiceID               string                   `json:"voiceId,omitempty"`
+	ProjectID             string                   `json:"projectId,omitempty"`
+	BookSourceID          string                   `json:"bookSourceId,omitempty"`
+	BookScope             *BookScope               `json:"bookScope,omitempty"`
+	PreparedSourceID      string                   `json:"preparedSourceId,omitempty"`
+	SelectedBlockIDs      []string                 `json:"selectedBlockIds,omitempty"`
+	SourceKind            string                   `json:"sourceKind,omitempty"`
+	ProgressTargetID      string                   `json:"progressTargetId,omitempty"`
+	VoiceProfileID        string                   `json:"voiceProfileId"`
+	VoiceLanguage         string                   `json:"voiceLanguage"`
+	TTSEngine             string                   `json:"ttsEngine,omitempty"`
+	EngineOptions         map[string]string        `json:"engineOptions,omitempty"`
+	TTSVoice              string                   `json:"ttsVoice,omitempty"`
+	TTSLanguage           string                   `json:"ttsLanguage,omitempty"`
+	AdaptiveMode          bool                     `json:"adaptiveMode"`
+	RunMode               RunMode                  `json:"runMode,omitempty"`
+	PerformanceMode       PerformanceMode          `json:"performanceMode,omitempty"`
+	PipelineOptions       CreateJobPipelineOptions `json:"pipelineOptions,omitempty"`
+	SpeechPolicyProfile   string                   `json:"speechPolicyProfile,omitempty"`
+	SpeechPolicyOverrides policy.Overrides         `json:"speechPolicyOverrides,omitempty"`
 }
 
 type VoiceKind string
@@ -78,10 +81,21 @@ type VoiceUpload struct {
 }
 
 type VoiceProject struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID                   string                      `json:"id"`
+	Name                 string                      `json:"name"`
+	SpeechPolicyProfile  string                      `json:"speechPolicyProfile"`
+	SpeechPolicyProfiles []CustomSpeechPolicyProfile `json:"speechPolicyProfiles,omitempty"`
+	CreatedAt            time.Time                   `json:"createdAt"`
+	UpdatedAt            time.Time                   `json:"updatedAt"`
+}
+
+type CustomSpeechPolicyProfile struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	BaseProfile string          `json:"baseProfile,omitempty"`
+	Settings    policy.Settings `json:"settings"`
+	CreatedAt   time.Time       `json:"createdAt"`
+	UpdatedAt   time.Time       `json:"updatedAt"`
 }
 
 type PreparedSourceKind string
@@ -109,6 +123,9 @@ const (
 	NarrationBlockKindQuote       NarrationBlockKind = "quote"
 	NarrationBlockKindTable       NarrationBlockKind = "table"
 	NarrationBlockKindCode        NarrationBlockKind = "code"
+	NarrationBlockKindMath        NarrationBlockKind = "math"
+	NarrationBlockKindImage       NarrationBlockKind = "image"
+	NarrationBlockKindCaption     NarrationBlockKind = "caption"
 	NarrationBlockKindCitation    NarrationBlockKind = "citation"
 	NarrationBlockKindFrontmatter NarrationBlockKind = "frontmatter"
 )
@@ -130,22 +147,24 @@ type NarrationSegment struct {
 }
 
 type NarrationBlock struct {
-	ID                  string             `json:"id"`
-	Index               int                `json:"index"`
-	Kind                NarrationBlockKind `json:"kind"`
-	SpeakMode           NarrationSpeakMode `json:"speakMode"`
-	Label               string             `json:"label,omitempty"`
-	Text                string             `json:"text,omitempty"`
-	SpokenText          string             `json:"spokenText,omitempty"`
-	Emphasis            string             `json:"emphasis,omitempty"`
-	PauseBeforeMS       int                `json:"pauseBeforeMs,omitempty"`
-	PauseAfterMS        int                `json:"pauseAfterMs,omitempty"`
-	StartOffset         int                `json:"startOffset"`
-	EndOffset           int                `json:"endOffset"`
-	EstimatedDurationMS int                `json:"estimatedDurationMs,omitempty"`
-	Confidence          float64            `json:"confidence,omitempty"`
-	Segments            []NarrationSegment `json:"segments,omitempty"`
-	Warnings            []string           `json:"warnings,omitempty"`
+	ID                  string              `json:"id"`
+	Index               int                 `json:"index"`
+	Kind                NarrationBlockKind  `json:"kind"`
+	SpeakMode           NarrationSpeakMode  `json:"speakMode"`
+	Label               string              `json:"label,omitempty"`
+	Text                string              `json:"text,omitempty"`
+	SpokenText          string              `json:"spokenText,omitempty"`
+	Language            string              `json:"language,omitempty"`
+	Emphasis            string              `json:"emphasis,omitempty"`
+	PauseBeforeMS       int                 `json:"pauseBeforeMs,omitempty"`
+	PauseAfterMS        int                 `json:"pauseAfterMs,omitempty"`
+	StartOffset         int                 `json:"startOffset"`
+	EndOffset           int                 `json:"endOffset"`
+	EstimatedDurationMS int                 `json:"estimatedDurationMs,omitempty"`
+	Confidence          float64             `json:"confidence,omitempty"`
+	Segments            []NarrationSegment  `json:"segments,omitempty"`
+	Warnings            []string            `json:"warnings,omitempty"`
+	SpeechPolicy        policy.SpeechPolicy `json:"speechPolicy"`
 }
 
 type SkippedSourceItem struct {
@@ -177,6 +196,7 @@ type PreparedSource struct {
 	PreprocessorVersion string                `json:"preprocessorVersion,omitempty"`
 	SourceFormat        string                `json:"sourceFormat,omitempty"`
 	RenderMode          string                `json:"renderMode,omitempty"`
+	SpeechPolicyProfile string                `json:"speechPolicyProfile"`
 	Title               string                `json:"title,omitempty"`
 	Text                string                `json:"text,omitempty"`
 	SpeechText          string                `json:"speechText,omitempty"`
@@ -199,6 +219,24 @@ type CreatePreparedSourceRequest struct {
 	SourceName        string             `json:"sourceName,omitempty"`
 	SourceContentType string             `json:"sourceContentType,omitempty"`
 	SourceBytes       int64              `json:"sourceBytes,omitempty"`
+}
+
+type SpeechPolicyPreviewRequest struct {
+	Profile   string           `json:"profile,omitempty"`
+	Overrides policy.Overrides `json:"overrides,omitempty"`
+}
+
+type ProjectSpeechPolicy struct {
+	ProjectID      string                      `json:"projectId"`
+	Profile        string                      `json:"profile"`
+	Settings       policy.Settings             `json:"settings"`
+	CustomProfiles []CustomSpeechPolicyProfile `json:"customProfiles,omitempty"`
+}
+
+type UpsertSpeechPolicyProfileRequest struct {
+	Name        string          `json:"name"`
+	BaseProfile string          `json:"baseProfile,omitempty"`
+	Settings    policy.Settings `json:"settings"`
 }
 
 type ProjectStorageDownload struct {
@@ -794,6 +832,8 @@ type VoiceJob struct {
 	SelectedBlockIDs        []string          `json:"selectedBlockIds,omitempty"`
 	SourceKind              string            `json:"sourceKind,omitempty"`
 	ProgressTargetID        string            `json:"progressTargetId,omitempty"`
+	SpeechPolicyProfile     string            `json:"speechPolicyProfile,omitempty"`
+	SpeechPolicyOverrides   policy.Overrides  `json:"speechPolicyOverrides,omitempty"`
 	Status                  JobStatus         `json:"status"`
 	Stages                  PipelineStages    `json:"stages"`
 	AdaptiveMode            bool              `json:"adaptiveMode"`

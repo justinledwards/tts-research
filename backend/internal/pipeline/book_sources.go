@@ -17,6 +17,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 const bookSourceMetadataFilename = "book.json"
@@ -198,6 +200,14 @@ func (service *Service) GetBookSourceScope(id string, requested *BookScope) (Boo
 		warnings = append(warnings, section.Warnings...)
 	}
 	blocks, skippedItems, prepWarnings := prepareNarrationBlocks(text, service.options.SourcePrepSentenceMaxRunes)
+	policySource := applySpeechPolicyToPreparedSource(PreparedSource{
+		ID:        "book-scope-preview",
+		ProjectID: book.ProjectID,
+		Kind:      PreparedSourceKindBook,
+		Blocks:    blocks,
+	}, service.projectSpeechPolicyProfile(book.ProjectID), policy.Overrides{}, service.options.SourcePrepSentenceMaxRunes)
+	blocks = policySource.Blocks
+	skippedItems = policySource.SkippedItems
 	warnings = append(warnings, prepWarnings...)
 	return BookSourceScopeContent{
 		BookSourceID:         book.ID,

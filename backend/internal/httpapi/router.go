@@ -15,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 	systemmetrics "github.com/justinedwards/tts-research/backend/internal/systemmetrics"
 )
 
@@ -114,6 +115,28 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(document)
 	})
 
+	app.Post("/api/content-ir/:id/speech-policy/preview", func(ctx fiber.Ctx) error {
+		var request pipeline.SpeechPolicyPreviewRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		document, err := service.PreviewContentIRSpeechPolicy(ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrContentIRNotFound) || errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(document)
+	})
+
+	app.Get("/api/policies/profiles", func(ctx fiber.Ctx) error {
+		return ctx.JSON(policy.Profiles())
+	})
+
 	app.Get("/api/projects", func(ctx fiber.Ctx) error {
 		return ctx.JSON(service.ListProjects())
 	})
@@ -179,6 +202,72 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return notFound(ctx, err)
 		}
 		return ctx.JSON(progress)
+	})
+
+	app.Get("/api/projects/:id/speech-policy", func(ctx fiber.Ctx) error {
+		settings, err := service.GetProjectSpeechPolicy(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(settings)
+	})
+
+	app.Patch("/api/projects/:id/speech-policy", func(ctx fiber.Ctx) error {
+		var request struct {
+			Profile string `json:"profile"`
+		}
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		settings, err := service.UpdateProjectSpeechPolicy(ctx.Params("id"), request.Profile)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(settings)
+	})
+
+	app.Post("/api/projects/:id/speech-policy/profiles", func(ctx fiber.Ctx) error {
+		var request pipeline.UpsertSpeechPolicyProfileRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		settings, err := service.CreateCustomSpeechPolicyProfile(ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.Status(fiber.StatusCreated).JSON(settings)
+	})
+
+	app.Patch("/api/projects/:id/speech-policy/profiles/:profileId", func(ctx fiber.Ctx) error {
+		var request pipeline.UpsertSpeechPolicyProfileRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		settings, err := service.UpdateCustomSpeechPolicyProfile(ctx.Params("id"), ctx.Params("profileId"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProjectNotFound) || errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(settings)
+	})
+
+	app.Delete("/api/projects/:id/speech-policy/profiles/:profileId", func(ctx fiber.Ctx) error {
+		settings, err := service.DeleteCustomSpeechPolicyProfile(ctx.Params("id"), ctx.Params("profileId"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProjectNotFound) || errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(settings)
 	})
 
 	app.Get("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
@@ -292,6 +381,21 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return ctx.Status(fiber.StatusNotFound).JSON(errorResponse(err.Error()))
 		}
 		return ctx.JSON(block)
+	})
+
+	app.Post("/api/source-preps/:id/speech-policy/preview", func(ctx fiber.Ctx) error {
+		var request pipeline.SpeechPolicyPreviewRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		source, err := service.PreviewPreparedSourceSpeechPolicy(ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) || errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(source)
 	})
 
 	app.Post("/api/source-preps/:id/voice-jobs", func(ctx fiber.Ctx) error {

@@ -18,6 +18,7 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/agents"
 	"github.com/justinedwards/tts-research/backend/internal/audio"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 func TestCreateJobCompletesWithMockAgents(t *testing.T) {
@@ -107,6 +108,16 @@ func TestPreparedSourceSkipsResearchCitationsAndKeepsHeadings(t *testing.T) {
 	if !strings.Contains(source.SpeechText, "Corporate Moats") || !strings.Contains(source.SpeechText, "Executive summary") {
 		t.Fatalf("speech text lost headings: %q", source.SpeechText)
 	}
+	if !strings.Contains(source.SpeechText, "The corporate moat remains useful.") {
+		t.Fatalf("speech text lost body paragraph with inline citation: %q", source.SpeechText)
+	}
+	bodyBlock := findPreparedBlockContaining(source.Blocks, "The corporate moat remains useful.")
+	if bodyBlock == nil {
+		t.Fatalf("body block with inline citation was not preserved: %#v", source.Blocks)
+	}
+	if bodyBlock.SpeakMode != pipeline.NarrationSpeakModeSpeak || bodyBlock.SpeechPolicy.Element != "prose" {
+		t.Fatalf("body block policy = %#v, want spoken prose", bodyBlock.SpeechPolicy)
+	}
 	if source.PreprocessorID != "markdown-gfm" || source.RenderMode != "markdown" || source.SourceFormat != "markdown" {
 		t.Fatalf("source preprocessor metadata = %q/%q/%q", source.PreprocessorID, source.RenderMode, source.SourceFormat)
 	}
@@ -116,6 +127,152 @@ func TestPreparedSourceSkipsResearchCitationsAndKeepsHeadings(t *testing.T) {
 	if source.Summary.SentenceSegmentCount < 3 {
 		t.Fatalf("sentence segment count = %d, want at least 3", source.Summary.SentenceSegmentCount)
 	}
+}
+
+func TestEnterpriseProfileSpeaksDemoBodyParagraphsWithInlineCitations(t *testing.T) {
+	t.Parallel()
+
+	markdown, err := os.ReadFile(filepath.Join("..", "..", "..", "demo", "deep-research-report.md"))
+	if err != nil {
+		t.Fatalf("ReadFile demo/deep-research-report.md returned error: %v", err)
+	}
+	service := newBookSourceService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "deep-research-report.md",
+		Text:       string(markdown),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+
+	bodyWithCitationWarnings := 0
+	for _, block := range source.Blocks {
+		if block.Kind != "body" || !containsString(block.Warnings, "citation_removed") {
+			continue
+		}
+		bodyWithCitationWarnings++
+		if block.SpeakMode == pipeline.NarrationSpeakModeSkip {
+			t.Fatalf("body block %s was skipped by Enterprise after citation removal: policy=%#v text=%q", block.ID, block.SpeechPolicy, block.Text)
+		}
+		if block.SpeechPolicy.Element != "prose" || strings.Contains(block.SpeechPolicy.Explanation, "footnote") {
+			t.Fatalf("body block %s policy = %#v, want prose explanation", block.ID, block.SpeechPolicy)
+		}
+	}
+	if bodyWithCitationWarnings == 0 {
+		t.Fatal("expected demo markdown to contain body blocks with removed inline citations")
+	}
+	if source.Summary.SpokenBlockCount <= source.Summary.SkippedBlockCount {
+		t.Fatalf("summary = %#v, want Enterprise to speak prose body blocks", source.Summary)
+	}
+}
+
+func TestPreparedSourcePolicyPreviewAndOverrides(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "policy.md",
+		Text: strings.Join([]string{
+			"# Policy",
+			"",
+			"| Metric | Value |",
+			"|---|---|",
+			"| Latency | 12ms |",
+			"",
+			"```go",
+			"fmt.Println(\"hello\")",
+			"```",
+			"",
+			"$$x^2 + y = 4$$",
+			"",
+			"[^1]: Supporting note.",
+			"",
+			"![Architecture diagram](diagram.png)",
+			"",
+			"Figure: request flow overview",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if source.SpeechPolicyProfile != "Enterprise" {
+		t.Fatalf("source profile = %q, want Enterprise", source.SpeechPolicyProfile)
+	}
+	if strings.Contains(source.SpeechText, "fmt.Println") || strings.Contains(source.SpeechText, "Supporting note") {
+		t.Fatalf("enterprise speech should skip code and notes: %q", source.SpeechText)
+	}
+
+	accessibility, err := service.PreviewPreparedSourceSpeechPolicy(source.ID, pipeline.SpeechPolicyPreviewRequest{Profile: "Accessibility"})
+	if err != nil {
+		t.Fatalf("PreviewPreparedSourceSpeechPolicy returned error: %v", err)
+	}
+	if !strings.Contains(accessibility.SpeechText, "fmt.Println") || !strings.Contains(accessibility.SpeechText, "Metric: Latency") {
+		t.Fatalf("accessibility preview did not include row-linear table and code: %q", accessibility.SpeechText)
+	}
+	if accessibility.Blocks[2].SpeechPolicy.Explanation == "" {
+		t.Fatalf("expected explanation on code block: %#v", accessibility.Blocks[2].SpeechPolicy)
+	}
+
+	override, err := service.PreviewPreparedSourceSpeechPolicy(source.ID, pipeline.SpeechPolicyPreviewRequest{
+		Profile:   "Enterprise",
+		Overrides: policy.Overrides{CodeMode: policy.CodeModeLiteral, FootnoteMode: policy.FootnoteModeInline},
+	})
+	if err != nil {
+		t.Fatalf("PreviewPreparedSourceSpeechPolicy override returned error: %v", err)
+	}
+	if !strings.Contains(override.SpeechText, "fmt.Println") || !strings.Contains(override.SpeechText, "Supporting note") {
+		t.Fatalf("override preview did not include literal code and inline note: %q", override.SpeechText)
+	}
+	if !strings.Contains(override.Blocks[2].SpeechPolicy.Explanation, "session override") {
+		t.Fatalf("override explanation = %q, want session override", override.Blocks[2].SpeechPolicy.Explanation)
+	}
+
+	if _, err := service.UpdateProjectSpeechPolicy("default", "Accessibility"); err != nil {
+		t.Fatalf("UpdateProjectSpeechPolicy returned error: %v", err)
+	}
+	reloaded, err := service.GetPreparedSource(source.ID)
+	if err != nil {
+		t.Fatalf("GetPreparedSource returned error: %v", err)
+	}
+	if reloaded.SpeechPolicyProfile != "Accessibility" || !strings.Contains(reloaded.SpeechText, "fmt.Println") {
+		t.Fatalf("reloaded source did not use stored project profile: profile=%q text=%q", reloaded.SpeechPolicyProfile, reloaded.SpeechText)
+	}
+}
+
+func TestPreparedSourceJobStoresAppliedSpeechPolicyMetadata(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "policy-job.md",
+		Text: strings.Join([]string{
+			"# Policy job",
+			"",
+			"```go",
+			"fmt.Println(\"hello\")",
+			"```",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{
+		SpeechPolicyProfile:   "Enterprise",
+		SpeechPolicyOverrides: policy.Overrides{CodeMode: policy.CodeModeLiteral},
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	if job.SpeechPolicyProfile != "Enterprise" || job.SpeechPolicyOverrides.CodeMode != policy.CodeModeLiteral {
+		t.Fatalf("job policy metadata = profile %q overrides %#v, want Enterprise literal code", job.SpeechPolicyProfile, job.SpeechPolicyOverrides)
+	}
+	if !strings.Contains(job.InputText, "fmt.Println") {
+		t.Fatalf("job input text = %q, want literal code from applied override", job.InputText)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 }
 
 func TestPreparedSourceJobAllowsLongSentenceWithWarning(t *testing.T) {
@@ -594,6 +751,93 @@ func TestProjectsCreateRenameAndGroupJobs(t *testing.T) {
 	}
 }
 
+func TestProjectCustomSpeechPolicyProfilesPersistAndSelect(t *testing.T) {
+	t.Parallel()
+
+	options := pipeline.Options{
+		MaxRetries:         3,
+		JobDataDir:         t.TempDir(),
+		ProjectDataDir:     t.TempDir(),
+		BookSourceDir:      t.TempDir(),
+		SourcePrepDir:      t.TempDir(),
+		ProgressDataDir:    t.TempDir(),
+		PlaybackSessionDir: t.TempDir(),
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	project, err := service.CreateProject("Policy lab")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	created, err := service.CreateCustomSpeechPolicyProfile(project.ID, pipeline.UpsertSpeechPolicyProfileRequest{
+		Name:        "Reader QA",
+		BaseProfile: "Enterprise",
+		Settings: policy.Settings{
+			Mode:         policy.ModeSpeak,
+			TableMode:    policy.TableModeRowLinear,
+			CodeMode:     policy.CodeModeLiteral,
+			MathMode:     policy.MathModeSemantic,
+			FootnoteMode: policy.FootnoteModeInline,
+			ImageMode:    policy.ImageModeDescribeShort,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateCustomSpeechPolicyProfile returned error: %v", err)
+	}
+	customID := created.Profile
+	if customID == "" || len(created.CustomProfiles) != 1 || created.CustomProfiles[0].Name != "Reader QA" {
+		t.Fatalf("created custom policy = %#v, want selected custom profile", created)
+	}
+	if created.Settings.CodeMode != policy.CodeModeLiteral {
+		t.Fatalf("created settings = %#v, want literal code mode", created.Settings)
+	}
+
+	reloaded := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	reloadedPolicy, err := reloaded.GetProjectSpeechPolicy(project.ID)
+	if err != nil {
+		t.Fatalf("GetProjectSpeechPolicy(reloaded) returned error: %v", err)
+	}
+	if reloadedPolicy.Profile != customID || len(reloadedPolicy.CustomProfiles) != 1 {
+		t.Fatalf("reloaded policy = %#v, want selected custom profile", reloadedPolicy)
+	}
+
+	updated, err := reloaded.UpdateCustomSpeechPolicyProfile(project.ID, customID, pipeline.UpsertSpeechPolicyProfileRequest{
+		Name:        "Reader QA edited",
+		BaseProfile: "Education",
+		Settings: policy.Settings{
+			Mode:         policy.ModeSpeak,
+			TableMode:    policy.TableModeSummary,
+			CodeMode:     policy.CodeModeSummary,
+			MathMode:     policy.MathModeSemantic,
+			FootnoteMode: policy.FootnoteModeEndnote,
+			ImageMode:    policy.ImageModeAltFirst,
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateCustomSpeechPolicyProfile returned error: %v", err)
+	}
+	if updated.CustomProfiles[0].Name != "Reader QA edited" || updated.Settings.CodeMode != policy.CodeModeSummary {
+		t.Fatalf("updated policy = %#v, want edited custom settings", updated)
+	}
+
+	deleted, err := reloaded.DeleteCustomSpeechPolicyProfile(project.ID, customID)
+	if err != nil {
+		t.Fatalf("DeleteCustomSpeechPolicyProfile returned error: %v", err)
+	}
+	if deleted.Profile != "Enterprise" || len(deleted.CustomProfiles) != 0 {
+		t.Fatalf("deleted policy = %#v, want Enterprise fallback without custom profiles", deleted)
+	}
+}
+
 func TestProjectDeleteAndStorageSummary(t *testing.T) {
 	t.Parallel()
 
@@ -702,6 +946,21 @@ func TestProjectBundleSummaryExportAndPreview(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateProject returned error: %v", err)
 	}
+	customPolicy, err := service.CreateCustomSpeechPolicyProfile(project.ID, pipeline.UpsertSpeechPolicyProfileRequest{
+		Name:        "Bundle profile",
+		BaseProfile: "Enterprise",
+		Settings: policy.Settings{
+			Mode:         policy.ModeSpeak,
+			TableMode:    policy.TableModeSummary,
+			CodeMode:     policy.CodeModeLiteral,
+			MathMode:     policy.MathModeSkip,
+			FootnoteMode: policy.FootnoteModeInline,
+			ImageMode:    policy.ImageModeAltFirst,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateCustomSpeechPolicyProfile returned error: %v", err)
+	}
 	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
 		ProjectID: project.ID,
 		Text:      "Export this project as a portable bundle.",
@@ -751,6 +1010,11 @@ func TestProjectBundleSummaryExportAndPreview(t *testing.T) {
 	}
 	if preview.Manifest == nil || len(preview.Manifest.Jobs) != 1 || preview.Manifest.Jobs[0].ID != completed.ID {
 		t.Fatalf("preview manifest = %#v, want exported completed job", preview.Manifest)
+	}
+	if preview.Manifest.Project.SpeechPolicyProfile != customPolicy.Profile ||
+		len(preview.Manifest.Project.SpeechPolicyProfiles) != 1 ||
+		preview.Manifest.Project.SpeechPolicyProfiles[0].Name != "Bundle profile" {
+		t.Fatalf("preview project policy = %#v, want exported custom speech policy", preview.Manifest.Project)
 	}
 	if len(preview.Manifest.Books) != 1 || preview.Manifest.Books[0].ID != book.ID {
 		t.Fatalf("preview books = %#v, want exported book metadata", preview.Manifest.Books)
@@ -2655,6 +2919,24 @@ func (checker *countingRejectChecker) Check(_ context.Context, _ string, _ []byt
 
 func boolPtr(value bool) *bool {
 	return &value
+}
+
+func findPreparedBlockContaining(blocks []pipeline.NarrationBlock, text string) *pipeline.NarrationBlock {
+	for index := range blocks {
+		if strings.Contains(blocks[index].Text, text) {
+			return &blocks[index]
+		}
+	}
+	return nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func newMockService(t *testing.T, checker pipeline.VoiceChecker) *pipeline.Service {

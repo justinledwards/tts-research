@@ -32,6 +32,7 @@ export interface TeleprompterWordCue {
 export interface TeleprompterCue {
   activeWordIndex: number;
   currentText: string;
+  documentActiveWordIndex: number;
   nextText: string | null;
   previousText: string | null;
   segmentCount: number;
@@ -316,10 +317,15 @@ export function buildTeleprompterCue(
   const activeWordIndex =
     wordCues.find((wordCue) => wordCue.state === "active")?.wordIndex ??
     pickTeleprompterWordIndex(currentText, segmentProgress);
+  const documentActiveWordIndex =
+    segments
+      .slice(0, activeSegmentIndex)
+      .reduce((total, segment) => total + wordCount(segment.text), 0) + activeWordIndex;
 
   return {
     activeWordIndex,
     currentText,
+    documentActiveWordIndex,
     nextText: segments[activeSegmentIndex + 1]?.text ?? null,
     previousText: segments[activeSegmentIndex - 1]?.text ?? null,
     segmentCount: segments.length,

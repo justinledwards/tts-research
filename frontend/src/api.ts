@@ -13,10 +13,14 @@ import type {
   PlaybackProgressUpdate,
   PlaybackSession,
   PreparedSource,
+  ProjectSpeechPolicy,
   ProjectBundleImportResult,
   ProjectBundlePreview,
   ProjectBundleSummary,
   ProjectStorageSummary,
+  SpeechPolicyOverrides,
+  SpeechPolicyProfile,
+  UpsertSpeechPolicyProfileRequest,
   SystemMetrics,
   TTSEngineDiagnostics,
   Voice,
@@ -83,6 +87,129 @@ export async function getContentIR(id: string): Promise<ContentIRDocument> {
     throw await apiError(response);
   }
   return response.json() as Promise<ContentIRDocument>;
+}
+
+export async function previewContentIRSpeechPolicy(
+  id: string,
+  request: { profile?: string; overrides?: SpeechPolicyOverrides },
+): Promise<ContentIRDocument> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/content-ir/${encodeURIComponent(id)}/speech-policy/preview`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<ContentIRDocument>;
+}
+
+export async function listSpeechPolicyProfiles(): Promise<SpeechPolicyProfile[]> {
+  const response = await fetch(`${apiBaseUrl}/api/policies/profiles`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<SpeechPolicyProfile[]>;
+}
+
+export async function getProjectSpeechPolicy(projectId: string): Promise<ProjectSpeechPolicy> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/speech-policy`,
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<ProjectSpeechPolicy>;
+}
+
+export async function updateProjectSpeechPolicy(
+  projectId: string,
+  profile: string,
+): Promise<ProjectSpeechPolicy> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/speech-policy`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile }),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<ProjectSpeechPolicy>;
+}
+
+export async function createCustomSpeechPolicyProfile(
+  projectId: string,
+  request: UpsertSpeechPolicyProfileRequest,
+): Promise<ProjectSpeechPolicy> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/speech-policy/profiles`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<ProjectSpeechPolicy>;
+}
+
+export async function updateCustomSpeechPolicyProfile(
+  projectId: string,
+  profileId: string,
+  request: UpsertSpeechPolicyProfileRequest,
+): Promise<ProjectSpeechPolicy> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/speech-policy/profiles/${encodeURIComponent(profileId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<ProjectSpeechPolicy>;
+}
+
+export async function deleteCustomSpeechPolicyProfile(
+  projectId: string,
+  profileId: string,
+): Promise<ProjectSpeechPolicy> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/speech-policy/profiles/${encodeURIComponent(profileId)}`,
+    { method: "DELETE" },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<ProjectSpeechPolicy>;
+}
+
+export async function previewPreparedSourceSpeechPolicy(
+  preparedSourceId: string,
+  request: { profile?: string; overrides?: SpeechPolicyOverrides },
+): Promise<PreparedSource> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/source-preps/${encodeURIComponent(preparedSourceId)}/speech-policy/preview`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PreparedSource>;
 }
 
 export async function listProjectBookSources(projectId: string): Promise<BookSource[]> {

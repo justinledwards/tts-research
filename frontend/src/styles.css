@@ -411,6 +411,7 @@ select {
 
 .prose-markdown pre {
   overflow: auto;
+  max-width: 100%;
   border: 1px solid var(--vs-border);
   border-radius: 0.45rem;
   background: var(--vs-surface);
@@ -421,6 +422,15 @@ select {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.88em;
+}
+
+.prose-markdown :where(p, li, blockquote, figcaption) {
+  overflow-wrap: anywhere;
+}
+
+.prose-markdown :where(img, svg, video, canvas) {
+  max-width: 100%;
+  height: auto;
 }
 
 .prose-markdown :where(th, td) {
@@ -448,6 +458,29 @@ select {
 
 .markdown-cinema-block + .markdown-cinema-block {
   margin-top: 0.5rem;
+}
+
+.markdown-cinema {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.markdown-cinema :where(table, pre) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.markdown-cinema :where(td, th) {
+  min-width: 8rem;
+}
+
+.markdown-cinema-block-active {
+  border-radius: 0.22em;
+  background: color-mix(in srgb, var(--vs-accent) 13%, transparent);
+  box-shadow:
+    0 0 0 0.1em color-mix(in srgb, var(--vs-accent) 18%, transparent),
+    0 0 0.75em color-mix(in srgb, var(--vs-accent) 14%, transparent);
 }
 
 .markdown-cinema-word-active {

@@ -1,6 +1,10 @@
 package contentir
 
-import "time"
+import (
+	"time"
+
+	"github.com/justinedwards/tts-research/backend/internal/policy"
+)
 
 const SchemaVersion = "content-ir.v1"
 
@@ -43,7 +47,8 @@ type UIHints struct {
 }
 
 type SpeechMetadata struct {
-	PolicyHint SpeechPolicyHint `json:"policyHint"`
+	PolicyHint   SpeechPolicyHint    `json:"policyHint"`
+	SpeechPolicy policy.SpeechPolicy `json:"speechPolicy"`
 }
 
 type RightsMetadata struct {

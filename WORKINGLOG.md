@@ -91,3 +91,18 @@
 - [x] Add word-level follow-along in Markdown render mode
 - [x] Verify tables and flowcharts render after processing
 - [x] Run validation and commit state
+
+## 2026-05-16 19:34 CEST - Policy engine and market profiles
+
+- [x] Add backend policy engine, market profiles, and docs
+- [x] Extend project storage, APIs, IR, and legacy source prep bridges
+- [x] Add frontend profile selector, session overrides, and explanations
+- [x] Add profile snapshots, precedence tests, frontend tests, and validation
+
+## 2026-05-16 20:30 CEST - Policy review and Markdown Cinema fixes
+
+- [x] Fix Enterprise prose/citation classification
+- [x] Add project custom speech profiles and policy-aware inspection
+- [x] Expand prepared-source review and profile comparison UI
+- [x] Stabilize Markdown Cinema rendering and readalong mapping
+- [x] Add regression coverage, run checks, and visual smoke

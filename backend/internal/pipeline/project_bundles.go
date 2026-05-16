@@ -388,21 +388,61 @@ func (service *Service) resolveBundleImportProject(
 	projectID string,
 	mode BundleImportMode,
 ) (VoiceProject, error) {
+	applyPolicyMetadata := func(project VoiceProject, replace bool) (VoiceProject, error) {
+		if replace {
+			project.SpeechPolicyProfiles = cloneCustomSpeechPolicyProfiles(manifest.Project.SpeechPolicyProfiles)
+		} else {
+			byID := map[string]CustomSpeechPolicyProfile{}
+			for _, profile := range project.SpeechPolicyProfiles {
+				byID[profile.ID] = profile
+			}
+			for _, profile := range manifest.Project.SpeechPolicyProfiles {
+				byID[profile.ID] = profile
+			}
+			project.SpeechPolicyProfiles = project.SpeechPolicyProfiles[:0]
+			for _, profile := range byID {
+				project.SpeechPolicyProfiles = append(project.SpeechPolicyProfiles, profile)
+			}
+			sort.SliceStable(project.SpeechPolicyProfiles, func(left int, right int) bool {
+				return project.SpeechPolicyProfiles[left].Name < project.SpeechPolicyProfiles[right].Name
+			})
+		}
+		if strings.TrimSpace(manifest.Project.SpeechPolicyProfile) != "" {
+			project.SpeechPolicyProfile = manifest.Project.SpeechPolicyProfile
+		}
+		project = normalizeProjectSpeechPolicy(project)
+		project.UpdatedAt = time.Now().UTC()
+		if err := service.writeProject(project); err != nil {
+			return VoiceProject{}, err
+		}
+		service.mu.Lock()
+		service.projects[project.ID] = project
+		service.mu.Unlock()
+		return project, nil
+	}
 	switch mode {
 	case BundleImportModeMerge:
-		return service.GetProject(projectID)
+		project, err := service.GetProject(projectID)
+		if err != nil {
+			return VoiceProject{}, err
+		}
+		return applyPolicyMetadata(project, false)
 	case BundleImportModeReplace:
 		project, err := service.GetProject(projectID)
 		if err != nil {
 			return VoiceProject{}, err
 		}
-		return service.UpdateProject(project.ID, manifest.Project.Name)
+		project, err = service.UpdateProject(project.ID, manifest.Project.Name)
+		if err != nil {
+			return VoiceProject{}, err
+		}
+		return applyPolicyMetadata(project, true)
 	default:
 		project, err := service.CreateProject(manifest.Project.Name + " (Imported)")
 		if err != nil {
 			return VoiceProject{}, err
 		}
-		return project, nil
+		return applyPolicyMetadata(project, true)
 	}
 }
 

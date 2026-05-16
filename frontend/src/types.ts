@@ -30,6 +30,8 @@ export interface CreateVoiceJobRequest {
   runMode?: RunMode;
   performanceMode?: PerformanceMode;
   pipelineOptions?: Partial<PipelineOptions>;
+  speechPolicyProfile?: string;
+  speechPolicyOverrides?: SpeechPolicyOverrides;
 }
 
 export type RunMode = "draftPreview" | "fastCreate" | "checkedMaster" | "publishMaster";
@@ -39,8 +41,89 @@ export type PerformanceMode = "balanced" | "throughput" | "quality";
 export interface VoiceProject {
   id: string;
   name: string;
+  speechPolicyProfile: string;
+  speechPolicyProfiles?: CustomSpeechPolicyProfile[];
   createdAt: string;
   updatedAt: string;
+}
+
+export type BuiltInSpeechPolicyProfileName =
+  | "Education"
+  | "Accessibility"
+  | "TechnicalDocs"
+  | "LanguageLearning"
+  | "Enterprise";
+
+export type SpeechPolicyMode =
+  | "speak"
+  | "skip"
+  | "summarise"
+  | "literal"
+  | "spell"
+  | "describeShort"
+  | "describeLong"
+  | "onDemand"
+  | "interactive";
+
+export type SpeechPolicyTableMode = "skip" | "summary" | "rowLinear" | "interactive";
+export type SpeechPolicyCodeMode = "skip" | "summary" | "syntaxAware" | "literal";
+export type SpeechPolicyMathMode = "skip" | "semantic" | "literalsafe";
+export type SpeechPolicyFootnoteMode = "skip" | "inline" | "endnote" | "onDemand";
+export type SpeechPolicyImageMode = "skip" | "altFirst" | "describeShort" | "describeLong";
+
+export interface SpeechPolicySettings {
+  mode: SpeechPolicyMode;
+  tableMode: SpeechPolicyTableMode;
+  codeMode: SpeechPolicyCodeMode;
+  mathMode: SpeechPolicyMathMode;
+  footnoteMode: SpeechPolicyFootnoteMode;
+  imageMode: SpeechPolicyImageMode;
+}
+
+export interface SpeechPolicyOverrides {
+  mode?: SpeechPolicyMode;
+  tableMode?: SpeechPolicyTableMode;
+  codeMode?: SpeechPolicyCodeMode;
+  mathMode?: SpeechPolicyMathMode;
+  footnoteMode?: SpeechPolicyFootnoteMode;
+  imageMode?: SpeechPolicyImageMode;
+}
+
+export interface SpeechPolicyProfile {
+  name: string;
+  label: string;
+  description: string;
+  settings: SpeechPolicySettings;
+}
+
+export interface CustomSpeechPolicyProfile {
+  id: string;
+  name: string;
+  baseProfile?: string;
+  settings: SpeechPolicySettings;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectSpeechPolicy {
+  projectId: string;
+  profile: string;
+  settings: SpeechPolicySettings;
+  customProfiles?: CustomSpeechPolicyProfile[];
+}
+
+export interface UpsertSpeechPolicyProfileRequest {
+  name: string;
+  baseProfile?: string;
+  settings: SpeechPolicySettings;
+}
+
+export interface SpeechPolicyDecision {
+  profile: string;
+  element?: string;
+  elementMode?: string;
+  mode: string;
+  explanation: string;
 }
 
 export type VoiceKind = "native" | "clone";
@@ -210,6 +293,9 @@ export type NarrationBlockKind =
   | "quote"
   | "table"
   | "code"
+  | "math"
+  | "image"
+  | "caption"
   | "citation"
   | "frontmatter";
 export type NarrationSpeakMode = "speak" | "skip" | "summarize";
@@ -230,6 +316,7 @@ export interface NarrationBlock {
   label?: string;
   text?: string;
   spokenText?: string;
+  language?: string;
   emphasis?: string;
   pauseBeforeMs?: number;
   pauseAfterMs?: number;
@@ -239,6 +326,7 @@ export interface NarrationBlock {
   confidence?: number;
   segments?: NarrationSegment[];
   warnings?: string[];
+  speechPolicy: SpeechPolicyDecision;
 }
 
 export interface SkippedSourceItem {
@@ -270,6 +358,7 @@ export interface PreparedSource {
   preprocessorVersion?: string;
   sourceFormat?: string;
   renderMode?: string;
+  speechPolicyProfile: string;
   title?: string;
   text?: string;
   speechText?: string;
@@ -737,6 +826,8 @@ export interface VoiceJob {
   selectedBlockIds?: string[];
   sourceKind?: string;
   progressTargetId?: string;
+  speechPolicyProfile?: string;
+  speechPolicyOverrides?: SpeechPolicyOverrides;
   status: JobStatus;
   adaptiveMode?: boolean;
   runMode?: RunMode;

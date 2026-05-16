@@ -47,6 +47,13 @@
           "emphasis": "",
           "pauseBeforeMs": 0,
           "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "prose",
+          "elementMode": "speak",
+          "mode": "speak",
+          "explanation": "Prose is spoken because the Enterprise profile sets mode to speak."
         }
       },
       "warnings": [],

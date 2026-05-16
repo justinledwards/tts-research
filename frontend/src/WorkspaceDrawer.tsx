@@ -2,12 +2,15 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatDuration } from "./format";
 import type {
   BookSource,
+  CustomSpeechPolicyProfile,
+  SpeechPolicyProfile,
   SystemMetrics,
   VoiceJob,
   VoiceProfile,
   VoiceProfileSource,
   VoiceProject,
 } from "./types";
+import { SPEECH_POLICY_PROFILE_OPTIONS, speechPolicyProfileLabel } from "./speechPolicy";
 
 export function WorkspaceDrawer({
   activeProjectId,
@@ -21,6 +24,9 @@ export function WorkspaceDrawer({
   projects,
   profileSource,
   profiles,
+  customSpeechPolicyProfiles,
+  speechPolicyProfile,
+  speechPolicyProfiles,
   selectedProfileId,
   onCreateProject,
   onClose,
@@ -31,6 +37,7 @@ export function WorkspaceDrawer({
   onRenameProject,
   onSelectProject,
   onSelectProfile,
+  onSpeechPolicyProfileChange,
 }: Readonly<{
   activeProjectId: string;
   bookSources: BookSource[];
@@ -43,6 +50,9 @@ export function WorkspaceDrawer({
   projects: VoiceProject[];
   profileSource: VoiceProfileSource | null;
   profiles: VoiceProfile[];
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  speechPolicyProfile: string;
+  speechPolicyProfiles: SpeechPolicyProfile[];
   selectedProfileId: string;
   onCreateProject: (name: string) => Promise<void>;
   onClose: () => void;
@@ -53,6 +63,7 @@ export function WorkspaceDrawer({
   onRenameProject: (id: string, name: string) => Promise<void>;
   onSelectProject: (id: string) => void;
   onSelectProfile: (profileId: string) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
 }>) {
   useEscapeClose(isOpen, onClose);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
@@ -199,6 +210,39 @@ export function WorkspaceDrawer({
                 ) : (
                   <EmptyDrawerText>No saved voice profiles yet.</EmptyDrawerText>
                 )}
+              </div>
+            </WorkspaceSection>
+
+            <WorkspaceSection id="workspace-speech" title="Speech Policy">
+              <div className="grid gap-2 rounded-md border p-4 vs-surface">
+                <label className="grid gap-1 text-sm font-semibold">
+                  <span>Market profile</span>
+                  <select
+                    className="h-10 rounded-md border bg-[var(--vs-raised)] px-3 text-sm outline-none vs-border"
+                    onChange={(event) => {
+                      onSpeechPolicyProfileChange(event.currentTarget.value);
+                    }}
+                    value={speechPolicyProfile}
+                  >
+                    {(speechPolicyProfiles.length > 0
+                      ? speechPolicyProfiles.map((profile) => profile.name)
+                      : SPEECH_POLICY_PROFILE_OPTIONS
+                    ).map((profile) => (
+                      <option key={profile} value={profile}>
+                        {speechPolicyProfileLabel(profile)}
+                      </option>
+                    ))}
+                    {customSpeechPolicyProfiles.length > 0 ? (
+                      <optgroup label="Custom profiles">
+                        {customSpeechPolicyProfiles.map((profile) => (
+                          <option key={profile.id} value={profile.id}>
+                            {profile.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </select>
+                </label>
               </div>
             </WorkspaceSection>
 

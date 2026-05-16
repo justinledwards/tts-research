@@ -110,6 +110,7 @@ export interface ContentIRUIHints {
 
 export interface ContentIRSpeechMetadata {
   policyHint: ContentIRSpeechPolicyHint;
+  speechPolicy: ContentIRSpeechPolicy;
 }
 
 export interface ContentIRSpeechPolicyHint {
@@ -117,6 +118,14 @@ export interface ContentIRSpeechPolicyHint {
   emphasis: string;
   pauseBeforeMs: number;
   pauseAfterMs: number;
+}
+
+export interface ContentIRSpeechPolicy {
+  profile: string;
+  element?: string;
+  elementMode?: string;
+  mode: string;
+  explanation: string;
 }
 
 export interface ContentIRRightsMetadata {

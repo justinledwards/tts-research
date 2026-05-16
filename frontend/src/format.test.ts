@@ -121,10 +121,12 @@ describe("teleprompter helpers", () => {
     const earlyCue = buildTeleprompterCue(baseJob, 1.2);
     expect(earlyCue?.segmentIndex).toBe(1);
     expect(earlyCue?.activeWordIndex).toBe(0);
+    expect(earlyCue?.documentActiveWordIndex).toBe(2);
 
     const lateCue = buildTeleprompterCue(baseJob, 2.6);
     expect(lateCue?.segmentIndex).toBe(1);
     expect(lateCue?.activeWordIndex).toBe(1);
+    expect(lateCue?.documentActiveWordIndex).toBe(3);
   });
 
   it("keeps the final word active at the end of a segment", () => {

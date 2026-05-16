@@ -12,6 +12,7 @@ import (
 
 	"github.com/justinedwards/tts-research/backend/internal/agents"
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 var goldenContentIRTime = time.Date(2026, 5, 16, 12, 0, 0, 0, time.UTC)
@@ -53,6 +54,9 @@ func TestPreparedSourceIRRoundTrip(t *testing.T) {
 	if roundTrip.SpeechText != source.SpeechText {
 		t.Fatalf("speech text = %q, want %q", roundTrip.SpeechText, source.SpeechText)
 	}
+	if roundTrip.Blocks[0].SpeechPolicy.Profile != source.Blocks[0].SpeechPolicy.Profile {
+		t.Fatalf("speech policy profile = %q, want %q", roundTrip.Blocks[0].SpeechPolicy.Profile, source.Blocks[0].SpeechPolicy.Profile)
+	}
 	if roundTrip.Summary.SkippedBlockCount != source.Summary.SkippedBlockCount {
 		t.Fatalf("skipped blocks = %d, want %d", roundTrip.Summary.SkippedBlockCount, source.Summary.SkippedBlockCount)
 	}
@@ -75,6 +79,7 @@ func TestGetContentIRSanitizesStaleSentenceWarnings(t *testing.T) {
 	}
 	document := PreparedSourceToIR(source, goldenContentIRTime)
 	document.Nodes[0].Warnings = append(document.Nodes[0].Warnings, warningSentenceTooLong)
+	document.Nodes[0].Speech.SpeechPolicy = contentir.SpeechMetadata{}.SpeechPolicy
 	encoded, err := contentir.JSONSerializer{}.Encode(document)
 	if err != nil {
 		t.Fatalf("Encode returned error: %v", err)
@@ -89,6 +94,44 @@ func TestGetContentIRSanitizesStaleSentenceWarnings(t *testing.T) {
 	}
 	if hasWarning(loaded.Nodes[0].Warnings, warningSentenceTooLong) {
 		t.Fatalf("node warnings = %#v, want stale sentence_too_long removed", loaded.Nodes[0].Warnings)
+	}
+	if loaded.Nodes[0].Speech.SpeechPolicy.Profile != "Enterprise" {
+		t.Fatalf("speech policy was not backfilled: %#v", loaded.Nodes[0].Speech.SpeechPolicy)
+	}
+}
+
+func TestPreviewContentIRSpeechPolicyAppliesCurrentOverrides(t *testing.T) {
+	t.Parallel()
+
+	service := newContentIRTestService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", CreatePreparedSourceRequest{
+		Kind:       PreparedSourceKindFile,
+		SourceName: "preview.md",
+		Text:       "# Preview\n\n```go\nfmt.Println(\"hello\")\n```",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	document, err := service.PreviewContentIRSpeechPolicy(source.ID, SpeechPolicyPreviewRequest{
+		Profile:   "Enterprise",
+		Overrides: policy.Overrides{CodeMode: policy.CodeModeLiteral},
+	})
+	if err != nil {
+		t.Fatalf("PreviewContentIRSpeechPolicy returned error: %v", err)
+	}
+	var codeNode *contentir.Node
+	for index := range document.Nodes {
+		if document.Nodes[index].Kind == string(NarrationBlockKindCode) {
+			codeNode = &document.Nodes[index]
+			break
+		}
+	}
+	if codeNode == nil {
+		t.Fatalf("preview nodes = %#v, want code node", document.Nodes)
+	}
+	if codeNode.Speech.SpeechPolicy.Mode != string(policy.ModeLiteral) ||
+		!strings.Contains(codeNode.SpeechText, "fmt.Println") {
+		t.Fatalf("code node speech = %#v text=%q, want literal override", codeNode.Speech.SpeechPolicy, codeNode.SpeechText)
 	}
 }
 
@@ -203,6 +246,12 @@ func assertContentIRGolden(t *testing.T, filename string, document contentir.Doc
 		t.Fatalf("Encode returned error: %v", err)
 	}
 	goldenPath := filepath.Join("..", "contentir", "testdata", "golden", filename)
+	if os.Getenv("UPDATE_CONTENT_IR_GOLDEN") == "1" {
+		if err := os.WriteFile(goldenPath, actual, 0o644); err != nil {
+			t.Fatalf("Update golden %s returned error: %v", goldenPath, err)
+		}
+		return
+	}
 	expected, err := os.ReadFile(goldenPath)
 	if err != nil {
 		t.Fatalf("ReadFile(%s) returned error: %v\nActual:\n%s", goldenPath, err, actual)

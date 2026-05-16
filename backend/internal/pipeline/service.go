@@ -20,31 +20,33 @@ import (
 
 	"github.com/justinedwards/tts-research/backend/internal/agents"
 	"github.com/justinedwards/tts-research/backend/internal/audio"
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 var (
-	ErrEmptyText                  = errors.New("text is required")
-	ErrJobNotFound                = errors.New("voice job not found")
-	ErrVoiceNotFound              = errors.New("voice not found")
-	ErrInvalidVoice               = errors.New("voice upload is invalid")
-	ErrProfileNotFound            = errors.New("voice profile not found")
-	ErrAudioNotReady              = errors.New("voice job audio is not ready")
-	ErrRetryExhaust               = errors.New("voice checker did not confirm complete audio before retry limit")
-	ErrProfileTooLarge            = errors.New("voice profile upload exceeds allowed size")
-	ErrProfileExtractionFailed    = errors.New("unable to extract voice profile audio")
-	ErrProfileMissingAudio        = errors.New("voice profile has no reference audio")
-	ErrProfileUnsupported         = errors.New("tts engine does not support reference voice synthesis")
-	ErrProfileSourceNotFound      = errors.New("voice profile source not found")
-	ErrProfileCandidateNotFound   = errors.New("voice profile candidate not found")
-	ErrProfileAnalysisUnavailable = errors.New("voice profile source analysis is not configured")
-	ErrProjectNotFound            = errors.New("project not found")
-	ErrProjectProtected           = errors.New("default project cannot be deleted")
-	ErrBookSourceNotFound         = errors.New("book source not found")
-	ErrPreparedSourceNotFound     = errors.New("prepared source not found")
-	ErrContentIRNotFound          = errors.New("content IR not found")
-	ErrProgressNotFound           = errors.New("playback progress not found")
-	ErrPlaybackSessionNotFound    = errors.New("playback session not found")
-	ErrProjectBundleInvalid       = errors.New("project bundle is invalid")
+	ErrEmptyText                   = errors.New("text is required")
+	ErrJobNotFound                 = errors.New("voice job not found")
+	ErrVoiceNotFound               = errors.New("voice not found")
+	ErrInvalidVoice                = errors.New("voice upload is invalid")
+	ErrProfileNotFound             = errors.New("voice profile not found")
+	ErrAudioNotReady               = errors.New("voice job audio is not ready")
+	ErrRetryExhaust                = errors.New("voice checker did not confirm complete audio before retry limit")
+	ErrProfileTooLarge             = errors.New("voice profile upload exceeds allowed size")
+	ErrProfileExtractionFailed     = errors.New("unable to extract voice profile audio")
+	ErrProfileMissingAudio         = errors.New("voice profile has no reference audio")
+	ErrProfileUnsupported          = errors.New("tts engine does not support reference voice synthesis")
+	ErrProfileSourceNotFound       = errors.New("voice profile source not found")
+	ErrProfileCandidateNotFound    = errors.New("voice profile candidate not found")
+	ErrProfileAnalysisUnavailable  = errors.New("voice profile source analysis is not configured")
+	ErrProjectNotFound             = errors.New("project not found")
+	ErrProjectProtected            = errors.New("default project cannot be deleted")
+	ErrBookSourceNotFound          = errors.New("book source not found")
+	ErrPreparedSourceNotFound      = errors.New("prepared source not found")
+	ErrContentIRNotFound           = errors.New("content IR not found")
+	ErrSpeechPolicyProfileNotFound = errors.New("speech policy profile not found")
+	ErrProgressNotFound            = errors.New("playback progress not found")
+	ErrPlaybackSessionNotFound     = errors.New("playback session not found")
+	ErrProjectBundleInvalid        = errors.New("project bundle is invalid")
 )
 
 type VoiceOptimizer interface {
@@ -538,6 +540,8 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 	bookSourceID := strings.TrimSpace(request.BookSourceID)
 	preparedSourceID := strings.TrimSpace(request.PreparedSourceID)
 	progressTargetID := strings.TrimSpace(request.ProgressTargetID)
+	speechPolicyProfile := strings.TrimSpace(request.SpeechPolicyProfile)
+	speechPolicyOverrides := policy.NormalizeOverrides(request.SpeechPolicyOverrides)
 	sourceKind := strings.TrimSpace(request.SourceKind)
 	voiceProfileID := strings.TrimSpace(request.VoiceProfileID)
 	voiceLanguage := strings.TrimSpace(request.VoiceLanguage)
@@ -625,29 +629,31 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 
 	job := storedJob{
 		VoiceJob: VoiceJob{
-			ID:                   newID(),
-			ProjectID:            projectID,
-			BookSourceID:         bookSourceID,
-			BookScope:            cloneBookScope(request.BookScope),
-			PreparedSourceID:     preparedSourceID,
-			SelectedBlockIDs:     append([]string(nil), request.SelectedBlockIDs...),
-			SourceKind:           sourceKind,
-			ProgressTargetID:     progressTargetID,
-			Status:               JobStatusQueued,
-			Stages:               initialStages(),
-			AdaptiveMode:         adaptiveMode,
-			RunMode:              config.runMode,
-			PerformanceMode:      config.performanceMode,
-			PipelineOptions:      config.pipelineOptions,
-			VoiceProfileID:       voiceProfileID,
-			VoiceProfileName:     voiceProfileName,
-			VoiceProfileLanguage: voiceLanguage,
-			VoiceID:              voiceID,
-			TTSEngine:            ttsEngine,
-			EngineOptions:        engineOptions,
-			TTSVoice:             ttsVoice,
-			TTSLanguage:          ttsLanguage,
-			InputText:            inputText,
+			ID:                    newID(),
+			ProjectID:             projectID,
+			BookSourceID:          bookSourceID,
+			BookScope:             cloneBookScope(request.BookScope),
+			PreparedSourceID:      preparedSourceID,
+			SelectedBlockIDs:      append([]string(nil), request.SelectedBlockIDs...),
+			SourceKind:            sourceKind,
+			ProgressTargetID:      progressTargetID,
+			SpeechPolicyProfile:   speechPolicyProfile,
+			SpeechPolicyOverrides: speechPolicyOverrides,
+			Status:                JobStatusQueued,
+			Stages:                initialStages(),
+			AdaptiveMode:          adaptiveMode,
+			RunMode:               config.runMode,
+			PerformanceMode:       config.performanceMode,
+			PipelineOptions:       config.pipelineOptions,
+			VoiceProfileID:        voiceProfileID,
+			VoiceProfileName:      voiceProfileName,
+			VoiceProfileLanguage:  voiceLanguage,
+			VoiceID:               voiceID,
+			TTSEngine:             ttsEngine,
+			EngineOptions:         engineOptions,
+			TTSVoice:              ttsVoice,
+			TTSLanguage:           ttsLanguage,
+			InputText:             inputText,
 			Progress: JobProgress{
 				Message: "Queued",
 				Detail:  "Waiting to start voice optimization.",

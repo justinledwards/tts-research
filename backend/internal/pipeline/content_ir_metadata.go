@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 const contentIRFilename = "content-ir.json"
@@ -79,6 +80,14 @@ func (service *Service) GetContentIR(id string) (contentir.Document, error) {
 	return contentir.Document{}, ErrContentIRNotFound
 }
 
+func (service *Service) PreviewContentIRSpeechPolicy(id string, request SpeechPolicyPreviewRequest) (contentir.Document, error) {
+	document, err := service.GetContentIR(id)
+	if err != nil {
+		return contentir.Document{}, err
+	}
+	return service.evaluateContentIRSpeechPolicy(document, request, false), nil
+}
+
 func (service *Service) preparedSourceByID(id string) (PreparedSource, bool) {
 	service.mu.RLock()
 	source, ok := service.sourcePreps[id]
@@ -105,24 +114,24 @@ func (service *Service) preparedSourceContentIR(source PreparedSource) (contenti
 	path := filepath.Join(service.preparedSourceDataDir(source.ID), contentIRFilename)
 	document, err := readContentIR(path)
 	if err == nil {
-		return sanitizeContentIRSentenceWarnings(document, service.options.SourcePrepSentenceMaxRunes), nil
+		return service.backfillContentIRSpeechPolicy(sanitizeContentIRSentenceWarnings(document, service.options.SourcePrepSentenceMaxRunes)), nil
 	}
 	if !os.IsNotExist(err) {
 		return contentir.Document{}, fmt.Errorf("read prepared source content IR: %w", err)
 	}
-	return sanitizeContentIRSentenceWarnings(PreparedSourceToIR(source, time.Now().UTC()), service.options.SourcePrepSentenceMaxRunes), nil
+	return service.backfillContentIRSpeechPolicy(sanitizeContentIRSentenceWarnings(PreparedSourceToIR(source, time.Now().UTC()), service.options.SourcePrepSentenceMaxRunes)), nil
 }
 
 func (service *Service) bookSourceContentIR(book BookSource) (contentir.Document, error) {
 	path := filepath.Join(service.bookSourceDataDir(book.ID), contentIRFilename)
 	document, err := readContentIR(path)
 	if err == nil {
-		return document, nil
+		return service.backfillContentIRSpeechPolicy(document), nil
 	}
 	if !os.IsNotExist(err) {
 		return contentir.Document{}, fmt.Errorf("read book source content IR: %w", err)
 	}
-	return BookSourceToIR(book, time.Now().UTC()), nil
+	return service.backfillContentIRSpeechPolicy(BookSourceToIR(book, time.Now().UTC())), nil
 }
 
 func (service *Service) writePreparedSourceContentIR(source PreparedSource) error {
@@ -142,6 +151,47 @@ func (service *Service) writeContentIR(outputDir string, document contentir.Docu
 		return err
 	}
 	return os.WriteFile(filepath.Join(outputDir, contentIRFilename), encoded, 0o644)
+}
+
+func (service *Service) backfillContentIRSpeechPolicy(document contentir.Document) contentir.Document {
+	return service.evaluateContentIRSpeechPolicy(document, SpeechPolicyPreviewRequest{}, true)
+}
+
+func (service *Service) evaluateContentIRSpeechPolicy(
+	document contentir.Document,
+	request SpeechPolicyPreviewRequest,
+	onlyMissing bool,
+) contentir.Document {
+	evaluator := policy.NewEvaluator(policy.DefaultProfileName, request.Overrides)
+	if strings.TrimSpace(document.ProjectID) != "" {
+		if project, err := service.GetProject(document.ProjectID); err == nil {
+			profileName := strings.TrimSpace(request.Profile)
+			if profileName == "" {
+				profileName = project.SpeechPolicyProfile
+			}
+			evaluator = projectSpeechPolicyEvaluator(project, profileName, request.Overrides)
+		}
+	}
+	for index, node := range document.Nodes {
+		if onlyMissing && !node.Speech.SpeechPolicy.IsZero() {
+			document.Nodes[index] = node
+			continue
+		}
+		decision := evaluator.Evaluate(policy.Element{
+			Kind:     node.Kind,
+			Role:     node.Role,
+			Text:     firstNonEmpty(node.DisplayText, node.NormalisedText, node.SpeechText),
+			Language: node.Lang,
+			Warnings: node.Warnings,
+		})
+		node.Speech.SpeechPolicy = decision.Policy
+		if !onlyMissing {
+			node.SpeechText = strings.TrimSpace(decision.SpeechText)
+			node.Speech.PolicyHint.Mode = string(legacySpeakModeForDecision(decision))
+		}
+		document.Nodes[index] = node
+	}
+	return document
 }
 
 func readContentIR(path string) (contentir.Document, error) {

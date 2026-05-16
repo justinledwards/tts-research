@@ -145,6 +145,11 @@ function makeContentIRNode(): ContentIRNode {
         pauseBeforeMs: 0,
         pauseAfterMs: 0,
       },
+      speechPolicy: {
+        explanation: "Prose is spoken.",
+        mode: "speak",
+        profile: "Enterprise",
+      },
     },
     warnings: [],
     confidence: 0.94,

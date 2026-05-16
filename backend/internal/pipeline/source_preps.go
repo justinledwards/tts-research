@@ -26,6 +26,8 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 const (
@@ -60,6 +62,7 @@ var (
 	turnCitationPattern       = regexp.MustCompile(`\bturn\d+(?:search|view|news|fetch)\d+\b`)
 	markdownLinkPattern       = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 	markdownImagePattern      = regexp.MustCompile(`!\[([^\]]*)\]\([^)]+\)`)
+	markdownImageOnlyLine     = regexp.MustCompile(`^!\[[^\]]*\]\([^)]+\)\s*$`)
 	inlineCodeSpeechPattern   = regexp.MustCompile("`([^`]+)`")
 	htmlScriptStylePattern    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>|<noscript[^>]*>.*?</noscript>`)
 	htmlBlockBreakPattern     = regexp.MustCompile(`(?i)</(p|div|section|article|br|h[1-6]|li|tr)>`)
@@ -68,6 +71,8 @@ var (
 	markdownFenceLine         = regexp.MustCompile("^```\\s*([A-Za-z0-9_-]+)?")
 	markdownTableDividerLine  = regexp.MustCompile(`^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$`)
 	markdownFootnoteLine      = regexp.MustCompile(`^\[\^[^\]]+\]:`)
+	markdownCaptionLine       = regexp.MustCompile(`(?i)^(figure|fig\.|caption):\s+`)
+	markdownInlineMathPattern = regexp.MustCompile(`\$(?:[^$\n]+)\$`)
 	markdownRawURLLine        = regexp.MustCompile(`^https?://\S+$`)
 	markdownListPrefixPattern = regexp.MustCompile(`^(\s*)([-*+]|\d+[.)])\s+`)
 )
@@ -131,13 +136,13 @@ func (service *Service) CreatePreparedSource(
 	prepared.RenderMode = preprocessed.RenderMode
 	prepared.Title = firstNonEmpty(preprocessed.Title, inferPreparedSourceTitle(sourceText, sourceName))
 	prepared.Blocks = preprocessed.Blocks
-	prepared.SkippedItems = preprocessed.SkippedItems
 	prepared.Warnings = preprocessed.Warnings
-	prepared.SpeechText = preparedSourceSpeechText(prepared.Blocks)
-	prepared.WordCount = countWords(prepared.SpeechText)
-	prepared.BlockCount = len(prepared.Blocks)
-	prepared.SegmentCount = countPreparedSegments(prepared.Blocks)
-	prepared.Summary = summarizePreparedSource(prepared.Blocks)
+	prepared.SpeechPolicyProfile = project.SpeechPolicyProfile
+	prepared = applySpeechPolicyToPreparedSourceWithEvaluator(
+		prepared,
+		projectSpeechPolicyEvaluator(project, prepared.SpeechPolicyProfile, policy.Overrides{}),
+		service.options.SourcePrepSentenceMaxRunes,
+	)
 
 	service.updatePreparedSource(prepared)
 	if err := service.writePreparedSourceMetadata(prepared); err != nil {
@@ -195,6 +200,7 @@ func (service *Service) ListProjectPreparedSources(projectID string) ([]Prepared
 	sources := make([]PreparedSource, 0)
 	for _, source := range service.sourcePreps {
 		if source.ProjectID == project.ID {
+			source = service.applyCurrentSpeechPolicy(source, policy.Overrides{})
 			sources = append(sources, summarizePreparedSourcePayload(service.sanitizePreparedSourceWarnings(source)))
 		}
 	}
@@ -212,7 +218,45 @@ func (service *Service) GetPreparedSource(id string) (PreparedSource, error) {
 	if !ok {
 		return PreparedSource{}, ErrPreparedSourceNotFound
 	}
-	return service.sanitizePreparedSourceWarnings(source), nil
+	return service.sanitizePreparedSourceWarnings(service.applyCurrentSpeechPolicy(source, policy.Overrides{})), nil
+}
+
+func (service *Service) PreviewPreparedSourceSpeechPolicy(sourceID string, request SpeechPolicyPreviewRequest) (PreparedSource, error) {
+	service.mu.RLock()
+	source, ok := service.sourcePreps[strings.TrimSpace(sourceID)]
+	service.mu.RUnlock()
+	if !ok {
+		return PreparedSource{}, ErrPreparedSourceNotFound
+	}
+	profileName := strings.TrimSpace(request.Profile)
+	if profileName == "" {
+		project, err := service.GetProject(source.ProjectID)
+		if err != nil {
+			return PreparedSource{}, err
+		}
+		profileName = project.SpeechPolicyProfile
+	}
+	project, err := service.GetProject(source.ProjectID)
+	if err != nil {
+		return PreparedSource{}, err
+	}
+	return service.sanitizePreparedSourceWarnings(applySpeechPolicyToPreparedSourceWithEvaluator(
+		source,
+		projectSpeechPolicyEvaluator(project, profileName, request.Overrides),
+		service.options.SourcePrepSentenceMaxRunes,
+	)), nil
+}
+
+func (service *Service) applyCurrentSpeechPolicy(source PreparedSource, overrides policy.Overrides) PreparedSource {
+	project, err := service.GetProject(source.ProjectID)
+	if err != nil {
+		return applySpeechPolicyToPreparedSource(source, source.SpeechPolicyProfile, overrides, service.options.SourcePrepSentenceMaxRunes)
+	}
+	return applySpeechPolicyToPreparedSourceWithEvaluator(
+		source,
+		projectSpeechPolicyEvaluator(project, project.SpeechPolicyProfile, overrides),
+		service.options.SourcePrepSentenceMaxRunes,
+	)
 }
 
 func (service *Service) GetPreparedSourceBlock(sourceID string, blockID string) (NarrationBlock, error) {
@@ -233,13 +277,32 @@ func (service *Service) CreatePreparedSourceJob(
 	sourceID string,
 	request CreateJobRequest,
 ) (VoiceJob, error) {
-	source, err := service.GetPreparedSource(sourceID)
-	if err != nil {
-		return VoiceJob{}, err
+	service.mu.RLock()
+	source, ok := service.sourcePreps[strings.TrimSpace(sourceID)]
+	service.mu.RUnlock()
+	if !ok {
+		return VoiceJob{}, ErrPreparedSourceNotFound
 	}
 	if source.Status != PreparedSourceStatusReady {
 		return VoiceJob{}, fmt.Errorf("prepared source is not ready")
 	}
+	profileName := strings.TrimSpace(request.SpeechPolicyProfile)
+	if profileName == "" {
+		project, err := service.GetProject(source.ProjectID)
+		if err != nil {
+			return VoiceJob{}, err
+		}
+		profileName = project.SpeechPolicyProfile
+	}
+	project, err := service.GetProject(source.ProjectID)
+	if err != nil {
+		return VoiceJob{}, err
+	}
+	source = service.sanitizePreparedSourceWarnings(applySpeechPolicyToPreparedSourceWithEvaluator(
+		source,
+		projectSpeechPolicyEvaluator(project, profileName, request.SpeechPolicyOverrides),
+		service.options.SourcePrepSentenceMaxRunes,
+	))
 	selected := map[string]struct{}{}
 	for _, id := range request.SelectedBlockIDs {
 		selected[strings.TrimSpace(id)] = struct{}{}
@@ -276,6 +339,8 @@ func (service *Service) CreatePreparedSourceJob(
 	request.SourceKind = string(source.Kind)
 	request.ProgressTargetID = progressTargetForPreparedSource(source.ID)
 	request.Text = strings.Join(parts, "\n\n")
+	request.SpeechPolicyProfile = source.SpeechPolicyProfile
+	request.SpeechPolicyOverrides = policy.NormalizeOverrides(request.SpeechPolicyOverrides)
 	job, err := service.CreateJob(ctx, request)
 	if err != nil {
 		return VoiceJob{}, err
@@ -557,10 +622,9 @@ func preparePlainNarrationBlocks(input string, maxSentenceRunes int) ([]Narratio
 		mode := NarrationSpeakModeSpeak
 		if markdownRawURLLine.MatchString(clean) || shouldSkipCitationBlock(clean) {
 			kind = NarrationBlockKindCitation
-			mode = NarrationSpeakModeSkip
 		}
 		block := newNarrationBlock(len(blocks), kind, mode, labelForBlock(kind, clean), raw, clean, start, end, maxSentenceRunes)
-		if mode == NarrationSpeakModeSkip {
+		if kind == NarrationBlockKindCitation {
 			block.Warnings = append(block.Warnings, "citation_skipped")
 			skipped = append(skipped, skippedSourceItem(block, "citation or raw URL skipped"))
 		}
@@ -587,6 +651,9 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 	fenceLang := ""
 	var fenceLines []string
 	fenceStart := 0
+	inMath := false
+	var mathLines []string
+	mathStart := 0
 	var tableLines []string
 	tableStart := 0
 
@@ -604,13 +671,12 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 		if strings.HasPrefix(strings.TrimSpace(raw), ">") {
 			kind = NarrationBlockKindQuote
 			clean = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(clean), ">"))
+		} else if markdownInlineMathPattern.MatchString(strings.TrimSpace(raw)) && strings.TrimSpace(raw) == markdownInlineMathPattern.FindString(strings.TrimSpace(raw)) {
+			kind = NarrationBlockKindMath
 		}
 		block := newNarrationBlock(len(blocks), kind, NarrationSpeakModeSpeak, labelForBlock(kind, clean), raw, clean, paragraphStart, endOffset, maxSentenceRunes)
 		if shouldSkipCitationBlock(clean) {
 			block.Kind = NarrationBlockKindCitation
-			block.SpeakMode = NarrationSpeakModeSkip
-			block.SpokenText = ""
-			block.Segments = nil
 			block.Warnings = append(block.Warnings, "citation_skipped")
 			skipped = append(skipped, skippedSourceItem(block, "citation markup removed from spoken playback"))
 		} else if containsCitationMarkup(raw) {
@@ -631,9 +697,18 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 		}
 		raw := strings.Join(tableLines, "\n")
 		tableLines = nil
-		summary := summarizeMarkdownTable(tableLinesOrRaw(raw))
-		block := newNarrationBlock(len(blocks), NarrationBlockKindTable, NarrationSpeakModeSummarize, "Table summary", raw, summary, tableStart, endOffset, maxSentenceRunes)
-		block.Warnings = append(block.Warnings, "table_summarized")
+		block := newNarrationBlock(len(blocks), NarrationBlockKindTable, NarrationSpeakModeSpeak, "Table", raw, raw, tableStart, endOffset, maxSentenceRunes)
+		block.Warnings = append(block.Warnings, "table_policy")
+		blocks = append(blocks, block)
+	}
+	flushMath := func(endOffset int) {
+		if len(mathLines) == 0 {
+			return
+		}
+		raw := strings.Join(mathLines, "\n")
+		mathLines = nil
+		block := newNarrationBlock(len(blocks), NarrationBlockKindMath, NarrationSpeakModeSpeak, "Math expression", raw, raw, mathStart, endOffset, maxSentenceRunes)
+		block.Warnings = append(block.Warnings, "math_policy")
 		blocks = append(blocks, block)
 	}
 
@@ -649,8 +724,9 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 				if strings.EqualFold(fenceLang, "mermaid") {
 					reason = "diagram omitted from spoken playback"
 				}
-				block := newNarrationBlock(len(blocks), kind, NarrationSpeakModeSkip, "Code sample", raw, "", fenceStart, offsetCursor, maxSentenceRunes)
-				block.Warnings = append(block.Warnings, "code_skipped")
+				block := newNarrationBlock(len(blocks), kind, NarrationSpeakModeSpeak, "Code sample", raw, raw, fenceStart, offsetCursor, maxSentenceRunes)
+				block.Language = fenceLang
+				block.Warnings = append(block.Warnings, "code_policy")
 				blocks = append(blocks, block)
 				skipped = append(skipped, skippedSourceItem(block, reason))
 				fenceLines = nil
@@ -661,6 +737,15 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 			fenceLines = append(fenceLines, line)
 			continue
 		}
+		if inMath {
+			if trimmed == "$$" {
+				flushMath(offsetCursor)
+				inMath = false
+				continue
+			}
+			mathLines = append(mathLines, line)
+			continue
+		}
 		if matches := markdownFenceLine.FindStringSubmatch(trimmed); len(matches) > 0 {
 			flushParagraph(lineStart)
 			flushTable(lineStart)
@@ -669,6 +754,21 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 			if len(matches) > 1 {
 				fenceLang = strings.TrimSpace(matches[1])
 			}
+			continue
+		}
+		if trimmed == "$$" {
+			flushParagraph(lineStart)
+			flushTable(lineStart)
+			inMath = true
+			mathStart = lineStart
+			continue
+		}
+		if strings.HasPrefix(trimmed, "$$") && strings.HasSuffix(trimmed, "$$") && len(trimmed) > 4 {
+			flushParagraph(lineStart)
+			flushTable(lineStart)
+			block := newNarrationBlock(len(blocks), NarrationBlockKindMath, NarrationSpeakModeSpeak, "Math expression", trimmed, trimmed, lineStart, offsetCursor, maxSentenceRunes)
+			block.Warnings = append(block.Warnings, "math_policy")
+			blocks = append(blocks, block)
 			continue
 		}
 		if trimmed == "" {
@@ -687,10 +787,25 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 			continue
 		}
 		flushTable(lineStart)
+		if markdownImageOnlyLine.MatchString(trimmed) {
+			flushParagraph(lineStart)
+			block := newNarrationBlock(len(blocks), NarrationBlockKindImage, NarrationSpeakModeSpeak, "Image", trimmed, cleanMarkdownInline(trimmed), lineStart, offsetCursor, maxSentenceRunes)
+			block.Warnings = append(block.Warnings, "image_policy")
+			blocks = append(blocks, block)
+			continue
+		}
+		if markdownCaptionLine.MatchString(trimmed) {
+			flushParagraph(lineStart)
+			clean := cleanMarkdownInline(markdownCaptionLine.ReplaceAllString(trimmed, ""))
+			block := newNarrationBlock(len(blocks), NarrationBlockKindCaption, NarrationSpeakModeSpeak, "Caption", trimmed, clean, lineStart, offsetCursor, maxSentenceRunes)
+			block.Warnings = append(block.Warnings, "caption_policy")
+			blocks = append(blocks, block)
+			continue
+		}
 		if markdownFootnoteLine.MatchString(trimmed) || markdownRawURLLine.MatchString(trimmed) || shouldSkipCitationBlock(trimmed) {
 			flushParagraph(lineStart)
 			clean := cleanMarkdownInline(trimmed)
-			block := newNarrationBlock(len(blocks), NarrationBlockKindCitation, NarrationSpeakModeSkip, "Citation", trimmed, "", lineStart, offsetCursor, maxSentenceRunes)
+			block := newNarrationBlock(len(blocks), NarrationBlockKindCitation, NarrationSpeakModeSpeak, "Citation", trimmed, clean, lineStart, offsetCursor, maxSentenceRunes)
 			block.Warnings = append(block.Warnings, "citation_skipped")
 			blocks = append(blocks, block)
 			skipped = append(skipped, SkippedSourceItem{ID: block.ID, Kind: block.Kind, Text: clean, Reason: "citation or raw URL skipped", Offset: lineStart})
@@ -716,6 +831,7 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 	}
 	flushParagraph(offsetCursor)
 	flushTable(offsetCursor)
+	flushMath(offsetCursor)
 	for _, block := range blocks {
 		warnings = append(warnings, block.Warnings...)
 	}
@@ -745,6 +861,84 @@ func newNarrationBlock(index int, kind NarrationBlockKind, mode NarrationSpeakMo
 		Confidence:          confidenceForBlock(kind, mode),
 		Segments:            segments,
 		Warnings:            warnings,
+		SpeechPolicy: policy.SpeechPolicy{
+			Profile:     string(policy.DefaultProfileName),
+			Element:     policy.ElementKind(string(kind), string(kind), text, warnings),
+			ElementMode: string(mode),
+			Mode:        string(policy.ModeSpeak),
+			Explanation: "Policy has not been evaluated yet.",
+		},
+	}
+}
+
+func applySpeechPolicyToPreparedSource(source PreparedSource, profileName string, overrides policy.Overrides, maxSentenceRunes int) PreparedSource {
+	evaluator := policy.NewEvaluator(policy.NormalizeProfileName(profileName), overrides)
+	return applySpeechPolicyToPreparedSourceWithEvaluator(source, evaluator, maxSentenceRunes)
+}
+
+func applySpeechPolicyToPreparedSourceWithEvaluator(source PreparedSource, evaluator policy.Evaluator, maxSentenceRunes int) PreparedSource {
+	source.SpeechPolicyProfile = evaluator.ProfileID()
+	source.SkippedItems = nil
+	for index := range source.Blocks {
+		block := source.Blocks[index]
+		decision := evaluator.Evaluate(policy.Element{
+			Kind:     string(block.Kind),
+			Role:     string(block.Kind),
+			Text:     policyElementText(block),
+			Language: block.Language,
+			Warnings: block.Warnings,
+		})
+		block.SpeechPolicy = decision.Policy
+		block.SpokenText = strings.TrimSpace(decision.SpeechText)
+		block.SpeakMode = legacySpeakModeForDecision(decision)
+		if block.SpeakMode == NarrationSpeakModeSkip {
+			block.SpokenText = ""
+			block.Segments = nil
+			block.EstimatedDurationMS = 0
+			source.SkippedItems = append(source.SkippedItems, skippedSourceItem(block, decision.Policy.Explanation))
+		} else {
+			block.Segments, block.Warnings = resetPolicySegments(block, maxSentenceRunes)
+			block.EstimatedDurationMS = estimateBookDurationMS(countWords(block.SpokenText))
+		}
+		block.Emphasis, block.PauseBeforeMS, block.PauseAfterMS = narrationEmphasis(block.Kind, block.SpeakMode)
+		block.Confidence = confidenceForBlock(block.Kind, block.SpeakMode)
+		source.Blocks[index] = block
+	}
+	source.SpeechText = preparedSourceSpeechText(source.Blocks)
+	source.WordCount = countWords(source.SpeechText)
+	source.BlockCount = len(source.Blocks)
+	source.SegmentCount = countPreparedSegments(source.Blocks)
+	source.Summary = summarizePreparedSource(source.Blocks)
+	return source
+}
+
+func policyElementText(block NarrationBlock) string {
+	switch block.Kind {
+	case NarrationBlockKindTable, NarrationBlockKindCode, NarrationBlockKindMath, NarrationBlockKindImage, NarrationBlockKindCaption, NarrationBlockKindCitation:
+		return firstNonEmpty(block.Text, block.SpokenText)
+	default:
+		return firstNonEmpty(block.SpokenText, block.Text)
+	}
+}
+
+func resetPolicySegments(block NarrationBlock, maxSentenceRunes int) ([]NarrationSegment, []string) {
+	segments, sentenceWarnings := sentenceSafeSegments(block.SpokenText, maxSentenceRunes)
+	warnings := removeWarning(block.Warnings, warningSentenceTooLong)
+	warnings = append(warnings, sentenceWarnings...)
+	return segments, uniqueStrings(warnings)
+}
+
+func legacySpeakModeForDecision(decision policy.Decision) NarrationSpeakMode {
+	if strings.TrimSpace(decision.SpeechText) == "" {
+		return NarrationSpeakModeSkip
+	}
+	switch policy.Mode(decision.Policy.Mode) {
+	case policy.ModeSkip, policy.ModeOnDemand, policy.ModeInteractive:
+		return NarrationSpeakModeSkip
+	case policy.ModeSummarise:
+		return NarrationSpeakModeSummarize
+	default:
+		return NarrationSpeakModeSpeak
 	}
 }
 

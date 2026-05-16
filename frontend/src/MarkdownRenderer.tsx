@@ -20,12 +20,21 @@ export function looksLikeMermaidDiagram(value: string): boolean {
 
 export function MarkdownRenderer({
   children,
+  blockHighlight,
   className = "prose-markdown",
   wordHighlight,
-}: Readonly<{ children: string; className?: string; wordHighlight?: MarkdownWordHighlight }>) {
+}: Readonly<{
+  children: string;
+  blockHighlight?: MarkdownBlockHighlight;
+  className?: string;
+  wordHighlight?: MarkdownWordHighlight;
+}>) {
   const rehypePlugins = useMemo(
-    () => (wordHighlight ? [createWordHighlightPlugin(wordHighlight)] : []),
-    [wordHighlight],
+    () => [
+      ...(blockHighlight ? [createBlockHighlightPlugin(blockHighlight)] : []),
+      ...(wordHighlight ? [createWordHighlightPlugin(wordHighlight)] : []),
+    ],
+    [blockHighlight, wordHighlight],
   );
 
   return (
@@ -170,6 +179,11 @@ export interface MarkdownWordHighlight {
   blockStartOffset: number;
 }
 
+export interface MarkdownBlockHighlight {
+  blockEndOffset: number;
+  blockStartOffset: number;
+}
+
 interface HastPositionPoint {
   offset?: number;
 }
@@ -195,6 +209,35 @@ function createWordHighlightPlugin(highlight: MarkdownWordHighlight) {
       transformChildren(tree, highlight, () => blockWordOffset++);
     };
   };
+}
+
+function createBlockHighlightPlugin(highlight: MarkdownBlockHighlight) {
+  return function highlightMarkdownBlock() {
+    return function transformTree(tree: HastNode) {
+      markHighlightedElements(tree, highlight);
+    };
+  };
+}
+
+function markHighlightedElements(node: HastNode, highlight: MarkdownBlockHighlight): boolean {
+  const overlaps = nodePositionOverlapsHighlight(node.position, highlight);
+  let childOverlaps = false;
+  for (const child of node.children ?? []) {
+    childOverlaps = markHighlightedElements(child, highlight) || childOverlaps;
+  }
+  if (node.type === "element" && overlaps && !childOverlaps) {
+    const properties = node.properties ?? {};
+    const className = properties.className;
+    let classes: string[] = [];
+    if (Array.isArray(className)) {
+      classes = className.map(String);
+    } else if (typeof className === "string") {
+      classes = className.split(/\s+/);
+    }
+    properties.className = [...classes, "markdown-cinema-block-active"];
+    node.properties = properties;
+  }
+  return overlaps || childOverlaps;
 }
 
 function transformChildren(
@@ -259,7 +302,7 @@ function splitHighlightedTextNode(
 
 function nodePositionOverlapsHighlight(
   position: HastPosition | undefined,
-  highlight: MarkdownWordHighlight,
+  highlight: MarkdownBlockHighlight,
 ): boolean {
   const start = position?.start?.offset;
   const end = position?.end?.offset;

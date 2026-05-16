@@ -18,17 +18,20 @@ import {
   createBookSource,
   createBookSourceFromUrl,
   createProject,
+  createCustomSpeechPolicyProfile,
   createPreparedSource,
   createPreparedSourceJob,
   createVoiceJob,
   createVoiceProfileFromCandidate,
   createVoiceProfileSource,
   deleteProject,
+  deleteCustomSpeechPolicyProfile,
   deleteVoiceProfile,
   getBookCinemaDiagnostics,
   getBookSourceScope,
   getContentIR,
   getPreparedSource,
+  getProjectSpeechPolicy,
   getProjectStorageSummary,
   getSystemMetrics,
   getVoiceJob,
@@ -38,20 +41,26 @@ import {
   listPreparedSources,
   listProjectBookSources,
   listProjectProgress,
+  listSpeechPolicyProfiles,
   listTTSEngines,
   listProjectJobs,
   listProjects,
   listVoiceProfiles,
+  previewPreparedSourceSpeechPolicy,
+  previewContentIRSpeechPolicy,
   renameProject,
   startPlaybackSession,
   subscribeToVoiceJob,
   syncPlaybackSession,
+  updateProjectSpeechPolicy,
+  updateCustomSpeechPolicyProfile,
   updatePlaybackProgress,
 } from "./api";
 import { formatDuration } from "./format";
 import {
   BookCinemaOverlay,
   BookCinemaPanel,
+  type BookCinemaTextSize,
   bookSourceName,
   bookScopeKey,
   bookScopeText,
@@ -100,11 +109,15 @@ import type {
   BookSourceScopeContent,
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
+  CustomSpeechPolicyProfile,
   PlaybackProgress,
   PlaybackSession,
   PreparedSource,
   ProjectBundleImportResult,
   ProjectStorageSummary,
+  SpeechPolicyOverrides,
+  SpeechPolicyProfile,
+  SpeechPolicySettings,
   StageStatus,
   SystemMetrics,
   ThemeName,
@@ -116,6 +129,26 @@ import type {
   VoiceProfileSourceDiagnostics,
   VoiceProject,
 } from "./types";
+import {
+  BUILT_IN_SPEECH_POLICY_SETTINGS,
+  CODE_MODE_OPTIONS,
+  DEFAULT_SPEECH_POLICY_PROFILE,
+  FOOTNOTE_MODE_OPTIONS,
+  IMAGE_MODE_OPTIONS,
+  MATH_MODE_OPTIONS,
+  SPEECH_POLICY_PROFILE_OPTIONS,
+  TABLE_MODE_OPTIONS,
+  applySpeechPolicyOverridesToSettings,
+  clearSpeechPolicyOverrides,
+  compactSpeechPolicyOverrides,
+  hasSpeechPolicyOverrides,
+  loadSpeechPolicyOverrides,
+  normalizeSpeechPolicyProfile,
+  resolveSpeechPolicySettings,
+  saveSpeechPolicyOverrides,
+  speechPolicyProfileDisplayName,
+  speechPolicyProfileLabel,
+} from "./speechPolicy";
 import type { ContentIRDocument } from "./content-ir";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
 import { VoiceSourceAnalysisPanel } from "./VoiceSourceAnalysisPanel";
@@ -165,7 +198,8 @@ interface WritableRef<T> {
   current: T;
 }
 
-type CinemaTextSize = "comfortable" | "large" | "giant";
+type CinemaTextSize = "compact" | "comfortable" | "large" | "giant" | "massive";
+type PreparedSourceBlock = NonNullable<PreparedSource["blocks"]>[number];
 
 const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   isAvailable: false,
@@ -676,12 +710,16 @@ function TeleprompterWords({
 }>) {
   const activeWordRef = useRef<HTMLSpanElement | null>(null);
   const cinemaTextClassBySize: Record<CinemaTextSize, string> = {
+    compact:
+      "whitespace-pre-wrap text-[1.18rem] leading-[1.72] text-[var(--vs-text)] sm:text-[1.55rem] lg:text-[1.95rem]",
     comfortable:
       "whitespace-pre-wrap text-[1.45rem] leading-[1.8] text-[var(--vs-text)] sm:text-[1.9rem] lg:text-[2.35rem]",
     large:
       "whitespace-pre-wrap text-[1.8rem] leading-[1.82] text-[var(--vs-text)] sm:text-[2.35rem] lg:text-[3rem]",
     giant:
       "whitespace-pre-wrap text-[2.1rem] leading-[1.86] text-[var(--vs-text)] sm:text-[2.8rem] lg:text-[3.55rem]",
+    massive:
+      "whitespace-pre-wrap text-[2.45rem] leading-[1.9] text-[var(--vs-text)] sm:text-[3.2rem] lg:text-[4.1rem]",
   };
   const textClass =
     variant === "cinema"
@@ -902,7 +940,7 @@ function CinemaTeleprompterOverlay({
           <div className="max-h-[68vh] min-h-0 overflow-y-auto rounded-xl border bg-[var(--vs-raised)] p-5 shadow-2xl sm:p-8">
             {viewMode === "markdown" && markdownSource ? (
               <MarkdownCinemaView
-                activeWordIndex={cue.activeWordIndex}
+                activeWordIndex={cue.documentActiveWordIndex}
                 source={markdownSource}
                 textSize={textSize}
               />
@@ -1051,13 +1089,20 @@ function MarkdownCinemaView({
     () => resolvePreparedSourceActiveWord(source, activeWordIndex),
     [activeWordIndex, source],
   );
+  const activeBlock = useMemo(
+    () => source.blocks?.find((block) => block.id === activeWord?.blockId) ?? null,
+    [activeWord?.blockId, source.blocks],
+  );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const blocks = source.blocks ?? [];
   const markdownTextClassBySize: Record<CinemaTextSize, string> = {
+    compact: "text-sm leading-7 sm:text-base",
     comfortable: "text-base leading-8 sm:text-lg",
     large: "text-lg leading-9 sm:text-xl",
-    giant: "text-xl leading-9 sm:text-2xl",
+    giant: "text-xl leading-10 sm:text-2xl",
+    massive: "text-2xl leading-[2.8rem] sm:text-3xl",
   };
+  const shouldHighlightWord = activeBlock ? isMarkdownCinemaWordHighlightable(activeBlock) : false;
 
   useEffect(() => {
     if (!activeWord) {
@@ -1075,8 +1120,16 @@ function MarkdownCinemaView({
       <div ref={containerRef}>
         <MarkdownRenderer
           className={`markdown-cinema prose-markdown ${markdownTextClassBySize[textSize]} text-[var(--vs-text)]`}
+          blockHighlight={
+            activeWord && activeBlock && !shouldHighlightWord
+              ? {
+                  blockEndOffset: activeWord.blockEndOffset,
+                  blockStartOffset: activeWord.blockStartOffset,
+                }
+              : undefined
+          }
           wordHighlight={
-            activeWord
+            activeWord && shouldHighlightWord
               ? {
                   activeWordOffset: activeWord.wordOffset,
                   blockEndOffset: activeWord.blockEndOffset,
@@ -1103,6 +1156,16 @@ function MarkdownCinemaView({
         />
       ))}
     </div>
+  );
+}
+
+function isMarkdownCinemaWordHighlightable(block: PreparedSourceBlock): boolean {
+  return (
+    (block.kind === "body" ||
+      block.kind === "heading" ||
+      block.kind === "subheading" ||
+      block.kind === "quote") &&
+    block.speakMode === "speak"
   );
 }
 
@@ -1182,17 +1245,26 @@ function cinemaToggleClass(isActive: boolean): string {
 }
 
 function decreaseCinemaTextSize(size: CinemaTextSize): CinemaTextSize {
-  if (size === "giant") {
-    return "large";
-  }
-  return "comfortable";
+  const order: CinemaTextSize[] = ["compact", "comfortable", "large", "giant", "massive"];
+  return order[Math.max(0, order.indexOf(size) - 1)] ?? "compact";
 }
 
 function increaseCinemaTextSize(size: CinemaTextSize): CinemaTextSize {
-  if (size === "comfortable") {
-    return "large";
+  const order: CinemaTextSize[] = ["compact", "comfortable", "large", "giant", "massive"];
+  return order[Math.min(order.length - 1, order.indexOf(size) + 1)] ?? "massive";
+}
+
+function uniqueSortedStrings(values: readonly string[]): string[] {
+  const sorted: string[] = [];
+  for (const value of new Set(values)) {
+    const insertIndex = sorted.findIndex((item) => value.localeCompare(item) < 0);
+    if (insertIndex === -1) {
+      sorted.push(value);
+    } else {
+      sorted.splice(insertIndex, 0, value);
+    }
   }
-  return "giant";
+  return sorted;
 }
 
 type AudioPlaybackMode = "arrival" | "completed";
@@ -1254,6 +1326,19 @@ export function App() {
   const [hydratingPreparedSourceId, setHydratingPreparedSourceId] = useState<string | null>(null);
   const [isPreparingSource, setIsPreparingSource] = useState(false);
   const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
+  const [speechPolicyProfiles, setSpeechPolicyProfiles] = useState<SpeechPolicyProfile[]>([]);
+  const [customSpeechPolicyProfiles, setCustomSpeechPolicyProfiles] = useState<
+    CustomSpeechPolicyProfile[]
+  >([]);
+  const [speechPolicyProfile, setSpeechPolicyProfile] = useState<string>(
+    DEFAULT_SPEECH_POLICY_PROFILE,
+  );
+  const [speechPolicyOverrides, setSpeechPolicyOverrides] = useState<SpeechPolicyOverrides>(() =>
+    loadSpeechPolicyOverrides(localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default"),
+  );
+  const [speechPolicyError, setSpeechPolicyError] = useState<string | null>(null);
+  const [isSpeechPolicyPreviewing, setIsSpeechPolicyPreviewing] = useState(false);
+  const [jobPreparedSource, setJobPreparedSource] = useState<PreparedSource | null>(null);
   const [projectProgress, setProjectProgress] = useState<PlaybackProgress[]>([]);
   const [projectStorage, setProjectStorage] = useState<ProjectStorageSummary | null>(null);
   const [projectStorageError, setProjectStorageError] = useState<string | null>(null);
@@ -1266,7 +1351,7 @@ export function App() {
     null,
   );
   const [isBookCinemaOpen, setIsBookCinemaOpen] = useState(false);
-  const [bookCinemaTextSize, setBookCinemaTextSize] = useState<CinemaTextSize>("large");
+  const [bookCinemaTextSize, setBookCinemaTextSize] = useState<BookCinemaTextSize>("large");
   const [bookCinemaThemeName, setBookCinemaThemeName] = useState<ThemeName>("night");
   const [isImportingBookSource, setIsImportingBookSource] = useState(false);
   const [bookSourceError, setBookSourceError] = useState<string | null>(null);
@@ -1363,7 +1448,6 @@ export function App() {
     }
     return projectProgress.length > 0 ? projectProgress[0] : null;
   })();
-
   useEffect(() => {
     if (
       selectedPreparedSource?.renderMode !== "markdown" ||
@@ -1397,6 +1481,102 @@ export function App() {
       isCancelled = true;
     };
   }, [hydratingPreparedSourceId, selectedPreparedSource]);
+
+  useEffect(() => {
+    const preparedSourceId = job?.preparedSourceId;
+    if (!preparedSourceId) {
+      setJobPreparedSource(null);
+      return;
+    }
+    const requestedProfile = normalizeSpeechPolicyProfile(
+      job.speechPolicyProfile ?? speechPolicyProfile,
+    );
+    const requestedOverrides = compactSpeechPolicyOverrides(
+      job.speechPolicyOverrides ?? speechPolicyOverrides,
+    );
+    if (
+      jobPreparedSource?.id === preparedSourceId &&
+      jobPreparedSource.text &&
+      jobPreparedSource.speechPolicyProfile === requestedProfile
+    ) {
+      return;
+    }
+    let isCancelled = false;
+    void previewPreparedSourceSpeechPolicy(preparedSourceId, {
+      profile: requestedProfile,
+      overrides: requestedOverrides,
+    })
+      .then((source) => {
+        if (!isCancelled) {
+          setJobPreparedSource(source);
+          setPreparedSources((currentSources) => upsertPreparedSource(currentSources, source));
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          void getPreparedSource(preparedSourceId)
+            .then((source) => {
+              if (!isCancelled) {
+                setJobPreparedSource(source);
+              }
+            })
+            .catch(() => {
+              if (!isCancelled) {
+                setJobPreparedSource(null);
+              }
+            });
+        }
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    job?.preparedSourceId,
+    job?.speechPolicyOverrides,
+    job?.speechPolicyProfile,
+    jobPreparedSource?.id,
+    jobPreparedSource?.speechPolicyProfile,
+    jobPreparedSource?.text,
+    speechPolicyOverrides,
+    speechPolicyProfile,
+  ]);
+
+  useEffect(() => {
+    if (!selectedPreparedSource?.id || selectedPreparedSource.status !== "ready") {
+      return;
+    }
+    let isCancelled = false;
+    setIsSpeechPolicyPreviewing(true);
+    void previewPreparedSourceSpeechPolicy(selectedPreparedSource.id, {
+      profile: speechPolicyProfile,
+      overrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
+    })
+      .then((source) => {
+        if (isCancelled) {
+          return;
+        }
+        setPreparedSources((currentSources) => upsertPreparedSource(currentSources, source));
+        setSourcePrepError(null);
+      })
+      .catch((caughtError: unknown) => {
+        if (!isCancelled) {
+          setSourcePrepError(formatErrorMessage(caughtError, "Unable to preview speech policy"));
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsSpeechPolicyPreviewing(false);
+        }
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    selectedPreparedSource?.id,
+    selectedPreparedSource?.status,
+    speechPolicyOverrides,
+    speechPolicyProfile,
+  ]);
 
   const effectiveBookScope = useMemo(
     () =>
@@ -1575,6 +1755,34 @@ export function App() {
     }
   }, []);
 
+  const refreshSpeechPolicyProfiles = useCallback(async () => {
+    try {
+      setSpeechPolicyProfiles(await listSpeechPolicyProfiles());
+      setSpeechPolicyError(null);
+    } catch (caughtError) {
+      setSpeechPolicyProfiles([]);
+      setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to load speech profiles"));
+    }
+  }, []);
+
+  const refreshProjectSpeechPolicy = useCallback(async (projectId: string) => {
+    if (projectId.trim().length === 0) {
+      setSpeechPolicyProfile(DEFAULT_SPEECH_POLICY_PROFILE);
+      setCustomSpeechPolicyProfiles([]);
+      return;
+    }
+    try {
+      const settings = await getProjectSpeechPolicy(projectId);
+      setSpeechPolicyProfile(normalizeSpeechPolicyProfile(settings.profile));
+      setCustomSpeechPolicyProfiles(settings.customProfiles ?? []);
+      setSpeechPolicyError(null);
+    } catch (caughtError) {
+      setSpeechPolicyProfile(DEFAULT_SPEECH_POLICY_PROFILE);
+      setCustomSpeechPolicyProfiles([]);
+      setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to load project speech policy"));
+    }
+  }, []);
+
   const refreshBookCinemaDiagnostics = useCallback(async () => {
     try {
       setBookCinemaDiagnostics(await getBookCinemaDiagnostics());
@@ -1613,6 +1821,124 @@ export function App() {
     setSelectedVoiceProfileId("");
     localStorage.removeItem(VOICE_PROFILE_ID_STORAGE_KEY);
   }, []);
+
+  const handleSpeechPolicyProfileChange = useCallback(
+    async (profile: string) => {
+      const normalizedProfile = normalizeSpeechPolicyProfile(profile);
+      setSpeechPolicyProfile(normalizedProfile);
+      setSpeechPolicyError(null);
+      try {
+        const settings = await updateProjectSpeechPolicy(activeProjectId, normalizedProfile);
+        const storedProfile = normalizeSpeechPolicyProfile(settings.profile);
+        setSpeechPolicyProfile(storedProfile);
+        setCustomSpeechPolicyProfiles(settings.customProfiles ?? []);
+        setProjects((currentProjects) =>
+          currentProjects.map((project) =>
+            project.id === activeProjectId
+              ? { ...project, speechPolicyProfile: storedProfile }
+              : project,
+          ),
+        );
+      } catch (caughtError) {
+        setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to save speech profile"));
+      }
+    },
+    [activeProjectId],
+  );
+
+  const handleSpeechPolicyOverridesChange = useCallback(
+    (overrides: SpeechPolicyOverrides) => {
+      const normalized = compactSpeechPolicyOverrides(overrides);
+      setSpeechPolicyOverrides(normalized);
+      saveSpeechPolicyOverrides(activeProjectId, normalized);
+    },
+    [activeProjectId],
+  );
+
+  const handleClearSpeechPolicyOverrides = useCallback(() => {
+    setSpeechPolicyOverrides({});
+    clearSpeechPolicyOverrides(activeProjectId);
+  }, [activeProjectId]);
+
+  const applyProjectSpeechPolicyState = useCallback(
+    (settings: Awaited<ReturnType<typeof getProjectSpeechPolicy>>) => {
+      const storedProfile = normalizeSpeechPolicyProfile(settings.profile);
+      setSpeechPolicyProfile(storedProfile);
+      setCustomSpeechPolicyProfiles(settings.customProfiles ?? []);
+      setProjects((currentProjects) =>
+        currentProjects.map((project) =>
+          project.id === activeProjectId
+            ? {
+                ...project,
+                speechPolicyProfile: storedProfile,
+                speechPolicyProfiles: settings.customProfiles ?? [],
+              }
+            : project,
+        ),
+      );
+    },
+    [activeProjectId],
+  );
+
+  const handleCreateCustomSpeechPolicyProfile = useCallback(
+    async (name: string, settings: SpeechPolicySettings, baseProfile: string) => {
+      setSpeechPolicyError(null);
+      try {
+        const response = await createCustomSpeechPolicyProfile(activeProjectId, {
+          baseProfile,
+          name,
+          settings,
+        });
+        applyProjectSpeechPolicyState(response);
+        setSpeechPolicyOverrides({});
+        clearSpeechPolicyOverrides(activeProjectId);
+      } catch (caughtError) {
+        setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to save custom profile"));
+      }
+    },
+    [activeProjectId, applyProjectSpeechPolicyState],
+  );
+
+  const handleUpdateCustomSpeechPolicyProfile = useCallback(
+    async (
+      profileId: string,
+      name: string,
+      settings: SpeechPolicySettings,
+      baseProfile: string,
+    ) => {
+      setSpeechPolicyError(null);
+      try {
+        applyProjectSpeechPolicyState(
+          await updateCustomSpeechPolicyProfile(activeProjectId, profileId, {
+            baseProfile,
+            name,
+            settings,
+          }),
+        );
+        setSpeechPolicyOverrides({});
+        clearSpeechPolicyOverrides(activeProjectId);
+      } catch (caughtError) {
+        setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to update custom profile"));
+      }
+    },
+    [activeProjectId, applyProjectSpeechPolicyState],
+  );
+
+  const handleDeleteCustomSpeechPolicyProfile = useCallback(
+    async (profileId: string) => {
+      setSpeechPolicyError(null);
+      try {
+        applyProjectSpeechPolicyState(
+          await deleteCustomSpeechPolicyProfile(activeProjectId, profileId),
+        );
+        setSpeechPolicyOverrides({});
+        clearSpeechPolicyOverrides(activeProjectId);
+      } catch (caughtError) {
+        setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to delete custom profile"));
+      }
+    },
+    [activeProjectId, applyProjectSpeechPolicyState],
+  );
 
   const selectKokoroVoice = useCallback((voiceId: string) => {
     const nextVoiceId = findKokoroVoicepack(voiceId)?.id ?? DEFAULT_KOKORO_VOICE_ID;
@@ -2060,20 +2386,30 @@ export function App() {
     }
   }, []);
 
-  const handleInspectContentIR = useCallback(async (sourceId: string, title: string) => {
-    setContentIRTitle(title);
-    setContentIRDocument(null);
-    setContentIRError(null);
-    setIsContentIROpen(true);
-    setIsContentIRLoading(true);
-    try {
-      setContentIRDocument(await getContentIR(sourceId));
-    } catch (caughtError) {
-      setContentIRError(formatErrorMessage(caughtError, "Unable to load content structure"));
-    } finally {
-      setIsContentIRLoading(false);
-    }
-  }, []);
+  const handleInspectContentIR = useCallback(
+    async (sourceId: string, title: string, previewSpeechPolicy = false) => {
+      setContentIRTitle(title);
+      setContentIRDocument(null);
+      setContentIRError(null);
+      setIsContentIROpen(true);
+      setIsContentIRLoading(true);
+      try {
+        setContentIRDocument(
+          previewSpeechPolicy
+            ? await previewContentIRSpeechPolicy(sourceId, {
+                profile: speechPolicyProfile,
+                overrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
+              })
+            : await getContentIR(sourceId),
+        );
+      } catch (caughtError) {
+        setContentIRError(formatErrorMessage(caughtError, "Unable to load content structure"));
+      } finally {
+        setIsContentIRLoading(false);
+      }
+    },
+    [speechPolicyOverrides, speechPolicyProfile],
+  );
 
   const handleUseBookText = useCallback(
     (book: BookSource, scope: BookScope) => {
@@ -2186,6 +2522,7 @@ export function App() {
     }
     void refreshVoiceProfiles();
     void refreshProjects();
+    void refreshSpeechPolicyProfiles();
     void refreshProfileSourceDiagnostics();
     void refreshBookCinemaDiagnostics();
     void refreshTTSEngines();
@@ -2193,6 +2530,7 @@ export function App() {
     refreshBookCinemaDiagnostics,
     refreshProfileSourceDiagnostics,
     refreshProjects,
+    refreshSpeechPolicyProfiles,
     refreshTTSEngines,
     refreshVoiceProfiles,
   ]);
@@ -2205,7 +2543,9 @@ export function App() {
     void refreshPreparedSources(activeProjectId);
     void refreshProjectProgress(activeProjectId);
     void refreshProjectStorage(activeProjectId);
+    void refreshProjectSpeechPolicy(activeProjectId);
     void restoreProjectWorkspace(activeProjectId);
+    setSpeechPolicyOverrides(loadSpeechPolicyOverrides(activeProjectId));
   }, [
     activeProjectId,
     refreshBookSources,
@@ -2213,6 +2553,7 @@ export function App() {
     refreshProjectJobs,
     refreshProjectProgress,
     refreshProjectStorage,
+    refreshProjectSpeechPolicy,
     restoreProjectWorkspace,
   ]);
 
@@ -2798,6 +3139,8 @@ export function App() {
         source.blocks?.filter((block) => block.speakMode !== "skip").map((block) => block.id) ?? [],
       sourceKind: source.kind,
       progressTargetId: `prepared:${source.id}`,
+      speechPolicyProfile,
+      speechPolicyOverrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
     };
     setRequestState("running");
     setError(null);
@@ -2881,6 +3224,9 @@ export function App() {
         projects={projects}
         profileSource={profileSource}
         profiles={voiceProfiles}
+        customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+        speechPolicyProfile={speechPolicyProfile}
+        speechPolicyProfiles={speechPolicyProfiles}
         selectedProfileId={selectedVoiceProfileId}
         onDeleteProject={handleDeleteProject}
         onCreateProject={handleCreateProject}
@@ -2904,6 +3250,9 @@ export function App() {
         onRenameProject={handleRenameProject}
         onSelectProject={selectProject}
         onSelectProfile={selectVoiceProfile}
+        onSpeechPolicyProfileChange={(profile) => {
+          void handleSpeechPolicyProfileChange(profile);
+        }}
       />
       <RunConfigDrawer
         canSubmit={canSubmit}
@@ -3055,7 +3404,7 @@ export function App() {
             }}
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
-            preparedSourceForCinema={selectedPreparedSource}
+            preparedSourceForCinema={jobPreparedSource ?? selectedPreparedSource}
             settings={teleprompterSettings}
             themeName={themeName}
             onOpenSettings={() => {
@@ -3096,16 +3445,30 @@ export function App() {
             isProcessing={isProcessing}
             preparedSources={preparedSources}
             selectedPreparedSource={selectedPreparedSource}
+            speechPolicyError={speechPolicyError}
+            speechPolicyOverrides={speechPolicyOverrides}
+            speechPolicyProfile={speechPolicyProfile}
+            customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+            speechPolicyProfiles={speechPolicyProfiles}
             sourcePrepError={sourcePrepError}
             text={text}
+            isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
+            onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
             onCreatePreparedAudio={(source) => {
               void submitPreparedSourceJob(source);
             }}
             onInspectPreparedSource={(source) => {
-              void handleInspectContentIR(source.id, source.title ?? source.sourceName);
+              void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
             }}
             onPrepareFile={handlePrepareSourceFile}
             onPrepareUrl={handlePrepareSourceUrl}
+            onSpeechPolicyOverridesChange={handleSpeechPolicyOverridesChange}
+            onSpeechPolicyProfileChange={(profile) => {
+              void handleSpeechPolicyProfileChange(profile);
+            }}
+            onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
+            onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
+            onUpdateCustomSpeechPolicyProfile={handleUpdateCustomSpeechPolicyProfile}
             onSubmit={handleSubmit}
             onTextChange={setText}
             onUsePreparedSource={handleUsePreparedSource}
@@ -3304,14 +3667,26 @@ function SourceTextPanel({
   canSubmit,
   isProcessing,
   isPreparingSource,
+  isSpeechPolicyPreviewing,
   preparedSources,
   selectedPreparedSource,
+  customSpeechPolicyProfiles,
+  speechPolicyError,
+  speechPolicyOverrides,
+  speechPolicyProfile,
+  speechPolicyProfiles,
   sourcePrepError,
   text,
+  onClearSpeechPolicyOverrides,
+  onCreateCustomSpeechPolicyProfile,
   onCreatePreparedAudio,
+  onDeleteCustomSpeechPolicyProfile,
   onInspectPreparedSource,
   onPrepareFile,
   onPrepareUrl,
+  onSpeechPolicyOverridesChange,
+  onSpeechPolicyProfileChange,
+  onUpdateCustomSpeechPolicyProfile,
   onSubmit,
   onTextChange,
   onUsePreparedSource,
@@ -3320,14 +3695,35 @@ function SourceTextPanel({
   canSubmit: boolean;
   isProcessing: boolean;
   isPreparingSource: boolean;
+  isSpeechPolicyPreviewing: boolean;
   preparedSources: PreparedSource[];
   selectedPreparedSource: PreparedSource | null;
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  speechPolicyError: string | null;
+  speechPolicyOverrides: SpeechPolicyOverrides;
+  speechPolicyProfile: string;
+  speechPolicyProfiles: SpeechPolicyProfile[];
   sourcePrepError: string | null;
   text: string;
+  onClearSpeechPolicyOverrides: () => void;
+  onCreateCustomSpeechPolicyProfile: (
+    name: string,
+    settings: SpeechPolicySettings,
+    baseProfile: string,
+  ) => Promise<void>;
   onCreatePreparedAudio: (source: PreparedSource) => void;
+  onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onPrepareFile: (file: File) => Promise<void>;
   onPrepareUrl: (url: string) => Promise<void>;
+  onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
+  onUpdateCustomSpeechPolicyProfile: (
+    profileId: string,
+    name: string,
+    settings: SpeechPolicySettings,
+    baseProfile: string,
+  ) => Promise<void>;
   onSubmit: (event: React.SyntheticEvent<HTMLFormElement>) => void;
   onTextChange: (text: string) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
@@ -3426,8 +3822,14 @@ function SourceTextPanel({
       {sourceMode === "file" ? (
         <SourcePrepReview
           isPreparing={isPreparingSource}
+          isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
+          customSpeechPolicyProfiles={customSpeechPolicyProfiles}
           preparedSources={preparedSources}
           selectedPreparedSource={selectedPreparedSource}
+          speechPolicyError={speechPolicyError}
+          speechPolicyOverrides={speechPolicyOverrides}
+          speechPolicyProfile={speechPolicyProfile}
+          speechPolicyProfiles={speechPolicyProfiles}
           sourceFileError={sourceFileError}
           sourceFileLabel={sourceFileLabel}
           sourcePrepError={sourcePrepError}
@@ -3436,12 +3838,18 @@ function SourceTextPanel({
             fileInputRef.current?.click();
           }}
           onCreatePreparedAudio={onCreatePreparedAudio}
+          onCreateCustomSpeechPolicyProfile={onCreateCustomSpeechPolicyProfile}
+          onDeleteCustomSpeechPolicyProfile={onDeleteCustomSpeechPolicyProfile}
           onInspectPreparedSource={onInspectPreparedSource}
           onPrepareUrl={() => {
             if (sourceUrl.trim()) {
               void onPrepareUrl(sourceUrl.trim());
             }
           }}
+          onClearSpeechPolicyOverrides={onClearSpeechPolicyOverrides}
+          onSpeechPolicyOverridesChange={onSpeechPolicyOverridesChange}
+          onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+          onUpdateCustomSpeechPolicyProfile={onUpdateCustomSpeechPolicyProfile}
           onSourceUrlChange={setSourceUrl}
           onUsePreparedSource={(source) => {
             void onUsePreparedSource(source);
@@ -3568,39 +3976,104 @@ function SourcePrepTabButton({
 
 function SourcePrepReview({
   children,
+  customSpeechPolicyProfiles,
   isPreparing,
+  isSpeechPolicyPreviewing,
   preparedSources,
   selectedPreparedSource,
+  speechPolicyError,
+  speechPolicyOverrides,
+  speechPolicyProfile,
+  speechPolicyProfiles,
   sourceFileError,
   sourceFileLabel,
   sourcePrepError,
   sourceUrl,
   onBrowse,
+  onClearSpeechPolicyOverrides,
+  onCreateCustomSpeechPolicyProfile,
   onCreatePreparedAudio,
+  onDeleteCustomSpeechPolicyProfile,
   onInspectPreparedSource,
   onPrepareUrl,
+  onSpeechPolicyOverridesChange,
+  onSpeechPolicyProfileChange,
   onSourceUrlChange,
+  onUpdateCustomSpeechPolicyProfile,
   onUsePreparedSource,
 }: Readonly<{
   children: ReactNode;
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
   isPreparing: boolean;
+  isSpeechPolicyPreviewing: boolean;
   preparedSources: PreparedSource[];
   selectedPreparedSource: PreparedSource | null;
+  speechPolicyError: string | null;
+  speechPolicyOverrides: SpeechPolicyOverrides;
+  speechPolicyProfile: string;
+  speechPolicyProfiles: SpeechPolicyProfile[];
   sourceFileError: string | null;
   sourceFileLabel: string | null;
   sourcePrepError: string | null;
   sourceUrl: string;
   onBrowse: () => void;
+  onClearSpeechPolicyOverrides: () => void;
+  onCreateCustomSpeechPolicyProfile: (
+    name: string,
+    settings: SpeechPolicySettings,
+    baseProfile: string,
+  ) => Promise<void>;
   onCreatePreparedAudio: (source: PreparedSource) => void;
+  onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onPrepareUrl: () => void;
+  onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
   onSourceUrlChange: (url: string) => void;
+  onUpdateCustomSpeechPolicyProfile: (
+    profileId: string,
+    name: string,
+    settings: SpeechPolicySettings,
+    baseProfile: string,
+  ) => Promise<void>;
   onUsePreparedSource: (source: PreparedSource) => void;
 }>) {
   const source = selectedPreparedSource;
   const blocks = source?.blocks ?? [];
-  const visibleBlocks = blocks.slice(0, 12);
   const [reviewTab, setReviewTab] = useState<SourcePrepReviewTab>("blocks");
+  const [blockQuery, setBlockQuery] = useState("");
+  const [blockKindFilter, setBlockKindFilter] = useState("");
+  const [blockModeFilter, setBlockModeFilter] = useState("");
+  const blockKinds = useMemo(
+    () => uniqueSortedStrings(blocks.map((block) => block.kind)),
+    [blocks],
+  );
+  const filteredBlocks = useMemo(() => {
+    const query = blockQuery.trim().toLowerCase();
+    return blocks.filter((block) => {
+      if (blockKindFilter && block.kind !== blockKindFilter) {
+        return false;
+      }
+      if (blockModeFilter && block.speakMode !== blockModeFilter) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      return [
+        block.kind,
+        block.speakMode,
+        block.label,
+        block.text,
+        block.spokenText,
+        block.speechPolicy.explanation,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [blockKindFilter, blockModeFilter, blockQuery, blocks]);
 
   return (
     <div className="grid min-w-0 gap-4">
@@ -3648,6 +4121,20 @@ function SourcePrepReview({
 
       {preparedSources.length > 0 ? (
         <div className="grid gap-3">
+          <SpeechPolicyControls
+            customProfiles={customSpeechPolicyProfiles}
+            isPreviewing={isSpeechPolicyPreviewing}
+            overrides={speechPolicyOverrides}
+            profile={speechPolicyProfile}
+            profiles={speechPolicyProfiles}
+            error={speechPolicyError}
+            onClearOverrides={onClearSpeechPolicyOverrides}
+            onCreateCustomProfile={onCreateCustomSpeechPolicyProfile}
+            onDeleteCustomProfile={onDeleteCustomSpeechPolicyProfile}
+            onOverridesChange={onSpeechPolicyOverridesChange}
+            onProfileChange={onSpeechPolicyProfileChange}
+            onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
+          />
           <div className="-mx-1 flex max-w-full min-w-0 gap-2 overflow-x-auto px-1 pb-1">
             {preparedSources.slice(0, 5).map((item) => (
               <button
@@ -3754,39 +4241,87 @@ function SourcePrepReview({
             </div>
 
             {reviewTab === "blocks" ? (
-              <div className="max-h-[28rem] overflow-y-auto">
-                {visibleBlocks.map((block) => (
-                  <div
-                    className="grid gap-2 border-b border-zinc-100 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-start"
-                    key={block.id}
+              <div>
+                <div className="grid gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 md:grid-cols-[minmax(0,1fr)_11rem_11rem]">
+                  <input
+                    className="h-9 min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-orange-400"
+                    onChange={(event) => {
+                      setBlockQuery(event.currentTarget.value);
+                    }}
+                    placeholder="Search blocks and explanations"
+                    type="search"
+                    value={blockQuery}
+                  />
+                  <select
+                    className="h-9 rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-orange-400"
+                    onChange={(event) => {
+                      setBlockKindFilter(event.currentTarget.value);
+                    }}
+                    value={blockKindFilter}
                   >
-                    <span className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                      {block.kind}
-                    </span>
-                    <span className="min-w-0">
-                      <span
-                        className="block truncate font-medium"
-                        title={block.spokenText ?? block.text}
-                      >
-                        {block.spokenText ?? block.text ?? block.label}
-                      </span>
-                      <span className="mt-1 block truncate text-xs text-zinc-500">
-                        {String(block.segments?.length ?? 0)} segments ·{" "}
-                        {formatDuration(block.estimatedDurationMs ?? 0)}
-                      </span>
-                    </span>
-                    <span
-                      className={`w-fit rounded-full border px-2 py-1 text-[0.68rem] font-semibold sm:justify-self-end ${speakModeClass(block.speakMode)}`}
+                    <option value="">All kinds</option>
+                    {blockKinds.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {kind}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="h-9 rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-orange-400"
+                    onChange={(event) => {
+                      setBlockModeFilter(event.currentTarget.value);
+                    }}
+                    value={blockModeFilter}
+                  >
+                    <option value="">All modes</option>
+                    <option value="speak">Speak</option>
+                    <option value="summarize">Summarize</option>
+                    <option value="skip">Skip</option>
+                  </select>
+                </div>
+                <div className="max-h-[28rem] overflow-y-auto">
+                  {filteredBlocks.map((block) => (
+                    <div
+                      className="grid gap-2 border-b border-zinc-100 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-start"
+                      key={block.id}
                     >
-                      {block.speakMode}
-                    </span>
-                  </div>
-                ))}
-                {blocks.length > visibleBlocks.length ? (
+                      <span className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                        {block.kind}
+                      </span>
+                      <span className="min-w-0">
+                        <span
+                          className="block truncate font-medium"
+                          title={block.spokenText ?? block.text}
+                        >
+                          {block.spokenText ?? block.text ?? block.label}
+                        </span>
+                        <span className="mt-1 block truncate text-xs text-zinc-500">
+                          {String(block.segments?.length ?? 0)} segments ·{" "}
+                          {formatDuration(block.estimatedDurationMs ?? 0)}
+                        </span>
+                        {block.speechPolicy.explanation ? (
+                          <span
+                            className="mt-1 block truncate text-xs text-blue-700"
+                            title={block.speechPolicy.explanation}
+                          >
+                            {block.speechPolicy.explanation}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span
+                        className={`w-fit rounded-full border px-2 py-1 text-[0.68rem] font-semibold sm:justify-self-end ${speakModeClass(block.speakMode)}`}
+                      >
+                        {block.speakMode}
+                      </span>
+                    </div>
+                  ))}
+                  {filteredBlocks.length === 0 ? (
+                    <p className="px-4 py-6 text-sm text-zinc-500">No blocks match the filters.</p>
+                  ) : null}
                   <p className="px-4 py-3 text-xs text-zinc-500">
-                    Showing {visibleBlocks.length.toString()} of {blocks.length.toString()} blocks
+                    Showing {filteredBlocks.length.toString()} of {blocks.length.toString()} blocks
                   </p>
-                ) : null}
+                </div>
               </div>
             ) : null}
             {reviewTab === "preview" ? <PreparedSourceMarkdownPreview source={source} /> : null}
@@ -3801,6 +4336,352 @@ function SourcePrepReview({
       )}
     </div>
   );
+}
+
+function SpeechPolicyControls({
+  customProfiles,
+  error,
+  isPreviewing,
+  overrides,
+  profile,
+  profiles,
+  onClearOverrides,
+  onCreateCustomProfile,
+  onDeleteCustomProfile,
+  onOverridesChange,
+  onProfileChange,
+  onUpdateCustomProfile,
+}: Readonly<{
+  customProfiles: CustomSpeechPolicyProfile[];
+  error: string | null;
+  isPreviewing: boolean;
+  overrides: SpeechPolicyOverrides;
+  profile: string;
+  profiles: SpeechPolicyProfile[];
+  onClearOverrides: () => void;
+  onCreateCustomProfile: (
+    name: string,
+    settings: SpeechPolicySettings,
+    baseProfile: string,
+  ) => Promise<void>;
+  onDeleteCustomProfile: (profileId: string) => Promise<void>;
+  onOverridesChange: (overrides: SpeechPolicyOverrides) => void;
+  onProfileChange: (profile: string) => void;
+  onUpdateCustomProfile: (
+    profileId: string,
+    name: string,
+    settings: SpeechPolicySettings,
+    baseProfile: string,
+  ) => Promise<void>;
+}>) {
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [isDefaultsOpen, setIsDefaultsOpen] = useState(false);
+  const [isCustomFormOpen, setIsCustomFormOpen] = useState(false);
+  const activeCustomProfile = customProfiles.find((item) => item.id === profile) ?? null;
+  const [customProfileName, setCustomProfileName] = useState("");
+  const profileOptions: SpeechPolicyProfile[] =
+    profiles.length > 0
+      ? profiles
+      : SPEECH_POLICY_PROFILE_OPTIONS.map(
+          (name): SpeechPolicyProfile => ({
+            description: "",
+            label: speechPolicyProfileLabel(name),
+            name,
+            settings: { ...BUILT_IN_SPEECH_POLICY_SETTINGS[name] },
+          }),
+        );
+  const baseSettings = resolveSpeechPolicySettings(profile, profileOptions, customProfiles);
+  const effectiveSettings = applySpeechPolicyOverridesToSettings(baseSettings, overrides);
+  const baseProfile = activeCustomProfile?.baseProfile ?? profile;
+  const customNamePlaceholder = `${speechPolicyProfileDisplayName(profile, customProfiles)} copy`;
+
+  useEffect(() => {
+    setCustomProfileName(activeCustomProfile?.name ?? customNamePlaceholder);
+  }, [activeCustomProfile?.name, customNamePlaceholder]);
+
+  return (
+    <section className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-4">
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+        <label className="grid min-w-0 gap-1 text-sm font-semibold text-zinc-950">
+          <span>Profile</span>
+          <select
+            className="h-10 min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+            onChange={(event) => {
+              onProfileChange(normalizeSpeechPolicyProfile(event.currentTarget.value));
+            }}
+            value={profile}
+          >
+            {profileOptions.map((option) => (
+              <option key={option.name} value={option.name}>
+                {option.label || speechPolicyProfileLabel(option.name)}
+              </option>
+            ))}
+            {customProfiles.length > 0 ? (
+              <optgroup label="Custom profiles">
+                {customProfiles.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+          </select>
+        </label>
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
+          {isPreviewing ? (
+            <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+              Updating preview
+            </span>
+          ) : null}
+          <button
+            className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700"
+            onClick={() => {
+              setIsAdvancedOpen((current) => !current);
+            }}
+            type="button"
+          >
+            Advanced
+          </button>
+          <button
+            className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700"
+            onClick={() => {
+              setIsDefaultsOpen((current) => !current);
+            }}
+            type="button"
+          >
+            Defaults
+          </button>
+          <button
+            className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700"
+            onClick={() => {
+              setIsCustomFormOpen((current) => !current);
+            }}
+            type="button"
+          >
+            Save as profile
+          </button>
+          {hasSpeechPolicyOverrides(overrides) ? (
+            <button
+              className="h-9 rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-800"
+              onClick={onClearOverrides}
+              type="button"
+            >
+              Clear overrides
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {error ? (
+        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </p>
+      ) : null}
+      {isDefaultsOpen ? <SpeechPolicyDefaultsTable profiles={profileOptions} /> : null}
+      {isAdvancedOpen ? (
+        <div className="grid gap-3 border-t border-zinc-100 pt-3 sm:grid-cols-2">
+          <PolicyModeSelect
+            label="Tables"
+            options={TABLE_MODE_OPTIONS}
+            value={overrides.tableMode ?? ""}
+            onChange={(value) => {
+              onOverridesChange({
+                ...overrides,
+                tableMode: value as SpeechPolicyOverrides["tableMode"],
+              });
+            }}
+          />
+          <PolicyModeSelect
+            label="Code"
+            options={CODE_MODE_OPTIONS}
+            value={overrides.codeMode ?? ""}
+            onChange={(value) => {
+              onOverridesChange({
+                ...overrides,
+                codeMode: value as SpeechPolicyOverrides["codeMode"],
+              });
+            }}
+          />
+          <PolicyModeSelect
+            label="Math"
+            options={MATH_MODE_OPTIONS}
+            value={overrides.mathMode ?? ""}
+            onChange={(value) => {
+              onOverridesChange({
+                ...overrides,
+                mathMode: value as SpeechPolicyOverrides["mathMode"],
+              });
+            }}
+          />
+          <PolicyModeSelect
+            label="Notes"
+            options={FOOTNOTE_MODE_OPTIONS}
+            value={overrides.footnoteMode ?? ""}
+            onChange={(value) => {
+              onOverridesChange({
+                ...overrides,
+                footnoteMode: value as SpeechPolicyOverrides["footnoteMode"],
+              });
+            }}
+          />
+          <PolicyModeSelect
+            label="Images"
+            options={IMAGE_MODE_OPTIONS}
+            value={overrides.imageMode ?? ""}
+            onChange={(value) => {
+              onOverridesChange({
+                ...overrides,
+                imageMode: value as SpeechPolicyOverrides["imageMode"],
+              });
+            }}
+          />
+        </div>
+      ) : null}
+      {isCustomFormOpen ? (
+        <div className="grid gap-3 border-t border-zinc-100 pt-3">
+          <label className="grid gap-1 text-xs font-semibold text-zinc-700">
+            <span>Profile name</span>
+            <input
+              className="h-9 rounded-md border border-zinc-200 bg-zinc-50 px-3 text-sm outline-none focus:border-orange-400"
+              onChange={(event) => {
+                setCustomProfileName(event.currentTarget.value);
+              }}
+              value={customProfileName}
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="h-9 rounded-md bg-zinc-950 px-3 text-xs font-semibold text-white"
+              onClick={() => {
+                void onCreateCustomProfile(customProfileName, effectiveSettings, baseProfile);
+              }}
+              type="button"
+            >
+              Save new profile
+            </button>
+            {activeCustomProfile ? (
+              <>
+                <button
+                  className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800"
+                  onClick={() => {
+                    void onUpdateCustomProfile(
+                      activeCustomProfile.id,
+                      customProfileName,
+                      effectiveSettings,
+                      baseProfile,
+                    );
+                  }}
+                  type="button"
+                >
+                  Update selected
+                </button>
+                <button
+                  className="h-9 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-700"
+                  onClick={() => {
+                    void onDeleteCustomProfile(activeCustomProfile.id);
+                  }}
+                  type="button"
+                >
+                  Delete selected
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function SpeechPolicyDefaultsTable({
+  profiles,
+}: Readonly<{ profiles: Pick<SpeechPolicyProfile, "name" | "label" | "settings">[] }>) {
+  return (
+    <div className="overflow-x-auto border-t border-zinc-100 pt-3">
+      <table className="min-w-[760px] border-collapse text-left text-xs">
+        <thead className="bg-zinc-50 text-[0.68rem] uppercase tracking-[0.14em] text-zinc-500">
+          <tr>
+            {["Profile", "Mode", "Tables", "Code", "Math", "Notes", "Images"].map((header) => (
+              <th className="border border-zinc-200 px-3 py-2" key={header}>
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {profiles.map((item) => (
+            <tr key={item.name}>
+              <td className="border border-zinc-200 px-3 py-2 font-semibold">
+                {item.label || speechPolicyProfileLabel(item.name)}
+              </td>
+              <td className="border border-zinc-200 px-3 py-2">{item.settings.mode}</td>
+              <td className="border border-zinc-200 px-3 py-2">{item.settings.tableMode}</td>
+              <td className="border border-zinc-200 px-3 py-2">{item.settings.codeMode}</td>
+              <td className="border border-zinc-200 px-3 py-2">{item.settings.mathMode}</td>
+              <td className="border border-zinc-200 px-3 py-2">{item.settings.footnoteMode}</td>
+              <td className="border border-zinc-200 px-3 py-2">{item.settings.imageMode}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PolicyModeSelect({
+  label,
+  options,
+  value,
+  onChange,
+}: Readonly<{
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (value: string | undefined) => void;
+}>) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold text-zinc-700">
+      <span>{label}</span>
+      <select
+        className="h-9 min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 text-xs outline-none focus:border-orange-400"
+        onChange={(event) => {
+          onChange(event.currentTarget.value || undefined);
+        }}
+        value={value}
+      >
+        <option value="">Profile default</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {formatPolicyModeLabel(option)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function formatPolicyModeLabel(value: string): string {
+  if (value === "rowLinear") {
+    return "Row linear";
+  }
+  if (value === "syntaxAware") {
+    return "Syntax aware";
+  }
+  if (value === "literalsafe") {
+    return "Literal safe";
+  }
+  if (value === "altFirst") {
+    return "Alt first";
+  }
+  if (value === "describeShort") {
+    return "Describe short";
+  }
+  if (value === "describeLong") {
+    return "Describe long";
+  }
+  if (value === "onDemand") {
+    return "On demand";
+  }
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function PreparedSourceMarkdownPreview({ source }: Readonly<{ source: PreparedSource | null }>) {

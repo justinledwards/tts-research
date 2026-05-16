@@ -49,6 +49,13 @@
           "emphasis": "heading",
           "pauseBeforeMs": 420,
           "pauseAfterMs": 520
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "prose",
+          "elementMode": "speak",
+          "mode": "speak",
+          "explanation": "Prose is spoken because the Enterprise profile sets mode to speak."
         }
       },
       "warnings": ["heading_emphasis"],
@@ -100,9 +107,16 @@
           "emphasis": "",
           "pauseBeforeMs": 0,
           "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "table",
+          "elementMode": "summary",
+          "mode": "summarise",
+          "explanation": "This table is summarised because the Enterprise profile sets table to summary."
         }
       },
-      "warnings": ["table_summarized"],
+      "warnings": ["table_policy"],
       "confidence": 0.82,
       "rights": {
         "status": "unknown",
@@ -119,7 +133,7 @@
       "displayText": "fmt.Println(\"skip\")",
       "normalisedText": "fmt.Println(\"skip\")",
       "speechText": "",
-      "lang": "und",
+      "lang": "go",
       "script": "Latn",
       "dir": "ltr",
       "provenance": {
@@ -151,9 +165,16 @@
           "emphasis": "",
           "pauseBeforeMs": 0,
           "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "code",
+          "elementMode": "skip",
+          "mode": "skip",
+          "explanation": "This code block is skipped because the Enterprise profile sets code to skip."
         }
       },
-      "warnings": ["code_skipped"],
+      "warnings": ["code_policy"],
       "confidence": 0.98,
       "rights": {
         "status": "unknown",
@@ -202,6 +223,13 @@
           "emphasis": "",
           "pauseBeforeMs": 0,
           "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "footnote",
+          "elementMode": "onDemand",
+          "mode": "onDemand",
+          "explanation": "This note is available on demand because the Enterprise profile sets footnote to onDemand."
         }
       },
       "warnings": ["citation_skipped"],

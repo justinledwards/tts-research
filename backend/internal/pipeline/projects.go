@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 const (
@@ -56,16 +58,17 @@ func (service *Service) GetProject(id string) (VoiceProject, error) {
 	if !ok {
 		return VoiceProject{}, ErrProjectNotFound
 	}
-	return project, nil
+	return normalizeProjectSpeechPolicy(project), nil
 }
 
 func (service *Service) CreateProject(name string) (VoiceProject, error) {
 	now := time.Now().UTC()
 	project := VoiceProject{
-		ID:        newID(),
-		Name:      cleanProjectName(name),
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:                  newID(),
+		Name:                cleanProjectName(name),
+		SpeechPolicyProfile: string(policy.DefaultProfileName),
+		CreatedAt:           now,
+		UpdatedAt:           now,
 	}
 	if err := service.writeProject(project); err != nil {
 		return VoiceProject{}, err
@@ -97,6 +100,7 @@ func (service *Service) UpdateProject(id string, name string) (VoiceProject, err
 		return VoiceProject{}, ErrProjectNotFound
 	}
 	project.Name = cleanProjectName(name)
+	project = normalizeProjectSpeechPolicy(project)
 	project.UpdatedAt = time.Now().UTC()
 	for key, candidate := range service.projects {
 		if key == cleanID || candidate.ID == project.ID {
@@ -169,6 +173,7 @@ func (service *Service) reloadProjects() {
 			if project.UpdatedAt.IsZero() {
 				project.UpdatedAt = project.CreatedAt
 			}
+			project = normalizeProjectSpeechPolicy(project)
 			projects[project.ID] = project
 		}
 	} else if os.IsNotExist(err) {
@@ -178,10 +183,11 @@ func (service *Service) reloadProjects() {
 	if _, ok := projects[defaultProjectID]; !ok {
 		now := time.Now().UTC()
 		projects[defaultProjectID] = VoiceProject{
-			ID:        defaultProjectID,
-			Name:      defaultProjectName,
-			CreatedAt: now,
-			UpdatedAt: now,
+			ID:                  defaultProjectID,
+			Name:                defaultProjectName,
+			SpeechPolicyProfile: string(policy.DefaultProfileName),
+			CreatedAt:           now,
+			UpdatedAt:           now,
 		}
 	}
 
@@ -244,6 +250,7 @@ func (service *Service) reloadJobs() {
 }
 
 func (service *Service) writeProject(project VoiceProject) error {
+	project = normalizeProjectSpeechPolicy(project)
 	outputDir, err := filepath.Abs(filepath.Join(service.options.ProjectDataDir, project.ID))
 	if err != nil {
 		return err
@@ -252,6 +259,371 @@ func (service *Service) writeProject(project VoiceProject) error {
 		return err
 	}
 	return writeJSON(filepath.Join(outputDir, projectMetadata), project)
+}
+
+func (service *Service) GetProjectSpeechPolicy(projectID string) (ProjectSpeechPolicy, error) {
+	project, err := service.GetProject(projectID)
+	if err != nil {
+		return ProjectSpeechPolicy{}, err
+	}
+	settings, err := projectSpeechPolicySettings(project, project.SpeechPolicyProfile)
+	if err != nil {
+		return ProjectSpeechPolicy{}, err
+	}
+	return ProjectSpeechPolicy{
+		ProjectID:      project.ID,
+		Profile:        project.SpeechPolicyProfile,
+		Settings:       settings,
+		CustomProfiles: cloneCustomSpeechPolicyProfiles(project.SpeechPolicyProfiles),
+	}, nil
+}
+
+func (service *Service) projectSpeechPolicyProfile(projectID string) string {
+	project, err := service.GetProject(projectID)
+	if err != nil {
+		return string(policy.DefaultProfileName)
+	}
+	return project.SpeechPolicyProfile
+}
+
+func (service *Service) UpdateProjectSpeechPolicy(projectID string, profileName string) (ProjectSpeechPolicy, error) {
+	cleanID := strings.TrimSpace(projectID)
+	if cleanID == "" {
+		cleanID = defaultProjectID
+	}
+	service.mu.Lock()
+	project, ok := service.projects[cleanID]
+	if !ok {
+		for _, candidate := range service.projects {
+			if candidate.ID == cleanID {
+				project = candidate
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
+		service.mu.Unlock()
+		return ProjectSpeechPolicy{}, ErrProjectNotFound
+	}
+	profile, err := resolveProjectSpeechPolicyProfile(project, profileName)
+	if err != nil {
+		service.mu.Unlock()
+		return ProjectSpeechPolicy{}, err
+	}
+	project.SpeechPolicyProfile = profile
+	project = normalizeProjectSpeechPolicy(project)
+	project.UpdatedAt = time.Now().UTC()
+	for key, candidate := range service.projects {
+		if key == cleanID || candidate.ID == project.ID {
+			delete(service.projects, key)
+		}
+	}
+	service.projects[project.ID] = project
+	service.mu.Unlock()
+	if err := service.writeProject(project); err != nil {
+		return ProjectSpeechPolicy{}, err
+	}
+	settings, err := projectSpeechPolicySettings(project, project.SpeechPolicyProfile)
+	if err != nil {
+		return ProjectSpeechPolicy{}, err
+	}
+	return ProjectSpeechPolicy{
+		ProjectID:      project.ID,
+		Profile:        project.SpeechPolicyProfile,
+		Settings:       settings,
+		CustomProfiles: cloneCustomSpeechPolicyProfiles(project.SpeechPolicyProfiles),
+	}, nil
+}
+
+func (service *Service) CreateCustomSpeechPolicyProfile(
+	projectID string,
+	request UpsertSpeechPolicyProfileRequest,
+) (ProjectSpeechPolicy, error) {
+	cleanID := strings.TrimSpace(projectID)
+	if cleanID == "" {
+		cleanID = defaultProjectID
+	}
+	now := time.Now().UTC()
+	service.mu.Lock()
+	project, ok := service.projects[cleanID]
+	if !ok {
+		for _, candidate := range service.projects {
+			if candidate.ID == cleanID {
+				project = candidate
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
+		service.mu.Unlock()
+		return ProjectSpeechPolicy{}, ErrProjectNotFound
+	}
+	project = normalizeProjectSpeechPolicy(project)
+	profile := CustomSpeechPolicyProfile{
+		ID:          "custom-" + newID(),
+		Name:        cleanSpeechPolicyProfileName(request.Name),
+		BaseProfile: resolveBaseSpeechPolicyProfile(request.BaseProfile),
+		Settings:    normalizeCustomSpeechPolicySettings(request.Settings, request.BaseProfile),
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	project.SpeechPolicyProfiles = append(project.SpeechPolicyProfiles, profile)
+	project.SpeechPolicyProfile = profile.ID
+	project.UpdatedAt = now
+	for key, candidate := range service.projects {
+		if key == cleanID || candidate.ID == project.ID {
+			delete(service.projects, key)
+		}
+	}
+	service.projects[project.ID] = project
+	service.mu.Unlock()
+	if err := service.writeProject(project); err != nil {
+		return ProjectSpeechPolicy{}, err
+	}
+	return projectSpeechPolicyResponse(project), nil
+}
+
+func (service *Service) UpdateCustomSpeechPolicyProfile(
+	projectID string,
+	profileID string,
+	request UpsertSpeechPolicyProfileRequest,
+) (ProjectSpeechPolicy, error) {
+	cleanID := strings.TrimSpace(projectID)
+	if cleanID == "" {
+		cleanID = defaultProjectID
+	}
+	profileID = strings.TrimSpace(profileID)
+	service.mu.Lock()
+	project, ok := service.projects[cleanID]
+	if !ok {
+		for _, candidate := range service.projects {
+			if candidate.ID == cleanID {
+				project = candidate
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
+		service.mu.Unlock()
+		return ProjectSpeechPolicy{}, ErrProjectNotFound
+	}
+	project = normalizeProjectSpeechPolicy(project)
+	found := false
+	for index := range project.SpeechPolicyProfiles {
+		if project.SpeechPolicyProfiles[index].ID != profileID {
+			continue
+		}
+		project.SpeechPolicyProfiles[index].Name = cleanSpeechPolicyProfileName(request.Name)
+		project.SpeechPolicyProfiles[index].BaseProfile = resolveBaseSpeechPolicyProfile(request.BaseProfile)
+		project.SpeechPolicyProfiles[index].Settings = normalizeCustomSpeechPolicySettings(request.Settings, request.BaseProfile)
+		project.SpeechPolicyProfiles[index].UpdatedAt = time.Now().UTC()
+		found = true
+		break
+	}
+	if !found {
+		service.mu.Unlock()
+		return ProjectSpeechPolicy{}, ErrSpeechPolicyProfileNotFound
+	}
+	project.UpdatedAt = time.Now().UTC()
+	for key, candidate := range service.projects {
+		if key == cleanID || candidate.ID == project.ID {
+			delete(service.projects, key)
+		}
+	}
+	service.projects[project.ID] = project
+	service.mu.Unlock()
+	if err := service.writeProject(project); err != nil {
+		return ProjectSpeechPolicy{}, err
+	}
+	return projectSpeechPolicyResponse(project), nil
+}
+
+func (service *Service) DeleteCustomSpeechPolicyProfile(projectID string, profileID string) (ProjectSpeechPolicy, error) {
+	cleanID := strings.TrimSpace(projectID)
+	if cleanID == "" {
+		cleanID = defaultProjectID
+	}
+	profileID = strings.TrimSpace(profileID)
+	service.mu.Lock()
+	project, ok := service.projects[cleanID]
+	if !ok {
+		for _, candidate := range service.projects {
+			if candidate.ID == cleanID {
+				project = candidate
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
+		service.mu.Unlock()
+		return ProjectSpeechPolicy{}, ErrProjectNotFound
+	}
+	project = normalizeProjectSpeechPolicy(project)
+	nextProfiles := make([]CustomSpeechPolicyProfile, 0, len(project.SpeechPolicyProfiles))
+	found := false
+	for _, profile := range project.SpeechPolicyProfiles {
+		if profile.ID == profileID {
+			found = true
+			continue
+		}
+		nextProfiles = append(nextProfiles, profile)
+	}
+	if !found {
+		service.mu.Unlock()
+		return ProjectSpeechPolicy{}, ErrSpeechPolicyProfileNotFound
+	}
+	project.SpeechPolicyProfiles = nextProfiles
+	if project.SpeechPolicyProfile == profileID {
+		project.SpeechPolicyProfile = string(policy.DefaultProfileName)
+	}
+	project = normalizeProjectSpeechPolicy(project)
+	project.UpdatedAt = time.Now().UTC()
+	for key, candidate := range service.projects {
+		if key == cleanID || candidate.ID == project.ID {
+			delete(service.projects, key)
+		}
+	}
+	service.projects[project.ID] = project
+	service.mu.Unlock()
+	if err := service.writeProject(project); err != nil {
+		return ProjectSpeechPolicy{}, err
+	}
+	return projectSpeechPolicyResponse(project), nil
+}
+
+func projectSpeechPolicyResponse(project VoiceProject) ProjectSpeechPolicy {
+	project = normalizeProjectSpeechPolicy(project)
+	settings, _ := projectSpeechPolicySettings(project, project.SpeechPolicyProfile)
+	return ProjectSpeechPolicy{
+		ProjectID:      project.ID,
+		Profile:        project.SpeechPolicyProfile,
+		Settings:       settings,
+		CustomProfiles: cloneCustomSpeechPolicyProfiles(project.SpeechPolicyProfiles),
+	}
+}
+
+func normalizeProjectSpeechPolicy(project VoiceProject) VoiceProject {
+	project.SpeechPolicyProfiles = normalizeCustomSpeechPolicyProfiles(project.SpeechPolicyProfiles)
+	profile, err := resolveProjectSpeechPolicyProfile(project, project.SpeechPolicyProfile)
+	if err != nil {
+		profile = string(policy.DefaultProfileName)
+	}
+	project.SpeechPolicyProfile = profile
+	return project
+}
+
+func normalizeCustomSpeechPolicyProfiles(profiles []CustomSpeechPolicyProfile) []CustomSpeechPolicyProfile {
+	if len(profiles) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	normalized := make([]CustomSpeechPolicyProfile, 0, len(profiles))
+	for _, profile := range profiles {
+		profile.ID = strings.TrimSpace(profile.ID)
+		if profile.ID == "" {
+			continue
+		}
+		if _, ok := seen[profile.ID]; ok {
+			continue
+		}
+		seen[profile.ID] = struct{}{}
+		profile.Name = cleanSpeechPolicyProfileName(profile.Name)
+		profile.BaseProfile = resolveBaseSpeechPolicyProfile(profile.BaseProfile)
+		profile.Settings = normalizeCustomSpeechPolicySettings(profile.Settings, profile.BaseProfile)
+		if profile.CreatedAt.IsZero() {
+			profile.CreatedAt = time.Now().UTC()
+		}
+		if profile.UpdatedAt.IsZero() {
+			profile.UpdatedAt = profile.CreatedAt
+		}
+		normalized = append(normalized, profile)
+	}
+	return normalized
+}
+
+func cloneCustomSpeechPolicyProfiles(profiles []CustomSpeechPolicyProfile) []CustomSpeechPolicyProfile {
+	if len(profiles) == 0 {
+		return nil
+	}
+	cloned := append([]CustomSpeechPolicyProfile(nil), profiles...)
+	return cloned
+}
+
+func resolveProjectSpeechPolicyProfile(project VoiceProject, profileName string) (string, error) {
+	profileName = strings.TrimSpace(profileName)
+	for _, profile := range project.SpeechPolicyProfiles {
+		if profile.ID == profileName {
+			return profile.ID, nil
+		}
+	}
+	if isBuiltinSpeechPolicyProfile(profileName) {
+		return string(policy.NormalizeProfileName(profileName)), nil
+	}
+	return "", ErrSpeechPolicyProfileNotFound
+}
+
+func isBuiltinSpeechPolicyProfile(profileName string) bool {
+	profileName = strings.TrimSpace(profileName)
+	for _, profile := range policy.Profiles() {
+		if string(profile.Name) == profileName {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveBaseSpeechPolicyProfile(profileName string) string {
+	if isBuiltinSpeechPolicyProfile(profileName) {
+		return string(policy.NormalizeProfileName(profileName))
+	}
+	return string(policy.DefaultProfileName)
+}
+
+func projectSpeechPolicySettings(project VoiceProject, profileName string) (policy.Settings, error) {
+	profileName = strings.TrimSpace(profileName)
+	for _, custom := range project.SpeechPolicyProfiles {
+		if custom.ID == profileName {
+			fallback := policy.ProfileByName(policy.NormalizeProfileName(custom.BaseProfile)).Settings
+			return policy.NormalizeSettings(custom.Settings, fallback), nil
+		}
+	}
+	if isBuiltinSpeechPolicyProfile(profileName) {
+		_, settings, _ := policy.ResolveSettings(policy.NormalizeProfileName(profileName), policy.Overrides{})
+		return settings, nil
+	}
+	return policy.ProfileByName(policy.DefaultProfileName).Settings, ErrSpeechPolicyProfileNotFound
+}
+
+func projectSpeechPolicyEvaluator(project VoiceProject, profileName string, overrides policy.Overrides) policy.Evaluator {
+	project = normalizeProjectSpeechPolicy(project)
+	profileName, err := resolveProjectSpeechPolicyProfile(project, profileName)
+	if err != nil {
+		profileName = project.SpeechPolicyProfile
+	}
+	for _, custom := range project.SpeechPolicyProfiles {
+		if custom.ID == profileName {
+			settings, _ := projectSpeechPolicySettings(project, profileName)
+			return policy.NewEvaluatorForSettings(custom.ID, custom.Name, settings, overrides)
+		}
+	}
+	return policy.NewEvaluator(policy.NormalizeProfileName(profileName), overrides)
+}
+
+func normalizeCustomSpeechPolicySettings(settings policy.Settings, baseProfile string) policy.Settings {
+	fallback := policy.ProfileByName(policy.NormalizeProfileName(resolveBaseSpeechPolicyProfile(baseProfile))).Settings
+	return policy.NormalizeSettings(settings, fallback)
+}
+
+func cleanSpeechPolicyProfileName(name string) string {
+	clean := strings.TrimSpace(name)
+	if clean == "" {
+		return "Custom Profile"
+	}
+	return clean
 }
 
 func cleanProjectName(name string) string {

@@ -43,6 +43,17 @@ describe("Markdown rendering helpers", () => {
     expect(markup).toContain(">world</span>");
   });
 
+  it("marks an active generated block without wrapping individual words", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer blockHighlight={{ blockEndOffset: 30, blockStartOffset: 0 }}>
+        {"| One | Two |\n|---|---|\n| A | B |"}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain("markdown-cinema-block-active");
+    expect(markup).not.toContain("markdown-cinema-word-active");
+  });
+
   it("maps active teleprompter word indexes back to prepared-source blocks", () => {
     const source = makePreparedSource([
       makeBlock("block-1", "First two", "First two"),
@@ -66,6 +77,7 @@ function makePreparedSource(blocks: NarrationBlock[]): PreparedSource {
     sourceName: "demo.md",
     sourceFormat: "markdown",
     renderMode: "markdown",
+    speechPolicyProfile: "Enterprise",
     text: "# Demo",
     speechText: "First two\n\nSecond block here",
     wordCount: 5,
@@ -99,5 +111,10 @@ function makeBlock(
     spokenText,
     startOffset: 0,
     endOffset: text.length,
+    speechPolicy: {
+      explanation: "Test policy",
+      mode: speakMode,
+      profile: "Enterprise",
+    },
   };
 }

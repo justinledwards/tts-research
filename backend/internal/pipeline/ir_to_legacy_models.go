@@ -46,9 +46,11 @@ func narrationBlockFromIRNode(node contentir.Node, index int) NarrationBlock {
 	block.ID = node.NodeID
 	block.Warnings = contentIRStringSlice(node.Warnings)
 	block.Confidence = node.Confidence
+	block.Language = node.Lang
 	block.Emphasis = node.Speech.PolicyHint.Emphasis
 	block.PauseBeforeMS = node.Speech.PolicyHint.PauseBeforeMS
 	block.PauseAfterMS = node.Speech.PolicyHint.PauseAfterMS
+	block.SpeechPolicy = node.Speech.SpeechPolicy
 	return block
 }
 
