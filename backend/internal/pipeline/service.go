@@ -41,6 +41,7 @@ var (
 	ErrProjectProtected           = errors.New("default project cannot be deleted")
 	ErrBookSourceNotFound         = errors.New("book source not found")
 	ErrPreparedSourceNotFound     = errors.New("prepared source not found")
+	ErrContentIRNotFound          = errors.New("content IR not found")
 	ErrProgressNotFound           = errors.New("playback progress not found")
 	ErrPlaybackSessionNotFound    = errors.New("playback session not found")
 	ErrProjectBundleInvalid       = errors.New("project bundle is invalid")
@@ -106,6 +107,7 @@ type Options struct {
 	StudioSegmentWorkers                 int
 	StudioSegmentWorkersAdaptive         int
 	StudioSegmentMaxRunesAdaptive        int
+	SourcePrepSentenceMaxRunes           int
 	ReferenceWorkerCount                 int
 	JobDataDir                           string
 	ProjectDataDir                       string
@@ -151,6 +153,7 @@ const (
 	defaultStudioSegmentWorkers                = 4
 	defaultStudioAdaptiveSegmentWorkers        = 6
 	defaultStudioAdaptiveSegmentMaxRunes       = 180
+	defaultSourcePrepSentenceMaxRunes          = 420
 	defaultJobDataDir                          = "./data/jobs"
 	defaultProjectDataDir                      = "./data/projects"
 	defaultBookSourceDir                       = "./data/book-sources"
@@ -355,6 +358,9 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 		if options.StudioSegmentMaxRunesAdaptive > defaultStudioAdaptiveSegmentMaxRunes {
 			options.StudioSegmentMaxRunesAdaptive = defaultStudioAdaptiveSegmentMaxRunes
 		}
+	}
+	if options.SourcePrepSentenceMaxRunes <= 0 {
+		options.SourcePrepSentenceMaxRunes = defaultSourcePrepSentenceMaxRunes
 	}
 	if strings.TrimSpace(options.JobDataDir) == "" {
 		options.JobDataDir = defaultJobDataDir

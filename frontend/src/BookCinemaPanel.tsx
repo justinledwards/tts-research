@@ -67,13 +67,12 @@ export interface BookCinemaControlsProps {
   isProcessing: boolean;
   isScopeLoading: boolean;
   scopeContent: BookSourceScopeContent | null;
-  scopeProgress: PlaybackProgress | null;
   selectedBookScope: BookScope | null;
   selectedBookSourceId: string | null;
   onCreateAudio: (book: BookSource, scope: BookScope) => void;
   onImport: (file: File) => Promise<void>;
+  onInspectStructure: (book: BookSource) => void;
   onOpenCinema: () => void;
-  onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
   onScopeChange: (scope: BookScope) => void;
   onSelectBook: (bookId: string) => void;
   onUseText: (book: BookSource, scope: BookScope) => void;
@@ -89,13 +88,12 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
     isProcessing,
     isScopeLoading,
     scopeContent,
-    scopeProgress,
     selectedBookScope,
     selectedBookSourceId,
     onCreateAudio,
     onImport,
+    onInspectStructure,
     onOpenCinema,
-    onResumeProgress,
     onScopeChange,
     onSelectBook,
     onUseText,
@@ -197,11 +195,10 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
           scope={scope}
           scopeContent={scopeContent}
           scopeOptions={scopeOptions}
-          scopeProgress={scopeProgress}
           selectedBook={selectedBook}
           onCreateAudio={onCreateAudio}
+          onInspectStructure={onInspectStructure}
           onOpenCinema={onOpenCinema}
-          onResumeProgress={onResumeProgress}
           onScopeChange={onScopeChange}
           onSelectBook={onSelectBook}
           onUseText={onUseText}
@@ -221,11 +218,10 @@ function BookCinemaSelectedSource({
   scope,
   scopeContent,
   scopeOptions,
-  scopeProgress,
   selectedBook,
   onCreateAudio,
+  onInspectStructure,
   onOpenCinema,
-  onResumeProgress,
   onScopeChange,
   onSelectBook,
   onUseText,
@@ -237,11 +233,10 @@ function BookCinemaSelectedSource({
   scope: BookScope;
   scopeContent: BookSourceScopeContent | null;
   scopeOptions: BookScopeOption[];
-  scopeProgress: PlaybackProgress | null;
   selectedBook: BookSource;
   onCreateAudio: (book: BookSource, scope: BookScope) => void;
+  onInspectStructure: (book: BookSource) => void;
   onOpenCinema: () => void;
-  onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
   onScopeChange: (scope: BookScope) => void;
   onSelectBook: (bookId: string) => void;
   onUseText: (book: BookSource, scope: BookScope) => void;
@@ -262,6 +257,7 @@ function BookCinemaSelectedSource({
           scopeContent={scopeContent}
           selectedBook={selectedBook}
           onCreateAudio={onCreateAudio}
+          onInspectStructure={onInspectStructure}
           onOpenCinema={onOpenCinema}
           onUseText={onUseText}
         />
@@ -271,9 +267,6 @@ function BookCinemaSelectedSource({
           scopeOptions={scopeOptions}
           onScopeChange={onScopeChange}
         />
-        {scopeProgress ? (
-          <BookScopeProgressButton progress={scopeProgress} onResumeProgress={onResumeProgress} />
-        ) : null}
         <BookReadingPreview
           book={selectedBook}
           isLoading={isScopeLoading}
@@ -346,6 +339,7 @@ function BookScopeActionHeader({
   scopeContent,
   selectedBook,
   onCreateAudio,
+  onInspectStructure,
   onOpenCinema,
   onUseText,
 }: Readonly<{
@@ -355,6 +349,7 @@ function BookScopeActionHeader({
   scopeContent: BookSourceScopeContent | null;
   selectedBook: BookSource;
   onCreateAudio: (book: BookSource, scope: BookScope) => void;
+  onInspectStructure: (book: BookSource) => void;
   onOpenCinema: () => void;
   onUseText: (book: BookSource, scope: BookScope) => void;
 }>) {
@@ -370,6 +365,15 @@ function BookScopeActionHeader({
         </p>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">
+        <button
+          className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+          onClick={() => {
+            onInspectStructure(selectedBook);
+          }}
+          type="button"
+        >
+          Inspect structure
+        </button>
         <button
           className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
           disabled={selectedBook.status !== "ready" || isScopeLoading || !scopeContent}
@@ -440,34 +444,6 @@ function BookScopeSelector({
         ))}
       </select>
     </label>
-  );
-}
-
-function BookScopeProgressButton({
-  progress,
-  onResumeProgress,
-}: Readonly<{
-  progress: PlaybackProgress;
-  onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
-}>) {
-  return (
-    <button
-      className="mt-3 flex w-full min-w-0 items-center justify-between gap-3 rounded-md border border-orange-300 bg-orange-500/10 px-3 py-2 text-left text-xs text-orange-600"
-      onClick={() => {
-        onResumeProgress(progress);
-      }}
-      type="button"
-    >
-      <span className="min-w-0">
-        <span className="block font-semibold">Continue this scope</span>
-        <span className="block truncate">
-          {formatProgressPercent(progress.progress)} ·{" "}
-          {formatEstimatedDuration(progress.currentTimeSec * 1000)}
-          {formatBookmarkSummary(progress.bookmarks?.length ?? 0)}
-        </span>
-      </span>
-      <span className="shrink-0 font-semibold">Resume</span>
-    </button>
   );
 }
 
@@ -547,6 +523,7 @@ export function BookCinemaOverlay({
   onClose,
   onBookmark,
   onCreateAudio,
+  onInspectStructure,
   onPlayPause,
   onRestart,
   onScopeChange,
@@ -576,6 +553,7 @@ export function BookCinemaOverlay({
   onClose: () => void;
   onBookmark: () => void;
   onCreateAudio: (book: BookSource, scope: BookScope) => void;
+  onInspectStructure: (book: BookSource) => void;
   onPlayPause: () => void;
   onRestart: () => void;
   onScopeChange: (scope: BookScope) => void;
@@ -598,6 +576,7 @@ export function BookCinemaOverlay({
     normalizedScope,
     scopeContent,
   );
+  const displayedActiveWordIndex = resolveDisplayedBookActiveWordIndex(activeWordIndex, progress);
   const queueOptions = useMemo(() => {
     const narratable = scopeOptions.filter(
       (option) => option.isNarratable && (option.wordCount ?? 0) > 0,
@@ -652,6 +631,15 @@ export function BookCinemaOverlay({
               </option>
             ))}
           </select>
+          <button
+            className="h-10 rounded-md border px-4 text-sm font-semibold vs-border"
+            onClick={() => {
+              onInspectStructure(book);
+            }}
+            type="button"
+          >
+            Inspect structure
+          </button>
           <button
             className="h-10 rounded-md border px-4 text-sm font-semibold vs-border"
             onClick={onClose}
@@ -725,7 +713,7 @@ export function BookCinemaOverlay({
         </aside>
 
         <BookCinemaReaderStage
-          activeWordIndex={activeWordIndex}
+          activeWordIndex={displayedActiveWordIndex}
           book={book}
           scope={normalizedScope}
           scopedSpans={scopedSpans}
@@ -748,6 +736,9 @@ export function BookCinemaOverlay({
               </span>
             </div>
             <div className="mt-5 h-12 rounded bg-[linear-gradient(90deg,rgba(255,106,0,.95)_0_4px,transparent_4px_12px)] opacity-70" />
+            {progress ? (
+              <BookCinemaResumeButton progress={progress} onResumeProgress={onResumeProgress} />
+            ) : null}
             <button
               className="mx-auto mt-5 flex h-14 w-14 items-center justify-center rounded-full text-xl font-semibold text-white shadow-lg shadow-orange-500/30 disabled:opacity-50 vs-accent-bg"
               disabled={!playbackControls.isAvailable}
@@ -809,6 +800,17 @@ export function BookCinemaOverlay({
           >
             Restart
           </button>
+          {progress ? (
+            <button
+              className="h-10 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-sm font-semibold text-orange-500 lg:hidden"
+              onClick={() => {
+                onResumeProgress(progress);
+              }}
+              type="button"
+            >
+              Resume saved
+            </button>
+          ) : null}
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold disabled:opacity-40 vs-border"
             disabled={!playbackControls.skipBy}
@@ -896,6 +898,33 @@ export function BookCinemaOverlay({
         ) : null}
       </footer>
     </div>
+  );
+}
+
+function BookCinemaResumeButton({
+  progress,
+  onResumeProgress,
+}: Readonly<{
+  progress: PlaybackProgress;
+  onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
+}>) {
+  return (
+    <button
+      className="mt-4 flex w-full min-w-0 items-center justify-between gap-3 rounded-md bg-orange-500/10 px-3 py-2 text-left text-xs text-orange-500 transition hover:bg-orange-500/15"
+      onClick={() => {
+        onResumeProgress(progress);
+      }}
+      type="button"
+    >
+      <span className="min-w-0">
+        <span className="block font-semibold">Resume saved point</span>
+        <span className="vs-muted mt-1 block truncate">
+          {formatProgressPercent(progress.progress)} ·{" "}
+          {formatEstimatedDuration(progress.currentTimeSec * 1000)}
+        </span>
+      </span>
+      <span className="shrink-0 font-semibold">Resume</span>
+    </button>
   );
 }
 
@@ -1403,6 +1432,13 @@ export function resolveBookActiveWordIndex(
   );
 }
 
+export function resolveDisplayedBookActiveWordIndex(
+  activeWordIndex: number,
+  progress: PlaybackProgress | null,
+): number {
+  return activeWordIndex >= 0 ? activeWordIndex : (progress?.activeWordIndex ?? -1);
+}
+
 export function visibleBookSpans(
   spans: BookSource["wordSpans"],
   activeWordIndex: number,
@@ -1562,13 +1598,6 @@ function formatProgressPercent(progress: number): string {
     return "0%";
   }
   return `${Math.round(Math.min(1, progress) * 100).toString()}%`;
-}
-
-function formatBookmarkSummary(count: number): string {
-  if (count <= 0) {
-    return "";
-  }
-  return ` · ${count.toString()} bookmark${count === 1 ? "" : "s"}`;
 }
 
 function bookSpanTitle(span: NonNullable<BookSource["wordSpans"]>[number]): string | undefined {

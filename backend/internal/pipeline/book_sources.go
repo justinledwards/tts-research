@@ -127,6 +127,9 @@ func (service *Service) CreateBookSource(
 	if err := service.writeBookSourceMetadata(book); err != nil {
 		return BookSource{}, err
 	}
+	if err := service.writeBookSourceContentIR(book); err != nil {
+		return BookSource{}, err
+	}
 	return book, nil
 }
 
@@ -194,7 +197,7 @@ func (service *Service) GetBookSourceScope(id string, requested *BookScope) (Boo
 	if section != nil {
 		warnings = append(warnings, section.Warnings...)
 	}
-	blocks, skippedItems, prepWarnings := prepareNarrationBlocks(text, service.options.StudioSegmentMaxRunes)
+	blocks, skippedItems, prepWarnings := prepareNarrationBlocks(text, service.options.SourcePrepSentenceMaxRunes)
 	warnings = append(warnings, prepWarnings...)
 	return BookSourceScopeContent{
 		BookSourceID:         book.ID,
@@ -228,15 +231,7 @@ func (service *Service) CreateBookNarrationJob(
 	if err != nil {
 		return VoiceJob{}, err
 	}
-	blocks, _, warnings := prepareNarrationBlocks(narrationText, service.options.StudioSegmentMaxRunes)
-	for _, block := range blocks {
-		if block.SpeakMode == NarrationSpeakModeSkip {
-			continue
-		}
-		if hasWarning(block.Warnings, "sentence_too_long") {
-			return VoiceJob{}, fmt.Errorf("book scope contains a sentence that is too long to synthesize safely; choose a smaller scope or edit the source")
-		}
-	}
+	_, _, warnings := prepareNarrationBlocks(narrationText, service.options.SourcePrepSentenceMaxRunes)
 	request.ProjectID = book.ProjectID
 	request.BookSourceID = book.ID
 	request.BookScope = scope
@@ -662,7 +657,10 @@ func (service *Service) importBundleBookSource(book BookSource, projectID string
 		book.Status = BookSourceStatusReady
 	}
 	service.updateBookSource(storedBookSource{BookSource: book})
-	return service.writeBookSourceMetadata(book)
+	if err := service.writeBookSourceMetadata(book); err != nil {
+		return err
+	}
+	return service.writeBookSourceContentIR(book)
 }
 
 func (service *Service) removeProjectBookSources(projectID string) error {

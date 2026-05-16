@@ -1,15 +1,20 @@
 package httpapi_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v3"
 	"github.com/justinedwards/tts-research/backend/internal/agents"
+	"github.com/justinedwards/tts-research/backend/internal/contentir"
 	"github.com/justinedwards/tts-research/backend/internal/httpapi"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 )
@@ -268,6 +273,48 @@ func TestProjectEndpointsCreateRenameAndListJobs(t *testing.T) {
 	}
 }
 
+func TestContentIREndpoint(t *testing.T) {
+	t.Parallel()
+
+	service, sourcePrepDir, _ := newServiceWithContentIRDirs(t)
+	app := httpapi.NewRouter(service)
+	source, err := service.CreatePreparedSource(t.Context(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "endpoint.md",
+		Text:       "# Endpoint\n\nContent IR response.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+
+	preparedDocument := getContentIRDocument(t, app, source.ID, http.StatusOK)
+	if preparedDocument.SourceType != "preparedSource" || len(preparedDocument.Nodes) == 0 {
+		t.Fatalf("prepared document = %#v, want prepared source nodes", preparedDocument)
+	}
+
+	epubPath := writeRouterTestEPUB(t)
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(t.Context(), "default", epubPath, "endpoint.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	bookDocument := getContentIRDocument(t, app, book.ID, http.StatusOK)
+	if bookDocument.SourceType != "bookSource" || bookDocument.Nodes[0].Provenance.Locator.HTML == nil {
+		t.Fatalf("book document = %#v, want EPUB locator", bookDocument)
+	}
+
+	getContentIRDocument(t, app, "missing", http.StatusNotFound)
+
+	invalidPath := filepath.Join(sourcePrepDir, source.ID, "content-ir.json")
+	if err := os.WriteFile(invalidPath, []byte(`{"schemaVersion":"content-ir.v99"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile invalid IR returned error: %v", err)
+	}
+	getContentIRDocument(t, app, source.ID, http.StatusInternalServerError)
+}
+
 func newService(t *testing.T) *pipeline.Service {
 	t.Helper()
 
@@ -277,6 +324,88 @@ func newService(t *testing.T) *pipeline.Service {
 		agents.NewMockVoiceCheckerAgent(),
 		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
 	)
+}
+
+func newServiceWithContentIRDirs(t *testing.T) (*pipeline.Service, string, string) {
+	t.Helper()
+	sourcePrepDir := t.TempDir()
+	bookSourceDir := t.TempDir()
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:         3,
+			JobDataDir:         t.TempDir(),
+			ProjectDataDir:     t.TempDir(),
+			BookSourceDir:      bookSourceDir,
+			SourcePrepDir:      sourcePrepDir,
+			ProgressDataDir:    t.TempDir(),
+			PlaybackSessionDir: t.TempDir(),
+		},
+	)
+	return service, sourcePrepDir, bookSourceDir
+}
+
+func getContentIRDocument(
+	t *testing.T,
+	app *fiber.App,
+	id string,
+	status int,
+) contentir.Document {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodGet, "/api/content-ir/"+id, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(content-ir) returned error: %v", err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test(content-ir) returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != status {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("content-ir status = %d, want %d, body = %s", response.StatusCode, status, payload)
+	}
+	if status != http.StatusOK {
+		return contentir.Document{}
+	}
+	var document contentir.Document
+	if err := json.NewDecoder(response.Body).Decode(&document); err != nil {
+		t.Fatalf("decode content IR: %v", err)
+	}
+	return document
+}
+
+func writeRouterTestEPUB(t *testing.T) string {
+	t.Helper()
+	outputPath := filepath.Join(t.TempDir(), "endpoint.epub")
+	file, err := os.Create(outputPath)
+	if err != nil {
+		t.Fatalf("Create EPUB returned error: %v", err)
+	}
+	zipWriter := zip.NewWriter(file)
+	files := map[string]string{
+		"META-INF/container.xml": `<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/package.opf"/></rootfiles></container>`,
+		"OPS/package.opf":        `<package xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:title>Endpoint Book</dc:title></metadata><manifest><item id="c1" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>`,
+		"OPS/chapter.xhtml":      `<html><body><h1>Endpoint</h1><p>Book content IR endpoint.</p></body></html>`,
+	}
+	for path, body := range files {
+		writer, createErr := zipWriter.Create(path)
+		if createErr != nil {
+			t.Fatalf("Create zip file returned error: %v", createErr)
+		}
+		if _, writeErr := writer.Write([]byte(body)); writeErr != nil {
+			t.Fatalf("Write zip file returned error: %v", writeErr)
+		}
+	}
+	if err := zipWriter.Close(); err != nil {
+		t.Fatalf("Close zip writer returned error: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close EPUB returned error: %v", err)
+	}
+	return outputPath
 }
 
 func waitForJob(t *testing.T, service *pipeline.Service, id string, status pipeline.JobStatus) {

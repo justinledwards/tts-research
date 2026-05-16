@@ -26,6 +26,7 @@ import type {
   VoiceProfileSourceDiagnostics,
   VoiceProject,
 } from "./types";
+import type { ContentIRDocument } from "./content-ir";
 
 // Vite rewrites direct import.meta.env access during dev and build.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -74,6 +75,14 @@ export async function getBookCinemaDiagnostics(): Promise<BookCinemaDiagnostics>
   }
 
   return response.json() as Promise<BookCinemaDiagnostics>;
+}
+
+export async function getContentIR(id: string): Promise<ContentIRDocument> {
+  const response = await fetch(`${apiBaseUrl}/api/content-ir/${encodeURIComponent(id)}`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<ContentIRDocument>;
 }
 
 export async function listProjectBookSources(projectId: string): Promise<BookSource[]> {

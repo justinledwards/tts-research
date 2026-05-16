@@ -56,3 +56,38 @@
 - [x] Keep runtime model, voice, cache, upstream, demo, and output assets out of Git.
 - [x] Remove tracked Kokoro model and voice blobs from the cleaned branch history.
 - [x] Run branch-local artifact and validation checks.
+
+## 2026-05-16 16:50 CEST - Workstream Alpha Content IR
+
+- [x] Add Content IR contract and schema
+- [x] Add backend adapters, persistence and endpoint
+- [x] Add frontend Content IR drawer and inspect actions
+- [x] Add validation task and tests
+- [x] Run local validation
+
+## 2026-05-16 17:20 CEST - Markdown sentence limit tuning
+
+- [x] Validate demo markdown sentence_too_long warnings
+- [x] Tune safe synthesis sentence limits
+- [x] Remove hard-blocking on long sentence warnings
+- [x] Run focused validation
+
+## 2026-05-16 17:33 CEST - Source intake UI ergonomics
+
+- [x] Validate source intake structure inspection flow
+- [x] Streamline preview and inspect ergonomics
+- [x] Run rendered UI and local validation
+- [x] Add Markdown Cinema follow-along view with flowchart rendering
+
+## 2026-05-16 18:05 CEST - Resume placement ergonomics
+
+- [x] Move continue listening into playback surfaces
+- [x] Validate resume from audio player and Cinema
+- [x] Run local validation
+
+## 2026-05-16 18:19 CEST - Markdown Cinema fidelity
+
+- [x] Render full Markdown document in Cinema
+- [x] Add word-level follow-along in Markdown render mode
+- [x] Verify tables and flowcharts render after processing
+- [x] Run validation and commit state

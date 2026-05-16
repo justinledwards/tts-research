@@ -429,6 +429,36 @@ select {
   text-align: left;
 }
 
+.mermaid-diagram {
+  margin: 0.75rem 0;
+}
+
+.mermaid-diagram svg {
+  height: auto;
+  max-width: 100%;
+}
+
+.mermaid-diagram--error {
+  border: 1px solid var(--vs-border);
+  border-radius: 0.45rem;
+  background: var(--vs-surface);
+  color: var(--vs-text);
+  padding: 0.75rem;
+}
+
+.markdown-cinema-block + .markdown-cinema-block {
+  margin-top: 0.5rem;
+}
+
+.markdown-cinema-word-active {
+  border-radius: 0.22em;
+  background: color-mix(in srgb, var(--vs-accent) 24%, transparent);
+  box-shadow:
+    0 0 0 0.1em color-mix(in srgb, var(--vs-accent) 24%, transparent),
+    0 0 0.8em color-mix(in srgb, var(--vs-accent) 20%, transparent);
+  color: inherit;
+}
+
 .book-cinema-word-active {
   position: relative;
   isolation: isolate;

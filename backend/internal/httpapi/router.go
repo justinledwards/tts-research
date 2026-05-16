@@ -103,6 +103,17 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(service.BookCinemaDiagnostics())
 	})
 
+	app.Get("/api/content-ir/:id", func(ctx fiber.Ctx) error {
+		document, err := service.GetContentIR(ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrContentIRNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(document)
+	})
+
 	app.Get("/api/projects", func(ctx fiber.Ctx) error {
 		return ctx.JSON(service.ListProjects())
 	})
@@ -888,6 +899,7 @@ func notFound(ctx fiber.Ctx, err error) error {
 		errors.Is(err, pipeline.ErrProjectNotFound) ||
 		errors.Is(err, pipeline.ErrBookSourceNotFound) ||
 		errors.Is(err, pipeline.ErrPreparedSourceNotFound) ||
+		errors.Is(err, pipeline.ErrContentIRNotFound) ||
 		errors.Is(err, pipeline.ErrProgressNotFound) ||
 		errors.Is(err, pipeline.ErrPlaybackSessionNotFound) {
 		return ctx.Status(fiber.StatusNotFound).JSON(errorResponse(err.Error()))

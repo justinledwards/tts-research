@@ -97,6 +97,11 @@ func main() {
 		logger.Error("invalid pipeline configuration", "error", err)
 		os.Exit(1)
 	}
+	sourcePrepSentenceMaxRunes, err := envIntWithDefault("VOICE_SOURCE_PREP_SENTENCE_MAX_RUNES", 0)
+	if err != nil {
+		logger.Error("invalid pipeline configuration", "error", err)
+		os.Exit(1)
+	}
 	maxProfileBytes, err := envInt64WithDefault("VOICE_PROFILE_MAX_BYTES", 0)
 	if err != nil {
 		logger.Error("invalid pipeline configuration", "error", err)
@@ -160,6 +165,8 @@ func main() {
 		studioSegmentWorkersAdaptive,
 		"requestedStudioAdaptiveSegmentMaxRunes",
 		studioSegmentMaxRunesAdaptive,
+		"requestedSourcePrepSentenceMaxRunes",
+		sourcePrepSentenceMaxRunes,
 		"requestedReferenceWorkerCount",
 		referenceWorkerCount,
 		"voiceProfileReferenceMinSeconds",
@@ -204,6 +211,7 @@ func main() {
 			StudioSegmentWorkers:                 studioSegmentWorkers,
 			StudioSegmentWorkersAdaptive:         studioSegmentWorkersAdaptive,
 			StudioSegmentMaxRunesAdaptive:        studioSegmentMaxRunesAdaptive,
+			SourcePrepSentenceMaxRunes:           sourcePrepSentenceMaxRunes,
 			ReferenceWorkerCount:                 referenceWorkerCount,
 			JobDataDir:                           envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
 			ProjectDataDir:                       envWithDefault("VOICE_PROJECT_DATA_DIR", "./data/projects"),
@@ -256,6 +264,8 @@ func main() {
 		serviceOptions.StudioSegmentWorkersAdaptive,
 		"studioAdaptiveSegmentMaxRunes",
 		serviceOptions.StudioSegmentMaxRunesAdaptive,
+		"sourcePrepSentenceMaxRunes",
+		serviceOptions.SourcePrepSentenceMaxRunes,
 		"resolvedReferenceWorkerCount",
 		referenceWorkerCount,
 		"voiceProfileReferenceMinSeconds",

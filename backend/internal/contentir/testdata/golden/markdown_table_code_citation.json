@@ -1,0 +1,216 @@
+{
+  "schemaVersion": "content-ir.v1",
+  "id": "markdown-table-code-citation",
+  "sourceType": "preparedSource",
+  "sourceId": "markdown-table-code-citation",
+  "projectId": "default",
+  "sourceName": "research.md",
+  "adapterVersion": "prepared-source-to-ir.v1",
+  "generatedAt": "2026-05-16T12:00:00Z",
+  "nodes": [
+    {
+      "nodeId": "block-0001",
+      "parentId": "",
+      "orderKey": "00000001",
+      "kind": "heading",
+      "role": "heading",
+      "displayText": "# Findings",
+      "normalisedText": "# Findings",
+      "speechText": "Findings",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "markdown-table-code-citation",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "research.md",
+            "lineStart": 1,
+            "lineEnd": 2,
+            "columnStart": 1,
+            "columnEnd": 1,
+            "astPath": "/blocks/0"
+          }
+        },
+        "offsets": {
+          "start": 0,
+          "end": 11
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "segment"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "heading",
+          "pauseBeforeMs": 420,
+          "pauseAfterMs": 520
+        }
+      },
+      "warnings": ["heading_emphasis"],
+      "confidence": 0.94,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "adapterVersion": "prepared-source-to-ir.v1"
+    },
+    {
+      "nodeId": "block-0002",
+      "parentId": "",
+      "orderKey": "00000002",
+      "kind": "table",
+      "role": "table",
+      "displayText": "| Metric | Value |\n| Latency | 12ms |",
+      "normalisedText": "| Metric | Value | | Latency | 12ms |",
+      "speechText": "A table appears here with columns: Metric, Value.",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "markdown-table-code-citation",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "research.md",
+            "lineStart": 3,
+            "lineEnd": 6,
+            "columnStart": 1,
+            "columnEnd": 1,
+            "astPath": "/blocks/1"
+          }
+        },
+        "offsets": {
+          "start": 12,
+          "end": 60
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "segment"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "summarize",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        }
+      },
+      "warnings": ["table_summarized"],
+      "confidence": 0.82,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "adapterVersion": "prepared-source-to-ir.v1"
+    },
+    {
+      "nodeId": "block-0003",
+      "parentId": "",
+      "orderKey": "00000003",
+      "kind": "code",
+      "role": "code",
+      "displayText": "fmt.Println(\"skip\")",
+      "normalisedText": "fmt.Println(\"skip\")",
+      "speechText": "",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "markdown-table-code-citation",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "research.md",
+            "lineStart": 7,
+            "lineEnd": 10,
+            "columnStart": 1,
+            "columnEnd": 1,
+            "astPath": "/blocks/2"
+          }
+        },
+        "offsets": {
+          "start": 61,
+          "end": 91
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "node"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "skip",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        }
+      },
+      "warnings": ["code_skipped"],
+      "confidence": 0.98,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "adapterVersion": "prepared-source-to-ir.v1"
+    },
+    {
+      "nodeId": "block-0004",
+      "parentId": "",
+      "orderKey": "00000004",
+      "kind": "citation",
+      "role": "citation",
+      "displayText": "citeturn1search0",
+      "normalisedText": "citeturn1search0",
+      "speechText": "",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "markdown-table-code-citation",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "research.md",
+            "lineStart": 11,
+            "lineEnd": 11,
+            "columnStart": 1,
+            "columnEnd": 20,
+            "astPath": "/blocks/3"
+          }
+        },
+        "offsets": {
+          "start": 92,
+          "end": 118
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "node"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "skip",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        }
+      },
+      "warnings": ["citation_skipped"],
+      "confidence": 0.98,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "adapterVersion": "prepared-source-to-ir.v1"
+    }
+  ]
+}

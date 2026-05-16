@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "content-ir.v1",
+  "id": "simple-markdown",
+  "sourceType": "preparedSource",
+  "sourceId": "simple-markdown",
+  "projectId": "default",
+  "sourceName": "simple.md",
+  "adapterVersion": "prepared-source-to-ir.v1",
+  "generatedAt": "2026-05-16T12:00:00Z",
+  "nodes": [
+    {
+      "nodeId": "block-0001",
+      "parentId": "",
+      "orderKey": "00000001",
+      "kind": "heading",
+      "role": "heading",
+      "displayText": "# Title",
+      "normalisedText": "# Title",
+      "speechText": "Title",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "simple-markdown",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "simple.md",
+            "lineStart": 1,
+            "lineEnd": 2,
+            "columnStart": 1,
+            "columnEnd": 1,
+            "astPath": "/blocks/0"
+          }
+        },
+        "offsets": {
+          "start": 0,
+          "end": 8
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "segment"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "heading",
+          "pauseBeforeMs": 420,
+          "pauseAfterMs": 520
+        }
+      },
+      "warnings": ["heading_emphasis"],
+      "confidence": 0.94,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "adapterVersion": "prepared-source-to-ir.v1"
+    },
+    {
+      "nodeId": "block-0002",
+      "parentId": "",
+      "orderKey": "00000002",
+      "kind": "body",
+      "role": "body",
+      "displayText": "Hello world.",
+      "normalisedText": "Hello world.",
+      "speechText": "Hello world.",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "simple-markdown",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "simple.md",
+            "lineStart": 3,
+            "lineEnd": 3,
+            "columnStart": 1,
+            "columnEnd": 13,
+            "astPath": "/blocks/1"
+          }
+        },
+        "offsets": {
+          "start": 9,
+          "end": 22
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "segment"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        }
+      },
+      "warnings": [],
+      "confidence": 0.94,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "adapterVersion": "prepared-source-to-ir.v1"
+    }
+  ]
+}

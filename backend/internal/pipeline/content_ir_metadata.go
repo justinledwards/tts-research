@@ -1,0 +1,213 @@
+package pipeline
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/justinedwards/tts-research/backend/internal/contentir"
+)
+
+const contentIRFilename = "content-ir.json"
+
+type contentIRSourceDescriptor struct {
+	ID             string
+	ProjectID      string
+	Name           string
+	SourceType     string
+	Format         string
+	AdapterVersion string
+}
+
+func preparedSourceIRDescriptor(source PreparedSource) contentIRSourceDescriptor {
+	format := strings.TrimSpace(source.SourceFormat)
+	if format == "" {
+		format = string(source.Kind)
+	}
+	return contentIRSourceDescriptor{
+		ID:             source.ID,
+		ProjectID:      source.ProjectID,
+		Name:           source.SourceName,
+		SourceType:     "preparedSource",
+		Format:         format,
+		AdapterVersion: "prepared-source-to-ir.v1",
+	}
+}
+
+func bookSourceIRDescriptor(book BookSource) contentIRSourceDescriptor {
+	return contentIRSourceDescriptor{
+		ID:             book.ID,
+		ProjectID:      book.ProjectID,
+		Name:           book.SourceFile,
+		SourceType:     "bookSource",
+		Format:         string(book.Kind),
+		AdapterVersion: "book-source-to-ir.v1",
+	}
+}
+
+func newContentIRDocument(
+	descriptor contentIRSourceDescriptor,
+	generatedAt time.Time,
+	nodes []contentir.Node,
+) contentir.Document {
+	return contentir.NewDocument(
+		descriptor.ID,
+		descriptor.SourceType,
+		descriptor.ID,
+		descriptor.ProjectID,
+		descriptor.Name,
+		descriptor.AdapterVersion,
+		generatedAt,
+		nodes,
+	)
+}
+
+func (service *Service) GetContentIR(id string) (contentir.Document, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return contentir.Document{}, ErrContentIRNotFound
+	}
+	if source, ok := service.preparedSourceByID(id); ok {
+		return service.preparedSourceContentIR(source)
+	}
+	if book, ok := service.bookSourceByID(id); ok {
+		return service.bookSourceContentIR(book)
+	}
+	return contentir.Document{}, ErrContentIRNotFound
+}
+
+func (service *Service) preparedSourceByID(id string) (PreparedSource, bool) {
+	service.mu.RLock()
+	source, ok := service.sourcePreps[id]
+	service.mu.RUnlock()
+	if !ok {
+		return PreparedSource{}, false
+	}
+	return service.sanitizePreparedSourceWarnings(source), true
+}
+
+func (service *Service) bookSourceByID(id string) (BookSource, bool) {
+	service.mu.RLock()
+	book, ok := service.books[id]
+	service.mu.RUnlock()
+	if !ok {
+		return BookSource{}, false
+	}
+	nextBook := book.BookSource
+	ensureBookStructureMetadata(&nextBook)
+	return nextBook, true
+}
+
+func (service *Service) preparedSourceContentIR(source PreparedSource) (contentir.Document, error) {
+	path := filepath.Join(service.preparedSourceDataDir(source.ID), contentIRFilename)
+	document, err := readContentIR(path)
+	if err == nil {
+		return sanitizeContentIRSentenceWarnings(document, service.options.SourcePrepSentenceMaxRunes), nil
+	}
+	if !os.IsNotExist(err) {
+		return contentir.Document{}, fmt.Errorf("read prepared source content IR: %w", err)
+	}
+	return sanitizeContentIRSentenceWarnings(PreparedSourceToIR(source, time.Now().UTC()), service.options.SourcePrepSentenceMaxRunes), nil
+}
+
+func (service *Service) bookSourceContentIR(book BookSource) (contentir.Document, error) {
+	path := filepath.Join(service.bookSourceDataDir(book.ID), contentIRFilename)
+	document, err := readContentIR(path)
+	if err == nil {
+		return document, nil
+	}
+	if !os.IsNotExist(err) {
+		return contentir.Document{}, fmt.Errorf("read book source content IR: %w", err)
+	}
+	return BookSourceToIR(book, time.Now().UTC()), nil
+}
+
+func (service *Service) writePreparedSourceContentIR(source PreparedSource) error {
+	return service.writeContentIR(service.preparedSourceDataDir(source.ID), PreparedSourceToIR(source, time.Now().UTC()))
+}
+
+func (service *Service) writeBookSourceContentIR(book BookSource) error {
+	return service.writeContentIR(service.bookSourceDataDir(book.ID), BookSourceToIR(book, time.Now().UTC()))
+}
+
+func (service *Service) writeContentIR(outputDir string, document contentir.Document) error {
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return err
+	}
+	encoded, err := contentir.JSONSerializer{}.Encode(document)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(outputDir, contentIRFilename), encoded, 0o644)
+}
+
+func readContentIR(path string) (contentir.Document, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return contentir.Document{}, err
+	}
+	return contentir.JSONSerializer{}.Decode(data)
+}
+
+func (service *Service) preparedSourceDataDir(id string) string {
+	outputDir, err := filepath.Abs(filepath.Join(service.options.SourcePrepDir, id))
+	if err != nil {
+		return filepath.Join(service.options.SourcePrepDir, id)
+	}
+	return outputDir
+}
+
+func (service *Service) bookSourceDataDir(id string) string {
+	outputDir, err := filepath.Abs(filepath.Join(service.options.BookSourceDir, id))
+	if err != nil {
+		return filepath.Join(service.options.BookSourceDir, id)
+	}
+	return outputDir
+}
+
+func contentIRText(value string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
+}
+
+func contentIRStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	output := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			output = append(output, value)
+		}
+	}
+	return output
+}
+
+func sanitizeContentIRSentenceWarnings(document contentir.Document, maxSentenceRunes int) contentir.Document {
+	if maxSentenceRunes <= 0 {
+		maxSentenceRunes = defaultSourcePrepSentenceMaxRunes
+	}
+	for index, node := range document.Nodes {
+		if !hasWarning(node.Warnings, warningSentenceTooLong) {
+			continue
+		}
+		text := firstNonEmpty(node.SpeechText, node.NormalisedText, node.DisplayText)
+		if textHasUnsafeSentence(text, maxSentenceRunes) {
+			continue
+		}
+		node.Warnings = removeWarning(node.Warnings, warningSentenceTooLong)
+		document.Nodes[index] = node
+	}
+	return document
+}
+
+func textHasUnsafeSentence(text string, maxSentenceRunes int) bool {
+	for _, sentence := range splitSentencePieces(text) {
+		if utf8.RuneCountInString(strings.TrimSpace(sentence)) > maxSentenceRunes {
+			return true
+		}
+	}
+	return false
+}

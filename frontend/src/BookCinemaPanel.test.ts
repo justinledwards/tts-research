@@ -6,6 +6,7 @@ import {
   bookSourceName,
   paginateBookSpans,
   resolveBookActiveWordIndex,
+  resolveDisplayedBookActiveWordIndex,
   resolveDefaultBookScope,
   visibleBookSpans,
 } from "./BookCinemaPanel";
@@ -26,6 +27,24 @@ describe("Book Cinema helpers", () => {
     const job = makeVoiceJob("different text", 4000);
 
     expect(resolveBookActiveWordIndex(book, job, 2)).toBe(-1);
+  });
+
+  it("uses saved logical book fragment when playback has not resolved a cursor yet", () => {
+    expect(
+      resolveDisplayedBookActiveWordIndex(-1, {
+        targetId: "book:book-1:chapter:1",
+        projectId: "default",
+        bookSourceId: "book-1",
+        currentTimeSec: 2,
+        progress: 0.5,
+        activeWordIndex: 12,
+        finished: false,
+        hidden: false,
+        createdAt: "2026-05-15T00:00:00Z",
+        updatedAt: "2026-05-15T00:00:00Z",
+      }),
+    ).toBe(12);
+    expect(resolveDisplayedBookActiveWordIndex(4, null)).toBe(4);
   });
 
   it("defaults EPUB narration to the first chapter", () => {

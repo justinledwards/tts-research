@@ -34,6 +34,7 @@ const (
 	playbackSessionFilename        = "session.json"
 	maxReadableURLBytes            = 20 << 20
 	readableURLTimeout             = 20 * time.Second
+	warningSentenceTooLong         = "sentence_too_long"
 )
 
 type fetchedReadableSource struct {
@@ -123,7 +124,7 @@ func (service *Service) CreatePreparedSource(
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
-	preprocessed := preprocessReadableSource(sourceText, sourceName, contentType, service.options.StudioSegmentMaxRunes)
+	preprocessed := preprocessReadableSource(sourceText, sourceName, contentType, service.options.SourcePrepSentenceMaxRunes)
 	prepared.PreprocessorID = preprocessed.PreprocessorID
 	prepared.PreprocessorVersion = preprocessed.PreprocessorVersion
 	prepared.SourceFormat = preprocessed.SourceFormat
@@ -140,6 +141,9 @@ func (service *Service) CreatePreparedSource(
 
 	service.updatePreparedSource(prepared)
 	if err := service.writePreparedSourceMetadata(prepared); err != nil {
+		return PreparedSource{}, err
+	}
+	if err := service.writePreparedSourceContentIR(prepared); err != nil {
 		return PreparedSource{}, err
 	}
 	return prepared, nil
@@ -191,7 +195,7 @@ func (service *Service) ListProjectPreparedSources(projectID string) ([]Prepared
 	sources := make([]PreparedSource, 0)
 	for _, source := range service.sourcePreps {
 		if source.ProjectID == project.ID {
-			sources = append(sources, summarizePreparedSourcePayload(source))
+			sources = append(sources, summarizePreparedSourcePayload(service.sanitizePreparedSourceWarnings(source)))
 		}
 	}
 	service.mu.RUnlock()
@@ -208,7 +212,7 @@ func (service *Service) GetPreparedSource(id string) (PreparedSource, error) {
 	if !ok {
 		return PreparedSource{}, ErrPreparedSourceNotFound
 	}
-	return source, nil
+	return service.sanitizePreparedSourceWarnings(source), nil
 }
 
 func (service *Service) GetPreparedSourceBlock(sourceID string, blockID string) (NarrationBlock, error) {
@@ -252,9 +256,6 @@ func (service *Service) CreatePreparedSourceJob(
 		if block.SpeakMode == NarrationSpeakModeSkip {
 			continue
 		}
-		if hasWarning(block.Warnings, "sentence_too_long") {
-			return VoiceJob{}, fmt.Errorf("block %q contains a sentence that is too long to synthesize safely; edit the source before creating audio", block.Label)
-		}
 		text := strings.TrimSpace(block.SpokenText)
 		if text == "" {
 			text = strings.TrimSpace(block.Text)
@@ -296,6 +297,61 @@ func (service *Service) updatePreparedSource(source PreparedSource) {
 	source.UpdatedAt = time.Now().UTC()
 	service.sourcePreps[source.ID] = source
 	service.mu.Unlock()
+}
+
+func (service *Service) sanitizePreparedSourceWarnings(source PreparedSource) PreparedSource {
+	maxSentenceRunes := service.options.SourcePrepSentenceMaxRunes
+	if maxSentenceRunes <= 0 {
+		maxSentenceRunes = defaultSourcePrepSentenceMaxRunes
+	}
+	blocks := make([]NarrationBlock, 0, len(source.Blocks))
+	for _, block := range source.Blocks {
+		blocks = append(blocks, sanitizeNarrationBlockWarnings(block, maxSentenceRunes))
+	}
+	source.Blocks = blocks
+	warnings := make([]string, 0)
+	for _, block := range source.Blocks {
+		warnings = append(warnings, block.Warnings...)
+	}
+	source.Warnings = uniqueStrings(warnings)
+	source.Summary = summarizePreparedSource(source.Blocks)
+	return source
+}
+
+func sanitizeNarrationBlockWarnings(block NarrationBlock, maxSentenceRunes int) NarrationBlock {
+	if !hasWarning(block.Warnings, warningSentenceTooLong) {
+		return block
+	}
+	if narrationBlockHasUnsafeSentence(block, maxSentenceRunes) {
+		return block
+	}
+	block.Warnings = removeWarning(block.Warnings, warningSentenceTooLong)
+	for index, segment := range block.Segments {
+		segment.Warnings = removeWarning(segment.Warnings, warningSentenceTooLong)
+		block.Segments[index] = segment
+	}
+	return block
+}
+
+func narrationBlockHasUnsafeSentence(block NarrationBlock, maxSentenceRunes int) bool {
+	if maxSentenceRunes <= 0 {
+		maxSentenceRunes = defaultSourcePrepSentenceMaxRunes
+	}
+	if len(block.Segments) > 0 {
+		for _, segment := range block.Segments {
+			if utf8.RuneCountInString(segment.Text) > maxSentenceRunes {
+				return true
+			}
+		}
+		return false
+	}
+	text := firstNonEmpty(block.SpokenText, block.Text)
+	for _, sentence := range splitSentencePieces(text) {
+		if utf8.RuneCountInString(strings.TrimSpace(sentence)) > maxSentenceRunes {
+			return true
+		}
+	}
+	return false
 }
 
 func (service *Service) writePreparedSourceMetadata(source PreparedSource) error {
@@ -414,16 +470,16 @@ func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL strin
 	}, nil
 }
 
-func prepareNarrationBlocks(input string, maxRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
-	result := preprocessReadableSource(input, "book-scope.md", "text/markdown", maxRunes)
+func prepareNarrationBlocks(input string, maxSentenceRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
+	result := preprocessReadableSource(input, "book-scope.md", "text/markdown", maxSentenceRunes)
 	return result.Blocks, result.SkippedItems, result.Warnings
 }
 
-func preprocessReadableSource(input string, sourceName string, contentType string, maxRunes int) sourcePreprocessResult {
+func preprocessReadableSource(input string, sourceName string, contentType string, maxSentenceRunes int) sourcePreprocessResult {
 	sourceFormat := detectPreparedSourceFormat(sourceName, contentType, input)
 	switch sourceFormat {
 	case "html":
-		blocks, skipped, warnings := preparePlainNarrationBlocks(normalizeReadableSourceText(input), maxRunes)
+		blocks, skipped, warnings := preparePlainNarrationBlocks(normalizeReadableSourceText(input), maxSentenceRunes)
 		return sourcePreprocessResult{
 			Blocks:              blocks,
 			SkippedItems:        skipped,
@@ -435,7 +491,7 @@ func preprocessReadableSource(input string, sourceName string, contentType strin
 			Title:               inferPreparedSourceTitle(normalizeReadableSourceText(input), sourceName),
 		}
 	case "structured":
-		blocks, skipped, warnings := preparePlainNarrationBlocks(input, maxRunes)
+		blocks, skipped, warnings := preparePlainNarrationBlocks(input, maxSentenceRunes)
 		return sourcePreprocessResult{
 			Blocks:              blocks,
 			SkippedItems:        skipped,
@@ -447,7 +503,7 @@ func preprocessReadableSource(input string, sourceName string, contentType strin
 			Title:               inferPreparedSourceTitle(input, sourceName),
 		}
 	case "plain":
-		blocks, skipped, warnings := preparePlainNarrationBlocks(input, maxRunes)
+		blocks, skipped, warnings := preparePlainNarrationBlocks(input, maxSentenceRunes)
 		return sourcePreprocessResult{
 			Blocks:              blocks,
 			SkippedItems:        skipped,
@@ -459,7 +515,7 @@ func preprocessReadableSource(input string, sourceName string, contentType strin
 			Title:               inferPreparedSourceTitle(input, sourceName),
 		}
 	default:
-		blocks, skipped, warnings := prepareMarkdownNarrationBlocks(input, maxRunes)
+		blocks, skipped, warnings := prepareMarkdownNarrationBlocks(input, maxSentenceRunes)
 		return sourcePreprocessResult{
 			Blocks:              blocks,
 			SkippedItems:        skipped,
@@ -473,9 +529,9 @@ func preprocessReadableSource(input string, sourceName string, contentType strin
 	}
 }
 
-func preparePlainNarrationBlocks(input string, maxRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
-	if maxRunes <= 0 {
-		maxRunes = defaultStudioSegmentMaxRunes
+func preparePlainNarrationBlocks(input string, maxSentenceRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
+	if maxSentenceRunes <= 0 {
+		maxSentenceRunes = defaultSourcePrepSentenceMaxRunes
 	}
 	text := normalizeReadableSourceText(input)
 	paragraphs := strings.Split(text, "\n\n")
@@ -503,7 +559,7 @@ func preparePlainNarrationBlocks(input string, maxRunes int) ([]NarrationBlock, 
 			kind = NarrationBlockKindCitation
 			mode = NarrationSpeakModeSkip
 		}
-		block := newNarrationBlock(len(blocks), kind, mode, labelForBlock(kind, clean), raw, clean, start, end, maxRunes)
+		block := newNarrationBlock(len(blocks), kind, mode, labelForBlock(kind, clean), raw, clean, start, end, maxSentenceRunes)
 		if mode == NarrationSpeakModeSkip {
 			block.Warnings = append(block.Warnings, "citation_skipped")
 			skipped = append(skipped, skippedSourceItem(block, "citation or raw URL skipped"))
@@ -515,9 +571,9 @@ func preparePlainNarrationBlocks(input string, maxRunes int) ([]NarrationBlock, 
 	return blocks, skipped, uniqueStrings(warnings)
 }
 
-func prepareMarkdownNarrationBlocks(input string, maxRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
-	if maxRunes <= 0 {
-		maxRunes = defaultStudioSegmentMaxRunes
+func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
+	if maxSentenceRunes <= 0 {
+		maxSentenceRunes = defaultSourcePrepSentenceMaxRunes
 	}
 	text := normalizeReadableSourceText(input)
 	lines := strings.Split(text, "\n")
@@ -549,7 +605,7 @@ func prepareMarkdownNarrationBlocks(input string, maxRunes int) ([]NarrationBloc
 			kind = NarrationBlockKindQuote
 			clean = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(clean), ">"))
 		}
-		block := newNarrationBlock(len(blocks), kind, NarrationSpeakModeSpeak, labelForBlock(kind, clean), raw, clean, paragraphStart, endOffset, maxRunes)
+		block := newNarrationBlock(len(blocks), kind, NarrationSpeakModeSpeak, labelForBlock(kind, clean), raw, clean, paragraphStart, endOffset, maxSentenceRunes)
 		if shouldSkipCitationBlock(clean) {
 			block.Kind = NarrationBlockKindCitation
 			block.SpeakMode = NarrationSpeakModeSkip
@@ -576,7 +632,7 @@ func prepareMarkdownNarrationBlocks(input string, maxRunes int) ([]NarrationBloc
 		raw := strings.Join(tableLines, "\n")
 		tableLines = nil
 		summary := summarizeMarkdownTable(tableLinesOrRaw(raw))
-		block := newNarrationBlock(len(blocks), NarrationBlockKindTable, NarrationSpeakModeSummarize, "Table summary", raw, summary, tableStart, endOffset, maxRunes)
+		block := newNarrationBlock(len(blocks), NarrationBlockKindTable, NarrationSpeakModeSummarize, "Table summary", raw, summary, tableStart, endOffset, maxSentenceRunes)
 		block.Warnings = append(block.Warnings, "table_summarized")
 		blocks = append(blocks, block)
 	}
@@ -593,7 +649,7 @@ func prepareMarkdownNarrationBlocks(input string, maxRunes int) ([]NarrationBloc
 				if strings.EqualFold(fenceLang, "mermaid") {
 					reason = "diagram omitted from spoken playback"
 				}
-				block := newNarrationBlock(len(blocks), kind, NarrationSpeakModeSkip, "Code sample", raw, "", fenceStart, offsetCursor, maxRunes)
+				block := newNarrationBlock(len(blocks), kind, NarrationSpeakModeSkip, "Code sample", raw, "", fenceStart, offsetCursor, maxSentenceRunes)
 				block.Warnings = append(block.Warnings, "code_skipped")
 				blocks = append(blocks, block)
 				skipped = append(skipped, skippedSourceItem(block, reason))
@@ -634,7 +690,7 @@ func prepareMarkdownNarrationBlocks(input string, maxRunes int) ([]NarrationBloc
 		if markdownFootnoteLine.MatchString(trimmed) || markdownRawURLLine.MatchString(trimmed) || shouldSkipCitationBlock(trimmed) {
 			flushParagraph(lineStart)
 			clean := cleanMarkdownInline(trimmed)
-			block := newNarrationBlock(len(blocks), NarrationBlockKindCitation, NarrationSpeakModeSkip, "Citation", trimmed, "", lineStart, offsetCursor, maxRunes)
+			block := newNarrationBlock(len(blocks), NarrationBlockKindCitation, NarrationSpeakModeSkip, "Citation", trimmed, "", lineStart, offsetCursor, maxSentenceRunes)
 			block.Warnings = append(block.Warnings, "citation_skipped")
 			blocks = append(blocks, block)
 			skipped = append(skipped, SkippedSourceItem{ID: block.ID, Kind: block.Kind, Text: clean, Reason: "citation or raw URL skipped", Offset: lineStart})
@@ -648,7 +704,7 @@ func prepareMarkdownNarrationBlocks(input string, maxRunes int) ([]NarrationBloc
 				kind = NarrationBlockKindSubheading
 			}
 			clean := cleanMarkdownInline(matches[2])
-			block := newNarrationBlock(len(blocks), kind, NarrationSpeakModeSpeak, clean, trimmed, clean, lineStart, offsetCursor, maxRunes)
+			block := newNarrationBlock(len(blocks), kind, NarrationSpeakModeSpeak, clean, trimmed, clean, lineStart, offsetCursor, maxSentenceRunes)
 			block.Warnings = append(block.Warnings, "heading_emphasis")
 			blocks = append(blocks, block)
 			continue
@@ -666,8 +722,8 @@ func prepareMarkdownNarrationBlocks(input string, maxRunes int) ([]NarrationBloc
 	return blocks, skipped, uniqueStrings(warnings)
 }
 
-func newNarrationBlock(index int, kind NarrationBlockKind, mode NarrationSpeakMode, label string, text string, spokenText string, startOffset int, endOffset int, maxRunes int) NarrationBlock {
-	segments, warnings := sentenceSafeSegments(spokenText, maxRunes)
+func newNarrationBlock(index int, kind NarrationBlockKind, mode NarrationSpeakMode, label string, text string, spokenText string, startOffset int, endOffset int, maxSentenceRunes int) NarrationBlock {
+	segments, warnings := sentenceSafeSegments(spokenText, maxSentenceRunes)
 	if mode == NarrationSpeakModeSkip {
 		segments = nil
 	}
@@ -711,6 +767,9 @@ func sentenceSafeSegments(text string, maxRunes int) ([]NarrationSegment, []stri
 	if clean == "" {
 		return nil, nil
 	}
+	if maxRunes <= 0 {
+		maxRunes = defaultSourcePrepSentenceMaxRunes
+	}
 	sentences := splitSentencePieces(clean)
 	segments := make([]NarrationSegment, 0, len(sentences))
 	warnings := make([]string, 0)
@@ -729,8 +788,8 @@ func sentenceSafeSegments(text string, maxRunes int) ([]NarrationSegment, []stri
 		end := start + len(sentence)
 		segmentWarnings := []string{}
 		if utf8.RuneCountInString(sentence) > maxRunes {
-			segmentWarnings = append(segmentWarnings, "sentence_too_long")
-			warnings = append(warnings, "sentence_too_long")
+			segmentWarnings = append(segmentWarnings, warningSentenceTooLong)
+			warnings = append(warnings, warningSentenceTooLong)
 		}
 		segments = append(segments, NarrationSegment{
 			Index:       len(segments) + 1,
@@ -979,6 +1038,22 @@ func hasWarning(warnings []string, warning string) bool {
 		}
 	}
 	return false
+}
+
+func removeWarning(warnings []string, warning string) []string {
+	if len(warnings) == 0 {
+		return warnings
+	}
+	output := make([]string, 0, len(warnings))
+	for _, item := range warnings {
+		if item != warning {
+			output = append(output, item)
+		}
+	}
+	if len(output) == 0 {
+		return nil
+	}
+	return output
 }
 
 func uniqueStrings(values []string) []string {

@@ -7,8 +7,6 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { type RequestState, TopProductBar } from "./AppShell";
 import { BundleFlowPanel, type BundlePanelMode } from "./BundlePanels";
 import {
@@ -27,9 +25,10 @@ import {
   createVoiceProfileSource,
   deleteProject,
   deleteVoiceProfile,
-  getPreparedSource,
   getBookCinemaDiagnostics,
   getBookSourceScope,
+  getContentIR,
+  getPreparedSource,
   getProjectStorageSummary,
   getSystemMetrics,
   getVoiceJob,
@@ -53,11 +52,15 @@ import { formatDuration } from "./format";
 import {
   BookCinemaOverlay,
   BookCinemaPanel,
+  bookSourceName,
   bookScopeKey,
   bookScopeText,
   normalizeBookScopeForBook,
+  resolveBookActiveWordIndex,
   resolveDefaultBookScope,
 } from "./BookCinemaPanel";
+import { ContentIRDrawer } from "./ContentIrDrawer";
+import { MarkdownRenderer, MermaidDiagram, looksLikeMermaidDiagram } from "./MarkdownRenderer";
 import { HelpPanel, SettingsPanel } from "./ProductPanels";
 import { RunConfigDrawer } from "./RunConfigDrawer";
 import {
@@ -113,6 +116,8 @@ import type {
   VoiceProfileSourceDiagnostics,
   VoiceProject,
 } from "./types";
+import type { ContentIRDocument } from "./content-ir";
+import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
 import { VoiceSourceAnalysisPanel } from "./VoiceSourceAnalysisPanel";
 import { WorkspaceDrawer } from "./WorkspaceDrawer";
 import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
@@ -314,9 +319,12 @@ function TeleprompterPanel({
   canOpenBookCinema,
   isPlaybackActive,
   job,
+  latestProgress,
   onOpenBookCinema,
+  onResumeProgress,
   playbackControls,
   playbackCursorSec,
+  preparedSourceForCinema,
   settings,
   themeName,
   onOpenSettings,
@@ -324,9 +332,12 @@ function TeleprompterPanel({
   canOpenBookCinema: boolean;
   isPlaybackActive: boolean;
   job: VoiceJob | null;
+  latestProgress: PlaybackProgress | null;
   onOpenBookCinema: () => void;
+  onResumeProgress: (progress: PlaybackProgress) => void;
   playbackControls: PlaybackController;
   playbackCursorSec: number;
+  preparedSourceForCinema: PreparedSource | null;
   settings: TeleprompterHighlightSettings;
   themeName: ThemeName;
   onOpenSettings: () => void;
@@ -353,14 +364,24 @@ function TeleprompterPanel({
     () => buildTeleprompterCue(job, playbackCursorSec, effectiveSettings),
     [effectiveSettings, job, playbackCursorSec],
   );
+  const markdownCinemaSource = useMemo(
+    () => resolveMarkdownCinemaSource(job, preparedSourceForCinema),
+    [job, preparedSourceForCinema],
+  );
+  const cinemaResumeProgress = useMemo(
+    () => resolveProgressForJob(job, latestProgress),
+    [job, latestProgress],
+  );
+  const shouldOpenBookCinema = canOpenBookCinema && (!job || Boolean(job.bookSourceId));
+  const canOpenCinema = Boolean(cue) || canOpenBookCinema;
   const handleOpenCinema = useCallback(() => {
-    if (canOpenBookCinema) {
+    if (shouldOpenBookCinema) {
       onOpenBookCinema();
       return;
     }
     setCinemaThemeName(themeName === "light" ? "night" : themeName);
     setIsCinemaOpen(true);
-  }, [canOpenBookCinema, onOpenBookCinema, themeName]);
+  }, [onOpenBookCinema, shouldOpenBookCinema, themeName]);
   const handleCloseCinema = useCallback(() => {
     setIsCinemaOpen(false);
   }, []);
@@ -394,7 +415,7 @@ function TeleprompterPanel({
           <h2 className="text-sm font-semibold">Teleprompter</h2>
           <button
             className="h-8 rounded-md border px-3 text-xs font-semibold transition disabled:opacity-50 vs-border"
-            disabled={!canOpenBookCinema}
+            disabled={!canOpenCinema}
             onClick={handleOpenCinema}
             type="button"
           >
@@ -509,7 +530,9 @@ function TeleprompterPanel({
           isFocusEnabled={isFocusEnabled}
           settings={effectiveSettings}
           themeName={cinemaThemeName}
+          markdownSource={markdownCinemaSource}
           playbackControls={playbackControls}
+          resumeProgress={cinemaResumeProgress}
           textSize={cinemaTextSize}
           isPlaybackActive={isPlaybackActive}
           onClose={handleCloseCinema}
@@ -522,6 +545,7 @@ function TeleprompterPanel({
           }}
           onPlayPause={handlePlayPause}
           onRestart={handleRestart}
+          onResumeProgress={onResumeProgress}
           onSkip={handleSkip}
           onThemeChange={setCinemaThemeName}
           onTextSizeChange={setCinemaTextSize}
@@ -564,6 +588,79 @@ function teleprompterWordLabel(cue: TeleprompterCue): string {
   return cue.activeWordIndex >= 0
     ? `${String(cue.activeWordIndex + 1)} / ${String(cue.wordCount)}`
     : "0 / 0";
+}
+
+function resolveMarkdownCinemaSource(
+  job: VoiceJob | null,
+  source: PreparedSource | null,
+): PreparedSource | null {
+  if (!job || !source) {
+    return null;
+  }
+  if (source.renderMode !== "markdown") {
+    return null;
+  }
+  if (!source.text && !source.blocks?.length) {
+    return null;
+  }
+  if (job.preparedSourceId) {
+    return source.id === job.preparedSourceId ? source : null;
+  }
+  if (!preparedSourceTextMatchesJob(source, job)) {
+    return null;
+  }
+  return source;
+}
+
+function preparedSourceTextMatchesJob(source: PreparedSource, job: VoiceJob): boolean {
+  const sourceSpeech = normalizeComparableText(source.speechText ?? "");
+  if (!sourceSpeech) {
+    return false;
+  }
+  return [job.inputText, job.optimizedText].some(
+    (value) => normalizeComparableText(value) === sourceSpeech,
+  );
+}
+
+function normalizeComparableText(value: string): string {
+  return value.trim().replaceAll(/\s+/g, " ");
+}
+
+function upsertPreparedSource(
+  currentSources: PreparedSource[],
+  source: PreparedSource,
+): PreparedSource[] {
+  return [source, ...currentSources.filter((item) => item.id !== source.id)];
+}
+
+function resolveProgressForJob(
+  job: VoiceJob | null,
+  progress: PlaybackProgress | null,
+): PlaybackProgress | null {
+  if (!job || !progress || progress.finished) {
+    return null;
+  }
+
+  if (progress.jobId && progress.jobId === job.id) {
+    return progress;
+  }
+  if (progress.targetId && progress.targetId === progressTargetIdForJob(job)) {
+    return progress;
+  }
+  if (progress.preparedSourceId && progress.preparedSourceId === job.preparedSourceId) {
+    return progress;
+  }
+  if (
+    progress.bookSourceId &&
+    progress.bookSourceId === job.bookSourceId &&
+    progress.bookScope &&
+    job.bookScope &&
+    bookScopeKey(progress.bookScope) === bookScopeKey(job.bookScope)
+  ) {
+    return progress;
+  }
+
+  return null;
 }
 
 function TeleprompterWords({
@@ -646,12 +743,16 @@ function TeleprompterWords({
   );
 }
 
+type CinemaViewMode = "teleprompter" | "markdown";
+
 function CinemaTeleprompterOverlay({
   cue,
   isContextVisible,
   isFocusEnabled,
   isPlaybackActive,
+  markdownSource,
   playbackControls,
+  resumeProgress,
   settings,
   themeName,
   textSize,
@@ -661,6 +762,7 @@ function CinemaTeleprompterOverlay({
   onFocusToggle,
   onPlayPause,
   onRestart,
+  onResumeProgress,
   onSkip,
   onThemeChange,
   onTextSizeChange,
@@ -669,7 +771,9 @@ function CinemaTeleprompterOverlay({
   isContextVisible: boolean;
   isFocusEnabled: boolean;
   isPlaybackActive: boolean;
+  markdownSource: PreparedSource | null;
   playbackControls: PlaybackController;
+  resumeProgress: PlaybackProgress | null;
   settings: TeleprompterHighlightSettings;
   themeName: ThemeName;
   textSize: CinemaTextSize;
@@ -679,10 +783,15 @@ function CinemaTeleprompterOverlay({
   onFocusToggle: () => void;
   onPlayPause: () => void;
   onRestart: () => void;
+  onResumeProgress: (progress: PlaybackProgress) => void;
   onSkip: (seconds: number) => void;
   onThemeChange: (theme: ThemeName) => void;
   onTextSizeChange: (size: CinemaTextSize) => void;
 }>) {
+  const [viewMode, setViewMode] = useState<CinemaViewMode>(
+    markdownSource ? "markdown" : "teleprompter",
+  );
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -700,6 +809,12 @@ function CinemaTeleprompterOverlay({
     };
   }, [onClose]);
 
+  useEffect(() => {
+    if (!markdownSource && viewMode === "markdown") {
+      setViewMode("teleprompter");
+    }
+  }, [markdownSource, viewMode]);
+
   return (
     <div
       aria-modal="true"
@@ -707,7 +822,7 @@ function CinemaTeleprompterOverlay({
       data-theme={themeName}
       role="dialog"
     >
-      <header className="flex items-center justify-between gap-4 border-b px-5 py-4 vs-border sm:px-8">
+      <header className="flex flex-col gap-4 border-b px-5 py-4 vs-border sm:px-8 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-500">
             Cinema Teleprompter
@@ -716,7 +831,33 @@ function CinemaTeleprompterOverlay({
             {isPlaybackActive ? "Following playback" : "Ready for playback"}
           </h2>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+          {markdownSource ? (
+            <fieldset
+              aria-label="Cinema view"
+              className="flex rounded-md border bg-[var(--vs-surface)] p-1 vs-border"
+            >
+              <legend className="sr-only">Cinema view</legend>
+              <button
+                className={cinemaViewModeClass(viewMode === "teleprompter")}
+                onClick={() => {
+                  setViewMode("teleprompter");
+                }}
+                type="button"
+              >
+                Teleprompter
+              </button>
+              <button
+                className={cinemaViewModeClass(viewMode === "markdown")}
+                onClick={() => {
+                  setViewMode("markdown");
+                }}
+                type="button"
+              >
+                Markdown Render
+              </button>
+            </fieldset>
+          ) : null}
           <span
             className={`rounded-full border px-3 py-1 text-xs font-semibold ${
               isPlaybackActive
@@ -759,7 +900,20 @@ function CinemaTeleprompterOverlay({
         <div className="mx-auto grid min-h-0 w-full max-w-6xl gap-4">
           {isContextVisible ? <TeleprompterContext cue={cue} /> : null}
           <div className="max-h-[68vh] min-h-0 overflow-y-auto rounded-xl border bg-[var(--vs-raised)] p-5 shadow-2xl sm:p-8">
-            <TeleprompterWords cue={cue} settings={settings} textSize={textSize} variant="cinema" />
+            {viewMode === "markdown" && markdownSource ? (
+              <MarkdownCinemaView
+                activeWordIndex={cue.activeWordIndex}
+                source={markdownSource}
+                textSize={textSize}
+              />
+            ) : (
+              <TeleprompterWords
+                cue={cue}
+                settings={settings}
+                textSize={textSize}
+                variant="cinema"
+              />
+            )}
           </div>
         </div>
       </main>
@@ -786,6 +940,17 @@ function CinemaTeleprompterOverlay({
           >
             Settings
           </button>
+          {resumeProgress ? (
+            <button
+              className="h-10 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-sm font-semibold text-orange-600 transition hover:bg-orange-500/15"
+              onClick={() => {
+                onResumeProgress(resumeProgress);
+              }}
+              type="button"
+            >
+              Resume saved
+            </button>
+          ) : null}
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
             disabled={!playbackControls.isAvailable}
@@ -873,6 +1038,141 @@ function CinemaTeleprompterOverlay({
   );
 }
 
+function MarkdownCinemaView({
+  activeWordIndex,
+  source,
+  textSize,
+}: Readonly<{
+  activeWordIndex: number;
+  source: PreparedSource;
+  textSize: CinemaTextSize;
+}>) {
+  const activeWord = useMemo(
+    () => resolvePreparedSourceActiveWord(source, activeWordIndex),
+    [activeWordIndex, source],
+  );
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const blocks = source.blocks ?? [];
+  const markdownTextClassBySize: Record<CinemaTextSize, string> = {
+    comfortable: "text-base leading-8 sm:text-lg",
+    large: "text-lg leading-9 sm:text-xl",
+    giant: "text-xl leading-9 sm:text-2xl",
+  };
+
+  useEffect(() => {
+    if (!activeWord) {
+      return;
+    }
+    containerRef.current?.querySelector(".markdown-cinema-word-active")?.scrollIntoView({
+      block: "center",
+      inline: "nearest",
+      behavior: "smooth",
+    });
+  }, [activeWord]);
+
+  if (source.text) {
+    return (
+      <div ref={containerRef}>
+        <MarkdownRenderer
+          className={`markdown-cinema prose-markdown ${markdownTextClassBySize[textSize]} text-[var(--vs-text)]`}
+          wordHighlight={
+            activeWord
+              ? {
+                  activeWordOffset: activeWord.wordOffset,
+                  blockEndOffset: activeWord.blockEndOffset,
+                  blockStartOffset: activeWord.blockStartOffset,
+                }
+              : undefined
+          }
+        >
+          {source.text}
+        </MarkdownRenderer>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`markdown-cinema prose-markdown ${markdownTextClassBySize[textSize]} text-[var(--vs-text)]`}
+    >
+      {blocks.map((block) => (
+        <MarkdownCinemaBlock
+          block={block}
+          isActive={block.id === activeWord?.blockId}
+          key={block.id}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MarkdownCinemaBlock({
+  block,
+  isActive,
+}: Readonly<{
+  block: NonNullable<PreparedSource["blocks"]>[number];
+  isActive: boolean;
+}>) {
+  const blockRef = useRef<HTMLElement | null>(null);
+  const blockText = markdownBlockText(block);
+
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+    blockRef.current?.scrollIntoView({
+      block: "center",
+      inline: "nearest",
+      behavior: "smooth",
+    });
+  }, [isActive]);
+
+  if (!blockText.trim()) {
+    return null;
+  }
+
+  return (
+    <section
+      className={`markdown-cinema-block rounded-lg border px-4 py-3 transition ${
+        isActive
+          ? "border-orange-300 bg-orange-500/10 shadow-[0_0_0_1px_rgba(249,115,22,0.25)]"
+          : "border-transparent"
+      }`}
+      data-active={isActive ? "true" : "false"}
+      ref={blockRef}
+    >
+      {renderMarkdownCinemaBlockContent(block, blockText)}
+    </section>
+  );
+}
+
+function renderMarkdownCinemaBlockContent(
+  block: NonNullable<PreparedSource["blocks"]>[number],
+  blockText: string,
+): ReactNode {
+  if (block.kind === "code" && looksLikeMermaidDiagram(blockText)) {
+    return <MermaidDiagram chart={blockText} />;
+  }
+
+  if (block.kind === "code") {
+    return (
+      <pre>
+        <code>{blockText}</code>
+      </pre>
+    );
+  }
+
+  return <MarkdownRenderer className="contents">{blockText}</MarkdownRenderer>;
+}
+
+function cinemaViewModeClass(isActive: boolean): string {
+  return `h-8 rounded px-3 text-xs font-semibold transition ${
+    isActive
+      ? "bg-orange-500 text-white shadow-sm"
+      : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
+  }`;
+}
+
 function cinemaToggleClass(isActive: boolean): string {
   return `h-10 rounded-md border px-3 text-sm font-semibold transition vs-border ${
     isActive
@@ -951,6 +1251,7 @@ export function App() {
   const [isLoadingBookScope, setIsLoadingBookScope] = useState(false);
   const [preparedSources, setPreparedSources] = useState<PreparedSource[]>([]);
   const [selectedPreparedSourceId, setSelectedPreparedSourceId] = useState<string | null>(null);
+  const [hydratingPreparedSourceId, setHydratingPreparedSourceId] = useState<string | null>(null);
   const [isPreparingSource, setIsPreparingSource] = useState(false);
   const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
   const [projectProgress, setProjectProgress] = useState<PlaybackProgress[]>([]);
@@ -1005,6 +1306,11 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [bundlePanelMode, setBundlePanelMode] = useState<BundlePanelMode>("export");
   const [isBundlePanelOpen, setIsBundlePanelOpen] = useState(false);
+  const [isContentIROpen, setIsContentIROpen] = useState(false);
+  const [contentIRDocument, setContentIRDocument] = useState<ContentIRDocument | null>(null);
+  const [contentIRError, setContentIRError] = useState<string | null>(null);
+  const [contentIRTitle, setContentIRTitle] = useState("Content structure");
+  const [isContentIRLoading, setIsContentIRLoading] = useState(false);
   const [playbackCursorSec, setPlaybackCursorSec] = useState(0);
   const [isPlaybackActive, setIsPlaybackActive] = useState(false);
   const [playbackControls, setPlaybackControls] = useState<PlaybackController>(
@@ -1057,6 +1363,41 @@ export function App() {
     }
     return projectProgress.length > 0 ? projectProgress[0] : null;
   })();
+
+  useEffect(() => {
+    if (
+      selectedPreparedSource?.renderMode !== "markdown" ||
+      selectedPreparedSource.text ||
+      hydratingPreparedSourceId === selectedPreparedSource.id
+    ) {
+      return;
+    }
+
+    let isCancelled = false;
+    setHydratingPreparedSourceId(selectedPreparedSource.id);
+    void getPreparedSource(selectedPreparedSource.id)
+      .then((source) => {
+        if (isCancelled) {
+          return;
+        }
+        setPreparedSources((currentSources) => upsertPreparedSource(currentSources, source));
+      })
+      .catch((caughtError: unknown) => {
+        if (!isCancelled) {
+          setSourcePrepError(formatErrorMessage(caughtError, "Unable to load prepared source"));
+        }
+      })
+      .finally(() => {
+        setHydratingPreparedSourceId((currentId) =>
+          currentId === selectedPreparedSource.id ? null : currentId,
+        );
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [hydratingPreparedSourceId, selectedPreparedSource]);
+
   const effectiveBookScope = useMemo(
     () =>
       selectedBookSource ? normalizeBookScopeForBook(selectedBookSource, selectedBookScope) : null,
@@ -1521,13 +1862,27 @@ export function App() {
       }
       if (progress.preparedSourceId) {
         setSelectedPreparedSourceId(progress.preparedSourceId);
+        const preparedSource = preparedSources.find(
+          (source) => source.id === progress.preparedSourceId,
+        );
+        if (!preparedSource?.text) {
+          try {
+            const hydratedSource = await getPreparedSource(progress.preparedSourceId);
+            setPreparedSources((currentSources) => [
+              hydratedSource,
+              ...currentSources.filter((source) => source.id !== hydratedSource.id),
+            ]);
+          } catch (caughtError) {
+            setSourcePrepError(formatErrorMessage(caughtError, "Unable to load prepared source"));
+          }
+        }
       }
       if (progress.jobId && progress.jobId !== job?.id) {
         await handleSelectJob(progress.jobId);
       }
       setPendingPlaybackResume({ autoplay: true, seconds: Math.max(0, seconds) });
     },
-    [handleSelectJob, job?.id, themeName],
+    [handleSelectJob, job?.id, preparedSources, themeName],
   );
 
   const handleBundleImported = useCallback(
@@ -1683,7 +2038,10 @@ export function App() {
   const handleUsePreparedSource = useCallback(async (source: PreparedSource) => {
     setSelectedPreparedSourceId(source.id);
     let nextSource = source;
-    if (!source.text && !source.speechText) {
+    if (
+      (!source.text && source.renderMode === "markdown") ||
+      (!source.text && !source.speechText)
+    ) {
       try {
         nextSource = await getPreparedSource(source.id);
         setPreparedSources((currentSources) => [
@@ -1699,6 +2057,21 @@ export function App() {
     }
     if (nextSource.speechText) {
       setText(nextSource.speechText);
+    }
+  }, []);
+
+  const handleInspectContentIR = useCallback(async (sourceId: string, title: string) => {
+    setContentIRTitle(title);
+    setContentIRDocument(null);
+    setContentIRError(null);
+    setIsContentIROpen(true);
+    setIsContentIRLoading(true);
+    try {
+      setContentIRDocument(await getContentIR(sourceId));
+    } catch (caughtError) {
+      setContentIRError(formatErrorMessage(caughtError, "Unable to load content structure"));
+    } finally {
+      setIsContentIRLoading(false);
     }
   }, []);
 
@@ -1750,6 +2123,25 @@ export function App() {
     [playbackControls],
   );
 
+  const activeWordIndexForPlaybackProgress = useCallback(
+    (currentJob: VoiceJob, currentTimeSec: number) => {
+      if (selectedBookSource && currentJob.bookSourceId === selectedBookSource.id) {
+        const bookIndex = resolveBookActiveWordIndex(
+          selectedBookSource,
+          currentJob,
+          currentTimeSec,
+          currentJob.bookScope ?? effectiveBookScope,
+          bookScopeContent,
+        );
+        if (bookIndex >= 0) {
+          return bookIndex;
+        }
+      }
+      return activeWordIndexForProgress(currentJob, currentTimeSec);
+    },
+    [bookScopeContent, effectiveBookScope, selectedBookSource],
+  );
+
   const handleAddPlaybackBookmark = useCallback(async () => {
     if (!job) {
       return;
@@ -1762,9 +2154,9 @@ export function App() {
     const durationSec = job.durationMs > 0 ? job.durationMs / 1000 : undefined;
     try {
       const progress = await updatePlaybackProgress(targetId, {
-        activeWordIndex: activeWordIndexForProgress(job, currentTimeSec),
+        activeWordIndex: activeWordIndexForPlaybackProgress(job, currentTimeSec),
         addBookmark: {
-          activeWordIndex: activeWordIndexForProgress(job, currentTimeSec),
+          activeWordIndex: activeWordIndexForPlaybackProgress(job, currentTimeSec),
           createdAt: new Date().toISOString(),
           currentTimeSec,
           id: `bookmark-${Date.now().toString(36)}`,
@@ -1785,7 +2177,7 @@ export function App() {
     } catch {
       setError("Unable to save bookmark.");
     }
-  }, [job, playbackCursorSec]);
+  }, [activeWordIndexForPlaybackProgress, job, playbackCursorSec]);
 
   useEffect(() => {
     const cachedProfileId = localStorage.getItem(VOICE_PROFILE_ID_STORAGE_KEY);
@@ -2140,7 +2532,7 @@ export function App() {
       bookScope: job.bookScope,
       currentTimeSec: playbackCursorSec,
       durationSec: job.durationMs > 0 ? job.durationMs / 1000 : undefined,
-      activeWordIndex: activeWordIndexForProgress(job, playbackCursorSec),
+      activeWordIndex: activeWordIndexForPlaybackProgress(job, playbackCursorSec),
     })
       .then((session) => {
         if (!isCancelled) {
@@ -2153,7 +2545,13 @@ export function App() {
     return () => {
       isCancelled = true;
     };
-  }, [activePlaybackSession, isPlaybackActive, job, playbackCursorSec]);
+  }, [
+    activePlaybackSession,
+    activeWordIndexForPlaybackProgress,
+    isPlaybackActive,
+    job,
+    playbackCursorSec,
+  ]);
 
   useEffect(() => {
     if (!activePlaybackSession || !job) {
@@ -2163,7 +2561,7 @@ export function App() {
       void syncPlaybackSession(activePlaybackSession.id, {
         currentTimeSec: playbackCursorSec,
         durationSec: job.durationMs > 0 ? job.durationMs / 1000 : undefined,
-        activeWordIndex: activeWordIndexForProgress(job, playbackCursorSec),
+        activeWordIndex: activeWordIndexForPlaybackProgress(job, playbackCursorSec),
         finished:
           job.status === "completed" &&
           job.durationMs > 0 &&
@@ -2176,7 +2574,13 @@ export function App() {
     return () => {
       globalThis.clearInterval(interval);
     };
-  }, [activePlaybackSession, job, playbackCursorSec, refreshProjectProgress]);
+  }, [
+    activePlaybackSession,
+    activeWordIndexForPlaybackProgress,
+    job,
+    playbackCursorSec,
+    refreshProjectProgress,
+  ]);
 
   useEffect(() => {
     if (isPlaybackActive || !activePlaybackSession || !job) {
@@ -2187,7 +2591,7 @@ export function App() {
     void closePlaybackSession(session.id, {
       currentTimeSec: playbackCursorSec,
       durationSec: job.durationMs > 0 ? job.durationMs / 1000 : undefined,
-      activeWordIndex: activeWordIndexForProgress(job, playbackCursorSec),
+      activeWordIndex: activeWordIndexForPlaybackProgress(job, playbackCursorSec),
       finished:
         job.status === "completed" &&
         job.durationMs > 0 &&
@@ -2195,7 +2599,14 @@ export function App() {
     }).then(() => {
       void refreshProjectProgress(job.projectId);
     });
-  }, [activePlaybackSession, isPlaybackActive, job, playbackCursorSec, refreshProjectProgress]);
+  }, [
+    activePlaybackSession,
+    activeWordIndexForPlaybackProgress,
+    isPlaybackActive,
+    job,
+    playbackCursorSec,
+    refreshProjectProgress,
+  ]);
 
   useEffect(() => {
     if (!isProcessing && !isSettingsOpen && !isWorkspaceOpen) {
@@ -2556,6 +2967,16 @@ export function App() {
         }}
         onImported={handleBundleImported}
       />
+      <ContentIRDrawer
+        document={contentIRDocument}
+        error={contentIRError}
+        isLoading={isContentIRLoading}
+        isOpen={isContentIROpen}
+        title={contentIRTitle}
+        onClose={() => {
+          setIsContentIROpen(false);
+        }}
+      />
       {isBookCinemaOpen && selectedBookSource && effectiveBookScope ? (
         <BookCinemaOverlay
           book={selectedBookSource}
@@ -2574,6 +2995,9 @@ export function App() {
           }}
           onCreateAudio={(book, scope) => {
             void submitBookNarrationJob(book, scope);
+          }}
+          onInspectStructure={(book) => {
+            void handleInspectContentIR(book.id, bookSourceName(book));
           }}
           onBookmark={() => {
             void handleAddPlaybackBookmark();
@@ -2621,12 +3045,17 @@ export function App() {
             canOpenBookCinema={canOpenBookCinema}
             isPlaybackActive={isPlaybackActive}
             job={job}
+            latestProgress={latestProgress}
             onOpenBookCinema={() => {
               setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
               setIsBookCinemaOpen(true);
             }}
+            onResumeProgress={(progress) => {
+              void handleResumeProgress(progress);
+            }}
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
+            preparedSourceForCinema={selectedPreparedSource}
             settings={teleprompterSettings}
             themeName={themeName}
             onOpenSettings={() => {
@@ -2644,7 +3073,6 @@ export function App() {
                 isProcessing={isProcessing}
                 isScopeLoading={isLoadingBookScope}
                 scopeContent={bookScopeContent}
-                scopeProgress={selectedBookProgress}
                 selectedBookScope={effectiveBookScope}
                 selectedBookSourceId={selectedBookSourceId}
                 onCreateAudio={(book, scope) => {
@@ -2655,8 +3083,8 @@ export function App() {
                   setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
                   setIsBookCinemaOpen(true);
                 }}
-                onResumeProgress={(progress, seconds) => {
-                  void handleResumeProgress(progress, seconds);
+                onInspectStructure={(book) => {
+                  void handleInspectContentIR(book.id, bookSourceName(book));
                 }}
                 onScopeChange={setSelectedBookScope}
                 onSelectBook={setSelectedBookSourceId}
@@ -2666,7 +3094,6 @@ export function App() {
             canSubmit={canSubmit}
             isPreparingSource={isPreparingSource}
             isProcessing={isProcessing}
-            latestProgress={latestProgress}
             preparedSources={preparedSources}
             selectedPreparedSource={selectedPreparedSource}
             sourcePrepError={sourcePrepError}
@@ -2674,13 +3101,13 @@ export function App() {
             onCreatePreparedAudio={(source) => {
               void submitPreparedSourceJob(source);
             }}
+            onInspectPreparedSource={(source) => {
+              void handleInspectContentIR(source.id, source.title ?? source.sourceName);
+            }}
             onPrepareFile={handlePrepareSourceFile}
             onPrepareUrl={handlePrepareSourceUrl}
             onSubmit={handleSubmit}
             onTextChange={setText}
-            onResumeProgress={(progress) => {
-              void handleResumeProgress(progress);
-            }}
             onUsePreparedSource={handleUsePreparedSource}
           />
           <SourceMetadataStrip job={job} text={text} />
@@ -2700,9 +3127,13 @@ export function App() {
         <aside className="vs-raised order-2 flex min-w-0 flex-col gap-4 border-zinc-200 p-5 lg:order-none lg:border-l">
           <AudioPanel
             job={job}
+            latestProgress={latestProgress}
             onPlaybackCursorChange={setPlaybackCursorSec}
             onPlaybackControlsChange={handlePlaybackControlsChange}
             onPlaybackStateChange={setIsPlaybackActive}
+            onResumeProgress={(progress) => {
+              void handleResumeProgress(progress);
+            }}
           />
           {job?.progress.message ? <ProgressPanel job={job} now={now} /> : null}
         </aside>
@@ -2873,15 +3304,14 @@ function SourceTextPanel({
   canSubmit,
   isProcessing,
   isPreparingSource,
-  latestProgress,
   preparedSources,
   selectedPreparedSource,
   sourcePrepError,
   text,
   onCreatePreparedAudio,
+  onInspectPreparedSource,
   onPrepareFile,
   onPrepareUrl,
-  onResumeProgress,
   onSubmit,
   onTextChange,
   onUsePreparedSource,
@@ -2890,15 +3320,14 @@ function SourceTextPanel({
   canSubmit: boolean;
   isProcessing: boolean;
   isPreparingSource: boolean;
-  latestProgress: PlaybackProgress | null;
   preparedSources: PreparedSource[];
   selectedPreparedSource: PreparedSource | null;
   sourcePrepError: string | null;
   text: string;
   onCreatePreparedAudio: (source: PreparedSource) => void;
+  onInspectPreparedSource: (source: PreparedSource) => void;
   onPrepareFile: (file: File) => Promise<void>;
   onPrepareUrl: (url: string) => Promise<void>;
-  onResumeProgress: (progress: PlaybackProgress) => void;
   onSubmit: (event: React.SyntheticEvent<HTMLFormElement>) => void;
   onTextChange: (text: string) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
@@ -2948,7 +3377,7 @@ function SourceTextPanel({
 
   return (
     <form
-      className={`rounded-lg border bg-white p-5 shadow-sm ${
+      className={`min-w-0 overflow-hidden rounded-lg border bg-white p-5 shadow-sm ${
         isDragActive ? "border-orange-300 ring-2 ring-orange-100" : "border-zinc-200"
       }`}
       onSubmit={onSubmit}
@@ -2997,7 +3426,6 @@ function SourceTextPanel({
       {sourceMode === "file" ? (
         <SourcePrepReview
           isPreparing={isPreparingSource}
-          latestProgress={latestProgress}
           preparedSources={preparedSources}
           selectedPreparedSource={selectedPreparedSource}
           sourceFileError={sourceFileError}
@@ -3008,12 +3436,12 @@ function SourceTextPanel({
             fileInputRef.current?.click();
           }}
           onCreatePreparedAudio={onCreatePreparedAudio}
+          onInspectPreparedSource={onInspectPreparedSource}
           onPrepareUrl={() => {
             if (sourceUrl.trim()) {
               void onPrepareUrl(sourceUrl.trim());
             }
           }}
-          onResumeProgress={onResumeProgress}
           onSourceUrlChange={setSourceUrl}
           onUsePreparedSource={(source) => {
             void onUsePreparedSource(source);
@@ -3105,10 +3533,42 @@ function speakModeClass(mode: string): string {
   return "border-emerald-200 bg-emerald-50 text-emerald-700";
 }
 
+type SourcePrepReviewTab = "blocks" | "preview" | "rules";
+
+function SourcePrepMetric({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="min-w-0 bg-white px-4 py-3">
+      <dt className="truncate text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+        {label}
+      </dt>
+      <dd className="mt-1 truncate text-sm font-semibold text-zinc-950" title={value}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function SourcePrepTabButton({
+  active,
+  label,
+  onClick,
+}: Readonly<{ active: boolean; label: string; onClick: () => void }>) {
+  return (
+    <button
+      className={`rounded-md px-3 py-1.5 transition ${
+        active ? "bg-zinc-950 text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
 function SourcePrepReview({
   children,
   isPreparing,
-  latestProgress,
   preparedSources,
   selectedPreparedSource,
   sourceFileError,
@@ -3117,14 +3577,13 @@ function SourcePrepReview({
   sourceUrl,
   onBrowse,
   onCreatePreparedAudio,
+  onInspectPreparedSource,
   onPrepareUrl,
-  onResumeProgress,
   onSourceUrlChange,
   onUsePreparedSource,
 }: Readonly<{
   children: ReactNode;
   isPreparing: boolean;
-  latestProgress: PlaybackProgress | null;
   preparedSources: PreparedSource[];
   selectedPreparedSource: PreparedSource | null;
   sourceFileError: string | null;
@@ -3133,21 +3592,22 @@ function SourcePrepReview({
   sourceUrl: string;
   onBrowse: () => void;
   onCreatePreparedAudio: (source: PreparedSource) => void;
+  onInspectPreparedSource: (source: PreparedSource) => void;
   onPrepareUrl: () => void;
-  onResumeProgress: (progress: PlaybackProgress) => void;
   onSourceUrlChange: (url: string) => void;
   onUsePreparedSource: (source: PreparedSource) => void;
 }>) {
   const source = selectedPreparedSource;
   const blocks = source?.blocks ?? [];
-  const visibleBlocks = blocks.slice(0, 9);
+  const visibleBlocks = blocks.slice(0, 12);
+  const [reviewTab, setReviewTab] = useState<SourcePrepReviewTab>("blocks");
 
   return (
-    <div className="grid gap-4">
-      <div className="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+    <div className="grid min-w-0 gap-4">
+      <div className="grid min-w-0 gap-3 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+        <div className="grid max-w-full min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
           <input
-            className="h-10 min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+            className="h-10 w-full min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
             onChange={(event) => {
               onSourceUrlChange(event.currentTarget.value);
             }}
@@ -3156,7 +3616,7 @@ function SourcePrepReview({
             value={sourceUrl}
           />
           <button
-            className="h-10 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-50"
+            className="h-10 w-full rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-50 md:w-auto"
             disabled={isPreparing || sourceUrl.trim().length === 0}
             onClick={onPrepareUrl}
             type="button"
@@ -3164,7 +3624,7 @@ function SourcePrepReview({
             {isPreparing ? "Preparing..." : "Fetch & Prepare"}
           </button>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
+        <div className="flex max-w-full min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
           <span className="min-w-0 flex-1 truncate" title={sourceFileLabel ?? undefined}>
             {sourceFileLabel ??
               "Drop a file here, or browse for text, PDF, EPUB, HTML, CSV, JSON, or logs"}
@@ -3186,34 +3646,12 @@ function SourcePrepReview({
         ) : null}
       </div>
 
-      {latestProgress ? (
-        <button
-          className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-left text-sm text-orange-950"
-          onClick={() => {
-            onResumeProgress(latestProgress);
-          }}
-          type="button"
-        >
-          <span className="min-w-0">
-            <span className="block font-semibold">Continue Listening</span>
-            <span className="block truncate text-xs text-orange-800">
-              {latestProgress.bookScope?.label ??
-                latestProgress.preparedSourceId ??
-                latestProgress.jobId}
-            </span>
-          </span>
-          <span className="shrink-0 text-xs font-semibold">
-            {formatPercentage(latestProgress.progress)}
-          </span>
-        </button>
-      ) : null}
-
       {preparedSources.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_240px]">
-          <div className="grid min-w-0 gap-2 content-start">
+        <div className="grid gap-3">
+          <div className="-mx-1 flex max-w-full min-w-0 gap-2 overflow-x-auto px-1 pb-1">
             {preparedSources.slice(0, 5).map((item) => (
               <button
-                className={`min-w-0 rounded-md border p-3 text-left transition ${
+                className={`w-[190px] shrink-0 rounded-md border p-3 text-left transition sm:w-[220px] ${
                   item.id === source?.id
                     ? "border-orange-300 bg-orange-500/10"
                     : "border-zinc-200 bg-white hover:border-zinc-300"
@@ -3236,8 +3674,8 @@ function SourcePrepReview({
               </button>
             ))}
           </div>
-          <div className="min-w-0 rounded-lg border border-zinc-200 bg-white">
-            <div className="flex min-w-0 items-start justify-between gap-3 border-b border-zinc-200 p-4">
+          <div className="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white">
+            <div className="flex min-w-0 flex-col gap-3 border-b border-zinc-200 p-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <h3
                   className="truncate text-sm font-semibold"
@@ -3246,68 +3684,113 @@ function SourcePrepReview({
                   {source?.title ?? "Prepared Source"}
                 </h3>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {String(source?.summary.sentenceSegmentCount ?? 0)} sentence-safe segments ·{" "}
+                  {String(source?.summary.sentenceSegmentCount ?? 0)} sentence segments ·{" "}
                   {String(source?.summary.citationSkipCount ?? 0)} citations skipped
                 </p>
               </div>
               {source ? (
-                <button
-                  className="h-9 shrink-0 rounded-md bg-orange-600 px-3 text-xs font-semibold text-white shadow-sm shadow-orange-500/20 disabled:opacity-50"
-                  disabled={isPreparing}
-                  onClick={() => {
-                    onCreatePreparedAudio(source);
-                  }}
-                  type="button"
-                >
-                  Create & Listen
-                </button>
+                <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                  <button
+                    className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700"
+                    onClick={() => {
+                      onInspectPreparedSource(source);
+                    }}
+                    type="button"
+                  >
+                    Inspect structure
+                  </button>
+                  <button
+                    className="h-9 rounded-md bg-orange-600 px-3 text-xs font-semibold text-white shadow-sm shadow-orange-500/20 disabled:opacity-50"
+                    disabled={isPreparing}
+                    onClick={() => {
+                      onCreatePreparedAudio(source);
+                    }}
+                    type="button"
+                  >
+                    Create & Listen
+                  </button>
+                </div>
               ) : null}
             </div>
-            <div className="max-h-80 overflow-y-auto">
-              {visibleBlocks.map((block) => (
-                <div
-                  className="grid grid-cols-[72px_minmax(0,1fr)_84px] gap-3 border-b border-zinc-100 px-4 py-3 text-sm last:border-b-0"
-                  key={block.id}
-                >
-                  <span className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                    {block.kind}
-                  </span>
-                  <span className="min-w-0">
-                    <span
-                      className="block truncate font-medium"
-                      title={block.spokenText ?? block.text}
-                    >
-                      {block.spokenText ?? block.text ?? block.label}
-                    </span>
-                    <span className="mt-1 block truncate text-xs text-zinc-500">
-                      {String(block.segments?.length ?? 0)} segments ·{" "}
-                      {formatDuration(block.estimatedDurationMs ?? 0)}
-                    </span>
-                  </span>
-                  <span
-                    className={`justify-self-end rounded-full border px-2 py-1 text-[0.68rem] font-semibold ${speakModeClass(block.speakMode)}`}
-                  >
-                    {block.speakMode}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Preview & Rules
-            </p>
-            <dl className="mt-3 grid gap-3">
-              <Metric label="Headings" value={String(source?.summary.headingCount ?? 0)} />
-              <Metric label="Speak Blocks" value={String(source?.summary.spokenBlockCount ?? 0)} />
-              <Metric label="Citations" value={String(source?.summary.citationSkipCount ?? 0)} />
-              <Metric label="Skipped Items" value={String(source?.skippedItems?.length ?? 0)} />
+            <dl className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 text-sm sm:grid-cols-5">
+              <SourcePrepMetric label="Blocks" value={String(source?.blockCount ?? 0)} />
+              <SourcePrepMetric
+                label="Speak"
+                value={String(source?.summary.spokenBlockCount ?? 0)}
+              />
+              <SourcePrepMetric
+                label="Segments"
+                value={String(source?.summary.sentenceSegmentCount ?? 0)}
+              />
+              <SourcePrepMetric
+                label="Citations"
+                value={String(source?.summary.citationSkipCount ?? 0)}
+              />
+              <SourcePrepMetric label="Skipped" value={String(source?.skippedItems?.length ?? 0)} />
             </dl>
-            <p className="mt-4 rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-600">
-              Headings are emphasized as separate blocks, citation junk is skipped, and segments
-              only break at sentence boundaries.
-            </p>
-            <PreparedSourceMarkdownPreview source={source} />
+
+            <div className="flex gap-2 overflow-x-auto border-b border-zinc-200 px-4 py-3 text-xs font-semibold">
+              <SourcePrepTabButton
+                active={reviewTab === "blocks"}
+                label="Blocks"
+                onClick={() => {
+                  setReviewTab("blocks");
+                }}
+              />
+              <SourcePrepTabButton
+                active={reviewTab === "preview"}
+                label="Preview"
+                onClick={() => {
+                  setReviewTab("preview");
+                }}
+              />
+              <SourcePrepTabButton
+                active={reviewTab === "rules"}
+                label="Rules"
+                onClick={() => {
+                  setReviewTab("rules");
+                }}
+              />
+            </div>
+
+            {reviewTab === "blocks" ? (
+              <div className="max-h-[28rem] overflow-y-auto">
+                {visibleBlocks.map((block) => (
+                  <div
+                    className="grid gap-2 border-b border-zinc-100 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-start"
+                    key={block.id}
+                  >
+                    <span className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                      {block.kind}
+                    </span>
+                    <span className="min-w-0">
+                      <span
+                        className="block truncate font-medium"
+                        title={block.spokenText ?? block.text}
+                      >
+                        {block.spokenText ?? block.text ?? block.label}
+                      </span>
+                      <span className="mt-1 block truncate text-xs text-zinc-500">
+                        {String(block.segments?.length ?? 0)} segments ·{" "}
+                        {formatDuration(block.estimatedDurationMs ?? 0)}
+                      </span>
+                    </span>
+                    <span
+                      className={`w-fit rounded-full border px-2 py-1 text-[0.68rem] font-semibold sm:justify-self-end ${speakModeClass(block.speakMode)}`}
+                    >
+                      {block.speakMode}
+                    </span>
+                  </div>
+                ))}
+                {blocks.length > visibleBlocks.length ? (
+                  <p className="px-4 py-3 text-xs text-zinc-500">
+                    Showing {visibleBlocks.length.toString()} of {blocks.length.toString()} blocks
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {reviewTab === "preview" ? <PreparedSourceMarkdownPreview source={source} /> : null}
+            {reviewTab === "rules" ? <SourcePrepRulesPanel source={source} /> : null}
           </div>
         </div>
       ) : (
@@ -3326,23 +3809,57 @@ function PreparedSourceMarkdownPreview({ source }: Readonly<{ source: PreparedSo
   }
   if (source.renderMode !== "markdown" || !source.text) {
     return (
-      <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs leading-5 text-zinc-600">
-        <p className="font-semibold text-zinc-800">Rendered preview</p>
-        <p className="mt-1">
-          Select the source to load the full Markdown preview. Narration blocks remain visible in
-          the review list.
-        </p>
+      <div className="p-4 text-sm text-zinc-600">
+        <p>Rendered preview is unavailable for this source.</p>
       </div>
     );
   }
   return (
-    <div className="mt-4 max-h-72 overflow-y-auto rounded-md border border-zinc-200 bg-white p-4">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-        Markdown Preview
-      </p>
-      <div className="prose-markdown text-sm leading-6 text-zinc-800">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{source.text}</ReactMarkdown>
-      </div>
+    <div className="max-h-[28rem] overflow-y-auto p-4">
+      <MarkdownRenderer className="prose-markdown text-sm leading-6 text-zinc-800">
+        {source.text}
+      </MarkdownRenderer>
+    </div>
+  );
+}
+
+function SourcePrepRulesPanel({ source }: Readonly<{ source: PreparedSource | null }>) {
+  if (!source) {
+    return null;
+  }
+  return (
+    <div className="grid gap-4 p-4 text-sm">
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-zinc-200 bg-zinc-200 sm:grid-cols-3">
+        <SourcePrepMetric label="Headings" value={String(source.summary.headingCount)} />
+        <SourcePrepMetric label="Skipped Blocks" value={String(source.summary.skippedBlockCount)} />
+        <SourcePrepMetric label="Notes" value={String(source.warnings?.length ?? 0)} />
+      </dl>
+      {source.warnings && source.warnings.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {source.warnings.map((warning) => (
+            <span
+              className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700"
+              key={warning}
+            >
+              {warning}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {source.skippedItems && source.skippedItems.length > 0 ? (
+        <div className="max-h-56 overflow-y-auto border-t border-zinc-200">
+          {source.skippedItems.slice(0, 12).map((item) => (
+            <div className="border-b border-zinc-100 py-3 last:border-b-0" key={item.id}>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                {item.kind}
+              </p>
+              <p className="mt-1 truncate font-medium text-zinc-900" title={item.reason}>
+                {item.reason}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -3684,14 +4201,18 @@ function ScriptReviewPanel({
 
 function AudioPanel({
   job,
+  latestProgress,
   onPlaybackCursorChange,
   onPlaybackControlsChange,
   onPlaybackStateChange,
+  onResumeProgress,
 }: Readonly<{
   job: VoiceJob | null;
+  latestProgress: PlaybackProgress | null;
   onPlaybackCursorChange?: (cursorSec: number) => void;
   onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
+  onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
   useEffect(() => {
     if (!job) {
@@ -3704,12 +4225,23 @@ function AudioPanel({
     return (
       <section className="min-w-0 rounded-lg border p-3 shadow-sm vs-raised">
         <h2 className="text-sm font-semibold">Audio Player</h2>
-        <div className="mt-3 grid h-24 place-items-center rounded-md border border-dashed px-4 text-center vs-border">
+        <div className="mt-3 grid min-h-32 place-items-center rounded-md border border-dashed px-4 py-5 text-center vs-border">
           <div>
             <p className="text-sm font-semibold">No audio generated yet</p>
             <p className="vs-muted mt-2 text-xs">
               Choose a run mode, then create audio to start buffering playback.
             </p>
+            {latestProgress ? (
+              <button
+                className="mt-4 inline-flex h-9 items-center rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
+                onClick={() => {
+                  onResumeProgress(latestProgress);
+                }}
+                type="button"
+              >
+                Continue Listening · {formatPercentage(latestProgress.progress)}
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
@@ -3720,23 +4252,29 @@ function AudioPanel({
     <StreamingAudioPanel
       job={job}
       key={job.id}
+      latestProgress={latestProgress}
       onPlaybackCursorChange={onPlaybackCursorChange}
       onPlaybackControlsChange={onPlaybackControlsChange}
       onPlaybackStateChange={onPlaybackStateChange}
+      onResumeProgress={onResumeProgress}
     />
   );
 }
 
 function StreamingAudioPanel({
   job,
+  latestProgress,
   onPlaybackCursorChange,
   onPlaybackControlsChange,
   onPlaybackStateChange,
+  onResumeProgress,
 }: Readonly<{
   job: VoiceJob;
+  latestProgress: PlaybackProgress | null;
   onPlaybackCursorChange?: (cursorSec: number) => void;
   onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
+  onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
   const readySegments = job.audioReadySegments ?? 0;
   const canPlayCompleted = job.status === "completed";
@@ -3848,6 +4386,9 @@ function StreamingAudioPanel({
             })}
           </div>
         </div>
+        {latestProgress ? (
+          <AudioResumeAction progress={latestProgress} onResumeProgress={onResumeProgress} />
+        ) : null}
       </div>
 
       <div className="mt-3">
@@ -3875,6 +4416,46 @@ function StreamingAudioPanel({
       <QueueBufferPanel currentTimeSec={panelCursorSec} job={job} />
     </section>
   );
+}
+
+function AudioResumeAction({
+  progress,
+  onResumeProgress,
+}: Readonly<{
+  progress: PlaybackProgress;
+  onResumeProgress: (progress: PlaybackProgress) => void;
+}>) {
+  return (
+    <button
+      className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-orange-500/10 px-3 py-2 text-left text-xs text-orange-700 transition hover:bg-orange-500/15"
+      onClick={() => {
+        onResumeProgress(progress);
+      }}
+      type="button"
+    >
+      <span className="min-w-0">
+        <span className="block font-semibold">Continue Listening</span>
+        <span className="block truncate">
+          {resumeProgressLabel(progress)} ·{" "}
+          {formatDuration(Math.round(progress.currentTimeSec * 1000))}
+        </span>
+      </span>
+      <span className="shrink-0 font-semibold">{formatPercentage(progress.progress)}</span>
+    </button>
+  );
+}
+
+function resumeProgressLabel(progress: PlaybackProgress): string {
+  if (progress.bookScope?.label) {
+    return progress.bookScope.label;
+  }
+  if (progress.bookSourceId) {
+    return "Book source";
+  }
+  if (progress.preparedSourceId) {
+    return "Prepared source";
+  }
+  return progress.jobId ? "Previous job" : "Saved progress";
 }
 
 function queueBlockClass(

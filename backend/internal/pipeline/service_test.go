@@ -118,10 +118,10 @@ func TestPreparedSourceSkipsResearchCitationsAndKeepsHeadings(t *testing.T) {
 	}
 }
 
-func TestPreparedSourceJobRejectsLongSentenceInsteadOfSplitting(t *testing.T) {
+func TestPreparedSourceJobAllowsLongSentenceWithWarning(t *testing.T) {
 	t.Parallel()
 
-	service := newBookSourceServiceWithOptions(t, pipeline.Options{StudioSegmentMaxRunes: 24})
+	service := newBookSourceServiceWithOptions(t, pipeline.Options{SourcePrepSentenceMaxRunes: 24})
 	longSentence := strings.Repeat("word ", 20) + "end."
 	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
 		Kind:       pipeline.PreparedSourceKindText,
@@ -137,10 +137,37 @@ func TestPreparedSourceJobRejectsLongSentenceInsteadOfSplitting(t *testing.T) {
 	if !strings.Contains(strings.Join(source.Blocks[0].Warnings, ","), "sentence_too_long") {
 		t.Fatalf("block warnings = %#v, want sentence_too_long", source.Blocks[0].Warnings)
 	}
-	_, err = service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
-	if err == nil || !strings.Contains(err.Error(), "too long") {
-		t.Fatalf("CreatePreparedSourceJob error = %v, want too long", err)
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
 	}
+	if !strings.Contains(strings.Join(job.SegmentationWarnings, ","), "sentence_too_long") {
+		t.Fatalf("job segmentation warnings = %#v, want sentence_too_long", job.SegmentationWarnings)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+}
+
+func TestPreparedSourceAllowsLongAnalyticalSentencesByDefault(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	text := "Gartner reports that organisations with successful AI initiatives invest up to four times more in data quality, governance, AI-ready people, and change management than poor performers, and that organisations with the highest maturity of AI-ready data and analytics capabilities achieve up to 65% greater business outcomes."
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "deep-research-report.md",
+		Text:       text,
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if strings.Contains(strings.Join(source.Blocks[0].Warnings, ","), "sentence_too_long") {
+		t.Fatalf("block warnings = %#v, want long analytical sentence accepted", source.Blocks[0].Warnings)
+	}
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 }
 
 func TestPreparedSourceURLIngestHonorsPrivateNetworkDefault(t *testing.T) {
@@ -2145,6 +2172,9 @@ func TestNewServiceStudioDefaultsAutoTuneThroughput(t *testing.T) {
 	if options.StudioSegmentMaxRunesAdaptive != 180 {
 		t.Fatalf("studio adaptive segment max runes = %d, want %d", options.StudioSegmentMaxRunesAdaptive, 180)
 	}
+	if options.SourcePrepSentenceMaxRunes != 420 {
+		t.Fatalf("source prep sentence max runes = %d, want %d", options.SourcePrepSentenceMaxRunes, 420)
+	}
 }
 
 func TestNewServiceStudioDefaultsAllowExplicitOverride(t *testing.T) {
@@ -2176,6 +2206,9 @@ func TestNewServiceStudioDefaultsAllowExplicitOverride(t *testing.T) {
 	}
 	if options.StudioSegmentMaxRunesAdaptive != 180 {
 		t.Fatalf("studio adaptive segment max runes = %d, want %d", options.StudioSegmentMaxRunesAdaptive, 180)
+	}
+	if options.SourcePrepSentenceMaxRunes != 420 {
+		t.Fatalf("source prep sentence max runes = %d, want %d", options.SourcePrepSentenceMaxRunes, 420)
 	}
 }
 
