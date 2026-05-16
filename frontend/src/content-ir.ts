@@ -9,6 +9,7 @@ export interface ContentIRDocument {
   sourceName: string;
   adapterVersion: string;
   generatedAt: string;
+  metadata?: Record<string, unknown>;
   nodes: ContentIRNode[];
 }
 
@@ -30,6 +31,7 @@ export interface ContentIRNode {
   warnings: string[];
   confidence: number;
   rights: ContentIRRightsMetadata;
+  metadata?: Record<string, unknown>;
   adapterVersion: string;
 }
 

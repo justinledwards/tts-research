@@ -5,8 +5,19 @@
   "sourceId": "markdown-table-code-citation",
   "projectId": "default",
   "sourceName": "research.md",
-  "adapterVersion": "prepared-source-to-ir.v1",
+  "adapterVersion": "markdown-adapter-v2",
   "generatedAt": "2026-05-16T12:00:00Z",
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
   "nodes": [
     {
       "nodeId": "block-0001",
@@ -28,15 +39,15 @@
           "markdown": {
             "path": "research.md",
             "lineStart": 1,
-            "lineEnd": 2,
+            "lineEnd": 1,
             "columnStart": 1,
-            "columnEnd": 1,
-            "astPath": "/blocks/0"
+            "columnEnd": 11,
+            "astPath": "/children/0"
           }
         },
         "offsets": {
           "start": 0,
-          "end": 11
+          "end": 10
         }
       },
       "ui": {
@@ -58,13 +69,21 @@
           "explanation": "Prose is spoken because the Enterprise profile sets mode to speak."
         }
       },
-      "warnings": ["heading_emphasis"],
+      "warnings": [],
       "confidence": 0.94,
       "rights": {
         "status": "unknown",
         "notes": ""
       },
-      "adapterVersion": "prepared-source-to-ir.v1"
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 11,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# Findings"
+      },
+      "adapterVersion": "markdown-adapter-v2"
     },
     {
       "nodeId": "block-0002",
@@ -72,8 +91,8 @@
       "orderKey": "00000002",
       "kind": "table",
       "role": "table",
-      "displayText": "| Metric | Value |\n| Latency | 12ms |",
-      "normalisedText": "| Metric | Value | | Latency | 12ms |",
+      "displayText": "| Metric | Value |\n|---|---|\n| Latency | 12ms |",
+      "normalisedText": "| Metric | Value | |---|---| | Latency | 12ms |",
       "speechText": "A table appears here with columns: Metric, Value.",
       "lang": "und",
       "script": "Latn",
@@ -86,15 +105,15 @@
           "markdown": {
             "path": "research.md",
             "lineStart": 3,
-            "lineEnd": 6,
+            "lineEnd": 5,
             "columnStart": 1,
-            "columnEnd": 1,
-            "astPath": "/blocks/1"
+            "columnEnd": 19,
+            "astPath": "/children/1"
           }
         },
         "offsets": {
           "start": 12,
-          "end": 60
+          "end": 59
         }
       },
       "ui": {
@@ -122,7 +141,18 @@
         "status": "unknown",
         "notes": ""
       },
-      "adapterVersion": "prepared-source-to-ir.v1"
+      "metadata": {
+        "align": [null, null],
+        "astPath": "/children/1",
+        "columnEnd": 19,
+        "columnStart": 1,
+        "headers": ["Metric", "Value"],
+        "lineEnd": 5,
+        "lineStart": 3,
+        "rows": [["Latency", "12ms"]],
+        "sourceSlice": "| Metric | Value |\n|---|---|\n| Latency | 12ms |"
+      },
+      "adapterVersion": "markdown-adapter-v2"
     },
     {
       "nodeId": "block-0003",
@@ -130,8 +160,8 @@
       "orderKey": "00000003",
       "kind": "code",
       "role": "code",
-      "displayText": "fmt.Println(\"skip\")",
-      "normalisedText": "fmt.Println(\"skip\")",
+      "displayText": "```go\nfmt.Println(\"skip\")\n```",
+      "normalisedText": "```go fmt.Println(\"skip\") ```",
       "speechText": "",
       "lang": "go",
       "script": "Latn",
@@ -144,15 +174,15 @@
           "markdown": {
             "path": "research.md",
             "lineStart": 7,
-            "lineEnd": 10,
+            "lineEnd": 9,
             "columnStart": 1,
-            "columnEnd": 1,
-            "astPath": "/blocks/2"
+            "columnEnd": 4,
+            "astPath": "/children/2"
           }
         },
         "offsets": {
           "start": 61,
-          "end": 91
+          "end": 90
         }
       },
       "ui": {
@@ -180,7 +210,17 @@
         "status": "unknown",
         "notes": ""
       },
-      "adapterVersion": "prepared-source-to-ir.v1"
+      "metadata": {
+        "astPath": "/children/2",
+        "codeMeta": "",
+        "columnEnd": 4,
+        "columnStart": 1,
+        "language": "go",
+        "lineEnd": 9,
+        "lineStart": 7,
+        "sourceSlice": "```go\nfmt.Println(\"skip\")\n```"
+      },
+      "adapterVersion": "markdown-adapter-v2"
     },
     {
       "nodeId": "block-0004",
@@ -205,12 +245,12 @@
             "lineEnd": 11,
             "columnStart": 1,
             "columnEnd": 20,
-            "astPath": "/blocks/3"
+            "astPath": "/children/3"
           }
         },
         "offsets": {
           "start": 92,
-          "end": 118
+          "end": 117
         }
       },
       "ui": {
@@ -238,7 +278,15 @@
         "status": "unknown",
         "notes": ""
       },
-      "adapterVersion": "prepared-source-to-ir.v1"
+      "metadata": {
+        "astPath": "/children/3",
+        "columnEnd": 20,
+        "columnStart": 1,
+        "lineEnd": 11,
+        "lineStart": 11,
+        "sourceSlice": "citeturn1search0"
+      },
+      "adapterVersion": "markdown-adapter-v2"
     }
   ]
 }

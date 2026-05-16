@@ -44,6 +44,8 @@ func profileSourceLabel(profileLabel string) string {
 
 func elementLabel(element string) string {
 	switch element {
+	case "admonition":
+		return "This admonition"
 	case "table":
 		return "This table"
 	case "code":
@@ -52,6 +54,12 @@ func elementLabel(element string) string {
 		return "This math expression"
 	case "footnote":
 		return "This note"
+	case "frontmatter":
+		return "This frontmatter"
+	case "embedded":
+		return "This embedded construct"
+	case "directive":
+		return "This directive"
 	case "image":
 		return "This image or caption"
 	default:

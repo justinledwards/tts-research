@@ -118,14 +118,91 @@ func TestPreparedSourceSkipsResearchCitationsAndKeepsHeadings(t *testing.T) {
 	if bodyBlock.SpeakMode != pipeline.NarrationSpeakModeSpeak || bodyBlock.SpeechPolicy.Element != "prose" {
 		t.Fatalf("body block policy = %#v, want spoken prose", bodyBlock.SpeechPolicy)
 	}
-	if source.PreprocessorID != "markdown-gfm" || source.RenderMode != "markdown" || source.SourceFormat != "markdown" {
-		t.Fatalf("source preprocessor metadata = %q/%q/%q", source.PreprocessorID, source.RenderMode, source.SourceFormat)
+	if source.PreprocessorID != "markdown-ast" ||
+		source.PreprocessorVersion != "markdown-adapter-v2" ||
+		source.RenderMode != "markdown" ||
+		source.SourceFormat != "markdown" ||
+		source.MarkdownParseMode != "strict" {
+		t.Fatalf(
+			"source preprocessor metadata = %q/%q/%q/%q/%q",
+			source.PreprocessorID,
+			source.PreprocessorVersion,
+			source.RenderMode,
+			source.SourceFormat,
+			source.MarkdownParseMode,
+		)
 	}
 	if source.Blocks[0].Emphasis != "heading" || source.Blocks[0].PauseAfterMS == 0 {
 		t.Fatalf("heading block should carry emphasis/pause metadata: %#v", source.Blocks[0])
 	}
 	if source.Summary.SentenceSegmentCount < 3 {
 		t.Fatalf("sentence segment count = %d, want at least 3", source.Summary.SentenceSegmentCount)
+	}
+}
+
+func TestPreparedSourceMarkdownStrictDefaultPreservesMetadataAndEmbeddedNodes(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "adapter.md",
+		Text: strings.Join([]string{
+			"---",
+			"title: Adapter Demo",
+			"---",
+			"",
+			"# Adapter Demo",
+			"",
+			"Interactive widget: <Widget mode=\"demo\" />.",
+			"",
+			"```{warning}",
+			"Keep this callout audible.",
+			"```",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if source.MarkdownParseMode != "strict" || source.PreprocessorID != "markdown-ast" {
+		t.Fatalf("markdown mode/preprocessor = %q/%q, want strict markdown-ast", source.MarkdownParseMode, source.PreprocessorID)
+	}
+	if source.Metadata == nil || source.Metadata["frontmatter"] == nil {
+		t.Fatalf("source metadata = %#v, want frontmatter metadata", source.Metadata)
+	}
+	if findPreparedBlockByKind(source.Blocks, pipeline.NarrationBlockKindFrontmatter) == nil {
+		t.Fatalf("blocks = %#v, want frontmatter block", source.Blocks)
+	}
+	if findPreparedBlockByKind(source.Blocks, pipeline.NarrationBlockKindEmbedded) == nil {
+		t.Fatalf("blocks = %#v, want explicit embedded block", source.Blocks)
+	}
+	admonition := findPreparedBlockByKind(source.Blocks, pipeline.NarrationBlockKindAdmonition)
+	if admonition == nil || !strings.Contains(admonition.SpokenText, "Keep this callout audible.") {
+		t.Fatalf("admonition = %#v, want spoken MyST callout", admonition)
+	}
+	if strings.Contains(source.SpeechText, "title: Adapter Demo") || strings.Contains(source.SpeechText, "<Widget") {
+		t.Fatalf("speech text leaked metadata or embedded markup: %q", source.SpeechText)
+	}
+}
+
+func TestPreparedSourceMarkdownLegacyMode(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:              pipeline.PreparedSourceKindFile,
+		MarkdownParseMode: "legacy",
+		SourceName:        "legacy.md",
+		Text:              "# Legacy\n\nA compatibility paragraph.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if source.MarkdownParseMode != "legacy" || source.PreprocessorID != "markdown-legacy" {
+		t.Fatalf("markdown mode/preprocessor = %q/%q, want legacy markdown-legacy", source.MarkdownParseMode, source.PreprocessorID)
+	}
+	if !strings.Contains(source.SpeechText, "A compatibility paragraph.") {
+		t.Fatalf("speech text = %q, want legacy paragraph", source.SpeechText)
 	}
 }
 
@@ -2924,6 +3001,18 @@ func boolPtr(value bool) *bool {
 func findPreparedBlockContaining(blocks []pipeline.NarrationBlock, text string) *pipeline.NarrationBlock {
 	for index := range blocks {
 		if strings.Contains(blocks[index].Text, text) {
+			return &blocks[index]
+		}
+	}
+	return nil
+}
+
+func findPreparedBlockByKind(
+	blocks []pipeline.NarrationBlock,
+	kind pipeline.NarrationBlockKind,
+) *pipeline.NarrationBlock {
+	for index := range blocks {
+		if blocks[index].Kind == kind {
 			return &blocks[index]
 		}
 	}

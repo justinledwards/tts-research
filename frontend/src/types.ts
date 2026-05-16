@@ -286,6 +286,7 @@ export interface BookSourceScopeContent {
 
 export type PreparedSourceKind = "text" | "file" | "url" | "book";
 export type PreparedSourceStatus = "ready" | "failed";
+export type MarkdownParseMode = "strict" | "legacy";
 export type NarrationBlockKind =
   | "heading"
   | "subheading"
@@ -297,7 +298,10 @@ export type NarrationBlockKind =
   | "image"
   | "caption"
   | "citation"
-  | "frontmatter";
+  | "frontmatter"
+  | "admonition"
+  | "directive"
+  | "embedded";
 export type NarrationSpeakMode = "speak" | "skip" | "summarize";
 
 export interface NarrationSegment {
@@ -326,6 +330,7 @@ export interface NarrationBlock {
   confidence?: number;
   segments?: NarrationSegment[];
   warnings?: string[];
+  metadata?: Record<string, unknown>;
   speechPolicy: SpeechPolicyDecision;
 }
 
@@ -358,6 +363,7 @@ export interface PreparedSource {
   preprocessorVersion?: string;
   sourceFormat?: string;
   renderMode?: string;
+  markdownParseMode?: MarkdownParseMode;
   speechPolicyProfile: string;
   title?: string;
   text?: string;
@@ -369,6 +375,7 @@ export interface PreparedSource {
   blocks?: NarrationBlock[];
   skippedItems?: SkippedSourceItem[];
   warnings?: string[];
+  metadata?: Record<string, unknown>;
   error?: string;
   createdAt: string;
   updatedAt: string;
@@ -381,6 +388,7 @@ export interface CreatePreparedSourceRequest {
   sourceName?: string;
   sourceContentType?: string;
   sourceBytes?: number;
+  markdownParseMode?: MarkdownParseMode;
 }
 
 export interface ProgressBookmark {

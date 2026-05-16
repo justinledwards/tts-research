@@ -15,7 +15,9 @@ func PreparedSourceToIR(source PreparedSource, generatedAt time.Time) contentir.
 	for index, block := range source.Blocks {
 		nodes = append(nodes, preparedBlockToIRNode(descriptor, normalizedSourceText, block, index))
 	}
-	return newContentIRDocument(descriptor, generatedAt, nodes)
+	document := newContentIRDocument(descriptor, generatedAt, nodes)
+	document.Metadata = contentir.Metadata(source.Metadata)
+	return document
 }
 
 func preparedBlockToIRNode(
@@ -51,6 +53,7 @@ func preparedBlockToIRNode(
 		Warnings:       contentIRStringSlice(block.Warnings),
 		Confidence:     block.Confidence,
 		Rights:         contentir.UnknownRights(),
+		Metadata:       contentir.Metadata(block.Metadata),
 		AdapterVersion: descriptor.AdapterVersion,
 	}
 }
@@ -71,8 +74,22 @@ func preparedBlockLocator(
 		lineEnd,
 		columnStart,
 		columnEnd,
-		fmt.Sprintf("/blocks/%d", index),
+		firstNonEmpty(metadataString(block.Metadata, "astPath"), fmt.Sprintf("/blocks/%d", index)),
 	)
+}
+
+func metadataString(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	value, ok := metadata[key]
+	if !ok {
+		return ""
+	}
+	if text, ok := value.(string); ok {
+		return strings.TrimSpace(text)
+	}
+	return ""
 }
 
 func preparedBlockUIHints(block NarrationBlock) contentir.UIHints {

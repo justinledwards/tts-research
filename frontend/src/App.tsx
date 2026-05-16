@@ -110,6 +110,7 @@ import type {
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
   CustomSpeechPolicyProfile,
+  MarkdownParseMode,
   PlaybackProgress,
   PlaybackSession,
   PreparedSource,
@@ -2272,7 +2273,7 @@ export function App() {
   );
 
   const handlePrepareSourceFile = useCallback(
-    async (file: File) => {
+    async (file: File, markdownParseMode: MarkdownParseMode = "strict") => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
       try {
@@ -2287,7 +2288,7 @@ export function App() {
           setSelectedBookScope(resolveDefaultBookScope(book));
           return;
         }
-        const source = await createPreparedSource(activeProjectId, file);
+        const source = await createPreparedSource(activeProjectId, file, { markdownParseMode });
         setPreparedSources((currentSources) => [
           source,
           ...currentSources.filter((item) => item.id !== source.id),
@@ -2315,7 +2316,7 @@ export function App() {
   );
 
   const handlePrepareSourceUrl = useCallback(
-    async (url: string) => {
+    async (url: string, markdownParseMode: MarkdownParseMode = "strict") => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
       try {
@@ -2332,6 +2333,7 @@ export function App() {
         }
         const source = await createPreparedSource(activeProjectId, {
           kind: "url",
+          markdownParseMode,
           url,
           sourceName: url,
         });
@@ -3714,8 +3716,8 @@ function SourceTextPanel({
   onCreatePreparedAudio: (source: PreparedSource) => void;
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onInspectPreparedSource: (source: PreparedSource) => void;
-  onPrepareFile: (file: File) => Promise<void>;
-  onPrepareUrl: (url: string) => Promise<void>;
+  onPrepareFile: (file: File, markdownParseMode: MarkdownParseMode) => Promise<void>;
+  onPrepareUrl: (url: string, markdownParseMode: MarkdownParseMode) => Promise<void>;
   onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onUpdateCustomSpeechPolicyProfile: (
@@ -3734,6 +3736,7 @@ function SourceTextPanel({
   const [sourceFileError, setSourceFileError] = useState<string | null>(null);
   const [sourceMode, setSourceMode] = useState<"book" | "file" | "text">("text");
   const [sourceUrl, setSourceUrl] = useState("");
+  const [markdownParseMode, setMarkdownParseMode] = useState<MarkdownParseMode>("strict");
 
   const loadSourceFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -3752,7 +3755,7 @@ function SourceTextPanel({
 
       try {
         if (sourceMode === "file") {
-          await onPrepareFile(fileArray[0]);
+          await onPrepareFile(fileArray[0], markdownParseMode);
           setSourceFileLabel(formatSourceTextFileLabel(fileArray));
           return;
         }
@@ -3768,7 +3771,7 @@ function SourceTextPanel({
         setSourceFileError("Unable to read that file locally.");
       }
     },
-    [isProcessing, onPrepareFile, onTextChange, sourceMode],
+    [isProcessing, markdownParseMode, onPrepareFile, onTextChange, sourceMode],
   );
 
   return (
@@ -3832,6 +3835,7 @@ function SourceTextPanel({
           speechPolicyProfiles={speechPolicyProfiles}
           sourceFileError={sourceFileError}
           sourceFileLabel={sourceFileLabel}
+          markdownParseMode={markdownParseMode}
           sourcePrepError={sourcePrepError}
           sourceUrl={sourceUrl}
           onBrowse={() => {
@@ -3843,7 +3847,7 @@ function SourceTextPanel({
           onInspectPreparedSource={onInspectPreparedSource}
           onPrepareUrl={() => {
             if (sourceUrl.trim()) {
-              void onPrepareUrl(sourceUrl.trim());
+              void onPrepareUrl(sourceUrl.trim(), markdownParseMode);
             }
           }}
           onClearSpeechPolicyOverrides={onClearSpeechPolicyOverrides}
@@ -3851,6 +3855,7 @@ function SourceTextPanel({
           onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
           onUpdateCustomSpeechPolicyProfile={onUpdateCustomSpeechPolicyProfile}
           onSourceUrlChange={setSourceUrl}
+          onMarkdownParseModeChange={setMarkdownParseMode}
           onUsePreparedSource={(source) => {
             void onUsePreparedSource(source);
           }}
@@ -3974,6 +3979,75 @@ function SourcePrepTabButton({
   );
 }
 
+function MarkdownParseModeControl({
+  mode,
+  onChange,
+}: Readonly<{
+  mode: MarkdownParseMode;
+  onChange: (mode: MarkdownParseMode) => void;
+}>) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 pt-3 text-xs">
+      <span className="font-semibold text-zinc-700">Markdown parser</span>
+      <div className="grid grid-cols-2 rounded-md border border-zinc-200 bg-white p-1 font-semibold text-zinc-600">
+        {(["strict", "legacy"] as const).map((item) => (
+          <button
+            className={`rounded px-3 py-1.5 capitalize transition ${
+              mode === item ? "bg-zinc-950 text-white shadow-sm" : "hover:text-zinc-900"
+            }`}
+            key={item}
+            onClick={() => {
+              onChange(item);
+            }}
+            type="button"
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function preparedSourceBlockMatchesFilters(
+  block: PreparedSourceBlock,
+  kindFilter: string,
+  modeFilter: string,
+  query: string,
+): boolean {
+  if (kindFilter && block.kind !== kindFilter) {
+    return false;
+  }
+  if (modeFilter && block.speakMode !== modeFilter) {
+    return false;
+  }
+  if (!query) {
+    return true;
+  }
+  return [
+    block.kind,
+    block.speakMode,
+    block.label,
+    block.text,
+    block.spokenText,
+    block.speechPolicy.explanation,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
+}
+
+function preparedSourceSummaryLine(source: PreparedSource | null): string {
+  const base = `${String(source?.summary.sentenceSegmentCount ?? 0)} sentence segments · ${String(
+    source?.summary.citationSkipCount ?? 0,
+  )} citations skipped`;
+  if (source?.sourceFormat !== "markdown") {
+    return base;
+  }
+  return `${base} · ${source.markdownParseMode ?? "strict"} markdown`;
+}
+
 function SourcePrepReview({
   children,
   customSpeechPolicyProfiles,
@@ -3987,6 +4061,7 @@ function SourcePrepReview({
   speechPolicyProfiles,
   sourceFileError,
   sourceFileLabel,
+  markdownParseMode,
   sourcePrepError,
   sourceUrl,
   onBrowse,
@@ -3995,6 +4070,7 @@ function SourcePrepReview({
   onCreatePreparedAudio,
   onDeleteCustomSpeechPolicyProfile,
   onInspectPreparedSource,
+  onMarkdownParseModeChange,
   onPrepareUrl,
   onSpeechPolicyOverridesChange,
   onSpeechPolicyProfileChange,
@@ -4014,6 +4090,7 @@ function SourcePrepReview({
   speechPolicyProfiles: SpeechPolicyProfile[];
   sourceFileError: string | null;
   sourceFileLabel: string | null;
+  markdownParseMode: MarkdownParseMode;
   sourcePrepError: string | null;
   sourceUrl: string;
   onBrowse: () => void;
@@ -4026,6 +4103,7 @@ function SourcePrepReview({
   onCreatePreparedAudio: (source: PreparedSource) => void;
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onInspectPreparedSource: (source: PreparedSource) => void;
+  onMarkdownParseModeChange: (mode: MarkdownParseMode) => void;
   onPrepareUrl: () => void;
   onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
@@ -4050,29 +4128,9 @@ function SourcePrepReview({
   );
   const filteredBlocks = useMemo(() => {
     const query = blockQuery.trim().toLowerCase();
-    return blocks.filter((block) => {
-      if (blockKindFilter && block.kind !== blockKindFilter) {
-        return false;
-      }
-      if (blockModeFilter && block.speakMode !== blockModeFilter) {
-        return false;
-      }
-      if (!query) {
-        return true;
-      }
-      return [
-        block.kind,
-        block.speakMode,
-        block.label,
-        block.text,
-        block.spokenText,
-        block.speechPolicy.explanation,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(query);
-    });
+    return blocks.filter((block) =>
+      preparedSourceBlockMatchesFilters(block, blockKindFilter, blockModeFilter, query),
+    );
   }, [blockKindFilter, blockModeFilter, blockQuery, blocks]);
 
   return (
@@ -4097,6 +4155,7 @@ function SourcePrepReview({
             {isPreparing ? "Preparing..." : "Fetch & Prepare"}
           </button>
         </div>
+        <MarkdownParseModeControl mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
         <div className="flex max-w-full min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
           <span className="min-w-0 flex-1 truncate" title={sourceFileLabel ?? undefined}>
             {sourceFileLabel ??
@@ -4170,10 +4229,7 @@ function SourcePrepReview({
                 >
                   {source?.title ?? "Prepared Source"}
                 </h3>
-                <p className="mt-1 text-xs text-zinc-500">
-                  {String(source?.summary.sentenceSegmentCount ?? 0)} sentence segments ·{" "}
-                  {String(source?.summary.citationSkipCount ?? 0)} citations skipped
-                </p>
+                <p className="mt-1 text-xs text-zinc-500">{preparedSourceSummaryLine(source)}</p>
               </div>
               {source ? (
                 <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
@@ -4305,6 +4361,18 @@ function SourcePrepReview({
                             title={block.speechPolicy.explanation}
                           >
                             {block.speechPolicy.explanation}
+                          </span>
+                        ) : null}
+                        {block.warnings && block.warnings.length > 0 ? (
+                          <span className="mt-2 flex flex-wrap gap-1">
+                            {block.warnings.slice(0, 3).map((warning) => (
+                              <span
+                                className="rounded-full bg-amber-50 px-2 py-0.5 text-[0.68rem] font-semibold text-amber-700"
+                                key={warning}
+                              >
+                                {warning}
+                              </span>
+                            ))}
                           </span>
                         ) : null}
                       </span>

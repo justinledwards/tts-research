@@ -1,0 +1,481 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.98,
+      "endOffset": 16,
+      "id": "block-0001",
+      "index": 1,
+      "kind": "heading",
+      "label": "Plain Markdown",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 17,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# Plain Markdown"
+      },
+      "speakMode": "speak",
+      "spokenText": "Plain Markdown",
+      "startOffset": 0,
+      "text": "# Plain Markdown",
+      "warnings": []
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 113,
+      "id": "block-0002",
+      "index": 2,
+      "kind": "body",
+      "label": "This paragraph has strong text , inline code",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/1",
+        "columnEnd": 96,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com)."
+      },
+      "speakMode": "speak",
+      "spokenText": "This paragraph has strong text , inline code , and a reference link .",
+      "startOffset": 18,
+      "text": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
+      "warnings": []
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 156,
+      "id": "block-0003",
+      "index": 3,
+      "kind": "quote",
+      "label": "Quote",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/2",
+        "columnEnd": 42,
+        "columnStart": 1,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "sourceSlice": "> A quoted line should remain narratable."
+      },
+      "speakMode": "speak",
+      "spokenText": "A quoted line should remain narratable.",
+      "startOffset": 115,
+      "text": "> A quoted line should remain narratable.",
+      "warnings": []
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 170,
+      "id": "block-0004",
+      "index": 4,
+      "kind": "body",
+      "label": "First item",
+      "language": "",
+      "metadata": {
+        "checked": null,
+        "listOrdered": false,
+        "astPath": "/children/3/children/0",
+        "columnEnd": 13,
+        "columnStart": 1,
+        "lineEnd": 7,
+        "lineStart": 7,
+        "sourceSlice": "- First item"
+      },
+      "speakMode": "speak",
+      "spokenText": "First item",
+      "startOffset": 158,
+      "text": "- First item",
+      "warnings": []
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 184,
+      "id": "block-0005",
+      "index": 5,
+      "kind": "body",
+      "label": "Second item",
+      "language": "",
+      "metadata": {
+        "checked": null,
+        "listOrdered": false,
+        "astPath": "/children/3/children/1",
+        "columnEnd": 14,
+        "columnStart": 1,
+        "lineEnd": 8,
+        "lineStart": 8,
+        "sourceSlice": "- Second item"
+      },
+      "speakMode": "speak",
+      "spokenText": "Second item",
+      "startOffset": 171,
+      "text": "- Second item",
+      "warnings": []
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "plain",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": []
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "# Plain Markdown",
+        "kind": "heading",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/0",
+          "columnEnd": 17,
+          "columnStart": 1,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "# Plain Markdown"
+        },
+        "nodeId": "block-0001",
+        "normalisedText": "# Plain Markdown",
+        "orderKey": "00000001",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 17,
+              "columnStart": 1,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "plain.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 16,
+            "start": 0
+          },
+          "sourceId": "plain"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "heading",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Plain Markdown",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/1",
+          "columnEnd": 96,
+          "columnStart": 1,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com)."
+        },
+        "nodeId": "block-0002",
+        "normalisedText": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
+        "orderKey": "00000002",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 96,
+              "columnStart": 1,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "plain.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 113,
+            "start": 18
+          },
+          "sourceId": "plain"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "This paragraph has strong text , inline code , and a reference link .",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "> A quoted line should remain narratable.",
+        "kind": "quote",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/2",
+          "columnEnd": 42,
+          "columnStart": 1,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "> A quoted line should remain narratable."
+        },
+        "nodeId": "block-0003",
+        "normalisedText": "> A quoted line should remain narratable.",
+        "orderKey": "00000003",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 42,
+              "columnStart": 1,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "plain.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 156,
+            "start": 115
+          },
+          "sourceId": "plain"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "quote",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "A quoted line should remain narratable.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "- First item",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "checked": null,
+          "listOrdered": false,
+          "astPath": "/children/3/children/0",
+          "columnEnd": 13,
+          "columnStart": 1,
+          "lineEnd": 7,
+          "lineStart": 7,
+          "sourceSlice": "- First item"
+        },
+        "nodeId": "block-0004",
+        "normalisedText": "- First item",
+        "orderKey": "00000004",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3/children/0",
+              "columnEnd": 13,
+              "columnStart": 1,
+              "lineEnd": 7,
+              "lineStart": 7,
+              "path": "plain.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 170,
+            "start": 158
+          },
+          "sourceId": "plain"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "First item",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "- Second item",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "checked": null,
+          "listOrdered": false,
+          "astPath": "/children/3/children/1",
+          "columnEnd": 14,
+          "columnStart": 1,
+          "lineEnd": 8,
+          "lineStart": 8,
+          "sourceSlice": "- Second item"
+        },
+        "nodeId": "block-0005",
+        "normalisedText": "- Second item",
+        "orderKey": "00000005",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3/children/1",
+              "columnEnd": 14,
+              "columnStart": 1,
+              "lineEnd": 8,
+              "lineStart": 8,
+              "path": "plain.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 184,
+            "start": 171
+          },
+          "sourceId": "plain"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Second item",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "plain",
+    "sourceName": "plain.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "parseMode": "strict",
+  "skippedItems": [],
+  "title": "Plain Markdown",
+  "warnings": []
+}

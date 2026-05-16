@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -313,6 +314,49 @@ func TestContentIREndpoint(t *testing.T) {
 		t.Fatalf("WriteFile invalid IR returned error: %v", err)
 	}
 	getContentIRDocument(t, app, source.ID, http.StatusInternalServerError)
+}
+
+func TestPreparedSourceMultipartMarkdownParseMode(t *testing.T) {
+	t.Parallel()
+
+	service, _, _ := newServiceWithContentIRDirs(t)
+	app := httpapi.NewRouter(service)
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("markdownParseMode", "legacy"); err != nil {
+		t.Fatalf("WriteField returned error: %v", err)
+	}
+	part, err := writer.CreateFormFile("file", "legacy.md")
+	if err != nil {
+		t.Fatalf("CreateFormFile returned error: %v", err)
+	}
+	if _, err := part.Write([]byte("# Legacy\n\nA multipart import.")); err != nil {
+		t.Fatalf("Write file returned error: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("Close writer returned error: %v", err)
+	}
+	request, err := http.NewRequest(http.MethodPost, "/api/projects/default/source-preps", &body)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusCreated {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusCreated, payload)
+	}
+	var source pipeline.PreparedSource
+	if err := json.NewDecoder(response.Body).Decode(&source); err != nil {
+		t.Fatalf("Decode returned error: %v", err)
+	}
+	if source.MarkdownParseMode != "legacy" || source.PreprocessorID != "markdown-legacy" {
+		t.Fatalf("source parse mode/preprocessor = %q/%q, want legacy markdown-legacy", source.MarkdownParseMode, source.PreprocessorID)
+	}
 }
 
 func newService(t *testing.T) *pipeline.Service {

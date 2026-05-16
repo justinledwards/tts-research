@@ -341,10 +341,11 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("unable to read uploaded source"))
 			}
 			request = pipeline.CreatePreparedSourceRequest{
-				Kind:        pipeline.PreparedSourceKindFile,
-				Text:        string(bytes),
-				SourceName:  filename,
-				SourceBytes: size,
+				Kind:              pipeline.PreparedSourceKindFile,
+				Text:              string(bytes),
+				SourceName:        filename,
+				SourceBytes:       size,
+				MarkdownParseMode: ctx.FormValue("markdownParseMode"),
 			}
 		} else {
 			if err := ctx.Bind().Body(&request); err != nil {

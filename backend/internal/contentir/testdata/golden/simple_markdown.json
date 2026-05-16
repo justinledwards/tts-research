@@ -5,8 +5,19 @@
   "sourceId": "simple-markdown",
   "projectId": "default",
   "sourceName": "simple.md",
-  "adapterVersion": "prepared-source-to-ir.v1",
+  "adapterVersion": "markdown-adapter-v2",
   "generatedAt": "2026-05-16T12:00:00Z",
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
   "nodes": [
     {
       "nodeId": "block-0001",
@@ -28,15 +39,15 @@
           "markdown": {
             "path": "simple.md",
             "lineStart": 1,
-            "lineEnd": 2,
+            "lineEnd": 1,
             "columnStart": 1,
-            "columnEnd": 1,
-            "astPath": "/blocks/0"
+            "columnEnd": 8,
+            "astPath": "/children/0"
           }
         },
         "offsets": {
           "start": 0,
-          "end": 8
+          "end": 7
         }
       },
       "ui": {
@@ -58,13 +69,21 @@
           "explanation": "Prose is spoken because the Enterprise profile sets mode to speak."
         }
       },
-      "warnings": ["heading_emphasis"],
+      "warnings": [],
       "confidence": 0.94,
       "rights": {
         "status": "unknown",
         "notes": ""
       },
-      "adapterVersion": "prepared-source-to-ir.v1"
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 8,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# Title"
+      },
+      "adapterVersion": "markdown-adapter-v2"
     },
     {
       "nodeId": "block-0002",
@@ -89,12 +108,12 @@
             "lineEnd": 3,
             "columnStart": 1,
             "columnEnd": 13,
-            "astPath": "/blocks/1"
+            "astPath": "/children/1"
           }
         },
         "offsets": {
           "start": 9,
-          "end": 22
+          "end": 21
         }
       },
       "ui": {
@@ -122,7 +141,15 @@
         "status": "unknown",
         "notes": ""
       },
-      "adapterVersion": "prepared-source-to-ir.v1"
+      "metadata": {
+        "astPath": "/children/1",
+        "columnEnd": 13,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "Hello world."
+      },
+      "adapterVersion": "markdown-adapter-v2"
     }
   ]
 }

@@ -9,6 +9,7 @@ import type {
   CreateVoiceJobRequest,
   CreateVoiceProfileRequest,
   CreateVoiceProfileSourceRequest,
+  MarkdownParseMode,
   PlaybackProgress,
   PlaybackProgressUpdate,
   PlaybackSession,
@@ -285,15 +286,22 @@ export async function listPreparedSources(projectId: string): Promise<PreparedSo
 export async function createPreparedSource(
   projectId: string,
   request: CreatePreparedSourceRequest | File,
+  options: { markdownParseMode?: MarkdownParseMode } = {},
 ): Promise<PreparedSource> {
   const init: RequestInit = { method: "POST" };
   if (request instanceof File) {
     const formData = new FormData();
     formData.append("file", request);
+    if (options.markdownParseMode) {
+      formData.append("markdownParseMode", options.markdownParseMode);
+    }
     init.body = formData;
   } else {
     init.headers = { "Content-Type": "application/json" };
-    init.body = JSON.stringify(request);
+    init.body = JSON.stringify({
+      ...request,
+      markdownParseMode: request.markdownParseMode ?? options.markdownParseMode,
+    });
   }
   const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/source-preps`, init);
   if (!response.ok) {

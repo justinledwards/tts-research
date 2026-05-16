@@ -1,0 +1,116 @@
+{
+  "type": "root",
+  "position": {
+    "start": {
+      "line": 1,
+      "column": 1,
+      "offset": 0
+    },
+    "end": {
+      "line": 6,
+      "column": 1,
+      "offset": 91
+    }
+  },
+  "children": [
+    {
+      "type": "heading",
+      "position": {
+        "start": {
+          "line": 1,
+          "column": 1,
+          "offset": 0
+        },
+        "end": {
+          "line": 1,
+          "column": 12,
+          "offset": 11
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "Citations",
+          "position": {
+            "start": {
+              "line": 1,
+              "column": 3,
+              "offset": 2
+            },
+            "end": {
+              "line": 1,
+              "column": 12,
+              "offset": 11
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 3,
+          "column": 1,
+          "offset": 13
+        },
+        "end": {
+          "line": 3,
+          "column": 57,
+          "offset": 69
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "The corporate moat remains useful. citeturn40search10",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 1,
+              "offset": 13
+            },
+            "end": {
+              "line": 3,
+              "column": 57,
+              "offset": 69
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 5,
+          "column": 1,
+          "offset": 71
+        },
+        "end": {
+          "line": 5,
+          "column": 20,
+          "offset": 90
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "citeturn1search0",
+          "position": {
+            "start": {
+              "line": 5,
+              "column": 1,
+              "offset": 71
+            },
+            "end": {
+              "line": 5,
+              "column": 20,
+              "offset": 90
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

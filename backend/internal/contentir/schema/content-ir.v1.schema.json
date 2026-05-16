@@ -24,12 +24,17 @@
     "sourceName": { "type": "string" },
     "adapterVersion": { "type": "string", "minLength": 1 },
     "generatedAt": { "type": "string", "format": "date-time" },
+    "metadata": { "$ref": "#/$defs/metadata" },
     "nodes": {
       "type": "array",
       "items": { "$ref": "#/$defs/node" }
     }
   },
   "$defs": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
     "node": {
       "type": "object",
       "additionalProperties": false,
@@ -74,6 +79,7 @@
         },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "rights": { "$ref": "#/$defs/rights" },
+        "metadata": { "$ref": "#/$defs/metadata" },
         "adapterVersion": { "type": "string", "minLength": 1 }
       }
     },

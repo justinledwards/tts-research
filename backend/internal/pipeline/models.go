@@ -128,6 +128,9 @@ const (
 	NarrationBlockKindCaption     NarrationBlockKind = "caption"
 	NarrationBlockKindCitation    NarrationBlockKind = "citation"
 	NarrationBlockKindFrontmatter NarrationBlockKind = "frontmatter"
+	NarrationBlockKindAdmonition  NarrationBlockKind = "admonition"
+	NarrationBlockKindDirective   NarrationBlockKind = "directive"
+	NarrationBlockKindEmbedded    NarrationBlockKind = "embedded"
 )
 
 type NarrationSpeakMode string
@@ -164,6 +167,7 @@ type NarrationBlock struct {
 	Confidence          float64             `json:"confidence,omitempty"`
 	Segments            []NarrationSegment  `json:"segments,omitempty"`
 	Warnings            []string            `json:"warnings,omitempty"`
+	Metadata            map[string]any      `json:"metadata,omitempty"`
 	SpeechPolicy        policy.SpeechPolicy `json:"speechPolicy"`
 }
 
@@ -196,6 +200,7 @@ type PreparedSource struct {
 	PreprocessorVersion string                `json:"preprocessorVersion,omitempty"`
 	SourceFormat        string                `json:"sourceFormat,omitempty"`
 	RenderMode          string                `json:"renderMode,omitempty"`
+	MarkdownParseMode   string                `json:"markdownParseMode,omitempty"`
 	SpeechPolicyProfile string                `json:"speechPolicyProfile"`
 	Title               string                `json:"title,omitempty"`
 	Text                string                `json:"text,omitempty"`
@@ -207,6 +212,7 @@ type PreparedSource struct {
 	Blocks              []NarrationBlock      `json:"blocks,omitempty"`
 	SkippedItems        []SkippedSourceItem   `json:"skippedItems,omitempty"`
 	Warnings            []string              `json:"warnings,omitempty"`
+	Metadata            map[string]any        `json:"metadata,omitempty"`
 	Error               string                `json:"error,omitempty"`
 	CreatedAt           time.Time             `json:"createdAt"`
 	UpdatedAt           time.Time             `json:"updatedAt"`
@@ -219,6 +225,7 @@ type CreatePreparedSourceRequest struct {
 	SourceName        string             `json:"sourceName,omitempty"`
 	SourceContentType string             `json:"sourceContentType,omitempty"`
 	SourceBytes       int64              `json:"sourceBytes,omitempty"`
+	MarkdownParseMode string             `json:"markdownParseMode,omitempty"`
 }
 
 type SpeechPolicyPreviewRequest struct {

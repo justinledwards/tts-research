@@ -1,0 +1,780 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.98,
+      "endOffset": 21,
+      "id": "block-0001",
+      "index": 1,
+      "kind": "heading",
+      "label": "Embedded Constructs",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 22,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# Embedded Constructs"
+      },
+      "speakMode": "speak",
+      "spokenText": "Embedded Constructs",
+      "startOffset": 0,
+      "text": "# Embedded Constructs",
+      "warnings": []
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 80,
+      "id": "block-0002",
+      "index": 2,
+      "kind": "body",
+      "label": "The chart below is interactive: .",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/1",
+        "columnEnd": 58,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "The chart below is interactive: <Chart data=\"revenue\" />."
+      },
+      "speakMode": "speak",
+      "spokenText": "The chart below is interactive: .",
+      "startOffset": 23,
+      "text": "The chart below is interactive: <Chart data=\"revenue\" />.",
+      "warnings": ["embedded_fallback"]
+    },
+    {
+      "confidence": 0.72,
+      "endOffset": 79,
+      "id": "block-0003",
+      "index": 3,
+      "kind": "embedded",
+      "label": "MDX embedded Chart",
+      "language": "",
+      "metadata": {
+        "embeddedFamily": "mdx",
+        "embeddedName": "Chart",
+        "astPath": "/children/1/children/1",
+        "columnEnd": 57,
+        "columnStart": 33,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "<Chart data=\"revenue\" />"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 55,
+      "text": "<Chart data=\"revenue\" />",
+      "warnings": ["embedded_fallback"]
+    },
+    {
+      "confidence": 0.72,
+      "endOffset": 106,
+      "id": "block-0004",
+      "index": 4,
+      "kind": "embedded",
+      "label": "MDX embedded mdxjsEsm",
+      "language": "",
+      "metadata": {
+        "embeddedFamily": "mdx",
+        "embeddedName": "mdxjsEsm",
+        "astPath": "/children/2",
+        "columnEnd": 25,
+        "columnStart": 1,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "sourceSlice": "export const answer = 42"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 82,
+      "text": "export const answer = 42",
+      "warnings": ["embedded_fallback"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 174,
+      "id": "block-0005",
+      "index": 5,
+      "kind": "admonition",
+      "label": "Warning",
+      "language": "",
+      "metadata": {
+        "directiveName": "warning",
+        "directiveArguments": "",
+        "directiveFamily": "myst",
+        "astPath": "/children/3",
+        "columnEnd": 4,
+        "columnStart": 1,
+        "lineEnd": 9,
+        "lineStart": 7,
+        "sourceSlice": "```{warning}\nKeep this MyST warning as spoken callout content.\n```"
+      },
+      "speakMode": "speak",
+      "spokenText": "Keep this MyST warning as spoken callout content.",
+      "startOffset": 108,
+      "text": "```{warning}\nKeep this MyST warning as spoken callout content.\n```",
+      "warnings": ["admonition_directive"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 240,
+      "id": "block-0006",
+      "index": 6,
+      "kind": "body",
+      "label": "Use the workbook <files/report.xlsx> when available.",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/4",
+        "columnEnd": 65,
+        "columnStart": 1,
+        "lineEnd": 11,
+        "lineStart": 11,
+        "sourceSlice": "Use {download}`the workbook <files/report.xlsx>` when available."
+      },
+      "speakMode": "speak",
+      "spokenText": "Use the workbook <files/report.xlsx> when available.",
+      "startOffset": 176,
+      "text": "Use {download}`the workbook <files/report.xlsx>` when available.",
+      "warnings": ["embedded_fallback"]
+    },
+    {
+      "confidence": 0.72,
+      "endOffset": 190,
+      "id": "block-0007",
+      "index": 7,
+      "kind": "embedded",
+      "label": "MDX embedded mdxTextExpression",
+      "language": "",
+      "metadata": {
+        "embeddedFamily": "mdx",
+        "embeddedName": "mdxTextExpression",
+        "astPath": "/children/4/children/1",
+        "columnEnd": 15,
+        "columnStart": 5,
+        "lineEnd": 11,
+        "lineStart": 11,
+        "sourceSlice": "{download}"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 180,
+      "text": "{download}",
+      "warnings": ["embedded_fallback"]
+    },
+    {
+      "confidence": 0.72,
+      "endOffset": 224,
+      "id": "block-0008",
+      "index": 8,
+      "kind": "embedded",
+      "label": "MYST embedded download",
+      "language": "",
+      "metadata": {
+        "embeddedFamily": "myst",
+        "embeddedName": "download",
+        "fallbackText": "the workbook <files/report.xlsx>",
+        "astPath": "/children/4/myst-role/0",
+        "columnEnd": 49,
+        "columnStart": 5,
+        "sourceSlice": "{download}`the workbook <files/report.xlsx>`"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 180,
+      "text": "{download}`the workbook <files/report.xlsx>`",
+      "warnings": ["embedded_fallback"]
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "mdx-myst",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": []
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "# Embedded Constructs",
+        "kind": "heading",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/0",
+          "columnEnd": 22,
+          "columnStart": 1,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "# Embedded Constructs"
+        },
+        "nodeId": "block-0001",
+        "normalisedText": "# Embedded Constructs",
+        "orderKey": "00000001",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 22,
+              "columnStart": 1,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "mdx-myst.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 21,
+            "start": 0
+          },
+          "sourceId": "mdx-myst"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "heading",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Embedded Constructs",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "The chart below is interactive: <Chart data=\"revenue\" />.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/1",
+          "columnEnd": 58,
+          "columnStart": 1,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "The chart below is interactive: <Chart data=\"revenue\" />."
+        },
+        "nodeId": "block-0002",
+        "normalisedText": "The chart below is interactive: <Chart data=\"revenue\" />.",
+        "orderKey": "00000002",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 58,
+              "columnStart": 1,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "mdx-myst.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 80,
+            "start": 23
+          },
+          "sourceId": "mdx-myst"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "The chart below is interactive: .",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["embedded_fallback"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.72,
+        "dir": "ltr",
+        "displayText": "<Chart data=\"revenue\" />",
+        "kind": "embedded",
+        "lang": "und",
+        "metadata": {
+          "embeddedFamily": "mdx",
+          "embeddedName": "Chart",
+          "astPath": "/children/1/children/1",
+          "columnEnd": 57,
+          "columnStart": 33,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "<Chart data=\"revenue\" />"
+        },
+        "nodeId": "block-0003",
+        "normalisedText": "<Chart data=\"revenue\" />",
+        "orderKey": "00000003",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1/children/1",
+              "columnEnd": 57,
+              "columnStart": 33,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "mdx-myst.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 79,
+            "start": 55
+          },
+          "sourceId": "mdx-myst"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "embedded",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["embedded_fallback"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.72,
+        "dir": "ltr",
+        "displayText": "export const answer = 42",
+        "kind": "embedded",
+        "lang": "und",
+        "metadata": {
+          "embeddedFamily": "mdx",
+          "embeddedName": "mdxjsEsm",
+          "astPath": "/children/2",
+          "columnEnd": 25,
+          "columnStart": 1,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "export const answer = 42"
+        },
+        "nodeId": "block-0004",
+        "normalisedText": "export const answer = 42",
+        "orderKey": "00000004",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 25,
+              "columnStart": 1,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "mdx-myst.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 106,
+            "start": 82
+          },
+          "sourceId": "mdx-myst"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "embedded",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["embedded_fallback"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "```{warning}\nKeep this MyST warning as spoken callout content.\n```",
+        "kind": "admonition",
+        "lang": "und",
+        "metadata": {
+          "directiveName": "warning",
+          "directiveArguments": "",
+          "directiveFamily": "myst",
+          "astPath": "/children/3",
+          "columnEnd": 4,
+          "columnStart": 1,
+          "lineEnd": 9,
+          "lineStart": 7,
+          "sourceSlice": "```{warning}\nKeep this MyST warning as spoken callout content.\n```"
+        },
+        "nodeId": "block-0005",
+        "normalisedText": "```{warning} Keep this MyST warning as spoken callout content. ```",
+        "orderKey": "00000005",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3",
+              "columnEnd": 4,
+              "columnStart": 1,
+              "lineEnd": 9,
+              "lineStart": 7,
+              "path": "mdx-myst.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 174,
+            "start": 108
+          },
+          "sourceId": "mdx-myst"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "admonition",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Keep this MyST warning as spoken callout content.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["admonition_directive"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "Use {download}`the workbook <files/report.xlsx>` when available.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/4",
+          "columnEnd": 65,
+          "columnStart": 1,
+          "lineEnd": 11,
+          "lineStart": 11,
+          "sourceSlice": "Use {download}`the workbook <files/report.xlsx>` when available."
+        },
+        "nodeId": "block-0006",
+        "normalisedText": "Use {download}`the workbook <files/report.xlsx>` when available.",
+        "orderKey": "00000006",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/4",
+              "columnEnd": 65,
+              "columnStart": 1,
+              "lineEnd": 11,
+              "lineStart": 11,
+              "path": "mdx-myst.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 240,
+            "start": 176
+          },
+          "sourceId": "mdx-myst"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Use the workbook <files/report.xlsx> when available.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["embedded_fallback"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.72,
+        "dir": "ltr",
+        "displayText": "{download}",
+        "kind": "embedded",
+        "lang": "und",
+        "metadata": {
+          "embeddedFamily": "mdx",
+          "embeddedName": "mdxTextExpression",
+          "astPath": "/children/4/children/1",
+          "columnEnd": 15,
+          "columnStart": 5,
+          "lineEnd": 11,
+          "lineStart": 11,
+          "sourceSlice": "{download}"
+        },
+        "nodeId": "block-0007",
+        "normalisedText": "{download}",
+        "orderKey": "00000007",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/4/children/1",
+              "columnEnd": 15,
+              "columnStart": 5,
+              "lineEnd": 11,
+              "lineStart": 11,
+              "path": "mdx-myst.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 190,
+            "start": 180
+          },
+          "sourceId": "mdx-myst"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "embedded",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["embedded_fallback"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.72,
+        "dir": "ltr",
+        "displayText": "{download}`the workbook <files/report.xlsx>`",
+        "kind": "embedded",
+        "lang": "und",
+        "metadata": {
+          "embeddedFamily": "myst",
+          "embeddedName": "download",
+          "fallbackText": "the workbook <files/report.xlsx>",
+          "astPath": "/children/4/myst-role/0",
+          "columnEnd": 49,
+          "columnStart": 5,
+          "sourceSlice": "{download}`the workbook <files/report.xlsx>`"
+        },
+        "nodeId": "block-0008",
+        "normalisedText": "{download}`the workbook <files/report.xlsx>`",
+        "orderKey": "00000008",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/4/myst-role/0",
+              "columnEnd": 49,
+              "columnStart": 5,
+              "lineEnd": 0,
+              "lineStart": 0,
+              "path": "mdx-myst.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 224,
+            "start": 180
+          },
+          "sourceId": "mdx-myst"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "embedded",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["embedded_fallback"]
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "mdx-myst",
+    "sourceName": "mdx-myst.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "parseMode": "strict",
+  "skippedItems": [
+    {
+      "id": "block-0003",
+      "kind": "embedded",
+      "offset": 55,
+      "reason": "embedded construct kept as safe fallback",
+      "text": "<Chart data=\"revenue\" />"
+    },
+    {
+      "id": "block-0004",
+      "kind": "embedded",
+      "offset": 82,
+      "reason": "embedded construct kept as safe fallback",
+      "text": "export const answer = 42"
+    },
+    {
+      "id": "block-0007",
+      "kind": "embedded",
+      "offset": 180,
+      "reason": "embedded construct kept as safe fallback",
+      "text": "{download}"
+    },
+    {
+      "id": "block-0008",
+      "kind": "embedded",
+      "offset": 180,
+      "reason": "embedded construct kept as safe fallback",
+      "text": "{download}`the workbook <files/report.xlsx>`"
+    }
+  ],
+  "title": "Embedded Constructs",
+  "warnings": []
+}

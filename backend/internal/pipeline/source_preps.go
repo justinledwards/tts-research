@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -55,6 +56,8 @@ type sourcePreprocessResult struct {
 	SourceFormat        string
 	RenderMode          string
 	Title               string
+	MarkdownParseMode   string
+	Metadata            map[string]any
 }
 
 var (
@@ -114,6 +117,7 @@ func (service *Service) CreatePreparedSource(
 	if strings.TrimSpace(sourceText) == "" {
 		return PreparedSource{}, ErrEmptyText
 	}
+	markdownParseMode := normalizeMarkdownParseMode(request.MarkdownParseMode)
 
 	now := time.Now().UTC()
 	prepared := PreparedSource{
@@ -126,17 +130,26 @@ func (service *Service) CreatePreparedSource(
 		SourceContentType: contentType,
 		SourceBytes:       sourceBytes,
 		Text:              sourceText,
+		MarkdownParseMode: markdownParseMode,
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
-	preprocessed := preprocessReadableSource(sourceText, sourceName, contentType, service.options.SourcePrepSentenceMaxRunes)
+	preprocessed := preprocessReadableSource(
+		sourceText,
+		sourceName,
+		contentType,
+		service.options.SourcePrepSentenceMaxRunes,
+		markdownParseMode,
+	)
 	prepared.PreprocessorID = preprocessed.PreprocessorID
 	prepared.PreprocessorVersion = preprocessed.PreprocessorVersion
 	prepared.SourceFormat = preprocessed.SourceFormat
 	prepared.RenderMode = preprocessed.RenderMode
+	prepared.MarkdownParseMode = preprocessed.MarkdownParseMode
 	prepared.Title = firstNonEmpty(preprocessed.Title, inferPreparedSourceTitle(sourceText, sourceName))
 	prepared.Blocks = preprocessed.Blocks
 	prepared.Warnings = preprocessed.Warnings
+	prepared.Metadata = preprocessed.Metadata
 	prepared.SpeechPolicyProfile = project.SpeechPolicyProfile
 	prepared = applySpeechPolicyToPreparedSourceWithEvaluator(
 		prepared,
@@ -536,11 +549,17 @@ func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL strin
 }
 
 func prepareNarrationBlocks(input string, maxSentenceRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
-	result := preprocessReadableSource(input, "book-scope.md", "text/markdown", maxSentenceRunes)
+	result := preprocessReadableSource(input, "book-scope.md", "text/markdown", maxSentenceRunes, "legacy")
 	return result.Blocks, result.SkippedItems, result.Warnings
 }
 
-func preprocessReadableSource(input string, sourceName string, contentType string, maxSentenceRunes int) sourcePreprocessResult {
+func preprocessReadableSource(
+	input string,
+	sourceName string,
+	contentType string,
+	maxSentenceRunes int,
+	markdownParseMode string,
+) sourcePreprocessResult {
 	sourceFormat := detectPreparedSourceFormat(sourceName, contentType, input)
 	switch sourceFormat {
 	case "html":
@@ -580,16 +599,23 @@ func preprocessReadableSource(input string, sourceName string, contentType strin
 			Title:               inferPreparedSourceTitle(input, sourceName),
 		}
 	default:
+		markdownParseMode = normalizeMarkdownParseMode(markdownParseMode)
+		if markdownParseMode == "strict" {
+			if result, ok := prepareMarkdownNarrationBlocksWithAdapter(input, sourceName, maxSentenceRunes); ok {
+				return result
+			}
+		}
 		blocks, skipped, warnings := prepareMarkdownNarrationBlocks(input, maxSentenceRunes)
 		return sourcePreprocessResult{
 			Blocks:              blocks,
 			SkippedItems:        skipped,
-			Warnings:            warnings,
-			PreprocessorID:      "markdown-gfm",
-			PreprocessorVersion: "markdown-gfm-v1",
+			Warnings:            appendAdapterFallbackWarning(warnings, markdownParseMode),
+			PreprocessorID:      "markdown-legacy",
+			PreprocessorVersion: "markdown-legacy-v1",
 			SourceFormat:        "markdown",
 			RenderMode:          "markdown",
 			Title:               firstNonEmpty(markdownFirstHeading(input), inferPreparedSourceTitle(input, sourceName)),
+			MarkdownParseMode:   "legacy",
 		}
 	}
 }
@@ -633,6 +659,162 @@ func preparePlainNarrationBlocks(input string, maxSentenceRunes int) ([]Narratio
 		offsetCursor = end
 	}
 	return blocks, skipped, uniqueStrings(warnings)
+}
+
+type markdownAdapterResponse struct {
+	AdapterVersion string                 `json:"adapterVersion"`
+	Blocks         []markdownAdapterBlock `json:"blocks"`
+	Metadata       map[string]any         `json:"metadata"`
+	ParseMode      string                 `json:"parseMode"`
+	Title          string                 `json:"title"`
+	Warnings       []string               `json:"warnings"`
+}
+
+type markdownAdapterBlock struct {
+	ID          string         `json:"id"`
+	Index       int            `json:"index"`
+	Kind        string         `json:"kind"`
+	SpeakMode   string         `json:"speakMode"`
+	Label       string         `json:"label"`
+	Text        string         `json:"text"`
+	SpokenText  string         `json:"spokenText"`
+	Language    string         `json:"language"`
+	StartOffset int            `json:"startOffset"`
+	EndOffset   int            `json:"endOffset"`
+	Confidence  float64        `json:"confidence"`
+	Warnings    []string       `json:"warnings"`
+	Metadata    map[string]any `json:"metadata"`
+}
+
+func prepareMarkdownNarrationBlocksWithAdapter(
+	input string,
+	sourceName string,
+	maxSentenceRunes int,
+) (sourcePreprocessResult, bool) {
+	scriptPath, ok := markdownAdapterCLIPath()
+	if !ok {
+		return sourcePreprocessResult{}, false
+	}
+	request := map[string]any{
+		"parseMode":  "strict",
+		"source":     input,
+		"sourceName": sourceName,
+	}
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		return sourcePreprocessResult{}, false
+	}
+	cmd := exec.Command(markdownAdapterNodePath(), scriptPath)
+	cmd.Stdin = bytes.NewReader(encoded)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return sourcePreprocessResult{}, false
+	}
+	var response markdownAdapterResponse
+	if err := json.Unmarshal(output, &response); err != nil {
+		return sourcePreprocessResult{}, false
+	}
+	blocks := make([]NarrationBlock, 0, len(response.Blocks))
+	warnings := append([]string{}, response.Warnings...)
+	for index, adapterBlock := range response.Blocks {
+		block := narrationBlockFromMarkdownAdapter(adapterBlock, index, maxSentenceRunes)
+		blocks = append(blocks, block)
+		warnings = append(warnings, block.Warnings...)
+	}
+	return sourcePreprocessResult{
+		Blocks:              blocks,
+		SkippedItems:        nil,
+		Warnings:            uniqueStrings(warnings),
+		PreprocessorID:      "markdown-ast",
+		PreprocessorVersion: firstNonEmpty(response.AdapterVersion, "markdown-adapter-v2"),
+		SourceFormat:        "markdown",
+		RenderMode:          "markdown",
+		Title:               response.Title,
+		MarkdownParseMode:   "strict",
+		Metadata:            response.Metadata,
+	}, true
+}
+
+func narrationBlockFromMarkdownAdapter(
+	adapterBlock markdownAdapterBlock,
+	index int,
+	maxSentenceRunes int,
+) NarrationBlock {
+	kind := NarrationBlockKind(adapterBlock.Kind)
+	if kind == "" {
+		kind = NarrationBlockKindEmbedded
+	}
+	mode := NarrationSpeakMode(adapterBlock.SpeakMode)
+	if mode == "" {
+		mode = NarrationSpeakModeSpeak
+	}
+	block := newNarrationBlock(
+		index,
+		kind,
+		mode,
+		firstNonEmpty(adapterBlock.Label, labelForBlock(kind, adapterBlock.SpokenText)),
+		adapterBlock.Text,
+		adapterBlock.SpokenText,
+		adapterBlock.StartOffset,
+		adapterBlock.EndOffset,
+		maxSentenceRunes,
+	)
+	if strings.TrimSpace(adapterBlock.ID) != "" {
+		block.ID = adapterBlock.ID
+	}
+	if adapterBlock.Index > 0 {
+		block.Index = adapterBlock.Index
+	}
+	block.Language = adapterBlock.Language
+	block.Metadata = adapterBlock.Metadata
+	block.Warnings = uniqueStrings(append(block.Warnings, adapterBlock.Warnings...))
+	if adapterBlock.Confidence > 0 {
+		block.Confidence = adapterBlock.Confidence
+	}
+	return block
+}
+
+func markdownAdapterNodePath() string {
+	if configured := strings.TrimSpace(os.Getenv("VOICE_MARKDOWN_ADAPTER_NODE_PATH")); configured != "" {
+		return configured
+	}
+	return "node"
+}
+
+func markdownAdapterCLIPath() (string, bool) {
+	candidates := []string{}
+	if configured := strings.TrimSpace(os.Getenv("VOICE_MARKDOWN_ADAPTER_CLI_PATH")); configured != "" {
+		candidates = append(candidates, configured)
+	}
+	candidates = append(candidates,
+		"adapters/markdown/cli.js",
+		"../adapters/markdown/cli.js",
+		"../../adapters/markdown/cli.js",
+		"../../../adapters/markdown/cli.js",
+		"../../../../adapters/markdown/cli.js",
+	)
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+func normalizeMarkdownParseMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "legacy", "compat", "compatibility":
+		return "legacy"
+	default:
+		return "strict"
+	}
+}
+
+func appendAdapterFallbackWarning(warnings []string, requestedMode string) []string {
+	if normalizeMarkdownParseMode(requestedMode) != "strict" {
+		return warnings
+	}
+	return uniqueStrings(append(warnings, "markdown_adapter_fallback"))
 }
 
 func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
@@ -914,7 +1096,15 @@ func applySpeechPolicyToPreparedSourceWithEvaluator(source PreparedSource, evalu
 
 func policyElementText(block NarrationBlock) string {
 	switch block.Kind {
-	case NarrationBlockKindTable, NarrationBlockKindCode, NarrationBlockKindMath, NarrationBlockKindImage, NarrationBlockKindCaption, NarrationBlockKindCitation:
+	case NarrationBlockKindTable,
+		NarrationBlockKindCode,
+		NarrationBlockKindMath,
+		NarrationBlockKindImage,
+		NarrationBlockKindCaption,
+		NarrationBlockKindCitation,
+		NarrationBlockKindDirective,
+		NarrationBlockKindEmbedded,
+		NarrationBlockKindFrontmatter:
 		return firstNonEmpty(block.Text, block.SpokenText)
 	default:
 		return firstNonEmpty(block.SpokenText, block.Text)
@@ -951,6 +1141,8 @@ func narrationEmphasis(kind NarrationBlockKind, mode NarrationSpeakMode) (string
 		return "heading", 420, 520
 	case NarrationBlockKindSubheading:
 		return "subheading", 280, 360
+	case NarrationBlockKindAdmonition:
+		return "admonition", 180, 220
 	default:
 		return "", 0, 0
 	}
@@ -1215,8 +1407,11 @@ func confidenceForBlock(kind NarrationBlockKind, mode NarrationSpeakMode) float6
 	if mode == NarrationSpeakModeSkip {
 		return 0.98
 	}
-	if kind == NarrationBlockKindTable {
+	switch kind {
+	case NarrationBlockKindTable:
 		return 0.82
+	case NarrationBlockKindDirective, NarrationBlockKindEmbedded:
+		return 0.72
 	}
 	return 0.94
 }

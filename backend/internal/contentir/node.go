@@ -17,6 +17,7 @@ type Document struct {
 	SourceName     string    `json:"sourceName"`
 	AdapterVersion string    `json:"adapterVersion"`
 	GeneratedAt    time.Time `json:"generatedAt"`
+	Metadata       Metadata  `json:"metadata,omitempty"`
 	Nodes          []Node    `json:"nodes"`
 }
 
@@ -38,8 +39,11 @@ type Node struct {
 	Warnings       []string       `json:"warnings"`
 	Confidence     float64        `json:"confidence"`
 	Rights         RightsMetadata `json:"rights"`
+	Metadata       Metadata       `json:"metadata,omitempty"`
 	AdapterVersion string         `json:"adapterVersion"`
 }
+
+type Metadata map[string]any
 
 type UIHints struct {
 	ProgressionHint   string `json:"progressionHint"`

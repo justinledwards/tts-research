@@ -28,13 +28,17 @@ func preparedSourceIRDescriptor(source PreparedSource) contentIRSourceDescriptor
 	if format == "" {
 		format = string(source.Kind)
 	}
+	adapterVersion := "prepared-source-to-ir.v1"
+	if format == "markdown" && strings.TrimSpace(source.PreprocessorVersion) != "" {
+		adapterVersion = source.PreprocessorVersion
+	}
 	return contentIRSourceDescriptor{
 		ID:             source.ID,
 		ProjectID:      source.ProjectID,
 		Name:           source.SourceName,
 		SourceType:     "preparedSource",
 		Format:         format,
-		AdapterVersion: "prepared-source-to-ir.v1",
+		AdapterVersion: adapterVersion,
 	}
 }
 

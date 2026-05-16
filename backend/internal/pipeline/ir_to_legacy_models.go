@@ -12,6 +12,7 @@ func PreparedSourceFromIR(document contentir.Document, source PreparedSource) Pr
 		blocks = append(blocks, narrationBlockFromIRNode(node, index))
 	}
 	source.Blocks = blocks
+	source.Metadata = map[string]any(document.Metadata)
 	source.SpeechText = preparedSourceSpeechText(blocks)
 	source.WordCount = countWords(source.SpeechText)
 	source.BlockCount = len(blocks)
@@ -50,6 +51,7 @@ func narrationBlockFromIRNode(node contentir.Node, index int) NarrationBlock {
 	block.Emphasis = node.Speech.PolicyHint.Emphasis
 	block.PauseBeforeMS = node.Speech.PolicyHint.PauseBeforeMS
 	block.PauseAfterMS = node.Speech.PolicyHint.PauseAfterMS
+	block.Metadata = map[string]any(node.Metadata)
 	block.SpeechPolicy = node.Speech.SpeechPolicy
 	return block
 }

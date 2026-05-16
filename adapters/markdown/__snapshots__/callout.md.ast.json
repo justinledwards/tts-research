@@ -1,0 +1,100 @@
+{
+  "type": "root",
+  "position": {
+    "start": {
+      "line": 1,
+      "column": 1,
+      "offset": 0
+    },
+    "end": {
+      "line": 5,
+      "column": 1,
+      "offset": 84
+    }
+  },
+  "children": [
+    {
+      "type": "heading",
+      "position": {
+        "start": {
+          "line": 1,
+          "column": 1,
+          "offset": 0
+        },
+        "end": {
+          "line": 1,
+          "column": 10,
+          "offset": 9
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "Callout",
+          "position": {
+            "start": {
+              "line": 1,
+              "column": 3,
+              "offset": 2
+            },
+            "end": {
+              "line": 1,
+              "column": 10,
+              "offset": 9
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "position": {
+        "start": {
+          "line": 3,
+          "column": 1,
+          "offset": 11
+        },
+        "end": {
+          "line": 4,
+          "column": 41,
+          "offset": 83
+        }
+      },
+      "children": [
+        {
+          "type": "paragraph",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 3,
+              "offset": 13
+            },
+            "end": {
+              "line": 4,
+              "column": 41,
+              "offset": 83
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "[!IMPORTANT] Migration window\nReaders should hear this callout body.",
+              "position": {
+                "start": {
+                  "line": 3,
+                  "column": 3,
+                  "offset": 13
+                },
+                "end": {
+                  "line": 4,
+                  "column": 41,
+                  "offset": 83
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

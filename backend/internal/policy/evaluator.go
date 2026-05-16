@@ -83,6 +83,14 @@ func (evaluator Evaluator) ProfileID() string {
 func (evaluator Evaluator) Evaluate(element Element) Decision {
 	elementKind := ElementKind(element.Kind, element.Role, element.Text, element.Warnings)
 	switch elementKind {
+	case "frontmatter":
+		return evaluator.decision("frontmatter", "metadata", ModeSkip, "")
+	case "embedded":
+		return evaluator.decision("embedded", "safeFallback", ModeOnDemand, "")
+	case "directive":
+		return evaluator.decision("directive", "safeFallback", ModeOnDemand, "")
+	case "admonition":
+		return evaluator.decision("admonition", string(evaluator.settings.Mode), evaluator.settings.Mode, cleanInline(element.Text))
 	case "table":
 		return evaluator.evaluateTable(element)
 	case "code":
@@ -102,7 +110,7 @@ func ElementKind(kind string, role string, text string, warnings []string) strin
 	lowerKind := strings.ToLower(strings.TrimSpace(kind))
 	lowerRole := strings.ToLower(strings.TrimSpace(role))
 	switch lowerKind {
-	case "table", "code", "math", "image", "caption":
+	case "admonition", "directive", "embedded", "frontmatter", "table", "code", "math", "image", "caption":
 		if lowerKind == "caption" {
 			return "image"
 		}
@@ -111,7 +119,7 @@ func ElementKind(kind string, role string, text string, warnings []string) strin
 		return "footnote"
 	}
 	switch lowerRole {
-	case "table", "code", "math", "image", "caption":
+	case "admonition", "directive", "embedded", "frontmatter", "table", "code", "math", "image", "caption":
 		if lowerRole == "caption" {
 			return "image"
 		}

@@ -106,3 +106,18 @@
 - [x] Expand prepared-source review and profile comparison UI
 - [x] Stabilize Markdown Cinema rendering and readalong mapping
 - [x] Add regression coverage, run checks, and visual smoke
+
+## 2026-05-16 21:27 CEST - Markdown adapter v2
+
+- [x] Add strict Markdown adapter package and CLI bridge
+- [x] Integrate strict and legacy parse modes in source prep
+- [x] Extend IR, policy, frontend types, and review UI
+- [x] Add markdown fixtures, docs, snapshots, and benchmark command
+- [x] Run project validation
+
+## 2026-05-16 21:49 CEST - Markdown adapter v2 UX QA and commit
+
+- [x] Validate Source Prep parser-mode ergonomics in rendered UI
+- [x] Iterate on UX polish if needed
+- [x] Run validation after UX pass
+- [x] Commit Markdown adapter v2 package

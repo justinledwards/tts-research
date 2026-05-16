@@ -1,0 +1,380 @@
+{
+  "type": "root",
+  "position": {
+    "start": {
+      "line": 1,
+      "column": 1,
+      "offset": 0
+    },
+    "end": {
+      "line": 9,
+      "column": 1,
+      "offset": 185
+    }
+  },
+  "children": [
+    {
+      "type": "heading",
+      "position": {
+        "start": {
+          "line": 1,
+          "column": 1,
+          "offset": 0
+        },
+        "end": {
+          "line": 1,
+          "column": 17,
+          "offset": 16
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "Plain Markdown",
+          "position": {
+            "start": {
+              "line": 1,
+              "column": 3,
+              "offset": 2
+            },
+            "end": {
+              "line": 1,
+              "column": 17,
+              "offset": 16
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 3,
+          "column": 1,
+          "offset": 18
+        },
+        "end": {
+          "line": 3,
+          "column": 96,
+          "offset": 113
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "This paragraph has ",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 1,
+              "offset": 18
+            },
+            "end": {
+              "line": 3,
+              "column": 20,
+              "offset": 37
+            }
+          }
+        },
+        {
+          "type": "strong",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 20,
+              "offset": 37
+            },
+            "end": {
+              "line": 3,
+              "column": 35,
+              "offset": 52
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "strong text",
+              "position": {
+                "start": {
+                  "line": 3,
+                  "column": 22,
+                  "offset": 39
+                },
+                "end": {
+                  "line": 3,
+                  "column": 33,
+                  "offset": 50
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "value": ", ",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 35,
+              "offset": 52
+            },
+            "end": {
+              "line": 3,
+              "column": 37,
+              "offset": 54
+            }
+          }
+        },
+        {
+          "type": "inlineCode",
+          "value": "inline code",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 37,
+              "offset": 54
+            },
+            "end": {
+              "line": 3,
+              "column": 50,
+              "offset": 67
+            }
+          }
+        },
+        {
+          "type": "text",
+          "value": ", and a ",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 50,
+              "offset": 67
+            },
+            "end": {
+              "line": 3,
+              "column": 58,
+              "offset": 75
+            }
+          }
+        },
+        {
+          "type": "link",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 58,
+              "offset": 75
+            },
+            "end": {
+              "line": 3,
+              "column": 95,
+              "offset": 112
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "reference link",
+              "position": {
+                "start": {
+                  "line": 3,
+                  "column": 59,
+                  "offset": 76
+                },
+                "end": {
+                  "line": 3,
+                  "column": 73,
+                  "offset": 90
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "value": ".",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 95,
+              "offset": 112
+            },
+            "end": {
+              "line": 3,
+              "column": 96,
+              "offset": 113
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "position": {
+        "start": {
+          "line": 5,
+          "column": 1,
+          "offset": 115
+        },
+        "end": {
+          "line": 5,
+          "column": 42,
+          "offset": 156
+        }
+      },
+      "children": [
+        {
+          "type": "paragraph",
+          "position": {
+            "start": {
+              "line": 5,
+              "column": 3,
+              "offset": 117
+            },
+            "end": {
+              "line": 5,
+              "column": 42,
+              "offset": 156
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "A quoted line should remain narratable.",
+              "position": {
+                "start": {
+                  "line": 5,
+                  "column": 3,
+                  "offset": 117
+                },
+                "end": {
+                  "line": 5,
+                  "column": 42,
+                  "offset": 156
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "position": {
+        "start": {
+          "line": 7,
+          "column": 1,
+          "offset": 158
+        },
+        "end": {
+          "line": 8,
+          "column": 14,
+          "offset": 184
+        }
+      },
+      "children": [
+        {
+          "type": "listItem",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 1,
+              "offset": 158
+            },
+            "end": {
+              "line": 7,
+              "column": 13,
+              "offset": 170
+            }
+          },
+          "children": [
+            {
+              "type": "paragraph",
+              "position": {
+                "start": {
+                  "line": 7,
+                  "column": 3,
+                  "offset": 160
+                },
+                "end": {
+                  "line": 7,
+                  "column": 13,
+                  "offset": 170
+                }
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "value": "First item",
+                  "position": {
+                    "start": {
+                      "line": 7,
+                      "column": 3,
+                      "offset": 160
+                    },
+                    "end": {
+                      "line": 7,
+                      "column": 13,
+                      "offset": 170
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "position": {
+            "start": {
+              "line": 8,
+              "column": 1,
+              "offset": 171
+            },
+            "end": {
+              "line": 8,
+              "column": 14,
+              "offset": 184
+            }
+          },
+          "children": [
+            {
+              "type": "paragraph",
+              "position": {
+                "start": {
+                  "line": 8,
+                  "column": 3,
+                  "offset": 173
+                },
+                "end": {
+                  "line": 8,
+                  "column": 14,
+                  "offset": 184
+                }
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Second item",
+                  "position": {
+                    "start": {
+                      "line": 8,
+                      "column": 3,
+                      "offset": 173
+                    },
+                    "end": {
+                      "line": 8,
+                      "column": 14,
+                      "offset": 184
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
