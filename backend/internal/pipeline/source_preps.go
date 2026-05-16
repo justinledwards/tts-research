@@ -156,6 +156,9 @@ func (service *Service) CreatePreparedSource(
 		projectSpeechPolicyEvaluator(project, prepared.SpeechPolicyProfile, policy.Overrides{}),
 		service.options.SourcePrepSentenceMaxRunes,
 	)
+	prepared = service.applySpeechRenderToPreparedSource(prepared, SpeechRenderOptions{
+		ProjectID: project.ID,
+	})
 
 	service.updatePreparedSource(prepared)
 	if err := service.writePreparedSourceMetadata(prepared); err != nil {
@@ -274,23 +277,32 @@ func (service *Service) PreviewPreparedSourceSpeechPolicy(sourceID string, reque
 	if err != nil {
 		return PreparedSource{}, err
 	}
-	return service.sanitizePreparedSourceWarnings(applySpeechPolicyToPreparedSourceWithEvaluator(
+	source = applySpeechPolicyToPreparedSourceWithEvaluator(
 		source,
 		projectSpeechPolicyEvaluator(project, profileName, request.Overrides),
 		service.options.SourcePrepSentenceMaxRunes,
-	)), nil
+	)
+	source = service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{
+		ProjectID:      source.ProjectID,
+		VoiceProfileID: request.VoiceProfileID,
+		Locale:         request.Locale,
+		TTSEngine:      request.TTSEngine,
+	})
+	return service.sanitizePreparedSourceWarnings(source), nil
 }
 
 func (service *Service) applyCurrentSpeechPolicy(source PreparedSource, overrides policy.Overrides) PreparedSource {
 	project, err := service.GetProject(source.ProjectID)
 	if err != nil {
-		return applySpeechPolicyToPreparedSource(source, source.SpeechPolicyProfile, overrides, service.options.SourcePrepSentenceMaxRunes)
+		source = applySpeechPolicyToPreparedSource(source, source.SpeechPolicyProfile, overrides, service.options.SourcePrepSentenceMaxRunes)
+		return service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{ProjectID: source.ProjectID})
 	}
-	return applySpeechPolicyToPreparedSourceWithEvaluator(
+	source = applySpeechPolicyToPreparedSourceWithEvaluator(
 		source,
 		projectSpeechPolicyEvaluator(project, project.SpeechPolicyProfile, overrides),
 		service.options.SourcePrepSentenceMaxRunes,
 	)
+	return service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{ProjectID: source.ProjectID})
 }
 
 func (service *Service) GetPreparedSourceBlock(sourceID string, blockID string) (NarrationBlock, error) {
@@ -337,6 +349,12 @@ func (service *Service) CreatePreparedSourceJob(
 		projectSpeechPolicyEvaluator(project, profileName, request.SpeechPolicyOverrides),
 		service.options.SourcePrepSentenceMaxRunes,
 	))
+	source = service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{
+		ProjectID:      source.ProjectID,
+		VoiceProfileID: request.VoiceProfileID,
+		Locale:         request.Locale,
+		TTSEngine:      request.TTSEngine,
+	})
 	selected := map[string]struct{}{}
 	for _, id := range request.SelectedBlockIDs {
 		selected[strings.TrimSpace(id)] = struct{}{}
@@ -375,6 +393,7 @@ func (service *Service) CreatePreparedSourceJob(
 	request.Text = strings.Join(parts, "\n\n")
 	request.SpeechPolicyProfile = source.SpeechPolicyProfile
 	request.SpeechPolicyOverrides = policy.NormalizeOverrides(request.SpeechPolicyOverrides)
+	request.SpeechRenderApplied = true
 	job, err := service.CreateJob(ctx, request)
 	if err != nil {
 		return VoiceJob{}, err
@@ -1093,6 +1112,14 @@ func applySpeechPolicyToPreparedSourceWithEvaluator(source PreparedSource, evalu
 		})
 		block.SpeechPolicy = decision.Policy
 		block.SpokenText = strings.TrimSpace(decision.SpeechText)
+		if block.Metadata == nil {
+			block.Metadata = map[string]any{}
+		}
+		block.Metadata["policySpeechText"] = block.SpokenText
+		block.LanguageSpans = nil
+		block.Pronunciations = nil
+		block.Normalisations = nil
+		block.MathPreview = nil
 		block.SpeakMode = legacySpeakModeForDecision(decision)
 		if block.SpeakMode == NarrationSpeakModeSkip {
 			block.SpokenText = ""
@@ -1128,6 +1155,9 @@ func policyElementText(block NarrationBlock) string {
 		NarrationBlockKindFrontmatter:
 		return firstNonEmpty(block.Text, block.SpokenText)
 	default:
+		if text := metadataString(block.Metadata, "policySpeechText"); text != "" {
+			return text
+		}
 		return firstNonEmpty(block.SpokenText, block.Text)
 	}
 }

@@ -8,16 +8,19 @@ import type {
   AdapterDiagnostics,
   BundleImportMode,
   CreatePreparedSourceRequest,
+  LexiconUpsertRequest,
   CreateVoiceProfileFromCandidateRequest,
   CreateVoiceJobRequest,
   CreateVoiceProfileRequest,
   CreateVoiceProfileSourceRequest,
   MarkdownParseMode,
+  MathPreviewResult,
   PlaybackProgress,
   PlaybackProgressUpdate,
   PlaybackSession,
   PreparedSource,
   ProjectSpeechPolicy,
+  PronunciationLexicon,
   ProjectBundleImportResult,
   ProjectBundlePreview,
   ProjectBundleSummary,
@@ -113,7 +116,13 @@ export async function getContentIR(id: string): Promise<ContentIRDocument> {
 
 export async function previewContentIRSpeechPolicy(
   id: string,
-  request: { profile?: string; overrides?: SpeechPolicyOverrides },
+  request: {
+    profile?: string;
+    overrides?: SpeechPolicyOverrides;
+    voiceProfileId?: string;
+    locale?: string;
+    ttsEngine?: string;
+  },
 ): Promise<ContentIRDocument> {
   const response = await fetch(
     `${apiBaseUrl}/api/content-ir/${encodeURIComponent(id)}/speech-policy/preview`,
@@ -218,7 +227,13 @@ export async function deleteCustomSpeechPolicyProfile(
 
 export async function previewPreparedSourceSpeechPolicy(
   preparedSourceId: string,
-  request: { profile?: string; overrides?: SpeechPolicyOverrides },
+  request: {
+    profile?: string;
+    overrides?: SpeechPolicyOverrides;
+    voiceProfileId?: string;
+    locale?: string;
+    ttsEngine?: string;
+  },
 ): Promise<PreparedSource> {
   const response = await fetch(
     `${apiBaseUrl}/api/source-preps/${encodeURIComponent(preparedSourceId)}/speech-policy/preview`,
@@ -232,6 +247,140 @@ export async function previewPreparedSourceSpeechPolicy(
     throw await apiError(response);
   }
   return response.json() as Promise<PreparedSource>;
+}
+
+export async function previewMathSpeech(input: string): Promise<MathPreviewResult> {
+  const response = await fetch(`${apiBaseUrl}/api/math/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ input }),
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<MathPreviewResult>;
+}
+
+export async function getProjectLexicon(projectId: string): Promise<PronunciationLexicon> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/lexicon`,
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PronunciationLexicon>;
+}
+
+export async function upsertProjectLexiconEntry(
+  projectId: string,
+  request: LexiconUpsertRequest,
+): Promise<PronunciationLexicon> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/lexicon`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PronunciationLexicon>;
+}
+
+export async function deleteProjectLexiconEntry(
+  projectId: string,
+  entryId: string,
+): Promise<PronunciationLexicon> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/lexicon/entries/${encodeURIComponent(entryId)}`,
+    { method: "DELETE" },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PronunciationLexicon>;
+}
+
+export async function importProjectLexicon(
+  projectId: string,
+  file: File,
+): Promise<PronunciationLexicon> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/lexicon/import`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PronunciationLexicon>;
+}
+
+export async function getVoiceProfileLexicon(profileId: string): Promise<PronunciationLexicon> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profiles/${encodeURIComponent(profileId)}/lexicon`,
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PronunciationLexicon>;
+}
+
+export async function upsertVoiceProfileLexiconEntry(
+  profileId: string,
+  request: LexiconUpsertRequest,
+): Promise<PronunciationLexicon> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profiles/${encodeURIComponent(profileId)}/lexicon`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PronunciationLexicon>;
+}
+
+export async function deleteVoiceProfileLexiconEntry(
+  profileId: string,
+  entryId: string,
+): Promise<PronunciationLexicon> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profiles/${encodeURIComponent(profileId)}/lexicon/entries/${encodeURIComponent(entryId)}`,
+    { method: "DELETE" },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PronunciationLexicon>;
+}
+
+export async function importVoiceProfileLexicon(
+  profileId: string,
+  file: File,
+): Promise<PronunciationLexicon> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profiles/${encodeURIComponent(profileId)}/lexicon/import`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PronunciationLexicon>;
 }
 
 export async function listProjectBookSources(projectId: string): Promise<BookSource[]> {

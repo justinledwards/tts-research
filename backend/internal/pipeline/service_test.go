@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -63,6 +64,95 @@ func TestCreateJobCompletesWithMockAgents(t *testing.T) {
 	metadataPath := filepath.Join(filepath.Dir(completed.AudioPath), "metadata.json")
 	if _, err := os.Stat(metadataPath); err != nil {
 		t.Fatalf("saved metadata should exist: %v", err)
+	}
+}
+
+func TestRenderSpeechTextAppliesLexiconAndNormalisation(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	if _, err := service.UpsertProjectLexiconEntry("default", pipeline.LexiconUpsertRequest{
+		Term:        "Nguyen",
+		Replacement: "Win",
+		Protected:   true,
+	}); err != nil {
+		t.Fatalf("UpsertProjectLexiconEntry returned error: %v", err)
+	}
+
+	rendered := service.RenderSpeechText("CPU Nguyen paid £12.50 on 2026-05-17.", pipeline.SpeechRenderOptions{
+		ProjectID: "default",
+		Locale:    "en-GB",
+	})
+
+	for _, expected := range []string{
+		"C P U Win",
+		"twelve pounds fifty pence",
+		"seventeenth May twenty twenty six",
+	} {
+		if !strings.Contains(rendered.PlainText, expected) {
+			t.Fatalf("plain text = %q, want %q", rendered.PlainText, expected)
+		}
+	}
+	if len(rendered.Pronunciations) != 1 || !rendered.Pronunciations[0].Protected {
+		t.Fatalf("pronunciations = %#v, want protected lexicon decision", rendered.Pronunciations)
+	}
+	if rendered.SSML == "" || !strings.Contains(rendered.SSML, "<speak") {
+		t.Fatalf("ssml = %q, want SSML output", rendered.SSML)
+	}
+}
+
+func TestRenderSpeechTextDetectsStandaloneMathFallback(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	rendered := service.RenderSpeechText("$$\n\\frac{x+1}{y} + \\sqrt{y}\n$$", pipeline.SpeechRenderOptions{
+		Kind: pipeline.NarrationBlockKindBody,
+	})
+
+	if rendered.MathPreview == nil {
+		t.Fatalf("MathPreview was nil for standalone display math")
+	}
+	if !strings.Contains(rendered.PlainText, "fraction") || !strings.Contains(rendered.PlainText, "square root") {
+		t.Fatalf("plain text = %q, want semantic math speech", rendered.PlainText)
+	}
+}
+
+func TestCreateJobRoutesPlainAndSSMLEnginePaths(t *testing.T) {
+	ssmlAgent := &recordingTTSAgent{}
+	ssmlService := newRecordingTTSService(t, "ssml-engine", ssmlAgent, true)
+	ssmlJob, err := ssmlService.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:        "Alice & Bob",
+		TTSEngine:   "ssml-engine",
+		TTSLanguage: "en",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob ssml returned error: %v", err)
+	}
+	waitForJob(t, ssmlService, ssmlJob.ID, pipeline.JobStatusCompleted)
+	if len(ssmlAgent.ssmlCalls()) == 0 {
+		t.Fatalf("expected SSML engine path, plain calls = %#v", ssmlAgent.plainCalls())
+	}
+	if !strings.Contains(ssmlAgent.ssmlCalls()[0], "<speak") ||
+		!strings.Contains(ssmlAgent.ssmlCalls()[0], "Alice and Bob") {
+		t.Fatalf("ssml calls = %#v, want rendered SSML", ssmlAgent.ssmlCalls())
+	}
+
+	plainAgent := &recordingTTSAgent{}
+	plainService := newRecordingTTSService(t, "plain-engine", plainAgent, false)
+	plainJob, err := plainService.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:        "Alice & Bob",
+		TTSEngine:   "plain-engine",
+		TTSLanguage: "en",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob plain returned error: %v", err)
+	}
+	waitForJob(t, plainService, plainJob.ID, pipeline.JobStatusCompleted)
+	if len(plainAgent.ssmlCalls()) != 0 {
+		t.Fatalf("plain engine should not receive SSML: %#v", plainAgent.ssmlCalls())
+	}
+	if len(plainAgent.plainCalls()) == 0 || !strings.Contains(plainAgent.plainCalls()[0], "Alice and Bob") {
+		t.Fatalf("plain calls = %#v, want rendered plain text", plainAgent.plainCalls())
 	}
 }
 
@@ -431,7 +521,7 @@ func TestPreparedSourceURLIngestHonorsPrivateNetworkDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreatePreparedSource(URL) returned error: %v", err)
 	}
-	if source.Kind != pipeline.PreparedSourceKindURL || !strings.Contains(source.SpeechText, "URL Source") {
+	if source.Kind != pipeline.PreparedSourceKindURL || !strings.Contains(source.SpeechText, "U R L Source") {
 		t.Fatalf("source = %#v, want prepared URL source", source)
 	}
 }
@@ -3008,6 +3098,58 @@ func (mockReferenceTTS) SynthesizeWithReference(
 	}, nil
 }
 
+type recordingTTSAgent struct {
+	mu    sync.Mutex
+	plain []string
+	ssml  []string
+}
+
+func (agent *recordingTTSAgent) Synthesize(_ context.Context, text string) (agents.TTSResult, error) {
+	agent.mu.Lock()
+	agent.plain = append(agent.plain, text)
+	agent.mu.Unlock()
+	return silentTTSResult(text, "recording-plain")
+}
+
+func (agent *recordingTTSAgent) SynthesizeSSML(
+	_ context.Context,
+	ssmlText string,
+	plainText string,
+	_ string,
+	_ string,
+) (agents.TTSResult, error) {
+	agent.mu.Lock()
+	agent.ssml = append(agent.ssml, ssmlText)
+	agent.mu.Unlock()
+	return silentTTSResult(plainText, "recording-ssml")
+}
+
+func (agent *recordingTTSAgent) plainCalls() []string {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	return append([]string(nil), agent.plain...)
+}
+
+func (agent *recordingTTSAgent) ssmlCalls() []string {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	return append([]string(nil), agent.ssml...)
+}
+
+func silentTTSResult(text string, provider string) (agents.TTSResult, error) {
+	wav, err := audio.SilentWAV(audio.DurationForText(text))
+	if err != nil {
+		return agents.TTSResult{}, err
+	}
+	return agents.TTSResult{
+		Audio:       wav,
+		ContentType: "audio/wav",
+		DurationMS:  audio.DurationForText(text),
+		Provider:    provider,
+		Voice:       "default",
+	}, nil
+}
+
 func newProfileSourceService(
 	t *testing.T,
 	analyzer pipeline.VoiceProfileSourceAnalyzer,
@@ -3266,6 +3408,42 @@ func newMockService(t *testing.T, checker pipeline.VoiceChecker) *pipeline.Servi
 			SourcePrepDir:      t.TempDir(),
 			ProgressDataDir:    t.TempDir(),
 			PlaybackSessionDir: t.TempDir(),
+		},
+	)
+}
+
+func newRecordingTTSService(
+	t *testing.T,
+	engineID string,
+	agent pipeline.TTSAgent,
+	supportsSSML bool,
+) *pipeline.Service {
+	t.Helper()
+
+	return pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agent,
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:         3,
+			JobDataDir:         t.TempDir(),
+			ProjectDataDir:     t.TempDir(),
+			BookSourceDir:      t.TempDir(),
+			SourcePrepDir:      t.TempDir(),
+			ProgressDataDir:    t.TempDir(),
+			PlaybackSessionDir: t.TempDir(),
+			DefaultTTSEngine:   engineID,
+			TTSEngines: []pipeline.TTSEngineRegistration{{
+				ID:    engineID,
+				Agent: agent,
+				Diagnostics: pipeline.TTSEngineDiagnostics{
+					ID:           engineID,
+					Label:        engineID,
+					Status:       "ready",
+					Local:        true,
+					SupportsSSML: supportsSSML,
+				},
+			}},
 		},
 	)
 }

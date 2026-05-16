@@ -173,6 +173,7 @@ function ContentIRNodeCard({ node }: Readonly<{ node: ContentIRNode }>) {
           <span className="vs-muted rounded border px-2 py-1 text-xs font-semibold vs-border">
             {node.role || "unassigned"}
           </span>
+          <ContentIRLanguageBadge node={node} />
           <span className="vs-muted min-w-0 truncate text-xs" title={node.nodeId}>
             {node.nodeId}
           </span>
@@ -193,6 +194,7 @@ function ContentIRNodeCard({ node }: Readonly<{ node: ContentIRNode }>) {
       <p className="max-h-24 overflow-hidden break-words rounded-md bg-[var(--vs-surface)] p-3 text-sm leading-6">
         {preview || "No spoken text"}
       </p>
+      <ContentIRSpeechDifference node={node} />
       {node.warnings.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {node.warnings.map((warning) => (
@@ -212,6 +214,57 @@ function ContentIRNodeCard({ node }: Readonly<{ node: ContentIRNode }>) {
       ) : null}
     </article>
   );
+}
+
+function ContentIRLanguageBadge({ node }: Readonly<{ node: ContentIRNode }>) {
+  const render = speechRenderMetadata(node);
+  const spanCount = render?.languageSpans?.length ?? 0;
+  const lang = render?.lang ?? node.lang;
+  if (!lang || lang === "und") {
+    return null;
+  }
+  return (
+    <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+      {spanCount > 1 ? `${lang} · ${spanCount.toLocaleString()} spans` : lang}
+    </span>
+  );
+}
+
+function ContentIRSpeechDifference({ node }: Readonly<{ node: ContentIRNode }>) {
+  const render = speechRenderMetadata(node);
+  const speech = render?.plainText ?? node.speechText;
+  const displayed = normalizeDrawerSpeechText(node.displayText);
+  const spoken = normalizeDrawerSpeechText(speech);
+  if (!displayed || !spoken || displayed === spoken) {
+    return null;
+  }
+  return (
+    <div className="grid gap-1 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+      <span className="font-semibold text-blue-900">Spoken as</span>
+      <span className="max-h-12 overflow-hidden break-words">{speech}</span>
+    </div>
+  );
+}
+
+interface SpeechRenderMetadata {
+  plainText?: string;
+  lang?: string;
+  languageSpans?: { lang?: string }[];
+}
+
+function speechRenderMetadata(node: ContentIRNode): SpeechRenderMetadata | null {
+  const render = node.metadata?.speechRender;
+  if (!render || typeof render !== "object") {
+    return null;
+  }
+  return render;
+}
+
+function normalizeDrawerSpeechText(value: string): string {
+  return value
+    .replaceAll(/^#+\s*/g, "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
 }
 
 function MetadataItem({ label, value }: Readonly<{ label: string; value: string | number }>) {

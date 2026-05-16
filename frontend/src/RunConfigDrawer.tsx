@@ -14,6 +14,11 @@ import type {
   TTSEngineDiagnostics,
   VoiceJob,
 } from "./types";
+import {
+  SUPERTONIC_LANGUAGE_OPTIONS,
+  SUPERTONIC_VOICE_STYLES,
+  supertonicLanguageLabel,
+} from "./supertonic";
 
 const OPTION_LABELS: Record<keyof PipelineOptions, { label: string; detail: string }> = {
   textPreprocess: {
@@ -104,7 +109,7 @@ export function RunConfigDrawer({
           ? {
               ...runConfiguration.engineOptions,
               voiceStyle: runConfiguration.engineOptions.voiceStyle ?? firstVoice ?? "M1",
-              lang: runConfiguration.engineOptions.lang ?? "sv",
+              lang: runConfiguration.engineOptions.lang ?? "na",
             }
           : {},
     });
@@ -195,7 +200,7 @@ export function RunConfigDrawer({
               {runConfiguration.ttsEngine === "supertonic-3" ? (
                 <SupertonicOptions
                   engine={findEngine(ttsEngines, "supertonic-3")}
-                  language={runConfiguration.engineOptions.lang ?? "sv"}
+                  language={runConfiguration.engineOptions.lang ?? "na"}
                   voiceStyle={runConfiguration.engineOptions.voiceStyle ?? "M1"}
                   onOptionChange={updateEngineOption}
                 />
@@ -313,7 +318,9 @@ function EngineDiagnosticsCard({
       </p>
       <p className="leading-5 text-zinc-600">{engine.reason ?? engine.setup ?? "Ready."}</p>
       <p className="text-xs text-zinc-500">
-        {engine.local ? "Local" : "Remote"} · {engine.estimatedVram ?? "fit unknown"}
+        {engine.local ? "Local" : "Remote"} · {engine.supportsSSML ? "SSML" : "plain text"} ·{" "}
+        {formatEngineLanguageCount(engine)}
+        {engine.estimatedVram ? ` · ${engine.estimatedVram}` : ""}
         {engine.supportsSwedish ? " · Swedish" : ""}
       </p>
     </div>
@@ -332,6 +339,7 @@ function SupertonicOptions({
   onOptionChange: (key: string, value: string) => void;
 }>) {
   const voices = engine?.voices ?? fallbackSupertonicVoices();
+  const languages = languageOptionsForEngine(engine);
   return (
     <div className="grid gap-3 rounded-md border border-orange-200 bg-orange-50 p-3">
       <label className="grid gap-1 text-sm font-semibold text-orange-950">
@@ -359,20 +367,36 @@ function SupertonicOptions({
           }}
           value={language}
         >
-          <option value="sv">Swedish · sv</option>
-          <option value="en">English · en</option>
-          <option value="da">Danish · da</option>
-          <option value="de">German · de</option>
-          <option value="fi">Finnish · fi</option>
-          <option value="fr">French · fr</option>
+          {languages.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.label} · {option.code}
+            </option>
+          ))}
         </select>
       </label>
       <p className="text-xs leading-5 text-orange-900">
-        Swedish smoke text: Det var en kylig kväll i Stockholm. Ljuset från gatlyktorna speglade sig
-        i vattnet medan hon öppnade boken och började läsa.
+        Selected before audio: {voiceStyle} · {supertonicLanguageLabel(language)} ·{" "}
+        {engine?.supportsSSML ? "SSML" : "plain text fallback"}
       </p>
     </div>
   );
+}
+
+function formatEngineLanguageCount(engine: TTSEngineDiagnostics): string {
+  const count = engine.languages?.length ?? 0;
+  if (engine.id === "supertonic-3" && count >= 31) {
+    return `${(count - 1).toLocaleString()} languages + na`;
+  }
+  return count > 0 ? `${count.toLocaleString()} languages` : "language auto";
+}
+
+function languageOptionsForEngine(engine: TTSEngineDiagnostics | undefined) {
+  const supportedCodes =
+    engine?.languages && engine.languages.length > 0
+      ? engine.languages
+      : SUPERTONIC_LANGUAGE_OPTIONS.map((item) => item.code);
+  const supported = new Set(supportedCodes);
+  return SUPERTONIC_LANGUAGE_OPTIONS.filter((option) => supported.has(option.code));
 }
 
 function findEngine(
@@ -394,12 +418,13 @@ function fallbackTTSEngines(): TTSEngineDiagnostics[] {
       supportsVoice: true,
       supportsReference: true,
       supportsSwedish: false,
+      supportsSSML: false,
     },
   ];
 }
 
 function fallbackSupertonicVoices(): { id: string; name: string; gender?: string }[] {
-  return ["M1", "M2", "M3", "M4", "M5", "F1", "F2", "F3", "F4", "F5"].map((id) => ({
+  return SUPERTONIC_VOICE_STYLES.map((id) => ({
     id,
     name: id,
     gender: id.startsWith("M") ? "male" : "female",

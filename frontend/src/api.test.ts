@@ -5,11 +5,14 @@ import {
   createCustomSpeechPolicyProfile,
   createPreparedSource,
   deleteProject,
+  getProjectLexicon,
   getAdapterCapabilities,
   getAdapterDiagnostics,
+  previewMathSpeech,
   previewContentIRSpeechPolicy,
   isApiNotFoundError,
   previewPreparedSourceSpeechPolicy,
+  upsertProjectLexiconEntry,
 } from "./api";
 
 describe("API errors", () => {
@@ -74,14 +77,20 @@ describe("API errors", () => {
 
     try {
       const source = await previewPreparedSourceSpeechPolicy("source-1", {
+        locale: "sv-SE",
         profile: "Accessibility",
         overrides: { codeMode: "literal" },
+        ttsEngine: "supertonic-3",
+        voiceProfileId: "profile-1",
       });
       expect(source.speechPolicyProfile).toBe("Accessibility");
       expect(requestInit?.method).toBe("POST");
       expect(requestInit?.headers).toEqual({ "Content-Type": "application/json" });
       expect(typeof requestInit?.body === "string" ? requestInit.body : "").toContain(
         '"codeMode":"literal"',
+      );
+      expect(typeof requestInit?.body === "string" ? requestInit.body : "").toContain(
+        '"voiceProfileId":"profile-1"',
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -204,14 +213,20 @@ describe("API errors", () => {
 
     try {
       const document = await previewContentIRSpeechPolicy("source-1", {
+        locale: "en-GB",
         profile: "Enterprise",
         overrides: { tableMode: "rowLinear" },
+        ttsEngine: "mock",
+        voiceProfileId: "profile-1",
       });
       expect(document.id).toBe("source-1");
       expect(requestUrl).toBe("/api/content-ir/source-1/speech-policy/preview");
       expect(requestInit?.method).toBe("POST");
       expect(typeof requestInit?.body === "string" ? requestInit.body : "").toContain(
         '"tableMode":"rowLinear"',
+      );
+      expect(typeof requestInit?.body === "string" ? requestInit.body : "").toContain(
+        '"locale":"en-GB"',
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -277,6 +292,58 @@ describe("API errors", () => {
       expect(requestInit?.method).toBe("POST");
       expect(typeof requestInit?.body === "string" ? requestInit.body : "").toContain(
         '"name":"Reader"',
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("uses lexicon and maths preview endpoints", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      const url = fetchInputUrl(input);
+      requests.push({ url, init });
+      if (url.endsWith("/api/math/preview")) {
+        return Promise.resolve(
+          Response.json({
+            input: "x=1",
+            normalized: "x=1",
+            speech: "x equals one",
+            source: "deterministic-fallback",
+            toolOptional: true,
+          }),
+        );
+      }
+      return Promise.resolve(
+        Response.json({
+          version: "lexicon.v1",
+          scope: "project",
+          ownerId: "project-1",
+          entries: [],
+          updatedAt: "2026-05-16T12:00:00Z",
+        }),
+      );
+    };
+
+    try {
+      const math = await previewMathSpeech("x=1");
+      const lexicon = await getProjectLexicon("project-1");
+      await upsertProjectLexiconEntry("project-1", {
+        protected: true,
+        replacement: "Win",
+        term: "Nguyen",
+      });
+      expect(math.speech).toBe("x equals one");
+      expect(lexicon.scope).toBe("project");
+      expect(requests.map((request) => request.url)).toEqual([
+        "/api/math/preview",
+        "/api/projects/project-1/lexicon",
+        "/api/projects/project-1/lexicon",
+      ]);
+      expect(requests[2]?.init?.method).toBe("POST");
+      expect(typeof requests[2]?.init?.body === "string" ? requests[2].init.body : "").toContain(
+        '"replacement":"Win"',
       );
     } finally {
       globalThis.fetch = originalFetch;

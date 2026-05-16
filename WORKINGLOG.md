@@ -147,3 +147,16 @@
 - [x] Add fixtures and regression coverage
 - [x] Validate free-text source intake remains visible and editable
 - [x] Run local validation
+
+## 2026-05-17 00:21 CEST - Pronunciation, multilingual and maths pipeline
+
+- [x] Add central normalisation, lexicon, maths and SSML backend pipeline
+- [x] Add pronunciation, mixed-language, maths and Supertonic UI controls
+- [x] Add fixture regression coverage and local smoke paths
+- [x] Run project checks and commit package
+
+## 2026-05-17 00:59 CEST - Pronunciation pipeline ergonomics QA
+
+- [x] Run rendered UI ergonomics smoke
+- [x] Iterate on any UX issues found
+- [x] Validate and commit QA follow-up if needed

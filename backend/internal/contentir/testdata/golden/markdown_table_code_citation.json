@@ -28,7 +28,7 @@
       "displayText": "# Findings",
       "normalisedText": "# Findings",
       "speechText": "Findings",
-      "lang": "und",
+      "lang": "en",
       "script": "Latn",
       "dir": "ltr",
       "provenance": {
@@ -81,7 +81,25 @@
         "columnStart": 1,
         "lineEnd": 1,
         "lineStart": 1,
-        "sourceSlice": "# Findings"
+        "policySpeechText": "Findings",
+        "sourceSlice": "# Findings",
+        "speechRender": {
+          "plainText": "Findings",
+          "ssml": "\u003cspeak version=\"1.1\" xml:lang=\"en\"\u003eFindings\u003c/speak\u003e",
+          "lang": "en",
+          "locale": "en-GB",
+          "languageSpans": [
+            {
+              "startOffset": 0,
+              "endOffset": 8,
+              "text": "Findings",
+              "lang": "en",
+              "script": "Latn",
+              "confidence": 0.52,
+              "source": "heuristic"
+            }
+          ]
+        }
       },
       "adapterVersion": "markdown-adapter-v2"
     },
@@ -94,7 +112,7 @@
       "displayText": "| Metric | Value |\n|---|---|\n| Latency | 12ms |",
       "normalisedText": "| Metric | Value | |---|---| | Latency | 12ms |",
       "speechText": "A table appears here with columns: Metric, Value.",
-      "lang": "und",
+      "lang": "en",
       "script": "Latn",
       "dir": "ltr",
       "provenance": {
@@ -149,8 +167,26 @@
         "headers": ["Metric", "Value"],
         "lineEnd": 5,
         "lineStart": 3,
+        "policySpeechText": "A table appears here with columns: Metric, Value.",
         "rows": [["Latency", "12ms"]],
-        "sourceSlice": "| Metric | Value |\n|---|---|\n| Latency | 12ms |"
+        "sourceSlice": "| Metric | Value |\n|---|---|\n| Latency | 12ms |",
+        "speechRender": {
+          "plainText": "A table appears here with columns: Metric, Value.",
+          "ssml": "\u003cspeak version=\"1.1\" xml:lang=\"en\"\u003eA table appears here with columns: Metric, Value.\u003c/speak\u003e",
+          "lang": "en",
+          "locale": "en-GB",
+          "languageSpans": [
+            {
+              "startOffset": 0,
+              "endOffset": 49,
+              "text": "A table appears here with columns: Metric, Value.",
+              "lang": "en",
+              "script": "Latn",
+              "confidence": 0.52,
+              "source": "heuristic"
+            }
+          ]
+        }
       },
       "adapterVersion": "markdown-adapter-v2"
     },
@@ -218,6 +254,7 @@
         "language": "go",
         "lineEnd": 9,
         "lineStart": 7,
+        "policySpeechText": "",
         "sourceSlice": "```go\nfmt.Println(\"skip\")\n```"
       },
       "adapterVersion": "markdown-adapter-v2"
@@ -284,6 +321,7 @@
         "columnStart": 1,
         "lineEnd": 11,
         "lineStart": 11,
+        "policySpeechText": "",
         "sourceSlice": "citeturn1search0"
       },
       "adapterVersion": "markdown-adapter-v2"

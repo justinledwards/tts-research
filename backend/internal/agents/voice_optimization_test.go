@@ -37,12 +37,12 @@ func TestVoiceOptimizationAgentNormalizesMarkdownForSpeech(t *testing.T) {
 	}
 	for _, expected := range []string{
 		"Chapter One",
-		"Read this reference aloud and clearly",
+		"Read this reference aloud & clearly",
 		"first point",
 		"second point",
 		"quoted aside",
 		"code sample omitted for spoken playback",
-		"speed, 90 percent",
+		"speed, 90%",
 	} {
 		if !strings.Contains(optimized, expected) {
 			t.Fatalf("optimized text = %q, want substring %q", optimized, expected)

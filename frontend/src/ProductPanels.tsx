@@ -14,6 +14,7 @@ import {
   type TeleprompterEffectStyle,
   type TeleprompterHighlightSettings,
 } from "./teleprompter";
+import { SUPERTONIC_LANGUAGE_OPTIONS } from "./supertonic";
 import { VOICE_STUDIO_THEMES } from "./theme";
 import type {
   SystemMetrics,
@@ -412,7 +413,7 @@ function SettingsProvidersTab({
               ...runConfiguration.engineOptions,
               voiceStyle:
                 runConfiguration.engineOptions.voiceStyle ?? engine?.voices?.[0]?.id ?? "M1",
-              lang: runConfiguration.engineOptions.lang ?? "sv",
+              lang: runConfiguration.engineOptions.lang ?? "na",
             }
           : {},
     });
@@ -517,7 +518,8 @@ function TTSEngineDiagnosticsList({
                 </span>
               </span>
               <span className="vs-muted break-words">
-                {engine.supportsSwedish ? "Swedish · " : ""}
+                {engine.supportsSSML ? "SSML" : "plain text"} ·{" "}
+                {formatProviderLanguageSummary(engine)} ·{" "}
                 {engine.estimatedVram ?? (engine.local ? "local" : "remote")}
               </span>
               {engine.reason || engine.setup ? (
@@ -529,6 +531,18 @@ function TTSEngineDiagnosticsList({
       </ul>
     </div>
   );
+}
+
+function formatProviderLanguageSummary(engine: TTSEngineDiagnostics): string {
+  const count = engine.languages?.length ?? 0;
+  if (engine.id === "supertonic-3") {
+    const languageCount = Math.max(count || SUPERTONIC_LANGUAGE_OPTIONS.length, 1);
+    return `${(languageCount - 1).toLocaleString()} languages + na`;
+  }
+  if (count > 0) {
+    return `${count.toLocaleString()} languages`;
+  }
+  return engine.supportsSwedish ? "Swedish" : "language auto";
 }
 
 function KokoroVoicepackDetails() {

@@ -71,6 +71,7 @@ import {
 import { ContentIRDrawer } from "./ContentIrDrawer";
 import { MarkdownRenderer, MermaidDiagram, looksLikeMermaidDiagram } from "./MarkdownRenderer";
 import { HelpPanel, SettingsPanel } from "./ProductPanels";
+import { PronunciationPanel } from "./PronunciationPanel";
 import { RunConfigDrawer } from "./RunConfigDrawer";
 import {
   KOKORO_VOICEPACKS,
@@ -93,6 +94,12 @@ import {
   saveProjectWorkspaceState,
 } from "./projectState";
 import { calculateArrivalThroughput, formatBufferHealth } from "./studioMetrics";
+import {
+  SUPERTONIC_LANGUAGE_CODES,
+  SUPERTONIC_LANGUAGE_OPTIONS,
+  SUPERTONIC_VOICE_STYLES,
+  supertonicLanguageLabel,
+} from "./supertonic";
 import {
   DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS,
   TELEPROMPTER_SETTINGS_STORAGE_KEY,
@@ -228,6 +235,53 @@ function createPipelineBase(job?: VoiceJob): PipelineStepState {
     synthesis: job.stages.synthesis,
     checker: job.stages.checker,
   };
+}
+
+function resolveRunLocale(config: RunConfiguration): string {
+  const lang = config.ttsEngine === "supertonic-3" ? config.engineOptions.lang : undefined;
+  if (lang === "sv") {
+    return "sv-SE";
+  }
+  return "en-GB";
+}
+
+function resolveSupertonicLanguage(
+  savedLanguage: string | undefined,
+  source?: PreparedSource | null,
+): string {
+  const sourceLanguage = dominantPreparedSourceLanguage(source);
+  if (sourceLanguage) {
+    return sourceLanguage;
+  }
+  const normalized = normalizeSupertonicLanguage(savedLanguage);
+  return normalized ?? "na";
+}
+
+function dominantPreparedSourceLanguage(source?: PreparedSource | null): string | null {
+  const counts = new Map<string, number>();
+  for (const block of source?.blocks ?? []) {
+    const lang = normalizeSupertonicLanguage(block.language);
+    if (lang && lang !== "na") {
+      counts.set(lang, (counts.get(lang) ?? 0) + 1);
+    }
+  }
+  let top: [string, number] | null = null;
+  let total = 0;
+  for (const entry of counts.entries()) {
+    total += entry[1];
+    if (!top || entry[1] > top[1]) {
+      top = entry;
+    }
+  }
+  if (!top) {
+    return null;
+  }
+  return top[1] / total >= 0.6 ? top[0] : null;
+}
+
+function normalizeSupertonicLanguage(value: string | undefined): string | null {
+  const normalized = value?.trim().toLowerCase().split(/[-_]/)[0] ?? "";
+  return SUPERTONIC_LANGUAGE_CODES.has(normalized) ? normalized : null;
 }
 
 function isTerminalJob(job: VoiceJob): boolean {
@@ -1511,6 +1565,9 @@ export function App() {
     void previewPreparedSourceSpeechPolicy(preparedSourceId, {
       profile: requestedProfile,
       overrides: requestedOverrides,
+      locale: resolveRunLocale(runConfiguration),
+      ttsEngine: runConfiguration.ttsEngine,
+      voiceProfileId: selectedVoiceProfileId,
     })
       .then((source) => {
         if (!isCancelled) {
@@ -1543,6 +1600,8 @@ export function App() {
     jobPreparedSource?.id,
     jobPreparedSource?.speechPolicyProfile,
     jobPreparedSource?.text,
+    runConfiguration,
+    selectedVoiceProfileId,
     speechPolicyOverrides,
     speechPolicyProfile,
   ]);
@@ -1556,6 +1615,9 @@ export function App() {
     void previewPreparedSourceSpeechPolicy(selectedPreparedSource.id, {
       profile: speechPolicyProfile,
       overrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
+      locale: resolveRunLocale(runConfiguration),
+      ttsEngine: runConfiguration.ttsEngine,
+      voiceProfileId: selectedVoiceProfileId,
     })
       .then((source) => {
         if (isCancelled) {
@@ -1580,6 +1642,8 @@ export function App() {
   }, [
     selectedPreparedSource?.id,
     selectedPreparedSource?.status,
+    runConfiguration,
+    selectedVoiceProfileId,
     speechPolicyOverrides,
     speechPolicyProfile,
   ]);
@@ -2479,6 +2543,9 @@ export function App() {
             ? await previewContentIRSpeechPolicy(sourceId, {
                 profile: speechPolicyProfile,
                 overrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
+                locale: resolveRunLocale(runConfiguration),
+                ttsEngine: runConfiguration.ttsEngine,
+                voiceProfileId: selectedVoiceProfileId,
               })
             : await getContentIR(sourceId),
         );
@@ -2488,7 +2555,7 @@ export function App() {
         setIsContentIRLoading(false);
       }
     },
-    [speechPolicyOverrides, speechPolicyProfile],
+    [runConfiguration, selectedVoiceProfileId, speechPolicyOverrides, speechPolicyProfile],
   );
 
   const handleUseBookText = useCallback(
@@ -3160,14 +3227,17 @@ export function App() {
     }
   }
 
-  function buildVoiceJobRequest(sourceText: string): CreateVoiceJobRequest {
+  function buildVoiceJobRequest(
+    sourceText: string,
+    preparedSource?: PreparedSource | null,
+  ): CreateVoiceJobRequest {
     const selectedKokoroVoice = findKokoroVoicepack(selectedKokoroVoiceId);
     const isSupertonicRun = runConfiguration.ttsEngine === "supertonic-3";
     const selectedProviderVoice = isSupertonicRun
       ? (runConfiguration.engineOptions.voiceStyle ?? "M1")
       : selectedKokoroVoice?.id;
     const selectedProviderLanguage = isSupertonicRun
-      ? (runConfiguration.engineOptions.lang ?? "sv")
+      ? resolveSupertonicLanguage(runConfiguration.engineOptions.lang, preparedSource)
       : selectedKokoroVoice?.langCode;
     const request: CreateVoiceJobRequest = buildCreateVoiceJobRequest(
       sourceText,
@@ -3177,6 +3247,7 @@ export function App() {
       selectedProviderVoice,
       selectedProviderLanguage,
     );
+    request.locale = resolveRunLocale(runConfiguration);
     return request;
   }
 
@@ -3269,7 +3340,7 @@ export function App() {
       return;
     }
     const request = {
-      ...buildVoiceJobRequest(speechText),
+      ...buildVoiceJobRequest(speechText, source),
       preparedSourceId: source.id,
       selectedBlockIds:
         source.blocks?.filter((block) => block.speakMode !== "skip").map((block) => block.id) ?? [],
@@ -3511,15 +3582,18 @@ export function App() {
             optimizedText={job?.optimizedText ?? ""}
             profileCandidateCreateId={profileCandidateCreateId}
             profiles={voiceProfiles}
+            runConfiguration={runConfiguration}
             selectedKokoroVoiceId={selectedKokoroVoiceId}
             selectedProfileId={selectedVoiceProfileId}
             studioPipelineHint={studioPipelineHint}
+            ttsEngines={ttsEngines}
             onAnalyzeSource={handleAnalyzeVoiceSource}
             onClearSelection={clearVoiceProfileSelection}
             onCreateProfileFromCandidate={handleCreateVoiceProfileFromCandidate}
             onDeleteProfile={(id) => {
               void handleDeleteVoiceProfile(id);
             }}
+            onRunConfigurationChange={setRunConfiguration}
             onSelectKokoroVoice={selectKokoroVoice}
             onSelectProfile={selectVoiceProfile}
           />
@@ -3548,6 +3622,7 @@ export function App() {
             }}
           />
           <SourceTextPanel
+            projectId={activeProjectId}
             bookControls={
               <BookCinemaPanel
                 bookSources={bookSources}
@@ -3588,6 +3663,7 @@ export function App() {
             speechPolicyProfiles={speechPolicyProfiles}
             sourcePrepError={sourcePrepError}
             text={text}
+            voiceProfileId={selectedVoiceProfileId}
             isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
             onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
             onCreatePreparedAudio={(source) => {
@@ -3805,6 +3881,7 @@ function SourceTextPanel({
   isPreparingSource,
   isSpeechPolicyPreviewing,
   preparedSources,
+  projectId,
   selectedPreparedSource,
   customSpeechPolicyProfiles,
   speechPolicyError,
@@ -3813,6 +3890,7 @@ function SourceTextPanel({
   speechPolicyProfiles,
   sourcePrepError,
   text,
+  voiceProfileId,
   onClearSpeechPolicyOverrides,
   onCreateCustomSpeechPolicyProfile,
   onCreatePreparedAudio,
@@ -3833,6 +3911,7 @@ function SourceTextPanel({
   isPreparingSource: boolean;
   isSpeechPolicyPreviewing: boolean;
   preparedSources: PreparedSource[];
+  projectId: string;
   selectedPreparedSource: PreparedSource | null;
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
   speechPolicyError: string | null;
@@ -3841,6 +3920,7 @@ function SourceTextPanel({
   speechPolicyProfiles: SpeechPolicyProfile[];
   sourcePrepError: string | null;
   text: string;
+  voiceProfileId: string;
   onClearSpeechPolicyOverrides: () => void;
   onCreateCustomSpeechPolicyProfile: (
     name: string,
@@ -3958,6 +4038,7 @@ function SourceTextPanel({
       {sourceMode === "book" ? bookControls : null}
       {sourceMode === "file" ? (
         <SourcePrepReview
+          projectId={projectId}
           isPreparing={isPreparingSource}
           isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
           customSpeechPolicyProfiles={customSpeechPolicyProfiles}
@@ -3972,6 +4053,7 @@ function SourceTextPanel({
           markdownParseMode={markdownParseMode}
           sourcePrepError={sourcePrepError}
           sourceUrl={sourceUrl}
+          voiceProfileId={voiceProfileId}
           onBrowse={() => {
             fileInputRef.current?.click();
           }}
@@ -4080,7 +4162,7 @@ function speakModeClass(mode: string): string {
   return "border-emerald-200 bg-emerald-50 text-emerald-700";
 }
 
-type SourcePrepReviewTab = "blocks" | "preview" | "rules";
+type SourcePrepReviewTab = "blocks" | "preview" | "pronunciation" | "math" | "rules";
 
 function SourcePrepMetric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
@@ -4182,12 +4264,40 @@ function preparedSourceSummaryLine(source: PreparedSource | null): string {
   return `${base} · ${source.markdownParseMode ?? "strict"} markdown`;
 }
 
+function blockHasSpeechDifference(block: PreparedSourceBlock): boolean {
+  const displayed = normalizeSpeechComparisonText(block.text ?? block.label ?? "");
+  const spoken = normalizeSpeechComparisonText(block.spokenText ?? "");
+  return Boolean(displayed && spoken && displayed !== spoken);
+}
+
+function normalizeSpeechComparisonText(value: string): string {
+  return value
+    .replaceAll(/^#+\s*/g, "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+}
+
+function LanguageBadge({ block }: Readonly<{ block: PreparedSourceBlock }>) {
+  const lang = block.language ?? block.languageSpans?.[0]?.lang;
+  const spanCount = block.languageSpans?.length ?? 0;
+  if (!lang && spanCount === 0) {
+    return null;
+  }
+  const mixed = spanCount > 1;
+  return (
+    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-700">
+      {mixed ? `mixed · ${lang ?? "multi"} · ${spanCount.toLocaleString()} spans` : lang}
+    </span>
+  );
+}
+
 function SourcePrepReview({
   children,
   customSpeechPolicyProfiles,
   isPreparing,
   isSpeechPolicyPreviewing,
   preparedSources,
+  projectId,
   selectedPreparedSource,
   speechPolicyError,
   speechPolicyOverrides,
@@ -4198,6 +4308,7 @@ function SourcePrepReview({
   markdownParseMode,
   sourcePrepError,
   sourceUrl,
+  voiceProfileId,
   onBrowse,
   onClearSpeechPolicyOverrides,
   onCreateCustomSpeechPolicyProfile,
@@ -4217,6 +4328,7 @@ function SourcePrepReview({
   isPreparing: boolean;
   isSpeechPolicyPreviewing: boolean;
   preparedSources: PreparedSource[];
+  projectId: string;
   selectedPreparedSource: PreparedSource | null;
   speechPolicyError: string | null;
   speechPolicyOverrides: SpeechPolicyOverrides;
@@ -4227,6 +4339,7 @@ function SourcePrepReview({
   markdownParseMode: MarkdownParseMode;
   sourcePrepError: string | null;
   sourceUrl: string;
+  voiceProfileId: string;
   onBrowse: () => void;
   onClearSpeechPolicyOverrides: () => void;
   onCreateCustomSpeechPolicyProfile: (
@@ -4422,6 +4535,20 @@ function SourcePrepReview({
                 }}
               />
               <SourcePrepTabButton
+                active={reviewTab === "pronunciation"}
+                label="Pronunciation"
+                onClick={() => {
+                  setReviewTab("pronunciation");
+                }}
+              />
+              <SourcePrepTabButton
+                active={reviewTab === "math"}
+                label="Math"
+                onClick={() => {
+                  setReviewTab("math");
+                }}
+              />
+              <SourcePrepTabButton
                 active={reviewTab === "rules"}
                 label="Rules"
                 onClick={() => {
@@ -4431,102 +4558,27 @@ function SourcePrepReview({
             </div>
 
             {reviewTab === "blocks" ? (
-              <div>
-                <div className="grid gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 md:grid-cols-[minmax(0,1fr)_11rem_11rem]">
-                  <input
-                    className="h-9 min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-orange-400"
-                    onChange={(event) => {
-                      setBlockQuery(event.currentTarget.value);
-                    }}
-                    placeholder="Search blocks and explanations"
-                    type="search"
-                    value={blockQuery}
-                  />
-                  <select
-                    className="h-9 rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-orange-400"
-                    onChange={(event) => {
-                      setBlockKindFilter(event.currentTarget.value);
-                    }}
-                    value={blockKindFilter}
-                  >
-                    <option value="">All kinds</option>
-                    {blockKinds.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {kind}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="h-9 rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-orange-400"
-                    onChange={(event) => {
-                      setBlockModeFilter(event.currentTarget.value);
-                    }}
-                    value={blockModeFilter}
-                  >
-                    <option value="">All modes</option>
-                    <option value="speak">Speak</option>
-                    <option value="summarize">Summarize</option>
-                    <option value="skip">Skip</option>
-                  </select>
-                </div>
-                <div className="max-h-[28rem] overflow-y-auto">
-                  {filteredBlocks.map((block) => (
-                    <div
-                      className="grid gap-2 border-b border-zinc-100 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-start"
-                      key={block.id}
-                    >
-                      <span className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                        {block.kind}
-                      </span>
-                      <span className="min-w-0">
-                        <span
-                          className="block truncate font-medium"
-                          title={block.spokenText ?? block.text}
-                        >
-                          {block.spokenText ?? block.text ?? block.label}
-                        </span>
-                        <span className="mt-1 block truncate text-xs text-zinc-500">
-                          {String(block.segments?.length ?? 0)} segments ·{" "}
-                          {formatDuration(block.estimatedDurationMs ?? 0)}
-                        </span>
-                        {block.speechPolicy.explanation ? (
-                          <span
-                            className="mt-1 block truncate text-xs text-blue-700"
-                            title={block.speechPolicy.explanation}
-                          >
-                            {block.speechPolicy.explanation}
-                          </span>
-                        ) : null}
-                        {block.warnings && block.warnings.length > 0 ? (
-                          <span className="mt-2 flex flex-wrap gap-1">
-                            {block.warnings.slice(0, 3).map((warning) => (
-                              <span
-                                className="rounded-full bg-amber-50 px-2 py-0.5 text-[0.68rem] font-semibold text-amber-700"
-                                key={warning}
-                              >
-                                {warning}
-                              </span>
-                            ))}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span
-                        className={`w-fit rounded-full border px-2 py-1 text-[0.68rem] font-semibold sm:justify-self-end ${speakModeClass(block.speakMode)}`}
-                      >
-                        {block.speakMode}
-                      </span>
-                    </div>
-                  ))}
-                  {filteredBlocks.length === 0 ? (
-                    <p className="px-4 py-6 text-sm text-zinc-500">No blocks match the filters.</p>
-                  ) : null}
-                  <p className="px-4 py-3 text-xs text-zinc-500">
-                    Showing {filteredBlocks.length.toString()} of {blocks.length.toString()} blocks
-                  </p>
-                </div>
-              </div>
+              <SourcePrepBlocksPanel
+                blockKindFilter={blockKindFilter}
+                blockKinds={blockKinds}
+                blockModeFilter={blockModeFilter}
+                blockQuery={blockQuery}
+                blocks={blocks}
+                filteredBlocks={filteredBlocks}
+                onKindFilterChange={setBlockKindFilter}
+                onModeFilterChange={setBlockModeFilter}
+                onQueryChange={setBlockQuery}
+              />
             ) : null}
             {reviewTab === "preview" ? <PreparedSourceMarkdownPreview source={source} /> : null}
+            {reviewTab === "pronunciation" ? (
+              <PronunciationPanel
+                projectId={projectId}
+                source={source}
+                voiceProfileId={voiceProfileId}
+              />
+            ) : null}
+            {reviewTab === "math" ? <SourcePrepMathPanel source={source} /> : null}
             {reviewTab === "rules" ? <SourcePrepRulesPanel source={source} /> : null}
           </div>
         </div>
@@ -4886,6 +4938,152 @@ function formatPolicyModeLabel(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function SourcePrepBlocksPanel({
+  blockKindFilter,
+  blockKinds,
+  blockModeFilter,
+  blockQuery,
+  blocks,
+  filteredBlocks,
+  onKindFilterChange,
+  onModeFilterChange,
+  onQueryChange,
+}: Readonly<{
+  blockKindFilter: string;
+  blockKinds: string[];
+  blockModeFilter: string;
+  blockQuery: string;
+  blocks: PreparedSourceBlock[];
+  filteredBlocks: PreparedSourceBlock[];
+  onKindFilterChange: (value: string) => void;
+  onModeFilterChange: (value: string) => void;
+  onQueryChange: (value: string) => void;
+}>) {
+  return (
+    <div>
+      <div className="grid gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 md:grid-cols-[minmax(0,1fr)_11rem_11rem]">
+        <input
+          className="h-9 min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-orange-400"
+          onChange={(event) => {
+            onQueryChange(event.currentTarget.value);
+          }}
+          placeholder="Search blocks and explanations"
+          type="search"
+          value={blockQuery}
+        />
+        <select
+          className="h-9 rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-orange-400"
+          onChange={(event) => {
+            onKindFilterChange(event.currentTarget.value);
+          }}
+          value={blockKindFilter}
+        >
+          <option value="">All kinds</option>
+          {blockKinds.map((kind) => (
+            <option key={kind} value={kind}>
+              {kind}
+            </option>
+          ))}
+        </select>
+        <select
+          className="h-9 rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-orange-400"
+          onChange={(event) => {
+            onModeFilterChange(event.currentTarget.value);
+          }}
+          value={blockModeFilter}
+        >
+          <option value="">All modes</option>
+          <option value="speak">Speak</option>
+          <option value="summarize">Summarize</option>
+          <option value="skip">Skip</option>
+        </select>
+      </div>
+      <div className="max-h-[28rem] overflow-y-auto">
+        {filteredBlocks.map((block) => (
+          <SourcePrepBlockRow block={block} key={block.id} />
+        ))}
+        {filteredBlocks.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-zinc-500">No blocks match the filters.</p>
+        ) : null}
+        <p className="px-4 py-3 text-xs text-zinc-500">
+          Showing {filteredBlocks.length.toString()} of {blocks.length.toString()} blocks
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SourcePrepBlockRow({ block }: Readonly<{ block: PreparedSourceBlock }>) {
+  return (
+    <div className="grid gap-2 border-b border-zinc-100 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-start">
+      <span className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+        {block.kind}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate font-medium" title={block.spokenText ?? block.text}>
+          {block.spokenText ?? block.text ?? block.label}
+        </span>
+        <span className="mt-1 block truncate text-xs text-zinc-500">
+          {String(block.segments?.length ?? 0)} segments ·{" "}
+          {formatDuration(block.estimatedDurationMs ?? 0)}
+        </span>
+        <BlockSpeechBadges block={block} />
+        {blockHasSpeechDifference(block) ? (
+          <span className="mt-2 grid gap-1 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+            <span className="font-semibold text-blue-900">Spoken as</span>
+            <span className="max-h-12 overflow-hidden break-words">
+              {block.spokenText ?? block.label}
+            </span>
+          </span>
+        ) : null}
+        {block.speechPolicy.explanation ? (
+          <span
+            className="mt-1 block truncate text-xs text-blue-700"
+            title={block.speechPolicy.explanation}
+          >
+            {block.speechPolicy.explanation}
+          </span>
+        ) : null}
+        {block.warnings && block.warnings.length > 0 ? (
+          <span className="mt-2 flex flex-wrap gap-1">
+            {block.warnings.slice(0, 3).map((warning) => (
+              <span
+                className="rounded-full bg-amber-50 px-2 py-0.5 text-[0.68rem] font-semibold text-amber-700"
+                key={warning}
+              >
+                {warning}
+              </span>
+            ))}
+          </span>
+        ) : null}
+      </span>
+      <span
+        className={`w-fit rounded-full border px-2 py-1 text-[0.68rem] font-semibold sm:justify-self-end ${speakModeClass(block.speakMode)}`}
+      >
+        {block.speakMode}
+      </span>
+    </div>
+  );
+}
+
+function BlockSpeechBadges({ block }: Readonly<{ block: PreparedSourceBlock }>) {
+  return (
+    <span className="mt-2 flex flex-wrap gap-1">
+      <LanguageBadge block={block} />
+      {block.normalisations && block.normalisations.length > 0 ? (
+        <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[0.68rem] font-semibold text-violet-700">
+          {block.normalisations.length.toLocaleString()} normalised
+        </span>
+      ) : null}
+      {block.pronunciations && block.pronunciations.length > 0 ? (
+        <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[0.68rem] font-semibold text-blue-700">
+          {block.pronunciations.length.toLocaleString()} pronunciations
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function PreparedSourceMarkdownPreview({ source }: Readonly<{ source: PreparedSource | null }>) {
   if (!source) {
     return null;
@@ -4902,6 +5100,65 @@ function PreparedSourceMarkdownPreview({ source }: Readonly<{ source: PreparedSo
       <MarkdownRenderer className="prose-markdown text-sm leading-6 text-zinc-800">
         {source.text}
       </MarkdownRenderer>
+    </div>
+  );
+}
+
+function SourcePrepMathPanel({ source }: Readonly<{ source: PreparedSource | null }>) {
+  const mathBlocks = (source?.blocks ?? []).filter(
+    (block) => block.kind === "math" || Boolean(block.mathPreview),
+  );
+  if (!source) {
+    return null;
+  }
+  if (mathBlocks.length === 0) {
+    return (
+      <div className="p-4 text-sm text-zinc-600">
+        <p>No maths blocks were detected in this source.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="grid max-h-[28rem] gap-3 overflow-y-auto p-4 text-sm">
+      {mathBlocks.map((block) => (
+        <article
+          className="grid gap-3 rounded-md border border-zinc-200 bg-white p-3"
+          key={block.id}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+              {block.kind} · block {block.index.toLocaleString()}
+            </p>
+            <span
+              className={`rounded-full border px-2 py-1 text-[0.68rem] font-semibold ${
+                block.mathPreview?.source === "fallback"
+                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
+              }`}
+            >
+              {block.mathPreview?.source ?? "speech policy"}
+            </span>
+          </div>
+          <div className="rounded-md border border-zinc-100 bg-zinc-50 p-3 font-mono text-xs leading-5 text-zinc-800">
+            {block.text ?? block.label}
+          </div>
+          <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+            {block.mathPreview?.speech ?? block.spokenText ?? "No maths speech available"}
+          </div>
+          {block.mathPreview?.warnings && block.mathPreview.warnings.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {block.mathPreview.warnings.map((warning) => (
+                <span
+                  className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700"
+                  key={warning}
+                >
+                  {warning}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </article>
+      ))}
     </div>
   );
 }
@@ -5024,13 +5281,16 @@ function VoiceStudioPanel({
   optimizedText,
   profileCandidateCreateId,
   profiles,
+  runConfiguration,
   selectedKokoroVoiceId,
   selectedProfileId,
   studioPipelineHint,
+  ttsEngines,
   onAnalyzeSource,
   onClearSelection,
   onCreateProfileFromCandidate,
   onDeleteProfile,
+  onRunConfigurationChange,
   onSelectKokoroVoice,
   onSelectProfile,
 }: Readonly<{
@@ -5043,9 +5303,11 @@ function VoiceStudioPanel({
   optimizedText: string;
   profileCandidateCreateId: string | null;
   profiles: VoiceProfile[];
+  runConfiguration: RunConfiguration;
   selectedKokoroVoiceId: string;
   selectedProfileId: string;
   studioPipelineHint: string;
+  ttsEngines: TTSEngineDiagnostics[];
   onAnalyzeSource: (file: File) => Promise<void>;
   onClearSelection: () => void;
   onCreateProfileFromCandidate: (
@@ -5053,6 +5315,7 @@ function VoiceStudioPanel({
     request: CreateVoiceProfileFromCandidateRequest,
   ) => Promise<void>;
   onDeleteProfile: (id: string) => void;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onSelectKokoroVoice: (voiceId: string) => void;
   onSelectProfile: (id: string) => void;
 }>) {
@@ -5071,11 +5334,14 @@ function VoiceStudioPanel({
         <VoiceProfileDropdown
           isLoading={isLoading}
           profiles={profiles}
+          runConfiguration={runConfiguration}
           selectedKokoroVoiceId={selectedKokoroVoiceId}
           selectedProfile={selectedProfile ?? null}
           selectedProfileId={selectedProfileId}
+          ttsEngines={ttsEngines}
           onClearSelection={onClearSelection}
           onDeleteProfile={onDeleteProfile}
+          onRunConfigurationChange={onRunConfigurationChange}
           onSelectKokoroVoice={onSelectKokoroVoice}
           onSelectProfile={onSelectProfile}
         />
@@ -5099,26 +5365,35 @@ function VoiceStudioPanel({
 function VoiceProfileDropdown({
   isLoading,
   profiles,
+  runConfiguration,
   selectedKokoroVoiceId,
   selectedProfile,
   selectedProfileId,
+  ttsEngines,
   onClearSelection,
   onDeleteProfile,
+  onRunConfigurationChange,
   onSelectKokoroVoice,
   onSelectProfile,
 }: Readonly<{
   isLoading: boolean;
   profiles: VoiceProfile[];
+  runConfiguration: RunConfiguration;
   selectedKokoroVoiceId: string;
   selectedProfile: VoiceProfile | null;
   selectedProfileId: string;
+  ttsEngines: TTSEngineDiagnostics[];
   onClearSelection: () => void;
   onDeleteProfile: (id: string) => void;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onSelectKokoroVoice: (voiceId: string) => void;
   onSelectProfile: (id: string) => void;
 }>) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedKokoroVoice = findKokoroVoicepack(selectedKokoroVoiceId);
+  const selectedEngine = findVoicePanelEngine(ttsEngines, runConfiguration.ttsEngine);
+  const supertonicVoices = selectedEngine?.voices ?? voicePanelSupertonicVoices();
+  const supertonicLanguages = voicePanelSupertonicLanguages(selectedEngine);
   const activeName = selectedProfile?.name ?? "Default Voice";
   const likenessBadge = selectedProfile ? formatLikenessLabel(selectedProfile) : "Provider voice";
   const activeDetail = selectedProfile
@@ -5126,6 +5401,37 @@ function VoiceProfileDropdown({
         selectedProfile.referenceDurationMs ?? selectedProfile.durationMs,
       )} reference · ${likenessBadge}`
     : "Kokoro voicepacks · ready";
+  let kokoroDetailSuffix = "";
+  if (runConfiguration.ttsEngine === "supertonic-3") {
+    kokoroDetailSuffix = " · kept for Auto/Kokoro runs";
+  } else if (selectedProfile) {
+    kokoroDetailSuffix = " · used when the cloned profile is off";
+  }
+  const updateEngine = (engineId: string) => {
+    const engine = findVoicePanelEngine(ttsEngines, engineId);
+    onRunConfigurationChange({
+      ...runConfiguration,
+      ttsEngine: engineId,
+      engineOptions:
+        engineId === "supertonic-3"
+          ? {
+              ...runConfiguration.engineOptions,
+              voiceStyle:
+                runConfiguration.engineOptions.voiceStyle ?? engine?.voices?.[0]?.id ?? "M1",
+              lang: runConfiguration.engineOptions.lang ?? "na",
+            }
+          : {},
+    });
+  };
+  const updateEngineOption = (key: string, value: string) => {
+    onRunConfigurationChange({
+      ...runConfiguration,
+      engineOptions: {
+        ...runConfiguration.engineOptions,
+        [key]: value,
+      },
+    });
+  };
 
   return (
     <section className="grid min-w-0 gap-2">
@@ -5164,8 +5470,74 @@ function VoiceProfileDropdown({
           </p>
         ) : null}
       </div>
+      <section className="grid min-w-0 gap-2 rounded-md border border-zinc-200 bg-white p-3 text-xs text-zinc-600">
+        <label className="grid min-w-0 gap-1">
+          <span className="font-semibold text-zinc-800">Narration backend</span>
+          <select
+            className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
+            value={runConfiguration.ttsEngine}
+            onChange={(event) => {
+              updateEngine(event.currentTarget.value);
+            }}
+          >
+            {voicePanelEngineOptions(ttsEngines).map((engine) => (
+              <option key={engine.id} value={engine.id}>
+                {engine.label} · {engine.status}
+              </option>
+            ))}
+          </select>
+        </label>
+        {runConfiguration.ttsEngine === "supertonic-3" ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="grid min-w-0 gap-1">
+              <span className="font-semibold text-zinc-800">Supertonic voice</span>
+              <select
+                className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
+                value={runConfiguration.engineOptions.voiceStyle ?? "M1"}
+                onChange={(event) => {
+                  updateEngineOption("voiceStyle", event.currentTarget.value);
+                }}
+              >
+                {supertonicVoices.map((voice) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.name} {voice.gender ? `· ${voice.gender}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid min-w-0 gap-1">
+              <span className="font-semibold text-zinc-800">Language</span>
+              <select
+                className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
+                value={runConfiguration.engineOptions.lang ?? "na"}
+                onChange={(event) => {
+                  updateEngineOption("lang", event.currentTarget.value);
+                }}
+              >
+                {supertonicLanguages.map((language) => (
+                  <option key={language.code} value={language.code}>
+                    {language.label} · {language.code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span
+              className="min-w-0 truncate text-zinc-500 sm:col-span-2"
+              title={voicePanelSupertonicSummary(runConfiguration, selectedEngine)}
+            >
+              {voicePanelSupertonicSummary(runConfiguration, selectedEngine)}
+            </span>
+          </div>
+        ) : (
+          <span>Switch to Supertonic 3 here to choose M/F styles and language.</span>
+        )}
+      </section>
       <label className="grid min-w-0 gap-1 rounded-md border border-zinc-200 bg-white p-3 text-xs text-zinc-600">
-        <span className="font-semibold text-zinc-800">Kokoro voicepack</span>
+        <span className="font-semibold text-zinc-800">
+          {runConfiguration.ttsEngine === "supertonic-3"
+            ? "Kokoro fallback voicepack"
+            : "Kokoro voicepack"}
+        </span>
         <select
           className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
           value={selectedKokoroVoice?.id ?? DEFAULT_KOKORO_VOICE_ID}
@@ -5181,7 +5553,7 @@ function VoiceProfileDropdown({
         </select>
         <span className="truncate" title={kokoroVoicepackDetail(selectedKokoroVoice?.id)}>
           {kokoroVoicepackDetail(selectedKokoroVoice?.id)}
-          {selectedProfile ? " · used when the cloned profile is off" : ""}
+          {kokoroDetailSuffix}
         </span>
       </label>
       {isLoading ? <p className="text-sm text-zinc-600">Loading profiles...</p> : null}
@@ -5213,6 +5585,73 @@ function VoiceProfileDropdown({
       ) : null}
     </section>
   );
+}
+
+function voicePanelEngineOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiagnostics[] {
+  if (engines.length > 0) {
+    return engines;
+  }
+  return [
+    {
+      default: true,
+      experimental: false,
+      id: "auto",
+      label: "Auto",
+      local: true,
+      status: "ready",
+      supportsReference: true,
+      supportsSSML: false,
+      supportsSwedish: false,
+      supportsVoice: true,
+    },
+    {
+      default: false,
+      experimental: false,
+      id: "supertonic-3",
+      label: "Supertonic 3",
+      local: true,
+      status: "ready",
+      supportsReference: false,
+      supportsSSML: false,
+      supportsSwedish: true,
+      supportsVoice: true,
+    },
+  ];
+}
+
+function findVoicePanelEngine(
+  engines: TTSEngineDiagnostics[],
+  engineId: string,
+): TTSEngineDiagnostics | undefined {
+  return voicePanelEngineOptions(engines).find((engine) => engine.id === engineId);
+}
+
+function voicePanelSupertonicVoices(): { id: string; name: string; gender?: string }[] {
+  return SUPERTONIC_VOICE_STYLES.map((id) => ({
+    gender: id.startsWith("M") ? "male" : "female",
+    id,
+    name: id,
+  }));
+}
+
+function voicePanelSupertonicLanguages(engine: TTSEngineDiagnostics | undefined) {
+  const supportedCodes =
+    engine?.languages && engine.languages.length > 0
+      ? engine.languages
+      : SUPERTONIC_LANGUAGE_OPTIONS.map((language) => language.code);
+  const supported = new Set(supportedCodes);
+  return SUPERTONIC_LANGUAGE_OPTIONS.filter((language) => supported.has(language.code));
+}
+
+function voicePanelSupertonicSummary(
+  runConfiguration: RunConfiguration,
+  engine: TTSEngineDiagnostics | undefined,
+): string {
+  const voice = runConfiguration.engineOptions.voiceStyle ?? "M1";
+  const language = runConfiguration.engineOptions.lang ?? "na";
+  return `${voice} · ${supertonicLanguageLabel(language)} · ${language} · ${
+    engine?.supportsSSML ? "SSML" : "plain text fallback"
+  }`;
 }
 
 function VoiceProfileOption({

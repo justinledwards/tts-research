@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/justinedwards/tts-research/backend/internal/agents"
+	"github.com/justinedwards/tts-research/backend/internal/ssml"
 )
 
 const (
@@ -203,6 +204,13 @@ func (service *Service) resolveTTSEngine(engineID string, isReferenceProfile boo
 	return requested, registration.Agent, nil
 }
 
+func (service *Service) ttsEngineSupportsSSML(engineID string) bool {
+	service.mu.RLock()
+	registration, ok := service.ttsEngines[normalizeTTSEngineID(engineID)]
+	service.mu.RUnlock()
+	return ok && registration.Diagnostics.SupportsSSML
+}
+
 func synthesizeWithAgent(
 	ctx context.Context,
 	agent TTSAgent,
@@ -212,6 +220,8 @@ func synthesizeWithAgent(
 	referenceLanguage string,
 	voice string,
 	language string,
+	ssmlText string,
+	supportsSSML bool,
 ) (agents.TTSResult, error) {
 	if isReferenceProfile {
 		withReference, ok := agent.(TTSWithReference)
@@ -222,7 +232,17 @@ func synthesizeWithAgent(
 	}
 	if withVoice, ok := agent.(TTSWithVoice); ok &&
 		(strings.TrimSpace(voice) != "" || strings.TrimSpace(language) != "") {
+		if supportsSSML {
+			if withSSML, ok := agent.(TTSWithSSML); ok && strings.TrimSpace(ssmlText) != "" {
+				return withSSML.SynthesizeSSML(ctx, ssmlText, text, voice, language)
+			}
+		}
 		return withVoice.SynthesizeWithVoice(ctx, text, voice, language)
+	}
+	if supportsSSML {
+		if withSSML, ok := agent.(TTSWithSSML); ok && strings.TrimSpace(ssmlText) != "" {
+			return withSSML.SynthesizeSSML(ctx, ssmlText, text, voice, language)
+		}
 	}
 	result, err := agent.Synthesize(ctx, text)
 	if err != nil {
@@ -232,4 +252,8 @@ func synthesizeWithAgent(
 		return agents.TTSResult{}, err
 	}
 	return result, nil
+}
+
+func ssmlForSegment(text string, language string) string {
+	return ssml.Serialize(ssml.Document{Text: text, Lang: language})
 }

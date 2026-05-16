@@ -34,6 +34,8 @@ export interface CreateVoiceJobRequest {
   pipelineOptions?: Partial<PipelineOptions>;
   speechPolicyProfile?: string;
   speechPolicyOverrides?: SpeechPolicyOverrides;
+  locale?: string;
+  speechRenderApplied?: boolean;
 }
 
 export type RunMode = "draftPreview" | "fastCreate" | "checkedMaster" | "publishMaster";
@@ -364,6 +366,47 @@ export interface NarrationSegment {
   warnings?: string[];
 }
 
+export interface LanguageSpan {
+  startOffset: number;
+  endOffset: number;
+  text: string;
+  lang: string;
+  script: string;
+  confidence: number;
+  source: string;
+}
+
+export interface PronunciationDecision {
+  term: string;
+  spoken: string;
+  source: string;
+  entryId?: string;
+  scope?: "project" | "voiceProfile";
+  protected?: boolean;
+  startOffset: number;
+  endOffset: number;
+  originalText: string;
+}
+
+export interface NormalisationDecision {
+  kind: string;
+  original: string;
+  spoken: string;
+  rule: string;
+  startOffset: number;
+  endOffset: number;
+}
+
+export interface MathPreviewResult {
+  input: string;
+  normalized: string;
+  speech: string;
+  source: string;
+  previewMath?: string;
+  warnings?: string[];
+  toolOptional: boolean;
+}
+
 export interface NarrationBlock {
   id: string;
   index: number;
@@ -384,6 +427,10 @@ export interface NarrationBlock {
   warnings?: string[];
   metadata?: Record<string, unknown>;
   speechPolicy: SpeechPolicyDecision;
+  languageSpans?: LanguageSpan[];
+  pronunciations?: PronunciationDecision[];
+  normalisations?: NormalisationDecision[];
+  mathPreview?: MathPreviewResult;
 }
 
 export interface SkippedSourceItem {
@@ -532,6 +579,7 @@ export interface TTSEngineDiagnostics {
   supportsVoice: boolean;
   supportsReference: boolean;
   supportsSwedish: boolean;
+  supportsSSML: boolean;
   languages?: string[];
   voices?: TTSEngineVoice[];
   estimatedVram?: string;
@@ -539,6 +587,45 @@ export interface TTSEngineDiagnostics {
   reason?: string;
   setup?: string;
   metadata?: Record<string, string>;
+}
+
+export type LexiconScope = "project" | "voiceProfile";
+
+export interface LexiconEntry {
+  id: string;
+  term: string;
+  replacement?: string;
+  alphabet?: string;
+  phoneme?: string;
+  lang?: string;
+  locale?: string;
+  caseSensitive?: boolean;
+  protected?: boolean;
+  scope: LexiconScope;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PronunciationLexicon {
+  version: string;
+  scope: LexiconScope;
+  ownerId: string;
+  entries: LexiconEntry[];
+  updatedAt: string;
+}
+
+export interface LexiconUpsertRequest {
+  id?: string;
+  term: string;
+  replacement?: string;
+  alphabet?: string;
+  phoneme?: string;
+  lang?: string;
+  locale?: string;
+  caseSensitive?: boolean;
+  protected?: boolean;
+  notes?: string;
 }
 
 export type ThemeName = "light" | "dark" | "dawn" | "night";

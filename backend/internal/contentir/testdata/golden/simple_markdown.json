@@ -28,7 +28,7 @@
       "displayText": "# Title",
       "normalisedText": "# Title",
       "speechText": "Title",
-      "lang": "und",
+      "lang": "en",
       "script": "Latn",
       "dir": "ltr",
       "provenance": {
@@ -81,7 +81,25 @@
         "columnStart": 1,
         "lineEnd": 1,
         "lineStart": 1,
-        "sourceSlice": "# Title"
+        "policySpeechText": "Title",
+        "sourceSlice": "# Title",
+        "speechRender": {
+          "plainText": "Title",
+          "ssml": "\u003cspeak version=\"1.1\" xml:lang=\"en\"\u003eTitle\u003c/speak\u003e",
+          "lang": "en",
+          "locale": "en-GB",
+          "languageSpans": [
+            {
+              "startOffset": 0,
+              "endOffset": 5,
+              "text": "Title",
+              "lang": "en",
+              "script": "Latn",
+              "confidence": 0.52,
+              "source": "heuristic"
+            }
+          ]
+        }
       },
       "adapterVersion": "markdown-adapter-v2"
     },
@@ -94,7 +112,7 @@
       "displayText": "Hello world.",
       "normalisedText": "Hello world.",
       "speechText": "Hello world.",
-      "lang": "und",
+      "lang": "en",
       "script": "Latn",
       "dir": "ltr",
       "provenance": {
@@ -147,7 +165,25 @@
         "columnStart": 1,
         "lineEnd": 3,
         "lineStart": 3,
-        "sourceSlice": "Hello world."
+        "policySpeechText": "Hello world.",
+        "sourceSlice": "Hello world.",
+        "speechRender": {
+          "plainText": "Hello world.",
+          "ssml": "\u003cspeak version=\"1.1\" xml:lang=\"en\"\u003eHello world.\u003c/speak\u003e",
+          "lang": "en",
+          "locale": "en-GB",
+          "languageSpans": [
+            {
+              "startOffset": 0,
+              "endOffset": 12,
+              "text": "Hello world.",
+              "lang": "en",
+              "script": "Latn",
+              "confidence": 0.52,
+              "source": "heuristic"
+            }
+          ]
+        }
       },
       "adapterVersion": "markdown-adapter-v2"
     }

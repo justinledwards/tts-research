@@ -182,6 +182,23 @@ func (service *Service) evaluateContentIRSpeechPolicy(
 	}
 	for index, node := range document.Nodes {
 		if onlyMissing && !node.Speech.SpeechPolicy.IsZero() {
+			if strings.TrimSpace(node.SpeechText) != "" {
+				rendered := service.RenderSpeechText(node.SpeechText, SpeechRenderOptions{
+					ProjectID:      document.ProjectID,
+					VoiceProfileID: request.VoiceProfileID,
+					Locale:         request.Locale,
+					TTSEngine:      request.TTSEngine,
+					Kind:           NarrationBlockKind(node.Kind),
+					FallbackLang:   node.Lang,
+				})
+				node.SpeechText = rendered.PlainText
+				node.Lang = rendered.Lang
+				if node.Metadata == nil {
+					node.Metadata = contentir.Metadata{}
+				}
+				node.Metadata[speechRenderMetadataKey] = rendered
+				node.Warnings = uniqueStrings(append(node.Warnings, rendered.Warnings...))
+			}
 			document.Nodes[index] = node
 			continue
 		}
@@ -196,6 +213,23 @@ func (service *Service) evaluateContentIRSpeechPolicy(
 		if !onlyMissing {
 			node.SpeechText = strings.TrimSpace(decision.SpeechText)
 			node.Speech.PolicyHint.Mode = string(legacySpeakModeForDecision(decision))
+		}
+		if strings.TrimSpace(node.SpeechText) != "" && legacySpeakModeForDecision(decision) != NarrationSpeakModeSkip {
+			rendered := service.RenderSpeechText(node.SpeechText, SpeechRenderOptions{
+				ProjectID:      document.ProjectID,
+				VoiceProfileID: request.VoiceProfileID,
+				Locale:         request.Locale,
+				TTSEngine:      request.TTSEngine,
+				Kind:           NarrationBlockKind(node.Kind),
+				FallbackLang:   node.Lang,
+			})
+			node.SpeechText = rendered.PlainText
+			node.Lang = rendered.Lang
+			if node.Metadata == nil {
+				node.Metadata = contentir.Metadata{}
+			}
+			node.Metadata[speechRenderMetadataKey] = rendered
+			node.Warnings = uniqueStrings(append(node.Warnings, rendered.Warnings...))
 		}
 		document.Nodes[index] = node
 	}

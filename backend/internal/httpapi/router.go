@@ -14,6 +14,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
+	speechmath "github.com/justinedwards/tts-research/backend/internal/math"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
 	systemmetrics "github.com/justinedwards/tts-research/backend/internal/systemmetrics"
@@ -54,6 +55,16 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 
 	app.Get("/api/tts-engines", func(ctx fiber.Ctx) error {
 		return ctx.JSON(service.ListTTSEngines())
+	})
+
+	app.Post("/api/math/preview", func(ctx fiber.Ctx) error {
+		var request struct {
+			Input string `json:"input"`
+		}
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		return ctx.JSON(speechmath.Preview(request.Input))
 	})
 
 	app.Get("/api/voices", func(ctx fiber.Ctx) error {
@@ -276,6 +287,70 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 		}
 		return ctx.JSON(settings)
+	})
+
+	app.Get("/api/projects/:id/lexicon", func(ctx fiber.Ctx) error {
+		lex, err := service.GetProjectLexicon(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(lex)
+	})
+
+	app.Post("/api/projects/:id/lexicon", func(ctx fiber.Ctx) error {
+		var request pipeline.LexiconUpsertRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		lex, err := service.UpsertProjectLexiconEntry(ctx.Params("id"), request)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.Status(fiber.StatusCreated).JSON(lex)
+	})
+
+	app.Patch("/api/projects/:id/lexicon/entries/:entryId", func(ctx fiber.Ctx) error {
+		var request pipeline.LexiconUpsertRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		request.ID = ctx.Params("entryId")
+		lex, err := service.UpsertProjectLexiconEntry(ctx.Params("id"), request)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(lex)
+	})
+
+	app.Delete("/api/projects/:id/lexicon/entries/:entryId", func(ctx fiber.Ctx) error {
+		lex, err := service.DeleteProjectLexiconEntry(ctx.Params("id"), ctx.Params("entryId"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(lex)
+	})
+
+	app.Post("/api/projects/:id/lexicon/import", func(ctx fiber.Ctx) error {
+		file, err := openLexiconUpload(ctx)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		lex, err := service.ImportProjectLexicon(ctx.Params("id"), file)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(lex)
+	})
+
+	app.Get("/api/projects/:id/lexicon/export.pls", func(ctx fiber.Ctx) error {
+		data, err := service.ExportProjectLexiconPLS(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		ctx.Set(fiber.HeaderContentType, "application/pls+xml")
+		ctx.Set(fiber.HeaderContentDisposition, `attachment; filename="project-lexicon.pls"`)
+		return ctx.Send(data)
 	})
 
 	app.Get("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
@@ -719,6 +794,70 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(profile)
 	})
 
+	app.Get("/api/voice-profiles/:id/lexicon", func(ctx fiber.Ctx) error {
+		lex, err := service.GetVoiceProfileLexicon(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(lex)
+	})
+
+	app.Post("/api/voice-profiles/:id/lexicon", func(ctx fiber.Ctx) error {
+		var request pipeline.LexiconUpsertRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		lex, err := service.UpsertVoiceProfileLexiconEntry(ctx.Params("id"), request)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.Status(fiber.StatusCreated).JSON(lex)
+	})
+
+	app.Patch("/api/voice-profiles/:id/lexicon/entries/:entryId", func(ctx fiber.Ctx) error {
+		var request pipeline.LexiconUpsertRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		request.ID = ctx.Params("entryId")
+		lex, err := service.UpsertVoiceProfileLexiconEntry(ctx.Params("id"), request)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(lex)
+	})
+
+	app.Delete("/api/voice-profiles/:id/lexicon/entries/:entryId", func(ctx fiber.Ctx) error {
+		lex, err := service.DeleteVoiceProfileLexiconEntry(ctx.Params("id"), ctx.Params("entryId"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(lex)
+	})
+
+	app.Post("/api/voice-profiles/:id/lexicon/import", func(ctx fiber.Ctx) error {
+		file, err := openLexiconUpload(ctx)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		lex, err := service.ImportVoiceProfileLexicon(ctx.Params("id"), file)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(lex)
+	})
+
+	app.Get("/api/voice-profiles/:id/lexicon/export.pls", func(ctx fiber.Ctx) error {
+		data, err := service.ExportVoiceProfileLexiconPLS(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+		ctx.Set(fiber.HeaderContentType, "application/pls+xml")
+		ctx.Set(fiber.HeaderContentDisposition, `attachment; filename="voice-profile-lexicon.pls"`)
+		return ctx.Send(data)
+	})
+
 	app.Get("/api/voice-profile-sources/diagnostics", func(ctx fiber.Ctx) error {
 		return ctx.JSON(service.GetVoiceProfileSourceDiagnostics())
 	})
@@ -1136,6 +1275,25 @@ func firstFormValue(values []string) string {
 		return ""
 	}
 	return values[0]
+}
+
+func openLexiconUpload(ctx fiber.Ctx) (io.ReadCloser, error) {
+	form, err := ctx.MultipartForm()
+	if err != nil {
+		return nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid multipart form data"))
+	}
+	fileHeaders := form.File["file"]
+	if len(fileHeaders) == 0 {
+		fileHeaders = form.File["lexicon"]
+	}
+	if len(fileHeaders) == 0 {
+		return nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("missing lexicon file"))
+	}
+	file, err := fileHeaders[0].Open()
+	if err != nil {
+		return nil, ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("could not read lexicon file"))
+	}
+	return file, nil
 }
 
 func saveUploadedSource(ctx fiber.Ctx) (string, string, int64, func(), error) {

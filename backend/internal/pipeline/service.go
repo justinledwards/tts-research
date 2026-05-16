@@ -73,6 +73,10 @@ type TTSWithReference interface {
 	SynthesizeWithReference(context.Context, string, string, string) (agents.TTSResult, error)
 }
 
+type TTSWithSSML interface {
+	SynthesizeSSML(context.Context, string, string, string, string) (agents.TTSResult, error)
+}
+
 type TTSEngineRegistration struct {
 	ID          string
 	Agent       TTSAgent
@@ -639,6 +643,8 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 			ProgressTargetID:      progressTargetID,
 			SpeechPolicyProfile:   speechPolicyProfile,
 			SpeechPolicyOverrides: speechPolicyOverrides,
+			Locale:                request.Locale,
+			SpeechRenderApplied:   request.SpeechRenderApplied,
 			Status:                JobStatusQueued,
 			Stages:                initialStages(),
 			AdaptiveMode:          adaptiveMode,
@@ -1110,6 +1116,22 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		})
 	}
 
+	if !job.SpeechRenderApplied {
+		rendered := service.RenderSpeechText(optimizedText, SpeechRenderOptions{
+			ProjectID:      job.ProjectID,
+			VoiceProfileID: job.VoiceProfileID,
+			Locale:         job.Locale,
+			TTSEngine:      job.TTSEngine,
+			FallbackLang:   job.TTSLanguage,
+		})
+		optimizedText = rendered.PlainText
+		service.updateJob(id, func(job *storedJob) {
+			job.Locale = rendered.Locale
+			job.SegmentationWarnings = uniqueStrings(append(job.SegmentationWarnings, rendered.Warnings...))
+			job.SpeechRenderApplied = true
+		})
+	}
+
 	service.updateJob(id, func(job *storedJob) {
 		job.OptimizedText = optimizedText
 		job.Stages.Optimization = StageStatusDone
@@ -1415,6 +1437,8 @@ func (service *Service) synthesizeUntilComplete(
 					profileLanguage,
 					ttsVoice,
 					ttsLanguage,
+					ssmlForSegment(resumeText, firstNonEmpty(ttsLanguage, profileLanguage)),
+					service.ttsEngineSupportsSSML(resolvedEngine),
 				)
 				if result.Provider == "" {
 					result.Provider = resolvedEngine

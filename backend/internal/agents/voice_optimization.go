@@ -20,11 +20,6 @@ func (agent *VoiceOptimizationAgent) Optimize(_ context.Context, input string) (
 	normalized := strings.TrimSpace(input)
 	normalized = strings.ReplaceAll(normalized, "\r\n", "\n")
 	normalized = normalizeMarkdownForSpeech(normalized)
-	normalized = strings.ReplaceAll(normalized, "&", " and ")
-	normalized = strings.ReplaceAll(normalized, "%", " percent")
-	normalized = strings.ReplaceAll(normalized, "°", " degrees ")
-	normalized = strings.ReplaceAll(normalized, "=", " equals ")
-	normalized = strings.ReplaceAll(normalized, "+", " plus ")
 	normalized = whitespacePattern.ReplaceAllString(normalized, " ")
 
 	return strings.TrimSpace(normalized), nil

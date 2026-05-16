@@ -158,7 +158,7 @@ func TestOpenRouterVoiceOptimizationAgentFallsBackWithoutKey(t *testing.T) {
 		t.Fatalf("Optimize returned error: %v", err)
 	}
 
-	if optimized != "CPU usage is 90 percent plus memory equals 4GB." {
+	if optimized != "CPU usage is 90% + memory = 4GB." {
 		t.Fatalf("optimized = %q", optimized)
 	}
 }

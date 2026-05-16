@@ -6,6 +6,9 @@ import (
 
 	"github.com/justinedwards/tts-research/backend/internal/audio"
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
+	"github.com/justinedwards/tts-research/backend/internal/lexicon"
+	speechmath "github.com/justinedwards/tts-research/backend/internal/math"
+	"github.com/justinedwards/tts-research/backend/internal/normalise"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
@@ -53,6 +56,8 @@ type CreateJobRequest struct {
 	PipelineOptions       CreateJobPipelineOptions `json:"pipelineOptions,omitempty"`
 	SpeechPolicyProfile   string                   `json:"speechPolicyProfile,omitempty"`
 	SpeechPolicyOverrides policy.Overrides         `json:"speechPolicyOverrides,omitempty"`
+	Locale                string                   `json:"locale,omitempty"`
+	SpeechRenderApplied   bool                     `json:"speechRenderApplied,omitempty"`
 }
 
 type VoiceKind string
@@ -151,25 +156,29 @@ type NarrationSegment struct {
 }
 
 type NarrationBlock struct {
-	ID                  string              `json:"id"`
-	Index               int                 `json:"index"`
-	Kind                NarrationBlockKind  `json:"kind"`
-	SpeakMode           NarrationSpeakMode  `json:"speakMode"`
-	Label               string              `json:"label,omitempty"`
-	Text                string              `json:"text,omitempty"`
-	SpokenText          string              `json:"spokenText,omitempty"`
-	Language            string              `json:"language,omitempty"`
-	Emphasis            string              `json:"emphasis,omitempty"`
-	PauseBeforeMS       int                 `json:"pauseBeforeMs,omitempty"`
-	PauseAfterMS        int                 `json:"pauseAfterMs,omitempty"`
-	StartOffset         int                 `json:"startOffset"`
-	EndOffset           int                 `json:"endOffset"`
-	EstimatedDurationMS int                 `json:"estimatedDurationMs,omitempty"`
-	Confidence          float64             `json:"confidence,omitempty"`
-	Segments            []NarrationSegment  `json:"segments,omitempty"`
-	Warnings            []string            `json:"warnings,omitempty"`
-	Metadata            map[string]any      `json:"metadata,omitempty"`
-	SpeechPolicy        policy.SpeechPolicy `json:"speechPolicy"`
+	ID                  string                    `json:"id"`
+	Index               int                       `json:"index"`
+	Kind                NarrationBlockKind        `json:"kind"`
+	SpeakMode           NarrationSpeakMode        `json:"speakMode"`
+	Label               string                    `json:"label,omitempty"`
+	Text                string                    `json:"text,omitempty"`
+	SpokenText          string                    `json:"spokenText,omitempty"`
+	Language            string                    `json:"language,omitempty"`
+	Emphasis            string                    `json:"emphasis,omitempty"`
+	PauseBeforeMS       int                       `json:"pauseBeforeMs,omitempty"`
+	PauseAfterMS        int                       `json:"pauseAfterMs,omitempty"`
+	StartOffset         int                       `json:"startOffset"`
+	EndOffset           int                       `json:"endOffset"`
+	EstimatedDurationMS int                       `json:"estimatedDurationMs,omitempty"`
+	Confidence          float64                   `json:"confidence,omitempty"`
+	Segments            []NarrationSegment        `json:"segments,omitempty"`
+	Warnings            []string                  `json:"warnings,omitempty"`
+	Metadata            map[string]any            `json:"metadata,omitempty"`
+	SpeechPolicy        policy.SpeechPolicy       `json:"speechPolicy"`
+	LanguageSpans       []normalise.LanguageSpan  `json:"languageSpans,omitempty"`
+	Pronunciations      []lexicon.Decision        `json:"pronunciations,omitempty"`
+	Normalisations      []normalise.Decision      `json:"normalisations,omitempty"`
+	MathPreview         *speechmath.PreviewResult `json:"mathPreview,omitempty"`
 }
 
 type SkippedSourceItem struct {
@@ -230,8 +239,11 @@ type CreatePreparedSourceRequest struct {
 }
 
 type SpeechPolicyPreviewRequest struct {
-	Profile   string           `json:"profile,omitempty"`
-	Overrides policy.Overrides `json:"overrides,omitempty"`
+	Profile        string           `json:"profile,omitempty"`
+	Overrides      policy.Overrides `json:"overrides,omitempty"`
+	VoiceProfileID string           `json:"voiceProfileId,omitempty"`
+	Locale         string           `json:"locale,omitempty"`
+	TTSEngine      string           `json:"ttsEngine,omitempty"`
 }
 
 type ProjectSpeechPolicy struct {
@@ -494,6 +506,7 @@ type TTSEngineDiagnostics struct {
 	SupportsVoice     bool              `json:"supportsVoice"`
 	SupportsReference bool              `json:"supportsReference"`
 	SupportsSwedish   bool              `json:"supportsSwedish"`
+	SupportsSSML      bool              `json:"supportsSSML"`
 	Languages         []string          `json:"languages,omitempty"`
 	Voices            []TTSEngineVoice  `json:"voices,omitempty"`
 	EstimatedVRAM     string            `json:"estimatedVram,omitempty"`
@@ -926,6 +939,8 @@ type VoiceJob struct {
 	ProgressTargetID        string            `json:"progressTargetId,omitempty"`
 	SpeechPolicyProfile     string            `json:"speechPolicyProfile,omitempty"`
 	SpeechPolicyOverrides   policy.Overrides  `json:"speechPolicyOverrides,omitempty"`
+	Locale                  string            `json:"locale,omitempty"`
+	SpeechRenderApplied     bool              `json:"speechRenderApplied,omitempty"`
 	Status                  JobStatus         `json:"status"`
 	Stages                  PipelineStages    `json:"stages"`
 	AdaptiveMode            bool              `json:"adaptiveMode"`
