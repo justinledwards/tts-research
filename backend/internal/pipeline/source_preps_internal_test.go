@@ -61,3 +61,46 @@ func TestHackerNewsItemMarkdown(t *testing.T) {
 		}
 	}
 }
+
+func TestClonePreparedSourceDetachesMutableBlockState(t *testing.T) {
+	t.Parallel()
+
+	original := PreparedSource{
+		Warnings: []string{"source-warning"},
+		Metadata: map[string]any{"title": "original"},
+		Blocks: []NarrationBlock{{
+			ID:       "block-1",
+			Text:     "Hello",
+			Warnings: []string{"block-warning"},
+			Metadata: map[string]any{"policySpeechText": "Hello"},
+			Segments: []NarrationSegment{{
+				Index:    0,
+				Text:     "Hello",
+				Warnings: []string{"segment-warning"},
+			}},
+		}},
+	}
+
+	cloned := clonePreparedSource(original)
+	cloned.Warnings[0] = "changed-source"
+	cloned.Metadata["title"] = "changed"
+	cloned.Blocks[0].Metadata["policySpeechText"] = "changed"
+	cloned.Blocks[0].Warnings[0] = "changed-block"
+	cloned.Blocks[0].Segments[0].Warnings[0] = "changed-segment"
+
+	if original.Warnings[0] != "source-warning" {
+		t.Fatalf("source warnings were shared")
+	}
+	if original.Metadata["title"] != "original" {
+		t.Fatalf("source metadata was shared")
+	}
+	if original.Blocks[0].Metadata["policySpeechText"] != "Hello" {
+		t.Fatalf("block metadata was shared")
+	}
+	if original.Blocks[0].Warnings[0] != "block-warning" {
+		t.Fatalf("block warnings were shared")
+	}
+	if original.Blocks[0].Segments[0].Warnings[0] != "segment-warning" {
+		t.Fatalf("segment warnings were shared")
+	}
+}

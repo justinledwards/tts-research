@@ -30,6 +30,14 @@ type TTSResult struct {
 	TimingEvents []alignment.NativeTimingEvent
 }
 
+type VoiceProfileArtifact struct {
+	ModuleID string
+	EngineID string
+	Kind     string
+	Path     string
+	File     string
+}
+
 type MockTTSAgent struct{}
 
 func NewMockTTSAgent() *MockTTSAgent {
@@ -59,9 +67,12 @@ func (agent *MockTTSAgent) SynthesizeWithVoice(_ context.Context, text string, v
 type KokoroConfig struct {
 	PythonPath                         string
 	ReferencePythonPath                string
+	EmbedPythonPath                    string
 	ScriptPath                         string
 	ReferenceScriptPath                string
+	EmbedScriptPath                    string
 	ReferenceModulePath                string
+	EmbedModulePath                    string
 	ReferenceWorkerCount               int
 	DataDir                            string
 	LangCode                           string
@@ -113,11 +124,17 @@ func NewKokoroTTSAgent(config KokoroConfig) *KokoroTTSAgent {
 	if config.ReferencePythonPath == "" {
 		config.ReferencePythonPath = config.PythonPath
 	}
+	if config.EmbedPythonPath == "" {
+		config.EmbedPythonPath = config.ReferencePythonPath
+	}
 	if config.ScriptPath == "" {
 		config.ScriptPath = "./scripts/kokoro_synth.py"
 	}
 	if config.ReferenceScriptPath == "" {
 		config.ReferenceScriptPath = "./scripts/kokoro_clone.py"
+	}
+	if config.EmbedScriptPath == "" {
+		config.EmbedScriptPath = "./scripts/kokoro_embed_synth.py"
 	}
 	if config.DataDir == "" {
 		config.DataDir = "./data/kokoro"
@@ -166,6 +183,19 @@ func (agent *KokoroTTSAgent) SynthesizeWithVoice(ctx context.Context, text strin
 		config.LangCode = cleanLangCode
 	}
 	return agent.synthesizeWithConfig(ctx, text, config)
+}
+
+func (agent *KokoroTTSAgent) SynthesizeWithProfileArtifact(
+	ctx context.Context,
+	text string,
+	artifact VoiceProfileArtifact,
+	langCode string,
+) (TTSResult, error) {
+	config := agent.config
+	if cleanLangCode := strings.TrimSpace(langCode); cleanLangCode != "" {
+		config.LangCode = cleanLangCode
+	}
+	return agent.synthesizeWithEmbedArtifact(ctx, text, artifact, config)
 }
 
 func (agent *KokoroTTSAgent) synthesizeWithConfig(ctx context.Context, text string, config KokoroConfig) (TTSResult, error) {
@@ -229,6 +259,116 @@ func (agent *KokoroTTSAgent) synthesizeWithConfig(ctx context.Context, text stri
 	wav, err := os.ReadFile(outputPath)
 	if err != nil {
 		return TTSResult{}, fmt.Errorf("read kokoro output: %w", err)
+	}
+
+	return TTSResult{
+		Audio:       wav,
+		ContentType: "audio/wav",
+		DurationMS:  metadata.DurationMS,
+		Provider:    metadata.Provider,
+		Voice:       metadata.Voice,
+	}, nil
+}
+
+func (agent *KokoroTTSAgent) synthesizeWithEmbedArtifact(
+	ctx context.Context,
+	text string,
+	artifact VoiceProfileArtifact,
+	config KokoroConfig,
+) (TTSResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.ReferenceTimeoutSeconds)*time.Second)
+	defer cancel()
+
+	stylePath := strings.TrimSpace(artifact.Path)
+	if stylePath == "" {
+		return TTSResult{}, errors.New("kokoro embed artifact path is required")
+	}
+	if _, err := os.Stat(stylePath); err != nil {
+		return TTSResult{}, fmt.Errorf("kokoro embed artifact not found: %w", err)
+	}
+	if err := os.MkdirAll(config.DataDir, 0o755); err != nil {
+		return TTSResult{}, fmt.Errorf("create kokoro data dir: %w", err)
+	}
+
+	workDir, err := os.MkdirTemp(config.DataDir, "synth-embed-*")
+	if err != nil {
+		return TTSResult{}, fmt.Errorf("create kokoro embed work dir: %w", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(workDir)
+	}()
+
+	textPath := filepath.Join(workDir, "input.txt")
+	outputPath := filepath.Join(workDir, "output.wav")
+	if err := os.WriteFile(textPath, []byte(text), 0o600); err != nil {
+		return TTSResult{}, fmt.Errorf("write kokoro embed input: %w", err)
+	}
+
+	command := exec.CommandContext(
+		ctx,
+		config.EmbedPythonPath,
+		config.EmbedScriptPath,
+		"--text-file",
+		textPath,
+		"--output",
+		outputPath,
+		"--style-file",
+		stylePath,
+		"--lang-code",
+		config.LangCode,
+		"--speed",
+		fmt.Sprintf("%g", config.Speed),
+		"--device",
+		config.Device,
+	)
+	if modulePath := strings.TrimSpace(config.EmbedModulePath); modulePath != "" {
+		command.Args = append(command.Args, "--upstream-dir", modulePath)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+
+	if err := command.Run(); err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return TTSResult{}, fmt.Errorf(
+				"%w: kokoro embed synthesis timed out after %d seconds",
+				context.DeadlineExceeded,
+				config.ReferenceTimeoutSeconds,
+			)
+		}
+		return TTSResult{}, fmt.Errorf("kokoro embed synthesis failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+
+	metadata, parseErr := parseKokoroMetadata(stdout.String())
+	wav, err := os.ReadFile(outputPath)
+	if err != nil {
+		return TTSResult{}, fmt.Errorf("read kokoro embed output: %w", err)
+	}
+	if parseErr != nil {
+		spec, pcm, pcmErr := audio.ParsePCM16WAV(wav)
+		if pcmErr != nil {
+			return TTSResult{}, fmt.Errorf("parse kokoro embed metadata: %w", parseErr)
+		}
+		metadata = kokoroMetadata{
+			Provider:    "kokoro-embed",
+			RepoID:      "hexgrad/Kokoro-82M",
+			Voice:       firstNonEmptyString(artifact.File, artifact.ModuleID, "kokoro-embed"),
+			LangCode:    config.LangCode,
+			SampleRate:  spec.SampleRate,
+			SampleCount: len(pcm) / (spec.BitsPerSample * spec.ChannelCount / 8),
+			DurationMS:  audio.DurationMSForWAVData(len(pcm), spec),
+		}
+	}
+	if metadata.DurationMS <= 0 {
+		return TTSResult{}, errors.New("kokoro embed output did not include a positive duration")
+	}
+	if metadata.Provider == "" {
+		metadata.Provider = "kokoro-embed"
+	}
+	if metadata.Voice == "" {
+		metadata.Voice = firstNonEmptyString(artifact.File, artifact.ModuleID, "kokoro-embed")
 	}
 
 	return TTSResult{
@@ -703,6 +843,15 @@ func parseKokoroMetadata(stdout string) (kokoroMetadata, error) {
 	}
 
 	return kokoroMetadata{}, errors.New("kokoro did not return metadata")
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if clean := strings.TrimSpace(value); clean != "" {
+			return clean
+		}
+	}
+	return ""
 }
 
 func max(a int, b int) int {

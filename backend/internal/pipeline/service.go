@@ -36,6 +36,8 @@ var (
 	ErrProfileExtractionFailed     = errors.New("unable to extract voice profile audio")
 	ErrProfileMissingAudio         = errors.New("voice profile has no reference audio")
 	ErrProfileUnsupported          = errors.New("tts engine does not support reference voice synthesis")
+	ErrProfileArtifactMissing      = errors.New("voice profile clone artifact is not ready")
+	ErrProfileArtifactUnsupported  = errors.New("voice profile clone artifact module is not supported")
 	ErrProfileSourceNotFound       = errors.New("voice profile source not found")
 	ErrProfileCandidateNotFound    = errors.New("voice profile candidate not found")
 	ErrProfileAnalysisUnavailable  = errors.New("voice profile source analysis is not configured")
@@ -48,6 +50,8 @@ var (
 	ErrProgressNotFound            = errors.New("playback progress not found")
 	ErrPlaybackSessionNotFound     = errors.New("playback session not found")
 	ErrProjectBundleInvalid        = errors.New("project bundle is invalid")
+	ErrResearchModuleNotFound      = errors.New("research module not found")
+	ErrResearchModuleUnavailable   = errors.New("research module is not installed")
 )
 
 type VoiceOptimizer interface {
@@ -76,6 +80,10 @@ type TTSWithReference interface {
 
 type TTSWithSSML interface {
 	SynthesizeSSML(context.Context, string, string, string, string) (agents.TTSResult, error)
+}
+
+type TTSWithProfileArtifact interface {
+	SynthesizeWithProfileArtifact(context.Context, string, agents.VoiceProfileArtifact, string) (agents.TTSResult, error)
 }
 
 type TTSEngineRegistration struct {
@@ -149,6 +157,13 @@ type Options struct {
 	VoiceProfileLikenessCalibrationText  string
 	VoiceProfileLikenessTimeoutSeconds   int
 	VoiceProfileLikenessScorer           VoiceProfileLikenessScorer
+	VoiceProfileArtifactPythonPath       string
+	VoiceProfileArtifactScriptPath       string
+	VoiceProfileArtifactTimeoutSeconds   int
+	VoiceProfileArtifactSteps            int
+	ResearchModules                      []ResearchModuleConfig
+	ResearchModulePromptDisabled         bool
+	ResearchModuleCloneTimeoutSeconds    int
 	Alignment                            AlignmentOptions
 	DefaultTTSEngine                     string
 	TTSEngines                           []TTSEngineRegistration
@@ -188,6 +203,10 @@ const (
 	defaultVoiceProfileEmbeddingScriptPath     = "./scripts/profile_likeness.py"
 	defaultVoiceProfileLikenessCalibrationText = "This is a short voice clone calibration sample for measuring speaker likeness."
 	defaultVoiceProfileLikenessTimeoutSeconds  = 120
+	defaultVoiceProfileArtifactPythonPath      = "./.venv-voice-embed/bin/python"
+	defaultVoiceProfileArtifactScriptPath      = "./scripts/profile_embed_artifact.py"
+	defaultVoiceProfileArtifactTimeoutSeconds  = 3600
+	defaultResearchModuleCloneTimeoutSeconds   = 180
 )
 
 type storedVoiceProfile struct {
@@ -451,6 +470,23 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if options.VoiceProfileLikenessTimeoutSeconds <= 0 {
 		options.VoiceProfileLikenessTimeoutSeconds = defaultVoiceProfileLikenessTimeoutSeconds
 	}
+	if strings.TrimSpace(options.VoiceProfileArtifactPythonPath) == "" {
+		options.VoiceProfileArtifactPythonPath = defaultVoiceProfileArtifactPythonPath
+	}
+	if strings.TrimSpace(options.VoiceProfileArtifactScriptPath) == "" {
+		options.VoiceProfileArtifactScriptPath = defaultVoiceProfileArtifactScriptPath
+	}
+	if options.VoiceProfileArtifactTimeoutSeconds <= 0 {
+		options.VoiceProfileArtifactTimeoutSeconds = defaultVoiceProfileArtifactTimeoutSeconds
+	}
+	if options.ResearchModuleCloneTimeoutSeconds <= 0 {
+		options.ResearchModuleCloneTimeoutSeconds = defaultResearchModuleCloneTimeoutSeconds
+	}
+	if len(options.ResearchModules) == 0 {
+		options.ResearchModules = defaultResearchModuleConfigs()
+	} else {
+		options.ResearchModules = normalizeResearchModuleConfigs(options.ResearchModules)
+	}
 	if options.VoiceProfileSourceAnalyzer == nil {
 		options.VoiceProfileSourceAnalyzer = newPythonProfileSourceAnalyzer(options)
 	}
@@ -619,8 +655,21 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 		if voiceLanguage == "" && profile.Language != "" {
 			voiceLanguage = profile.Language
 		}
+		if service.readyVoiceProfileArtifact(profile, ttsEngine) == nil {
+			switch normalizeTTSEngineID(ttsEngine) {
+			case TTSEngineSupertonic, TTSEngineKokoroEmbed:
+				return VoiceJob{}, fmt.Errorf("%w: build the %s artifact for %s first", ErrProfileArtifactMissing, normalizeTTSEngineID(ttsEngine), profile.Name)
+			}
+		}
 	}
-	if _, _, err := service.resolveTTSEngine(ttsEngine, voiceProfileID != "" || usesCloneVoice); err != nil {
+	isReferenceRequest := voiceProfileID != "" || usesCloneVoice
+	if voiceProfileID != "" {
+		profile, _ := service.GetVoiceProfile(voiceProfileID)
+		if service.readyVoiceProfileArtifact(profile, ttsEngine) != nil {
+			isReferenceRequest = false
+		}
+	}
+	if _, _, err := service.resolveTTSEngine(ttsEngine, isReferenceRequest); err != nil {
 		return VoiceJob{}, err
 	}
 
@@ -955,6 +1004,9 @@ func (service *Service) reloadProfiles() {
 		if cleaned.UpdatedAt.IsZero() {
 			cleaned.UpdatedAt = cleaned.CreatedAt
 		}
+		if len(cleaned.CloneArtifacts) == 0 {
+			cleaned.CloneArtifacts = nil
+		}
 		profiles[cleaned.ID] = cleaned
 	}
 
@@ -1143,6 +1195,7 @@ func (service *Service) runJob(ctx context.Context, id string) {
 
 	profileID := strings.TrimSpace(job.VoiceProfileID)
 	profileRef := ""
+	var profileArtifact *VoiceProfileCloneArtifact
 	profileLanguage := strings.TrimSpace(job.VoiceProfileLanguage)
 	ttsVoice := strings.TrimSpace(job.TTSVoice)
 	ttsLanguage := strings.TrimSpace(job.TTSLanguage)
@@ -1187,13 +1240,17 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		if profileLanguage == "" {
 			profileLanguage = profile.Language
 		}
+		if artifact := service.readyVoiceProfileArtifact(profile.VoiceProfile, ttsEngine); artifact != nil {
+			profileArtifact = artifact
+		}
 	}
 
-	isReferenceProfile := profileRef != ""
+	isReferenceProfile := profileRef != "" && profileArtifact == nil
 	result, check, err := service.synthesizeUntilComplete(
 		ctx,
 		id,
 		optimizedText,
+		profileArtifact,
 		isReferenceProfile,
 		profileRef,
 		profileLanguage,
@@ -1308,6 +1365,7 @@ func (service *Service) synthesizeUntilComplete(
 	ctx context.Context,
 	id string,
 	optimizedText string,
+	profileArtifact *VoiceProfileCloneArtifact,
 	isReferenceProfile bool,
 	profileReferencePath string,
 	profileLanguage string,
@@ -1443,10 +1501,16 @@ func (service *Service) synthesizeUntilComplete(
 				if err != nil {
 					return agents.TTSResult{}, err
 				}
+				var agentArtifact *agents.VoiceProfileArtifact
+				if profileArtifact != nil {
+					artifact := service.profileArtifactForAgent(*profileArtifact)
+					agentArtifact = &artifact
+				}
 				result, err := synthesizeWithAgent(
 					pipelineCtx,
 					agent,
 					resumeText,
+					agentArtifact,
 					isReferenceProfile,
 					profileReferencePath,
 					profileLanguage,

@@ -1,5 +1,15 @@
 # Working Log
 
+## 2026-05-17 12:14 CEST - Optional embed clone modules
+- [x] Add research module diagnostics and clone setup APIs.
+- [x] Add voice profile clone artifacts and artifact build APIs.
+- [x] Extend synthesis routing for optional embed artifacts.
+- [x] Add Research Modules and profile artifact UI.
+- [x] Add focused tests and run project checks.
+- [x] Harden clone/setup browser flow and prepared-source concurrency.
+- [x] Keep mock TTS out of primary Studio engine ergonomics.
+- [x] Re-run checks, smoke the UI, stop dev servers, and commit.
+
 ## 2026-05-14 16:53 CEST - Voice Studio pipeline and product controls
 - [x] Add the backend voice job pipeline foundation.
 - [x] Add product shell controls for source, profile, and script workflows.

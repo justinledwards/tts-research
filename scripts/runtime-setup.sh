@@ -10,6 +10,9 @@ ALIGNMENT_MFA_ENV="${ALIGNMENT_MFA_ENV:-tts-research-mfa}"
 ALIGNMENT_GENTLE_IMAGE="${ALIGNMENT_GENTLE_IMAGE:-lowerquality/gentle}"
 DRAMABOX_DIR="${DRAMABOX_DIR:-$ROOT_DIR/.upstreams/DramaBox}"
 DRAMABOX_VENV="${DRAMABOX_VENV:-$BACKEND_DIR/.venv-dramabox}"
+VOICE_EMBED_VENV="${VOICE_EMBED_VENV:-$BACKEND_DIR/.venv-voice-embed}"
+SUPERTONIC_EMBED_DIR="${SUPERTONIC_EMBED_DIR:-$ROOT_DIR/.upstreams/supertonic.embed}"
+KOKORO_EMBED_DIR="${KOKORO_EMBED_DIR:-$ROOT_DIR/.upstreams/kokoro.embed}"
 HISTORY_REWRITE_BRANCH="codex/history-rewrite-hygiene"
 PURGED_PATHS=(
   "backend/model/kokoro.onnx"
@@ -169,6 +172,39 @@ setup_dramabox() {
   fi
 }
 
+voice_embed_python() {
+  printf "%s/bin/python" "$VOICE_EMBED_VENV"
+}
+
+setup_voice_embed() {
+  require_command uv
+  ensure_local_dirs
+
+  if [[ ! -x "$(voice_embed_python)" ]]; then
+    echo "Creating voice embed artifact environment at $VOICE_EMBED_VENV..."
+    run_with_mise uv venv --python "${VOICE_EMBED_PYTHON_VERSION:-3.12}" "$VOICE_EMBED_VENV"
+  fi
+
+  echo "Voice embed runtime is intentionally isolated from Kokoro/Supertonic synthesis."
+  echo "Use the app to clone optional upstream modules into:"
+  echo "  - $SUPERTONIC_EMBED_DIR"
+  echo "  - $KOKORO_EMBED_DIR"
+
+  if [[ "${VOICE_EMBED_INSTALL_DEPS:-0}" != "1" ]]; then
+    echo "Skipping heavy CUDA/PyTorch dependency install."
+    echo "Set VOICE_EMBED_INSTALL_DEPS=1 after reviewing upstream requirements."
+    return
+  fi
+
+  local requirements
+  for requirements in "$SUPERTONIC_EMBED_DIR/requirements.txt" "$KOKORO_EMBED_DIR/requirements.txt"; do
+    if [[ -f "$requirements" ]]; then
+      echo "Installing optional upstream requirements: $requirements"
+      run_with_mise uv pip install --python "$(voice_embed_python)" -r "$requirements"
+    fi
+  done
+}
+
 setup_alignment() {
   ensure_local_dirs
   echo "Alignment setup"
@@ -301,6 +337,23 @@ dramabox_status() {
   echo "not configured"
 }
 
+voice_embed_status() {
+  local python_path
+  python_path="$(voice_embed_python)"
+  if [[ ! -x "$python_path" ]]; then
+    echo "not installed"
+    return
+  fi
+  local modules=()
+  [[ -f "$SUPERTONIC_EMBED_DIR/optimize_style.py" ]] && modules+=("supertonic")
+  [[ -f "$KOKORO_EMBED_DIR/optimize_style.py" ]] && modules+=("kokoro")
+  if [[ "${#modules[@]}" -eq 0 ]]; then
+    echo "python ready, no upstream modules cloned"
+    return
+  fi
+  echo "python ready, modules: ${modules[*]}"
+}
+
 alignment_mfa_status() {
   if [[ -n "${ALIGNMENT_MFA_BIN:-}" ]]; then
     echo "configured ($ALIGNMENT_MFA_BIN)"
@@ -358,6 +411,7 @@ doctor() {
   echo
   echo "Providers"
   echo "  - Supertonic 3: $(supertonic_status)"
+  echo "  - Voice embed artifacts: $(voice_embed_status)"
   echo "  - DramaBox: $(dramabox_status)"
   echo "  - Alignment MFA: $(alignment_mfa_status)"
   echo "  - Alignment Aeneas: $(alignment_aeneas_status)"
@@ -473,6 +527,9 @@ main() {
     setup-dramabox)
       setup_dramabox "$@"
       ;;
+    setup-voice-embed)
+      setup_voice_embed "$@"
+      ;;
     setup-alignment)
       setup_alignment "$@"
       ;;
@@ -493,7 +550,7 @@ main() {
       ;;
     *)
       echo "Unknown command: $command" >&2
-      echo "Usage: $0 {setup|setup-supertonic|setup-dramabox|setup-alignment|doctor|audit-artifacts|audit-secrets|clean-history-plan|clean-history-rewrite}" >&2
+      echo "Usage: $0 {setup|setup-supertonic|setup-dramabox|setup-voice-embed|setup-alignment|doctor|audit-artifacts|audit-secrets|clean-history-plan|clean-history-rewrite}" >&2
       exit 2
       ;;
   esac

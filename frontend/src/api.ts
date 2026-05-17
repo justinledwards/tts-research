@@ -27,6 +27,7 @@ import type {
   ProjectBundlePreview,
   ProjectBundleSummary,
   ProjectStorageSummary,
+  ResearchModuleDiagnostics,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
   UpsertSpeechPolicyProfileRequest,
@@ -836,6 +837,29 @@ export async function listTTSEngines(): Promise<TTSEngineDiagnostics[]> {
   return response.json() as Promise<TTSEngineDiagnostics[]>;
 }
 
+export async function listResearchModules(): Promise<ResearchModuleDiagnostics[]> {
+  const response = await fetch(`${apiBaseUrl}/api/research-modules`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<ResearchModuleDiagnostics[]>;
+}
+
+export async function cloneResearchModule(id: string): Promise<ResearchModuleDiagnostics> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/research-modules/${encodeURIComponent(id)}/clone`,
+    {
+      method: "POST",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<ResearchModuleDiagnostics>;
+}
+
 export async function listVoices(): Promise<Voice[]> {
   const response = await fetch(`${apiBaseUrl}/api/voices`);
   if (!response.ok) {
@@ -877,6 +901,24 @@ export async function createVoiceProfile(
     method: "POST",
     body: formData,
   });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfile>;
+}
+
+export async function buildVoiceProfileArtifact(
+  profileId: string,
+  moduleId: string,
+): Promise<VoiceProfile> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profiles/${encodeURIComponent(profileId)}/artifacts/${encodeURIComponent(moduleId)}`,
+    {
+      method: "POST",
+    },
+  );
 
   if (!response.ok) {
     throw new Error(await readError(response));

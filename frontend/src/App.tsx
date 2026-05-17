@@ -12,7 +12,9 @@ import { BundleFlowPanel, type BundlePanelMode } from "./BundlePanels";
 import {
   apiBaseUrl,
   audioSource,
+  buildVoiceProfileArtifact,
   cancelVoiceJob,
+  cloneResearchModule,
   closePlaybackSession,
   createBookNarrationJob,
   createBookSource,
@@ -46,6 +48,7 @@ import {
   listTTSEngines,
   listProjectJobs,
   listProjects,
+  listResearchModules,
   listVoiceProfiles,
   previewPreparedSourceSpeechPolicy,
   previewContentIRSpeechPolicy,
@@ -133,6 +136,7 @@ import type {
   ProjectBundleImportResult,
   ReadingPosition,
   ProjectStorageSummary,
+  ResearchModuleDiagnostics,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
   SpeechPolicySettings,
@@ -175,7 +179,9 @@ import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./wave
 
 const DEFAULT_PROJECT_NAME = "The Future of Clean Energy";
 const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
+const RESEARCH_MODULE_PROMPT_HIDDEN_KEY = "tts-research-module-prompt-hidden";
 const DEFAULT_KOKORO_VOICE_ID = "af_heart";
+const PROFILE_ARTIFACT_MODULE_ORDER = ["kokoro-embed", "supertonic-embed"] as const;
 const SOURCE_TEXT_FILE_ACCEPT =
   ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,image/png,image/jpeg,image/tiff,image/webp";
 const SOURCE_TEXT_FILE_EXTENSIONS = new Set([
@@ -1364,6 +1370,13 @@ export function App() {
   const [now, setNow] = useState(() => Date.now());
   const [voiceProfiles, setVoiceProfiles] = useState<VoiceProfile[]>([]);
   const [selectedVoiceProfileId, setSelectedVoiceProfileId] = useState("");
+  const [researchModules, setResearchModules] = useState<ResearchModuleDiagnostics[]>([]);
+  const [researchModuleError, setResearchModuleError] = useState<string | null>(null);
+  const [cloningResearchModuleId, setCloningResearchModuleId] = useState<string | null>(null);
+  const [buildingArtifactKey, setBuildingArtifactKey] = useState<string | null>(null);
+  const [isResearchPromptHidden, setIsResearchPromptHidden] = useState(() => {
+    return localStorage.getItem(RESEARCH_MODULE_PROMPT_HIDDEN_KEY) === "1";
+  });
   const [selectedKokoroVoiceId, setSelectedKokoroVoiceId] = useState(() => {
     const savedVoiceId = localStorage.getItem(KOKORO_VOICE_STORAGE_KEY);
     if (savedVoiceId && findKokoroVoicepack(savedVoiceId)) {
@@ -1759,6 +1772,66 @@ export function App() {
       setIsLoadingProfiles(false);
     }
   }, []);
+
+  const refreshResearchModules = useCallback(async () => {
+    try {
+      setResearchModules(await listResearchModules());
+      setResearchModuleError(null);
+    } catch (caughtError) {
+      setResearchModuleError(
+        caughtError instanceof Error ? caughtError.message : "Unable to load research modules",
+      );
+    }
+  }, []);
+
+  const handleCloneResearchModule = useCallback(
+    async (moduleId: string) => {
+      setCloningResearchModuleId(moduleId);
+      setResearchModuleError(null);
+      try {
+        const module = await cloneResearchModule(moduleId);
+        setResearchModules((currentModules) => [
+          ...currentModules.filter((item) => item.id !== module.id),
+          module,
+        ]);
+        await refreshResearchModules();
+      } catch (caughtError) {
+        setResearchModuleError(
+          caughtError instanceof Error ? caughtError.message : "Unable to clone research module",
+        );
+      } finally {
+        setCloningResearchModuleId(null);
+      }
+    },
+    [refreshResearchModules],
+  );
+
+  const handleHideResearchPrompt = useCallback(() => {
+    localStorage.setItem(RESEARCH_MODULE_PROMPT_HIDDEN_KEY, "1");
+    setIsResearchPromptHidden(true);
+  }, []);
+
+  const handleBuildVoiceProfileArtifact = useCallback(
+    async (profileId: string, moduleId: string) => {
+      setBuildingArtifactKey(`${profileId}:${moduleId}`);
+      setProfileError(null);
+      try {
+        const profile = await buildVoiceProfileArtifact(profileId, moduleId);
+        setVoiceProfiles((currentProfiles) =>
+          upsertVoiceProfileByCreatedAt(currentProfiles, profile),
+        );
+      } catch (caughtError) {
+        setProfileError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to build voice profile artifact",
+        );
+      } finally {
+        setBuildingArtifactKey(null);
+      }
+    },
+    [],
+  );
 
   const refreshProjects = useCallback(async () => {
     setProjectError(null);
@@ -2759,11 +2832,13 @@ export function App() {
     void refreshSpeechPolicyProfiles();
     void refreshProfileSourceDiagnostics();
     void refreshBookCinemaDiagnostics();
+    void refreshResearchModules();
     void refreshTTSEngines();
   }, [
     refreshBookCinemaDiagnostics,
     refreshProfileSourceDiagnostics,
     refreshProjects,
+    refreshResearchModules,
     refreshSpeechPolicyProfiles,
     refreshTTSEngines,
     refreshVoiceProfiles,
@@ -3541,7 +3616,7 @@ export function App() {
         isOpen={isRunConfigOpen}
         job={job}
         runConfiguration={runConfiguration}
-        selectedProfileName={selectedVoiceProfile?.name ?? null}
+        selectedProfile={selectedVoiceProfile}
         ttsEngineError={ttsEngineError}
         ttsEngines={ttsEngines}
         onChange={setRunConfiguration}
@@ -3572,6 +3647,7 @@ export function App() {
         profileSource={profileSource}
         projectStorage={projectStorage}
         projectStorageError={projectStorageError}
+        researchModules={researchModules}
         runConfiguration={runConfiguration}
         selectedProfile={selectedVoiceProfile}
         teleprompterSettings={teleprompterSettings}
@@ -3647,9 +3723,21 @@ export function App() {
         />
       ) : null}
 
+      <ResearchModulesSetupCard
+        error={researchModuleError}
+        hidden={isResearchPromptHidden}
+        modules={researchModules}
+        cloningModuleId={cloningResearchModuleId}
+        onClone={(moduleId) => {
+          void handleCloneResearchModule(moduleId);
+        }}
+        onHide={handleHideResearchPrompt}
+      />
+
       <section className="grid min-h-[calc(100vh-58px)] grid-cols-1 border-t lg:grid-cols-[340px_minmax(0,1fr)_360px] vs-border">
         <aside className="vs-raised order-3 flex min-w-0 flex-col overflow-hidden border-zinc-200 lg:order-none lg:border-r">
           <VoiceStudioPanel
+            buildingArtifactKey={buildingArtifactKey}
             error={profileError}
             job={job}
             profileSource={profileSource}
@@ -3659,6 +3747,7 @@ export function App() {
             optimizedText={job?.optimizedText ?? ""}
             profileCandidateCreateId={profileCandidateCreateId}
             profiles={voiceProfiles}
+            researchModules={researchModules}
             runConfiguration={runConfiguration}
             selectedKokoroVoiceId={selectedKokoroVoiceId}
             selectedProfileId={selectedVoiceProfileId}
@@ -3666,6 +3755,7 @@ export function App() {
             ttsEngines={ttsEngines}
             onAnalyzeSource={handleAnalyzeVoiceSource}
             onClearSelection={clearVoiceProfileSelection}
+            onBuildArtifact={handleBuildVoiceProfileArtifact}
             onCreateProfileFromCandidate={handleCreateVoiceProfileFromCandidate}
             onDeleteProfile={(id) => {
               void handleDeleteVoiceProfile(id);
@@ -5348,7 +5438,65 @@ function SourceMetadataStrip({ job, text }: Readonly<{ job: VoiceJob | null; tex
   );
 }
 
+function ResearchModulesSetupCard({
+  cloningModuleId,
+  error,
+  hidden,
+  modules,
+  onClone,
+  onHide,
+}: Readonly<{
+  cloningModuleId: string | null;
+  error: string | null;
+  hidden: boolean;
+  modules: ResearchModuleDiagnostics[];
+  onClone: (moduleId: string) => void;
+  onHide: () => void;
+}>) {
+  const promptModules = modules.filter((module) => module.prompt && !module.installed);
+  if (hidden || (promptModules.length === 0 && !error)) {
+    return null;
+  }
+  return (
+    <section className="border-t border-zinc-200 bg-amber-50 px-5 py-3 text-sm text-amber-950">
+      <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="font-semibold">Optional local research modules are available.</p>
+          <p className="mt-1 break-words text-xs leading-5 text-amber-900">
+            Clone upstreams into ignored .upstreams paths only when you want profile-specific embed
+            artifacts. Current Kokoro Clone and Supertonic preset rendering stay available.
+          </p>
+          {error ? <p className="mt-2 text-xs font-semibold text-red-700">{error}</p> : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {promptModules.map((module) => (
+            <button
+              className="rounded-md border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
+              disabled={!module.cloneAllowed || cloningModuleId === module.id}
+              key={module.id}
+              onClick={() => {
+                onClone(module.id);
+              }}
+              type="button"
+            >
+              {cloningModuleId === module.id ? "Cloning..." : `Clone ${module.label}`}
+            </button>
+          ))}
+          <button
+            className="rounded-md border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            onClick={onHide}
+            type="button"
+          >
+            Hide
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function VoiceStudioPanel({
+  buildingArtifactKey,
   error,
   job,
   profileSource,
@@ -5358,12 +5506,14 @@ function VoiceStudioPanel({
   optimizedText,
   profileCandidateCreateId,
   profiles,
+  researchModules,
   runConfiguration,
   selectedKokoroVoiceId,
   selectedProfileId,
   studioPipelineHint,
   ttsEngines,
   onAnalyzeSource,
+  onBuildArtifact,
   onClearSelection,
   onCreateProfileFromCandidate,
   onDeleteProfile,
@@ -5371,6 +5521,7 @@ function VoiceStudioPanel({
   onSelectKokoroVoice,
   onSelectProfile,
 }: Readonly<{
+  buildingArtifactKey: string | null;
   error: string | null;
   job: VoiceJob | null;
   profileSource: VoiceProfileSource | null;
@@ -5380,12 +5531,14 @@ function VoiceStudioPanel({
   optimizedText: string;
   profileCandidateCreateId: string | null;
   profiles: VoiceProfile[];
+  researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
   selectedKokoroVoiceId: string;
   selectedProfileId: string;
   studioPipelineHint: string;
   ttsEngines: TTSEngineDiagnostics[];
   onAnalyzeSource: (file: File) => Promise<void>;
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
   onClearSelection: () => void;
   onCreateProfileFromCandidate: (
     candidate: VoiceProfileCandidate,
@@ -5409,13 +5562,16 @@ function VoiceStudioPanel({
         </div>
 
         <VoiceProfileDropdown
+          buildingArtifactKey={buildingArtifactKey}
           isLoading={isLoading}
           profiles={profiles}
+          researchModules={researchModules}
           runConfiguration={runConfiguration}
           selectedKokoroVoiceId={selectedKokoroVoiceId}
           selectedProfile={selectedProfile ?? null}
           selectedProfileId={selectedProfileId}
           ttsEngines={ttsEngines}
+          onBuildArtifact={onBuildArtifact}
           onClearSelection={onClearSelection}
           onDeleteProfile={onDeleteProfile}
           onRunConfigurationChange={onRunConfigurationChange}
@@ -5440,26 +5596,32 @@ function VoiceStudioPanel({
 }
 
 function VoiceProfileDropdown({
+  buildingArtifactKey,
   isLoading,
   profiles,
+  researchModules,
   runConfiguration,
   selectedKokoroVoiceId,
   selectedProfile,
   selectedProfileId,
   ttsEngines,
+  onBuildArtifact,
   onClearSelection,
   onDeleteProfile,
   onRunConfigurationChange,
   onSelectKokoroVoice,
   onSelectProfile,
 }: Readonly<{
+  buildingArtifactKey: string | null;
   isLoading: boolean;
   profiles: VoiceProfile[];
+  researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
   selectedKokoroVoiceId: string;
   selectedProfile: VoiceProfile | null;
   selectedProfileId: string;
   ttsEngines: TTSEngineDiagnostics[];
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
   onClearSelection: () => void;
   onDeleteProfile: (id: string) => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
@@ -5541,10 +5703,20 @@ function VoiceProfileDropdown({
           <span className="shrink-0 text-zinc-500">{isOpen ? "▴" : "▾"}</span>
         </button>
         {selectedProfile ? (
-          <p className="mt-3 truncate text-xs text-zinc-500" title={selectedProfile.sourceFile}>
-            {selectedProfile.referenceTrimmed ? "Trimmed clone reference" : "Full clone reference"}{" "}
-            · {formatBytes(selectedProfile.sourceBytes)}
-          </p>
+          <div className="mt-3 grid gap-2">
+            <p className="truncate text-xs text-zinc-500" title={selectedProfile.sourceFile}>
+              {selectedProfile.referenceTrimmed
+                ? "Trimmed clone reference"
+                : "Full clone reference"}{" "}
+              · {formatBytes(selectedProfile.sourceBytes)}
+            </p>
+            <VoiceProfileArtifactControls
+              buildingArtifactKey={buildingArtifactKey}
+              modules={researchModules}
+              profile={selectedProfile}
+              onBuildArtifact={onBuildArtifact}
+            />
+          </div>
         ) : null}
       </div>
       <section className="grid min-w-0 gap-2 rounded-md border border-zinc-200 bg-white p-3 text-xs text-zinc-600">
@@ -5558,7 +5730,15 @@ function VoiceProfileDropdown({
             }}
           >
             {voicePanelEngineOptions(ttsEngines).map((engine) => (
-              <option key={engine.id} value={engine.id}>
+              <option
+                disabled={isEngineUnavailableForSelectedProfile(
+                  engine,
+                  selectedProfile,
+                  runConfiguration,
+                )}
+                key={engine.id}
+                value={engine.id}
+              >
                 {engine.label} · {engine.status}
               </option>
             ))}
@@ -5644,6 +5824,9 @@ function VoiceProfileDropdown({
           />
           {profiles.map((profile) => (
             <VoiceProfileOption
+              artifactSummary={
+                <ProfileOptionArtifactStrip modules={researchModules} profile={profile} />
+              }
               detail={`${profile.status} · ${profile.language} · ${formatDuration(profile.referenceDurationMs ?? profile.durationMs)}`}
               isActive={profile.id === selectedProfileId}
               key={profile.id}
@@ -5662,6 +5845,194 @@ function VoiceProfileDropdown({
       ) : null}
     </section>
   );
+}
+
+function VoiceProfileArtifactControls({
+  buildingArtifactKey,
+  modules,
+  profile,
+  onBuildArtifact,
+}: Readonly<{
+  buildingArtifactKey: string | null;
+  modules: ResearchModuleDiagnostics[];
+  profile: VoiceProfile;
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+}>) {
+  return (
+    <div className="grid gap-2 rounded-md border border-zinc-200 bg-white p-2">
+      <div className="flex flex-wrap gap-1">
+        <ArtifactChip profile={profile} moduleId="kokoro-clone" label="KokoClone" />
+        {PROFILE_ARTIFACT_MODULE_ORDER.map((moduleId) => {
+          const module = modules.find((item) => item.id === moduleId);
+          return (
+            <ArtifactChip
+              key={moduleId}
+              label={moduleLabel(moduleId)}
+              module={module}
+              moduleId={moduleId}
+              profile={profile}
+            />
+          );
+        })}
+      </div>
+      <div className="grid gap-2">
+        {PROFILE_ARTIFACT_MODULE_ORDER.map((moduleId) => {
+          const module = modules.find((item) => item.id === moduleId);
+          const artifact = profile.cloneArtifacts?.[moduleId];
+          const isBuilding =
+            buildingArtifactKey === `${profile.id}:${moduleId}` || artifact?.status === "building";
+          const isInstalled = module?.installed ?? false;
+          const buttonLabel = artifactBuildButtonLabel({
+            isBuilding,
+            isInstalled,
+            moduleId,
+            ready: artifact?.status === "ready",
+          });
+          return (
+            <button
+              className="rounded-md border border-zinc-200 px-2 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
+              disabled={!isInstalled || isBuilding}
+              key={moduleId}
+              onClick={() => {
+                void onBuildArtifact(profile.id, moduleId);
+              }}
+              type="button"
+            >
+              {buttonLabel}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ProfileOptionArtifactStrip({
+  modules,
+  profile,
+}: Readonly<{
+  modules: ResearchModuleDiagnostics[];
+  profile: VoiceProfile;
+}>) {
+  return (
+    <span className="mt-2 flex min-w-0 flex-wrap gap-1">
+      <ArtifactChip profile={profile} moduleId="kokoro-clone" label="KokoClone" />
+      {PROFILE_ARTIFACT_MODULE_ORDER.map((moduleId) => {
+        const module = modules.find((item) => item.id === moduleId);
+        return (
+          <ArtifactChip
+            key={moduleId}
+            label={compactModuleLabel(moduleId)}
+            module={module}
+            moduleId={moduleId}
+            profile={profile}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+function ArtifactChip({
+  label,
+  module,
+  moduleId,
+  profile,
+}: Readonly<{
+  label: string;
+  module?: ResearchModuleDiagnostics;
+  moduleId: string;
+  profile: VoiceProfile;
+}>) {
+  const artifact = profile.cloneArtifacts?.[moduleId];
+  const status = artifactChipStatus(moduleId, artifact?.status, module?.installed ?? false);
+  const ready = status === "ready";
+  const failed = status === "failed";
+  const className = artifactChipClass(ready, failed);
+  return (
+    <span
+      className={`rounded-full border px-2 py-1 text-[0.65rem] font-semibold ${className}`}
+      title={artifact?.error ?? module?.reason ?? status}
+    >
+      {label} {status}
+    </span>
+  );
+}
+
+function moduleLabel(moduleId: string): string {
+  switch (moduleId) {
+    case "kokoro-embed": {
+      return "Kokoro Embed";
+    }
+    case "supertonic-embed": {
+      return "Supertonic Embed";
+    }
+    default: {
+      return moduleId;
+    }
+  }
+}
+
+function compactModuleLabel(moduleId: string): string {
+  switch (moduleId) {
+    case "kokoro-embed": {
+      return "K-Embed";
+    }
+    case "supertonic-embed": {
+      return "S-Embed";
+    }
+    default: {
+      return moduleId;
+    }
+  }
+}
+
+function artifactBuildButtonLabel({
+  isBuilding,
+  isInstalled,
+  moduleId,
+  ready,
+}: Readonly<{
+  isBuilding: boolean;
+  isInstalled: boolean;
+  moduleId: string;
+  ready: boolean;
+}>): string {
+  const label = moduleLabel(moduleId);
+  if (isBuilding) {
+    return `Building ${label}...`;
+  }
+  if (ready) {
+    return `Rebuild ${label}`;
+  }
+  if (isInstalled) {
+    return `Build ${label}`;
+  }
+  return `${label} setup needed`;
+}
+
+function artifactChipStatus(
+  moduleId: string,
+  artifactStatus: string | undefined,
+  moduleInstalled: boolean,
+): string {
+  if (moduleId === "kokoro-clone") {
+    return "ready";
+  }
+  if (artifactStatus) {
+    return artifactStatus;
+  }
+  return moduleInstalled ? "not built" : "setup needed";
+}
+
+function artifactChipClass(ready: boolean, failed: boolean): string {
+  if (ready) {
+    return "border-emerald-300 bg-emerald-50 text-emerald-700";
+  }
+  if (failed) {
+    return "border-red-300 bg-red-50 text-red-700";
+  }
+  return "border-amber-300 bg-amber-50 text-amber-800";
 }
 
 function voicePanelEngineOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiagnostics[] {
@@ -5703,6 +6074,26 @@ function findVoicePanelEngine(
   return voicePanelEngineOptions(engines).find((engine) => engine.id === engineId);
 }
 
+function isEngineUnavailableForSelectedProfile(
+  engine: TTSEngineDiagnostics | undefined,
+  profile: VoiceProfile | null,
+  runConfiguration: RunConfiguration,
+): boolean {
+  if (engine?.status !== "ready") {
+    return true;
+  }
+  if (!profile || !runConfiguration.options.voiceClone) {
+    return false;
+  }
+  if (engine.id === "kokoro-embed") {
+    return profile.cloneArtifacts?.["kokoro-embed"]?.status !== "ready";
+  }
+  if (engine.id === "supertonic-3") {
+    return profile.cloneArtifacts?.["supertonic-embed"]?.status !== "ready";
+  }
+  return false;
+}
+
 function voicePanelSupertonicVoices(): { id: string; name: string; gender?: string }[] {
   return SUPERTONIC_VOICE_STYLES.map((id) => ({
     gender: id.startsWith("M") ? "male" : "female",
@@ -5732,6 +6123,7 @@ function voicePanelSupertonicSummary(
 }
 
 function VoiceProfileOption({
+  artifactSummary,
   detail,
   isActive,
   likeness,
@@ -5740,6 +6132,7 @@ function VoiceProfileOption({
   onDelete,
   onSelect,
 }: Readonly<{
+  artifactSummary?: ReactNode;
   detail: string;
   isActive: boolean;
   likeness?: VoiceProfile["likeness"];
@@ -5758,6 +6151,7 @@ function VoiceProfileOption({
           <span className="mt-1 block truncate text-xs text-zinc-500" title={detail}>
             {detail}
           </span>
+          {artifactSummary}
         </button>
         <div className="flex shrink-0 items-center gap-2">
           {likeness ? (

@@ -250,11 +250,14 @@ func (service *Service) ListProjectPreparedSources(projectID string) ([]Prepared
 	sources := make([]PreparedSource, 0)
 	for _, source := range service.sourcePreps {
 		if source.ProjectID == project.ID {
-			source = service.applyCurrentSpeechPolicy(source, policy.Overrides{})
-			sources = append(sources, summarizePreparedSourcePayload(service.sanitizePreparedSourceWarnings(source)))
+			sources = append(sources, clonePreparedSource(source))
 		}
 	}
 	service.mu.RUnlock()
+	for index, source := range sources {
+		source = service.applyCurrentSpeechPolicy(source, policy.Overrides{})
+		sources[index] = summarizePreparedSourcePayload(service.sanitizePreparedSourceWarnings(source))
+	}
 	sort.SliceStable(sources, func(left int, right int) bool {
 		return sources[left].UpdatedAt.After(sources[right].UpdatedAt)
 	})
@@ -268,6 +271,7 @@ func (service *Service) GetPreparedSource(id string) (PreparedSource, error) {
 	if !ok {
 		return PreparedSource{}, ErrPreparedSourceNotFound
 	}
+	source = clonePreparedSource(source)
 	return service.sanitizePreparedSourceWarnings(service.applyCurrentSpeechPolicy(source, policy.Overrides{})), nil
 }
 
@@ -278,6 +282,7 @@ func (service *Service) PreviewPreparedSourceSpeechPolicy(sourceID string, reque
 	if !ok {
 		return PreparedSource{}, ErrPreparedSourceNotFound
 	}
+	source = clonePreparedSource(source)
 	profileName := strings.TrimSpace(request.Profile)
 	if profileName == "" {
 		project, err := service.GetProject(source.ProjectID)
@@ -342,6 +347,7 @@ func (service *Service) CreatePreparedSourceJob(
 	if !ok {
 		return VoiceJob{}, ErrPreparedSourceNotFound
 	}
+	source = clonePreparedSource(source)
 	if source.Status != PreparedSourceStatusReady {
 		return VoiceJob{}, fmt.Errorf("prepared source is not ready")
 	}
@@ -426,8 +432,69 @@ func (service *Service) CreatePreparedSourceJob(
 func (service *Service) updatePreparedSource(source PreparedSource) {
 	service.mu.Lock()
 	source.UpdatedAt = time.Now().UTC()
-	service.sourcePreps[source.ID] = source
+	service.sourcePreps[source.ID] = clonePreparedSource(source)
 	service.mu.Unlock()
+}
+
+func clonePreparedSource(source PreparedSource) PreparedSource {
+	source.Blocks = cloneNarrationBlocks(source.Blocks)
+	source.SkippedItems = append([]SkippedSourceItem(nil), source.SkippedItems...)
+	source.Warnings = cloneStringSlice(source.Warnings)
+	source.Metadata = cloneAnyMap(source.Metadata)
+	return source
+}
+
+func cloneNarrationBlocks(blocks []NarrationBlock) []NarrationBlock {
+	if len(blocks) == 0 {
+		return nil
+	}
+	cloned := make([]NarrationBlock, len(blocks))
+	for index, block := range blocks {
+		block.Segments = cloneNarrationSegments(block.Segments)
+		block.Warnings = cloneStringSlice(block.Warnings)
+		block.Metadata = cloneAnyMap(block.Metadata)
+		if len(block.LanguageSpans) > 0 {
+			block.LanguageSpans = append(block.LanguageSpans[:0:0], block.LanguageSpans...)
+		}
+		if len(block.Pronunciations) > 0 {
+			block.Pronunciations = append(block.Pronunciations[:0:0], block.Pronunciations...)
+		}
+		if len(block.Normalisations) > 0 {
+			block.Normalisations = append(block.Normalisations[:0:0], block.Normalisations...)
+		}
+		cloned[index] = block
+	}
+	return cloned
+}
+
+func cloneNarrationSegments(segments []NarrationSegment) []NarrationSegment {
+	if len(segments) == 0 {
+		return nil
+	}
+	cloned := make([]NarrationSegment, len(segments))
+	for index, segment := range segments {
+		segment.Warnings = cloneStringSlice(segment.Warnings)
+		cloned[index] = segment
+	}
+	return cloned
+}
+
+func cloneStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	return append([]string(nil), values...)
+}
+
+func cloneAnyMap(values map[string]any) map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]any, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func (service *Service) sanitizePreparedSourceWarnings(source PreparedSource) PreparedSource {

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,6 +65,35 @@ func TestTTSEnginesEndpoint(t *testing.T) {
 	}
 	if len(engines) == 0 || engines[0].ID != pipeline.TTSEngineAuto {
 		t.Fatalf("engines = %#v, want auto diagnostics first", engines)
+	}
+}
+
+func TestResearchModuleClonePreflightAllowsLocalDevOrigins(t *testing.T) {
+	t.Parallel()
+
+	app := httpapi.NewRouter(newService(t))
+	request, err := http.NewRequest(http.MethodOptions, "/api/research-modules/supertonic-embed/clone", nil)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set(fiber.HeaderOrigin, "http://192.168.1.42:5173")
+	request.Header.Set(fiber.HeaderAccessControlRequestMethod, http.MethodPost)
+	request.Header.Set(fiber.HeaderAccessControlRequestHeaders, "Content-Type")
+
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusNoContent)
+	}
+	if got := response.Header.Get(fiber.HeaderAccessControlAllowOrigin); got != "http://192.168.1.42:5173" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want local dev origin", got)
+	}
+	if got := response.Header.Get(fiber.HeaderAccessControlAllowMethods); !strings.Contains(got, http.MethodPost) {
+		t.Fatalf("Access-Control-Allow-Methods = %q, want POST", got)
 	}
 }
 

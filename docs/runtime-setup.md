@@ -56,6 +56,41 @@ export SUPERTONIC_SKIP_SMOKE=1
 
 `SUPERTONIC_AUTO_DOWNLOAD=true` is useful for first setup. After the model cache exists, you can set it to `false` for offline-style runs.
 
+## Optional Voice Embed Artifacts
+
+Voice clone artifact modules are optional local research integrations. The app never vendors or
+bundles these upstreams. On startup, the UI can prompt the user to clone them into ignored paths:
+
+- `.upstreams/supertonic.embed`
+- `.upstreams/kokoro.embed`
+
+Create the isolated artifact-building environment separately from synthesis runtimes:
+
+```sh
+mise setup:voice-embed
+```
+
+That command creates `backend/.venv-voice-embed` and leaves heavy CUDA/PyTorch dependency
+installation off by default. After reviewing the upstream requirements, opt in intentionally:
+
+```sh
+VOICE_EMBED_INSTALL_DEPS=1 mise setup:voice-embed
+```
+
+Useful environment values:
+
+```sh
+export RESEARCH_MODULE_BASE_DIR=../.upstreams
+export SUPERTONIC_EMBED_LOCAL_PATH=../.upstreams/supertonic.embed
+export KOKORO_EMBED_LOCAL_PATH=../.upstreams/kokoro.embed
+export VOICE_PROFILE_ARTIFACT_PYTHON_PATH=./.venv-voice-embed/bin/python
+export VOICE_PROFILE_ARTIFACT_SCRIPT_PATH=./scripts/profile_embed_artifact.py
+export VOICE_PROFILE_ARTIFACT_TIMEOUT_SECONDS=3600
+```
+
+The app stores built artifacts under each voice profile directory as ignored local data. Current
+Kokoro Clone and Supertonic preset rendering remain available when no artifact exists.
+
 ## DramaBox
 
 DramaBox is treated as an experimental engine because its documented hardware footprint is not a good default for consumer 8 GB GPU systems.

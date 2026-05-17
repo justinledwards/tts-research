@@ -20,6 +20,7 @@ type SupertonicConfig struct {
 	ModelDir       string
 	DefaultVoice   string
 	DefaultLang    string
+	StyleFile      string
 	AutoDownload   bool
 	TimeoutSeconds int
 }
@@ -74,6 +75,28 @@ func (agent *SupertonicTTSAgent) SynthesizeWithVoice(ctx context.Context, text s
 	return agent.synthesizeWithConfig(ctx, text, config)
 }
 
+func (agent *SupertonicTTSAgent) SynthesizeWithProfileArtifact(
+	ctx context.Context,
+	text string,
+	artifact VoiceProfileArtifact,
+	lang string,
+) (TTSResult, error) {
+	config := agent.config
+	config.StyleFile = strings.TrimSpace(artifact.Path)
+	if strings.TrimSpace(config.StyleFile) == "" {
+		return TTSResult{}, errors.New("supertonic embed artifact path is required")
+	}
+	if cleanLang := strings.TrimSpace(lang); cleanLang != "" {
+		config.DefaultLang = cleanLang
+	}
+	if cleanFile := strings.TrimSpace(artifact.File); cleanFile != "" {
+		config.DefaultVoice = strings.TrimSuffix(cleanFile, filepath.Ext(cleanFile))
+	} else if cleanModule := strings.TrimSpace(artifact.ModuleID); cleanModule != "" {
+		config.DefaultVoice = cleanModule
+	}
+	return agent.synthesizeWithConfig(ctx, text, config)
+}
+
 func (agent *SupertonicTTSAgent) synthesizeWithConfig(ctx context.Context, text string, config SupertonicConfig) (TTSResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.TimeoutSeconds)*time.Second)
 	defer cancel()
@@ -102,6 +125,9 @@ func (agent *SupertonicTTSAgent) synthesizeWithConfig(ctx context.Context, text 
 	}
 	if strings.TrimSpace(config.ModelDir) != "" {
 		args = append(args, "--model-dir", config.ModelDir)
+	}
+	if strings.TrimSpace(config.StyleFile) != "" {
+		args = append(args, "--voice-style-file", config.StyleFile)
 	}
 
 	command := exec.CommandContext(ctx, config.PythonPath, args...)

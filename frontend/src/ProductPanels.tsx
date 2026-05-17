@@ -18,6 +18,7 @@ import { SUPERTONIC_LANGUAGE_OPTIONS } from "./supertonic";
 import { VOICE_STUDIO_THEMES } from "./theme";
 import type {
   SystemMetrics,
+  ResearchModuleDiagnostics,
   ThemeName,
   TTSEngineDiagnostics,
   VoiceJob,
@@ -118,6 +119,7 @@ export function SettingsPanel({
   profileSource,
   projectStorage,
   projectStorageError,
+  researchModules,
   runConfiguration,
   selectedProfile,
   teleprompterSettings,
@@ -137,6 +139,7 @@ export function SettingsPanel({
   profileSource: VoiceProfileSource | null;
   projectStorage: ProjectStorageSummary | null;
   projectStorageError: string | null;
+  researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
   selectedProfile: VoiceProfile | null;
   teleprompterSettings: TeleprompterHighlightSettings;
@@ -186,6 +189,7 @@ export function SettingsPanel({
         profileSourceDiagnostics={profileSourceDiagnostics}
         projectStorage={projectStorage}
         projectStorageError={projectStorageError}
+        researchModules={researchModules}
         runConfiguration={runConfiguration}
         selectedProfile={selectedProfile}
         teleprompterSettings={teleprompterSettings}
@@ -209,6 +213,7 @@ function SettingsTabContent({
   profileSourceDiagnostics,
   projectStorage,
   projectStorageError,
+  researchModules,
   runConfiguration,
   selectedProfile,
   teleprompterSettings,
@@ -227,6 +232,7 @@ function SettingsTabContent({
   profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
   projectStorage: ProjectStorageSummary | null;
   projectStorageError: string | null;
+  researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
   selectedProfile: VoiceProfile | null;
   teleprompterSettings: TeleprompterHighlightSettings;
@@ -259,6 +265,7 @@ function SettingsTabContent({
         metrics={metrics}
         metricsError={metricsError}
         profileSourceDiagnostics={profileSourceDiagnostics}
+        researchModules={researchModules}
         runConfiguration={runConfiguration}
         ttsEngineError={ttsEngineError}
         ttsEngines={ttsEngines}
@@ -385,6 +392,7 @@ function SettingsProvidersTab({
   metrics,
   metricsError,
   profileSourceDiagnostics,
+  researchModules,
   runConfiguration,
   ttsEngineError,
   ttsEngines,
@@ -394,6 +402,7 @@ function SettingsProvidersTab({
   metrics: SystemMetrics | null;
   metricsError: string | null;
   profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
+  researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
@@ -455,6 +464,7 @@ function SettingsProvidersTab({
           {profileSourceDiagnostics.setupMessage}
         </p>
       ) : null}
+      <ResearchModuleDiagnosticsList modules={researchModules} />
       <TTSEngineDiagnosticsList
         engines={ttsEngines}
         error={ttsEngineError}
@@ -526,6 +536,49 @@ function TTSEngineDiagnosticsList({
                 <span className="vs-muted break-words">{engine.reason ?? engine.setup}</span>
               ) : null}
             </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ResearchModuleDiagnosticsList({
+  modules,
+}: Readonly<{ modules: ResearchModuleDiagnostics[] }>) {
+  if (modules.length === 0) {
+    return null;
+  }
+  return (
+    <div className="grid gap-3 rounded-md border p-3 text-xs vs-border vs-surface">
+      <div>
+        <h4 className="text-sm font-semibold">Research Modules</h4>
+        <p className="vs-muted mt-1 text-xs leading-5">
+          Optional cloned upstreams live outside the app source and are only used for profile
+          artifact builds.
+        </p>
+      </div>
+      <ul className="grid gap-2">
+        {modules.map((module) => (
+          <li className="grid gap-1 rounded-md border p-3 vs-border" key={module.id}>
+            <span className="flex min-w-0 items-center justify-between gap-2">
+              <span className="truncate font-semibold" title={module.label}>
+                {module.label}
+              </span>
+              <span
+                className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${
+                  module.installed
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                    : "border-amber-300 bg-amber-50 text-amber-800"
+                }`}
+              >
+                {module.status}
+              </span>
+            </span>
+            <span className="vs-muted break-words">{module.reason ?? module.setup}</span>
+            <code className="truncate rounded bg-[var(--vs-raised)] px-2 py-1 font-mono text-[11px]">
+              {module.localPath}
+            </code>
           </li>
         ))}
       </ul>

@@ -12,6 +12,7 @@ import type {
   PipelineOptions,
   RunMode,
   TTSEngineDiagnostics,
+  VoiceProfile,
   VoiceJob,
 } from "./types";
 import {
@@ -52,7 +53,7 @@ export function RunConfigDrawer({
   isOpen,
   job,
   runConfiguration,
-  selectedProfileName,
+  selectedProfile,
   ttsEngineError,
   ttsEngines,
   onChange,
@@ -63,7 +64,7 @@ export function RunConfigDrawer({
   isOpen: boolean;
   job: VoiceJob | null;
   runConfiguration: RunConfiguration;
-  selectedProfileName: string | null;
+  selectedProfile: VoiceProfile | null;
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
   onChange: (configuration: RunConfiguration) => void;
@@ -188,7 +189,15 @@ export function RunConfigDrawer({
                 value={runConfiguration.ttsEngine}
               >
                 {(ttsEngines.length > 0 ? ttsEngines : fallbackTTSEngines()).map((engine) => (
-                  <option key={engine.id} value={engine.id}>
+                  <option
+                    disabled={isEngineUnavailableForSelectedProfile(
+                      engine,
+                      selectedProfile,
+                      runConfiguration,
+                    )}
+                    key={engine.id}
+                    value={engine.id}
+                  >
                     {engine.label} · {engine.status}
                   </option>
                 ))}
@@ -196,6 +205,8 @@ export function RunConfigDrawer({
               <EngineDiagnosticsCard
                 engine={findEngine(ttsEngines, runConfiguration.ttsEngine)}
                 error={ttsEngineError}
+                runConfiguration={runConfiguration}
+                selectedProfile={selectedProfile}
               />
               {runConfiguration.ttsEngine === "supertonic-3" ? (
                 <SupertonicOptions
@@ -270,7 +281,7 @@ export function RunConfigDrawer({
             <h3 className="text-sm font-semibold text-zinc-950">Current Job Shape</h3>
             <dl className="mt-3 grid gap-2 text-sm">
               <DrawerFact label="Mode" value={preset.label} />
-              <DrawerFact label="Voice" value={selectedProfileName ?? "Default voice"} />
+              <DrawerFact label="Voice" value={selectedProfile?.name ?? "Default voice"} />
               <DrawerFact label="Last status" value={job?.status ?? "No job yet"} />
               <DrawerFact
                 label="Primary action"
@@ -298,7 +309,14 @@ export function RunConfigDrawer({
 function EngineDiagnosticsCard({
   engine,
   error,
-}: Readonly<{ engine: TTSEngineDiagnostics | undefined; error: string | null }>) {
+  runConfiguration,
+  selectedProfile,
+}: Readonly<{
+  engine: TTSEngineDiagnostics | undefined;
+  error: string | null;
+  runConfiguration: RunConfiguration;
+  selectedProfile: VoiceProfile | null;
+}>) {
   if (error) {
     return (
       <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>
@@ -311,12 +329,26 @@ function EngineDiagnosticsCard({
       </p>
     );
   }
+  const profileReadiness = selectedProfile
+    ? profileReadinessForEngine(engine.id, selectedProfile, runConfiguration)
+    : null;
   return (
     <div className="grid gap-1 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm">
       <p className="font-semibold text-zinc-950">
         {engine.label} · {engine.status}
       </p>
       <p className="leading-5 text-zinc-600">{engine.reason ?? engine.setup ?? "Ready."}</p>
+      {profileReadiness ? (
+        <p
+          className={`rounded border px-2 py-1 text-xs ${
+            profileReadiness.ready
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }`}
+        >
+          {profileReadiness.message}
+        </p>
+      ) : null}
       <p className="text-xs text-zinc-500">
         {engine.local ? "Local" : "Remote"} · {engine.supportsSSML ? "SSML" : "plain text"} ·{" "}
         {formatEngineLanguageCount(engine)}
@@ -325,6 +357,47 @@ function EngineDiagnosticsCard({
       </p>
     </div>
   );
+}
+
+function profileReadinessForEngine(
+  engineId: string,
+  profile: VoiceProfile,
+  runConfiguration: RunConfiguration,
+): { ready: boolean; message: string } | null {
+  if (!runConfiguration.options.voiceClone) {
+    return {
+      ready: true,
+      message: "Voice cloning is off for this run; provider presets will render.",
+    };
+  }
+  if (engineId === "supertonic-3") {
+    const ready = profile.cloneArtifacts?.["supertonic-embed"]?.status === "ready";
+    return {
+      ready,
+      message: ready
+        ? "Selected profile has a Supertonic Embed artifact."
+        : "Build a Supertonic Embed artifact on this profile before using Supertonic clone rendering.",
+    };
+  }
+  if (engineId === "kokoro-embed") {
+    const ready = profile.cloneArtifacts?.["kokoro-embed"]?.status === "ready";
+    return {
+      ready,
+      message: ready
+        ? "Selected profile has a Kokoro Embed artifact."
+        : "Build a Kokoro Embed artifact on this profile before using Kokoro Embed.",
+    };
+  }
+  if (engineId === "auto" || engineId === "kokoro") {
+    const ready = profile.cloneArtifacts?.["kokoro-embed"]?.status === "ready";
+    return {
+      ready: true,
+      message: ready
+        ? "Auto/Kokoro will use the Kokoro Embed artifact for this profile."
+        : "Auto/Kokoro will use the existing KokoClone reference path.",
+    };
+  }
+  return null;
 }
 
 function SupertonicOptions({
@@ -404,6 +477,26 @@ function findEngine(
   engineId: string,
 ): TTSEngineDiagnostics | undefined {
   return engines.find((engine) => engine.id === engineId);
+}
+
+function isEngineUnavailableForSelectedProfile(
+  engine: TTSEngineDiagnostics,
+  profile: VoiceProfile | null,
+  runConfiguration: RunConfiguration,
+): boolean {
+  if (engine.status !== "ready") {
+    return true;
+  }
+  if (!profile || !runConfiguration.options.voiceClone) {
+    return false;
+  }
+  if (engine.id === "kokoro-embed") {
+    return profile.cloneArtifacts?.["kokoro-embed"]?.status !== "ready";
+  }
+  if (engine.id === "supertonic-3") {
+    return profile.cloneArtifacts?.["supertonic-embed"]?.status !== "ready";
+  }
+  return false;
 }
 
 function fallbackTTSEngines(): TTSEngineDiagnostics[] {

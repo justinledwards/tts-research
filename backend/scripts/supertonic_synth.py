@@ -11,6 +11,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def parse_bool(value: str) -> bool:
@@ -59,11 +60,35 @@ def load_tts(model_dir: str | None, auto_download: bool):
     return TTS(auto_download=auto_download)
 
 
+def load_voice_style_file(path: str):
+    try:
+        import numpy as np
+        from supertonic.core import Style
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            "supertonic Python package is not installed. "
+            "Create .venv-supertonic and run `pip install supertonic`."
+        ) from exc
+
+    data: dict[str, Any] = json.loads(Path(path).read_text(encoding="utf-8"))
+    ttl_node = data["style_ttl"]
+    dp_node = data["style_dp"]
+    ttl_dims = ttl_node.get("dims") or [1, 50, 256]
+    dp_dims = dp_node.get("dims") or [1, 8, 16]
+    style_ttl = np.array(ttl_node["data"], dtype=np.float32).reshape(tuple(ttl_dims))
+    style_dp = np.array(dp_node["data"], dtype=np.float32).reshape(tuple(dp_dims))
+    try:
+        return Style(style_ttl, style_dp)
+    except TypeError:
+        return Style(style_ttl_onnx=style_ttl, style_dp_onnx=style_dp)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--text-file")
     parser.add_argument("--output")
     parser.add_argument("--voice-style", default="M1")
+    parser.add_argument("--voice-style-file", default="")
     parser.add_argument("--lang", default="en")
     parser.add_argument("--model-dir", default="")
     parser.add_argument("--auto-download", default="false")
@@ -87,7 +112,12 @@ def main() -> int:
         raise SystemExit("text is required")
 
     tts = load_tts(args.model_dir or None, parse_bool(args.auto_download))
-    style = tts.get_voice_style(voice_name=args.voice_style)
+    if args.voice_style_file:
+        style = load_voice_style_file(args.voice_style_file)
+        voice_label = Path(args.voice_style_file).stem
+    else:
+        style = tts.get_voice_style(voice_name=args.voice_style)
+        voice_label = args.voice_style
     wav, duration = tts.synthesize(text, voice_style=style, lang=args.lang)
     tts.save_audio(wav, args.output)
     duration_seconds = audio_duration_seconds(args.output, wav, duration)
@@ -96,7 +126,7 @@ def main() -> int:
         json.dumps(
             {
                 "provider": "supertonic-3",
-                "voice": args.voice_style,
+                "voice": voice_label,
                 "language": args.lang,
                 "durationMs": int(duration_seconds * 1000),
                 "duration": duration_seconds,

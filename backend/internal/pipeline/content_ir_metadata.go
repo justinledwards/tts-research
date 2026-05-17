@@ -122,6 +122,7 @@ func (service *Service) preparedSourceByID(id string) (PreparedSource, bool) {
 	if !ok {
 		return PreparedSource{}, false
 	}
+	source = clonePreparedSource(source)
 	return service.sanitizePreparedSourceWarnings(source), true
 }
 

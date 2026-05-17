@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -40,9 +42,10 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: corsAllowedOrigins(),
-		AllowMethods: []string{fiber.MethodGet, fiber.MethodPost, fiber.MethodPatch, fiber.MethodDelete, fiber.MethodOptions},
-		AllowHeaders: []string{"Origin", "Content-Type", "Accept"},
+		AllowOriginsFunc:    corsAllowedOrigin,
+		AllowMethods:        []string{fiber.MethodGet, fiber.MethodPost, fiber.MethodPatch, fiber.MethodDelete, fiber.MethodOptions},
+		AllowHeaders:        []string{"Origin", "Content-Type", "Accept"},
+		AllowPrivateNetwork: true,
 	}))
 
 	app.Get("/api/health", func(ctx fiber.Ctx) error {
@@ -56,6 +59,21 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 
 	app.Get("/api/tts-engines", func(ctx fiber.Ctx) error {
 		return ctx.JSON(service.ListTTSEngines())
+	})
+
+	app.Get("/api/research-modules", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.ListResearchModules())
+	})
+
+	app.Post("/api/research-modules/:id/clone", func(ctx fiber.Ctx) error {
+		diagnostics, err := service.CloneResearchModule(ctx.Context(), ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrResearchModuleNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(diagnostics)
 	})
 
 	app.Post("/api/math/preview", func(ctx fiber.Ctx) error {
@@ -1171,6 +1189,23 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.SendStatus(fiber.StatusNoContent)
 	})
 
+	app.Post("/api/voice-profiles/:id/artifacts/:moduleId", func(ctx fiber.Ctx) error {
+		profile, err := service.BuildVoiceProfileArtifact(ctx.Context(), ctx.Params("id"), ctx.Params("moduleId"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProfileNotFound) ||
+				errors.Is(err, pipeline.ErrResearchModuleNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrResearchModuleUnavailable) ||
+				errors.Is(err, pipeline.ErrProfileMissingAudio) ||
+				errors.Is(err, pipeline.ErrProfileArtifactUnsupported) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(profile)
+	})
+
 	return app
 }
 
@@ -1178,10 +1213,13 @@ func corsAllowedOrigins() []string {
 	origins := []string{
 		"http://localhost:5173",
 		"http://127.0.0.1:5173",
+		"http://0.0.0.0:5173",
 		"http://localhost:5174",
 		"http://127.0.0.1:5174",
+		"http://0.0.0.0:5174",
 		"http://localhost:5175",
 		"http://127.0.0.1:5175",
+		"http://0.0.0.0:5175",
 	}
 	seen := make(map[string]struct{}, len(origins)+4)
 	for _, origin := range origins {
@@ -1196,6 +1234,32 @@ func corsAllowedOrigins() []string {
 		addOrigin(&origins, seen, strings.TrimSpace(origin))
 	}
 	return origins
+}
+
+func corsAllowedOrigin(origin string) bool {
+	if origin == "null" || strings.TrimSpace(origin) == "" {
+		return false
+	}
+	for _, allowed := range corsAllowedOrigins() {
+		if origin == allowed {
+			return true
+		}
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+	default:
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || host == "0.0.0.0" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate())
 }
 
 func addOrigin(origins *[]string, seen map[string]struct{}, origin string) {
@@ -1220,7 +1284,8 @@ func notFound(ctx fiber.Ctx, err error) error {
 		errors.Is(err, pipeline.ErrPreparedSourceNotFound) ||
 		errors.Is(err, pipeline.ErrContentIRNotFound) ||
 		errors.Is(err, pipeline.ErrProgressNotFound) ||
-		errors.Is(err, pipeline.ErrPlaybackSessionNotFound) {
+		errors.Is(err, pipeline.ErrPlaybackSessionNotFound) ||
+		errors.Is(err, pipeline.ErrResearchModuleNotFound) {
 		return ctx.Status(fiber.StatusNotFound).JSON(errorResponse(err.Error()))
 	}
 

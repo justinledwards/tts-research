@@ -579,6 +579,7 @@ export interface TTSEngineDiagnostics {
   experimental: boolean;
   supportsVoice: boolean;
   supportsReference: boolean;
+  supportsProfileArtifacts?: boolean;
   supportsSwedish: boolean;
   supportsSSML: boolean;
   languages?: string[];
@@ -588,6 +589,21 @@ export interface TTSEngineDiagnostics {
   reason?: string;
   setup?: string;
   metadata?: Record<string, string>;
+}
+
+export interface ResearchModuleDiagnostics {
+  id: string;
+  label: string;
+  repoUrl: string;
+  ref: string;
+  localPath: string;
+  engineId?: string;
+  status: string;
+  installed: boolean;
+  cloneAllowed: boolean;
+  prompt: boolean;
+  reason?: string;
+  setup?: string;
 }
 
 export type LexiconScope = "project" | "voiceProfile";
@@ -750,12 +766,34 @@ export interface VoiceProfile {
   qualityMetrics?: VoiceProfileQualityMetrics;
   denoise?: VoiceProfileDenoiseMetadata;
   likeness?: VoiceProfileLikeness;
+  cloneArtifacts?: Record<string, VoiceProfileCloneArtifact>;
   audioFormat: string;
   status: VoiceProfileStatus;
   error?: string;
   durationMs: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type VoiceProfileCloneArtifactStatus = "pending" | "building" | "ready" | "failed";
+
+export interface VoiceProfileCloneArtifact {
+  moduleId: string;
+  engineId?: string;
+  kind?: string;
+  status: VoiceProfileCloneArtifactStatus;
+  file?: string;
+  path?: string;
+  loss?: number;
+  score?: number;
+  steps?: number;
+  baseStyle?: string;
+  upstreamRef?: string;
+  modelVersion?: string;
+  metadata?: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+  error?: string;
 }
 
 export interface CreateVoiceProfileRequest {

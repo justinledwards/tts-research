@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -255,6 +256,13 @@ func main() {
 			VoiceProfileEmbeddingScriptPath:      envWithDefault("VOICE_PROFILE_EMBEDDING_SCRIPT_PATH", "./scripts/profile_likeness.py"),
 			VoiceProfileLikenessCalibrationText:  envWithDefault("VOICE_PROFILE_LIKENESS_CALIBRATION_TEXT", "This is a short voice clone calibration sample for measuring speaker likeness."),
 			VoiceProfileLikenessTimeoutSeconds:   voiceProfileLikenessTimeoutSeconds,
+			VoiceProfileArtifactPythonPath:       envWithDefault("VOICE_PROFILE_ARTIFACT_PYTHON_PATH", "./.venv-voice-embed/bin/python"),
+			VoiceProfileArtifactScriptPath:       envWithDefault("VOICE_PROFILE_ARTIFACT_SCRIPT_PATH", "./scripts/profile_embed_artifact.py"),
+			VoiceProfileArtifactTimeoutSeconds:   envIntWithFallback("VOICE_PROFILE_ARTIFACT_TIMEOUT_SECONDS", 3600),
+			VoiceProfileArtifactSteps:            envIntWithFallback("VOICE_PROFILE_ARTIFACT_STEPS", 0),
+			ResearchModules:                      researchModuleConfigsFromEnv(),
+			ResearchModulePromptDisabled:         envBoolWithFallback("RESEARCH_MODULE_PROMPT_DISABLED", false),
+			ResearchModuleCloneTimeoutSeconds:    envIntWithFallback("RESEARCH_MODULE_CLONE_TIMEOUT_SECONDS", 180),
 			Alignment: pipeline.AlignmentOptions{
 				Enabled:          alignmentEnabled,
 				Preferred:        alignmentPreferredFromEnv(),
@@ -265,7 +273,7 @@ func main() {
 				GentleURL:        strings.TrimSpace(os.Getenv("ALIGNMENT_GENTLE_URL")),
 				TimeoutSeconds:   alignmentTimeoutSeconds,
 			},
-			DefaultTTSEngine: envWithDefault("TTS_DEFAULT_ENGINE", envWithDefault("TTS_PROVIDER", "mock")),
+			DefaultTTSEngine: defaultTTSEngineFromEnv(),
 			TTSEngines:       ttsEngineRegistrationsFromEnv(ttsAgent),
 		},
 	)
@@ -421,12 +429,15 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 		return agents.NewKokoroTTSAgent(agents.KokoroConfig{
 			PythonPath:          envWithDefault("KOKORO_PYTHON_PATH", "./.venv/bin/python"),
 			ReferencePythonPath: referencePythonPath,
+			EmbedPythonPath:     envWithDefault("KOKORO_EMBED_PYTHON_PATH", envWithDefault("VOICE_PROFILE_ARTIFACT_PYTHON_PATH", referencePythonPath)),
 			ScriptPath:          envWithDefault("KOKORO_SCRIPT_PATH", "./scripts/kokoro_synth.py"),
 			ReferenceScriptPath: envWithDefault(
 				"KOKORO_REFERENCE_SCRIPT_PATH",
 				"",
 			),
+			EmbedScriptPath:                    envWithDefault("KOKORO_EMBED_SCRIPT_PATH", "./scripts/kokoro_embed_synth.py"),
 			ReferenceModulePath:                firstEnv("KOKORO_REFERENCE_MODULE_PATH", "KOKOCLONE_MODULE_PATH", ""),
+			EmbedModulePath:                    envWithDefault("KOKORO_EMBED_MODULE_PATH", filepath.Join(researchModuleBaseDirFromEnv(), "kokoro.embed")),
 			DataDir:                            envWithDefault("KOKORO_DATA_DIR", "./data/kokoro"),
 			LangCode:                           envWithDefault("KOKORO_LANG_CODE", "a"),
 			Voice:                              envWithDefault("KOKORO_VOICE", "af_heart"),
@@ -438,17 +449,38 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 			ReferenceWorkerCount:               referenceWorkerCount,
 		}), nil
 	case "mock":
-		return agents.NewMockTTSAgent(), nil
+		return newDevMockTTSAgent(), nil
 	default:
 		return nil, fmt.Errorf("unsupported TTS_PROVIDER %q", provider)
 	}
+}
+
+type devMockTTSAgent struct {
+	*agents.MockTTSAgent
+}
+
+func newDevMockTTSAgent() *devMockTTSAgent {
+	return &devMockTTSAgent{MockTTSAgent: agents.NewMockTTSAgent()}
+}
+
+func (agent *devMockTTSAgent) SynthesizeWithReference(ctx context.Context, text string, referencePath string, language string) (agents.TTSResult, error) {
+	result, err := agent.SynthesizeWithVoice(ctx, text, "reference:"+filepath.Base(referencePath), language)
+	if err != nil {
+		return agents.TTSResult{}, err
+	}
+	result.Provider = "mock-reference"
+	return result, nil
 }
 
 func ttsEngineRegistrationsFromEnv(defaultAgent pipeline.TTSAgent) []pipeline.TTSEngineRegistration {
 	provider := strings.ToLower(envWithDefault("TTS_PROVIDER", "mock"))
 	registrations := make([]pipeline.TTSEngineRegistration, 0, 6)
 	switch provider {
-	case "kokoro":
+	case "kokoro", "mock":
+		setup := "Fast local long-form voicepack synthesis."
+		if provider == "mock" {
+			setup = "Kokoro-facing silent runtime for UI development. Start with TTS_PROVIDER=kokoro for real local audio."
+		}
 		registrations = append(registrations, pipeline.TTSEngineRegistration{
 			ID:    pipeline.TTSEngineKokoro,
 			Agent: defaultAgent,
@@ -461,20 +493,7 @@ func ttsEngineRegistrationsFromEnv(defaultAgent pipeline.TTSAgent) []pipeline.TT
 				SupportsSSML:  false,
 				Languages:     []string{"en", "ja", "zh", "es", "fr", "hi", "it", "pt"},
 				ModelCache:    envWithDefault("KOKORO_DATA_DIR", "./data/kokoro"),
-				Setup:         "Fast local long-form voicepack synthesis.",
-			},
-		})
-	case "mock":
-		registrations = append(registrations, pipeline.TTSEngineRegistration{
-			ID:    "mock",
-			Agent: defaultAgent,
-			Diagnostics: pipeline.TTSEngineDiagnostics{
-				ID:           "mock",
-				Label:        "Mock TTS",
-				Status:       "ready",
-				Local:        true,
-				SupportsSSML: false,
-				Setup:        "Silent WAV generator for tests and offline UI development.",
+				Setup:         setup,
 			},
 		})
 	}
@@ -496,6 +515,27 @@ func ttsEngineRegistrationsFromEnv(defaultAgent pipeline.TTSAgent) []pipeline.TT
 			},
 		})
 	}
+	if _, ok := defaultAgent.(pipeline.TTSWithProfileArtifact); ok {
+		registrations = append(registrations, pipeline.TTSEngineRegistration{
+			ID:    pipeline.TTSEngineKokoroEmbed,
+			Agent: defaultAgent,
+			Diagnostics: pipeline.TTSEngineDiagnostics{
+				ID:                pipeline.TTSEngineKokoroEmbed,
+				Label:             "Kokoro Embed",
+				Status:            "ready",
+				Local:             true,
+				SupportsVoice:     true,
+				SupportsArtifacts: true,
+				SupportsSSML:      false,
+				Languages:         []string{"en"},
+				ModelCache:        envWithDefault("KOKORO_DATA_DIR", "./data/kokoro"),
+				Setup:             "Build a Kokoro Embed artifact on a Voice Profile, then render Kokoro with the optimized style vector.",
+				Metadata: map[string]string{
+					"module": pipeline.ResearchModuleKokoroEmbed,
+				},
+			},
+		})
+	}
 	registrations = append(registrations, supertonicRegistrationFromEnv())
 	registrations = append(registrations, experimentalEngineRegistration(
 		"dramabox",
@@ -510,6 +550,17 @@ func ttsEngineRegistrationsFromEnv(defaultAgent pipeline.TTSAgent) []pipeline.TT
 		"Set SCENEMA_AUDIO_BASE_URL to a running Scenema Audio HTTP service.",
 	))
 	return registrations
+}
+
+func defaultTTSEngineFromEnv() string {
+	if value := strings.TrimSpace(os.Getenv("TTS_DEFAULT_ENGINE")); value != "" {
+		return value
+	}
+	provider := strings.ToLower(envWithDefault("TTS_PROVIDER", "mock"))
+	if provider == "mock" {
+		return pipeline.TTSEngineKokoro
+	}
+	return provider
 }
 
 func supertonicRegistrationFromEnv() pipeline.TTSEngineRegistration {
@@ -548,13 +599,14 @@ func supertonicRegistrationFromEnv() pipeline.TTSEngineRegistration {
 		ID:    pipeline.TTSEngineSupertonic,
 		Agent: agent,
 		Diagnostics: pipeline.TTSEngineDiagnostics{
-			ID:              pipeline.TTSEngineSupertonic,
-			Label:           "Supertonic 3",
-			Status:          status,
-			Local:           true,
-			SupportsVoice:   true,
-			SupportsSwedish: true,
-			SupportsSSML:    false,
+			ID:                pipeline.TTSEngineSupertonic,
+			Label:             "Supertonic 3",
+			Status:            status,
+			Local:             true,
+			SupportsVoice:     true,
+			SupportsArtifacts: true,
+			SupportsSwedish:   true,
+			SupportsSSML:      false,
 			Languages: []string{
 				"ar", "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el",
 				"hi", "hu", "id", "it", "ja", "ko", "lv", "lt", "pl", "pt", "ro", "ru",
@@ -616,6 +668,34 @@ func supertonicVoices() []pipeline.TTSEngineVoice {
 		{ID: "F4", Name: "F4", Gender: "female", Description: "General female voice style"},
 		{ID: "F5", Name: "F5", Gender: "female", Description: "General female voice style"},
 	}
+}
+
+func researchModuleConfigsFromEnv() []pipeline.ResearchModuleConfig {
+	baseDir := researchModuleBaseDirFromEnv()
+	return []pipeline.ResearchModuleConfig{
+		{
+			ID:        pipeline.ResearchModuleSupertonicEmbed,
+			Label:     "Supertonic Embed",
+			RepoURL:   envWithDefault("SUPERTONIC_EMBED_REPO_URL", "https://github.com/kdrkdrkdr/supertonic.embed.git"),
+			Ref:       envWithDefault("SUPERTONIC_EMBED_REF", "main"),
+			LocalPath: envWithDefault("SUPERTONIC_EMBED_LOCAL_PATH", filepath.Join(baseDir, "supertonic.embed")),
+			EngineID:  pipeline.TTSEngineSupertonic,
+			Setup:     "Optional CUDA/PyTorch research module for Supertonic voice-style artifact extraction. Clone is user-triggered and kept outside the repo in .upstreams.",
+		},
+		{
+			ID:        pipeline.ResearchModuleKokoroEmbed,
+			Label:     "Kokoro Embed",
+			RepoURL:   envWithDefault("KOKORO_EMBED_REPO_URL", "https://github.com/kdrkdrkdr/kokoro.embed.git"),
+			Ref:       envWithDefault("KOKORO_EMBED_REF", "main"),
+			LocalPath: envWithDefault("KOKORO_EMBED_LOCAL_PATH", filepath.Join(baseDir, "kokoro.embed")),
+			EngineID:  pipeline.TTSEngineKokoroEmbed,
+			Setup:     "Optional CUDA/PyTorch research module for Kokoro style-vector artifact extraction. Clone is user-triggered and kept outside the repo in .upstreams.",
+		},
+	}
+}
+
+func researchModuleBaseDirFromEnv() string {
+	return envWithDefault("RESEARCH_MODULE_BASE_DIR", "../.upstreams")
 }
 
 func executableAvailable(path string) bool {
@@ -734,6 +814,14 @@ func envIntWithDefault(key string, fallback int) (int, error) {
 	return parsed, nil
 }
 
+func envIntWithFallback(key string, fallback int) int {
+	value, err := envIntWithDefault(key, fallback)
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
 func alignmentPreferredFromEnv() []alignment.TimingSource {
 	raw := strings.TrimSpace(os.Getenv("ALIGNMENT_PREFERRED"))
 	if raw == "" {
@@ -781,4 +869,12 @@ func envBoolWithDefault(key string, fallback bool) (bool, error) {
 	}
 
 	return parsed, nil
+}
+
+func envBoolWithFallback(key string, fallback bool) bool {
+	value, err := envBoolWithDefault(key, fallback)
+	if err != nil {
+		return fallback
+	}
+	return value
 }

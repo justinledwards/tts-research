@@ -507,6 +507,7 @@ type TTSEngineDiagnostics struct {
 	Experimental      bool              `json:"experimental"`
 	SupportsVoice     bool              `json:"supportsVoice"`
 	SupportsReference bool              `json:"supportsReference"`
+	SupportsArtifacts bool              `json:"supportsProfileArtifacts"`
 	SupportsSwedish   bool              `json:"supportsSwedish"`
 	SupportsSSML      bool              `json:"supportsSSML"`
 	Languages         []string          `json:"languages,omitempty"`
@@ -516,6 +517,21 @@ type TTSEngineDiagnostics struct {
 	Reason            string            `json:"reason,omitempty"`
 	Setup             string            `json:"setup,omitempty"`
 	Metadata          map[string]string `json:"metadata,omitempty"`
+}
+
+type ResearchModuleDiagnostics struct {
+	ID           string `json:"id"`
+	Label        string `json:"label"`
+	RepoURL      string `json:"repoUrl"`
+	Ref          string `json:"ref"`
+	LocalPath    string `json:"localPath"`
+	EngineID     string `json:"engineId,omitempty"`
+	Status       string `json:"status"`
+	Installed    bool   `json:"installed"`
+	CloneAllowed bool   `json:"cloneAllowed"`
+	Prompt       bool   `json:"prompt"`
+	Reason       string `json:"reason,omitempty"`
+	Setup        string `json:"setup,omitempty"`
 }
 
 type ProjectBundleContentItem struct {
@@ -806,6 +822,34 @@ type VoiceProfileLikeness struct {
 	Reason            string     `json:"reason,omitempty"`
 }
 
+type VoiceProfileCloneArtifactStatus string
+
+const (
+	VoiceProfileCloneArtifactStatusPending  VoiceProfileCloneArtifactStatus = "pending"
+	VoiceProfileCloneArtifactStatusBuilding VoiceProfileCloneArtifactStatus = "building"
+	VoiceProfileCloneArtifactStatusReady    VoiceProfileCloneArtifactStatus = "ready"
+	VoiceProfileCloneArtifactStatusFailed   VoiceProfileCloneArtifactStatus = "failed"
+)
+
+type VoiceProfileCloneArtifact struct {
+	ModuleID     string                          `json:"moduleId"`
+	EngineID     string                          `json:"engineId,omitempty"`
+	Kind         string                          `json:"kind,omitempty"`
+	Status       VoiceProfileCloneArtifactStatus `json:"status"`
+	File         string                          `json:"file,omitempty"`
+	Path         string                          `json:"path,omitempty"`
+	Loss         float64                         `json:"loss,omitempty"`
+	Score        float64                         `json:"score,omitempty"`
+	Steps        int                             `json:"steps,omitempty"`
+	BaseStyle    string                          `json:"baseStyle,omitempty"`
+	UpstreamRef  string                          `json:"upstreamRef,omitempty"`
+	ModelVersion string                          `json:"modelVersion,omitempty"`
+	Metadata     map[string]string               `json:"metadata,omitempty"`
+	CreatedAt    time.Time                       `json:"createdAt"`
+	UpdatedAt    time.Time                       `json:"updatedAt"`
+	Error        string                          `json:"error,omitempty"`
+}
+
 type VoiceProfileCandidate struct {
 	ID                      string                       `json:"id"`
 	SpeakerID               string                       `json:"speakerId"`
@@ -869,33 +913,34 @@ type VoiceProfileSource struct {
 }
 
 type VoiceProfile struct {
-	ID                      string                       `json:"id"`
-	Name                    string                       `json:"name"`
-	Language                string                       `json:"language"`
-	SourceFile              string                       `json:"sourceFile"`
-	SourceBytes             int64                        `json:"sourceBytes"`
-	SourceID                string                       `json:"sourceId,omitempty"`
-	SpeakerID               string                       `json:"speakerId,omitempty"`
-	SpeakerName             string                       `json:"speakerName,omitempty"`
-	SourceDurationMS        int                          `json:"sourceDurationMs,omitempty"`
-	ReferenceAudio          string                       `json:"referenceAudio"`
-	ReferencePath           string                       `json:"referencePath"`
-	ReferenceDurationMS     int                          `json:"referenceDurationMs,omitempty"`
-	ReferenceTrimmed        bool                         `json:"referenceTrimmed"`
-	ReferenceSampleStrategy string                       `json:"referenceSampleStrategy,omitempty"`
-	ReferenceVersion        string                       `json:"referenceVersion,omitempty"`
-	ReferenceScore          float64                      `json:"referenceScore,omitempty"`
-	ReferenceSpans          []VoiceProfileReferenceSpan  `json:"referenceSpans,omitempty"`
-	QualityMetrics          *VoiceProfileQualityMetrics  `json:"qualityMetrics,omitempty"`
-	Denoise                 *VoiceProfileDenoiseMetadata `json:"denoise,omitempty"`
-	Likeness                *VoiceProfileLikeness        `json:"likeness,omitempty"`
-	AudioFormat             string                       `json:"audioFormat"`
-	Status                  VoiceProfileStatus           `json:"status"`
-	Error                   string                       `json:"error,omitempty"`
-	DurationMS              int                          `json:"durationMs"`
-	CreatedAt               time.Time                    `json:"createdAt"`
-	UpdatedAt               time.Time                    `json:"updatedAt"`
-	ReferenceSamples        string                       `json:"referenceSamples,omitempty"`
+	ID                      string                               `json:"id"`
+	Name                    string                               `json:"name"`
+	Language                string                               `json:"language"`
+	SourceFile              string                               `json:"sourceFile"`
+	SourceBytes             int64                                `json:"sourceBytes"`
+	SourceID                string                               `json:"sourceId,omitempty"`
+	SpeakerID               string                               `json:"speakerId,omitempty"`
+	SpeakerName             string                               `json:"speakerName,omitempty"`
+	SourceDurationMS        int                                  `json:"sourceDurationMs,omitempty"`
+	ReferenceAudio          string                               `json:"referenceAudio"`
+	ReferencePath           string                               `json:"referencePath"`
+	ReferenceDurationMS     int                                  `json:"referenceDurationMs,omitempty"`
+	ReferenceTrimmed        bool                                 `json:"referenceTrimmed"`
+	ReferenceSampleStrategy string                               `json:"referenceSampleStrategy,omitempty"`
+	ReferenceVersion        string                               `json:"referenceVersion,omitempty"`
+	ReferenceScore          float64                              `json:"referenceScore,omitempty"`
+	ReferenceSpans          []VoiceProfileReferenceSpan          `json:"referenceSpans,omitempty"`
+	QualityMetrics          *VoiceProfileQualityMetrics          `json:"qualityMetrics,omitempty"`
+	Denoise                 *VoiceProfileDenoiseMetadata         `json:"denoise,omitempty"`
+	Likeness                *VoiceProfileLikeness                `json:"likeness,omitempty"`
+	CloneArtifacts          map[string]VoiceProfileCloneArtifact `json:"cloneArtifacts,omitempty"`
+	AudioFormat             string                               `json:"audioFormat"`
+	Status                  VoiceProfileStatus                   `json:"status"`
+	Error                   string                               `json:"error,omitempty"`
+	DurationMS              int                                  `json:"durationMs"`
+	CreatedAt               time.Time                            `json:"createdAt"`
+	UpdatedAt               time.Time                            `json:"updatedAt"`
+	ReferenceSamples        string                               `json:"referenceSamples,omitempty"`
 }
 
 type RetryMetadata struct {

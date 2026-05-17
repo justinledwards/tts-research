@@ -2765,6 +2765,125 @@ func TestCreateVoiceProfileFromCandidateStoresScoredLikeness(t *testing.T) {
 	}
 }
 
+func TestResearchModuleDiagnosticsReportsInstalledUpstream(t *testing.T) {
+	t.Parallel()
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+			VoiceProfileDir: t.TempDir(),
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleSupertonicEmbed,
+					Label:     "Supertonic Embed",
+					RepoURL:   "https://example.invalid/supertonic.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineSupertonic,
+				},
+			},
+		},
+	)
+
+	modules := service.ListResearchModules()
+	if len(modules) != 1 {
+		t.Fatalf("module count = %d, want 1", len(modules))
+	}
+	if !modules[0].Installed || modules[0].Status != "ready" {
+		t.Fatalf("module diagnostics = %+v, want installed ready", modules[0])
+	}
+	if modules[0].CloneAllowed {
+		t.Fatalf("cloneAllowed = true, want false for installed module")
+	}
+	if !filepath.IsAbs(modules[0].LocalPath) {
+		t.Fatalf("local path = %q, want absolute path", modules[0].LocalPath)
+	}
+}
+
+func TestBuildVoiceProfileArtifactPersistsFakeOutput(t *testing.T) {
+	t.Setenv("VOICE_EMBED_FAKE_ARTIFACT", "1")
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	artifactScript, err := filepath.Abs("../../scripts/profile_embed_artifact.py")
+	if err != nil {
+		t.Fatalf("resolve artifact script: %v", err)
+	}
+	profileDir := t.TempDir()
+	options := pipeline.Options{
+		JobDataDir:                         t.TempDir(),
+		ProjectDataDir:                     t.TempDir(),
+		VoiceProfileDir:                    profileDir,
+		VoiceProfileReferenceMinSeconds:    20,
+		VoiceProfileReferenceTargetSeconds: 45,
+		VoiceProfileReferenceMaxSeconds:    60,
+		VoiceProfileDenoiseProvider:        "none",
+		VoiceProfileLikenessScorer:         mockLikenessScorer{score: 0.8},
+		VoiceProfileArtifactPythonPath:     "python3",
+		VoiceProfileArtifactScriptPath:     artifactScript,
+		ResearchModules: []pipeline.ResearchModuleConfig{
+			{
+				ID:        pipeline.ResearchModuleKokoroEmbed,
+				Label:     "Kokoro Embed",
+				RepoURL:   "https://example.invalid/kokoro.embed.git",
+				Ref:       "main",
+				LocalPath: upstreamDir,
+				EngineID:  pipeline.TTSEngineKokoroEmbed,
+			},
+		},
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	built, err := service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed)
+	if err != nil {
+		t.Fatalf("BuildVoiceProfileArtifact returned error: %v", err)
+	}
+	artifact := built.CloneArtifacts[pipeline.ResearchModuleKokoroEmbed]
+	if artifact.Status != pipeline.VoiceProfileCloneArtifactStatusReady {
+		t.Fatalf("artifact status = %q, want ready", artifact.Status)
+	}
+	if artifact.EngineID != pipeline.TTSEngineKokoroEmbed {
+		t.Fatalf("artifact engine = %q, want kokoro-embed", artifact.EngineID)
+	}
+	if _, err := os.Stat(artifact.Path); err != nil {
+		t.Fatalf("artifact path missing: %v", err)
+	}
+
+	reloadedService := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	reloaded, err := reloadedService.GetVoiceProfile(profile.ID)
+	if err != nil {
+		t.Fatalf("GetVoiceProfile returned error after reload: %v", err)
+	}
+	if reloaded.CloneArtifacts[pipeline.ResearchModuleKokoroEmbed].Status != pipeline.VoiceProfileCloneArtifactStatusReady {
+		t.Fatalf("reloaded artifacts = %+v, want ready kokoro embed", reloaded.CloneArtifacts)
+	}
+}
+
 func TestCreateJobPublishesSegmentTelemetry(t *testing.T) {
 	t.Parallel()
 

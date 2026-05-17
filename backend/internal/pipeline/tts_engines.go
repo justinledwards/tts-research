@@ -15,6 +15,7 @@ const (
 	TTSEngineAuto        = "auto"
 	TTSEngineKokoro      = "kokoro"
 	TTSEngineKokoroClone = "kokoro-clone"
+	TTSEngineKokoroEmbed = "kokoro-embed"
 	TTSEngineSupertonic  = "supertonic-3"
 )
 
@@ -115,6 +116,8 @@ func defaultEngineLabel(id string) string {
 		return "Kokoro"
 	case TTSEngineKokoroClone:
 		return "Kokoro Clone"
+	case TTSEngineKokoroEmbed:
+		return "Kokoro Embed"
 	case TTSEngineSupertonic:
 		return "Supertonic 3"
 	default:
@@ -157,9 +160,10 @@ func (service *Service) ListTTSEngines() []TTSEngineDiagnostics {
 			TTSEngineAuto:        0,
 			TTSEngineKokoro:      1,
 			TTSEngineKokoroClone: 2,
-			TTSEngineSupertonic:  3,
-			"dramabox":           4,
-			"scenema-audio":      5,
+			TTSEngineKokoroEmbed: 3,
+			TTSEngineSupertonic:  4,
+			"dramabox":           5,
+			"scenema-audio":      6,
 		}
 		leftOrder, leftOK := order[engines[left].ID]
 		rightOrder, rightOK := order[engines[right].ID]
@@ -215,6 +219,7 @@ func synthesizeWithAgent(
 	ctx context.Context,
 	agent TTSAgent,
 	text string,
+	profileArtifact *agents.VoiceProfileArtifact,
 	isReferenceProfile bool,
 	referencePath string,
 	referenceLanguage string,
@@ -223,6 +228,13 @@ func synthesizeWithAgent(
 	ssmlText string,
 	supportsSSML bool,
 ) (agents.TTSResult, error) {
+	if profileArtifact != nil {
+		withArtifact, ok := agent.(TTSWithProfileArtifact)
+		if !ok {
+			return agents.TTSResult{}, ErrProfileArtifactUnsupported
+		}
+		return withArtifact.SynthesizeWithProfileArtifact(ctx, text, *profileArtifact, firstNonEmpty(language, referenceLanguage))
+	}
 	if isReferenceProfile {
 		withReference, ok := agent.(TTSWithReference)
 		if !ok {
