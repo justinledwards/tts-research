@@ -8,6 +8,9 @@ import {
   getProjectLexicon,
   getAdapterCapabilities,
   getAdapterDiagnostics,
+  getContentIR,
+  getContentIRSpeechPlan,
+  getJobSpeechPlan,
   previewMathSpeech,
   previewContentIRSpeechPolicy,
   isApiNotFoundError,
@@ -228,6 +231,56 @@ describe("API errors", () => {
       expect(typeof requestInit?.body === "string" ? requestInit.body : "").toContain(
         '"locale":"en-GB"',
       );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("fetches versioned Content IR and speech plans", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: string[] = [];
+    globalThis.fetch = (input) => {
+      const url = fetchInputUrl(input);
+      requests.push(url);
+      if (url.includes("/speech-plan")) {
+        return Promise.resolve(
+          Response.json({
+            schemaVersion: "speech-plan.v1",
+            id: "source-1",
+            sourceId: "source-1",
+            projectId: "default",
+            generatedAt: new Date(0).toISOString(),
+            segments: [],
+          }),
+        );
+      }
+      return Promise.resolve(
+        Response.json({
+          schemaVersion: "content-ir.v1_1",
+          id: "source-1",
+          sourceType: "preparedSource",
+          sourceId: "source-1",
+          projectId: "default",
+          sourceName: "demo.md",
+          adapterVersion: "test",
+          generatedAt: new Date(0).toISOString(),
+          nodes: [],
+        }),
+      );
+    };
+
+    try {
+      const document = await getContentIR("source-1", "content-ir.v1_1");
+      const sourcePlan = await getContentIRSpeechPlan("source-1");
+      const jobPlan = await getJobSpeechPlan("job-1");
+      expect(document.schemaVersion).toBe("content-ir.v1_1");
+      expect(sourcePlan.schemaVersion).toBe("speech-plan.v1");
+      expect(jobPlan.schemaVersion).toBe("speech-plan.v1");
+      expect(requests).toEqual([
+        "/api/content-ir/source-1?schemaVersion=content-ir.v1_1",
+        "/api/content-ir/source-1/speech-plan",
+        "/api/voice-jobs/job-1/speech-plan",
+      ]);
     } finally {
       globalThis.fetch = originalFetch;
     }

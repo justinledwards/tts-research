@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "locator-envelope.v1",
+  "kind": "bookmark",
+  "sourceId": "contract-markdown",
+  "nodeId": "md-0001",
+  "scopeKey": "document",
+  "activeWordIndex": 0,
+  "locator": {
+    "type": "markdown",
+    "markdown": {
+      "path": "contract.md",
+      "lineStart": 3,
+      "lineEnd": 3,
+      "columnStart": 1,
+      "columnEnd": 24,
+      "astPath": "/children/1"
+    }
+  },
+  "readium": {
+    "href": "contract.md",
+    "type": "text/markdown",
+    "locations": {
+      "fragments": ["line=3"],
+      "position": 3
+    },
+    "text": {
+      "highlight": "Dr Nguyen shipped v1.1."
+    }
+  },
+  "textQuote": "Dr Nguyen shipped v1.1."
+}

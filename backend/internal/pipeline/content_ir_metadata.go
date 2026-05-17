@@ -10,9 +10,11 @@ import (
 
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
+	"github.com/justinedwards/tts-research/backend/internal/speechplan"
 )
 
 const contentIRFilename = "content-ir.json"
+const speechPlanFilename = "speech-plan.v1.json"
 
 type contentIRSourceDescriptor struct {
 	ID             string
@@ -71,6 +73,18 @@ func newContentIRDocument(
 }
 
 func (service *Service) GetContentIR(id string) (contentir.Document, error) {
+	return service.GetContentIRSchema(id, contentir.SchemaVersionV1)
+}
+
+func (service *Service) GetContentIRSchema(id string, schemaVersion string) (contentir.Document, error) {
+	document, err := service.contentIRDocument(id)
+	if err != nil {
+		return contentir.Document{}, err
+	}
+	return contentir.ToSchemaVersion(document, schemaVersion)
+}
+
+func (service *Service) contentIRDocument(id string) (contentir.Document, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return contentir.Document{}, ErrContentIRNotFound
@@ -85,11 +99,20 @@ func (service *Service) GetContentIR(id string) (contentir.Document, error) {
 }
 
 func (service *Service) PreviewContentIRSpeechPolicy(id string, request SpeechPolicyPreviewRequest) (contentir.Document, error) {
-	document, err := service.GetContentIR(id)
+	return service.PreviewContentIRSpeechPolicySchema(id, request, contentir.SchemaVersionV1)
+}
+
+func (service *Service) PreviewContentIRSpeechPolicySchema(
+	id string,
+	request SpeechPolicyPreviewRequest,
+	schemaVersion string,
+) (contentir.Document, error) {
+	document, err := service.contentIRDocument(id)
 	if err != nil {
 		return contentir.Document{}, err
 	}
-	return service.evaluateContentIRSpeechPolicy(document, request, false), nil
+	document = service.evaluateContentIRSpeechPolicy(document, request, false)
+	return contentir.ToSchemaVersion(document, schemaVersion)
 }
 
 func (service *Service) preparedSourceByID(id string) (PreparedSource, bool) {
@@ -154,11 +177,30 @@ func (service *Service) writeContentIR(outputDir string, document contentir.Docu
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return err
 	}
-	encoded, err := contentir.JSONSerializer{}.Encode(document)
+	storedDocument, err := contentir.ToV1(document)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(outputDir, contentIRFilename), encoded, 0o644)
+	encoded, err := contentir.JSONSerializer{}.Encode(storedDocument)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, contentIRFilename), encoded, 0o644); err != nil {
+		return err
+	}
+	plan, err := speechplan.BuildFromContentIR(storedDocument, speechplan.BuildOptions{
+		ID:          storedDocument.ID,
+		GeneratedAt: time.Now().UTC(),
+		LocatorKind: "highlight",
+	})
+	if err != nil {
+		return err
+	}
+	encodedPlan, err := speechplan.Encode(plan)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(outputDir, speechPlanFilename), encodedPlan, 0o644)
 }
 
 func (service *Service) backfillContentIRSpeechPolicy(document contentir.Document) contentir.Document {
@@ -242,6 +284,54 @@ func readContentIR(path string) (contentir.Document, error) {
 		return contentir.Document{}, err
 	}
 	return contentir.JSONSerializer{}.Decode(data)
+}
+
+func (service *Service) GetSpeechPlan(id string) (speechplan.Document, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return speechplan.Document{}, ErrContentIRNotFound
+	}
+	if source, ok := service.preparedSourceByID(id); ok {
+		return service.sourceSpeechPlan(service.preparedSourceDataDir(source.ID), id)
+	}
+	if book, ok := service.bookSourceByID(id); ok {
+		return service.sourceSpeechPlan(service.bookSourceDataDir(book.ID), id)
+	}
+	return speechplan.Document{}, ErrContentIRNotFound
+}
+
+func (service *Service) sourceSpeechPlan(outputDir string, id string) (speechplan.Document, error) {
+	path := filepath.Join(outputDir, speechPlanFilename)
+	data, err := os.ReadFile(path)
+	if err == nil {
+		return speechplan.Decode(data)
+	}
+	if !os.IsNotExist(err) {
+		return speechplan.Document{}, err
+	}
+	document, err := service.GetContentIRSchema(id, contentir.SchemaVersionV11)
+	if err != nil {
+		return speechplan.Document{}, err
+	}
+	plan, err := speechplan.BuildFromContentIR(document, speechplan.BuildOptions{
+		ID:          document.ID,
+		GeneratedAt: time.Now().UTC(),
+		LocatorKind: "highlight",
+	})
+	if err != nil {
+		return speechplan.Document{}, err
+	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return speechplan.Document{}, err
+	}
+	encoded, err := speechplan.Encode(plan)
+	if err != nil {
+		return speechplan.Document{}, err
+	}
+	if err := os.WriteFile(path, encoded, 0o644); err != nil {
+		return speechplan.Document{}, err
+	}
+	return plan, nil
 }
 
 func (service *Service) preparedSourceDataDir(id string) string {

@@ -40,11 +40,22 @@ import type {
   VoiceProfileSourceDiagnostics,
   VoiceProject,
 } from "./types";
-import type { ContentIRDocument } from "./content-ir";
+import type { ContentIRDocument, ContentIRSchemaVersion, SpeechPlanDocument } from "./content-ir";
 
 // Vite rewrites direct import.meta.env access during dev and build.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const apiBaseUrl: string = import.meta.env.VITE_API_BASE_URL ?? "";
+
+function apiEndpoint(path: string, params: Record<string, string | undefined> = {}): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      query.set(key, value);
+    }
+  }
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  return `${apiBaseUrl}${path}${suffix}`;
+}
 
 export class ApiRequestError extends Error {
   readonly status: number;
@@ -109,12 +120,27 @@ export async function getAdapterDiagnostics(): Promise<Record<string, AdapterDia
   return response.json() as Promise<Record<string, AdapterDiagnostics>>;
 }
 
-export async function getContentIR(id: string): Promise<ContentIRDocument> {
-  const response = await fetch(`${apiBaseUrl}/api/content-ir/${encodeURIComponent(id)}`);
+export async function getContentIR(
+  id: string,
+  schemaVersion?: ContentIRSchemaVersion,
+): Promise<ContentIRDocument> {
+  const response = await fetch(
+    apiEndpoint(`/api/content-ir/${encodeURIComponent(id)}`, { schemaVersion }),
+  );
   if (!response.ok) {
     throw await apiError(response);
   }
   return response.json() as Promise<ContentIRDocument>;
+}
+
+export async function getContentIRSpeechPlan(id: string): Promise<SpeechPlanDocument> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/content-ir/${encodeURIComponent(id)}/speech-plan`,
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<SpeechPlanDocument>;
 }
 
 export async function previewContentIRSpeechPolicy(
@@ -126,9 +152,12 @@ export async function previewContentIRSpeechPolicy(
     locale?: string;
     ttsEngine?: string;
   },
+  schemaVersion?: ContentIRSchemaVersion,
 ): Promise<ContentIRDocument> {
   const response = await fetch(
-    `${apiBaseUrl}/api/content-ir/${encodeURIComponent(id)}/speech-policy/preview`,
+    apiEndpoint(`/api/content-ir/${encodeURIComponent(id)}/speech-policy/preview`, {
+      schemaVersion,
+    }),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -754,6 +783,14 @@ export async function getHighlightMap(id: string): Promise<HighlightMap> {
     throw await apiError(response);
   }
   return response.json() as Promise<HighlightMap>;
+}
+
+export async function getJobSpeechPlan(id: string): Promise<SpeechPlanDocument> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/speech-plan`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<SpeechPlanDocument>;
 }
 
 export async function getFragmentTiming(id: string): Promise<FragmentTimingArtifact> {

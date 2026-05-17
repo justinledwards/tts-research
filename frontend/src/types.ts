@@ -1,4 +1,4 @@
-import type { ContentIRLocator } from "./content-ir";
+import type { ContentIRLocator, LocatorEnvelope } from "./content-ir";
 
 export type JobStatus =
   | "queued"
@@ -505,6 +505,7 @@ export interface ReadingPosition {
   activeWordIndex?: number;
   nodeId?: string;
   locator?: ContentIRLocator;
+  locatorEnvelope?: LocatorEnvelope;
   textQuote?: string;
 }
 

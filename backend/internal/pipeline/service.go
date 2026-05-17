@@ -1362,6 +1362,11 @@ func (service *Service) synthesizeUntilComplete(
 			len(segments),
 		)
 	})
+	if err := service.writeJobSpeechPlan(id); err != nil {
+		service.updateJob(id, func(job *storedJob) {
+			job.SegmentationWarnings = uniqueStrings(append(job.SegmentationWarnings, "speech plan unavailable: "+err.Error()))
+		})
+	}
 
 	type segmentResult struct {
 		index              int

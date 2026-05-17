@@ -198,6 +198,8 @@ type Decision struct {
 	StartOffset  int    `json:"startOffset"`
 	EndOffset    int    `json:"endOffset"`
 	OriginalText string `json:"originalText"`
+	Phoneme      string `json:"phoneme,omitempty"`
+	Alphabet     string `json:"alphabet,omitempty"`
 }
 
 func Apply(text string, lexicons ...Lexicon) (string, []Decision) {
@@ -243,6 +245,8 @@ func applyEntry(input string, entry Entry, decisions []Decision) (string, []Deci
 			StartOffset:  match[0],
 			EndOffset:    match[1],
 			OriginalText: original,
+			Phoneme:      entry.Phoneme,
+			Alphabet:     entry.Alphabet,
 		})
 		cursor = match[1]
 	}

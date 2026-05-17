@@ -195,6 +195,7 @@ function ContentIRNodeCard({ node }: Readonly<{ node: ContentIRNode }>) {
         {preview || "No spoken text"}
       </p>
       <ContentIRSpeechDifference node={node} />
+      <ContentIRSpeechContract node={node} />
       {node.warnings.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {node.warnings.map((warning) => (
@@ -214,6 +215,54 @@ function ContentIRNodeCard({ node }: Readonly<{ node: ContentIRNode }>) {
       ) : null}
     </article>
   );
+}
+
+function ContentIRSpeechContract({ node }: Readonly<{ node: ContentIRNode }>) {
+  const pronunciationRefs = node.pronunciationRefs ?? [];
+  const lexiconEntryIds = node.lexiconEntryIds ?? [];
+  const entries = [
+    ...pronunciationRefs.map((ref, index) => ({
+      key: `pronunciation-${ref.entryId ?? ref.term}-${index.toString()}`,
+      label: formatPronunciationRef(ref),
+    })),
+    ...lexiconEntryIds.map((id) => ({ key: `lexicon-${id}`, label: `Lexicon ${id}` })),
+    node.sayAs ? { key: "say-as", label: `Say-as ${node.sayAs}` } : null,
+    node.phoneme ? { key: "phoneme", label: `Phoneme ${node.phoneme}` } : null,
+    node.alphabet ? { key: "alphabet", label: `Alphabet ${node.alphabet}` } : null,
+    node.markId ? { key: "mark", label: `Mark ${node.markId}` } : null,
+  ].filter((entry): entry is { key: string; label: string } => entry !== null);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-2 rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs vs-border">
+      <span className="font-semibold">Speech contract</span>
+      <div className="flex max-h-20 flex-wrap gap-2 overflow-y-auto">
+        {entries.map((entry) => (
+          <span
+            className="min-w-0 max-w-full break-words rounded border px-2 py-1 font-medium vs-border"
+            key={entry.key}
+            title={entry.label}
+          >
+            {entry.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatPronunciationRef(
+  ref: NonNullable<ContentIRNode["pronunciationRefs"]>[number],
+): string {
+  const term =
+    [ref.term, ref.originalText, ref.entryId].find((value) => value != null && value.length > 0) ??
+    "term";
+  const spoken = ref.spoken ? ` -> ${ref.spoken}` : "";
+  const source = ref.source ? ` (${ref.source})` : "";
+  return `${term}${spoken}${source}`;
 }
 
 function ContentIRLanguageBadge({ node }: Readonly<{ node: ContentIRNode }>) {
@@ -314,6 +363,25 @@ function contentIRNodeSearchText(node: ContentIRNode): string {
     node.speech.speechPolicy.mode,
     node.speech.speechPolicy.elementMode,
     node.speech.speechPolicy.explanation,
+    node.pronunciationRefs
+      ?.map((ref) =>
+        [
+          ref.term,
+          ref.spoken,
+          ref.source,
+          ref.entryId,
+          ref.scope,
+          ref.originalText,
+          ref.phoneme,
+          ref.alphabet,
+        ].join(" "),
+      )
+      .join(" "),
+    node.lexiconEntryIds?.join(" "),
+    node.phoneme,
+    node.alphabet,
+    node.sayAs,
+    node.markId,
     node.provenance.extraction?.extractor,
     node.provenance.extraction?.supportTier,
     formatContentIRLocator(node.provenance.locator),

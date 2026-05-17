@@ -615,12 +615,13 @@ type ProgressBookmark struct {
 }
 
 type ReadingPosition struct {
-	BookSourceID    string             `json:"bookSourceId,omitempty"`
-	ScopeKey        string             `json:"scopeKey,omitempty"`
-	ActiveWordIndex int                `json:"activeWordIndex,omitempty"`
-	NodeID          string             `json:"nodeId,omitempty"`
-	Locator         *contentir.Locator `json:"locator,omitempty"`
-	TextQuote       string             `json:"textQuote,omitempty"`
+	BookSourceID    string                     `json:"bookSourceId,omitempty"`
+	ScopeKey        string                     `json:"scopeKey,omitempty"`
+	ActiveWordIndex int                        `json:"activeWordIndex,omitempty"`
+	NodeID          string                     `json:"nodeId,omitempty"`
+	Locator         *contentir.Locator         `json:"locator,omitempty"`
+	LocatorEnvelope *contentir.LocatorEnvelope `json:"locatorEnvelope,omitempty"`
+	TextQuote       string                     `json:"textQuote,omitempty"`
 }
 
 type PlaybackProgress struct {

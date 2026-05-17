@@ -1,4 +1,5 @@
 import type { ContentIRLocator } from "./content-ir";
+import { contentIRLocatorsMatch, locatorFromEnvelope } from "./locatorCodecs";
 import type { HighlightFragment, HighlightMap, HighlightToken, ReadingPosition } from "./types";
 
 export interface HighlightCue {
@@ -72,7 +73,10 @@ export function secondsForReadingPosition(
   if (!map || !position) {
     return null;
   }
-  const byLocator = findTokenByLocator(map.tokens, position.locator);
+  const byLocator = findTokenByLocator(
+    map.tokens,
+    position.locator ?? locatorFromEnvelope(position.locatorEnvelope),
+  );
   if (byLocator) {
     return byLocator.startMs / 1000;
   }
@@ -118,23 +122,5 @@ function findTokenByLocator(
 }
 
 function locatorsMatch(left: ContentIRLocator | undefined, right: ContentIRLocator): boolean {
-  if (left?.type !== right.type) {
-    return false;
-  }
-  if (left.html || right.html) {
-    return left.html?.href === right.html?.href && left.html?.fragment === right.html?.fragment;
-  }
-  if (left.pdf || right.pdf) {
-    return left.pdf?.pageIndex === right.pdf?.pageIndex;
-  }
-  if (left.docx || right.docx) {
-    return left.docx?.paragraphIndex === right.docx?.paragraphIndex;
-  }
-  if (left.markdown || right.markdown) {
-    return (
-      left.markdown?.path === right.markdown?.path &&
-      left.markdown?.lineStart === right.markdown?.lineStart
-    );
-  }
-  return false;
+  return contentIRLocatorsMatch(left, right);
 }

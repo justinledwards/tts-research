@@ -5,11 +5,13 @@ import path from "node:path";
 import process from "node:process";
 
 const repoRoot = process.cwd();
-const schemaPath = path.join(
-  repoRoot,
-  "backend/internal/contentir/schema/content-ir.v1.schema.json",
-);
+const schemaDir = path.join(repoRoot, "backend/internal/contentir/schema");
+const schemaPath = path.join(schemaDir, "content-ir.v1.schema.json");
+const contentIRV11SchemaPath = path.join(schemaDir, "content-ir.v1_1.schema.json");
+const locatorEnvelopeSchemaPath = path.join(schemaDir, "locator-envelope.v1.schema.json");
+const speechPlanSchemaPath = path.join(schemaDir, "speech-plan.v1.schema.json");
 const goldenDir = path.join(repoRoot, "backend/internal/contentir/testdata/golden");
+const contractDir = path.join(repoRoot, "fixtures/contracts");
 const adapterFiles = [
   "backend/internal/pipeline/prepared_source_to_ir.go",
   "backend/internal/pipeline/book_source_to_ir.go",
@@ -17,9 +19,19 @@ const adapterFiles = [
 ];
 
 const schema = JSON.parse(await readFile(schemaPath, "utf8"));
+const contentIRV11Schema = JSON.parse(await readFile(contentIRV11SchemaPath, "utf8"));
+const locatorEnvelopeSchema = JSON.parse(await readFile(locatorEnvelopeSchemaPath, "utf8"));
+const speechPlanSchema = JSON.parse(await readFile(speechPlanSchemaPath, "utf8"));
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 addFormats(ajv);
+ajv.addSchema(schema, "content-ir.v1.schema.json");
+ajv.addSchema(contentIRV11Schema, "content-ir.v1_1.schema.json");
+ajv.addSchema(locatorEnvelopeSchema, "locator-envelope.v1.schema.json");
+ajv.addSchema(speechPlanSchema, "speech-plan.v1.schema.json");
 const validate = ajv.compile(schema);
+const validateV11 = ajv.compile(contentIRV11Schema);
+const validateLocatorEnvelope = ajv.compile(locatorEnvelopeSchema);
+const validateSpeechPlan = ajv.compile(speechPlanSchema);
 
 const goldenFiles = (await readdir(goldenDir)).filter((file) => file.endsWith(".json")).sort();
 if (goldenFiles.length === 0) {
@@ -31,6 +43,61 @@ for (const file of goldenFiles) {
   const payload = JSON.parse(await readFile(fullPath, "utf8"));
   if (!validate(payload)) {
     throw new Error(`${file} failed schema validation:\n${ajv.errorsText(validate.errors)}`);
+  }
+  assertJSONRoundTrip(file, payload);
+}
+
+const contractFiles = (await readdir(contractDir)).filter((file) => file.endsWith(".json")).sort();
+if (contractFiles.length === 0) {
+  throw new Error("No public contract fixtures found.");
+}
+
+const contractCounts = { contentIRV11: 0, locatorEnvelope: 0, speechPlan: 0 };
+for (const file of contractFiles) {
+  const fullPath = path.join(contractDir, file);
+  const payload = JSON.parse(await readFile(fullPath, "utf8"));
+  assertJSONRoundTrip(file, payload);
+  if (file.endsWith(".content-ir.v1_1.json")) {
+    contractCounts.contentIRV11 += 1;
+    if (!validateV11(payload)) {
+      throw new Error(
+        `${file} failed Content IR v1_1 validation:\n${ajv.errorsText(validateV11.errors)}`,
+      );
+    }
+  } else if (file.endsWith(".locator-envelope.v1.json")) {
+    contractCounts.locatorEnvelope += 1;
+    if (!validateLocatorEnvelope(payload)) {
+      throw new Error(
+        `${file} failed locator envelope validation:\n${ajv.errorsText(validateLocatorEnvelope.errors)}`,
+      );
+    }
+  } else if (file.endsWith(".speech-plan.v1.json")) {
+    contractCounts.speechPlan += 1;
+    if (!validateSpeechPlan(payload)) {
+      throw new Error(
+        `${file} failed speech plan validation:\n${ajv.errorsText(validateSpeechPlan.errors)}`,
+      );
+    }
+  } else {
+    throw new Error(`${file} is not a recognized contract fixture.`);
+  }
+}
+
+for (const [kind, count] of Object.entries(contractCounts)) {
+  if (count === 0) {
+    throw new Error(`No ${kind} contract fixtures found.`);
+  }
+}
+
+const generatedTypes = await readFile(
+  path.join(repoRoot, "frontend/src/generated/contracts.ts"),
+  "utf8",
+);
+for (const expected of ["ContentIRDocument", "LocatorEnvelope", "SpeechPlanDocument"]) {
+  if (!generatedTypes.includes(`interface ${expected}`)) {
+    throw new Error(
+      `Generated contract types are missing ${expected}. Run pnpm generate:contracts.`,
+    );
   }
 }
 
@@ -49,8 +116,17 @@ for (const adapterFile of adapterFiles) {
 }
 
 console.log(
-  `Validated ${goldenFiles.length.toString()} Content IR fixtures and ${adapterFiles.length.toString()} adapter files.`,
+  `Validated ${goldenFiles.length.toString()} Content IR fixtures, ${contractFiles.length.toString()} public contract fixtures, and ${adapterFiles.length.toString()} adapter files.`,
 );
+
+function assertJSONRoundTrip(file, payload) {
+  const encoded = JSON.stringify(payload);
+  const decoded = JSON.parse(encoded);
+  const reencoded = JSON.stringify(decoded);
+  if (encoded !== reencoded) {
+    throw new Error(`${file} failed JSON parse/stringify roundtrip.`);
+  }
+}
 
 function findGoFunctions(source) {
   const functions = [];

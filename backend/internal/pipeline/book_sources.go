@@ -399,6 +399,10 @@ func cloneReadingPosition(position *ReadingPosition) *ReadingPosition {
 		locator := *position.Locator
 		cloned.Locator = &locator
 	}
+	if position.LocatorEnvelope != nil {
+		envelope := *position.LocatorEnvelope
+		cloned.LocatorEnvelope = &envelope
+	}
 	return &cloned
 }
 

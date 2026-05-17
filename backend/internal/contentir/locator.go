@@ -4,6 +4,7 @@ type Locator struct {
 	Type     string           `json:"type"`
 	Markdown *MarkdownLocator `json:"markdown,omitempty"`
 	HTML     *HTMLLocator     `json:"html,omitempty"`
+	EPUB     *EPUBLocator     `json:"epub,omitempty"`
 	PDF      *PDFLocator      `json:"pdf,omitempty"`
 	DOCX     *DOCXLocator     `json:"docx,omitempty"`
 	OCR      *OCRLocator      `json:"ocr,omitempty"`
@@ -24,6 +25,15 @@ type HTMLLocator struct {
 	TextQuote   string   `json:"textQuote,omitempty"`
 	Progression *float64 `json:"progression,omitempty"`
 	EPUBCFI     string   `json:"epubCfi,omitempty"`
+}
+
+type EPUBLocator struct {
+	Href        string   `json:"href"`
+	Fragment    string   `json:"fragment,omitempty"`
+	TextQuote   string   `json:"textQuote,omitempty"`
+	Progression *float64 `json:"progression,omitempty"`
+	EPUBCFI     string   `json:"epubCfi,omitempty"`
+	SpineID     string   `json:"spineId,omitempty"`
 }
 
 type PDFLocator struct {
@@ -96,6 +106,20 @@ func NewEPUBLocator(href string, fragment string, textQuote string, progression 
 	locator := NewHTMLLocator(href, fragment, textQuote, progression, epubCFI)
 	locator.Type = "epub"
 	return locator
+}
+
+func NewPublicEPUBLocator(href string, fragment string, textQuote string, progression *float64, epubCFI string, spineID string) Locator {
+	return Locator{
+		Type: "epub",
+		EPUB: &EPUBLocator{
+			Href:        href,
+			Fragment:    fragment,
+			TextQuote:   textQuote,
+			Progression: progression,
+			EPUBCFI:     epubCFI,
+			SpineID:     spineID,
+		},
+	}
 }
 
 func NewPDFLocator(pageIndex int, bbox *BBox, polygon []Point, readingOrderIndex *int) Locator {

@@ -130,6 +130,7 @@ function normalizeReadingPosition(value: unknown): ReadingPosition | null {
         ? candidate.bookSourceId
         : undefined,
     locator: candidate.locator,
+    locatorEnvelope: candidate.locatorEnvelope,
     nodeId:
       typeof candidate.nodeId === "string" && candidate.nodeId.trim().length > 0
         ? candidate.nodeId

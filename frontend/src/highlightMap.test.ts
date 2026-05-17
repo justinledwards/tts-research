@@ -95,4 +95,17 @@ describe("highlight map lookup", () => {
     });
     expect(seconds).toBe(0);
   });
+
+  it("resolves resume seconds from locator envelopes", () => {
+    const seconds = secondsForReadingPosition(fixtureMap("word"), {
+      activeWordIndex: 99,
+      locatorEnvelope: {
+        schemaVersion: "locator-envelope.v1",
+        kind: "resume",
+        sourceId: "book",
+        locator: { type: "html", html: { href: "chapter.xhtml", fragment: "w8" } },
+      },
+    });
+    expect(seconds).toBe(0);
+  });
 });

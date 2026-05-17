@@ -65,6 +65,13 @@ func TestCreateJobCompletesWithMockAgents(t *testing.T) {
 	if _, err := os.Stat(metadataPath); err != nil {
 		t.Fatalf("saved metadata should exist: %v", err)
 	}
+	plan, err := service.GetJobSpeechPlan(job.ID)
+	if err != nil {
+		t.Fatalf("GetJobSpeechPlan returned error: %v", err)
+	}
+	if plan.SchemaVersion != "speech-plan.v1" || plan.JobID != job.ID || len(plan.Segments) == 0 {
+		t.Fatalf("job speech plan = %#v, want persisted speech-plan segments", plan)
+	}
 }
 
 func TestRenderSpeechTextAppliesLexiconAndNormalisation(t *testing.T) {

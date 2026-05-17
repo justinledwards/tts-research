@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/locator-envelope.v1.schema.json",
+  "title": "Locator Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "sourceId"],
+  "properties": {
+    "schemaVersion": { "const": "locator-envelope.v1" },
+    "kind": { "enum": ["resume", "bookmark", "highlight"] },
+    "sourceId": { "type": "string", "minLength": 1 },
+    "nodeId": { "type": "string" },
+    "scopeKey": { "type": "string" },
+    "activeWordIndex": { "type": "integer", "minimum": 0 },
+    "locator": { "$ref": "content-ir.v1_1.schema.json#/$defs/locator" },
+    "readium": { "$ref": "#/$defs/readiumLocator" },
+    "textQuote": { "type": "string" }
+  },
+  "$defs": {
+    "readiumLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["href", "type"],
+      "properties": {
+        "href": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "locations": { "$ref": "#/$defs/readiumLocations" },
+        "text": { "$ref": "#/$defs/readiumText" },
+        "metadata": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "readiumLocations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fragments": { "type": "array", "items": { "type": "string" } },
+        "progression": { "type": "number", "minimum": 0, "maximum": 1 },
+        "totalProgression": { "type": "number", "minimum": 0, "maximum": 1 },
+        "position": { "type": "integer", "minimum": 1 },
+        "cssSelector": { "type": "string" },
+        "partialCfi": { "type": "string" }
+      }
+    },
+    "readiumText": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "before": { "type": "string" },
+        "highlight": { "type": "string" },
+        "after": { "type": "string" }
+      }
+    }
+  }
+}

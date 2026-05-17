@@ -34,6 +34,12 @@ describe("Content IR UI helpers", () => {
     ).toBe("OPS/chapter.xhtml#p1");
     expect(
       formatContentIRLocator({
+        type: "epub",
+        epub: { href: "OPS/chapter.xhtml", fragment: "p2" },
+      }),
+    ).toBe("OPS/chapter.xhtml#p2");
+    expect(
+      formatContentIRLocator({
         type: "html",
         html: { href: "https://example.test/article", fragment: "lead" },
       }),
@@ -94,6 +100,49 @@ describe("Content IR UI helpers", () => {
     expect(markup).toContain("Inspect Structure");
     expect(markup).toContain("notes.md:line 1");
     expect(markup).toContain("Hello spoken text");
+
+    const contractMarkup = renderToStaticMarkup(
+      <ContentIRDrawer
+        document={{
+          ...makeContentIRDocument(),
+          schemaVersion: "content-ir.v1_1",
+          nodes: [
+            {
+              ...makeContentIRNode(),
+              pronunciationRefs: [
+                {
+                  term: "Dr",
+                  spoken: "Doctor",
+                  source: "project",
+                  entryId: "lex-dr",
+                  scope: "project",
+                  protected: true,
+                  startOffset: 0,
+                  endOffset: 2,
+                  originalText: "Dr",
+                  phoneme: "D AA K T ER",
+                  alphabet: "ipa",
+                },
+              ],
+              lexiconEntryIds: ["lex-dr"],
+              phoneme: "D AA K T ER",
+              alphabet: "ipa",
+              sayAs: "name",
+              markId: "mark-block-0001",
+            },
+          ],
+        }}
+        error={null}
+        isLoading={false}
+        isOpen
+        title="Demo"
+        onClose={noop}
+      />,
+    );
+    expect(contractMarkup).toContain("Speech contract");
+    expect(contractMarkup).toContain("Dr -&gt; Doctor");
+    expect(contractMarkup).toContain("lex-dr");
+    expect(contractMarkup).toContain("mark-block-0001");
   });
 
   it("prefers spoken text for node previews", () => {

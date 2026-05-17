@@ -21,6 +21,7 @@
     "test:pdf-adapter": "python3 -m unittest adapters.pdf.pdf_adapter_test",
     "bench:alignment": "node scripts/bench-alignment.mjs",
     "bench:markdown": "node adapters/markdown/bench.js",
+    "generate:contracts": "node scripts/generate-contract-types.mjs",
     "e2e:book-cinema": "node scripts/e2e-book-cinema.mjs",
     "validate:live-ingestion": "node scripts/validate-live-ingestion.mjs"
   },

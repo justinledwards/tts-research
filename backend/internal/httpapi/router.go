@@ -14,6 +14,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/justinedwards/tts-research/backend/internal/contentir"
 	speechmath "github.com/justinedwards/tts-research/backend/internal/math"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
@@ -124,14 +125,29 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Get("/api/content-ir/:id", func(ctx fiber.Ctx) error {
-		document, err := service.GetContentIR(ctx.Params("id"))
+		schemaVersion := ctx.Query("schemaVersion")
+		document, err := service.GetContentIRSchema(ctx.Params("id"), schemaVersion)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrContentIRNotFound) {
+				return notFound(ctx, err)
+			}
+			if schemaVersion != "" && errors.Is(err, contentir.ErrUnsupportedSchemaVersion) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(document)
+	})
+
+	app.Get("/api/content-ir/:id/speech-plan", func(ctx fiber.Ctx) error {
+		payload, err := service.GetSpeechPlan(ctx.Params("id"))
 		if err != nil {
 			if errors.Is(err, pipeline.ErrContentIRNotFound) {
 				return notFound(ctx, err)
 			}
 			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
 		}
-		return ctx.JSON(document)
+		return ctx.JSON(payload)
 	})
 
 	app.Post("/api/content-ir/:id/speech-policy/preview", func(ctx fiber.Ctx) error {
@@ -139,10 +155,14 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		if err := ctx.Bind().Body(&request); err != nil {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
 		}
-		document, err := service.PreviewContentIRSpeechPolicy(ctx.Params("id"), request)
+		schemaVersion := ctx.Query("schemaVersion")
+		document, err := service.PreviewContentIRSpeechPolicySchema(ctx.Params("id"), request, schemaVersion)
 		if err != nil {
 			if errors.Is(err, pipeline.ErrContentIRNotFound) || errors.Is(err, pipeline.ErrProjectNotFound) {
 				return notFound(ctx, err)
+			}
+			if schemaVersion != "" && errors.Is(err, contentir.ErrUnsupportedSchemaVersion) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 			}
 			if errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
 				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
@@ -690,6 +710,14 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			if errors.Is(err, pipeline.ErrAudioNotReady) {
 				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
 			}
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(payload)
+	})
+
+	app.Get("/api/voice-jobs/:id/speech-plan", func(ctx fiber.Ctx) error {
+		payload, err := service.GetJobSpeechPlan(ctx.Params("id"))
+		if err != nil {
 			return notFound(ctx, err)
 		}
 		return ctx.JSON(payload)

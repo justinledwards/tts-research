@@ -17,11 +17,12 @@ type WordSpan struct {
 }
 
 type ReadingPosition struct {
-	BookSourceID    string             `json:"bookSourceId,omitempty"`
-	ScopeKey        string             `json:"scopeKey,omitempty"`
-	ActiveWordIndex int                `json:"activeWordIndex,omitempty"`
-	Locator         *contentir.Locator `json:"locator,omitempty"`
-	TextQuote       string             `json:"textQuote,omitempty"`
+	BookSourceID    string                     `json:"bookSourceId,omitempty"`
+	ScopeKey        string                     `json:"scopeKey,omitempty"`
+	ActiveWordIndex int                        `json:"activeWordIndex,omitempty"`
+	Locator         *contentir.Locator         `json:"locator,omitempty"`
+	LocatorEnvelope *contentir.LocatorEnvelope `json:"locatorEnvelope,omitempty"`
+	TextQuote       string                     `json:"textQuote,omitempty"`
 }
 
 func readingPositionForTiming(
@@ -41,9 +42,11 @@ func readingPositionForTiming(
 		position.ActiveWordIndex = span.Index
 		position.TextQuote = firstNonEmpty(span.Text, text)
 		position.Locator = locatorForWordSpan(span)
+		position.LocatorEnvelope = contentirLocatorEnvelope(position, "highlight")
 		return position
 	}
 	position.ActiveWordIndex = max(0, tokenIndex)
+	position.LocatorEnvelope = contentirLocatorEnvelope(position, "highlight")
 	return position
 }
 
@@ -70,25 +73,16 @@ func locatorForWordSpan(span WordSpan) *contentir.Locator {
 }
 
 func PositionMatchesLocator(position ReadingPosition, locator *contentir.Locator) bool {
-	if locator == nil || position.Locator == nil {
-		return false
-	}
-	if position.Locator.Type != locator.Type {
-		return false
-	}
-	if locator.HTML != nil && position.Locator.HTML != nil {
-		return position.Locator.HTML.Href == locator.HTML.Href &&
-			position.Locator.HTML.Fragment == locator.HTML.Fragment
-	}
-	if locator.PDF != nil && position.Locator.PDF != nil {
-		return position.Locator.PDF.PageIndex == locator.PDF.PageIndex
-	}
-	if locator.DOCX != nil && position.Locator.DOCX != nil {
-		return position.Locator.DOCX.ParagraphIndex == locator.DOCX.ParagraphIndex
-	}
-	if locator.Markdown != nil && position.Locator.Markdown != nil {
-		return position.Locator.Markdown.Path == locator.Markdown.Path &&
-			position.Locator.Markdown.LineStart == locator.Markdown.LineStart
-	}
-	return false
+	return contentir.LocatorsMatch(position.Locator, locator)
+}
+
+func contentirLocatorEnvelope(position ReadingPosition, kind string) *contentir.LocatorEnvelope {
+	envelope := contentir.NewLocatorEnvelope(position.Locator, contentir.LocatorContext{
+		Kind:            kind,
+		SourceID:        position.BookSourceID,
+		ScopeKey:        position.ScopeKey,
+		ActiveWordIndex: position.ActiveWordIndex,
+		TextQuote:       position.TextQuote,
+	})
+	return &envelope
 }

@@ -175,3 +175,18 @@
 - [x] Validate read-along ergonomics in browser
 - [x] Rerun checks and Book Cinema E2E
 - [x] Commit Alignment and read-along package
+
+## 2026-05-17 03:11 CEST - Workstream IOTA contract hardening
+
+- [x] Add versioned Content IR, locator envelope, and speech-plan contracts
+- [x] Implement migration, locator codecs, speech-plan persistence, and APIs
+- [x] Add generated frontend contract types and shared locator helpers
+- [x] Add public contract fixtures, docs, and validation coverage
+- [x] Run local validation and review diffs
+
+## 2026-05-17 11:30 CEST - IOTA ergonomics QA and commit
+
+- [x] Review API and UI ergonomics for contract hardening
+- [x] Iterate on any polish or friction found
+- [x] Rerun local validation
+- [x] Commit contract hardening package

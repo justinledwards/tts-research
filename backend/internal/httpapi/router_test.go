@@ -18,6 +18,7 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
 	"github.com/justinedwards/tts-research/backend/internal/httpapi"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
+	"github.com/justinedwards/tts-research/backend/internal/speechplan"
 )
 
 func TestHealthEndpoint(t *testing.T) {
@@ -352,6 +353,69 @@ func TestContentIREndpoint(t *testing.T) {
 	bookDocument := getContentIRDocument(t, app, book.ID, http.StatusOK)
 	if bookDocument.SourceType != "bookSource" || bookDocument.Nodes[0].Provenance.Locator.HTML == nil {
 		t.Fatalf("book document = %#v, want EPUB locator", bookDocument)
+	}
+	request, err := http.NewRequest(http.MethodGet, "/api/content-ir/"+book.ID+"?schemaVersion=content-ir.v1_1", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(content-ir v1_1) returned error: %v", err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test(content-ir v1_1) returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("content-ir v1_1 status = %d, body = %s", response.StatusCode, payload)
+	}
+	var upgraded contentir.Document
+	if err := json.NewDecoder(response.Body).Decode(&upgraded); err != nil {
+		t.Fatalf("decode v1_1 content IR: %v", err)
+	}
+	if upgraded.SchemaVersion != contentir.SchemaVersionV11 || upgraded.Nodes[0].Provenance.Locator.EPUB == nil {
+		t.Fatalf("v1_1 document = %#v, want EPUB payload", upgraded)
+	}
+	invalidSchemaRequest, err := http.NewRequest(
+		http.MethodGet,
+		"/api/content-ir/"+book.ID+"?schemaVersion=content-ir.v99",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewRequest(content-ir invalid schema) returned error: %v", err)
+	}
+	invalidSchemaResponse, err := app.Test(invalidSchemaRequest)
+	if err != nil {
+		t.Fatalf("app.Test(content-ir invalid schema) returned error: %v", err)
+	}
+	defer invalidSchemaResponse.Body.Close()
+	if invalidSchemaResponse.StatusCode != http.StatusBadRequest {
+		payload, _ := io.ReadAll(invalidSchemaResponse.Body)
+		t.Fatalf(
+			"content-ir invalid schema status = %d, want %d, body = %s",
+			invalidSchemaResponse.StatusCode,
+			http.StatusBadRequest,
+			payload,
+		)
+	}
+
+	planRequest, err := http.NewRequest(http.MethodGet, "/api/content-ir/"+source.ID+"/speech-plan", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(speech-plan) returned error: %v", err)
+	}
+	planResponse, err := app.Test(planRequest)
+	if err != nil {
+		t.Fatalf("app.Test(speech-plan) returned error: %v", err)
+	}
+	defer planResponse.Body.Close()
+	if planResponse.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(planResponse.Body)
+		t.Fatalf("speech-plan status = %d, body = %s", planResponse.StatusCode, payload)
+	}
+	var plan speechplan.Document
+	if err := json.NewDecoder(planResponse.Body).Decode(&plan); err != nil {
+		t.Fatalf("decode speech plan: %v", err)
+	}
+	if plan.SchemaVersion != speechplan.SchemaVersion || len(plan.Segments) == 0 {
+		t.Fatalf("speech plan = %#v, want segments", plan)
 	}
 
 	getContentIRDocument(t, app, "missing", http.StatusNotFound)
