@@ -5,6 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 SUPERTONIC_VENV="${SUPERTONIC_VENV:-$BACKEND_DIR/.venv-supertonic}"
 SUPERTONIC_MODEL_DIR="${SUPERTONIC_MODEL_DIR:-$BACKEND_DIR/model-cache/supertonic}"
+ALIGNMENT_AENEAS_VENV="${ALIGNMENT_AENEAS_VENV:-$BACKEND_DIR/.venv-aeneas}"
+ALIGNMENT_MFA_ENV="${ALIGNMENT_MFA_ENV:-tts-research-mfa}"
+ALIGNMENT_GENTLE_IMAGE="${ALIGNMENT_GENTLE_IMAGE:-lowerquality/gentle}"
 DRAMABOX_DIR="${DRAMABOX_DIR:-$ROOT_DIR/.upstreams/DramaBox}"
 DRAMABOX_VENV="${DRAMABOX_VENV:-$BACKEND_DIR/.venv-dramabox}"
 HISTORY_REWRITE_BRANCH="codex/history-rewrite-hygiene"
@@ -166,6 +169,50 @@ setup_dramabox() {
   fi
 }
 
+setup_alignment() {
+  ensure_local_dirs
+  echo "Alignment setup"
+
+  if command -v mamba >/dev/null 2>&1 || command -v conda >/dev/null 2>&1; then
+    local conda_bin
+    conda_bin="$(command -v mamba || command -v conda)"
+    if "$conda_bin" env list | awk '{print $1}' | grep -qx "$ALIGNMENT_MFA_ENV"; then
+      echo "MFA conda environment already exists: $ALIGNMENT_MFA_ENV"
+    else
+      echo "Creating MFA conda environment: $ALIGNMENT_MFA_ENV"
+      "$conda_bin" create -y -n "$ALIGNMENT_MFA_ENV" -c conda-forge montreal-forced-aligner
+    fi
+    echo "Set ALIGNMENT_MFA_BIN to run MFA through that environment, for example:"
+    echo "  ALIGNMENT_MFA_BIN=\"$conda_bin run -n $ALIGNMENT_MFA_ENV mfa\""
+  else
+    echo "Skipping MFA install: conda/mamba is not available."
+  fi
+
+  if command -v uv >/dev/null 2>&1; then
+    if [[ ! -x "$ALIGNMENT_AENEAS_VENV/bin/python" ]]; then
+      echo "Creating Aeneas environment at $ALIGNMENT_AENEAS_VENV..."
+      run_with_mise uv venv --python "${ALIGNMENT_AENEAS_PYTHON_VERSION:-3.11}" "$ALIGNMENT_AENEAS_VENV"
+    fi
+    if ! "$ALIGNMENT_AENEAS_VENV/bin/python" -c "import aeneas" >/dev/null 2>&1; then
+      echo "Installing Aeneas into isolated environment..."
+      run_with_mise uv pip install --python "$ALIGNMENT_AENEAS_VENV/bin/python" aeneas
+    fi
+    echo "Aeneas Python: $ALIGNMENT_AENEAS_VENV/bin/python"
+  else
+    echo "Skipping Aeneas install: uv is not available."
+  fi
+
+  if command -v docker >/dev/null 2>&1; then
+    echo "Pulling Gentle Docker image: $ALIGNMENT_GENTLE_IMAGE"
+    docker pull "$ALIGNMENT_GENTLE_IMAGE"
+    echo "Run Gentle separately and set ALIGNMENT_GENTLE_URL, for example http://127.0.0.1:8765."
+  else
+    echo "Skipping Gentle image pull: Docker is not available."
+  fi
+
+  echo "Enable post-alignment with ALIGNMENT_ENABLED=true and choose ALIGNMENT_PREFERRED=mfa,aeneas,gentle."
+}
+
 artifact_patterns() {
   printf "%s\n" "${PURGED_PATHS[@]}"
   printf "%s\n" \
@@ -254,6 +301,39 @@ dramabox_status() {
   echo "not configured"
 }
 
+alignment_mfa_status() {
+  if [[ -n "${ALIGNMENT_MFA_BIN:-}" ]]; then
+    echo "configured ($ALIGNMENT_MFA_BIN)"
+    return
+  fi
+  if command -v mfa >/dev/null 2>&1; then
+    echo "available ($(command -v mfa))"
+    return
+  fi
+  echo "not configured"
+}
+
+alignment_aeneas_status() {
+  local python_path="${ALIGNMENT_AENEAS_PYTHON:-$ALIGNMENT_AENEAS_VENV/bin/python}"
+  if [[ -x "$python_path" ]] && "$python_path" -c "import aeneas" >/dev/null 2>&1; then
+    echo "installed ($python_path)"
+    return
+  fi
+  echo "not installed"
+}
+
+alignment_gentle_status() {
+  if [[ -n "${ALIGNMENT_GENTLE_URL:-}" ]]; then
+    echo "server configured ($ALIGNMENT_GENTLE_URL)"
+    return
+  fi
+  if command -v docker >/dev/null 2>&1 && docker image inspect "$ALIGNMENT_GENTLE_IMAGE" >/dev/null 2>&1; then
+    echo "docker image available ($ALIGNMENT_GENTLE_IMAGE)"
+    return
+  fi
+  echo "not configured"
+}
+
 doctor() {
   require_command git
   echo "Voice Studio local setup doctor"
@@ -279,6 +359,9 @@ doctor() {
   echo "Providers"
   echo "  - Supertonic 3: $(supertonic_status)"
   echo "  - DramaBox: $(dramabox_status)"
+  echo "  - Alignment MFA: $(alignment_mfa_status)"
+  echo "  - Alignment Aeneas: $(alignment_aeneas_status)"
+  echo "  - Alignment Gentle: $(alignment_gentle_status)"
   echo
   echo "Git hygiene"
   echo "  - branch: $(git branch --show-current)"
@@ -390,6 +473,9 @@ main() {
     setup-dramabox)
       setup_dramabox "$@"
       ;;
+    setup-alignment)
+      setup_alignment "$@"
+      ;;
     doctor)
       doctor "$@"
       ;;
@@ -407,7 +493,7 @@ main() {
       ;;
     *)
       echo "Unknown command: $command" >&2
-      echo "Usage: $0 {setup|setup-supertonic|setup-dramabox|doctor|audit-artifacts|audit-secrets|clean-history-plan|clean-history-rewrite}" >&2
+      echo "Usage: $0 {setup|setup-supertonic|setup-dramabox|setup-alignment|doctor|audit-artifacts|audit-secrets|clean-history-plan|clean-history-rewrite}" >&2
       exit 2
       ;;
   esac

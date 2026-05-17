@@ -10,6 +10,7 @@
     "start:local": "VOICE_OPTIMIZER_PROVIDER=rules TTS_PROVIDER=kokoro VOICE_CHECKER_PROVIDER=qwen bash ./scripts/start.sh",
     "start:local-bonsai": "VOICE_OPTIMIZER_PROVIDER=bonsai TTS_PROVIDER=kokoro VOICE_CHECKER_PROVIDER=qwen bash ./scripts/start.sh",
     "start:mock": "VOICE_OPTIMIZER_PROVIDER=rules TTS_PROVIDER=mock VOICE_CHECKER_PROVIDER=mock bash ./scripts/start.sh",
+    "setup:alignment": "bash ./scripts/runtime-setup.sh setup-alignment",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "format": "biome format --write .",
     "format:check": "biome format .",
@@ -18,6 +19,7 @@
     "test": "pnpm test:markdown-adapter && pnpm test:pdf-adapter && pnpm --filter @tts-research/backend test && pnpm --filter @tts-research/frontend test",
     "test:markdown-adapter": "node --test \"adapters/**/*.test.js\"",
     "test:pdf-adapter": "python3 -m unittest adapters.pdf.pdf_adapter_test",
+    "bench:alignment": "node scripts/bench-alignment.mjs",
     "bench:markdown": "node adapters/markdown/bench.js",
     "e2e:book-cinema": "node scripts/e2e-book-cinema.mjs",
     "validate:live-ingestion": "node scripts/validate-live-ingestion.mjs"

@@ -233,6 +233,7 @@ func (service *Service) reloadJobs() {
 		if job.AudioURL == "" && job.AudioPath != "" {
 			job.AudioURL = "/api/voice-jobs/" + job.ID + "/audio"
 		}
+		job = service.hydrateTimingSummary(job)
 		if job.CreatedAt.IsZero() {
 			job.CreatedAt = time.Now().UTC()
 		}

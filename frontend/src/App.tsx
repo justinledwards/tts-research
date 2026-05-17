@@ -30,6 +30,7 @@ import {
   getBookCinemaDiagnostics,
   getBookSourceScope,
   getContentIR,
+  getHighlightMap,
   getPreparedSource,
   getProjectSpeechPolicy,
   getProjectStorageSummary,
@@ -108,6 +109,12 @@ import {
   type TeleprompterCue,
   type TeleprompterHighlightSettings,
 } from "./teleprompter";
+import {
+  readingPositionForHighlightCue,
+  resolveHighlightCue,
+  secondsForReadingPosition,
+  type HighlightCue,
+} from "./highlightMap";
 import { THEME_STORAGE_KEY, VOICE_STUDIO_THEMES, normalizeThemeName } from "./theme";
 import type {
   BookSource,
@@ -118,6 +125,7 @@ import type {
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
   CustomSpeechPolicyProfile,
+  HighlightMap,
   MarkdownParseMode,
   PlaybackProgress,
   PlaybackSession,
@@ -197,9 +205,11 @@ interface ActivePipelineFlags {
 interface PlaybackController {
   isAvailable: boolean;
   isPlaying: boolean;
+  playbackRate: number;
   play: () => Promise<void> | void;
   pause: () => void;
   restart: () => Promise<void> | void;
+  setPlaybackRate?: (rate: number) => void;
   skipBy?: (seconds: number) => void;
   seekTo?: (seconds: number) => void;
 }
@@ -214,9 +224,11 @@ type PreparedSourceBlock = NonNullable<PreparedSource["blocks"]>[number];
 const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   isAvailable: false,
   isPlaying: false,
+  playbackRate: 1,
   play: () => Promise.resolve(),
   pause: () => false,
   restart: () => Promise.resolve(),
+  setPlaybackRate: undefined,
   skipBy: undefined,
   seekTo: undefined,
 };
@@ -1405,6 +1417,7 @@ export function App() {
   const [activePlaybackSession, setActivePlaybackSession] = useState<PlaybackSession | null>(null);
   const [pendingPlaybackResume, setPendingPlaybackResume] = useState<{
     autoplay: boolean;
+    readingPosition?: ReadingPosition;
     seconds: number;
   } | null>(null);
   const [bookCinemaDiagnostics, setBookCinemaDiagnostics] = useState<BookCinemaDiagnostics | null>(
@@ -1458,6 +1471,7 @@ export function App() {
   const [isContentIRLoading, setIsContentIRLoading] = useState(false);
   const [playbackCursorSec, setPlaybackCursorSec] = useState(0);
   const [isPlaybackActive, setIsPlaybackActive] = useState(false);
+  const [highlightMap, setHighlightMap] = useState<HighlightMap | null>(null);
   const [playbackControls, setPlaybackControls] = useState<PlaybackController>(
     DISABLED_PLAYBACK_CONTROLLER,
   );
@@ -2349,9 +2363,14 @@ export function App() {
       if (progress.jobId && progress.jobId !== job?.id) {
         await handleSelectJob(progress.jobId);
       }
-      setPendingPlaybackResume({ autoplay: true, seconds: Math.max(0, seconds) });
+      const locatorSeconds = secondsForReadingPosition(highlightMap, progress.readingPosition);
+      setPendingPlaybackResume({
+        autoplay: true,
+        readingPosition: progress.readingPosition,
+        seconds: Math.max(0, locatorSeconds ?? seconds),
+      });
     },
-    [handleSelectJob, job?.id, preparedSources, themeName],
+    [handleSelectJob, highlightMap, job?.id, preparedSources, themeName],
   );
 
   const handleBundleImported = useCallback(
@@ -2606,8 +2625,21 @@ export function App() {
     [playbackControls],
   );
 
+  const activeHighlightCue = useMemo<HighlightCue | null>(() => {
+    if (!job || highlightMap?.jobId !== job.id) {
+      return null;
+    }
+    return resolveHighlightCue(highlightMap, playbackCursorSec);
+  }, [highlightMap, job, playbackCursorSec]);
+
   const activeWordIndexForPlaybackProgress = useCallback(
     (currentJob: VoiceJob, currentTimeSec: number) => {
+      if (highlightMap?.jobId === currentJob.id) {
+        const cue = resolveHighlightCue(highlightMap, currentTimeSec);
+        if (cue && cue.activeWordIndex >= 0) {
+          return cue.activeWordIndex;
+        }
+      }
       if (selectedBookSource && currentJob.bookSourceId === selectedBookSource.id) {
         const bookIndex = resolveBookActiveWordIndex(
           selectedBookSource,
@@ -2622,11 +2654,18 @@ export function App() {
       }
       return activeWordIndexForProgress(currentJob, currentTimeSec);
     },
-    [bookScopeContent, effectiveBookScope, selectedBookSource],
+    [bookScopeContent, effectiveBookScope, highlightMap, selectedBookSource],
   );
 
   const readingPositionForPlaybackProgress = useCallback(
     (currentJob: VoiceJob, currentTimeSec: number): ReadingPosition | undefined => {
+      if (highlightMap?.jobId === currentJob.id) {
+        const cue = resolveHighlightCue(highlightMap, currentTimeSec);
+        const position = readingPositionForHighlightCue(cue);
+        if (position) {
+          return position;
+        }
+      }
       if (!selectedBookSource || currentJob.bookSourceId !== selectedBookSource.id) {
         return undefined;
       }
@@ -2640,7 +2679,7 @@ export function App() {
         scopeKey: bookScopeKey(scope),
       };
     },
-    [activeWordIndexForPlaybackProgress, effectiveBookScope, selectedBookSource],
+    [activeWordIndexForPlaybackProgress, effectiveBookScope, highlightMap, selectedBookSource],
   );
 
   useEffect(() => {
@@ -2964,7 +3003,11 @@ export function App() {
     if (!pendingPlaybackResume || !playbackControls.isAvailable) {
       return;
     }
-    const targetSeconds = Math.max(0, pendingPlaybackResume.seconds);
+    const locatorSeconds = secondsForReadingPosition(
+      highlightMap,
+      pendingPlaybackResume.readingPosition,
+    );
+    const targetSeconds = Math.max(0, locatorSeconds ?? pendingPlaybackResume.seconds);
     if (playbackControls.seekTo) {
       playbackControls.seekTo(targetSeconds);
     } else if (playbackControls.skipBy) {
@@ -2975,7 +3018,7 @@ export function App() {
       void playbackControls.play();
     }
     setPendingPlaybackResume(null);
-  }, [pendingPlaybackResume, playbackControls, playbackCursorSec]);
+  }, [highlightMap, pendingPlaybackResume, playbackControls, playbackCursorSec]);
 
   useEffect(() => {
     const restoreJobId = new URLSearchParams(globalThis.location.search).get("jobId");
@@ -3037,6 +3080,38 @@ export function App() {
       },
     );
   }, [activeJobId, activeProjectId, refreshProjectJobs, refreshProjectStorage]);
+
+  useEffect(() => {
+    if (!job?.id || !job.timing?.highlightMapUrl) {
+      setHighlightMap(null);
+      return;
+    }
+    const expectedStatus = job.timing.summary.status;
+    const expectedTokenCount = job.timing.summary.tokenCount;
+    let isCancelled = false;
+    void getHighlightMap(job.id)
+      .then((map) => {
+        if (
+          !isCancelled &&
+          (expectedStatus !== "partial" || map.summary.tokenCount >= expectedTokenCount)
+        ) {
+          setHighlightMap(map);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setHighlightMap(null);
+        }
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    job?.id,
+    job?.timing?.highlightMapUrl,
+    job?.timing?.summary.status,
+    job?.timing?.summary.tokenCount,
+  ]);
 
   useEffect(() => {
     if (!isProcessing) {
@@ -3544,6 +3619,8 @@ export function App() {
           progress={selectedBookProgress ?? hashProgress}
           scope={effectiveBookScope}
           scopeContent={bookScopeContent}
+          highlightCue={activeHighlightCue}
+          highlightMap={highlightMap}
           textSize={bookCinemaTextSize}
           themeName={bookCinemaThemeName}
           onClose={() => {
@@ -6657,18 +6734,22 @@ function useCompletedPlaybackControllerRegistration({
   canPlayCompleted,
   isPlaying,
   onPlaybackControlsChange,
+  playbackRate,
   playCompletedAudio,
   restartCompletedAudio,
   seekTo,
+  setPlaybackRate,
   skipBy,
 }: {
   audioRef: WritableRef<HTMLAudioElement | null>;
   canPlayCompleted: boolean;
   isPlaying: boolean;
   onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
+  playbackRate: number;
   playCompletedAudio: () => Promise<void> | void;
   restartCompletedAudio: () => Promise<void> | void;
   seekTo: (seconds: number) => void;
+  setPlaybackRate: (rate: number) => void;
   skipBy: (seconds: number) => void;
 }) {
   useEffect(() => {
@@ -6679,12 +6760,14 @@ function useCompletedPlaybackControllerRegistration({
     onPlaybackControlsChange?.({
       isAvailable: true,
       isPlaying,
+      playbackRate,
       pause: () => {
         audioRef.current?.pause();
       },
       play: playCompletedAudio,
       restart: restartCompletedAudio,
       seekTo,
+      setPlaybackRate,
       skipBy,
     });
     return () => {
@@ -6695,9 +6778,11 @@ function useCompletedPlaybackControllerRegistration({
     canPlayCompleted,
     isPlaying,
     onPlaybackControlsChange,
+    playbackRate,
     playCompletedAudio,
     restartCompletedAudio,
     seekTo,
+    setPlaybackRate,
     skipBy,
   ]);
 }
@@ -6750,6 +6835,7 @@ function CompletedAudioPlayer({
   const [durationSec, setDurationSec] = useState(0);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [playbackRate, setPlaybackRateState] = useState(1);
   const waveformBars = useCompletedWaveformBars(src, canPlayCompleted);
   const isSeekingRef = useRef(false);
   const isSeekCommitInProgressRef = useRef(false);
@@ -6833,18 +6919,33 @@ function CompletedAudioPlayer({
     }
   }, []);
 
+  const setPlaybackRate = useCallback((rate: number) => {
+    const next = Number.isFinite(rate) ? Math.max(0.5, Math.min(2, rate)) : 1;
+    setPlaybackRateState(next);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = next;
+    }
+  }, []);
+
   useCompletedPlaybackControllerRegistration({
     audioRef,
     canPlayCompleted,
     isPlaying,
     onPlaybackControlsChange,
+    playbackRate,
     playCompletedAudio,
     restartCompletedAudio,
     seekTo,
+    setPlaybackRate,
     skipBy,
   });
 
   useCompletedAudioElementSource({ audioRef, canPlayCompleted, src, volume });
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate]);
   const durationForSliderSec = Math.max(1, resolvedDurationSec);
   const sliderValue = Math.max(0, Math.min(currentTimeSec, durationForSliderSec));
 
@@ -7160,6 +7261,7 @@ function ArrivalAudioPlayerQueue({
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [bufferedDurationSec, setBufferedDurationSec] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [playbackRate, setPlaybackRateState] = useState(1);
   const [waveformBars, setWaveformBars] = useState<number[]>([]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -7178,6 +7280,7 @@ function ArrivalAudioPlayerQueue({
   const seekSliderValueRef = useRef(0);
 
   const volumeRef = useRef(1);
+  const playbackRateRef = useRef(1);
 
   const getContext = useCallback(() => {
     if (audioContextRef.current) {
@@ -7248,7 +7351,8 @@ function ArrivalAudioPlayerQueue({
     }
 
     const played =
-      playbackSessionCursorRef.current + (context.currentTime - playbackSessionContextRef.current);
+      playbackSessionCursorRef.current +
+      (context.currentTime - playbackSessionContextRef.current) * playbackRateRef.current;
     const clamped = clampCursor(played);
     if (isScrubbingRef.current || isSeekCommitInProgressRef.current) {
       return cursorSecRef.current;
@@ -7266,7 +7370,8 @@ function ArrivalAudioPlayerQueue({
     }
 
     return clampCursor(
-      playbackSessionCursorRef.current + (context.currentTime - playbackSessionContextRef.current),
+      playbackSessionCursorRef.current +
+        (context.currentTime - playbackSessionContextRef.current) * playbackRateRef.current,
     );
   }, [clampCursor]);
 
@@ -7374,8 +7479,12 @@ function ArrivalAudioPlayerQueue({
           return;
         }
         source.connect(gainNode);
+        source.playbackRate.value = playbackRateRef.current;
         const segmentOffset = Math.max(0, playbackAnchorCursor - segment.startSec);
-        const start = startContext + Math.max(0, segment.startSec - playbackAnchorCursor);
+        const start =
+          startContext +
+          Math.max(0, segment.startSec - playbackAnchorCursor) /
+            Math.max(0.1, playbackRateRef.current);
 
         source.addEventListener("ended", () => {
           if (playbackSequenceRef.current !== playbackSequence) {
@@ -7595,6 +7704,33 @@ function ArrivalAudioPlayerQueue({
     }
   }, []);
 
+  const setPlaybackRate = useCallback(
+    (rate: number) => {
+      const next = Number.isFinite(rate) ? Math.max(0.5, Math.min(2, rate)) : 1;
+      const context = audioContextRef.current;
+      if (context && isPlaying && isIntentRef.current) {
+        const cursor = getCurrentCursor();
+        clearSources();
+        playbackRateRef.current = next;
+        setPlaybackRateState(next);
+        playbackSessionCursorRef.current = cursor;
+        playbackSessionContextRef.current = 0;
+        scheduleFromCursor(cursor, context);
+        return;
+      }
+      playbackRateRef.current = next;
+      setPlaybackRateState(next);
+      for (const source of activeSourcesRef.current.values()) {
+        if (context) {
+          source.playbackRate.setValueAtTime(next, context.currentTime);
+        } else {
+          source.playbackRate.value = next;
+        }
+      }
+    },
+    [clearSources, getCurrentCursor, isPlaying, scheduleFromCursor],
+  );
+
   const seekTo = useCallback(
     (seconds: number) => {
       const next = clampCursor(seconds);
@@ -7628,10 +7764,12 @@ function ArrivalAudioPlayerQueue({
     onPlaybackControlsChange?.({
       isAvailable: true,
       isPlaying,
+      playbackRate,
       pause: pausePlayback,
       play: beginPlayback,
       restart: restartArrivalPlayback,
       seekTo,
+      setPlaybackRate,
       skipBy,
     });
     return () => {
@@ -7643,8 +7781,10 @@ function ArrivalAudioPlayerQueue({
     isPlaying,
     onPlaybackControlsChange,
     pausePlayback,
+    playbackRate,
     restartArrivalPlayback,
     seekTo,
+    setPlaybackRate,
     skipBy,
   ]);
 

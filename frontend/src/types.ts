@@ -977,6 +977,137 @@ export interface JobProgress {
   startedAt?: string;
 }
 
+export type TimingSource = "native" | "mfa" | "aeneas" | "gentle" | "heuristic";
+
+export interface TimingConfidence {
+  overall: number;
+  segment: number;
+  token: number;
+  reason?: string;
+}
+
+export interface DriftStats {
+  meanAbsoluteMs: number;
+  maxAbsoluteMs: number;
+  maxRatio: number;
+  corrected: boolean;
+  lowConfidence: boolean;
+  reason?: string;
+}
+
+export interface FragmentTiming {
+  index: number;
+  segmentIndex: number;
+  text: string;
+  startMs: number;
+  endMs: number;
+  confidence: number;
+  source: TimingSource;
+  tokenStart?: number;
+  tokenEnd?: number;
+}
+
+export interface TokenTiming {
+  index: number;
+  fragmentIndex: number;
+  segmentIndex: number;
+  text: string;
+  startMs: number;
+  endMs: number;
+  confidence: number;
+  source: TimingSource;
+}
+
+export interface FragmentTimingArtifact {
+  schemaVersion: string;
+  jobId?: string;
+  source: TimingSource;
+  status: string;
+  durationMs: number;
+  generatedAt: string;
+  confidence: TimingConfidence;
+  drift: DriftStats;
+  fragments: FragmentTiming[];
+  warnings?: string[];
+}
+
+export interface TokenTimingArtifact {
+  schemaVersion: string;
+  jobId?: string;
+  source: TimingSource;
+  status: string;
+  durationMs: number;
+  generatedAt: string;
+  confidence: TimingConfidence;
+  drift: DriftStats;
+  tokens: TokenTiming[];
+  warnings?: string[];
+}
+
+export interface HighlightMapSummary {
+  status: string;
+  source: TimingSource;
+  mode: "word" | "phrase";
+  durationMs: number;
+  fragmentCount: number;
+  tokenCount: number;
+  confidence: TimingConfidence;
+  drift: DriftStats;
+  lowConfidence: boolean;
+  reason?: string;
+  warnings?: string[];
+}
+
+export interface HighlightFragment {
+  index: number;
+  segmentIndex: number;
+  text: string;
+  startMs: number;
+  endMs: number;
+  confidence: number;
+  tokenStart?: number;
+  tokenEnd?: number;
+  readingPosition?: ReadingPosition;
+}
+
+export interface HighlightToken {
+  index: number;
+  fragmentIndex: number;
+  segmentIndex: number;
+  text: string;
+  startMs: number;
+  endMs: number;
+  confidence: number;
+  mode: "word" | "phrase";
+  readingPosition?: ReadingPosition;
+}
+
+export interface HighlightMap {
+  schemaVersion: string;
+  jobId?: string;
+  bookSourceId?: string;
+  scopeKey?: string;
+  status: string;
+  source: TimingSource;
+  mode: "word" | "phrase";
+  durationMs: number;
+  generatedAt: string;
+  summary: HighlightMapSummary;
+  fragments: HighlightFragment[];
+  tokens: HighlightToken[];
+  warnings?: string[];
+}
+
+export interface TimingArtifacts {
+  status: string;
+  summary: HighlightMapSummary;
+  highlightMapUrl?: string;
+  fragmentTimingUrl?: string;
+  tokenTimingUrl?: string;
+  fragmentTiming?: FragmentTimingArtifact;
+  tokenTiming?: TokenTimingArtifact;
+}
+
 export interface VoiceJob {
   id: string;
   projectId: string;
@@ -1005,6 +1136,7 @@ export interface VoiceJob {
   audioReadySegments?: number;
   audioSegmentDurationsMs?: number[];
   audioSegmentLatenciesMs?: number[];
+  timing?: TimingArtifacts;
   contentType: string;
   durationMs: number;
   provider: string;

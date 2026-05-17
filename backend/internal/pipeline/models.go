@@ -4,8 +4,10 @@ import (
 	"io"
 	"time"
 
+	"github.com/justinedwards/tts-research/backend/internal/alignment"
 	"github.com/justinedwards/tts-research/backend/internal/audio"
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
+	"github.com/justinedwards/tts-research/backend/internal/highlightmap"
 	"github.com/justinedwards/tts-research/backend/internal/lexicon"
 	speechmath "github.com/justinedwards/tts-research/backend/internal/math"
 	"github.com/justinedwards/tts-research/backend/internal/normalise"
@@ -928,6 +930,27 @@ type JobProgress struct {
 	StartedAt      *time.Time `json:"startedAt,omitempty"`
 }
 
+type AlignmentOptions struct {
+	Enabled          bool                     `json:"enabled"`
+	Preferred        []alignment.TimingSource `json:"preferred,omitempty"`
+	MFABin           string                   `json:"mfaBin,omitempty"`
+	MFADictionary    string                   `json:"mfaDictionary,omitempty"`
+	MFAAcousticModel string                   `json:"mfaAcousticModel,omitempty"`
+	AeneasPython     string                   `json:"aeneasPython,omitempty"`
+	GentleURL        string                   `json:"gentleUrl,omitempty"`
+	TimeoutSeconds   int                      `json:"timeoutSeconds,omitempty"`
+}
+
+type TimingArtifacts struct {
+	Status            string                            `json:"status"`
+	Summary           highlightmap.Summary              `json:"summary"`
+	HighlightMapURL   string                            `json:"highlightMapUrl,omitempty"`
+	FragmentTimingURL string                            `json:"fragmentTimingUrl,omitempty"`
+	TokenTimingURL    string                            `json:"tokenTimingUrl,omitempty"`
+	FragmentTiming    *alignment.FragmentTimingArtifact `json:"fragmentTiming,omitempty"`
+	TokenTiming       *alignment.TokenTimingArtifact    `json:"tokenTiming,omitempty"`
+}
+
 type VoiceJob struct {
 	ID                      string            `json:"id"`
 	ProjectID               string            `json:"projectId"`
@@ -966,6 +989,7 @@ type VoiceJob struct {
 	AudioReadySegments      int               `json:"audioReadySegments,omitempty"`
 	AudioSegmentDurationsMS []int             `json:"audioSegmentDurationsMs,omitempty"`
 	AudioSegmentLatenciesMS []int             `json:"audioSegmentLatenciesMs,omitempty"`
+	Timing                  *TimingArtifacts  `json:"timing,omitempty"`
 	ContentType             string            `json:"contentType"`
 	DurationMS              int               `json:"durationMs"`
 	Provider                string            `json:"provider"`
@@ -982,9 +1006,10 @@ type VoiceJob struct {
 
 type storedJob struct {
 	VoiceJob
-	audio             []byte
-	audioSegments     [][]byte
-	audioPartialPCM   []byte
-	audioPartialSpec  audio.WAVSpec
-	audioPartialReady bool
+	audio              []byte
+	audioSegments      [][]byte
+	audioPartialPCM    []byte
+	audioPartialSpec   audio.WAVSpec
+	audioPartialReady  bool
+	nativeTimingEvents []alignment.NativeTimingEvent
 }

@@ -522,6 +522,12 @@ select {
   );
 }
 
+.book-cinema-word-phrase {
+  border-radius: 0.16em;
+  background: color-mix(in srgb, var(--vs-accent) 18%, transparent);
+  box-shadow: 0 0 0 0.08em color-mix(in srgb, var(--vs-accent) 16%, transparent);
+}
+
 @keyframes teleprompter-focus-pulse {
   from {
     transform: scale(0.97);

@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/justinedwards/tts-research/backend/internal/agents"
+	"github.com/justinedwards/tts-research/backend/internal/alignment"
 	"github.com/justinedwards/tts-research/backend/internal/audio"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
@@ -148,6 +149,7 @@ type Options struct {
 	VoiceProfileLikenessCalibrationText  string
 	VoiceProfileLikenessTimeoutSeconds   int
 	VoiceProfileLikenessScorer           VoiceProfileLikenessScorer
+	Alignment                            AlignmentOptions
 	DefaultTTSEngine                     string
 	TTSEngines                           []TTSEngineRegistration
 }
@@ -963,14 +965,13 @@ func (service *Service) reloadProfiles() {
 
 func (service *Service) GetJob(id string) (VoiceJob, error) {
 	service.mu.RLock()
-	defer service.mu.RUnlock()
-
 	job, ok := service.jobs[id]
+	service.mu.RUnlock()
 	if !ok {
 		return VoiceJob{}, ErrJobNotFound
 	}
 
-	return job.VoiceJob, nil
+	return service.hydrateTimingSummary(job.VoiceJob), nil
 }
 
 func (service *Service) GetAudio(id string) ([]byte, string, error) {
@@ -1233,9 +1234,6 @@ func (service *Service) runJob(ctx context.Context, id string) {
 	now := time.Now().UTC()
 	var metadataErr error
 	service.updateJob(id, func(job *storedJob) {
-		job.Status = JobStatusCompleted
-		job.Stages.Synthesis = StageStatusDone
-		job.Stages.Checker = StageStatusDone
 		job.AudioURL = fmt.Sprintf("/api/voice-jobs/%s/audio", job.ID)
 		job.AudioReadySegments = job.Retries.TotalSegments
 		job.AudioPath = audioPath
@@ -1247,6 +1245,17 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		job.Voice = result.Voice
 		job.VoiceCheck = toVoiceCheck(check)
 		job.QualityReport = buildQualityReport(job.VoiceJob, config.pipelineOptions, check)
+		setProgress(job, string(JobStatusChecking), "Preparing read-along timing", "Writing highlight-map and timing sidecars.", job.Retries.TotalSegments, job.Retries.TotalSegments)
+	})
+	if _, err := service.refreshTimingArtifacts(ctx, id, true); err != nil {
+		service.updateJob(id, func(job *storedJob) {
+			job.SegmentationWarnings = uniqueStrings(append(job.SegmentationWarnings, "final timing unavailable: "+err.Error()))
+		})
+	}
+	service.updateJob(id, func(job *storedJob) {
+		job.Status = JobStatusCompleted
+		job.Stages.Synthesis = StageStatusDone
+		job.Stages.Checker = StageStatusDone
 		job.CompletedAt = &now
 		completedDetail := "All generated segments passed voice checking."
 		if !config.pipelineOptions.ASRCheck {
@@ -1355,20 +1364,21 @@ func (service *Service) synthesizeUntilComplete(
 	})
 
 	type segmentResult struct {
-		index           int
-		audio           []byte
-		audioPCM        []byte
-		audioSpec       audio.WAVSpec
-		audioDurationMS int
-		attempts        int
-		check           agents.VoiceCheckResult
-		latencyMS       int
-		contentType     string
-		provider        string
-		voice           string
-		err             error
-		transcript      string
-		similarity      float64
+		index              int
+		audio              []byte
+		audioPCM           []byte
+		audioSpec          audio.WAVSpec
+		audioDurationMS    int
+		attempts           int
+		check              agents.VoiceCheckResult
+		latencyMS          int
+		contentType        string
+		provider           string
+		voice              string
+		nativeTimingEvents []alignment.NativeTimingEvent
+		err                error
+		transcript         string
+		similarity         float64
 	}
 
 	totalAttempts := 0
@@ -1503,6 +1513,7 @@ func (service *Service) synthesizeUntilComplete(
 				output.contentType = result.ContentType
 				output.provider = result.Provider
 				output.voice = result.Voice
+				output.nativeTimingEvents = result.TimingEvents
 				output.check = agents.VoiceCheckResult{
 					Complete:    true,
 					Transcript:  expectedSegment,
@@ -1549,6 +1560,7 @@ func (service *Service) synthesizeUntilComplete(
 				output.contentType = result.ContentType
 				output.provider = result.Provider
 				output.voice = result.Voice
+				output.nativeTimingEvents = result.TimingEvents
 				return output
 			}
 
@@ -1674,6 +1686,7 @@ func (service *Service) synthesizeUntilComplete(
 
 			delete(pending, nextSegment)
 
+			segmentStartMS := totalDurationMS
 			mergedSegmentsPCM = append(mergedSegmentsPCM, nextResult.audioPCM...)
 			totalAttempts += nextResult.attempts
 			totalDurationMS += nextResult.audioDurationMS
@@ -1690,6 +1703,10 @@ func (service *Service) synthesizeUntilComplete(
 				job.audioPartialPCM = append(job.audioPartialPCM, nextResult.audioPCM...)
 				job.audioPartialSpec = nextResult.audioSpec
 				job.audioPartialReady = true
+				job.nativeTimingEvents = append(
+					job.nativeTimingEvents,
+					alignment.OffsetNativeEvents(nextResult.nativeTimingEvents, segmentStartMS, nextSegment)...,
+				)
 				job.AudioSegmentDurationsMS = append(
 					job.AudioSegmentDurationsMS,
 					nextResult.audioDurationMS,
@@ -1733,6 +1750,11 @@ func (service *Service) synthesizeUntilComplete(
 					totalSegments,
 				)
 			})
+			if _, err := service.refreshTimingArtifacts(pipelineCtx, id, false); err != nil && !errors.Is(err, alignment.ErrNoTimingInput) {
+				service.updateJob(id, func(job *storedJob) {
+					job.SegmentationWarnings = uniqueStrings(append(job.SegmentationWarnings, "partial timing unavailable: "+err.Error()))
+				})
+			}
 
 			nextSegment += 1
 		}
@@ -2462,6 +2484,7 @@ func (service *Service) failJobByID(id string, err error) {
 		job.audioPartialPCM = nil
 		job.audioPartialReady = false
 		job.audioSegments = nil
+		job.nativeTimingEvents = nil
 		job.AudioSegmentDurationsMS = nil
 		job.AudioSegmentLatenciesMS = nil
 		job.Error = err.Error()
@@ -2486,6 +2509,7 @@ func (service *Service) cancelJobByID(id string) {
 		job.audioPartialPCM = nil
 		job.audioPartialReady = false
 		job.audioSegments = nil
+		job.nativeTimingEvents = nil
 		job.AudioSegmentDurationsMS = nil
 		job.AudioSegmentLatenciesMS = nil
 		job.Error = "cancelled by request"

@@ -675,12 +675,46 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Get("/api/voice-jobs/:id", func(ctx fiber.Ctx) error {
-		job, err := service.GetJob(ctx.Params("id"))
+		includeTiming := ctx.Query("includeTiming") == "1" || strings.EqualFold(ctx.Query("includeTiming"), "true")
+		job, err := service.GetJobWithTiming(ctx.Params("id"), includeTiming)
 		if err != nil {
 			return notFound(ctx, err)
 		}
 
 		return ctx.JSON(job)
+	})
+
+	app.Get("/api/voice-jobs/:id/highlight-map", func(ctx fiber.Ctx) error {
+		payload, err := service.GetHighlightMap(ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrAudioNotReady) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(payload)
+	})
+
+	app.Get("/api/voice-jobs/:id/timing/fragments", func(ctx fiber.Ctx) error {
+		payload, err := service.GetFragmentTiming(ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrAudioNotReady) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(payload)
+	})
+
+	app.Get("/api/voice-jobs/:id/timing/tokens", func(ctx fiber.Ctx) error {
+		payload, err := service.GetTokenTiming(ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrAudioNotReady) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(payload)
 	})
 
 	app.Get("/api/voice-jobs/:id/events", func(ctx fiber.Ctx) error {

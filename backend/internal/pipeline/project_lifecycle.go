@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/justinedwards/tts-research/backend/internal/highlightmap"
 )
 
 var regexpInvalidDownloadFilename = regexp.MustCompile(`[^a-z0-9.-]+`)
@@ -132,6 +134,48 @@ func (service *Service) GetProjectStorageSummary(id string) (ProjectStorageSumma
 				Segment:   index,
 				Available: true,
 			})
+		}
+		timingDownloads := []struct {
+			kind     string
+			label    string
+			url      string
+			filename string
+			path     string
+		}{
+			{
+				kind:     "highlight_map",
+				label:    "Highlight map",
+				url:      fmt.Sprintf("/api/voice-jobs/%s/highlight-map", job.ID),
+				filename: safeDownloadFilename(project.Name, job, "highlight-map", ".json"),
+				path:     filepath.Join(jobDir, highlightmap.HighlightMapFilename),
+			},
+			{
+				kind:     "fragment_timing",
+				label:    "Fragment timing",
+				url:      fmt.Sprintf("/api/voice-jobs/%s/timing/fragments", job.ID),
+				filename: safeDownloadFilename(project.Name, job, "fragment-timing", ".json"),
+				path:     filepath.Join(jobDir, highlightmap.FragmentTimingFilename),
+			},
+			{
+				kind:     "token_timing",
+				label:    "Token timing",
+				url:      fmt.Sprintf("/api/voice-jobs/%s/timing/tokens", job.ID),
+				filename: safeDownloadFilename(project.Name, job, "token-timing", ".json"),
+				path:     filepath.Join(jobDir, highlightmap.TokenTimingFilename),
+			},
+		}
+		for _, download := range timingDownloads {
+			if bytes := fileSize(download.path); bytes > 0 {
+				summary.Downloads = append(summary.Downloads, ProjectStorageDownload{
+					Kind:      download.kind,
+					Label:     downloadLabel(download.label, job),
+					URL:       download.url,
+					FileName:  download.filename,
+					Bytes:     bytes,
+					JobID:     job.ID,
+					Available: true,
+				})
+			}
 		}
 	}
 	for _, book := range books {

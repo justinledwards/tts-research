@@ -7,11 +7,13 @@ import type {
   BookSourceImportOptions,
   BookSourceSectionRole,
   BookSourceScopeContent,
+  HighlightMap,
   PDFTableMode,
   PlaybackProgress,
   ThemeName,
   VoiceJob,
 } from "./types";
+import type { HighlightCue } from "./highlightMap";
 
 export const BOOK_SOURCE_ACCEPT =
   ".pdf,.epub,.docx,.html,.htm,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/html,application/xhtml+xml,application/zip,image/png,image/jpeg,image/tiff,image/webp";
@@ -622,6 +624,8 @@ export function BookCinemaOverlay({
   progress,
   scope,
   scopeContent,
+  highlightCue,
+  highlightMap,
   textSize,
   themeName,
   onClose,
@@ -645,13 +649,17 @@ export function BookCinemaOverlay({
   playbackControls: {
     isAvailable: boolean;
     isPlaying: boolean;
+    playbackRate: number;
     play: () => void | Promise<void>;
     pause: () => void;
     restart: () => void | Promise<void>;
+    setPlaybackRate?: (rate: number) => void;
     skipBy?: (seconds: number) => void;
   };
   scope: BookScope;
   scopeContent: BookSourceScopeContent | null;
+  highlightCue: HighlightCue | null;
+  highlightMap: HighlightMap | null;
   textSize: BookCinemaTextSize;
   themeName: ThemeName;
   onClose: () => void;
@@ -680,7 +688,12 @@ export function BookCinemaOverlay({
     normalizedScope,
     scopeContent,
   );
-  const displayedActiveWordIndex = resolveDisplayedBookActiveWordIndex(activeWordIndex, progress);
+  const timingActiveWordIndex = highlightCue?.activeWordIndex ?? activeWordIndex;
+  const displayedActiveWordIndex = resolveDisplayedBookActiveWordIndex(
+    timingActiveWordIndex,
+    progress,
+  );
+  const phraseRange = resolveHighlightPhraseRange(highlightCue);
   const queueOptions = useMemo(() => {
     const narratable = scopeOptions.filter(
       (option) => option.isNarratable && (option.wordCount ?? 0) > 0,
@@ -823,6 +836,8 @@ export function BookCinemaOverlay({
           scopedSpans={scopedSpans}
           scopedText={scopedText}
           textSize={textSize}
+          phraseWordEnd={phraseRange.end}
+          phraseWordStart={phraseRange.start}
           onTextSizeChange={onTextSizeChange}
         />
 
@@ -866,7 +881,16 @@ export function BookCinemaOverlay({
                 Bookmark
               </button>
             </div>
+            <BookCinemaPlaybackRateControls
+              playbackRate={playbackControls.playbackRate}
+              setPlaybackRate={playbackControls.setPlaybackRate}
+            />
           </div>
+          <BookCinemaTimingDebug
+            cursorSec={playbackCursorSec}
+            highlightCue={highlightCue}
+            highlightMap={highlightMap}
+          />
           <div className="mt-4 rounded-lg border p-4 vs-border">
             <div className="flex items-center justify-between gap-3">
               <p className="vs-muted text-xs font-semibold uppercase tracking-[0.2em]">Queue</p>
@@ -943,6 +967,21 @@ export function BookCinemaOverlay({
           >
             +10s
           </button>
+          <select
+            aria-label="Playback speed"
+            className="h-10 rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-semibold outline-none disabled:opacity-40 vs-border"
+            disabled={!playbackControls.setPlaybackRate}
+            onChange={(event) => {
+              playbackControls.setPlaybackRate?.(Number(event.currentTarget.value));
+            }}
+            value={String(playbackControls.playbackRate)}
+          >
+            {[0.8, 1, 1.25, 1.5].map((rate) => (
+              <option key={rate} value={rate}>
+                {rate.toFixed(rate === 1 ? 0 : 2)}x
+              </option>
+            ))}
+          </select>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold vs-border"
             onClick={() => {
@@ -1032,6 +1071,75 @@ function BookCinemaResumeButton({
   );
 }
 
+function BookCinemaTimingDebug({
+  cursorSec,
+  highlightCue,
+  highlightMap,
+}: Readonly<{
+  cursorSec: number;
+  highlightCue: HighlightCue | null;
+  highlightMap: HighlightMap | null;
+}>) {
+  if (!highlightMap) {
+    return null;
+  }
+  const summary = highlightMap.summary;
+  return (
+    <div className="mt-4 rounded-lg border p-4 text-xs vs-border">
+      <div className="flex items-center justify-between gap-3">
+        <p className="vs-muted font-semibold uppercase tracking-[0.2em]">Timing</p>
+        <span className="font-semibold text-orange-500">{summary.mode}</span>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
+        <dt className="vs-muted">Clock</dt>
+        <dd className="truncate text-right">{formatEstimatedDuration(cursorSec * 1000)}</dd>
+        <dt className="vs-muted">Token</dt>
+        <dd className="truncate text-right">{highlightCue?.tokenIndex ?? "phrase"}</dd>
+        <dt className="vs-muted">Locator</dt>
+        <dd className="truncate text-right">
+          {highlightCue?.readingPosition?.activeWordIndex ?? "-"}
+        </dd>
+        <dt className="vs-muted">Source</dt>
+        <dd className="truncate text-right">{summary.source}</dd>
+        <dt className="vs-muted">Confidence</dt>
+        <dd className="truncate text-right">{Math.round(summary.confidence.overall * 100)}%</dd>
+        <dt className="vs-muted">Drift</dt>
+        <dd className="truncate text-right">{summary.drift.maxAbsoluteMs}ms</dd>
+      </dl>
+    </div>
+  );
+}
+
+function BookCinemaPlaybackRateControls({
+  playbackRate,
+  setPlaybackRate,
+}: Readonly<{
+  playbackRate: number;
+  setPlaybackRate?: (rate: number) => void;
+}>) {
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-1.5">
+      {[0.8, 1, 1.25, 1.5].map((rate) => (
+        <button
+          className={`rounded border px-2 py-1 text-xs font-semibold ${
+            Math.abs(playbackRate - rate) < 0.01
+              ? "border-orange-400 bg-orange-500/10 text-orange-500"
+              : "vs-border"
+          }`}
+          disabled={!setPlaybackRate}
+          key={rate}
+          onClick={() => {
+            setPlaybackRate?.(rate);
+          }}
+          type="button"
+        >
+          {rate.toFixed(rate === 1 ? 0 : 2)}x
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function BookPageHeading({
   book,
   compact = false,
@@ -1057,6 +1165,8 @@ function BookCinemaReaderStage({
   scopedSpans,
   scopedText,
   textSize,
+  phraseWordEnd,
+  phraseWordStart,
   onTextSizeChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -1065,6 +1175,8 @@ function BookCinemaReaderStage({
   scopedSpans: NonNullable<BookSource["wordSpans"]>;
   scopedText: string;
   textSize: BookCinemaTextSize;
+  phraseWordEnd?: number;
+  phraseWordStart?: number;
   onTextSizeChange: (size: BookCinemaTextSize) => void;
 }>) {
   const pageMetrics = useBookPageMetrics(textSize);
@@ -1109,6 +1221,8 @@ function BookCinemaReaderStage({
               isRightPage={index === 1}
               key={`${book.id}-${bookScopeKey(scope)}-${String(page?.index ?? "fallback")}`}
               page={page}
+              phraseWordEnd={phraseWordEnd}
+              phraseWordStart={phraseWordStart}
               scope={scope}
               totalPages={pagination.totalPages}
             />
@@ -1122,6 +1236,8 @@ function BookCinemaReaderStage({
               isActivePage={false}
               isRightPage
               page={null}
+              phraseWordEnd={phraseWordEnd}
+              phraseWordStart={phraseWordStart}
               scope={scope}
               totalPages={pagination.totalPages}
             />
@@ -1184,6 +1300,8 @@ function BookReaderPage({
   isActivePage,
   isRightPage = false,
   page,
+  phraseWordEnd,
+  phraseWordStart,
   scope,
   totalPages,
 }: Readonly<{
@@ -1194,6 +1312,8 @@ function BookReaderPage({
   isActivePage: boolean;
   isRightPage?: boolean;
   page: BookPage | null;
+  phraseWordEnd?: number;
+  phraseWordStart?: number;
   scope: BookScope;
   totalPages: number;
 }>) {
@@ -1219,7 +1339,12 @@ function BookReaderPage({
         {page && page.spans.length > 0
           ? page.spans.map((span) => (
               <span
-                className={span.index === activeWordIndex ? "book-cinema-word-active" : ""}
+                className={bookWordClassName(
+                  span.index,
+                  activeWordIndex,
+                  phraseWordStart,
+                  phraseWordEnd,
+                )}
                 data-book-word={span.index}
                 key={`${book.id}-cinema-page-${String(page.index)}-${String(span.index)}`}
                 title={bookSpanTitle(span)}
@@ -1541,6 +1666,36 @@ export function resolveDisplayedBookActiveWordIndex(
   progress: PlaybackProgress | null,
 ): number {
   return activeWordIndex >= 0 ? activeWordIndex : (progress?.activeWordIndex ?? -1);
+}
+
+function resolveHighlightPhraseRange(cue: HighlightCue | null): {
+  end?: number;
+  start?: number;
+} {
+  if (cue?.mode !== "phrase") {
+    return {};
+  }
+  return {
+    end: cue.phraseWordEnd,
+    start: cue.phraseWordStart,
+  };
+}
+
+function bookWordClassName(
+  index: number,
+  activeWordIndex: number,
+  phraseWordStart?: number,
+  phraseWordEnd?: number,
+): string {
+  if (
+    phraseWordStart !== undefined &&
+    phraseWordEnd !== undefined &&
+    index >= phraseWordStart &&
+    index <= phraseWordEnd
+  ) {
+    return "book-cinema-word-phrase";
+  }
+  return index === activeWordIndex ? "book-cinema-word-active" : "";
 }
 
 export function visibleBookSpans(

@@ -37,6 +37,8 @@ const (
 	playbackSessionFilename        = "session.json"
 	maxReadableURLBytes            = 20 << 20
 	readableURLTimeout             = 20 * time.Second
+	readableURLUserAgent           = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 VoiceStudio/1.0"
+	maxHackerNewsComments          = 120
 	warningSentenceTooLong         = "sentence_too_long"
 )
 
@@ -45,6 +47,17 @@ type fetchedReadableSource struct {
 	Filename    string
 	ContentType string
 	Bytes       []byte
+}
+
+type hackerNewsAlgoliaItem struct {
+	ID       int                     `json:"id"`
+	Author   string                  `json:"author"`
+	Children []hackerNewsAlgoliaItem `json:"children"`
+	Points   int                     `json:"points"`
+	Text     string                  `json:"text"`
+	Title    string                  `json:"title"`
+	Type     string                  `json:"type"`
+	URL      string                  `json:"url"`
 }
 
 type sourcePreprocessResult struct {
@@ -555,21 +568,35 @@ func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL strin
 			return nil
 		},
 	}
+	if fallback, ok, fallbackErr := service.fetchHackerNewsItemFallback(ctx, client, parsed); ok && fallbackErr == nil {
+		return fallback, nil
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
 	if err != nil {
 		return fetchedReadableSource{}, err
 	}
-	req.Header.Set("User-Agent", "VoiceStudio/1.0 source-prep")
+	setReadableURLRequestHeaders(req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fetchedReadableSource{}, err
 	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		statusCode := resp.StatusCode
+		_ = resp.Body.Close()
+		if statusCode == http.StatusTooManyRequests {
+			fallback, ok, fallbackErr := service.fetchHackerNewsItemFallback(ctx, client, parsed)
+			if ok && fallbackErr == nil {
+				return fallback, nil
+			}
+			if ok && fallbackErr != nil {
+				return fetchedReadableSource{}, fmt.Errorf("URL returned HTTP %d and Hacker News fallback failed: %w", statusCode, fallbackErr)
+			}
+		}
+		return fetchedReadableSource{}, fmt.Errorf("URL returned HTTP %d", statusCode)
+	}
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fetchedReadableSource{}, fmt.Errorf("URL returned HTTP %d", resp.StatusCode)
-	}
 	contentType := strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0])
 	limited := io.LimitReader(resp.Body, maxReadableURLBytes+1)
 	body, err := io.ReadAll(limited)
@@ -586,6 +613,156 @@ func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL strin
 		ContentType: contentType,
 		Bytes:       body,
 	}, nil
+}
+
+func setReadableURLRequestHeaders(req *http.Request) {
+	req.Header.Set("User-Agent", readableURLUserAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,application/json;q=0.7,*/*;q=0.5")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Cache-Control", "no-cache")
+}
+
+func (service *Service) fetchHackerNewsItemFallback(
+	ctx context.Context,
+	client *http.Client,
+	parsed *url.URL,
+) (fetchedReadableSource, bool, error) {
+	itemID, ok := hackerNewsItemID(parsed)
+	if !ok {
+		return fetchedReadableSource{}, false, nil
+	}
+	apiURL := "https://hn.algolia.com/api/v1/items/" + itemID
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return fetchedReadableSource{}, true, err
+	}
+	setReadableURLRequestHeaders(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fetchedReadableSource{}, true, err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fetchedReadableSource{}, true, fmt.Errorf("HN API returned HTTP %d", resp.StatusCode)
+	}
+	limited := io.LimitReader(resp.Body, maxReadableURLBytes+1)
+	body, err := io.ReadAll(limited)
+	if err != nil {
+		return fetchedReadableSource{}, true, err
+	}
+	if len(body) > maxReadableURLBytes {
+		return fetchedReadableSource{}, true, fmt.Errorf("HN API content is too large")
+	}
+	var item hackerNewsAlgoliaItem
+	if err := json.Unmarshal(body, &item); err != nil {
+		return fetchedReadableSource{}, true, err
+	}
+	markdown := hackerNewsItemMarkdown(item, parsed.String())
+	if strings.TrimSpace(markdown) == "" {
+		return fetchedReadableSource{}, true, fmt.Errorf("HN API returned no readable text")
+	}
+	return fetchedReadableSource{
+		URL:         parsed.String(),
+		Filename:    "hacker-news-" + itemID + ".md",
+		ContentType: "text/markdown",
+		Bytes:       []byte(markdown),
+	}, true, nil
+}
+
+func hackerNewsItemID(parsed *url.URL) (string, bool) {
+	host := strings.ToLower(strings.TrimPrefix(parsed.Hostname(), "www."))
+	if host != "news.ycombinator.com" || strings.Trim(parsed.Path, "/") != "item" {
+		return "", false
+	}
+	id := strings.TrimSpace(parsed.Query().Get("id"))
+	if id == "" {
+		return "", false
+	}
+	for _, value := range id {
+		if value < '0' || value > '9' {
+			return "", false
+		}
+	}
+	return id, true
+}
+
+func hackerNewsItemMarkdown(item hackerNewsAlgoliaItem, sourceURL string) string {
+	var builder strings.Builder
+	title := firstNonEmpty(item.Title, "Hacker News item")
+	builder.WriteString("# ")
+	builder.WriteString(title)
+	builder.WriteString("\n\n")
+	if strings.TrimSpace(item.URL) != "" {
+		builder.WriteString("Story URL: ")
+		builder.WriteString(strings.TrimSpace(item.URL))
+		builder.WriteString("\n\n")
+	}
+	builder.WriteString("Hacker News URL: ")
+	builder.WriteString(sourceURL)
+	builder.WriteString("\n")
+	if strings.TrimSpace(item.Author) != "" {
+		builder.WriteString("Author: ")
+		builder.WriteString(strings.TrimSpace(item.Author))
+		builder.WriteString("\n")
+	}
+	if item.Points > 0 {
+		builder.WriteString("Points: ")
+		builder.WriteString(strconv.Itoa(item.Points))
+		builder.WriteString("\n")
+	}
+	if text := hackerNewsReadableText(item.Text); text != "" {
+		builder.WriteString("\n")
+		builder.WriteString(text)
+		builder.WriteString("\n")
+	}
+	commentCount := 0
+	for _, child := range item.Children {
+		writeHackerNewsCommentMarkdown(&builder, child, 0, &commentCount)
+		if commentCount >= maxHackerNewsComments {
+			break
+		}
+	}
+	return strings.TrimSpace(builder.String()) + "\n"
+}
+
+func writeHackerNewsCommentMarkdown(
+	builder *strings.Builder,
+	item hackerNewsAlgoliaItem,
+	depth int,
+	commentCount *int,
+) {
+	if *commentCount >= maxHackerNewsComments {
+		return
+	}
+	text := hackerNewsReadableText(item.Text)
+	if text != "" {
+		*commentCount += 1
+		if *commentCount == 1 {
+			builder.WriteString("\n## Comments\n")
+		}
+		builder.WriteString("\n")
+		for range max(0, depth) {
+			builder.WriteString("> ")
+		}
+		if strings.TrimSpace(item.Author) != "" {
+			builder.WriteString(strings.TrimSpace(item.Author))
+			builder.WriteString(": ")
+		}
+		builder.WriteString(text)
+		builder.WriteString("\n")
+	}
+	for _, child := range item.Children {
+		writeHackerNewsCommentMarkdown(builder, child, depth+1, commentCount)
+		if *commentCount >= maxHackerNewsComments {
+			return
+		}
+	}
+}
+
+func hackerNewsReadableText(input string) string {
+	return strings.Join(strings.Fields(normalizeReadableSourceText(input)), " ")
 }
 
 func prepareNarrationBlocks(input string, maxSentenceRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {

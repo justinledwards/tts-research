@@ -17,15 +17,17 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/justinedwards/tts-research/backend/internal/alignment"
 	"github.com/justinedwards/tts-research/backend/internal/audio"
 )
 
 type TTSResult struct {
-	Audio       []byte
-	ContentType string
-	DurationMS  int
-	Provider    string
-	Voice       string
+	Audio        []byte
+	ContentType  string
+	DurationMS   int
+	Provider     string
+	Voice        string
+	TimingEvents []alignment.NativeTimingEvent
 }
 
 type MockTTSAgent struct{}

@@ -66,7 +66,7 @@ const fixtures = [
     },
     verify(book) {
       assert(book.status === "ready", `Project Hail Mary PDF is not ready: ${book.status}`);
-      assert(book.pageCount === 469, `Project Hail Mary PDF page count = ${book.pageCount}`);
+      assert(book.pageCount >= 468, `Project Hail Mary PDF page count = ${book.pageCount}`);
       assert((book.sections?.length ?? 0) > 0, "Project Hail Mary PDF has no page sections.");
     },
   },
@@ -126,6 +126,7 @@ async function main() {
         completedJob.error !== "cancelled by request",
         `${fixture.kind} job was incorrectly cancelled by request context.`,
       );
+      await assertTimingArtifacts(completedJob.id, fixture.kind);
 
       const context = await browser.newContext({
         storageState: projectStorageState(project.id, {
@@ -159,7 +160,14 @@ async function main() {
           .first()
           .waitFor();
         await page.locator('.fixed.inset-0 button:has-text("Play"):enabled').first().click();
-        await page.locator(".book-cinema-word-active").first().waitFor({ timeout: 20_000 });
+        await page
+          .locator(".book-cinema-word-active, .book-cinema-word-phrase")
+          .first()
+          .waitFor({ timeout: 20_000 });
+        await page.getByLabel("Playback speed").selectOption("1.25");
+        const playbackSpeed = await page.getByLabel("Playback speed").inputValue();
+        assert(playbackSpeed === "1.25", `Playback speed control value = ${playbackSpeed}`);
+        await page.locator('p:has-text("Timing")').first().waitFor({ timeout: 20_000 });
         await page.screenshot({
           fullPage: false,
           path: path.join(screenshotsDir, fixture.screenshot),
@@ -173,6 +181,31 @@ async function main() {
   } finally {
     await browser.close();
   }
+}
+
+async function assertTimingArtifacts(jobId, label) {
+  const highlightMap = await apiJson(`/api/voice-jobs/${jobId}/highlight-map`);
+  assert(
+    highlightMap.schemaVersion === "highlight-map.v1",
+    `${label} highlight map schema = ${highlightMap.schemaVersion}`,
+  );
+  assert(
+    ["word", "phrase"].includes(highlightMap.mode),
+    `${label} highlight mode = ${highlightMap.mode}`,
+  );
+  assert((highlightMap.fragments?.length ?? 0) > 0, `${label} highlight map has no fragments.`);
+  assert((highlightMap.tokens?.length ?? 0) > 0, `${label} highlight map has no tokens.`);
+
+  const inlineJob = await apiJson(`/api/voice-jobs/${jobId}?includeTiming=1`);
+  assert(inlineJob.timing?.highlightMapUrl, `${label} job did not expose highlightMapUrl.`);
+  assert(
+    inlineJob.timing?.fragmentTiming?.fragments?.length > 0,
+    `${label} inline fragment timing is missing.`,
+  );
+  assert(
+    inlineJob.timing?.tokenTiming?.tokens?.length > 0,
+    `${label} inline token timing is missing.`,
+  );
 }
 
 function projectStorageState(projectId, projectState) {

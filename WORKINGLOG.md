@@ -160,3 +160,18 @@
 - [x] Run rendered UI ergonomics smoke
 - [x] Iterate on any UX issues found
 - [x] Validate and commit QA follow-up if needed
+
+## 2026-05-17 01:29 CEST - Alignment and read-along
+
+- [x] Add timing contract, alignment adapters, and highlight-map persistence
+- [x] Expose timing artefacts through playback APIs
+- [x] Wire reader highlighting, locator resume, debug overlay, and playback speed
+- [x] Add alignment benchmarks, setup support, and regression coverage
+- [x] Run project checks
+
+## 2026-05-17 02:07 CEST - Alignment package ergonomics QA
+
+- [x] Reproduce and fix HN URL source intake 429
+- [x] Validate read-along ergonomics in browser
+- [x] Rerun checks and Book Cinema E2E
+- [x] Commit Alignment and read-along package

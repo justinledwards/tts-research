@@ -499,6 +499,12 @@ func TestPreparedSourceURLIngestHonorsPrivateNetworkDefault(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("User-Agent") == "" || !strings.Contains(request.Header.Get("User-Agent"), "Mozilla/5.0") {
+			t.Errorf("User-Agent = %q, want browser-like readable source header", request.Header.Get("User-Agent"))
+		}
+		if !strings.Contains(request.Header.Get("Accept"), "text/html") {
+			t.Errorf("Accept = %q, want readable document types", request.Header.Get("Accept"))
+		}
 		writer.Header().Set("Content-Type", "text/markdown")
 		_, _ = writer.Write([]byte("# URL Source\n\nThis came from a readable local test URL."))
 	}))

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/justinedwards/tts-research/backend/internal/agents"
+	"github.com/justinedwards/tts-research/backend/internal/alignment"
 	"github.com/justinedwards/tts-research/backend/internal/httpapi"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 )
@@ -141,6 +142,16 @@ func main() {
 		logger.Error("invalid source URL configuration", "error", err)
 		os.Exit(1)
 	}
+	alignmentEnabled, err := envBoolWithDefault("ALIGNMENT_ENABLED", false)
+	if err != nil {
+		logger.Error("invalid alignment configuration", "error", err)
+		os.Exit(1)
+	}
+	alignmentTimeoutSeconds, err := envIntWithDefault("ALIGNMENT_TIMEOUT_SECONDS", 120)
+	if err != nil {
+		logger.Error("invalid alignment configuration", "error", err)
+		os.Exit(1)
+	}
 	segmentWorkers = clampWorkerCount("VOICE_SEGMENT_WORKERS", segmentWorkers, maxSafeWorkerCount, logger)
 	studioSegmentWorkers = clampWorkerCount("VOICE_SEGMENT_WORKERS_STUDIO", studioSegmentWorkers, maxSafeWorkerCount, logger)
 	studioSegmentWorkersAdaptive = clampWorkerCount(
@@ -244,8 +255,18 @@ func main() {
 			VoiceProfileEmbeddingScriptPath:      envWithDefault("VOICE_PROFILE_EMBEDDING_SCRIPT_PATH", "./scripts/profile_likeness.py"),
 			VoiceProfileLikenessCalibrationText:  envWithDefault("VOICE_PROFILE_LIKENESS_CALIBRATION_TEXT", "This is a short voice clone calibration sample for measuring speaker likeness."),
 			VoiceProfileLikenessTimeoutSeconds:   voiceProfileLikenessTimeoutSeconds,
-			DefaultTTSEngine:                     envWithDefault("TTS_DEFAULT_ENGINE", envWithDefault("TTS_PROVIDER", "mock")),
-			TTSEngines:                           ttsEngineRegistrationsFromEnv(ttsAgent),
+			Alignment: pipeline.AlignmentOptions{
+				Enabled:          alignmentEnabled,
+				Preferred:        alignmentPreferredFromEnv(),
+				MFABin:           envWithDefault("ALIGNMENT_MFA_BIN", "mfa"),
+				MFADictionary:    strings.TrimSpace(os.Getenv("ALIGNMENT_MFA_DICTIONARY")),
+				MFAAcousticModel: strings.TrimSpace(os.Getenv("ALIGNMENT_MFA_ACOUSTIC_MODEL")),
+				AeneasPython:     envWithDefault("ALIGNMENT_AENEAS_PYTHON", "python3"),
+				GentleURL:        strings.TrimSpace(os.Getenv("ALIGNMENT_GENTLE_URL")),
+				TimeoutSeconds:   alignmentTimeoutSeconds,
+			},
+			DefaultTTSEngine: envWithDefault("TTS_DEFAULT_ENGINE", envWithDefault("TTS_PROVIDER", "mock")),
+			TTSEngines:       ttsEngineRegistrationsFromEnv(ttsAgent),
 		},
 	)
 	serviceOptions := service.Options()
@@ -711,6 +732,33 @@ func envIntWithDefault(key string, fallback int) (int, error) {
 	}
 
 	return parsed, nil
+}
+
+func alignmentPreferredFromEnv() []alignment.TimingSource {
+	raw := strings.TrimSpace(os.Getenv("ALIGNMENT_PREFERRED"))
+	if raw == "" {
+		raw = "mfa,aeneas,gentle"
+	}
+	parts := strings.FieldsFunc(raw, func(value rune) bool {
+		return value == ',' || value == ' ' || value == ';'
+	})
+	preferred := make([]alignment.TimingSource, 0, len(parts))
+	for _, part := range parts {
+		switch strings.ToLower(strings.TrimSpace(part)) {
+		case "mfa", "montreal":
+			preferred = append(preferred, alignment.TimingSourceMFA)
+		case "aeneas":
+			preferred = append(preferred, alignment.TimingSourceAeneas)
+		case "gentle":
+			preferred = append(preferred, alignment.TimingSourceGentle)
+		case "native":
+			preferred = append(preferred, alignment.TimingSourceNative)
+		}
+	}
+	if len(preferred) == 0 {
+		return []alignment.TimingSource{alignment.TimingSourceMFA, alignment.TimingSourceAeneas, alignment.TimingSourceGentle}
+	}
+	return preferred
 }
 
 func clampWorkerCount(name string, requested, max int, logger *slog.Logger) int {

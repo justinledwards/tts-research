@@ -13,6 +13,8 @@ import type {
   CreateVoiceJobRequest,
   CreateVoiceProfileRequest,
   CreateVoiceProfileSourceRequest,
+  FragmentTimingArtifact,
+  HighlightMap,
   MarkdownParseMode,
   MathPreviewResult,
   PlaybackProgress,
@@ -29,6 +31,7 @@ import type {
   SpeechPolicyProfile,
   UpsertSpeechPolicyProfileRequest,
   SystemMetrics,
+  TokenTimingArtifact,
   TTSEngineDiagnostics,
   Voice,
   VoiceJob,
@@ -731,14 +734,42 @@ export async function importProjectBundle(
   return response.json() as Promise<ProjectBundleImportResult>;
 }
 
-export async function getVoiceJob(id: string): Promise<VoiceJob> {
-  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}`);
+export async function getVoiceJob(
+  id: string,
+  options?: { includeTiming?: boolean },
+): Promise<VoiceJob> {
+  const includeTiming = options?.includeTiming ? "?includeTiming=1" : "";
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}${includeTiming}`);
 
   if (!response.ok) {
     throw new Error(await readError(response));
   }
 
   return response.json() as Promise<VoiceJob>;
+}
+
+export async function getHighlightMap(id: string): Promise<HighlightMap> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/highlight-map`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<HighlightMap>;
+}
+
+export async function getFragmentTiming(id: string): Promise<FragmentTimingArtifact> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/timing/fragments`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<FragmentTimingArtifact>;
+}
+
+export async function getTokenTiming(id: string): Promise<TokenTimingArtifact> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/timing/tokens`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TokenTimingArtifact>;
 }
 
 export async function listVoiceProfiles(): Promise<VoiceProfile[]> {
