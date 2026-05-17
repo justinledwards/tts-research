@@ -368,6 +368,29 @@ func (service *Service) CreateVoiceProfileFromCandidate(
 	name string,
 	language string,
 ) (VoiceProfile, error) {
+	autoValidate := false
+	profile, err := service.CreateVoiceProfileFromCandidateWithOptions(
+		ctx,
+		sourceID,
+		candidateID,
+		name,
+		language,
+		VoiceProfileCreationOptions{AutoValidate: &autoValidate},
+	)
+	if err != nil {
+		return VoiceProfile{}, err
+	}
+	return service.measureAndPersistVoiceProfileLikeness(ctx, profile.ID)
+}
+
+func (service *Service) CreateVoiceProfileFromCandidateWithOptions(
+	ctx context.Context,
+	sourceID string,
+	candidateID string,
+	name string,
+	language string,
+	options VoiceProfileCreationOptions,
+) (VoiceProfile, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -421,6 +444,10 @@ func (service *Service) CreateVoiceProfileFromCandidate(
 	}
 
 	now := time.Now().UTC()
+	targetIDs := normalizeVoiceProfileTargetIDs(options.Targets)
+	if len(targetIDs) == 0 {
+		return VoiceProfile{}, ErrProfileArtifactUnsupported
+	}
 	qualityMetrics := candidate.QualityMetrics
 	profile := storedVoiceProfile{
 		VoiceProfile: VoiceProfile{
@@ -446,22 +473,32 @@ func (service *Service) CreateVoiceProfileFromCandidate(
 			AudioFormat:             "audio/wav",
 			Status:                  VoiceProfileStatusReady,
 			DurationMS:              referenceDurationMS,
+			CloneTargets:            newVoiceProfileTargets(targetIDs, options.autoValidate(), now),
 			CreatedAt:               now,
 			UpdatedAt:               now,
 			ReferenceSamples:        candidate.ReferenceAudio,
 		},
 	}
-	likeness := service.measureVoiceProfileLikeness(ctx, profile.VoiceProfile, outputDir)
+	likenessReason := "Target validation is queued."
+	if !options.autoValidate() {
+		likenessReason = "Target validation is not started."
+	}
+	likeness := pendingVoiceProfileLikeness(
+		likenessReason,
+		strings.TrimSpace(service.options.VoiceProfileLikenessCalibrationText),
+	)
 	profile.Likeness = &likeness
 
-	metadataPath := filepath.Join(outputDir, "profile.json")
-	if err := writeJSON(metadataPath, profile.VoiceProfile); err != nil {
+	if err := service.persistVoiceProfile(profile); err != nil {
 		_ = os.RemoveAll(outputDir)
 		return VoiceProfile{}, err
 	}
 
-	service.updateVoiceProfile(profile)
-	return profile.VoiceProfile, nil
+	result := profile.VoiceProfile
+	if options.autoValidate() {
+		service.startVoiceProfileTargetPreparation(profile.ID, targetIDs, true)
+	}
+	return result, nil
 }
 
 func (service *Service) measureVoiceProfileLikeness(

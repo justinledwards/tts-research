@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/url"
 	"os"
@@ -1059,19 +1060,25 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 
 	app.Post("/api/voice-profile-sources/:id/candidates/:candidateId/profiles", func(ctx fiber.Ctx) error {
 		var request struct {
-			Name     string `json:"name"`
-			Language string `json:"language"`
+			Name         string   `json:"name"`
+			Language     string   `json:"language"`
+			Targets      []string `json:"targets"`
+			AutoValidate *bool    `json:"autoValidate"`
 		}
 		if err := ctx.Bind().Body(&request); err != nil {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
 		}
 
-		profile, err := service.CreateVoiceProfileFromCandidate(
+		profile, err := service.CreateVoiceProfileFromCandidateWithOptions(
 			ctx.Context(),
 			ctx.Params("id"),
 			ctx.Params("candidateId"),
 			request.Name,
 			request.Language,
+			pipeline.VoiceProfileCreationOptions{
+				Targets:      request.Targets,
+				AutoValidate: request.AutoValidate,
+			},
 		)
 		if err != nil {
 			if errors.Is(err, pipeline.ErrProfileSourceNotFound) ||
@@ -1103,6 +1110,10 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		language := strings.TrimSpace(ctx.FormValue("language"))
 		if language == "" {
 			language = strings.TrimSpace(ctx.FormValue("voiceLanguage"))
+		}
+		targets, autoValidate, err := voiceProfileCreationFormOptions(form)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 		}
 		maxProfileBytes := service.MaxProfileBytes()
 		sourceBytes := file.Size
@@ -1158,13 +1169,17 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize upload temp file"))
 		}
 
-		profile, err := service.CreateVoiceProfile(
+		profile, err := service.CreateVoiceProfileWithOptions(
 			ctx.Context(),
 			name,
 			language,
 			tempPath,
 			file.Filename,
 			copied,
+			pipeline.VoiceProfileCreationOptions{
+				Targets:      targets,
+				AutoValidate: autoValidate,
+			},
 		)
 		if err != nil {
 			if errors.Is(err, pipeline.ErrProfileTooLarge) {
@@ -1187,6 +1202,37 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return notFound(ctx, err)
 		}
 		return ctx.SendStatus(fiber.StatusNoContent)
+	})
+
+	app.Post("/api/voice-profiles/:id/targets/:targetId", func(ctx fiber.Ctx) error {
+		var request struct {
+			AutoValidate *bool `json:"autoValidate"`
+		}
+		if len(ctx.Body()) > 0 {
+			if err := ctx.Bind().Body(&request); err != nil {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+			}
+		}
+		autoValidate := true
+		if request.AutoValidate != nil {
+			autoValidate = *request.AutoValidate
+		}
+		profile, err := service.QueueVoiceProfileTarget(
+			ctx.Context(),
+			ctx.Params("id"),
+			ctx.Params("targetId"),
+			autoValidate,
+		)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProfileNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrProfileArtifactUnsupported) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(profile)
 	})
 
 	app.Post("/api/voice-profiles/:id/artifacts/:moduleId", func(ctx fiber.Ctx) error {
@@ -1294,6 +1340,44 @@ func notFound(ctx fiber.Ctx, err error) error {
 
 func errorResponse(message string) fiber.Map {
 	return fiber.Map{"error": message}
+}
+
+func voiceProfileCreationFormOptions(form *multipart.Form) ([]string, *bool, error) {
+	if form == nil {
+		return nil, nil, nil
+	}
+	targets := append([]string{}, form.Value["targets"]...)
+	if len(targets) == 0 {
+		targets = append(targets, form.Value["target"]...)
+	}
+	if len(targets) == 1 {
+		raw := strings.TrimSpace(targets[0])
+		if strings.HasPrefix(raw, "[") {
+			var parsed []string
+			if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+				return nil, nil, fmt.Errorf("invalid targets JSON")
+			}
+			targets = parsed
+		} else if strings.Contains(raw, ",") {
+			parts := strings.Split(raw, ",")
+			targets = targets[:0]
+			for _, part := range parts {
+				if clean := strings.TrimSpace(part); clean != "" {
+					targets = append(targets, clean)
+				}
+			}
+		}
+	}
+
+	var autoValidate *bool
+	if value := strings.TrimSpace(firstFormValue(form.Value["autoValidate"])); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid autoValidate value")
+		}
+		autoValidate = &parsed
+	}
+	return targets, autoValidate, nil
 }
 
 func saveUploadedBundle(ctx fiber.Ctx) (string, func(), error) {

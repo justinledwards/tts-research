@@ -20,6 +20,11 @@ import {
   SUPERTONIC_VOICE_STYLES,
   supertonicLanguageLabel,
 } from "./supertonic";
+import {
+  isVoiceProfileTargetReadyForEngine,
+  voiceProfileTargetForEngine,
+  voiceProfileTargetReadinessText,
+} from "./profileTargets";
 
 const OPTION_LABELS: Record<keyof PipelineOptions, { label: string; detail: string }> = {
   textPreprocess: {
@@ -58,6 +63,7 @@ export function RunConfigDrawer({
   ttsEngines,
   onChange,
   onClose,
+  onPrepareProfileTarget,
   onSubmit,
 }: Readonly<{
   canSubmit: boolean;
@@ -69,6 +75,7 @@ export function RunConfigDrawer({
   ttsEngines: TTSEngineDiagnostics[];
   onChange: (configuration: RunConfiguration) => void;
   onClose: () => void;
+  onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
   onSubmit: () => void;
 }>) {
   useEscapeClose(isOpen, onClose);
@@ -205,6 +212,7 @@ export function RunConfigDrawer({
               <EngineDiagnosticsCard
                 engine={findEngine(ttsEngines, runConfiguration.ttsEngine)}
                 error={ttsEngineError}
+                onPrepareProfileTarget={onPrepareProfileTarget}
                 runConfiguration={runConfiguration}
                 selectedProfile={selectedProfile}
               />
@@ -309,11 +317,13 @@ export function RunConfigDrawer({
 function EngineDiagnosticsCard({
   engine,
   error,
+  onPrepareProfileTarget,
   runConfiguration,
   selectedProfile,
 }: Readonly<{
   engine: TTSEngineDiagnostics | undefined;
   error: string | null;
+  onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
   runConfiguration: RunConfiguration;
   selectedProfile: VoiceProfile | null;
 }>) {
@@ -332,6 +342,10 @@ function EngineDiagnosticsCard({
   const profileReadiness = selectedProfile
     ? profileReadinessForEngine(engine.id, selectedProfile, runConfiguration)
     : null;
+  const targetId = voiceProfileTargetForEngine(engine.id);
+  const canPrepareTarget =
+    Boolean(selectedProfile && targetId && profileReadiness && !profileReadiness.ready) &&
+    runConfiguration.options.voiceClone;
   return (
     <div className="grid gap-1 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm">
       <p className="font-semibold text-zinc-950">
@@ -339,15 +353,26 @@ function EngineDiagnosticsCard({
       </p>
       <p className="leading-5 text-zinc-600">{engine.reason ?? engine.setup ?? "Ready."}</p>
       {profileReadiness ? (
-        <p
+        <div
           className={`rounded border px-2 py-1 text-xs ${
             profileReadiness.ready
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
               : "border-amber-200 bg-amber-50 text-amber-800"
           }`}
         >
-          {profileReadiness.message}
-        </p>
+          <p>{profileReadiness.message}</p>
+          {canPrepareTarget && selectedProfile && targetId ? (
+            <button
+              className="mt-2 rounded border border-amber-300 bg-white px-2 py-1 font-semibold text-amber-900 hover:bg-amber-100"
+              onClick={() => {
+                void onPrepareProfileTarget(selectedProfile.id, targetId);
+              }}
+              type="button"
+            >
+              Prepare target
+            </button>
+          ) : null}
+        </div>
       ) : null}
       <p className="text-xs text-zinc-500">
         {engine.local ? "Local" : "Remote"} · {engine.supportsSSML ? "SSML" : "plain text"} ·{" "}
@@ -370,34 +395,11 @@ function profileReadinessForEngine(
       message: "Voice cloning is off for this run; provider presets will render.",
     };
   }
-  if (engineId === "supertonic-3") {
-    const ready = profile.cloneArtifacts?.["supertonic-embed"]?.status === "ready";
-    return {
-      ready,
-      message: ready
-        ? "Selected profile has a Supertonic Embed artifact."
-        : "Build a Supertonic Embed artifact on this profile before using Supertonic clone rendering.",
-    };
-  }
-  if (engineId === "kokoro-embed") {
-    const ready = profile.cloneArtifacts?.["kokoro-embed"]?.status === "ready";
-    return {
-      ready,
-      message: ready
-        ? "Selected profile has a Kokoro Embed artifact."
-        : "Build a Kokoro Embed artifact on this profile before using Kokoro Embed.",
-    };
-  }
-  if (engineId === "auto" || engineId === "kokoro") {
-    const ready = profile.cloneArtifacts?.["kokoro-embed"]?.status === "ready";
-    return {
-      ready: true,
-      message: ready
-        ? "Auto/Kokoro will use the Kokoro Embed artifact for this profile."
-        : "Auto/Kokoro will use the existing KokoClone reference path.",
-    };
-  }
-  return null;
+  const ready = isVoiceProfileTargetReadyForEngine(profile, engineId);
+  return {
+    ready,
+    message: voiceProfileTargetReadinessText(profile, engineId),
+  };
 }
 
 function SupertonicOptions({
@@ -490,13 +492,7 @@ function isEngineUnavailableForSelectedProfile(
   if (!profile || !runConfiguration.options.voiceClone) {
     return false;
   }
-  if (engine.id === "kokoro-embed") {
-    return profile.cloneArtifacts?.["kokoro-embed"]?.status !== "ready";
-  }
-  if (engine.id === "supertonic-3") {
-    return profile.cloneArtifacts?.["supertonic-embed"]?.status !== "ready";
-  }
-  return false;
+  return !isVoiceProfileTargetReadyForEngine(profile, engine.id);
 }
 
 function fallbackTTSEngines(): TTSEngineDiagnostics[] {

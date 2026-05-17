@@ -822,6 +822,46 @@ type VoiceProfileLikeness struct {
 	Reason            string     `json:"reason,omitempty"`
 }
 
+type VoiceProfileTargetStatus string
+
+const (
+	VoiceProfileTargetStatusSelected   VoiceProfileTargetStatus = "selected"
+	VoiceProfileTargetStatusQueued     VoiceProfileTargetStatus = "queued"
+	VoiceProfileTargetStatusBuilding   VoiceProfileTargetStatus = "building"
+	VoiceProfileTargetStatusValidating VoiceProfileTargetStatus = "validating"
+	VoiceProfileTargetStatusReady      VoiceProfileTargetStatus = "ready"
+	VoiceProfileTargetStatusFailed     VoiceProfileTargetStatus = "failed"
+)
+
+type VoiceProfileTargetValidation struct {
+	Status               VoiceProfileTargetStatus `json:"status"`
+	Score                float64                  `json:"score,omitempty"`
+	SpeakerSimilarity    float64                  `json:"speakerSimilarity,omitempty"`
+	TranscriptSimilarity float64                  `json:"transcriptSimilarity,omitempty"`
+	GeneratedAudio       string                   `json:"generatedAudio,omitempty"`
+	GeneratedPath        string                   `json:"generatedPath,omitempty"`
+	ExpectedTranscript   string                   `json:"expectedTranscript,omitempty"`
+	ASRTranscript        string                   `json:"asrTranscript,omitempty"`
+	Provider             string                   `json:"provider,omitempty"`
+	Model                string                   `json:"model,omitempty"`
+	MeasuredAt           *time.Time               `json:"measuredAt,omitempty"`
+	Error                string                   `json:"error,omitempty"`
+}
+
+type VoiceProfileTarget struct {
+	ID         string                        `json:"id"`
+	Label      string                        `json:"label,omitempty"`
+	EngineID   string                        `json:"engineId,omitempty"`
+	ModuleID   string                        `json:"moduleId,omitempty"`
+	Status     VoiceProfileTargetStatus      `json:"status"`
+	Selected   bool                          `json:"selected"`
+	Validation *VoiceProfileTargetValidation `json:"validation,omitempty"`
+	CreatedAt  time.Time                     `json:"createdAt"`
+	UpdatedAt  time.Time                     `json:"updatedAt"`
+	Error      string                        `json:"error,omitempty"`
+	Metadata   map[string]string             `json:"metadata,omitempty"`
+}
+
 type VoiceProfileCloneArtifactStatus string
 
 const (
@@ -933,6 +973,7 @@ type VoiceProfile struct {
 	QualityMetrics          *VoiceProfileQualityMetrics          `json:"qualityMetrics,omitempty"`
 	Denoise                 *VoiceProfileDenoiseMetadata         `json:"denoise,omitempty"`
 	Likeness                *VoiceProfileLikeness                `json:"likeness,omitempty"`
+	CloneTargets            map[string]VoiceProfileTarget        `json:"cloneTargets,omitempty"`
 	CloneArtifacts          map[string]VoiceProfileCloneArtifact `json:"cloneArtifacts,omitempty"`
 	AudioFormat             string                               `json:"audioFormat"`
 	Status                  VoiceProfileStatus                   `json:"status"`

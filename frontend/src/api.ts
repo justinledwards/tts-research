@@ -896,6 +896,12 @@ export async function createVoiceProfile(
   formData.append("name", request.name);
   formData.append("language", request.language);
   formData.append("file", request.file);
+  if (request.targets && request.targets.length > 0) {
+    formData.append("targets", JSON.stringify(request.targets));
+  }
+  if (typeof request.autoValidate === "boolean") {
+    formData.append("autoValidate", String(request.autoValidate));
+  }
 
   const response = await fetch(`${apiBaseUrl}/api/voice-profiles`, {
     method: "POST",
@@ -917,6 +923,29 @@ export async function buildVoiceProfileArtifact(
     `${apiBaseUrl}/api/voice-profiles/${encodeURIComponent(profileId)}/artifacts/${encodeURIComponent(moduleId)}`,
     {
       method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfile>;
+}
+
+export async function queueVoiceProfileTarget(
+  profileId: string,
+  targetId: string,
+  autoValidate = true,
+): Promise<VoiceProfile> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profiles/${encodeURIComponent(profileId)}/targets/${encodeURIComponent(targetId)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ autoValidate }),
     },
   );
 

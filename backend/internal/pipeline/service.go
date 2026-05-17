@@ -655,6 +655,9 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 		if voiceLanguage == "" && profile.Language != "" {
 			voiceLanguage = profile.Language
 		}
+		if !voiceProfileTargetReadyForEngine(profile, ttsEngine) {
+			return VoiceJob{}, fmt.Errorf("%w: prepare the %s target for %s first", ErrProfileArtifactMissing, voiceProfileTargetLabel(voiceProfileTargetIDForEngine(ttsEngine)), profile.Name)
+		}
 		if service.readyVoiceProfileArtifact(profile, ttsEngine) == nil {
 			switch normalizeTTSEngineID(ttsEngine) {
 			case TTSEngineSupertonic, TTSEngineKokoroEmbed:
@@ -796,6 +799,34 @@ func (service *Service) CreateVoiceProfile(
 	sourceFileName string,
 	sourceBytes int64,
 ) (VoiceProfile, error) {
+	autoValidate := false
+	profile, err := service.CreateVoiceProfileWithOptions(
+		ctx,
+		name,
+		language,
+		sourcePath,
+		sourceFileName,
+		sourceBytes,
+		VoiceProfileCreationOptions{AutoValidate: &autoValidate},
+	)
+	if err != nil {
+		return VoiceProfile{}, err
+	}
+	return service.measureAndPersistVoiceProfileLikeness(ctx, profile.ID)
+}
+
+func (service *Service) CreateVoiceProfileWithOptions(
+	ctx context.Context,
+	name string,
+	language string,
+	sourcePath string,
+	sourceFileName string,
+	sourceBytes int64,
+	options VoiceProfileCreationOptions,
+) (VoiceProfile, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	cleanName := strings.TrimSpace(name)
 	if cleanName == "" {
 		cleanName = "Custom voice"
@@ -830,16 +861,21 @@ func (service *Service) CreateVoiceProfile(
 
 	profileID := newID()
 	now := time.Now().UTC()
+	targetIDs := normalizeVoiceProfileTargetIDs(options.Targets)
+	if len(targetIDs) == 0 {
+		return VoiceProfile{}, ErrProfileArtifactUnsupported
+	}
 	profile := storedVoiceProfile{
 		VoiceProfile: VoiceProfile{
-			ID:          profileID,
-			Name:        cleanName,
-			Language:    cleanLanguage,
-			SourceFile:  sourceFileName,
-			SourceBytes: fileInfo.Size(),
-			Status:      VoiceProfileStatusPending,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			ID:           profileID,
+			Name:         cleanName,
+			Language:     cleanLanguage,
+			SourceFile:   sourceFileName,
+			SourceBytes:  fileInfo.Size(),
+			Status:       VoiceProfileStatusPending,
+			CloneTargets: newVoiceProfileTargets(targetIDs, options.autoValidate(), now),
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		},
 	}
 	if sourceBytes > 0 {
@@ -887,16 +923,45 @@ func (service *Service) CreateVoiceProfile(
 	profile.AudioFormat = "audio/wav"
 	profile.DurationMS = durationMS
 	profile.UpdatedAt = time.Now().UTC()
-	likeness := service.measureVoiceProfileLikeness(ctx, profile.VoiceProfile, outputDir)
+	likenessReason := "Target validation is queued."
+	if !options.autoValidate() {
+		likenessReason = "Target validation is not started."
+	}
+	likeness := pendingVoiceProfileLikeness(
+		likenessReason,
+		strings.TrimSpace(service.options.VoiceProfileLikenessCalibrationText),
+	)
 	profile.Likeness = &likeness
 
-	metadataPath := filepath.Join(outputDir, "profile.json")
-	if err := writeJSON(metadataPath, profile.VoiceProfile); err != nil {
+	if err := service.persistVoiceProfile(profile); err != nil {
 		_ = os.RemoveAll(outputDir)
 		return VoiceProfile{}, err
 	}
 
-	service.updateVoiceProfile(profile)
+	result := profile.VoiceProfile
+	if options.autoValidate() {
+		service.startVoiceProfileTargetPreparation(profile.ID, targetIDs, true)
+	}
+	return result, nil
+}
+
+func (service *Service) measureAndPersistVoiceProfileLikeness(ctx context.Context, profileID string) (VoiceProfile, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	profile, err := service.getVoiceProfile(profileID)
+	if err != nil {
+		return VoiceProfile{}, err
+	}
+	outputDir := service.options.VoiceProfileDir
+	if strings.TrimSpace(profile.ReferencePath) != "" {
+		outputDir = filepath.Dir(profile.ReferencePath)
+	}
+	likeness := service.measureVoiceProfileLikeness(ctx, profile.VoiceProfile, outputDir)
+	profile.Likeness = &likeness
+	if err := service.persistVoiceProfile(profile); err != nil {
+		return VoiceProfile{}, err
+	}
 	return profile.VoiceProfile, nil
 }
 
@@ -1006,6 +1071,9 @@ func (service *Service) reloadProfiles() {
 		}
 		if len(cleaned.CloneArtifacts) == 0 {
 			cleaned.CloneArtifacts = nil
+		}
+		if len(cleaned.CloneTargets) == 0 {
+			cleaned.CloneTargets = nil
 		}
 		profiles[cleaned.ID] = cleaned
 	}

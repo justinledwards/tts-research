@@ -2765,6 +2765,168 @@ func TestCreateVoiceProfileFromCandidateStoresScoredLikeness(t *testing.T) {
 	}
 }
 
+func TestCreateVoiceProfileWithOptionsDefaultsToKokoroCloneTarget(t *testing.T) {
+	t.Parallel()
+
+	service := newVoiceProfileTargetService(t, nil)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfileWithOptions(
+		context.Background(),
+		"Narrator",
+		"en",
+		sourcePath,
+		"source.wav",
+		0,
+		pipeline.VoiceProfileCreationOptions{},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileWithOptions returned error: %v", err)
+	}
+	target := profile.CloneTargets[pipeline.VoiceProfileTargetKokoroClone]
+	if !target.Selected || target.Status != pipeline.VoiceProfileTargetStatusQueued {
+		t.Fatalf("kokoro clone target = %+v, want selected queued", target)
+	}
+
+	ready := waitForVoiceProfileTarget(t, service, profile.ID, pipeline.VoiceProfileTargetKokoroClone, pipeline.VoiceProfileTargetStatusReady)
+	validation := ready.CloneTargets[pipeline.VoiceProfileTargetKokoroClone].Validation
+	if validation == nil || validation.Score <= 0 || validation.TranscriptSimilarity <= 0 {
+		t.Fatalf("validation = %+v, want stored comparison scores", validation)
+	}
+}
+
+func TestCreateVoiceProfileWithOptionsQueuesMultipleTargets(t *testing.T) {
+	t.Parallel()
+
+	missingRoot := filepath.Join(t.TempDir(), "missing-upstream")
+	service := newVoiceProfileTargetService(t, []pipeline.ResearchModuleConfig{
+		{
+			ID:        pipeline.ResearchModuleKokoroEmbed,
+			Label:     "Kokoro Embed",
+			RepoURL:   "https://example.invalid/kokoro.embed.git",
+			Ref:       "main",
+			LocalPath: filepath.Join(missingRoot, "kokoro.embed"),
+			EngineID:  pipeline.TTSEngineKokoroEmbed,
+		},
+		{
+			ID:        pipeline.ResearchModuleSupertonicEmbed,
+			Label:     "Supertonic Embed",
+			RepoURL:   "https://example.invalid/supertonic.embed.git",
+			Ref:       "main",
+			LocalPath: filepath.Join(missingRoot, "supertonic.embed"),
+			EngineID:  pipeline.TTSEngineSupertonic,
+		},
+	})
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfileWithOptions(
+		context.Background(),
+		"Narrator",
+		"en",
+		sourcePath,
+		"source.wav",
+		0,
+		pipeline.VoiceProfileCreationOptions{
+			Targets: []string{
+				pipeline.VoiceProfileTargetKokoroClone,
+				pipeline.VoiceProfileTargetKokoroEmbed,
+				pipeline.VoiceProfileTargetSupertonicEmbed,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileWithOptions returned error: %v", err)
+	}
+	for _, targetID := range []string{
+		pipeline.VoiceProfileTargetKokoroClone,
+		pipeline.VoiceProfileTargetKokoroEmbed,
+		pipeline.VoiceProfileTargetSupertonicEmbed,
+	} {
+		if target := profile.CloneTargets[targetID]; target.Status != pipeline.VoiceProfileTargetStatusQueued {
+			t.Fatalf("target %s = %+v, want queued in immediate response", targetID, target)
+		}
+	}
+
+	waitForVoiceProfileTarget(t, service, profile.ID, pipeline.VoiceProfileTargetKokoroClone, pipeline.VoiceProfileTargetStatusReady)
+	waitForVoiceProfileTarget(t, service, profile.ID, pipeline.VoiceProfileTargetKokoroEmbed, pipeline.VoiceProfileTargetStatusFailed)
+	waitForVoiceProfileTarget(t, service, profile.ID, pipeline.VoiceProfileTargetSupertonicEmbed, pipeline.VoiceProfileTargetStatusFailed)
+}
+
+func TestVoiceProfileTargetValidationPersistsAcrossReload(t *testing.T) {
+	t.Parallel()
+
+	options := voiceProfileTargetOptions(t, nil)
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		mockReferenceTTS{},
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfileWithOptions(
+		context.Background(),
+		"Narrator",
+		"en",
+		sourcePath,
+		"source.wav",
+		0,
+		pipeline.VoiceProfileCreationOptions{Targets: []string{pipeline.VoiceProfileTargetKokoroClone}},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileWithOptions returned error: %v", err)
+	}
+	ready := waitForVoiceProfileTarget(t, service, profile.ID, pipeline.VoiceProfileTargetKokoroClone, pipeline.VoiceProfileTargetStatusReady)
+	validation := ready.CloneTargets[pipeline.VoiceProfileTargetKokoroClone].Validation
+	if validation == nil || validation.SpeakerSimilarity < 0.86 || validation.Provider == "" {
+		t.Fatalf("validation = %+v, want speaker and transcript metadata", validation)
+	}
+
+	reloadedService := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		mockReferenceTTS{},
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	reloaded, err := reloadedService.GetVoiceProfile(profile.ID)
+	if err != nil {
+		t.Fatalf("GetVoiceProfile returned error after reload: %v", err)
+	}
+	reloadedValidation := reloaded.CloneTargets[pipeline.VoiceProfileTargetKokoroClone].Validation
+	if reloadedValidation == nil || reloadedValidation.Score != validation.Score {
+		t.Fatalf("reloaded validation = %+v, want persisted score %f", reloadedValidation, validation.Score)
+	}
+}
+
+func TestCreateJobRequiresSelectedVoiceProfileTarget(t *testing.T) {
+	t.Parallel()
+
+	autoValidate := false
+	service := newVoiceProfileTargetService(t, nil)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfileWithOptions(
+		context.Background(),
+		"Narrator",
+		"en",
+		sourcePath,
+		"source.wav",
+		0,
+		pipeline.VoiceProfileCreationOptions{
+			Targets:      []string{pipeline.VoiceProfileTargetKokoroEmbed},
+			AutoValidate: &autoValidate,
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileWithOptions returned error: %v", err)
+	}
+
+	_, err = service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:           "Render through a target that was not prepared.",
+		VoiceProfileID: profile.ID,
+		TTSEngine:      pipeline.TTSEngineKokoro,
+	})
+	if !errors.Is(err, pipeline.ErrProfileArtifactMissing) {
+		t.Fatalf("CreateJob error = %v, want ErrProfileArtifactMissing", err)
+	}
+}
+
 func TestResearchModuleDiagnosticsReportsInstalledUpstream(t *testing.T) {
 	t.Parallel()
 
@@ -3324,6 +3486,40 @@ func newProfileSourceServiceWithTTS(
 	)
 }
 
+func newVoiceProfileTargetService(
+	t *testing.T,
+	researchModules []pipeline.ResearchModuleConfig,
+) *pipeline.Service {
+	t.Helper()
+
+	return pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		mockReferenceTTS{},
+		agents.NewMockVoiceCheckerAgent(),
+		voiceProfileTargetOptions(t, researchModules),
+	)
+}
+
+func voiceProfileTargetOptions(
+	t *testing.T,
+	researchModules []pipeline.ResearchModuleConfig,
+) pipeline.Options {
+	t.Helper()
+
+	return pipeline.Options{
+		MaxRetries:                         3,
+		JobDataDir:                         t.TempDir(),
+		ProjectDataDir:                     t.TempDir(),
+		VoiceProfileDir:                    t.TempDir(),
+		VoiceProfileReferenceMinSeconds:    20,
+		VoiceProfileReferenceTargetSeconds: 45,
+		VoiceProfileReferenceMaxSeconds:    60,
+		VoiceProfileDenoiseProvider:        "none",
+		VoiceProfileLikenessScorer:         mockLikenessScorer{score: 0.87},
+		ResearchModules:                    researchModules,
+	}
+}
+
 func writeToneWAV(t *testing.T, durationMS int, amplitude int16) string {
 	t.Helper()
 
@@ -3343,6 +3539,39 @@ func writeToneWAV(t *testing.T, durationMS int, amplitude int16) string {
 		t.Fatalf("write tone wav: %v", err)
 	}
 	return path
+}
+
+func waitForVoiceProfileTarget(
+	t *testing.T,
+	service *pipeline.Service,
+	profileID string,
+	targetID string,
+	status pipeline.VoiceProfileTargetStatus,
+) pipeline.VoiceProfile {
+	t.Helper()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		profile, err := service.GetVoiceProfile(profileID)
+		if err != nil {
+			t.Fatalf("GetVoiceProfile returned error: %v", err)
+		}
+		target := profile.CloneTargets[targetID]
+		if target.Status == status {
+			return profile
+		}
+		if target.Status == pipeline.VoiceProfileTargetStatusFailed && status != target.Status {
+			t.Fatalf("target %s failed unexpectedly: %s", targetID, target.Error)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	profile, err := service.GetVoiceProfile(profileID)
+	if err != nil {
+		t.Fatalf("GetVoiceProfile returned error: %v", err)
+	}
+	t.Fatalf("timed out waiting for target %s status %q, got %+v", targetID, status, profile.CloneTargets[targetID])
+	return pipeline.VoiceProfile{}
 }
 
 func waitForProfileSource(

@@ -245,6 +245,9 @@ func (service *Service) persistVoiceProfile(profile storedVoiceProfile) error {
 	if profile.CloneArtifacts != nil && len(profile.CloneArtifacts) == 0 {
 		profile.CloneArtifacts = nil
 	}
+	if profile.CloneTargets != nil && len(profile.CloneTargets) == 0 {
+		profile.CloneTargets = nil
+	}
 	profile.UpdatedAt = time.Now().UTC()
 	outputDir := filepath.Join(service.options.VoiceProfileDir, profile.ID)
 	if strings.TrimSpace(profile.ReferencePath) != "" {

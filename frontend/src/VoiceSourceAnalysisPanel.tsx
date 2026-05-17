@@ -3,6 +3,8 @@ import { voiceProfileCandidatePreviewSource } from "./api";
 import { formatDuration } from "./format";
 import type {
   CreateVoiceProfileFromCandidateRequest,
+  ResearchModuleDiagnostics,
+  TTSEngineDiagnostics,
   VoiceProfileCandidate,
   VoiceProfileSource,
   VoiceProfileSourceDiagnostics,
@@ -21,12 +23,16 @@ export function VoiceSourceAnalysisPanel({
   source,
   onAnalyze,
   onCreateProfile,
+  researchModules,
+  ttsEngines,
 }: Readonly<{
   createCandidateId: string | null;
   diagnostics: VoiceProfileSourceDiagnostics | null;
   error: string | null;
   isAnalyzing: boolean;
+  researchModules: ResearchModuleDiagnostics[];
   source: VoiceProfileSource | null;
+  ttsEngines: TTSEngineDiagnostics[];
   onAnalyze: (file: File) => Promise<void>;
   onCreateProfile: (
     candidate: VoiceProfileCandidate,
@@ -36,8 +42,13 @@ export function VoiceSourceAnalysisPanel({
   const [file, setFile] = useState<File | null>(null);
   const [language, setLanguage] = useState("en");
   const [candidateNames, setCandidateNames] = useState<Record<string, string>>({});
+  const [selectedTargets, setSelectedTargets] = useState<string[]>(["kokoro-clone"]);
   const [localError, setLocalError] = useState<string | null>(null);
   const displayError = localError ?? error;
+  const targetOptions = useMemo(
+    () => voiceProfileTargetOptions(researchModules, ttsEngines),
+    [researchModules, ttsEngines],
+  );
   const readyCandidates = useMemo(
     () => (source?.candidates ?? []).filter((candidate) => candidate.status === "ready"),
     [source?.candidates],
@@ -73,10 +84,20 @@ export function VoiceSourceAnalysisPanel({
       await onCreateProfile(candidate, {
         name: (candidateNames[candidate.id] ?? fallbackName).trim() || fallbackName,
         language: language.trim() || "en",
+        targets: selectedTargets,
+        autoValidate: true,
       });
     },
-    [candidateNames, language, onCreateProfile],
+    [candidateNames, language, onCreateProfile, selectedTargets],
   );
+  const toggleTarget = useCallback((targetId: string) => {
+    setSelectedTargets((currentTargets) => {
+      if (currentTargets.includes(targetId)) {
+        return currentTargets.filter((id) => id !== targetId);
+      }
+      return [...currentTargets, targetId];
+    });
+  }, []);
 
   return (
     <section className="grid min-w-0 gap-3">
@@ -145,12 +166,15 @@ export function VoiceSourceAnalysisPanel({
         candidates={source?.status === "ready" ? readyCandidates : []}
         createCandidateId={createCandidateId}
         language={language}
+        selectedTargets={selectedTargets}
         sourceId={source?.id ?? ""}
+        targetOptions={targetOptions}
         onCreate={handleCreate}
         onLanguageChange={setLanguage}
         onNameChange={(candidate, value) => {
           setCandidateNames((current) => ({ ...current, [candidate.id]: value }));
         }}
+        onTargetToggle={toggleTarget}
       />
       <RejectedCandidateList candidates={rejectedCandidates} />
     </section>
@@ -299,19 +323,25 @@ function ReadyCandidateList({
   candidates,
   createCandidateId,
   language,
+  selectedTargets,
   sourceId,
+  targetOptions,
   onCreate,
   onLanguageChange,
   onNameChange,
+  onTargetToggle,
 }: Readonly<{
   candidateNames: Record<string, string>;
   candidates: VoiceProfileCandidate[];
   createCandidateId: string | null;
   language: string;
+  selectedTargets: string[];
   sourceId: string;
+  targetOptions: ProfileTargetOption[];
   onCreate: (candidate: VoiceProfileCandidate) => Promise<void>;
   onLanguageChange: (value: string) => void;
   onNameChange: (candidate: VoiceProfileCandidate, value: string) => void;
+  onTargetToggle: (targetId: string) => void;
 }>) {
   if (candidates.length === 0 || sourceId === "") {
     return null;
@@ -331,7 +361,9 @@ function ReadyCandidateList({
             key={candidate.id}
             language={language}
             name={candidateNames[candidate.id] ?? candidate.suggestedName}
+            selectedTargets={selectedTargets}
             sourceId={sourceId}
+            targetOptions={targetOptions}
             onCreate={() => {
               void onCreate(candidate);
             }}
@@ -339,6 +371,7 @@ function ReadyCandidateList({
             onNameChange={(value) => {
               onNameChange(candidate, value);
             }}
+            onTargetToggle={onTargetToggle}
           />
         ))}
       </div>
@@ -376,21 +409,28 @@ function CandidateCard({
   createCandidateId,
   language,
   name,
+  selectedTargets,
   sourceId,
+  targetOptions,
   onCreate,
   onLanguageChange,
   onNameChange,
+  onTargetToggle,
 }: Readonly<{
   candidate: VoiceProfileCandidate;
   createCandidateId: string | null;
   language: string;
   name: string;
+  selectedTargets: string[];
   sourceId: string;
+  targetOptions: ProfileTargetOption[];
   onCreate: () => void;
   onLanguageChange: (value: string) => void;
   onNameChange: (value: string) => void;
+  onTargetToggle: (targetId: string) => void;
 }>) {
   const isCreating = createCandidateId === candidate.id;
+  const canCreate = selectedTargets.length > 0 && !isCreating;
   const [previewKind, setPreviewKind] = useState<"clean" | "raw">("clean");
   const previewSource = voiceProfileCandidatePreviewSource(sourceId, candidate.id, previewKind);
   const hasRawPreview = Boolean(candidate.rawPreviewAudio);
@@ -503,9 +543,14 @@ function CandidateCard({
           value={language}
         />
       </div>
+      <ProfileTargetPicker
+        options={targetOptions}
+        selectedTargets={selectedTargets}
+        onToggle={onTargetToggle}
+      />
       <button
         className="inline-flex h-9 items-center justify-center rounded-md bg-orange-500 px-3 text-sm font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
-        disabled={isCreating}
+        disabled={!canCreate}
         onClick={onCreate}
         type="button"
       >
@@ -513,6 +558,132 @@ function CandidateCard({
       </button>
     </article>
   );
+}
+
+interface ProfileTargetOption {
+  id: string;
+  label: string;
+  available: boolean;
+  detail: string;
+}
+
+function ProfileTargetPicker({
+  options,
+  selectedTargets,
+  onToggle,
+}: Readonly<{
+  options: ProfileTargetOption[];
+  selectedTargets: string[];
+  onToggle: (targetId: string) => void;
+}>) {
+  return (
+    <div className="grid gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-zinc-800">Prepare for</p>
+        <span className="text-[11px] text-zinc-500">{String(selectedTargets.length)} selected</span>
+      </div>
+      <div className="grid gap-2">
+        {options.map((option) => {
+          const selected = selectedTargets.includes(option.id);
+          return (
+            <label
+              className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-md border px-2 py-2 text-xs ${
+                option.available
+                  ? "cursor-pointer border-zinc-200 bg-white text-zinc-700"
+                  : "border-zinc-200 bg-zinc-100 text-zinc-400"
+              }`}
+              key={option.id}
+            >
+              <input
+                checked={selected}
+                className="mt-0.5"
+                disabled={!option.available}
+                onChange={() => {
+                  onToggle(option.id);
+                }}
+                type="checkbox"
+              />
+              <span className="min-w-0">
+                <span className="block truncate font-semibold text-zinc-900">{option.label}</span>
+                <span className="mt-0.5 block truncate" title={option.detail}>
+                  {option.detail}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {selectedTargets.length === 0 ? (
+        <p className="text-xs leading-5 text-red-600">Select at least one backend target.</p>
+      ) : null}
+    </div>
+  );
+}
+
+function voiceProfileTargetOptions(
+  modules: ResearchModuleDiagnostics[],
+  engines: TTSEngineDiagnostics[],
+): ProfileTargetOption[] {
+  const engineStatus = (engineId: string) => engines.find((engine) => engine.id === engineId);
+  const moduleStatus = (moduleId: string) => modules.find((module) => module.id === moduleId);
+  const kokoroClone = engineStatus("kokoro-clone");
+  const kokoroCloneReady = engines.length === 0 || kokoroClone?.status === "ready";
+  const kokoroEmbed = moduleStatus("kokoro-embed");
+  const kokoroEmbedEngine = engineStatus("kokoro-embed");
+  const supertonicEmbed = moduleStatus("supertonic-embed");
+  const supertonicEngine = engineStatus("supertonic-3");
+  const kokoroEmbedDetail = embedTargetDetail(
+    kokoroEmbed,
+    kokoroEmbedEngine,
+    "Builds optimized Kokoro style, then validates it.",
+    "Builds the style artifact; rendering waits for Kokoro Embed setup.",
+    "Clone kokoro.embed in Research Modules.",
+  );
+  const supertonicEmbedDetail = embedTargetDetail(
+    supertonicEmbed,
+    supertonicEngine,
+    "Builds a Supertonic style artifact, then validates it.",
+    "Builds the style artifact; rendering waits for Supertonic setup.",
+    "Clone supertonic.embed in Research Modules.",
+  );
+  return [
+    {
+      id: "kokoro-clone",
+      label: "Kokoro Clone",
+      available: kokoroCloneReady,
+      detail: kokoroCloneReady
+        ? "Available now; validates likeness after creation."
+        : (kokoroClone?.reason ?? "Kokoro Clone engine is not ready."),
+    },
+    {
+      id: "kokoro-embed",
+      label: "Kokoro Embed",
+      available: Boolean(kokoroEmbed?.installed),
+      detail: kokoroEmbedDetail,
+    },
+    {
+      id: "supertonic-embed",
+      label: "Supertonic Embed",
+      available: Boolean(supertonicEmbed?.installed),
+      detail: supertonicEmbedDetail,
+    },
+  ];
+}
+
+function embedTargetDetail(
+  module: ResearchModuleDiagnostics | undefined,
+  engine: TTSEngineDiagnostics | undefined,
+  readyMessage: string,
+  waitingMessage: string,
+  setupMessage: string,
+): string {
+  if (!module?.installed) {
+    return module?.setup ?? module?.reason ?? setupMessage;
+  }
+  if (!engine || engine.status === "ready") {
+    return readyMessage;
+  }
+  return waitingMessage;
 }
 
 function MetricPill({ label, value }: Readonly<{ label: string; value: string }>) {

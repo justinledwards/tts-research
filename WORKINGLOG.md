@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-17 13:22 CEST - Backend-targeted profile workbench
+- [x] Add profile target state and creation request support.
+- [x] Queue backend artifact builds and validation from profile creation.
+- [x] Update Voice Studio target picker, profile cards, and run readiness.
+- [x] Add backend and frontend coverage.
+- [x] Validate with checks and hosted dev servers.
+
 ## 2026-05-17 12:14 CEST - Optional embed clone modules
 - [x] Add research module diagnostics and clone setup APIs.
 - [x] Add voice profile clone artifacts and artifact build APIs.

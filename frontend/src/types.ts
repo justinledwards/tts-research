@@ -766,6 +766,7 @@ export interface VoiceProfile {
   qualityMetrics?: VoiceProfileQualityMetrics;
   denoise?: VoiceProfileDenoiseMetadata;
   likeness?: VoiceProfileLikeness;
+  cloneTargets?: Record<string, VoiceProfileTarget>;
   cloneArtifacts?: Record<string, VoiceProfileCloneArtifact>;
   audioFormat: string;
   status: VoiceProfileStatus;
@@ -773,6 +774,43 @@ export interface VoiceProfile {
   durationMs: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type VoiceProfileTargetStatus =
+  | "selected"
+  | "queued"
+  | "building"
+  | "validating"
+  | "ready"
+  | "failed";
+
+export interface VoiceProfileTargetValidation {
+  status: VoiceProfileTargetStatus;
+  score?: number;
+  speakerSimilarity?: number;
+  transcriptSimilarity?: number;
+  generatedAudio?: string;
+  generatedPath?: string;
+  expectedTranscript?: string;
+  asrTranscript?: string;
+  provider?: string;
+  model?: string;
+  measuredAt?: string;
+  error?: string;
+}
+
+export interface VoiceProfileTarget {
+  id: string;
+  label?: string;
+  engineId?: string;
+  moduleId?: string;
+  status: VoiceProfileTargetStatus;
+  selected: boolean;
+  validation?: VoiceProfileTargetValidation;
+  createdAt: string;
+  updatedAt: string;
+  error?: string;
+  metadata?: Record<string, string>;
 }
 
 export type VoiceProfileCloneArtifactStatus = "pending" | "building" | "ready" | "failed";
@@ -800,6 +838,8 @@ export interface CreateVoiceProfileRequest {
   name: string;
   language: string;
   file: File;
+  targets?: string[];
+  autoValidate?: boolean;
 }
 
 export type VoiceProfileSourceStatus =
@@ -930,6 +970,8 @@ export interface CreateVoiceProfileSourceRequest {
 export interface CreateVoiceProfileFromCandidateRequest {
   name: string;
   language: string;
+  targets?: string[];
+  autoValidate?: boolean;
 }
 
 export interface RetryMetadata {
