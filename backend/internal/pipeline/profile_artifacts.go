@@ -46,6 +46,14 @@ func (service *Service) BuildVoiceProfileArtifact(
 	if !diagnostics.Installed {
 		return VoiceProfile{}, fmt.Errorf("%w: %s", ErrResearchModuleUnavailable, module.ID)
 	}
+	modulePath, err := filepath.Abs(module.LocalPath)
+	if err != nil {
+		return VoiceProfile{}, err
+	}
+	if !diagnostics.RuntimeReady && module.ID == ResearchModuleSupertonicEmbed {
+		_ = service.prepareSupertonicEmbedAssetsIfNeeded(modulePath)
+		diagnostics = service.researchModuleDiagnostics(module)
+	}
 	if !diagnostics.RuntimeReady {
 		return VoiceProfile{}, fmt.Errorf("%w: %s", ErrResearchModuleUnavailable, diagnostics.Reason)
 	}
@@ -148,9 +156,64 @@ func (service *Service) runVoiceProfileArtifactBuilder(
 	if err != nil {
 		return profileArtifactBuildOutput{}, err
 	}
+	if module.ID == ResearchModuleSupertonicEmbed {
+		if missing := firstMissingSupertonicEmbedAsset(modulePath); missing != "" {
+			if err := service.prepareSupertonicEmbedAssetsIfNeeded(modulePath); err != nil {
+				return profileArtifactBuildOutput{},
+					fmt.Errorf(
+						"voice profile artifact build preflight: missing required supertonic asset at %s. %s",
+						missing,
+						missingSupertonicAssetsHint,
+					)
+			}
+			if missing = firstMissingSupertonicEmbedAsset(modulePath); missing != "" {
+				return profileArtifactBuildOutput{},
+					fmt.Errorf(
+						"voice profile artifact build preflight: missing required supertonic asset at %s. %s",
+						missing,
+						missingSupertonicAssetsHint,
+					)
+			}
+		}
+	}
+	if missing := firstMissingSupertonicEmbedAsset(modulePath); module.ID == ResearchModuleSupertonicEmbed && missing != "" {
+		return profileArtifactBuildOutput{},
+			fmt.Errorf("voice profile artifact build preflight: missing required supertonic asset at %s. %s", missing, missingSupertonicAssetsHint)
+	}
+	if module.ID == ResearchModuleKokoroEmbed {
+		if err := prepareKokoroEmbedWorkspace(modulePath); err != nil {
+			return profileArtifactBuildOutput{}, fmt.Errorf("voice profile artifact build preflight: prepare kokoro embed workspace: %w", err)
+		}
+	}
+
 	scriptPath := strings.TrimSpace(service.options.VoiceProfileArtifactScriptPath)
 	if scriptPath == "" {
 		scriptPath = defaultVoiceProfileArtifactScriptPath
+	}
+	scriptPath, err = filepath.Abs(scriptPath)
+	if err != nil {
+		return profileArtifactBuildOutput{}, fmt.Errorf("voice profile artifact build preflight: resolve artifact script path: %w", err)
+	}
+	if _, err := os.Stat(scriptPath); err != nil {
+		return profileArtifactBuildOutput{}, fmt.Errorf("voice profile artifact build preflight: artifact script missing at %s: %w", scriptPath, err)
+	}
+	pythonPath := strings.TrimSpace(service.options.VoiceProfileArtifactPythonPath)
+	if pythonPath == "" {
+		pythonPath = defaultVoiceProfileArtifactPythonPath
+	}
+	pythonPath, ok := resolveCommandExecutable(
+		pythonPath,
+		artifactCommandFallbackRoots(modulePath, scriptPath)...,
+	)
+	if !ok {
+		return profileArtifactBuildOutput{},
+			fmt.Errorf("voice profile artifact build preflight: %s (configured Python: %s)", missingKokoroPythonPathHint, pythonPath)
+	}
+	if os.Getenv("VOICE_EMBED_FAKE_ARTIFACT") != "1" {
+		runtimeDiagnostic := service.voiceEmbedDependencyDiagnostics(pythonPath, module)
+		if !runtimeDiagnostic.ready {
+			return profileArtifactBuildOutput{}, fmt.Errorf("voice profile artifact build preflight: %s", runtimeDiagnostic.reason)
+		}
 	}
 	args := []string{
 		scriptPath,
@@ -165,7 +228,8 @@ func (service *Service) runVoiceProfileArtifactBuilder(
 		args = append(args, "--steps", fmt.Sprintf("%d", service.options.VoiceProfileArtifactSteps))
 	}
 
-	command := exec.CommandContext(buildCtx, service.options.VoiceProfileArtifactPythonPath, args...)
+	command := exec.CommandContext(buildCtx, pythonPath, args...)
+	command.Dir = modulePath
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	command.Stdout = &stdout
@@ -174,7 +238,12 @@ func (service *Service) runVoiceProfileArtifactBuilder(
 		if buildCtx.Err() == context.DeadlineExceeded {
 			return profileArtifactBuildOutput{}, fmt.Errorf("voice profile artifact build timed out after %d seconds", service.options.VoiceProfileArtifactTimeoutSeconds)
 		}
-		return profileArtifactBuildOutput{}, fmt.Errorf("voice profile artifact build failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+		return profileArtifactBuildOutput{}, fmt.Errorf(
+			"voice profile artifact build failed (command=%s): %w: %s",
+			commandJSONContext(pythonPath, scriptPath, modulePath),
+			err,
+			artifactRunnerOutput(&stdout, &stderr),
+		)
 	}
 
 	var result profileArtifactBuildOutput
@@ -201,6 +270,54 @@ func (service *Service) runVoiceProfileArtifactBuilder(
 		return profileArtifactBuildOutput{}, fmt.Errorf("voice profile artifact output missing: %w", err)
 	}
 	return result, nil
+}
+
+func (service *Service) prepareSupertonicEmbedAssetsIfNeeded(modulePath string) error {
+	if _, err := os.Stat(modulePath); err != nil {
+		return fmt.Errorf("supertonic module not available at %s", modulePath)
+	}
+	if missing := firstMissingSupertonicEmbedAsset(modulePath); missing == "" {
+		return nil
+	}
+	if err := syncSupertonicEmbedAssets(modulePath); err != nil {
+		return fmt.Errorf("supertonic embed asset sync failed: %w", err)
+	}
+	if missing := firstMissingSupertonicEmbedAsset(modulePath); missing != "" {
+		return fmt.Errorf("missing supertonic required asset after sync: %s", missing)
+	}
+	return nil
+}
+
+func prepareKokoroEmbedWorkspace(modulePath string) error {
+	if _, err := os.Stat(modulePath); err != nil {
+		return fmt.Errorf("kokoro module not available at %s", modulePath)
+	}
+	voicesDir := filepath.Join(modulePath, "kokoro", "voices")
+	if err := os.MkdirAll(voicesDir, 0o755); err != nil {
+		return fmt.Errorf("create kokoro voices directory: %w", err)
+	}
+	return nil
+}
+
+func commandJSONContext(pythonPath string, scriptPath string, cwd string) string {
+	return fmt.Sprintf("python=%s script=%s cwd=%s", pythonPath, scriptPath, cwd)
+}
+
+func artifactRunnerOutput(stdout *bytes.Buffer, stderr *bytes.Buffer) string {
+	pieces := make([]string, 0, 2)
+	if value := strings.TrimSpace(stderr.String()); value != "" {
+		pieces = append(pieces, fmt.Sprintf("stderr=%q", value))
+	}
+	if value := strings.TrimSpace(stdout.String()); value != "" {
+		pieces = append(pieces, fmt.Sprintf("stdout=%q", value))
+	}
+	if len(pieces) == 0 {
+		return "(no output)"
+	}
+	if len(pieces) == 1 {
+		return pieces[0]
+	}
+	return strings.Join(pieces, "; ")
 }
 
 func (service *Service) readyVoiceProfileArtifact(

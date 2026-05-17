@@ -1896,6 +1896,50 @@ func TestCreateJobCanIgnoreSelectedVoiceProfile(t *testing.T) {
 	}
 }
 
+func TestDeleteVoiceProfileRemovesStoredProfileAndReferenceArtifacts(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:      3,
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+			VoiceProfileDir: t.TempDir(),
+		},
+	)
+
+	referencePath := writeToneWAV(t, 25_000, 9000)
+
+	profile, err := service.CreateVoiceProfile(
+		context.Background(),
+		"Delete Me",
+		"en",
+		referencePath,
+		"reference.wav",
+		0,
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+	referenceDir := filepath.Dir(profile.ReferencePath)
+	if _, err := os.Stat(profile.ReferencePath); err != nil {
+		t.Fatalf("reference path = %s should exist: %v", profile.ReferencePath, err)
+	}
+
+	if err := service.DeleteVoiceProfile(profile.ID); err != nil {
+		t.Fatalf("DeleteVoiceProfile returned error: %v", err)
+	}
+	if _, err := service.GetVoiceProfile(profile.ID); !errors.Is(err, pipeline.ErrProfileNotFound) {
+		t.Fatalf("GetVoiceProfile after delete = %v, want %v", err, pipeline.ErrProfileNotFound)
+	}
+	if _, err := os.Stat(referenceDir); !os.IsNotExist(err) {
+		t.Fatalf("expected reference directory removed, got err = %v", err)
+	}
+}
+
 func TestCreateJobPublishesPartialAudioWhileSynthesizing(t *testing.T) {
 	t.Parallel()
 
@@ -2977,6 +3021,104 @@ func TestVoiceProfileTargetSkipsGatedSpeakerValidationWithoutToken(t *testing.T)
 	}
 }
 
+func TestVoiceProfileCredentialStatusAndPersistence(t *testing.T) {
+	t.Parallel()
+
+	credentialPath := filepath.Join(t.TempDir(), "local-credentials", "huggingface.json")
+	options := voiceProfileTargetOptions(t, nil)
+	options.VoiceProfileCredentialsPath = credentialPath
+	options.VoiceProfileDiarizationToken = "env-token"
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		mockReferenceTTS{},
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+
+	status := service.GetVoiceProfileCredentialStatus()
+	if !status.HuggingFaceTokenConfigured || status.HuggingFaceTokenSource != "env" {
+		t.Fatalf("status = %+v, want env token configured", status)
+	}
+
+	status, err := service.SaveVoiceProfileHuggingFaceToken("  local-token  ")
+	if err != nil {
+		t.Fatalf("SaveVoiceProfileHuggingFaceToken returned error: %v", err)
+	}
+	if !status.HuggingFaceTokenConfigured || status.HuggingFaceTokenSource != "local" {
+		t.Fatalf("status = %+v, want local token configured", status)
+	}
+	fileInfo, err := os.Stat(credentialPath)
+	if err != nil {
+		t.Fatalf("credential file stat returned error: %v", err)
+	}
+	if fileInfo.Mode().Perm() != 0o600 {
+		t.Fatalf("credential file mode = %v, want 0600", fileInfo.Mode().Perm())
+	}
+	dirInfo, err := os.Stat(filepath.Dir(credentialPath))
+	if err != nil {
+		t.Fatalf("credential directory stat returned error: %v", err)
+	}
+	if dirInfo.Mode().Perm() != 0o700 {
+		t.Fatalf("credential directory mode = %v, want 0700", dirInfo.Mode().Perm())
+	}
+	credentialBytes, err := os.ReadFile(credentialPath)
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+	if strings.Contains(string(credentialBytes), "  local-token  ") || !strings.Contains(string(credentialBytes), "local-token") {
+		t.Fatalf("credential file should contain trimmed token, got %q", string(credentialBytes))
+	}
+
+	status, err = service.ClearVoiceProfileHuggingFaceToken()
+	if err != nil {
+		t.Fatalf("ClearVoiceProfileHuggingFaceToken returned error: %v", err)
+	}
+	if !status.HuggingFaceTokenConfigured || status.HuggingFaceTokenSource != "env" {
+		t.Fatalf("status = %+v, want env fallback after clearing local token", status)
+	}
+}
+
+func TestVoiceProfileTargetValidationUsesSavedCredentialToken(t *testing.T) {
+	t.Parallel()
+
+	scorer := &capturingLikenessScorer{score: 0.91}
+	options := voiceProfileTargetOptions(t, nil)
+	options.VoiceProfileCredentialsPath = filepath.Join(t.TempDir(), "credentials", "huggingface.json")
+	options.VoiceProfileDiarizationToken = ""
+	options.VoiceProfileLikenessScorer = scorer
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		mockReferenceTTS{},
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	if _, err := service.SaveVoiceProfileHuggingFaceToken(" hf-local-test "); err != nil {
+		t.Fatalf("SaveVoiceProfileHuggingFaceToken returned error: %v", err)
+	}
+
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfileWithOptions(
+		context.Background(),
+		"Narrator",
+		"en",
+		sourcePath,
+		"source.wav",
+		0,
+		pipeline.VoiceProfileCreationOptions{Targets: []string{pipeline.VoiceProfileTargetKokoroClone}},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileWithOptions returned error: %v", err)
+	}
+	ready := waitForVoiceProfileTarget(t, service, profile.ID, pipeline.VoiceProfileTargetKokoroClone, pipeline.VoiceProfileTargetStatusReady)
+	validation := ready.CloneTargets[pipeline.VoiceProfileTargetKokoroClone].Validation
+	if validation == nil || validation.Status != pipeline.VoiceProfileTargetStatusReady {
+		t.Fatalf("validation = %+v, want ready validation", validation)
+	}
+	if token := scorer.token(); token != "hf-local-test" {
+		t.Fatalf("scorer token = %q, want saved local token", token)
+	}
+}
+
 func TestCreateJobRequiresSelectedVoiceProfileTarget(t *testing.T) {
 	t.Parallel()
 
@@ -3015,6 +3157,33 @@ func TestResearchModuleDiagnosticsReportsInstalledUpstream(t *testing.T) {
 	upstreamDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
 		t.Fatalf("write fake optimizer: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(upstreamDir, "onnx"), 0o755); err != nil {
+		t.Fatalf("make onnx dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(upstreamDir, "voice_styles"), 0o755); err != nil {
+		t.Fatalf("make voice_styles dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "duration_predictor.onnx"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "text_encoder.onnx"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "vector_estimator.onnx"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "vocoder.onnx"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "tts.json"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "unicode_indexer.json"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "voice_styles", "M1.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write required style: %v", err)
 	}
 	fakePython := filepath.Join(t.TempDir(), "fake-python")
 	if err := os.WriteFile(fakePython, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
@@ -3057,6 +3226,79 @@ func TestResearchModuleDiagnosticsReportsInstalledUpstream(t *testing.T) {
 	}
 }
 
+func TestResearchModuleDiagnosticsReportsMissingSupertonicEmbedAsset(t *testing.T) {
+	t.Parallel()
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(upstreamDir, "onnx"), 0o755); err != nil {
+		t.Fatalf("make onnx dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(upstreamDir, "voice_styles"), 0o755); err != nil {
+		t.Fatalf("make voice_styles dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "text_encoder.onnx"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "vector_estimator.onnx"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "vocoder.onnx"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "tts.json"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", "unicode_indexer.json"), []byte("noop"), 0o644); err != nil {
+		t.Fatalf("write required asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "voice_styles", "M1.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write required style: %v", err)
+	}
+	fakePython := filepath.Join(t.TempDir(), "fake-python")
+	if err := os.WriteFile(fakePython, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake python: %v", err)
+	}
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+			VoiceProfileDir: t.TempDir(),
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleSupertonicEmbed,
+					Label:     "Supertonic Embed",
+					RepoURL:   "https://example.invalid/supertonic.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineSupertonic,
+				},
+			},
+			VoiceProfileArtifactPythonPath: fakePython,
+		},
+	)
+
+	modules := service.ListResearchModules()
+	if len(modules) != 1 {
+		t.Fatalf("module count = %d, want 1", len(modules))
+	}
+	if !modules[0].Installed || modules[0].Status != "setup-needed" || modules[0].RuntimeReady {
+		t.Fatalf("module diagnostics = %+v, want installed module with setup-needed", modules[0])
+	}
+	if !strings.Contains(modules[0].Reason, filepath.Join(upstreamDir, "onnx", "duration_predictor.onnx")) {
+		t.Fatalf("missing-asset reason = %q, want duration predictor", modules[0].Reason)
+	}
+	if modules[0].Setup == "" || !strings.Contains(modules[0].Setup, "backend/model-cache/supertonic") {
+		t.Fatalf("setup = %q, want guidance for supertonic assets", modules[0].Setup)
+	}
+}
+
 func TestResearchModuleDiagnosticsReportsMissingVoiceEmbedRuntimeDependencies(t *testing.T) {
 	t.Parallel()
 
@@ -3065,7 +3307,7 @@ func TestResearchModuleDiagnosticsReportsMissingVoiceEmbedRuntimeDependencies(t 
 		t.Fatalf("write fake optimizer: %v", err)
 	}
 	fakePython := filepath.Join(t.TempDir(), "fake-python")
-	if err := os.WriteFile(fakePython, []byte("#!/bin/sh\nprintf 'numpy\\n'\nexit 1\n"), 0o755); err != nil {
+	if err := os.WriteFile(fakePython, []byte("#!/bin/sh\nprintf 'numpy\\nen_core_web_sm\\n'\nexit 1\n"), 0o755); err != nil {
 		t.Fatalf("write fake python: %v", err)
 	}
 	service := pipeline.NewService(
@@ -3097,11 +3339,670 @@ func TestResearchModuleDiagnosticsReportsMissingVoiceEmbedRuntimeDependencies(t 
 	if !modules[0].Installed || modules[0].Status != "setup-needed" || modules[0].RuntimeReady {
 		t.Fatalf("module diagnostics = %+v, want installed module with runtime setup needed", modules[0])
 	}
-	if len(modules[0].MissingDependencies) != 1 || modules[0].MissingDependencies[0] != "numpy" {
+	if len(modules[0].MissingDependencies) != 2 {
+		t.Fatalf("missing dependencies = %#v, want at least numpy and en_core_web_sm", modules[0].MissingDependencies)
+	}
+	if !containsString(modules[0].MissingDependencies, "numpy") {
 		t.Fatalf("missing dependencies = %#v, want numpy", modules[0].MissingDependencies)
+	}
+	if !containsString(modules[0].MissingDependencies, "en_core_web_sm") {
+		t.Fatalf("missing dependencies = %#v, want en_core_web_sm", modules[0].MissingDependencies)
 	}
 	if !strings.Contains(modules[0].SetupCommand, "mise setup:voice-embed") {
 		t.Fatalf("setup command = %q, want voice embed setup command", modules[0].SetupCommand)
+	}
+}
+
+func TestBuildSupertonicArtifactUsesModuleWorkingDirectory(t *testing.T) {
+	t.Parallel()
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(upstreamDir, "onnx"), 0o755); err != nil {
+		t.Fatalf("make onnx dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(upstreamDir, "voice_styles"), 0o755); err != nil {
+		t.Fatalf("make voice_styles dir: %v", err)
+	}
+	for _, required := range []string{
+		"duration_predictor.onnx",
+		"text_encoder.onnx",
+		"vector_estimator.onnx",
+		"vocoder.onnx",
+		"tts.json",
+		"unicode_indexer.json",
+	} {
+		if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", required), []byte("noop"), 0o644); err != nil {
+			t.Fatalf("write required asset: %v", err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "voice_styles", "M1.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write required style: %v", err)
+	}
+
+	wrapper := filepath.Join(t.TempDir(), "fake-python")
+	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\nif [ \"$1\" = \"-c\" ]; then\n  exit 0\nfi\nexec /bin/sh \"$@\"\n"), 0o755); err != nil {
+		t.Fatalf("write fake python: %v", err)
+	}
+
+	artifactScript := filepath.Join(t.TempDir(), "artifact.sh")
+	if err := os.WriteFile(
+		artifactScript,
+		[]byte(`#!/bin/sh
+module_id=""
+output_dir=""
+upstream_dir=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --module-id)
+      module_id="$2"
+      shift 2
+      ;;
+    --output-dir)
+      output_dir="$2"
+      shift 2
+      ;;
+    --upstream-dir)
+      upstream_dir="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+if [ -z "$output_dir" ]; then
+  output_dir="."
+fi
+if [ -z "$module_id" ]; then
+  module_id="unknown"
+fi
+artifact_file="$output_dir/$module_id.json"
+printf '%s\n' "$PWD" > cmd_dir.txt
+cat > "$artifact_file" <<EOF
+{"path":"$artifact_file","moduleId":"$module_id","loss":0.0,"steps":1}
+EOF
+printf "%s\n" "{\"moduleId\":\"${module_id}\",\"path\":\"${artifact_file}\",\"loss\":0.0,\"steps\":1}"
+`), 0o755); err != nil {
+		t.Fatalf("write artifact script: %v", err)
+	}
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileArtifactPythonPath:     wrapper,
+			VoiceProfileArtifactScriptPath:     artifactScript,
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleSupertonicEmbed,
+					Label:     "Supertonic Embed",
+					RepoURL:   "https://example.invalid/supertonic.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineSupertonic,
+				},
+			},
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	built, err := service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleSupertonicEmbed)
+	if err != nil {
+		t.Fatalf("BuildVoiceProfileArtifact returned error: %v", err)
+	}
+	artifact := built.CloneArtifacts[pipeline.ResearchModuleSupertonicEmbed]
+	if artifact.Status != pipeline.VoiceProfileCloneArtifactStatusReady {
+		t.Fatalf("artifact status = %q, want ready", artifact.Status)
+	}
+	cwdMarker := filepath.Join(upstreamDir, "cmd_dir.txt")
+	cwd, err := os.ReadFile(cwdMarker)
+	if err != nil {
+		t.Fatalf("read command cwd marker: %v", err)
+	}
+	if strings.TrimSpace(string(cwd)) != upstreamDir {
+		t.Fatalf("command cwd = %q, want %q", strings.TrimSpace(string(cwd)), upstreamDir)
+	}
+}
+
+func TestBuildKokoroArtifactUsesResolvedPythonPathUnderModuleWorkingDirectory(t *testing.T) {
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+
+	venvPython := filepath.Join(upstreamDir, ".venv-voice-embed", "bin", "python")
+	if err := os.MkdirAll(filepath.Dir(venvPython), 0o755); err != nil {
+		t.Fatalf("make fake venv: %v", err)
+	}
+	if err := os.WriteFile(venvPython, []byte("#!/bin/sh\nif [ \"$1\" = \"-c\" ]; then\n  exit 0\nfi\nexec /bin/sh \"$@\"\n"), 0o755); err != nil {
+		t.Fatalf("write fake python: %v", err)
+	}
+
+	artifactScript := filepath.Join(t.TempDir(), "artifact.sh")
+	if err := os.WriteFile(
+		artifactScript,
+		[]byte(`#!/bin/sh
+module_id=""
+output_dir=""
+upstream_dir=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --module-id)
+      module_id="$2"
+      shift 2
+      ;;
+    --output-dir)
+      output_dir="$2"
+      shift 2
+      ;;
+    --upstream-dir)
+      upstream_dir="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+if [ -z "$output_dir" ]; then
+  output_dir="."
+fi
+if [ ! -d "$PWD/kokoro/voices" ]; then
+  echo "missing kokoro voices workspace" >&2
+  exit 1
+fi
+artifact_file="$output_dir/$module_id.json"
+cat > "$artifact_file" <<EOF
+{"path":"$artifact_file","moduleId":"$module_id","loss":0.0,"steps":1}
+EOF
+if [ -n "$upstream_dir" ]; then
+  printf '%s\n' "$PWD" > "$upstream_dir/cmd_dir.txt"
+fi
+printf "%s\n" "{\"moduleId\":\"${module_id}\",\"path\":\"${artifact_file}\",\"loss\":0.0,\"steps\":1}"
+`), 0o755); err != nil {
+		t.Fatalf("write artifact script: %v", err)
+	}
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileArtifactPythonPath:     filepath.Join(".", ".venv-voice-embed", "bin", "python"),
+			VoiceProfileArtifactScriptPath:     artifactScript,
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleKokoroEmbed,
+					Label:     "Kokoro Embed",
+					RepoURL:   "https://example.invalid/kokoro.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineKokoroEmbed,
+				},
+			},
+		},
+	)
+
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed)
+	if err != nil {
+		t.Fatalf("BuildVoiceProfileArtifact returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(upstreamDir, "cmd_dir.txt"))
+	if err != nil {
+		t.Fatalf("read command cwd marker: %v", err)
+	}
+	if strings.TrimSpace(string(data)) != upstreamDir {
+		t.Fatalf("command cwd = %q, want %q", strings.TrimSpace(string(data)), upstreamDir)
+	}
+	if _, err := os.Stat(filepath.Join(upstreamDir, "kokoro", "voices")); err != nil {
+		t.Fatalf("kokoro voices workspace was not prepared: %v", err)
+	}
+}
+
+func TestBuildSupertonicArtifactFailsWithMissingRequiredAsset(t *testing.T) {
+	t.Parallel()
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(upstreamDir, "onnx"), 0o755); err != nil {
+		t.Fatalf("make onnx dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(upstreamDir, "voice_styles"), 0o755); err != nil {
+		t.Fatalf("make voice_styles dir: %v", err)
+	}
+	for _, required := range []string{
+		"text_encoder.onnx",
+		"vector_estimator.onnx",
+		"vocoder.onnx",
+		"tts.json",
+		"unicode_indexer.json",
+	} {
+		if err := os.WriteFile(filepath.Join(upstreamDir, "onnx", required), []byte("noop"), 0o644); err != nil {
+			t.Fatalf("write required asset: %v", err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(upstreamDir, "voice_styles", "M1.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write required style: %v", err)
+	}
+
+	fakePython := filepath.Join(t.TempDir(), "fake-python")
+	if err := os.WriteFile(fakePython, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake python: %v", err)
+	}
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileArtifactPythonPath:     fakePython,
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleSupertonicEmbed,
+					Label:     "Supertonic Embed",
+					RepoURL:   "https://example.invalid/supertonic.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineSupertonic,
+				},
+			},
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	missing := filepath.Join(upstreamDir, "onnx", "duration_predictor.onnx")
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleSupertonicEmbed)
+	if err == nil {
+		t.Fatal("BuildVoiceProfileArtifact should fail when supertonic asset is missing")
+	}
+	if !strings.Contains(err.Error(), missing) {
+		t.Fatalf("build error = %q, want missing asset %q", err, missing)
+	}
+	if !strings.Contains(err.Error(), "VOICE_EMBED_INSTALL_DEPS=1 mise setup:voice-embed") {
+		t.Fatalf("build error = %q, want remediation hint", err)
+	}
+	if strings.Contains(err.Error(), "command=") {
+		t.Fatalf("build error = %q, should fail preflight before command execution", err)
+	}
+}
+
+func TestBuildSupertonicArtifactAutoSyncsMissingAssetsFromCache(t *testing.T) {
+	repoRoot := t.TempDir()
+	backendModelCache := filepath.Join(repoRoot, "backend", "model-cache", "supertonic")
+	if err := os.MkdirAll(filepath.Join(backendModelCache, "onnx"), 0o755); err != nil {
+		t.Fatalf("make cache onnx dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(backendModelCache, "voice_styles"), 0o755); err != nil {
+		t.Fatalf("make cache voice_styles dir: %v", err)
+	}
+	for _, required := range []string{
+		"onnx/duration_predictor.onnx",
+		"onnx/text_encoder.onnx",
+		"onnx/vector_estimator.onnx",
+		"onnx/vocoder.onnx",
+		"onnx/tts.json",
+		"onnx/unicode_indexer.json",
+		"voice_styles/M1.json",
+	} {
+		if err := os.WriteFile(filepath.Join(backendModelCache, required), []byte("noop"), 0o644); err != nil {
+			t.Fatalf("write cache asset %s: %v", required, err)
+		}
+	}
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(upstreamDir, "onnx"), 0o755); err != nil {
+		t.Fatalf("make onnx dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(upstreamDir, "voice_styles"), 0o755); err != nil {
+		t.Fatalf("make voice_styles dir: %v", err)
+	}
+	// Intentionally omit duration_predictor.onnx so the module path looks incomplete.
+	for _, required := range []string{
+		"onnx/text_encoder.onnx",
+		"onnx/vector_estimator.onnx",
+		"onnx/vocoder.onnx",
+		"onnx/tts.json",
+		"onnx/unicode_indexer.json",
+		"voice_styles/M1.json",
+	} {
+		if err := os.WriteFile(filepath.Join(upstreamDir, required), []byte("noop"), 0o644); err != nil {
+			t.Fatalf("write required upstream asset: %v", err)
+		}
+	}
+
+	wrapper := filepath.Join(t.TempDir(), "fake-python")
+	if err := os.WriteFile(
+		wrapper,
+		[]byte("#!/bin/sh\nif [ \"$1\" = \"-c\" ]; then\n  exit 0\nfi\nexec /bin/sh \"$@\"\n"),
+		0o755,
+	); err != nil {
+		t.Fatalf("write fake python: %v", err)
+	}
+	artifactScript := filepath.Join(t.TempDir(), "artifact.sh")
+	if err := os.WriteFile(
+		artifactScript,
+		[]byte(`#!/bin/sh
+module_id=""
+output_dir=""
+upstream_dir=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --module-id)
+      module_id="$2"
+      shift 2
+      ;;
+    --output-dir)
+      output_dir="$2"
+      shift 2
+      ;;
+    --upstream-dir)
+      upstream_dir="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+if [ -z "$output_dir" ]; then
+  output_dir="."
+fi
+artifact_file="$output_dir/$module_id.json"
+cat > "$artifact_file" <<EOF
+{"path":"$artifact_file","moduleId":"$module_id","loss":0.0,"steps":1}
+EOF
+printf "%s\n" "{\"moduleId\":\"${module_id}\",\"path\":\"${artifact_file}\",\"loss\":0.0,\"steps\":1}"
+`),
+		0o755,
+	); err != nil {
+		t.Fatalf("write artifact script: %v", err)
+	}
+
+	t.Setenv("SUPERTONIC_MODEL_DIR", backendModelCache)
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileArtifactPythonPath:     wrapper,
+			VoiceProfileArtifactScriptPath:     artifactScript,
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleSupertonicEmbed,
+					Label:     "Supertonic Embed",
+					RepoURL:   "https://example.invalid/supertonic.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineSupertonic,
+				},
+			},
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	built, err := service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleSupertonicEmbed)
+	if err != nil {
+		t.Fatalf("BuildVoiceProfileArtifact returned error: %v", err)
+	}
+	artifact := built.CloneArtifacts[pipeline.ResearchModuleSupertonicEmbed]
+	if artifact.Status != pipeline.VoiceProfileCloneArtifactStatusReady {
+		t.Fatalf("artifact status = %q, want ready", artifact.Status)
+	}
+	if _, err := os.Stat(filepath.Join(upstreamDir, "onnx", "duration_predictor.onnx")); err != nil {
+		t.Fatalf("supertonic asset was not synced into upstream module: %v", err)
+	}
+}
+
+func TestBuildVoiceProfileArtifactFailsWithMissingPythonExecutable(t *testing.T) {
+	t.Parallel()
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	missingPython := filepath.Join(t.TempDir(), "missing-python")
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileArtifactPythonPath:     missingPython,
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleKokoroEmbed,
+					Label:     "Kokoro Embed",
+					RepoURL:   "https://example.invalid/kokoro.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineKokoroEmbed,
+				},
+			},
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed)
+	if err == nil {
+		t.Fatal("BuildVoiceProfileArtifact should fail when python executable is missing")
+	}
+	if !strings.Contains(err.Error(), "No valid Python executable found") {
+		t.Fatalf("build error = %q, want missing-python setup guidance", err)
+	}
+	if !strings.Contains(err.Error(), "Voice Embed runtime executable not found or not executable") {
+		t.Fatalf("build error = %q, want runtime executable diagnostics", err)
+	}
+}
+
+func TestBuildKokoroArtifactFailsWhenSpacyModelMissing(t *testing.T) {
+	t.Parallel()
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	fakePython := filepath.Join(t.TempDir(), "fake-python")
+	if err := os.WriteFile(
+		fakePython,
+		[]byte(`#!/bin/sh
+if [ "$1" = "-c" ]; then
+  echo "en_core_web_sm"
+  exit 1
+fi
+exec /bin/sh "$@"
+`),
+		0o755,
+	); err != nil {
+		t.Fatalf("write fake python: %v", err)
+	}
+
+	artifactScript := filepath.Join(t.TempDir(), "artifact.sh")
+	if err := os.WriteFile(
+		artifactScript,
+		[]byte(`#!/bin/sh
+echo "artifact script should not run"
+exit 1
+`),
+		0o755,
+	); err != nil {
+		t.Fatalf("write artifact script: %v", err)
+	}
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileArtifactPythonPath:     fakePython,
+			VoiceProfileArtifactScriptPath:     artifactScript,
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleKokoroEmbed,
+					Label:     "Kokoro Embed",
+					RepoURL:   "https://example.invalid/kokoro.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineKokoroEmbed,
+				},
+			},
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed)
+	if err == nil {
+		t.Fatal("BuildVoiceProfileArtifact should fail when spacy model is missing")
+	}
+	if !strings.Contains(err.Error(), "en_core_web_sm") {
+		t.Fatalf("build error = %q, want missing en_core_web_sm", err)
+	}
+	if !strings.Contains(err.Error(), "VOICE_EMBED_INSTALL_DEPS=1 mise setup:voice-embed") {
+		t.Fatalf("build error = %q, want setup-required guidance", err)
+	}
+	if strings.Contains(err.Error(), "voice profile artifact build failed (command=") {
+		t.Fatalf("build error = %q, should fail preflight before command execution", err)
+	}
+}
+
+func TestBuildVoiceProfileArtifactIncludesSubprocessSnippetOnFailure(t *testing.T) {
+	t.Parallel()
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	wrapper := filepath.Join(t.TempDir(), "fake-python")
+	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\nif [ \"$1\" = \"-c\" ]; then\n  exit 0\nfi\nexec /bin/sh \"$@\"\n"), 0o755); err != nil {
+		t.Fatalf("write fake python: %v", err)
+	}
+
+	artifactScript := filepath.Join(t.TempDir(), "artifact.sh")
+	if err := os.WriteFile(artifactScript, []byte(`#!/bin/sh
+echo "No virtual environment found" >&2
+exit 1
+`), 0o755); err != nil {
+		t.Fatalf("write artifact script: %v", err)
+	}
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileArtifactPythonPath:     wrapper,
+			VoiceProfileArtifactScriptPath:     artifactScript,
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleKokoroEmbed,
+					Label:     "Kokoro Embed",
+					RepoURL:   "https://example.invalid/kokoro.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineKokoroEmbed,
+				},
+			},
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed)
+	if err == nil {
+		t.Fatal("BuildVoiceProfileArtifact should fail for subprocess failure")
+	}
+	if !strings.Contains(err.Error(), "No virtual environment found") {
+		t.Fatalf("build error = %q, want stderr snippet", err)
+	}
+	if !strings.Contains(err.Error(), "voice profile artifact build failed (command=") {
+		t.Fatalf("build error = %q, want command context", err)
 	}
 }
 
@@ -3490,6 +4391,37 @@ func (scorer mockLikenessScorer) ScoreVoiceProfileLikeness(
 		EmbeddingModel:    "mock-embedding",
 		Reason:            "mock speaker similarity",
 	}, nil
+}
+
+type capturingLikenessScorer struct {
+	mu        sync.Mutex
+	lastToken string
+	score     float64
+	err       error
+}
+
+func (scorer *capturingLikenessScorer) ScoreVoiceProfileLikeness(
+	_ context.Context,
+	request pipeline.VoiceProfileLikenessRequest,
+) (pipeline.VoiceProfileLikenessResult, error) {
+	scorer.mu.Lock()
+	scorer.lastToken = request.Token
+	scorer.mu.Unlock()
+	if scorer.err != nil {
+		return pipeline.VoiceProfileLikenessResult{}, scorer.err
+	}
+	return pipeline.VoiceProfileLikenessResult{
+		Score:             scorer.score,
+		SpeakerSimilarity: scorer.score,
+		EmbeddingModel:    "mock-embedding",
+		Reason:            "mock speaker similarity",
+	}, nil
+}
+
+func (scorer *capturingLikenessScorer) token() string {
+	scorer.mu.Lock()
+	defer scorer.mu.Unlock()
+	return scorer.lastToken
 }
 
 type mockReferenceTTS struct{}

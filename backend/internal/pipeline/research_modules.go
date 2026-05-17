@@ -16,7 +16,20 @@ const (
 	ResearchModuleKokoroEmbed     = "kokoro-embed"
 
 	voiceEmbedRuntimeSetupCommand = "VOICE_EMBED_INSTALL_DEPS=1 mise setup:voice-embed"
+	missingKokoroPythonPathHint   = "No valid Python executable found for embed artifacts. Set VoiceProfileArtifactPythonPath to an existing Python binary (for example the project .venv-voice-embed/bin/python), then retry"
+	missingSupertonicAssetsHint   = "Run `VOICE_EMBED_INSTALL_DEPS=1 mise setup:voice-embed` to sync onnx/* and voice_styles/* from backend/model-cache/supertonic into the module's upstream directory, or rerun the upstream supertonic setup steps."
+	missingKokoroSpacyModelHint   = "Install en_core_web_sm in the voice-embed runtime and retry. Example: `VOICE_EMBED_INSTALL_DEPS=1 mise setup:voice-embed`."
 )
+
+var supertonicEmbedRequiredFiles = []string{
+	filepath.Join("onnx", "duration_predictor.onnx"),
+	filepath.Join("onnx", "text_encoder.onnx"),
+	filepath.Join("onnx", "vector_estimator.onnx"),
+	filepath.Join("onnx", "vocoder.onnx"),
+	filepath.Join("onnx", "tts.json"),
+	filepath.Join("onnx", "unicode_indexer.json"),
+	filepath.Join("voice_styles", "M1.json"),
+}
 
 type ResearchModuleConfig struct {
 	ID        string
@@ -184,6 +197,9 @@ func (service *Service) researchModuleDiagnostics(module ResearchModuleConfig) R
 	setup := module.Setup
 	if installed {
 		runtime = service.voiceEmbedRuntimeDiagnostics(module)
+		if runtime.ready {
+			runtime = service.voiceEmbedSupertonicAssetDiagnostics(runtime, localPath, module)
+		}
 		status = "ready"
 		reason = "Installed locally. Profile artifacts can be built now."
 		if !runtime.ready {
@@ -228,20 +244,263 @@ func (service *Service) voiceEmbedRuntimeDiagnostics(module ResearchModuleConfig
 	if pythonPath == "" {
 		pythonPath = defaultVoiceProfileArtifactPythonPath
 	}
-	if _, err := exec.LookPath(pythonPath); err != nil {
-		if !filepath.IsAbs(pythonPath) {
-			if _, statErr := os.Stat(pythonPath); statErr == nil {
-				return service.voiceEmbedDependencyDiagnostics(pythonPath, module)
-			}
-		}
+	resolvedPath, ok := resolveCommandExecutable(
+		pythonPath,
+		artifactCommandFallbackRoots(module.LocalPath, service.options.VoiceProfileArtifactScriptPath)...,
+	)
+	if !ok {
 		return voiceEmbedRuntimeDiagnostics{
 			ready:        false,
-			reason:       fmt.Sprintf("Voice Embed runtime is not set up at %s.", pythonPath),
+			reason:       fmt.Sprintf("Voice Embed runtime executable not found or not executable at %s. %s", pythonPath, missingKokoroPythonPathHint),
 			setup:        fmt.Sprintf("Run `%s` after reviewing the upstream requirements.", voiceEmbedRuntimeSetupCommand),
 			setupCommand: voiceEmbedRuntimeSetupCommand,
 		}
 	}
-	return service.voiceEmbedDependencyDiagnostics(pythonPath, module)
+	return service.voiceEmbedDependencyDiagnostics(resolvedPath, module)
+}
+
+func (service *Service) voiceEmbedSupertonicAssetDiagnostics(
+	runtime voiceEmbedRuntimeDiagnostics,
+	modulePath string,
+	module ResearchModuleConfig,
+) voiceEmbedRuntimeDiagnostics {
+	if module.ID != ResearchModuleSupertonicEmbed {
+		return runtime
+	}
+	if runtime.ready == false {
+		return runtime
+	}
+	if _, err := os.Stat(modulePath); err != nil {
+		return voiceEmbedRuntimeDiagnostics{
+			ready:        false,
+			reason:       fmt.Sprintf("Supertonic embed prerequisite missing. Upstream directory missing at %s. %s", modulePath, missingSupertonicAssetsHint),
+			setup:        fmt.Sprintf("Copy %s into %s or rerun upstream setup.", missingSupertonicAssetsHint, modulePath),
+			setupCommand: voiceEmbedRuntimeSetupCommand,
+		}
+	}
+
+	for _, required := range supertonicEmbedRequiredFiles {
+		path := filepath.Join(modulePath, required)
+		if _, err := os.Stat(path); err != nil {
+			return voiceEmbedRuntimeDiagnostics{
+				ready:        false,
+				reason:       fmt.Sprintf("Supertonic embed prerequisite missing required file: %s. %s", path, missingSupertonicAssetsHint),
+				setup:        fmt.Sprintf("Copy %s to %s and retry.", missingSupertonicAssetsHint, filepath.Dir(modulePath)),
+				setupCommand: voiceEmbedRuntimeSetupCommand,
+			}
+		}
+	}
+
+	voiceStyleFiles, err := filepath.Glob(filepath.Join(modulePath, "voice_styles", "*.json"))
+	if err != nil || len(voiceStyleFiles) == 0 {
+		return voiceEmbedRuntimeDiagnostics{
+			ready:        false,
+			reason:       fmt.Sprintf("Supertonic embed prerequisite missing: no voice style JSON files found in %s. %s", filepath.Join(modulePath, "voice_styles"), missingSupertonicAssetsHint),
+			setup:        fmt.Sprintf("Copy %s and a valid voice style JSON file into %s, then retry.", missingSupertonicAssetsHint, filepath.Join(modulePath, "voice_styles")),
+			setupCommand: voiceEmbedRuntimeSetupCommand,
+		}
+	}
+
+	return runtime
+}
+
+func firstMissingSupertonicEmbedAsset(modulePath string) string {
+	if _, err := os.Stat(modulePath); err != nil {
+		return modulePath
+	}
+
+	for _, required := range supertonicEmbedRequiredFiles {
+		path := filepath.Join(modulePath, required)
+		if _, err := os.Stat(path); err != nil {
+			return path
+		}
+	}
+
+	voiceStyleFiles, err := filepath.Glob(filepath.Join(modulePath, "voice_styles", "*.json"))
+	if err != nil || len(voiceStyleFiles) == 0 {
+		return filepath.Join(modulePath, "voice_styles")
+	}
+
+	return ""
+}
+
+func resolveCommandExecutable(command string, fallbackRoots ...string) (string, bool) {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return command, false
+	}
+	command = filepath.Clean(command)
+
+	if !filepath.IsAbs(command) && strings.ContainsAny(command, `/\\`) {
+		if abs, err := filepath.Abs(command); err == nil {
+			if resolved, ok := resolveExecutableCandidate(abs); ok {
+				return resolved, true
+			}
+		}
+		roots := dedupeStrings(fallbackRoots...)
+		for _, root := range roots {
+			candidate := filepath.Clean(filepath.Join(root, command))
+			if resolved, ok := resolveExecutableCandidate(candidate); ok {
+				return resolved, true
+			}
+		}
+		// fallback for paths that are invalid from all candidates
+		if command, err := filepath.Abs(command); err == nil {
+			return command, false
+		}
+		return command, false
+	}
+
+	resolved, err := exec.LookPath(command)
+	if err != nil {
+		return command, false
+	}
+	if _, ok := resolveExecutableCandidate(resolved); !ok {
+		return resolved, false
+	}
+	return resolved, true
+}
+
+func resolveExecutableCandidate(path string) (string, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return path, false
+	}
+	if !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
+		return path, false
+	}
+	return path, true
+}
+
+func artifactCommandFallbackRoots(modulePath string, scriptPath string) []string {
+	moduleDir := strings.TrimSpace(modulePath)
+	scriptValue := strings.TrimSpace(scriptPath)
+	roots := []string{""}
+
+	if moduleDir != "" {
+		roots = append(roots, moduleDir, filepath.Dir(moduleDir), filepath.Join(moduleDir, ".."))
+	}
+	if scriptValue != "" {
+		scriptDir := filepath.Dir(scriptValue)
+		roots = append(roots, scriptDir, filepath.Dir(scriptDir))
+		if absScript, err := filepath.Abs(scriptValue); err == nil {
+			absScriptDir := filepath.Dir(absScript)
+			roots = append(roots, absScriptDir, filepath.Dir(absScriptDir))
+		}
+	}
+	return dedupeStrings(roots...)
+}
+
+func copyDirectoryTree(src, dst string) error {
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		sourcePath := filepath.Join(src, entry.Name())
+		targetPath := filepath.Join(dst, entry.Name())
+		if entry.IsDir() {
+			if err := copyDirectoryTree(sourcePath, targetPath); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := copyFile(sourcePath, targetPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func dedupeStrings(values ...string) []string {
+	seen := map[string]struct{}{}
+	output := make([]string, 0, len(values))
+	for _, value := range values {
+		clean := strings.TrimSpace(value)
+		if clean == "" {
+			continue
+		}
+		if _, ok := seen[clean]; ok {
+			continue
+		}
+		seen[clean] = struct{}{}
+		output = append(output, clean)
+	}
+	return output
+}
+
+func resolveSupertonicEmbedModelCacheDir(modulePath string) (string, error) {
+	moduleRoot := filepath.Dir(filepath.Clean(modulePath))
+	repoRoot := moduleRoot
+	if filepath.Base(moduleRoot) == "upstreams" {
+		repoRoot = filepath.Clean(filepath.Join(moduleRoot, ".."))
+	}
+	envPath := strings.TrimSpace(os.Getenv("SUPERTONIC_MODEL_DIR"))
+	candidates := []string{}
+	if envPath != "" {
+		candidates = append(
+			candidates,
+			envPath,
+			filepath.Join(repoRoot, envPath),
+			filepath.Join(filepath.Dir(modulePath), envPath),
+		)
+	} else {
+		candidates = append(
+			candidates,
+			filepath.Join(repoRoot, "backend", "model-cache", "supertonic"),
+			filepath.Join(moduleRoot, "..", "backend", "model-cache", "supertonic"),
+			filepath.Join(moduleRoot, "..", "..", "backend", "model-cache", "supertonic"),
+			filepath.Join(moduleRoot, "..", "..", "..", "backend", "model-cache", "supertonic"),
+		)
+	}
+	candidates = append(
+		candidates,
+		filepath.Join(modulePath, "..", "model-cache", "supertonic"),
+		filepath.Join(moduleRoot, "..", "model-cache", "supertonic"),
+		"backend/model-cache/supertonic",
+	)
+	candidates = dedupeStrings(candidates...)
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		candidate = filepath.Clean(candidate)
+		if path := strings.TrimSpace(candidate); path != "" {
+			if !filepath.IsAbs(path) {
+				if abs, err := filepath.Abs(path); err == nil {
+					path = abs
+				}
+			}
+			if _, err := os.Stat(path); err == nil {
+				return path, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no Supertonic model cache found for module path %s", modulePath)
+}
+
+func syncSupertonicEmbedAssets(modulePath string) error {
+	if _, err := os.Stat(modulePath); err != nil {
+		return fmt.Errorf("Supertonic module not available at %s", modulePath)
+	}
+	cacheDir, err := resolveSupertonicEmbedModelCacheDir(modulePath)
+	if err != nil {
+		return err
+	}
+	sourceOnnx := filepath.Join(cacheDir, "onnx")
+	sourceStyles := filepath.Join(cacheDir, "voice_styles")
+	targetOnnx := filepath.Join(modulePath, "onnx")
+	targetStyles := filepath.Join(modulePath, "voice_styles")
+	if err := copyDirectoryTree(sourceOnnx, targetOnnx); err != nil {
+		return fmt.Errorf("copy supertonic onnx assets: %w", err)
+	}
+	if err := copyDirectoryTree(sourceStyles, targetStyles); err != nil {
+		return fmt.Errorf("copy supertonic voice style assets: %w", err)
+	}
+	return nil
 }
 
 func (service *Service) voiceEmbedDependencyDiagnostics(
@@ -252,22 +511,42 @@ func (service *Service) voiceEmbedDependencyDiagnostics(
 	if len(required) == 0 {
 		return voiceEmbedRuntimeDiagnostics{ready: true}
 	}
-	args := append([]string{"-c", voiceEmbedDependencyProbeScript()}, required...)
+	args := append([]string{"-c", voiceEmbedDependencyProbeScript(module.ID)}, required...)
 	command := exec.Command(pythonPath, args...)
-	output, err := command.Output()
+	output, err := command.CombinedOutput()
+	cleanOutput := strings.TrimSpace(string(output))
 	missing := compactStrings(strings.Split(strings.TrimSpace(string(output)), "\n"))
 	if err != nil && len(missing) == 0 {
+		reason := fmt.Sprintf("Voice Embed runtime dependency probe failed for %s.", module.Label)
+		if cleanOutput != "" {
+			reason = fmt.Sprintf("%s %s", strings.TrimSuffix(reason, "."), cleanOutput)
+		}
 		return voiceEmbedRuntimeDiagnostics{
 			ready:        false,
-			reason:       fmt.Sprintf("Voice Embed runtime dependency probe failed for %s.", module.Label),
+			reason:       reason,
 			setup:        fmt.Sprintf("Run `%s` after reviewing the upstream requirements.", voiceEmbedRuntimeSetupCommand),
 			setupCommand: voiceEmbedRuntimeSetupCommand,
 		}
 	}
 	if len(missing) > 0 {
+		missingModel := false
+		for _, dependency := range missing {
+			if dependency == "en_core_web_sm" {
+				missingModel = true
+				break
+			}
+		}
+		reason := fmt.Sprintf("Voice Embed runtime is missing Python dependencies for %s: %s.", module.Label, strings.Join(missing, ", "))
+		if missingModel {
+			reason = fmt.Sprintf(
+				"%s %s",
+				reason,
+				missingKokoroSpacyModelHint,
+			)
+		}
 		return voiceEmbedRuntimeDiagnostics{
 			ready:               false,
-			reason:              fmt.Sprintf("Voice Embed runtime is missing Python dependencies for %s: %s.", module.Label, strings.Join(missing, ", ")),
+			reason:              reason,
 			setup:               fmt.Sprintf("Run `%s` after reviewing the upstream requirements.", voiceEmbedRuntimeSetupCommand),
 			setupCommand:        voiceEmbedRuntimeSetupCommand,
 			missingDependencies: missing,
@@ -279,7 +558,17 @@ func (service *Service) voiceEmbedDependencyDiagnostics(
 func voiceEmbedRequiredPythonModules(moduleID string) []string {
 	switch normalizeResearchModuleID(moduleID) {
 	case ResearchModuleKokoroEmbed:
-		return []string{"kokoro", "librosa", "numpy", "soundfile", "torch", "torchaudio", "transformers"}
+		return []string{
+			"kokoro",
+			"librosa",
+			"numpy",
+			"soundfile",
+			"torch",
+			"torchaudio",
+			"spacy",
+			"en_core_web_sm",
+			"transformers",
+		}
 	case ResearchModuleSupertonicEmbed:
 		return []string{"librosa", "numpy", "onnx", "onnx2torch", "onnxruntime", "onnxslim", "soundfile", "torch", "torchaudio", "transformers"}
 	default:
@@ -287,7 +576,34 @@ func voiceEmbedRequiredPythonModules(moduleID string) []string {
 	}
 }
 
-func voiceEmbedDependencyProbeScript() string {
+func voiceEmbedDependencyProbeScript(moduleID string) string {
+	module := strings.TrimSpace(normalizeResearchModuleID(moduleID))
+	if module == ResearchModuleKokoroEmbed {
+		return `import importlib.util
+import sys
+
+missing = []
+spacy_module = None
+for name in sys.argv[1:]:
+    if name == "en_core_web_sm":
+        if spacy_module is None:
+            continue
+        try:
+            spacy_module.load(name)
+        except Exception:
+            missing.append(name)
+        continue
+    if importlib.util.find_spec(name) is None:
+        missing.append(name)
+        continue
+    if name == "spacy":
+        import spacy as spacy_module
+if missing:
+    print("\n".join(missing))
+    raise SystemExit(1)
+`
+	}
+
 	return `import importlib.util
 import sys
 

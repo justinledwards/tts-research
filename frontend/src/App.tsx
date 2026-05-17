@@ -13,6 +13,7 @@ import {
   apiBaseUrl,
   audioSource,
   cancelVoiceJob,
+  clearHuggingFaceToken,
   cloneResearchModule,
   closePlaybackSession,
   createBookNarrationJob,
@@ -37,6 +38,7 @@ import {
   getProjectStorageSummary,
   getSystemMetrics,
   getVoiceJob,
+  getVoiceProfileCredentials,
   getVoiceProfileSource,
   getVoiceProfileSourceDiagnostics,
   isApiNotFoundError,
@@ -53,6 +55,7 @@ import {
   previewContentIRSpeechPolicy,
   queueVoiceProfileTarget,
   renameProject,
+  saveHuggingFaceToken,
   startPlaybackSession,
   subscribeToVoiceJob,
   syncPlaybackSession,
@@ -84,10 +87,16 @@ import {
   kokoroVoicepackLabel,
 } from "./kokoroVoices";
 import {
+  applyKokoroRenderMode,
   buildCreateVoiceJobRequest,
   createRunConfiguration,
+  isKokoroRenderEngine,
+  KOKORO_RENDER_MODE_OPTIONS,
+  kokoroEngineFamilyValue,
+  kokoroRenderModeForConfiguration,
   normalizeRunConfiguration,
   RUN_CONFIG_STORAGE_KEY,
+  type KokoroRenderMode,
   type RunConfiguration,
 } from "./runConfig";
 import {
@@ -146,6 +155,7 @@ import type {
   TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
+  VoiceProfileCredentialStatus,
   VoiceProfileCandidate,
   VoiceProfileSource,
   VoiceProfileSourceDiagnostics,
@@ -174,6 +184,7 @@ import {
 import type { ContentIRDocument } from "./content-ir";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
 import {
+  humanizeProfileTargetProblem,
   isVoiceProfileTargetReadyForEngine,
   voiceProfileTargetReadinessText,
 } from "./profileTargets";
@@ -1349,6 +1360,8 @@ function uniqueSortedStrings(values: readonly string[]): string[] {
 type AudioPlaybackMode = "arrival" | "completed";
 
 const VOICE_PROFILE_ID_STORAGE_KEY = "tts-active-voice-profile-id";
+const PROFILE_LOADING_SHOW_DELAY_MS = 120;
+const PROFILE_LOADING_MIN_VISIBLE_MS = 260;
 
 function formatErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -1390,6 +1403,11 @@ export function App() {
   });
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
   const [hasLoadedVoiceProfiles, setHasLoadedVoiceProfiles] = useState(false);
+  const hasLoadedVoiceProfilesRef = useRef(false);
+  const profileLoadingShowTimerRef = useRef<number | null>(null);
+  const profileLoadingHideTimerRef = useRef<number | null>(null);
+  const profileLoadingVisibleRequestCounter = useRef(0);
+  const profileLoadingVisibleSinceRef = useRef(0);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSource, setProfileSource] = useState<VoiceProfileSource | null>(null);
   const [profileSourceDiagnostics, setProfileSourceDiagnostics] =
@@ -1497,6 +1515,13 @@ export function App() {
   const [systemMetricsUnavailable, setSystemMetricsUnavailable] = useState(false);
   const [ttsEngines, setTTSEngines] = useState<TTSEngineDiagnostics[]>([]);
   const [ttsEngineError, setTTSEngineError] = useState<string | null>(null);
+  const [voiceProfileCredentials, setVoiceProfileCredentials] =
+    useState<VoiceProfileCredentialStatus | null>(null);
+  const [voiceProfileCredentialError, setVoiceProfileCredentialError] = useState<string | null>(
+    null,
+  );
+  const [savingHuggingFaceTokenKey, setSavingHuggingFaceTokenKey] = useState<string | null>(null);
+  const [isClearingHuggingFaceToken, setIsClearingHuggingFaceToken] = useState(false);
 
   const isProcessing = requestState === "running";
   const canSubmit = useMemo(() => text.trim().length > 0 && !isProcessing, [text, isProcessing]);
@@ -1765,25 +1790,90 @@ export function App() {
     }
   }, [bookSources, hashReadingPosition]);
 
-  const refreshVoiceProfiles = useCallback(async () => {
-    setIsLoadingProfiles(true);
-    setProfileError(null);
-    try {
-      const profiles = await listVoiceProfiles();
-      setVoiceProfiles(profiles);
-      const restoreProfileId = localStorage.getItem(VOICE_PROFILE_ID_STORAGE_KEY);
-      if (restoreProfileId && !profiles.some((profile) => profile.id === restoreProfileId)) {
-        setSelectedVoiceProfileId("");
-        localStorage.removeItem(VOICE_PROFILE_ID_STORAGE_KEY);
-      }
-    } catch (caughtError) {
-      setProfileError(
-        caughtError instanceof Error ? caughtError.message : "Unable to load voice profiles",
-      );
-    } finally {
-      setHasLoadedVoiceProfiles(true);
-      setIsLoadingProfiles(false);
+  const beginProfileLoadingIndicator = useCallback(() => {
+    const visibleRequestToken = ++profileLoadingVisibleRequestCounter.current;
+    if (profileLoadingHideTimerRef.current !== null) {
+      globalThis.clearTimeout(profileLoadingHideTimerRef.current);
+      profileLoadingHideTimerRef.current = null;
     }
+    if (profileLoadingShowTimerRef.current !== null) {
+      globalThis.clearTimeout(profileLoadingShowTimerRef.current);
+    }
+    profileLoadingShowTimerRef.current = globalThis.setTimeout(() => {
+      if (visibleRequestToken !== profileLoadingVisibleRequestCounter.current) {
+        return;
+      }
+      profileLoadingVisibleSinceRef.current = Date.now();
+      setIsLoadingProfiles(true);
+    }, PROFILE_LOADING_SHOW_DELAY_MS);
+    return visibleRequestToken;
+  }, []);
+
+  const finishProfileLoadingIndicator = useCallback((visibleRequestToken: number) => {
+    if (visibleRequestToken !== profileLoadingVisibleRequestCounter.current) {
+      return;
+    }
+    if (profileLoadingShowTimerRef.current !== null) {
+      globalThis.clearTimeout(profileLoadingShowTimerRef.current);
+      profileLoadingShowTimerRef.current = null;
+    }
+    const visibleSince = profileLoadingVisibleSinceRef.current;
+    const hideDelay =
+      visibleSince === 0
+        ? 0
+        : Math.max(0, PROFILE_LOADING_MIN_VISIBLE_MS - (Date.now() - visibleSince));
+    const hideLoader = () => {
+      if (visibleRequestToken !== profileLoadingVisibleRequestCounter.current) {
+        return;
+      }
+      setIsLoadingProfiles(false);
+      profileLoadingVisibleSinceRef.current = 0;
+    };
+    if (hideDelay === 0 || visibleSince === 0) {
+      hideLoader();
+      return;
+    }
+    profileLoadingHideTimerRef.current = globalThis.setTimeout(hideLoader, hideDelay);
+  }, []);
+
+  const refreshVoiceProfiles = useCallback(
+    async (options?: Readonly<{ silent?: boolean }>) => {
+      const isSilent = options?.silent ?? false;
+      const shouldShowLoader = !isSilent && !hasLoadedVoiceProfilesRef.current;
+      const visibleRequestToken = shouldShowLoader ? beginProfileLoadingIndicator() : 0;
+      setProfileError(null);
+      try {
+        const profiles = await listVoiceProfiles();
+        setVoiceProfiles(profiles);
+        const restoreProfileId = localStorage.getItem(VOICE_PROFILE_ID_STORAGE_KEY);
+        if (restoreProfileId && !profiles.some((profile) => profile.id === restoreProfileId)) {
+          setSelectedVoiceProfileId("");
+          localStorage.removeItem(VOICE_PROFILE_ID_STORAGE_KEY);
+        }
+      } catch (caughtError) {
+        setProfileError(
+          caughtError instanceof Error ? caughtError.message : "Unable to load voice profiles",
+        );
+      } finally {
+        hasLoadedVoiceProfilesRef.current = true;
+        setHasLoadedVoiceProfiles(true);
+        if (shouldShowLoader) {
+          finishProfileLoadingIndicator(visibleRequestToken);
+        }
+      }
+    },
+    [beginProfileLoadingIndicator, finishProfileLoadingIndicator],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (profileLoadingShowTimerRef.current !== null) {
+        globalThis.clearTimeout(profileLoadingShowTimerRef.current);
+      }
+      if (profileLoadingHideTimerRef.current !== null) {
+        globalThis.clearTimeout(profileLoadingHideTimerRef.current);
+      }
+    };
   }, []);
 
   const refreshResearchModules = useCallback(async () => {
@@ -1797,12 +1887,25 @@ export function App() {
     }
   }, []);
 
+  const refreshVoiceProfileCredentials = useCallback(async () => {
+    try {
+      setVoiceProfileCredentials(await getVoiceProfileCredentials());
+      setVoiceProfileCredentialError(null);
+    } catch (caughtError) {
+      setVoiceProfileCredentialError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to load voice profile credential status",
+      );
+    }
+  }, []);
+
   useEffect(() => {
     if (!hasActiveVoiceProfileTargets) {
       return;
     }
     const timer = globalThis.setInterval(() => {
-      void refreshVoiceProfiles();
+      void refreshVoiceProfiles({ silent: true });
     }, 1500);
     return () => {
       globalThis.clearInterval(timer);
@@ -1857,6 +1960,42 @@ export function App() {
     },
     [],
   );
+
+  const handleSaveHuggingFaceTokenAndValidate = useCallback(
+    async (profileId: string, targetId: string, token: string) => {
+      const saveKey = `${profileId}:${targetId}`;
+      setSavingHuggingFaceTokenKey(saveKey);
+      setVoiceProfileCredentialError(null);
+      try {
+        const status = await saveHuggingFaceToken(token);
+        setVoiceProfileCredentials(status);
+        await handleBuildVoiceProfileArtifact(profileId, targetId);
+      } catch (caughtError) {
+        setVoiceProfileCredentialError(
+          caughtError instanceof Error ? caughtError.message : "Unable to save Hugging Face token",
+        );
+      } finally {
+        setSavingHuggingFaceTokenKey(null);
+      }
+    },
+    [handleBuildVoiceProfileArtifact],
+  );
+
+  const handleClearLocalHuggingFaceToken = useCallback(async () => {
+    setIsClearingHuggingFaceToken(true);
+    setVoiceProfileCredentialError(null);
+    try {
+      setVoiceProfileCredentials(await clearHuggingFaceToken());
+    } catch (caughtError) {
+      setVoiceProfileCredentialError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to clear local Hugging Face token",
+      );
+    } finally {
+      setIsClearingHuggingFaceToken(false);
+    }
+  }, []);
 
   const refreshProjects = useCallback(async () => {
     setProjectError(null);
@@ -2859,6 +2998,7 @@ export function App() {
     void refreshBookCinemaDiagnostics();
     void refreshResearchModules();
     void refreshTTSEngines();
+    void refreshVoiceProfileCredentials();
   }, [
     refreshBookCinemaDiagnostics,
     refreshProfileSourceDiagnostics,
@@ -2866,6 +3006,7 @@ export function App() {
     refreshResearchModules,
     refreshSpeechPolicyProfiles,
     refreshTTSEngines,
+    refreshVoiceProfileCredentials,
     refreshVoiceProfiles,
   ]);
 
@@ -3779,16 +3920,24 @@ export function App() {
             selectedProfileId={selectedVoiceProfileId}
             studioPipelineHint={studioPipelineHint}
             ttsEngines={ttsEngines}
+            voiceProfileCredentialError={voiceProfileCredentialError}
+            voiceProfileCredentials={voiceProfileCredentials}
             onAnalyzeSource={handleAnalyzeVoiceSource}
             onClearSelection={clearVoiceProfileSelection}
             onBuildArtifact={handleBuildVoiceProfileArtifact}
+            onClearHuggingFaceToken={() => {
+              void handleClearLocalHuggingFaceToken();
+            }}
             onCreateProfileFromCandidate={handleCreateVoiceProfileFromCandidate}
             onDeleteProfile={(id) => {
               void handleDeleteVoiceProfile(id);
             }}
             onRunConfigurationChange={setRunConfiguration}
+            onSaveHuggingFaceToken={handleSaveHuggingFaceTokenAndValidate}
             onSelectKokoroVoice={selectKokoroVoice}
             onSelectProfile={selectVoiceProfile}
+            savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
+            isClearingHuggingFaceToken={isClearingHuggingFaceToken}
           />
         </aside>
 
@@ -5479,8 +5628,11 @@ function ResearchModulesSetupCard({
   onClone: (moduleId: string) => void;
   onHide: () => void;
 }>) {
-  const promptModules = modules.filter((module) => module.prompt && !module.installed);
-  if (hidden || (promptModules.length === 0 && !error)) {
+  const cloneModules = modules.filter((module) => module.prompt && !module.installed);
+  const setupModules = modules.filter(
+    (module) => module.prompt && module.installed && module.status === "setup-needed",
+  );
+  if (hidden || (cloneModules.length === 0 && setupModules.length === 0 && !error)) {
     return null;
   }
   return (
@@ -5493,9 +5645,34 @@ function ResearchModulesSetupCard({
             artifacts. Current Kokoro Clone and Supertonic preset rendering stay available.
           </p>
           {error ? <p className="mt-2 text-xs font-semibold text-red-700">{error}</p> : null}
+          {setupModules.length > 0 ? (
+            <div className="mt-2 grid gap-2">
+              {setupModules.map((module) => (
+                <div
+                  className="rounded border border-amber-200 bg-amber-100/40 p-2 text-xs text-amber-950"
+                  key={module.id}
+                >
+                  <p className="font-semibold">{module.label} runtime setup needed</p>
+                  <p className="mt-1 break-words leading-5">
+                    {module.reason ?? "Install missing runtime dependencies and rerun checks."}
+                  </p>
+                  {module.setup ? (
+                    <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-white/80 p-2 font-mono text-[11px]">
+                      {module.setup}
+                    </code>
+                  ) : null}
+                  {module.setupCommand ? (
+                    <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-white/80 p-2 font-mono text-[11px]">
+                      {module.setupCommand}
+                    </code>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {promptModules.map((module) => (
+          {cloneModules.map((module) => (
             <button
               className="rounded-md border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
               disabled={!module.cloneAllowed || cloningModuleId === module.id}
@@ -5538,14 +5715,20 @@ function VoiceStudioPanel({
   selectedProfileId,
   studioPipelineHint,
   ttsEngines,
+  voiceProfileCredentialError,
+  voiceProfileCredentials,
   onAnalyzeSource,
   onBuildArtifact,
+  onClearHuggingFaceToken,
   onClearSelection,
   onCreateProfileFromCandidate,
   onDeleteProfile,
   onRunConfigurationChange,
+  onSaveHuggingFaceToken,
   onSelectKokoroVoice,
   onSelectProfile,
+  savingHuggingFaceTokenKey,
+  isClearingHuggingFaceToken,
 }: Readonly<{
   buildingArtifactKey: string | null;
   error: string | null;
@@ -5563,8 +5746,11 @@ function VoiceStudioPanel({
   selectedProfileId: string;
   studioPipelineHint: string;
   ttsEngines: TTSEngineDiagnostics[];
+  voiceProfileCredentialError: string | null;
+  voiceProfileCredentials: VoiceProfileCredentialStatus | null;
   onAnalyzeSource: (file: File) => Promise<void>;
   onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onCreateProfileFromCandidate: (
     candidate: VoiceProfileCandidate,
@@ -5572,8 +5758,11 @@ function VoiceStudioPanel({
   ) => Promise<void>;
   onDeleteProfile: (id: string) => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
+  onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
   onSelectKokoroVoice: (voiceId: string) => void;
   onSelectProfile: (id: string) => void;
+  savingHuggingFaceTokenKey: string | null;
+  isClearingHuggingFaceToken: boolean;
 }>) {
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
 
@@ -5597,12 +5786,18 @@ function VoiceStudioPanel({
           selectedProfile={selectedProfile ?? null}
           selectedProfileId={selectedProfileId}
           ttsEngines={ttsEngines}
+          voiceProfileCredentialError={voiceProfileCredentialError}
+          voiceProfileCredentials={voiceProfileCredentials}
           onBuildArtifact={onBuildArtifact}
+          onClearHuggingFaceToken={onClearHuggingFaceToken}
           onClearSelection={onClearSelection}
           onDeleteProfile={onDeleteProfile}
           onRunConfigurationChange={onRunConfigurationChange}
+          onSaveHuggingFaceToken={onSaveHuggingFaceToken}
           onSelectKokoroVoice={onSelectKokoroVoice}
           onSelectProfile={onSelectProfile}
+          savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
+          isClearingHuggingFaceToken={isClearingHuggingFaceToken}
         />
 
         <ScriptReviewPanel job={job} optimizedText={optimizedText} />
@@ -5623,6 +5818,7 @@ function VoiceStudioPanel({
   );
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 function VoiceProfileDropdown({
   buildingArtifactKey,
   isLoading,
@@ -5633,12 +5829,18 @@ function VoiceProfileDropdown({
   selectedProfile,
   selectedProfileId,
   ttsEngines,
+  voiceProfileCredentialError,
+  voiceProfileCredentials,
   onBuildArtifact,
+  onClearHuggingFaceToken,
   onClearSelection,
   onDeleteProfile,
   onRunConfigurationChange,
+  onSaveHuggingFaceToken,
   onSelectKokoroVoice,
   onSelectProfile,
+  savingHuggingFaceTokenKey,
+  isClearingHuggingFaceToken,
 }: Readonly<{
   buildingArtifactKey: string | null;
   isLoading: boolean;
@@ -5649,19 +5851,35 @@ function VoiceProfileDropdown({
   selectedProfile: VoiceProfile | null;
   selectedProfileId: string;
   ttsEngines: TTSEngineDiagnostics[];
+  voiceProfileCredentialError: string | null;
+  voiceProfileCredentials: VoiceProfileCredentialStatus | null;
   onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onDeleteProfile: (id: string) => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
+  onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
   onSelectKokoroVoice: (voiceId: string) => void;
   onSelectProfile: (id: string) => void;
+  savingHuggingFaceTokenKey: string | null;
+  isClearingHuggingFaceToken: boolean;
 }>) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedKokoroVoice = findKokoroVoicepack(selectedKokoroVoiceId);
-  const selectedEngine = findVoicePanelEngine(ttsEngines, runConfiguration.ttsEngine);
+  const engineFamilyValue = kokoroEngineFamilyValue(runConfiguration.ttsEngine);
+  const selectedEngine = findVoicePanelEngine(ttsEngines, engineFamilyValue);
+  const showKokoroRenderModes = isKokoroRenderEngine(runConfiguration.ttsEngine);
+  const activeKokoroRenderMode = kokoroRenderModeForConfiguration(
+    runConfiguration,
+    Boolean(selectedProfile),
+  );
   const selectedEngineBlocked =
     selectedProfile && runConfiguration.options.voiceClone
-      ? isEngineUnavailableForSelectedProfile(selectedEngine, selectedProfile, runConfiguration)
+      ? isEngineUnavailableForSelectedProfile(
+          findVoicePanelEngine(ttsEngines, runConfiguration.ttsEngine) ?? selectedEngine,
+          selectedProfile,
+          runConfiguration,
+        )
       : false;
   const supertonicVoices = selectedEngine?.voices ?? voicePanelSupertonicVoices();
   const supertonicLanguages = voicePanelSupertonicLanguages(selectedEngine);
@@ -5680,6 +5898,12 @@ function VoiceProfileDropdown({
   }
   const updateEngine = (engineId: string) => {
     const engine = findVoicePanelEngine(ttsEngines, engineId);
+    if (engineId === "kokoro") {
+      onRunConfigurationChange(
+        applyKokoroRenderMode(runConfiguration, selectedProfile ? "kokoclone" : "voicepack"),
+      );
+      return;
+    }
     onRunConfigurationChange({
       ...runConfiguration,
       ttsEngine: engineId,
@@ -5694,6 +5918,9 @@ function VoiceProfileDropdown({
           : {},
     });
   };
+  const updateKokoroRenderMode = (mode: KokoroRenderMode) => {
+    onRunConfigurationChange(applyKokoroRenderMode(runConfiguration, mode));
+  };
   const updateEngineOption = (key: string, value: string) => {
     onRunConfigurationChange({
       ...runConfiguration,
@@ -5703,6 +5930,17 @@ function VoiceProfileDropdown({
       },
     });
   };
+  const backendCopy =
+    runConfiguration.ttsEngine === "supertonic-3" || showKokoroRenderModes
+      ? null
+      : "Auto keeps provider selection flexible; choose Kokoro when you want an explicit voicepack, KokoClone, or Kokoro Embed render.";
+  const backendCopyNode = backendCopy ? <span>{backendCopy}</span> : null;
+  const showKokoroVoicepackPicker =
+    activeKokoroRenderMode === "voicepack" || runConfiguration.ttsEngine === "supertonic-3";
+  const kokoroVoicepackControlLabel =
+    runConfiguration.ttsEngine === "supertonic-3"
+      ? "Kokoro fallback voicepack"
+      : "Kokoro voicepack";
 
   return (
     <section className="grid min-w-0 gap-2">
@@ -5744,9 +5982,15 @@ function VoiceProfileDropdown({
             </p>
             <VoiceProfileArtifactControls
               buildingArtifactKey={buildingArtifactKey}
+              credentialError={voiceProfileCredentialError}
+              credentials={voiceProfileCredentials}
+              isClearingHuggingFaceToken={isClearingHuggingFaceToken}
               modules={researchModules}
               profile={selectedProfile}
               onBuildArtifact={onBuildArtifact}
+              onClearHuggingFaceToken={onClearHuggingFaceToken}
+              onSaveHuggingFaceToken={onSaveHuggingFaceToken}
+              savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
             />
           </div>
         ) : null}
@@ -5756,21 +6000,13 @@ function VoiceProfileDropdown({
           <span className="font-semibold text-zinc-800">Narration backend</span>
           <select
             className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
-            value={runConfiguration.ttsEngine}
+            value={engineFamilyValue}
             onChange={(event) => {
               updateEngine(event.currentTarget.value);
             }}
           >
             {voicePanelEngineOptions(ttsEngines).map((engine) => (
-              <option
-                disabled={isEngineUnavailableForSelectedProfile(
-                  engine,
-                  selectedProfile,
-                  runConfiguration,
-                )}
-                key={engine.id}
-                value={engine.id}
-              >
+              <option disabled={engine.status !== "ready"} key={engine.id} value={engine.id}>
                 {engine.label} · {engine.status}
               </option>
             ))}
@@ -5780,7 +6016,23 @@ function VoiceProfileDropdown({
               {voiceProfileTargetReadinessText(selectedProfile, runConfiguration.ttsEngine)}
             </span>
           ) : null}
+          {runConfiguration.ttsEngine === "auto" ? (
+            <span className="text-xs leading-5 text-zinc-500">
+              Auto chooses a sensible default; the Kokoro render mode below makes profile-backed
+              generation explicit.
+            </span>
+          ) : null}
         </label>
+        {showKokoroRenderModes ? (
+          <KokoroRenderModeSelector
+            activeMode={activeKokoroRenderMode}
+            buildingArtifactKey={buildingArtifactKey}
+            modules={researchModules}
+            profile={selectedProfile ?? null}
+            onBuildArtifact={onBuildArtifact}
+            onSelectMode={updateKokoroRenderMode}
+          />
+        ) : null}
         {runConfiguration.ttsEngine === "supertonic-3" ? (
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="grid min-w-0 gap-1">
@@ -5823,33 +6075,36 @@ function VoiceProfileDropdown({
             </span>
           </div>
         ) : (
-          <span>Switch to Supertonic 3 here to choose M/F styles and language.</span>
+          backendCopyNode
         )}
       </section>
-      <label className="grid min-w-0 gap-1 rounded-md border border-zinc-200 bg-white p-3 text-xs text-zinc-600">
-        <span className="font-semibold text-zinc-800">
-          {runConfiguration.ttsEngine === "supertonic-3"
-            ? "Kokoro fallback voicepack"
-            : "Kokoro voicepack"}
-        </span>
-        <select
-          className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
-          value={selectedKokoroVoice?.id ?? DEFAULT_KOKORO_VOICE_ID}
-          onChange={(event) => {
-            onSelectKokoroVoice(event.currentTarget.value);
-          }}
-        >
-          {KOKORO_VOICEPACKS.map((voicepack) => (
-            <option key={voicepack.id} value={voicepack.id}>
-              {voicepack.name} · {voicepack.locale} · {voicepack.id}
-            </option>
-          ))}
-        </select>
-        <span className="truncate" title={kokoroVoicepackDetail(selectedKokoroVoice?.id)}>
-          {kokoroVoicepackDetail(selectedKokoroVoice?.id)}
-          {kokoroDetailSuffix}
-        </span>
-      </label>
+      {showKokoroVoicepackPicker ? (
+        <label className="grid min-w-0 gap-1 rounded-md border border-zinc-200 bg-white p-3 text-xs text-zinc-600">
+          <span className="font-semibold text-zinc-800">{kokoroVoicepackControlLabel}</span>
+          <select
+            className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
+            value={selectedKokoroVoice?.id ?? DEFAULT_KOKORO_VOICE_ID}
+            onChange={(event) => {
+              onSelectKokoroVoice(event.currentTarget.value);
+            }}
+          >
+            {KOKORO_VOICEPACKS.map((voicepack) => (
+              <option key={voicepack.id} value={voicepack.id}>
+                {voicepack.name} · {voicepack.locale} · {voicepack.id}
+              </option>
+            ))}
+          </select>
+          <span className="truncate" title={kokoroVoicepackDetail(selectedKokoroVoice?.id)}>
+            {kokoroVoicepackDetail(selectedKokoroVoice?.id)}
+            {kokoroDetailSuffix}
+          </span>
+        </label>
+      ) : (
+        <p className="rounded-md border border-zinc-200 bg-white p-3 text-xs leading-5 text-zinc-500">
+          Kokoro voicepack fallback: {kokoroVoicepackLabel(selectedKokoroVoice?.id)}. Switch to
+          Kokoro Voicepack to change it for non-cloned renders.
+        </p>
+      )}
       {isLoading ? <p className="text-sm text-zinc-600">Loading profiles...</p> : null}
       {isOpen ? (
         <ul className="max-h-80 min-w-0 overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-sm">
@@ -5857,7 +6112,10 @@ function VoiceProfileDropdown({
             detail="Kokoro voicepacks · non-cloned · ready"
             isActive={selectedProfileId === ""}
             name="Default Voice"
-            onSelect={onClearSelection}
+            onSelect={() => {
+              onClearSelection();
+              setIsOpen(false);
+            }}
           />
           {profiles.map((profile) => (
             <VoiceProfileOption
@@ -5875,6 +6133,7 @@ function VoiceProfileDropdown({
               }}
               onSelect={() => {
                 onSelectProfile(profile.id);
+                setIsOpen(false);
               }}
             />
           ))}
@@ -5884,16 +6143,234 @@ function VoiceProfileDropdown({
   );
 }
 
-function VoiceProfileArtifactControls({
+function KokoroRenderModeSelector({
+  activeMode,
   buildingArtifactKey,
   modules,
   profile,
   onBuildArtifact,
+  onSelectMode,
+}: Readonly<{
+  activeMode: KokoroRenderMode;
+  buildingArtifactKey: string | null;
+  modules: ResearchModuleDiagnostics[];
+  profile: VoiceProfile | null;
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onSelectMode: (mode: KokoroRenderMode) => void;
+}>) {
+  return (
+    <div className="grid min-w-0 gap-2">
+      <span className="font-semibold text-zinc-800">Kokoro render mode</span>
+      <div className="grid gap-2">
+        {KOKORO_RENDER_MODE_OPTIONS.map((option) => {
+          const readiness = kokoroRenderModeReadiness(option.id, profile, modules);
+          const targetId = kokoroRenderModeTargetId(option.id);
+          const isBusy =
+            targetId !== null &&
+            profile !== null &&
+            (buildingArtifactKey === `${profile.id}:${targetId}` ||
+              ["queued", "building", "validating"].includes(
+                profile.cloneTargets?.[targetId]?.status ?? "",
+              ));
+          const selected = option.id === activeMode;
+          const canSelect = readiness.ready;
+          const canPrepare = Boolean(profile && targetId && readiness.canPrepare && !isBusy);
+          return (
+            <div
+              className={`rounded-md border p-2 ${
+                selected ? "border-orange-300 bg-orange-50" : "border-zinc-200 bg-white"
+              }`}
+              key={option.id}
+            >
+              <button
+                className="grid w-full min-w-0 gap-1 text-left disabled:cursor-not-allowed"
+                disabled={!canSelect}
+                onClick={() => {
+                  onSelectMode(option.id);
+                }}
+                type="button"
+              >
+                <span className="flex min-w-0 items-center justify-between gap-2">
+                  <span className="truncate text-sm font-semibold text-zinc-950">
+                    {option.label}
+                  </span>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-1 text-[0.65rem] font-semibold ${kokoroRenderModeStatusClass(
+                      readiness.status,
+                      readiness.ready,
+                    )}`}
+                  >
+                    {readiness.status}
+                  </span>
+                </span>
+                <span className="text-xs leading-5 text-zinc-600">{option.detail}</span>
+                <span className="text-xs leading-5 text-zinc-500">{readiness.detail}</span>
+              </button>
+              {canPrepare && profile && targetId ? (
+                <button
+                  className="mt-2 rounded border border-orange-200 bg-white px-2 py-1 text-xs font-semibold text-orange-800 hover:bg-orange-100"
+                  onClick={() => {
+                    void onBuildArtifact(profile.id, targetId);
+                  }}
+                  type="button"
+                >
+                  {isBusy ? "Preparing..." : "Prepare target"}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function kokoroRenderModeTargetId(mode: KokoroRenderMode): string | null {
+  if (mode === "kokoclone") {
+    return "kokoro-clone";
+  }
+  if (mode === "kokoro-embed") {
+    return "kokoro-embed";
+  }
+  return null;
+}
+
+function kokoroRenderModeReadiness(
+  mode: KokoroRenderMode,
+  profile: VoiceProfile | null,
+  modules: ResearchModuleDiagnostics[],
+): { ready: boolean; status: string; detail: string; canPrepare: boolean } {
+  const targetId = kokoroRenderModeTargetId(mode);
+  if (!targetId) {
+    return {
+      ready: true,
+      status: "ready",
+      detail: "No voice profile target is required.",
+      canPrepare: false,
+    };
+  }
+  if (!profile) {
+    return {
+      ready: false,
+      status: "profile needed",
+      detail: "Select a voice profile before using profile-backed rendering.",
+      canPrepare: false,
+    };
+  }
+  const module = modules.find((item) => item.id === targetId);
+  const target = profile.cloneTargets?.[targetId];
+  const isInstalled = targetId === "kokoro-clone" || (module?.installed ?? false);
+  const runtimeReady = targetId === "kokoro-clone" || researchModuleRuntimeReady(module);
+  if (!isInstalled) {
+    return {
+      ready: false,
+      status: "setup needed",
+      detail: `${moduleLabel(targetId)} needs its optional local module cloned first.`,
+      canPrepare: false,
+    };
+  }
+  if (!runtimeReady) {
+    return {
+      ready: false,
+      status: "setup needed",
+      detail: module?.reason ?? "Run the isolated voice-embed setup before preparing this target.",
+      canPrepare: false,
+    };
+  }
+  if (!target) {
+    return targetId === "kokoro-clone"
+      ? {
+          ready: true,
+          status: "ready",
+          detail: "Legacy KokoClone rendering can use the reference audio immediately.",
+          canPrepare: true,
+        }
+      : {
+          ready: false,
+          status: "not built",
+          detail: `${moduleLabel(targetId)} has not been prepared for this profile yet.`,
+          canPrepare: true,
+        };
+  }
+  if (target.status === "ready") {
+    if (target.validation?.status === "failed") {
+      return {
+        ready: true,
+        status: "check needed",
+        detail: target.validation.error ?? "Rendering is ready; validation can be re-run.",
+        canPrepare: true,
+      };
+    }
+    const score = target.validation?.score;
+    return {
+      ready: true,
+      status:
+        typeof score === "number" && Number.isFinite(score)
+          ? String(Math.round(score * 100))
+          : "ready",
+      detail: `${moduleLabel(targetId)} is ready for this profile.`,
+      canPrepare: true,
+    };
+  }
+  if (target.status === "failed") {
+    return {
+      ready: false,
+      status: "failed",
+      detail: target.error ?? target.validation?.error ?? `${moduleLabel(targetId)} failed.`,
+      canPrepare: true,
+    };
+  }
+  if (target.status === "selected") {
+    return {
+      ready: false,
+      status: "not built",
+      detail: `${moduleLabel(targetId)} is selected for this profile and can be prepared now.`,
+      canPrepare: true,
+    };
+  }
+  return {
+    ready: false,
+    status: target.status,
+    detail: `${moduleLabel(targetId)} is ${target.status}.`,
+    canPrepare: false,
+  };
+}
+
+function kokoroRenderModeStatusClass(status: string, ready: boolean): string {
+  if (status === "failed") {
+    return "bg-red-100 text-red-700";
+  }
+  if (ready && status !== "check needed") {
+    return "bg-emerald-100 text-emerald-700";
+  }
+  if (status === "check needed") {
+    return "bg-amber-100 text-amber-800";
+  }
+  return "bg-zinc-100 text-zinc-600";
+}
+
+function VoiceProfileArtifactControls({
+  buildingArtifactKey,
+  credentialError,
+  credentials,
+  isClearingHuggingFaceToken,
+  modules,
+  profile,
+  onBuildArtifact,
+  onClearHuggingFaceToken,
+  onSaveHuggingFaceToken,
+  savingHuggingFaceTokenKey,
 }: Readonly<{
   buildingArtifactKey: string | null;
+  credentialError: string | null;
+  credentials: VoiceProfileCredentialStatus | null;
+  isClearingHuggingFaceToken: boolean;
   modules: ResearchModuleDiagnostics[];
   profile: VoiceProfile;
   onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onClearHuggingFaceToken: () => void;
+  onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
+  savingHuggingFaceTokenKey: string | null;
 }>) {
   const issues = voiceProfileTargetIssues(profile, modules);
   return (
@@ -5970,12 +6447,118 @@ function VoiceProfileArtifactControls({
                   {issue.command}
                 </code>
               ) : null}
+              {issue.requiresHuggingFaceToken ? (
+                <HuggingFaceTokenPrompt
+                  credentialError={credentialError}
+                  credentials={credentials}
+                  isClearing={isClearingHuggingFaceToken}
+                  isSaving={savingHuggingFaceTokenKey === `${profile.id}:${issue.moduleId}`}
+                  onClear={onClearHuggingFaceToken}
+                  onRevalidate={() => onBuildArtifact(profile.id, issue.moduleId)}
+                  onSave={(token) => onSaveHuggingFaceToken(profile.id, issue.moduleId, token)}
+                />
+              ) : null}
             </div>
           ))}
         </div>
       ) : null}
     </div>
   );
+}
+
+function HuggingFaceTokenPrompt({
+  credentialError,
+  credentials,
+  isClearing,
+  isSaving,
+  onClear,
+  onRevalidate,
+  onSave,
+}: Readonly<{
+  credentialError: string | null;
+  credentials: VoiceProfileCredentialStatus | null;
+  isClearing: boolean;
+  isSaving: boolean;
+  onClear: () => void;
+  onRevalidate: () => Promise<void>;
+  onSave: (token: string) => Promise<void>;
+}>) {
+  const [token, setToken] = useState("");
+  const source = credentials?.huggingFaceTokenSource ?? "none";
+  const hasConfiguredToken = credentials?.huggingFaceTokenConfigured ?? false;
+  const sourceLabel = huggingFaceCredentialSourceLabel(source);
+  const saveLabel = hasConfiguredToken ? "Update token & re-validate" : "Save token & re-validate";
+  return (
+    <div className="mt-3 grid gap-2 rounded-md border border-amber-200 bg-white/80 p-2">
+      <p className="text-xs font-semibold text-amber-950">
+        Hugging Face access:{" "}
+        {hasConfiguredToken ? `Token configured from ${sourceLabel}` : "Token not configured"}
+      </p>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <input
+          autoComplete="off"
+          className="min-w-0 rounded-md border border-amber-200 bg-white px-2 py-2 text-xs text-zinc-950 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+          onChange={(event) => {
+            setToken(event.currentTarget.value);
+          }}
+          placeholder={hasConfiguredToken ? "Paste a replacement token" : "Paste HF token"}
+          type="password"
+          value={token}
+        />
+        <button
+          className="rounded-md bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          disabled={isSaving || token.trim().length === 0}
+          onClick={() => {
+            const clean = token.trim();
+            if (clean.length === 0) {
+              return;
+            }
+            void onSave(clean).then(() => {
+              setToken("");
+            });
+          }}
+          type="button"
+        >
+          {isSaving ? "Saving..." : saveLabel}
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {hasConfiguredToken ? (
+          <button
+            className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            disabled={isSaving}
+            onClick={() => {
+              void onRevalidate();
+            }}
+            type="button"
+          >
+            Re-validate
+          </button>
+        ) : null}
+        {source === "local" ? (
+          <button
+            className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
+            disabled={isClearing || isSaving}
+            onClick={onClear}
+            type="button"
+          >
+            {isClearing ? "Clearing..." : "Clear local token"}
+          </button>
+        ) : null}
+      </div>
+      {credentialError ? <p className="text-xs text-red-700">{credentialError}</p> : null}
+    </div>
+  );
+}
+
+function huggingFaceCredentialSourceLabel(source: string): string {
+  if (source === "local") {
+    return "local";
+  }
+  if (source === "env") {
+    return "environment";
+  }
+  return "not configured";
 }
 
 function ProfileOptionArtifactStrip({
@@ -6034,7 +6617,7 @@ function ArtifactChip({
   }
   return (
     <span
-      className={`rounded-full border px-2 py-1 text-[0.65rem] font-semibold ${className}`}
+      className={`whitespace-nowrap rounded-md border px-2 py-1 text-[0.65rem] font-semibold leading-none ${className}`}
       title={
         target?.validation?.error ?? target?.error ?? artifact?.error ?? module?.reason ?? status
       }
@@ -6115,9 +6698,11 @@ function targetBuildButtonLabel({
 interface VoiceProfileTargetIssue {
   key: string;
   label: string;
+  moduleId: string;
   title: string;
   detail: string;
   command?: string;
+  requiresHuggingFaceToken?: boolean;
   severity: "error" | "warning";
 }
 
@@ -6135,6 +6720,7 @@ function voiceProfileTargetIssues(
       issues.push({
         key: `${moduleId}:runtime`,
         label,
+        moduleId,
         title: "Runtime setup needed",
         detail:
           module.reason ??
@@ -6149,9 +6735,11 @@ function voiceProfileTargetIssues(
       issues.push({
         key: `${moduleId}:validation`,
         label,
+        moduleId,
         title: "Rendering is ready; validation needs attention",
         detail: normalized.detail,
         command: normalized.command,
+        requiresHuggingFaceToken: normalized.requiresHuggingFaceToken,
         severity: "warning",
       });
       continue;
@@ -6164,9 +6752,11 @@ function voiceProfileTargetIssues(
       issues.push({
         key: `${moduleId}:target`,
         label,
+        moduleId,
         title: "Preparation failed",
         detail: normalized.detail,
         command: normalized.command,
+        requiresHuggingFaceToken: normalized.requiresHuggingFaceToken,
         severity: "error",
       });
       continue;
@@ -6176,61 +6766,16 @@ function voiceProfileTargetIssues(
       issues.push({
         key: `${moduleId}:artifact`,
         label,
+        moduleId,
         title: "Artifact build failed",
         detail: normalized.detail,
         command: normalized.command,
+        requiresHuggingFaceToken: normalized.requiresHuggingFaceToken,
         severity: "error",
       });
     }
   }
   return issues;
-}
-
-function humanizeProfileTargetProblem(
-  message: string,
-  module?: ResearchModuleDiagnostics,
-): { detail: string; command?: string } {
-  const clean = message.trim();
-  const lower = clean.toLowerCase();
-  const setupCommand = module?.setupCommand ?? "VOICE_EMBED_INSTALL_DEPS=1 mise setup:voice-embed";
-  if (lower.includes("pyannote/embedding") || lower.includes("gated repo")) {
-    return {
-      detail:
-        "Speaker likeness validation needs access to the gated pyannote/embedding model. Rendering is available; add a Hugging Face token or configure a local embedding model, then re-validate.",
-    };
-  }
-  const missingModule = /No module named ['"]([^'"]+)['"]/i.exec(clean)?.[1];
-  if (missingModule) {
-    return {
-      detail: `The Voice Embed runtime is missing the Python package ${missingModule}. Install the optional embed dependencies, then retry this target.`,
-      command: setupCommand,
-    };
-  }
-  if (lower.includes("voice embed runtime")) {
-    return {
-      detail: clean,
-      command: setupCommand,
-    };
-  }
-  if (lower.includes("tts engine") && lower.includes("unavailable")) {
-    return {
-      detail:
-        "The style artifact is ready, but the validation render could not run because this backend is unavailable in the current runtime. Start the app with that backend enabled, then re-validate.",
-      command: module?.setupCommand,
-    };
-  }
-  if (lower.includes("profile artifact build failed")) {
-    return {
-      detail:
-        clean ||
-        "The artifact builder exited before creating a style file. Check the module setup and retry.",
-      command: module?.setupCommand,
-    };
-  }
-  return {
-    detail: clean || "This target could not be prepared. Retry after checking the backend logs.",
-    command: module?.setupCommand,
-  };
 }
 
 function researchModuleRuntimeReady(module: ResearchModuleDiagnostics | undefined): boolean {
@@ -6270,7 +6815,7 @@ function artifactChipClass(ready: boolean, failed: boolean): string {
 
 function voicePanelEngineOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiagnostics[] {
   if (engines.length > 0) {
-    return engines;
+    return engines.filter((engine) => engine.id !== "kokoro-clone" && engine.id !== "kokoro-embed");
   }
   return [
     {

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyKokoroRenderMode,
   buildCreateVoiceJobRequest,
   createRunConfiguration,
+  kokoroEngineFamilyValue,
+  kokoroRenderModeForConfiguration,
   normalizeRunConfiguration,
   resolveRunPrimaryLabel,
 } from "./runConfig";
@@ -75,5 +78,25 @@ describe("run configuration helpers", () => {
     const draftRequest = buildCreateVoiceJobRequest("Hello", draft, "profile-1");
     expect(draftRequest.voiceProfileId).toBeUndefined();
     expect(draftRequest.pipelineOptions?.voiceClone).toBe(false);
+  });
+
+  it("maps Kokoro render modes to engine ids and clone intent", () => {
+    const base = createRunConfiguration("checkedMaster");
+
+    const voicepack = applyKokoroRenderMode(base, "voicepack");
+    expect(voicepack.ttsEngine).toBe("kokoro");
+    expect(voicepack.options.voiceClone).toBe(false);
+    expect(kokoroRenderModeForConfiguration(voicepack)).toBe("voicepack");
+
+    const clone = applyKokoroRenderMode(base, "kokoclone");
+    expect(clone.ttsEngine).toBe("kokoro-clone");
+    expect(clone.options.voiceClone).toBe(true);
+    expect(kokoroRenderModeForConfiguration(clone)).toBe("kokoclone");
+
+    const embed = applyKokoroRenderMode(base, "kokoro-embed");
+    expect(embed.ttsEngine).toBe("kokoro-embed");
+    expect(embed.options.voiceClone).toBe(true);
+    expect(kokoroRenderModeForConfiguration(embed)).toBe("kokoro-embed");
+    expect(kokoroEngineFamilyValue(embed.ttsEngine)).toBe("kokoro");
   });
 });

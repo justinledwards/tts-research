@@ -1,5 +1,27 @@
 # Working Log
 
+## 2026-05-17 18:16 CEST - HF token validation retry fix
+- [x] Trace token status versus validation retry path.
+- [x] Fix backend/frontend re-validation so saved HF token is used.
+- [x] Add regression coverage for token-backed re-validation.
+- [x] Fix profile-analysis missing dependency setup guidance.
+- [x] Detect saved local Hugging Face token during startup dependency bootstrap.
+- [x] Validate checks and commit/amend as appropriate.
+
+## 2026-05-17 17:38 CEST - HF token prompt and Kokoro render mode polish
+- [x] Add local Hugging Face token credential status/save/clear APIs.
+- [x] Use active token for voice profile likeness validation retries.
+- [x] Replace flat Kokoro engine selection with ergonomic render mode choices.
+- [x] Clean recent voice-profile/embed working log entries before amend.
+- [x] Validate checks and rendered selector flow, then amend commit.
+
+## 2026-05-17 17:07 CEST - Embed setup polish and profile loading fix
+- [x] Stabilize profile creation polling so “Loading profiles...” does not flicker.
+- [x] Harden Kokoro/Supertonic embed artifact setup preflights.
+- [x] Improve target failure messages into actionable setup/retry guidance.
+- [x] Validate with focused backend checks and Playwright UI smoke on alternate ports.
+- [x] Commit the polished workpackage.
+
 ## 2026-05-17 14:10 CEST - Profile target failure ergonomics
 - [x] Trace failed demo clone target state.
 - [x] Fix target preparation behavior where it is brittle.

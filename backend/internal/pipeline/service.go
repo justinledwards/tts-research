@@ -146,6 +146,7 @@ type Options struct {
 	VoiceProfileDiarizationModelPath     string
 	VoiceProfileDiarizationLocalModelDir string
 	VoiceProfileDiarizationToken         string
+	VoiceProfileCredentialsPath          string
 	VoiceProfileAnalysisPythonPath       string
 	VoiceProfileAnalysisScriptPath       string
 	VoiceProfileAnalysisStrategyVersion  string
@@ -194,6 +195,7 @@ const (
 	defaultVoiceProfileReferenceTargetSeconds  = 45
 	defaultVoiceProfileReferenceMaxSeconds     = 60
 	defaultVoiceProfileDiarizationModel        = "pyannote/speaker-diarization-community-1"
+	defaultVoiceProfileCredentialsPath         = "./data/local-credentials/huggingface.json"
 	defaultVoiceProfileAnalysisPythonPath      = "python3"
 	defaultVoiceProfileAnalysisScriptPath      = "./scripts/profile_analyze.py"
 	defaultVoiceProfileAnalysisStrategyVersion = "speaker-aware-v1"
@@ -442,6 +444,9 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	}
 	if strings.TrimSpace(options.VoiceProfileDiarizationModel) == "" {
 		options.VoiceProfileDiarizationModel = defaultVoiceProfileDiarizationModel
+	}
+	if strings.TrimSpace(options.VoiceProfileCredentialsPath) == "" {
+		options.VoiceProfileCredentialsPath = defaultVoiceProfileCredentialsPath
 	}
 	if strings.TrimSpace(options.VoiceProfileAnalysisPythonPath) == "" {
 		options.VoiceProfileAnalysisPythonPath = defaultVoiceProfileAnalysisPythonPath

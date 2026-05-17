@@ -36,6 +36,7 @@ import type {
   TTSEngineDiagnostics,
   Voice,
   VoiceJob,
+  VoiceProfileCredentialStatus,
   VoiceProfile,
   VoiceProfileSource,
   VoiceProfileSourceDiagnostics,
@@ -844,6 +845,41 @@ export async function listResearchModules(): Promise<ResearchModuleDiagnostics[]
   }
 
   return response.json() as Promise<ResearchModuleDiagnostics[]>;
+}
+
+export async function getVoiceProfileCredentials(): Promise<VoiceProfileCredentialStatus> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-profile-credentials`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfileCredentialStatus>;
+}
+
+export async function saveHuggingFaceToken(token: string): Promise<VoiceProfileCredentialStatus> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-profile-credentials/hugging-face-token`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ token }),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfileCredentialStatus>;
+}
+
+export async function clearHuggingFaceToken(): Promise<VoiceProfileCredentialStatus> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-profile-credentials/hugging-face-token`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfileCredentialStatus>;
 }
 
 export async function cloneResearchModule(id: string): Promise<ResearchModuleDiagnostics> {

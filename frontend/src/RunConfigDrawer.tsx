@@ -1,11 +1,17 @@
 import { useEffect } from "react";
 import type { RunConfiguration } from "./runConfig";
 import {
+  KOKORO_RENDER_MODE_OPTIONS,
   RUN_MODE_PRESETS,
+  applyKokoroRenderMode,
   createRunConfiguration,
   describePerformanceMode,
   getRunModePreset,
+  isKokoroRenderEngine,
+  kokoroEngineFamilyValue,
+  kokoroRenderModeForConfiguration,
   resolveRunPrimaryLabel,
+  type KokoroRenderMode,
 } from "./runConfig";
 import type {
   PerformanceMode,
@@ -84,15 +90,26 @@ export function RunConfigDrawer({
   }
 
   const preset = getRunModePreset(runConfiguration.runMode);
+  const engineFamilyValue = kokoroEngineFamilyValue(runConfiguration.ttsEngine);
+  const showKokoroRenderModes = isKokoroRenderEngine(runConfiguration.ttsEngine);
+  const activeKokoroRenderMode = kokoroRenderModeForConfiguration(
+    runConfiguration,
+    Boolean(selectedProfile),
+  );
 
   const updateOption = (key: keyof PipelineOptions, value: boolean) => {
-    onChange({
+    const nextConfiguration = {
       ...runConfiguration,
       options: {
         ...runConfiguration.options,
         [key]: value,
       },
-    });
+    };
+    if (key === "voiceClone" && isKokoroRenderEngine(runConfiguration.ttsEngine)) {
+      onChange(applyKokoroRenderMode(nextConfiguration, value ? "kokoclone" : "voicepack"));
+      return;
+    }
+    onChange(nextConfiguration);
   };
 
   const updateMode = (mode: RunMode) => {
@@ -109,6 +126,12 @@ export function RunConfigDrawer({
   const updateTTSEngine = (engineId: string) => {
     const selectedEngine = ttsEngines.find((engine) => engine.id === engineId);
     const firstVoice = selectedEngine?.voices?.[0]?.id;
+    if (engineId === "kokoro") {
+      onChange(
+        applyKokoroRenderMode(runConfiguration, selectedProfile ? "kokoclone" : "voicepack"),
+      );
+      return;
+    }
     onChange({
       ...runConfiguration,
       ttsEngine: engineId,
@@ -121,6 +144,10 @@ export function RunConfigDrawer({
             }
           : {},
     });
+  };
+
+  const updateKokoroRenderMode = (mode: KokoroRenderMode) => {
+    onChange(applyKokoroRenderMode(runConfiguration, mode));
   };
 
   const updateEngineOption = (key: string, value: string) => {
@@ -193,29 +220,38 @@ export function RunConfigDrawer({
                 onChange={(event) => {
                   updateTTSEngine(event.currentTarget.value);
                 }}
-                value={runConfiguration.ttsEngine}
+                value={engineFamilyValue}
               >
-                {(ttsEngines.length > 0 ? ttsEngines : fallbackTTSEngines()).map((engine) => (
-                  <option
-                    disabled={isEngineUnavailableForSelectedProfile(
-                      engine,
-                      selectedProfile,
-                      runConfiguration,
-                    )}
-                    key={engine.id}
-                    value={engine.id}
-                  >
+                {drawerEngineFamilyOptions(ttsEngines).map((engine) => (
+                  <option disabled={engine.status !== "ready"} key={engine.id} value={engine.id}>
                     {engine.label} · {engine.status}
                   </option>
                 ))}
               </select>
+              {runConfiguration.ttsEngine === "auto" ? (
+                <p className="text-sm leading-5 text-zinc-500">
+                  Auto chooses a sensible default; use the Kokoro render mode below when you want a
+                  specific profile-backed path.
+                </p>
+              ) : null}
               <EngineDiagnosticsCard
-                engine={findEngine(ttsEngines, runConfiguration.ttsEngine)}
+                engine={
+                  findEngine(ttsEngines, runConfiguration.ttsEngine) ??
+                  findEngine(ttsEngines, engineFamilyValue)
+                }
                 error={ttsEngineError}
                 onPrepareProfileTarget={onPrepareProfileTarget}
                 runConfiguration={runConfiguration}
                 selectedProfile={selectedProfile}
               />
+              {showKokoroRenderModes ? (
+                <DrawerKokoroRenderModeSelector
+                  activeMode={activeKokoroRenderMode}
+                  profile={selectedProfile}
+                  onPrepareProfileTarget={onPrepareProfileTarget}
+                  onSelectMode={updateKokoroRenderMode}
+                />
+              ) : null}
               {runConfiguration.ttsEngine === "supertonic-3" ? (
                 <SupertonicOptions
                   engine={findEngine(ttsEngines, "supertonic-3")}
@@ -384,6 +420,178 @@ function EngineDiagnosticsCard({
   );
 }
 
+function DrawerKokoroRenderModeSelector({
+  activeMode,
+  profile,
+  onPrepareProfileTarget,
+  onSelectMode,
+}: Readonly<{
+  activeMode: KokoroRenderMode;
+  profile: VoiceProfile | null;
+  onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
+  onSelectMode: (mode: KokoroRenderMode) => void;
+}>) {
+  return (
+    <div className="grid gap-2 rounded-md border border-zinc-200 bg-white p-3">
+      <p className="text-sm font-semibold text-zinc-950">Kokoro Render Mode</p>
+      <div className="grid gap-2">
+        {KOKORO_RENDER_MODE_OPTIONS.map((option) => {
+          const readiness = drawerKokoroModeReadiness(option.id, profile);
+          const targetId = drawerKokoroModeTargetId(option.id);
+          const selected = option.id === activeMode;
+          const canPrepare = Boolean(profile && targetId && readiness.canPrepare);
+          return (
+            <div
+              className={`rounded-md border p-3 ${
+                selected ? "border-orange-300 bg-orange-50" : "border-zinc-200 bg-zinc-50"
+              }`}
+              key={option.id}
+            >
+              <button
+                className="grid w-full gap-1 text-left disabled:cursor-not-allowed"
+                disabled={!readiness.ready}
+                onClick={() => {
+                  onSelectMode(option.id);
+                }}
+                type="button"
+              >
+                <span className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-zinc-950">{option.label}</span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-[0.65rem] font-semibold ${drawerKokoroModeStatusClass(
+                      readiness.ready,
+                      readiness.status,
+                    )}`}
+                  >
+                    {readiness.status}
+                  </span>
+                </span>
+                <span className="text-sm leading-5 text-zinc-600">{option.detail}</span>
+                <span className="text-xs leading-5 text-zinc-500">{readiness.detail}</span>
+              </button>
+              {canPrepare && profile && targetId ? (
+                <button
+                  className="mt-2 rounded border border-orange-200 bg-white px-2 py-1 text-xs font-semibold text-orange-800 hover:bg-orange-100"
+                  onClick={() => {
+                    void onPrepareProfileTarget(profile.id, targetId);
+                  }}
+                  type="button"
+                >
+                  Prepare target
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function drawerKokoroModeTargetId(mode: KokoroRenderMode): string | null {
+  if (mode === "kokoclone") {
+    return "kokoro-clone";
+  }
+  if (mode === "kokoro-embed") {
+    return "kokoro-embed";
+  }
+  return null;
+}
+
+function drawerKokoroModeReadiness(
+  mode: KokoroRenderMode,
+  profile: VoiceProfile | null,
+): { ready: boolean; status: string; detail: string; canPrepare: boolean } {
+  const targetId = drawerKokoroModeTargetId(mode);
+  if (!targetId) {
+    return {
+      ready: true,
+      status: "ready",
+      detail: "Uses the selected built-in Kokoro voicepack.",
+      canPrepare: false,
+    };
+  }
+  if (!profile) {
+    return {
+      ready: false,
+      status: "profile needed",
+      detail: "Select a voice profile before using profile-backed Kokoro rendering.",
+      canPrepare: false,
+    };
+  }
+  const target = profile.cloneTargets?.[targetId];
+  if (!target) {
+    return targetId === "kokoro-clone"
+      ? {
+          ready: true,
+          status: "ready",
+          detail: "KokoClone can use the selected reference audio.",
+          canPrepare: true,
+        }
+      : {
+          ready: false,
+          status: "not built",
+          detail: "Prepare this profile target before rendering.",
+          canPrepare: true,
+        };
+  }
+  if (target.status === "ready") {
+    if (target.validation?.status === "failed") {
+      return {
+        ready: true,
+        status: "check needed",
+        detail: target.validation.error ?? "Rendering is ready; validation can be re-run.",
+        canPrepare: true,
+      };
+    }
+    const score = target.validation?.score;
+    return {
+      ready: true,
+      status:
+        typeof score === "number" && Number.isFinite(score)
+          ? String(Math.round(score * 100))
+          : "ready",
+      detail: "Ready for the selected voice profile.",
+      canPrepare: true,
+    };
+  }
+  if (target.status === "failed") {
+    return {
+      ready: false,
+      status: "failed",
+      detail: target.error ?? target.validation?.error ?? "Preparation failed.",
+      canPrepare: true,
+    };
+  }
+  if (target.status === "selected") {
+    return {
+      ready: false,
+      status: "not built",
+      detail: "This profile target is selected and can be prepared now.",
+      canPrepare: true,
+    };
+  }
+  return {
+    ready: false,
+    status: target.status,
+    detail: `Target is ${target.status}.`,
+    canPrepare: false,
+  };
+}
+
+function drawerKokoroModeStatusClass(ready: boolean, status: string): string {
+  if (status === "failed") {
+    return "bg-red-100 text-red-700";
+  }
+  if (ready && status !== "check needed") {
+    return "bg-emerald-100 text-emerald-700";
+  }
+  if (status === "check needed") {
+    return "bg-amber-100 text-amber-800";
+  }
+  return "bg-zinc-100 text-zinc-600";
+}
+
 function profileReadinessForEngine(
   engineId: string,
   profile: VoiceProfile,
@@ -481,18 +689,9 @@ function findEngine(
   return engines.find((engine) => engine.id === engineId);
 }
 
-function isEngineUnavailableForSelectedProfile(
-  engine: TTSEngineDiagnostics,
-  profile: VoiceProfile | null,
-  runConfiguration: RunConfiguration,
-): boolean {
-  if (engine.status !== "ready") {
-    return true;
-  }
-  if (!profile || !runConfiguration.options.voiceClone) {
-    return false;
-  }
-  return !isVoiceProfileTargetReadyForEngine(profile, engine.id);
+function drawerEngineFamilyOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiagnostics[] {
+  const source = engines.length > 0 ? engines : fallbackTTSEngines();
+  return source.filter((engine) => engine.id !== "kokoro-clone" && engine.id !== "kokoro-embed");
 }
 
 function fallbackTTSEngines(): TTSEngineDiagnostics[] {

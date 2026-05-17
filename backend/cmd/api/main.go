@@ -247,6 +247,7 @@ func main() {
 			VoiceProfileDiarizationModelPath:     strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_MODEL_PATH")),
 			VoiceProfileDiarizationLocalModelDir: strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR")),
 			VoiceProfileDiarizationToken:         voiceProfileDiarizationToken,
+			VoiceProfileCredentialsPath:          envWithDefault("VOICE_PROFILE_CREDENTIALS_PATH", "./data/local-credentials/huggingface.json"),
 			VoiceProfileAnalysisPythonPath:       envWithDefault("VOICE_PROFILE_ANALYSIS_PYTHON_PATH", "python3"),
 			VoiceProfileAnalysisScriptPath:       envWithDefault("VOICE_PROFILE_ANALYSIS_SCRIPT_PATH", "./scripts/profile_analyze.py"),
 			VoiceProfileAnalysisStrategyVersion:  envWithDefault("VOICE_PROFILE_ANALYSIS_STRATEGY_VERSION", "speaker-aware-v1"),

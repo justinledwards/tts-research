@@ -51,6 +51,7 @@ def main() -> int:
         raise SystemExit(f"{args.module_id} is not installed at {upstream_dir}")
 
     name = safe_name(f"tts_research_{args.profile_id}_{args.module_id}")
+    prepare_upstream_workspace(args.module_id, upstream_dir, name)
     upstream_wav = upstream_dir / "wavs" / f"{name}.wav"
     upstream_wav.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(reference, upstream_wav)
@@ -114,6 +115,26 @@ def main() -> int:
     }
     print(json.dumps(result))
     return 0
+
+
+def prepare_upstream_workspace(module_id: str, upstream_dir: Path, name: str) -> None:
+    if module_id == "kokoro-embed":
+        # The upstream optimizer assumes this directory exists before falling back
+        # to the built-in Kokoro preset list.
+        (upstream_dir / "kokoro" / "voices").mkdir(parents=True, exist_ok=True)
+    if module_id == "supertonic-embed":
+        remove_non_step_checkpoints(upstream_dir, name)
+
+
+def remove_non_step_checkpoints(upstream_dir: Path, name: str) -> None:
+    log_dir = upstream_dir / "logs" / name
+    if not log_dir.exists():
+        return
+    step_checkpoint = re.compile(rf"^{re.escape(name)}_\d+\.json$")
+    for checkpoint in log_dir.glob(f"{name}_*.json"):
+        if step_checkpoint.match(checkpoint.name):
+            continue
+        checkpoint.unlink(missing_ok=True)
 
 
 def write_fake_artifact(args: argparse.Namespace, module: dict[str, Any], output_dir: Path) -> dict[str, Any]:

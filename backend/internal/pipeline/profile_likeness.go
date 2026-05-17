@@ -73,7 +73,12 @@ func (scorer pythonProfileLikenessScorer) ScoreVoiceProfileLikeness(
 		"--model",
 		model,
 	)
-	command.Env = append(os.Environ(), "PYANNOTE_METRICS_ENABLED=0", "PYANNOTE_AUTH_TOKEN="+token)
+	command.Env = append(
+		os.Environ(),
+		"PYANNOTE_METRICS_ENABLED=0",
+		"PYANNOTE_AUTH_TOKEN="+token,
+		"HF_TOKEN="+token,
+	)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	command.Stdout = &stdout

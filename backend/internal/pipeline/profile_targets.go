@@ -339,7 +339,8 @@ func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileI
 	transcriptSimilarity := clamp01(check.Similarity)
 	speakerScore := VoiceProfileLikenessResult{}
 	if service.options.VoiceProfileLikenessScorer != nil {
-		if setupWarning := service.voiceProfileSpeakerLikenessSetupWarning(); setupWarning != "" {
+		activeToken, _ := service.activeVoiceProfileHuggingFaceToken()
+		if setupWarning := service.voiceProfileSpeakerLikenessSetupWarning(activeToken); setupWarning != "" {
 			validation := failedReadyTargetValidation(
 				setupWarning,
 				result,
@@ -360,7 +361,7 @@ func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileI
 			ReferencePath: profile.ReferencePath,
 			GeneratedPath: generatedPath,
 			Model:         service.options.VoiceProfileEmbeddingModel,
-			Token:         service.options.VoiceProfileDiarizationToken,
+			Token:         activeToken,
 		})
 		if err != nil {
 			validation := failedReadyTargetValidation(
@@ -408,12 +409,12 @@ func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileI
 	_, _ = service.completeVoiceProfileTargetValidation(profileID, targetID, validation)
 }
 
-func (service *Service) voiceProfileSpeakerLikenessSetupWarning() string {
+func (service *Service) voiceProfileSpeakerLikenessSetupWarning(activeToken string) string {
 	model := strings.TrimSpace(service.options.VoiceProfileEmbeddingModel)
 	if model == "" {
 		model = defaultVoiceProfileEmbeddingModel
 	}
-	if strings.TrimSpace(service.options.VoiceProfileDiarizationToken) != "" {
+	if strings.TrimSpace(activeToken) != "" {
 		return ""
 	}
 	modelKey := strings.ToLower(model)

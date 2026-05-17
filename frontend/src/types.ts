@@ -609,6 +609,13 @@ export interface ResearchModuleDiagnostics {
   setupCommand?: string;
 }
 
+export type VoiceProfileCredentialSource = "local" | "env" | "none";
+
+export interface VoiceProfileCredentialStatus {
+  huggingFaceTokenConfigured: boolean;
+  huggingFaceTokenSource: VoiceProfileCredentialSource;
+}
+
 export type LexiconScope = "project" | "voiceProfile";
 
 export interface LexiconEntry {

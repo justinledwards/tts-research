@@ -55,6 +55,33 @@ ensure_local_dirs() {
   touch "$BACKEND_DIR/data/.gitkeep"
 }
 
+sync_supertonic_embed_assets() {
+  if [[ ! -d "$SUPERTONIC_EMBED_DIR" ]]; then
+    echo "Supertonic upstream directory not found at $SUPERTONIC_EMBED_DIR; skipping asset sync." >&2
+    return 1
+  fi
+  if [[ ! -d "$SUPERTONIC_MODEL_DIR/onnx" || ! -d "$SUPERTONIC_MODEL_DIR/voice_styles" ]]; then
+    echo "Supertonic model cache is missing required asset directories under $SUPERTONIC_MODEL_DIR." >&2
+    return 1
+  fi
+
+  mkdir -p "$SUPERTONIC_EMBED_DIR/onnx" "$SUPERTONIC_EMBED_DIR/voice_styles"
+  cp -a "$SUPERTONIC_MODEL_DIR/onnx/." "$SUPERTONIC_EMBED_DIR/onnx/"
+  cp -a "$SUPERTONIC_MODEL_DIR/voice_styles/." "$SUPERTONIC_EMBED_DIR/voice_styles/"
+  echo "Synced Supertonic embed assets from cache: $SUPERTONIC_MODEL_DIR -> $SUPERTONIC_EMBED_DIR"
+  return 0
+}
+
+ensure_kokoro_embed_workspace() {
+  if [[ ! -d "$KOKORO_EMBED_DIR" ]]; then
+    echo "Kokoro upstream directory not found at $KOKORO_EMBED_DIR; skipping workspace prep." >&2
+    return 1
+  fi
+  mkdir -p "$KOKORO_EMBED_DIR/kokoro/voices"
+  echo "Prepared Kokoro embed workspace: $KOKORO_EMBED_DIR/kokoro/voices"
+  return 0
+}
+
 sync_node_deps() {
   if [[ -d "$ROOT_DIR/node_modules" && -d "$ROOT_DIR/frontend/node_modules" ]]; then
     echo "Node dependencies already present."
@@ -176,6 +203,63 @@ voice_embed_python() {
   printf "%s/bin/python" "$VOICE_EMBED_VENV"
 }
 
+verify_spacy_model_present() {
+  local python_path="$1"
+  "$python_path" - <<'PY' >/dev/null 2>&1
+import importlib.util
+import spacy
+
+if importlib.util.find_spec("en_core_web_sm") is None:
+    raise SystemExit(1)
+spacy.load("en_core_web_sm")
+PY
+}
+
+install_spacy_core_model() {
+  local python_path="$1"
+  local model_name="en_core_web_sm"
+  local model_version
+  local wheel_url
+
+  if verify_spacy_model_present "$python_path"; then
+    return 0
+  fi
+
+  if run_with_mise uv pip install --python "$python_path" en-core-web-sm; then
+    if verify_spacy_model_present "$python_path"; then
+      echo "Installed ${model_name} via package name."
+      return 0
+    fi
+  fi
+
+  model_version="$("$python_path" -c 'import spacy; print("{}.{}.0".format(*spacy.__version__.split(".")[:2]))' 2>/dev/null || true)"
+  if [[ -n "$model_version" ]]; then
+    wheel_url="https://github.com/explosion/spacy-models/releases/download/${model_name}-${model_version}/${model_name}-${model_version}-py3-none-any.whl"
+    if run_with_mise uv pip install --python "$python_path" "$wheel_url"; then
+      if verify_spacy_model_present "$python_path"; then
+        echo "Installed ${model_name} from wheel ${wheel_url}."
+        return 0
+      fi
+    fi
+  fi
+
+  if "$python_path" -m spacy download "$model_name"; then
+    if verify_spacy_model_present "$python_path"; then
+      echo "Installed ${model_name} via spacy downloader."
+      return 0
+    fi
+  fi
+
+  echo "Could not install ${model_name} automatically into $python_path." >&2
+  echo "Fallback commands:" >&2
+  echo "  uv pip install --python \"$python_path\" en-core-web-sm" >&2
+  if [[ -n "$wheel_url" ]]; then
+    echo "  uv pip install --python \"$python_path\" \"$wheel_url\"" >&2
+  fi
+  echo "Retry with VOICE_EMBED_INSTALL_DEPS=1 setup:voice-embed after installation." >&2
+  return 1
+}
+
 setup_voice_embed() {
   require_command uv
   ensure_local_dirs
@@ -190,6 +274,18 @@ setup_voice_embed() {
   echo "  - $SUPERTONIC_EMBED_DIR"
   echo "  - $KOKORO_EMBED_DIR"
 
+  if sync_supertonic_embed_assets; then
+    echo "Supertonic embed assets synced from model cache."
+  else
+    echo "Supertonic embed assets not synced automatically. Run setup after ensuring model cache is present."
+  fi
+  ensure_kokoro_embed_workspace || true
+
+  if ! verify_spacy_model_present "$(voice_embed_python)"; then
+    echo "Installing optional Kokoro spacy model en_core_web_sm..."
+    install_spacy_core_model "$(voice_embed_python)" || true
+  fi
+
   if [[ "${VOICE_EMBED_INSTALL_DEPS:-0}" != "1" ]]; then
     echo "Skipping heavy CUDA/PyTorch dependency install."
     echo "Set VOICE_EMBED_INSTALL_DEPS=1 after reviewing upstream requirements."
@@ -203,6 +299,11 @@ setup_voice_embed() {
       run_with_mise uv pip install --python "$(voice_embed_python)" -r "$requirements"
     fi
   done
+
+  if ! verify_spacy_model_present "$(voice_embed_python)"; then
+    echo "Installing Kokoro optional Spacy model en_core_web_sm..."
+    install_spacy_core_model "$(voice_embed_python)" || true
+  fi
 }
 
 setup_alignment() {

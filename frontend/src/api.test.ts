@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ApiRequestError,
   backendAssetUrl,
+  clearHuggingFaceToken,
   createCustomSpeechPolicyProfile,
   createPreparedSource,
   deleteProject,
@@ -11,10 +12,12 @@ import {
   getContentIR,
   getContentIRSpeechPlan,
   getJobSpeechPlan,
+  getVoiceProfileCredentials,
   previewMathSpeech,
   previewContentIRSpeechPolicy,
   isApiNotFoundError,
   previewPreparedSourceSpeechPolicy,
+  saveHuggingFaceToken,
   upsertProjectLexiconEntry,
 } from "./api";
 
@@ -43,6 +46,64 @@ describe("API errors", () => {
     try {
       await expect(deleteProject("project-1")).rejects.toThrow(
         /Restart the backend with mise start -- pnpm start:local/,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("manages voice profile credential status without exposing the token", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      const url = fetchInputUrl(input);
+      requests.push({ url, init });
+      if (init?.method === "PUT") {
+        return Promise.resolve(
+          Response.json({
+            huggingFaceTokenConfigured: true,
+            huggingFaceTokenSource: "local",
+          }),
+        );
+      }
+      if (init?.method === "DELETE") {
+        return Promise.resolve(
+          Response.json({
+            huggingFaceTokenConfigured: true,
+            huggingFaceTokenSource: "env",
+          }),
+        );
+      }
+      return Promise.resolve(
+        Response.json({
+          huggingFaceTokenConfigured: false,
+          huggingFaceTokenSource: "none",
+        }),
+      );
+    };
+
+    try {
+      await expect(getVoiceProfileCredentials()).resolves.toEqual({
+        huggingFaceTokenConfigured: false,
+        huggingFaceTokenSource: "none",
+      });
+      await expect(saveHuggingFaceToken("hf_secret")).resolves.toEqual({
+        huggingFaceTokenConfigured: true,
+        huggingFaceTokenSource: "local",
+      });
+      await expect(clearHuggingFaceToken()).resolves.toEqual({
+        huggingFaceTokenConfigured: true,
+        huggingFaceTokenSource: "env",
+      });
+      expect(requests.map((request) => request.url)).toEqual([
+        "/api/voice-profile-credentials",
+        "/api/voice-profile-credentials/hugging-face-token",
+        "/api/voice-profile-credentials/hugging-face-token",
+      ]);
+      expect(requests[1]?.init?.method).toBe("PUT");
+      expect(requests[2]?.init?.method).toBe("DELETE");
+      expect(typeof requests[1]?.init?.body === "string" ? requests[1].init.body : "").toContain(
+        '"token":"hf_secret"',
       );
     } finally {
       globalThis.fetch = originalFetch;

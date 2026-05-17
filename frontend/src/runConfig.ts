@@ -25,6 +25,40 @@ export interface RunModePreset {
   performanceMode: PerformanceMode;
 }
 
+export type KokoroRenderMode = "voicepack" | "kokoclone" | "kokoro-embed";
+
+export interface KokoroRenderModeOption {
+  id: KokoroRenderMode;
+  label: string;
+  detail: string;
+  engineId: string;
+  voiceClone: boolean;
+}
+
+export const KOKORO_RENDER_MODE_OPTIONS: KokoroRenderModeOption[] = [
+  {
+    id: "voicepack",
+    label: "Kokoro Voicepack",
+    detail: "Use the selected built-in Kokoro voicepack.",
+    engineId: "kokoro",
+    voiceClone: false,
+  },
+  {
+    id: "kokoclone",
+    label: "KokoClone",
+    detail: "Render Kokoro from the selected voice profile reference.",
+    engineId: "kokoro-clone",
+    voiceClone: true,
+  },
+  {
+    id: "kokoro-embed",
+    label: "Kokoro Embed",
+    detail: "Render Kokoro with the optimized style artifact for this profile.",
+    engineId: "kokoro-embed",
+    voiceClone: true,
+  },
+];
+
 export const RUN_MODE_PRESETS: RunModePreset[] = [
   {
     mode: "draftPreview",
@@ -146,6 +180,53 @@ export function buildCreateVoiceJobRequest(
     request.voiceProfileId = selectedVoiceProfileId;
   }
   return request;
+}
+
+export function kokoroRenderModeForConfiguration(
+  config: RunConfiguration,
+  hasSelectedProfile = true,
+): KokoroRenderMode {
+  if (config.ttsEngine === "kokoro-embed") {
+    return "kokoro-embed";
+  }
+  if (config.ttsEngine === "kokoro-clone") {
+    return "kokoclone";
+  }
+  if (hasSelectedProfile && config.options.voiceClone && isKokoroRenderEngine(config.ttsEngine)) {
+    return "kokoclone";
+  }
+  return "voicepack";
+}
+
+export function applyKokoroRenderMode(
+  config: RunConfiguration,
+  mode: KokoroRenderMode,
+): RunConfiguration {
+  const option =
+    KOKORO_RENDER_MODE_OPTIONS.find((candidate) => candidate.id === mode) ??
+    KOKORO_RENDER_MODE_OPTIONS[0];
+  return {
+    ...config,
+    ttsEngine: option.engineId,
+    engineOptions: {},
+    options: {
+      ...config.options,
+      voiceClone: option.voiceClone,
+    },
+  };
+}
+
+export function isKokoroRenderEngine(engineId: string): boolean {
+  return (
+    engineId === "auto" ||
+    engineId === "kokoro" ||
+    engineId === "kokoro-clone" ||
+    engineId === "kokoro-embed"
+  );
+}
+
+export function kokoroEngineFamilyValue(engineId: string): string {
+  return engineId === "kokoro-clone" || engineId === "kokoro-embed" ? "kokoro" : engineId;
 }
 
 export function describePerformanceMode(mode: PerformanceMode): string {

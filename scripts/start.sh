@@ -101,11 +101,21 @@ checker_uses_qwen() {
   [[ "$provider" == "qwen" || "$provider" == "qwen-asr" ]]
 }
 
+voice_profile_local_hf_token_configured() {
+  local credentials_path="${VOICE_PROFILE_CREDENTIALS_PATH:-data/local-credentials/huggingface.json}"
+  if [[ "$credentials_path" != /* ]]; then
+    credentials_path="$ROOT_DIR/backend/$credentials_path"
+  fi
+  [[ -f "$credentials_path" ]] &&
+    grep -q '"token"[[:space:]]*:[[:space:]]*"[^"]' "$credentials_path" 2>/dev/null
+}
+
 profile_analysis_uses_pyannote() {
   [[ -n "${PYANNOTE_AUTH_TOKEN:-}" ||
     -n "${HF_TOKEN:-}" ||
     -n "${VOICE_PROFILE_DIARIZATION_MODEL_PATH:-}" ||
-    -n "${VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR:-}" ]]
+    -n "${VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR:-}" ]] ||
+    voice_profile_local_hf_token_configured
 }
 
 book_pdf_python_fallback_enabled() {
@@ -300,7 +310,7 @@ python_requirements_present() {
     required_modules+=("torch" "qwen_asr")
   fi
   if profile_analysis_uses_pyannote; then
-    required_modules+=("torch" "pyannote.audio" "soundfile")
+    required_modules+=("torch" "pyannote.audio" "omegaconf" "soundfile")
   fi
   if book_pdf_python_fallback_enabled; then
     required_modules+=("pypdf")
@@ -809,7 +819,7 @@ if [[ "${SKIP_BOOTSTRAP:-0}" != "1" ]]; then
     if ! ensure_backend_python_env; then
       if profile_analysis_uses_pyannote; then
         echo "Voice profile source analysis is configured, but profile-analysis Python dependencies could not be installed."
-        echo "Run: cd backend && uv sync --extra profile-analysis"
+        echo "Run: cd backend && uv sync --all-extras"
         exit 1
       fi
       fallback_to_mock_tts || true

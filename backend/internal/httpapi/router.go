@@ -44,7 +44,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 
 	app.Use(cors.New(cors.Config{
 		AllowOriginsFunc:    corsAllowedOrigin,
-		AllowMethods:        []string{fiber.MethodGet, fiber.MethodPost, fiber.MethodPatch, fiber.MethodDelete, fiber.MethodOptions},
+		AllowMethods:        []string{fiber.MethodGet, fiber.MethodPost, fiber.MethodPut, fiber.MethodPatch, fiber.MethodDelete, fiber.MethodOptions},
 		AllowHeaders:        []string{"Origin", "Content-Type", "Accept"},
 		AllowPrivateNetwork: true,
 	}))
@@ -75,6 +75,35 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 		}
 		return ctx.JSON(diagnostics)
+	})
+
+	app.Get("/api/voice-profile-credentials", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.GetVoiceProfileCredentialStatus())
+	})
+
+	app.Put("/api/voice-profile-credentials/hugging-face-token", func(ctx fiber.Ctx) error {
+		var request struct {
+			Token string `json:"token"`
+		}
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		status, err := service.SaveVoiceProfileHuggingFaceToken(request.Token)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrVoiceProfileCredentialEmpty) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("Hugging Face token is required"))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(status)
+	})
+
+	app.Delete("/api/voice-profile-credentials/hugging-face-token", func(ctx fiber.Ctx) error {
+		status, err := service.ClearVoiceProfileHuggingFaceToken()
+		if err != nil {
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(status)
 	})
 
 	app.Post("/api/math/preview", func(ctx fiber.Ctx) error {

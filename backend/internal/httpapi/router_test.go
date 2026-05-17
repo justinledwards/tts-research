@@ -97,6 +97,97 @@ func TestResearchModuleClonePreflightAllowsLocalDevOrigins(t *testing.T) {
 	}
 }
 
+func TestVoiceProfileCredentialsEndpointSavesStatusWithoutReturningToken(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:                         3,
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileCredentialsPath:        filepath.Join(t.TempDir(), "credentials", "huggingface.json"),
+			VoiceProfileDiarizationToken:       "env-token",
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileLikenessTimeoutSeconds: 1,
+		},
+	)
+	app := httpapi.NewRouter(service)
+
+	preflight, err := http.NewRequest(http.MethodOptions, "/api/voice-profile-credentials/hugging-face-token", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(preflight) returned error: %v", err)
+	}
+	preflight.Header.Set(fiber.HeaderOrigin, "http://localhost:5173")
+	preflight.Header.Set(fiber.HeaderAccessControlRequestMethod, http.MethodPut)
+	preflight.Header.Set(fiber.HeaderAccessControlRequestHeaders, "Content-Type")
+	preflightResponse, err := app.Test(preflight)
+	if err != nil {
+		t.Fatalf("app.Test(preflight) returned error: %v", err)
+	}
+	defer preflightResponse.Body.Close()
+	if preflightResponse.StatusCode != http.StatusNoContent {
+		t.Fatalf("preflight status = %d, want %d", preflightResponse.StatusCode, http.StatusNoContent)
+	}
+	if got := preflightResponse.Header.Get(fiber.HeaderAccessControlAllowMethods); !strings.Contains(got, http.MethodPut) {
+		t.Fatalf("Access-Control-Allow-Methods = %q, want PUT", got)
+	}
+
+	status := getCredentialStatus(t, app)
+	if !status.HuggingFaceTokenConfigured || status.HuggingFaceTokenSource != "env" {
+		t.Fatalf("status = %+v, want env fallback", status)
+	}
+
+	putRequest, err := http.NewRequest(
+		http.MethodPut,
+		"/api/voice-profile-credentials/hugging-face-token",
+		bytes.NewBufferString(`{"token":"  local-secret  "}`),
+	)
+	if err != nil {
+		t.Fatalf("NewRequest(put) returned error: %v", err)
+	}
+	putRequest.Header.Set("Content-Type", "application/json")
+	putResponse, err := app.Test(putRequest)
+	if err != nil {
+		t.Fatalf("app.Test(put) returned error: %v", err)
+	}
+	defer putResponse.Body.Close()
+	bodyBytes, _ := io.ReadAll(putResponse.Body)
+	if putResponse.StatusCode != http.StatusOK {
+		t.Fatalf("put status = %d, want %d, body = %s", putResponse.StatusCode, http.StatusOK, bodyBytes)
+	}
+	if strings.Contains(string(bodyBytes), "local-secret") {
+		t.Fatalf("credential response leaked token: %s", bodyBytes)
+	}
+	var putStatus pipeline.VoiceProfileCredentialStatus
+	if err := json.Unmarshal(bodyBytes, &putStatus); err != nil {
+		t.Fatalf("decode put status: %v", err)
+	}
+	if !putStatus.HuggingFaceTokenConfigured || putStatus.HuggingFaceTokenSource != "local" {
+		t.Fatalf("put status = %+v, want local token", putStatus)
+	}
+
+	deleteRequest, err := http.NewRequest(http.MethodDelete, "/api/voice-profile-credentials/hugging-face-token", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(delete) returned error: %v", err)
+	}
+	deleteResponse, err := app.Test(deleteRequest)
+	if err != nil {
+		t.Fatalf("app.Test(delete) returned error: %v", err)
+	}
+	defer deleteResponse.Body.Close()
+	if deleteResponse.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(deleteResponse.Body)
+		t.Fatalf("delete status = %d, want %d, body = %s", deleteResponse.StatusCode, http.StatusOK, payload)
+	}
+	status = getCredentialStatus(t, app)
+	if !status.HuggingFaceTokenConfigured || status.HuggingFaceTokenSource != "env" {
+		t.Fatalf("status = %+v, want env fallback after delete", status)
+	}
+}
+
 func TestAdapterCapabilityEndpoints(t *testing.T) {
 	t.Parallel()
 
@@ -560,6 +651,28 @@ func getContentIRDocument(
 		t.Fatalf("decode content IR: %v", err)
 	}
 	return document
+}
+
+func getCredentialStatus(t *testing.T, app *fiber.App) pipeline.VoiceProfileCredentialStatus {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodGet, "/api/voice-profile-credentials", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(credentials) returned error: %v", err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test(credentials) returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("credentials status = %d, want %d, body = %s", response.StatusCode, http.StatusOK, payload)
+	}
+	var status pipeline.VoiceProfileCredentialStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
+		t.Fatalf("decode credentials: %v", err)
+	}
+	return status
 }
 
 func writeRouterTestEPUB(t *testing.T) string {
