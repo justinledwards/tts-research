@@ -567,7 +567,7 @@ function ResearchModuleDiagnosticsList({
               </span>
               <span
                 className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${
-                  module.installed
+                  module.status === "ready"
                     ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                     : "border-amber-300 bg-amber-50 text-amber-800"
                 }`}
@@ -576,6 +576,11 @@ function ResearchModuleDiagnosticsList({
               </span>
             </span>
             <span className="vs-muted break-words">{module.reason ?? module.setup}</span>
+            {module.setupCommand ? (
+              <code className="truncate rounded bg-[var(--vs-raised)] px-2 py-1 font-mono text-[11px]">
+                {module.setupCommand}
+              </code>
+            ) : null}
             <code className="truncate rounded bg-[var(--vs-raised)] px-2 py-1 font-mono text-[11px]">
               {module.localPath}
             </code>

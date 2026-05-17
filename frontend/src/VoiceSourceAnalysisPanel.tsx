@@ -658,13 +658,13 @@ function voiceProfileTargetOptions(
     {
       id: "kokoro-embed",
       label: "Kokoro Embed",
-      available: Boolean(kokoroEmbed?.installed),
+      available: researchModuleBuildReady(kokoroEmbed),
       detail: kokoroEmbedDetail,
     },
     {
       id: "supertonic-embed",
       label: "Supertonic Embed",
-      available: Boolean(supertonicEmbed?.installed),
+      available: researchModuleBuildReady(supertonicEmbed),
       detail: supertonicEmbedDetail,
     },
   ];
@@ -680,10 +680,24 @@ function embedTargetDetail(
   if (!module?.installed) {
     return module?.setup ?? module?.reason ?? setupMessage;
   }
+  if (!researchModuleBuildReady(module)) {
+    return (
+      module.reason ??
+      module.setup ??
+      "Voice Embed runtime setup is needed before building this target."
+    );
+  }
   if (!engine || engine.status === "ready") {
     return readyMessage;
   }
   return waitingMessage;
+}
+
+function researchModuleBuildReady(module: ResearchModuleDiagnostics | undefined): boolean {
+  if (!module?.installed) {
+    return false;
+  }
+  return module.runtimeReady ?? module.status === "ready";
 }
 
 function MetricPill({ label, value }: Readonly<{ label: string; value: string }>) {

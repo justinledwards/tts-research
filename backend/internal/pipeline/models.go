@@ -520,18 +520,21 @@ type TTSEngineDiagnostics struct {
 }
 
 type ResearchModuleDiagnostics struct {
-	ID           string `json:"id"`
-	Label        string `json:"label"`
-	RepoURL      string `json:"repoUrl"`
-	Ref          string `json:"ref"`
-	LocalPath    string `json:"localPath"`
-	EngineID     string `json:"engineId,omitempty"`
-	Status       string `json:"status"`
-	Installed    bool   `json:"installed"`
-	CloneAllowed bool   `json:"cloneAllowed"`
-	Prompt       bool   `json:"prompt"`
-	Reason       string `json:"reason,omitempty"`
-	Setup        string `json:"setup,omitempty"`
+	ID                  string   `json:"id"`
+	Label               string   `json:"label"`
+	RepoURL             string   `json:"repoUrl"`
+	Ref                 string   `json:"ref"`
+	LocalPath           string   `json:"localPath"`
+	EngineID            string   `json:"engineId,omitempty"`
+	Status              string   `json:"status"`
+	Installed           bool     `json:"installed"`
+	RuntimeReady        bool     `json:"runtimeReady"`
+	MissingDependencies []string `json:"missingDependencies,omitempty"`
+	CloneAllowed        bool     `json:"cloneAllowed"`
+	Prompt              bool     `json:"prompt"`
+	Reason              string   `json:"reason,omitempty"`
+	Setup               string   `json:"setup,omitempty"`
+	SetupCommand        string   `json:"setupCommand,omitempty"`
 }
 
 type ProjectBundleContentItem struct {

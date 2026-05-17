@@ -600,10 +600,13 @@ export interface ResearchModuleDiagnostics {
   engineId?: string;
   status: string;
   installed: boolean;
+  runtimeReady?: boolean;
+  missingDependencies?: string[];
   cloneAllowed: boolean;
   prompt: boolean;
   reason?: string;
   setup?: string;
+  setupCommand?: string;
 }
 
 export type LexiconScope = "project" | "voiceProfile";

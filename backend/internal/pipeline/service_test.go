@@ -2895,6 +2895,88 @@ func TestVoiceProfileTargetValidationPersistsAcrossReload(t *testing.T) {
 	}
 }
 
+func TestVoiceProfileTargetStaysReadyWhenSpeakerValidationIsGated(t *testing.T) {
+	t.Parallel()
+
+	options := voiceProfileTargetOptions(t, nil)
+	options.VoiceProfileLikenessScorer = mockLikenessScorer{err: errors.New("gated speaker embedding")}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		mockReferenceTTS{},
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfileWithOptions(
+		context.Background(),
+		"Narrator",
+		"en",
+		sourcePath,
+		"source.wav",
+		0,
+		pipeline.VoiceProfileCreationOptions{Targets: []string{pipeline.VoiceProfileTargetKokoroClone}},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileWithOptions returned error: %v", err)
+	}
+	ready := waitForVoiceProfileTarget(t, service, profile.ID, pipeline.VoiceProfileTargetKokoroClone, pipeline.VoiceProfileTargetStatusReady)
+	target := ready.CloneTargets[pipeline.VoiceProfileTargetKokoroClone]
+	if target.Validation == nil || target.Validation.Status != pipeline.VoiceProfileTargetStatusFailed {
+		t.Fatalf("validation = %+v, want failed validation metadata", target.Validation)
+	}
+	if !strings.Contains(target.Validation.Error, "gated speaker embedding") {
+		t.Fatalf("validation error = %q, want gated scorer detail", target.Validation.Error)
+	}
+
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:           "Render even when the optional likeness scorer is gated.",
+		VoiceProfileID: profile.ID,
+		TTSEngine:      pipeline.TTSEngineKokoro,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob should allow ready target with validation warning: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+}
+
+func TestVoiceProfileTargetSkipsGatedSpeakerValidationWithoutToken(t *testing.T) {
+	t.Parallel()
+
+	options := voiceProfileTargetOptions(t, nil)
+	options.VoiceProfileDiarizationToken = ""
+	options.VoiceProfileLikenessScorer = mockLikenessScorer{err: errors.New("scorer should not be called")}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		mockReferenceTTS{},
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfileWithOptions(
+		context.Background(),
+		"Narrator",
+		"en",
+		sourcePath,
+		"source.wav",
+		0,
+		pipeline.VoiceProfileCreationOptions{Targets: []string{pipeline.VoiceProfileTargetKokoroClone}},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileWithOptions returned error: %v", err)
+	}
+	ready := waitForVoiceProfileTarget(t, service, profile.ID, pipeline.VoiceProfileTargetKokoroClone, pipeline.VoiceProfileTargetStatusReady)
+	validation := ready.CloneTargets[pipeline.VoiceProfileTargetKokoroClone].Validation
+	if validation == nil || validation.Status != pipeline.VoiceProfileTargetStatusFailed {
+		t.Fatalf("validation = %+v, want failed validation warning", validation)
+	}
+	if !strings.Contains(validation.Error, "needs access to pyannote/embedding") {
+		t.Fatalf("validation error = %q, want gated setup warning", validation.Error)
+	}
+	if strings.Contains(validation.Error, "scorer should not be called") {
+		t.Fatalf("validation error = %q, scorer should have been skipped", validation.Error)
+	}
+}
+
 func TestCreateJobRequiresSelectedVoiceProfileTarget(t *testing.T) {
 	t.Parallel()
 
@@ -2934,6 +3016,10 @@ func TestResearchModuleDiagnosticsReportsInstalledUpstream(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
 		t.Fatalf("write fake optimizer: %v", err)
 	}
+	fakePython := filepath.Join(t.TempDir(), "fake-python")
+	if err := os.WriteFile(fakePython, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake python: %v", err)
+	}
 	service := pipeline.NewService(
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
@@ -2952,6 +3038,7 @@ func TestResearchModuleDiagnosticsReportsInstalledUpstream(t *testing.T) {
 					EngineID:  pipeline.TTSEngineSupertonic,
 				},
 			},
+			VoiceProfileArtifactPythonPath: fakePython,
 		},
 	)
 
@@ -2967,6 +3054,54 @@ func TestResearchModuleDiagnosticsReportsInstalledUpstream(t *testing.T) {
 	}
 	if !filepath.IsAbs(modules[0].LocalPath) {
 		t.Fatalf("local path = %q, want absolute path", modules[0].LocalPath)
+	}
+}
+
+func TestResearchModuleDiagnosticsReportsMissingVoiceEmbedRuntimeDependencies(t *testing.T) {
+	t.Parallel()
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	fakePython := filepath.Join(t.TempDir(), "fake-python")
+	if err := os.WriteFile(fakePython, []byte("#!/bin/sh\nprintf 'numpy\\n'\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake python: %v", err)
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+			VoiceProfileDir: t.TempDir(),
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleKokoroEmbed,
+					Label:     "Kokoro Embed",
+					RepoURL:   "https://example.invalid/kokoro.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineKokoroEmbed,
+				},
+			},
+			VoiceProfileArtifactPythonPath: fakePython,
+		},
+	)
+
+	modules := service.ListResearchModules()
+	if len(modules) != 1 {
+		t.Fatalf("module count = %d, want 1", len(modules))
+	}
+	if !modules[0].Installed || modules[0].Status != "setup-needed" || modules[0].RuntimeReady {
+		t.Fatalf("module diagnostics = %+v, want installed module with runtime setup needed", modules[0])
+	}
+	if len(modules[0].MissingDependencies) != 1 || modules[0].MissingDependencies[0] != "numpy" {
+		t.Fatalf("missing dependencies = %#v, want numpy", modules[0].MissingDependencies)
+	}
+	if !strings.Contains(modules[0].SetupCommand, "mise setup:voice-embed") {
+		t.Fatalf("setup command = %q, want voice embed setup command", modules[0].SetupCommand)
 	}
 }
 
@@ -3481,6 +3616,7 @@ func newProfileSourceServiceWithTTS(
 			VoiceProfileReferenceMaxSeconds:    60,
 			VoiceProfileSourceAnalyzer:         analyzer,
 			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileDiarizationToken:       "test-token",
 			VoiceProfileLikenessScorer:         likenessScorer,
 		},
 	)
@@ -3515,6 +3651,7 @@ func voiceProfileTargetOptions(
 		VoiceProfileReferenceTargetSeconds: 45,
 		VoiceProfileReferenceMaxSeconds:    60,
 		VoiceProfileDenoiseProvider:        "none",
+		VoiceProfileDiarizationToken:       "test-token",
 		VoiceProfileLikenessScorer:         mockLikenessScorer{score: 0.87},
 		ResearchModules:                    researchModules,
 	}

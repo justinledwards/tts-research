@@ -46,6 +46,9 @@ func (service *Service) BuildVoiceProfileArtifact(
 	if !diagnostics.Installed {
 		return VoiceProfile{}, fmt.Errorf("%w: %s", ErrResearchModuleUnavailable, module.ID)
 	}
+	if !diagnostics.RuntimeReady {
+		return VoiceProfile{}, fmt.Errorf("%w: %s", ErrResearchModuleUnavailable, diagnostics.Reason)
+	}
 
 	profile, err := service.getVoiceProfile(profileID)
 	if err != nil {

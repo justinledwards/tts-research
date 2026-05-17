@@ -1,5 +1,11 @@
 # Working Log
 
+## 2026-05-17 14:10 CEST - Profile target failure ergonomics
+- [x] Trace failed demo clone target state.
+- [x] Fix target preparation behavior where it is brittle.
+- [x] Improve UI failure diagnostics and recovery actions.
+- [x] Validate checks and rendered clone flow.
+
 ## 2026-05-17 13:22 CEST - Backend-targeted profile workbench
 - [x] Add profile target state and creation request support.
 - [x] Queue backend artifact builds and validation from profile creation.

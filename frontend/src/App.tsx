@@ -5895,6 +5895,7 @@ function VoiceProfileArtifactControls({
   profile: VoiceProfile;
   onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
 }>) {
+  const issues = voiceProfileTargetIssues(profile, modules);
   return (
     <div className="grid gap-2 rounded-md border border-zinc-200 bg-white p-2">
       <div className="flex flex-wrap gap-1">
@@ -5923,20 +5924,25 @@ function VoiceProfileArtifactControls({
             target?.status === "validating" ||
             profile.cloneArtifacts?.[moduleId]?.status === "building";
           const isInstalled = moduleId === "kokoro-clone" || (module?.installed ?? false);
+          const runtimeReady = moduleId === "kokoro-clone" || researchModuleRuntimeReady(module);
+          const canPrepare = isInstalled && runtimeReady;
           const buttonLabel = targetBuildButtonLabel({
             isBusy,
             isInstalled,
             moduleId,
+            runtimeReady,
             ready: target?.status === "ready",
+            status: target?.status,
           });
           return (
             <button
               className="rounded-md border border-zinc-200 px-2 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
-              disabled={!isInstalled || isBusy}
+              disabled={!canPrepare || isBusy}
               key={moduleId}
               onClick={() => {
                 void onBuildArtifact(profile.id, moduleId);
               }}
+              title={canPrepare ? undefined : (module?.reason ?? module?.setup)}
               type="button"
             >
               {buttonLabel}
@@ -5944,6 +5950,30 @@ function VoiceProfileArtifactControls({
           );
         })}
       </div>
+      {issues.length > 0 ? (
+        <div className="grid gap-2">
+          {issues.map((issue) => (
+            <div
+              className={`rounded-md border px-3 py-2 text-xs leading-5 ${
+                issue.severity === "error"
+                  ? "border-red-200 bg-red-50 text-red-800"
+                  : "border-amber-200 bg-amber-50 text-amber-900"
+              }`}
+              key={issue.key}
+            >
+              <p className="font-semibold">
+                {issue.label}: {issue.title}
+              </p>
+              <p>{issue.detail}</p>
+              {issue.command ? (
+                <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-white/70 px-2 py-1 font-mono text-[11px]">
+                  {issue.command}
+                </code>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -5987,20 +6017,21 @@ function ArtifactChip({
 }>) {
   const artifact = profile.cloneArtifacts?.[moduleId];
   const target = profile.cloneTargets?.[moduleId];
-  const status = artifactChipStatus(
-    moduleId,
-    target?.status,
-    artifact?.status,
-    module?.installed ?? false,
-  );
-  const ready = status === "ready";
+  const moduleReady =
+    moduleId === "kokoro-clone" ||
+    (module?.installed === true && researchModuleRuntimeReady(module));
+  const status = artifactChipStatus(moduleId, target?.status, artifact?.status, moduleReady);
+  const validationWarning = target?.status === "ready" && target.validation?.status === "failed";
+  const ready = status === "ready" && !validationWarning;
   const failed = status === "failed";
   const className = artifactChipClass(ready, failed);
   const score = target?.validation?.score;
-  const displayStatus =
-    ready && typeof score === "number" && Number.isFinite(score)
-      ? String(Math.round(score * 100))
-      : status;
+  let displayStatus = status;
+  if (validationWarning) {
+    displayStatus = "check needed";
+  } else if (ready && typeof score === "number" && Number.isFinite(score)) {
+    displayStatus = String(Math.round(score * 100));
+  }
   return (
     <span
       className={`rounded-full border px-2 py-1 text-[0.65rem] font-semibold ${className}`}
@@ -6052,11 +6083,15 @@ function targetBuildButtonLabel({
   isInstalled,
   moduleId,
   ready,
+  runtimeReady,
+  status,
 }: Readonly<{
   isBusy: boolean;
   isInstalled: boolean;
   moduleId: string;
   ready?: boolean;
+  runtimeReady?: boolean;
+  status?: string;
 }>): string {
   const label = moduleLabel(moduleId);
   if (isBusy) {
@@ -6065,10 +6100,144 @@ function targetBuildButtonLabel({
   if (ready) {
     return `Re-validate ${label}`;
   }
+  if (status === "failed") {
+    return `Retry ${label}`;
+  }
   if (isInstalled) {
+    if (runtimeReady === false) {
+      return `${label} runtime setup needed`;
+    }
     return `Prepare ${label}`;
   }
   return `${label} setup needed`;
+}
+
+interface VoiceProfileTargetIssue {
+  key: string;
+  label: string;
+  title: string;
+  detail: string;
+  command?: string;
+  severity: "error" | "warning";
+}
+
+function voiceProfileTargetIssues(
+  profile: VoiceProfile,
+  modules: ResearchModuleDiagnostics[],
+): VoiceProfileTargetIssue[] {
+  const issues: VoiceProfileTargetIssue[] = [];
+  for (const moduleId of ["kokoro-clone", ...PROFILE_ARTIFACT_MODULE_ORDER]) {
+    const module = modules.find((item) => item.id === moduleId);
+    const target = profile.cloneTargets?.[moduleId];
+    const artifact = profile.cloneArtifacts?.[moduleId];
+    const label = moduleLabel(moduleId);
+    if (moduleId !== "kokoro-clone" && module?.installed && module.runtimeReady === false) {
+      issues.push({
+        key: `${moduleId}:runtime`,
+        label,
+        title: "Runtime setup needed",
+        detail:
+          module.reason ??
+          "The optional upstream is cloned, but its isolated Python runtime is not ready to build style artifacts.",
+        command: module.setupCommand,
+        severity: "warning",
+      });
+      continue;
+    }
+    if (target?.status === "ready" && target.validation?.status === "failed") {
+      const normalized = humanizeProfileTargetProblem(target.validation.error ?? "", module);
+      issues.push({
+        key: `${moduleId}:validation`,
+        label,
+        title: "Rendering is ready; validation needs attention",
+        detail: normalized.detail,
+        command: normalized.command,
+        severity: "warning",
+      });
+      continue;
+    }
+    if (target?.status === "failed") {
+      const normalized = humanizeProfileTargetProblem(
+        target.error ?? target.validation?.error ?? "",
+        module,
+      );
+      issues.push({
+        key: `${moduleId}:target`,
+        label,
+        title: "Preparation failed",
+        detail: normalized.detail,
+        command: normalized.command,
+        severity: "error",
+      });
+      continue;
+    }
+    if (artifact?.status === "failed") {
+      const normalized = humanizeProfileTargetProblem(artifact.error ?? "", module);
+      issues.push({
+        key: `${moduleId}:artifact`,
+        label,
+        title: "Artifact build failed",
+        detail: normalized.detail,
+        command: normalized.command,
+        severity: "error",
+      });
+    }
+  }
+  return issues;
+}
+
+function humanizeProfileTargetProblem(
+  message: string,
+  module?: ResearchModuleDiagnostics,
+): { detail: string; command?: string } {
+  const clean = message.trim();
+  const lower = clean.toLowerCase();
+  const setupCommand = module?.setupCommand ?? "VOICE_EMBED_INSTALL_DEPS=1 mise setup:voice-embed";
+  if (lower.includes("pyannote/embedding") || lower.includes("gated repo")) {
+    return {
+      detail:
+        "Speaker likeness validation needs access to the gated pyannote/embedding model. Rendering is available; add a Hugging Face token or configure a local embedding model, then re-validate.",
+    };
+  }
+  const missingModule = /No module named ['"]([^'"]+)['"]/i.exec(clean)?.[1];
+  if (missingModule) {
+    return {
+      detail: `The Voice Embed runtime is missing the Python package ${missingModule}. Install the optional embed dependencies, then retry this target.`,
+      command: setupCommand,
+    };
+  }
+  if (lower.includes("voice embed runtime")) {
+    return {
+      detail: clean,
+      command: setupCommand,
+    };
+  }
+  if (lower.includes("tts engine") && lower.includes("unavailable")) {
+    return {
+      detail:
+        "The style artifact is ready, but the validation render could not run because this backend is unavailable in the current runtime. Start the app with that backend enabled, then re-validate.",
+      command: module?.setupCommand,
+    };
+  }
+  if (lower.includes("profile artifact build failed")) {
+    return {
+      detail:
+        clean ||
+        "The artifact builder exited before creating a style file. Check the module setup and retry.",
+      command: module?.setupCommand,
+    };
+  }
+  return {
+    detail: clean || "This target could not be prepared. Retry after checking the backend logs.",
+    command: module?.setupCommand,
+  };
+}
+
+function researchModuleRuntimeReady(module: ResearchModuleDiagnostics | undefined): boolean {
+  if (!module) {
+    return false;
+  }
+  return module.runtimeReady ?? module.status === "ready";
 }
 
 function artifactChipStatus(

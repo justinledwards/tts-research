@@ -105,7 +105,7 @@ func TestAdapterCapabilityEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRequest(capabilities) returned error: %v", err)
 	}
-	capabilityResponse, err := app.Test(capabilityRequest)
+	capabilityResponse, err := app.Test(capabilityRequest, fiber.TestConfig{Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("app.Test(capabilities) returned error: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestAdapterCapabilityEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRequest(diagnostics) returned error: %v", err)
 	}
-	diagnosticsResponse, err := app.Test(diagnosticsRequest)
+	diagnosticsResponse, err := app.Test(diagnosticsRequest, fiber.TestConfig{Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("app.Test(diagnostics) returned error: %v", err)
 	}

@@ -296,20 +296,66 @@ func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileI
 	expectedTranscript, transcriptProvider := service.referenceTranscriptForProfile(ctx, profile.VoiceProfile)
 	result, generatedPath, err := service.synthesizeVoiceProfileTargetSample(ctx, profile.VoiceProfile, targetID, expectedTranscript)
 	if err != nil {
+		if voiceProfileTargetHasReadyArtifact(profile.VoiceProfile, targetID) {
+			validation := failedReadyTargetValidation(
+				fmt.Sprintf("target validation sample failed: %s", err.Error()),
+				result,
+				generatedPath,
+				expectedTranscript,
+				"",
+				transcriptProvider,
+			)
+			_, _ = service.completeVoiceProfileTargetValidation(profileID, targetID, validation)
+			return
+		}
 		_, _ = service.failVoiceProfileTarget(profileID, targetID, err.Error())
 		return
 	}
 	if service.checker == nil {
-		_, _ = service.failVoiceProfileTarget(profileID, targetID, "target transcript validation is not configured")
+		validation := failedReadyTargetValidation(
+			"target transcript validation is not configured",
+			result,
+			generatedPath,
+			expectedTranscript,
+			"",
+			firstNonEmpty(transcriptProvider, result.Provider),
+		)
+		_, _ = service.completeVoiceProfileTargetValidation(profileID, targetID, validation)
 		return
 	}
 	check, err := service.checker.Check(ctx, expectedTranscript, result.Audio)
 	if err != nil {
-		_, _ = service.failVoiceProfileTarget(profileID, targetID, fmt.Sprintf("target transcript validation failed: %s", err.Error()))
+		validation := failedReadyTargetValidation(
+			fmt.Sprintf("target transcript validation failed: %s", err.Error()),
+			result,
+			generatedPath,
+			expectedTranscript,
+			"",
+			firstNonEmpty(transcriptProvider, result.Provider),
+		)
+		_, _ = service.completeVoiceProfileTargetValidation(profileID, targetID, validation)
 		return
 	}
+	transcriptSimilarity := clamp01(check.Similarity)
 	speakerScore := VoiceProfileLikenessResult{}
 	if service.options.VoiceProfileLikenessScorer != nil {
+		if setupWarning := service.voiceProfileSpeakerLikenessSetupWarning(); setupWarning != "" {
+			validation := failedReadyTargetValidation(
+				setupWarning,
+				result,
+				generatedPath,
+				expectedTranscript,
+				check.Transcript,
+				firstNonEmpty(check.Provider, transcriptProvider, result.Provider),
+			)
+			validation.TranscriptSimilarity = transcriptSimilarity
+			validation.Score = transcriptSimilarity
+			if targetID == VoiceProfileTargetKokoroClone {
+				_ = service.updateVoiceProfileLikenessFailureFromTarget(profileID, validation)
+			}
+			_, _ = service.completeVoiceProfileTargetValidation(profileID, targetID, validation)
+			return
+		}
 		speakerScore, err = service.options.VoiceProfileLikenessScorer.ScoreVoiceProfileLikeness(ctx, VoiceProfileLikenessRequest{
 			ReferencePath: profile.ReferencePath,
 			GeneratedPath: generatedPath,
@@ -317,11 +363,23 @@ func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileI
 			Token:         service.options.VoiceProfileDiarizationToken,
 		})
 		if err != nil {
-			_, _ = service.failVoiceProfileTarget(profileID, targetID, fmt.Sprintf("target speaker likeness failed: %s", err.Error()))
+			validation := failedReadyTargetValidation(
+				fmt.Sprintf("target speaker likeness failed: %s", err.Error()),
+				result,
+				generatedPath,
+				expectedTranscript,
+				check.Transcript,
+				firstNonEmpty(check.Provider, transcriptProvider, result.Provider),
+			)
+			validation.TranscriptSimilarity = transcriptSimilarity
+			validation.Score = transcriptSimilarity
+			if targetID == VoiceProfileTargetKokoroClone {
+				_ = service.updateVoiceProfileLikenessFailureFromTarget(profileID, validation)
+			}
+			_, _ = service.completeVoiceProfileTargetValidation(profileID, targetID, validation)
 			return
 		}
 	}
-	transcriptSimilarity := clamp01(check.Similarity)
 	speakerSimilarity := clamp01(speakerScore.SpeakerSimilarity)
 	if speakerSimilarity == 0 && speakerScore.Score > 0 {
 		speakerSimilarity = clamp01(speakerScore.Score)
@@ -344,15 +402,62 @@ func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileI
 		Model:                speakerScore.EmbeddingModel,
 		MeasuredAt:           &now,
 	}
-	_, _ = service.updateVoiceProfileTarget(profileID, targetID, VoiceProfileTargetStatusReady, func(target *VoiceProfileTarget) {
-		target.Validation = &validation
-		target.Metadata = map[string]string{
-			"sampleProvider": result.Provider,
-		}
-	})
 	if targetID == VoiceProfileTargetKokoroClone {
 		_ = service.updateVoiceProfileLikenessFromTarget(profileID, validation)
 	}
+	_, _ = service.completeVoiceProfileTargetValidation(profileID, targetID, validation)
+}
+
+func (service *Service) voiceProfileSpeakerLikenessSetupWarning() string {
+	model := strings.TrimSpace(service.options.VoiceProfileEmbeddingModel)
+	if model == "" {
+		model = defaultVoiceProfileEmbeddingModel
+	}
+	if strings.TrimSpace(service.options.VoiceProfileDiarizationToken) != "" {
+		return ""
+	}
+	modelKey := strings.ToLower(model)
+	if modelKey == defaultVoiceProfileEmbeddingModel || strings.HasPrefix(modelKey, "pyannote/") {
+		return fmt.Sprintf(
+			"target speaker likeness needs access to %s. Set PYANNOTE_AUTH_TOKEN or HF_TOKEN, or set VOICE_PROFILE_EMBEDDING_MODEL to a local embedding model. Rendering remains available.",
+			model,
+		)
+	}
+	return ""
+}
+
+func failedReadyTargetValidation(
+	message string,
+	result agents.TTSResult,
+	generatedPath string,
+	expectedTranscript string,
+	asrTranscript string,
+	provider string,
+) VoiceProfileTargetValidation {
+	now := time.Now().UTC()
+	generatedAudio := ""
+	if strings.TrimSpace(generatedPath) != "" {
+		generatedAudio = filepath.Base(generatedPath)
+	}
+	return VoiceProfileTargetValidation{
+		Status:             VoiceProfileTargetStatusFailed,
+		GeneratedAudio:     generatedAudio,
+		GeneratedPath:      generatedPath,
+		ExpectedTranscript: expectedTranscript,
+		ASRTranscript:      asrTranscript,
+		Provider:           firstNonEmpty(provider, result.Provider),
+		MeasuredAt:         &now,
+		Error:              message,
+	}
+}
+
+func voiceProfileTargetHasReadyArtifact(profile VoiceProfile, targetID string) bool {
+	moduleID := voiceProfileTargetModuleID(targetID)
+	if moduleID == "" {
+		return false
+	}
+	artifact := profile.CloneArtifacts[moduleID]
+	return artifact.Status == VoiceProfileCloneArtifactStatusReady && strings.TrimSpace(artifact.Path) != ""
 }
 
 func (service *Service) referenceTranscriptForProfile(ctx context.Context, profile VoiceProfile) (string, string) {
@@ -444,6 +549,20 @@ func (service *Service) failVoiceProfileTarget(profileID string, targetID string
 	})
 }
 
+func (service *Service) completeVoiceProfileTargetValidation(
+	profileID string,
+	targetID string,
+	validation VoiceProfileTargetValidation,
+) (VoiceProfile, error) {
+	return service.updateVoiceProfileTarget(profileID, targetID, VoiceProfileTargetStatusReady, func(target *VoiceProfileTarget) {
+		target.Error = ""
+		target.Validation = &validation
+		target.Metadata = map[string]string{
+			"sampleProvider": validation.Provider,
+		}
+	})
+}
+
 func (service *Service) updateVoiceProfileTarget(
 	profileID string,
 	targetID string,
@@ -492,6 +611,16 @@ func (service *Service) updateVoiceProfileLikenessFromTarget(profileID string, v
 		MeasuredAt:        validation.MeasuredAt,
 		Reason:            "target validation likeness score",
 	}
+	profile.Likeness = &likeness
+	return service.persistVoiceProfile(profile)
+}
+
+func (service *Service) updateVoiceProfileLikenessFailureFromTarget(profileID string, validation VoiceProfileTargetValidation) error {
+	profile, err := service.getVoiceProfile(profileID)
+	if err != nil {
+		return err
+	}
+	likeness := failedVoiceProfileLikeness(validation.Error, validation.ExpectedTranscript)
 	profile.Likeness = &likeness
 	return service.persistVoiceProfile(profile)
 }
