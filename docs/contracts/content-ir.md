@@ -1,24 +1,27 @@
 # Content IR Contract
 
-`content-ir.v1` remains the default app, API, and on-disk compatibility contract. Existing callers of
-`GET /api/content-ir/:id` receive v1 unless they explicitly request another version.
+`content-ir.v1` is the first public Content IR release and the default app, API, on-disk, SDK, and fixture contract.
 
-`content-ir.v1_1` is the additive SDK-facing contract:
+Fetch it with:
 
-- request with `GET /api/content-ir/:id?schemaVersion=content-ir.v1_1`;
-- read existing v1 documents through the migration layer;
-- down-convert v1_1 to v1 by removing v1_1-only node fields and mapping EPUB locators back to the v1 HTML payload.
+```text
+GET /api/content-ir/:id
+GET /api/content-ir/:id?schemaVersion=content-ir.v1
+```
 
-## v1_1 Additions
+The released v1 shape includes:
 
-- EPUB provenance uses `locator.type = "epub"` with an `epub` payload instead of an HTML payload.
-- Nodes may expose `pronunciationRefs`, `lexiconEntryIds`, `phoneme`, `alphabet`, `sayAs`, and `markId`.
-- Pronunciation refs carry stable lexicon entry IDs plus text offsets so SDKs can preserve custom terms across export/import.
+- format-specific locators for Markdown, HTML, EPUB, PDF, DOCX, and OCR/image sources;
+- EPUB provenance as `locator.type = "epub"` with an `epub` payload;
+- speech-facing fields such as `pronunciationRefs`, `lexiconEntryIds`, `phoneme`, `alphabet`, `sayAs`, and `markId`;
+- resolved `speech.speechPolicy` alongside adapter policy hints.
 
-Schemas live in `backend/internal/contentir/schema/`. Public examples live in `fixtures/contracts/`.
+Older in-repo pre-release v1 documents are still accepted by the backend reader and normalized into the released v1 shape. They are not a public compatibility target.
 
-## Compatibility Rules
+Public schemas live in `backend/internal/contentir/schema/`. Generated schema bundles live in `docs/contracts/schema-bundle.v1.json`. Golden examples live in `fixtures/contracts/`.
 
-- v1 remains valid and readable.
-- v1_1 is opt-in until SDKs are ready to depend on it.
-- New serializers should consume v1_1, but should still accept v1 and run `v1 -> v1_1` migration before processing.
+## Migration Notes
+
+- Consumers should treat `content-ir.v1` as stable.
+- Producers must emit EPUB locators using the `epub` payload, not the older EPUB-as-HTML payload.
+- Future breaking changes require a new schema version such as `content-ir.v2`.

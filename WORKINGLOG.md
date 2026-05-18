@@ -1,5 +1,20 @@
 # Working Log
 
+## 2026-05-18 13:03 CEST - Workstream Kappa local validation authority
+- [x] Add local validation and benchmark orchestration
+- [x] Add benchmark fixture manifests, thresholds, and corpus notes
+- [x] Make Book Cinema E2E self-contained with clean fixtures
+- [x] Add disabled GitHub Actions templates
+- [x] Document local validation and benchmark commands
+- [x] Run project checks
+
+## 2026-05-18 12:37 CEST - Workstream IOTA first public v1
+- [x] Collapse public Content IR contract to v1
+- [x] Centralize locator envelope and Readium bridge behavior
+- [x] Regenerate schema bundles, snapshots, fixtures, and frontend types
+- [x] Update public contract documentation and compatibility notes
+- [x] Run contract, frontend, and backend validation
+
 ## 2026-05-18 02:43 CEST - Voice Studio PR update
 - [x] Clean working log scope for the PR update.
 - [x] Confirm project checks and rendered QA status.

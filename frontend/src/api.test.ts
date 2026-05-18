@@ -297,7 +297,7 @@ describe("API errors", () => {
     }
   });
 
-  it("fetches versioned Content IR and speech plans", async () => {
+  it("fetches public Content IR v1 and speech plans", async () => {
     const originalFetch = globalThis.fetch;
     const requests: string[] = [];
     globalThis.fetch = (input) => {
@@ -317,7 +317,7 @@ describe("API errors", () => {
       }
       return Promise.resolve(
         Response.json({
-          schemaVersion: "content-ir.v1_1",
+          schemaVersion: "content-ir.v1",
           id: "source-1",
           sourceType: "preparedSource",
           sourceId: "source-1",
@@ -331,14 +331,14 @@ describe("API errors", () => {
     };
 
     try {
-      const document = await getContentIR("source-1", "content-ir.v1_1");
+      const document = await getContentIR("source-1", "content-ir.v1");
       const sourcePlan = await getContentIRSpeechPlan("source-1");
       const jobPlan = await getJobSpeechPlan("job-1");
-      expect(document.schemaVersion).toBe("content-ir.v1_1");
+      expect(document.schemaVersion).toBe("content-ir.v1");
       expect(sourcePlan.schemaVersion).toBe("speech-plan.v1");
       expect(jobPlan.schemaVersion).toBe("speech-plan.v1");
       expect(requests).toEqual([
-        "/api/content-ir/source-1?schemaVersion=content-ir.v1_1",
+        "/api/content-ir/source-1?schemaVersion=content-ir.v1",
         "/api/content-ir/source-1/speech-plan",
         "/api/voice-jobs/job-1/speech-plan",
       ]);

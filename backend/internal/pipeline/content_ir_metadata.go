@@ -310,7 +310,7 @@ func (service *Service) sourceSpeechPlan(outputDir string, id string) (speechpla
 	if !os.IsNotExist(err) {
 		return speechplan.Document{}, err
 	}
-	document, err := service.GetContentIRSchema(id, contentir.SchemaVersionV11)
+	document, err := service.GetContentIRSchema(id, contentir.SchemaVersionV1)
 	if err != nil {
 		return speechplan.Document{}, err
 	}

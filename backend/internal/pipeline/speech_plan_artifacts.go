@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
+	"github.com/justinedwards/tts-research/backend/internal/contentir/readiumbridge"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
 	"github.com/justinedwards/tts-research/backend/internal/speechplan"
 	"github.com/justinedwards/tts-research/backend/internal/ssml"
@@ -89,7 +90,7 @@ func jobSpeechPlan(job VoiceJob, generatedAt time.Time) speechplan.Document {
 			Mode:        string(policy.ModeSpeak),
 			Explanation: "Speech plan segment uses resolved synthesis text after project, source, and session policy preprocessing.",
 		}
-		envelope := contentir.NewLocatorEnvelope(nil, contentir.LocatorContext{
+		envelope := readiumbridge.NewLocatorEnvelope(nil, contentir.LocatorContext{
 			Kind:            "highlight",
 			SourceID:        sourceID,
 			ScopeKey:        scopeKeyForJob(job),

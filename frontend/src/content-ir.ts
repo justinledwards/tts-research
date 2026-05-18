@@ -2,7 +2,6 @@ import { formatContentIRLocator as formatLocator } from "./locatorCodecs";
 import type { ContentIRLocator, ContentIRNode } from "./generated/contracts";
 
 export const CONTENT_IR_SCHEMA_VERSION = "content-ir.v1";
-export const CONTENT_IR_SCHEMA_VERSION_V1_1 = "content-ir.v1_1";
 
 export type {
   ContentIRBBox,

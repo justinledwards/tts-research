@@ -13,8 +13,8 @@ var ErrUnsupportedSchemaVersion = errors.New("unsupported content IR schema vers
 func Migrate(document Document) (Document, error) {
 	version := strings.TrimSpace(document.SchemaVersion)
 	switch version {
-	case SchemaVersionV1, SchemaVersionV11:
-		return document, nil
+	case SchemaVersionV1:
+		return normalizeReleasedV1(document), nil
 	case "":
 		return Document{}, fmt.Errorf("%w: missing schemaVersion", ErrUnsupportedSchemaVersion)
 	default:
@@ -26,22 +26,28 @@ func ToSchemaVersion(document Document, version string) (Document, error) {
 	switch strings.TrimSpace(version) {
 	case "", SchemaVersionV1:
 		return ToV1(document)
-	case SchemaVersionV11:
-		return ToV11(document)
 	default:
 		return Document{}, fmt.Errorf("%w: %s", ErrUnsupportedSchemaVersion, version)
 	}
 }
 
-func ToV11(document Document) (Document, error) {
-	document, err := Migrate(document)
-	if err != nil {
-		return Document{}, err
+func ToV1(document Document) (Document, error) {
+	version := strings.TrimSpace(document.SchemaVersion)
+	switch version {
+	case SchemaVersionV1:
+		return normalizeReleasedV1(document), nil
+	case "":
+		return Document{}, fmt.Errorf("%w: missing schemaVersion", ErrUnsupportedSchemaVersion)
+	default:
+		return Document{}, fmt.Errorf("%w: %s", ErrUnsupportedSchemaVersion, version)
 	}
-	document.SchemaVersion = SchemaVersionV11
+}
+
+func normalizeReleasedV1(document Document) Document {
+	document.SchemaVersion = SchemaVersionV1
 	for index := range document.Nodes {
 		node := document.Nodes[index]
-		node.Provenance.Locator = locatorToV11(node.Provenance.Locator)
+		node.Provenance.Locator = locatorToReleasedV1(node.Provenance.Locator)
 		refs := pronunciationRefsFromMetadata(node.Metadata)
 		if len(node.PronunciationRefs) == 0 {
 			node.PronunciationRefs = refs
@@ -70,30 +76,10 @@ func ToV11(document Document) (Document, error) {
 		}
 		document.Nodes[index] = node
 	}
-	return document, nil
+	return document
 }
 
-func ToV1(document Document) (Document, error) {
-	document, err := Migrate(document)
-	if err != nil {
-		return Document{}, err
-	}
-	document.SchemaVersion = SchemaVersionV1
-	for index := range document.Nodes {
-		node := document.Nodes[index]
-		node.Provenance.Locator = locatorToV1(node.Provenance.Locator)
-		node.PronunciationRefs = nil
-		node.LexiconEntryIDs = nil
-		node.Phoneme = ""
-		node.Alphabet = ""
-		node.SayAs = ""
-		node.MarkID = ""
-		document.Nodes[index] = node
-	}
-	return document, nil
-}
-
-func locatorToV11(locator Locator) Locator {
+func locatorToReleasedV1(locator Locator) Locator {
 	if locator.Type == "epub" && locator.EPUB == nil && locator.HTML != nil {
 		locator.EPUB = &EPUBLocator{
 			Href:        locator.HTML.Href,
@@ -104,20 +90,6 @@ func locatorToV11(locator Locator) Locator {
 		}
 		locator.HTML = nil
 	}
-	return locator
-}
-
-func locatorToV1(locator Locator) Locator {
-	if locator.Type == "epub" && locator.HTML == nil && locator.EPUB != nil {
-		locator.HTML = &HTMLLocator{
-			Href:        locator.EPUB.Href,
-			Fragment:    locator.EPUB.Fragment,
-			TextQuote:   locator.EPUB.TextQuote,
-			Progression: locator.EPUB.Progression,
-			EPUBCFI:     locator.EPUB.EPUBCFI,
-		}
-	}
-	locator.EPUB = nil
 	return locator
 }
 
@@ -270,4 +242,13 @@ func boolValue(value map[string]any, key string) bool {
 	}
 	typed, _ := raw.(bool)
 	return typed
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

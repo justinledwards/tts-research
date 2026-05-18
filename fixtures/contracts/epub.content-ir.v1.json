@@ -1,48 +1,46 @@
 {
-  "schemaVersion": "content-ir.v1_1",
-  "id": "contract-pdf",
+  "schemaVersion": "content-ir.v1",
+  "id": "contract-epub",
   "sourceType": "bookSource",
-  "sourceId": "contract-pdf",
+  "sourceId": "contract-epub",
   "projectId": "default",
-  "sourceName": "contract.pdf",
+  "sourceName": "contract.epub",
   "adapterVersion": "contract-fixture-v1",
   "generatedAt": "2026-05-17T01:00:00Z",
   "nodes": [
     {
-      "nodeId": "pdf-0001",
+      "nodeId": "epub-0001",
       "parentId": "",
       "orderKey": "00000001",
-      "kind": "page",
+      "kind": "chapter",
       "role": "body",
-      "displayText": "PDF page text.",
-      "normalisedText": "PDF page text.",
-      "speechText": "PDF page text.",
-      "lang": "und",
+      "displayText": "Opening chapter text.",
+      "normalisedText": "Opening chapter text.",
+      "speechText": "Opening chapter text.",
+      "lang": "en",
       "script": "Latn",
       "dir": "ltr",
       "provenance": {
-        "format": "pdf",
-        "sourceId": "contract-pdf",
+        "format": "epub",
+        "sourceId": "contract-epub",
         "locator": {
-          "type": "pdf",
-          "pdf": {
-            "pageIndex": 0,
-            "bbox": {
-              "x": 72,
-              "y": 90,
-              "width": 240,
-              "height": 32
-            },
-            "readingOrderIndex": 0
+          "type": "epub",
+          "epub": {
+            "href": "OPS/chapter-one.xhtml",
+            "fragment": "p1",
+            "textQuote": "Opening chapter text.",
+            "progression": 0,
+            "epubCfi": "epubcfi(/6/chapter-one!/4/2)",
+            "spineId": "chapter-one"
           }
         },
         "offsets": {
           "start": 0,
-          "end": 14
+          "end": 21
         }
       },
       "ui": {
-        "progressionHint": "paged",
+        "progressionHint": "linear",
         "highlightUnitHint": "node"
       },
       "speech": {
@@ -57,16 +55,16 @@
           "element": "prose",
           "elementMode": "speak",
           "mode": "speak",
-          "explanation": "PDF text-layer content is spoken."
+          "explanation": "EPUB prose is spoken."
         }
       },
       "warnings": [],
-      "confidence": 0.9,
+      "confidence": 0.94,
       "rights": {
         "status": "unknown",
         "notes": ""
       },
-      "markId": "mark-pdf-0001",
+      "markId": "mark-epub-0001",
       "adapterVersion": "contract-fixture-v1"
     }
   ]

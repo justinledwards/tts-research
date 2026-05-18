@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
+	"github.com/justinedwards/tts-research/backend/internal/contentir/readiumbridge"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
 	"github.com/justinedwards/tts-research/backend/internal/ssml"
 )
@@ -69,7 +70,7 @@ type BuildOptions struct {
 }
 
 func BuildFromContentIR(document contentir.Document, options BuildOptions) (Document, error) {
-	ir, err := contentir.ToV11(document)
+	ir, err := contentir.ToV1(document)
 	if err != nil {
 		return Document{}, err
 	}
@@ -116,7 +117,7 @@ func BuildFromContentIR(document contentir.Document, options BuildOptions) (Docu
 			Lang:         firstNonEmpty(node.Lang, "und"),
 			SpeechPolicy: node.Speech.SpeechPolicy,
 			PolicyTrace:  trace,
-			LocatorEnvelope: contentir.NewLocatorEnvelope(&locator, contentir.LocatorContext{
+			LocatorEnvelope: readiumbridge.NewLocatorEnvelope(&locator, contentir.LocatorContext{
 				Kind:            firstNonEmpty(options.LocatorKind, "highlight"),
 				SourceID:        ir.SourceID,
 				NodeID:          node.NodeID,

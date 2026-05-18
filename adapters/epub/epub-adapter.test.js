@@ -24,9 +24,9 @@ test("EPUB adapter traverses package spine, nav labels, fragments, and media ove
   assert(nodes.every((node) => node.provenance.locator.type === "epub"));
   assert(nodes.some((node) => node.kind === "caption" && node.displayText.includes("caption")));
   assert(nodes.some((node) => node.kind === "table" && node.displayText.includes("Term")));
-  assert(nodes.some((node) => node.provenance.locator.html.fragment === "p-intro"));
+  assert(nodes.some((node) => node.provenance.locator.epub.fragment === "p-intro"));
   assert(
-    nodes.every((node) => typeof node.provenance.locator.html.epubCfi === "string"),
+    nodes.every((node) => typeof node.provenance.locator.epub.epubCfi === "string"),
     "all EPUB nodes should expose best-effort CFI locators",
   );
 });

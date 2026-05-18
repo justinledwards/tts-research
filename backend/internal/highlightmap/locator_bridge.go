@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
+	"github.com/justinedwards/tts-research/backend/internal/contentir/readiumbridge"
 )
 
 type WordSpan struct {
@@ -73,11 +74,11 @@ func locatorForWordSpan(span WordSpan) *contentir.Locator {
 }
 
 func PositionMatchesLocator(position ReadingPosition, locator *contentir.Locator) bool {
-	return contentir.LocatorsMatch(position.Locator, locator)
+	return readiumbridge.LocatorsMatch(position.Locator, locator)
 }
 
 func contentirLocatorEnvelope(position ReadingPosition, kind string) *contentir.LocatorEnvelope {
-	envelope := contentir.NewLocatorEnvelope(position.Locator, contentir.LocatorContext{
+	envelope := readiumbridge.NewLocatorEnvelope(position.Locator, contentir.LocatorContext{
 		Kind:            kind,
 		SourceID:        position.BookSourceID,
 		ScopeKey:        position.ScopeKey,

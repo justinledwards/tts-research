@@ -171,7 +171,7 @@ function epubBlock(block, context) {
   return {
     ...block,
     locator: {
-      html: {
+      epub: {
         ...block.locator.html,
         epubCfi: bestEffortCFI(context.item.idref ?? context.item.id, localId),
         href: context.href,

@@ -1,13 +1,14 @@
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+import { execFile } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { promisify } from "node:util";
 
 const repoRoot = process.cwd();
 const schemaDir = path.join(repoRoot, "backend/internal/contentir/schema");
 const schemaPath = path.join(schemaDir, "content-ir.v1.schema.json");
-const contentIRV11SchemaPath = path.join(schemaDir, "content-ir.v1_1.schema.json");
 const locatorEnvelopeSchemaPath = path.join(schemaDir, "locator-envelope.v1.schema.json");
 const speechPlanSchemaPath = path.join(schemaDir, "speech-plan.v1.schema.json");
 const goldenDir = path.join(repoRoot, "backend/internal/contentir/testdata/golden");
@@ -17,19 +18,21 @@ const adapterFiles = [
   "backend/internal/pipeline/book_source_to_ir.go",
   "backend/internal/pipeline/ir_to_legacy_models.go",
 ];
+const execFileAsync = promisify(execFile);
+
+await execFileAsync(process.execPath, ["scripts/generate-contract-types.mjs", "--check"], {
+  cwd: repoRoot,
+});
 
 const schema = JSON.parse(await readFile(schemaPath, "utf8"));
-const contentIRV11Schema = JSON.parse(await readFile(contentIRV11SchemaPath, "utf8"));
 const locatorEnvelopeSchema = JSON.parse(await readFile(locatorEnvelopeSchemaPath, "utf8"));
 const speechPlanSchema = JSON.parse(await readFile(speechPlanSchemaPath, "utf8"));
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 addFormats(ajv);
 ajv.addSchema(schema, "content-ir.v1.schema.json");
-ajv.addSchema(contentIRV11Schema, "content-ir.v1_1.schema.json");
 ajv.addSchema(locatorEnvelopeSchema, "locator-envelope.v1.schema.json");
 ajv.addSchema(speechPlanSchema, "speech-plan.v1.schema.json");
 const validate = ajv.compile(schema);
-const validateV11 = ajv.compile(contentIRV11Schema);
 const validateLocatorEnvelope = ajv.compile(locatorEnvelopeSchema);
 const validateSpeechPlan = ajv.compile(speechPlanSchema);
 
@@ -52,16 +55,16 @@ if (contractFiles.length === 0) {
   throw new Error("No public contract fixtures found.");
 }
 
-const contractCounts = { contentIRV11: 0, locatorEnvelope: 0, speechPlan: 0 };
+const contractCounts = { contentIR: 0, locatorEnvelope: 0, speechPlan: 0 };
 for (const file of contractFiles) {
   const fullPath = path.join(contractDir, file);
   const payload = JSON.parse(await readFile(fullPath, "utf8"));
   assertJSONRoundTrip(file, payload);
-  if (file.endsWith(".content-ir.v1_1.json")) {
-    contractCounts.contentIRV11 += 1;
-    if (!validateV11(payload)) {
+  if (file.endsWith(".content-ir.v1.json")) {
+    contractCounts.contentIR += 1;
+    if (!validate(payload)) {
       throw new Error(
-        `${file} failed Content IR v1_1 validation:\n${ajv.errorsText(validateV11.errors)}`,
+        `${file} failed Content IR v1 validation:\n${ajv.errorsText(validate.errors)}`,
       );
     }
   } else if (file.endsWith(".locator-envelope.v1.json")) {

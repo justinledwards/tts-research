@@ -103,9 +103,7 @@ func NewHTMLLocator(href string, fragment string, textQuote string, progression 
 }
 
 func NewEPUBLocator(href string, fragment string, textQuote string, progression *float64, epubCFI string) Locator {
-	locator := NewHTMLLocator(href, fragment, textQuote, progression, epubCFI)
-	locator.Type = "epub"
-	return locator
+	return NewPublicEPUBLocator(href, fragment, textQuote, progression, epubCFI, "")
 }
 
 func NewPublicEPUBLocator(href string, fragment string, textQuote string, progression *float64, epubCFI string, spineID string) Locator {

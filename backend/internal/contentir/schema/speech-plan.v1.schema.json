@@ -37,12 +37,12 @@
         "nodeId": { "type": "string" },
         "text": { "type": "string" },
         "lang": { "type": "string" },
-        "speechPolicy": { "$ref": "content-ir.v1_1.schema.json#/$defs/speechPolicy" },
+        "speechPolicy": { "$ref": "content-ir.v1.schema.json#/$defs/speechPolicy" },
         "policyTrace": { "type": "array", "items": { "$ref": "#/$defs/policyTrace" } },
         "locatorEnvelope": { "$ref": "locator-envelope.v1.schema.json" },
         "pronunciationRefs": {
           "type": "array",
-          "items": { "$ref": "content-ir.v1_1.schema.json#/$defs/pronunciationRef" }
+          "items": { "$ref": "content-ir.v1.schema.json#/$defs/pronunciationRef" }
         },
         "lexiconEntryIds": { "type": "array", "items": { "type": "string" } },
         "serializerTargets": { "$ref": "#/$defs/serializerTargets" },

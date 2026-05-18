@@ -108,4 +108,26 @@ describe("highlight map lookup", () => {
     });
     expect(seconds).toBe(0);
   });
+
+  it("resolves resume seconds from released v1 EPUB locators", () => {
+    const map = fixtureMap("word");
+    if (map.tokens[0]?.readingPosition) {
+      map.tokens[0].readingPosition.locator = {
+        type: "epub",
+        epub: { href: "OPS/chapter.xhtml", fragment: "w8" },
+      };
+    }
+
+    const seconds = secondsForReadingPosition(map, {
+      activeWordIndex: 99,
+      locatorEnvelope: {
+        schemaVersion: "locator-envelope.v1",
+        kind: "resume",
+        sourceId: "book",
+        locator: { type: "epub", epub: { href: "OPS/chapter.xhtml", fragment: "w8" } },
+      },
+    });
+
+    expect(seconds).toBe(0);
+  });
 });

@@ -85,7 +85,7 @@
         "sourceSlice": "# Title",
         "speechRender": {
           "plainText": "Title",
-          "ssml": "\u003cspeak version=\"1.1\" xml:lang=\"en\"\u003eTitle\u003c/speak\u003e",
+          "ssml": "<speak version=\"1.1\" xml:lang=\"en\">Title</speak>",
           "lang": "en",
           "locale": "en-GB",
           "languageSpans": [
@@ -169,7 +169,7 @@
         "sourceSlice": "Hello world.",
         "speechRender": {
           "plainText": "Hello world.",
-          "ssml": "\u003cspeak version=\"1.1\" xml:lang=\"en\"\u003eHello world.\u003c/speak\u003e",
+          "ssml": "<speak version=\"1.1\" xml:lang=\"en\">Hello world.</speak>",
           "lang": "en",
           "locale": "en-GB",
           "languageSpans": [

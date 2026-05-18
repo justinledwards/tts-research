@@ -472,28 +472,21 @@ func TestContentIREndpoint(t *testing.T) {
 		t.Fatalf("CreateBookSource returned error: %v", err)
 	}
 	bookDocument := getContentIRDocument(t, app, book.ID, http.StatusOK)
-	if bookDocument.SourceType != "bookSource" || bookDocument.Nodes[0].Provenance.Locator.HTML == nil {
+	if bookDocument.SourceType != "bookSource" || bookDocument.Nodes[0].Provenance.Locator.EPUB == nil {
 		t.Fatalf("book document = %#v, want EPUB locator", bookDocument)
 	}
 	request, err := http.NewRequest(http.MethodGet, "/api/content-ir/"+book.ID+"?schemaVersion=content-ir.v1_1", nil)
 	if err != nil {
-		t.Fatalf("NewRequest(content-ir v1_1) returned error: %v", err)
+		t.Fatalf("NewRequest(content-ir unreleased version) returned error: %v", err)
 	}
 	response, err := app.Test(request)
 	if err != nil {
-		t.Fatalf("app.Test(content-ir v1_1) returned error: %v", err)
+		t.Fatalf("app.Test(content-ir unreleased version) returned error: %v", err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode != http.StatusBadRequest {
 		payload, _ := io.ReadAll(response.Body)
-		t.Fatalf("content-ir v1_1 status = %d, body = %s", response.StatusCode, payload)
-	}
-	var upgraded contentir.Document
-	if err := json.NewDecoder(response.Body).Decode(&upgraded); err != nil {
-		t.Fatalf("decode v1_1 content IR: %v", err)
-	}
-	if upgraded.SchemaVersion != contentir.SchemaVersionV11 || upgraded.Nodes[0].Provenance.Locator.EPUB == nil {
-		t.Fatalf("v1_1 document = %#v, want EPUB payload", upgraded)
+		t.Fatalf("content-ir unreleased version status = %d, want %d, body = %s", response.StatusCode, http.StatusBadRequest, payload)
 	}
 	invalidSchemaRequest, err := http.NewRequest(
 		http.MethodGet,

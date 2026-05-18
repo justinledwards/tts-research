@@ -248,10 +248,13 @@ func firstLine(value string) string {
 }
 
 func htmlHrefFromIRNode(node contentir.Node) string {
-	if node.Provenance.Locator.HTML == nil {
-		return ""
+	if node.Provenance.Locator.EPUB != nil {
+		return node.Provenance.Locator.EPUB.Href
 	}
-	return node.Provenance.Locator.HTML.Href
+	if node.Provenance.Locator.HTML != nil {
+		return node.Provenance.Locator.HTML.Href
+	}
+	return ""
 }
 
 func textFromIRNodes(nodes []contentir.Node) string {

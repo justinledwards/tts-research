@@ -105,7 +105,7 @@ describe("Content IR UI helpers", () => {
       <ContentIRDrawer
         document={{
           ...makeContentIRDocument(),
-          schemaVersion: "content-ir.v1_1",
+          schemaVersion: "content-ir.v1",
           nodes: [
             {
               ...makeContentIRNode(),

@@ -25,9 +25,8 @@
         "sourceId": "small-epub-chapter",
         "locator": {
           "type": "epub",
-          "html": {
+          "epub": {
             "href": "OPS/chapter-one.xhtml",
-            "fragment": "",
             "textQuote": "Opening Content IR keeps structure and spoken text together.",
             "progression": 0
           }

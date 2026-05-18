@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "content-ir.v1_1",
+  "schemaVersion": "content-ir.v1",
   "id": "contract-markdown",
   "sourceType": "preparedSource",
   "sourceId": "contract-markdown",
@@ -17,9 +17,9 @@
       "orderKey": "00000001",
       "kind": "body",
       "role": "body",
-      "displayText": "Dr Nguyen shipped v1.1.",
-      "normalisedText": "Dr Nguyen shipped v1.1.",
-      "speechText": "Doctor Nguyen shipped version one point one.",
+      "displayText": "Dr Nguyen shipped v1.",
+      "normalisedText": "Dr Nguyen shipped v1.",
+      "speechText": "Doctor Nguyen shipped version one.",
       "lang": "en",
       "script": "Latn",
       "dir": "ltr",
@@ -33,13 +33,13 @@
             "lineStart": 3,
             "lineEnd": 3,
             "columnStart": 1,
-            "columnEnd": 24,
+            "columnEnd": 22,
             "astPath": "/children/1"
           }
         },
         "offsets": {
           "start": 10,
-          "end": 33
+          "end": 31
         }
       },
       "ui": {

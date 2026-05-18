@@ -7,9 +7,8 @@ import (
 )
 
 const (
-	SchemaVersionV1  = "content-ir.v1"
-	SchemaVersionV11 = "content-ir.v1_1"
-	SchemaVersion    = SchemaVersionV1
+	SchemaVersionV1 = "content-ir.v1"
+	SchemaVersion   = SchemaVersionV1
 )
 
 type Document struct {
