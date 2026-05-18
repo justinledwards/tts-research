@@ -1,5 +1,13 @@
 # Working Log
 
+## 2026-05-18 20:06 CEST - Supertonic contract-row target and validation polish
+- [x] Map Supertonic engine target policy to `supertonic-embed` in frontend profile target helpers.
+- [x] Update backend contract table row to require a profile target and profile artifact text for Supertonic.
+- [x] Add backend-contract validation percentage visibility and target-oriented action labels.
+- [x] Keep Supertonic contract selection wired to profile-backed clone configuration.
+- [x] Expand profile-target unit coverage for Supertonic.
+- [x] Run frontend checks for tests, typecheck, and build.
+
 ## 2026-05-18 18:21 CEST - Workstream Lambda reader standards hardening
 - [x] Add source policy pin resolver and APIs
 - [x] Expand EPUB speech fidelity fixtures and goldens

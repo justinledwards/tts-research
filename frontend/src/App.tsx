@@ -6541,11 +6541,11 @@ const BACKEND_CONTRACTS = [
     voiceSource: "Profile",
   },
   {
-    artifact: "Preset voice",
+    artifact: "Style vector",
     engineId: "supertonic-3",
     label: "Supertonic",
-    targetId: null,
-    voiceSource: "Provider",
+    targetId: "supertonic-embed",
+    voiceSource: "Profile",
   },
 ] as const;
 
@@ -6599,6 +6599,7 @@ function BackendContractReviewPanel({
               <th className="px-3 py-2 font-semibold">Required Target</th>
               <th className="px-3 py-2 font-semibold">Artifact</th>
               <th className="px-3 py-2 font-semibold">Readiness</th>
+              <th className="px-3 py-2 font-semibold">Validation</th>
               <th className="px-3 py-2 font-semibold">User Action</th>
             </tr>
           </thead>
@@ -6650,6 +6651,7 @@ function BackendContractReviewPanel({
                       {summary.detail}
                     </p>
                   </td>
+                  <td className="px-3 py-3 text-[0.68rem] vs-muted">{summary.validationPercent}</td>
                   <td className="px-3 py-3">
                     <button
                       className={`h-8 min-w-28 rounded-md border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${backendContractActionButtonClass(summary.status)}`}
@@ -6689,6 +6691,7 @@ interface BackendContractSummary {
   canAct: boolean;
   detail: string;
   engineLabel: string;
+  validationPercent: string;
   label: string;
   status: BackendContractStatus;
 }
@@ -6733,6 +6736,8 @@ function backendContractSummary({
     (target?.status === "ready" ||
       artifact?.status === "ready" ||
       (contract.targetId === "kokoro-clone" && !target));
+  const validationPercent =
+    typeof target?.validation?.score === "number" ? formatSimilarity(target.validation.score) : "—";
   const status = backendContractReadinessStatus({
     artifactStatus: artifact?.status,
     isBusy,
@@ -6756,6 +6761,7 @@ function backendContractSummary({
       target?.validation?.error ??
       (profile ? voiceProfileTargetReadinessText(profile, contract.engineId) : "Select a profile"),
     engineLabel,
+    validationPercent,
     label: backendContractReadinessLabel(status),
     status,
   };
@@ -6779,6 +6785,7 @@ function backendContractNoTargetSummary({
     canAct: ready && activeEngineId !== contract.engineId,
     detail: ready ? "No profile target" : "Provider unavailable",
     engineLabel,
+    validationPercent: "—",
     label: ready ? "Ready" : "Unavailable",
     status: ready ? "ready" : "setup",
   };
@@ -6843,6 +6850,7 @@ function backendContractActionLabel({
   isCanceling: boolean;
   status: BackendContractStatus;
 }>): string {
+  const actionLabel = contract.targetId ? moduleLabel(contract.targetId) : contract.label;
   if (isCanceling) {
     return "Cancelling...";
   }
@@ -6850,13 +6858,13 @@ function backendContractActionLabel({
     return "Cancel";
   }
   if (status === "failed") {
-    return `Retry ${contract.targetId ? compactModuleLabel(contract.targetId) : contract.label}`;
+    return `Retry ${actionLabel}`;
   }
   if (status === "ready") {
-    return active ? "Selected" : `Use ${contract.label}`;
+    return active ? "Selected" : `Use ${actionLabel}`;
   }
   if (status === "waiting" && contract.targetId) {
-    return `Prepare ${compactModuleLabel(contract.targetId)}`;
+    return `Prepare ${actionLabel}`;
   }
   return "Setup needed";
 }
@@ -6956,7 +6964,7 @@ function handleBackendContractAction({
   }
   if (summary.status === "ready") {
     onRunConfigurationChange(
-      runConfigurationForBackendContract(runConfiguration, contract.engineId, ttsEngines),
+      runConfigurationForBackendContract(runConfiguration, contract.engineId, ttsEngines, profile),
     );
   }
 }
@@ -6965,6 +6973,7 @@ function runConfigurationForBackendContract(
   runConfiguration: RunConfiguration,
   engineId: string,
   ttsEngines: TTSEngineDiagnostics[],
+  profile: VoiceProfile | null,
 ): RunConfiguration {
   if (engineId === "kokoro") {
     return applyKokoroRenderMode(runConfiguration, "voicepack");
@@ -6983,6 +6992,10 @@ function runConfigurationForBackendContract(
         ...runConfiguration.engineOptions,
         lang: runConfiguration.engineOptions.lang ?? "na",
         voiceStyle: runConfiguration.engineOptions.voiceStyle ?? engine?.voices?.[0]?.id ?? "M1",
+      },
+      options: {
+        ...runConfiguration.options,
+        voiceClone: Boolean(profile),
       },
       ttsEngine: engineId,
     };
@@ -7218,7 +7231,7 @@ function handleCloneTargetReadinessAction({
   }
   if (canUse) {
     onRunConfigurationChange(
-      runConfigurationForCloneTarget(runConfiguration, moduleId, ttsEngines),
+      runConfigurationForCloneTarget(runConfiguration, moduleId, ttsEngines, profile),
     );
     return;
   }
@@ -7246,6 +7259,7 @@ function runConfigurationForCloneTarget(
   runConfiguration: RunConfiguration,
   moduleId: string,
   ttsEngines: TTSEngineDiagnostics[],
+  profile: VoiceProfile | null,
 ): RunConfiguration {
   if (moduleId === "kokoro-clone") {
     return applyKokoroRenderMode(runConfiguration, "kokoclone");
@@ -7254,7 +7268,12 @@ function runConfigurationForCloneTarget(
     return applyKokoroRenderMode(runConfiguration, "kokoro-embed");
   }
   if (moduleId === "supertonic-embed") {
-    return runConfigurationForBackendContract(runConfiguration, "supertonic-3", ttsEngines);
+    return runConfigurationForBackendContract(
+      runConfiguration,
+      "supertonic-3",
+      ttsEngines,
+      profile,
+    );
   }
   return runConfiguration;
 }

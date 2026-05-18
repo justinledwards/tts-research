@@ -45,6 +45,9 @@ export function voiceProfileTargetForEngine(engineId: string): string | null {
     case "kokoro-embed": {
       return "kokoro-embed";
     }
+    case "supertonic-3": {
+      return "supertonic-embed";
+    }
     default: {
       return null;
     }

@@ -4,6 +4,7 @@ import {
   buildNarrationBackendDescriptor,
   humanizeProfileTargetProblem,
   isVoiceProfileTargetReadyForEngine,
+  voiceProfileTargetForEngine,
   voiceProfileTargetReadinessText,
 } from "./profileTargets";
 import type { VoiceProfile } from "./types";
@@ -18,8 +19,49 @@ describe("voice profile target helpers", () => {
 
     expect(isVoiceProfileTargetReadyForEngine(profile, "kokoro")).toBe(true);
     expect(isVoiceProfileTargetReadyForEngine(profile, "kokoro-embed")).toBe(false);
-    expect(isVoiceProfileTargetReadyForEngine(profile, "supertonic-3")).toBe(true);
+    expect(isVoiceProfileTargetReadyForEngine(profile, "supertonic-3")).toBe(false);
     expect(voiceProfileTargetReadinessText(profile, "kokoro-embed")).toContain("building");
+  });
+
+  it("maps supertonic backend to supertonic-embed target", () => {
+    expect(voiceProfileTargetForEngine("supertonic-3")).toBe("supertonic-embed");
+  });
+
+  it("requires supertonic target or artifact for profile-backed supertonic rendering", () => {
+    const profile = profileWithTargets({ "kokoro-embed": "ready" });
+
+    expect(isVoiceProfileTargetReadyForEngine(profile, "supertonic-3")).toBe(false);
+
+    const supertonicProfile = {
+      ...profile,
+      cloneTargets: {
+        "supertonic-embed": {
+          id: "supertonic-embed",
+          selected: true,
+          status: "ready",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    } satisfies VoiceProfile;
+
+    expect(isVoiceProfileTargetReadyForEngine(supertonicProfile, "supertonic-3")).toBe(true);
+
+    const supertonicArtifactProfile = {
+      ...profileWithTargets({}),
+      cloneArtifacts: {
+        "supertonic-embed": {
+          moduleId: "supertonic-embed",
+          status: "ready",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    } satisfies VoiceProfile;
+
+    expect(isVoiceProfileTargetReadyForEngine(supertonicArtifactProfile, "supertonic-3")).toBe(
+      true,
+    );
   });
 
   it("treats an unselected target as unavailable on new targeted profiles", () => {
@@ -45,7 +87,7 @@ describe("voice profile target helpers", () => {
 
     expect(isVoiceProfileTargetReadyForEngine(profile, "kokoro")).toBe(true);
     expect(isVoiceProfileTargetReadyForEngine(profile, "kokoro-embed")).toBe(true);
-    expect(isVoiceProfileTargetReadyForEngine(profile, "supertonic-3")).toBe(true);
+    expect(isVoiceProfileTargetReadyForEngine(profile, "supertonic-3")).toBe(false);
   });
 
   it("describes Kokoro fallback readiness without asking for redundant preparation", () => {
@@ -86,8 +128,9 @@ describe("voice profile target helpers", () => {
       supportsSwedish: true,
       supportsVoice: true,
     });
-    expect(descriptor.targetPolicy.targetId).toBeNull();
-    expect(descriptor.targetPolicy.requiresProfileTarget).toBe(false);
+    expect(descriptor.targetPolicy.targetId).toBe("supertonic-embed");
+    expect(descriptor.targetPolicy.requiresProfileTarget).toBe(true);
+    expect(descriptor.targetPolicy.fallbackReadyWithoutTarget).toBe(false);
   });
 
   it("distinguishes configured-token access denial from missing-token setup", () => {
