@@ -111,6 +111,12 @@ export interface SpeechPolicyOverrides {
   quoteMode?: SpeechPolicyQuoteMode;
 }
 
+export interface SourceSpeechPolicyUpdateRequest {
+  profile?: string;
+  overrides?: SpeechPolicyOverrides;
+  clear?: boolean;
+}
+
 export interface SpeechPolicyProfile {
   name: string;
   label: string;
@@ -288,6 +294,8 @@ export interface BookSource {
   pages?: BookSourcePage[];
   chapters?: BookSourceChapter[];
   wordSpans?: BookSourceWordSpan[];
+  sourceSpeechPolicyProfile?: string;
+  sourceSpeechPolicyOverrides?: SpeechPolicyOverrides;
   warnings?: string[];
   ingestion?: IngestionDiagnostics;
   error?: string;
@@ -500,6 +508,8 @@ export interface PreparedSource {
   renderMode?: string;
   markdownParseMode?: MarkdownParseMode;
   speechPolicyProfile: string;
+  sourceSpeechPolicyProfile?: string;
+  sourceSpeechPolicyOverrides?: SpeechPolicyOverrides;
   title?: string;
   text?: string;
   speechText?: string;

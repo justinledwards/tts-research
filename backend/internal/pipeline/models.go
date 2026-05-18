@@ -201,34 +201,36 @@ type PreparedSourceSummary struct {
 }
 
 type PreparedSource struct {
-	ID                  string                `json:"id"`
-	ProjectID           string                `json:"projectId"`
-	Status              PreparedSourceStatus  `json:"status"`
-	Kind                PreparedSourceKind    `json:"kind"`
-	SourceName          string                `json:"sourceName"`
-	SourceURL           string                `json:"sourceUrl,omitempty"`
-	SourceContentType   string                `json:"sourceContentType,omitempty"`
-	SourceBytes         int64                 `json:"sourceBytes,omitempty"`
-	PreprocessorID      string                `json:"preprocessorId,omitempty"`
-	PreprocessorVersion string                `json:"preprocessorVersion,omitempty"`
-	SourceFormat        string                `json:"sourceFormat,omitempty"`
-	RenderMode          string                `json:"renderMode,omitempty"`
-	MarkdownParseMode   string                `json:"markdownParseMode,omitempty"`
-	SpeechPolicyProfile string                `json:"speechPolicyProfile"`
-	Title               string                `json:"title,omitempty"`
-	Text                string                `json:"text,omitempty"`
-	SpeechText          string                `json:"speechText,omitempty"`
-	WordCount           int                   `json:"wordCount"`
-	BlockCount          int                   `json:"blockCount"`
-	SegmentCount        int                   `json:"segmentCount"`
-	Summary             PreparedSourceSummary `json:"summary"`
-	Blocks              []NarrationBlock      `json:"blocks,omitempty"`
-	SkippedItems        []SkippedSourceItem   `json:"skippedItems,omitempty"`
-	Warnings            []string              `json:"warnings,omitempty"`
-	Metadata            map[string]any        `json:"metadata,omitempty"`
-	Error               string                `json:"error,omitempty"`
-	CreatedAt           time.Time             `json:"createdAt"`
-	UpdatedAt           time.Time             `json:"updatedAt"`
+	ID                          string                `json:"id"`
+	ProjectID                   string                `json:"projectId"`
+	Status                      PreparedSourceStatus  `json:"status"`
+	Kind                        PreparedSourceKind    `json:"kind"`
+	SourceName                  string                `json:"sourceName"`
+	SourceURL                   string                `json:"sourceUrl,omitempty"`
+	SourceContentType           string                `json:"sourceContentType,omitempty"`
+	SourceBytes                 int64                 `json:"sourceBytes,omitempty"`
+	PreprocessorID              string                `json:"preprocessorId,omitempty"`
+	PreprocessorVersion         string                `json:"preprocessorVersion,omitempty"`
+	SourceFormat                string                `json:"sourceFormat,omitempty"`
+	RenderMode                  string                `json:"renderMode,omitempty"`
+	MarkdownParseMode           string                `json:"markdownParseMode,omitempty"`
+	SpeechPolicyProfile         string                `json:"speechPolicyProfile"`
+	SourceSpeechPolicyProfile   string                `json:"sourceSpeechPolicyProfile,omitempty"`
+	SourceSpeechPolicyOverrides policy.Overrides      `json:"sourceSpeechPolicyOverrides,omitempty"`
+	Title                       string                `json:"title,omitempty"`
+	Text                        string                `json:"text,omitempty"`
+	SpeechText                  string                `json:"speechText,omitempty"`
+	WordCount                   int                   `json:"wordCount"`
+	BlockCount                  int                   `json:"blockCount"`
+	SegmentCount                int                   `json:"segmentCount"`
+	Summary                     PreparedSourceSummary `json:"summary"`
+	Blocks                      []NarrationBlock      `json:"blocks,omitempty"`
+	SkippedItems                []SkippedSourceItem   `json:"skippedItems,omitempty"`
+	Warnings                    []string              `json:"warnings,omitempty"`
+	Metadata                    map[string]any        `json:"metadata,omitempty"`
+	Error                       string                `json:"error,omitempty"`
+	CreatedAt                   time.Time             `json:"createdAt"`
+	UpdatedAt                   time.Time             `json:"updatedAt"`
 }
 
 type CreatePreparedSourceRequest struct {
@@ -248,6 +250,12 @@ type SpeechPolicyPreviewRequest struct {
 	VoiceProfileID string           `json:"voiceProfileId,omitempty"`
 	Locale         string           `json:"locale,omitempty"`
 	TTSEngine      string           `json:"ttsEngine,omitempty"`
+}
+
+type SourceSpeechPolicyUpdateRequest struct {
+	Profile   string           `json:"profile,omitempty"`
+	Overrides policy.Overrides `json:"overrides,omitempty"`
+	Clear     bool             `json:"clear,omitempty"`
 }
 
 type ProjectSpeechPolicy struct {
@@ -383,30 +391,32 @@ type BookSourceSection struct {
 }
 
 type BookSource struct {
-	ID               string                `json:"id"`
-	ProjectID        string                `json:"projectId"`
-	Status           BookSourceStatus      `json:"status"`
-	Kind             BookSourceKind        `json:"kind"`
-	SourceFile       string                `json:"sourceFile"`
-	SourceBytes      int64                 `json:"sourceBytes"`
-	Title            string                `json:"title,omitempty"`
-	Author           string                `json:"author,omitempty"`
-	Text             string                `json:"text,omitempty"`
-	WordCount        int                   `json:"wordCount"`
-	PageCount        int                   `json:"pageCount"`
-	ChapterCount     int                   `json:"chapterCount"`
-	StructureVersion string                `json:"structureVersion,omitempty"`
-	DefaultSectionID string                `json:"defaultSectionId,omitempty"`
-	ReadingOrder     []string              `json:"readingOrder,omitempty"`
-	Sections         []BookSourceSection   `json:"sections,omitempty"`
-	Pages            []BookSourcePage      `json:"pages,omitempty"`
-	Chapters         []BookSourceChapter   `json:"chapters,omitempty"`
-	WordSpans        []BookSourceWordSpan  `json:"wordSpans,omitempty"`
-	Warnings         []string              `json:"warnings,omitempty"`
-	Ingestion        *IngestionDiagnostics `json:"ingestion,omitempty"`
-	Error            string                `json:"error,omitempty"`
-	CreatedAt        time.Time             `json:"createdAt"`
-	UpdatedAt        time.Time             `json:"updatedAt"`
+	ID                          string                `json:"id"`
+	ProjectID                   string                `json:"projectId"`
+	Status                      BookSourceStatus      `json:"status"`
+	Kind                        BookSourceKind        `json:"kind"`
+	SourceFile                  string                `json:"sourceFile"`
+	SourceBytes                 int64                 `json:"sourceBytes"`
+	Title                       string                `json:"title,omitempty"`
+	Author                      string                `json:"author,omitempty"`
+	Text                        string                `json:"text,omitempty"`
+	WordCount                   int                   `json:"wordCount"`
+	PageCount                   int                   `json:"pageCount"`
+	ChapterCount                int                   `json:"chapterCount"`
+	StructureVersion            string                `json:"structureVersion,omitempty"`
+	DefaultSectionID            string                `json:"defaultSectionId,omitempty"`
+	SourceSpeechPolicyProfile   string                `json:"sourceSpeechPolicyProfile,omitempty"`
+	SourceSpeechPolicyOverrides policy.Overrides      `json:"sourceSpeechPolicyOverrides,omitempty"`
+	ReadingOrder                []string              `json:"readingOrder,omitempty"`
+	Sections                    []BookSourceSection   `json:"sections,omitempty"`
+	Pages                       []BookSourcePage      `json:"pages,omitempty"`
+	Chapters                    []BookSourceChapter   `json:"chapters,omitempty"`
+	WordSpans                   []BookSourceWordSpan  `json:"wordSpans,omitempty"`
+	Warnings                    []string              `json:"warnings,omitempty"`
+	Ingestion                   *IngestionDiagnostics `json:"ingestion,omitempty"`
+	Error                       string                `json:"error,omitempty"`
+	CreatedAt                   time.Time             `json:"createdAt"`
+	UpdatedAt                   time.Time             `json:"updatedAt"`
 }
 
 type IngestionDiagnostics struct {

@@ -97,6 +97,7 @@ assert.equal(plan.schemaVersion, "speech-plan.v1");
   await run("python3", ["-m", "venv", "--system-site-packages", venvDir], repoRoot);
   const python = path.join(venvDir, "bin/python");
   const wheelDir = path.join(tempDir, "wheels");
+  await run(python, ["-m", "pip", "install", "setuptools>=69", "wheel"], repoRoot);
   await run(
     python,
     ["-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "-w", wheelDir, "packages/sdk-py"],

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import type {
   BookCinemaDiagnostics,
   BookImportProfile,
@@ -922,6 +922,7 @@ export function BookCinemaOverlay({
 }>) {
   const normalizedScope = normalizeBookScopeForBook(book, scope);
   const normalizedAccessibility = normalizeReaderAccessibilitySettings(accessibilitySettings);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const scopeOptions = useMemo(() => bookScopeOptions(book), [book]);
   const scopedSpans = useMemo(
     () => scopeContent?.wordSpans ?? bookScopeSpans(book, normalizedScope),
@@ -975,14 +976,26 @@ export function BookCinemaOverlay({
     playbackControls,
   });
 
+  useEffect(() => {
+    const activeElement = document.activeElement;
+    const previouslyFocused = activeElement instanceof HTMLElement ? activeElement : null;
+    dialogRef.current?.focus();
+    return () => {
+      previouslyFocused?.focus();
+    };
+  }, []);
+
   return (
     <div
+      aria-labelledby="book-cinema-title"
       aria-modal="true"
       className="vs-app fixed inset-0 z-50 flex flex-col"
       data-reader-highlight={normalizedAccessibility.highContrast ? "high-contrast" : "standard"}
       data-reader-motion={normalizedAccessibility.reducedMotion ? "reduced" : "standard"}
       data-theme={themeName}
+      ref={dialogRef}
       role="dialog"
+      tabIndex={-1}
     >
       <div aria-atomic="true" aria-live="polite" className="sr-only">
         {liveAnnouncement}
@@ -994,6 +1007,7 @@ export function BookCinemaOverlay({
           </p>
           <h2
             className="mt-1 truncate text-lg font-semibold sm:text-xl"
+            id="book-cinema-title"
             title={bookSourceName(book)}
           >
             {bookSourceName(book)}
@@ -1317,6 +1331,9 @@ export function BookCinemaOverlay({
               : bookCreateLabel(normalizedScope)}
           </button>
         </div>
+        <div className="mx-auto w-full max-w-3xl lg:hidden">
+          <BookCinemaPolicyNotes notes={policyNotes} />
+        </div>
         {isCancelledBookJob ? (
           <p className="mt-3 text-center text-xs text-amber-600">
             This narration was cancelled. The selected scope is ready to create again.
@@ -1394,13 +1411,16 @@ function BookCinemaTimingDebug({
 }
 
 function BookCinemaPolicyNotes({ notes }: Readonly<{ notes: BookCinemaPolicyNote[] }>) {
+  const headingId = useId();
   if (notes.length === 0) {
     return null;
   }
   return (
-    <div className="mt-4 rounded-lg border p-4 vs-border">
+    <section aria-labelledby={headingId} className="mt-4 rounded-lg border p-4 vs-border">
       <div className="flex items-center justify-between gap-3">
-        <p className="vs-muted text-xs font-semibold uppercase tracking-[0.2em]">Policy Notes</p>
+        <p className="vs-muted text-xs font-semibold uppercase tracking-[0.2em]" id={headingId}>
+          Policy Notes
+        </p>
         <span className="text-xs font-semibold text-orange-500">{String(notes.length)}</span>
       </div>
       <div className="mt-3 grid gap-2">
@@ -1423,7 +1443,7 @@ function BookCinemaPolicyNotes({ notes }: Readonly<{ notes: BookCinemaPolicyNote
           </article>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 

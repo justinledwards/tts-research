@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import JSZip from "jszip";
 import { emitEPUBAdapter } from "./emit_ir.js";
@@ -44,10 +45,22 @@ test("EPUB adapter traverses package spine, nav labels, fragments, and media ove
   assert.equal(ssmlNode.metadata.cssSpeech["speak-as"], "spell-out");
   assert.equal(ssmlNode.pronunciationRefs[0].phoneme, "iːpʌb θriː spiːtʃ ˈmɛtədəɪtə");
   assert.equal(ssmlNode.pronunciationRefs[0].alphabet, "ipa");
+  const inheritedNode = nodes.find((node) => node.displayText.includes("Inherited alphabet"));
+  assert(inheritedNode, "fixture should expose inherited SSML alphabet metadata");
+  assert.equal(inheritedNode.pronunciationRefs[0].alphabet, "ipa");
+  assert.equal(inheritedNode.pronunciationRefs[0].term, "nested term");
+  const cssNode = nodes.find((node) => node.displayText.includes("CSS speech hints"));
+  assert(cssNode, "fixture should expose inline CSS Speech metadata");
+  assert.equal(cssNode.sayAs, "digits");
+  assert.equal(cssNode.speech.policyHint.pauseBeforeMs, 100);
+  assert.equal(cssNode.speech.policyHint.pauseAfterMs, 220);
+  assert.equal(cssNode.metadata.cssSpeech["voice-rate"], "slow");
   assert(
     nodes.every((node) => typeof node.provenance.locator.epub.epubCfi === "string"),
     "all EPUB nodes should expose best-effort CFI locators",
   );
+
+  assert.deepEqual(await speechFidelitySnapshot(emitted), await speechFidelityGolden());
 });
 
 async function fixtureEPUB() {
@@ -95,6 +108,8 @@ async function fixtureEPUB() {
       <h1 id="intro-heading">Raw Intro</h1>
       <p id="p-intro">The introduction uses fragment level locators.</p>
       <p id="p-ssml" ssml:ph="iːpʌb θriː spiːtʃ ˈmɛtədəɪtə" style="speak-as: spell-out; pause-before: 250ms;">EPUB 3 speech metadata.</p>
+      <p id="p-inherited">Inherited alphabet keeps <span ssml:ph="nɛstɪd tɝm">nested term</span> pronunciation.</p>
+      <p id="p-css" style="speak-as: digits; pause: 100ms 220ms; voice-rate: slow;">CSS speech hints are inline.</p>
       <figure><img src="cover.jpg" alt="Cover alt text" /><figcaption>Opening image caption.</figcaption></figure>
     </body></html>`,
   );
@@ -111,4 +126,48 @@ async function fixtureEPUB() {
     `<smil><body><seq><par><text src="intro.xhtml#p-intro" /><audio src="audio/intro.mp3" /></par></seq></body></smil>`,
   );
   return zip.generateAsync({ type: "nodebuffer" });
+}
+
+async function speechFidelitySnapshot(emitted) {
+  const nodes = emitted.document.nodes;
+  const wanted = [
+    "EPUB 3 speech metadata.",
+    "Inherited alphabet keeps",
+    "CSS speech hints are inline.",
+  ];
+  return {
+    pronunciationLexicons: emitted.metadata.pronunciationLexicons,
+    cssSpeechStyles: emitted.metadata.cssSpeechStyles,
+    nodes: wanted.map((text) =>
+      speechNodeSnapshot(nodes.find((node) => node.displayText.includes(text))),
+    ),
+  };
+}
+
+function speechNodeSnapshot(node) {
+  assert(node, "speech fidelity node should exist");
+  return {
+    displayText: node.displayText,
+    phoneme: node.phoneme ?? "",
+    alphabet: node.alphabet ?? "",
+    sayAs: node.sayAs ?? "",
+    pauseBeforeMs: node.speech.policyHint.pauseBeforeMs,
+    pauseAfterMs: node.speech.policyHint.pauseAfterMs,
+    cssSpeech: node.metadata.cssSpeech ?? {},
+    pronunciationRefs: (node.pronunciationRefs ?? []).map((ref) => ({
+      term: ref.term,
+      originalText: ref.originalText,
+      phoneme: ref.phoneme,
+      alphabet: ref.alphabet,
+      source: ref.source,
+      startOffset: ref.startOffset,
+      endOffset: ref.endOffset,
+    })),
+  };
+}
+
+async function speechFidelityGolden() {
+  return JSON.parse(
+    await readFile(new URL("./testdata/speech-fidelity.golden.json", import.meta.url), "utf8"),
+  );
 }

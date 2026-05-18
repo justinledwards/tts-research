@@ -16,6 +16,7 @@ import {
   resolveBookActiveWordIndex,
   resolveDisplayedBookActiveWordIndex,
   resolveDefaultBookScope,
+  shouldIgnoreBookCinemaKeyboardTarget,
   visibleBookSpans,
 } from "./BookCinemaPanel";
 import type { BookSource, VoiceJob } from "./types";
@@ -68,6 +69,48 @@ describe("Book Cinema helpers", () => {
     expect(bookCinemaKeyboardCommandForKey("b")).toBe("bookmark");
     expect(bookCinemaKeyboardCommandForKey("Escape")).toBe("close");
     expect(bookCinemaKeyboardCommandForKey("x")).toBeNull();
+  });
+
+  it("ignores reader shortcuts in editable and control targets", () => {
+    const hadHTMLElement = Object.hasOwn(globalThis, "HTMLElement");
+    const originalHTMLElement = globalThis.HTMLElement;
+    class FakeHTMLElement extends EventTarget {
+      isContentEditable = false;
+      tagName: string;
+
+      constructor(tagName: string) {
+        super();
+        this.tagName = tagName;
+      }
+
+      closest(selector: string): FakeHTMLElement | null {
+        return selector === "[data-book-cinema-ignore-shortcuts]" && this.tagName === "DIV"
+          ? this
+          : null;
+      }
+    }
+    globalThis.HTMLElement = FakeHTMLElement as unknown as typeof HTMLElement;
+
+    try {
+      const input = new FakeHTMLElement("INPUT");
+      const select = new FakeHTMLElement("SELECT");
+      const editable = new FakeHTMLElement("P");
+      editable.isContentEditable = true;
+      const ignoredRegion = new FakeHTMLElement("DIV");
+      const plainSpan = new FakeHTMLElement("SPAN");
+
+      expect(shouldIgnoreBookCinemaKeyboardTarget(input)).toBe(true);
+      expect(shouldIgnoreBookCinemaKeyboardTarget(select)).toBe(true);
+      expect(shouldIgnoreBookCinemaKeyboardTarget(editable)).toBe(true);
+      expect(shouldIgnoreBookCinemaKeyboardTarget(ignoredRegion)).toBe(true);
+      expect(shouldIgnoreBookCinemaKeyboardTarget(plainSpan)).toBe(false);
+    } finally {
+      if (hadHTMLElement) {
+        globalThis.HTMLElement = originalHTMLElement;
+      } else {
+        Reflect.deleteProperty(globalThis, "HTMLElement");
+      }
+    }
   });
 
   it("normalizes reader accessibility state and speed stepping", () => {

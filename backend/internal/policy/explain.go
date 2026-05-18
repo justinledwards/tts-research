@@ -13,6 +13,8 @@ func Explain(profileLabel string, element string, elementMode string, finalMode 
 	sourceLabel := profileSourceLabel(profileLabel)
 	if source == "session override" {
 		sourceLabel = "a session override"
+	} else if source == "source override" {
+		sourceLabel = "a source override"
 	}
 	switch finalMode {
 	case ModeSkip:

@@ -31,6 +31,7 @@ import type {
   SpeechPolicyDefinition,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
+  SourceSpeechPolicyUpdateRequest,
   UpsertSpeechPolicyProfileRequest,
   SystemMetrics,
   TokenTimingArtifact,
@@ -315,6 +316,42 @@ export async function previewBookSourceScopeSpeechPolicy(
     throw await apiError(response);
   }
   return response.json() as Promise<BookSourceScopeContent>;
+}
+
+export async function updatePreparedSourceSpeechPolicy(
+  preparedSourceId: string,
+  request: SourceSpeechPolicyUpdateRequest,
+): Promise<PreparedSource> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/source-preps/${encodeURIComponent(preparedSourceId)}/speech-policy`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<PreparedSource>;
+}
+
+export async function updateBookSourceSpeechPolicy(
+  bookSourceId: string,
+  request: SourceSpeechPolicyUpdateRequest,
+): Promise<BookSource> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/book-sources/${encodeURIComponent(bookSourceId)}/speech-policy`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<BookSource>;
 }
 
 export async function previewMathSpeech(input: string): Promise<MathPreviewResult> {

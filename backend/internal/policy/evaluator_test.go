@@ -140,6 +140,41 @@ func TestOverridePrecedenceIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestLayeredEvaluatorReportsSourceAndSessionPrecedence(t *testing.T) {
+	t.Parallel()
+
+	settings := ProfileByName(ProfileEnterprise).Settings
+	sourceOnly := NewLayeredEvaluatorForSettings(
+		"enterprise-source",
+		"Enterprise source",
+		settings,
+		Overrides{CodeMode: CodeModeLiteral},
+		Overrides{},
+		"source override",
+	).Evaluate(Element{Kind: "code", Text: "fmt.Println(\"hello\")"})
+	if sourceOnly.Policy.Mode != string(ModeLiteral) {
+		t.Fatalf("source-only code mode = %q, want literal", sourceOnly.Policy.Mode)
+	}
+	if sourceOnly.Policy.Explanation != "This code block is read literally because a source override sets code to literal." {
+		t.Fatalf("source-only explanation = %q", sourceOnly.Policy.Explanation)
+	}
+
+	sessionWins := NewLayeredEvaluatorForSettings(
+		"enterprise-source",
+		"Enterprise source",
+		settings,
+		Overrides{CodeMode: CodeModeLiteral},
+		Overrides{CodeMode: CodeModeSkip},
+		"source override",
+	).Evaluate(Element{Kind: "code", Text: "fmt.Println(\"hello\")"})
+	if sessionWins.Policy.Mode != string(ModeSkip) {
+		t.Fatalf("session code mode = %q, want skip", sessionWins.Policy.Mode)
+	}
+	if sessionWins.Policy.Explanation != "This code block is skipped because a session override sets code to skip." {
+		t.Fatalf("session explanation = %q", sessionWins.Policy.Explanation)
+	}
+}
+
 func TestDefinitionExposesSharedPolicyFields(t *testing.T) {
 	t.Parallel()
 

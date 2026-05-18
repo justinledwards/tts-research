@@ -206,6 +206,41 @@ func (service *Service) PreviewBookSourceScopeSpeechPolicy(
 	return service.bookSourceScopeContent(id, request.Scope, request)
 }
 
+func (service *Service) UpdateBookSourceSpeechPolicy(id string, request SourceSpeechPolicyUpdateRequest) (BookSource, error) {
+	service.mu.RLock()
+	stored, ok := service.books[strings.TrimSpace(id)]
+	service.mu.RUnlock()
+	if !ok {
+		return BookSource{}, ErrBookSourceNotFound
+	}
+	book := stored.BookSource
+	project, err := service.GetProject(book.ProjectID)
+	if err != nil {
+		return BookSource{}, err
+	}
+	if request.Clear {
+		book.SourceSpeechPolicyProfile = ""
+		book.SourceSpeechPolicyOverrides = policy.Overrides{}
+	} else {
+		profileName := strings.TrimSpace(request.Profile)
+		if profileName != "" {
+			resolved, err := resolveProjectSpeechPolicyProfile(project, profileName)
+			if err != nil {
+				return BookSource{}, err
+			}
+			book.SourceSpeechPolicyProfile = resolved
+		}
+		book.SourceSpeechPolicyOverrides = policy.NormalizeOverrides(request.Overrides)
+	}
+	book.UpdatedAt = time.Now().UTC()
+	ensureBookStructureMetadata(&book)
+	service.updateBookSource(storedBookSource{BookSource: book})
+	if err := service.writeBookSourceMetadata(book); err != nil {
+		return BookSource{}, err
+	}
+	return book, nil
+}
+
 func (service *Service) bookSourceScopeContent(
 	id string,
 	requested *BookScope,
@@ -257,8 +292,10 @@ func (service *Service) bookScopePolicySource(
 	blocks, warnings := service.bookScopeBlocks(book, scope, text)
 	profileName := strings.TrimSpace(request.Profile)
 	project, err := service.GetProject(book.ProjectID)
-	if err == nil && profileName == "" {
-		profileName = project.SpeechPolicyProfile
+	if err == nil && profileName != "" {
+		if _, err := resolveProjectSpeechPolicyProfile(project, profileName); err != nil {
+			profileName = ""
+		}
 	}
 	source := PreparedSource{
 		ID:        "book-scope-preview",
@@ -269,7 +306,7 @@ func (service *Service) bookScopePolicySource(
 	if err == nil {
 		return applySpeechPolicyToPreparedSourceWithEvaluator(
 			source,
-			projectSpeechPolicyEvaluator(project, profileName, request.Overrides),
+			speechPolicyEvaluatorForSource(project, book.SourceSpeechPolicyProfile, book.SourceSpeechPolicyOverrides, profileName, request.Overrides),
 			service.options.SourcePrepSentenceMaxRunes,
 		), warnings
 	}

@@ -420,6 +420,74 @@ func TestPreparedSourcePolicyPreviewAndOverrides(t *testing.T) {
 	}
 }
 
+func TestPreparedSourcePolicyPinFollowsPrecedenceOrder(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "source-pin.md",
+		Text: strings.Join([]string{
+			"# Pin",
+			"",
+			"```go",
+			"fmt.Println(\"hello\")",
+			"```",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if strings.Contains(source.SpeechText, "fmt.Println") {
+		t.Fatalf("default project policy should skip code, got %q", source.SpeechText)
+	}
+
+	pinned, err := service.UpdatePreparedSourceSpeechPolicy(source.ID, pipeline.SourceSpeechPolicyUpdateRequest{
+		Profile: "Accessibility",
+	})
+	if err != nil {
+		t.Fatalf("UpdatePreparedSourceSpeechPolicy returned error: %v", err)
+	}
+	if pinned.SourceSpeechPolicyProfile != "Accessibility" || !strings.Contains(pinned.SpeechText, "fmt.Println") {
+		t.Fatalf("pinned source = profile %q text %q, want Accessibility code speech", pinned.SourceSpeechPolicyProfile, pinned.SpeechText)
+	}
+	code := findPreparedBlockByKind(pinned.Blocks, pipeline.NarrationBlockKindCode)
+	if code == nil || !strings.Contains(code.SpeechPolicy.Explanation, "source override") {
+		t.Fatalf("pinned code policy = %#v, want source override explanation", code)
+	}
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	if !strings.Contains(job.InputText, "fmt.Println") {
+		t.Fatalf("job input text = %q, want source pin to apply without session inputs", job.InputText)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+
+	session, err := service.PreviewPreparedSourceSpeechPolicy(source.ID, pipeline.SpeechPolicyPreviewRequest{
+		Profile:   "Enterprise",
+		Overrides: policy.Overrides{CodeMode: policy.CodeModeSkip},
+	})
+	if err != nil {
+		t.Fatalf("PreviewPreparedSourceSpeechPolicy returned error: %v", err)
+	}
+	if strings.Contains(session.SpeechText, "fmt.Println") {
+		t.Fatalf("session policy should beat source pin and skip code, got %q", session.SpeechText)
+	}
+	code = findPreparedBlockByKind(session.Blocks, pipeline.NarrationBlockKindCode)
+	if code == nil || !strings.Contains(code.SpeechPolicy.Explanation, "session override") {
+		t.Fatalf("session code policy = %#v, want session override explanation", code)
+	}
+
+	cleared, err := service.UpdatePreparedSourceSpeechPolicy(source.ID, pipeline.SourceSpeechPolicyUpdateRequest{Clear: true})
+	if err != nil {
+		t.Fatalf("UpdatePreparedSourceSpeechPolicy(clear) returned error: %v", err)
+	}
+	if cleared.SourceSpeechPolicyProfile != "" || strings.Contains(cleared.SpeechText, "fmt.Println") {
+		t.Fatalf("cleared source = profile %q text %q, want project default", cleared.SourceSpeechPolicyProfile, cleared.SpeechText)
+	}
+}
+
 func TestPreparedSourceJobStoresAppliedSpeechPolicyMetadata(t *testing.T) {
 	t.Parallel()
 

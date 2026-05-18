@@ -120,6 +120,64 @@ func TestLocatorEnvelopeMarshalRoundTrip(t *testing.T) {
 	}
 }
 
+func TestLocatorEnvelopeGoldensCoverReaderBehaviors(t *testing.T) {
+	t.Parallel()
+
+	progression := 0.25
+	totalProgression := 0.4
+	cases := map[string]contentir.LocatorEnvelope{}
+
+	resumeLocator := contentir.NewEPUBLocator(
+		"OPS/ch1.xhtml",
+		"frag-resume",
+		"Resume quote",
+		&progression,
+		"epubcfi(/6/2!/4/2)",
+	)
+	cases["resume"] = NewLocatorEnvelope(&resumeLocator, contentir.LocatorContext{
+		Kind:             "resume",
+		SourceID:         "book-1",
+		NodeID:           "node-resume",
+		ScopeKey:         "chapter:1",
+		ActiveWordIndex:  7,
+		Title:            "Chapter 1",
+		TextQuote:        "Resume quote",
+		TotalProgression: &totalProgression,
+		Position:         12,
+	})
+
+	bookmarkLocator := contentir.NewPDFLocator(4, nil, nil, nil)
+	cases["bookmark"] = NewLocatorEnvelope(&bookmarkLocator, contentir.LocatorContext{
+		Kind:     "bookmark",
+		SourceID: "book-1",
+		ScopeKey: "pages:5",
+		Title:    "Chapter bookmark",
+		Position: 5,
+	})
+
+	highlightLocator := contentir.NewHTMLLocator("article.html", "quote-1", "Highlighted phrase", &progression, "")
+	cases["highlight"] = NewLocatorEnvelope(&highlightLocator, contentir.LocatorContext{
+		Kind:       "highlight",
+		SourceID:   "book-1",
+		NodeID:     "node-highlight",
+		Title:      "Article",
+		TextQuote:  "Highlighted phrase",
+		TextBefore: "words before",
+		TextAfter:  "words after",
+		Position:   18,
+	})
+
+	expected := readiumEnvelopeGoldens(t)
+	if !reflect.DeepEqual(cases, expected) {
+		actualJSON, _ := json.MarshalIndent(cases, "", "  ")
+		expectedJSON, _ := json.MarshalIndent(expected, "", "  ")
+		t.Fatalf("envelope golden mismatch\nactual: %s\nexpected: %s", actualJSON, expectedJSON)
+	}
+	if text := cases["highlight"].Readium.Text; text == nil || text.Before == "" || text.Highlight == "" || text.After == "" {
+		t.Fatalf("highlight text context = %#v, want before/highlight/after", text)
+	}
+}
+
 func readiumGoldens(t *testing.T) map[string]contentir.ReadiumLocator {
 	t.Helper()
 
@@ -130,6 +188,20 @@ func readiumGoldens(t *testing.T) map[string]contentir.ReadiumLocator {
 	var goldens map[string]contentir.ReadiumLocator
 	if err := json.Unmarshal(data, &goldens); err != nil {
 		t.Fatalf("decode golden: %v", err)
+	}
+	return goldens
+}
+
+func readiumEnvelopeGoldens(t *testing.T) map[string]contentir.LocatorEnvelope {
+	t.Helper()
+
+	data, err := os.ReadFile(filepath.Join("testdata", "readium_envelopes.golden.json"))
+	if err != nil {
+		t.Fatalf("read envelope golden: %v", err)
+	}
+	var goldens map[string]contentir.LocatorEnvelope
+	if err := json.Unmarshal(data, &goldens); err != nil {
+		t.Fatalf("decode envelope golden: %v", err)
 	}
 	return goldens
 }

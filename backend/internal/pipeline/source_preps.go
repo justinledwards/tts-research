@@ -166,7 +166,7 @@ func (service *Service) CreatePreparedSource(
 	prepared.SpeechPolicyProfile = project.SpeechPolicyProfile
 	prepared = applySpeechPolicyToPreparedSourceWithEvaluator(
 		prepared,
-		projectSpeechPolicyEvaluator(project, prepared.SpeechPolicyProfile, policy.Overrides{}),
+		speechPolicyEvaluatorForSource(project, prepared.SourceSpeechPolicyProfile, prepared.SourceSpeechPolicyOverrides, "", policy.Overrides{}),
 		service.options.SourcePrepSentenceMaxRunes,
 	)
 	prepared = service.applySpeechRenderToPreparedSource(prepared, SpeechRenderOptions{
@@ -283,23 +283,23 @@ func (service *Service) PreviewPreparedSourceSpeechPolicy(sourceID string, reque
 		return PreparedSource{}, ErrPreparedSourceNotFound
 	}
 	source = clonePreparedSource(source)
-	profileName := strings.TrimSpace(request.Profile)
-	if profileName == "" {
-		project, err := service.GetProject(source.ProjectID)
-		if err != nil {
-			return PreparedSource{}, err
-		}
-		profileName = project.SpeechPolicyProfile
-	}
 	project, err := service.GetProject(source.ProjectID)
 	if err != nil {
 		return PreparedSource{}, err
 	}
-	source = applySpeechPolicyToPreparedSourceWithEvaluator(
-		source,
-		projectSpeechPolicyEvaluator(project, profileName, request.Overrides),
-		service.options.SourcePrepSentenceMaxRunes,
-	)
+	profileName := strings.TrimSpace(request.Profile)
+	if profileName != "" {
+		if _, err := resolveProjectSpeechPolicyProfile(project, profileName); err != nil {
+			return PreparedSource{}, err
+		}
+	}
+	source = applySpeechPolicyToPreparedSourceWithEvaluator(source, speechPolicyEvaluatorForSource(
+		project,
+		source.SourceSpeechPolicyProfile,
+		source.SourceSpeechPolicyOverrides,
+		profileName,
+		request.Overrides,
+	), service.options.SourcePrepSentenceMaxRunes)
 	source = service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{
 		ProjectID:      source.ProjectID,
 		VoiceProfileID: request.VoiceProfileID,
@@ -307,6 +307,49 @@ func (service *Service) PreviewPreparedSourceSpeechPolicy(sourceID string, reque
 		TTSEngine:      request.TTSEngine,
 	})
 	return service.sanitizePreparedSourceWarnings(source), nil
+}
+
+func (service *Service) UpdatePreparedSourceSpeechPolicy(sourceID string, request SourceSpeechPolicyUpdateRequest) (PreparedSource, error) {
+	service.mu.RLock()
+	source, ok := service.sourcePreps[strings.TrimSpace(sourceID)]
+	service.mu.RUnlock()
+	if !ok {
+		return PreparedSource{}, ErrPreparedSourceNotFound
+	}
+	source = clonePreparedSource(source)
+	project, err := service.GetProject(source.ProjectID)
+	if err != nil {
+		return PreparedSource{}, err
+	}
+	if request.Clear {
+		source.SourceSpeechPolicyProfile = ""
+		source.SourceSpeechPolicyOverrides = policy.Overrides{}
+	} else {
+		profileName := strings.TrimSpace(request.Profile)
+		if profileName != "" {
+			resolved, err := resolveProjectSpeechPolicyProfile(project, profileName)
+			if err != nil {
+				return PreparedSource{}, err
+			}
+			source.SourceSpeechPolicyProfile = resolved
+		}
+		source.SourceSpeechPolicyOverrides = policy.NormalizeOverrides(request.Overrides)
+	}
+	source = service.sanitizePreparedSourceWarnings(applySpeechPolicyToPreparedSourceWithEvaluator(source, speechPolicyEvaluatorForSource(
+		project,
+		source.SourceSpeechPolicyProfile,
+		source.SourceSpeechPolicyOverrides,
+		"",
+		policy.Overrides{},
+	), service.options.SourcePrepSentenceMaxRunes))
+	source = service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{
+		ProjectID: source.ProjectID,
+	})
+	service.updatePreparedSource(source)
+	if err := service.writePreparedSourceMetadata(source); err != nil {
+		return PreparedSource{}, err
+	}
+	return source, nil
 }
 
 func (service *Service) applyCurrentSpeechPolicy(source PreparedSource, overrides policy.Overrides) PreparedSource {
@@ -317,7 +360,7 @@ func (service *Service) applyCurrentSpeechPolicy(source PreparedSource, override
 	}
 	source = applySpeechPolicyToPreparedSourceWithEvaluator(
 		source,
-		projectSpeechPolicyEvaluator(project, project.SpeechPolicyProfile, overrides),
+		speechPolicyEvaluatorForSource(project, source.SourceSpeechPolicyProfile, source.SourceSpeechPolicyOverrides, "", overrides),
 		service.options.SourcePrepSentenceMaxRunes,
 	)
 	return service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{ProjectID: source.ProjectID})
@@ -352,22 +395,22 @@ func (service *Service) CreatePreparedSourceJob(
 		return VoiceJob{}, fmt.Errorf("prepared source is not ready")
 	}
 	profileName := strings.TrimSpace(request.SpeechPolicyProfile)
-	if profileName == "" {
-		project, err := service.GetProject(source.ProjectID)
-		if err != nil {
-			return VoiceJob{}, err
-		}
-		profileName = project.SpeechPolicyProfile
-	}
 	project, err := service.GetProject(source.ProjectID)
 	if err != nil {
 		return VoiceJob{}, err
 	}
-	source = service.sanitizePreparedSourceWarnings(applySpeechPolicyToPreparedSourceWithEvaluator(
-		source,
-		projectSpeechPolicyEvaluator(project, profileName, request.SpeechPolicyOverrides),
-		service.options.SourcePrepSentenceMaxRunes,
-	))
+	if profileName != "" {
+		if _, err := resolveProjectSpeechPolicyProfile(project, profileName); err != nil {
+			return VoiceJob{}, err
+		}
+	}
+	source = service.sanitizePreparedSourceWarnings(applySpeechPolicyToPreparedSourceWithEvaluator(source, speechPolicyEvaluatorForSource(
+		project,
+		source.SourceSpeechPolicyProfile,
+		source.SourceSpeechPolicyOverrides,
+		profileName,
+		request.SpeechPolicyOverrides,
+	), service.options.SourcePrepSentenceMaxRunes))
 	source = service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{
 		ProjectID:      source.ProjectID,
 		VoiceProfileID: request.VoiceProfileID,

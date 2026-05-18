@@ -46,6 +46,8 @@ type LocatorContext struct {
 	ActiveWordIndex  int
 	Title            string
 	TextQuote        string
+	TextBefore       string
+	TextAfter        string
 	TotalProgression *float64
 	Position         int
 }

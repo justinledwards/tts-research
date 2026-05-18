@@ -600,18 +600,7 @@ func projectSpeechPolicySettings(project VoiceProject, profileName string) (poli
 }
 
 func projectSpeechPolicyEvaluator(project VoiceProject, profileName string, overrides policy.Overrides) policy.Evaluator {
-	project = normalizeProjectSpeechPolicy(project)
-	profileName, err := resolveProjectSpeechPolicyProfile(project, profileName)
-	if err != nil {
-		profileName = project.SpeechPolicyProfile
-	}
-	for _, custom := range project.SpeechPolicyProfiles {
-		if custom.ID == profileName {
-			settings, _ := projectSpeechPolicySettings(project, profileName)
-			return policy.NewEvaluatorForSettings(custom.ID, custom.Name, settings, overrides)
-		}
-	}
-	return policy.NewEvaluator(policy.NormalizeProfileName(profileName), overrides)
+	return projectSpeechPolicyEvaluatorWithLayers(project, profileName, policy.Overrides{}, overrides, "profile")
 }
 
 func normalizeCustomSpeechPolicySettings(settings policy.Settings, baseProfile string) policy.Settings {

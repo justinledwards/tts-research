@@ -9,63 +9,37 @@ import (
 var markdownLinkLikePattern = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]+\)`)
 
 type Evaluator struct {
-	profile      ProfileName
-	profileID    string
-	profileLabel string
-	settings     Settings
-	overrides    Overrides
+	profile          ProfileName
+	profileID        string
+	profileLabel     string
+	settings         Settings
+	sourceOverrides  Overrides
+	sessionOverrides Overrides
+	baseSource       string
 }
 
 func NewEvaluator(profileName ProfileName, overrides Overrides) Evaluator {
 	profile, settings, normalizedOverrides := ResolveSettings(profileName, overrides)
 	return Evaluator{
-		profile:      profile,
-		profileID:    string(profile),
-		profileLabel: string(profile),
-		settings:     settings,
-		overrides:    normalizedOverrides,
+		profile:          profile,
+		profileID:        string(profile),
+		profileLabel:     string(profile),
+		settings:         settings,
+		sessionOverrides: normalizedOverrides,
+		baseSource:       "profile",
 	}
 }
 
 func NewEvaluatorForSettings(profileID string, profileLabel string, settings Settings, overrides Overrides) Evaluator {
-	normalizedOverrides := NormalizeOverrides(overrides)
+	return NewLayeredEvaluatorForSettings(profileID, profileLabel, settings, Overrides{}, overrides, "profile")
+}
+
+func NewLayeredEvaluatorForSettings(profileID string, profileLabel string, settings Settings, sourceOverrides Overrides, sessionOverrides Overrides, baseSource string) Evaluator {
+	normalizedSourceOverrides := NormalizeOverrides(sourceOverrides)
+	normalizedSessionOverrides := NormalizeOverrides(sessionOverrides)
 	normalizedSettings := NormalizeSettings(settings, ProfileByName(DefaultProfileName).Settings)
-	if normalizedOverrides.Mode != "" {
-		normalizedSettings.Mode = normalizedOverrides.Mode
-	}
-	if normalizedOverrides.TableMode != "" {
-		normalizedSettings.TableMode = normalizedOverrides.TableMode
-	}
-	if normalizedOverrides.TableHeaderMode != "" {
-		normalizedSettings.TableHeaderMode = normalizedOverrides.TableHeaderMode
-	}
-	if normalizedOverrides.CodeMode != "" {
-		normalizedSettings.CodeMode = normalizedOverrides.CodeMode
-	}
-	if normalizedOverrides.MathMode != "" {
-		normalizedSettings.MathMode = normalizedOverrides.MathMode
-	}
-	if normalizedOverrides.FootnoteMode != "" {
-		normalizedSettings.FootnoteMode = normalizedOverrides.FootnoteMode
-	}
-	if normalizedOverrides.ImageMode != "" {
-		normalizedSettings.ImageMode = normalizedOverrides.ImageMode
-	}
-	if normalizedOverrides.CaptionMode != "" {
-		normalizedSettings.CaptionMode = normalizedOverrides.CaptionMode
-	}
-	if normalizedOverrides.CitationMode != "" {
-		normalizedSettings.CitationMode = normalizedOverrides.CitationMode
-	}
-	if normalizedOverrides.ListMarkerMode != "" {
-		normalizedSettings.ListMarkerMode = normalizedOverrides.ListMarkerMode
-	}
-	if normalizedOverrides.AdmonitionMode != "" {
-		normalizedSettings.AdmonitionMode = normalizedOverrides.AdmonitionMode
-	}
-	if normalizedOverrides.QuoteMode != "" {
-		normalizedSettings.QuoteMode = normalizedOverrides.QuoteMode
-	}
+	normalizedSettings = applyOverrides(normalizedSettings, normalizedSourceOverrides)
+	normalizedSettings = applyOverrides(normalizedSettings, normalizedSessionOverrides)
 	profileID = strings.TrimSpace(profileID)
 	if profileID == "" {
 		profileID = string(DefaultProfileName)
@@ -74,13 +48,59 @@ func NewEvaluatorForSettings(profileID string, profileLabel string, settings Set
 	if profileLabel == "" {
 		profileLabel = profileID
 	}
-	return Evaluator{
-		profile:      NormalizeProfileName(profileID),
-		profileID:    profileID,
-		profileLabel: profileLabel,
-		settings:     normalizedSettings,
-		overrides:    normalizedOverrides,
+	baseSource = strings.TrimSpace(baseSource)
+	if baseSource == "" {
+		baseSource = "profile"
 	}
+	return Evaluator{
+		profile:          NormalizeProfileName(profileID),
+		profileID:        profileID,
+		profileLabel:     profileLabel,
+		settings:         normalizedSettings,
+		sourceOverrides:  normalizedSourceOverrides,
+		sessionOverrides: normalizedSessionOverrides,
+		baseSource:       baseSource,
+	}
+}
+
+func applyOverrides(settings Settings, overrides Overrides) Settings {
+	if overrides.Mode != "" {
+		settings.Mode = overrides.Mode
+	}
+	if overrides.TableMode != "" {
+		settings.TableMode = overrides.TableMode
+	}
+	if overrides.TableHeaderMode != "" {
+		settings.TableHeaderMode = overrides.TableHeaderMode
+	}
+	if overrides.CodeMode != "" {
+		settings.CodeMode = overrides.CodeMode
+	}
+	if overrides.MathMode != "" {
+		settings.MathMode = overrides.MathMode
+	}
+	if overrides.FootnoteMode != "" {
+		settings.FootnoteMode = overrides.FootnoteMode
+	}
+	if overrides.ImageMode != "" {
+		settings.ImageMode = overrides.ImageMode
+	}
+	if overrides.CaptionMode != "" {
+		settings.CaptionMode = overrides.CaptionMode
+	}
+	if overrides.CitationMode != "" {
+		settings.CitationMode = overrides.CitationMode
+	}
+	if overrides.ListMarkerMode != "" {
+		settings.ListMarkerMode = overrides.ListMarkerMode
+	}
+	if overrides.AdmonitionMode != "" {
+		settings.AdmonitionMode = overrides.AdmonitionMode
+	}
+	if overrides.QuoteMode != "" {
+		settings.QuoteMode = overrides.QuoteMode
+	}
+	return settings
 }
 
 func (evaluator Evaluator) Settings() Settings {
@@ -277,7 +297,7 @@ func (evaluator Evaluator) evaluateImage(element Element) Decision {
 }
 
 func (evaluator Evaluator) decision(element string, elementMode string, mode Mode, speechText string) Decision {
-	source := OverrideSourceForElement(element, evaluator.overrides)
+	source := evaluator.overrideSourceForElement(element)
 	return Decision{
 		Policy: SpeechPolicy{
 			Profile:     evaluator.ProfileID(),
@@ -288,6 +308,19 @@ func (evaluator Evaluator) decision(element string, elementMode string, mode Mod
 		},
 		SpeechText: strings.TrimSpace(speechText),
 	}
+}
+
+func (evaluator Evaluator) overrideSourceForElement(element string) string {
+	if source := OverrideSourceForElement(element, evaluator.sessionOverrides); source == "session override" {
+		return source
+	}
+	if source := OverrideSourceForElement(element, evaluator.sourceOverrides); source == "session override" {
+		return "source override"
+	}
+	if strings.TrimSpace(evaluator.baseSource) == "" {
+		return "profile"
+	}
+	return evaluator.baseSource
 }
 
 func summarizeTable(text string) string {

@@ -18,6 +18,8 @@ import {
   isApiNotFoundError,
   previewPreparedSourceSpeechPolicy,
   saveHuggingFaceToken,
+  updateBookSourceSpeechPolicy,
+  updatePreparedSourceSpeechPolicy,
   upsertProjectLexiconEntry,
 } from "./api";
 
@@ -291,6 +293,68 @@ describe("API errors", () => {
       );
       expect(typeof requestInit?.body === "string" ? requestInit.body : "").toContain(
         '"locale":"en-GB"',
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("updates durable source speech policy pins through PATCH endpoints", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      const url = fetchInputUrl(input);
+      requests.push({ url, init });
+      if (url.includes("/book-sources/")) {
+        return Promise.resolve(
+          Response.json({
+            id: "book-1",
+            projectId: "default",
+            status: "ready",
+            kind: "epub",
+            sourceFile: "fixture.epub",
+            sourceBytes: 10,
+            sourceSpeechPolicyProfile: "Accessibility",
+            sourceSpeechPolicyOverrides: { quoteMode: "summarise" },
+            wordCount: 1,
+            pageCount: 0,
+            chapterCount: 1,
+            createdAt: "2026-05-16T12:00:00Z",
+            updatedAt: "2026-05-16T12:00:00Z",
+          }),
+        );
+      }
+      return Promise.resolve(
+        Response.json(
+          preparedSourceResponse({
+            sourceSpeechPolicyProfile: "Enterprise",
+            sourceSpeechPolicyOverrides: { codeMode: "literal" },
+          }),
+        ),
+      );
+    };
+
+    try {
+      const prepared = await updatePreparedSourceSpeechPolicy("source-1", {
+        profile: "Enterprise",
+        overrides: { codeMode: "literal" },
+      });
+      const book = await updateBookSourceSpeechPolicy("book-1", {
+        clear: true,
+      });
+      expect(prepared.sourceSpeechPolicyProfile).toBe("Enterprise");
+      expect(book.sourceSpeechPolicyOverrides?.quoteMode).toBe("summarise");
+      expect(requests.map((request) => request.url)).toEqual([
+        "/api/source-preps/source-1/speech-policy",
+        "/api/book-sources/book-1/speech-policy",
+      ]);
+      expect(requests[0]?.init?.method).toBe("PATCH");
+      expect(requests[1]?.init?.method).toBe("PATCH");
+      expect(typeof requests[0]?.init?.body === "string" ? requests[0].init.body : "").toContain(
+        '"codeMode":"literal"',
+      );
+      expect(typeof requests[1]?.init?.body === "string" ? requests[1].init.body : "").toContain(
+        '"clear":true',
       );
     } finally {
       globalThis.fetch = originalFetch;

@@ -559,6 +559,24 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(source)
 	})
 
+	app.Patch("/api/source-preps/:id/speech-policy", func(ctx fiber.Ctx) error {
+		var request pipeline.SourceSpeechPolicyUpdateRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		source, err := service.UpdatePreparedSourceSpeechPolicy(ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) || errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(source)
+	})
+
 	app.Post("/api/source-preps/:id/voice-jobs", func(ctx fiber.Ctx) error {
 		var request pipeline.CreateJobRequest
 		if err := json.Unmarshal(ctx.Body(), &request); err != nil {
@@ -613,6 +631,24 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 		}
 		return ctx.JSON(content)
+	})
+
+	app.Patch("/api/book-sources/:id/speech-policy", func(ctx fiber.Ctx) error {
+		var request pipeline.SourceSpeechPolicyUpdateRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		book, err := service.UpdateBookSourceSpeechPolicy(ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrBookSourceNotFound) || errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(book)
 	})
 
 	app.Post("/api/book-sources/:id/voice-jobs", func(ctx fiber.Ctx) error {

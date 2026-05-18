@@ -47,7 +47,7 @@ func ExportReadiumLocator(locator contentir.Locator, context contentir.LocatorCo
 	textQuote := strings.TrimSpace(firstNonEmpty(context.TextQuote, locatorTextQuote(locator)))
 	output := contentir.ReadiumLocator{
 		Title: strings.TrimSpace(context.Title),
-		Text:  readiumText(textQuote),
+		Text:  readiumText(context.TextBefore, textQuote, context.TextAfter),
 	}
 	if context.Position > 0 {
 		output.Locations.Position = context.Position
@@ -225,11 +225,18 @@ func locatorTextQuote(locator contentir.Locator) string {
 	}
 }
 
-func readiumText(textQuote string) *contentir.ReadiumText {
-	if strings.TrimSpace(textQuote) == "" {
+func readiumText(before string, textQuote string, after string) *contentir.ReadiumText {
+	before = strings.TrimSpace(before)
+	textQuote = strings.TrimSpace(textQuote)
+	after = strings.TrimSpace(after)
+	if before == "" && textQuote == "" && after == "" {
 		return nil
 	}
-	return &contentir.ReadiumText{Highlight: strings.TrimSpace(textQuote)}
+	return &contentir.ReadiumText{
+		Before:    before,
+		Highlight: textQuote,
+		After:     after,
+	}
 }
 
 func partialCFI(value string) string {

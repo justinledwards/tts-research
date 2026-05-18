@@ -1,5 +1,13 @@
 # Working Log
 
+## 2026-05-18 18:21 CEST - Workstream Lambda reader standards hardening
+- [x] Add source policy pin resolver and APIs
+- [x] Expand EPUB speech fidelity fixtures and goldens
+- [x] Expand Readium locator envelope roundtrip goldens
+- [x] Harden reader accessibility controls and policy explanations
+- [x] Update accessibility, EPUB fidelity, and market profile docs
+- [x] Run targeted and local validation checks
+
 ## 2026-05-18 15:48 CEST - Workstream MU stable developer packages
 - [x] Add private schema, TypeScript SDK, CLI, and Python SDK packages
 - [x] Move generated contract outputs to schema package and update consumers

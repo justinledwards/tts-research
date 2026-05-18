@@ -217,10 +217,21 @@ func (service *Service) evaluateContentIRSpeechPolicy(
 	if strings.TrimSpace(document.ProjectID) != "" {
 		if project, err := service.GetProject(document.ProjectID); err == nil {
 			profileName := strings.TrimSpace(request.Profile)
-			if profileName == "" {
-				profileName = project.SpeechPolicyProfile
+			if profileName != "" {
+				if _, err := resolveProjectSpeechPolicyProfile(project, profileName); err != nil {
+					profileName = ""
+				}
 			}
-			evaluator = projectSpeechPolicyEvaluator(project, profileName, request.Overrides)
+			sourceProfile := ""
+			sourceOverrides := policy.Overrides{}
+			if source, ok := service.preparedSourceByID(document.ID); ok {
+				sourceProfile = source.SourceSpeechPolicyProfile
+				sourceOverrides = source.SourceSpeechPolicyOverrides
+			} else if book, ok := service.bookSourceByID(document.ID); ok {
+				sourceProfile = book.SourceSpeechPolicyProfile
+				sourceOverrides = book.SourceSpeechPolicyOverrides
+			}
+			evaluator = speechPolicyEvaluatorForSource(project, sourceProfile, sourceOverrides, profileName, request.Overrides)
 		}
 	}
 	for index, node := range document.Nodes {
