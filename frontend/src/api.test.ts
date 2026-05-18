@@ -5,6 +5,7 @@ import {
   clearHuggingFaceToken,
   createCustomSpeechPolicyProfile,
   createPreparedSource,
+  buildVoiceProfileArtifact,
   deleteProject,
   getProjectLexicon,
   getAdapterCapabilities,
@@ -57,8 +58,8 @@ describe("API errors", () => {
   it("manages voice profile credential status without exposing the token", async () => {
     const originalFetch = globalThis.fetch;
     const requests: { url: string; init?: RequestInit }[] = [];
-    globalThis.fetch = (input, init) => {
-      const url = fetchInputUrl(input);
+    globalThis.fetch = (_input, init) => {
+      const url = fetchInputUrl(_input);
       requests.push({ url, init });
       if (init?.method === "PUT") {
         return Promise.resolve(
@@ -106,6 +107,31 @@ describe("API errors", () => {
       expect(requests[2]?.init?.method).toBe("DELETE");
       expect(typeof requests[1]?.init?.body === "string" ? requests[1].init.body : "").toContain(
         '"token":"hf_secret"',
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("builds voice profile artifacts with optional timeout override payload", async () => {
+    const originalFetch = globalThis.fetch;
+    const requestInits: RequestInit[] = [];
+    globalThis.fetch = (_input, init) => {
+      requestInits.push(init ?? {});
+      return Promise.resolve(Response.json({ id: "artifact-profile" }));
+    };
+
+    try {
+      await buildVoiceProfileArtifact("profile-id", "kokoro-embed");
+      expect(requestInits[0]?.method).toBe("POST");
+      expect(requestInits[0]?.headers).toBeUndefined();
+      expect(requestInits[0]?.body).toBeUndefined();
+
+      await buildVoiceProfileArtifact("profile-id", "kokoro-embed", 60);
+      expect(requestInits[1]?.method).toBe("POST");
+      expect(requestInits[1]?.headers).toEqual({ "Content-Type": "application/json" });
+      expect(typeof requestInits[1]?.body === "string" ? requestInits[1].body : "").toBe(
+        JSON.stringify({ timeoutSeconds: 60 }),
       );
     } finally {
       globalThis.fetch = originalFetch;

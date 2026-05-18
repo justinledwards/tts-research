@@ -20,9 +20,12 @@ export function VoiceSourceAnalysisPanel({
   diagnostics,
   error,
   isAnalyzing,
+  refreshingTranscriptKey,
   source,
   onAnalyze,
   onCreateProfile,
+  onRefreshCandidateTranscript,
+  onRefreshSourceTranscript,
   researchModules,
   ttsEngines,
 }: Readonly<{
@@ -30,6 +33,7 @@ export function VoiceSourceAnalysisPanel({
   diagnostics: VoiceProfileSourceDiagnostics | null;
   error: string | null;
   isAnalyzing: boolean;
+  refreshingTranscriptKey: string | null;
   researchModules: ResearchModuleDiagnostics[];
   source: VoiceProfileSource | null;
   ttsEngines: TTSEngineDiagnostics[];
@@ -38,6 +42,8 @@ export function VoiceSourceAnalysisPanel({
     candidate: VoiceProfileCandidate,
     request: CreateVoiceProfileFromCandidateRequest,
   ) => Promise<void>;
+  onRefreshCandidateTranscript: (candidate: VoiceProfileCandidate) => Promise<void>;
+  onRefreshSourceTranscript: (sourceId: string) => Promise<void>;
 }>) {
   const [file, setFile] = useState<File | null>(null);
   const [language, setLanguage] = useState("en");
@@ -158,7 +164,15 @@ export function VoiceSourceAnalysisPanel({
         </button>
       </form>
 
-      {source ? <SourceProgress source={source} /> : null}
+      {source ? (
+        <SourceProgress
+          isRefreshingTranscript={refreshingTranscriptKey === `source:${source.id}`}
+          source={source}
+          onRefreshTranscript={() => {
+            void onRefreshSourceTranscript(source.id);
+          }}
+        />
+      ) : null}
       {sourceNotice}
 
       <ReadyCandidateList
@@ -169,12 +183,14 @@ export function VoiceSourceAnalysisPanel({
         selectedTargets={selectedTargets}
         sourceId={source?.id ?? ""}
         targetOptions={targetOptions}
+        refreshingTranscriptKey={refreshingTranscriptKey}
         onCreate={handleCreate}
         onLanguageChange={setLanguage}
         onNameChange={(candidate, value) => {
           setCandidateNames((current) => ({ ...current, [candidate.id]: value }));
         }}
         onTargetToggle={toggleTarget}
+        onTranscriptRefresh={onRefreshCandidateTranscript}
       />
       <RejectedCandidateList candidates={rejectedCandidates} />
     </section>
@@ -272,7 +288,15 @@ function SetupLine({ label, value }: Readonly<{ label: string; value: string }>)
   );
 }
 
-function SourceProgress({ source }: Readonly<{ source: VoiceProfileSource }>) {
+function SourceProgress({
+  isRefreshingTranscript,
+  source,
+  onRefreshTranscript,
+}: Readonly<{
+  isRefreshingTranscript: boolean;
+  source: VoiceProfileSource;
+  onRefreshTranscript: () => void;
+}>) {
   const candidates = Array.isArray(source.candidates) ? source.candidates : [];
   const stages = Array.isArray(source.stages) ? source.stages : [];
   const readyCount = candidates.filter((candidate) => candidate.status === "ready").length;
@@ -304,6 +328,15 @@ function SourceProgress({ source }: Readonly<{ source: VoiceProfileSource }>) {
           </li>
         ))}
       </ol>
+      <TranscriptBlock
+        isRefreshing={isRefreshingTranscript}
+        label="Source transcript"
+        transcript={source.transcript}
+        transcriptError={source.transcriptError}
+        transcriptGeneratedAt={source.transcriptGeneratedAt}
+        transcriptModel={source.transcriptModel}
+        onRefresh={onRefreshTranscript}
+      />
     </section>
   );
 }
@@ -329,10 +362,12 @@ function ReadyCandidateList({
   selectedTargets,
   sourceId,
   targetOptions,
+  refreshingTranscriptKey,
   onCreate,
   onLanguageChange,
   onNameChange,
   onTargetToggle,
+  onTranscriptRefresh,
 }: Readonly<{
   candidateNames: Record<string, string>;
   candidates: VoiceProfileCandidate[];
@@ -341,10 +376,12 @@ function ReadyCandidateList({
   selectedTargets: string[];
   sourceId: string;
   targetOptions: ProfileTargetOption[];
+  refreshingTranscriptKey: string | null;
   onCreate: (candidate: VoiceProfileCandidate) => Promise<void>;
   onLanguageChange: (value: string) => void;
   onNameChange: (candidate: VoiceProfileCandidate, value: string) => void;
   onTargetToggle: (targetId: string) => void;
+  onTranscriptRefresh: (candidate: VoiceProfileCandidate) => Promise<void>;
 }>) {
   if (candidates.length === 0 || sourceId === "") {
     return null;
@@ -364,6 +401,7 @@ function ReadyCandidateList({
             key={candidate.id}
             language={language}
             name={candidateNames[candidate.id] ?? candidate.suggestedName}
+            isRefreshingTranscript={refreshingTranscriptKey === `candidate:${candidate.id}`}
             selectedTargets={selectedTargets}
             sourceId={sourceId}
             targetOptions={targetOptions}
@@ -375,6 +413,9 @@ function ReadyCandidateList({
               onNameChange(candidate, value);
             }}
             onTargetToggle={onTargetToggle}
+            onTranscriptRefresh={() => {
+              void onTranscriptRefresh(candidate);
+            }}
           />
         ))}
       </div>
@@ -410,6 +451,7 @@ function RejectedCandidateList({
 function CandidateCard({
   candidate,
   createCandidateId,
+  isRefreshingTranscript,
   language,
   name,
   selectedTargets,
@@ -419,9 +461,11 @@ function CandidateCard({
   onLanguageChange,
   onNameChange,
   onTargetToggle,
+  onTranscriptRefresh,
 }: Readonly<{
   candidate: VoiceProfileCandidate;
   createCandidateId: string | null;
+  isRefreshingTranscript: boolean;
   language: string;
   name: string;
   selectedTargets: string[];
@@ -431,6 +475,7 @@ function CandidateCard({
   onLanguageChange: (value: string) => void;
   onNameChange: (value: string) => void;
   onTargetToggle: (targetId: string) => void;
+  onTranscriptRefresh: () => void;
 }>) {
   const isCreating = createCandidateId === candidate.id;
   const canCreate = selectedTargets.length > 0 && !isCreating;
@@ -491,6 +536,15 @@ function CandidateCard({
       <audio className="h-9 w-full" controls preload="none" src={previewSource}>
         <track kind="captions" />
       </audio>
+      <TranscriptBlock
+        isRefreshing={isRefreshingTranscript}
+        label="Reference transcript"
+        transcript={candidate.transcript}
+        transcriptError={candidate.transcriptError}
+        transcriptGeneratedAt={candidate.transcriptGeneratedAt}
+        transcriptModel={candidate.transcriptModel}
+        onRefresh={onTranscriptRefresh}
+      />
       <p className="break-words text-xs leading-5 text-zinc-500">
         {summarizeCandidateMetrics(candidate)}
       </p>
@@ -561,6 +615,75 @@ function CandidateCard({
       </button>
     </article>
   );
+}
+
+function TranscriptBlock({
+  isRefreshing,
+  label,
+  transcript,
+  transcriptError,
+  transcriptGeneratedAt,
+  transcriptModel,
+  onRefresh,
+}: Readonly<{
+  isRefreshing: boolean;
+  label: string;
+  transcript?: string;
+  transcriptError?: string;
+  transcriptGeneratedAt?: string;
+  transcriptModel?: string;
+  onRefresh: () => void;
+}>) {
+  const generatedLabel = formatTranscriptTimestamp(transcriptGeneratedAt);
+  let transcriptBody: ReactNode = null;
+  if (transcript) {
+    transcriptBody = (
+      <p className="max-h-36 overflow-y-auto whitespace-pre-wrap break-words rounded bg-zinc-50 p-2 leading-5 text-zinc-700">
+        {transcript}
+      </p>
+    );
+  } else if (!transcriptError) {
+    transcriptBody = (
+      <p className="rounded bg-zinc-50 p-2 leading-5 text-zinc-500">Transcript pending.</p>
+    );
+  }
+  return (
+    <section className="grid gap-2 rounded-md border border-zinc-200 bg-white p-2 text-xs">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-semibold text-zinc-800">{label}</p>
+          <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+            {[transcriptModel, generatedLabel].filter(Boolean).join(" · ") || "Pending"}
+          </p>
+        </div>
+        <button
+          className="shrink-0 rounded border border-zinc-200 bg-zinc-50 px-2 py-1 font-semibold text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isRefreshing}
+          onClick={onRefresh}
+          type="button"
+        >
+          {isRefreshing ? "Refreshing..." : "Refresh"}
+        </button>
+      </div>
+      {transcriptError ? (
+        <p className="break-words rounded bg-red-50 p-2 leading-5 text-red-700">
+          {transcriptError}
+        </p>
+      ) : null}
+      {transcriptBody}
+    </section>
+  );
+}
+
+function formatTranscriptTimestamp(value?: string): string {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleString();
 }
 
 interface ProfileTargetOption {

@@ -533,6 +533,17 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(source)
 	})
 
+	app.Post("/api/source-preps/:id/transcript", func(ctx fiber.Ctx) error {
+		source, err := service.RefreshPreparedSourceTranscript(ctx.Context(), ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(source)
+	})
+
 	app.Get("/api/source-preps/:id/blocks/:blockId", func(ctx fiber.Ctx) error {
 		block, err := service.GetPreparedSourceBlock(ctx.Params("id"), ctx.Params("blockId"))
 		if err != nil {
@@ -1127,6 +1138,18 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(source)
 	})
 
+	app.Post("/api/voice-profile-sources/:id/transcript", func(ctx fiber.Ctx) error {
+		source, err := service.RefreshVoiceProfileSourceTranscript(ctx.Context(), ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProfileSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+
+		return ctx.JSON(source)
+	})
+
 	app.Post("/api/voice-profile-sources/:id/cancel", func(ctx fiber.Ctx) error {
 		source, err := service.CancelVoiceProfileSource(ctx.Params("id"))
 		if err != nil {
@@ -1152,6 +1175,23 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		ctx.Set(fiber.HeaderContentType, contentType)
 		ctx.Set(fiber.HeaderCacheControl, "no-store")
 		return ctx.Send(audioBytes)
+	})
+
+	app.Post("/api/voice-profile-sources/:id/candidates/:candidateId/transcript", func(ctx fiber.Ctx) error {
+		candidate, err := service.RefreshVoiceProfileCandidateTranscript(
+			ctx.Context(),
+			ctx.Params("id"),
+			ctx.Params("candidateId"),
+		)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProfileSourceNotFound) ||
+				errors.Is(err, pipeline.ErrProfileCandidateNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+
+		return ctx.JSON(candidate)
 	})
 
 	app.Post("/api/voice-profile-sources/:id/candidates/:candidateId/profiles", func(ctx fiber.Ctx) error {
@@ -1346,7 +1386,35 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Post("/api/voice-profiles/:id/artifacts/:moduleId", func(ctx fiber.Ctx) error {
-		profile, err := service.BuildVoiceProfileArtifact(ctx.Context(), ctx.Params("id"), ctx.Params("moduleId"))
+		var request struct {
+			TimeoutSeconds *int `json:"timeoutSeconds"`
+		}
+		var timeoutRequest struct {
+			TimeoutSeconds json.RawMessage `json:"timeoutSeconds"`
+		}
+		if len(ctx.Body()) > 0 {
+			if err := json.Unmarshal(ctx.Body(), &timeoutRequest); err != nil {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+			}
+			if len(strings.TrimSpace(string(timeoutRequest.TimeoutSeconds))) > 0 {
+				if err := json.Unmarshal(timeoutRequest.TimeoutSeconds, &request.TimeoutSeconds); err != nil {
+					return ctx.Status(fiber.StatusBadRequest).JSON(
+						errorResponse("timeoutSeconds must be a positive integer"),
+					)
+				}
+			}
+		}
+		if request.TimeoutSeconds != nil && *request.TimeoutSeconds <= 0 {
+			return ctx.Status(fiber.StatusBadRequest).JSON(
+				errorResponse("timeoutSeconds must be a positive integer"),
+			)
+		}
+		profile, err := service.BuildVoiceProfileArtifact(
+			ctx.Context(),
+			ctx.Params("id"),
+			ctx.Params("moduleId"),
+			request.TimeoutSeconds,
+		)
 		if err != nil {
 			if errors.Is(err, pipeline.ErrProfileNotFound) ||
 				errors.Is(err, pipeline.ErrResearchModuleNotFound) {

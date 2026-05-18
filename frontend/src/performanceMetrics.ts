@@ -1,6 +1,7 @@
 export type FrontendPerformanceMetricName =
   | "app-cold-usable"
   | "book-cinema-open"
+  | "prepared-source-cinema-open"
   | "reader-resume"
   | "studio-route-switch";
 

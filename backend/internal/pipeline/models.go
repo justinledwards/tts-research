@@ -200,6 +200,15 @@ type PreparedSourceSummary struct {
 	SentenceSegmentCount int `json:"sentenceSegmentCount"`
 }
 
+type TranscriptMetadata struct {
+	Text        string     `json:"text,omitempty"`
+	GeneratedAt *time.Time `json:"generatedAt,omitempty"`
+	Model       string     `json:"model,omitempty"`
+	Provider    string     `json:"provider,omitempty"`
+	Confidence  float64    `json:"confidence,omitempty"`
+	Error       string     `json:"error,omitempty"`
+}
+
 type PreparedSource struct {
 	ID                          string                `json:"id"`
 	ProjectID                   string                `json:"projectId"`
@@ -228,6 +237,12 @@ type PreparedSource struct {
 	SkippedItems                []SkippedSourceItem   `json:"skippedItems,omitempty"`
 	Warnings                    []string              `json:"warnings,omitempty"`
 	Metadata                    map[string]any        `json:"metadata,omitempty"`
+	TranscriptMetadata          *TranscriptMetadata   `json:"transcriptMetadata,omitempty"`
+	Transcript                  string                `json:"transcript,omitempty"`
+	TranscriptGeneratedAt       *time.Time            `json:"transcriptGeneratedAt,omitempty"`
+	TranscriptModel             string                `json:"transcriptModel,omitempty"`
+	TranscriptError             string                `json:"transcriptError,omitempty"`
+	TranscriptConfidence        float64               `json:"transcriptConfidence,omitempty"`
 	Error                       string                `json:"error,omitempty"`
 	CreatedAt                   time.Time             `json:"createdAt"`
 	UpdatedAt                   time.Time             `json:"updatedAt"`
@@ -937,6 +952,12 @@ type VoiceProfileCandidate struct {
 	Spans                   []VoiceProfileReferenceSpan  `json:"spans"`
 	QualityMetrics          VoiceProfileQualityMetrics   `json:"qualityMetrics"`
 	Denoise                 *VoiceProfileDenoiseMetadata `json:"denoise,omitempty"`
+	TranscriptMetadata      *TranscriptMetadata          `json:"transcriptMetadata,omitempty"`
+	Transcript              string                       `json:"transcript,omitempty"`
+	TranscriptGeneratedAt   *time.Time                   `json:"transcriptGeneratedAt,omitempty"`
+	TranscriptModel         string                       `json:"transcriptModel,omitempty"`
+	TranscriptError         string                       `json:"transcriptError,omitempty"`
+	TranscriptConfidence    float64                      `json:"transcriptConfidence,omitempty"`
 	CreatedAt               time.Time                    `json:"createdAt"`
 	UpdatedAt               time.Time                    `json:"updatedAt"`
 }
@@ -948,26 +969,32 @@ type VoiceProfileSourceStage struct {
 }
 
 type VoiceProfileSource struct {
-	ID               string                       `json:"id"`
-	Status           VoiceProfileSourceStatus     `json:"status"`
-	SourceFile       string                       `json:"sourceFile"`
-	SourceBytes      int64                        `json:"sourceBytes"`
-	SourceDurationMS int                          `json:"sourceDurationMs,omitempty"`
-	NormalizedAudio  string                       `json:"normalizedAudio,omitempty"`
-	NormalizedPath   string                       `json:"normalizedPath,omitempty"`
-	CleanedAudio     string                       `json:"cleanedAudio,omitempty"`
-	CleanedPath      string                       `json:"cleanedPath,omitempty"`
-	Denoise          *VoiceProfileDenoiseMetadata `json:"denoise,omitempty"`
-	AudioFormat      string                       `json:"audioFormat"`
-	ProgressMessage  string                       `json:"progressMessage"`
-	ProgressDetail   string                       `json:"progressDetail,omitempty"`
-	Error            string                       `json:"error,omitempty"`
-	Stages           []VoiceProfileSourceStage    `json:"stages"`
-	Candidates       []VoiceProfileCandidate      `json:"candidates"`
-	StrategyVersion  string                       `json:"strategyVersion"`
-	ModelVersion     string                       `json:"modelVersion,omitempty"`
-	CreatedAt        time.Time                    `json:"createdAt"`
-	UpdatedAt        time.Time                    `json:"updatedAt"`
+	ID                    string                       `json:"id"`
+	Status                VoiceProfileSourceStatus     `json:"status"`
+	SourceFile            string                       `json:"sourceFile"`
+	SourceBytes           int64                        `json:"sourceBytes"`
+	SourceDurationMS      int                          `json:"sourceDurationMs,omitempty"`
+	NormalizedAudio       string                       `json:"normalizedAudio,omitempty"`
+	NormalizedPath        string                       `json:"normalizedPath,omitempty"`
+	CleanedAudio          string                       `json:"cleanedAudio,omitempty"`
+	CleanedPath           string                       `json:"cleanedPath,omitempty"`
+	Denoise               *VoiceProfileDenoiseMetadata `json:"denoise,omitempty"`
+	AudioFormat           string                       `json:"audioFormat"`
+	ProgressMessage       string                       `json:"progressMessage"`
+	ProgressDetail        string                       `json:"progressDetail,omitempty"`
+	Error                 string                       `json:"error,omitempty"`
+	Stages                []VoiceProfileSourceStage    `json:"stages"`
+	Candidates            []VoiceProfileCandidate      `json:"candidates"`
+	TranscriptMetadata    *TranscriptMetadata          `json:"transcriptMetadata,omitempty"`
+	Transcript            string                       `json:"transcript,omitempty"`
+	TranscriptGeneratedAt *time.Time                   `json:"transcriptGeneratedAt,omitempty"`
+	TranscriptModel       string                       `json:"transcriptModel,omitempty"`
+	TranscriptError       string                       `json:"transcriptError,omitempty"`
+	TranscriptConfidence  float64                      `json:"transcriptConfidence,omitempty"`
+	StrategyVersion       string                       `json:"strategyVersion"`
+	ModelVersion          string                       `json:"modelVersion,omitempty"`
+	CreatedAt             time.Time                    `json:"createdAt"`
+	UpdatedAt             time.Time                    `json:"updatedAt"`
 }
 
 type VoiceProfile struct {

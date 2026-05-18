@@ -43,6 +43,7 @@ import {
   getSpeechPolicyDefinition,
   getSystemMetrics,
   getVoiceJob,
+  buildVoiceProfileArtifact,
   getVoiceProfileCredentials,
   getVoiceProfileSource,
   getVoiceProfileSourceDiagnostics,
@@ -60,6 +61,8 @@ import {
   previewPreparedSourceSpeechPolicy,
   previewContentIRSpeechPolicy,
   queueVoiceProfileTarget,
+  refreshVoiceProfileCandidateTranscript,
+  refreshVoiceProfileSourceTranscript,
   renameProject,
   saveHuggingFaceToken,
   startPlaybackSession,
@@ -126,6 +129,7 @@ import {
   type TeleprompterCue,
   type TeleprompterHighlightSettings,
 } from "./teleprompter";
+
 import {
   readingPositionForHighlightCue,
   resolveHighlightCue,
@@ -208,6 +212,24 @@ import { endFrontendSpan, recordColdUsableMetric, startFrontendSpan } from "./pe
 import { buildVoiceLibraryViewModel, type VoiceLibraryEntry } from "./voiceStudioViewModels";
 import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
 
+type VoiceProfileArtifactBuildAction = (
+  profileId: string,
+  moduleId: string,
+  timeoutSeconds?: number,
+) => Promise<void>;
+
+export interface ArtifactBuildTimeoutResolution {
+  canBuild: boolean;
+  error: string | null;
+  timeoutSeconds?: number;
+}
+
+interface ArtifactBuildTimeoutState extends ArtifactBuildTimeoutResolution {
+  input: string;
+  setInput: (value: string) => void;
+}
+
+const ARTIFACT_BUILD_TIMEOUT_ERROR = "Timeout must be blank or a positive integer.";
 const DEFAULT_PROJECT_NAME = "The Future of Clean Energy";
 const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
 const RESEARCH_MODULE_PROMPT_HIDDEN_KEY = "tts-research-module-prompt-hidden";
@@ -278,6 +300,30 @@ function LazySurfaceFallback({ label = "Loading..." }: Readonly<{ label?: string
       {label}
     </div>
   );
+}
+
+export function resolveArtifactBuildTimeoutInput(input: string): ArtifactBuildTimeoutResolution {
+  const normalized = input.trim();
+  if (normalized === "") {
+    return { canBuild: true, error: null };
+  }
+  if (!/^[1-9]\d*$/.test(normalized)) {
+    return { canBuild: false, error: ARTIFACT_BUILD_TIMEOUT_ERROR };
+  }
+  const timeoutSeconds = Number(normalized);
+  if (!Number.isSafeInteger(timeoutSeconds)) {
+    return { canBuild: false, error: ARTIFACT_BUILD_TIMEOUT_ERROR };
+  }
+  return { canBuild: true, error: null, timeoutSeconds };
+}
+
+function useArtifactBuildTimeoutState(): ArtifactBuildTimeoutState {
+  const [input, setInput] = useState("");
+  return {
+    input,
+    setInput,
+    ...resolveArtifactBuildTimeoutInput(input),
+  };
 }
 
 interface PipelineStepState {
@@ -2290,6 +2336,7 @@ export function App() {
     useState<VoiceProfileSourceDiagnostics | null>(null);
   const [isAnalyzingProfileSource, setIsAnalyzingProfileSource] = useState(false);
   const [profileCandidateCreateId, setProfileCandidateCreateId] = useState<string | null>(null);
+  const [refreshingTranscriptKey, setRefreshingTranscriptKey] = useState<string | null>(null);
   const [projects, setProjects] = useState<VoiceProject[]>([]);
   const [activeProjectId, setActiveProjectId] = useState(
     () => localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default",
@@ -2977,11 +3024,14 @@ export function App() {
   }, []);
 
   const handleBuildVoiceProfileArtifact = useCallback(
-    async (profileId: string, moduleId: string) => {
+    async (profileId: string, moduleId: string, timeoutSeconds?: number) => {
       setBuildingArtifactKey(`${profileId}:${moduleId}`);
       setProfileError(null);
       try {
-        const profile = await queueVoiceProfileTarget(profileId, moduleId, true);
+        const profile =
+          moduleId === "kokoro-clone"
+            ? await queueVoiceProfileTarget(profileId, moduleId, true)
+            : await buildVoiceProfileArtifact(profileId, moduleId, timeoutSeconds);
         setVoiceProfiles((currentProfiles) =>
           upsertVoiceProfileByCreatedAt(currentProfiles, profile),
         );
@@ -4247,6 +4297,59 @@ export function App() {
     [profileSource, selectVoiceProfile],
   );
 
+  const handleRefreshVoiceSourceTranscript = useCallback(async (sourceId: string) => {
+    const key = `source:${sourceId}`;
+    setRefreshingTranscriptKey(key);
+    setProfileError(null);
+    try {
+      const source = await refreshVoiceProfileSourceTranscript(sourceId);
+      setProfileSource(source);
+    } catch (caughtError) {
+      setProfileError(
+        caughtError instanceof Error ? caughtError.message : "Unable to refresh source transcript",
+      );
+    } finally {
+      setRefreshingTranscriptKey(null);
+    }
+  }, []);
+
+  const handleRefreshVoiceCandidateTranscript = useCallback(
+    async (candidate: VoiceProfileCandidate) => {
+      if (!profileSource) {
+        return;
+      }
+      const key = `candidate:${candidate.id}`;
+      setRefreshingTranscriptKey(key);
+      setProfileError(null);
+      try {
+        const updatedCandidate = await refreshVoiceProfileCandidateTranscript(
+          profileSource.id,
+          candidate.id,
+        );
+        setProfileSource((currentSource) => {
+          if (currentSource?.id !== profileSource.id) {
+            return currentSource;
+          }
+          return {
+            ...currentSource,
+            candidates: currentSource.candidates.map((currentCandidate) =>
+              currentCandidate.id === updatedCandidate.id ? updatedCandidate : currentCandidate,
+            ),
+          };
+        });
+      } catch (caughtError) {
+        setProfileError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to refresh candidate transcript",
+        );
+      } finally {
+        setRefreshingTranscriptKey(null);
+      }
+    },
+    [profileSource],
+  );
+
   const handleDeleteVoiceProfile = useCallback(
     async (id: string) => {
       setProfileError(null);
@@ -5194,6 +5297,7 @@ export function App() {
                 profileSource ? cancelingProfileSourceId === profileSource.id : false
               }
               isAnalyzing={isAnalyzingProfileSource}
+              refreshingTranscriptKey={refreshingTranscriptKey}
               researchModules={researchModules}
               runConfiguration={runConfiguration}
               source={profileSource}
@@ -5203,6 +5307,8 @@ export function App() {
               onCancelSource={handleCancelVoiceProfileSource}
               onCancelTarget={handleCancelVoiceProfileTarget}
               onCreateProfile={handleCreateVoiceProfileFromCandidate}
+              onRefreshCandidateTranscript={handleRefreshVoiceCandidateTranscript}
+              onRefreshSourceTranscript={handleRefreshVoiceSourceTranscript}
               onRunConfigurationChange={setRunConfiguration}
             />
           </section>
@@ -5924,7 +6030,7 @@ function NarrationSidebar({
   ttsEngines: TTSEngineDiagnostics[];
   voiceProfileCredentialError: string | null;
   voiceProfileCredentials: VoiceProfileCredentialStatus | null;
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onCloneVoice: () => void;
@@ -6186,7 +6292,7 @@ function VoiceCloningVoiceRail({
   ttsEngines: TTSEngineDiagnostics[];
   voiceProfileCredentialError: string | null;
   voiceProfileCredentials: VoiceProfileCredentialStatus | null;
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onDeleteProfile: (id: string) => void;
@@ -6419,6 +6525,7 @@ function VoiceCloningWorkspace({
   error,
   isCancelingSource,
   isAnalyzing,
+  refreshingTranscriptKey,
   researchModules,
   runConfiguration,
   source,
@@ -6428,6 +6535,8 @@ function VoiceCloningWorkspace({
   onCancelSource,
   onCancelTarget,
   onCreateProfile,
+  onRefreshCandidateTranscript,
+  onRefreshSourceTranscript,
   onRunConfigurationChange,
 }: Readonly<{
   activity: VoiceCloningActivitySummary;
@@ -6438,18 +6547,21 @@ function VoiceCloningWorkspace({
   error: string | null;
   isCancelingSource: boolean;
   isAnalyzing: boolean;
+  refreshingTranscriptKey: string | null;
   researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
   source: VoiceProfileSource | null;
   ttsEngines: TTSEngineDiagnostics[];
   onAnalyze: (file: File) => Promise<void>;
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onCancelSource: (sourceId: string) => Promise<void>;
   onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
   onCreateProfile: (
     candidate: VoiceProfileCandidate,
     request: CreateVoiceProfileFromCandidateRequest,
   ) => Promise<void>;
+  onRefreshCandidateTranscript: (candidate: VoiceProfileCandidate) => Promise<void>;
+  onRefreshSourceTranscript: (sourceId: string) => Promise<void>;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
   return (
@@ -6478,11 +6590,14 @@ function VoiceCloningWorkspace({
           diagnostics={diagnostics}
           error={error}
           isAnalyzing={isAnalyzing}
+          refreshingTranscriptKey={refreshingTranscriptKey}
           researchModules={researchModules}
           source={source}
           ttsEngines={ttsEngines}
           onAnalyze={onAnalyze}
           onCreateProfile={onCreateProfile}
+          onRefreshCandidateTranscript={onRefreshCandidateTranscript}
+          onRefreshSourceTranscript={onRefreshSourceTranscript}
         />
       </Suspense>
     </section>
@@ -6570,6 +6685,36 @@ function VoiceCloningActivityPanel({
   );
 }
 
+function ArtifactBuildTimeoutInput({
+  input,
+  error,
+  onInputChange,
+}: Readonly<{
+  input: string;
+  error: string | null;
+  onInputChange: (value: string) => void;
+}>) {
+  return (
+    <label className="grid min-w-0 gap-1 rounded-md border p-3 text-xs vs-border vs-raised">
+      <span className="font-semibold text-[var(--vs-text)]">Artifact build timeout (seconds)</span>
+      <input
+        aria-invalid={error ? "true" : "false"}
+        className="h-9 min-w-0 rounded-md border px-2 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 vs-border vs-surface"
+        inputMode="numeric"
+        onChange={(event) => {
+          onInputChange(event.currentTarget.value);
+        }}
+        placeholder="Server default"
+        type="number"
+        value={input}
+      />
+      <span className={error ? "text-red-700" : "vs-muted"}>
+        {error ?? "Blank uses the server default for this build."}
+      </span>
+    </label>
+  );
+}
+
 function CloneArtifactReadinessPanel({
   buildingArtifactKey,
   cancelingTargetKey,
@@ -6587,11 +6732,12 @@ function CloneArtifactReadinessPanel({
   profile: VoiceProfile | null;
   runConfiguration: RunConfiguration;
   ttsEngines: TTSEngineDiagnostics[];
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
   const profileIssues = profile ? voiceProfileTargetIssues(profile, modules) : [];
+  const artifactBuildTimeout = useArtifactBuildTimeoutState();
   return (
     <section className="grid min-w-0 gap-3 overflow-hidden rounded-lg border p-4 shadow-sm vs-raised">
       <div className="flex min-w-0 items-start justify-between gap-3">
@@ -6611,7 +6757,13 @@ function CloneArtifactReadinessPanel({
       </div>
       {profile ? (
         <>
+          <ArtifactBuildTimeoutInput
+            error={artifactBuildTimeout.error}
+            input={artifactBuildTimeout.input}
+            onInputChange={artifactBuildTimeout.setInput}
+          />
           <CloneTargetReadinessList
+            artifactBuildTimeout={artifactBuildTimeout}
             buildingArtifactKey={buildingArtifactKey}
             cancelingTargetKey={cancelingTargetKey}
             modules={modules}
@@ -6722,10 +6874,11 @@ function BackendContractReviewPanel({
   profile: VoiceProfile | null;
   runConfiguration: RunConfiguration;
   ttsEngines: TTSEngineDiagnostics[];
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
+  const artifactBuildTimeout = useArtifactBuildTimeoutState();
   return (
     <section className="grid gap-3 rounded-lg border p-4 shadow-sm vs-border vs-surface">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -6742,6 +6895,11 @@ function BackendContractReviewPanel({
           visible so adding another backend remains a descriptor-level change.
         </p>
       </div>
+      <ArtifactBuildTimeoutInput
+        error={artifactBuildTimeout.error}
+        input={artifactBuildTimeout.input}
+        onInputChange={artifactBuildTimeout.setInput}
+      />
       <div className="overflow-x-auto rounded-md border vs-border">
         <table className="w-full min-w-[720px] border-collapse text-left text-xs">
           <thead className="bg-[var(--vs-raised)] text-[0.65rem] uppercase tracking-[0.14em] vs-muted">
@@ -6766,6 +6924,8 @@ function BackendContractReviewPanel({
                 profile,
                 ttsEngines,
               });
+              const actionBuildsArtifact = backendContractActionBuildsArtifact(summary.status);
+              const timeoutBlocksAction = actionBuildsArtifact && !artifactBuildTimeout.canBuild;
               return (
                 <tr
                   className={
@@ -6789,9 +6949,7 @@ function BackendContractReviewPanel({
                     </div>
                   </td>
                   <td className="px-3 py-3 vs-muted">{contract.voiceSource}</td>
-                  <td className="px-3 py-3 vs-muted">
-                    {contract.targetId ? moduleLabel(contract.targetId) : "-"}
-                  </td>
+                  <td className="px-3 py-3 vs-muted">{moduleLabel(contract.targetId)}</td>
                   <td className="px-3 py-3 vs-muted">{summary.artifact}</td>
                   <td className="px-3 py-3">
                     <span
@@ -6807,19 +6965,23 @@ function BackendContractReviewPanel({
                   <td className="px-3 py-3">
                     <button
                       className={`h-8 min-w-28 rounded-md border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${backendContractActionButtonClass(summary.status)}`}
-                      disabled={!summary.canAct}
+                      disabled={!summary.canAct || timeoutBlocksAction}
                       onClick={() => {
                         handleBackendContractAction({
                           contract,
                           profile,
                           runConfiguration,
                           summary,
+                          timeoutSeconds: artifactBuildTimeout.timeoutSeconds,
                           ttsEngines,
                           onBuildArtifact,
                           onCancelTarget,
                           onRunConfigurationChange,
                         });
                       }}
+                      title={
+                        timeoutBlocksAction ? (artifactBuildTimeout.error ?? undefined) : undefined
+                      }
                       type="button"
                     >
                       {summary.actionLabel}
@@ -6867,9 +7029,6 @@ function backendContractSummary({
 }>): BackendContractSummary {
   const engine = ttsEngines.find((item) => item.id === contract.engineId);
   const engineLabel = engine ? `${engine.label} · ${engine.status}` : contract.engineId;
-  if (!contract.targetId) {
-    return backendContractNoTargetSummary({ activeEngineId, contract, engine, engineLabel });
-  }
   const module = modules.find((item) => item.id === contract.targetId);
   const target = profile?.cloneTargets?.[contract.targetId];
   const artifact = profile?.cloneArtifacts?.[contract.targetId];
@@ -6906,7 +7065,7 @@ function backendContractSummary({
       status,
     }),
     artifact: artifact?.status ?? contract.artifact,
-    canAct: backendContractCanAct(status, profile, contract.targetId),
+    canAct: backendContractCanAct(status, profile),
     detail:
       target?.error ??
       artifact?.error ??
@@ -6919,43 +7078,18 @@ function backendContractSummary({
   };
 }
 
-function backendContractNoTargetSummary({
-  activeEngineId,
-  contract,
-  engine,
-  engineLabel,
-}: Readonly<{
-  activeEngineId: string;
-  contract: BackendContractRow;
-  engine?: TTSEngineDiagnostics;
-  engineLabel: string;
-}>): BackendContractSummary {
-  const ready = engine?.status === "ready" || contract.engineId === "auto";
-  return {
-    actionLabel: activeEngineId === contract.engineId ? "Selected" : `Use ${contract.label}`,
-    artifact: contract.artifact,
-    canAct: ready && activeEngineId !== contract.engineId,
-    detail: ready ? "No profile target" : "Provider unavailable",
-    engineLabel,
-    validationPercent: "—",
-    label: ready ? "Ready" : "Unavailable",
-    status: ready ? "ready" : "setup",
-  };
-}
-
 function backendContractCanAct(
   status: BackendContractStatus,
   profile: VoiceProfile | null,
-  targetId: string,
 ): boolean {
   if (status === "ready") {
     return true;
   }
-  return (
-    Boolean(profile) &&
-    Boolean(targetId) &&
-    (status === "running" || status === "failed" || status === "waiting")
-  );
+  return Boolean(profile) && (status === "running" || status === "failed" || status === "waiting");
+}
+
+function backendContractActionBuildsArtifact(status: BackendContractStatus): boolean {
+  return status === "failed" || status === "waiting";
 }
 
 function backendContractReadinessStatus({
@@ -7002,7 +7136,7 @@ function backendContractActionLabel({
   isCanceling: boolean;
   status: BackendContractStatus;
 }>): string {
-  const actionLabel = contract.targetId ? moduleLabel(contract.targetId) : contract.label;
+  const actionLabel = moduleLabel(contract.targetId);
   if (isCanceling) {
     return "Cancelling...";
   }
@@ -7015,7 +7149,7 @@ function backendContractActionLabel({
   if (status === "ready") {
     return active ? "Selected" : `Use ${actionLabel}`;
   }
-  if (status === "waiting" && contract.targetId) {
+  if (status === "waiting") {
     return `Prepare ${actionLabel}`;
   }
   return "Setup needed";
@@ -7088,6 +7222,7 @@ function handleBackendContractAction({
   profile,
   runConfiguration,
   summary,
+  timeoutSeconds,
   ttsEngines,
   onBuildArtifact,
   onCancelTarget,
@@ -7097,21 +7232,18 @@ function handleBackendContractAction({
   profile: VoiceProfile | null;
   runConfiguration: RunConfiguration;
   summary: BackendContractSummary;
+  timeoutSeconds?: number;
   ttsEngines: TTSEngineDiagnostics[];
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
-  if (contract.targetId && profile && summary.status === "running") {
+  if (profile && summary.status === "running") {
     void onCancelTarget(profile.id, contract.targetId);
     return;
   }
-  if (
-    contract.targetId &&
-    profile &&
-    (summary.status === "failed" || summary.status === "waiting")
-  ) {
-    void onBuildArtifact(profile.id, contract.targetId);
+  if (profile && (summary.status === "failed" || summary.status === "waiting")) {
+    void onBuildArtifact(profile.id, contract.targetId, timeoutSeconds);
     return;
   }
   if (summary.status === "ready") {
@@ -7164,6 +7296,7 @@ function runConfigurationForBackendContract(
 }
 
 function CloneTargetReadinessList({
+  artifactBuildTimeout,
   buildingArtifactKey,
   cancelingTargetKey,
   modules,
@@ -7174,13 +7307,14 @@ function CloneTargetReadinessList({
   onCancelTarget,
   onRunConfigurationChange,
 }: Readonly<{
+  artifactBuildTimeout: ArtifactBuildTimeoutResolution;
   buildingArtifactKey: string | null;
   cancelingTargetKey: string | null;
   modules: ResearchModuleDiagnostics[];
   profile: VoiceProfile;
   runConfiguration: RunConfiguration;
   ttsEngines: TTSEngineDiagnostics[];
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
@@ -7189,6 +7323,7 @@ function CloneTargetReadinessList({
     <div className="grid gap-2">
       {targetOrder.map((moduleId) => (
         <CloneTargetReadinessRow
+          artifactBuildTimeout={artifactBuildTimeout}
           buildingArtifactKey={buildingArtifactKey}
           cancelingTargetKey={cancelingTargetKey}
           key={moduleId}
@@ -7207,6 +7342,7 @@ function CloneTargetReadinessList({
 }
 
 function CloneTargetReadinessRow({
+  artifactBuildTimeout,
   buildingArtifactKey,
   cancelingTargetKey,
   module,
@@ -7218,6 +7354,7 @@ function CloneTargetReadinessRow({
   onCancelTarget,
   onRunConfigurationChange,
 }: Readonly<{
+  artifactBuildTimeout: ArtifactBuildTimeoutResolution;
   buildingArtifactKey: string | null;
   cancelingTargetKey: string | null;
   module?: ResearchModuleDiagnostics;
@@ -7225,7 +7362,7 @@ function CloneTargetReadinessRow({
   profile: VoiceProfile;
   runConfiguration: RunConfiguration;
   ttsEngines: TTSEngineDiagnostics[];
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
@@ -7265,6 +7402,8 @@ function CloneTargetReadinessRow({
     status,
     validationStatus: target?.validation?.status,
   });
+  const buildActionNeedsTimeout = canPrepare || canRevalidate;
+  const timeoutBlocksAction = buildActionNeedsTimeout && !artifactBuildTimeout.canBuild;
 
   return (
     <div
@@ -7309,7 +7448,7 @@ function CloneTargetReadinessRow({
             isBusy,
             isReady,
           )}`}
-          disabled={isCanceling || isSelected || (!canAct && !isSelected)}
+          disabled={isCanceling || isSelected || timeoutBlocksAction}
           onClick={() => {
             handleCloneTargetReadinessAction({
               canPrepare,
@@ -7319,12 +7458,14 @@ function CloneTargetReadinessRow({
               moduleId,
               profile,
               runConfiguration,
+              timeoutSeconds: artifactBuildTimeout.timeoutSeconds,
               ttsEngines,
               onBuildArtifact,
               onCancelTarget,
               onRunConfigurationChange,
             });
           }}
+          title={timeoutBlocksAction ? (artifactBuildTimeout.error ?? undefined) : undefined}
           type="button"
         >
           {actionLabel}
@@ -7352,7 +7493,7 @@ function cloneTargetActionButtonClass(isBusy: boolean, isReady: boolean): string
   return "border-orange-200 bg-white text-orange-800 hover:bg-orange-50";
 }
 
-function handleCloneTargetReadinessAction({
+export function handleCloneTargetReadinessAction({
   canPrepare,
   canRevalidate,
   canUse,
@@ -7360,6 +7501,7 @@ function handleCloneTargetReadinessAction({
   moduleId,
   profile,
   runConfiguration,
+  timeoutSeconds,
   ttsEngines,
   onBuildArtifact,
   onCancelTarget,
@@ -7372,8 +7514,9 @@ function handleCloneTargetReadinessAction({
   moduleId: string;
   profile: VoiceProfile;
   runConfiguration: RunConfiguration;
+  timeoutSeconds?: number;
   ttsEngines: TTSEngineDiagnostics[];
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
@@ -7388,7 +7531,7 @@ function handleCloneTargetReadinessAction({
     return;
   }
   if (canPrepare || canRevalidate) {
-    void onBuildArtifact(profile.id, moduleId);
+    void onBuildArtifact(profile.id, moduleId, timeoutSeconds);
   }
 }
 
@@ -9620,7 +9763,7 @@ function VoiceProfileDropdown({
   showArtifactControls?: boolean;
   showBackendControls?: boolean;
   showBackendSummary?: boolean;
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onDeleteProfile: (id: string) => void;
@@ -9632,6 +9775,7 @@ function VoiceProfileDropdown({
   isClearingHuggingFaceToken: boolean;
 }>) {
   const [isOpen, setIsOpen] = useState(false);
+  const artifactBuildTimeout = useArtifactBuildTimeoutState();
   const selectedKokoroVoice = findKokoroVoicepack(selectedKokoroVoiceId);
   const engineFamilyValue = kokoroEngineFamilyValue(runConfiguration.ttsEngine);
   const selectedEngine = findVoicePanelEngine(ttsEngines, engineFamilyValue);
@@ -9760,6 +9904,7 @@ function VoiceProfileDropdown({
             </p>
             {showArtifactControls ? (
               <VoiceProfileArtifactControls
+                artifactBuildTimeout={artifactBuildTimeout}
                 buildingArtifactKey={buildingArtifactKey}
                 credentialError={voiceProfileCredentialError}
                 credentials={voiceProfileCredentials}
@@ -9811,6 +9956,7 @@ function VoiceProfileDropdown({
                 buildingArtifactKey={buildingArtifactKey}
                 modules={researchModules}
                 profile={selectedProfile ?? null}
+                artifactBuildTimeout={artifactBuildTimeout}
                 onBuildArtifact={onBuildArtifact}
                 onSelectMode={updateKokoroRenderMode}
               />
@@ -9978,6 +10124,7 @@ function VoiceBackendSummary({
 
 function KokoroRenderModeSelector({
   activeMode,
+  artifactBuildTimeout,
   buildingArtifactKey,
   modules,
   profile,
@@ -9985,10 +10132,11 @@ function KokoroRenderModeSelector({
   onSelectMode,
 }: Readonly<{
   activeMode: KokoroRenderMode;
+  artifactBuildTimeout: ArtifactBuildTimeoutResolution;
   buildingArtifactKey: string | null;
   modules: ResearchModuleDiagnostics[];
   profile: VoiceProfile | null;
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onSelectMode: (mode: KokoroRenderMode) => void;
 }>) {
   return (
@@ -10008,6 +10156,7 @@ function KokoroRenderModeSelector({
           const selected = option.id === activeMode;
           const canSelect = readiness.ready;
           const canPrepare = Boolean(profile && targetId && readiness.canPrepare && !isBusy);
+          const timeoutBlocksAction = canPrepare && !artifactBuildTimeout.canBuild;
           return (
             <div
               className={`rounded-md border p-2 ${
@@ -10042,9 +10191,13 @@ function KokoroRenderModeSelector({
               {canPrepare && profile && targetId ? (
                 <button
                   className="mt-2 rounded border border-orange-200 bg-white px-2 py-1 text-xs font-semibold text-orange-800 hover:bg-orange-100"
+                  disabled={timeoutBlocksAction}
                   onClick={() => {
-                    void onBuildArtifact(profile.id, targetId);
+                    void onBuildArtifact(profile.id, targetId, artifactBuildTimeout.timeoutSeconds);
                   }}
+                  title={
+                    timeoutBlocksAction ? (artifactBuildTimeout.error ?? undefined) : undefined
+                  }
                   type="button"
                 >
                   {kokoroRenderModeActionLabel(readiness.status, isBusy)}
@@ -10205,6 +10358,7 @@ function kokoroRenderModeStatusClass(status: string, ready: boolean): string {
 }
 
 function VoiceProfileArtifactControls({
+  artifactBuildTimeout,
   buildingArtifactKey,
   credentialError,
   credentials,
@@ -10217,6 +10371,7 @@ function VoiceProfileArtifactControls({
   onSaveHuggingFaceToken,
   savingHuggingFaceTokenKey,
 }: Readonly<{
+  artifactBuildTimeout: ArtifactBuildTimeoutState;
   buildingArtifactKey: string | null;
   credentialError: string | null;
   credentials: VoiceProfileCredentialStatus | null;
@@ -10224,12 +10379,18 @@ function VoiceProfileArtifactControls({
   modules: ResearchModuleDiagnostics[];
   profile: VoiceProfile;
   showTargetButtons?: boolean;
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onBuildArtifact: VoiceProfileArtifactBuildAction;
   onClearHuggingFaceToken: () => void;
   onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
   savingHuggingFaceTokenKey: string | null;
 }>) {
   const issues = voiceProfileTargetIssues(profile, modules);
+  const startArtifactBuild = async (moduleId: string): Promise<void> => {
+    if (!artifactBuildTimeout.canBuild) {
+      return;
+    }
+    await onBuildArtifact(profile.id, moduleId, artifactBuildTimeout.timeoutSeconds);
+  };
   return (
     <div className="grid gap-2 rounded-md border border-zinc-200 bg-white p-2">
       <div className="flex flex-wrap gap-1">
@@ -10247,6 +10408,11 @@ function VoiceProfileArtifactControls({
           );
         })}
       </div>
+      <ArtifactBuildTimeoutInput
+        error={artifactBuildTimeout.error}
+        input={artifactBuildTimeout.input}
+        onInputChange={artifactBuildTimeout.setInput}
+      />
       {showTargetButtons ? (
         <div className="grid gap-2">
           {["kokoro-clone", ...PROFILE_ARTIFACT_MODULE_ORDER].map((moduleId) => {
@@ -10283,15 +10449,25 @@ function VoiceProfileArtifactControls({
               ready: status === "ready",
               status: target?.status,
             });
+            const resolveArtifactBuildButtonTitle = (): string | undefined => {
+              if (!artifactBuildTimeout.canBuild) {
+                return artifactBuildTimeout.error ?? undefined;
+              }
+              if (!canPrepare) {
+                return module?.reason ?? module?.setup;
+              }
+              return undefined;
+            };
+            const artifactBuildButtonTitle = resolveArtifactBuildButtonTitle();
             return (
               <button
                 className="rounded-md border border-zinc-200 px-2 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
-                disabled={!canPrepare || isBusy}
+                disabled={!artifactBuildTimeout.canBuild || !canPrepare || isBusy}
                 key={moduleId}
                 onClick={() => {
-                  void onBuildArtifact(profile.id, moduleId);
+                  void startArtifactBuild(moduleId);
                 }}
-                title={canPrepare ? undefined : (module?.reason ?? module?.setup)}
+                title={artifactBuildButtonTitle}
                 type="button"
               >
                 {buttonLabel}
@@ -10327,7 +10503,7 @@ function VoiceProfileArtifactControls({
                   isClearing={isClearingHuggingFaceToken}
                   isSaving={savingHuggingFaceTokenKey === `${profile.id}:${issue.moduleId}`}
                   onClear={onClearHuggingFaceToken}
-                  onRevalidate={() => onBuildArtifact(profile.id, issue.moduleId)}
+                  onRevalidate={() => startArtifactBuild(issue.moduleId)}
                   onSave={(token) => onSaveHuggingFaceToken(profile.id, issue.moduleId, token)}
                 />
               ) : null}

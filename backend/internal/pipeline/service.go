@@ -528,6 +528,7 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	service.reloadProjects()
 	service.reloadBookSources()
 	service.reloadSourcePreps()
+	service.reloadVoiceProfileSources()
 	service.reloadProgress()
 	service.reloadPlaybackSessions()
 	service.reloadProfiles()

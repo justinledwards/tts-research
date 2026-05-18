@@ -2573,6 +2573,134 @@ func TestCreateVoiceProfileSourceSkipsDenoiseForAlreadyCleanAudio(t *testing.T) 
 	}
 }
 
+func TestVoiceProfileSourceStoresTranscriptsAndReloads(t *testing.T) {
+	t.Parallel()
+
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	checker := &sequenceTranscriptChecker{
+		transcripts: []string{"whole source transcript", "stitched candidate transcript"},
+		provider:    "test-asr",
+		similarity:  0.91,
+	}
+	options := profileSourceOptions(t, mockProfileSourceAnalyzer{
+		result: pipeline.VoiceProfileSourceAnalysisResult{
+			ModelVersion: "mock-diarizer",
+			Spans: []pipeline.DetectedSpeakerSpan{
+				{SpeakerID: "SPEAKER_00", StartMS: 0, EndMS: 25_000, Confidence: 0.94},
+			},
+		},
+	})
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		checker,
+		options,
+	)
+
+	source, err := service.CreateVoiceProfileSource(context.Background(), sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSource returned error: %v", err)
+	}
+	ready := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusReady)
+	if ready.Transcript != "whole source transcript" || ready.TranscriptModel != "test-asr" {
+		t.Fatalf("source transcript = %q/%q, want stored ASR metadata", ready.Transcript, ready.TranscriptModel)
+	}
+	if ready.TranscriptGeneratedAt == nil || ready.TranscriptConfidence <= 0 {
+		t.Fatalf("source transcript metadata = %+v, want generatedAt and confidence", ready.TranscriptMetadata)
+	}
+	if len(ready.Candidates) == 0 || ready.Candidates[0].Transcript != "stitched candidate transcript" {
+		t.Fatalf("candidate transcript = %+v, want stitched candidate transcript", ready.Candidates)
+	}
+
+	reloaded := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	reloadedSource, err := reloaded.GetVoiceProfileSource(source.ID)
+	if err != nil {
+		t.Fatalf("GetVoiceProfileSource after reload returned error: %v", err)
+	}
+	if reloadedSource.Transcript != ready.Transcript ||
+		len(reloadedSource.Candidates) == 0 ||
+		reloadedSource.Candidates[0].Transcript != ready.Candidates[0].Transcript {
+		t.Fatalf("reloaded transcripts = %+v, want persisted source/candidate transcripts", reloadedSource)
+	}
+}
+
+func TestPreparedSourceTranscriptRefreshUsesExpectedTextWhenAvailable(t *testing.T) {
+	t.Parallel()
+
+	sourcePrepDir := t.TempDir()
+	audioPath := writeToneWAV(t, 1000, 9000)
+	checker := &sequenceTranscriptChecker{
+		transcripts: []string{"expected transcript"},
+		provider:    "test-asr",
+		similarity:  0.88,
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		checker,
+		pipeline.Options{
+			MaxRetries:      3,
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+			SourcePrepDir:   sourcePrepDir,
+			ProgressDataDir: t.TempDir(),
+		},
+	)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		SourceName: "expected.txt",
+		Text:       "Expected words.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	metadataPath := filepath.Join(sourcePrepDir, source.ID, "source-prep.json")
+	metadataBytes, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatalf("ReadFile metadata returned error: %v", err)
+	}
+	var persisted pipeline.PreparedSource
+	if err := json.Unmarshal(metadataBytes, &persisted); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	persisted.Metadata = map[string]any{"audioPath": audioPath}
+	encoded, err := json.MarshalIndent(persisted, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent metadata returned error: %v", err)
+	}
+	if err := os.WriteFile(metadataPath, append(encoded, '\n'), 0o644); err != nil {
+		t.Fatalf("WriteFile metadata returned error: %v", err)
+	}
+
+	reloaded := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		checker,
+		pipeline.Options{
+			MaxRetries:      3,
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+			SourcePrepDir:   sourcePrepDir,
+			ProgressDataDir: t.TempDir(),
+		},
+	)
+	updated, err := reloaded.RefreshPreparedSourceTranscript(context.Background(), source.ID)
+	if err != nil {
+		t.Fatalf("RefreshPreparedSourceTranscript returned error: %v", err)
+	}
+	if updated.Transcript != "expected transcript" || updated.TranscriptModel != "test-asr" {
+		t.Fatalf("transcript = %q/%q, want refreshed metadata", updated.Transcript, updated.TranscriptModel)
+	}
+	if len(checker.expectedTexts()) == 0 || checker.expectedTexts()[0] != "Expected words." {
+		t.Fatalf("checker expected texts = %#v, want prepared speech text", checker.expectedTexts())
+	}
+}
+
 func TestVoiceProfileSourceDiagnosticsUsesLocalModelPathWithoutToken(t *testing.T) {
 	t.Parallel()
 
@@ -3686,7 +3814,7 @@ printf "%s\n" "{\"moduleId\":\"${module_id}\",\"path\":\"${artifact_file}\",\"lo
 		t.Fatalf("CreateVoiceProfile returned error: %v", err)
 	}
 
-	built, err := service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleSupertonicEmbed)
+	built, err := service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleSupertonicEmbed, nil)
 	if err != nil {
 		t.Fatalf("BuildVoiceProfileArtifact returned error: %v", err)
 	}
@@ -3796,7 +3924,7 @@ printf "%s\n" "{\"moduleId\":\"${module_id}\",\"path\":\"${artifact_file}\",\"lo
 		t.Fatalf("CreateVoiceProfile returned error: %v", err)
 	}
 
-	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed)
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed, nil)
 	if err != nil {
 		t.Fatalf("BuildVoiceProfileArtifact returned error: %v", err)
 	}
@@ -3878,7 +4006,7 @@ func TestBuildSupertonicArtifactFailsWithMissingRequiredAsset(t *testing.T) {
 	}
 
 	missing := filepath.Join(upstreamDir, "onnx", "duration_predictor.onnx")
-	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleSupertonicEmbed)
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleSupertonicEmbed, nil)
 	if err == nil {
 		t.Fatal("BuildVoiceProfileArtifact should fail when supertonic asset is missing")
 	}
@@ -4021,7 +4149,7 @@ printf "%s\n" "{\"moduleId\":\"${module_id}\",\"path\":\"${artifact_file}\",\"lo
 		t.Fatalf("CreateVoiceProfile returned error: %v", err)
 	}
 
-	built, err := service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleSupertonicEmbed)
+	built, err := service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleSupertonicEmbed, nil)
 	if err != nil {
 		t.Fatalf("BuildVoiceProfileArtifact returned error: %v", err)
 	}
@@ -4074,7 +4202,7 @@ func TestBuildVoiceProfileArtifactFailsWithMissingPythonExecutable(t *testing.T)
 		t.Fatalf("CreateVoiceProfile returned error: %v", err)
 	}
 
-	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed)
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed, nil)
 	if err == nil {
 		t.Fatal("BuildVoiceProfileArtifact should fail when python executable is missing")
 	}
@@ -4152,7 +4280,7 @@ exit 1
 		t.Fatalf("CreateVoiceProfile returned error: %v", err)
 	}
 
-	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed)
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed, nil)
 	if err == nil {
 		t.Fatal("BuildVoiceProfileArtifact should fail when spacy model is missing")
 	}
@@ -4219,7 +4347,7 @@ exit 1
 		t.Fatalf("CreateVoiceProfile returned error: %v", err)
 	}
 
-	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed)
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed, nil)
 	if err == nil {
 		t.Fatal("BuildVoiceProfileArtifact should fail for subprocess failure")
 	}
@@ -4283,7 +4411,7 @@ func TestBuildVoiceProfileArtifactCancellationPersistsCancelledState(t *testing.
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		_, buildErr := service.BuildVoiceProfileArtifact(ctx, profile.ID, pipeline.ResearchModuleKokoroEmbed)
+		_, buildErr := service.BuildVoiceProfileArtifact(ctx, profile.ID, pipeline.ResearchModuleKokoroEmbed, nil)
 		errCh <- buildErr
 	}()
 	waitForVoiceProfileArtifactStatus(t, service, profile.ID, pipeline.ResearchModuleKokoroEmbed, pipeline.VoiceProfileCloneArtifactStatusBuilding)
@@ -4300,6 +4428,123 @@ func TestBuildVoiceProfileArtifactCancellationPersistsCancelledState(t *testing.
 	settled := waitForVoiceProfileArtifactStatus(t, service, profile.ID, pipeline.ResearchModuleKokoroEmbed, pipeline.VoiceProfileCloneArtifactStatusCancelled)
 	if settled.CloneArtifacts[pipeline.ResearchModuleKokoroEmbed].Error != "cancelled by request" {
 		t.Fatalf("artifact error = %q, want explicit cancellation reason", settled.CloneArtifacts[pipeline.ResearchModuleKokoroEmbed].Error)
+	}
+}
+
+func TestBuildVoiceProfileArtifactUsesProvidedTimeout(t *testing.T) {
+	t.Setenv("VOICE_EMBED_FAKE_ARTIFACT", "1")
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	artifactScript := filepath.Join(t.TempDir(), "profile_embed_artifact.py")
+	if err := os.WriteFile(
+		artifactScript,
+		[]byte("import time\nwhile True:\n    time.sleep(1)\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("write artifact script: %v", err)
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileArtifactTimeoutSeconds: 30,
+			VoiceProfileArtifactPythonPath:     "python3",
+			VoiceProfileArtifactScriptPath:     artifactScript,
+			VoiceProfileLikenessScorer:         mockLikenessScorer{score: 0.8},
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleKokoroEmbed,
+					Label:     "Kokoro Embed",
+					RepoURL:   "https://example.invalid/kokoro.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineKokoroEmbed,
+				},
+			},
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	overrideSeconds := 1
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed, &overrideSeconds)
+	if err == nil {
+		t.Fatal("BuildVoiceProfileArtifact should timeout")
+	}
+	if !strings.Contains(err.Error(), "voice profile artifact build timed out after 1 seconds") {
+		t.Fatalf("build error = %q, want timed out after 1 second", err)
+	}
+}
+
+func TestBuildVoiceProfileArtifactFallsBackToConfiguredTimeout(t *testing.T) {
+	t.Setenv("VOICE_EMBED_FAKE_ARTIFACT", "1")
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	artifactScript := filepath.Join(t.TempDir(), "profile_embed_artifact.py")
+	if err := os.WriteFile(
+		artifactScript,
+		[]byte("import time\nwhile True:\n    time.sleep(1)\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("write artifact script: %v", err)
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileArtifactTimeoutSeconds: 2,
+			VoiceProfileArtifactPythonPath:     "python3",
+			VoiceProfileArtifactScriptPath:     artifactScript,
+			VoiceProfileLikenessScorer:         mockLikenessScorer{score: 0.8},
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleKokoroEmbed,
+					Label:     "Kokoro Embed",
+					RepoURL:   "https://example.invalid/kokoro.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineKokoroEmbed,
+				},
+			},
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	_, err = service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed, nil)
+	if err == nil {
+		t.Fatal("BuildVoiceProfileArtifact should timeout")
+	}
+	if !strings.Contains(err.Error(), "voice profile artifact build timed out after 2 seconds") {
+		t.Fatalf("build error = %q, want timed out after 2 seconds", err)
 	}
 }
 
@@ -4349,7 +4594,7 @@ func TestBuildVoiceProfileArtifactPersistsFakeOutput(t *testing.T) {
 		t.Fatalf("CreateVoiceProfile returned error: %v", err)
 	}
 
-	built, err := service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed)
+	built, err := service.BuildVoiceProfileArtifact(context.Background(), profile.ID, pipeline.ResearchModuleKokoroEmbed, nil)
 	if err != nil {
 		t.Fatalf("BuildVoiceProfileArtifact returned error: %v", err)
 	}
@@ -4675,6 +4920,49 @@ func (analyzer mockProfileSourceAnalyzer) AnalyzeVoiceProfileSource(
 	return analyzer.result, nil
 }
 
+type sequenceTranscriptChecker struct {
+	mu          sync.Mutex
+	transcripts []string
+	provider    string
+	similarity  float64
+	expected    []string
+	calls       int
+}
+
+func (checker *sequenceTranscriptChecker) Check(
+	_ context.Context,
+	expectedText string,
+	_ []byte,
+) (agents.VoiceCheckResult, error) {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+
+	checker.expected = append(checker.expected, expectedText)
+	index := checker.calls
+	checker.calls += 1
+	transcript := expectedText
+	if len(checker.transcripts) > 0 {
+		if index >= len(checker.transcripts) {
+			index = len(checker.transcripts) - 1
+		}
+		transcript = checker.transcripts[index]
+	}
+	return agents.VoiceCheckResult{
+		Complete:    true,
+		Transcript:  transcript,
+		NeedsResume: false,
+		Reason:      "test transcript",
+		Provider:    checker.provider,
+		Similarity:  checker.similarity,
+	}, nil
+}
+
+func (checker *sequenceTranscriptChecker) expectedTexts() []string {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+	return append([]string(nil), checker.expected...)
+}
+
 type blockingProfileSourceAnalyzer struct {
 	once    sync.Once
 	started chan struct{}
@@ -4879,21 +5167,38 @@ func newProfileSourceServiceWithTTS(
 		agents.NewVoiceOptimizationAgent(),
 		tts,
 		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{
-			MaxRetries:                         3,
-			JobDataDir:                         t.TempDir(),
-			ProjectDataDir:                     t.TempDir(),
-			VoiceProfileDir:                    t.TempDir(),
-			VoiceProfileSourceDir:              t.TempDir(),
-			VoiceProfileReferenceMinSeconds:    20,
-			VoiceProfileReferenceTargetSeconds: 45,
-			VoiceProfileReferenceMaxSeconds:    60,
-			VoiceProfileSourceAnalyzer:         analyzer,
-			VoiceProfileDenoiseProvider:        "none",
-			VoiceProfileDiarizationToken:       "test-token",
-			VoiceProfileLikenessScorer:         likenessScorer,
-		},
+		profileSourceOptionsWithLikeness(t, analyzer, likenessScorer),
 	)
+}
+
+func profileSourceOptions(
+	t *testing.T,
+	analyzer pipeline.VoiceProfileSourceAnalyzer,
+) pipeline.Options {
+	t.Helper()
+	return profileSourceOptionsWithLikeness(t, analyzer, nil)
+}
+
+func profileSourceOptionsWithLikeness(
+	t *testing.T,
+	analyzer pipeline.VoiceProfileSourceAnalyzer,
+	likenessScorer pipeline.VoiceProfileLikenessScorer,
+) pipeline.Options {
+	t.Helper()
+	return pipeline.Options{
+		MaxRetries:                         3,
+		JobDataDir:                         t.TempDir(),
+		ProjectDataDir:                     t.TempDir(),
+		VoiceProfileDir:                    t.TempDir(),
+		VoiceProfileSourceDir:              t.TempDir(),
+		VoiceProfileReferenceMinSeconds:    20,
+		VoiceProfileReferenceTargetSeconds: 45,
+		VoiceProfileReferenceMaxSeconds:    60,
+		VoiceProfileSourceAnalyzer:         analyzer,
+		VoiceProfileDenoiseProvider:        "none",
+		VoiceProfileDiarizationToken:       "test-token",
+		VoiceProfileLikenessScorer:         likenessScorer,
+	}
 }
 
 func newVoiceProfileTargetService(

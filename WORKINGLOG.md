@@ -1,5 +1,26 @@
 # Working Log
 
+## 2026-05-18 21:31 CEST - Transcript persistence and rerun analysis
+- [x] Add persisted transcript metadata to analyzed source and candidate models.
+- [x] Generate transcripts during voice source and candidate analysis without failing the run.
+- [x] Add transcript refresh service methods and HTTP endpoints.
+- [x] Surface transcripts and refresh actions in the frontend analysis panel.
+- [x] Add focused backend/frontend coverage.
+- [x] Run project checks and commit validated changes.
+
+## 2026-05-18 21:01 CEST - Make artifact build timeout user-configurable in Workbench
+- [x] Update backend artifact build endpoint to accept optional timeout override.
+- [x] Thread timeout override through service and artifact builder path.
+- [x] Update Workbench build controls to accept optional timeout input and pass through API.
+- [x] Extend API tests for timeout validation and fallback behavior.
+- [x] Extend frontend API tests for payload shape and timeout inclusion.
+- [x] Add service-level tests for effective timeout behavior.
+- [x] Preserve existing default timeout fallback and diagnostics messaging.
+- [x] Surface timeout control in visible Workbench build action panels.
+- [x] Add focused unit coverage for timeout parsing and Workbench action wiring.
+- [x] Run focused backend/frontend unit tests for timeout behavior.
+- [ ] Run full project checks and targeted manual smoke when unrelated worktree changes are ready.
+
 ## 2026-05-18 20:55 CEST - Backend Contract Review scope cleanup
 - [x] Remove preset-only Auto/Kokoro rows from Backend Contract Review target table.
 - [x] Preserve non-table Auto/Kokoro engine selection behavior in existing run-configuration paths.
@@ -16,8 +37,9 @@
 - [x] Generate Website Cinema concept references
 - [x] Implement prepared-source cinema shell and entry points
 - [x] Add focused frontend coverage
-- [ ] Run browser scroll/fuzz validation
-- [ ] Run frontend and project checks
+- [x] Run browser scroll/fuzz validation
+- [x] Fix backend artifact test call signature surfaced by project check
+- [x] Run frontend and project checks
 
 ## 2026-05-18 20:06 CEST - Supertonic contract-row target and validation polish
 - [x] Map Supertonic engine target policy to `supertonic-embed` in frontend profile target helpers.
@@ -430,3 +452,28 @@
 - [x] Generate operator studio concept images
 - [x] Compare against previous concept images
 - [x] Run validation checks
+
+## 2026-05-18 21:08 CEST - Transcript persistence and on-demand transcript analysis
+- [ ] Add transcript metadata model fields across analyzed media artifacts
+- [ ] Add shared transcript extraction helper in analysis service
+- [ ] Wire transcript generation after source, source-candidate stitching, and original media stages
+- [ ] Preserve compatibility when transcript metadata is missing from existing artifacts
+- [ ] Add API read fields and explicit transcript rerun endpoints
+- [ ] Extend frontend typing and panels to show transcript + rerun controls
+- [ ] Run project checks (per AGENTS) before handoff
+
+## 2026-05-18 21:12 CEST - Transcript persistence implementation
+- [ ] Add transcript metadata model fields across analyzed media artifacts
+- [ ] Add shared transcript extraction helper in analysis service
+- [ ] Wire transcript generation after source, source-candidate stitching, and original media stages
+- [ ] Preserve compatibility when transcript metadata is missing from existing artifacts
+- [ ] Add API read fields and explicit transcript rerun endpoints
+- [ ] Extend frontend typing and panels to show transcript + rerun controls
+- [ ] Run project checks (per AGENTS) before handoff
+
+## 2026-05-18 21:31 CEST - Website Cinema concept fidelity
+- [x] Align Website Cinema desktop to accepted concept
+- [x] Align Website Cinema mobile to accepted concept
+- [x] Add focused helper coverage for new derived UI data
+- [x] Run Playwright screenshot/fuzz fidelity loop
+- [x] Run frontend and project checks (project typecheck blocked by unrelated dirty files)

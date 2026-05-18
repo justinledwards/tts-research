@@ -215,6 +215,41 @@ describe("voice profile source helpers", () => {
     expect(source.candidates).toEqual([]);
   });
 
+  it("normalizes transcript metadata onto source and candidate compatibility fields", () => {
+    const source = normalizeVoiceProfileSource({
+      id: "source-1",
+      status: "ready",
+      sourceFile: "demo.wav",
+      sourceBytes: 1024,
+      audioFormat: "audio/wav",
+      progressMessage: "Ready",
+      stages: [],
+      candidates: [
+        {
+          ...baseCandidate,
+          transcriptMetadata: {
+            text: "candidate words",
+            generatedAt: "2026-05-18T19:31:00Z",
+            model: "test-asr",
+          },
+        },
+      ],
+      transcriptMetadata: {
+        text: "source words",
+        generatedAt: "2026-05-18T19:30:00Z",
+        model: "test-asr",
+      },
+      strategyVersion: "speaker-aware-v1",
+      createdAt: "2026-05-14T00:00:00Z",
+      updatedAt: "2026-05-14T00:00:00Z",
+    });
+
+    expect(source.transcript).toBe("source words");
+    expect(source.transcriptGeneratedAt).toBe("2026-05-18T19:30:00Z");
+    expect(source.candidates[0]?.transcript).toBe("candidate words");
+    expect(source.candidates[0]?.transcriptModel).toBe("test-asr");
+  });
+
   it("labels strong source candidates with understandable quality language", () => {
     expect(candidateQualityScore(baseCandidate.qualityMetrics)).toBeGreaterThan(0.8);
     expect(candidateQualityLabel(baseCandidate)).toBe("Excellent");

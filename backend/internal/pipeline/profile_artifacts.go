@@ -34,6 +34,7 @@ func (service *Service) BuildVoiceProfileArtifact(
 	ctx context.Context,
 	profileID string,
 	moduleID string,
+	providedTimeoutSeconds *int,
 ) (VoiceProfile, error) {
 	module, err := service.researchModuleConfig(moduleID)
 	if err != nil {
@@ -89,7 +90,13 @@ func (service *Service) BuildVoiceProfileArtifact(
 		return VoiceProfile{}, err
 	}
 
-	result, buildErr := service.runVoiceProfileArtifactBuilder(ctx, profile.VoiceProfile, module, artifactDir)
+	result, buildErr := service.runVoiceProfileArtifactBuilder(
+		ctx,
+		profile.VoiceProfile,
+		module,
+		artifactDir,
+		providedTimeoutSeconds,
+	)
 	profile, reloadErr := service.getVoiceProfile(profileID)
 	if reloadErr != nil {
 		return VoiceProfile{}, reloadErr
@@ -154,8 +161,13 @@ func (service *Service) runVoiceProfileArtifactBuilder(
 	profile VoiceProfile,
 	module ResearchModuleConfig,
 	outputDir string,
+	providedTimeoutSeconds *int,
 ) (profileArtifactBuildOutput, error) {
-	timeout := time.Duration(service.options.VoiceProfileArtifactTimeoutSeconds) * time.Second
+	timeoutSeconds := service.options.VoiceProfileArtifactTimeoutSeconds
+	if providedTimeoutSeconds != nil {
+		timeoutSeconds = *providedTimeoutSeconds
+	}
+	timeout := time.Duration(timeoutSeconds) * time.Second
 	buildCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -243,7 +255,10 @@ func (service *Service) runVoiceProfileArtifactBuilder(
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
 		if buildCtx.Err() == context.DeadlineExceeded {
-			return profileArtifactBuildOutput{}, fmt.Errorf("voice profile artifact build timed out after %d seconds", service.options.VoiceProfileArtifactTimeoutSeconds)
+			return profileArtifactBuildOutput{}, fmt.Errorf(
+				"voice profile artifact build timed out after %d seconds",
+				timeoutSeconds,
+			)
 		}
 		if buildCtx.Err() == context.Canceled {
 			return profileArtifactBuildOutput{}, context.Canceled

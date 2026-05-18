@@ -347,7 +347,7 @@ func (service *Service) GetVoiceProfileSource(id string) (VoiceProfileSource, er
 	if !ok {
 		return VoiceProfileSource{}, ErrProfileSourceNotFound
 	}
-	return source.VoiceProfileSource, nil
+	return normalizeVoiceProfileSourceTranscriptFields(source.VoiceProfileSource), nil
 }
 
 func (service *Service) GetVoiceProfileCandidatePreview(
@@ -620,6 +620,15 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 		updateVoiceProfileSourceStage(source, "denoise", "running", "Cleaning background noise.")
 	})
 
+	sourceTranscript := service.transcriptForAudioPath(ctx, "", normalizedPath)
+	if isContextCancellation(ctx, nil) {
+		_, _ = service.cancelVoiceProfileSourceByID(sourceID)
+		return
+	}
+	service.updateVoiceProfileSourceByID(sourceID, func(source *storedVoiceProfileSource) {
+		setVoiceProfileSourceTranscript(&source.VoiceProfileSource, sourceTranscript)
+	})
+
 	denoiseMetadata, err := denoiseProfileSourceAudio(
 		ctx,
 		normalizedPath,
@@ -709,6 +718,17 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 	if isContextCancellation(ctx, nil) {
 		_, _ = service.cancelVoiceProfileSourceByID(sourceID)
 		return
+	}
+	for index := range candidates {
+		if candidates[index].Status != "ready" || strings.TrimSpace(candidates[index].ReferencePath) == "" {
+			continue
+		}
+		transcript := service.transcriptForAudioPath(ctx, "", candidates[index].ReferencePath)
+		if isContextCancellation(ctx, nil) {
+			_, _ = service.cancelVoiceProfileSourceByID(sourceID)
+			return
+		}
+		setVoiceProfileCandidateTranscript(&candidates[index], transcript)
 	}
 	readyCount := 0
 	for _, candidate := range candidates {
@@ -1692,6 +1712,7 @@ func cloneDenoiseMetadata(metadata VoiceProfileDenoiseMetadata) *VoiceProfileDen
 
 func (service *Service) updateVoiceProfileSource(source storedVoiceProfileSource) {
 	service.mu.Lock()
+	source.VoiceProfileSource = normalizeVoiceProfileSourceTranscriptFields(source.VoiceProfileSource)
 	source.UpdatedAt = time.Now().UTC()
 	service.sources[source.ID] = source
 	service.mu.Unlock()
@@ -1708,6 +1729,7 @@ func (service *Service) updateVoiceProfileSourceByID(
 		return
 	}
 	update(&source)
+	source.VoiceProfileSource = normalizeVoiceProfileSourceTranscriptFields(source.VoiceProfileSource)
 	source.UpdatedAt = time.Now().UTC()
 	service.sources[id] = source
 	service.mu.Unlock()
@@ -1791,6 +1813,7 @@ func (service *Service) writeVoiceProfileSourceMetadata(source VoiceProfileSourc
 	if strings.TrimSpace(source.ID) == "" {
 		return nil
 	}
+	source = normalizeVoiceProfileSourceTranscriptFields(source)
 	outputDir, err := filepath.Abs(filepath.Join(service.options.VoiceProfileSourceDir, source.ID))
 	if err != nil {
 		return err
@@ -1799,6 +1822,39 @@ func (service *Service) writeVoiceProfileSourceMetadata(source VoiceProfileSourc
 		return err
 	}
 	return writeJSON(filepath.Join(outputDir, sourceMetadataFilename), source)
+}
+
+func (service *Service) reloadVoiceProfileSources() {
+	baseDir, err := filepath.Abs(service.options.VoiceProfileSourceDir)
+	if err != nil {
+		return
+	}
+	sources := make(map[string]storedVoiceProfileSource)
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			_ = os.MkdirAll(baseDir, 0o755)
+		}
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		metadataBytes, readErr := os.ReadFile(filepath.Join(baseDir, entry.Name(), sourceMetadataFilename))
+		if readErr != nil {
+			continue
+		}
+		var source VoiceProfileSource
+		if err := json.Unmarshal(metadataBytes, &source); err != nil || source.ID == "" {
+			continue
+		}
+		source = normalizeVoiceProfileSourceTranscriptFields(source)
+		sources[source.ID] = storedVoiceProfileSource{VoiceProfileSource: source}
+	}
+	service.mu.Lock()
+	service.sources = sources
+	service.mu.Unlock()
 }
 
 func initialVoiceProfileSourceStages() []VoiceProfileSourceStage {

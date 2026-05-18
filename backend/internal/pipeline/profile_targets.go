@@ -305,7 +305,7 @@ func (service *Service) prepareVoiceProfileTarget(ctx context.Context, profileID
 			return
 		}
 		_, _ = service.updateVoiceProfileTarget(profileID, targetID, VoiceProfileTargetStatusBuilding, nil)
-		if _, err := service.BuildVoiceProfileArtifact(ctx, profileID, moduleID); err != nil {
+		if _, err := service.BuildVoiceProfileArtifact(ctx, profileID, moduleID, nil); err != nil {
 			if isContextCancellation(ctx, err) {
 				_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
 				return

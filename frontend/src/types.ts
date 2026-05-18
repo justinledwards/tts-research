@@ -493,6 +493,15 @@ export interface PreparedSourceSummary {
   sentenceSegmentCount: number;
 }
 
+export interface TranscriptMetadata {
+  text?: string;
+  generatedAt?: string;
+  model?: string;
+  provider?: string;
+  confidence?: number;
+  error?: string;
+}
+
 export interface PreparedSource {
   id: string;
   projectId: string;
@@ -521,6 +530,12 @@ export interface PreparedSource {
   skippedItems?: SkippedSourceItem[];
   warnings?: string[];
   metadata?: Record<string, unknown>;
+  transcriptMetadata?: TranscriptMetadata;
+  transcript?: string;
+  transcriptGeneratedAt?: string;
+  transcriptModel?: string;
+  transcriptError?: string;
+  transcriptConfidence?: number;
   error?: string;
   createdAt: string;
   updatedAt: string;
@@ -983,6 +998,12 @@ export interface VoiceProfileCandidate {
   spans: VoiceProfileReferenceSpan[];
   qualityMetrics: VoiceProfileQualityMetrics;
   denoise?: VoiceProfileDenoiseMetadata;
+  transcriptMetadata?: TranscriptMetadata;
+  transcript?: string;
+  transcriptGeneratedAt?: string;
+  transcriptModel?: string;
+  transcriptError?: string;
+  transcriptConfidence?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -1008,6 +1029,12 @@ export interface VoiceProfileSource {
   error?: string;
   stages: VoiceProfileSourceStage[];
   candidates: VoiceProfileCandidate[];
+  transcriptMetadata?: TranscriptMetadata;
+  transcript?: string;
+  transcriptGeneratedAt?: string;
+  transcriptModel?: string;
+  transcriptError?: string;
+  transcriptConfidence?: number;
   strategyVersion: string;
   modelVersion?: string;
   createdAt: string;

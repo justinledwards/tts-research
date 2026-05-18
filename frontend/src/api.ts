@@ -35,11 +35,13 @@ import type {
   UpsertSpeechPolicyProfileRequest,
   SystemMetrics,
   TokenTimingArtifact,
+  TranscriptMetadata,
   TTSEngineDiagnostics,
   Voice,
   VoiceJob,
   VoiceProfileCredentialStatus,
   VoiceProfile,
+  VoiceProfileCandidate,
   VoiceProfileSource,
   VoiceProfileSourceDiagnostics,
   VoiceProject,
@@ -571,7 +573,8 @@ export async function listPreparedSources(projectId: string): Promise<PreparedSo
   if (!response.ok) {
     throw await apiError(response);
   }
-  return response.json() as Promise<PreparedSource[]>;
+  const sources = (await response.json()) as PreparedSource[];
+  return sources.map((source) => normalizePreparedSource(source));
 }
 
 export async function createPreparedSource(
@@ -598,7 +601,7 @@ export async function createPreparedSource(
   if (!response.ok) {
     throw await apiError(response);
   }
-  return response.json() as Promise<PreparedSource>;
+  return normalizePreparedSource((await response.json()) as PreparedSource);
 }
 
 export async function createPreparedSourceJob(
@@ -621,7 +624,20 @@ export async function getPreparedSource(id: string): Promise<PreparedSource> {
   if (!response.ok) {
     throw await apiError(response);
   }
-  return response.json() as Promise<PreparedSource>;
+  return normalizePreparedSource((await response.json()) as PreparedSource);
+}
+
+export async function refreshPreparedSourceTranscript(id: string): Promise<PreparedSource> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/source-preps/${encodeURIComponent(id)}/transcript`,
+    {
+      method: "POST",
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return normalizePreparedSource((await response.json()) as PreparedSource);
 }
 
 export async function listProjectProgress(projectId: string): Promise<PlaybackProgress[]> {
@@ -1025,11 +1041,22 @@ export async function createVoiceProfile(
 export async function buildVoiceProfileArtifact(
   profileId: string,
   moduleId: string,
+  timeoutSeconds?: number,
 ): Promise<VoiceProfile> {
+  const body = typeof timeoutSeconds === "number" ? JSON.stringify({ timeoutSeconds }) : undefined;
+
   const response = await fetch(
     `${apiBaseUrl}/api/voice-profiles/${encodeURIComponent(profileId)}/artifacts/${encodeURIComponent(moduleId)}`,
     {
       method: "POST",
+      ...(body
+        ? {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body,
+          }
+        : {}),
     },
   );
 
@@ -1124,6 +1151,39 @@ export async function getVoiceProfileSource(id: string): Promise<VoiceProfileSou
   return normalizeVoiceProfileSource((await response.json()) as VoiceProfileSource);
 }
 
+export async function refreshVoiceProfileSourceTranscript(id: string): Promise<VoiceProfileSource> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profile-sources/${encodeURIComponent(id)}/transcript`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return normalizeVoiceProfileSource((await response.json()) as VoiceProfileSource);
+}
+
+export async function refreshVoiceProfileCandidateTranscript(
+  sourceId: string,
+  candidateId: string,
+): Promise<VoiceProfileCandidate> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profile-sources/${encodeURIComponent(sourceId)}/candidates/${encodeURIComponent(candidateId)}/transcript`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return normalizeVoiceProfileCandidate((await response.json()) as VoiceProfileCandidate);
+}
+
 export async function getVoiceProfileSourceDiagnostics(): Promise<VoiceProfileSourceDiagnostics> {
   const response = await fetch(`${apiBaseUrl}/api/voice-profile-sources/diagnostics`);
 
@@ -1139,11 +1199,62 @@ export function normalizeVoiceProfileSource(source: VoiceProfileSource): VoicePr
     candidates?: VoiceProfileSource["candidates"] | null;
     stages?: VoiceProfileSource["stages"] | null;
   };
+  const normalized = normalizeTranscriptFields(source);
 
   return {
-    ...source,
-    candidates: Array.isArray(nullableSource.candidates) ? nullableSource.candidates : [],
+    ...normalized,
+    candidates: Array.isArray(nullableSource.candidates)
+      ? nullableSource.candidates.map((candidate) => normalizeVoiceProfileCandidate(candidate))
+      : [],
     stages: Array.isArray(nullableSource.stages) ? nullableSource.stages : [],
+  };
+}
+
+export function normalizePreparedSource(source: PreparedSource): PreparedSource {
+  return normalizeTranscriptFields(source);
+}
+
+export function normalizeVoiceProfileCandidate(
+  candidate: VoiceProfileCandidate,
+): VoiceProfileCandidate {
+  return normalizeTranscriptFields(candidate);
+}
+
+interface TranscriptCapable {
+  transcriptMetadata?: TranscriptMetadata | null;
+  transcript?: string;
+  transcriptGeneratedAt?: string;
+  transcriptModel?: string;
+  transcriptError?: string;
+  transcriptConfidence?: number;
+}
+
+function normalizeTranscriptFields<T extends TranscriptCapable>(item: T): T {
+  const metadata = item.transcriptMetadata ?? undefined;
+  const transcript = item.transcript ?? metadata?.text;
+  const transcriptGeneratedAt = item.transcriptGeneratedAt ?? metadata?.generatedAt;
+  const transcriptModel = item.transcriptModel ?? metadata?.model ?? metadata?.provider;
+  const transcriptError = item.transcriptError ?? metadata?.error;
+  const transcriptConfidence = item.transcriptConfidence ?? metadata?.confidence;
+  const transcriptMetadata =
+    metadata ??
+    (transcript || transcriptGeneratedAt || transcriptModel || transcriptError
+      ? {
+          text: transcript,
+          generatedAt: transcriptGeneratedAt,
+          model: transcriptModel,
+          confidence: transcriptConfidence,
+          error: transcriptError,
+        }
+      : undefined);
+  return {
+    ...item,
+    ...(transcriptMetadata ? { transcriptMetadata } : {}),
+    ...(transcript ? { transcript } : {}),
+    ...(transcriptGeneratedAt ? { transcriptGeneratedAt } : {}),
+    ...(transcriptModel ? { transcriptModel } : {}),
+    ...(transcriptError ? { transcriptError } : {}),
+    ...(typeof transcriptConfidence === "number" ? { transcriptConfidence } : {}),
   };
 }
 

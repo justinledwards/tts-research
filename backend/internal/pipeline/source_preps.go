@@ -480,10 +480,13 @@ func (service *Service) updatePreparedSource(source PreparedSource) {
 }
 
 func clonePreparedSource(source PreparedSource) PreparedSource {
+	source = normalizePreparedSourceTranscriptFields(source)
 	source.Blocks = cloneNarrationBlocks(source.Blocks)
 	source.SkippedItems = append([]SkippedSourceItem(nil), source.SkippedItems...)
 	source.Warnings = cloneStringSlice(source.Warnings)
 	source.Metadata = cloneAnyMap(source.Metadata)
+	source.TranscriptMetadata = cloneTranscriptMetadata(source.TranscriptMetadata)
+	source.TranscriptGeneratedAt = cloneTimePtr(source.TranscriptGeneratedAt)
 	return source
 }
 
@@ -596,6 +599,7 @@ func narrationBlockHasUnsafeSentence(block NarrationBlock, maxSentenceRunes int)
 }
 
 func (service *Service) writePreparedSourceMetadata(source PreparedSource) error {
+	source = normalizePreparedSourceTranscriptFields(source)
 	outputDir, err := filepath.Abs(filepath.Join(service.options.SourcePrepDir, source.ID))
 	if err != nil {
 		return err
@@ -631,6 +635,7 @@ func (service *Service) reloadSourcePreps() {
 		if err := jsonUnmarshal(metadataBytes, &source); err != nil || source.ID == "" {
 			continue
 		}
+		source = normalizePreparedSourceTranscriptFields(source)
 		sources[source.ID] = source
 	}
 	service.mu.Lock()
