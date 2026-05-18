@@ -655,7 +655,7 @@ export interface LexiconUpsertRequest {
   notes?: string;
 }
 
-export type ThemeName = "light" | "dark" | "dawn" | "night";
+export type ThemeName = "light" | "dark" | "dawn" | "night" | "papery";
 
 export interface ProjectBundleContentItem {
   key: string;
@@ -792,7 +792,8 @@ export type VoiceProfileTargetStatus =
   | "building"
   | "validating"
   | "ready"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export interface VoiceProfileTargetValidation {
   status: VoiceProfileTargetStatus;
@@ -823,7 +824,12 @@ export interface VoiceProfileTarget {
   metadata?: Record<string, string>;
 }
 
-export type VoiceProfileCloneArtifactStatus = "pending" | "building" | "ready" | "failed";
+export type VoiceProfileCloneArtifactStatus =
+  | "pending"
+  | "building"
+  | "ready"
+  | "failed"
+  | "cancelled";
 
 export interface VoiceProfileCloneArtifact {
   moduleId: string;
@@ -858,7 +864,8 @@ export type VoiceProfileSourceStatus =
   | "analyzing"
   | "scoring"
   | "ready"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export interface VoiceProfileReferenceSpan {
   startMs: number;

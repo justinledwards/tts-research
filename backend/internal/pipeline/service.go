@@ -220,23 +220,26 @@ type storedBookSource struct {
 }
 
 type Service struct {
-	optimizer   VoiceOptimizer
-	tts         TTSAgent
-	ttsEngines  map[string]TTSEngineRegistration
-	defaultTTS  string
-	checker     VoiceChecker
-	options     Options
-	mu          sync.RWMutex
-	jobs        map[string]storedJob
-	projects    map[string]VoiceProject
-	books       map[string]storedBookSource
-	sourcePreps map[string]PreparedSource
-	progress    map[string]PlaybackProgress
-	sessions    map[string]PlaybackSession
-	profiles    map[string]storedVoiceProfile
-	sources     map[string]storedVoiceProfileSource
-	voices      map[string]Voice
-	jobCancels  map[string]context.CancelFunc
+	optimizer     VoiceOptimizer
+	tts           TTSAgent
+	ttsEngines    map[string]TTSEngineRegistration
+	defaultTTS    string
+	checker       VoiceChecker
+	options       Options
+	mu            sync.RWMutex
+	jobs          map[string]storedJob
+	projects      map[string]VoiceProject
+	books         map[string]storedBookSource
+	sourcePreps   map[string]PreparedSource
+	progress      map[string]PlaybackProgress
+	sessions      map[string]PlaybackSession
+	profiles      map[string]storedVoiceProfile
+	sources       map[string]storedVoiceProfileSource
+	voices        map[string]Voice
+	jobCancels    map[string]context.CancelFunc
+	jobDone       map[string]chan struct{}
+	sourceCancels map[string]context.CancelFunc
+	targetCancels map[string]context.CancelFunc
 }
 
 type resolvedJobConfig struct {
@@ -501,22 +504,25 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	defaultTTS, ttsEngines := initializeTTSEngines(options.DefaultTTSEngine, tts, options.TTSEngines)
 
 	service := &Service{
-		optimizer:   optimizer,
-		tts:         tts,
-		ttsEngines:  ttsEngines,
-		defaultTTS:  defaultTTS,
-		checker:     checker,
-		options:     options,
-		jobs:        map[string]storedJob{},
-		projects:    map[string]VoiceProject{},
-		books:       map[string]storedBookSource{},
-		sourcePreps: map[string]PreparedSource{},
-		progress:    map[string]PlaybackProgress{},
-		sessions:    map[string]PlaybackSession{},
-		profiles:    map[string]storedVoiceProfile{},
-		sources:     map[string]storedVoiceProfileSource{},
-		voices:      map[string]Voice{},
-		jobCancels:  map[string]context.CancelFunc{},
+		optimizer:     optimizer,
+		tts:           tts,
+		ttsEngines:    ttsEngines,
+		defaultTTS:    defaultTTS,
+		checker:       checker,
+		options:       options,
+		jobs:          map[string]storedJob{},
+		projects:      map[string]VoiceProject{},
+		books:         map[string]storedBookSource{},
+		sourcePreps:   map[string]PreparedSource{},
+		progress:      map[string]PlaybackProgress{},
+		sessions:      map[string]PlaybackSession{},
+		profiles:      map[string]storedVoiceProfile{},
+		sources:       map[string]storedVoiceProfileSource{},
+		voices:        map[string]Voice{},
+		jobCancels:    map[string]context.CancelFunc{},
+		jobDone:       map[string]chan struct{}{},
+		sourceCancels: map[string]context.CancelFunc{},
+		targetCancels: map[string]context.CancelFunc{},
 	}
 	service.loadCloneVoices()
 	service.reloadProjects()
@@ -780,6 +786,7 @@ func (service *Service) CancelJob(id string) error {
 	if cancel != nil {
 		cancel()
 	}
+	service.waitForJobRuntime(id, 2*time.Second)
 
 	return nil
 }
@@ -787,13 +794,36 @@ func (service *Service) CancelJob(id string) error {
 func (service *Service) registerJobCancel(id string, cancel context.CancelFunc) {
 	service.mu.Lock()
 	service.jobCancels[id] = cancel
+	service.jobDone[id] = make(chan struct{})
 	service.mu.Unlock()
 }
 
 func (service *Service) clearJobCancel(id string) {
 	service.mu.Lock()
 	delete(service.jobCancels, id)
+	done := service.jobDone[id]
+	delete(service.jobDone, id)
 	service.mu.Unlock()
+
+	if done != nil {
+		close(done)
+	}
+}
+
+func (service *Service) waitForJobRuntime(id string, timeout time.Duration) {
+	service.mu.RLock()
+	done := service.jobDone[id]
+	service.mu.RUnlock()
+	if done == nil {
+		return
+	}
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+	}
 }
 
 func (service *Service) CreateVoiceProfile(
@@ -1089,22 +1119,18 @@ func (service *Service) reloadProfiles() {
 }
 
 func (service *Service) GetJob(id string) (VoiceJob, error) {
-	service.mu.RLock()
-	job, ok := service.jobs[id]
-	service.mu.RUnlock()
-	if !ok {
-		return VoiceJob{}, ErrJobNotFound
+	job, err := service.resolveStoredJob(id)
+	if err != nil {
+		return VoiceJob{}, err
 	}
 
 	return service.hydrateTimingSummary(job.VoiceJob), nil
 }
 
 func (service *Service) GetAudio(id string) ([]byte, string, error) {
-	service.mu.RLock()
-	job, ok := service.jobs[id]
-	service.mu.RUnlock()
-	if !ok {
-		return nil, "", ErrJobNotFound
+	job, err := service.resolveStoredJob(id)
+	if err != nil {
+		return nil, "", err
 	}
 
 	contentType := job.ContentType
@@ -1127,32 +1153,29 @@ func (service *Service) GetAudio(id string) ([]byte, string, error) {
 }
 
 func (service *Service) GetPartialAudio(id string) ([]byte, string, error) {
-	service.mu.RLock()
-	job, ok := service.jobs[id]
+	job, err := service.resolveStoredJob(id)
+	if err != nil {
+		return nil, "", err
+	}
+
 	var contentType string
 	var partialPCM []byte
 	var partialSpec audio.WAVSpec
 	var isReady bool
 	var completedAudio []byte
 	var completedAudioPath string
-	if ok {
-		contentType = job.ContentType
-		if contentType == "" {
-			contentType = "audio/wav"
-		}
-		isReady = job.audioPartialReady && len(job.audioPartialPCM) > 0
-		if isReady {
-			partialPCM = append(partialPCM, job.audioPartialPCM...)
-			partialSpec = job.audioPartialSpec
-		} else if len(job.audio) > 0 {
-			completedAudio = append(completedAudio, job.audio...)
-		} else {
-			completedAudioPath = job.AudioPath
-		}
+	contentType = job.ContentType
+	if contentType == "" {
+		contentType = "audio/wav"
 	}
-	service.mu.RUnlock()
-	if !ok {
-		return nil, "", ErrJobNotFound
+	isReady = job.audioPartialReady && len(job.audioPartialPCM) > 0
+	if isReady {
+		partialPCM = append(partialPCM, job.audioPartialPCM...)
+		partialSpec = job.audioPartialSpec
+	} else if len(job.audio) > 0 {
+		completedAudio = append(completedAudio, job.audio...)
+	} else {
+		completedAudioPath = job.AudioPath
 	}
 
 	if !isReady {
@@ -1178,11 +1201,9 @@ func (service *Service) GetPartialAudio(id string) ([]byte, string, error) {
 }
 
 func (service *Service) GetAudioSegment(id string, index int) ([]byte, string, error) {
-	service.mu.RLock()
-	job, ok := service.jobs[id]
-	service.mu.RUnlock()
-	if !ok {
-		return nil, "", ErrJobNotFound
+	job, err := service.resolveStoredJob(id)
+	if err != nil {
+		return nil, "", err
 	}
 
 	contentType := job.ContentType
@@ -1397,6 +1418,61 @@ func (service *Service) runJob(ctx context.Context, id string) {
 	if metadataErr != nil {
 		service.failJobByID(id, fmt.Errorf("save job metadata: %w", metadataErr))
 	}
+}
+
+func (service *Service) resolveStoredJob(id string) (storedJob, error) {
+	cleanID := strings.TrimSpace(id)
+	if cleanID == "" {
+		return storedJob{}, ErrJobNotFound
+	}
+
+	service.mu.RLock()
+	job, ok := service.jobs[cleanID]
+	service.mu.RUnlock()
+	if ok {
+		return job, nil
+	}
+
+	job, err := service.loadPersistedJob(cleanID)
+	if err != nil {
+		return storedJob{}, err
+	}
+	service.save(job)
+	return job, nil
+}
+
+func (service *Service) loadPersistedJob(id string) (storedJob, error) {
+	metadataPath := filepath.Join(service.options.JobDataDir, id, "metadata.json")
+	metadataBytes, err := os.ReadFile(metadataPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return storedJob{}, ErrJobNotFound
+		}
+		return storedJob{}, err
+	}
+
+	var job VoiceJob
+	if err := json.Unmarshal(metadataBytes, &job); err != nil {
+		return storedJob{}, err
+	}
+	if strings.TrimSpace(job.ID) == "" {
+		return storedJob{}, ErrJobNotFound
+	}
+	if strings.TrimSpace(job.ProjectID) == "" {
+		job.ProjectID = defaultProjectID
+	}
+	if job.AudioURL == "" && job.AudioPath != "" {
+		job.AudioURL = "/api/voice-jobs/" + job.ID + "/audio"
+	}
+	job = service.hydrateTimingSummary(job)
+	if job.CreatedAt.IsZero() {
+		job.CreatedAt = time.Now().UTC()
+	}
+	if job.UpdatedAt.IsZero() {
+		job.UpdatedAt = job.CreatedAt
+	}
+
+	return storedJob{VoiceJob: job}, nil
 }
 
 func (service *Service) optimizeText(ctx context.Context, id string, inputText string) (string, error) {

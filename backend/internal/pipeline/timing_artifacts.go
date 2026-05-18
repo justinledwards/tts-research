@@ -196,11 +196,9 @@ func (service *Service) GetTokenTiming(id string) (alignment.TokenTimingArtifact
 }
 
 func (service *Service) storedJobSnapshot(id string) (storedJob, error) {
-	service.mu.RLock()
-	defer service.mu.RUnlock()
-	job, ok := service.jobs[id]
-	if !ok {
-		return storedJob{}, ErrJobNotFound
+	job, err := service.resolveStoredJob(id)
+	if err != nil {
+		return storedJob{}, err
 	}
 	job.audio = nil
 	job.audioPartialPCM = nil

@@ -14,10 +14,10 @@ import type {
   VoiceJob,
 } from "./types";
 import type { HighlightCue } from "./highlightMap";
+import { VOICE_STUDIO_THEMES } from "./theme";
 
 export const BOOK_SOURCE_ACCEPT =
   ".pdf,.epub,.docx,.html,.htm,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/html,application/xhtml+xml,application/zip,image/png,image/jpeg,image/tiff,image/webp";
-const CINEMA_THEMES: ThemeName[] = ["light", "dark", "dawn", "night"];
 const BOOK_PAGE_VERTICAL_PADDING = 108;
 const BOOK_PAGE_HORIZONTAL_PADDING = 76;
 const BOOK_PAGE_MIN_WORDS = 18;
@@ -132,7 +132,7 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
 
   return (
     <fieldset
-      className={`grid gap-4 rounded-lg border border-dashed p-4 ${
+      className={`grid gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 ${
         isDragActive ? "border-orange-300 bg-orange-500/10" : "vs-border"
       }`}
       onDragLeave={() => {
@@ -151,7 +151,7 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
       }}
     >
       <legend className="sr-only">Book Cinema source import</legend>
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold">Book Cinema</h3>
           <p className="vs-muted mt-1 text-xs leading-5">
@@ -162,7 +162,7 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
             {formatAdapterDiagnostics(diagnostics)}
           </p>
         </div>
-        <div className="grid shrink-0 gap-2 sm:grid-cols-[9rem_9rem_auto] sm:items-end">
+        <div className="grid shrink-0 gap-2 sm:grid-cols-[8.5rem_8.5rem_auto] sm:items-end">
           <label className="grid gap-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] vs-muted">
             <span>Profile</span>
             <select
@@ -283,14 +283,14 @@ function BookCinemaSelectedSource({
   onUseText: (book: BookSource, scope: BookScope) => void;
 }>) {
   return (
-    <div className="grid gap-3 xl:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
+    <div className="grid gap-3 xl:grid-cols-[minmax(180px,0.52fr)_minmax(0,1.48fr)]">
       <BookSourceList
         bookSources={bookSources}
         selectedBookId={selectedBook.id}
         onScopeChange={onScopeChange}
         onSelectBook={onSelectBook}
       />
-      <article className="min-w-0 rounded-md border p-3 vs-surface vs-border">
+      <article className="min-w-0 rounded-lg border bg-[var(--vs-raised)] p-3 vs-border">
         <BookScopeActionHeader
           canCreateAudio={canCreateAudio}
           isScopeLoading={isScopeLoading}
@@ -332,13 +332,13 @@ function BookSourceList({
   onSelectBook: (bookId: string) => void;
 }>) {
   return (
-    <div className="grid min-w-0 gap-2 content-start">
+    <div className="grid max-h-72 min-w-0 content-start gap-2 overflow-y-auto pr-1">
       {bookSources.map((book) => (
         <button
           className={`min-w-0 rounded-md border p-3 text-left transition ${
             selectedBookId === book.id
               ? "border-orange-300 bg-orange-500/10"
-              : "hover:bg-[var(--vs-surface)] vs-border"
+              : "bg-[var(--vs-raised)] hover:bg-[var(--vs-surface)] vs-border"
           }`}
           key={book.id}
           onClick={() => {
@@ -390,7 +390,7 @@ function BookIngestionDiagnostics({ book }: Readonly<{ book: BookSource }>) {
       : "n/a";
   const warnings = [...(ingestion.warnings ?? []), ...(book.warnings ?? [])].filter(Boolean);
   return (
-    <section className="my-3 grid gap-2 rounded-md border bg-[var(--vs-raised)] p-3 text-xs vs-border">
+    <section className="my-3 grid gap-2 rounded-md border bg-[var(--vs-surface)] p-3 text-xs vs-border">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="rounded border px-2 py-1 font-semibold uppercase tracking-[0.12em] vs-border">
           {ingestion.supportTier ?? "tier"}
@@ -608,7 +608,7 @@ function BookReadingPreview({
   }
 
   return (
-    <div className="mt-3 max-h-52 overflow-y-auto rounded-md border bg-[var(--vs-raised)] p-4 leading-8 vs-border">
+    <div className="mt-3 max-h-44 overflow-y-auto rounded-md border bg-[var(--vs-surface)] p-4 leading-8 vs-border">
       {previewContent}
     </div>
   );
@@ -864,7 +864,7 @@ export function BookCinemaOverlay({
               onClick={onPlayPause}
               type="button"
             >
-              {playbackControls.isPlaying ? "Ⅱ" : "▶"}
+              {playbackControls.isPlaying ? <CinemaPauseIcon /> : <CinemaPlayIcon />}
             </button>
             <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs">
               <span className="vs-muted truncate">
@@ -1007,9 +1007,9 @@ export function BookCinemaOverlay({
             }}
             value={themeName}
           >
-            {CINEMA_THEMES.map((theme) => (
-              <option key={theme} value={theme}>
-                {theme}
+            {VOICE_STUDIO_THEMES.map((theme) => (
+              <option key={theme.name} value={theme.name}>
+                {theme.label}
               </option>
             ))}
           </select>
@@ -1107,6 +1107,23 @@ function BookCinemaTimingDebug({
         <dd className="truncate text-right">{summary.drift.maxAbsoluteMs}ms</dd>
       </dl>
     </div>
+  );
+}
+
+function CinemaPlayIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5 translate-x-px" fill="none" viewBox="0 0 24 24">
+      <path d="M8 5.8v12.4L18.4 12 8 5.8Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function CinemaPauseIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+      <rect fill="currentColor" height="13" rx="1.4" width="4" x="7" y="5.5" />
+      <rect fill="currentColor" height="13" rx="1.4" width="4" x="13" y="5.5" />
+    </svg>
   );
 }
 

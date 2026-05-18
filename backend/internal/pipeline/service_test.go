@@ -602,11 +602,19 @@ func TestCreateJobOutlivesRequestContextCancellation(t *testing.T) {
 func TestCancelJobMarksExplicitUserCancellation(t *testing.T) {
 	t.Parallel()
 
-	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	optimizer := &cancelAwareBlockingOptimizer{started: make(chan struct{})}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
 	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: strings.Repeat("cancel me. ", 200)})
 	if err != nil {
 		t.Fatalf("CreateJob returned error: %v", err)
 	}
+	waitForSignal(t, optimizer.started, "optimizer start")
+
 	if err := service.CancelJob(job.ID); err != nil {
 		t.Fatalf("CancelJob returned error: %v", err)
 	}
@@ -2291,6 +2299,37 @@ func TestCreateVoiceProfileSourceBuildsCandidateReference(t *testing.T) {
 	}
 }
 
+func TestCancelVoiceProfileSourcePersistsCancelledState(t *testing.T) {
+	t.Parallel()
+
+	analyzer := newBlockingProfileSourceAnalyzer()
+	service := newProfileSourceService(t, analyzer)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	source, err := service.CreateVoiceProfileSource(
+		context.Background(),
+		sourcePath,
+		"narrator.wav",
+		0,
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSource returned error: %v", err)
+	}
+	waitForSignal(t, analyzer.started, "source analyzer start")
+
+	cancelled, err := service.CancelVoiceProfileSource(source.ID)
+	if err != nil {
+		t.Fatalf("CancelVoiceProfileSource returned error: %v", err)
+	}
+	if cancelled.Status != pipeline.VoiceProfileSourceStatusCancelled {
+		t.Fatalf("cancelled source status = %q, want cancelled", cancelled.Status)
+	}
+
+	settled := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusCancelled)
+	if settled.Error != "cancelled by request" {
+		t.Fatalf("source error = %q, want explicit cancellation reason", settled.Error)
+	}
+}
+
 func TestVoiceProfileSourceMaxBytesZeroMeansUnlimited(t *testing.T) {
 	t.Parallel()
 
@@ -2835,6 +2874,56 @@ func TestCreateVoiceProfileWithOptionsDefaultsToKokoroCloneTarget(t *testing.T) 
 	validation := ready.CloneTargets[pipeline.VoiceProfileTargetKokoroClone].Validation
 	if validation == nil || validation.Score <= 0 || validation.TranscriptSimilarity <= 0 {
 		t.Fatalf("validation = %+v, want stored comparison scores", validation)
+	}
+}
+
+func TestCancelVoiceProfileTargetStopsValidationAndIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	scorer := newBlockingLikenessScorer()
+	options := voiceProfileTargetOptions(t, nil)
+	options.VoiceProfileLikenessScorer = scorer
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		mockReferenceTTS{},
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfileWithOptions(
+		context.Background(),
+		"Narrator",
+		"en",
+		sourcePath,
+		"source.wav",
+		0,
+		pipeline.VoiceProfileCreationOptions{Targets: []string{pipeline.VoiceProfileTargetKokoroClone}},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileWithOptions returned error: %v", err)
+	}
+	waitForSignal(t, scorer.started, "target validation scorer start")
+
+	cancelled, err := service.CancelVoiceProfileTarget(profile.ID, pipeline.VoiceProfileTargetKokoroClone)
+	if err != nil {
+		t.Fatalf("CancelVoiceProfileTarget returned error: %v", err)
+	}
+	target := cancelled.CloneTargets[pipeline.VoiceProfileTargetKokoroClone]
+	if target.Status != pipeline.VoiceProfileTargetStatusCancelled {
+		t.Fatalf("target status = %q, want cancelled", target.Status)
+	}
+
+	settled := waitForVoiceProfileTarget(t, service, profile.ID, pipeline.VoiceProfileTargetKokoroClone, pipeline.VoiceProfileTargetStatusCancelled)
+	if settled.CloneTargets[pipeline.VoiceProfileTargetKokoroClone].Error != "cancelled by request" {
+		t.Fatalf("target error = %q, want explicit cancellation reason", target.Error)
+	}
+
+	again, err := service.CancelVoiceProfileTarget(profile.ID, pipeline.VoiceProfileTargetKokoroClone)
+	if err != nil {
+		t.Fatalf("second CancelVoiceProfileTarget returned error: %v", err)
+	}
+	if again.CloneTargets[pipeline.VoiceProfileTargetKokoroClone].Status != pipeline.VoiceProfileTargetStatusCancelled {
+		t.Fatalf("second cancel changed target = %+v", again.CloneTargets[pipeline.VoiceProfileTargetKokoroClone])
 	}
 }
 
@@ -4006,6 +4095,78 @@ exit 1
 	}
 }
 
+func TestBuildVoiceProfileArtifactCancellationPersistsCancelledState(t *testing.T) {
+	t.Setenv("VOICE_EMBED_FAKE_ARTIFACT", "1")
+
+	upstreamDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write fake optimizer: %v", err)
+	}
+	artifactScript := filepath.Join(t.TempDir(), "profile_embed_artifact.py")
+	if err := os.WriteFile(artifactScript, []byte("# test\n"), 0o644); err != nil {
+		t.Fatalf("write artifact script: %v", err)
+	}
+	fakePython := filepath.Join(t.TempDir(), "fake-python")
+	if err := os.WriteFile(fakePython, []byte("#!/bin/sh\nwhile true; do sleep 1; done\n"), 0o755); err != nil {
+		t.Fatalf("write fake python: %v", err)
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		mockReferenceTTS{},
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileArtifactPythonPath:     fakePython,
+			VoiceProfileArtifactScriptPath:     artifactScript,
+			VoiceProfileArtifactTimeoutSeconds: 30,
+			VoiceProfileDenoiseProvider:        "none",
+			VoiceProfileLikenessScorer:         mockLikenessScorer{score: 0.8},
+			ResearchModules: []pipeline.ResearchModuleConfig{
+				{
+					ID:        pipeline.ResearchModuleKokoroEmbed,
+					Label:     "Kokoro Embed",
+					RepoURL:   "https://example.invalid/kokoro.embed.git",
+					Ref:       "main",
+					LocalPath: upstreamDir,
+					EngineID:  pipeline.TTSEngineKokoroEmbed,
+				},
+			},
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Narrator", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		_, buildErr := service.BuildVoiceProfileArtifact(ctx, profile.ID, pipeline.ResearchModuleKokoroEmbed)
+		errCh <- buildErr
+	}()
+	waitForVoiceProfileArtifactStatus(t, service, profile.ID, pipeline.ResearchModuleKokoroEmbed, pipeline.VoiceProfileCloneArtifactStatusBuilding)
+	cancel()
+	select {
+	case buildErr := <-errCh:
+		if !errors.Is(buildErr, context.Canceled) {
+			t.Fatalf("BuildVoiceProfileArtifact error = %v, want context.Canceled", buildErr)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for cancelled artifact build")
+	}
+
+	settled := waitForVoiceProfileArtifactStatus(t, service, profile.ID, pipeline.ResearchModuleKokoroEmbed, pipeline.VoiceProfileCloneArtifactStatusCancelled)
+	if settled.CloneArtifacts[pipeline.ResearchModuleKokoroEmbed].Error != "cancelled by request" {
+		t.Fatalf("artifact error = %q, want explicit cancellation reason", settled.CloneArtifacts[pipeline.ResearchModuleKokoroEmbed].Error)
+	}
+}
+
 func TestBuildVoiceProfileArtifactPersistsFakeOutput(t *testing.T) {
 	t.Setenv("VOICE_EMBED_FAKE_ARTIFACT", "1")
 
@@ -4358,6 +4519,11 @@ type slowStreamingOptimizer struct {
 	release    chan struct{}
 }
 
+type cancelAwareBlockingOptimizer struct {
+	once    sync.Once
+	started chan struct{}
+}
+
 type mockProfileSourceAnalyzer struct {
 	result pipeline.VoiceProfileSourceAnalysisResult
 	err    error
@@ -4371,6 +4537,26 @@ func (analyzer mockProfileSourceAnalyzer) AnalyzeVoiceProfileSource(
 		return pipeline.VoiceProfileSourceAnalysisResult{}, analyzer.err
 	}
 	return analyzer.result, nil
+}
+
+type blockingProfileSourceAnalyzer struct {
+	once    sync.Once
+	started chan struct{}
+}
+
+func newBlockingProfileSourceAnalyzer() *blockingProfileSourceAnalyzer {
+	return &blockingProfileSourceAnalyzer{started: make(chan struct{})}
+}
+
+func (analyzer *blockingProfileSourceAnalyzer) AnalyzeVoiceProfileSource(
+	ctx context.Context,
+	_ pipeline.VoiceProfileSourceAnalysisRequest,
+) (pipeline.VoiceProfileSourceAnalysisResult, error) {
+	analyzer.once.Do(func() {
+		close(analyzer.started)
+	})
+	<-ctx.Done()
+	return pipeline.VoiceProfileSourceAnalysisResult{}, ctx.Err()
 }
 
 type mockLikenessScorer struct {
@@ -4391,6 +4577,26 @@ func (scorer mockLikenessScorer) ScoreVoiceProfileLikeness(
 		EmbeddingModel:    "mock-embedding",
 		Reason:            "mock speaker similarity",
 	}, nil
+}
+
+type blockingLikenessScorer struct {
+	once    sync.Once
+	started chan struct{}
+}
+
+func newBlockingLikenessScorer() *blockingLikenessScorer {
+	return &blockingLikenessScorer{started: make(chan struct{})}
+}
+
+func (scorer *blockingLikenessScorer) ScoreVoiceProfileLikeness(
+	ctx context.Context,
+	_ pipeline.VoiceProfileLikenessRequest,
+) (pipeline.VoiceProfileLikenessResult, error) {
+	scorer.once.Do(func() {
+		close(scorer.started)
+	})
+	<-ctx.Done()
+	return pipeline.VoiceProfileLikenessResult{}, ctx.Err()
 }
 
 type capturingLikenessScorer struct {
@@ -4643,6 +4849,39 @@ func waitForVoiceProfileTarget(
 	return pipeline.VoiceProfile{}
 }
 
+func waitForVoiceProfileArtifactStatus(
+	t *testing.T,
+	service *pipeline.Service,
+	profileID string,
+	moduleID string,
+	status pipeline.VoiceProfileCloneArtifactStatus,
+) pipeline.VoiceProfile {
+	t.Helper()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		profile, err := service.GetVoiceProfile(profileID)
+		if err != nil {
+			t.Fatalf("GetVoiceProfile returned error: %v", err)
+		}
+		artifact := profile.CloneArtifacts[moduleID]
+		if artifact.Status == status {
+			return profile
+		}
+		if artifact.Status == pipeline.VoiceProfileCloneArtifactStatusFailed && status != artifact.Status {
+			t.Fatalf("artifact %s failed unexpectedly: %s", moduleID, artifact.Error)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	profile, err := service.GetVoiceProfile(profileID)
+	if err != nil {
+		t.Fatalf("GetVoiceProfile returned error: %v", err)
+	}
+	t.Fatalf("timed out waiting for artifact %s status %q, got %+v", moduleID, status, profile.CloneArtifacts[moduleID])
+	return pipeline.VoiceProfile{}
+}
+
 func waitForProfileSource(
 	t *testing.T,
 	service *pipeline.Service,
@@ -4674,8 +4913,26 @@ func waitForProfileSource(
 	return pipeline.VoiceProfileSource{}
 }
 
+func waitForSignal(t *testing.T, signal <-chan struct{}, name string) {
+	t.Helper()
+
+	select {
+	case <-signal:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for %s", name)
+	}
+}
+
 func (optimizer *slowStreamingOptimizer) Optimize(_ context.Context, _ string) (string, error) {
 	return "streamed final text", nil
+}
+
+func (optimizer *cancelAwareBlockingOptimizer) Optimize(ctx context.Context, _ string) (string, error) {
+	optimizer.once.Do(func() {
+		close(optimizer.started)
+	})
+	<-ctx.Done()
+	return "", ctx.Err()
 }
 
 func (optimizer *slowStreamingOptimizer) OptimizeStream(_ context.Context, _ string, onDelta func(string)) (string, error) {

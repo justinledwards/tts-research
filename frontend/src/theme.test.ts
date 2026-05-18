@@ -7,6 +7,7 @@ describe("Voice Studio themes", () => {
     expect(normalizeThemeName("dark")).toBe("dark");
     expect(normalizeThemeName("dawn")).toBe("dawn");
     expect(normalizeThemeName("night")).toBe("night");
+    expect(normalizeThemeName("papery")).toBe("papery");
     expect(normalizeThemeName("tokyo")).toBe("light");
   });
 
@@ -18,6 +19,7 @@ describe("Voice Studio themes", () => {
       "light",
       "dark",
       "dawn",
+      "papery",
       "night",
     ]);
     expect(dark.swatches.background).not.toBe(night.swatches.background);
@@ -33,5 +35,12 @@ describe("Voice Studio themes", () => {
     }
     expect(getTheme("dark").book.paper).not.toBe(getTheme("night").book.paper);
     expect(getTheme("light").book.ink).not.toBe(getTheme("dark").book.ink);
+  });
+
+  it("keeps theme registry ordering stable for selector-backed lists", () => {
+    const names = VOICE_STUDIO_THEMES.map((theme) => theme.name);
+    const uniqueCount = new Set(names).size;
+
+    expect(uniqueCount).toBe(names.length);
   });
 });

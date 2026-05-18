@@ -89,6 +89,65 @@ export function RunConfigDrawer({
     return null;
   }
 
+  return (
+    <div className="fixed inset-0 z-40 bg-zinc-950/25" role="presentation">
+      <aside
+        aria-label="Run configuration"
+        className="vs-app ml-auto flex h-full w-full max-w-[660px] flex-col border-l shadow-2xl md:w-[620px] vs-border"
+      >
+        <header className="flex items-center justify-between border-b px-5 py-4 vs-border">
+          <div>
+            <p className="vs-muted text-xs font-medium uppercase tracking-wide">Create</p>
+            <h2 className="text-lg font-semibold">Run Configuration</h2>
+          </div>
+          <button
+            aria-label="Close run configuration"
+            className="grid h-9 w-9 place-items-center rounded-md border hover:bg-[var(--vs-surface)] vs-border"
+            onClick={onClose}
+            type="button"
+          >
+            ×
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <RunConfigurationControls
+            canSubmit={canSubmit}
+            job={job}
+            runConfiguration={runConfiguration}
+            selectedProfile={selectedProfile}
+            ttsEngineError={ttsEngineError}
+            ttsEngines={ttsEngines}
+            onChange={onChange}
+            onPrepareProfileTarget={onPrepareProfileTarget}
+            onSubmit={onSubmit}
+          />
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+export function RunConfigurationControls({
+  canSubmit,
+  job,
+  runConfiguration,
+  selectedProfile,
+  ttsEngineError,
+  ttsEngines,
+  onChange,
+  onPrepareProfileTarget,
+  onSubmit,
+}: Readonly<{
+  canSubmit: boolean;
+  job: VoiceJob | null;
+  runConfiguration: RunConfiguration;
+  selectedProfile: VoiceProfile | null;
+  ttsEngineError: string | null;
+  ttsEngines: TTSEngineDiagnostics[];
+  onChange: (configuration: RunConfiguration) => void;
+  onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
+  onSubmit?: () => void;
+}>) {
   const preset = getRunModePreset(runConfiguration.runMode);
   const engineFamilyValue = kokoroEngineFamilyValue(runConfiguration.ttsEngine);
   const showKokoroRenderModes = isKokoroRenderEngine(runConfiguration.ttsEngine);
@@ -113,7 +172,12 @@ export function RunConfigDrawer({
   };
 
   const updateMode = (mode: RunMode) => {
-    onChange(createRunConfiguration(mode));
+    const nextConfiguration = createRunConfiguration(mode);
+    onChange({
+      ...nextConfiguration,
+      ttsEngine: runConfiguration.ttsEngine,
+      engineOptions: runConfiguration.engineOptions,
+    });
   };
 
   const updatePerformanceMode = (mode: PerformanceMode) => {
@@ -161,191 +225,157 @@ export function RunConfigDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-zinc-950/25" role="presentation">
-      <aside
-        aria-label="Run configuration"
-        className="ml-auto flex h-full w-full max-w-[520px] flex-col border-l border-zinc-200 bg-white shadow-2xl md:w-[500px]"
-      >
-        <header className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Create</p>
-            <h2 className="text-lg font-semibold text-zinc-950">Run Configuration</h2>
-          </div>
-          <button
-            aria-label="Close run configuration"
-            className="grid h-9 w-9 place-items-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
-            onClick={onClose}
-            type="button"
-          >
-            ×
-          </button>
-        </header>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Mode</h3>
-            <div className="mt-3 grid gap-3">
-              {RUN_MODE_PRESETS.map((item) => (
-                <button
-                  className={`rounded-md border p-4 text-left transition ${
-                    item.mode === runConfiguration.runMode
-                      ? "border-orange-300 bg-orange-50 text-orange-950"
-                      : "border-zinc-200 bg-white text-zinc-800 hover:border-zinc-300 hover:bg-zinc-50"
-                  }`}
-                  key={item.mode}
-                  onClick={() => {
-                    updateMode(item.mode);
-                  }}
-                  type="button"
-                >
-                  <span className="flex items-center justify-between gap-3">
-                    <span className="font-semibold">{item.label}</span>
-                    <span className="text-xs text-zinc-500">{item.primaryLabel}</span>
-                  </span>
-                  <span className="mt-2 block text-sm leading-5 text-zinc-600">
-                    {item.description}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="mt-7">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Narration Engine
-            </h3>
-            <div className="mt-3 grid gap-3">
-              <select
-                className="w-full rounded-md border border-zinc-200 bg-white px-3 py-3 text-sm font-semibold text-zinc-900 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
-                onChange={(event) => {
-                  updateTTSEngine(event.currentTarget.value);
-                }}
-                value={engineFamilyValue}
-              >
-                {drawerEngineFamilyOptions(ttsEngines).map((engine) => (
-                  <option disabled={engine.status !== "ready"} key={engine.id} value={engine.id}>
-                    {engine.label} · {engine.status}
-                  </option>
-                ))}
-              </select>
-              {runConfiguration.ttsEngine === "auto" ? (
-                <p className="text-sm leading-5 text-zinc-500">
-                  Auto chooses a sensible default; use the Kokoro render mode below when you want a
-                  specific profile-backed path.
-                </p>
-              ) : null}
-              <EngineDiagnosticsCard
-                engine={
-                  findEngine(ttsEngines, runConfiguration.ttsEngine) ??
-                  findEngine(ttsEngines, engineFamilyValue)
-                }
-                error={ttsEngineError}
-                onPrepareProfileTarget={onPrepareProfileTarget}
-                runConfiguration={runConfiguration}
-                selectedProfile={selectedProfile}
-              />
-              {showKokoroRenderModes ? (
-                <DrawerKokoroRenderModeSelector
-                  activeMode={activeKokoroRenderMode}
-                  profile={selectedProfile}
-                  onPrepareProfileTarget={onPrepareProfileTarget}
-                  onSelectMode={updateKokoroRenderMode}
-                />
-              ) : null}
-              {runConfiguration.ttsEngine === "supertonic-3" ? (
-                <SupertonicOptions
-                  engine={findEngine(ttsEngines, "supertonic-3")}
-                  language={runConfiguration.engineOptions.lang ?? "na"}
-                  voiceStyle={runConfiguration.engineOptions.voiceStyle ?? "M1"}
-                  onOptionChange={updateEngineOption}
-                />
-              ) : null}
-            </div>
-          </section>
-
-          <section className="mt-7">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Performance
-            </h3>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {(["balanced", "throughput", "quality"] as const).map((mode) => (
-                <button
-                  className={`rounded-md border px-3 py-3 text-sm font-semibold capitalize transition ${
-                    mode === runConfiguration.performanceMode
-                      ? "border-orange-300 bg-orange-50 text-orange-900"
-                      : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                  }`}
-                  key={mode}
-                  onClick={() => {
-                    updatePerformanceMode(mode);
-                  }}
-                  type="button"
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-sm leading-5 text-zinc-500">
-              {describePerformanceMode(runConfiguration.performanceMode)}
-            </p>
-          </section>
-
-          <section className="mt-7">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Pipeline Toggles
-            </h3>
-            <div className="mt-3 grid gap-3">
-              {(Object.keys(OPTION_LABELS) as (keyof PipelineOptions)[]).map((key) => (
-                <label
-                  className="flex cursor-pointer items-start justify-between gap-4 rounded-md border border-zinc-200 bg-white p-4 hover:bg-zinc-50"
-                  key={key}
-                >
-                  <span>
-                    <span className="block text-sm font-semibold text-zinc-950">
-                      {OPTION_LABELS[key].label}
-                    </span>
-                    <span className="mt-1 block text-sm leading-5 text-zinc-500">
-                      {OPTION_LABELS[key].detail}
-                    </span>
-                  </span>
-                  <input
-                    checked={runConfiguration.options[key]}
-                    className="mt-1 h-5 w-5 accent-orange-500"
-                    onChange={(event) => {
-                      updateOption(key, event.currentTarget.checked);
-                    }}
-                    type="checkbox"
-                  />
-                </label>
-              ))}
-            </div>
-          </section>
-
-          <section className="mt-7 rounded-md border border-zinc-200 bg-zinc-50 p-4">
-            <h3 className="text-sm font-semibold text-zinc-950">Current Job Shape</h3>
-            <dl className="mt-3 grid gap-2 text-sm">
-              <DrawerFact label="Mode" value={preset.label} />
-              <DrawerFact label="Voice" value={selectedProfile?.name ?? "Default voice"} />
-              <DrawerFact label="Last status" value={job?.status ?? "No job yet"} />
-              <DrawerFact
-                label="Primary action"
-                value={resolveRunPrimaryLabel(runConfiguration, job)}
-              />
-            </dl>
-          </section>
+    <div className="grid gap-5">
+      <section>
+        <h3 className="text-xs font-semibold uppercase tracking-wide vs-muted">Mode</h3>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          {RUN_MODE_PRESETS.map((item) => (
+            <button
+              className={`rounded-md border p-4 text-left transition ${
+                item.mode === runConfiguration.runMode
+                  ? "border-orange-300 bg-orange-500/10 text-[var(--vs-text)]"
+                  : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
+              }`}
+              key={item.mode}
+              onClick={() => {
+                updateMode(item.mode);
+              }}
+              type="button"
+            >
+              <span className="flex items-center justify-between gap-3">
+                <span className="font-semibold">{item.label}</span>
+                <span className="vs-muted text-xs">{item.primaryLabel}</span>
+              </span>
+              <span className="vs-muted mt-2 block text-sm leading-5">{item.description}</span>
+            </button>
+          ))}
         </div>
+      </section>
 
-        <footer className="border-t border-zinc-200 p-5">
-          <button
-            className="h-11 w-full rounded-md bg-orange-500 px-5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none"
-            disabled={!canSubmit}
-            onClick={onSubmit}
-            type="button"
-          >
-            {resolveRunPrimaryLabel(runConfiguration, job)}
-          </button>
-        </footer>
-      </aside>
+      <section className="grid gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide vs-muted">Narration Engine</h3>
+        <select
+          className="w-full rounded-md border px-3 py-3 text-sm font-semibold outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 vs-border vs-raised"
+          onChange={(event) => {
+            updateTTSEngine(event.currentTarget.value);
+          }}
+          value={engineFamilyValue}
+        >
+          {drawerEngineFamilyOptions(ttsEngines).map((engine) => (
+            <option disabled={engine.status !== "ready"} key={engine.id} value={engine.id}>
+              {engine.label} · {engine.status}
+            </option>
+          ))}
+        </select>
+        {runConfiguration.ttsEngine === "auto" ? (
+          <p className="vs-muted text-sm leading-5">
+            Auto chooses a sensible default; use the Kokoro render mode below when you want a
+            specific profile-backed path.
+          </p>
+        ) : null}
+        <EngineDiagnosticsCard
+          engine={
+            findEngine(ttsEngines, runConfiguration.ttsEngine) ??
+            findEngine(ttsEngines, engineFamilyValue)
+          }
+          error={ttsEngineError}
+          onPrepareProfileTarget={onPrepareProfileTarget}
+          runConfiguration={runConfiguration}
+          selectedProfile={selectedProfile}
+        />
+        {showKokoroRenderModes ? (
+          <DrawerKokoroRenderModeSelector
+            activeMode={activeKokoroRenderMode}
+            profile={selectedProfile}
+            onPrepareProfileTarget={onPrepareProfileTarget}
+            onSelectMode={updateKokoroRenderMode}
+          />
+        ) : null}
+        {runConfiguration.ttsEngine === "supertonic-3" ? (
+          <SupertonicOptions
+            engine={findEngine(ttsEngines, "supertonic-3")}
+            language={runConfiguration.engineOptions.lang ?? "na"}
+            voiceStyle={runConfiguration.engineOptions.voiceStyle ?? "M1"}
+            onOptionChange={updateEngineOption}
+          />
+        ) : null}
+      </section>
+
+      <section>
+        <h3 className="text-xs font-semibold uppercase tracking-wide vs-muted">Performance</h3>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {(["balanced", "throughput", "quality"] as const).map((mode) => (
+            <button
+              className={`rounded-md border px-3 py-3 text-sm font-semibold capitalize transition ${
+                mode === runConfiguration.performanceMode
+                  ? "border-orange-300 bg-orange-500/10 text-[var(--vs-text)]"
+                  : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
+              }`}
+              key={mode}
+              onClick={() => {
+                updatePerformanceMode(mode);
+              }}
+              type="button"
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+        <p className="vs-muted mt-2 text-sm leading-5">
+          {describePerformanceMode(runConfiguration.performanceMode)}
+        </p>
+      </section>
+
+      <section>
+        <h3 className="text-xs font-semibold uppercase tracking-wide vs-muted">Pipeline Toggles</h3>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          {(Object.keys(OPTION_LABELS) as (keyof PipelineOptions)[]).map((key) => (
+            <label
+              className="flex cursor-pointer items-start justify-between gap-4 rounded-md border p-4 transition hover:bg-[var(--vs-surface)] vs-border vs-raised"
+              key={key}
+            >
+              <span>
+                <span className="block text-sm font-semibold">{OPTION_LABELS[key].label}</span>
+                <span className="vs-muted mt-1 block text-sm leading-5">
+                  {OPTION_LABELS[key].detail}
+                </span>
+              </span>
+              <input
+                checked={runConfiguration.options[key]}
+                className="mt-1 h-5 w-5 accent-orange-500"
+                onChange={(event) => {
+                  updateOption(key, event.currentTarget.checked);
+                }}
+                type="checkbox"
+              />
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-md border p-4 vs-border vs-surface">
+        <h3 className="text-sm font-semibold">Current Job Shape</h3>
+        <dl className="mt-3 grid gap-2 text-sm">
+          <DrawerFact label="Mode" value={preset.label} />
+          <DrawerFact label="Voice" value={selectedProfile?.name ?? "Default voice"} />
+          <DrawerFact label="Last status" value={job?.status ?? "No job yet"} />
+          <DrawerFact
+            label="Primary action"
+            value={resolveRunPrimaryLabel(runConfiguration, job)}
+          />
+        </dl>
+      </section>
+
+      {onSubmit ? (
+        <button
+          className="h-11 w-full rounded-md px-5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none vs-accent-bg hover:brightness-95"
+          disabled={!canSubmit}
+          onClick={onSubmit}
+          type="button"
+        >
+          {resolveRunPrimaryLabel(runConfiguration, job)}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -383,11 +413,11 @@ function EngineDiagnosticsCard({
     Boolean(selectedProfile && targetId && profileReadiness && !profileReadiness.ready) &&
     runConfiguration.options.voiceClone;
   return (
-    <div className="grid gap-1 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm">
-      <p className="font-semibold text-zinc-950">
+    <div className="grid gap-1 rounded-md border p-3 text-sm vs-border vs-surface">
+      <p className="font-semibold">
         {engine.label} · {engine.status}
       </p>
-      <p className="leading-5 text-zinc-600">{engine.reason ?? engine.setup ?? "Ready."}</p>
+      <p className="vs-muted leading-5">{engine.reason ?? engine.setup ?? "Ready."}</p>
       {profileReadiness ? (
         <div
           className={`rounded border px-2 py-1 text-xs ${
@@ -399,7 +429,7 @@ function EngineDiagnosticsCard({
           <p>{profileReadiness.message}</p>
           {canPrepareTarget && selectedProfile && targetId ? (
             <button
-              className="mt-2 rounded border border-amber-300 bg-white px-2 py-1 font-semibold text-amber-900 hover:bg-amber-100"
+              className="mt-2 rounded border border-amber-300 px-2 py-1 font-semibold text-amber-900 hover:bg-amber-100 vs-raised"
               onClick={() => {
                 void onPrepareProfileTarget(selectedProfile.id, targetId);
               }}
@@ -410,7 +440,7 @@ function EngineDiagnosticsCard({
           ) : null}
         </div>
       ) : null}
-      <p className="text-xs text-zinc-500">
+      <p className="vs-muted text-xs">
         {engine.local ? "Local" : "Remote"} · {engine.supportsSSML ? "SSML" : "plain text"} ·{" "}
         {formatEngineLanguageCount(engine)}
         {engine.estimatedVram ? ` · ${engine.estimatedVram}` : ""}
@@ -432,8 +462,8 @@ function DrawerKokoroRenderModeSelector({
   onSelectMode: (mode: KokoroRenderMode) => void;
 }>) {
   return (
-    <div className="grid gap-2 rounded-md border border-zinc-200 bg-white p-3">
-      <p className="text-sm font-semibold text-zinc-950">Kokoro Render Mode</p>
+    <div className="grid gap-2 rounded-md border p-3 vs-border vs-raised">
+      <p className="text-sm font-semibold">Kokoro Render Mode</p>
       <div className="grid gap-2">
         {KOKORO_RENDER_MODE_OPTIONS.map((option) => {
           const readiness = drawerKokoroModeReadiness(option.id, profile);
@@ -443,7 +473,7 @@ function DrawerKokoroRenderModeSelector({
           return (
             <div
               className={`rounded-md border p-3 ${
-                selected ? "border-orange-300 bg-orange-50" : "border-zinc-200 bg-zinc-50"
+                selected ? "border-orange-300 bg-orange-500/10" : "vs-border vs-surface"
               }`}
               key={option.id}
             >
@@ -456,7 +486,7 @@ function DrawerKokoroRenderModeSelector({
                 type="button"
               >
                 <span className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-zinc-950">{option.label}</span>
+                  <span className="text-sm font-semibold">{option.label}</span>
                   <span
                     className={`rounded-full px-2 py-1 text-[0.65rem] font-semibold ${drawerKokoroModeStatusClass(
                       readiness.ready,
@@ -466,18 +496,18 @@ function DrawerKokoroRenderModeSelector({
                     {readiness.status}
                   </span>
                 </span>
-                <span className="text-sm leading-5 text-zinc-600">{option.detail}</span>
-                <span className="text-xs leading-5 text-zinc-500">{readiness.detail}</span>
+                <span className="vs-muted text-sm leading-5">{option.detail}</span>
+                <span className="vs-muted text-xs leading-5">{readiness.detail}</span>
               </button>
               {canPrepare && profile && targetId ? (
                 <button
-                  className="mt-2 rounded border border-orange-200 bg-white px-2 py-1 text-xs font-semibold text-orange-800 hover:bg-orange-100"
+                  className="mt-2 rounded border border-orange-200 px-2 py-1 text-xs font-semibold text-orange-800 hover:bg-orange-100 vs-raised"
                   onClick={() => {
                     void onPrepareProfileTarget(profile.id, targetId);
                   }}
                   type="button"
                 >
-                  Prepare target
+                  {drawerKokoroModeActionLabel(readiness.status)}
                 </button>
               ) : null}
             </div>
@@ -526,7 +556,7 @@ function drawerKokoroModeReadiness(
           ready: true,
           status: "ready",
           detail: "KokoClone can use the selected reference audio.",
-          canPrepare: true,
+          canPrepare: false,
         }
       : {
           ready: false,
@@ -552,7 +582,7 @@ function drawerKokoroModeReadiness(
           ? String(Math.round(score * 100))
           : "ready",
       detail: "Ready for the selected voice profile.",
-      canPrepare: true,
+      canPrepare: false,
     };
   }
   if (target.status === "failed") {
@@ -560,6 +590,14 @@ function drawerKokoroModeReadiness(
       ready: false,
       status: "failed",
       detail: target.error ?? target.validation?.error ?? "Preparation failed.",
+      canPrepare: true,
+    };
+  }
+  if (target.status === "cancelled") {
+    return {
+      ready: false,
+      status: "cancelled",
+      detail: "Preparation was cancelled.",
       canPrepare: true,
     };
   }
@@ -579,9 +617,22 @@ function drawerKokoroModeReadiness(
   };
 }
 
+function drawerKokoroModeActionLabel(status: string): string {
+  if (status === "check needed") {
+    return "Revalidate";
+  }
+  if (status === "failed" || status === "cancelled") {
+    return "Retry";
+  }
+  return "Prepare target";
+}
+
 function drawerKokoroModeStatusClass(ready: boolean, status: string): string {
   if (status === "failed") {
     return "bg-red-100 text-red-700";
+  }
+  if (status === "cancelled") {
+    return "bg-zinc-100 text-zinc-600";
   }
   if (ready && status !== "check needed") {
     return "bg-emerald-100 text-emerald-700";
@@ -624,11 +675,11 @@ function SupertonicOptions({
   const voices = engine?.voices ?? fallbackSupertonicVoices();
   const languages = languageOptionsForEngine(engine);
   return (
-    <div className="grid gap-3 rounded-md border border-orange-200 bg-orange-50 p-3">
-      <label className="grid gap-1 text-sm font-semibold text-orange-950">
+    <div className="grid gap-3 rounded-md border border-orange-200 bg-orange-500/10 p-3">
+      <label className="grid gap-1 text-sm font-semibold">
         Voice style
         <select
-          className="rounded-md border border-orange-200 bg-white px-3 py-2 text-zinc-900"
+          className="rounded-md border border-orange-200 px-3 py-2 vs-raised"
           onChange={(event) => {
             onOptionChange("voiceStyle", event.currentTarget.value);
           }}
@@ -641,10 +692,10 @@ function SupertonicOptions({
           ))}
         </select>
       </label>
-      <label className="grid gap-1 text-sm font-semibold text-orange-950">
+      <label className="grid gap-1 text-sm font-semibold">
         Language
         <select
-          className="rounded-md border border-orange-200 bg-white px-3 py-2 text-zinc-900"
+          className="rounded-md border border-orange-200 px-3 py-2 vs-raised"
           onChange={(event) => {
             onOptionChange("lang", event.currentTarget.value);
           }}
@@ -722,8 +773,8 @@ function fallbackSupertonicVoices(): { id: string; name: string; gender?: string
 function DrawerFact({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <dt className="text-zinc-500">{label}</dt>
-      <dd className="truncate font-medium text-zinc-900">{value}</dd>
+      <dt className="vs-muted">{label}</dt>
+      <dd className="truncate font-medium">{value}</dd>
     </div>
   );
 }

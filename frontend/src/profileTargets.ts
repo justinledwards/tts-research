@@ -1,4 +1,39 @@
-import type { ResearchModuleDiagnostics, VoiceProfile } from "./types";
+import type { ResearchModuleDiagnostics, TTSEngineDiagnostics, VoiceProfile } from "./types";
+
+export interface BackendProfileTargetPolicy {
+  engineId: string;
+  targetId: string | null;
+  requiresProfileTarget: boolean;
+  fallbackReadyWithoutTarget: boolean;
+}
+
+export interface NarrationBackendDescriptor {
+  id: string;
+  label: string;
+  status: string;
+  targetPolicy: BackendProfileTargetPolicy;
+}
+
+export function buildNarrationBackendDescriptor(
+  engine: TTSEngineDiagnostics,
+): NarrationBackendDescriptor {
+  return {
+    id: engine.id,
+    label: engine.label,
+    status: engine.status,
+    targetPolicy: backendProfileTargetPolicy(engine.id),
+  };
+}
+
+export function backendProfileTargetPolicy(engineId: string): BackendProfileTargetPolicy {
+  const targetId = voiceProfileTargetForEngine(engineId);
+  return {
+    engineId,
+    fallbackReadyWithoutTarget: targetId === "kokoro-clone",
+    requiresProfileTarget: targetId !== null && targetId !== "kokoro-clone",
+    targetId,
+  };
+}
 
 export function voiceProfileTargetForEngine(engineId: string): string | null {
   switch (engineId) {
@@ -9,9 +44,6 @@ export function voiceProfileTargetForEngine(engineId: string): string | null {
     }
     case "kokoro-embed": {
       return "kokoro-embed";
-    }
-    case "supertonic-3": {
-      return "supertonic-embed";
     }
     default: {
       return null;
@@ -57,6 +89,9 @@ export function voiceProfileTargetReadinessText(
   }
   const target = profile.cloneTargets?.[targetId];
   if (!target) {
+    if (targetId === "kokoro-clone" && isVoiceProfileTargetReadyForEngine(profile, engineId)) {
+      return "Kokoro Clone is ready from the selected reference audio.";
+    }
     return `Prepare ${voiceProfileTargetLabel(targetId)} on this profile.`;
   }
   if (target.status === "ready") {
@@ -66,6 +101,9 @@ export function voiceProfileTargetReadinessText(
     return (
       target.error ?? target.validation?.error ?? `${voiceProfileTargetLabel(targetId)} failed.`
     );
+  }
+  if (target.status === "cancelled") {
+    return `${voiceProfileTargetLabel(targetId)} was cancelled.`;
   }
   return `${voiceProfileTargetLabel(targetId)} is ${target.status}.`;
 }

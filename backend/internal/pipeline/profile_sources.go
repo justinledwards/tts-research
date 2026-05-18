@@ -325,9 +325,19 @@ func (service *Service) CreateVoiceProfileSource(
 	service.updateVoiceProfileSource(source)
 	_ = service.writeVoiceProfileSourceMetadata(source.VoiceProfileSource)
 
-	go service.runVoiceProfileSourceAnalysis(context.Background(), sourceID, originalPath, audioInfo.streamIndex)
+	analysisCtx, cancel := context.WithCancel(context.Background())
+	service.registerVoiceProfileSourceCancel(sourceID, cancel)
+	go service.runVoiceProfileSourceAnalysis(analysisCtx, sourceID, originalPath, audioInfo.streamIndex)
 
 	return source.VoiceProfileSource, nil
+}
+
+func (service *Service) CancelVoiceProfileSource(id string) (VoiceProfileSource, error) {
+	cancel := service.takeVoiceProfileSourceCancel(id)
+	if cancel != nil {
+		cancel()
+	}
+	return service.cancelVoiceProfileSourceByID(id)
 }
 
 func (service *Service) GetVoiceProfileSource(id string) (VoiceProfileSource, error) {
@@ -570,6 +580,7 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 	originalPath string,
 	audioStreamIndex int,
 ) {
+	defer service.clearVoiceProfileSourceCancel(sourceID)
 	outputDir := filepath.Dir(originalPath)
 	normalizedPath := filepath.Join(outputDir, normalizedProfileSourceFilename)
 	cleanedPath := filepath.Join(outputDir, cleanedProfileSourceFilename)
@@ -583,7 +594,15 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 
 	sourceDurationMS, err := normalizeProfileSourceAudio(ctx, originalPath, normalizedPath, audioStreamIndex)
 	if err != nil {
+		if isContextCancellation(ctx, err) {
+			_, _ = service.cancelVoiceProfileSourceByID(sourceID)
+			return
+		}
 		service.failVoiceProfileSource(sourceID, fmt.Errorf("normalize source audio: %w", err))
+		return
+	}
+	if isContextCancellation(ctx, nil) {
+		_, _ = service.cancelVoiceProfileSourceByID(sourceID)
 		return
 	}
 
@@ -609,7 +628,15 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 		service.options.VoiceProfileDenoiseStrength,
 	)
 	if err != nil {
+		if isContextCancellation(ctx, err) {
+			_, _ = service.cancelVoiceProfileSourceByID(sourceID)
+			return
+		}
 		service.failVoiceProfileSource(sourceID, fmt.Errorf("denoise source audio: %w", err))
+		return
+	}
+	if isContextCancellation(ctx, nil) {
+		_, _ = service.cancelVoiceProfileSourceByID(sourceID)
 		return
 	}
 
@@ -641,7 +668,15 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 		},
 	)
 	if err != nil {
+		if isContextCancellation(ctx, err) {
+			_, _ = service.cancelVoiceProfileSourceByID(sourceID)
+			return
+		}
 		service.failVoiceProfileSource(sourceID, err)
+		return
+	}
+	if isContextCancellation(ctx, nil) {
+		_, _ = service.cancelVoiceProfileSourceByID(sourceID)
 		return
 	}
 
@@ -664,7 +699,15 @@ func (service *Service) runVoiceProfileSourceAnalysis(
 		denoiseMetadata,
 	)
 	if err != nil {
+		if isContextCancellation(ctx, err) {
+			_, _ = service.cancelVoiceProfileSourceByID(sourceID)
+			return
+		}
 		service.failVoiceProfileSource(sourceID, fmt.Errorf("build voice candidates: %w", err))
+		return
+	}
+	if isContextCancellation(ctx, nil) {
+		_, _ = service.cancelVoiceProfileSourceByID(sourceID)
 		return
 	}
 	readyCount := 0
@@ -1684,6 +1727,64 @@ func (service *Service) failVoiceProfileSource(id string, err error) {
 			}
 		}
 	})
+}
+
+func (service *Service) cancelVoiceProfileSourceByID(id string) (VoiceProfileSource, error) {
+	service.mu.Lock()
+	source, ok := service.sources[id]
+	if !ok {
+		service.mu.Unlock()
+		return VoiceProfileSource{}, ErrProfileSourceNotFound
+	}
+	if source.Status == VoiceProfileSourceStatusReady ||
+		source.Status == VoiceProfileSourceStatusFailed ||
+		source.Status == VoiceProfileSourceStatusCancelled {
+		result := source.VoiceProfileSource
+		service.mu.Unlock()
+		return result, nil
+	}
+	source.Status = VoiceProfileSourceStatusCancelled
+	source.Error = "cancelled by request"
+	source.ProgressMessage = "Source analysis cancelled"
+	source.ProgressDetail = "Processing was cancelled by user request."
+	for index := range source.Stages {
+		if source.Stages[index].Status == "running" {
+			source.Stages[index].Status = "failed"
+			source.Stages[index].Detail = "Cancelled by request."
+		}
+	}
+	source.UpdatedAt = time.Now().UTC()
+	service.sources[id] = source
+	service.mu.Unlock()
+	_ = service.writeVoiceProfileSourceMetadata(source.VoiceProfileSource)
+	return source.VoiceProfileSource, nil
+}
+
+func (service *Service) registerVoiceProfileSourceCancel(id string, cancel context.CancelFunc) {
+	service.mu.Lock()
+	service.sourceCancels[id] = cancel
+	service.mu.Unlock()
+}
+
+func (service *Service) takeVoiceProfileSourceCancel(id string) context.CancelFunc {
+	service.mu.Lock()
+	cancel := service.sourceCancels[id]
+	delete(service.sourceCancels, id)
+	service.mu.Unlock()
+	return cancel
+}
+
+func (service *Service) clearVoiceProfileSourceCancel(id string) {
+	service.mu.Lock()
+	delete(service.sourceCancels, id)
+	service.mu.Unlock()
+}
+
+func isContextCancellation(ctx context.Context, err error) bool {
+	if ctx != nil && errors.Is(ctx.Err(), context.Canceled) {
+		return true
+	}
+	return errors.Is(err, context.Canceled)
 }
 
 func (service *Service) writeVoiceProfileSourceMetadata(source VoiceProfileSource) error {

@@ -66,6 +66,16 @@ describe("Markdown rendering helpers", () => {
     expect(resolvePreparedSourceActiveBlockId(source, 20)).toBe("block-3");
     expect(resolvePreparedSourceActiveWord(source, 3)?.wordOffset).toBe(1);
   });
+
+  it("opens markdown links in a new tab with safe rel metadata", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer>{"[Open](/docs/example)"}</MarkdownRenderer>,
+    );
+
+    expect(markup).toContain('<a target="_blank"');
+    expect(markup).toContain('rel="noopener noreferrer"');
+    expect(markup).toContain('href="/docs/example"');
+  });
 });
 
 function makePreparedSource(blocks: NarrationBlock[]): PreparedSource {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  backendProfileTargetPolicy,
+  buildNarrationBackendDescriptor,
   humanizeProfileTargetProblem,
   isVoiceProfileTargetReadyForEngine,
   voiceProfileTargetReadinessText,
@@ -16,7 +18,7 @@ describe("voice profile target helpers", () => {
 
     expect(isVoiceProfileTargetReadyForEngine(profile, "kokoro")).toBe(true);
     expect(isVoiceProfileTargetReadyForEngine(profile, "kokoro-embed")).toBe(false);
-    expect(isVoiceProfileTargetReadyForEngine(profile, "supertonic-3")).toBe(false);
+    expect(isVoiceProfileTargetReadyForEngine(profile, "supertonic-3")).toBe(true);
     expect(voiceProfileTargetReadinessText(profile, "kokoro-embed")).toContain("building");
   });
 
@@ -43,7 +45,49 @@ describe("voice profile target helpers", () => {
 
     expect(isVoiceProfileTargetReadyForEngine(profile, "kokoro")).toBe(true);
     expect(isVoiceProfileTargetReadyForEngine(profile, "kokoro-embed")).toBe(true);
-    expect(isVoiceProfileTargetReadyForEngine(profile, "supertonic-3")).toBe(false);
+    expect(isVoiceProfileTargetReadyForEngine(profile, "supertonic-3")).toBe(true);
+  });
+
+  it("describes Kokoro fallback readiness without asking for redundant preparation", () => {
+    expect(isVoiceProfileTargetReadyForEngine(baseProfile, "kokoro")).toBe(true);
+    expect(voiceProfileTargetReadinessText(baseProfile, "kokoro")).toContain(
+      "ready from the selected reference audio",
+    );
+  });
+
+  it("treats cancelled targets as unavailable with retry copy", () => {
+    const profile = profileWithTargets({ "kokoro-embed": "cancelled" });
+
+    expect(isVoiceProfileTargetReadyForEngine(profile, "kokoro-embed")).toBe(false);
+    expect(voiceProfileTargetReadinessText(profile, "kokoro-embed")).toContain("cancelled");
+  });
+
+  it("describes backend target policy from a single descriptor", () => {
+    expect(backendProfileTargetPolicy("kokoro-embed")).toMatchObject({
+      fallbackReadyWithoutTarget: false,
+      requiresProfileTarget: true,
+      targetId: "kokoro-embed",
+    });
+    expect(backendProfileTargetPolicy("kokoro")).toMatchObject({
+      fallbackReadyWithoutTarget: true,
+      requiresProfileTarget: false,
+      targetId: "kokoro-clone",
+    });
+
+    const descriptor = buildNarrationBackendDescriptor({
+      id: "supertonic-3",
+      label: "Supertonic",
+      status: "ready",
+      default: false,
+      experimental: true,
+      local: true,
+      supportsReference: false,
+      supportsSSML: true,
+      supportsSwedish: true,
+      supportsVoice: true,
+    });
+    expect(descriptor.targetPolicy.targetId).toBeNull();
+    expect(descriptor.targetPolicy.requiresProfileTarget).toBe(false);
   });
 
   it("distinguishes configured-token access denial from missing-token setup", () => {
@@ -90,7 +134,9 @@ Access to model pyannote/embedding is restricted and you are not in the authoriz
   });
 });
 
-function profileWithTargets(targets: Record<string, "ready" | "building" | "failed">) {
+function profileWithTargets(
+  targets: Record<string, "ready" | "building" | "failed" | "cancelled">,
+) {
   const now = new Date().toISOString();
   return {
     ...baseProfile,

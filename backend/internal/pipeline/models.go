@@ -778,6 +778,7 @@ const (
 	VoiceProfileSourceStatusScoring     VoiceProfileSourceStatus = "scoring"
 	VoiceProfileSourceStatusReady       VoiceProfileSourceStatus = "ready"
 	VoiceProfileSourceStatusFailed      VoiceProfileSourceStatus = "failed"
+	VoiceProfileSourceStatusCancelled   VoiceProfileSourceStatus = "cancelled"
 )
 
 type VoiceProfileReferenceSpan struct {
@@ -834,6 +835,7 @@ const (
 	VoiceProfileTargetStatusValidating VoiceProfileTargetStatus = "validating"
 	VoiceProfileTargetStatusReady      VoiceProfileTargetStatus = "ready"
 	VoiceProfileTargetStatusFailed     VoiceProfileTargetStatus = "failed"
+	VoiceProfileTargetStatusCancelled  VoiceProfileTargetStatus = "cancelled"
 )
 
 type VoiceProfileTargetValidation struct {
@@ -868,10 +870,11 @@ type VoiceProfileTarget struct {
 type VoiceProfileCloneArtifactStatus string
 
 const (
-	VoiceProfileCloneArtifactStatusPending  VoiceProfileCloneArtifactStatus = "pending"
-	VoiceProfileCloneArtifactStatusBuilding VoiceProfileCloneArtifactStatus = "building"
-	VoiceProfileCloneArtifactStatusReady    VoiceProfileCloneArtifactStatus = "ready"
-	VoiceProfileCloneArtifactStatusFailed   VoiceProfileCloneArtifactStatus = "failed"
+	VoiceProfileCloneArtifactStatusPending   VoiceProfileCloneArtifactStatus = "pending"
+	VoiceProfileCloneArtifactStatusBuilding  VoiceProfileCloneArtifactStatus = "building"
+	VoiceProfileCloneArtifactStatusReady     VoiceProfileCloneArtifactStatus = "ready"
+	VoiceProfileCloneArtifactStatusFailed    VoiceProfileCloneArtifactStatus = "failed"
+	VoiceProfileCloneArtifactStatusCancelled VoiceProfileCloneArtifactStatus = "cancelled"
 )
 
 type VoiceProfileCloneArtifact struct {

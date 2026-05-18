@@ -992,6 +992,24 @@ export async function queueVoiceProfileTarget(
   return response.json() as Promise<VoiceProfile>;
 }
 
+export async function cancelVoiceProfileTarget(
+  profileId: string,
+  targetId: string,
+): Promise<VoiceProfile> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profiles/${encodeURIComponent(profileId)}/targets/${encodeURIComponent(targetId)}/cancel`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceProfile>;
+}
+
 export async function createVoiceProfileSource(
   request: CreateVoiceProfileSourceRequest,
 ): Promise<VoiceProfileSource> {
@@ -1002,6 +1020,21 @@ export async function createVoiceProfileSource(
     method: "POST",
     body: formData,
   });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return normalizeVoiceProfileSource((await response.json()) as VoiceProfileSource);
+}
+
+export async function cancelVoiceProfileSource(id: string): Promise<VoiceProfileSource> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/voice-profile-sources/${encodeURIComponent(id)}/cancel`,
+    {
+      method: "POST",
+    },
+  );
 
   if (!response.ok) {
     throw new Error(await readError(response));

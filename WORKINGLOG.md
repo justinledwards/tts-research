@@ -1,5 +1,18 @@
 # Working Log
 
+## 2026-05-18 02:43 CEST - Voice Studio PR update
+- [x] Clean working log scope for the PR update.
+- [x] Confirm project checks and rendered QA status.
+- [x] Fix cancellation worker-settle race found by the commit hook.
+- [x] Commit, push, and update PR body.
+
+## 2026-05-17 18:45 CEST - Fix theme orchestration and add papery
+- [x] Align ThemeName with expanded theme registry and add papery metadata.
+- [x] Add papery CSS variable block and complete per-theme variable coverage.
+- [x] Remove Book Cinema hardcoded theme list in favor of VOICE_STUDIO_THEMES.
+- [x] Use theme-aware select option styling and validate contrast behavior.
+- [x] Update theme tests for expanded ordered theme list and list-backed selectors.
+
 ## 2026-05-17 18:16 CEST - HF token validation retry fix
 - [x] Trace token status versus validation retry path.
 - [x] Fix backend/frontend re-validation so saved HF token is used.
@@ -235,3 +248,103 @@
 - [x] Iterate on any polish or friction found
 - [x] Rerun local validation
 - [x] Commit contract hardening package
+
+## 2026-05-17 18:46 CEST - Voice Studio ergonomic redesign
+
+- [x] Add top-level Narration and Voice Cloning modes
+- [x] Merge Source Intake and Script Review into central workbench
+- [x] Add persistent pipeline footer and Cinema entry points
+- [x] Rehome voice cloning workflow into dedicated mode
+- [x] Run frontend checks and visual QA
+
+## 2026-05-17 19:33 CEST - Voice Studio activity awareness refinement
+
+- [x] Tighten header fidelity and mode switch ergonomics
+- [x] Add two-lane activity footer with voice cloning state
+- [x] Rework voice cloning workbench progress and readiness views
+- [x] Run project checks and visual QA
+
+## 2026-05-17 20:22 CEST - Voice Studio ergonomics menus and cancellation
+
+- [x] Add cancellable voice cloning background work contracts
+- [x] Stabilize voice library and target action view models
+- [x] Streamline fixed rails, workspace activity, and settings ergonomics
+- [x] Add regression coverage for cancellation and UI state helpers
+- [x] Run project checks and visual QA
+
+## 2026-05-17 21:23 CEST - Voice Studio ergonomic iteration
+
+- [x] Move run configuration into settings
+- [x] Add collapsible activity footer states
+- [x] Fix desktop scroll ownership for rails and workbench
+- [x] Rework Papery theme token usage
+- [x] Polish rail actions and run visual QA
+
+## 2026-05-17 22:00 CEST - Voice Studio fidelity iteration
+
+- [x] Add collapsible left and right rail states
+- [x] Tighten visual fidelity against approved concepts
+- [x] Clean working log and avoid unrelated task leakage
+- [x] Run full checks and rendered QA
+
+## 2026-05-17 22:34 CEST - Voice Studio menu fidelity iteration
+
+- [x] Streamline Workspace & Activity menu
+- [x] Tighten header ergonomics and visual fidelity
+- [x] Rework Settings into a best-in-class configuration surface
+- [x] Run full checks and rendered QA
+
+## 2026-05-17 23:03 CEST - Voice Studio header and Supertonic fidelity
+
+- [x] Remove odd header previous and next controls
+- [x] Fix Supertonic ready artifact attention state
+- [x] Tighten Workspace and Settings menu ergonomics
+- [x] Run full checks and rendered QA
+
+## 2026-05-17 23:23 CEST - Voice Studio vision fidelity loop
+
+- [x] Compare rendered app against approved visual targets
+- [x] Tighten shell, rail, footer, and menu fidelity
+- [x] Run full checks and rendered QA
+
+## 2026-05-17 23:50 CEST - Voice Studio final fidelity tightening
+
+- [x] Remove remaining prototype glyphs and header/control roughness
+- [x] Tighten footer real estate and rail readability against the approved concepts
+- [x] Recheck backend readiness copy for misleading failed or prepare states
+- [x] Run full checks and rendered QA
+
+## 2026-05-18 00:06 CEST - Voice Studio narration fidelity pass
+
+- [x] Compare Narration intake and review against approved workbench concept
+- [x] Rework source intake and review ergonomics
+- [x] Tighten related rails and footer fit where the narration viewport exposes gaps
+- [x] Run full checks and rendered QA
+
+## 2026-05-18 01:00 CEST - Voice Studio rail fidelity pass
+
+- [x] Compare Narration and Voice Cloning rails against approved concept
+- [x] Polish left rail hierarchy, density, and collapse behavior in both modes
+- [x] Polish right rail playback/readiness inspectors in both modes
+- [x] Run full checks and rendered QA
+
+## 2026-05-18 01:25 CEST - Voice Studio narration viewport pass
+
+- [x] Compare Narration Text, Book, and File / URL modes against approved workbench concept
+- [x] Fix workbench scroll and first-viewport visibility issues
+- [x] Streamline intake and review ergonomics across source modes
+- [x] Run full checks and rendered QA
+
+## 2026-05-18 01:53 CEST - Voice Studio narration cleanliness pass
+
+- [x] Compare Narration viewport against the approved clean workbench concept
+- [x] Reduce visual weight and duplicated surfaces in Source Intake and Review
+- [x] Tighten Text, Book, and File / URL ergonomics toward one coherent intake family
+- [x] Run full checks and rendered QA
+
+## 2026-05-18 02:20 CEST - Voice Studio voice cloning rail streamlining
+
+- [x] Compare Voice Cloning rails against the accepted activity concept
+- [x] Remove duplicated workbench/footer content from left and right rails
+- [x] Rework Voice Cloning rails into focused command and readiness surfaces
+- [x] Run full checks and rendered QA

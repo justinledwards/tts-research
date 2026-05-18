@@ -208,6 +208,15 @@ func (service *Service) QueueVoiceProfileTarget(ctx context.Context, profileID s
 	return profile, nil
 }
 
+func (service *Service) CancelVoiceProfileTarget(profileID string, targetID string) (VoiceProfile, error) {
+	targetID = normalizeVoiceProfileTargetID(targetID)
+	cancel := service.takeVoiceProfileTargetCancel(profileID, targetID)
+	if cancel != nil {
+		cancel()
+	}
+	return service.cancelVoiceProfileTargetByID(profileID, targetID)
+}
+
 func (service *Service) queueVoiceProfileTargets(profileID string, targets []string, autoValidate bool) (VoiceProfile, error) {
 	profile, err := service.getVoiceProfile(profileID)
 	if err != nil {
@@ -233,7 +242,9 @@ func (service *Service) queueVoiceProfileTargets(profileID string, targets []str
 		target.Error = ""
 		if autoValidate {
 			target.Status = VoiceProfileTargetStatusQueued
-		} else if target.Status == "" || target.Status == VoiceProfileTargetStatusFailed {
+		} else if target.Status == "" ||
+			target.Status == VoiceProfileTargetStatusFailed ||
+			target.Status == VoiceProfileTargetStatusCancelled {
 			target.Status = VoiceProfileTargetStatusSelected
 		}
 		profile.CloneTargets[targetID] = target
@@ -248,17 +259,42 @@ func (service *Service) startVoiceProfileTargetPreparation(profileID string, tar
 	targetIDs := normalizeVoiceProfileTargetIDs(targets)
 	go func() {
 		for _, targetID := range targetIDs {
-			service.prepareVoiceProfileTarget(context.Background(), profileID, targetID, autoValidate)
+			if service.voiceProfileTargetIsCancelled(profileID, targetID) {
+				continue
+			}
+			runCtx, cancel := context.WithCancel(context.Background())
+			service.registerVoiceProfileTargetCancel(profileID, targetID, cancel)
+			func(ctx context.Context, targetID string) {
+				defer service.clearVoiceProfileTargetCancel(profileID, targetID)
+				service.prepareVoiceProfileTarget(ctx, profileID, targetID, autoValidate)
+			}(runCtx, targetID)
 		}
 	}()
 }
 
+func (service *Service) voiceProfileTargetIsCancelled(profileID string, targetID string) bool {
+	profile, err := service.getVoiceProfile(profileID)
+	if err != nil {
+		return true
+	}
+	target := profile.CloneTargets[normalizeVoiceProfileTargetID(targetID)]
+	return target.Status == VoiceProfileTargetStatusCancelled
+}
+
 func (service *Service) prepareVoiceProfileTarget(ctx context.Context, profileID string, targetID string, autoValidate bool) {
 	targetID = normalizeVoiceProfileTargetID(targetID)
+	if isContextCancellation(ctx, nil) {
+		_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
+		return
+	}
 	switch targetID {
 	case VoiceProfileTargetKokoroClone:
 		if autoValidate {
 			service.validateVoiceProfileTarget(ctx, profileID, targetID)
+			return
+		}
+		if isContextCancellation(ctx, nil) {
+			_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
 			return
 		}
 		_, _ = service.updateVoiceProfileTarget(profileID, targetID, VoiceProfileTargetStatusReady, nil)
@@ -270,11 +306,19 @@ func (service *Service) prepareVoiceProfileTarget(ctx context.Context, profileID
 		}
 		_, _ = service.updateVoiceProfileTarget(profileID, targetID, VoiceProfileTargetStatusBuilding, nil)
 		if _, err := service.BuildVoiceProfileArtifact(ctx, profileID, moduleID); err != nil {
+			if isContextCancellation(ctx, err) {
+				_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
+				return
+			}
 			_, _ = service.failVoiceProfileTarget(profileID, targetID, err.Error())
 			return
 		}
 		if autoValidate {
 			service.validateVoiceProfileTarget(ctx, profileID, targetID)
+			return
+		}
+		if isContextCancellation(ctx, nil) {
+			_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
 			return
 		}
 		_, _ = service.updateVoiceProfileTarget(profileID, targetID, VoiceProfileTargetStatusReady, nil)
@@ -285,17 +329,29 @@ func (service *Service) prepareVoiceProfileTarget(ctx context.Context, profileID
 
 func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileID string, targetID string) {
 	targetID = normalizeVoiceProfileTargetID(targetID)
+	if isContextCancellation(ctx, nil) {
+		_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
+		return
+	}
 	_, _ = service.updateVoiceProfileTarget(profileID, targetID, VoiceProfileTargetStatusValidating, func(target *VoiceProfileTarget) {
 		target.Validation = &VoiceProfileTargetValidation{Status: VoiceProfileTargetStatusValidating}
 	})
 	profile, err := service.getVoiceProfile(profileID)
 	if err != nil {
+		if isContextCancellation(ctx, err) {
+			_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
+			return
+		}
 		_, _ = service.failVoiceProfileTarget(profileID, targetID, err.Error())
 		return
 	}
 	expectedTranscript, transcriptProvider := service.referenceTranscriptForProfile(ctx, profile.VoiceProfile)
 	result, generatedPath, err := service.synthesizeVoiceProfileTargetSample(ctx, profile.VoiceProfile, targetID, expectedTranscript)
 	if err != nil {
+		if isContextCancellation(ctx, err) {
+			_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
+			return
+		}
 		if voiceProfileTargetHasReadyArtifact(profile.VoiceProfile, targetID) {
 			validation := failedReadyTargetValidation(
 				fmt.Sprintf("target validation sample failed: %s", err.Error()),
@@ -312,6 +368,10 @@ func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileI
 		return
 	}
 	if service.checker == nil {
+		if isContextCancellation(ctx, nil) {
+			_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
+			return
+		}
 		validation := failedReadyTargetValidation(
 			"target transcript validation is not configured",
 			result,
@@ -325,6 +385,10 @@ func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileI
 	}
 	check, err := service.checker.Check(ctx, expectedTranscript, result.Audio)
 	if err != nil {
+		if isContextCancellation(ctx, err) {
+			_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
+			return
+		}
 		validation := failedReadyTargetValidation(
 			fmt.Sprintf("target transcript validation failed: %s", err.Error()),
 			result,
@@ -364,6 +428,10 @@ func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileI
 			Token:         activeToken,
 		})
 		if err != nil {
+			if isContextCancellation(ctx, err) {
+				_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
+				return
+			}
 			validation := failedReadyTargetValidation(
 				fmt.Sprintf("target speaker likeness failed: %s", err.Error()),
 				result,
@@ -380,6 +448,10 @@ func (service *Service) validateVoiceProfileTarget(ctx context.Context, profileI
 			_, _ = service.completeVoiceProfileTargetValidation(profileID, targetID, validation)
 			return
 		}
+	}
+	if isContextCancellation(ctx, nil) {
+		_, _ = service.cancelVoiceProfileTargetByID(profileID, targetID)
+		return
 	}
 	speakerSimilarity := clamp01(speakerScore.SpeakerSimilarity)
 	if speakerSimilarity == 0 && speakerScore.Score > 0 {
@@ -550,6 +622,57 @@ func (service *Service) failVoiceProfileTarget(profileID string, targetID string
 	})
 }
 
+func (service *Service) cancelVoiceProfileTargetByID(profileID string, targetID string) (VoiceProfile, error) {
+	profile, err := service.getVoiceProfile(profileID)
+	if err != nil {
+		return VoiceProfile{}, err
+	}
+	targetID = normalizeVoiceProfileTargetID(targetID)
+	profile.CloneTargets = cloneVoiceProfileTargets(profile.CloneTargets)
+	target := profile.CloneTargets[targetID]
+	if target.ID == "" {
+		return profile.VoiceProfile, nil
+	}
+
+	moduleID := target.ModuleID
+	if moduleID == "" {
+		moduleID = voiceProfileTargetModuleID(targetID)
+	}
+	profile.CloneArtifacts = cloneVoiceProfileArtifacts(profile.CloneArtifacts)
+	artifact := profile.CloneArtifacts[moduleID]
+	artifactWasBuilding := moduleID != "" && artifact.Status == VoiceProfileCloneArtifactStatusBuilding
+	targetIsTerminal :=
+		target.Status == VoiceProfileTargetStatusReady ||
+			target.Status == VoiceProfileTargetStatusFailed ||
+			target.Status == VoiceProfileTargetStatusCancelled
+	if targetIsTerminal && !artifactWasBuilding {
+		return profile.VoiceProfile, nil
+	}
+
+	now := time.Now().UTC()
+	if !targetIsTerminal {
+		target.Status = VoiceProfileTargetStatusCancelled
+		target.Error = "cancelled by request"
+		target.UpdatedAt = now
+	}
+	if target.Validation != nil && target.Validation.Status == VoiceProfileTargetStatusValidating {
+		target.Validation.Status = VoiceProfileTargetStatusCancelled
+		target.Validation.Error = "cancelled by request"
+		target.Validation.MeasuredAt = &now
+	}
+	profile.CloneTargets[targetID] = target
+	if artifactWasBuilding {
+		artifact.Status = VoiceProfileCloneArtifactStatusCancelled
+		artifact.Error = "cancelled by request"
+		artifact.UpdatedAt = now
+		profile.CloneArtifacts[moduleID] = artifact
+	}
+	if err := service.persistVoiceProfile(profile); err != nil {
+		return VoiceProfile{}, err
+	}
+	return profile.VoiceProfile, nil
+}
+
 func (service *Service) completeVoiceProfileTargetValidation(
 	profileID string,
 	targetID string,
@@ -596,6 +719,31 @@ func (service *Service) updateVoiceProfileTarget(
 		return VoiceProfile{}, err
 	}
 	return profile.VoiceProfile, nil
+}
+
+func (service *Service) registerVoiceProfileTargetCancel(profileID string, targetID string, cancel context.CancelFunc) {
+	service.mu.Lock()
+	service.targetCancels[voiceProfileTargetCancelKey(profileID, targetID)] = cancel
+	service.mu.Unlock()
+}
+
+func (service *Service) takeVoiceProfileTargetCancel(profileID string, targetID string) context.CancelFunc {
+	service.mu.Lock()
+	key := voiceProfileTargetCancelKey(profileID, targetID)
+	cancel := service.targetCancels[key]
+	delete(service.targetCancels, key)
+	service.mu.Unlock()
+	return cancel
+}
+
+func (service *Service) clearVoiceProfileTargetCancel(profileID string, targetID string) {
+	service.mu.Lock()
+	delete(service.targetCancels, voiceProfileTargetCancelKey(profileID, targetID))
+	service.mu.Unlock()
+}
+
+func voiceProfileTargetCancelKey(profileID string, targetID string) string {
+	return strings.TrimSpace(profileID) + ":" + normalizeVoiceProfileTargetID(targetID)
 }
 
 func (service *Service) updateVoiceProfileLikenessFromTarget(profileID string, validation VoiceProfileTargetValidation) error {

@@ -9,6 +9,7 @@ import {
   describePerformanceMode,
   getRunModePreset,
 } from "./runConfig";
+import { RunConfigurationControls } from "./RunConfigDrawer";
 import {
   buildTeleprompterWordCues,
   type TeleprompterEffectStyle,
@@ -27,6 +28,44 @@ import type {
   VoiceProfileSourceDiagnostics,
   ProjectStorageSummary,
 } from "./types";
+
+const SETTINGS_TABS = [
+  "run",
+  "providers",
+  "performance",
+  "preferences",
+  "storage",
+  "diagnostics",
+] as const;
+
+type SettingsTab = (typeof SETTINGS_TABS)[number];
+
+const SETTINGS_TAB_META: Record<SettingsTab, { detail: string; label: string }> = {
+  diagnostics: {
+    detail: "Backend health, provider readiness, and runtime facts",
+    label: "Diagnostics",
+  },
+  performance: {
+    detail: "Throughput, quality, and resource behavior",
+    label: "Performance",
+  },
+  preferences: {
+    detail: "Theme and reading experience",
+    label: "Preferences",
+  },
+  providers: {
+    detail: "Narration engines and model contracts",
+    label: "Providers",
+  },
+  run: {
+    detail: "Job shape and output intent",
+    label: "Run",
+  },
+  storage: {
+    detail: "Generated audio and project assets",
+    label: "Storage",
+  },
+};
 
 export function HelpPanel({
   isOpen,
@@ -111,6 +150,7 @@ export function HelpPanel({
 }
 
 export function SettingsPanel({
+  canSubmit,
   isOpen,
   job,
   metrics,
@@ -127,10 +167,13 @@ export function SettingsPanel({
   ttsEngineError,
   ttsEngines,
   onClose,
+  onPrepareProfileTarget,
   onRunConfigurationChange,
+  onSubmit,
   onTeleprompterSettingsChange,
   onThemeChange,
 }: Readonly<{
+  canSubmit: boolean;
   isOpen: boolean;
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
@@ -147,65 +190,127 @@ export function SettingsPanel({
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
   onClose: () => void;
+  onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
+  onSubmit: () => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
   useEscapeClose(isOpen, onClose);
-  const [activeTab, setActiveTab] = useState<
-    "preferences" | "providers" | "performance" | "storage"
-  >("preferences");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("run");
   if (!isOpen) {
     return null;
   }
 
   return (
     <PanelShell label="Settings" title="Studio Settings" onClose={onClose}>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {(["preferences", "providers", "performance", "storage"] as const).map((tab) => (
-          <button
-            className={`rounded-md border px-3 py-2 text-sm font-semibold capitalize ${
-              activeTab === tab
-                ? "border-orange-300 bg-orange-50 text-orange-900"
-                : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
-            }`}
-            key={tab}
-            onClick={() => {
-              setActiveTab(tab);
-            }}
-            type="button"
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      <div className="grid min-h-0 gap-4 lg:grid-cols-[210px_minmax(0,1fr)]">
+        <nav className="grid content-start gap-2 rounded-md border p-2 vs-border vs-surface">
+          {SETTINGS_TABS.map((tab) => (
+            <button
+              className={`grid gap-1 rounded-md border px-3 py-2 text-left transition ${
+                activeTab === tab
+                  ? "border-orange-300 bg-orange-500 text-white shadow-sm"
+                  : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
+              }`}
+              key={tab}
+              onClick={() => {
+                setActiveTab(tab);
+              }}
+              type="button"
+            >
+              <span className="text-sm font-semibold">{SETTINGS_TAB_META[tab].label}</span>
+              <span
+                className={`text-[0.68rem] leading-4 ${
+                  activeTab === tab ? "text-white/80" : "vs-muted"
+                }`}
+              >
+                {SETTINGS_TAB_META[tab].detail}
+              </span>
+            </button>
+          ))}
+        </nav>
 
-      <SettingsTabContent
-        activeTab={activeTab}
-        job={job}
-        metrics={metrics}
-        metricsError={metricsError}
-        profileSource={profileSource}
-        profileSourceDiagnostics={profileSourceDiagnostics}
-        projectStorage={projectStorage}
-        projectStorageError={projectStorageError}
-        researchModules={researchModules}
-        runConfiguration={runConfiguration}
-        selectedProfile={selectedProfile}
-        teleprompterSettings={teleprompterSettings}
-        themeName={themeName}
-        ttsEngineError={ttsEngineError}
-        ttsEngines={ttsEngines}
-        onRunConfigurationChange={onRunConfigurationChange}
-        onTeleprompterSettingsChange={onTeleprompterSettingsChange}
-        onThemeChange={onThemeChange}
-      />
+        <div className="min-w-0">
+          <SettingsOverviewStrip
+            activeTab={activeTab}
+            job={job}
+            metrics={metrics}
+            runConfiguration={runConfiguration}
+          />
+
+          <SettingsTabContent
+            activeTab={activeTab}
+            canSubmit={canSubmit}
+            job={job}
+            metrics={metrics}
+            metricsError={metricsError}
+            profileSource={profileSource}
+            profileSourceDiagnostics={profileSourceDiagnostics}
+            projectStorage={projectStorage}
+            projectStorageError={projectStorageError}
+            researchModules={researchModules}
+            runConfiguration={runConfiguration}
+            selectedProfile={selectedProfile}
+            teleprompterSettings={teleprompterSettings}
+            themeName={themeName}
+            ttsEngineError={ttsEngineError}
+            ttsEngines={ttsEngines}
+            onPrepareProfileTarget={onPrepareProfileTarget}
+            onRunConfigurationChange={onRunConfigurationChange}
+            onSubmit={onSubmit}
+            onTeleprompterSettingsChange={onTeleprompterSettingsChange}
+            onThemeChange={onThemeChange}
+          />
+        </div>
+      </div>
     </PanelShell>
+  );
+}
+
+function SettingsOverviewStrip({
+  activeTab,
+  job,
+  metrics,
+  runConfiguration,
+}: Readonly<{
+  activeTab: SettingsTab;
+  job: VoiceJob | null;
+  metrics: SystemMetrics | null;
+  runConfiguration: RunConfiguration;
+}>) {
+  const preset = getRunModePreset(runConfiguration.runMode);
+  return (
+    <div className="mb-4 grid gap-3 rounded-md border p-4 vs-border vs-surface">
+      <div>
+        <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
+          {SETTINGS_TAB_META[activeTab].label}
+        </p>
+        <h3 className="mt-1 text-xl font-semibold">{SETTINGS_TAB_META[activeTab].detail}</h3>
+      </div>
+      <div className="grid gap-2 text-xs sm:grid-cols-3">
+        <SettingsFact label="Run" value={preset.label} />
+        <SettingsFact label="Engine" value={runConfiguration.ttsEngine} />
+        <SettingsFact label="Backend" value={metrics ? "Online" : (job?.status ?? "Pending")} />
+      </div>
+    </div>
+  );
+}
+
+function SettingsFact({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="rounded-md border px-3 py-2 vs-border vs-raised">
+      <p className="vs-muted text-[0.62rem] font-semibold uppercase tracking-[0.14em]">{label}</p>
+      <p className="mt-1 truncate font-semibold" title={value}>
+        {value}
+      </p>
+    </div>
   );
 }
 
 function SettingsTabContent({
   activeTab,
+  canSubmit,
   job,
   metrics,
   metricsError,
@@ -220,11 +325,14 @@ function SettingsTabContent({
   themeName,
   ttsEngineError,
   ttsEngines,
+  onPrepareProfileTarget,
   onRunConfigurationChange,
+  onSubmit,
   onTeleprompterSettingsChange,
   onThemeChange,
 }: Readonly<{
-  activeTab: "preferences" | "providers" | "performance" | "storage";
+  activeTab: SettingsTab;
+  canSubmit: boolean;
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
   metricsError: string | null;
@@ -239,11 +347,35 @@ function SettingsTabContent({
   themeName: ThemeName;
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
+  onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
+  onSubmit: () => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
   const preset = getRunModePreset(runConfiguration.runMode);
+
+  if (activeTab === "run") {
+    return (
+      <PanelSection title="Run Configuration">
+        <p className="vs-muted text-sm leading-6">
+          Configure the shape of the next narration job here. The workbench remains focused on
+          source content, review, and playback.
+        </p>
+        <RunConfigurationControls
+          canSubmit={canSubmit}
+          job={job}
+          runConfiguration={runConfiguration}
+          selectedProfile={selectedProfile}
+          ttsEngineError={ttsEngineError}
+          ttsEngines={ttsEngines}
+          onChange={onRunConfigurationChange}
+          onPrepareProfileTarget={onPrepareProfileTarget}
+          onSubmit={onSubmit}
+        />
+      </PanelSection>
+    );
+  }
 
   if (activeTab === "preferences") {
     return (
@@ -282,6 +414,21 @@ function SettingsTabContent({
         presetLabel={preset.label}
         runConfiguration={runConfiguration}
         onRunConfigurationChange={onRunConfigurationChange}
+      />
+    );
+  }
+
+  if (activeTab === "diagnostics") {
+    return (
+      <SettingsDiagnosticsTab
+        job={job}
+        metrics={metrics}
+        metricsError={metricsError}
+        profileSource={profileSource}
+        profileSourceDiagnostics={profileSourceDiagnostics}
+        researchModules={researchModules}
+        ttsEngineError={ttsEngineError}
+        ttsEngines={ttsEngines}
       />
     );
   }
@@ -719,6 +866,111 @@ function SettingsPerformanceTab({
   );
 }
 
+function SettingsDiagnosticsTab({
+  job,
+  metrics,
+  metricsError,
+  profileSource,
+  profileSourceDiagnostics,
+  researchModules,
+  ttsEngineError,
+  ttsEngines,
+}: Readonly<{
+  job: VoiceJob | null;
+  metrics: SystemMetrics | null;
+  metricsError: string | null;
+  profileSource: VoiceProfileSource | null;
+  profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
+  researchModules: ResearchModuleDiagnostics[];
+  ttsEngineError: string | null;
+  ttsEngines: TTSEngineDiagnostics[];
+}>) {
+  const gpu = metrics?.gpus?.[0];
+  return (
+    <PanelSection title="Diagnostics">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <DiagnosticLine
+          label="Backend"
+          value={metrics ? `Online · ${metrics.serviceVersion}` : (metricsError ?? "Pending")}
+        />
+        <DiagnosticLine label="TTS job" value={job?.status ?? "No active job"} />
+        <DiagnosticLine
+          label="Source analysis"
+          value={profileSource?.status ?? "No source queued"}
+        />
+        <DiagnosticLine
+          label="Diarization"
+          value={profileSourceDiagnostics?.mode ?? "Diagnostics pending"}
+        />
+        <DiagnosticLine
+          label="Analysis Python"
+          value={profileSourceDiagnostics?.pythonPath ?? "Diagnostics pending"}
+        />
+        <DiagnosticLine
+          label="ffmpeg"
+          value={profileSourceDiagnostics?.ffmpegAvailable ? "Available" : "Missing"}
+        />
+        <DiagnosticLine
+          label="GPU"
+          value={
+            gpu ? `${String(gpu.memoryUsedMiB)}/${String(gpu.memoryTotalMiB)} MiB` : "Unavailable"
+          }
+        />
+        <DiagnosticLine
+          label="Checker"
+          value={
+            job?.pipelineOptions?.asrCheck === false
+              ? "Disabled for this run"
+              : (job?.voiceCheck.provider ?? "Resolved when a job runs")
+          }
+        />
+      </div>
+
+      {profileSourceDiagnostics?.setupMessage ? (
+        <p className="break-words rounded-md border p-3 text-sm leading-6 vs-border vs-surface">
+          {profileSourceDiagnostics.setupMessage}
+        </p>
+      ) : null}
+
+      <div className="grid gap-3 rounded-md border p-3 text-xs vs-border vs-surface">
+        <div>
+          <h4 className="text-sm font-semibold">Narration Engine Health</h4>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            Readiness is shared with Run, rails, and the footer so backend/model additions stay
+            visible from one contract.
+          </p>
+        </div>
+        {ttsEngineError ? <p className="text-sm leading-6 text-red-700">{ttsEngineError}</p> : null}
+        <ul className="grid gap-2">
+          {ttsEngines.map((engine) => (
+            <li className="rounded-md border p-3 vs-border" key={engine.id}>
+              <span className="flex min-w-0 items-center justify-between gap-2">
+                <span className="min-w-0 truncate font-semibold" title={engine.label}>
+                  {engine.label}
+                </span>
+                <span
+                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${
+                    engine.status === "ready"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                      : "border-amber-300 bg-amber-50 text-amber-800"
+                  }`}
+                >
+                  {engine.status}
+                </span>
+              </span>
+              <span className="vs-muted mt-1 block break-words">
+                {engine.reason ?? engine.setup ?? formatProviderLanguageSummary(engine)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <ResearchModuleDiagnosticsList modules={researchModules} />
+    </PanelSection>
+  );
+}
+
 function SettingsStorageTab({
   job,
   profileSource,
@@ -1003,7 +1255,7 @@ function PanelShell({
     <div className="fixed inset-0 z-50 bg-zinc-950/25" role="presentation">
       <aside
         aria-label={label}
-        className="vs-app ml-auto flex h-full w-full max-w-[520px] flex-col border-l shadow-2xl md:w-[500px] vs-border"
+        className="vs-app ml-auto flex h-full w-full max-w-[780px] flex-col border-l shadow-2xl md:w-[740px] vs-border"
       >
         <header className="flex items-center justify-between border-b px-5 py-4 vs-border">
           <div>
@@ -1012,11 +1264,11 @@ function PanelShell({
           </div>
           <button
             aria-label={`Close ${label}`}
-            className="grid h-9 w-9 place-items-center rounded-md border hover:bg-[var(--vs-surface)] vs-border"
+            className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-surface)] vs-border"
             onClick={onClose}
             type="button"
           >
-            ×
+            Close
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
@@ -1070,11 +1322,17 @@ function explainCurrentState(job: VoiceJob | null, source: VoiceProfileSource | 
   if (job?.status === "failed") {
     return job.error ?? "The current job failed. Open Settings for provider diagnostics.";
   }
+  if (job?.status === "cancelled") {
+    return "The narration run was cancelled. The app is idle and ready for the next run.";
+  }
   if (job && job.status !== "completed") {
     return `${job.progress.message || "The job is running."} ${job.progress.detail || ""}`.trim();
   }
   if (source?.status === "failed") {
     return source.error ?? "Source analysis failed before candidates were ready.";
+  }
+  if (source?.status === "cancelled") {
+    return "Source analysis was cancelled. The app is idle and ready for the next source.";
   }
   if (source && source.status !== "ready") {
     return source.progressMessage || "Source analysis is preparing candidate voices.";

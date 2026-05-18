@@ -93,6 +93,28 @@ export const VOICE_STUDIO_THEMES: VoiceStudioTheme[] = [
     },
   },
   {
+    name: "papery",
+    label: "Papery",
+    description: "Warm paper workspace",
+    swatches: {
+      background: "#fbf3df",
+      surface: "#f1e7d0",
+      raised: "#fff9ec",
+      text: "#2d332f",
+      muted: "#766f61",
+      border: "#dccdad",
+      accent: "#ff6a00",
+      success: "#16845b",
+      generating: "#556a88",
+      queued: "#b66a1d",
+    },
+    book: {
+      ink: "#2d332f",
+      muted: "#7a7467",
+      paper: "#fff4da",
+    },
+  },
+  {
     name: "night",
     label: "Night",
     description: "Immersive reading",
@@ -119,7 +141,13 @@ export const VOICE_STUDIO_THEMES: VoiceStudioTheme[] = [
 export const DEFAULT_THEME_NAME: ThemeName = "light";
 
 export function normalizeThemeName(value: unknown): ThemeName {
-  if (value === "dark" || value === "dawn" || value === "night" || value === "light") {
+  if (
+    value === "dark" ||
+    value === "dawn" ||
+    value === "night" ||
+    value === "light" ||
+    value === "papery"
+  ) {
     return value;
   }
   return DEFAULT_THEME_NAME;

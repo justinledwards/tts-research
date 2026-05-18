@@ -185,6 +185,9 @@ function sourceStatusClass(source: VoiceProfileSource): string {
   if (source.status === "failed") {
     return "bg-red-100 text-red-700";
   }
+  if (source.status === "cancelled") {
+    return "bg-zinc-100 text-zinc-600";
+  }
   if (source.status === "ready") {
     return "bg-emerald-100 text-emerald-700";
   }

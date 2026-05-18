@@ -138,6 +138,18 @@ export function MermaidDiagram({ chart }: Readonly<{ chart: string }>) {
 }
 
 const markdownComponents: Components = {
+  a({ href, children, rel, target, ...props }) {
+    return (
+      <a
+        target={target ?? "_blank"}
+        rel={target === undefined || target === "_blank" ? (rel ?? "noopener noreferrer") : rel}
+        href={href}
+        {...props}
+      >
+        {children}
+      </a>
+    );
+  },
   code({ children, className }) {
     const code = reactNodeToText(children).replace(/\n$/, "");
     const language = /language-([A-Za-z0-9_-]+)/.exec(className ?? "")?.[1]?.toLowerCase() ?? "";

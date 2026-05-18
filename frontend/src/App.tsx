@@ -7,12 +7,14 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { type RequestState, TopProductBar } from "./AppShell";
+import { type RequestState, type StudioMode, TopProductBar } from "./AppShell";
 import { BundleFlowPanel, type BundlePanelMode } from "./BundlePanels";
 import {
   apiBaseUrl,
   audioSource,
   cancelVoiceJob,
+  cancelVoiceProfileSource,
+  cancelVoiceProfileTarget,
   clearHuggingFaceToken,
   cloneResearchModule,
   closePlaybackSession,
@@ -79,7 +81,6 @@ import { ContentIRDrawer } from "./ContentIrDrawer";
 import { MarkdownRenderer, MermaidDiagram, looksLikeMermaidDiagram } from "./MarkdownRenderer";
 import { HelpPanel, SettingsPanel } from "./ProductPanels";
 import { PronunciationPanel } from "./PronunciationPanel";
-import { RunConfigDrawer } from "./RunConfigDrawer";
 import {
   KOKORO_VOICEPACKS,
   findKokoroVoicepack,
@@ -90,6 +91,7 @@ import {
   applyKokoroRenderMode,
   buildCreateVoiceJobRequest,
   createRunConfiguration,
+  getRunModePreset,
   isKokoroRenderEngine,
   KOKORO_RENDER_MODE_OPTIONS,
   kokoroEngineFamilyValue,
@@ -128,6 +130,13 @@ import {
   type HighlightCue,
 } from "./highlightMap";
 import { THEME_STORAGE_KEY, VOICE_STUDIO_THEMES, normalizeThemeName } from "./theme";
+import {
+  ACTIVITY_FOOTER_MODE_STORAGE_KEY,
+  defaultActivityFooterMode,
+  nextActivityFooterMode,
+  normalizeActivityFooterMode,
+  type ActivityFooterMode,
+} from "./activityFooter";
 import type {
   BookSource,
   BookCinemaDiagnostics,
@@ -139,6 +148,7 @@ import type {
   CustomSpeechPolicyProfile,
   HighlightMap,
   MarkdownParseMode,
+  NarrationBlock,
   PlaybackProgress,
   PlaybackSession,
   PreparedSource,
@@ -186,16 +196,22 @@ import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCi
 import {
   humanizeProfileTargetProblem,
   isVoiceProfileTargetReadyForEngine,
+  voiceProfileTargetForEngine,
   voiceProfileTargetReadinessText,
 } from "./profileTargets";
 import { VoiceSourceAnalysisPanel } from "./VoiceSourceAnalysisPanel";
 import { WorkspaceDrawer } from "./WorkspaceDrawer";
+import { buildVoiceLibraryViewModel, type VoiceLibraryEntry } from "./voiceStudioViewModels";
 import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
 
 const DEFAULT_PROJECT_NAME = "The Future of Clean Energy";
 const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
 const RESEARCH_MODULE_PROMPT_HIDDEN_KEY = "tts-research-module-prompt-hidden";
+const LEFT_RAIL_MODE_STORAGE_KEY = "tts-left-rail-mode";
+const RIGHT_RAIL_MODE_STORAGE_KEY = "tts-right-rail-mode";
 const DEFAULT_KOKORO_VOICE_ID = "af_heart";
+const VOICE_PROFILE_RECENT_STORAGE_KEY = "tts-recent-voice-profile-ids";
+const VOICE_PROFILE_PINNED_STORAGE_KEY = "tts-pinned-voice-profile-ids";
 const PROFILE_ARTIFACT_MODULE_ORDER = ["kokoro-embed", "supertonic-embed"] as const;
 const SOURCE_TEXT_FILE_ACCEPT =
   ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,image/png,image/jpeg,image/tiff,image/webp";
@@ -223,6 +239,29 @@ interface ActivePipelineFlags {
   checking: boolean;
 }
 
+interface ActivityStageSummary {
+  detail?: string;
+  label: string;
+  status: StageStatus;
+}
+
+type ActivityStatus = "idle" | "running" | "attention" | "complete" | "cancelled";
+
+interface VoiceCloningActivitySummary {
+  activeProfile: VoiceProfile | null;
+  actionLabel: string;
+  candidateDetail: string;
+  detail: string;
+  elapsed: string;
+  eta: string;
+  lastUpdate: string;
+  message: string;
+  sourceDetail: string;
+  stages: ActivityStageSummary[];
+  status: ActivityStatus;
+  statusLabel: string;
+}
+
 interface PlaybackController {
   isAvailable: boolean;
   isPlaying: boolean;
@@ -241,6 +280,8 @@ interface WritableRef<T> {
 
 type CinemaTextSize = "compact" | "comfortable" | "large" | "giant" | "massive";
 type PreparedSourceBlock = NonNullable<PreparedSource["blocks"]>[number];
+type ContentMode = "sourceIntake" | "review";
+type SourceMode = "text" | "book" | "fileUrl";
 
 const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   isAvailable: false,
@@ -395,34 +436,596 @@ function resolveTTSPipelineState(job: VoiceJob | null): PipelineStepState {
   return pipeline;
 }
 
+function isVoiceProfileSourceActive(source: VoiceProfileSource | null): boolean {
+  return Boolean(
+    source &&
+      source.status !== "ready" &&
+      source.status !== "failed" &&
+      source.status !== "cancelled",
+  );
+}
+
+function scopedProfileTargetIds(engineId: string): string[] | null {
+  const targetId = voiceProfileTargetForEngine(engineId);
+  return targetId ? [targetId] : null;
+}
+
+function targetIdMatchesScope(targetId: string, targetIds?: readonly string[] | null): boolean {
+  return !targetIds || targetIds.length === 0 || targetIds.includes(targetId);
+}
+
+function scopedCloneTargets(profile: VoiceProfile, targetIds?: readonly string[] | null) {
+  return Object.entries(profile.cloneTargets ?? {})
+    .filter(([targetId]) => targetIdMatchesScope(targetId, targetIds))
+    .map(([, target]) => target);
+}
+
+function scopedCloneArtifacts(profile: VoiceProfile, targetIds?: readonly string[] | null) {
+  return Object.entries(profile.cloneArtifacts ?? {})
+    .filter(([targetId]) => targetIdMatchesScope(targetId, targetIds))
+    .map(([, artifact]) => artifact);
+}
+
+function profileHasActiveTarget(
+  profile: VoiceProfile | null,
+  targetIds?: readonly string[] | null,
+): boolean {
+  if (!profile) {
+    return false;
+  }
+  return scopedCloneTargets(profile, targetIds).some((target) =>
+    ["queued", "building", "validating"].includes(target.status),
+  );
+}
+
+function profileHasTargetAttention(
+  profile: VoiceProfile | null,
+  targetIds?: readonly string[] | null,
+): boolean {
+  if (!profile) {
+    return false;
+  }
+  const targets = scopedCloneTargets(profile, targetIds);
+  const artifacts = scopedCloneArtifacts(profile, targetIds);
+  return (
+    targets.some(
+      (target) => target.status === "failed" || target.validation?.status === "failed",
+    ) || artifacts.some((artifact) => artifact.status === "failed")
+  );
+}
+
+function profileHasBlockingTargetAttention(
+  profile: VoiceProfile | null,
+  targetIds?: readonly string[] | null,
+): boolean {
+  if (!profile) {
+    return false;
+  }
+  const targets = scopedCloneTargets(profile, targetIds);
+  const artifacts = scopedCloneArtifacts(profile, targetIds);
+  return (
+    targets.some((target) => target.status === "failed") ||
+    artifacts.some((artifact) => artifact.status === "failed")
+  );
+}
+
+function profileHasTargetCancelled(
+  profile: VoiceProfile | null,
+  targetIds?: readonly string[] | null,
+): boolean {
+  if (!profile) {
+    return false;
+  }
+  const targets = scopedCloneTargets(profile, targetIds);
+  const artifacts = scopedCloneArtifacts(profile, targetIds);
+  return (
+    targets.some(
+      (target) => target.status === "cancelled" || target.validation?.status === "cancelled",
+    ) || artifacts.some((artifact) => artifact.status === "cancelled")
+  );
+}
+
+function profileHasReadyCloneTarget(
+  profile: VoiceProfile | null,
+  targetIds?: readonly string[] | null,
+): boolean {
+  if (!profile) {
+    return false;
+  }
+  const targets = scopedCloneTargets(profile, targetIds);
+  const artifacts = scopedCloneArtifacts(profile, targetIds);
+  return (
+    targets.some((target) => target.status === "ready") ||
+    artifacts.some((artifact) => artifact.status === "ready")
+  );
+}
+
+function resolveActiveCloneProfile(
+  selectedProfile: VoiceProfile | null,
+  profiles: VoiceProfile[],
+  engineId: string,
+): VoiceProfile | null {
+  if (selectedProfile) {
+    return selectedProfile;
+  }
+  const targetIds = scopedProfileTargetIds(engineId);
+  return (
+    profiles.find((profile) => profileHasActiveTarget(profile, targetIds)) ??
+    profiles.find((profile) => isVoiceProfileTargetReadyForEngine(profile, engineId)) ??
+    profiles.find((profile) => profileHasActiveTarget(profile)) ??
+    profiles.find((profile) => profileHasTargetAttention(profile, targetIds)) ??
+    profiles.find((profile) => profileHasTargetAttention(profile)) ??
+    null
+  );
+}
+
+function sourceStageStatus(source: VoiceProfileSource | null, stageName: string): StageStatus {
+  return source?.stages.find((stage) => stage.name === stageName)?.status ?? "waiting";
+}
+
+function resolveAnalyzeStageStatus(source: VoiceProfileSource | null): StageStatus {
+  if (!source) {
+    return "waiting";
+  }
+  if (source.status === "cancelled") {
+    return "failed";
+  }
+  if (source.status === "failed") {
+    return sourceStageStatus(source, "normalize") === "failed" ||
+      sourceStageStatus(source, "denoise") === "failed"
+      ? "failed"
+      : "done";
+  }
+  if (source.status === "queued" || source.status === "normalizing") {
+    return "running";
+  }
+  return "done";
+}
+
+function resolveDetectStageStatus(source: VoiceProfileSource | null): StageStatus {
+  if (!source) {
+    return "waiting";
+  }
+  if (source.status === "cancelled") {
+    return "failed";
+  }
+  if (source.status === "failed") {
+    return sourceStageStatus(source, "analyze") === "failed" ||
+      sourceStageStatus(source, "score") === "failed"
+      ? "failed"
+      : "waiting";
+  }
+  if (source.status === "analyzing" || source.status === "scoring") {
+    return "running";
+  }
+  return source.status === "ready" ? "done" : "waiting";
+}
+
+function resolveBuildStageStatus(
+  profile: VoiceProfile | null,
+  buildingArtifactKey: string | null,
+  targetIds?: readonly string[] | null,
+  engineId?: string,
+): StageStatus {
+  if (!profile) {
+    return buildingArtifactKey ? "running" : "waiting";
+  }
+  const targets = scopedCloneTargets(profile, targetIds);
+  const artifacts = scopedCloneArtifacts(profile, targetIds);
+  if (
+    buildingArtifactMatchesScope(profile.id, buildingArtifactKey, targetIds) ||
+    targets.some((target) => ["queued", "building"].includes(target.status)) ||
+    artifacts.some((artifact) => artifact.status === "building")
+  ) {
+    return "running";
+  }
+  const engineTargetReady = engineId
+    ? isVoiceProfileTargetReadyForEngine(profile, engineId)
+    : false;
+  if (profileHasReadyCloneTarget(profile, targetIds) || engineTargetReady) {
+    return "done";
+  }
+  if (
+    targets.some((target) => target.status === "failed") ||
+    artifacts.some((artifact) => artifact.status === "failed")
+  ) {
+    return "failed";
+  }
+  return profileHasTargetCancelled(profile, targetIds) ? "failed" : "waiting";
+}
+
+function buildingArtifactMatchesScope(
+  profileId: string,
+  buildingArtifactKey: string | null,
+  targetIds?: readonly string[] | null,
+): boolean {
+  if (!buildingArtifactKey?.startsWith(`${profileId}:`)) {
+    return false;
+  }
+  if (!targetIds || targetIds.length === 0) {
+    return true;
+  }
+  return targetIds.some((targetId) => buildingArtifactKey === `${profileId}:${targetId}`);
+}
+
+function resolveValidateStageStatus(
+  profile: VoiceProfile | null,
+  targetIds?: readonly string[] | null,
+  engineId?: string,
+): StageStatus {
+  if (!profile) {
+    return "waiting";
+  }
+  const targets = scopedCloneTargets(profile, targetIds);
+  if (
+    targets.some((target) => target.status === "ready") ||
+    (engineId ? isVoiceProfileTargetReadyForEngine(profile, engineId) : false)
+  ) {
+    return "done";
+  }
+  if (targets.some((target) => target.validation?.status === "failed")) {
+    return "failed";
+  }
+  if (targets.some((target) => target.validation?.status === "cancelled")) {
+    return "failed";
+  }
+  if (targets.some((target) => target.status === "validating")) {
+    return "running";
+  }
+  if (targets.some((target) => target.validation?.status === "ready")) {
+    return "done";
+  }
+  return "waiting";
+}
+
+function voiceCloningProgressRatio(stages: ActivityStageSummary[]): number {
+  if (stages.length === 0) {
+    return 0;
+  }
+  const doneCount = stages.filter((stage) => stage.status === "done").length;
+  const runningIndex = stages.findIndex((stage) => stage.status === "running");
+  const partial = runningIndex === -1 ? 0 : 0.55;
+  return Math.min(1, (doneCount + partial) / stages.length);
+}
+
+function latestTimestamp(...timestamps: (string | undefined)[]): string | undefined {
+  let latest: string | undefined;
+  for (const timestamp of timestamps) {
+    if (typeof timestamp !== "string" || timestamp.trim().length === 0) {
+      continue;
+    }
+    if (!latest || Date.parse(timestamp) > Date.parse(latest)) {
+      latest = timestamp;
+    }
+  }
+  return latest;
+}
+
+function latestProfileActivityTimestamp(
+  profile: VoiceProfile | null,
+  targetIds?: readonly string[] | null,
+): string | undefined {
+  if (!profile) {
+    return undefined;
+  }
+  const targetTimes = scopedCloneTargets(profile, targetIds).flatMap((target) => [
+    target.updatedAt,
+    target.validation?.measuredAt,
+  ]);
+  const artifactTimes = scopedCloneArtifacts(profile, targetIds).map(
+    (artifact) => artifact.updatedAt,
+  );
+  return latestTimestamp(profile.updatedAt, ...targetTimes, ...artifactTimes);
+}
+
+function sourceActivityMessage(source: VoiceProfileSource | null): string {
+  if (!source) {
+    return "No source analysis is running.";
+  }
+  if (source.progressMessage.trim().length > 0) {
+    return source.progressMessage;
+  }
+  switch (source.status) {
+    case "queued": {
+      return "Queued for source analysis.";
+    }
+    case "normalizing": {
+      return "Preparing source audio.";
+    }
+    case "analyzing": {
+      return "Detecting and separating speaker segments.";
+    }
+    case "scoring": {
+      return "Scoring candidate voice references.";
+    }
+    case "ready": {
+      return "Voice candidates are ready for review.";
+    }
+    case "failed": {
+      return "Source analysis needs attention.";
+    }
+    case "cancelled": {
+      return "Source analysis was cancelled.";
+    }
+    default: {
+      return "Voice cloning is waiting.";
+    }
+  }
+}
+
+function resolveVoiceCloneActionLabel(status: ActivityStatus): string {
+  switch (status) {
+    case "attention": {
+      return "Review Issue";
+    }
+    case "cancelled": {
+      return "Review Cancelled";
+    }
+    case "running": {
+      return "View Progress";
+    }
+    case "complete": {
+      return "View Profile";
+    }
+    default: {
+      return "Create Clone";
+    }
+  }
+}
+
+function resolveVoiceCloneStages(
+  profileSource: VoiceProfileSource | null,
+  activeProfile: VoiceProfile | null,
+  buildingArtifactKey: string | null,
+  targetIds: readonly string[] | null,
+  engineId: string,
+): ActivityStageSummary[] {
+  const detectDetail =
+    profileSource?.status === "scoring" ? "Scoring candidate references" : "Find speaker turns";
+  return [
+    {
+      detail: profileSource?.progressDetail ?? "Prepare analysis-ready audio",
+      label: "Analyze Source",
+      status: resolveAnalyzeStageStatus(profileSource),
+    },
+    {
+      detail: detectDetail,
+      label: "Detect Speakers",
+      status: resolveDetectStageStatus(profileSource),
+    },
+    {
+      detail: activeProfile ? "Prepare selected clone targets" : "Waiting for profile",
+      label: "Build Clone",
+      status: resolveBuildStageStatus(activeProfile, buildingArtifactKey, targetIds, engineId),
+    },
+    {
+      detail: activeProfile ? "Measure likeness and readiness" : "Waiting for target",
+      label: "Validate Voice",
+      status: resolveValidateStageStatus(activeProfile, targetIds, engineId),
+    },
+  ];
+}
+
+function resolveVoiceCloneActivityStatus({
+  activeProfile,
+  attention,
+  cancelled,
+  sourceActive,
+  targetActive,
+  profileSource,
+  targetReady,
+}: Readonly<{
+  activeProfile: VoiceProfile | null;
+  attention: boolean;
+  cancelled: boolean;
+  sourceActive: boolean;
+  targetActive: boolean;
+  profileSource: VoiceProfileSource | null;
+  targetReady: boolean;
+}>): ActivityStatus {
+  if (attention) {
+    return "attention";
+  }
+  if (cancelled) {
+    return "cancelled";
+  }
+  if (sourceActive || targetActive) {
+    return "running";
+  }
+  if (activeProfile && (profileSource?.status === "ready" || targetReady)) {
+    return "complete";
+  }
+  return "idle";
+}
+
+function resolveVoiceCloneStatusLabel({
+  profileSource,
+  sourceActive,
+  status,
+}: Readonly<{
+  profileSource: VoiceProfileSource | null;
+  sourceActive: boolean;
+  status: ActivityStatus;
+}>): string {
+  if (status === "attention") {
+    return "Attention Needed";
+  }
+  if (status === "cancelled") {
+    return "Cancelled";
+  }
+  if (status === "running") {
+    return sourceActive
+      ? humanizeSourceStatus(profileSource?.status ?? "queued")
+      : "Preparing Target";
+  }
+  if (status === "complete") {
+    return "Ready";
+  }
+  return "Idle";
+}
+
+function voiceCloneSourceDetail(
+  profileSource: VoiceProfileSource | null,
+  activeProfile: VoiceProfile | null,
+): string {
+  if (profileSource) {
+    return `${shortIdentifier(profileSource.id)} · ${profileSource.sourceFile}`;
+  }
+  if (activeProfile) {
+    return `${shortIdentifier(activeProfile.id)} · ${activeProfile.name}`;
+  }
+  return "No source queued";
+}
+
+function voiceCloneDetail(
+  profileSource: VoiceProfileSource | null,
+  activeProfile: VoiceProfile | null,
+  engineId: string,
+): string {
+  if (profileSource?.progressDetail) {
+    return profileSource.progressDetail;
+  }
+  if (activeProfile) {
+    return voiceProfileTargetReadinessText(activeProfile, engineId);
+  }
+  return "Upload source media to begin.";
+}
+
+function voiceCloneEta(status: ActivityStatus): string {
+  if (status === "running") {
+    return "Polling every 3s";
+  }
+  if (status === "complete") {
+    return "Complete";
+  }
+  if (status === "cancelled") {
+    return "Stopped";
+  }
+  return "n/a";
+}
+
+function resolveVoiceCloningActivity({
+  activeEngineId,
+  buildingArtifactKey,
+  createCandidateId,
+  error,
+  isAnalyzing,
+  now,
+  profileSource,
+  profiles,
+  selectedProfile,
+}: Readonly<{
+  activeEngineId: string;
+  buildingArtifactKey: string | null;
+  createCandidateId: string | null;
+  error: string | null;
+  isAnalyzing: boolean;
+  now: number;
+  profileSource: VoiceProfileSource | null;
+  profiles: VoiceProfile[];
+  selectedProfile: VoiceProfile | null;
+}>): VoiceCloningActivitySummary {
+  const activeProfile = resolveActiveCloneProfile(selectedProfile, profiles, activeEngineId);
+  const activeTargetIds = scopedProfileTargetIds(activeEngineId);
+  const targetReady =
+    Boolean(activeProfile) && isVoiceProfileTargetReadyForEngine(activeProfile, activeEngineId);
+  const stages = resolveVoiceCloneStages(
+    profileSource,
+    activeProfile,
+    buildingArtifactKey,
+    activeTargetIds,
+    activeEngineId,
+  );
+  const sourceActive = isAnalyzing || isVoiceProfileSourceActive(profileSource);
+  const targetBuildActive = activeProfile
+    ? buildingArtifactMatchesScope(activeProfile.id, buildingArtifactKey, activeTargetIds)
+    : Boolean(buildingArtifactKey);
+  const targetActive =
+    targetBuildActive ||
+    Boolean(createCandidateId) ||
+    profileHasActiveTarget(activeProfile, activeTargetIds);
+  const cancelled =
+    profileSource?.status === "cancelled" ||
+    profileHasTargetCancelled(activeProfile, activeTargetIds);
+  const attention =
+    Boolean(error) ||
+    profileSource?.status === "failed" ||
+    profileHasBlockingTargetAttention(activeProfile, activeTargetIds) ||
+    (!cancelled && stages.some((stage) => stage.status === "failed"));
+  const status = resolveVoiceCloneActivityStatus({
+    activeProfile,
+    attention,
+    cancelled,
+    profileSource,
+    sourceActive,
+    targetActive,
+    targetReady,
+  });
+  const activityTimestamp = latestTimestamp(
+    profileSource?.updatedAt,
+    latestProfileActivityTimestamp(activeProfile, activeTargetIds),
+  );
+  const message =
+    error ??
+    (status === "complete" && activeProfile
+      ? voiceProfileTargetReadinessText(activeProfile, activeEngineId)
+      : sourceActivityMessage(profileSource));
+  const candidates = profileSource?.candidates ?? [];
+  const readyCandidates = candidates.filter((candidate) => candidate.status === "ready").length;
+  const candidateDetail =
+    candidates.length > 0
+      ? `${String(readyCandidates)} ready / ${String(candidates.length)} detected`
+      : "No candidates yet";
+  return {
+    activeProfile,
+    actionLabel: resolveVoiceCloneActionLabel(status),
+    candidateDetail,
+    detail: voiceCloneDetail(profileSource, activeProfile, activeEngineId),
+    elapsed: formatElapsed(profileSource?.createdAt ?? activeProfile?.createdAt, now),
+    eta: voiceCloneEta(status),
+    lastUpdate: formatRelativeTime(activityTimestamp, now),
+    message,
+    sourceDetail: voiceCloneSourceDetail(profileSource, activeProfile),
+    stages,
+    status,
+    statusLabel: resolveVoiceCloneStatusLabel({ profileSource, sourceActive, status }),
+  };
+}
+
+function humanizeSourceStatus(status: string): string {
+  switch (status) {
+    case "queued": {
+      return "Queued";
+    }
+    case "normalizing": {
+      return "Normalizing";
+    }
+    case "analyzing": {
+      return "Detecting Speakers";
+    }
+    case "scoring": {
+      return "Scoring Candidates";
+    }
+    case "ready": {
+      return "Ready";
+    }
+    case "failed": {
+      return "Failed";
+    }
+    case "cancelled": {
+      return "Cancelled";
+    }
+    default: {
+      return "Working";
+    }
+  }
+}
+
 function getStudioJobName(job: VoiceJob | null): string {
   if (job?.voiceProfileName) {
     return `${job.voiceProfileName} - Long Form`;
   }
   return "Clean Energy - Long Form";
-}
-
-function getStudioPipelineHint({
-  hasLoadedProfiles,
-  isLoadingProfiles,
-  isProfileStale,
-  selectedProfileId,
-}: Readonly<{
-  hasLoadedProfiles: boolean;
-  isLoadingProfiles: boolean;
-  isProfileStale: boolean;
-  selectedProfileId: string;
-}>): string {
-  if (isLoadingProfiles) {
-    return "Loading profile catalog and updating studio controls.";
-  }
-  if (hasLoadedProfiles && isProfileStale) {
-    return "Selected profile no longer exists; please choose another profile.";
-  }
-  if (selectedProfileId) {
-    return "Custom reference profile active for this job.";
-  }
-  return "Using default TTS voice. Select or upload a reference profile above.";
 }
 
 function upsertVoiceProfileByCreatedAt(
@@ -439,11 +1042,32 @@ function upsertVoiceProfileByCreatedAt(
   return [...nextProfiles.slice(0, insertAt), profile, ...nextProfiles.slice(insertAt)];
 }
 
+function loadStoredIdList(key: string): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? "[]") as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item): item is string => typeof item === "string" && item.trim() !== "");
+  } catch {
+    return [];
+  }
+}
+
+function rememberRecentId(ids: string[], id: string, limit = 8): string[] {
+  if (!id) {
+    return ids;
+  }
+  return [id, ...ids.filter((item) => item !== id)].slice(0, limit);
+}
+
 function TeleprompterPanel({
   canOpenBookCinema,
   isPlaybackActive,
   job,
   latestProgress,
+  openSignal,
+  showInlinePreview = true,
   onOpenBookCinema,
   onResumeProgress,
   playbackControls,
@@ -457,6 +1081,8 @@ function TeleprompterPanel({
   isPlaybackActive: boolean;
   job: VoiceJob | null;
   latestProgress: PlaybackProgress | null;
+  openSignal: number;
+  showInlinePreview?: boolean;
   onOpenBookCinema: () => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
   playbackControls: PlaybackController;
@@ -471,6 +1097,7 @@ function TeleprompterPanel({
   const [cinemaThemeName, setCinemaThemeName] = useState<ThemeName>("night");
   const [isContextVisible, setIsContextVisible] = useState(false);
   const [isFocusEnabled, setIsFocusEnabled] = useState(true);
+  const handledOpenSignalRef = useRef(openSignal);
   const effectiveSettings = useMemo(
     () =>
       isFocusEnabled
@@ -509,6 +1136,15 @@ function TeleprompterPanel({
   const handleCloseCinema = useCallback(() => {
     setIsCinemaOpen(false);
   }, []);
+  useEffect(() => {
+    if (openSignal <= handledOpenSignalRef.current) {
+      return;
+    }
+    handledOpenSignalRef.current = openSignal;
+    if (canOpenCinema) {
+      handleOpenCinema();
+    }
+  }, [canOpenCinema, handleOpenCinema, openSignal]);
   const handlePlayPause = useCallback(() => {
     if (!playbackControls.isAvailable) {
       return;
@@ -533,6 +1169,9 @@ function TeleprompterPanel({
   );
 
   if (!cue) {
+    if (!showInlinePreview) {
+      return null;
+    }
     return (
       <section className="rounded-lg border p-5 shadow-sm vs-raised">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -554,6 +1193,38 @@ function TeleprompterPanel({
   }
 
   const currentWordLabel = teleprompterWordLabel(cue);
+  const cinemaOverlay = isCinemaOpen ? (
+    <CinemaTeleprompterOverlay
+      cue={cue}
+      isContextVisible={isContextVisible}
+      isFocusEnabled={isFocusEnabled}
+      settings={effectiveSettings}
+      themeName={cinemaThemeName}
+      markdownSource={markdownCinemaSource}
+      playbackControls={playbackControls}
+      resumeProgress={cinemaResumeProgress}
+      textSize={cinemaTextSize}
+      isPlaybackActive={isPlaybackActive}
+      onClose={handleCloseCinema}
+      onContextToggle={() => {
+        setIsContextVisible((current) => !current);
+      }}
+      onFocusSettingsOpen={onOpenSettings}
+      onFocusToggle={() => {
+        setIsFocusEnabled((current) => !current);
+      }}
+      onPlayPause={handlePlayPause}
+      onRestart={handleRestart}
+      onResumeProgress={onResumeProgress}
+      onSkip={handleSkip}
+      onThemeChange={setCinemaThemeName}
+      onTextSizeChange={setCinemaTextSize}
+    />
+  ) : null;
+
+  if (!showInlinePreview) {
+    return cinemaOverlay;
+  }
 
   return (
     <section className="rounded-xl border p-4 shadow-sm vs-raised sm:p-5">
@@ -647,34 +1318,7 @@ function TeleprompterPanel({
           </button>
         </div>
       </div>
-      {isCinemaOpen ? (
-        <CinemaTeleprompterOverlay
-          cue={cue}
-          isContextVisible={isContextVisible}
-          isFocusEnabled={isFocusEnabled}
-          settings={effectiveSettings}
-          themeName={cinemaThemeName}
-          markdownSource={markdownCinemaSource}
-          playbackControls={playbackControls}
-          resumeProgress={cinemaResumeProgress}
-          textSize={cinemaTextSize}
-          isPlaybackActive={isPlaybackActive}
-          onClose={handleCloseCinema}
-          onContextToggle={() => {
-            setIsContextVisible((current) => !current);
-          }}
-          onFocusSettingsOpen={onOpenSettings}
-          onFocusToggle={() => {
-            setIsFocusEnabled((current) => !current);
-          }}
-          onPlayPause={handlePlayPause}
-          onRestart={handleRestart}
-          onResumeProgress={onResumeProgress}
-          onSkip={handleSkip}
-          onThemeChange={setCinemaThemeName}
-          onTextSizeChange={setCinemaTextSize}
-        />
-      ) : null}
+      {cinemaOverlay}
     </section>
   );
 }
@@ -755,6 +1399,32 @@ function upsertPreparedSource(
   source: PreparedSource,
 ): PreparedSource[] {
   return [source, ...currentSources.filter((item) => item.id !== source.id)];
+}
+
+export function isPreparedSourceDisplayIncomplete(source: PreparedSource | null): boolean {
+  if (!source) {
+    return false;
+  }
+  if (source.renderMode === "markdown") {
+    return !source.text;
+  }
+  return !source.text || !source.speechText;
+}
+
+export function mergePreparedSourcesPreservingFullContent(
+  currentSources: PreparedSource[],
+  nextSources: PreparedSource[],
+): PreparedSource[] {
+  return nextSources.map((nextSource) => {
+    const currentSource = currentSources.find((source) => source.id === nextSource.id);
+    if (
+      currentSource?.updatedAt === nextSource.updatedAt &&
+      !isPreparedSourceDisplayIncomplete(currentSource)
+    ) {
+      return currentSource;
+    }
+    return nextSource;
+  });
 }
 
 function resolveProgressForJob(
@@ -863,11 +1533,105 @@ function TeleprompterWords({
               } as CSSProperties
             }
           >
-            {token.text}
+            {renderTeleprompterTokenContent(token.text)}
           </span>
         );
       })}
     </p>
+  );
+}
+
+function renderTeleprompterTokenContent(text: string): ReactNode {
+  const link = teleprompterLinkToken(text);
+  if (!link) {
+    return <>{text}</>;
+  }
+
+  return (
+    <>
+      {link.leading}
+      <a href={link.href} target="_blank" rel="noopener noreferrer">
+        {link.label}
+      </a>
+      {link.trailing}
+    </>
+  );
+}
+
+export interface TeleprompterLinkToken {
+  href: string;
+  label: string;
+  leading: string;
+  trailing: string;
+}
+
+export function teleprompterLinkToken(text: string): TeleprompterLinkToken | null {
+  const token = text.trim();
+  if (!token) {
+    return null;
+  }
+
+  let offset = 0;
+  while (offset < token.length && isLinkLeadingPunctuation(token[offset] ?? "")) {
+    offset += 1;
+  }
+  let core = token.slice(offset);
+  const leading = token.slice(0, offset);
+  if (!core) {
+    return null;
+  }
+
+  let trailing = "";
+  while (core.length > 0 && isLinkTrailingPunctuation(core.at(-1) ?? "")) {
+    const lastCharacter = core.at(-1) ?? "";
+    trailing = `${lastCharacter}${trailing}`;
+    core = core.slice(0, -1);
+  }
+  if (!core) {
+    return null;
+  }
+
+  if (/^(?:https?:\/\/|mailto:)[^\s<>"']+$/i.test(core)) {
+    return { href: core, label: core, leading, trailing };
+  }
+  if (/^www\.[^\s<>"']+$/i.test(core)) {
+    return { href: `https://${core}`, label: core, leading, trailing };
+  }
+
+  return null;
+}
+
+function isLinkLeadingPunctuation(character: string): boolean {
+  return (
+    character === "(" ||
+    character === "[" ||
+    character === "{" ||
+    character === '"' ||
+    character === "'" ||
+    character === "`" ||
+    character === "“" ||
+    character === "‘" ||
+    character === "«"
+  );
+}
+
+function isLinkTrailingPunctuation(character: string): boolean {
+  return (
+    character === ")" ||
+    character === "]" ||
+    character === "}" ||
+    character === ">" ||
+    character === '"' ||
+    character === "'" ||
+    character === "?" ||
+    character === "!" ||
+    character === "." ||
+    character === "," ||
+    character === ":" ||
+    character === ";" ||
+    character === "”" ||
+    character === "’" ||
+    character === "»"
   );
 }
 
@@ -1344,19 +2108,6 @@ function increaseCinemaTextSize(size: CinemaTextSize): CinemaTextSize {
   return order[Math.min(order.length - 1, order.indexOf(size) + 1)] ?? "massive";
 }
 
-function uniqueSortedStrings(values: readonly string[]): string[] {
-  const sorted: string[] = [];
-  for (const value of new Set(values)) {
-    const insertIndex = sorted.findIndex((item) => value.localeCompare(item) < 0);
-    if (insertIndex === -1) {
-      sorted.push(value);
-    } else {
-      sorted.splice(insertIndex, 0, value);
-    }
-  }
-  return sorted;
-}
-
 type AudioPlaybackMode = "arrival" | "completed";
 
 const VOICE_PROFILE_ID_STORAGE_KEY = "tts-active-voice-profile-id";
@@ -1379,6 +2130,7 @@ function removeBookSourceById(bookId: string): (books: BookSource[]) => BookSour
   return (books) => books.filter((book) => book.id !== bookId);
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function App() {
   const [text, setText] = useState("");
   const [job, setJob] = useState<VoiceJob | null>(null);
@@ -1387,10 +2139,18 @@ export function App() {
   const [now, setNow] = useState(() => Date.now());
   const [voiceProfiles, setVoiceProfiles] = useState<VoiceProfile[]>([]);
   const [selectedVoiceProfileId, setSelectedVoiceProfileId] = useState("");
+  const [recentVoiceProfileIds, setRecentVoiceProfileIds] = useState<string[]>(() =>
+    loadStoredIdList(VOICE_PROFILE_RECENT_STORAGE_KEY),
+  );
+  const [pinnedVoiceProfileIds, setPinnedVoiceProfileIds] = useState<string[]>(() =>
+    loadStoredIdList(VOICE_PROFILE_PINNED_STORAGE_KEY),
+  );
   const [researchModules, setResearchModules] = useState<ResearchModuleDiagnostics[]>([]);
   const [researchModuleError, setResearchModuleError] = useState<string | null>(null);
   const [cloningResearchModuleId, setCloningResearchModuleId] = useState<string | null>(null);
   const [buildingArtifactKey, setBuildingArtifactKey] = useState<string | null>(null);
+  const [cancelingProfileSourceId, setCancelingProfileSourceId] = useState<string | null>(null);
+  const [cancelingTargetKey, setCancelingTargetKey] = useState<string | null>(null);
   const [isResearchPromptHidden, setIsResearchPromptHidden] = useState(() => {
     return localStorage.getItem(RESEARCH_MODULE_PROMPT_HIDDEN_KEY) === "1";
   });
@@ -1402,7 +2162,6 @@ export function App() {
     return DEFAULT_KOKORO_VOICE_ID;
   });
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
-  const [hasLoadedVoiceProfiles, setHasLoadedVoiceProfiles] = useState(false);
   const hasLoadedVoiceProfilesRef = useRef(false);
   const profileLoadingShowTimerRef = useRef<number | null>(null);
   const profileLoadingHideTimerRef = useRef<number | null>(null);
@@ -1493,8 +2252,17 @@ export function App() {
   const [themeName, setThemeName] = useState<ThemeName>(() =>
     normalizeThemeName(localStorage.getItem(THEME_STORAGE_KEY)),
   );
+  const [activityFooterMode, setActivityFooterMode] = useState<ActivityFooterMode>(() => {
+    const storedMode = localStorage.getItem(ACTIVITY_FOOTER_MODE_STORAGE_KEY);
+    return storedMode ? normalizeActivityFooterMode(storedMode) : defaultActivityFooterMode();
+  });
+  const [leftRailMode, setLeftRailMode] = useState<ActivityFooterMode>(() =>
+    normalizeActivityFooterMode(localStorage.getItem(LEFT_RAIL_MODE_STORAGE_KEY)),
+  );
+  const [rightRailMode, setRightRailMode] = useState<ActivityFooterMode>(() =>
+    normalizeActivityFooterMode(localStorage.getItem(RIGHT_RAIL_MODE_STORAGE_KEY)),
+  );
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
-  const [isRunConfigOpen, setIsRunConfigOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [bundlePanelMode, setBundlePanelMode] = useState<BundlePanelMode>("export");
@@ -1522,16 +2290,16 @@ export function App() {
   );
   const [savingHuggingFaceTokenKey, setSavingHuggingFaceTokenKey] = useState<string | null>(null);
   const [isClearingHuggingFaceToken, setIsClearingHuggingFaceToken] = useState(false);
+  const [studioMode, setStudioMode] = useState<StudioMode>("narration");
+  const [contentMode, setContentMode] = useState<ContentMode>("sourceIntake");
+  const [sourceMode, setSourceMode] = useState<SourceMode>("text");
+  const [teleprompterOpenSignal, setTeleprompterOpenSignal] = useState(0);
 
   const isProcessing = requestState === "running";
   const canSubmit = useMemo(() => text.trim().length > 0 && !isProcessing, [text, isProcessing]);
   const activeJobId =
     job && !["completed", "failed", "cancelled"].includes(job.status) ? job.id : null;
   const ttsPipeline = useMemo(() => resolveTTSPipelineState(job), [job]);
-  const isStudioProfileStale =
-    selectedVoiceProfileId !== "" &&
-    hasLoadedVoiceProfiles &&
-    !voiceProfiles.some((profile) => profile.id === selectedVoiceProfileId);
   const selectedVoiceProfile = useMemo(
     () => voiceProfiles.find((profile) => profile.id === selectedVoiceProfileId) ?? null,
     [selectedVoiceProfileId, voiceProfiles],
@@ -1544,6 +2312,46 @@ export function App() {
         ),
       ),
     [voiceProfiles],
+  );
+  const hasActiveVoiceCloningActivity = useMemo(
+    () =>
+      isAnalyzingProfileSource ||
+      Boolean(profileCandidateCreateId) ||
+      Boolean(buildingArtifactKey) ||
+      hasActiveVoiceProfileTargets ||
+      isVoiceProfileSourceActive(profileSource),
+    [
+      buildingArtifactKey,
+      hasActiveVoiceProfileTargets,
+      isAnalyzingProfileSource,
+      profileCandidateCreateId,
+      profileSource,
+    ],
+  );
+  const voiceCloningActivity = useMemo(
+    () =>
+      resolveVoiceCloningActivity({
+        activeEngineId: runConfiguration.ttsEngine,
+        buildingArtifactKey,
+        createCandidateId: profileCandidateCreateId,
+        error: profileError,
+        isAnalyzing: isAnalyzingProfileSource,
+        now,
+        profileSource,
+        profiles: voiceProfiles,
+        selectedProfile: selectedVoiceProfile,
+      }),
+    [
+      buildingArtifactKey,
+      isAnalyzingProfileSource,
+      now,
+      profileCandidateCreateId,
+      profileError,
+      profileSource,
+      runConfiguration.ttsEngine,
+      selectedVoiceProfile,
+      voiceProfiles,
+    ],
   );
   const activeProject = useMemo<VoiceProject | null>(() => {
     const selectedProject = projects.find((project) => project.id === activeProjectId);
@@ -1575,8 +2383,8 @@ export function App() {
   })();
   useEffect(() => {
     if (
-      selectedPreparedSource?.renderMode !== "markdown" ||
-      selectedPreparedSource.text ||
+      !selectedPreparedSource ||
+      !isPreparedSourceDisplayIncomplete(selectedPreparedSource) ||
       hydratingPreparedSourceId === selectedPreparedSource.id
     ) {
       return;
@@ -1755,12 +2563,14 @@ export function App() {
     [activeProjectId, effectiveBookScope, hashReadingPosition, selectedBookSource],
   );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
-  const studioPipelineHint = getStudioPipelineHint({
-    hasLoadedProfiles: hasLoadedVoiceProfiles,
-    isLoadingProfiles,
-    isProfileStale: isStudioProfileStale,
-    selectedProfileId: selectedVoiceProfileId,
-  });
+  const openReadingCinema = useCallback(() => {
+    if (canOpenBookCinema && (!job || Boolean(job.bookSourceId))) {
+      setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
+      setIsBookCinemaOpen(true);
+      return;
+    }
+    setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
+  }, [canOpenBookCinema, job, themeName]);
   const ttsPipelineHint = isProcessing
     ? (job?.progress.message ?? "TTS pipeline is processing the current job.")
     : "Start a job to see live TTS pipeline status.";
@@ -1856,7 +2666,6 @@ export function App() {
         );
       } finally {
         hasLoadedVoiceProfilesRef.current = true;
-        setHasLoadedVoiceProfiles(true);
         if (shouldShowLoader) {
           finishProfileLoadingIndicator(visibleRequestToken);
         }
@@ -1956,6 +2765,44 @@ export function App() {
         );
       } finally {
         setBuildingArtifactKey(null);
+      }
+    },
+    [],
+  );
+
+  const handleCancelVoiceProfileSource = useCallback(async (sourceId: string) => {
+    setCancelingProfileSourceId(sourceId);
+    setProfileError(null);
+    try {
+      const source = await cancelVoiceProfileSource(sourceId);
+      setProfileSource(source);
+    } catch (caughtError) {
+      setProfileError(
+        caughtError instanceof Error ? caughtError.message : "Unable to cancel source analysis",
+      );
+    } finally {
+      setCancelingProfileSourceId(null);
+    }
+  }, []);
+
+  const handleCancelVoiceProfileTarget = useCallback(
+    async (profileId: string, targetId: string) => {
+      const key = `${profileId}:${targetId}`;
+      setCancelingTargetKey(key);
+      setProfileError(null);
+      try {
+        const profile = await cancelVoiceProfileTarget(profileId, targetId);
+        setVoiceProfiles((currentProfiles) =>
+          upsertVoiceProfileByCreatedAt(currentProfiles, profile),
+        );
+      } catch (caughtError) {
+        setProfileError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to cancel target preparation",
+        );
+      } finally {
+        setCancelingTargetKey(null);
       }
     },
     [],
@@ -2081,7 +2928,9 @@ export function App() {
       }
       try {
         const sources = await listPreparedSources(projectId);
-        setPreparedSources(sources);
+        setPreparedSources((currentSources) =>
+          mergePreparedSourcesPreservingFullContent(currentSources, sources),
+        );
         setSelectedPreparedSourceId((currentId) => {
           if (currentId && sources.some((source) => source.id === currentId)) {
             return currentId;
@@ -2191,11 +3040,20 @@ export function App() {
   const selectVoiceProfile = useCallback((profileId: string) => {
     setSelectedVoiceProfileId(profileId);
     localStorage.setItem(VOICE_PROFILE_ID_STORAGE_KEY, profileId);
+    setRecentVoiceProfileIds((currentIds) => rememberRecentId(currentIds, profileId));
   }, []);
 
   const clearVoiceProfileSelection = useCallback(() => {
     setSelectedVoiceProfileId("");
     localStorage.removeItem(VOICE_PROFILE_ID_STORAGE_KEY);
+  }, []);
+
+  const togglePinnedVoiceProfile = useCallback((profileId: string) => {
+    setPinnedVoiceProfileIds((currentIds) =>
+      currentIds.includes(profileId)
+        ? currentIds.filter((item) => item !== profileId)
+        : [...currentIds, profileId],
+    );
   }, []);
 
   const handleSpeechPolicyProfileChange = useCallback(
@@ -2585,7 +3443,7 @@ export function App() {
         const preparedSource = preparedSources.find(
           (source) => source.id === progress.preparedSourceId,
         );
-        if (!preparedSource?.text) {
+        if (isPreparedSourceDisplayIncomplete(preparedSource ?? null)) {
           try {
             const hydratedSource = await getPreparedSource(progress.preparedSourceId);
             setPreparedSources((currentSources) => [
@@ -2764,10 +3622,7 @@ export function App() {
   const handleUsePreparedSource = useCallback(async (source: PreparedSource) => {
     setSelectedPreparedSourceId(source.id);
     let nextSource = source;
-    if (
-      (!source.text && source.renderMode === "markdown") ||
-      (!source.text && !source.speechText)
-    ) {
+    if (isPreparedSourceDisplayIncomplete(source)) {
       try {
         nextSource = await getPreparedSource(source.id);
         setPreparedSources((currentSources) => [
@@ -3160,7 +4015,12 @@ export function App() {
   );
 
   useEffect(() => {
-    if (!profileSource || profileSource.status === "ready" || profileSource.status === "failed") {
+    if (
+      !profileSource ||
+      profileSource.status === "ready" ||
+      profileSource.status === "failed" ||
+      profileSource.status === "cancelled"
+    ) {
       if (profileSource?.status === "failed") {
         void refreshProfileSourceDiagnostics();
       }
@@ -3222,12 +4082,32 @@ export function App() {
   }, [runConfiguration]);
 
   useEffect(() => {
+    localStorage.setItem(VOICE_PROFILE_RECENT_STORAGE_KEY, JSON.stringify(recentVoiceProfileIds));
+  }, [recentVoiceProfileIds]);
+
+  useEffect(() => {
+    localStorage.setItem(VOICE_PROFILE_PINNED_STORAGE_KEY, JSON.stringify(pinnedVoiceProfileIds));
+  }, [pinnedVoiceProfileIds]);
+
+  useEffect(() => {
     localStorage.setItem(TELEPROMPTER_SETTINGS_STORAGE_KEY, JSON.stringify(teleprompterSettings));
   }, [teleprompterSettings]);
 
   useEffect(() => {
     localStorage.setItem(THEME_STORAGE_KEY, themeName);
   }, [themeName]);
+
+  useEffect(() => {
+    localStorage.setItem(ACTIVITY_FOOTER_MODE_STORAGE_KEY, activityFooterMode);
+  }, [activityFooterMode]);
+
+  useEffect(() => {
+    localStorage.setItem(LEFT_RAIL_MODE_STORAGE_KEY, leftRailMode);
+  }, [leftRailMode]);
+
+  useEffect(() => {
+    localStorage.setItem(RIGHT_RAIL_MODE_STORAGE_KEY, rightRailMode);
+  }, [rightRailMode]);
 
   useEffect(() => {
     const hasJob = Boolean(job?.id);
@@ -3355,7 +4235,7 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!isProcessing) {
+    if (!isProcessing && !hasActiveVoiceCloningActivity) {
       return;
     }
 
@@ -3366,7 +4246,7 @@ export function App() {
     return () => {
       globalThis.clearInterval(interval);
     };
-  }, [isProcessing]);
+  }, [hasActiveVoiceCloningActivity, isProcessing]);
 
   useEffect(() => {
     if (!job || !isPlaybackActive || activePlaybackSession) {
@@ -3688,9 +4568,16 @@ export function App() {
 
   const studioJobName = getStudioJobName(job);
   const studioProjectName = activeProject?.name ?? DEFAULT_PROJECT_NAME;
+  const studioGridStyle = {
+    "--studio-left-column": railColumnWidth(leftRailMode, "left"),
+    "--studio-right-column": railColumnWidth(rightRailMode, "right"),
+  } as CSSProperties;
 
   return (
-    <main className="vs-app" data-theme={themeName}>
+    <main
+      className="vs-app flex h-screen min-h-0 flex-col overflow-y-auto lg:overflow-hidden"
+      data-theme={themeName}
+    >
       <TopProductBar
         activeJobId={activeJobId}
         activeProjectId={activeProjectId}
@@ -3702,6 +4589,7 @@ export function App() {
         projectName={studioProjectName}
         projects={projects}
         requestState={requestState}
+        studioMode={studioMode}
         onCancel={() => {
           void handleCancelVoiceJob();
         }}
@@ -3720,12 +4608,10 @@ export function App() {
           void handleSelectJob(jobId);
         }}
         onProjectSelect={selectProject}
-        onRunConfigOpen={() => {
-          setIsRunConfigOpen(true);
-        }}
         onSettingsOpen={() => {
           setIsSettingsOpen(true);
         }}
+        onStudioModeChange={setStudioMode}
         onSubmit={() => {
           void submitVoiceJob();
         }}
@@ -3751,6 +4637,11 @@ export function App() {
         speechPolicyProfile={speechPolicyProfile}
         speechPolicyProfiles={speechPolicyProfiles}
         selectedProfileId={selectedVoiceProfileId}
+        cancelingProfileSourceId={cancelingProfileSourceId}
+        cancelingTargetKey={cancelingTargetKey}
+        onCancelJob={handleCancelVoiceJob}
+        onCancelProfileSource={handleCancelVoiceProfileSource}
+        onCancelProfileTarget={handleCancelVoiceProfileTarget}
         onDeleteProject={handleDeleteProject}
         onCreateProject={handleCreateProject}
         onClose={() => {
@@ -3777,24 +4668,6 @@ export function App() {
           void handleSpeechPolicyProfileChange(profile);
         }}
       />
-      <RunConfigDrawer
-        canSubmit={canSubmit}
-        isOpen={isRunConfigOpen}
-        job={job}
-        runConfiguration={runConfiguration}
-        selectedProfile={selectedVoiceProfile}
-        ttsEngineError={ttsEngineError}
-        ttsEngines={ttsEngines}
-        onChange={setRunConfiguration}
-        onClose={() => {
-          setIsRunConfigOpen(false);
-        }}
-        onPrepareProfileTarget={handleBuildVoiceProfileArtifact}
-        onSubmit={() => {
-          setIsRunConfigOpen(false);
-          void submitVoiceJob();
-        }}
-      />
       <HelpPanel
         isOpen={isHelpOpen}
         job={job}
@@ -3806,6 +4679,7 @@ export function App() {
         }}
       />
       <SettingsPanel
+        canSubmit={canSubmit}
         isOpen={isSettingsOpen}
         job={job}
         metrics={systemMetrics}
@@ -3821,9 +4695,14 @@ export function App() {
         themeName={themeName}
         ttsEngineError={ttsEngineError}
         ttsEngines={ttsEngines}
+        onPrepareProfileTarget={handleBuildVoiceProfileArtifact}
         onRunConfigurationChange={setRunConfiguration}
         onClose={() => {
           setIsSettingsOpen(false);
+        }}
+        onSubmit={() => {
+          setIsSettingsOpen(false);
+          void submitVoiceJob();
         }}
         onTeleprompterSettingsChange={(settings) => {
           setTeleprompterSettings(normalizeTeleprompterHighlightSettings(settings));
@@ -3849,6 +4728,26 @@ export function App() {
         title={contentIRTitle}
         onClose={() => {
           setIsContentIROpen(false);
+        }}
+      />
+      <TeleprompterPanel
+        canOpenBookCinema={canOpenBookCinema}
+        isPlaybackActive={isPlaybackActive}
+        job={job}
+        latestProgress={latestProgress}
+        openSignal={teleprompterOpenSignal}
+        playbackControls={playbackControls}
+        playbackCursorSec={playbackCursorSec}
+        preparedSourceForCinema={jobPreparedSource ?? selectedPreparedSource}
+        settings={teleprompterSettings}
+        showInlinePreview={false}
+        themeName={themeName}
+        onOpenBookCinema={openReadingCinema}
+        onOpenSettings={() => {
+          setIsSettingsOpen(true);
+        }}
+        onResumeProgress={(progress) => {
+          void handleResumeProgress(progress);
         }}
       />
       {isBookCinemaOpen && selectedBookSource && effectiveBookScope ? (
@@ -3901,228 +4800,639 @@ export function App() {
         onHide={handleHideResearchPrompt}
       />
 
-      <section className="grid min-h-[calc(100vh-58px)] grid-cols-1 border-t lg:grid-cols-[340px_minmax(0,1fr)_360px] vs-border">
-        <aside className="vs-raised order-3 flex min-w-0 flex-col overflow-hidden border-zinc-200 lg:order-none lg:border-r">
-          <VoiceStudioPanel
-            buildingArtifactKey={buildingArtifactKey}
-            error={profileError}
-            job={job}
-            profileSource={profileSource}
-            profileSourceDiagnostics={profileSourceDiagnostics}
-            isLoading={isLoadingProfiles}
-            isAnalyzingSource={isAnalyzingProfileSource}
-            optimizedText={job?.optimizedText ?? ""}
-            profileCandidateCreateId={profileCandidateCreateId}
-            profiles={voiceProfiles}
-            researchModules={researchModules}
-            runConfiguration={runConfiguration}
-            selectedKokoroVoiceId={selectedKokoroVoiceId}
-            selectedProfileId={selectedVoiceProfileId}
-            studioPipelineHint={studioPipelineHint}
-            ttsEngines={ttsEngines}
-            voiceProfileCredentialError={voiceProfileCredentialError}
-            voiceProfileCredentials={voiceProfileCredentials}
-            onAnalyzeSource={handleAnalyzeVoiceSource}
-            onClearSelection={clearVoiceProfileSelection}
-            onBuildArtifact={handleBuildVoiceProfileArtifact}
-            onClearHuggingFaceToken={() => {
-              void handleClearLocalHuggingFaceToken();
-            }}
-            onCreateProfileFromCandidate={handleCreateVoiceProfileFromCandidate}
-            onDeleteProfile={(id) => {
-              void handleDeleteVoiceProfile(id);
-            }}
-            onRunConfigurationChange={setRunConfiguration}
-            onSaveHuggingFaceToken={handleSaveHuggingFaceTokenAndValidate}
-            onSelectKokoroVoice={selectKokoroVoice}
-            onSelectProfile={selectVoiceProfile}
-            savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
-            isClearingHuggingFaceToken={isClearingHuggingFaceToken}
-          />
-        </aside>
-
-        <section className="order-1 flex min-w-0 flex-col gap-5 p-5 lg:order-none xl:p-6">
-          <TeleprompterPanel
-            canOpenBookCinema={canOpenBookCinema}
-            isPlaybackActive={isPlaybackActive}
-            job={job}
-            latestProgress={latestProgress}
-            onOpenBookCinema={() => {
-              setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
-              setIsBookCinemaOpen(true);
-            }}
-            onResumeProgress={(progress) => {
-              void handleResumeProgress(progress);
-            }}
-            playbackControls={playbackControls}
-            playbackCursorSec={playbackCursorSec}
-            preparedSourceForCinema={jobPreparedSource ?? selectedPreparedSource}
-            settings={teleprompterSettings}
-            themeName={themeName}
-            onOpenSettings={() => {
-              setIsSettingsOpen(true);
-            }}
-          />
-          <SourceTextPanel
-            projectId={activeProjectId}
-            bookControls={
-              <BookCinemaPanel
-                bookSources={bookSources}
-                canCreateAudio={!isProcessing}
-                diagnostics={bookCinemaDiagnostics}
-                error={bookSourceError}
-                isImporting={isImportingBookSource}
-                isProcessing={isProcessing}
-                isScopeLoading={isLoadingBookScope}
-                scopeContent={bookScopeContent}
-                selectedBookScope={effectiveBookScope}
-                selectedBookSourceId={selectedBookSourceId}
-                onCreateAudio={(book, scope) => {
-                  void submitBookNarrationJob(book, scope);
-                }}
-                onImport={handleImportBookSource}
-                onOpenCinema={() => {
-                  setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
-                  setIsBookCinemaOpen(true);
-                }}
-                onInspectStructure={(book) => {
-                  void handleInspectContentIR(book.id, bookSourceName(book));
-                }}
-                onScopeChange={setSelectedBookScope}
-                onSelectBook={setSelectedBookSourceId}
-                onUseText={handleUseBookText}
+      {studioMode === "voiceCloning" ? (
+        <section
+          className="grid min-h-0 grid-cols-1 border-t lg:flex-1 lg:grid-cols-[var(--studio-left-column)_minmax(0,1fr)_var(--studio-right-column)] lg:overflow-hidden vs-border"
+          style={studioGridStyle}
+        >
+          <aside className="vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-r">
+            {leftRailMode === "collapsed" ? null : (
+              <RailModeToolbar
+                label="Voice Command"
+                mode={leftRailMode}
+                onModeChange={setLeftRailMode}
               />
-            }
-            canSubmit={canSubmit}
-            isPreparingSource={isPreparingSource}
-            isProcessing={isProcessing}
-            preparedSources={preparedSources}
-            selectedPreparedSource={selectedPreparedSource}
-            speechPolicyError={speechPolicyError}
-            speechPolicyOverrides={speechPolicyOverrides}
-            speechPolicyProfile={speechPolicyProfile}
-            customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-            speechPolicyProfiles={speechPolicyProfiles}
-            sourcePrepError={sourcePrepError}
-            text={text}
-            voiceProfileId={selectedVoiceProfileId}
-            isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
-            onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
-            onCreatePreparedAudio={(source) => {
-              void submitPreparedSourceJob(source);
-            }}
-            onInspectPreparedSource={(source) => {
-              void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
-            }}
-            onPrepareFile={handlePrepareSourceFile}
-            onPrepareUrl={handlePrepareSourceUrl}
-            onSpeechPolicyOverridesChange={handleSpeechPolicyOverridesChange}
-            onSpeechPolicyProfileChange={(profile) => {
-              void handleSpeechPolicyProfileChange(profile);
-            }}
-            onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
-            onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
-            onUpdateCustomSpeechPolicyProfile={handleUpdateCustomSpeechPolicyProfile}
-            onSubmit={handleSubmit}
-            onTextChange={setText}
-            onUsePreparedSource={handleUsePreparedSource}
-          />
-          <SourceMetadataStrip job={job} text={text} />
-          <PipelineStageCards pipeline={ttsPipeline} job={job} hint={ttsPipelineHint} />
-          <RelevantMetricsPanel
-            job={job}
-            metrics={systemMetrics}
-            metricsError={systemMetricsError}
-          />
-          {error ? (
-            <section className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900">
-              {error}
-            </section>
-          ) : null}
+            )}
+            {leftRailMode === "full" ? (
+              <VoiceCloningVoiceRail
+                buildingArtifactKey={buildingArtifactKey}
+                isClearingHuggingFaceToken={isClearingHuggingFaceToken}
+                isLoading={isLoadingProfiles}
+                profiles={voiceProfiles}
+                pinnedProfileIds={pinnedVoiceProfileIds}
+                recentProfileIds={recentVoiceProfileIds}
+                researchModules={researchModules}
+                runConfiguration={runConfiguration}
+                savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
+                selectedKokoroVoiceId={selectedKokoroVoiceId}
+                selectedProfile={selectedVoiceProfile ?? voiceCloningActivity.activeProfile}
+                selectedProfileId={
+                  (selectedVoiceProfile ?? voiceCloningActivity.activeProfile)?.id ??
+                  selectedVoiceProfileId
+                }
+                ttsEngines={ttsEngines}
+                voiceProfileCredentialError={voiceProfileCredentialError}
+                voiceProfileCredentials={voiceProfileCredentials}
+                onBuildArtifact={handleBuildVoiceProfileArtifact}
+                onClearHuggingFaceToken={() => {
+                  void handleClearLocalHuggingFaceToken();
+                }}
+                onClearSelection={clearVoiceProfileSelection}
+                onDeleteProfile={(id) => {
+                  void handleDeleteVoiceProfile(id);
+                }}
+                onRunConfigurationChange={setRunConfiguration}
+                onSaveHuggingFaceToken={handleSaveHuggingFaceTokenAndValidate}
+                onSelectKokoroVoice={selectKokoroVoice}
+                onSelectProfile={selectVoiceProfile}
+                onTogglePinnedProfile={togglePinnedVoiceProfile}
+              />
+            ) : (
+              <VoiceCloningRailMini
+                mode={leftRailMode}
+                profile={selectedVoiceProfile}
+                source={profileSource}
+                totalProfiles={voiceProfiles.length}
+                onModeChange={setLeftRailMode}
+              />
+            )}
+          </aside>
+          <section className="order-1 min-w-0 p-5 lg:order-none lg:min-h-0 lg:overflow-y-auto xl:p-6">
+            <VoiceCloningWorkspace
+              activity={voiceCloningActivity}
+              buildingArtifactKey={buildingArtifactKey}
+              cancelingTargetKey={cancelingTargetKey}
+              createCandidateId={profileCandidateCreateId}
+              diagnostics={profileSourceDiagnostics}
+              error={profileError}
+              isCancelingSource={
+                profileSource ? cancelingProfileSourceId === profileSource.id : false
+              }
+              isAnalyzing={isAnalyzingProfileSource}
+              researchModules={researchModules}
+              runConfiguration={runConfiguration}
+              source={profileSource}
+              ttsEngines={ttsEngines}
+              onAnalyze={handleAnalyzeVoiceSource}
+              onBuildArtifact={handleBuildVoiceProfileArtifact}
+              onCancelSource={handleCancelVoiceProfileSource}
+              onCancelTarget={handleCancelVoiceProfileTarget}
+              onCreateProfile={handleCreateVoiceProfileFromCandidate}
+              onRunConfigurationChange={setRunConfiguration}
+            />
+          </section>
+          <aside className="vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-l">
+            {rightRailMode === "collapsed" ? null : (
+              <RailModeToolbar
+                label="Readiness"
+                mode={rightRailMode}
+                onModeChange={setRightRailMode}
+              />
+            )}
+            {rightRailMode === "full" ? (
+              <div className="grid gap-3 p-4 xl:p-5">
+                <CloneArtifactReadinessPanel
+                  buildingArtifactKey={buildingArtifactKey}
+                  cancelingTargetKey={cancelingTargetKey}
+                  modules={researchModules}
+                  profile={selectedVoiceProfile ?? voiceCloningActivity.activeProfile}
+                  runConfiguration={runConfiguration}
+                  ttsEngines={ttsEngines}
+                  onBuildArtifact={handleBuildVoiceProfileArtifact}
+                  onCancelTarget={handleCancelVoiceProfileTarget}
+                  onRunConfigurationChange={setRunConfiguration}
+                />
+              </div>
+            ) : (
+              <CloneReadinessRailMini
+                activity={voiceCloningActivity}
+                mode={rightRailMode}
+                onModeChange={setRightRailMode}
+                onOpenVoiceCloning={() => {
+                  setStudioMode("voiceCloning");
+                }}
+              />
+            )}
+          </aside>
         </section>
+      ) : (
+        <section
+          className="grid min-h-0 grid-cols-1 border-t lg:flex-1 lg:grid-cols-[var(--studio-left-column)_minmax(0,1fr)_var(--studio-right-column)] lg:overflow-hidden vs-border"
+          style={studioGridStyle}
+        >
+          <aside className="vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-r">
+            {leftRailMode === "collapsed" ? null : (
+              <RailModeToolbar
+                label="Voice Command"
+                mode={leftRailMode}
+                onModeChange={setLeftRailMode}
+              />
+            )}
+            {leftRailMode === "full" ? (
+              <NarrationSidebar
+                bookSources={bookSources}
+                buildingArtifactKey={buildingArtifactKey}
+                customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+                isClearingHuggingFaceToken={isClearingHuggingFaceToken}
+                isLoadingProfiles={isLoadingProfiles}
+                preparedSources={preparedSources}
+                profiles={voiceProfiles}
+                pinnedProfileIds={pinnedVoiceProfileIds}
+                recentProfileIds={recentVoiceProfileIds}
+                researchModules={researchModules}
+                runConfiguration={runConfiguration}
+                savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
+                selectedBookSourceId={selectedBookSourceId}
+                selectedKokoroVoiceId={selectedKokoroVoiceId}
+                selectedPreparedSourceId={selectedPreparedSourceId}
+                selectedProfile={selectedVoiceProfile}
+                selectedProfileId={selectedVoiceProfileId}
+                speechPolicyProfile={speechPolicyProfile}
+                speechPolicyProfiles={speechPolicyProfiles}
+                ttsEngines={ttsEngines}
+                voiceProfileCredentialError={voiceProfileCredentialError}
+                voiceProfileCredentials={voiceProfileCredentials}
+                onBuildArtifact={handleBuildVoiceProfileArtifact}
+                onClearHuggingFaceToken={() => {
+                  void handleClearLocalHuggingFaceToken();
+                }}
+                onClearSelection={clearVoiceProfileSelection}
+                onCloneVoice={() => {
+                  setStudioMode("voiceCloning");
+                }}
+                onDeleteProfile={(id) => {
+                  void handleDeleteVoiceProfile(id);
+                }}
+                onInspectSelectedSource={() => {
+                  if (selectedPreparedSource) {
+                    void handleInspectContentIR(
+                      selectedPreparedSource.id,
+                      selectedPreparedSource.title ?? selectedPreparedSource.sourceName,
+                      true,
+                    );
+                    return;
+                  }
+                  if (selectedBookSource) {
+                    void handleInspectContentIR(
+                      selectedBookSource.id,
+                      bookSourceName(selectedBookSource),
+                    );
+                  }
+                }}
+                onCreateSource={() => {
+                  setContentMode("sourceIntake");
+                  setSourceMode("text");
+                }}
+                onRunConfigurationChange={setRunConfiguration}
+                onSaveHuggingFaceToken={handleSaveHuggingFaceTokenAndValidate}
+                onSelectBook={(bookId) => {
+                  setSelectedBookSourceId(bookId);
+                  setSourceMode("book");
+                  setContentMode("review");
+                }}
+                onSelectKokoroVoice={selectKokoroVoice}
+                onSelectPreparedSource={(source) => {
+                  setSourceMode("fileUrl");
+                  setContentMode("review");
+                  void handleUsePreparedSource(source);
+                }}
+                onSelectProfile={selectVoiceProfile}
+                onSpeechPolicyProfileChange={(profile) => {
+                  void handleSpeechPolicyProfileChange(profile);
+                }}
+                onTogglePinnedProfile={togglePinnedVoiceProfile}
+              />
+            ) : (
+              <NarrationRailMini
+                activeSourceLabel={
+                  selectedPreparedSource?.title ??
+                  (selectedBookSource ? bookSourceName(selectedBookSource) : undefined)
+                }
+                mode={leftRailMode}
+                profile={selectedVoiceProfile}
+                sourceCount={preparedSources.length + bookSources.length}
+                onModeChange={setLeftRailMode}
+                onOpenVoiceCloning={() => {
+                  setStudioMode("voiceCloning");
+                }}
+              />
+            )}
+          </aside>
 
-        <aside className="vs-raised order-2 flex min-w-0 flex-col gap-4 border-zinc-200 p-5 lg:order-none lg:border-l">
-          <AudioPanel
-            job={job}
-            latestProgress={latestProgress}
-            onPlaybackCursorChange={setPlaybackCursorSec}
-            onPlaybackControlsChange={handlePlaybackControlsChange}
-            onPlaybackStateChange={setIsPlaybackActive}
-            onResumeProgress={(progress) => {
-              void handleResumeProgress(progress);
-            }}
-          />
-          {job?.progress.message ? <ProgressPanel job={job} now={now} /> : null}
-        </aside>
-      </section>
+          <section className="order-1 flex min-w-0 flex-col gap-3 p-4 lg:order-none lg:min-h-0 lg:overflow-y-auto xl:p-5">
+            <SourceTextPanel
+              projectId={activeProjectId}
+              bookControls={
+                <BookCinemaPanel
+                  bookSources={bookSources}
+                  canCreateAudio={!isProcessing}
+                  diagnostics={bookCinemaDiagnostics}
+                  error={bookSourceError}
+                  isImporting={isImportingBookSource}
+                  isProcessing={isProcessing}
+                  isScopeLoading={isLoadingBookScope}
+                  scopeContent={bookScopeContent}
+                  selectedBookScope={effectiveBookScope}
+                  selectedBookSourceId={selectedBookSourceId}
+                  onCreateAudio={(book, scope) => {
+                    void submitBookNarrationJob(book, scope);
+                  }}
+                  onImport={handleImportBookSource}
+                  onOpenCinema={openReadingCinema}
+                  onInspectStructure={(book) => {
+                    void handleInspectContentIR(book.id, bookSourceName(book));
+                  }}
+                  onScopeChange={setSelectedBookScope}
+                  onSelectBook={setSelectedBookSourceId}
+                  onUseText={handleUseBookText}
+                />
+              }
+              canSubmit={canSubmit}
+              contentMode={contentMode}
+              isPreparingSource={isPreparingSource}
+              isProcessing={isProcessing}
+              isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
+              job={job}
+              bookScopeContent={bookScopeContent}
+              optimizedText={job?.optimizedText ?? ""}
+              preparedSources={preparedSources}
+              selectedBookScope={effectiveBookScope}
+              selectedBookSource={selectedBookSource}
+              selectedPreparedSource={selectedPreparedSource}
+              sourceMode={sourceMode}
+              speechPolicyError={speechPolicyError}
+              speechPolicyOverrides={speechPolicyOverrides}
+              speechPolicyProfile={speechPolicyProfile}
+              customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+              speechPolicyProfiles={speechPolicyProfiles}
+              sourcePrepError={sourcePrepError}
+              text={text}
+              voiceProfileId={selectedVoiceProfileId}
+              onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
+              onContentModeChange={setContentMode}
+              onCreatePreparedAudio={(source) => {
+                void submitPreparedSourceJob(source);
+              }}
+              onInspectBookSource={(book) => {
+                void handleInspectContentIR(book.id, bookSourceName(book));
+              }}
+              onInspectPreparedSource={(source) => {
+                void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
+              }}
+              onOpenTeleprompter={openReadingCinema}
+              onPrepareFile={handlePrepareSourceFile}
+              onPrepareUrl={handlePrepareSourceUrl}
+              onSourceModeChange={setSourceMode}
+              onSpeechPolicyOverridesChange={handleSpeechPolicyOverridesChange}
+              onSpeechPolicyProfileChange={(profile) => {
+                void handleSpeechPolicyProfileChange(profile);
+              }}
+              onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
+              onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
+              onUpdateCustomSpeechPolicyProfile={handleUpdateCustomSpeechPolicyProfile}
+              onSubmit={handleSubmit}
+              onTextChange={setText}
+              onUsePreparedSource={handleUsePreparedSource}
+            />
+            {error ? (
+              <section className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900">
+                {error}
+              </section>
+            ) : null}
+          </section>
+
+          <aside className="vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-l">
+            {rightRailMode === "collapsed" ? null : (
+              <RailModeToolbar
+                label="Playback"
+                mode={rightRailMode}
+                onModeChange={setRightRailMode}
+              />
+            )}
+            {rightRailMode === "full" ? (
+              <div className="grid gap-3 p-4 xl:p-5">
+                <AudioPanel
+                  canOpenCinema={Boolean(job) || canOpenBookCinema}
+                  job={job}
+                  latestProgress={latestProgress}
+                  onOpenCinema={openReadingCinema}
+                  onPlaybackCursorChange={setPlaybackCursorSec}
+                  onPlaybackControlsChange={handlePlaybackControlsChange}
+                  onPlaybackStateChange={setIsPlaybackActive}
+                  onResumeProgress={(progress) => {
+                    void handleResumeProgress(progress);
+                  }}
+                />
+                {job?.progress.message ? <ProgressPanel job={job} now={now} /> : null}
+                <RelevantMetricsPanel
+                  job={job}
+                  metrics={systemMetrics}
+                  metricsError={systemMetricsError}
+                />
+              </div>
+            ) : (
+              <PlaybackRailMini
+                job={job}
+                mode={rightRailMode}
+                onModeChange={setRightRailMode}
+                onOpenCinema={openReadingCinema}
+              />
+            )}
+          </aside>
+        </section>
+      )}
+      <PipelineStatusFooter
+        activeJobId={activeJobId}
+        canSubmit={canSubmit}
+        hint={ttsPipelineHint}
+        isProcessing={isProcessing}
+        job={job}
+        mode={activityFooterMode}
+        pipeline={ttsPipeline}
+        voiceCloningActivity={voiceCloningActivity}
+        onCancel={() => {
+          void handleCancelVoiceJob();
+        }}
+        onOpenVoiceCloning={() => {
+          setStudioMode("voiceCloning");
+        }}
+        onModeChange={setActivityFooterMode}
+        onSubmit={() => {
+          void submitVoiceJob();
+        }}
+      />
     </main>
   );
 }
 
-function pipelineStatusClass(status: StageStatus): string {
-  if (status === "done") {
-    return "border-emerald-500 text-emerald-600";
+function railColumnWidth(mode: ActivityFooterMode, side: "left" | "right"): string {
+  if (mode === "collapsed") {
+    return "52px";
   }
-  if (status === "running") {
-    return "border-blue-500 text-blue-600";
+  if (mode === "compact") {
+    return "156px";
   }
-  if (status === "failed") {
-    return "border-red-500 text-red-600";
+  if (side === "left") {
+    return "clamp(300px, 18vw, 340px)";
   }
-  return "border-zinc-300 text-zinc-500";
+  return "clamp(320px, 19vw, 360px)";
 }
 
-function PipelineStageCards({
-  hint,
-  job,
-  pipeline,
-}: Readonly<{ hint: string; job: VoiceJob | null; pipeline: PipelineStepState }>) {
-  const total = job?.retries.totalSegments ?? job?.progress.totalSegments ?? 0;
-  const current = job?.audioReadySegments ?? job?.progress.currentSegment ?? 0;
-  const stages = [
-    {
-      label: "Optimize",
-      status: pipeline.optimization,
-      detail: pipeline.optimization === "done" ? "Completed" : hint,
-      meta: `${String(Math.max(0, Math.round((job?.optimizedText.length ?? 0) / 4)))} tokens`,
-    },
-    {
-      label: "Synthesize",
-      status: pipeline.synthesis,
-      detail: pipeline.synthesis === "running" ? "In Progress" : pipeline.synthesis,
-      meta:
-        total > 0
-          ? `${formatPercentageRatio(current, total)} · ${String(current)} / ${String(total)} segments`
-          : "Waiting for segments",
-    },
-    {
-      label: "Check",
-      status: pipeline.checker,
-      detail: pipeline.checker === "running" ? "Checker running" : pipeline.checker,
-      meta: job?.voiceCheck.reason ?? "Checker will run automatically",
-    },
-  ];
-
+function RailModeToolbar({
+  label,
+  mode,
+  onModeChange,
+}: Readonly<{
+  label: string;
+  mode: ActivityFooterMode;
+  onModeChange: (mode: ActivityFooterMode) => void;
+}>) {
+  const labelByMode: Record<ActivityFooterMode, string> = {
+    collapsed: "Hide",
+    compact: "Slim",
+    full: "Full",
+  };
+  const buttonLabel = (item: ActivityFooterMode) => {
+    return labelByMode[item];
+  };
   return (
-    <ol className="grid overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm md:grid-cols-3">
-      {stages.map((stage, index) => (
-        <li
-          className="grid gap-2 border-b border-zinc-200 p-5 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0"
-          key={stage.label}
-        >
-          <div className="flex items-center gap-3">
-            <span
-              className={`grid h-8 w-8 place-items-center rounded-full border text-sm font-semibold ${pipelineStatusClass(stage.status)}`}
-            >
-              {stage.status === "done" ? "✓" : String(index + 1)}
-            </span>
-            <p className="font-semibold text-zinc-950">{stage.label}</p>
-          </div>
-          <p className="pl-11 text-sm text-zinc-600">{stage.detail}</p>
-          <p className="pl-11 text-xs text-zinc-500">{stage.meta}</p>
-        </li>
+    <div
+      className={`sticky top-0 z-20 flex min-w-0 items-center justify-between gap-2 border-b backdrop-blur vs-border vs-raised ${
+        mode === "compact" ? "px-1.5 py-1" : "px-2 py-1.5"
+      }`}
+    >
+      <span
+        className={`min-w-0 truncate text-[0.58rem] font-semibold uppercase tracking-[0.12em] vs-muted ${
+          mode === "compact" ? "sr-only" : ""
+        }`}
+      >
+        {label}
+      </span>
+      <div className="grid shrink-0 grid-cols-3 gap-0.5 rounded-md border p-0.5 vs-border vs-surface">
+        {(["full", "compact", "collapsed"] as const).map((item) => (
+          <button
+            aria-label={`${label} ${item}`}
+            className={`h-6 rounded px-1.5 text-[0.58rem] font-semibold capitalize transition ${
+              mode === item
+                ? "bg-orange-500 text-white"
+                : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
+            }`}
+            key={item}
+            onClick={() => {
+              onModeChange(item);
+            }}
+            type="button"
+          >
+            {buttonLabel(item)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NarrationRailMini({
+  activeSourceLabel,
+  mode,
+  profile,
+  sourceCount,
+  onModeChange,
+  onOpenVoiceCloning,
+}: Readonly<{
+  activeSourceLabel?: string;
+  mode: ActivityFooterMode;
+  profile: VoiceProfile | null;
+  sourceCount: number;
+  onModeChange: (mode: ActivityFooterMode) => void;
+  onOpenVoiceCloning: () => void;
+}>) {
+  if (mode === "collapsed") {
+    return (
+      <CollapsedRailButton
+        label="Voice Command"
+        shortLabel="V"
+        onExpand={() => {
+          onModeChange("compact");
+        }}
+      />
+    );
+  }
+  return (
+    <RailMiniStack
+      items={[
+        { label: "Sources", value: String(sourceCount), detail: activeSourceLabel ?? "No source" },
+        { label: "Voice", value: profile?.name ?? "Default", detail: profile?.status ?? "ready" },
+        { label: "Backend", value: "Run", detail: "Settings" },
+      ]}
+      actionLabel="Clone"
+      onAction={onOpenVoiceCloning}
+    />
+  );
+}
+
+function VoiceCloningRailMini({
+  mode,
+  profile,
+  source,
+  totalProfiles,
+  onModeChange,
+}: Readonly<{
+  mode: ActivityFooterMode;
+  profile: VoiceProfile | null;
+  source: VoiceProfileSource | null;
+  totalProfiles: number;
+  onModeChange: (mode: ActivityFooterMode) => void;
+}>) {
+  if (mode === "collapsed") {
+    return (
+      <CollapsedRailButton
+        label="Voice Cloning"
+        shortLabel="C"
+        onExpand={() => {
+          onModeChange("compact");
+        }}
+      />
+    );
+  }
+  return (
+    <RailMiniStack
+      items={[
+        { label: "Media", value: source ? "Active" : "Empty", detail: source?.status ?? "idle" },
+        { label: "Voice", value: profile?.name ?? "None", detail: profile?.status ?? "select" },
+        { label: "Saved", value: String(totalProfiles), detail: "voices" },
+      ]}
+    />
+  );
+}
+
+function PlaybackRailMini({
+  job,
+  mode,
+  onModeChange,
+  onOpenCinema,
+}: Readonly<{
+  job: VoiceJob | null;
+  mode: ActivityFooterMode;
+  onModeChange: (mode: ActivityFooterMode) => void;
+  onOpenCinema: () => void;
+}>) {
+  const total = job?.retries.totalSegments ?? job?.segments?.length ?? 0;
+  const ready = job?.audioReadySegments ?? 0;
+  if (mode === "collapsed") {
+    return (
+      <CollapsedRailButton
+        label="Playback"
+        shortLabel="P"
+        onExpand={() => {
+          onModeChange("compact");
+        }}
+      />
+    );
+  }
+  return (
+    <RailMiniStack
+      items={[
+        { label: "Audio", value: job?.status ?? "Idle", detail: estimateFirstAudioETA(job) },
+        {
+          label: "Segments",
+          value: total > 0 ? formatPercentageRatio(ready, total) : "0%",
+          detail: total > 0 ? `${String(ready)} / ${String(total)}` : "waiting",
+        },
+        { label: "Check", value: formatSimilarity(job?.voiceCheck.similarity ?? 0), detail: "ASR" },
+      ]}
+      actionLabel="Cinema"
+      onAction={onOpenCinema}
+    />
+  );
+}
+
+function CloneReadinessRailMini({
+  activity,
+  mode,
+  onModeChange,
+  onOpenVoiceCloning,
+}: Readonly<{
+  activity: VoiceCloningActivitySummary;
+  mode: ActivityFooterMode;
+  onModeChange: (mode: ActivityFooterMode) => void;
+  onOpenVoiceCloning: () => void;
+}>) {
+  if (mode === "collapsed") {
+    return (
+      <CollapsedRailButton
+        label="Readiness"
+        shortLabel="R"
+        onExpand={() => {
+          onModeChange("compact");
+        }}
+      />
+    );
+  }
+  return (
+    <RailMiniStack
+      items={[
+        { label: "State", value: activity.statusLabel, detail: activity.lastUpdate },
+        { label: "Elapsed", value: activity.elapsed, detail: activity.eta },
+        { label: "Candidates", value: activity.candidateDetail, detail: "voices" },
+      ]}
+      actionLabel={activity.actionLabel}
+      onAction={onOpenVoiceCloning}
+    />
+  );
+}
+
+function RailMiniStack({
+  actionLabel,
+  items,
+  onAction,
+}: Readonly<{
+  actionLabel?: string;
+  items: { detail: string; label: string; value: string }[];
+  onAction?: () => void;
+}>) {
+  return (
+    <div className="grid min-w-0 gap-2 p-2">
+      {items.map((item) => (
+        <div className="min-w-0 rounded-md border p-2 vs-border vs-surface" key={item.label}>
+          <p className="truncate text-[0.58rem] font-semibold uppercase tracking-[0.12em] vs-muted">
+            {item.label}
+          </p>
+          <p className="mt-1 truncate text-xs font-semibold" title={item.value}>
+            {item.value}
+          </p>
+          <p className="mt-0.5 truncate text-[0.65rem] vs-muted" title={item.detail}>
+            {item.detail}
+          </p>
+        </div>
       ))}
-    </ol>
+      {actionLabel && onAction ? (
+        <button
+          className="min-h-8 rounded-md border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50"
+          onClick={onAction}
+          type="button"
+        >
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function CollapsedRailButton({
+  label,
+  shortLabel,
+  onExpand,
+}: Readonly<{ label: string; shortLabel: string; onExpand: () => void }>) {
+  return (
+    <button
+      aria-label={`Expand ${label}`}
+      className="mx-auto mt-2 grid h-9 w-9 place-items-center rounded-md border text-xs font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+      onClick={onExpand}
+      title={label}
+      type="button"
+    >
+      {shortLabel}
+    </button>
   );
 }
 
@@ -4143,42 +5453,50 @@ function RelevantMetricsPanel({
   const confidence = formatSimilarity(job?.voiceCheck.similarity ?? 0);
 
   return (
-    <dl className="grid rounded-lg border border-zinc-200 bg-white shadow-sm sm:grid-cols-2 2xl:grid-cols-3">
-      <ProductMetric
-        label="Segment Progress"
-        value={total > 0 ? formatPercentageRatio(ready, total) : "0%"}
-        detail={total > 0 ? `${String(ready)} / ${String(total)} segments` : "Waiting"}
-        tone="blue"
-      />
-      <ProductMetric
-        label="First Audio ETA"
-        value={estimateFirstAudioETA(job)}
-        detail="until first checked segment"
-      />
-      <ProductMetric
-        label="Buffer Health"
-        value={formatBufferHealth(job)}
-        detail={ready > 0 ? `${String(ready)} ready` : "No buffer yet"}
-        tone="green"
-      />
-      <ProductMetric
-        label="Clone Pace"
-        value={formatPace(throughput?.pace)}
-        detail="realtime"
-        tone="orange"
-      />
-      <ProductMetric
-        label="Checker Confidence"
-        value={confidence}
-        detail={job?.voiceCheck.provider ?? "waiting"}
-      />
-      <ProductMetric
-        label="GPU Memory"
-        value={gpuMemory}
-        detail={gpu?.name ?? metricsError ?? "metrics unavailable"}
-        tone="orange"
-      />
-    </dl>
+    <section className="rounded-lg border shadow-sm vs-border vs-raised">
+      <div className="border-b px-3 py-3 vs-border">
+        <h2 className="text-sm font-semibold text-[var(--vs-text)]">Output Health</h2>
+        <p className="vs-muted mt-1 truncate text-xs">
+          {job ? `${job.status} · ${estimateFirstAudioETA(job)}` : "Waiting for a narration run"}
+        </p>
+      </div>
+      <dl className="grid grid-cols-2">
+        <ProductMetric
+          label="Segment Progress"
+          value={total > 0 ? formatPercentageRatio(ready, total) : "0%"}
+          detail={total > 0 ? `${String(ready)} / ${String(total)} segments` : "Waiting"}
+          tone="blue"
+        />
+        <ProductMetric
+          label="First Audio ETA"
+          value={estimateFirstAudioETA(job)}
+          detail="until first checked segment"
+        />
+        <ProductMetric
+          label="Buffer Health"
+          value={formatBufferHealth(job)}
+          detail={ready > 0 ? `${String(ready)} ready` : "No buffer yet"}
+          tone="green"
+        />
+        <ProductMetric
+          label="Clone Pace"
+          value={formatPace(throughput?.pace)}
+          detail="realtime"
+          tone="orange"
+        />
+        <ProductMetric
+          label="Checker Confidence"
+          value={confidence}
+          detail={job?.voiceCheck.provider ?? "waiting"}
+        />
+        <ProductMetric
+          label="GPU Memory"
+          value={gpuMemory}
+          detail={gpu?.name ?? metricsError ?? "metrics unavailable"}
+          tone="orange"
+        />
+      </dl>
+    </section>
   );
 }
 
@@ -4201,31 +5519,2198 @@ function ProductMetric({
   };
   const barClass = barClassByTone[tone];
   return (
-    <div className="min-w-0 border-b border-zinc-200 p-4 last:border-b-0">
-      <dt className="text-xs font-medium text-zinc-500">{label}</dt>
-      <dd className="mt-2 break-words text-base font-semibold leading-tight text-zinc-950">
+    <div className="min-w-0 border-b p-3 last:border-b-0 vs-border">
+      <dt className="vs-muted text-xs font-medium">{label}</dt>
+      <dd className="mt-2 break-words text-base font-semibold leading-tight text-[var(--vs-text)]">
         {value}
       </dd>
-      <p className="mt-1 truncate text-xs text-zinc-500" title={detail}>
+      <p className="vs-muted mt-1 truncate text-xs" title={detail}>
         {detail}
       </p>
-      <div className="mt-3 h-1 rounded-full bg-zinc-100">
+      <div className="mt-3 h-1 rounded-full bg-[var(--vs-surface)]">
         <div className={`h-1 w-2/5 rounded-full ${barClass}`} />
       </div>
     </div>
   );
 }
 
+function NarrationSidebar({
+  bookSources,
+  buildingArtifactKey,
+  customSpeechPolicyProfiles,
+  isClearingHuggingFaceToken,
+  isLoadingProfiles,
+  preparedSources,
+  pinnedProfileIds,
+  profiles,
+  recentProfileIds,
+  researchModules,
+  runConfiguration,
+  savingHuggingFaceTokenKey,
+  selectedBookSourceId,
+  selectedKokoroVoiceId,
+  selectedPreparedSourceId,
+  selectedProfile,
+  selectedProfileId,
+  speechPolicyProfile,
+  speechPolicyProfiles,
+  ttsEngines,
+  voiceProfileCredentialError,
+  voiceProfileCredentials,
+  onBuildArtifact,
+  onClearHuggingFaceToken,
+  onClearSelection,
+  onCloneVoice,
+  onCreateSource,
+  onDeleteProfile,
+  onInspectSelectedSource,
+  onRunConfigurationChange,
+  onSaveHuggingFaceToken,
+  onSelectBook,
+  onSelectKokoroVoice,
+  onSelectPreparedSource,
+  onSelectProfile,
+  onSpeechPolicyProfileChange,
+  onTogglePinnedProfile,
+}: Readonly<{
+  bookSources: BookSource[];
+  buildingArtifactKey: string | null;
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  isClearingHuggingFaceToken: boolean;
+  isLoadingProfiles: boolean;
+  preparedSources: PreparedSource[];
+  pinnedProfileIds: string[];
+  profiles: VoiceProfile[];
+  recentProfileIds: string[];
+  researchModules: ResearchModuleDiagnostics[];
+  runConfiguration: RunConfiguration;
+  savingHuggingFaceTokenKey: string | null;
+  selectedBookSourceId: string | null;
+  selectedKokoroVoiceId: string;
+  selectedPreparedSourceId: string | null;
+  selectedProfile: VoiceProfile | null;
+  selectedProfileId: string;
+  speechPolicyProfile: string;
+  speechPolicyProfiles: SpeechPolicyProfile[];
+  ttsEngines: TTSEngineDiagnostics[];
+  voiceProfileCredentialError: string | null;
+  voiceProfileCredentials: VoiceProfileCredentialStatus | null;
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onClearHuggingFaceToken: () => void;
+  onClearSelection: () => void;
+  onCloneVoice: () => void;
+  onCreateSource: () => void;
+  onDeleteProfile: (id: string) => void;
+  onInspectSelectedSource: () => void;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+  onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
+  onSelectBook: (bookId: string) => void;
+  onSelectKokoroVoice: (voiceId: string) => void;
+  onSelectPreparedSource: (source: PreparedSource) => void;
+  onSelectProfile: (id: string) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
+  onTogglePinnedProfile: (id: string) => void;
+}>) {
+  const voiceLibrary = buildVoiceLibraryViewModel({
+    pinnedIds: pinnedProfileIds,
+    profiles,
+    recentIds: recentProfileIds,
+    selectedProfileId,
+  });
+  const [sourceSearch, setSourceSearch] = useState("");
+  const sourceNeedle = sourceSearch.trim().toLowerCase();
+  const matchesSourceSearch = useCallback(
+    (value: string) => !sourceNeedle || value.toLowerCase().includes(sourceNeedle),
+    [sourceNeedle],
+  );
+  const visiblePreparedSources = preparedSources
+    .filter((source) =>
+      matchesSourceSearch(`${source.title ?? ""} ${source.sourceName} ${source.kind}`),
+    )
+    .slice(0, sourceNeedle ? 7 : 4);
+  const visibleBookSources = bookSources
+    .filter((book) => matchesSourceSearch(`${bookSourceName(book)} ${book.kind}`))
+    .slice(0, sourceNeedle ? 7 : 3);
+  const hasSourceResults = visiblePreparedSources.length > 0 || visibleBookSources.length > 0;
+  return (
+    <section className="min-h-full min-w-0 overflow-visible">
+      <div className="grid min-w-0 gap-3 p-4 xl:p-5">
+        <section className="grid gap-3 rounded-lg border p-3 vs-border vs-raised">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Source Library</h2>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="vs-muted text-xs">
+                {String(preparedSources.length + bookSources.length)}
+              </span>
+              <button
+                className="h-7 rounded-md border px-2 text-[0.68rem] font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+                onClick={onCreateSource}
+                type="button"
+              >
+                New
+              </button>
+            </div>
+          </div>
+          <input
+            className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-xs outline-none transition placeholder:text-[var(--vs-muted)] focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
+            onChange={(event) => {
+              setSourceSearch(event.currentTarget.value);
+            }}
+            placeholder="Search sources..."
+            type="search"
+            value={sourceSearch}
+          />
+          <div className="grid gap-2">
+            {visiblePreparedSources.map((source) => (
+              <button
+                className={`min-w-0 rounded-md border p-2 text-left transition ${
+                  source.id === selectedPreparedSourceId
+                    ? "border-orange-300 bg-orange-500/10"
+                    : "hover:border-orange-200 vs-border vs-surface"
+                }`}
+                key={source.id}
+                onClick={() => {
+                  onSelectPreparedSource(source);
+                }}
+                type="button"
+              >
+                <span
+                  className="block truncate text-sm font-semibold"
+                  title={source.title ?? source.sourceName}
+                >
+                  {source.title ?? source.sourceName}
+                </span>
+                <span className="vs-muted mt-1 block truncate text-xs">
+                  {source.kind.toUpperCase()} · {source.wordCount.toLocaleString()} words
+                </span>
+              </button>
+            ))}
+            {visibleBookSources.map((book) => (
+              <button
+                className={`min-w-0 rounded-md border p-2 text-left transition ${
+                  book.id === selectedBookSourceId
+                    ? "border-orange-300 bg-orange-500/10"
+                    : "hover:border-orange-200 vs-border vs-surface"
+                }`}
+                key={book.id}
+                onClick={() => {
+                  onSelectBook(book.id);
+                }}
+                type="button"
+              >
+                <span className="block truncate text-sm font-semibold" title={bookSourceName(book)}>
+                  {bookSourceName(book)}
+                </span>
+                <span className="vs-muted mt-1 block truncate text-xs">
+                  {book.kind.toUpperCase()} · {book.wordCount.toLocaleString()} words
+                </span>
+              </button>
+            ))}
+            {preparedSources.length === 0 && bookSources.length === 0 ? (
+              <p className="vs-muted rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-surface">
+                Text drafts, prepared files, URLs, and books appear here as reusable sources.
+              </p>
+            ) : null}
+            {preparedSources.length + bookSources.length > 0 && !hasSourceResults ? (
+              <p className="vs-muted rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-surface">
+                No sources match that search.
+              </p>
+            ) : null}
+          </div>
+        </section>
+
+        <VoiceProfileDropdown
+          buildingArtifactKey={buildingArtifactKey}
+          isClearingHuggingFaceToken={isClearingHuggingFaceToken}
+          isLoading={isLoadingProfiles}
+          profiles={profiles}
+          researchModules={researchModules}
+          runConfiguration={runConfiguration}
+          savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
+          selectedKokoroVoiceId={selectedKokoroVoiceId}
+          selectedProfile={selectedProfile}
+          selectedProfileId={selectedProfileId}
+          ttsEngines={ttsEngines}
+          voiceProfileCredentialError={voiceProfileCredentialError}
+          voiceProfileCredentials={voiceProfileCredentials}
+          showArtifactControls={false}
+          showBackendControls={false}
+          showBackendSummary={false}
+          onBuildArtifact={onBuildArtifact}
+          onClearHuggingFaceToken={onClearHuggingFaceToken}
+          onClearSelection={onClearSelection}
+          onDeleteProfile={onDeleteProfile}
+          onRunConfigurationChange={onRunConfigurationChange}
+          onSaveHuggingFaceToken={onSaveHuggingFaceToken}
+          onSelectKokoroVoice={onSelectKokoroVoice}
+          onSelectProfile={onSelectProfile}
+        />
+
+        <SavedVoicesRailPanel
+          entries={voiceLibrary.entries}
+          total={voiceLibrary.total}
+          onSelectProfile={onSelectProfile}
+          onTogglePinnedProfile={onTogglePinnedProfile}
+        />
+
+        <section className="grid gap-3 rounded-lg border p-3 text-xs vs-border vs-raised">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Run / Policy Summary</h2>
+            <button
+              className="rounded border px-2 py-1 font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              onClick={onInspectSelectedSource}
+              type="button"
+            >
+              Content Structure
+            </button>
+          </div>
+          <dl className="grid gap-2">
+            <SidebarFact
+              label="Run mode"
+              value={getRunModePreset(runConfiguration.runMode).label}
+            />
+            <SidebarFact label="Performance" value={runConfiguration.performanceMode} />
+            <SidebarFact
+              label="Speech Policy"
+              value={speechPolicyProfileDisplayName(
+                speechPolicyProfile,
+                customSpeechPolicyProfiles,
+              )}
+            />
+          </dl>
+          <select
+            className="h-9 rounded-md border px-2 text-xs font-semibold vs-border vs-surface"
+            onChange={(event) => {
+              onSpeechPolicyProfileChange(event.currentTarget.value);
+            }}
+            value={speechPolicyProfile}
+          >
+            {(speechPolicyProfiles.length > 0
+              ? speechPolicyProfiles.map((profile) => profile.name)
+              : SPEECH_POLICY_PROFILE_OPTIONS
+            ).map((profile) => (
+              <option key={profile} value={profile}>
+                {speechPolicyProfileLabel(profile)}
+              </option>
+            ))}
+            {customSpeechPolicyProfiles.length > 0 ? (
+              <optgroup label="Custom profiles">
+                {customSpeechPolicyProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+          </select>
+          <button
+            className="h-9 rounded-md border border-orange-300 bg-orange-500/10 text-xs font-semibold text-orange-700 transition hover:bg-orange-500/15"
+            onClick={onCloneVoice}
+            type="button"
+          >
+            Clone Voice
+          </button>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function VoiceCloningVoiceRail({
+  buildingArtifactKey,
+  isClearingHuggingFaceToken,
+  isLoading,
+  profiles,
+  pinnedProfileIds,
+  recentProfileIds,
+  researchModules,
+  runConfiguration,
+  savingHuggingFaceTokenKey,
+  selectedKokoroVoiceId,
+  selectedProfile,
+  selectedProfileId,
+  ttsEngines,
+  voiceProfileCredentialError,
+  voiceProfileCredentials,
+  onBuildArtifact,
+  onClearHuggingFaceToken,
+  onClearSelection,
+  onDeleteProfile,
+  onRunConfigurationChange,
+  onSaveHuggingFaceToken,
+  onSelectKokoroVoice,
+  onSelectProfile,
+  onTogglePinnedProfile,
+}: Readonly<{
+  buildingArtifactKey: string | null;
+  isClearingHuggingFaceToken: boolean;
+  isLoading: boolean;
+  profiles: VoiceProfile[];
+  pinnedProfileIds: string[];
+  recentProfileIds: string[];
+  researchModules: ResearchModuleDiagnostics[];
+  runConfiguration: RunConfiguration;
+  savingHuggingFaceTokenKey: string | null;
+  selectedKokoroVoiceId: string;
+  selectedProfile: VoiceProfile | null;
+  selectedProfileId: string;
+  ttsEngines: TTSEngineDiagnostics[];
+  voiceProfileCredentialError: string | null;
+  voiceProfileCredentials: VoiceProfileCredentialStatus | null;
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onClearHuggingFaceToken: () => void;
+  onClearSelection: () => void;
+  onDeleteProfile: (id: string) => void;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+  onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
+  onSelectKokoroVoice: (voiceId: string) => void;
+  onSelectProfile: (id: string) => void;
+  onTogglePinnedProfile: (id: string) => void;
+}>) {
+  const [profileSearch, setProfileSearch] = useState("");
+  const voiceLibrary = buildVoiceLibraryViewModel({
+    limit: profiles.length,
+    pinnedIds: pinnedProfileIds,
+    profiles,
+    recentIds: recentProfileIds,
+    selectedProfileId,
+  });
+  const profileSearchNeedle = profileSearch.trim().toLowerCase();
+  const visibleVoiceEntries = voiceLibrary.entries
+    .filter((entry) => {
+      if (!profileSearchNeedle) {
+        return true;
+      }
+      const profile = entry.profile;
+      return `${profile.name} ${profile.language} ${profile.status}`
+        .toLowerCase()
+        .includes(profileSearchNeedle);
+    })
+    .slice(0, profileSearchNeedle ? 8 : 5);
+  return (
+    <section className="min-h-full min-w-0 overflow-visible">
+      <div className="grid min-w-0 gap-3 p-4 xl:p-5">
+        <section className="grid gap-3 rounded-lg border p-3 vs-border vs-raised">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Voice Profile Library</h2>
+            <span className="vs-muted text-xs">{profiles.length.toString()}</span>
+          </div>
+          <input
+            className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-xs outline-none transition placeholder:text-[var(--vs-muted)] focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
+            onChange={(event) => {
+              setProfileSearch(event.currentTarget.value);
+            }}
+            placeholder="Search profiles..."
+            type="search"
+            value={profileSearch}
+          />
+        </section>
+        <VoiceProfileDropdown
+          heading="Active Profile"
+          buildingArtifactKey={buildingArtifactKey}
+          isClearingHuggingFaceToken={isClearingHuggingFaceToken}
+          isLoading={isLoading}
+          profiles={profiles}
+          researchModules={researchModules}
+          runConfiguration={runConfiguration}
+          savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
+          selectedKokoroVoiceId={selectedKokoroVoiceId}
+          selectedProfile={selectedProfile}
+          selectedProfileId={selectedProfileId}
+          ttsEngines={ttsEngines}
+          voiceProfileCredentialError={voiceProfileCredentialError}
+          voiceProfileCredentials={voiceProfileCredentials}
+          showArtifactControls={false}
+          showBackendControls={false}
+          showBackendSummary={false}
+          onBuildArtifact={onBuildArtifact}
+          onClearHuggingFaceToken={onClearHuggingFaceToken}
+          onClearSelection={onClearSelection}
+          onDeleteProfile={onDeleteProfile}
+          onRunConfigurationChange={onRunConfigurationChange}
+          onSaveHuggingFaceToken={onSaveHuggingFaceToken}
+          onSelectKokoroVoice={onSelectKokoroVoice}
+          onSelectProfile={onSelectProfile}
+        />
+        <SavedVoicesRailPanel
+          emptyMessage={profileSearchNeedle ? "No saved voices match that search." : undefined}
+          entries={visibleVoiceEntries}
+          total={voiceLibrary.total}
+          onSelectProfile={onSelectProfile}
+          onTogglePinnedProfile={onTogglePinnedProfile}
+        />
+      </div>
+    </section>
+  );
+}
+
+function SavedVoicesRailPanel({
+  emptyMessage = "Created voice profiles will appear here for quick selection.",
+  entries,
+  total,
+  onSelectProfile,
+  onTogglePinnedProfile,
+}: Readonly<{
+  emptyMessage?: string;
+  entries: VoiceLibraryEntry[];
+  total: number;
+  onSelectProfile: (id: string) => void;
+  onTogglePinnedProfile: (id: string) => void;
+}>) {
+  return (
+    <section className="grid gap-2 rounded-lg border p-3 vs-border vs-raised">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-[var(--vs-text)]">Saved Voices</h2>
+        <span className="vs-muted text-xs">{String(total)}</span>
+      </div>
+      <div className="grid gap-2 text-xs">
+        {entries.map((entry) => (
+          <SavedVoiceRailRow
+            entry={entry}
+            key={entry.profile.id}
+            onSelect={onSelectProfile}
+            onTogglePinned={onTogglePinnedProfile}
+          />
+        ))}
+        {entries.length === 0 ? (
+          <p className="vs-muted rounded-md border border-dashed p-3 leading-5 vs-border vs-surface">
+            {emptyMessage}
+          </p>
+        ) : null}
+        {entries.length > 0 && total > entries.length ? (
+          <button
+            className="h-8 rounded-md border text-xs font-semibold transition hover:border-orange-200 hover:bg-orange-50 vs-border vs-surface"
+            type="button"
+          >
+            Browse all
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function SavedVoiceRailRow({
+  entry,
+  onSelect,
+  onTogglePinned,
+}: Readonly<{
+  entry: VoiceLibraryEntry;
+  onSelect: (id: string) => void;
+  onTogglePinned: (id: string) => void;
+}>) {
+  const { profile } = entry;
+  const status = voiceLibraryProfileStatus(profile);
+  const pinTitle = savedVoicePinTitle(entry);
+  const pinLabel = savedVoicePinLabel(entry);
+  return (
+    <div
+      className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border px-2 py-2 ${
+        entry.selected ? "border-orange-300 bg-orange-50" : "vs-border vs-surface"
+      }`}
+    >
+      <button
+        className="min-w-0 text-left"
+        onClick={() => {
+          onSelect(profile.id);
+        }}
+        type="button"
+      >
+        <span className="block truncate font-semibold text-[var(--vs-text)]" title={profile.name}>
+          {profile.name}
+        </span>
+        <span className="vs-muted mt-0.5 block truncate">
+          {profile.language} · {formatLikenessLabel(profile)}
+        </span>
+      </button>
+      <span className={`rounded px-2 py-1 text-[0.65rem] font-semibold ${status.className}`}>
+        {status.label}
+      </span>
+      <button
+        aria-label={entry.pinned ? `Unpin ${profile.name}` : `Pin ${profile.name}`}
+        className={`grid h-7 w-7 place-items-center rounded border text-xs ${
+          entry.pinned
+            ? "border-orange-300 bg-white text-orange-700"
+            : "hover:border-orange-200 vs-border vs-raised vs-muted"
+        }`}
+        onClick={() => {
+          onTogglePinned(profile.id);
+        }}
+        title={pinTitle}
+        type="button"
+      >
+        {pinLabel}
+      </button>
+    </div>
+  );
+}
+
+function savedVoicePinTitle(entry: VoiceLibraryEntry): string {
+  if (entry.pinned) {
+    return "Pinned";
+  }
+  if (entry.recent) {
+    return "Recent";
+  }
+  return "Pin voice";
+}
+
+function savedVoicePinLabel(entry: VoiceLibraryEntry): string {
+  if (entry.pinned) {
+    return "P";
+  }
+  if (entry.recent) {
+    return "R";
+  }
+  return "+";
+}
+
+function voiceLibraryProfileStatus(profile: VoiceProfile): { label: string; className: string } {
+  if (profileHasActiveTarget(profile)) {
+    return { label: "Building", className: "bg-amber-100 text-amber-800" };
+  }
+  if (profileHasTargetAttention(profile)) {
+    return { label: "Issue", className: "bg-red-100 text-red-700" };
+  }
+  if (profileHasReadyCloneTarget(profile)) {
+    return { label: "Ready", className: "bg-emerald-100 text-emerald-700" };
+  }
+  if (profile.status === "error") {
+    return { label: "Issue", className: "bg-red-100 text-red-700" };
+  }
+  return { label: profile.status, className: "bg-zinc-100 text-zinc-600" };
+}
+
+function VoiceCloningWorkspace({
+  activity,
+  buildingArtifactKey,
+  cancelingTargetKey,
+  createCandidateId,
+  diagnostics,
+  error,
+  isCancelingSource,
+  isAnalyzing,
+  researchModules,
+  runConfiguration,
+  source,
+  ttsEngines,
+  onAnalyze,
+  onBuildArtifact,
+  onCancelSource,
+  onCancelTarget,
+  onCreateProfile,
+  onRunConfigurationChange,
+}: Readonly<{
+  activity: VoiceCloningActivitySummary;
+  buildingArtifactKey: string | null;
+  cancelingTargetKey: string | null;
+  createCandidateId: string | null;
+  diagnostics: VoiceProfileSourceDiagnostics | null;
+  error: string | null;
+  isCancelingSource: boolean;
+  isAnalyzing: boolean;
+  researchModules: ResearchModuleDiagnostics[];
+  runConfiguration: RunConfiguration;
+  source: VoiceProfileSource | null;
+  ttsEngines: TTSEngineDiagnostics[];
+  onAnalyze: (file: File) => Promise<void>;
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onCancelSource: (sourceId: string) => Promise<void>;
+  onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
+  onCreateProfile: (
+    candidate: VoiceProfileCandidate,
+    request: CreateVoiceProfileFromCandidateRequest,
+  ) => Promise<void>;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+}>) {
+  return (
+    <section className="grid min-w-0 gap-5">
+      <VoiceCloningActivityPanel
+        activity={activity}
+        isCancelingSource={isCancelingSource}
+        source={source}
+        onCancelSource={onCancelSource}
+      />
+      <BackendContractReviewPanel
+        activeEngineId={runConfiguration.ttsEngine}
+        buildingArtifactKey={buildingArtifactKey}
+        cancelingTargetKey={cancelingTargetKey}
+        modules={researchModules}
+        profile={activity.activeProfile}
+        runConfiguration={runConfiguration}
+        ttsEngines={ttsEngines}
+        onBuildArtifact={onBuildArtifact}
+        onCancelTarget={onCancelTarget}
+        onRunConfigurationChange={onRunConfigurationChange}
+      />
+      <VoiceSourceAnalysisPanel
+        createCandidateId={createCandidateId}
+        diagnostics={diagnostics}
+        error={error}
+        isAnalyzing={isAnalyzing}
+        researchModules={researchModules}
+        source={source}
+        ttsEngines={ttsEngines}
+        onAnalyze={onAnalyze}
+        onCreateProfile={onCreateProfile}
+      />
+    </section>
+  );
+}
+
+function VoiceCloningActivityPanel({
+  activity,
+  isCancelingSource,
+  source,
+  onCancelSource,
+}: Readonly<{
+  activity: VoiceCloningActivitySummary;
+  isCancelingSource: boolean;
+  source: VoiceProfileSource | null;
+  onCancelSource: (sourceId: string) => Promise<void>;
+}>) {
+  const progress = formatPercentage(voiceCloningProgressRatio(activity.stages));
+  const canCancelSource = isVoiceProfileSourceActive(source);
+  return (
+    <section className="grid gap-4 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            Voice Cloning Workbench
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-zinc-950">Build a reusable voice</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">{activity.message}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {canCancelSource && source ? (
+            <button
+              className="h-9 rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              disabled={isCancelingSource}
+              onClick={() => {
+                void onCancelSource(source.id);
+              }}
+              type="button"
+            >
+              {isCancelingSource ? "Cancelling..." : "Cancel Analysis"}
+            </button>
+          ) : null}
+          <ActivityStatusBadge status={activity.status} label={activity.statusLabel} />
+        </div>
+      </div>
+      <div className="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+        <div className="grid gap-2 md:grid-cols-4">
+          <ActivityFact label="Elapsed" value={activity.elapsed} detail={activity.eta} />
+          <ActivityFact label="Last Update" value={activity.lastUpdate} detail="Polling every 3s" />
+          <ActivityFact
+            label="Source"
+            value={activity.sourceDetail}
+            detail={activity.candidateDetail}
+          />
+          <ActivityFact label="Progress" value={progress} detail={activity.detail} />
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-white">
+          <div className="h-full rounded-full bg-orange-500" style={{ width: progress }} />
+        </div>
+      </div>
+      <ol className="grid gap-2 md:grid-cols-4">
+        {activity.stages.map((stage, index) => (
+          <li
+            className={`rounded-md border p-3 ${
+              stage.status === "running"
+                ? "border-orange-300 bg-orange-50"
+                : "border-zinc-200 bg-zinc-50"
+            }`}
+            key={stage.label}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="grid h-6 w-6 place-items-center rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-600">
+                {String(index + 1)}
+              </span>
+              <PipelineFooterStage label={stageStatusLabel(stage.status)} status={stage.status} />
+            </div>
+            <p className="mt-3 text-sm font-semibold text-zinc-950">{stage.label}</p>
+            <p className="mt-1 min-h-10 break-words text-xs leading-5 text-zinc-500">
+              {stage.detail}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function CloneArtifactReadinessPanel({
+  buildingArtifactKey,
+  cancelingTargetKey,
+  modules,
+  profile,
+  runConfiguration,
+  ttsEngines,
+  onBuildArtifact,
+  onCancelTarget,
+  onRunConfigurationChange,
+}: Readonly<{
+  buildingArtifactKey: string | null;
+  cancelingTargetKey: string | null;
+  modules: ResearchModuleDiagnostics[];
+  profile: VoiceProfile | null;
+  runConfiguration: RunConfiguration;
+  ttsEngines: TTSEngineDiagnostics[];
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+}>) {
+  const profileIssues = profile ? voiceProfileTargetIssues(profile, modules) : [];
+  return (
+    <section className="grid min-w-0 gap-3 overflow-hidden rounded-lg border p-4 shadow-sm vs-raised">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold">Clone Readiness</h2>
+          <p className="vs-muted mt-1 truncate text-xs">
+            {profile ? profile.name : "Select or create a voice profile to prepare engine targets."}
+          </p>
+        </div>
+        {profile ? (
+          <span
+            className={`rounded px-2 py-1 text-[0.65rem] font-semibold ${voiceLibraryProfileStatus(profile).className}`}
+          >
+            {voiceLibraryProfileStatus(profile).label}
+          </span>
+        ) : null}
+      </div>
+      {profile ? (
+        <>
+          <CloneTargetReadinessList
+            buildingArtifactKey={buildingArtifactKey}
+            cancelingTargetKey={cancelingTargetKey}
+            modules={modules}
+            profile={profile}
+            runConfiguration={runConfiguration}
+            ttsEngines={ttsEngines}
+            onBuildArtifact={onBuildArtifact}
+            onCancelTarget={onCancelTarget}
+            onRunConfigurationChange={onRunConfigurationChange}
+          />
+          <CloneReadinessDiagnostics issues={profileIssues} />
+        </>
+      ) : (
+        <p className="break-words rounded-md border border-dashed p-4 text-sm leading-6 vs-border vs-muted">
+          Analyze source media, create a candidate, then validate clone artifacts here.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function CloneReadinessDiagnostics({
+  issues,
+}: Readonly<{ issues: ReturnType<typeof voiceProfileTargetIssues> }>) {
+  if (issues.length === 0) {
+    return (
+      <div className="rounded-md border p-3 text-xs vs-border vs-surface">
+        <p className="font-semibold text-[var(--vs-text)]">Diagnostics</p>
+        <p className="vs-muted mt-1 leading-5">
+          No blocking setup issues for the selected profile. Detailed provider configuration lives
+          in Settings.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-2 rounded-md border p-3 text-xs vs-border vs-surface">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold text-[var(--vs-text)]">Diagnostics</p>
+        <span className="rounded bg-amber-100 px-2 py-1 font-semibold text-amber-800">
+          {issues.length.toString()}
+        </span>
+      </div>
+      {issues.slice(0, 2).map((issue) => (
+        <div
+          className={`rounded-md border p-2 ${
+            issue.severity === "error"
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-amber-200 bg-amber-50 text-amber-900"
+          }`}
+          key={issue.key}
+        >
+          <p className="font-semibold">
+            {issue.label}: {issue.title}
+          </p>
+          <p className="mt-1 line-clamp-2 leading-5">{issue.detail}</p>
+        </div>
+      ))}
+      {issues.length > 2 ? (
+        <p className="vs-muted">Open Settings for {String(issues.length - 2)} more issue(s).</p>
+      ) : null}
+    </div>
+  );
+}
+
+const BACKEND_CONTRACTS = [
+  {
+    artifact: "Provider choice",
+    engineId: "auto",
+    label: "Auto",
+    targetId: null,
+    voiceSource: "Any",
+  },
+  {
+    artifact: "Built-in voicepack",
+    engineId: "kokoro",
+    label: "Kokoro",
+    targetId: null,
+    voiceSource: "Any",
+  },
+  {
+    artifact: "Reference clone",
+    engineId: "kokoro-clone",
+    label: "Kokoro Clone",
+    targetId: "kokoro-clone",
+    voiceSource: "Profile",
+  },
+  {
+    artifact: "Style vector",
+    engineId: "kokoro-embed",
+    label: "Kokoro Embed",
+    targetId: "kokoro-embed",
+    voiceSource: "Profile",
+  },
+  {
+    artifact: "Preset voice",
+    engineId: "supertonic-3",
+    label: "Supertonic",
+    targetId: null,
+    voiceSource: "Provider",
+  },
+] as const;
+
+type BackendContractRow = (typeof BACKEND_CONTRACTS)[number];
+
+function BackendContractReviewPanel({
+  activeEngineId,
+  buildingArtifactKey,
+  cancelingTargetKey,
+  modules,
+  profile,
+  runConfiguration,
+  ttsEngines,
+  onBuildArtifact,
+  onCancelTarget,
+  onRunConfigurationChange,
+}: Readonly<{
+  activeEngineId: string;
+  buildingArtifactKey: string | null;
+  cancelingTargetKey: string | null;
+  modules: ResearchModuleDiagnostics[];
+  profile: VoiceProfile | null;
+  runConfiguration: RunConfiguration;
+  ttsEngines: TTSEngineDiagnostics[];
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+}>) {
+  return (
+    <section className="grid gap-3 rounded-lg border p-4 shadow-sm vs-border vs-surface">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+            Backend Contract Review
+          </p>
+          <h3 className="mt-1 text-base font-semibold text-[var(--vs-text)]">
+            Profile targets by narration backend
+          </h3>
+        </div>
+        <p className="max-w-lg text-xs leading-5 vs-muted">
+          One row per backend. The required target, artifact, readiness, and next action stay
+          visible so adding another backend remains a descriptor-level change.
+        </p>
+      </div>
+      <div className="overflow-x-auto rounded-md border vs-border">
+        <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+          <thead className="bg-[var(--vs-raised)] text-[0.65rem] uppercase tracking-[0.14em] vs-muted">
+            <tr>
+              <th className="px-3 py-2 font-semibold">Backend</th>
+              <th className="px-3 py-2 font-semibold">Voice Source</th>
+              <th className="px-3 py-2 font-semibold">Required Target</th>
+              <th className="px-3 py-2 font-semibold">Artifact</th>
+              <th className="px-3 py-2 font-semibold">Readiness</th>
+              <th className="px-3 py-2 font-semibold">User Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--vs-border)]">
+            {BACKEND_CONTRACTS.map((contract) => {
+              const summary = backendContractSummary({
+                activeEngineId,
+                buildingArtifactKey,
+                cancelingTargetKey,
+                contract,
+                modules,
+                profile,
+                ttsEngines,
+              });
+              return (
+                <tr
+                  className={
+                    contract.engineId === activeEngineId
+                      ? "bg-orange-500/10"
+                      : "bg-[var(--vs-surface)] hover:bg-[var(--vs-raised)]"
+                  }
+                  key={contract.engineId}
+                >
+                  <td className="px-3 py-3 align-middle">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${backendContractDotClass(summary.status)}`}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-[var(--vs-text)]">
+                          {contract.label}
+                        </p>
+                        <p className="truncate text-[0.68rem] vs-muted">{summary.engineLabel}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 vs-muted">{contract.voiceSource}</td>
+                  <td className="px-3 py-3 vs-muted">
+                    {contract.targetId ? moduleLabel(contract.targetId) : "-"}
+                  </td>
+                  <td className="px-3 py-3 vs-muted">{summary.artifact}</td>
+                  <td className="px-3 py-3">
+                    <span
+                      className={`inline-flex rounded-md px-2 py-1 font-semibold ${backendContractStatusClass(summary.status)}`}
+                    >
+                      {summary.label}
+                    </span>
+                    <p className="mt-1 max-w-[14rem] truncate text-[0.68rem] vs-muted">
+                      {summary.detail}
+                    </p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <button
+                      className={`h-8 min-w-28 rounded-md border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${backendContractActionButtonClass(summary.status)}`}
+                      disabled={!summary.canAct}
+                      onClick={() => {
+                        handleBackendContractAction({
+                          contract,
+                          profile,
+                          runConfiguration,
+                          summary,
+                          ttsEngines,
+                          onBuildArtifact,
+                          onCancelTarget,
+                          onRunConfigurationChange,
+                        });
+                      }}
+                      type="button"
+                    >
+                      {summary.actionLabel}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+type BackendContractStatus = "ready" | "running" | "failed" | "waiting" | "setup";
+
+interface BackendContractSummary {
+  actionLabel: string;
+  artifact: string;
+  canAct: boolean;
+  detail: string;
+  engineLabel: string;
+  label: string;
+  status: BackendContractStatus;
+}
+
+function backendContractSummary({
+  activeEngineId,
+  buildingArtifactKey,
+  cancelingTargetKey,
+  contract,
+  modules,
+  profile,
+  ttsEngines,
+}: Readonly<{
+  activeEngineId: string;
+  buildingArtifactKey: string | null;
+  cancelingTargetKey: string | null;
+  contract: BackendContractRow;
+  modules: ResearchModuleDiagnostics[];
+  profile: VoiceProfile | null;
+  ttsEngines: TTSEngineDiagnostics[];
+}>): BackendContractSummary {
+  const engine = ttsEngines.find((item) => item.id === contract.engineId);
+  const engineLabel = engine ? `${engine.label} · ${engine.status}` : contract.engineId;
+  if (!contract.targetId) {
+    return backendContractNoTargetSummary({ activeEngineId, contract, engine, engineLabel });
+  }
+  const module = modules.find((item) => item.id === contract.targetId);
+  const target = profile?.cloneTargets?.[contract.targetId];
+  const artifact = profile?.cloneArtifacts?.[contract.targetId];
+  const targetKey = profile ? `${profile.id}:${contract.targetId}` : "";
+  const isCanceling = cancelingTargetKey === targetKey;
+  const isBusy =
+    buildingArtifactKey === targetKey ||
+    isCanceling ||
+    ["queued", "building", "validating"].includes(target?.status ?? "") ||
+    artifact?.status === "building";
+  const moduleReady =
+    contract.targetId === "kokoro-clone" ||
+    (module?.installed === true && researchModuleRuntimeReady(module));
+  const ready =
+    profile !== null &&
+    (target?.status === "ready" ||
+      artifact?.status === "ready" ||
+      (contract.targetId === "kokoro-clone" && !target));
+  const status = backendContractReadinessStatus({
+    artifactStatus: artifact?.status,
+    isBusy,
+    moduleReady,
+    profile,
+    ready,
+    targetStatus: target?.status,
+  });
+  return {
+    actionLabel: backendContractActionLabel({
+      active: activeEngineId === contract.engineId,
+      contract,
+      isCanceling,
+      status,
+    }),
+    artifact: artifact?.status ?? contract.artifact,
+    canAct: backendContractCanAct(status, profile, contract.targetId),
+    detail:
+      target?.error ??
+      artifact?.error ??
+      target?.validation?.error ??
+      (profile ? voiceProfileTargetReadinessText(profile, contract.engineId) : "Select a profile"),
+    engineLabel,
+    label: backendContractReadinessLabel(status),
+    status,
+  };
+}
+
+function backendContractNoTargetSummary({
+  activeEngineId,
+  contract,
+  engine,
+  engineLabel,
+}: Readonly<{
+  activeEngineId: string;
+  contract: BackendContractRow;
+  engine?: TTSEngineDiagnostics;
+  engineLabel: string;
+}>): BackendContractSummary {
+  const ready = engine?.status === "ready" || contract.engineId === "auto";
+  return {
+    actionLabel: activeEngineId === contract.engineId ? "Selected" : `Use ${contract.label}`,
+    artifact: contract.artifact,
+    canAct: ready && activeEngineId !== contract.engineId,
+    detail: ready ? "No profile target" : "Provider unavailable",
+    engineLabel,
+    label: ready ? "Ready" : "Unavailable",
+    status: ready ? "ready" : "setup",
+  };
+}
+
+function backendContractCanAct(
+  status: BackendContractStatus,
+  profile: VoiceProfile | null,
+  targetId: string,
+): boolean {
+  if (status === "ready") {
+    return true;
+  }
+  return (
+    Boolean(profile) &&
+    Boolean(targetId) &&
+    (status === "running" || status === "failed" || status === "waiting")
+  );
+}
+
+function backendContractReadinessStatus({
+  artifactStatus,
+  isBusy,
+  moduleReady,
+  profile,
+  ready,
+  targetStatus,
+}: Readonly<{
+  artifactStatus?: string;
+  isBusy: boolean;
+  moduleReady: boolean;
+  profile: VoiceProfile | null;
+  ready: boolean;
+  targetStatus?: string;
+}>): BackendContractStatus {
+  if (isBusy) {
+    return "running";
+  }
+  if (!profile) {
+    return "waiting";
+  }
+  if (!moduleReady) {
+    return "setup";
+  }
+  if (ready) {
+    return "ready";
+  }
+  if (targetStatus === "failed" || artifactStatus === "failed") {
+    return "failed";
+  }
+  return "waiting";
+}
+
+function backendContractActionLabel({
+  active,
+  contract,
+  isCanceling,
+  status,
+}: Readonly<{
+  active: boolean;
+  contract: BackendContractRow;
+  isCanceling: boolean;
+  status: BackendContractStatus;
+}>): string {
+  if (isCanceling) {
+    return "Cancelling...";
+  }
+  if (status === "running") {
+    return "Cancel";
+  }
+  if (status === "failed") {
+    return `Retry ${contract.targetId ? compactModuleLabel(contract.targetId) : contract.label}`;
+  }
+  if (status === "ready") {
+    return active ? "Selected" : `Use ${contract.label}`;
+  }
+  if (status === "waiting" && contract.targetId) {
+    return `Prepare ${compactModuleLabel(contract.targetId)}`;
+  }
+  return "Setup needed";
+}
+
+function backendContractReadinessLabel(status: BackendContractStatus): string {
+  switch (status) {
+    case "failed": {
+      return "Issue";
+    }
+    case "ready": {
+      return "Ready";
+    }
+    case "running": {
+      return "Working";
+    }
+    case "setup": {
+      return "Setup";
+    }
+    default: {
+      return "Not built";
+    }
+  }
+}
+
+function backendContractStatusClass(status: BackendContractStatus): string {
+  if (status === "ready") {
+    return "bg-emerald-100 text-emerald-700";
+  }
+  if (status === "running") {
+    return "bg-orange-100 text-orange-800";
+  }
+  if (status === "failed") {
+    return "bg-red-100 text-red-700";
+  }
+  if (status === "setup") {
+    return "bg-amber-100 text-amber-800";
+  }
+  return "bg-zinc-100 text-zinc-600";
+}
+
+function backendContractDotClass(status: BackendContractStatus): string {
+  if (status === "ready") {
+    return "bg-emerald-500";
+  }
+  if (status === "running") {
+    return "bg-orange-500";
+  }
+  if (status === "failed") {
+    return "bg-red-500";
+  }
+  if (status === "setup") {
+    return "bg-amber-500";
+  }
+  return "bg-zinc-300";
+}
+
+function backendContractActionButtonClass(status: BackendContractStatus): string {
+  if (status === "failed") {
+    return "border-red-200 bg-white text-red-700 hover:bg-red-50";
+  }
+  if (status === "running") {
+    return "border-orange-300 bg-white text-orange-800 hover:bg-orange-50";
+  }
+  return "border-zinc-200 bg-white text-zinc-800 hover:border-orange-200 hover:bg-orange-50";
+}
+
+function handleBackendContractAction({
+  contract,
+  profile,
+  runConfiguration,
+  summary,
+  ttsEngines,
+  onBuildArtifact,
+  onCancelTarget,
+  onRunConfigurationChange,
+}: Readonly<{
+  contract: BackendContractRow;
+  profile: VoiceProfile | null;
+  runConfiguration: RunConfiguration;
+  summary: BackendContractSummary;
+  ttsEngines: TTSEngineDiagnostics[];
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+}>) {
+  if (contract.targetId && profile && summary.status === "running") {
+    void onCancelTarget(profile.id, contract.targetId);
+    return;
+  }
+  if (
+    contract.targetId &&
+    profile &&
+    (summary.status === "failed" || summary.status === "waiting")
+  ) {
+    void onBuildArtifact(profile.id, contract.targetId);
+    return;
+  }
+  if (summary.status === "ready") {
+    onRunConfigurationChange(
+      runConfigurationForBackendContract(runConfiguration, contract.engineId, ttsEngines),
+    );
+  }
+}
+
+function runConfigurationForBackendContract(
+  runConfiguration: RunConfiguration,
+  engineId: string,
+  ttsEngines: TTSEngineDiagnostics[],
+): RunConfiguration {
+  if (engineId === "kokoro") {
+    return applyKokoroRenderMode(runConfiguration, "voicepack");
+  }
+  if (engineId === "kokoro-clone") {
+    return applyKokoroRenderMode(runConfiguration, "kokoclone");
+  }
+  if (engineId === "kokoro-embed") {
+    return applyKokoroRenderMode(runConfiguration, "kokoro-embed");
+  }
+  if (engineId === "supertonic-3") {
+    const engine = ttsEngines.find((item) => item.id === engineId);
+    return {
+      ...runConfiguration,
+      engineOptions: {
+        ...runConfiguration.engineOptions,
+        lang: runConfiguration.engineOptions.lang ?? "na",
+        voiceStyle: runConfiguration.engineOptions.voiceStyle ?? engine?.voices?.[0]?.id ?? "M1",
+      },
+      ttsEngine: engineId,
+    };
+  }
+  return {
+    ...runConfiguration,
+    engineOptions: {},
+    options: {
+      ...runConfiguration.options,
+      voiceClone: false,
+    },
+    ttsEngine: "auto",
+  };
+}
+
+function CloneTargetReadinessList({
+  buildingArtifactKey,
+  cancelingTargetKey,
+  modules,
+  profile,
+  runConfiguration,
+  ttsEngines,
+  onBuildArtifact,
+  onCancelTarget,
+  onRunConfigurationChange,
+}: Readonly<{
+  buildingArtifactKey: string | null;
+  cancelingTargetKey: string | null;
+  modules: ResearchModuleDiagnostics[];
+  profile: VoiceProfile;
+  runConfiguration: RunConfiguration;
+  ttsEngines: TTSEngineDiagnostics[];
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+}>) {
+  const targetOrder = cloneReadinessTargetOrder(profile);
+  return (
+    <div className="grid gap-2">
+      {targetOrder.map((moduleId) => (
+        <CloneTargetReadinessRow
+          buildingArtifactKey={buildingArtifactKey}
+          cancelingTargetKey={cancelingTargetKey}
+          key={moduleId}
+          module={modules.find((item) => item.id === moduleId)}
+          moduleId={moduleId}
+          profile={profile}
+          runConfiguration={runConfiguration}
+          ttsEngines={ttsEngines}
+          onBuildArtifact={onBuildArtifact}
+          onCancelTarget={onCancelTarget}
+          onRunConfigurationChange={onRunConfigurationChange}
+        />
+      ))}
+    </div>
+  );
+}
+
+function CloneTargetReadinessRow({
+  buildingArtifactKey,
+  cancelingTargetKey,
+  module,
+  moduleId,
+  profile,
+  runConfiguration,
+  ttsEngines,
+  onBuildArtifact,
+  onCancelTarget,
+  onRunConfigurationChange,
+}: Readonly<{
+  buildingArtifactKey: string | null;
+  cancelingTargetKey: string | null;
+  module?: ResearchModuleDiagnostics;
+  moduleId: string;
+  profile: VoiceProfile;
+  runConfiguration: RunConfiguration;
+  ttsEngines: TTSEngineDiagnostics[];
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+}>) {
+  const target = profile.cloneTargets?.[moduleId];
+  const artifact = profile.cloneArtifacts?.[moduleId];
+  const moduleReady =
+    moduleId === "kokoro-clone" ||
+    (module?.installed === true && researchModuleRuntimeReady(module));
+  const status = artifactChipStatus(moduleId, target?.status, artifact?.status, moduleReady);
+  const targetKey = `${profile.id}:${moduleId}`;
+  const isCanceling = cancelingTargetKey === targetKey;
+  const isBusy =
+    buildingArtifactKey === targetKey ||
+    isCanceling ||
+    ["queued", "building", "validating"].includes(target?.status ?? "") ||
+    artifact?.status === "building";
+  const canPrepare = moduleReady && !isBusy && status !== "ready";
+  const canRevalidate =
+    moduleReady && !isBusy && target?.status === "ready" && target.validation?.status === "failed";
+  const isSelected = isCloneTargetSelected(moduleId, runConfiguration, profile);
+  const score = target?.validation?.score ?? artifact?.score;
+  const detail =
+    target?.error ??
+    artifact?.error ??
+    target?.validation?.error ??
+    voiceProfileTargetReadinessText(profile, moduleId);
+  const isReady = status === "ready" && !canRevalidate;
+  const canUse = isReady && !isSelected;
+  const canAct = isBusy || canPrepare || canRevalidate || canUse;
+  const engineLabel = target?.engineId ?? module?.engineId ?? moduleId;
+  const actionLabel = cloneTargetInspectorActionLabel({
+    isBusy,
+    isCanceling,
+    isReady,
+    isSelected,
+    moduleId,
+    status,
+    validationStatus: target?.validation?.status,
+  });
+
+  return (
+    <div
+      className={`grid gap-3 rounded-md border p-3 text-xs ${cloneTargetReadinessCardClass(
+        isBusy,
+        status,
+      )}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-semibold text-[var(--vs-text)]">{moduleLabel(moduleId)}</p>
+          <p className="vs-muted mt-1 truncate" title={detail}>
+            {detail}
+          </p>
+        </div>
+        <span className={`shrink-0 rounded px-2 py-1 font-semibold ${targetStatusClass(status)}`}>
+          {isBusy ? "working" : status}
+        </span>
+      </div>
+      <p className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-[0.68rem] vs-muted">
+        <span className="min-w-0">
+          Artifact:{" "}
+          <span className="font-semibold text-[var(--vs-text)]">
+            {artifact?.status ?? (moduleReady ? "available" : "setup")}
+          </span>
+        </span>
+        <span className="min-w-0">
+          Validation:{" "}
+          <span className="font-semibold text-[var(--vs-text)]">
+            {typeof score === "number"
+              ? formatSimilarity(score)
+              : (target?.validation?.status ?? "waiting")}
+          </span>
+        </span>
+      </p>
+      <p className="truncate text-[0.68rem] vs-muted" title={engineLabel}>
+        {engineLabel} · {moduleReady ? "engine ready" : "setup needed"}
+      </p>
+      {canAct || isSelected ? (
+        <button
+          className={`h-8 w-full rounded-md border px-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${cloneTargetActionButtonClass(
+            isBusy,
+            isReady,
+          )}`}
+          disabled={isCanceling || isSelected || (!canAct && !isSelected)}
+          onClick={() => {
+            handleCloneTargetReadinessAction({
+              canPrepare,
+              canRevalidate,
+              canUse,
+              isBusy,
+              moduleId,
+              profile,
+              runConfiguration,
+              ttsEngines,
+              onBuildArtifact,
+              onCancelTarget,
+              onRunConfigurationChange,
+            });
+          }}
+          type="button"
+        >
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function cloneReadinessTargetOrder(profile: VoiceProfile): string[] {
+  const targets = ["kokoro-clone", "kokoro-embed"];
+  if (profile.cloneTargets?.["supertonic-embed"] || profile.cloneArtifacts?.["supertonic-embed"]) {
+    targets.push("supertonic-embed");
+  }
+  return targets;
+}
+
+function cloneTargetActionButtonClass(isBusy: boolean, isReady: boolean): string {
+  if (isBusy) {
+    return "border-red-200 bg-white text-red-600 hover:bg-red-50";
+  }
+  if (isReady) {
+    return "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50";
+  }
+  return "border-orange-200 bg-white text-orange-800 hover:bg-orange-50";
+}
+
+function handleCloneTargetReadinessAction({
+  canPrepare,
+  canRevalidate,
+  canUse,
+  isBusy,
+  moduleId,
+  profile,
+  runConfiguration,
+  ttsEngines,
+  onBuildArtifact,
+  onCancelTarget,
+  onRunConfigurationChange,
+}: Readonly<{
+  canPrepare: boolean;
+  canRevalidate: boolean;
+  canUse: boolean;
+  isBusy: boolean;
+  moduleId: string;
+  profile: VoiceProfile;
+  runConfiguration: RunConfiguration;
+  ttsEngines: TTSEngineDiagnostics[];
+  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
+  onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+}>) {
+  if (isBusy) {
+    void onCancelTarget(profile.id, moduleId);
+    return;
+  }
+  if (canUse) {
+    onRunConfigurationChange(
+      runConfigurationForCloneTarget(runConfiguration, moduleId, ttsEngines),
+    );
+    return;
+  }
+  if (canPrepare || canRevalidate) {
+    void onBuildArtifact(profile.id, moduleId);
+  }
+}
+
+function isCloneTargetSelected(
+  moduleId: string,
+  runConfiguration: RunConfiguration,
+  profile: VoiceProfile,
+): boolean {
+  if (moduleId === "supertonic-embed") {
+    return runConfiguration.ttsEngine === "supertonic-3";
+  }
+  if (!isKokoroRenderEngine(runConfiguration.ttsEngine)) {
+    return false;
+  }
+  const activeMode = kokoroRenderModeForConfiguration(runConfiguration, Boolean(profile));
+  return kokoroRenderModeTargetId(activeMode) === moduleId;
+}
+
+function runConfigurationForCloneTarget(
+  runConfiguration: RunConfiguration,
+  moduleId: string,
+  ttsEngines: TTSEngineDiagnostics[],
+): RunConfiguration {
+  if (moduleId === "kokoro-clone") {
+    return applyKokoroRenderMode(runConfiguration, "kokoclone");
+  }
+  if (moduleId === "kokoro-embed") {
+    return applyKokoroRenderMode(runConfiguration, "kokoro-embed");
+  }
+  if (moduleId === "supertonic-embed") {
+    return runConfigurationForBackendContract(runConfiguration, "supertonic-3", ttsEngines);
+  }
+  return runConfiguration;
+}
+
+function cloneTargetInspectorActionLabel({
+  isBusy,
+  isCanceling,
+  isReady,
+  isSelected,
+  moduleId,
+  status,
+  validationStatus,
+}: Readonly<{
+  isBusy: boolean;
+  isCanceling: boolean;
+  isReady: boolean;
+  isSelected: boolean;
+  moduleId: string;
+  status: string;
+  validationStatus?: string;
+}>): string {
+  if (isSelected) {
+    return "Selected";
+  }
+  if (isReady) {
+    return "Use";
+  }
+  return cloneTargetActionLabel({
+    isBusy,
+    isCanceling,
+    moduleId,
+    status,
+    validationStatus,
+  });
+}
+
+function cloneTargetActionLabel({
+  isBusy,
+  isCanceling,
+  moduleId,
+  status,
+  validationStatus,
+}: Readonly<{
+  isBusy: boolean;
+  isCanceling: boolean;
+  moduleId: string;
+  status: string;
+  validationStatus?: string;
+}>): string {
+  if (isCanceling) {
+    return "Cancelling...";
+  }
+  if (isBusy) {
+    return "Cancel";
+  }
+  if (status === "ready" && validationStatus === "failed") {
+    return "Revalidate";
+  }
+  if (status === "failed" || status === "cancelled") {
+    return `Retry ${moduleLabel(moduleId)}`;
+  }
+  return `Prepare ${moduleLabel(moduleId)}`;
+}
+
+function cloneTargetReadinessCardClass(isBusy: boolean, status: string): string {
+  if (isBusy) {
+    return "border-orange-300 bg-orange-50";
+  }
+  if (status === "failed") {
+    return "border-red-200 bg-red-50";
+  }
+  if (status === "cancelled") {
+    return "border-zinc-300 bg-zinc-50";
+  }
+  if (status === "ready") {
+    return "border-emerald-200 bg-emerald-50";
+  }
+  return "vs-border vs-raised";
+}
+
+function targetStatusClass(status: string): string {
+  if (status === "ready") {
+    return "bg-emerald-100 text-emerald-700";
+  }
+  if (status === "failed") {
+    return "bg-red-100 text-red-700";
+  }
+  if (status === "cancelled") {
+    return "bg-zinc-100 text-zinc-600";
+  }
+  if (["queued", "building", "validating"].includes(status)) {
+    return "bg-orange-100 text-orange-700";
+  }
+  return "bg-zinc-100 text-zinc-600";
+}
+
+function PipelineStatusFooter({
+  activeJobId,
+  canSubmit,
+  hint,
+  isProcessing,
+  job,
+  mode,
+  pipeline,
+  voiceCloningActivity,
+  onCancel,
+  onModeChange,
+  onOpenVoiceCloning,
+  onSubmit,
+}: Readonly<{
+  activeJobId: string | null;
+  canSubmit: boolean;
+  hint: string;
+  isProcessing: boolean;
+  job: VoiceJob | null;
+  mode: ActivityFooterMode;
+  pipeline: PipelineStepState;
+  voiceCloningActivity: VoiceCloningActivitySummary;
+  onCancel: () => void;
+  onModeChange: (mode: ActivityFooterMode) => void;
+  onOpenVoiceCloning: () => void;
+  onSubmit: () => void;
+}>) {
+  const total = job?.retries.totalSegments ?? job?.progress.totalSegments ?? 0;
+  const current = job?.audioReadySegments ?? job?.progress.currentSegment ?? 0;
+  const narrationStatus = resolveNarrationActivityStatus(job, isProcessing);
+  const narrationStages: ActivityStageSummary[] = [
+    { label: "Optimize", status: pipeline.optimization },
+    { label: "Synthesize", status: pipeline.synthesis },
+    { label: "Check", status: pipeline.checker },
+  ];
+  const narrationAction = isProcessing ? (
+    <button
+      className="h-10 rounded-md border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+      disabled={!activeJobId}
+      onClick={onCancel}
+      type="button"
+    >
+      Cancel Run
+    </button>
+  ) : (
+    <button
+      className="h-10 rounded-md px-4 text-sm font-semibold text-white transition disabled:bg-zinc-300 vs-accent-bg"
+      disabled={!canSubmit}
+      onClick={onSubmit}
+      type="button"
+    >
+      Create & Listen
+    </button>
+  );
+  const voiceCloningAction = (
+    <button
+      className={`h-10 rounded-md px-4 text-sm font-semibold transition ${
+        voiceCloningActivity.status === "attention"
+          ? "border border-amber-300 bg-white text-amber-800 hover:bg-amber-50"
+          : "border border-orange-300 bg-orange-500/10 text-orange-700 hover:bg-orange-50"
+      }`}
+      onClick={onOpenVoiceCloning}
+      type="button"
+    >
+      {voiceCloningActivity.actionLabel}
+    </button>
+  );
+  const narrationMessage = narrationActivityMessage(job, hint);
+  const narrationSegmentSummary = total > 0 ? `${String(current)} / ${String(total)}` : "0 / 0";
+  const narrationCompactDetail = `${narrationSegmentSummary} · ${estimateFirstAudioETA(job)}`;
+
+  if (mode === "collapsed") {
+    return (
+      <footer className="z-30 shrink-0 border-t px-3 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised">
+        <button
+          className="flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-md border px-3 text-left transition hover:bg-[var(--vs-surface)] vs-border"
+          onClick={() => {
+            onModeChange("compact");
+          }}
+          type="button"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <FooterStatusDots
+              narrationStatus={narrationStatus}
+              voiceCloningStatus={voiceCloningActivity.status}
+            />
+            <span className="min-w-0 truncate text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+              Activity
+            </span>
+            <span className="min-w-0 truncate text-sm font-semibold">
+              Narration {job?.status ?? "Idle"} · Voice Cloning {voiceCloningActivity.statusLabel}
+            </span>
+          </span>
+          <span className="shrink-0 text-xs font-semibold text-orange-700">Expand</span>
+        </button>
+      </footer>
+    );
+  }
+
+  if (mode === "compact") {
+    return (
+      <footer className="z-30 shrink-0 border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised">
+        <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-center">
+          <CompactActivityLane
+            action={narrationAction}
+            detail={narrationCompactDetail}
+            message={narrationMessage}
+            stages={narrationStages}
+            status={narrationStatus}
+            statusLabel={job?.status ?? "Idle"}
+            title="Narration"
+          />
+          <CompactActivityLane
+            action={voiceCloningAction}
+            detail={`${voiceCloningActivity.elapsed} · ${voiceCloningActivity.lastUpdate}`}
+            message={voiceCloningActivity.message}
+            stages={voiceCloningActivity.stages}
+            status={voiceCloningActivity.status}
+            statusLabel={voiceCloningActivity.statusLabel}
+            title="Voice Cloning"
+          />
+          <ActivityFooterModeControls mode={mode} onModeChange={onModeChange} />
+        </div>
+      </footer>
+    );
+  }
+
+  return (
+    <footer className="z-30 max-h-[46vh] shrink-0 overflow-y-auto border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:max-h-none lg:overflow-visible lg:px-4 vs-border vs-raised">
+      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+          Activity Footer
+        </span>
+        <ActivityFooterModeControls mode={mode} onModeChange={onModeChange} />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <ActivityLanePanel
+          action={narrationAction}
+          facts={
+            <>
+              <ActivityFact
+                label="Job Status"
+                value={job?.status ?? "Idle"}
+                detail={activeJobId ?? hint}
+              />
+              <ActivityFact
+                label="Segments"
+                value={total > 0 ? `${String(current)} / ${String(total)}` : "0 / 0"}
+                detail={total > 0 ? formatPercentageRatio(current, total) : "Waiting"}
+              />
+              <ActivityFact
+                label="First Audio ETA"
+                value={estimateFirstAudioETA(job)}
+                detail="until checked audio"
+              />
+              <ActivityFact
+                label="Confidence"
+                value={formatSimilarity(job?.voiceCheck.similarity ?? 0)}
+                detail={job?.voiceCheck.reason ?? "waiting"}
+              />
+            </>
+          }
+          message={narrationMessage}
+          stages={narrationStages}
+          status={narrationStatus}
+          statusLabel={job?.status ?? "Idle"}
+          title="Narration Pipeline"
+        />
+        <ActivityLanePanel
+          action={voiceCloningAction}
+          facts={
+            <>
+              <ActivityFact
+                label="Status"
+                value={voiceCloningActivity.statusLabel}
+                detail={voiceCloningActivity.sourceDetail}
+              />
+              <ActivityFact
+                label="Elapsed"
+                value={voiceCloningActivity.elapsed}
+                detail={voiceCloningActivity.eta}
+              />
+              <ActivityFact
+                label="Last Update"
+                value={voiceCloningActivity.lastUpdate}
+                detail="heartbeat visible"
+              />
+              <ActivityFact
+                label="Candidates"
+                value={voiceCloningActivity.candidateDetail}
+                detail={voiceCloningActivity.activeProfile?.name ?? "profile pending"}
+              />
+            </>
+          }
+          message={voiceCloningActivity.message}
+          stages={voiceCloningActivity.stages}
+          status={voiceCloningActivity.status}
+          statusLabel={voiceCloningActivity.statusLabel}
+          title="Voice Cloning"
+        />
+      </div>
+    </footer>
+  );
+}
+
+function ActivityLanePanel({
+  action,
+  facts,
+  message,
+  stages,
+  status,
+  statusLabel,
+  title,
+}: Readonly<{
+  action: ReactNode;
+  facts: ReactNode;
+  message: string;
+  stages: ActivityStageSummary[];
+  status: ActivityStatus;
+  statusLabel: string;
+  title: string;
+}>) {
+  return (
+    <section className="min-w-0 rounded-lg border p-3 vs-border vs-surface">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">{title}</h2>
+            <ActivityStatusBadge label={statusLabel} status={status} />
+          </div>
+          <p className="mt-2 truncate text-sm font-medium" title={message}>
+            {message}
+          </p>
+        </div>
+        <div className="shrink-0">{action}</div>
+      </div>
+      <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
+        {stages.map((stage) => (
+          <PipelineFooterStage key={stage.label} label={stage.label} status={stage.status} />
+        ))}
+      </div>
+      <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs md:grid-cols-4">{facts}</div>
+    </section>
+  );
+}
+
+function ActivityFooterModeControls({
+  mode,
+  onModeChange,
+}: Readonly<{
+  mode: ActivityFooterMode;
+  onModeChange: (mode: ActivityFooterMode) => void;
+}>) {
+  const nextMode = nextActivityFooterMode(mode);
+  const labelByMode: Record<ActivityFooterMode, string> = {
+    collapsed: "Open",
+    compact: "Hide",
+    full: "Less",
+  };
+  const viewLabelByMode: Record<ActivityFooterMode, string> = {
+    collapsed: "Hide",
+    compact: "Slim",
+    full: "Full",
+  };
+  return (
+    <div className="flex w-full shrink-0 flex-wrap items-center gap-1 rounded-md border p-1 vs-border vs-surface sm:w-auto">
+      {(["full", "compact", "collapsed"] as const).map((item) => (
+        <button
+          aria-label={`Show ${item} activity footer`}
+          className={`h-7 min-w-[3.8rem] flex-1 rounded px-2 text-[0.68rem] font-semibold transition sm:flex-none ${
+            mode === item
+              ? "bg-orange-500 text-white"
+              : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
+          }`}
+          key={item}
+          onClick={() => {
+            onModeChange(item);
+          }}
+          type="button"
+        >
+          {viewLabelByMode[item]}
+        </button>
+      ))}
+      <button
+        className="h-7 min-w-[3.8rem] flex-1 rounded border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50 sm:flex-none"
+        onClick={() => {
+          onModeChange(nextMode);
+        }}
+        type="button"
+      >
+        {labelByMode[mode]}
+      </button>
+    </div>
+  );
+}
+
+function CompactActivityLane({
+  action,
+  detail,
+  message,
+  stages,
+  status,
+  statusLabel,
+  title,
+}: Readonly<{
+  action: ReactNode;
+  detail: string;
+  message: string;
+  stages: ActivityStageSummary[];
+  status: ActivityStatus;
+  statusLabel: string;
+  title: string;
+}>) {
+  return (
+    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border p-3 vs-border vs-surface">
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">{title}</h2>
+          <ActivityStatusBadge label={statusLabel} status={status} />
+          <span className="vs-muted min-w-0 truncate text-xs">{detail}</span>
+        </div>
+        <div className="mt-2 flex min-w-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1">
+            {stages.map((stage) => (
+              <span
+                className={`h-2 w-2 rounded-full ${stageDotClass(stage.status)}`}
+                key={stage.label}
+                title={`${stage.label}: ${stageStatusLabel(stage.status)}`}
+              />
+            ))}
+          </div>
+          <p className="min-w-0 truncate text-sm font-medium" title={message}>
+            {message}
+          </p>
+        </div>
+      </div>
+      <div className="shrink-0">{action}</div>
+    </section>
+  );
+}
+
+function FooterStatusDots({
+  narrationStatus,
+  voiceCloningStatus,
+}: Readonly<{ narrationStatus: ActivityStatus; voiceCloningStatus: ActivityStatus }>) {
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      <span className={`h-2.5 w-2.5 rounded-full ${activityDotClass(narrationStatus)}`} />
+      <span className={`h-2.5 w-2.5 rounded-full ${activityDotClass(voiceCloningStatus)}`} />
+    </span>
+  );
+}
+
+function activityDotClass(status: ActivityStatus): string {
+  if (status === "running") {
+    return "bg-orange-500";
+  }
+  if (status === "attention") {
+    return "bg-amber-500";
+  }
+  if (status === "complete") {
+    return "bg-emerald-500";
+  }
+  if (status === "cancelled") {
+    return "bg-zinc-500";
+  }
+  return "bg-zinc-300";
+}
+
+function ActivityStatusBadge({
+  label,
+  status,
+}: Readonly<{ label: string; status: ActivityStatus }>) {
+  const classNameByStatus: Record<ActivityStatus, string> = {
+    attention: "border-amber-300 bg-amber-50 text-amber-800",
+    cancelled: "border-zinc-300 bg-zinc-50 text-zinc-600",
+    complete: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    idle: "border-zinc-200 bg-zinc-50 text-zinc-600",
+    running: "border-orange-300 bg-orange-50 text-orange-700",
+  };
+  return (
+    <span
+      className={`inline-flex h-7 shrink-0 items-center rounded-md border px-2 text-[0.68rem] font-semibold ${classNameByStatus[status]}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function PipelineFooterStage({ label, status }: Readonly<{ label: string; status: StageStatus }>) {
+  let tone = "border-zinc-200 bg-zinc-50 text-zinc-500";
+  switch (status) {
+    case "done": {
+      tone = "border-emerald-300 bg-emerald-50 text-emerald-700";
+      break;
+    }
+    case "running": {
+      tone = "border-orange-300 bg-orange-500/10 text-orange-700";
+      break;
+    }
+    case "failed": {
+      tone = "border-red-300 bg-red-50 text-red-700";
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+  return (
+    <span
+      className={`inline-flex h-9 min-w-0 items-center gap-2 rounded-md border px-3 text-xs font-semibold ${tone}`}
+      title={`${label}: ${stageStatusLabel(status)}`}
+    >
+      <span className={`h-2 w-2 shrink-0 rounded-full ${stageDotClass(status)}`} />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
+function ActivityFact({
+  detail,
+  label,
+  value,
+}: Readonly<{ detail: string; label: string; value: string }>) {
+  return (
+    <div className="min-w-0 border-l pl-3 vs-border">
+      <p className="vs-muted truncate text-[0.65rem] font-semibold uppercase tracking-[0.12em]">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-sm font-semibold" title={value}>
+        {value}
+      </p>
+      <p className="vs-muted mt-0.5 truncate text-xs" title={detail}>
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function stageStatusLabel(status: StageStatus): string {
+  switch (status) {
+    case "done": {
+      return "done";
+    }
+    case "failed": {
+      return "failed";
+    }
+    case "running": {
+      return "running";
+    }
+    default: {
+      return "waiting";
+    }
+  }
+}
+
+function stageDotClass(status: StageStatus): string {
+  switch (status) {
+    case "done": {
+      return "bg-emerald-500";
+    }
+    case "failed": {
+      return "bg-red-500";
+    }
+    case "running": {
+      return "bg-orange-500";
+    }
+    default: {
+      return "bg-zinc-300";
+    }
+  }
+}
+
+function resolveNarrationActivityStatus(
+  job: VoiceJob | null,
+  isProcessing: boolean,
+): ActivityStatus {
+  if (job?.status === "failed" || job?.status === "cancelled") {
+    return "attention";
+  }
+  if (isProcessing) {
+    return "running";
+  }
+  if (job?.status === "completed") {
+    return "complete";
+  }
+  return "idle";
+}
+
+function narrationActivityMessage(job: VoiceJob | null, hint: string): string {
+  const progressMessage = job?.progress.message.trim();
+  if (progressMessage && progressMessage.length > 0) {
+    return progressMessage;
+  }
+  return hint;
+}
+
+function SidebarFact({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
+      <dt className="vs-muted">{label}</dt>
+      <dd className="truncate font-semibold text-[var(--vs-text)]" title={value}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function SourceTextPanel({
+  bookScopeContent,
   bookControls,
   canSubmit,
-  isProcessing,
+  contentMode,
+  customSpeechPolicyProfiles,
   isPreparingSource,
+  isProcessing,
   isSpeechPolicyPreviewing,
+  job,
+  optimizedText,
   preparedSources,
   projectId,
+  selectedBookScope,
+  selectedBookSource,
   selectedPreparedSource,
-  customSpeechPolicyProfiles,
+  sourceMode,
   speechPolicyError,
   speechPolicyOverrides,
   speechPolicyProfile,
@@ -4234,12 +7719,16 @@ function SourceTextPanel({
   text,
   voiceProfileId,
   onClearSpeechPolicyOverrides,
+  onContentModeChange,
   onCreateCustomSpeechPolicyProfile,
   onCreatePreparedAudio,
   onDeleteCustomSpeechPolicyProfile,
+  onInspectBookSource,
   onInspectPreparedSource,
+  onOpenTeleprompter,
   onPrepareFile,
   onPrepareUrl,
+  onSourceModeChange,
   onSpeechPolicyOverridesChange,
   onSpeechPolicyProfileChange,
   onUpdateCustomSpeechPolicyProfile,
@@ -4247,15 +7736,22 @@ function SourceTextPanel({
   onTextChange,
   onUsePreparedSource,
 }: Readonly<{
+  bookScopeContent: BookSourceScopeContent | null;
   bookControls: ReactNode;
   canSubmit: boolean;
-  isProcessing: boolean;
+  contentMode: ContentMode;
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
   isPreparingSource: boolean;
+  isProcessing: boolean;
   isSpeechPolicyPreviewing: boolean;
+  job: VoiceJob | null;
+  optimizedText: string;
   preparedSources: PreparedSource[];
   projectId: string;
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
-  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  sourceMode: SourceMode;
   speechPolicyError: string | null;
   speechPolicyOverrides: SpeechPolicyOverrides;
   speechPolicyProfile: string;
@@ -4264,6 +7760,7 @@ function SourceTextPanel({
   text: string;
   voiceProfileId: string;
   onClearSpeechPolicyOverrides: () => void;
+  onContentModeChange: (mode: ContentMode) => void;
   onCreateCustomSpeechPolicyProfile: (
     name: string,
     settings: SpeechPolicySettings,
@@ -4271,9 +7768,12 @@ function SourceTextPanel({
   ) => Promise<void>;
   onCreatePreparedAudio: (source: PreparedSource) => void;
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
+  onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
+  onOpenTeleprompter: () => void;
   onPrepareFile: (file: File, markdownParseMode: MarkdownParseMode) => Promise<void>;
   onPrepareUrl: (url: string, markdownParseMode: MarkdownParseMode) => Promise<void>;
+  onSourceModeChange: (mode: SourceMode) => void;
   onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onUpdateCustomSpeechPolicyProfile: (
@@ -4290,9 +7790,16 @@ function SourceTextPanel({
   const [isDragActive, setIsDragActive] = useState(false);
   const [sourceFileLabel, setSourceFileLabel] = useState<string | null>(null);
   const [sourceFileError, setSourceFileError] = useState<string | null>(null);
-  const [sourceMode, setSourceMode] = useState<"book" | "file" | "text">("text");
   const [sourceUrl, setSourceUrl] = useState("");
   const [markdownParseMode, setMarkdownParseMode] = useState<MarkdownParseMode>("strict");
+  const showSourceIntake = contentMode === "sourceIntake";
+  const sourceIdentity = resolveWorkbenchSourceIdentity({
+    contentMode,
+    selectedBookSource,
+    selectedPreparedSource,
+    sourceMode,
+    text,
+  });
 
   const loadSourceFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -4302,7 +7809,9 @@ function SourceTextPanel({
 
       setSourceFileError(null);
       const fileArray = [...files].filter((file) =>
-        sourceMode === "file" ? isSupportedSourcePrepFile(file) : isSupportedSourceTextFile(file),
+        sourceMode === "fileUrl"
+          ? isSupportedSourcePrepFile(file)
+          : isSupportedSourceTextFile(file),
       );
       if (fileArray.length === 0) {
         setSourceFileError("Drop a text, HTML, PDF, EPUB, CSV, JSON, or log file.");
@@ -4310,9 +7819,10 @@ function SourceTextPanel({
       }
 
       try {
-        if (sourceMode === "file") {
+        if (sourceMode === "fileUrl") {
           await onPrepareFile(fileArray[0], markdownParseMode);
           setSourceFileLabel(formatSourceTextFileLabel(fileArray));
+          onContentModeChange("review");
           return;
         }
         const parts = await Promise.all(fileArray.map((file) => file.text()));
@@ -4327,13 +7837,13 @@ function SourceTextPanel({
         setSourceFileError("Unable to read that file locally.");
       }
     },
-    [isProcessing, markdownParseMode, onPrepareFile, onTextChange, sourceMode],
+    [isProcessing, markdownParseMode, onContentModeChange, onPrepareFile, onTextChange, sourceMode],
   );
 
   return (
     <form
-      className={`min-w-0 overflow-hidden rounded-lg border bg-white p-5 shadow-sm ${
-        isDragActive ? "border-orange-300 ring-2 ring-orange-100" : "border-zinc-200"
+      className={`grid min-w-0 gap-4 rounded-xl border bg-[var(--vs-raised)] p-4 xl:p-5 ${
+        isDragActive ? "border-orange-300 ring-2 ring-orange-100" : "vs-border"
       }`}
       onSubmit={onSubmit}
       onDragOver={(event) => {
@@ -4351,41 +7861,98 @@ function SourceTextPanel({
         void loadSourceFiles(event.dataTransfer.files);
       }}
     >
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <label className="text-sm font-semibold text-zinc-950" htmlFor="source-text">
-            Source Intake
+      <div className="flex flex-col gap-1">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
+            Narration Workbench
+          </p>
+          <label
+            className="mt-1 block text-lg font-semibold text-[var(--vs-text)]"
+            htmlFor="source-text"
+          >
+            Content Workbench
           </label>
-          <p className="mt-1 text-xs text-zinc-500">
-            {text.trim().length.toLocaleString()} characters queued
+          <p className="mt-1 text-sm vs-muted">
+            {sourceIdentity.label} · {sourceIdentity.meta}
           </p>
         </div>
-        <div className="grid grid-cols-3 rounded-md border border-zinc-200 bg-zinc-50 p-1 text-xs font-semibold text-zinc-600">
-          {(["text", "book", "file"] as const).map((mode) => (
+      </div>
+
+      <div className="grid grid-cols-2 rounded-lg border bg-[var(--vs-surface)] p-1 text-sm font-semibold vs-border">
+        {(
+          [
+            ["sourceIntake", "Source Intake"],
+            ["review", "Review"],
+          ] as const
+        ).map(([mode, label]) => (
+          <button
+            className={`rounded-md px-3 py-2 transition ${
+              contentMode === mode
+                ? "bg-[var(--vs-raised)] text-orange-700 shadow-sm"
+                : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
+            }`}
+            key={mode}
+            onClick={() => {
+              onContentModeChange(mode);
+            }}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center vs-border">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md border text-orange-600 vs-border vs-surface">
+            <SourceKindIcon mode={sourceIdentity.mode} />
+          </span>
+          <div className="min-w-0">
+            <p
+              className="truncate text-sm font-semibold text-[var(--vs-text)]"
+              title={sourceIdentity.label}
+            >
+              {sourceIdentity.label}
+            </p>
+            <p className="mt-1 truncate text-xs vs-muted" title={sourceIdentity.meta}>
+              {sourceIdentity.meta}
+            </p>
+          </div>
+        </div>
+        <div className="grid min-w-0 grid-cols-3 rounded-md border bg-[var(--vs-surface)] p-1 text-xs font-semibold lg:w-[22rem] vs-border">
+          {(
+            [
+              ["text", "Text"],
+              ["book", "Book"],
+              ["fileUrl", "File / URL"],
+            ] as const
+          ).map(([mode, label]) => (
             <button
-              className={`rounded px-3 py-1.5 capitalize transition ${
-                sourceMode === mode ? "bg-white text-orange-700 shadow-sm" : "hover:text-zinc-900"
+              className={`rounded px-3 py-1.5 transition ${
+                sourceIdentity.mode === mode
+                  ? "bg-orange-500/10 text-orange-700 shadow-sm ring-1 ring-orange-300"
+                  : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
               }`}
               key={mode}
               onClick={() => {
-                setSourceMode(mode);
+                onSourceModeChange(mode);
               }}
               type="button"
             >
-              {mode === "file" ? "File / URL" : mode}
+              {label}
             </button>
           ))}
         </div>
       </div>
-      {sourceMode === "book" ? bookControls : null}
-      {sourceMode === "file" ? (
+      {showSourceIntake && sourceMode === "book" ? bookControls : null}
+      {showSourceIntake && sourceMode === "fileUrl" ? (
         <SourcePrepReview
-          projectId={projectId}
           isPreparing={isPreparingSource}
           isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
           customSpeechPolicyProfiles={customSpeechPolicyProfiles}
           preparedSources={preparedSources}
           selectedPreparedSource={selectedPreparedSource}
+          showIntakeControls={showSourceIntake}
           speechPolicyError={speechPolicyError}
           speechPolicyOverrides={speechPolicyOverrides}
           speechPolicyProfile={speechPolicyProfile}
@@ -4395,7 +7962,6 @@ function SourceTextPanel({
           markdownParseMode={markdownParseMode}
           sourcePrepError={sourcePrepError}
           sourceUrl={sourceUrl}
-          voiceProfileId={voiceProfileId}
           onBrowse={() => {
             fileInputRef.current?.click();
           }}
@@ -4406,6 +7972,7 @@ function SourceTextPanel({
           onPrepareUrl={() => {
             if (sourceUrl.trim()) {
               void onPrepareUrl(sourceUrl.trim(), markdownParseMode);
+              onContentModeChange("review");
             }
           }}
           onClearSpeechPolicyOverrides={onClearSpeechPolicyOverrides}
@@ -4415,6 +7982,7 @@ function SourceTextPanel({
           onSourceUrlChange={setSourceUrl}
           onMarkdownParseModeChange={setMarkdownParseMode}
           onUsePreparedSource={(source) => {
+            onContentModeChange("review");
             void onUsePreparedSource(source);
           }}
         >
@@ -4433,14 +8001,14 @@ function SourceTextPanel({
           />
         </SourcePrepReview>
       ) : null}
-      {sourceMode === "text" ? (
-        <>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+      {showSourceIntake && sourceMode === "text" ? (
+        <div className="grid gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed bg-[var(--vs-raised)] px-3 py-2 text-xs vs-border">
             <span className="min-w-0 flex-1 basis-48 truncate" title={sourceFileLabel ?? undefined}>
               {sourceFileLabel ?? "Drop text or Markdown files here"}
             </span>
             <button
-              className="rounded border border-zinc-200 bg-white px-3 py-1.5 font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50"
+              className="rounded border px-3 py-1.5 font-semibold transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50 vs-border vs-surface"
               disabled={isProcessing}
               onClick={() => {
                 fileInputRef.current?.click();
@@ -4463,9 +8031,9 @@ function SourceTextPanel({
               }}
             />
           </div>
-          {sourceFileError ? <p className="mb-3 text-xs text-red-700">{sourceFileError}</p> : null}
+          {sourceFileError ? <p className="text-xs text-red-700">{sourceFileError}</p> : null}
           <textarea
-            className="min-h-[180px] w-full resize-y rounded-md border border-zinc-200 bg-zinc-50 p-4 font-mono text-sm leading-6 text-zinc-900 outline-none transition read-only:bg-zinc-100 read-only:text-zinc-500 focus:border-orange-400 focus:bg-white focus:ring-2 focus:ring-orange-100"
+            className="min-h-[240px] w-full resize-none rounded-lg border bg-[var(--vs-raised)] p-4 font-mono text-sm leading-6 outline-none transition read-only:opacity-70 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
             id="source-text"
             onChange={(event) => {
               if (!isProcessing) {
@@ -4477,13 +8045,168 @@ function SourceTextPanel({
             spellCheck={false}
             value={text}
           />
-        </>
+        </div>
+      ) : null}
+      {contentMode === "review" ? (
+        <div className="grid gap-3">
+          <NarrationReviewWorkbench
+            bookScopeContent={bookScopeContent}
+            job={job}
+            optimizedText={optimizedText}
+            projectId={projectId}
+            selectedBookScope={selectedBookScope}
+            selectedBookSource={selectedBookSource}
+            selectedPreparedSource={selectedPreparedSource}
+            text={text}
+            voiceProfileId={voiceProfileId}
+            onInspectBookSource={onInspectBookSource}
+            onInspectPreparedSource={onInspectPreparedSource}
+            onOpenTeleprompter={onOpenTeleprompter}
+          />
+        </div>
+      ) : null}
+      {showSourceIntake && sourceMode !== "fileUrl" ? (
+        <SourceMetadataStrip
+          job={job}
+          selectedBookSource={selectedBookSource}
+          selectedBookScope={selectedBookScope}
+          bookScopeContent={bookScopeContent}
+          selectedPreparedSource={selectedPreparedSource}
+          sourceMode={sourceMode}
+          text={text}
+        />
       ) : null}
       <button className="sr-only" disabled={!canSubmit} type="submit">
         Create & Listen
       </button>
     </form>
   );
+}
+
+function SourceKindIcon({ mode }: Readonly<{ mode: SourceMode }>) {
+  if (mode === "book") {
+    return (
+      <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+        <path
+          d="M4.5 5.5A2.5 2.5 0 0 1 7 3h12.5v16H7a2.5 2.5 0 0 0-2.5 2.5v-16Z"
+          stroke="currentColor"
+          strokeLinejoin="round"
+          strokeWidth="1.7"
+        />
+        <path d="M8 7h7M8 10h6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
+      </svg>
+    );
+  }
+  if (mode === "fileUrl") {
+    return (
+      <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+        <path
+          d="M7 3.5h7l4 4v13H7v-17Z"
+          stroke="currentColor"
+          strokeLinejoin="round"
+          strokeWidth="1.7"
+        />
+        <path
+          d="M14 3.5v4h4M8.5 13h7M8.5 16h5"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="1.7"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M5 6h14M5 12h14M5 18h9"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+interface WorkbenchSourceIdentity {
+  label: string;
+  meta: string;
+  mode: SourceMode;
+}
+
+function resolveWorkbenchSourceIdentity({
+  contentMode,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  text,
+}: Readonly<{
+  contentMode: ContentMode;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  text: string;
+}>): WorkbenchSourceIdentity {
+  if (contentMode === "sourceIntake") {
+    return sourceIntakeIdentity(sourceMode, selectedBookSource, selectedPreparedSource, text);
+  }
+  if (selectedPreparedSource) {
+    return preparedSourceIdentity(selectedPreparedSource);
+  }
+  if (selectedBookSource) {
+    return bookSourceIdentity(selectedBookSource);
+  }
+  return draftTextIdentity(text);
+}
+
+function sourceIntakeIdentity(
+  sourceMode: SourceMode,
+  selectedBookSource: BookSource | null,
+  selectedPreparedSource: PreparedSource | null,
+  text: string,
+): WorkbenchSourceIdentity {
+  if (sourceMode === "book") {
+    return selectedBookSource
+      ? bookSourceIdentity(selectedBookSource)
+      : {
+          label: "Book source",
+          meta: "Select or import a book",
+          mode: "book",
+        };
+  }
+  if (sourceMode === "fileUrl") {
+    return selectedPreparedSource
+      ? preparedSourceIdentity(selectedPreparedSource)
+      : {
+          label: "File / URL source",
+          meta: "Prepare a document, article, or URL",
+          mode: "fileUrl",
+        };
+  }
+  return draftTextIdentity(text);
+}
+
+function preparedSourceIdentity(source: PreparedSource): WorkbenchSourceIdentity {
+  return {
+    label: source.title ?? source.sourceName,
+    meta: `${source.kind.toUpperCase()} · ${source.wordCount.toLocaleString()} words`,
+    mode: "fileUrl",
+  };
+}
+
+function bookSourceIdentity(source: BookSource): WorkbenchSourceIdentity {
+  return {
+    label: bookSourceName(source),
+    meta: `${source.kind.toUpperCase()} · ${source.wordCount.toLocaleString()} words`,
+    mode: "book",
+  };
+}
+
+function draftTextIdentity(text: string): WorkbenchSourceIdentity {
+  return {
+    label: "Draft text",
+    meta: `${text.trim().length.toLocaleString()} characters queued`,
+    mode: "text",
+  };
 }
 
 function isSupportedSourceTextFile(file: File): boolean {
@@ -4508,32 +8231,14 @@ type SourcePrepReviewTab = "blocks" | "preview" | "pronunciation" | "math" | "ru
 
 function SourcePrepMetric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
-    <div className="min-w-0 bg-white px-4 py-3">
-      <dt className="truncate text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+    <div className="min-w-0 border-l pl-3 first:border-l-0 first:pl-0 vs-border">
+      <dt className="truncate text-[0.68rem] font-semibold uppercase tracking-[0.16em] vs-muted">
         {label}
       </dt>
-      <dd className="mt-1 truncate text-sm font-semibold text-zinc-950" title={value}>
+      <dd className="mt-1 truncate text-sm font-semibold text-[var(--vs-text)]" title={value}>
         {value}
       </dd>
     </div>
-  );
-}
-
-function SourcePrepTabButton({
-  active,
-  label,
-  onClick,
-}: Readonly<{ active: boolean; label: string; onClick: () => void }>) {
-  return (
-    <button
-      className={`rounded-md px-3 py-1.5 transition ${
-        active ? "bg-zinc-950 text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      {label}
-    </button>
   );
 }
 
@@ -4545,13 +8250,15 @@ function MarkdownParseModeControl({
   onChange: (mode: MarkdownParseMode) => void;
 }>) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 pt-3 text-xs">
-      <span className="font-semibold text-zinc-700">Markdown parser</span>
-      <div className="grid grid-cols-2 rounded-md border border-zinc-200 bg-white p-1 font-semibold text-zinc-600">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs vs-border">
+      <span className="font-semibold text-[var(--vs-text)]">Markdown parser</span>
+      <div className="grid grid-cols-2 rounded-md border p-1 font-semibold vs-border vs-surface">
         {(["strict", "legacy"] as const).map((item) => (
           <button
             className={`rounded px-3 py-1.5 capitalize transition ${
-              mode === item ? "bg-zinc-950 text-white shadow-sm" : "hover:text-zinc-900"
+              mode === item
+                ? "bg-orange-500/10 text-orange-700 shadow-sm ring-1 ring-orange-300"
+                : "vs-muted hover:text-[var(--vs-text)]"
             }`}
             key={item}
             onClick={() => {
@@ -4567,35 +8274,6 @@ function MarkdownParseModeControl({
   );
 }
 
-function preparedSourceBlockMatchesFilters(
-  block: PreparedSourceBlock,
-  kindFilter: string,
-  modeFilter: string,
-  query: string,
-): boolean {
-  if (kindFilter && block.kind !== kindFilter) {
-    return false;
-  }
-  if (modeFilter && block.speakMode !== modeFilter) {
-    return false;
-  }
-  if (!query) {
-    return true;
-  }
-  return [
-    block.kind,
-    block.speakMode,
-    block.label,
-    block.text,
-    block.spokenText,
-    block.speechPolicy.explanation,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
-    .includes(query);
-}
-
 function preparedSourceSummaryLine(source: PreparedSource | null): string {
   const base = `${String(source?.summary.sentenceSegmentCount ?? 0)} sentence segments · ${String(
     source?.summary.citationSkipCount ?? 0,
@@ -4606,41 +8284,14 @@ function preparedSourceSummaryLine(source: PreparedSource | null): string {
   return `${base} · ${source.markdownParseMode ?? "strict"} markdown`;
 }
 
-function blockHasSpeechDifference(block: PreparedSourceBlock): boolean {
-  const displayed = normalizeSpeechComparisonText(block.text ?? block.label ?? "");
-  const spoken = normalizeSpeechComparisonText(block.spokenText ?? "");
-  return Boolean(displayed && spoken && displayed !== spoken);
-}
-
-function normalizeSpeechComparisonText(value: string): string {
-  return value
-    .replaceAll(/^#+\s*/g, "")
-    .replaceAll(/\s+/g, " ")
-    .trim();
-}
-
-function LanguageBadge({ block }: Readonly<{ block: PreparedSourceBlock }>) {
-  const lang = block.language ?? block.languageSpans?.[0]?.lang;
-  const spanCount = block.languageSpans?.length ?? 0;
-  if (!lang && spanCount === 0) {
-    return null;
-  }
-  const mixed = spanCount > 1;
-  return (
-    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-700">
-      {mixed ? `mixed · ${lang ?? "multi"} · ${spanCount.toLocaleString()} spans` : lang}
-    </span>
-  );
-}
-
 function SourcePrepReview({
   children,
   customSpeechPolicyProfiles,
   isPreparing,
   isSpeechPolicyPreviewing,
   preparedSources,
-  projectId,
   selectedPreparedSource,
+  showIntakeControls = true,
   speechPolicyError,
   speechPolicyOverrides,
   speechPolicyProfile,
@@ -4650,7 +8301,6 @@ function SourcePrepReview({
   markdownParseMode,
   sourcePrepError,
   sourceUrl,
-  voiceProfileId,
   onBrowse,
   onClearSpeechPolicyOverrides,
   onCreateCustomSpeechPolicyProfile,
@@ -4670,8 +8320,8 @@ function SourcePrepReview({
   isPreparing: boolean;
   isSpeechPolicyPreviewing: boolean;
   preparedSources: PreparedSource[];
-  projectId: string;
   selectedPreparedSource: PreparedSource | null;
+  showIntakeControls?: boolean;
   speechPolicyError: string | null;
   speechPolicyOverrides: SpeechPolicyOverrides;
   speechPolicyProfile: string;
@@ -4681,7 +8331,6 @@ function SourcePrepReview({
   markdownParseMode: MarkdownParseMode;
   sourcePrepError: string | null;
   sourceUrl: string;
-  voiceProfileId: string;
   onBrowse: () => void;
   onClearSpeechPolicyOverrides: () => void;
   onCreateCustomSpeechPolicyProfile: (
@@ -4706,66 +8355,57 @@ function SourcePrepReview({
   onUsePreparedSource: (source: PreparedSource) => void;
 }>) {
   const source = selectedPreparedSource;
-  const blocks = source?.blocks ?? [];
-  const [reviewTab, setReviewTab] = useState<SourcePrepReviewTab>("blocks");
-  const [blockQuery, setBlockQuery] = useState("");
-  const [blockKindFilter, setBlockKindFilter] = useState("");
-  const [blockModeFilter, setBlockModeFilter] = useState("");
-  const blockKinds = useMemo(
-    () => uniqueSortedStrings(blocks.map((block) => block.kind)),
-    [blocks],
-  );
-  const filteredBlocks = useMemo(() => {
-    const query = blockQuery.trim().toLowerCase();
-    return blocks.filter((block) =>
-      preparedSourceBlockMatchesFilters(block, blockKindFilter, blockModeFilter, query),
-    );
-  }, [blockKindFilter, blockModeFilter, blockQuery, blocks]);
+  const intakeError = sourceFileError ?? sourcePrepError;
+  const intakeErrorNode = intakeError ? (
+    <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+      {intakeError}
+    </p>
+  ) : null;
 
   return (
-    <div className="grid min-w-0 gap-4">
-      <div className="grid min-w-0 gap-3 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-        <div className="grid max-w-full min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-          <input
-            className="h-10 w-full min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
-            onChange={(event) => {
-              onSourceUrlChange(event.currentTarget.value);
-            }}
-            placeholder="Paste a readable web page, raw text, PDF, or EPUB URL"
-            type="url"
-            value={sourceUrl}
-          />
-          <button
-            className="h-10 w-full rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-50 md:w-auto"
-            disabled={isPreparing || sourceUrl.trim().length === 0}
-            onClick={onPrepareUrl}
-            type="button"
-          >
-            {isPreparing ? "Preparing..." : "Fetch & Prepare"}
-          </button>
+    <div className="grid min-w-0 gap-3">
+      {showIntakeControls ? (
+        <div className="grid min-w-0 gap-3 overflow-hidden rounded-lg border bg-[var(--vs-raised)] p-3 vs-border">
+          <div className="grid max-w-full min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+            <input
+              className="h-10 w-full min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
+              onChange={(event) => {
+                onSourceUrlChange(event.currentTarget.value);
+              }}
+              placeholder="Paste a readable web page, raw text, PDF, or EPUB URL"
+              type="url"
+              value={sourceUrl}
+            />
+            <button
+              className="h-10 w-full rounded-md border border-orange-300 bg-orange-500/10 px-4 text-sm font-semibold text-orange-700 transition hover:bg-orange-500/15 disabled:opacity-50 md:w-auto"
+              disabled={isPreparing || sourceUrl.trim().length === 0}
+              onClick={onPrepareUrl}
+              type="button"
+            >
+              {isPreparing ? "Preparing..." : "Fetch & Prepare"}
+            </button>
+          </div>
+          <MarkdownParseModeControl mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
+          <div className="flex max-w-full min-w-0 flex-wrap items-center justify-between gap-2 text-xs vs-muted">
+            <span className="min-w-0 flex-1 truncate" title={sourceFileLabel ?? undefined}>
+              {sourceFileLabel ??
+                "Drop a file here, or browse for text, PDF, EPUB, HTML, CSV, JSON, or logs"}
+            </span>
+            <button
+              className="rounded border bg-[var(--vs-raised)] px-3 py-1.5 font-semibold transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50 vs-border"
+              disabled={isPreparing}
+              onClick={onBrowse}
+              type="button"
+            >
+              Browse File
+            </button>
+            {children}
+          </div>
+          {intakeErrorNode}
         </div>
-        <MarkdownParseModeControl mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
-        <div className="flex max-w-full min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
-          <span className="min-w-0 flex-1 truncate" title={sourceFileLabel ?? undefined}>
-            {sourceFileLabel ??
-              "Drop a file here, or browse for text, PDF, EPUB, HTML, CSV, JSON, or logs"}
-          </span>
-          <button
-            className="rounded border border-zinc-200 bg-white px-3 py-1.5 font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50"
-            disabled={isPreparing}
-            onClick={onBrowse}
-            type="button"
-          >
-            Browse File
-          </button>
-          {children}
-        </div>
-        {sourceFileError || sourcePrepError ? (
-          <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-            {sourceFileError ?? sourcePrepError}
-          </p>
-        ) : null}
-      </div>
+      ) : (
+        intakeErrorNode
+      )}
 
       {preparedSources.length > 0 ? (
         <div className="grid gap-3">
@@ -4783,154 +8423,115 @@ function SourcePrepReview({
             onProfileChange={onSpeechPolicyProfileChange}
             onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
           />
-          <div className="-mx-1 flex max-w-full min-w-0 gap-2 overflow-x-auto px-1 pb-1">
-            {preparedSources.slice(0, 5).map((item) => (
-              <button
-                className={`w-[190px] shrink-0 rounded-md border p-3 text-left transition sm:w-[220px] ${
-                  item.id === source?.id
-                    ? "border-orange-300 bg-orange-500/10"
-                    : "border-zinc-200 bg-white hover:border-zinc-300"
-                }`}
-                key={item.id}
-                onClick={() => {
-                  onUsePreparedSource(item);
-                }}
-                type="button"
-              >
-                <span
-                  className="block truncate text-sm font-semibold"
-                  title={item.title ?? item.sourceName}
-                >
-                  {item.title ?? item.sourceName}
-                </span>
-                <span className="mt-1 block truncate text-xs text-zinc-500" title={item.sourceName}>
-                  {item.kind.toUpperCase()} · {item.wordCount.toLocaleString()} words
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white">
-            <div className="flex min-w-0 flex-col gap-3 border-b border-zinc-200 p-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h3
-                  className="truncate text-sm font-semibold"
-                  title={source?.title ?? source?.sourceName}
-                >
-                  {source?.title ?? "Prepared Source"}
-                </h3>
-                <p className="mt-1 text-xs text-zinc-500">{preparedSourceSummaryLine(source)}</p>
-              </div>
-              {source ? (
-                <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                  <button
-                    className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700"
-                    onClick={() => {
-                      onInspectPreparedSource(source);
-                    }}
-                    type="button"
-                  >
-                    Inspect structure
-                  </button>
-                  <button
-                    className="h-9 rounded-md bg-orange-600 px-3 text-xs font-semibold text-white shadow-sm shadow-orange-500/20 disabled:opacity-50"
-                    disabled={isPreparing}
-                    onClick={() => {
-                      onCreatePreparedAudio(source);
-                    }}
-                    type="button"
-                  >
-                    Create & Listen
-                  </button>
-                </div>
-              ) : null}
+          <div className="grid gap-2 rounded-lg border bg-[var(--vs-raised)] p-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center vs-border">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">Prepared</p>
+              <p className="mt-1 text-xs vs-muted">
+                {preparedSources.length.toLocaleString()} reusable source
+                {preparedSources.length === 1 ? "" : "s"}
+              </p>
             </div>
-            <dl className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 text-sm sm:grid-cols-5">
-              <SourcePrepMetric label="Blocks" value={String(source?.blockCount ?? 0)} />
-              <SourcePrepMetric
-                label="Speak"
-                value={String(source?.summary.spokenBlockCount ?? 0)}
-              />
-              <SourcePrepMetric
-                label="Segments"
-                value={String(source?.summary.sentenceSegmentCount ?? 0)}
-              />
-              <SourcePrepMetric
-                label="Citations"
-                value={String(source?.summary.citationSkipCount ?? 0)}
-              />
-              <SourcePrepMetric label="Skipped" value={String(source?.skippedItems?.length ?? 0)} />
-            </dl>
-
-            <div className="flex gap-2 overflow-x-auto border-b border-zinc-200 px-4 py-3 text-xs font-semibold">
-              <SourcePrepTabButton
-                active={reviewTab === "blocks"}
-                label="Blocks"
-                onClick={() => {
-                  setReviewTab("blocks");
-                }}
-              />
-              <SourcePrepTabButton
-                active={reviewTab === "preview"}
-                label="Preview"
-                onClick={() => {
-                  setReviewTab("preview");
-                }}
-              />
-              <SourcePrepTabButton
-                active={reviewTab === "pronunciation"}
-                label="Pronunciation"
-                onClick={() => {
-                  setReviewTab("pronunciation");
-                }}
-              />
-              <SourcePrepTabButton
-                active={reviewTab === "math"}
-                label="Math"
-                onClick={() => {
-                  setReviewTab("math");
-                }}
-              />
-              <SourcePrepTabButton
-                active={reviewTab === "rules"}
-                label="Rules"
-                onClick={() => {
-                  setReviewTab("rules");
-                }}
-              />
-            </div>
-
-            {reviewTab === "blocks" ? (
-              <SourcePrepBlocksPanel
-                blockKindFilter={blockKindFilter}
-                blockKinds={blockKinds}
-                blockModeFilter={blockModeFilter}
-                blockQuery={blockQuery}
-                blocks={blocks}
-                filteredBlocks={filteredBlocks}
-                onKindFilterChange={setBlockKindFilter}
-                onModeFilterChange={setBlockModeFilter}
-                onQueryChange={setBlockQuery}
-              />
-            ) : null}
-            {reviewTab === "preview" ? <PreparedSourceMarkdownPreview source={source} /> : null}
-            {reviewTab === "pronunciation" ? (
-              <PronunciationPanel
-                projectId={projectId}
-                source={source}
-                voiceProfileId={voiceProfileId}
-              />
-            ) : null}
-            {reviewTab === "math" ? <SourcePrepMathPanel source={source} /> : null}
-            {reviewTab === "rules" ? <SourcePrepRulesPanel source={source} /> : null}
+            <select
+              className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold outline-none focus:border-orange-400 vs-border"
+              onChange={(event) => {
+                const nextSource = preparedSources.find(
+                  (item) => item.id === event.currentTarget.value,
+                );
+                if (nextSource) {
+                  onUsePreparedSource(nextSource);
+                }
+              }}
+              value={source?.id ?? ""}
+            >
+              {preparedSources.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title ?? item.sourceName} · {item.kind.toUpperCase()} ·{" "}
+                  {item.wordCount.toLocaleString()} words
+                </option>
+              ))}
+            </select>
           </div>
+          <PreparedSourceIntakeSummary
+            isPreparing={isPreparing}
+            source={source}
+            onCreatePreparedAudio={onCreatePreparedAudio}
+            onInspectPreparedSource={onInspectPreparedSource}
+          />
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-zinc-200 bg-white p-5 text-sm text-zinc-600">
+        <div className="rounded-lg border border-dashed bg-[var(--vs-raised)] p-5 text-sm vs-border">
           Prepare a file or URL to review headings, skipped citations, and sentence-safe narration
           blocks before generating audio.
         </div>
       )}
     </div>
+  );
+}
+
+function PreparedSourceIntakeSummary({
+  isPreparing,
+  source,
+  onCreatePreparedAudio,
+  onInspectPreparedSource,
+}: Readonly<{
+  isPreparing: boolean;
+  source: PreparedSource | null;
+  onCreatePreparedAudio: (source: PreparedSource) => void;
+  onInspectPreparedSource: (source: PreparedSource) => void;
+}>) {
+  if (!source) {
+    return (
+      <div className="rounded-lg border border-dashed bg-[var(--vs-raised)] p-5 text-sm vs-border">
+        Prepare a file or URL to make it available for the Review workbench.
+      </div>
+    );
+  }
+
+  return (
+    <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
+            Prepared Source
+          </p>
+          <h3
+            className="mt-1 truncate text-base font-semibold"
+            title={source.title ?? source.sourceName}
+          >
+            {source.title ?? source.sourceName}
+          </h3>
+          <p className="mt-1 text-xs vs-muted">{preparedSourceSummaryLine(source)}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+          <button
+            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border"
+            onClick={() => {
+              onInspectPreparedSource(source);
+            }}
+            type="button"
+          >
+            Inspect structure
+          </button>
+          <button
+            className="h-9 rounded-md bg-orange-600 px-3 text-xs font-semibold text-white shadow-sm shadow-orange-500/20 disabled:opacity-50"
+            disabled={isPreparing}
+            onClick={() => {
+              onCreatePreparedAudio(source);
+            }}
+            type="button"
+          >
+            Create & Listen
+          </button>
+        </div>
+      </div>
+      <dl className="grid gap-3 text-sm sm:grid-cols-5">
+        <SourcePrepMetric label="Blocks" value={String(source.blockCount)} />
+        <SourcePrepMetric label="Speak" value={String(source.summary.spokenBlockCount)} />
+        <SourcePrepMetric label="Segments" value={String(source.summary.sentenceSegmentCount)} />
+        <SourcePrepMetric label="Citations" value={String(source.summary.citationSkipCount)} />
+        <SourcePrepMetric label="Skipped" value={String(source.skippedItems?.length ?? 0)} />
+      </dl>
+    </section>
   );
 }
 
@@ -4996,12 +8597,12 @@ function SpeechPolicyControls({
   }, [activeCustomProfile?.name, customNamePlaceholder]);
 
   return (
-    <section className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-4">
+    <section className="grid gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 vs-border">
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-        <label className="grid min-w-0 gap-1 text-sm font-semibold text-zinc-950">
+        <label className="grid min-w-0 gap-1 text-sm font-semibold text-[var(--vs-text)]">
           <span>Profile</span>
           <select
-            className="h-10 min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+            className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
             onChange={(event) => {
               onProfileChange(normalizeSpeechPolicyProfile(event.currentTarget.value));
             }}
@@ -5280,172 +8881,6 @@ function formatPolicyModeLabel(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function SourcePrepBlocksPanel({
-  blockKindFilter,
-  blockKinds,
-  blockModeFilter,
-  blockQuery,
-  blocks,
-  filteredBlocks,
-  onKindFilterChange,
-  onModeFilterChange,
-  onQueryChange,
-}: Readonly<{
-  blockKindFilter: string;
-  blockKinds: string[];
-  blockModeFilter: string;
-  blockQuery: string;
-  blocks: PreparedSourceBlock[];
-  filteredBlocks: PreparedSourceBlock[];
-  onKindFilterChange: (value: string) => void;
-  onModeFilterChange: (value: string) => void;
-  onQueryChange: (value: string) => void;
-}>) {
-  return (
-    <div>
-      <div className="grid gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 md:grid-cols-[minmax(0,1fr)_11rem_11rem]">
-        <input
-          className="h-9 min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-orange-400"
-          onChange={(event) => {
-            onQueryChange(event.currentTarget.value);
-          }}
-          placeholder="Search blocks and explanations"
-          type="search"
-          value={blockQuery}
-        />
-        <select
-          className="h-9 rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-orange-400"
-          onChange={(event) => {
-            onKindFilterChange(event.currentTarget.value);
-          }}
-          value={blockKindFilter}
-        >
-          <option value="">All kinds</option>
-          {blockKinds.map((kind) => (
-            <option key={kind} value={kind}>
-              {kind}
-            </option>
-          ))}
-        </select>
-        <select
-          className="h-9 rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-orange-400"
-          onChange={(event) => {
-            onModeFilterChange(event.currentTarget.value);
-          }}
-          value={blockModeFilter}
-        >
-          <option value="">All modes</option>
-          <option value="speak">Speak</option>
-          <option value="summarize">Summarize</option>
-          <option value="skip">Skip</option>
-        </select>
-      </div>
-      <div className="max-h-[28rem] overflow-y-auto">
-        {filteredBlocks.map((block) => (
-          <SourcePrepBlockRow block={block} key={block.id} />
-        ))}
-        {filteredBlocks.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-zinc-500">No blocks match the filters.</p>
-        ) : null}
-        <p className="px-4 py-3 text-xs text-zinc-500">
-          Showing {filteredBlocks.length.toString()} of {blocks.length.toString()} blocks
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function SourcePrepBlockRow({ block }: Readonly<{ block: PreparedSourceBlock }>) {
-  return (
-    <div className="grid gap-2 border-b border-zinc-100 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-start">
-      <span className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-        {block.kind}
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate font-medium" title={block.spokenText ?? block.text}>
-          {block.spokenText ?? block.text ?? block.label}
-        </span>
-        <span className="mt-1 block truncate text-xs text-zinc-500">
-          {String(block.segments?.length ?? 0)} segments ·{" "}
-          {formatDuration(block.estimatedDurationMs ?? 0)}
-        </span>
-        <BlockSpeechBadges block={block} />
-        {blockHasSpeechDifference(block) ? (
-          <span className="mt-2 grid gap-1 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
-            <span className="font-semibold text-blue-900">Spoken as</span>
-            <span className="max-h-12 overflow-hidden break-words">
-              {block.spokenText ?? block.label}
-            </span>
-          </span>
-        ) : null}
-        {block.speechPolicy.explanation ? (
-          <span
-            className="mt-1 block truncate text-xs text-blue-700"
-            title={block.speechPolicy.explanation}
-          >
-            {block.speechPolicy.explanation}
-          </span>
-        ) : null}
-        {block.warnings && block.warnings.length > 0 ? (
-          <span className="mt-2 flex flex-wrap gap-1">
-            {block.warnings.slice(0, 3).map((warning) => (
-              <span
-                className="rounded-full bg-amber-50 px-2 py-0.5 text-[0.68rem] font-semibold text-amber-700"
-                key={warning}
-              >
-                {warning}
-              </span>
-            ))}
-          </span>
-        ) : null}
-      </span>
-      <span
-        className={`w-fit rounded-full border px-2 py-1 text-[0.68rem] font-semibold sm:justify-self-end ${speakModeClass(block.speakMode)}`}
-      >
-        {block.speakMode}
-      </span>
-    </div>
-  );
-}
-
-function BlockSpeechBadges({ block }: Readonly<{ block: PreparedSourceBlock }>) {
-  return (
-    <span className="mt-2 flex flex-wrap gap-1">
-      <LanguageBadge block={block} />
-      {block.normalisations && block.normalisations.length > 0 ? (
-        <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[0.68rem] font-semibold text-violet-700">
-          {block.normalisations.length.toLocaleString()} normalised
-        </span>
-      ) : null}
-      {block.pronunciations && block.pronunciations.length > 0 ? (
-        <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[0.68rem] font-semibold text-blue-700">
-          {block.pronunciations.length.toLocaleString()} pronunciations
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
-function PreparedSourceMarkdownPreview({ source }: Readonly<{ source: PreparedSource | null }>) {
-  if (!source) {
-    return null;
-  }
-  if (source.renderMode !== "markdown" || !source.text) {
-    return (
-      <div className="p-4 text-sm text-zinc-600">
-        <p>Rendered preview is unavailable for this source.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="max-h-[28rem] overflow-y-auto p-4">
-      <MarkdownRenderer className="prose-markdown text-sm leading-6 text-zinc-800">
-        {source.text}
-      </MarkdownRenderer>
-    </div>
-  );
-}
-
 function SourcePrepMathPanel({ source }: Readonly<{ source: PreparedSource | null }>) {
   const mathBlocks = (source?.blocks ?? []).filter(
     (block) => block.kind === "math" || Boolean(block.mathPreview),
@@ -5598,19 +9033,113 @@ function formatSourceTextFileLabel(files: File[]): string {
   return `${files.length.toString()} files · ${formatBytes(totalBytes)}`;
 }
 
-function SourceMetadataStrip({ job, text }: Readonly<{ job: VoiceJob | null; text: string }>) {
-  const totalSegments = job?.retries.totalSegments ?? job?.segments?.length ?? 0;
-  const durationMs = job?.durationMs ?? text.length * 35;
+function SourceMetadataStrip({
+  bookScopeContent,
+  job,
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  text,
+}: Readonly<{
+  bookScopeContent?: BookSourceScopeContent | null;
+  job: VoiceJob | null;
+  selectedBookScope?: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  text: string;
+}>) {
+  const metadataBookSource = sourceMode === "book" ? selectedBookSource : null;
+  const metadataPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
+  const preparedDurationMs =
+    metadataPreparedSource?.blocks?.reduce(
+      (total, block) => total + (block.estimatedDurationMs ?? 0),
+      0,
+    ) ?? 0;
+  const bookDurationMs =
+    bookScopeContent?.estimatedDurationMs ??
+    (metadataBookSource && selectedBookScope
+      ? estimateNarrationTextDurationMs(bookScopeText(metadataBookSource, selectedBookScope))
+      : 0);
+  const totalSegments =
+    job?.retries.totalSegments ??
+    job?.segments?.length ??
+    metadataPreparedSource?.summary.sentenceSegmentCount ??
+    bookScopeContent?.summary?.sentenceSegmentCount ??
+    bookScopeContent?.blocks?.length ??
+    0;
   const contentType = job?.contentType ?? "48kHz - 24bit - WAV";
+  const durationMs = sourceMetadataDurationMs({
+    job,
+    bookDurationMs,
+    preparedDurationMs,
+    selectedBookSource: metadataBookSource,
+    text,
+  });
+  const sourceTextLabel = sourceMetadataLabel({
+    job,
+    selectedBookSource: metadataBookSource,
+    selectedPreparedSource: metadataPreparedSource,
+  });
 
   return (
-    <dl className="grid gap-4 rounded-lg border border-zinc-200 bg-white p-4 text-sm shadow-sm md:grid-cols-4">
-      <Metric label="Source Text" value={job?.inputText ? "restored job text" : "draft text"} />
+    <dl className="grid gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 text-sm md:grid-cols-4 vs-border">
+      <Metric label="Source Text" value={sourceTextLabel} />
       <Metric label="Total Segments" value={String(totalSegments)} />
       <Metric label="Total Duration (est.)" value={formatDuration(durationMs)} />
       <Metric label="Output Format" value={contentType} />
     </dl>
   );
+}
+
+function sourceMetadataDurationMs({
+  bookDurationMs,
+  job,
+  preparedDurationMs,
+  selectedBookSource,
+  text,
+}: Readonly<{
+  bookDurationMs?: number;
+  job: VoiceJob | null;
+  preparedDurationMs: number;
+  selectedBookSource: BookSource | null;
+  text: string;
+}>): number {
+  if (job?.durationMs) {
+    return job.durationMs;
+  }
+  if (preparedDurationMs > 0) {
+    return preparedDurationMs;
+  }
+  if (bookDurationMs && bookDurationMs > 0) {
+    return bookDurationMs;
+  }
+  if (selectedBookSource) {
+    return selectedBookSource.wordCount * 430;
+  }
+  return text.length * 35;
+}
+
+function sourceMetadataLabel({
+  job,
+  selectedBookSource,
+  selectedPreparedSource,
+}: Readonly<{
+  job: VoiceJob | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+}>): string {
+  if (job?.inputText) {
+    return "restored job text";
+  }
+  if (selectedPreparedSource) {
+    return `${selectedPreparedSource.kind.toUpperCase()} source`;
+  }
+  if (selectedBookSource) {
+    return `${selectedBookSource.kind.toUpperCase()} source`;
+  }
+  return "draft text";
 }
 
 function ResearchModulesSetupCard({
@@ -5698,129 +9227,10 @@ function ResearchModulesSetupCard({
   );
 }
 
-function VoiceStudioPanel({
-  buildingArtifactKey,
-  error,
-  job,
-  profileSource,
-  profileSourceDiagnostics,
-  isLoading,
-  isAnalyzingSource,
-  optimizedText,
-  profileCandidateCreateId,
-  profiles,
-  researchModules,
-  runConfiguration,
-  selectedKokoroVoiceId,
-  selectedProfileId,
-  studioPipelineHint,
-  ttsEngines,
-  voiceProfileCredentialError,
-  voiceProfileCredentials,
-  onAnalyzeSource,
-  onBuildArtifact,
-  onClearHuggingFaceToken,
-  onClearSelection,
-  onCreateProfileFromCandidate,
-  onDeleteProfile,
-  onRunConfigurationChange,
-  onSaveHuggingFaceToken,
-  onSelectKokoroVoice,
-  onSelectProfile,
-  savingHuggingFaceTokenKey,
-  isClearingHuggingFaceToken,
-}: Readonly<{
-  buildingArtifactKey: string | null;
-  error: string | null;
-  job: VoiceJob | null;
-  profileSource: VoiceProfileSource | null;
-  profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
-  isLoading: boolean;
-  isAnalyzingSource: boolean;
-  optimizedText: string;
-  profileCandidateCreateId: string | null;
-  profiles: VoiceProfile[];
-  researchModules: ResearchModuleDiagnostics[];
-  runConfiguration: RunConfiguration;
-  selectedKokoroVoiceId: string;
-  selectedProfileId: string;
-  studioPipelineHint: string;
-  ttsEngines: TTSEngineDiagnostics[];
-  voiceProfileCredentialError: string | null;
-  voiceProfileCredentials: VoiceProfileCredentialStatus | null;
-  onAnalyzeSource: (file: File) => Promise<void>;
-  onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
-  onClearHuggingFaceToken: () => void;
-  onClearSelection: () => void;
-  onCreateProfileFromCandidate: (
-    candidate: VoiceProfileCandidate,
-    request: CreateVoiceProfileFromCandidateRequest,
-  ) => Promise<void>;
-  onDeleteProfile: (id: string) => void;
-  onRunConfigurationChange: (configuration: RunConfiguration) => void;
-  onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
-  onSelectKokoroVoice: (voiceId: string) => void;
-  onSelectProfile: (id: string) => void;
-  savingHuggingFaceTokenKey: string | null;
-  isClearingHuggingFaceToken: boolean;
-}>) {
-  const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
-
-  return (
-    <section className="min-h-full min-w-0 overflow-y-auto">
-      <div className="grid min-w-0 gap-5 p-5">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
-            Voice Studio
-          </p>
-          <p className="mt-2 break-words text-xs leading-5 text-zinc-500">{studioPipelineHint}</p>
-        </div>
-
-        <VoiceProfileDropdown
-          buildingArtifactKey={buildingArtifactKey}
-          isLoading={isLoading}
-          profiles={profiles}
-          researchModules={researchModules}
-          runConfiguration={runConfiguration}
-          selectedKokoroVoiceId={selectedKokoroVoiceId}
-          selectedProfile={selectedProfile ?? null}
-          selectedProfileId={selectedProfileId}
-          ttsEngines={ttsEngines}
-          voiceProfileCredentialError={voiceProfileCredentialError}
-          voiceProfileCredentials={voiceProfileCredentials}
-          onBuildArtifact={onBuildArtifact}
-          onClearHuggingFaceToken={onClearHuggingFaceToken}
-          onClearSelection={onClearSelection}
-          onDeleteProfile={onDeleteProfile}
-          onRunConfigurationChange={onRunConfigurationChange}
-          onSaveHuggingFaceToken={onSaveHuggingFaceToken}
-          onSelectKokoroVoice={onSelectKokoroVoice}
-          onSelectProfile={onSelectProfile}
-          savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
-          isClearingHuggingFaceToken={isClearingHuggingFaceToken}
-        />
-
-        <ScriptReviewPanel job={job} optimizedText={optimizedText} />
-
-        <VoiceSourceAnalysisPanel
-          createCandidateId={profileCandidateCreateId}
-          diagnostics={profileSourceDiagnostics}
-          error={error}
-          isAnalyzing={isAnalyzingSource}
-          researchModules={researchModules}
-          source={profileSource}
-          ttsEngines={ttsEngines}
-          onAnalyze={onAnalyzeSource}
-          onCreateProfile={onCreateProfileFromCandidate}
-        />
-      </div>
-    </section>
-  );
-}
-
 // eslint-disable-next-line sonarjs/cognitive-complexity
 function VoiceProfileDropdown({
   buildingArtifactKey,
+  heading = "Voice Profile",
   isLoading,
   profiles,
   researchModules,
@@ -5831,6 +9241,9 @@ function VoiceProfileDropdown({
   ttsEngines,
   voiceProfileCredentialError,
   voiceProfileCredentials,
+  showArtifactControls = true,
+  showBackendControls = true,
+  showBackendSummary = true,
   onBuildArtifact,
   onClearHuggingFaceToken,
   onClearSelection,
@@ -5843,6 +9256,7 @@ function VoiceProfileDropdown({
   isClearingHuggingFaceToken,
 }: Readonly<{
   buildingArtifactKey: string | null;
+  heading?: string;
   isLoading: boolean;
   profiles: VoiceProfile[];
   researchModules: ResearchModuleDiagnostics[];
@@ -5853,6 +9267,9 @@ function VoiceProfileDropdown({
   ttsEngines: TTSEngineDiagnostics[];
   voiceProfileCredentialError: string | null;
   voiceProfileCredentials: VoiceProfileCredentialStatus | null;
+  showArtifactControls?: boolean;
+  showBackendControls?: boolean;
+  showBackendSummary?: boolean;
   onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
   onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
@@ -5941,14 +9358,23 @@ function VoiceProfileDropdown({
     runConfiguration.ttsEngine === "supertonic-3"
       ? "Kokoro fallback voicepack"
       : "Kokoro voicepack";
+  const backendSummaryNode = showBackendSummary ? (
+    <VoiceBackendSummary
+      activeKokoroRenderMode={activeKokoroRenderMode}
+      runConfiguration={runConfiguration}
+      selectedEngine={selectedEngine}
+      selectedKokoroVoiceId={selectedKokoroVoice?.id}
+      selectedProfile={selectedProfile}
+    />
+  ) : null;
 
   return (
     <section className="grid min-w-0 gap-2">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-zinc-950">Voice Profile</h2>
-        <span className="shrink-0 text-xs text-zinc-500">{String(profiles.length + 1)} voices</span>
+        <h2 className="text-sm font-semibold text-[var(--vs-text)]">{heading}</h2>
+        <span className="vs-muted shrink-0 text-xs">{String(profiles.length + 1)} voices</span>
       </div>
-      <div className="min-w-0 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+      <div className="min-w-0 rounded-lg border p-3 vs-border vs-raised">
         <button
           className="flex w-full min-w-0 items-center gap-3 text-left"
           onClick={() => {
@@ -5956,156 +9382,168 @@ function VoiceProfileDropdown({
           }}
           type="button"
         >
-          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-gradient-to-br from-zinc-200 to-zinc-100 text-base font-semibold text-zinc-700">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border text-base font-semibold vs-border vs-surface">
             {activeName.slice(0, 1).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate font-semibold text-zinc-950" title={activeName}>
+            <p className="truncate font-semibold text-[var(--vs-text)]" title={activeName}>
               {activeName}
             </p>
-            <p className="mt-1 truncate text-xs text-zinc-500" title={activeDetail}>
+            <p className="vs-muted mt-1 truncate text-xs" title={activeDetail}>
               {activeDetail}
             </p>
           </div>
           <span className="shrink-0 rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">
             Ready
           </span>
-          <span className="shrink-0 text-zinc-500">{isOpen ? "▴" : "▾"}</span>
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded border vs-border vs-surface vs-muted">
+            <DisclosureIcon open={isOpen} />
+          </span>
         </button>
         {selectedProfile ? (
           <div className="mt-3 grid gap-2">
-            <p className="truncate text-xs text-zinc-500" title={selectedProfile.sourceFile}>
+            <p className="vs-muted truncate text-xs" title={selectedProfile.sourceFile}>
               {selectedProfile.referenceTrimmed
                 ? "Trimmed clone reference"
                 : "Full clone reference"}{" "}
               · {formatBytes(selectedProfile.sourceBytes)}
             </p>
-            <VoiceProfileArtifactControls
-              buildingArtifactKey={buildingArtifactKey}
-              credentialError={voiceProfileCredentialError}
-              credentials={voiceProfileCredentials}
-              isClearingHuggingFaceToken={isClearingHuggingFaceToken}
-              modules={researchModules}
-              profile={selectedProfile}
-              onBuildArtifact={onBuildArtifact}
-              onClearHuggingFaceToken={onClearHuggingFaceToken}
-              onSaveHuggingFaceToken={onSaveHuggingFaceToken}
-              savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
-            />
+            {showArtifactControls ? (
+              <VoiceProfileArtifactControls
+                buildingArtifactKey={buildingArtifactKey}
+                credentialError={voiceProfileCredentialError}
+                credentials={voiceProfileCredentials}
+                isClearingHuggingFaceToken={isClearingHuggingFaceToken}
+                modules={researchModules}
+                profile={selectedProfile}
+                onBuildArtifact={onBuildArtifact}
+                onClearHuggingFaceToken={onClearHuggingFaceToken}
+                onSaveHuggingFaceToken={onSaveHuggingFaceToken}
+                savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
+              />
+            ) : null}
           </div>
         ) : null}
       </div>
-      <section className="grid min-w-0 gap-2 rounded-md border border-zinc-200 bg-white p-3 text-xs text-zinc-600">
-        <label className="grid min-w-0 gap-1">
-          <span className="font-semibold text-zinc-800">Narration backend</span>
-          <select
-            className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
-            value={engineFamilyValue}
-            onChange={(event) => {
-              updateEngine(event.currentTarget.value);
-            }}
-          >
-            {voicePanelEngineOptions(ttsEngines).map((engine) => (
-              <option disabled={engine.status !== "ready"} key={engine.id} value={engine.id}>
-                {engine.label} · {engine.status}
-              </option>
-            ))}
-          </select>
-          {selectedEngineBlocked ? (
-            <span className="break-words text-xs leading-5 text-amber-700">
-              {voiceProfileTargetReadinessText(selectedProfile, runConfiguration.ttsEngine)}
-            </span>
-          ) : null}
-          {runConfiguration.ttsEngine === "auto" ? (
-            <span className="text-xs leading-5 text-zinc-500">
-              Auto chooses a sensible default; the Kokoro render mode below makes profile-backed
-              generation explicit.
-            </span>
-          ) : null}
-        </label>
-        {showKokoroRenderModes ? (
-          <KokoroRenderModeSelector
-            activeMode={activeKokoroRenderMode}
-            buildingArtifactKey={buildingArtifactKey}
-            modules={researchModules}
-            profile={selectedProfile ?? null}
-            onBuildArtifact={onBuildArtifact}
-            onSelectMode={updateKokoroRenderMode}
-          />
-        ) : null}
-        {runConfiguration.ttsEngine === "supertonic-3" ? (
-          <div className="grid gap-2 sm:grid-cols-2">
+      {showBackendControls ? (
+        <>
+          <section className="grid min-w-0 gap-2 rounded-md border p-3 text-xs vs-border vs-raised vs-muted">
             <label className="grid min-w-0 gap-1">
-              <span className="font-semibold text-zinc-800">Supertonic voice</span>
+              <span className="font-semibold text-[var(--vs-text)]">Narration backend</span>
               <select
-                className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
-                value={runConfiguration.engineOptions.voiceStyle ?? "M1"}
+                className="min-w-0 rounded-md border px-2 py-2 text-sm font-medium vs-border vs-surface"
+                value={engineFamilyValue}
                 onChange={(event) => {
-                  updateEngineOption("voiceStyle", event.currentTarget.value);
+                  updateEngine(event.currentTarget.value);
                 }}
               >
-                {supertonicVoices.map((voice) => (
-                  <option key={voice.id} value={voice.id}>
-                    {voice.name} {voice.gender ? `· ${voice.gender}` : ""}
+                {voicePanelEngineOptions(ttsEngines).map((engine) => (
+                  <option disabled={engine.status !== "ready"} key={engine.id} value={engine.id}>
+                    {engine.label} · {engine.status}
                   </option>
                 ))}
               </select>
+              {selectedEngineBlocked ? (
+                <span className="break-words text-xs leading-5 text-amber-700">
+                  {voiceProfileTargetReadinessText(selectedProfile, runConfiguration.ttsEngine)}
+                </span>
+              ) : null}
+              {runConfiguration.ttsEngine === "auto" ? (
+                <span className="text-xs leading-5">
+                  Auto chooses a sensible default; the Kokoro render mode below makes profile-backed
+                  generation explicit.
+                </span>
+              ) : null}
             </label>
-            <label className="grid min-w-0 gap-1">
-              <span className="font-semibold text-zinc-800">Language</span>
+            {showKokoroRenderModes ? (
+              <KokoroRenderModeSelector
+                activeMode={activeKokoroRenderMode}
+                buildingArtifactKey={buildingArtifactKey}
+                modules={researchModules}
+                profile={selectedProfile ?? null}
+                onBuildArtifact={onBuildArtifact}
+                onSelectMode={updateKokoroRenderMode}
+              />
+            ) : null}
+            {runConfiguration.ttsEngine === "supertonic-3" ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="grid min-w-0 gap-1">
+                  <span className="font-semibold text-[var(--vs-text)]">Supertonic voice</span>
+                  <select
+                    className="min-w-0 rounded-md border px-2 py-2 text-sm font-medium vs-border vs-surface"
+                    value={runConfiguration.engineOptions.voiceStyle ?? "M1"}
+                    onChange={(event) => {
+                      updateEngineOption("voiceStyle", event.currentTarget.value);
+                    }}
+                  >
+                    {supertonicVoices.map((voice) => (
+                      <option key={voice.id} value={voice.id}>
+                        {voice.name} {voice.gender ? `· ${voice.gender}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid min-w-0 gap-1">
+                  <span className="font-semibold text-[var(--vs-text)]">Language</span>
+                  <select
+                    className="min-w-0 rounded-md border px-2 py-2 text-sm font-medium vs-border vs-surface"
+                    value={runConfiguration.engineOptions.lang ?? "na"}
+                    onChange={(event) => {
+                      updateEngineOption("lang", event.currentTarget.value);
+                    }}
+                  >
+                    {supertonicLanguages.map((language) => (
+                      <option key={language.code} value={language.code}>
+                        {language.label} · {language.code}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span
+                  className="min-w-0 truncate sm:col-span-2"
+                  title={voicePanelSupertonicSummary(runConfiguration, selectedEngine)}
+                >
+                  {voicePanelSupertonicSummary(runConfiguration, selectedEngine)}
+                </span>
+              </div>
+            ) : (
+              backendCopyNode
+            )}
+          </section>
+          {showKokoroVoicepackPicker ? (
+            <label className="grid min-w-0 gap-1 rounded-md border p-3 text-xs vs-border vs-raised vs-muted">
+              <span className="font-semibold text-[var(--vs-text)]">
+                {kokoroVoicepackControlLabel}
+              </span>
               <select
-                className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
-                value={runConfiguration.engineOptions.lang ?? "na"}
+                className="min-w-0 rounded-md border px-2 py-2 text-sm font-medium vs-border vs-surface"
+                value={selectedKokoroVoice?.id ?? DEFAULT_KOKORO_VOICE_ID}
                 onChange={(event) => {
-                  updateEngineOption("lang", event.currentTarget.value);
+                  onSelectKokoroVoice(event.currentTarget.value);
                 }}
               >
-                {supertonicLanguages.map((language) => (
-                  <option key={language.code} value={language.code}>
-                    {language.label} · {language.code}
+                {KOKORO_VOICEPACKS.map((voicepack) => (
+                  <option key={voicepack.id} value={voicepack.id}>
+                    {voicepack.name} · {voicepack.locale} · {voicepack.id}
                   </option>
                 ))}
               </select>
+              <span className="truncate" title={kokoroVoicepackDetail(selectedKokoroVoice?.id)}>
+                {kokoroVoicepackDetail(selectedKokoroVoice?.id)}
+                {kokoroDetailSuffix}
+              </span>
             </label>
-            <span
-              className="min-w-0 truncate text-zinc-500 sm:col-span-2"
-              title={voicePanelSupertonicSummary(runConfiguration, selectedEngine)}
-            >
-              {voicePanelSupertonicSummary(runConfiguration, selectedEngine)}
-            </span>
-          </div>
-        ) : (
-          backendCopyNode
-        )}
-      </section>
-      {showKokoroVoicepackPicker ? (
-        <label className="grid min-w-0 gap-1 rounded-md border border-zinc-200 bg-white p-3 text-xs text-zinc-600">
-          <span className="font-semibold text-zinc-800">{kokoroVoicepackControlLabel}</span>
-          <select
-            className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm font-medium text-zinc-900"
-            value={selectedKokoroVoice?.id ?? DEFAULT_KOKORO_VOICE_ID}
-            onChange={(event) => {
-              onSelectKokoroVoice(event.currentTarget.value);
-            }}
-          >
-            {KOKORO_VOICEPACKS.map((voicepack) => (
-              <option key={voicepack.id} value={voicepack.id}>
-                {voicepack.name} · {voicepack.locale} · {voicepack.id}
-              </option>
-            ))}
-          </select>
-          <span className="truncate" title={kokoroVoicepackDetail(selectedKokoroVoice?.id)}>
-            {kokoroVoicepackDetail(selectedKokoroVoice?.id)}
-            {kokoroDetailSuffix}
-          </span>
-        </label>
+          ) : (
+            <p className="rounded-md border p-3 text-xs leading-5 vs-border vs-raised vs-muted">
+              Kokoro voicepack fallback: {kokoroVoicepackLabel(selectedKokoroVoice?.id)}. Switch to
+              Kokoro Voicepack to change it for non-cloned renders.
+            </p>
+          )}
+        </>
       ) : (
-        <p className="rounded-md border border-zinc-200 bg-white p-3 text-xs leading-5 text-zinc-500">
-          Kokoro voicepack fallback: {kokoroVoicepackLabel(selectedKokoroVoice?.id)}. Switch to
-          Kokoro Voicepack to change it for non-cloned renders.
-        </p>
+        backendSummaryNode
       )}
-      {isLoading ? <p className="text-sm text-zinc-600">Loading profiles...</p> : null}
+      {isLoading ? <p className="vs-muted text-sm">Loading profiles...</p> : null}
       {isOpen ? (
         <ul className="max-h-80 min-w-0 overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-sm">
           <VoiceProfileOption
@@ -6139,6 +9577,51 @@ function VoiceProfileDropdown({
           ))}
         </ul>
       ) : null}
+    </section>
+  );
+}
+
+function VoiceBackendSummary({
+  activeKokoroRenderMode,
+  runConfiguration,
+  selectedEngine,
+  selectedKokoroVoiceId,
+  selectedProfile,
+}: Readonly<{
+  activeKokoroRenderMode: KokoroRenderMode;
+  runConfiguration: RunConfiguration;
+  selectedEngine?: TTSEngineDiagnostics;
+  selectedKokoroVoiceId?: string;
+  selectedProfile: VoiceProfile | null;
+}>) {
+  const renderMode = KOKORO_RENDER_MODE_OPTIONS.find(
+    (option) => option.id === activeKokoroRenderMode,
+  );
+  const backendLabel = selectedEngine?.label ?? runConfiguration.ttsEngine;
+  const voiceLabel =
+    runConfiguration.ttsEngine === "supertonic-3"
+      ? voicePanelSupertonicSummary(runConfiguration, selectedEngine)
+      : (renderMode?.label ?? kokoroVoicepackLabel(selectedKokoroVoiceId));
+  return (
+    <section className="grid min-w-0 gap-3 rounded-md border p-3 text-xs vs-border vs-raised">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <span className="font-semibold text-[var(--vs-text)]">Backend Summary</span>
+        <span className="rounded px-2 py-1 text-[0.65rem] font-semibold bg-emerald-100 text-emerald-700">
+          {selectedEngine?.status ?? "ready"}
+        </span>
+      </div>
+      <dl className="grid gap-2">
+        <SidebarFact label="Backend" value={backendLabel} />
+        <SidebarFact label="Voice mode" value={voiceLabel} />
+        <SidebarFact
+          label="Profile"
+          value={selectedProfile ? selectedProfile.name : "Built-in voice"}
+        />
+      </dl>
+      <p className="vs-muted break-words leading-5">
+        Edit backend, voicepack, performance, and provider options in Settings. The rail stays
+        focused on selection and readiness.
+      </p>
     </section>
   );
 }
@@ -6214,7 +9697,7 @@ function KokoroRenderModeSelector({
                   }}
                   type="button"
                 >
-                  {isBusy ? "Preparing..." : "Prepare target"}
+                  {kokoroRenderModeActionLabel(readiness.status, isBusy)}
                 </button>
               ) : null}
             </div>
@@ -6235,6 +9718,7 @@ function kokoroRenderModeTargetId(mode: KokoroRenderMode): string | null {
   return null;
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 function kokoroRenderModeReadiness(
   mode: KokoroRenderMode,
   profile: VoiceProfile | null,
@@ -6283,7 +9767,7 @@ function kokoroRenderModeReadiness(
           ready: true,
           status: "ready",
           detail: "Legacy KokoClone rendering can use the reference audio immediately.",
-          canPrepare: true,
+          canPrepare: false,
         }
       : {
           ready: false,
@@ -6309,7 +9793,7 @@ function kokoroRenderModeReadiness(
           ? String(Math.round(score * 100))
           : "ready",
       detail: `${moduleLabel(targetId)} is ready for this profile.`,
-      canPrepare: true,
+      canPrepare: false,
     };
   }
   if (target.status === "failed") {
@@ -6317,6 +9801,14 @@ function kokoroRenderModeReadiness(
       ready: false,
       status: "failed",
       detail: target.error ?? target.validation?.error ?? `${moduleLabel(targetId)} failed.`,
+      canPrepare: true,
+    };
+  }
+  if (target.status === "cancelled") {
+    return {
+      ready: false,
+      status: "cancelled",
+      detail: `${moduleLabel(targetId)} was cancelled.`,
       canPrepare: true,
     };
   }
@@ -6334,6 +9826,19 @@ function kokoroRenderModeReadiness(
     detail: `${moduleLabel(targetId)} is ${target.status}.`,
     canPrepare: false,
   };
+}
+
+function kokoroRenderModeActionLabel(status: string, isBusy: boolean): string {
+  if (isBusy) {
+    return "Preparing...";
+  }
+  if (status === "check needed") {
+    return "Revalidate";
+  }
+  if (status === "failed" || status === "cancelled") {
+    return "Retry";
+  }
+  return "Prepare target";
 }
 
 function kokoroRenderModeStatusClass(status: string, ready: boolean): string {
@@ -6356,6 +9861,7 @@ function VoiceProfileArtifactControls({
   isClearingHuggingFaceToken,
   modules,
   profile,
+  showTargetButtons = true,
   onBuildArtifact,
   onClearHuggingFaceToken,
   onSaveHuggingFaceToken,
@@ -6367,6 +9873,7 @@ function VoiceProfileArtifactControls({
   isClearingHuggingFaceToken: boolean;
   modules: ResearchModuleDiagnostics[];
   profile: VoiceProfile;
+  showTargetButtons?: boolean;
   onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
   onClearHuggingFaceToken: () => void;
   onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
@@ -6390,43 +9897,59 @@ function VoiceProfileArtifactControls({
           );
         })}
       </div>
-      <div className="grid gap-2">
-        {["kokoro-clone", ...PROFILE_ARTIFACT_MODULE_ORDER].map((moduleId) => {
-          const module = modules.find((item) => item.id === moduleId);
-          const target = profile.cloneTargets?.[moduleId];
-          const isBusy =
-            buildingArtifactKey === `${profile.id}:${moduleId}` ||
-            target?.status === "queued" ||
-            target?.status === "building" ||
-            target?.status === "validating" ||
-            profile.cloneArtifacts?.[moduleId]?.status === "building";
-          const isInstalled = moduleId === "kokoro-clone" || (module?.installed ?? false);
-          const runtimeReady = moduleId === "kokoro-clone" || researchModuleRuntimeReady(module);
-          const canPrepare = isInstalled && runtimeReady;
-          const buttonLabel = targetBuildButtonLabel({
-            isBusy,
-            isInstalled,
-            moduleId,
-            runtimeReady,
-            ready: target?.status === "ready",
-            status: target?.status,
-          });
-          return (
-            <button
-              className="rounded-md border border-zinc-200 px-2 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
-              disabled={!canPrepare || isBusy}
-              key={moduleId}
-              onClick={() => {
-                void onBuildArtifact(profile.id, moduleId);
-              }}
-              title={canPrepare ? undefined : (module?.reason ?? module?.setup)}
-              type="button"
-            >
-              {buttonLabel}
-            </button>
-          );
-        })}
-      </div>
+      {showTargetButtons ? (
+        <div className="grid gap-2">
+          {["kokoro-clone", ...PROFILE_ARTIFACT_MODULE_ORDER].map((moduleId) => {
+            const module = modules.find((item) => item.id === moduleId);
+            const target = profile.cloneTargets?.[moduleId];
+            const artifact = profile.cloneArtifacts?.[moduleId];
+            const isBusy =
+              buildingArtifactKey === `${profile.id}:${moduleId}` ||
+              target?.status === "queued" ||
+              target?.status === "building" ||
+              target?.status === "validating" ||
+              artifact?.status === "building";
+            const isInstalled = moduleId === "kokoro-clone" || (module?.installed ?? false);
+            const runtimeReady = moduleId === "kokoro-clone" || researchModuleRuntimeReady(module);
+            const status = artifactChipStatus(
+              moduleId,
+              target?.status,
+              artifact?.status,
+              isInstalled && runtimeReady,
+            );
+            const validationNeedsCheck =
+              target?.status === "ready" && target.validation?.status === "failed";
+            const isReady = status === "ready" && !validationNeedsCheck;
+            const showAction = isBusy || validationNeedsCheck || !isReady;
+            if (!showAction) {
+              return null;
+            }
+            const canPrepare = isInstalled && runtimeReady;
+            const buttonLabel = targetBuildButtonLabel({
+              isBusy,
+              isInstalled,
+              moduleId,
+              runtimeReady,
+              ready: status === "ready",
+              status: target?.status,
+            });
+            return (
+              <button
+                className="rounded-md border border-zinc-200 px-2 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
+                disabled={!canPrepare || isBusy}
+                key={moduleId}
+                onClick={() => {
+                  void onBuildArtifact(profile.id, moduleId);
+                }}
+                title={canPrepare ? undefined : (module?.reason ?? module?.setup)}
+                type="button"
+              >
+                {buttonLabel}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {issues.length > 0 ? (
         <div className="grid gap-2">
           {issues.map((issue) => (
@@ -6607,7 +10130,8 @@ function ArtifactChip({
   const validationWarning = target?.status === "ready" && target.validation?.status === "failed";
   const ready = status === "ready" && !validationWarning;
   const failed = status === "failed";
-  const className = artifactChipClass(ready, failed);
+  const cancelled = status === "cancelled";
+  const className = artifactChipClass(ready, failed, cancelled);
   const score = target?.validation?.score;
   let displayStatus = status;
   if (validationWarning) {
@@ -6686,6 +10210,9 @@ function targetBuildButtonLabel({
   if (status === "failed") {
     return `Retry ${label}`;
   }
+  if (status === "cancelled") {
+    return `Retry ${label}`;
+  }
   if (isInstalled) {
     if (runtimeReady === false) {
       return `${label} runtime setup needed`;
@@ -6693,6 +10220,20 @@ function targetBuildButtonLabel({
     return `Prepare ${label}`;
   }
   return `${label} setup needed`;
+}
+
+function DisclosureIcon({ open }: Readonly<{ open: boolean }>) {
+  return (
+    <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16">
+      <path
+        d={open ? "m4 9 4-4 4 4" : "m4 6 4 4 4-4"}
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
 }
 
 interface VoiceProfileTargetIssue {
@@ -6716,6 +10257,9 @@ function voiceProfileTargetIssues(
     const target = profile.cloneTargets?.[moduleId];
     const artifact = profile.cloneArtifacts?.[moduleId];
     const label = moduleLabel(moduleId);
+    if (moduleId === "supertonic-embed" && !target && !artifact) {
+      continue;
+    }
     if (moduleId !== "kokoro-clone" && module?.installed && module.runtimeReady === false) {
       issues.push({
         key: `${moduleId}:runtime`,
@@ -6803,12 +10347,15 @@ function artifactChipStatus(
   return moduleInstalled ? "not built" : "setup needed";
 }
 
-function artifactChipClass(ready: boolean, failed: boolean): string {
+function artifactChipClass(ready: boolean, failed: boolean, cancelled: boolean): string {
   if (ready) {
     return "border-emerald-300 bg-emerald-50 text-emerald-700";
   }
   if (failed) {
     return "border-red-300 bg-red-50 text-red-700";
+  }
+  if (cancelled) {
+    return "border-zinc-300 bg-zinc-50 text-zinc-600";
   }
   return "border-amber-300 bg-amber-50 text-amber-800";
 }
@@ -6962,54 +10509,650 @@ function VoiceProfileOption({
   );
 }
 
-function ScriptReviewPanel({
+interface NarrationReviewBlock {
+  estimatedDurationMs: number;
+  id: string;
+  index: number;
+  kind: string;
+  label: string;
+  segmentCount: number;
+  speakMode: string;
+  spokenText: string;
+  text: string;
+}
+
+function NarrationReviewWorkbench({
+  bookScopeContent,
   job,
+  onInspectBookSource,
+  onOpenTeleprompter,
+  onInspectPreparedSource,
   optimizedText,
+  projectId,
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  text,
+  voiceProfileId,
 }: Readonly<{
+  bookScopeContent: BookSourceScopeContent | null;
   job: VoiceJob | null;
+  onInspectBookSource: (source: BookSource) => void;
+  onInspectPreparedSource: (source: PreparedSource) => void;
+  onOpenTeleprompter: () => void;
   optimizedText: string;
+  projectId: string;
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  text: string;
+  voiceProfileId: string;
 }>) {
+  const [reviewTab, setReviewTab] = useState<SourcePrepReviewTab>("blocks");
+  const reviewBlocks = useMemo(
+    () =>
+      buildNarrationReviewBlocks({
+        optimizedText,
+        bookScopeContent,
+        selectedBookScope,
+        selectedBookSource,
+        selectedPreparedSource,
+        text,
+      }),
+    [
+      bookScopeContent,
+      optimizedText,
+      selectedBookScope,
+      selectedBookSource,
+      selectedPreparedSource,
+      text,
+    ],
+  );
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const selectedBlock =
+    reviewBlocks.find((block) => block.id === selectedBlockId) ?? reviewBlocks[0];
+  const sourceLabel = narrationReviewSourceLabel(selectedPreparedSource, selectedBookSource);
+  const sourceMeta = narrationReviewSourceMeta({
+    bookScopeContent,
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+    text,
+  });
   const validationReason =
     job?.voiceCheck.reason ??
     (job?.pipelineOptions?.asrCheck === false
       ? "Validation was disabled for this run."
       : "Validation appears after synthesis.");
   const validationTranscript = job?.voiceCheck.transcript ?? "";
+  const spokenText =
+    firstNonEmptyString(selectedBlock.spokenText, optimizedText, text.trim()) ??
+    "Submit text to see spoken-form output from the optimization agent.";
+  const previewText =
+    firstNonEmptyString(selectedPreparedSource?.text, selectedBlock.text, text.trim()) ??
+    "Source preview appears after text, book, or file content is selected.";
+  const previewContent = narrationReviewPreviewContent({
+    bookScopeContent,
+    previewText,
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+  });
+  const mathPanel = narrationReviewMathPanel(selectedPreparedSource);
+  const rulesPanel = narrationReviewRulesPanel(selectedPreparedSource, reviewBlocks, text);
+
+  useEffect(() => {
+    if (!selectedBlockId || !reviewBlocks.some((block) => block.id === selectedBlockId)) {
+      setSelectedBlockId(reviewBlocks[0]?.id ?? null);
+    }
+  }, [reviewBlocks, selectedBlockId]);
 
   return (
-    <section className="grid min-w-0 gap-3 rounded-lg border border-zinc-200 bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-zinc-950">Script Review</h2>
-        <span className="shrink-0 rounded bg-emerald-100 px-2 py-1 text-xs text-emerald-700">
-          {optimizedText ? "Optimized" : "Waiting"}
-        </span>
-      </div>
-      <p className="max-h-48 min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm leading-6 text-zinc-700">
-        {optimizedText || "Submit text to see spoken-form output from the optimization agent."}
-      </p>
-      <details className="rounded-md border border-zinc-200 bg-white p-3 text-xs text-zinc-600">
-        <summary className="cursor-pointer font-semibold text-zinc-800">Validation</summary>
-        <p className="mt-2 break-words leading-5">{validationReason}</p>
-        {validationTranscript ? (
-          <p className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded bg-zinc-50 p-2 leading-5 text-zinc-500">
-            {validationTranscript}
+    <section className="grid min-w-0 gap-3 rounded-xl border bg-[var(--vs-raised)] p-4 vs-border">
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 max-w-full">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
+            Source Review
           </p>
-        ) : null}
-      </details>
+          <h2
+            className="mt-1 max-w-full truncate text-lg font-semibold text-[var(--vs-text)]"
+            title={sourceLabel}
+          >
+            {sourceLabel}
+          </h2>
+          <p className="mt-1 text-sm vs-muted">{sourceMeta}</p>
+        </div>
+        <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
+          <span
+            className={`rounded-md px-2 py-1 text-xs font-semibold ${
+              optimizedText ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-600"
+            }`}
+          >
+            {optimizedText ? "Optimized" : "Waiting"}
+          </span>
+          <button
+            className="h-9 flex-1 whitespace-nowrap rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 sm:flex-none"
+            onClick={onOpenTeleprompter}
+            type="button"
+          >
+            Open Teleprompter
+          </button>
+          {selectedPreparedSource ? (
+            <button
+              className="h-9 flex-1 whitespace-nowrap rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 sm:flex-none vs-border vs-raised"
+              onClick={() => {
+                onInspectPreparedSource(selectedPreparedSource);
+              }}
+              type="button"
+            >
+              Content Structure
+            </button>
+          ) : null}
+          {!selectedPreparedSource && selectedBookSource ? (
+            <button
+              className="h-9 flex-1 whitespace-nowrap rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 sm:flex-none vs-border vs-raised"
+              onClick={() => {
+                onInspectBookSource(selectedBookSource);
+              }}
+              type="button"
+            >
+              Content Structure
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto border-b pb-3 text-xs font-semibold vs-border">
+        {(
+          [
+            ["blocks", "Blocks"],
+            ["preview", "Preview"],
+            ["pronunciation", "Pronunciation"],
+            ["math", "Math"],
+            ["rules", "Rules"],
+          ] as const
+        ).map(([tab, label]) => (
+          <button
+            className={`rounded-md px-3 py-1.5 transition ${
+              reviewTab === tab
+                ? "bg-orange-500/10 text-orange-700 ring-1 ring-orange-300"
+                : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
+            }`}
+            key={tab}
+            onClick={() => {
+              setReviewTab(tab);
+            }}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {reviewTab === "blocks" ? (
+        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(260px,0.78fr)_minmax(0,1.35fr)]">
+          <NarrationReviewBlockList
+            blocks={reviewBlocks}
+            selectedBlockId={selectedBlock.id}
+            onSelectBlock={setSelectedBlockId}
+          />
+          <NarrationSpokenScriptPanel
+            block={selectedBlock}
+            spokenText={spokenText}
+            validationReason={validationReason}
+            validationSimilarity={job?.voiceCheck.similarity ?? 0}
+            validationTranscript={validationTranscript}
+          />
+        </div>
+      ) : null}
+      {reviewTab === "preview" ? (
+        <div className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border">
+          {previewContent}
+        </div>
+      ) : null}
+      {reviewTab === "pronunciation" ? (
+        <div className="overflow-hidden rounded-md border vs-border">
+          <PronunciationPanel
+            projectId={projectId}
+            source={selectedPreparedSource}
+            voiceProfileId={voiceProfileId}
+          />
+        </div>
+      ) : null}
+      {reviewTab === "math" ? mathPanel : null}
+      {reviewTab === "rules" ? rulesPanel : null}
     </section>
   );
 }
 
+function narrationReviewSourceLabel(
+  selectedPreparedSource: PreparedSource | null,
+  selectedBookSource: BookSource | null,
+): string {
+  if (selectedPreparedSource?.title) {
+    return selectedPreparedSource.title;
+  }
+  if (selectedPreparedSource?.sourceName) {
+    return selectedPreparedSource.sourceName;
+  }
+  if (selectedBookSource) {
+    return bookSourceName(selectedBookSource);
+  }
+  return "Draft text";
+}
+
+function narrationReviewSourceMeta({
+  bookScopeContent,
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  text,
+}: Readonly<{
+  bookScopeContent: BookSourceScopeContent | null;
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  text: string;
+}>): string {
+  if (selectedPreparedSource) {
+    return `${selectedPreparedSource.kind.toUpperCase()} · ${selectedPreparedSource.wordCount.toLocaleString()} words`;
+  }
+  if (selectedBookSource) {
+    const scopeLabel = selectedBookScope ? bookScopeLabelForReview(selectedBookScope) : "Full book";
+    const wordCount = bookScopeContent?.wordCount ?? selectedBookSource.wordCount;
+    return `${selectedBookSource.kind.toUpperCase()} · ${scopeLabel} · ${wordCount.toLocaleString()} words`;
+  }
+  return `${text.trim().length.toLocaleString()} characters`;
+}
+
+function narrationReviewPreviewContent({
+  bookScopeContent,
+  previewText,
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+}: Readonly<{
+  bookScopeContent: BookSourceScopeContent | null;
+  previewText: string;
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+}>): ReactNode {
+  if (selectedPreparedSource?.renderMode === "markdown" && selectedPreparedSource.text) {
+    return (
+      <MarkdownRenderer className="prose-markdown text-sm leading-6">
+        {selectedPreparedSource.text}
+      </MarkdownRenderer>
+    );
+  }
+  if (selectedBookSource) {
+    const bookText =
+      bookScopeContent?.text ??
+      (selectedBookScope ? bookScopeText(selectedBookSource, selectedBookScope) : "");
+    return (
+      <p className="whitespace-pre-wrap break-words">
+        {bookText.trim() || "Select a readable book scope to preview narration text."}
+      </p>
+    );
+  }
+  return <p className="whitespace-pre-wrap break-words">{previewText}</p>;
+}
+
+function bookScopeLabelForReview(scope: BookScope): string {
+  if (scope.label?.trim()) {
+    return scope.label.trim();
+  }
+  if (scope.type === "chapter") {
+    return `Chapter ${String(scope.chapterIndex ?? 1)}`;
+  }
+  if (scope.type === "pages") {
+    const start = scope.pageStart ?? 1;
+    const end = scope.pageEnd ?? start;
+    return start === end ? `Page ${String(start)}` : `Pages ${String(start)}-${String(end)}`;
+  }
+  return "Full book";
+}
+
+function narrationReviewMathPanel(selectedPreparedSource: PreparedSource | null): ReactNode {
+  if (selectedPreparedSource) {
+    return (
+      <div className="overflow-hidden rounded-md border vs-border">
+        <SourcePrepMathPanel source={selectedPreparedSource} />
+      </div>
+    );
+  }
+  return (
+    <NarrationReviewEmptyState
+      title="No prepared maths blocks"
+      detail="Prepare a file or URL to review math-specific spoken forms before synthesis."
+    />
+  );
+}
+
+function narrationReviewRulesPanel(
+  selectedPreparedSource: PreparedSource | null,
+  reviewBlocks: NarrationReviewBlock[],
+  text: string,
+): ReactNode {
+  if (selectedPreparedSource) {
+    return (
+      <div className="overflow-hidden rounded-md border vs-border">
+        <SourcePrepRulesPanel source={selectedPreparedSource} />
+      </div>
+    );
+  }
+  return <NarrationDraftRulesPanel blocks={reviewBlocks} text={text} />;
+}
+
+function NarrationReviewBlockList({
+  blocks,
+  selectedBlockId,
+  onSelectBlock,
+}: Readonly<{
+  blocks: NarrationReviewBlock[];
+  selectedBlockId: string | null;
+  onSelectBlock: (id: string) => void;
+}>) {
+  return (
+    <section className="min-w-0 overflow-hidden rounded-lg border bg-[var(--vs-raised)] vs-border">
+      <div className="flex items-center justify-between gap-3 border-b bg-[var(--vs-surface)] px-3 py-2 vs-border">
+        <h3 className="text-sm font-semibold">Blocks ({blocks.length.toString()})</h3>
+        <span className="text-xs vs-muted">review order</span>
+      </div>
+      <div className="max-h-[18rem] overflow-y-auto">
+        {blocks.map((block) => (
+          <button
+            className={`grid w-full min-w-0 grid-cols-[2rem_minmax(0,1fr)_auto] gap-2 border-b px-3 py-3 text-left text-sm transition last:border-b-0 vs-border ${
+              selectedBlockId === block.id ? "bg-orange-500/10" : "hover:bg-[var(--vs-raised)]"
+            }`}
+            key={block.id}
+            onClick={() => {
+              onSelectBlock(block.id);
+            }}
+            type="button"
+          >
+            <span className="vs-muted font-semibold">{block.index.toString()}</span>
+            <span className="min-w-0">
+              <span className="block truncate font-semibold" title={block.label}>
+                {block.label}
+              </span>
+              <span className="mt-1 block truncate text-xs vs-muted" title={block.text}>
+                {block.text}
+              </span>
+              <span className="mt-2 block text-xs vs-muted">
+                {block.segmentCount.toString()} segment{block.segmentCount === 1 ? "" : "s"} ·{" "}
+                {formatDuration(block.estimatedDurationMs)}
+              </span>
+            </span>
+            <span
+              className={`h-fit rounded-md border px-2 py-1 text-[0.68rem] font-semibold ${speakModeClass(block.speakMode)}`}
+            >
+              {block.speakMode}
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function NarrationSpokenScriptPanel({
+  block,
+  spokenText,
+  validationReason,
+  validationSimilarity,
+  validationTranscript,
+}: Readonly<{
+  block: NarrationReviewBlock | null;
+  spokenText: string;
+  validationReason: string;
+  validationSimilarity: number;
+  validationTranscript: string;
+}>) {
+  return (
+    <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold">Spoken Script</h3>
+          <p className="mt-1 truncate text-xs vs-muted" title={block?.label}>
+            {block ? `Block ${block.index.toString()} · ${block.kind}` : "Waiting for source"}
+          </p>
+        </div>
+        <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+          Listener form
+        </span>
+      </div>
+      <p className="max-h-[10rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
+        {spokenText}
+      </p>
+      <div className="grid gap-2 rounded-md border bg-[var(--vs-surface)] p-3 text-xs vs-border">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-semibold uppercase tracking-[0.14em] vs-muted">
+            Validation Transcript
+          </p>
+          <span className="font-semibold text-emerald-700">
+            {validationSimilarity ? `Match ${formatSimilarity(validationSimilarity)}` : "Waiting"}
+          </span>
+        </div>
+        <p className="break-words leading-5 vs-muted">{validationReason}</p>
+        {validationTranscript ? (
+          <p className="max-h-16 overflow-auto whitespace-pre-wrap break-words rounded border p-2 font-mono leading-5 vs-border vs-raised">
+            {validationTranscript}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function NarrationReviewEmptyState({ detail, title }: Readonly<{ detail: string; title: string }>) {
+  return (
+    <div className="rounded-md border border-dashed p-5 text-sm vs-border vs-raised">
+      <p className="font-semibold">{title}</p>
+      <p className="mt-2 vs-muted">{detail}</p>
+    </div>
+  );
+}
+
+function NarrationDraftRulesPanel({
+  blocks,
+  text,
+}: Readonly<{ blocks: NarrationReviewBlock[]; text: string }>) {
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  return (
+    <dl className="grid gap-px overflow-hidden rounded-md border text-sm sm:grid-cols-3 vs-border">
+      <SourcePrepMetric label="Draft Blocks" value={blocks.length.toString()} />
+      <SourcePrepMetric label="Words" value={words.toLocaleString()} />
+      <SourcePrepMetric
+        label="Estimate"
+        value={formatDuration(
+          blocks.reduce((total, block) => total + block.estimatedDurationMs, 0),
+        )}
+      />
+    </dl>
+  );
+}
+
+function buildNarrationReviewBlocks({
+  bookScopeContent,
+  optimizedText,
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  text,
+}: Readonly<{
+  bookScopeContent: BookSourceScopeContent | null;
+  optimizedText: string;
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  text: string;
+}>): NarrationReviewBlock[] {
+  if (selectedPreparedSource?.blocks && selectedPreparedSource.blocks.length > 0) {
+    return selectedPreparedSource.blocks.map((block, index) =>
+      narrationBlockToReviewBlock(block, index),
+    );
+  }
+
+  if (selectedBookSource) {
+    if (bookScopeContent?.blocks && bookScopeContent.blocks.length > 0) {
+      return bookScopeContent.blocks.map((block, index) =>
+        narrationBlockToReviewBlock(block, index),
+      );
+    }
+    const scopedBookText =
+      bookScopeContent?.text ??
+      (selectedBookScope ? bookScopeText(selectedBookSource, selectedBookScope) : "");
+    if (scopedBookText.trim()) {
+      return splitNarrationDraftIntoBlocks(scopedBookText.trim()).map((part, index) => ({
+        estimatedDurationMs: estimateNarrationTextDurationMs(part),
+        id: `book-${index.toString()}`,
+        index: index + 1,
+        kind: "body",
+        label: firstWords(part, 8),
+        segmentCount: estimateNarrationSegmentCount(part),
+        speakMode: "speak",
+        spokenText: part,
+        text: part,
+      }));
+    }
+  }
+
+  const draft = (optimizedText || text).trim();
+  if (draft) {
+    return splitNarrationDraftIntoBlocks(draft).map((part, index) => ({
+      estimatedDurationMs: estimateNarrationTextDurationMs(part),
+      id: `draft-${index.toString()}`,
+      index: index + 1,
+      kind: "text",
+      label: firstWords(part, 8),
+      segmentCount: estimateNarrationSegmentCount(part),
+      speakMode: "speak",
+      spokenText: part,
+      text: part,
+    }));
+  }
+
+  if (selectedBookSource) {
+    return [
+      {
+        estimatedDurationMs: 0,
+        id: `book-${selectedBookSource.id}`,
+        index: 1,
+        kind: selectedBookSource.kind,
+        label: bookSourceName(selectedBookSource),
+        segmentCount: 0,
+        speakMode: "speak",
+        spokenText: "Choose a book scope or create audio to review the listener-ready script.",
+        text: `${bookSourceName(selectedBookSource)} · ${selectedBookSource.wordCount.toLocaleString()} words`,
+      },
+    ];
+  }
+
+  return [
+    {
+      estimatedDurationMs: 0,
+      id: "empty-draft",
+      index: 1,
+      kind: "text",
+      label: "Waiting for source",
+      segmentCount: 0,
+      speakMode: "speak",
+      spokenText: "Paste text, select a book, or prepare a file/URL to begin review.",
+      text: "No source content selected.",
+    },
+  ];
+}
+
+function narrationBlockToReviewBlock(block: NarrationBlock, index: number): NarrationReviewBlock {
+  return {
+    estimatedDurationMs:
+      block.estimatedDurationMs ??
+      estimateNarrationTextDurationMs(block.spokenText ?? block.text ?? ""),
+    id: block.id,
+    index: index + 1,
+    kind: block.kind,
+    label: block.label ?? firstWords(block.spokenText ?? block.text ?? "", 8),
+    segmentCount: block.segments?.length ?? 0,
+    speakMode: block.speakMode,
+    spokenText: block.spokenText ?? block.text ?? "",
+    text: block.text ?? block.spokenText ?? block.label ?? "",
+  };
+}
+
+function splitNarrationDraftIntoBlocks(value: string): string[] {
+  const paragraphs = value
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const source = paragraphs.length > 0 ? paragraphs : [value];
+  return source.flatMap((part) => chunkLongNarrationText(part, 720)).slice(0, 36);
+}
+
+function chunkLongNarrationText(value: string, maxLength: number): string[] {
+  if (value.length <= maxLength) {
+    return [value];
+  }
+  const chunks: string[] = [];
+  let cursor = value.trim();
+  while (cursor.length > maxLength) {
+    const boundary = Math.max(
+      cursor.lastIndexOf(". ", maxLength),
+      cursor.lastIndexOf("? ", maxLength),
+      cursor.lastIndexOf("! ", maxLength),
+      cursor.lastIndexOf("; ", maxLength),
+    );
+    const cut = boundary > maxLength * 0.45 ? boundary + 1 : maxLength;
+    chunks.push(cursor.slice(0, cut).trim());
+    cursor = cursor.slice(cut).trim();
+  }
+  if (cursor) {
+    chunks.push(cursor);
+  }
+  return chunks;
+}
+
+function firstWords(value: string, count: number): string {
+  const words = value.trim().split(/\s+/).filter(Boolean).slice(0, count);
+  return words.length > 0 ? words.join(" ") : "Untitled block";
+}
+
+function firstNonEmptyString(...values: (string | null | undefined)[]): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return null;
+}
+
+function estimateNarrationSegmentCount(value: string): number {
+  const sentenceMarkers = value.split(/[.!?]+/).filter((part) => part.trim().length > 0).length;
+  return Math.max(1, sentenceMarkers);
+}
+
+function estimateNarrationTextDurationMs(value: string): number {
+  if (!value.trim()) {
+    return 0;
+  }
+  return Math.max(1200, Math.round(value.trim().split(/\s+/).length * 430));
+}
+
 function AudioPanel({
+  canOpenCinema,
   job,
   latestProgress,
+  onOpenCinema,
   onPlaybackCursorChange,
   onPlaybackControlsChange,
   onPlaybackStateChange,
   onResumeProgress,
 }: Readonly<{
+  canOpenCinema: boolean;
   job: VoiceJob | null;
   latestProgress: PlaybackProgress | null;
+  onOpenCinema: () => void;
   onPlaybackCursorChange?: (cursorSec: number) => void;
   onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
@@ -7025,7 +11168,17 @@ function AudioPanel({
   if (!job) {
     return (
       <section className="min-w-0 rounded-lg border p-3 shadow-sm vs-raised">
-        <h2 className="text-sm font-semibold">Audio Player</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold">Audio Player</h2>
+          <button
+            className="h-8 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
+            disabled={!canOpenCinema}
+            onClick={onOpenCinema}
+            type="button"
+          >
+            Cinema
+          </button>
+        </div>
         <div className="mt-3 grid min-h-32 place-items-center rounded-md border border-dashed px-4 py-5 text-center vs-border">
           <div>
             <p className="text-sm font-semibold">No audio generated yet</p>
@@ -7054,6 +11207,7 @@ function AudioPanel({
       job={job}
       key={job.id}
       latestProgress={latestProgress}
+      onOpenCinema={onOpenCinema}
       onPlaybackCursorChange={onPlaybackCursorChange}
       onPlaybackControlsChange={onPlaybackControlsChange}
       onPlaybackStateChange={onPlaybackStateChange}
@@ -7065,6 +11219,7 @@ function AudioPanel({
 function StreamingAudioPanel({
   job,
   latestProgress,
+  onOpenCinema,
   onPlaybackCursorChange,
   onPlaybackControlsChange,
   onPlaybackStateChange,
@@ -7072,6 +11227,7 @@ function StreamingAudioPanel({
 }: Readonly<{
   job: VoiceJob;
   latestProgress: PlaybackProgress | null;
+  onOpenCinema: () => void;
   onPlaybackCursorChange?: (cursorSec: number) => void;
   onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
@@ -7168,23 +11324,32 @@ function StreamingAudioPanel({
             {playModeLabel[playMode]} mode · {String(readySegments)} segment
             {readySegments === 1 ? "" : "s"} ready
           </p>
-          <div className="inline-flex shrink-0 overflow-hidden rounded-md border p-0.5 vs-border">
-            {(["arrival", "completed"] as const).map((mode) => {
-              const isAvailable = isModeAvailable[mode];
-              return (
-                <button
-                  className={modeButtonClass(mode, isAvailable)}
-                  disabled={isModeDisabled(mode)}
-                  key={mode}
-                  onClick={() => {
-                    setPlayMode(mode);
-                  }}
-                  type="button"
-                >
-                  {playModeLabel[mode]}
-                </button>
-              );
-            })}
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
+              onClick={onOpenCinema}
+              type="button"
+            >
+              Cinema
+            </button>
+            <div className="inline-flex overflow-hidden rounded-md border p-0.5 vs-border">
+              {(["arrival", "completed"] as const).map((mode) => {
+                const isAvailable = isModeAvailable[mode];
+                return (
+                  <button
+                    className={modeButtonClass(mode, isAvailable)}
+                    disabled={isModeDisabled(mode)}
+                    key={mode}
+                    onClick={() => {
+                      setPlayMode(mode);
+                    }}
+                    type="button"
+                  >
+                    {playModeLabel[mode]}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
         {latestProgress ? (
@@ -7419,6 +11584,96 @@ function TransportButton({
     >
       {children}
     </button>
+  );
+}
+
+function SeekTenIcon({ direction }: Readonly<{ direction: "backward" | "forward" }>) {
+  const isBackward = direction === "backward";
+  return (
+    <svg aria-hidden="true" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24">
+      <path
+        d={
+          isBackward
+            ? "M8 6.5H4.8V3.2M5 6.4A8.4 8.4 0 1 1 3.7 12"
+            : "M16 6.5h3.2V3.2M19 6.4A8.4 8.4 0 1 0 20.3 12"
+        }
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+      <text fill="currentColor" fontSize="6.6" fontWeight="700" textAnchor="middle" x="12" y="14.2">
+        10
+      </text>
+    </svg>
+  );
+}
+
+function SkipSegmentIcon({ direction }: Readonly<{ direction: "backward" | "forward" }>) {
+  if (direction === "backward") {
+    return (
+      <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+        <path d="M6.5 5v14" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+        <path d="M18 6.5 9.5 12l8.5 5.5V6.5Z" fill="currentColor" />
+      </svg>
+    );
+  }
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <path d="M17.5 5v14" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+      <path d="M6 6.5 14.5 12 6 17.5V6.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4.5 w-4.5 translate-x-px" fill="none" viewBox="0 0 24 24">
+      <path d="M8 5.8v12.4L18.4 12 8 5.8Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24">
+      <rect fill="currentColor" height="13" rx="1.4" width="4" x="7" y="5.5" />
+      <rect fill="currentColor" height="13" rx="1.4" width="4" x="13" y="5.5" />
+    </svg>
+  );
+}
+
+function VolumeIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M4 9.5h3.5L13 5v14l-5.5-4.5H4v-5Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M16 9a4.4 4.4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
+function SlidersIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M5 7h14M5 17h14M9 4.8v4.4M15 14.8v4.4"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.7"
+      />
+      <circle cx="9" cy="7" r="2.2" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="15" cy="17" r="2.2" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
   );
 }
 
@@ -8318,7 +12573,7 @@ function CompletedTransportControls({
           onSkip(-10);
         }}
       >
-        ↶10
+        <SeekTenIcon direction="backward" />
       </TransportButton>
       <TransportButton
         label="Previous segment"
@@ -8326,7 +12581,7 @@ function CompletedTransportControls({
           onSkip(-30);
         }}
       >
-        |‹
+        <SkipSegmentIcon direction="backward" />
       </TransportButton>
       <button
         aria-label={isPlaying ? "Pause" : "Play"}
@@ -8336,7 +12591,7 @@ function CompletedTransportControls({
         }}
         type="button"
       >
-        {isPlaying ? "Ⅱ" : "▶"}
+        {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </button>
       <TransportButton
         label="Next segment"
@@ -8344,7 +12599,7 @@ function CompletedTransportControls({
           onSkip(30);
         }}
       >
-        ›|
+        <SkipSegmentIcon direction="forward" />
       </TransportButton>
       <TransportButton
         label="Forward 10 seconds"
@@ -8352,7 +12607,7 @@ function CompletedTransportControls({
           onSkip(10);
         }}
       >
-        10↷
+        <SeekTenIcon direction="forward" />
       </TransportButton>
     </div>
   );
@@ -8367,7 +12622,7 @@ function CompletedVolumeControl({
 }>) {
   return (
     <div className="vs-muted flex items-center gap-2.5 text-xs">
-      <span className="text-base">♩</span>
+      <VolumeIcon />
       <input
         className="h-1 flex-1 cursor-pointer accent-orange-500"
         max={1}
@@ -8378,7 +12633,7 @@ function CompletedVolumeControl({
         value={volume}
       />
       <span className="w-10 text-right">{Math.round(volume * 100).toString()}%</span>
-      <span className="text-sm">⚙</span>
+      <SlidersIcon />
     </div>
   );
 }
@@ -9271,7 +13526,7 @@ function ArrivalAudioPlayerQueue({
               skipBy(-10);
             }}
           >
-            ↶10
+            <SeekTenIcon direction="backward" />
           </TransportButton>
           <TransportButton
             label="Previous segment"
@@ -9279,17 +13534,17 @@ function ArrivalAudioPlayerQueue({
               skipBy(-30);
             }}
           >
-            |‹
+            <SkipSegmentIcon direction="backward" />
           </TransportButton>
           <button
             aria-label={isPlaying ? "Pause" : "Play"}
-            className="grid h-11 w-11 place-items-center rounded-full bg-orange-500 text-lg font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-600"
+            className="grid h-11 w-11 place-items-center rounded-full text-lg font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 vs-accent-bg"
             onClick={() => {
               void handlePlayToggle();
             }}
             type="button"
           >
-            {isPlaying ? "Ⅱ" : "▶"}
+            {isPlaying ? <PauseIcon /> : <PlayIcon />}
           </button>
           <TransportButton
             label="Next segment"
@@ -9297,7 +13552,7 @@ function ArrivalAudioPlayerQueue({
               skipBy(30);
             }}
           >
-            ›|
+            <SkipSegmentIcon direction="forward" />
           </TransportButton>
           <TransportButton
             label="Forward 10 seconds"
@@ -9305,11 +13560,11 @@ function ArrivalAudioPlayerQueue({
               skipBy(10);
             }}
           >
-            10↷
+            <SeekTenIcon direction="forward" />
           </TransportButton>
         </div>
         <div className="vs-muted flex items-center gap-2.5 text-xs">
-          <span className="text-base">♩</span>
+          <VolumeIcon />
           <input
             className="h-1 flex-1 cursor-pointer accent-orange-500"
             max={1}
@@ -9320,7 +13575,7 @@ function ArrivalAudioPlayerQueue({
             value={volume}
           />
           <span className="w-10 text-right">{Math.round(volume * 100).toString()}%</span>
-          <span className="text-sm">⚙</span>
+          <SlidersIcon />
         </div>
       </div>
       {showArrivalPendingMessage ? (
@@ -9374,9 +13629,9 @@ function ProgressPanel({ job, now }: Readonly<{ job: VoiceJob; now: number }>) {
 
 function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
-    <div className="border-t border-zinc-200 pt-3">
-      <dt className="text-xs uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
-      <dd className="mt-1 break-words font-medium text-zinc-900">{value}</dd>
+    <div className="border-t pt-3 vs-border">
+      <dt className="text-xs uppercase tracking-[0.14em] vs-muted">{label}</dt>
+      <dd className="mt-1 break-words font-medium text-[var(--vs-text)]">{value}</dd>
     </div>
   );
 }
@@ -9649,4 +13904,35 @@ function formatElapsed(startedAt: string | undefined, now: number): string {
   }
 
   return `${String(seconds)}s`;
+}
+
+function formatRelativeTime(timestamp: string | undefined, now: number): string {
+  if (!timestamp) {
+    return "No updates yet";
+  }
+  const parsed = Date.parse(timestamp);
+  if (!Number.isFinite(parsed)) {
+    return "No updates yet";
+  }
+  const elapsedSeconds = Math.max(0, Math.floor((now - parsed) / 1000));
+  if (elapsedSeconds < 5) {
+    return "just now";
+  }
+  if (elapsedSeconds < 60) {
+    return `${String(elapsedSeconds)}s ago`;
+  }
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  if (elapsedMinutes < 60) {
+    return `${String(elapsedMinutes)}m ago`;
+  }
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  return `${String(elapsedHours)}h ago`;
+}
+
+function shortIdentifier(value: string): string {
+  const clean = value.trim();
+  if (clean.length <= 12) {
+    return clean || "pending";
+  }
+  return clean.slice(0, 12);
 }

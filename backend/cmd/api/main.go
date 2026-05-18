@@ -426,11 +426,29 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 		if err != nil {
 			return nil, err
 		}
+		embedPythonPath := firstTrimmedEnvValue(
+			"KOKORO_EMBED_PYTHON_PATH",
+			"KOKORO_PYTHON_PATH",
+			"VOICE_PROFILE_ARTIFACT_PYTHON_PATH",
+		)
+		if strings.TrimSpace(embedPythonPath) == "" {
+			embedPythonPath = strings.TrimSpace(envWithDefault("KOKORO_PYTHON_PATH", "./.venv/bin/python"))
+		}
+		if strings.TrimSpace(embedPythonPath) == "" {
+			embedPythonPath = strings.TrimSpace(referencePythonPath)
+		}
+		if err := ensurePythonCanImportModule(embedPythonPath, "kokoro"); err != nil {
+			return nil, fmt.Errorf(
+				"kokoro embed synthesis runtime misconfiguration: resolved interpreter %q cannot import kokoro (checked at startup). Configure KOKORO_EMBED_PYTHON_PATH (preferred) or KOKORO_PYTHON_PATH to a Python environment with kokoro installed: %w",
+				embedPythonPath,
+				err,
+			)
+		}
 
 		return agents.NewKokoroTTSAgent(agents.KokoroConfig{
 			PythonPath:          envWithDefault("KOKORO_PYTHON_PATH", "./.venv/bin/python"),
 			ReferencePythonPath: referencePythonPath,
-			EmbedPythonPath:     envWithDefault("KOKORO_EMBED_PYTHON_PATH", envWithDefault("VOICE_PROFILE_ARTIFACT_PYTHON_PATH", referencePythonPath)),
+			EmbedPythonPath:     embedPythonPath,
 			ScriptPath:          envWithDefault("KOKORO_SCRIPT_PATH", "./scripts/kokoro_synth.py"),
 			ReferenceScriptPath: envWithDefault(
 				"KOKORO_REFERENCE_SCRIPT_PATH",
@@ -721,6 +739,39 @@ func firstEnv(names ...string) string {
 	}
 
 	return ""
+}
+
+func firstTrimmedEnvValue(names ...string) string {
+	for _, name := range names {
+		value, ok := os.LookupEnv(name)
+		if !ok {
+			continue
+		}
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func ensurePythonCanImportModule(pythonPath, module string) error {
+	pythonPath = strings.TrimSpace(pythonPath)
+	if pythonPath == "" {
+		return fmt.Errorf("python interpreter is not configured")
+	}
+	if !executableAvailable(pythonPath) {
+		return fmt.Errorf("python executable not found at %q", pythonPath)
+	}
+
+	command := exec.Command(pythonPath, "-c", fmt.Sprintf("import importlib; importlib.import_module(%q)", module))
+	output, err := command.CombinedOutput()
+	if err != nil {
+		if strings.TrimSpace(string(output)) == "" {
+			return fmt.Errorf("python import check failed: %w", err)
+		}
+		return fmt.Errorf("python import check failed: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 func envInt64WithDefault(key string, fallback int64) (int64, error) {

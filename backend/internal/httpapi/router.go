@@ -1069,6 +1069,15 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(source)
 	})
 
+	app.Post("/api/voice-profile-sources/:id/cancel", func(ctx fiber.Ctx) error {
+		source, err := service.CancelVoiceProfileSource(ctx.Params("id"))
+		if err != nil {
+			return notFound(ctx, err)
+		}
+
+		return ctx.JSON(source)
+	})
+
 	app.Get("/api/voice-profile-sources/:id/candidates/:candidateId/preview.wav", func(ctx fiber.Ctx) error {
 		audioBytes, contentType, err := service.GetVoiceProfileCandidatePreview(
 			ctx.Params("id"),
@@ -1264,6 +1273,20 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(profile)
 	})
 
+	app.Post("/api/voice-profiles/:id/targets/:targetId/cancel", func(ctx fiber.Ctx) error {
+		profile, err := service.CancelVoiceProfileTarget(
+			ctx.Params("id"),
+			ctx.Params("targetId"),
+		)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProfileNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(profile)
+	})
+
 	app.Post("/api/voice-profiles/:id/artifacts/:moduleId", func(ctx fiber.Ctx) error {
 		profile, err := service.BuildVoiceProfileArtifact(ctx.Context(), ctx.Params("id"), ctx.Params("moduleId"))
 		if err != nil {
@@ -1275,6 +1298,20 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 				errors.Is(err, pipeline.ErrProfileMissingAudio) ||
 				errors.Is(err, pipeline.ErrProfileArtifactUnsupported) {
 				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(profile)
+	})
+
+	app.Post("/api/voice-profiles/:id/artifacts/:moduleId/cancel", func(ctx fiber.Ctx) error {
+		profile, err := service.CancelVoiceProfileTarget(
+			ctx.Params("id"),
+			ctx.Params("moduleId"),
+		)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProfileNotFound) {
+				return notFound(ctx, err)
 			}
 			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
 		}

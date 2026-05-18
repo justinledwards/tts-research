@@ -105,6 +105,13 @@ func (service *Service) BuildVoiceProfileArtifact(
 	previous.Kind = "style-json"
 	previous.UpstreamRef = module.Ref
 	if buildErr != nil {
+		if isContextCancellation(ctx, buildErr) {
+			previous.Status = VoiceProfileCloneArtifactStatusCancelled
+			previous.Error = "cancelled by request"
+			profile.CloneArtifacts[module.ID] = previous
+			_ = service.persistVoiceProfile(profile)
+			return profile.VoiceProfile, context.Canceled
+		}
 		previous.Status = VoiceProfileCloneArtifactStatusFailed
 		previous.Error = buildErr.Error()
 		profile.CloneArtifacts[module.ID] = previous
@@ -237,6 +244,9 @@ func (service *Service) runVoiceProfileArtifactBuilder(
 	if err := command.Run(); err != nil {
 		if buildCtx.Err() == context.DeadlineExceeded {
 			return profileArtifactBuildOutput{}, fmt.Errorf("voice profile artifact build timed out after %d seconds", service.options.VoiceProfileArtifactTimeoutSeconds)
+		}
+		if buildCtx.Err() == context.Canceled {
+			return profileArtifactBuildOutput{}, context.Canceled
 		}
 		return profileArtifactBuildOutput{}, fmt.Errorf(
 			"voice profile artifact build failed (command=%s): %w: %s",
