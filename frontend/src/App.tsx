@@ -194,6 +194,11 @@ import {
 import type { ContentIRDocument } from "./content-ir";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
 import {
+  preparedSourceCinemaActionLabel,
+  preparedSourceCinemaJobMatchesSource,
+  type PreparedSourceCinemaTextSize,
+} from "./preparedSourceCinema";
+import {
   humanizeProfileTargetProblem,
   isVoiceProfileTargetReadyForEngine,
   voiceProfileTargetForEngine,
@@ -237,6 +242,11 @@ const BookCinemaOverlay = lazy(() =>
 );
 const ContentIRDrawer = lazy(() =>
   import("./ContentIrDrawer").then((module) => ({ default: module.ContentIRDrawer })),
+);
+const PreparedSourceCinemaOverlay = lazy(() =>
+  import("./PreparedSourceCinema").then((module) => ({
+    default: module.PreparedSourceCinemaOverlay,
+  })),
 );
 const HelpPanel = lazy(() =>
   import("./ProductPanels").then((module) => ({ default: module.HelpPanel })),
@@ -761,6 +771,49 @@ function latestProfileActivityTimestamp(
   return latestTimestamp(profile.updatedAt, ...targetTimes, ...artifactTimes);
 }
 
+export function resolveVoiceCloneCompletionReference(
+  activeProfile: VoiceProfile | null,
+  profileSource: VoiceProfileSource | null,
+  targetIds: readonly string[] | null | undefined,
+): string | undefined {
+  const targets = activeProfile ? scopedCloneTargets(activeProfile, targetIds) : [];
+  const measuredAt = latestTimestamp(...targets.map((target) => target.validation?.measuredAt));
+  if (measuredAt) {
+    return measuredAt;
+  }
+  const updatedAt = latestTimestamp(...targets.map((target) => target.updatedAt));
+  if (updatedAt) {
+    return updatedAt;
+  }
+  return latestTimestamp(
+    activeProfile?.updatedAt,
+    profileSource?.updatedAt,
+    profileSource?.createdAt,
+  );
+}
+
+export function resolveVoiceCloningActivityNow({
+  now,
+  status,
+  completionReference,
+}: Readonly<{
+  completionReference: string | undefined | null;
+  now: number;
+  status: ActivityStatus;
+}>): number {
+  if (status === "running" || status === "attention") {
+    return now;
+  }
+  if (!completionReference) {
+    return now;
+  }
+  const parsed = Date.parse(completionReference);
+  if (!Number.isFinite(parsed)) {
+    return now;
+  }
+  return parsed;
+}
+
 function sourceActivityMessage(source: VoiceProfileSource | null): string {
   if (!source) {
     return "No source analysis is running.";
@@ -947,7 +1000,7 @@ function voiceCloneEta(status: ActivityStatus): string {
   return "n/a";
 }
 
-function resolveVoiceCloningActivity({
+export function resolveVoiceCloningActivity({
   activeEngineId,
   buildingArtifactKey,
   createCandidateId,
@@ -1004,6 +1057,16 @@ function resolveVoiceCloningActivity({
     targetActive,
     targetReady,
   });
+  const completionReference = resolveVoiceCloneCompletionReference(
+    activeProfile,
+    profileSource,
+    activeTargetIds,
+  );
+  const nowForCloneTiming = resolveVoiceCloningActivityNow({
+    completionReference,
+    now,
+    status,
+  });
   const activityTimestamp = latestTimestamp(
     profileSource?.updatedAt,
     latestProfileActivityTimestamp(activeProfile, activeTargetIds),
@@ -1024,9 +1087,9 @@ function resolveVoiceCloningActivity({
     actionLabel: resolveVoiceCloneActionLabel(status),
     candidateDetail,
     detail: voiceCloneDetail(profileSource, activeProfile, activeEngineId),
-    elapsed: formatElapsed(profileSource?.createdAt ?? activeProfile?.createdAt, now),
+    elapsed: formatElapsed(profileSource?.createdAt ?? activeProfile?.createdAt, nowForCloneTiming),
     eta: voiceCloneEta(status),
-    lastUpdate: formatRelativeTime(activityTimestamp, now),
+    lastUpdate: formatRelativeTime(activityTimestamp, nowForCloneTiming),
     message,
     sourceDetail: voiceCloneSourceDetail(profileSource, activeProfile),
     stages,
@@ -2277,6 +2340,13 @@ export function App() {
   const [isBookCinemaOpen, setIsBookCinemaOpen] = useState(false);
   const [bookCinemaTextSize, setBookCinemaTextSize] = useState<BookCinemaTextSize>("large");
   const [bookCinemaThemeName, setBookCinemaThemeName] = useState<ThemeName>("night");
+  const [preparedSourceCinemaSourceId, setPreparedSourceCinemaSourceId] = useState<string | null>(
+    null,
+  );
+  const [preparedSourceCinemaTextSize, setPreparedSourceCinemaTextSize] =
+    useState<PreparedSourceCinemaTextSize>("large");
+  const [preparedSourceCinemaThemeName, setPreparedSourceCinemaThemeName] =
+    useState<ThemeName>("light");
   const [readerAccessibilitySettings, setReaderAccessibilitySettings] =
     useState<ReaderAccessibilitySettings>(() => {
       try {
@@ -2389,21 +2459,6 @@ export function App() {
       ),
     [voiceProfiles],
   );
-  const hasActiveVoiceCloningActivity = useMemo(
-    () =>
-      isAnalyzingProfileSource ||
-      Boolean(profileCandidateCreateId) ||
-      Boolean(buildingArtifactKey) ||
-      hasActiveVoiceProfileTargets ||
-      isVoiceProfileSourceActive(profileSource),
-    [
-      buildingArtifactKey,
-      hasActiveVoiceProfileTargets,
-      isAnalyzingProfileSource,
-      profileCandidateCreateId,
-      profileSource,
-    ],
-  );
   const voiceCloningActivity = useMemo(
     () =>
       resolveVoiceCloningActivity({
@@ -2428,6 +2483,13 @@ export function App() {
       selectedVoiceProfile,
       voiceProfiles,
     ],
+  );
+  const hasActiveVoiceCloningActivity = useMemo(
+    () =>
+      voiceCloningActivity.status === "running" ||
+      voiceCloningActivity.status === "attention" ||
+      isProcessing,
+    [isProcessing, voiceCloningActivity.status],
   );
   const activeProject = useMemo<VoiceProject | null>(() => {
     const selectedProject = projects.find((project) => project.id === activeProjectId);
@@ -2457,6 +2519,58 @@ export function App() {
     }
     return projectProgress.length > 0 ? projectProgress[0] : null;
   })();
+  const preparedSourceCinemaSource = useMemo(() => {
+    if (!preparedSourceCinemaSourceId) {
+      return null;
+    }
+    if (jobPreparedSource?.id === preparedSourceCinemaSourceId) {
+      return jobPreparedSource;
+    }
+    return preparedSources.find((source) => source.id === preparedSourceCinemaSourceId) ?? null;
+  }, [jobPreparedSource, preparedSourceCinemaSourceId, preparedSources]);
+  const preparedSourceCinemaJob = useMemo(
+    () => (preparedSourceCinemaJobMatchesSource(job, preparedSourceCinemaSource) ? job : null),
+    [job, preparedSourceCinemaSource],
+  );
+  const preparedSourceCinemaCue = useMemo(
+    () =>
+      preparedSourceCinemaJob
+        ? buildTeleprompterCue(preparedSourceCinemaJob, playbackCursorSec, teleprompterSettings)
+        : null,
+    [playbackCursorSec, preparedSourceCinemaJob, teleprompterSettings],
+  );
+  const preparedSourceCinemaProgress = useMemo(() => {
+    if (!preparedSourceCinemaSource) {
+      return null;
+    }
+    if (preparedSourceCinemaJob) {
+      const targetId = progressTargetIdForJob(preparedSourceCinemaJob);
+      return (
+        projectProgress.find(
+          (progress) =>
+            progress.targetId === targetId ||
+            progress.preparedSourceId === preparedSourceCinemaSource.id,
+        ) ??
+        resolveProgressForJob(preparedSourceCinemaJob, latestProgress) ??
+        null
+      );
+    }
+    return (
+      projectProgress.find(
+        (progress) =>
+          progress.preparedSourceId === preparedSourceCinemaSource.id ||
+          progress.targetId === `prepared:${preparedSourceCinemaSource.id}`,
+      ) ?? null
+    );
+  }, [latestProgress, preparedSourceCinemaJob, preparedSourceCinemaSource, projectProgress]);
+  const openPreparedSourceCinema = useCallback(
+    (source: PreparedSource) => {
+      startFrontendSpan("prepared-source-cinema-open");
+      setPreparedSourceCinemaSourceId(source.id);
+      setPreparedSourceCinemaThemeName(themeName === "night" ? "light" : themeName);
+    },
+    [themeName],
+  );
   useEffect(() => {
     if (
       !selectedPreparedSource ||
@@ -2673,6 +2787,20 @@ export function App() {
       scope: bookScopeKey(effectiveBookScope),
     });
   }, [effectiveBookScope, isBookCinemaOpen, selectedBookSource]);
+
+  useEffect(() => {
+    if (!preparedSourceCinemaSourceId) {
+      return;
+    }
+    if (!preparedSourceCinemaSource) {
+      setPreparedSourceCinemaSourceId(null);
+      return;
+    }
+    endFrontendSpan("prepared-source-cinema-open", {
+      preparedSourceId: preparedSourceCinemaSource.id,
+      kind: preparedSourceCinemaSource.kind,
+    });
+  }, [preparedSourceCinemaSource, preparedSourceCinemaSourceId]);
 
   useEffect(() => {
     const syncHashPosition = () => {
@@ -4369,7 +4497,7 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!isProcessing && !hasActiveVoiceCloningActivity) {
+    if (!hasActiveVoiceCloningActivity) {
       return;
     }
 
@@ -4380,7 +4508,7 @@ export function App() {
     return () => {
       globalThis.clearInterval(interval);
     };
-  }, [hasActiveVoiceCloningActivity, isProcessing]);
+  }, [hasActiveVoiceCloningActivity]);
 
   useEffect(() => {
     if (!job || !isPlaybackActive || activePlaybackSession) {
@@ -4948,6 +5076,43 @@ export function App() {
           />
         </Suspense>
       ) : null}
+      {preparedSourceCinemaSource ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading source cinema..." />}>
+          <PreparedSourceCinemaOverlay
+            activeWordIndex={preparedSourceCinemaCue?.documentActiveWordIndex ?? -1}
+            canCreateAudio={!isProcessing}
+            isProcessing={isProcessing}
+            isPlaybackActive={
+              isPlaybackActive &&
+              preparedSourceCinemaJobMatchesSource(job, preparedSourceCinemaSource)
+            }
+            job={preparedSourceCinemaJob}
+            playbackControls={playbackControls}
+            playbackCursorSec={playbackCursorSec}
+            progress={preparedSourceCinemaProgress}
+            source={preparedSourceCinemaSource}
+            textSize={preparedSourceCinemaTextSize}
+            themeName={preparedSourceCinemaThemeName}
+            onClose={() => {
+              setPreparedSourceCinemaSourceId(null);
+            }}
+            onCreateAudio={(source) => {
+              void submitPreparedSourceJob(source);
+            }}
+            onInspectStructure={(source) => {
+              void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
+            }}
+            onPlayPause={handleBookCinemaPlayPause}
+            onRestart={handleBookCinemaRestart}
+            onResumeProgress={(progress) => {
+              void handleResumeProgress(progress);
+            }}
+            onSkip={handleBookCinemaSkip}
+            onTextSizeChange={setPreparedSourceCinemaTextSize}
+            onThemeChange={setPreparedSourceCinemaThemeName}
+          />
+        </Suspense>
+      ) : null}
 
       <ResearchModulesSetupCard
         error={researchModuleError}
@@ -5242,6 +5407,7 @@ export function App() {
               onInspectPreparedSource={(source) => {
                 void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
               }}
+              onOpenPreparedSourceCinema={openPreparedSourceCinema}
               onOpenTeleprompter={openReadingCinema}
               onPrepareFile={handlePrepareSourceFile}
               onPrepareUrl={handlePrepareSourceUrl}
@@ -6365,7 +6531,7 @@ function VoiceCloningActivityPanel({
       <div className="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
         <div className="grid gap-2 md:grid-cols-4">
           <ActivityFact label="Elapsed" value={activity.elapsed} detail={activity.eta} />
-          <ActivityFact label="Last Update" value={activity.lastUpdate} detail="Polling every 3s" />
+          <ActivityFact label="Last Update" value={activity.lastUpdate} detail={activity.eta} />
           <ActivityFact
             label="Source"
             value={activity.sourceDetail}
@@ -7555,7 +7721,7 @@ function PipelineStatusFooter({
               <ActivityFact
                 label="Last Update"
                 value={voiceCloningActivity.lastUpdate}
-                detail="heartbeat visible"
+                detail={voiceCloningActivity.eta}
               />
               <ActivityFact
                 label="Candidates"
@@ -7910,6 +8076,7 @@ function SourceTextPanel({
   onDeleteCustomSpeechPolicyProfile,
   onInspectBookSource,
   onInspectPreparedSource,
+  onOpenPreparedSourceCinema,
   onOpenTeleprompter,
   onPrepareFile,
   onPrepareUrl,
@@ -7956,6 +8123,7 @@ function SourceTextPanel({
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
+  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
   onOpenTeleprompter: () => void;
   onPrepareFile: (file: File, markdownParseMode: MarkdownParseMode) => Promise<void>;
   onPrepareUrl: (url: string, markdownParseMode: MarkdownParseMode) => Promise<void>;
@@ -8153,6 +8321,7 @@ function SourceTextPanel({
             fileInputRef.current?.click();
           }}
           onCreatePreparedAudio={onCreatePreparedAudio}
+          onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
           onCreateCustomSpeechPolicyProfile={onCreateCustomSpeechPolicyProfile}
           onDeleteCustomSpeechPolicyProfile={onDeleteCustomSpeechPolicyProfile}
           onInspectPreparedSource={onInspectPreparedSource}
@@ -8248,6 +8417,7 @@ function SourceTextPanel({
             voiceProfileId={voiceProfileId}
             onInspectBookSource={onInspectBookSource}
             onInspectPreparedSource={onInspectPreparedSource}
+            onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
             onOpenTeleprompter={onOpenTeleprompter}
           />
         </div>
@@ -8496,6 +8666,7 @@ function SourcePrepReview({
   onDeleteCustomSpeechPolicyProfile,
   onInspectPreparedSource,
   onMarkdownParseModeChange,
+  onOpenPreparedSourceCinema,
   onPrepareUrl,
   onSpeechPolicyOverridesChange,
   onSpeechPolicyProfileChange,
@@ -8531,6 +8702,7 @@ function SourcePrepReview({
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onMarkdownParseModeChange: (mode: MarkdownParseMode) => void;
+  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
   onPrepareUrl: () => void;
   onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
@@ -8646,6 +8818,7 @@ function SourcePrepReview({
             source={source}
             onCreatePreparedAudio={onCreatePreparedAudio}
             onInspectPreparedSource={onInspectPreparedSource}
+            onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
           />
         </div>
       ) : (
@@ -8663,11 +8836,13 @@ function PreparedSourceIntakeSummary({
   source,
   onCreatePreparedAudio,
   onInspectPreparedSource,
+  onOpenPreparedSourceCinema,
 }: Readonly<{
   isPreparing: boolean;
   source: PreparedSource | null;
   onCreatePreparedAudio: (source: PreparedSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
+  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
 }>) {
   if (!source) {
     return (
@@ -8693,6 +8868,15 @@ function PreparedSourceIntakeSummary({
           <p className="mt-1 text-xs vs-muted">{preparedSourceSummaryLine(source)}</p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+          <button
+            className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 transition hover:bg-orange-500/15"
+            onClick={() => {
+              onOpenPreparedSourceCinema(source);
+            }}
+            type="button"
+          >
+            {preparedSourceCinemaActionLabel(source)}
+          </button>
           <button
             className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border"
             onClick={() => {
@@ -10707,6 +10891,7 @@ function NarrationReviewWorkbench({
   onInspectBookSource,
   onOpenTeleprompter,
   onInspectPreparedSource,
+  onOpenPreparedSourceCinema,
   optimizedText,
   projectId,
   selectedBookScope,
@@ -10719,6 +10904,7 @@ function NarrationReviewWorkbench({
   job: VoiceJob | null;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
+  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
   onOpenTeleprompter: () => void;
   optimizedText: string;
   projectId: string;
@@ -10817,6 +11003,17 @@ function NarrationReviewWorkbench({
           >
             Open Teleprompter
           </button>
+          {selectedPreparedSource ? (
+            <button
+              className="h-9 flex-1 whitespace-nowrap rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 sm:flex-none"
+              onClick={() => {
+                onOpenPreparedSourceCinema(selectedPreparedSource);
+              }}
+              type="button"
+            >
+              {preparedSourceCinemaActionLabel(selectedPreparedSource)}
+            </button>
+          ) : null}
           {selectedPreparedSource ? (
             <button
               className="h-9 flex-1 whitespace-nowrap rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 sm:flex-none vs-border vs-raised"

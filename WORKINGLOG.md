@@ -1,5 +1,19 @@
 # Working Log
 
+## 2026-05-18 20:46 CEST - Voice cloning completion timing freeze
+- [x] Stop cloned-profile activity timing from advancing after completion.
+- [x] Make completed clone summary rows use completion-timestamp anchors.
+- [x] Prevent polling/heartbeat copy from appearing on completed clone rows.
+- [x] Add regression coverage for complete-vs-running timing behavior.
+- [ ] Validate with targeted frontend checks and commit.
+
+## 2026-05-18 20:30 CEST - Website Cinema UI strengthening
+- [x] Generate Website Cinema concept references
+- [x] Implement prepared-source cinema shell and entry points
+- [x] Add focused frontend coverage
+- [ ] Run browser scroll/fuzz validation
+- [ ] Run frontend and project checks
+
 ## 2026-05-18 20:06 CEST - Supertonic contract-row target and validation polish
 - [x] Map Supertonic engine target policy to `supertonic-embed` in frontend profile target helpers.
 - [x] Update backend contract table row to require a profile target and profile artifact text for Supertonic.
@@ -405,9 +419,9 @@
 
 ## 2026-05-18 19:52 CEST - UI ergonomics audit and concept pack
 
-- [ ] Capture current UI state across primary surfaces
-- [ ] Run scroll extremes and deterministic UI fuzzing
-- [ ] Write ergonomic audit and findings
-- [ ] Generate operator studio concept images
-- [ ] Compare against previous concept images
-- [ ] Run validation checks
+- [x] Capture current UI state across primary surfaces
+- [x] Run scroll extremes and deterministic UI fuzzing
+- [x] Write ergonomic audit and findings
+- [x] Generate operator studio concept images
+- [x] Compare against previous concept images
+- [x] Run validation checks
