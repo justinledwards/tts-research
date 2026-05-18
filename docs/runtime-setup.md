@@ -16,6 +16,36 @@ mise start -- pnpm start:local
 
 `mise doctor` is the built-in mise health check. `mise run doctor` prints the Voice Studio state of core tools, `ffmpeg`, `pdftotext`, provider environments, ignored runtime paths, and tracked model artifacts.
 
+## Local Validation Authority
+
+Use the local validation command as the pre-merge ritual. It runs format, lint, typecheck, adapter
+tests, backend/frontend tests, Content IR validation, the threshold-gated alignment bench, and the
+self-contained Book Cinema smoke.
+
+```sh
+mise doctor
+mise run validate:local
+mise run bench:local
+```
+
+The same entrypoints are available through pnpm:
+
+```sh
+pnpm validate:local
+pnpm bench:local
+pnpm e2e:book-cinema
+```
+
+Reports are written under `output/validate-local/latest/`:
+
+- `summary.json` is the machine-readable contract;
+- `report.md` and `report.html` are generated from that JSON;
+- `logs/` and `artifacts/` contain per-step logs and E2E screenshots.
+
+Benchmark fixtures and thresholds live in `benches/`. GitHub Actions templates are intentionally
+disabled under `.github/workflows.examples/` and `.github/workflows.disabled/`; there is no active
+`.github/workflows/` gate.
+
 ## Ignored Runtime Layout
 
 - `backend/data/` stores generated jobs, profiles, projects, books, source preps, and progress.

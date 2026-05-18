@@ -1,0 +1,21 @@
+# Disabled GitHub Actions template.
+# This file is intentionally outside .github/workflows/ and has a .disabled suffix.
+
+name: Local Validation Disabled Template
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate-local:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise install
+      - run: pnpm install --frozen-lockfile
+      - run: mise run validate:local

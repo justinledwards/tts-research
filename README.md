@@ -119,6 +119,26 @@ export HF_HOME=/dev/shm/tts-research/hf
 pnpm check
 ```
 
+`pnpm check` stays the fast commit-time guard used by Husky. Before merging, run the local
+validation authority:
+
+```sh
+mise doctor
+mise run validate:local
+mise run bench:local
+```
+
+Equivalent pnpm entrypoints are available:
+
+```sh
+pnpm validate:local
+pnpm bench:local
+pnpm e2e:book-cinema
+```
+
+Validation writes `output/validate-local/latest/summary.json`, `report.md`, `report.html`, and
+per-step logs. Benchmark fixtures and thresholds are checked in under `benches/`.
+
 ## Agent Pipeline
 
 1. `VoiceOptimization` rewrites technical text so it flows naturally when spoken.

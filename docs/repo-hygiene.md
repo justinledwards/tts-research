@@ -15,6 +15,20 @@ mise audit:artifacts
 
 `mise audit:artifacts` flags tracked generated/model/cache paths. On the current unrevised history, it is expected to flag the historical Kokoro model blobs until the isolated rewrite branch is evaluated.
 
+## Pre-Merge Local Validation
+
+Hosted GitHub Actions are intentionally disabled for now. Keep workflow examples under
+`.github/workflows.examples/` or `.github/workflows.disabled/`, not `.github/workflows/`.
+
+Before merging, use the local authority:
+
+```sh
+mise run validate:local
+mise run bench:local
+```
+
+The generated report lives under ignored `output/validate-local/latest/`.
+
 ## Known Paths To Keep Out Of Git
 
 - `.upstreams/`

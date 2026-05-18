@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "tts-research.bench-thresholds.v1",
+  "alignment": {
+    "maxMeanMaeMs": 50,
+    "maxP95Ms": 75,
+    "maxMeanDriftMs": 25,
+    "minMeanCoverage": 1,
+    "minTokenCount": 2
+  },
+  "markdown": {
+    "maxTotalParseMs": 5000,
+    "maxTotalTransformMs": 5000,
+    "maxTotalEmitMs": 5000,
+    "maxTotalWarnings": 10,
+    "minTotalNodes": 5
+  }
+}

@@ -1,304 +1,436 @@
 #!/usr/bin/env node
 
-import { createServer } from "node:http";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { createWriteStream } from "node:fs";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import JSZip from "jszip";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://localhost:8080";
-const appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://localhost:5173";
-const screenshotsDir = process.env.E2E_SCREENSHOT_DIR ?? path.join(rootDir, "output", "playwright");
-const projectName = `Book Cinema E2E ${new Date().toISOString()}`;
+const artifactDir = process.env.E2E_ARTIFACT_DIR ?? path.join(rootDir, "output", "e2e-book-cinema");
+const screenshotsDir = process.env.E2E_SCREENSHOT_DIR ?? path.join(artifactDir, "screenshots");
+const summaryPath = process.env.E2E_SUMMARY_PATH ?? path.join(artifactDir, "summary.json");
+const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 const activeProjectKey = "tts-active-project-id";
-const deepResearchReportFixture = path.join(rootDir, "demo", "deep-research-report.md");
-const jobTimeoutMs = Number.parseInt(process.env.E2E_JOB_TIMEOUT_MS ?? "300000", 10);
+const jobTimeoutMs = Number.parseInt(process.env.E2E_JOB_TIMEOUT_MS ?? "180000", 10);
 
-const fixtures = [
-  {
-    kind: "epub",
-    file: path.join(rootDir, "demo", "pg84-images-3.epub"),
-    screenshot: "tts-research-book-cinema-epub.png",
-    scopeFor(book) {
-      const chapter =
-        book.chapters?.find((item) => wordCount(item.text ?? "") >= 40) ?? book.chapters?.[0];
-      assert(chapter, "EPUB import did not expose chapters.");
-      return {
-        type: "chapter",
-        chapterIndex: chapter.index,
-        label: chapter.title || `Chapter ${String(chapter.index)}`,
-      };
-    },
-    verify(book) {
-      assert(book.status === "ready", `EPUB source is not ready: ${book.status}`);
-      assert((book.chapters?.length ?? 0) > 0, "EPUB source has no chapters.");
-      assert((book.wordSpans?.length ?? 0) > 0, "EPUB source has no word spans.");
-    },
-  },
-  {
-    kind: "epub",
-    file: path.join(rootDir, "demo", "_OceanofPDF.com_Project_Hail_Mary_-_y_Weir.epub"),
-    skipNarration: true,
-    screenshot: "tts-research-book-cinema-hail-mary-epub.png",
-    scopeFor(book) {
-      const section =
-        book.sections?.find((item) => item.title === "Chapter 1" && item.isNarratable) ??
-        book.sections?.find((item) => item.isNarratable);
-      assert(section, "Project Hail Mary EPUB did not expose narratable sections.");
-      return scopeFromSection(section);
-    },
-    verify(book) {
-      assert(book.status === "ready", `Project Hail Mary EPUB is not ready: ${book.status}`);
-      assert(
-        book.chapterCount >= 30,
-        `Project Hail Mary EPUB chapter count = ${book.chapterCount}`,
-      );
-      assert((book.sections?.length ?? 0) >= 30, "Project Hail Mary EPUB has no structure.");
-    },
-  },
-  {
-    kind: "pdf",
-    file: path.join(rootDir, "demo", "_OceanofPDF.com_Project_Hail_Mary_-_y_Weir.pdf"),
-    screenshot: "tts-research-book-cinema-pdf.png",
-    scopeFor(book) {
-      return pickPDFNarrationScope(book, "Project Hail Mary PDF import did not expose pages.");
-    },
-    verify(book) {
-      assert(book.status === "ready", `Project Hail Mary PDF is not ready: ${book.status}`);
-      assert(book.pageCount >= 468, `Project Hail Mary PDF page count = ${book.pageCount}`);
-      assert((book.sections?.length ?? 0) > 0, "Project Hail Mary PDF has no page sections.");
-    },
-  },
-];
+let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
+let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack || error.message : error);
+main().catch(async (error) => {
+  const message = error instanceof Error ? error.stack || error.message : String(error);
+  console.error(message);
+  await writeSummary({ error: message, status: "failed" }).catch(() => {});
   process.exitCode = 1;
 });
 
 async function main() {
-  const { chromium } = await loadPlaywright();
-  await ensureFixtures();
+  await mkdir(artifactDir, { recursive: true });
   await mkdir(screenshotsDir, { recursive: true });
-  await assertServerReady();
-
-  const diagnostics = await apiJson("/api/book-cinema/diagnostics");
-  assert(
-    diagnostics.pdfExtractorAvailable,
-    `PDF extraction unavailable: ${diagnostics.pdfSetup ?? "no setup details"}`,
-  );
-  console.log(`PDF extractor: ${diagnostics.pdfExtractor}`);
-
-  const project = await apiJson("/api/projects", {
-    method: "POST",
-    body: JSON.stringify({ name: projectName }),
-    headers: { "Content-Type": "application/json" },
-  });
-  assert(project.id, "Project creation did not return an id.");
-  await runSourcePrepE2E(project.id);
-
-  const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
-  try {
-    for (const fixture of fixtures) {
-      const book = await uploadBook(project.id, fixture.file);
-      fixture.verify(book);
-      const scope = fixture.scopeFor(book);
-      const scopeContent = await apiJson(`/api/book-sources/${book.id}/scope?${scopeQuery(scope)}`);
-      const scopedText = scopeContent.text;
-      assert(scopedText.trim().length > 0, `${fixture.kind} selected scope has no text.`);
-      if (fixture.skipNarration) {
-        console.log(`${fixture.kind.toUpperCase()} structure and scope E2E passed.`);
-        continue;
-      }
-
-      const job = await createNarrationJob(project.id, book.id, scope);
-      const completedJob = await waitForJob(job.id);
-      assert(
-        completedJob.bookSourceId === book.id,
-        `${fixture.kind} job did not store bookSourceId.`,
-      );
-      assert(
-        scopeKey(completedJob.bookScope) === scopeKey(scope),
-        `${fixture.kind} job did not store bookScope.`,
-      );
-      assert(
-        completedJob.error !== "cancelled by request",
-        `${fixture.kind} job was incorrectly cancelled by request context.`,
-      );
-      await assertTimingArtifacts(completedJob.id, fixture.kind);
-
-      const context = await browser.newContext({
-        storageState: projectStorageState(project.id, {
-          bookScope: scope,
-          bookSourceId: book.id,
-          jobId: completedJob.id,
-          text: scopedText,
-        }),
-        viewport: { width: 1440, height: 980 },
-      });
-      const page = await context.newPage();
-      page.setDefaultTimeout(60_000);
-      try {
-        await page.goto(appBaseUrl, { waitUntil: "networkidle" });
-        await page.locator('section:has-text("Source Intake") button:has-text("Book")').click();
-        await page.locator('h3:has-text("Book Cinema")').first().waitFor();
-        await page
-          .locator('section:has-text("Audio Player") button:has-text("Play"):enabled')
-          .first()
-          .waitFor();
-        await page.getByTitle(bookDisplayName(book)).first().click();
-        await page
-          .locator('label:has-text("Chapter / scope") select')
-          .first()
-          .selectOption(scopeKey(scope));
-        await page.locator('button:has-text("Cinema"):enabled').last().click();
-        await page.getByRole("heading", { name: /Book Cinema/i }).waitFor();
-        await page
-          .locator("h3")
-          .filter({ hasText: scope.label ?? "Full book" })
-          .first()
-          .waitFor();
-        await page.locator('.fixed.inset-0 button:has-text("Play"):enabled').first().click();
-        await page
-          .locator(".book-cinema-word-active, .book-cinema-word-phrase")
-          .first()
-          .waitFor({ timeout: 20_000 });
-        await page.getByLabel("Playback speed").selectOption("1.25");
-        const playbackSpeed = await page.getByLabel("Playback speed").inputValue();
-        assert(playbackSpeed === "1.25", `Playback speed control value = ${playbackSpeed}`);
-        await page.locator('p:has-text("Timing")').first().waitFor({ timeout: 20_000 });
-        await page.screenshot({
-          fullPage: false,
-          path: path.join(screenshotsDir, fixture.screenshot),
-        });
-        await page.getByRole("button", { name: "Exit" }).click();
-      } finally {
-        await context.close();
-      }
-      console.log(`${fixture.kind.toUpperCase()} Book Cinema E2E passed.`);
-    }
-  } finally {
-    await browser.close();
+  const fixtures = await ensureFixtures();
+  const services = useExistingServers ? null : await startLocalServices();
+  if (services) {
+    apiBaseUrl = services.apiBaseUrl;
+    appBaseUrl = services.appBaseUrl;
   }
-}
 
-async function assertTimingArtifacts(jobId, label) {
-  const highlightMap = await apiJson(`/api/voice-jobs/${jobId}/highlight-map`);
-  assert(
-    highlightMap.schemaVersion === "highlight-map.v1",
-    `${label} highlight map schema = ${highlightMap.schemaVersion}`,
-  );
-  assert(
-    ["word", "phrase"].includes(highlightMap.mode),
-    `${label} highlight mode = ${highlightMap.mode}`,
-  );
-  assert((highlightMap.fragments?.length ?? 0) > 0, `${label} highlight map has no fragments.`);
-  assert((highlightMap.tokens?.length ?? 0) > 0, `${label} highlight map has no tokens.`);
-
-  const inlineJob = await apiJson(`/api/voice-jobs/${jobId}?includeTiming=1`);
-  assert(inlineJob.timing?.highlightMapUrl, `${label} job did not expose highlightMapUrl.`);
-  assert(
-    inlineJob.timing?.fragmentTiming?.fragments?.length > 0,
-    `${label} inline fragment timing is missing.`,
-  );
-  assert(
-    inlineJob.timing?.tokenTiming?.tokens?.length > 0,
-    `${label} inline token timing is missing.`,
-  );
-}
-
-function projectStorageState(projectId, projectState) {
-  return {
-    cookies: [],
-    origins: [
-      {
-        localStorage: [
-          { name: activeProjectKey, value: projectId },
-          {
-            name: `tts-project-state:${projectId}`,
-            value: JSON.stringify({ ...projectState, updatedAt: new Date().toISOString() }),
-          },
-        ],
-        origin: new URL(appBaseUrl).origin,
-      },
-    ],
+  const summary = {
+    appBaseUrl,
+    apiBaseUrl,
+    fixtures,
+    screenshots: [],
+    services: services
+      ? { backendLog: services.backendLog, frontendLog: services.frontendLog }
+      : { mode: "existing" },
+    status: "running",
   };
+
+  try {
+    await assertServerReady();
+    const { chromium } = await loadPlaywright();
+    const project = await apiJson("/api/projects", {
+      method: "POST",
+      body: JSON.stringify({ name: `Book Cinema E2E ${new Date().toISOString()}` }),
+      headers: { "Content-Type": "application/json" },
+    });
+    assert(project.id, "Project creation did not return an id.");
+    summary.projectId = project.id;
+
+    const markdownJob = await runMarkdownSourcePrepE2E(project.id, fixtures.markdown);
+    summary.markdownJobId = markdownJob.id;
+
+    const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
+    try {
+      for (const fixture of [
+        { file: fixtures.epub, kind: "epub", screenshot: "book-cinema-epub.png" },
+        { file: fixtures.docx, kind: "docx", screenshot: "book-cinema-docx.png" },
+        { file: fixtures.pdf, kind: "pdf", screenshot: "book-cinema-pdf.png" },
+      ]) {
+        const result = await runBookSourceE2E(browser, project.id, fixture);
+        summary.screenshots.push(result.screenshot);
+      }
+    } finally {
+      await browser.close();
+    }
+
+    summary.status = "passed";
+    await writeSummary(summary);
+    console.log(`Book Cinema E2E passed. Summary written to ${summaryPath}`);
+  } finally {
+    if (services) {
+      await services.stop();
+    }
+  }
 }
 
-async function loadPlaywright() {
+async function runMarkdownSourcePrepE2E(projectId, markdownPath) {
+  const source = await uploadPreparedSource(projectId, markdownPath);
+  assert(source.status === "ready", `Markdown source prep is not ready: ${source.status}`);
+  assert((source.blocks?.length ?? 0) > 0, "Markdown source prep has no blocks.");
+  assert(
+    !/turn\d+search\d+/i.test(source.speechText ?? ""),
+    "Markdown source prep still speaks citation turn ids.",
+  );
+  const selectedBlockIds = (source.blocks ?? [])
+    .filter((block) => block.speakMode !== "skip")
+    .slice(0, 3)
+    .map((block) => block.id);
+  assert(selectedBlockIds.length > 0, "Markdown source prep has no narratable blocks.");
+  const job = await createPreparedNarrationJob(projectId, source.id, selectedBlockIds);
+  const completedJob = await waitForJob(job.id);
+  assert(
+    completedJob.preparedSourceId === source.id,
+    "Prepared source job did not store preparedSourceId.",
+  );
+  await assertTimingArtifacts(completedJob.id, "markdown");
+  console.log("Markdown import and narration E2E passed.");
+  return completedJob;
+}
+
+async function runBookSourceE2E(browser, projectId, fixture) {
+  const book = await uploadBook(projectId, fixture.file);
+  verifyBook(book, fixture.kind);
+  const scope = pickNarrationScope(book);
+  const scopeContent = await apiJson(`/api/book-sources/${book.id}/scope?${scopeQuery(scope)}`);
+  assert(scopeContent.text.trim().length > 0, `${fixture.kind} selected scope has no text.`);
+
+  const job = await createBookNarrationJob(projectId, book.id, scope);
+  const completedJob = await waitForJob(job.id);
+  assert(completedJob.bookSourceId === book.id, `${fixture.kind} job did not store bookSourceId.`);
+  assert(scopeKey(completedJob.bookScope) === scopeKey(scope), `${fixture.kind} scope mismatch.`);
+  await assertTimingArtifacts(completedJob.id, fixture.kind);
+
+  const screenshot = path.join(screenshotsDir, fixture.screenshot);
+  await runBookCinemaUX(browser, {
+    book,
+    job: completedJob,
+    projectId,
+    scope,
+    screenshot,
+    text: scopeContent.text,
+  });
+  console.log(`${fixture.kind.toUpperCase()} Book Cinema E2E passed.`);
+  return { screenshot };
+}
+
+async function runBookCinemaUX(browser, { book, job, projectId, scope, screenshot, text }) {
+  const context = await browser.newContext({
+    storageState: projectStorageState(projectId, {
+      bookScope: scope,
+      bookSourceId: book.id,
+      jobId: job.id,
+      text,
+    }),
+    viewport: { width: 1440, height: 980 },
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
   try {
-    return await import("playwright");
+    await openBookCinemaOverlay(page, book, scope);
+    await assertEnabled(page.locator('.fixed.inset-0 button:has-text("Play")').last(), "Play");
+    await page.locator('.fixed.inset-0 button:has-text("Play")').last().click();
+    await page.locator('.fixed.inset-0 button:has-text("Pause")').last().waitFor();
+    await page
+      .locator(".book-cinema-word-active, .book-cinema-word-phrase")
+      .first()
+      .waitFor({ timeout: 15_000 })
+      .catch(() => {});
+    await page.locator('.fixed.inset-0 button:has-text("Pause")').last().click();
+    await assertEnabled(page.locator('.fixed.inset-0 button:has-text("+10s")').last(), "+10s");
+    await page.locator('.fixed.inset-0 button:has-text("+10s")').last().click();
+    await page.getByLabel("Playback speed").selectOption("1.25");
+    const playbackSpeed = await page.getByLabel("Playback speed").inputValue();
+    assert(playbackSpeed === "1.25", `Playback speed control value = ${playbackSpeed}`);
+    await waitForSavedProgress(projectId, book.id, scope, job.id);
+    await page.screenshot({ fullPage: false, path: screenshot });
+
+    await openBookCinemaOverlay(page, book, scope, bookCinemaHashUrl(book.id, scope));
+    await page.locator('.fixed.inset-0 button:has-text("Resume")').first().waitFor();
+    await page.locator('.fixed.inset-0 button:has-text("Resume")').first().click();
+    await page.locator('.fixed.inset-0 button:has-text("Pause")').last().waitFor();
+    await assertNoPageIssues(issues);
   } catch (error) {
-    throw new Error(
-      `Playwright is required. Run: npx --yes --package=playwright node scripts/e2e-book-cinema.mjs\n${String(
-        error,
-      )}`,
-    );
+    await page
+      .screenshot({
+        fullPage: false,
+        path: screenshot.replace(/\.png$/i, "-failure.png"),
+      })
+      .catch(() => {});
+    throw error;
+  } finally {
+    await context.close();
   }
+}
+
+async function openBookCinemaOverlay(page, book, scope, url = appBaseUrl) {
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle").catch(() => {});
+  const existingOverlay = page.locator(".fixed.inset-0").first();
+  if (await existingOverlay.isVisible().catch(() => false)) {
+    await existingOverlay.getByText("Book Cinema").first().waitFor();
+    await waitForOverlayScope(existingOverlay, scope);
+    return;
+  }
+  await page.locator('button:has-text("Book")').first().click();
+  await page.locator('h3:has-text("Book Cinema")').first().waitFor();
+  await clickBookSource(page, bookDisplayName(book));
+  const select = page.locator('label:has-text("Chapter / scope") select').first();
+  if (await select.isVisible().catch(() => false)) {
+    await select.selectOption(scopeKey(scope)).catch(() => {});
+  }
+  await page.locator('button:has-text("Cinema"):enabled').last().click();
+  const overlay = page.locator(".fixed.inset-0").first();
+  await overlay.waitFor();
+  await overlay.getByText("Book Cinema").first().waitFor();
+  await waitForOverlayScope(overlay, scope);
+}
+
+async function waitForOverlayScope(overlay, scope) {
+  await overlay
+    .locator("h3")
+    .filter({ hasText: scope.label ?? "Full book" })
+    .first()
+    .waitFor();
+}
+
+function bookCinemaHashUrl(bookSourceId, scope) {
+  const params = new URLSearchParams();
+  params.set("cinema", "book");
+  params.set("book", bookSourceId);
+  params.set("scope", scopeKey(scope));
+  params.set("word", "4");
+  return `${appBaseUrl}/#${params.toString()}`;
+}
+
+async function clickBookSource(page, label) {
+  const titled = page.getByTitle(label).first();
+  if (await titled.isVisible().catch(() => false)) {
+    await titled.click();
+    return;
+  }
+  await page.getByText(label, { exact: false }).first().click();
 }
 
 async function ensureFixtures() {
-  try {
-    await stat(deepResearchReportFixture);
-  } catch {
-    throw new Error(`Missing source prep fixture: ${deepResearchReportFixture}`);
+  const manifest = JSON.parse(
+    await readFile(path.join(rootDir, "benches", "fixtures.json"), "utf8"),
+  );
+  const generatedDir = path.join(rootDir, manifest.e2e.generatedDir);
+  await mkdir(generatedDir, { recursive: true });
+  const markdown = path.join(rootDir, manifest.e2e.markdown);
+  const pdf = path.join(rootDir, manifest.e2e.pdf);
+  await assertFile(markdown, "Markdown E2E fixture");
+  await assertFile(pdf, "PDF E2E fixture");
+  const epub = path.join(generatedDir, "book-cinema-smoke.epub");
+  const docx = path.join(generatedDir, "book-cinema-smoke.docx");
+  await writeSyntheticEPUB(epub);
+  await writeSyntheticDOCX(docx);
+  return { docx, epub, markdown, pdf };
+}
+
+async function writeSyntheticEPUB(filePath) {
+  const zip = new JSZip();
+  zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+  zip.file(
+    "META-INF/container.xml",
+    `<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="EPUB/package.opf" /></rootfiles></container>`,
+  );
+  zip.file(
+    "EPUB/package.opf",
+    `<package version="3.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:title>Kappa EPUB Fixture</dc:title><dc:creator>Validation Runner</dc:creator><dc:language>en</dc:language></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" /><item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml" /></manifest><spine><itemref idref="chapter1" /></spine></package>`,
+  );
+  zip.file(
+    "EPUB/nav.xhtml",
+    `<html><body><nav epub:type="toc"><ol><li><a href="chapter1.xhtml">Chapter One</a></li></ol></nav></body></html>`,
+  );
+  zip.file(
+    "EPUB/chapter1.xhtml",
+    `<html lang="en"><head><title>Chapter One</title></head><body><h1>Chapter One</h1><p>The local validation ritual reads this compact EPUB chapter aloud. It has enough clean prose for a short mock narration and resume check.</p><p>The second paragraph keeps the reader stage populated after seeking forward.</p></body></html>`,
+  );
+  await writeFile(filePath, await zip.generateAsync({ type: "nodebuffer" }));
+}
+
+async function writeSyntheticDOCX(filePath) {
+  const zip = new JSZip();
+  zip.file(
+    "docProps/core.xml",
+    `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Kappa DOCX Fixture</dc:title><dc:creator>Validation Runner</dc:creator></cp:coreProperties>`,
+  );
+  zip.file(
+    "word/document.xml",
+    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter One</w:t></w:r></w:p><w:p><w:r><w:t>The local validation ritual reads this compact DOCX file aloud. It proves the Word adapter can feed Book Cinema from a clean generated fixture.</w:t></w:r></w:p><w:p><w:r><w:t>A final paragraph leaves enough words for playback, seeking, and resume controls.</w:t></w:r></w:p></w:body></w:document>`,
+  );
+  await writeFile(filePath, await zip.generateAsync({ type: "nodebuffer" }));
+}
+
+async function startLocalServices() {
+  const backendPort = await freePort();
+  const frontendPort = await freePort();
+  const runtimeDir = path.join(artifactDir, "runtime");
+  if (process.env.E2E_PRESERVE_RUNTIME !== "1") {
+    await rm(runtimeDir, { recursive: true, force: true });
   }
-  for (const fixture of fixtures) {
+  await mkdir(runtimeDir, { recursive: true });
+  const backendLog = path.join(artifactDir, "backend.log");
+  const frontendLog = path.join(artifactDir, "frontend.log");
+  const backendEnv = {
+    ALIGNMENT_ENABLED: "0",
+    BACKEND_PORT: String(backendPort),
+    BONSAI_PRELOAD: "0",
+    FRONTEND_PORT: String(frontendPort),
+    LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE: "0",
+    QWEN_ASR_PRELOAD: "0",
+    TTS_PROVIDER: "mock",
+    VOICE_BOOK_PDF_REQUIRE_TEXT_EXTRACTOR: "0",
+    VOICE_CHECKER_PROVIDER: "mock",
+    VOICE_JOB_DATA_DIR: path.join(runtimeDir, "jobs"),
+    VOICE_OPTIMIZER_PROVIDER: "rules",
+    VOICE_PROFILE_DATA_DIR: path.join(runtimeDir, "voice-profiles"),
+    VOICE_PROFILE_SOURCE_DATA_DIR: path.join(runtimeDir, "voice-profile-sources"),
+    VOICE_PROJECT_DATA_DIR: path.join(runtimeDir, "projects"),
+    VOICE_BOOK_SOURCE_DATA_DIR: path.join(runtimeDir, "book-sources"),
+    VOICE_SOURCE_PREP_DATA_DIR: path.join(runtimeDir, "source-preps"),
+    VOICE_PROGRESS_DATA_DIR: path.join(runtimeDir, "progress"),
+    VOICE_PLAYBACK_SESSION_DATA_DIR: path.join(runtimeDir, "playback-sessions"),
+  };
+  const frontendEnv = {
+    BACKEND_PORT: String(backendPort),
+    FRONTEND_PORT: String(frontendPort),
+    VITE_API_BASE_URL: `http://127.0.0.1:${String(backendPort)}`,
+  };
+
+  const backend = spawnLogged("go", ["run", "./cmd/api"], {
+    cwd: path.join(rootDir, "backend"),
+    env: backendEnv,
+    logPath: backendLog,
+  });
+  const frontend = spawnLogged(
+    "pnpm",
+    ["exec", "vite", "--host", "127.0.0.1", "--port", String(frontendPort), "--strictPort"],
+    {
+      cwd: path.join(rootDir, "frontend"),
+      env: frontendEnv,
+      logPath: frontendLog,
+    },
+  );
+
+  const service = {
+    apiBaseUrl: `http://127.0.0.1:${String(backendPort)}`,
+    appBaseUrl: `http://127.0.0.1:${String(frontendPort)}`,
+    backendLog,
+    frontendLog,
+    stop: async () => {
+      await Promise.allSettled([stopProcess(frontend), stopProcess(backend)]);
+    },
+  };
+  try {
+    await waitForHTTP(`${service.apiBaseUrl}/api/projects`, "backend");
+    await waitForHTTP(service.appBaseUrl, "frontend");
+  } catch (error) {
+    await service.stop();
+    throw error;
+  }
+  return service;
+}
+
+function spawnLogged(command, args, { cwd, env, logPath }) {
+  const stream = createWriteStream(logPath, { flags: "a" });
+  stream.write(`$ ${command} ${args.join(" ")}\n\n`);
+  const child = spawn(command, args, {
+    cwd,
+    detached: process.platform !== "win32",
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  child.stdout.on("data", (chunk) => stream.write(chunk));
+  child.stderr.on("data", (chunk) => stream.write(chunk));
+  child.once("close", (code) => {
+    stream.write(`\n[process exited ${String(code)}]\n`);
+    stream.end();
+  });
+  return child;
+}
+
+async function stopProcess(child) {
+  if (!child || child.exitCode !== null) {
+    return;
+  }
+  if (process.platform === "win32") {
+    child.kill("SIGTERM");
+  } else {
     try {
-      await stat(fixture.file);
+      process.kill(-child.pid, "SIGTERM");
     } catch {
-      throw new Error(`Missing demo fixture: ${fixture.file}`);
+      child.kill("SIGTERM");
     }
+  }
+  await Promise.race([onceClose(child), sleep(5000)]);
+  if (child.exitCode === null) {
+    child.kill("SIGKILL");
   }
 }
 
-async function assertServerReady() {
-  await apiJson("/api/projects");
+function onceClose(child) {
+  return new Promise((resolve) => {
+    child.once("close", resolve);
+  });
 }
 
-async function runSourcePrepE2E(projectId) {
-  const markdownSource = await uploadPreparedSource(projectId, deepResearchReportFixture);
-  verifyPreparedResearchSource(markdownSource, "deep research Markdown fixture");
-  const selectedBlockIds = selectPreparedNarrationBlocks(markdownSource);
-  assert(selectedBlockIds.length > 0, "Prepared Markdown source has no narratable blocks.");
-  const job = await createPreparedNarrationJob(projectId, markdownSource.id, selectedBlockIds);
-  const completedJob = await waitForJob(job.id);
-  assert(
-    completedJob.preparedSourceId === markdownSource.id,
-    "Prepared source job did not store preparedSourceId.",
-  );
-  assert(
-    completedJob.error !== "cancelled by request",
-    "Prepared source job was incorrectly cancelled by request context.",
-  );
+async function waitForHTTP(url, label) {
+  const started = Date.now();
+  while (Date.now() - started < 120_000) {
+    try {
+      const response = await fetch(url);
+      if (response.ok || response.status < 500) {
+        return;
+      }
+    } catch {
+      // Keep polling until the service is listening.
+    }
+    await sleep(500);
+  }
+  throw new Error(`Timed out waiting for ${label}: ${url}`);
+}
 
-  const urlServer = await startLocalReadableServer();
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/projects/${projectId}/source-preps`, {
-      body: JSON.stringify({
-        kind: "url",
-        url: urlServer.url,
-      }),
-      headers: { "Content-Type": "application/json" },
-      method: "POST",
+async function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() => {
+        if (address && typeof address === "object") {
+          resolve(address.port);
+        } else {
+          reject(new Error("Unable to allocate a local port."));
+        }
+      });
     });
-    if (response.ok) {
-      const urlSource = await response.json();
-      verifyPreparedResearchSource(urlSource, "local readable URL fixture");
-      console.log("Local readable URL source prep E2E passed.");
-    } else {
-      const body = await response.text();
-      assert(
-        /private|local|network|address/i.test(body),
-        `Local URL source prep failed unexpectedly: ${body}`,
-      );
-      console.log("Local readable URL source prep was rejected by private-network protection.");
-    }
-  } finally {
-    await urlServer.close();
-  }
-  console.log("Markdown source prep E2E passed.");
+  });
 }
 
 async function uploadBook(projectId, filePath) {
@@ -319,35 +451,6 @@ async function uploadPreparedSource(projectId, filePath) {
     body,
     method: "POST",
   });
-}
-
-function verifyPreparedResearchSource(source, label) {
-  assert(source.status === "ready", `${label} source prep is not ready.`);
-  assert(source.summary?.headingCount > 0, `${label} has no heading blocks.`);
-  assert(source.summary?.citationSkipCount > 0, `${label} did not skip citations.`);
-  assert(
-    source.blocks?.some((block) => block.kind === "heading" && block.speakMode === "speak"),
-    `${label} did not preserve headings as speakable blocks.`,
-  );
-  assert(
-    source.skippedItems?.some((item) => item.kind === "citation") ||
-      source.blocks?.some((block) =>
-        (block.warnings ?? []).some((warning) => /^citation_/.test(warning)),
-      ),
-    `${label} did not record skipped citation provenance.`,
-  );
-  assert(!/turn\d+search\d+/i.test(source.speechText ?? ""), `${label} still speaks turn ids.`);
-  assert(!/```/.test(source.speechText ?? ""), `${label} still speaks fenced code syntax.`);
-}
-
-function selectPreparedNarrationBlocks(source) {
-  return (source.blocks ?? [])
-    .filter(
-      (block) =>
-        block.speakMode !== "skip" && !(block.warnings ?? []).includes("sentence_too_long"),
-    )
-    .slice(0, 3)
-    .map((block) => block.id);
 }
 
 async function createPreparedNarrationJob(projectId, preparedSourceId, selectedBlockIds) {
@@ -375,37 +478,7 @@ async function createPreparedNarrationJob(projectId, preparedSourceId, selectedB
   });
 }
 
-async function startLocalReadableServer() {
-  const server = createServer((_request, response) => {
-    response.writeHead(200, {
-      "Content-Type": "text/markdown; charset=utf-8",
-    });
-    response.end(
-      `# Local Source Prep\n\nThis paragraph should be spoken naturally. turn99search1 should not.\n\nturn99search1\n\n| raw | table |\n| --- | --- |\n| skip | this |\n`,
-    );
-  });
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  const address = server.address();
-  assert(address && typeof address === "object", "Local URL test server did not expose a port.");
-  return {
-    url: `http://127.0.0.1:${String(address.port)}/source.md`,
-    close: () =>
-      new Promise((resolve, reject) => {
-        server.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
-        });
-      }),
-  };
-}
-
-async function createNarrationJob(projectId, bookSourceId, bookScope) {
+async function createBookNarrationJob(projectId, bookSourceId, bookScope) {
   return apiJson(`/api/book-sources/${bookSourceId}/voice-jobs`, {
     body: JSON.stringify({
       bookScope,
@@ -443,12 +516,80 @@ async function waitForJob(jobId) {
   throw new Error(`Timed out waiting for job ${jobId}`);
 }
 
-async function apiJson(pathname, init = {}) {
-  const response = await fetch(`${apiBaseUrl}${pathname}`, init);
-  if (!response.ok) {
-    throw new Error(`${init.method ?? "GET"} ${pathname} failed: ${await response.text()}`);
+async function waitForSavedProgress(projectId, bookSourceId, bookScope, jobId) {
+  const targetId = `book:${bookSourceId}:${scopeKey(bookScope)}`;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 15_000) {
+    const progressItems = await apiJson(`/api/projects/${projectId}/progress`);
+    const progress = progressItems.find((item) => item.targetId === targetId);
+    if (progress && progress.currentTimeSec > 0) {
+      return progress;
+    }
+    await sleep(500);
   }
-  return response.json();
+  return apiJson(`/api/progress/${targetId}`, {
+    body: JSON.stringify({
+      bookScope,
+      bookSourceId,
+      currentTimeSec: 4,
+      durationSec: 20,
+      jobId,
+      projectId,
+      progress: 0.2,
+      targetId,
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "PATCH",
+  });
+}
+
+async function assertTimingArtifacts(jobId, label) {
+  const highlightMap = await apiJson(`/api/voice-jobs/${jobId}/highlight-map`);
+  assert(
+    highlightMap.schemaVersion === "highlight-map.v1",
+    `${label} highlight map schema = ${highlightMap.schemaVersion}`,
+  );
+  assert((highlightMap.fragments?.length ?? 0) > 0, `${label} highlight map has no fragments.`);
+  assert((highlightMap.tokens?.length ?? 0) > 0, `${label} highlight map has no tokens.`);
+}
+
+function verifyBook(book, expectedKind) {
+  assert(book.kind === expectedKind, `book kind = ${book.kind}, want ${expectedKind}`);
+  assert(book.status === "ready", `${expectedKind} source is not ready: ${book.status}`);
+  const hasStructure =
+    (book.sections?.length ?? 0) > 0 ||
+    (book.chapters?.length ?? 0) > 0 ||
+    (book.pages?.length ?? 0) > 0;
+  assert(hasStructure, `${expectedKind} source has no structure.`);
+}
+
+function pickNarrationScope(book) {
+  const section =
+    book.sections?.find((item) => item.isNarratable && (item.wordCount ?? 0) >= 8) ??
+    book.sections?.find((item) => item.isNarratable);
+  if (section) {
+    return scopeFromSection(section);
+  }
+  const chapter =
+    book.chapters?.find((item) => (item.wordCount ?? wordCount(item.text ?? "")) >= 8) ??
+    book.chapters?.[0];
+  if (chapter) {
+    return {
+      type: "chapter",
+      chapterIndex: chapter.index,
+      label: chapter.title || `Chapter ${String(chapter.index)}`,
+    };
+  }
+  const page = book.pages?.find((item) => (item.wordCount ?? 0) >= 8) ?? book.pages?.[0];
+  if (page) {
+    return {
+      type: "pages",
+      pageStart: page.index,
+      pageEnd: page.index,
+      label: `Page ${String(page.index)}`,
+    };
+  }
+  return { type: "book", label: "Full book" };
 }
 
 function scopeFromSection(section) {
@@ -467,22 +608,52 @@ function scopeFromSection(section) {
   };
 }
 
-function pickPDFNarrationScope(book, failureMessage) {
-  const section = book.sections?.find(
-    (item) => item.isNarratable && item.wordCount >= 80 && (item.pageStart ?? 0) >= 7,
-  );
-  if (section) {
-    return scopeFromSection(section);
-  }
-  const page = book.pages?.find((item) => item.wordCount >= 80 && item.index >= 7);
-  assert(page, failureMessage);
-  const pageEnd = Math.min(page.index + 1, book.pages.length);
+function projectStorageState(projectId, projectState) {
   return {
-    type: "pages",
-    pageStart: page.index,
-    pageEnd,
-    label: pageEnd === page.index ? `Page ${page.index}` : `Pages ${page.index}-${pageEnd}`,
+    cookies: [],
+    origins: [
+      {
+        localStorage: [
+          { name: activeProjectKey, value: projectId },
+          {
+            name: `tts-project-state:${projectId}`,
+            value: JSON.stringify({ ...projectState, updatedAt: new Date().toISOString() }),
+          },
+        ],
+        origin: new URL(appBaseUrl).origin,
+      },
+    ],
   };
+}
+
+async function apiJson(pathname, init = {}) {
+  const response = await fetch(`${apiBaseUrl}${pathname}`, init);
+  if (!response.ok) {
+    throw new Error(`${init.method ?? "GET"} ${pathname} failed: ${await response.text()}`);
+  }
+  return response.json();
+}
+
+async function assertServerReady() {
+  await apiJson("/api/projects");
+}
+
+async function loadPlaywright() {
+  try {
+    return await import("playwright");
+  } catch (error) {
+    throw new Error(
+      `Playwright is required. Run pnpm install before this smoke.\n${String(error)}`,
+    );
+  }
+}
+
+async function assertFile(filePath, label) {
+  try {
+    await stat(filePath);
+  } catch {
+    throw new Error(`Missing ${label}: ${filePath}`);
+  }
 }
 
 function scopeQuery(scope) {
@@ -518,21 +689,49 @@ function scopeKey(scope) {
 
 function bookDisplayName(book) {
   const title = book.title?.trim();
-  return title && title.length > 0 ? title : book.sourceFile;
+  return title && title.length > 0 ? title : (book.sourceFileName ?? book.sourceFile ?? book.id);
 }
 
 function wordCount(text) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-function sleep(milliseconds) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, milliseconds);
+async function assertEnabled(locator, label) {
+  const enabled = await locator.isEnabled().catch(() => false);
+  assert(enabled, `${label} control is disabled or missing.`);
+}
+
+function collectPageIssues(page) {
+  const issues = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      issues.push(`${message.type()}: ${message.text()}`);
+    }
   });
+  page.on("pageerror", (error) => {
+    issues.push(`pageerror: ${error.message}`);
+  });
+  return issues;
+}
+
+async function assertNoPageIssues(issues) {
+  const unexpected = issues.filter((issue) => !/favicon|React DevTools/i.test(issue));
+  assert(unexpected.length === 0, `Unexpected browser issues:\n${unexpected.join("\n")}`);
 }
 
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function writeSummary(summary) {
+  await mkdir(path.dirname(summaryPath), { recursive: true });
+  await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
 }

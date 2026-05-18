@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "tts-research.bench-fixtures.v1",
+  "alignment": {
+    "fixtures": ["backend/internal/alignment/testdata/gold/simple.json"]
+  },
+  "markdown": {
+    "fixtures": [
+      "fixtures/markdown/plain.md",
+      "fixtures/markdown/gfm-table-code.md",
+      "fixtures/markdown/citations.md"
+    ]
+  },
+  "e2e": {
+    "markdown": "fixtures/markdown/citations.md",
+    "pdf": "fixtures/pdf/born_digital_multicolumn.pdf",
+    "generatedDir": "output/validate-local/fixtures"
+  }
+}
