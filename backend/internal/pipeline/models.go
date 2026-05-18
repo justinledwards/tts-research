@@ -135,6 +135,7 @@ const (
 	NarrationBlockKindImage       NarrationBlockKind = "image"
 	NarrationBlockKindCaption     NarrationBlockKind = "caption"
 	NarrationBlockKindCitation    NarrationBlockKind = "citation"
+	NarrationBlockKindList        NarrationBlockKind = "list"
 	NarrationBlockKindFrontmatter NarrationBlockKind = "frontmatter"
 	NarrationBlockKindAdmonition  NarrationBlockKind = "admonition"
 	NarrationBlockKindDirective   NarrationBlockKind = "directive"
@@ -243,6 +244,7 @@ type CreatePreparedSourceRequest struct {
 type SpeechPolicyPreviewRequest struct {
 	Profile        string           `json:"profile,omitempty"`
 	Overrides      policy.Overrides `json:"overrides,omitempty"`
+	Scope          *BookScope       `json:"scope,omitempty"`
 	VoiceProfileID string           `json:"voiceProfileId,omitempty"`
 	Locale         string           `json:"locale,omitempty"`
 	TTSEngine      string           `json:"ttsEngine,omitempty"`

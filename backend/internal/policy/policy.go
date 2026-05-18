@@ -35,6 +35,14 @@ const (
 	TableModeInteractive TableMode = "interactive"
 )
 
+type TableHeaderMode string
+
+const (
+	TableHeaderModeNone         TableHeaderMode = "none"
+	TableHeaderModeColumn       TableHeaderMode = "column"
+	TableHeaderModeRowAndColumn TableHeaderMode = "rowAndColumn"
+)
+
 type CodeMode string
 
 const (
@@ -70,22 +78,74 @@ const (
 	ImageModeDescribeLong  ImageMode = "describeLong"
 )
 
+type CaptionMode string
+
+const (
+	CaptionModeSkip     CaptionMode = "skip"
+	CaptionModeSpeak    CaptionMode = "speak"
+	CaptionModeOnDemand CaptionMode = "onDemand"
+)
+
+type CitationMode string
+
+const (
+	CitationModeSkip     CitationMode = "skip"
+	CitationModeInline   CitationMode = "inline"
+	CitationModeEndnote  CitationMode = "endnote"
+	CitationModeOnDemand CitationMode = "onDemand"
+)
+
+type ListMarkerMode string
+
+const (
+	ListMarkerModeOmit     ListMarkerMode = "omit"
+	ListMarkerModeAnnounce ListMarkerMode = "announce"
+)
+
+type AdmonitionMode string
+
+const (
+	AdmonitionModeSkip      AdmonitionMode = "skip"
+	AdmonitionModeSpeak     AdmonitionMode = "speak"
+	AdmonitionModeSummarise AdmonitionMode = "summarise"
+)
+
+type QuoteMode string
+
+const (
+	QuoteModeSkip      QuoteMode = "skip"
+	QuoteModeSpeak     QuoteMode = "speak"
+	QuoteModeSummarise QuoteMode = "summarise"
+)
+
 type Settings struct {
-	Mode         Mode         `json:"mode"`
-	TableMode    TableMode    `json:"tableMode"`
-	CodeMode     CodeMode     `json:"codeMode"`
-	MathMode     MathMode     `json:"mathMode"`
-	FootnoteMode FootnoteMode `json:"footnoteMode"`
-	ImageMode    ImageMode    `json:"imageMode"`
+	Mode            Mode            `json:"mode"`
+	TableMode       TableMode       `json:"tableMode"`
+	TableHeaderMode TableHeaderMode `json:"tableHeaderMode"`
+	CodeMode        CodeMode        `json:"codeMode"`
+	MathMode        MathMode        `json:"mathMode"`
+	FootnoteMode    FootnoteMode    `json:"footnoteMode"`
+	ImageMode       ImageMode       `json:"imageMode"`
+	CaptionMode     CaptionMode     `json:"captionMode"`
+	CitationMode    CitationMode    `json:"citationMode"`
+	ListMarkerMode  ListMarkerMode  `json:"listMarkerMode"`
+	AdmonitionMode  AdmonitionMode  `json:"admonitionMode"`
+	QuoteMode       QuoteMode       `json:"quoteMode"`
 }
 
 type Overrides struct {
-	Mode         Mode         `json:"mode,omitempty"`
-	TableMode    TableMode    `json:"tableMode,omitempty"`
-	CodeMode     CodeMode     `json:"codeMode,omitempty"`
-	MathMode     MathMode     `json:"mathMode,omitempty"`
-	FootnoteMode FootnoteMode `json:"footnoteMode,omitempty"`
-	ImageMode    ImageMode    `json:"imageMode,omitempty"`
+	Mode            Mode            `json:"mode,omitempty"`
+	TableMode       TableMode       `json:"tableMode,omitempty"`
+	TableHeaderMode TableHeaderMode `json:"tableHeaderMode,omitempty"`
+	CodeMode        CodeMode        `json:"codeMode,omitempty"`
+	MathMode        MathMode        `json:"mathMode,omitempty"`
+	FootnoteMode    FootnoteMode    `json:"footnoteMode,omitempty"`
+	ImageMode       ImageMode       `json:"imageMode,omitempty"`
+	CaptionMode     CaptionMode     `json:"captionMode,omitempty"`
+	CitationMode    CitationMode    `json:"citationMode,omitempty"`
+	ListMarkerMode  ListMarkerMode  `json:"listMarkerMode,omitempty"`
+	AdmonitionMode  AdmonitionMode  `json:"admonitionMode,omitempty"`
+	QuoteMode       QuoteMode       `json:"quoteMode,omitempty"`
 }
 
 type Profile struct {
@@ -114,6 +174,23 @@ type SpeechPolicy struct {
 type Decision struct {
 	Policy     SpeechPolicy
 	SpeechText string
+}
+
+type Definition struct {
+	Fields   []DefinitionField `json:"fields"`
+	Profiles []Profile         `json:"profiles"`
+}
+
+type DefinitionField struct {
+	Key         string             `json:"key"`
+	Label       string             `json:"label"`
+	Description string             `json:"description"`
+	Options     []DefinitionOption `json:"options"`
+}
+
+type DefinitionOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
 }
 
 func (speechPolicy SpeechPolicy) IsZero() bool {

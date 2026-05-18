@@ -5,8 +5,13 @@ import {
   bookScopeText,
   bookSourceName,
   BOOK_SOURCE_ACCEPT,
+  bookCinemaKeyboardCommandForKey,
+  bookCinemaLiveAnnouncement,
+  bookCinemaPolicyNotes,
   isSupportedBookSourceBatch,
   isSupportedBookSource,
+  nextBookCinemaPlaybackRate,
+  normalizeReaderAccessibilitySettings,
   paginateBookSpans,
   resolveBookActiveWordIndex,
   resolveDisplayedBookActiveWordIndex,
@@ -48,6 +53,97 @@ describe("Book Cinema helpers", () => {
       }),
     ).toBe(12);
     expect(resolveDisplayedBookActiveWordIndex(4, null)).toBe(4);
+  });
+
+  it("maps keyboard-first playback shortcuts without depending on focus text", () => {
+    expect(bookCinemaKeyboardCommandForKey(" ")).toBe("togglePlayback");
+    expect(bookCinemaKeyboardCommandForKey("K")).toBe("togglePlayback");
+    expect(bookCinemaKeyboardCommandForKey("ArrowLeft")).toBe("seekBackward");
+    expect(bookCinemaKeyboardCommandForKey("j")).toBe("seekBackward");
+    expect(bookCinemaKeyboardCommandForKey("ArrowRight")).toBe("seekForward");
+    expect(bookCinemaKeyboardCommandForKey("l")).toBe("seekForward");
+    expect(bookCinemaKeyboardCommandForKey("Home")).toBe("restart");
+    expect(bookCinemaKeyboardCommandForKey("[")).toBe("speedDown");
+    expect(bookCinemaKeyboardCommandForKey("]")).toBe("speedUp");
+    expect(bookCinemaKeyboardCommandForKey("b")).toBe("bookmark");
+    expect(bookCinemaKeyboardCommandForKey("Escape")).toBe("close");
+    expect(bookCinemaKeyboardCommandForKey("x")).toBeNull();
+  });
+
+  it("normalizes reader accessibility state and speed stepping", () => {
+    expect(normalizeReaderAccessibilitySettings({ highContrast: true })).toEqual({
+      highContrast: true,
+      reducedMotion: false,
+    });
+    expect(normalizeReaderAccessibilitySettings({ reducedMotion: true })).toEqual({
+      highContrast: false,
+      reducedMotion: true,
+    });
+    expect(nextBookCinemaPlaybackRate(1, 1)).toBe(1.25);
+    expect(nextBookCinemaPlaybackRate(1, -1)).toBe(0.8);
+    expect(nextBookCinemaPlaybackRate(1.5, 1)).toBe(1.5);
+  });
+
+  it("builds polite reader announcements from current scope and fragment", () => {
+    const book = makeBookSource("one two three four");
+    expect(
+      bookCinemaLiveAnnouncement({
+        book,
+        fragmentIndex: 2,
+        scope: { type: "chapter", chapterIndex: 1, label: "Chapter" },
+      }),
+    ).toBe("Demo Book. Chapter. Fragment 3");
+    expect(
+      bookCinemaLiveAnnouncement({
+        activeWordIndex: 4,
+        book,
+        scope: { type: "book", label: "Full book" },
+      }),
+    ).toBe("Demo Book. Full book. Word 5");
+  });
+
+  it("collects policy explanations for skipped, summarized, and structural blocks", () => {
+    const notes = bookCinemaPolicyNotes({
+      bookSourceId: "book-1",
+      scope: { type: "book", label: "Full book" },
+      text: "Table text",
+      wordSpans: [],
+      wordCount: 0,
+      sourceStructureValid: true,
+      blocks: [
+        {
+          id: "block-1",
+          index: 0,
+          kind: "table",
+          speakMode: "summarize",
+          label: "Table",
+          text: "Name | Value",
+          spokenText: "Table summary",
+          startOffset: 0,
+          endOffset: 12,
+          speechPolicy: {
+            profile: "TechnicalDocs",
+            element: "table",
+            elementMode: "rowLinear",
+            mode: "summarize",
+            explanation: "This table is summarised by the selected profile.",
+          },
+        },
+      ],
+      skippedItems: [
+        {
+          id: "skip-1",
+          kind: "citation",
+          text: "[1]",
+          reason: "This citation is available on demand.",
+        },
+      ],
+    });
+
+    expect(notes.map((note) => [note.kind, note.mode, note.explanation])).toEqual([
+      ["table", "summarize", "This table is summarised by the selected profile."],
+      ["citation", "skip", "This citation is available on demand."],
+    ]);
   });
 
   it("defaults EPUB narration to the first chapter", () => {

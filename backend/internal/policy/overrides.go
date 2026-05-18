@@ -10,6 +10,9 @@ func ResolveSettings(profileName ProfileName, overrides Overrides) (ProfileName,
 	if normalized.TableMode != "" {
 		settings.TableMode = normalized.TableMode
 	}
+	if normalized.TableHeaderMode != "" {
+		settings.TableHeaderMode = normalized.TableHeaderMode
+	}
 	if normalized.CodeMode != "" {
 		settings.CodeMode = normalized.CodeMode
 	}
@@ -22,17 +25,38 @@ func ResolveSettings(profileName ProfileName, overrides Overrides) (ProfileName,
 	if normalized.ImageMode != "" {
 		settings.ImageMode = normalized.ImageMode
 	}
+	if normalized.CaptionMode != "" {
+		settings.CaptionMode = normalized.CaptionMode
+	}
+	if normalized.CitationMode != "" {
+		settings.CitationMode = normalized.CitationMode
+	}
+	if normalized.ListMarkerMode != "" {
+		settings.ListMarkerMode = normalized.ListMarkerMode
+	}
+	if normalized.AdmonitionMode != "" {
+		settings.AdmonitionMode = normalized.AdmonitionMode
+	}
+	if normalized.QuoteMode != "" {
+		settings.QuoteMode = normalized.QuoteMode
+	}
 	return profile.Name, settings, normalized
 }
 
 func NormalizeOverrides(overrides Overrides) Overrides {
 	return Overrides{
-		Mode:         normalizeMode(overrides.Mode),
-		TableMode:    normalizeTableMode(overrides.TableMode),
-		CodeMode:     normalizeCodeMode(overrides.CodeMode),
-		MathMode:     normalizeMathMode(overrides.MathMode),
-		FootnoteMode: normalizeFootnoteMode(overrides.FootnoteMode),
-		ImageMode:    normalizeImageMode(overrides.ImageMode),
+		Mode:            normalizeMode(overrides.Mode),
+		TableMode:       normalizeTableMode(overrides.TableMode),
+		TableHeaderMode: normalizeTableHeaderMode(overrides.TableHeaderMode),
+		CodeMode:        normalizeCodeMode(overrides.CodeMode),
+		MathMode:        normalizeMathMode(overrides.MathMode),
+		FootnoteMode:    normalizeFootnoteMode(overrides.FootnoteMode),
+		ImageMode:       normalizeImageMode(overrides.ImageMode),
+		CaptionMode:     normalizeCaptionMode(overrides.CaptionMode),
+		CitationMode:    normalizeCitationMode(overrides.CitationMode),
+		ListMarkerMode:  normalizeListMarkerMode(overrides.ListMarkerMode),
+		AdmonitionMode:  normalizeAdmonitionMode(overrides.AdmonitionMode),
+		QuoteMode:       normalizeQuoteMode(overrides.QuoteMode),
 	}
 }
 
@@ -43,6 +67,9 @@ func NormalizeSettings(settings Settings, fallback Settings) Settings {
 	}
 	if mode := normalizeTableMode(settings.TableMode); mode != "" {
 		normalized.TableMode = mode
+	}
+	if mode := normalizeTableHeaderMode(settings.TableHeaderMode); mode != "" {
+		normalized.TableHeaderMode = mode
 	}
 	if mode := normalizeCodeMode(settings.CodeMode); mode != "" {
 		normalized.CodeMode = mode
@@ -55,6 +82,21 @@ func NormalizeSettings(settings Settings, fallback Settings) Settings {
 	}
 	if mode := normalizeImageMode(settings.ImageMode); mode != "" {
 		normalized.ImageMode = mode
+	}
+	if mode := normalizeCaptionMode(settings.CaptionMode); mode != "" {
+		normalized.CaptionMode = mode
+	}
+	if mode := normalizeCitationMode(settings.CitationMode); mode != "" {
+		normalized.CitationMode = mode
+	}
+	if mode := normalizeListMarkerMode(settings.ListMarkerMode); mode != "" {
+		normalized.ListMarkerMode = mode
+	}
+	if mode := normalizeAdmonitionMode(settings.AdmonitionMode); mode != "" {
+		normalized.AdmonitionMode = mode
+	}
+	if mode := normalizeQuoteMode(settings.QuoteMode); mode != "" {
+		normalized.QuoteMode = mode
 	}
 	return normalized
 }
@@ -71,6 +113,15 @@ func normalizeMode(mode Mode) Mode {
 func normalizeTableMode(mode TableMode) TableMode {
 	switch mode {
 	case TableModeSkip, TableModeSummary, TableModeRowLinear, TableModeInteractive:
+		return mode
+	default:
+		return ""
+	}
+}
+
+func normalizeTableHeaderMode(mode TableHeaderMode) TableHeaderMode {
+	switch mode {
+	case TableHeaderModeNone, TableHeaderModeColumn, TableHeaderModeRowAndColumn:
 		return mode
 	default:
 		return ""
@@ -113,10 +164,55 @@ func normalizeImageMode(mode ImageMode) ImageMode {
 	}
 }
 
+func normalizeCaptionMode(mode CaptionMode) CaptionMode {
+	switch mode {
+	case CaptionModeSkip, CaptionModeSpeak, CaptionModeOnDemand:
+		return mode
+	default:
+		return ""
+	}
+}
+
+func normalizeCitationMode(mode CitationMode) CitationMode {
+	switch mode {
+	case CitationModeSkip, CitationModeInline, CitationModeEndnote, CitationModeOnDemand:
+		return mode
+	default:
+		return ""
+	}
+}
+
+func normalizeListMarkerMode(mode ListMarkerMode) ListMarkerMode {
+	switch mode {
+	case ListMarkerModeOmit, ListMarkerModeAnnounce:
+		return mode
+	default:
+		return ""
+	}
+}
+
+func normalizeAdmonitionMode(mode AdmonitionMode) AdmonitionMode {
+	switch mode {
+	case AdmonitionModeSkip, AdmonitionModeSpeak, AdmonitionModeSummarise:
+		return mode
+	default:
+		return ""
+	}
+}
+
+func normalizeQuoteMode(mode QuoteMode) QuoteMode {
+	switch mode {
+	case QuoteModeSkip, QuoteModeSpeak, QuoteModeSummarise:
+		return mode
+	default:
+		return ""
+	}
+}
+
 func OverrideSourceForElement(element string, overrides Overrides) string {
 	switch element {
 	case "table":
-		if normalizeTableMode(overrides.TableMode) != "" {
+		if normalizeTableMode(overrides.TableMode) != "" || normalizeTableHeaderMode(overrides.TableHeaderMode) != "" {
 			return "session override"
 		}
 	case "code":
@@ -133,6 +229,26 @@ func OverrideSourceForElement(element string, overrides Overrides) string {
 		}
 	case "image":
 		if normalizeImageMode(overrides.ImageMode) != "" {
+			return "session override"
+		}
+	case "caption":
+		if normalizeCaptionMode(overrides.CaptionMode) != "" {
+			return "session override"
+		}
+	case "citation":
+		if normalizeCitationMode(overrides.CitationMode) != "" {
+			return "session override"
+		}
+	case "list":
+		if normalizeListMarkerMode(overrides.ListMarkerMode) != "" {
+			return "session override"
+		}
+	case "admonition":
+		if normalizeAdmonitionMode(overrides.AdmonitionMode) != "" {
+			return "session override"
+		}
+	case "quote":
+		if normalizeQuoteMode(overrides.QuoteMode) != "" {
 			return "session override"
 		}
 	default:

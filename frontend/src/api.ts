@@ -28,6 +28,7 @@ import type {
   ProjectBundleSummary,
   ProjectStorageSummary,
   ResearchModuleDiagnostics,
+  SpeechPolicyDefinition,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
   UpsertSpeechPolicyProfileRequest,
@@ -180,6 +181,14 @@ export async function listSpeechPolicyProfiles(): Promise<SpeechPolicyProfile[]>
   return response.json() as Promise<SpeechPolicyProfile[]>;
 }
 
+export async function getSpeechPolicyDefinition(): Promise<SpeechPolicyDefinition> {
+  const response = await fetch(`${apiBaseUrl}/api/policies/definition`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<SpeechPolicyDefinition>;
+}
+
 export async function getProjectSpeechPolicy(projectId: string): Promise<ProjectSpeechPolicy> {
   const response = await fetch(
     `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/speech-policy`,
@@ -281,6 +290,31 @@ export async function previewPreparedSourceSpeechPolicy(
     throw await apiError(response);
   }
   return response.json() as Promise<PreparedSource>;
+}
+
+export async function previewBookSourceScopeSpeechPolicy(
+  bookSourceId: string,
+  request: {
+    profile?: string;
+    overrides?: SpeechPolicyOverrides;
+    scope?: BookScope;
+    voiceProfileId?: string;
+    locale?: string;
+    ttsEngine?: string;
+  },
+): Promise<BookSourceScopeContent> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/book-sources/${encodeURIComponent(bookSourceId)}/scope/speech-policy/preview`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<BookSourceScopeContent>;
 }
 
 export async function previewMathSpeech(input: string): Promise<MathPreviewResult> {

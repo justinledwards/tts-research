@@ -363,3 +363,11 @@
 - [x] Remove duplicated workbench/footer content from left and right rails
 - [x] Rework Voice Cloning rails into focused command and readiness surfaces
 - [x] Run full checks and rendered QA
+
+## 2026-05-18 14:33 CEST - Reader standards and accessibility hardening
+
+- [x] Preserve EPUB speech metadata in Content IR
+- [x] Add Readium bridge goldens
+- [x] Expand shared speech policy coverage
+- [x] Harden Book Cinema accessibility controls
+- [x] Add QA checklist and run checks

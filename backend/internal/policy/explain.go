@@ -46,6 +46,10 @@ func elementLabel(element string) string {
 	switch element {
 	case "admonition":
 		return "This admonition"
+	case "quote":
+		return "This quote"
+	case "list":
+		return "This list item"
 	case "table":
 		return "This table"
 	case "code":
@@ -61,7 +65,11 @@ func elementLabel(element string) string {
 	case "directive":
 		return "This directive"
 	case "image":
-		return "This image or caption"
+		return "This image"
+	case "caption":
+		return "This caption"
+	case "citation":
+		return "This citation"
 	default:
 		return "This prose"
 	}

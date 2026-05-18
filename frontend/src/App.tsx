@@ -38,6 +38,7 @@ import {
   getPreparedSource,
   getProjectSpeechPolicy,
   getProjectStorageSummary,
+  getSpeechPolicyDefinition,
   getSystemMetrics,
   getVoiceJob,
   getVoiceProfileCredentials,
@@ -53,6 +54,7 @@ import {
   listProjects,
   listResearchModules,
   listVoiceProfiles,
+  previewBookSourceScopeSpeechPolicy,
   previewPreparedSourceSpeechPolicy,
   previewContentIRSpeechPolicy,
   queueVoiceProfileTarget,
@@ -69,7 +71,11 @@ import { formatDuration } from "./format";
 import {
   BookCinemaOverlay,
   BookCinemaPanel,
+  DEFAULT_READER_ACCESSIBILITY_SETTINGS,
+  READER_ACCESSIBILITY_STORAGE_KEY,
+  normalizeReaderAccessibilitySettings,
   type BookCinemaTextSize,
+  type ReaderAccessibilitySettings,
   bookSourceName,
   bookScopeKey,
   bookScopeText,
@@ -156,6 +162,7 @@ import type {
   ReadingPosition,
   ProjectStorageSummary,
   ResearchModuleDiagnostics,
+  SpeechPolicyDefinition,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
   SpeechPolicySettings,
@@ -173,13 +180,9 @@ import type {
 } from "./types";
 import {
   BUILT_IN_SPEECH_POLICY_SETTINGS,
-  CODE_MODE_OPTIONS,
+  DEFAULT_SPEECH_POLICY_DEFINITION,
   DEFAULT_SPEECH_POLICY_PROFILE,
-  FOOTNOTE_MODE_OPTIONS,
-  IMAGE_MODE_OPTIONS,
-  MATH_MODE_OPTIONS,
   SPEECH_POLICY_PROFILE_OPTIONS,
-  TABLE_MODE_OPTIONS,
   applySpeechPolicyOverridesToSettings,
   clearSpeechPolicyOverrides,
   compactSpeechPolicyOverrides,
@@ -2190,6 +2193,9 @@ export function App() {
   const [isPreparingSource, setIsPreparingSource] = useState(false);
   const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
   const [speechPolicyProfiles, setSpeechPolicyProfiles] = useState<SpeechPolicyProfile[]>([]);
+  const [speechPolicyDefinition, setSpeechPolicyDefinition] = useState<SpeechPolicyDefinition>(
+    DEFAULT_SPEECH_POLICY_DEFINITION,
+  );
   const [customSpeechPolicyProfiles, setCustomSpeechPolicyProfiles] = useState<
     CustomSpeechPolicyProfile[]
   >([]);
@@ -2220,6 +2226,16 @@ export function App() {
   const [isBookCinemaOpen, setIsBookCinemaOpen] = useState(false);
   const [bookCinemaTextSize, setBookCinemaTextSize] = useState<BookCinemaTextSize>("large");
   const [bookCinemaThemeName, setBookCinemaThemeName] = useState<ThemeName>("night");
+  const [readerAccessibilitySettings, setReaderAccessibilitySettings] =
+    useState<ReaderAccessibilitySettings>(() => {
+      try {
+        return normalizeReaderAccessibilitySettings(
+          JSON.parse(localStorage.getItem(READER_ACCESSIBILITY_STORAGE_KEY) ?? "null") as unknown,
+        );
+      } catch {
+        return DEFAULT_READER_ACCESSIBILITY_SETTINGS;
+      }
+    });
   const [isImportingBookSource, setIsImportingBookSource] = useState(false);
   const [bookSourceError, setBookSourceError] = useState<string | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
@@ -2982,10 +2998,17 @@ export function App() {
 
   const refreshSpeechPolicyProfiles = useCallback(async () => {
     try {
-      setSpeechPolicyProfiles(await listSpeechPolicyProfiles());
+      const definition = await getSpeechPolicyDefinition();
+      setSpeechPolicyDefinition(definition);
+      setSpeechPolicyProfiles(definition.profiles);
       setSpeechPolicyError(null);
     } catch (caughtError) {
-      setSpeechPolicyProfiles([]);
+      setSpeechPolicyDefinition(DEFAULT_SPEECH_POLICY_DEFINITION);
+      try {
+        setSpeechPolicyProfiles(await listSpeechPolicyProfiles());
+      } catch {
+        setSpeechPolicyProfiles(DEFAULT_SPEECH_POLICY_DEFINITION.profiles);
+      }
       setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to load speech profiles"));
     }
   }, []);
@@ -3907,7 +3930,14 @@ export function App() {
     }
     let isCurrent = true;
     setIsLoadingBookScope(true);
-    void getBookSourceScope(selectedBookSource.id, effectiveBookScope)
+    void previewBookSourceScopeSpeechPolicy(selectedBookSource.id, {
+      profile: speechPolicyProfile,
+      overrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
+      scope: effectiveBookScope,
+      locale: resolveRunLocale(runConfiguration),
+      ttsEngine: runConfiguration.ttsEngine,
+      voiceProfileId: selectedVoiceProfileId,
+    })
       .then((content) => {
         if (!isCurrent) {
           return;
@@ -3934,7 +3964,15 @@ export function App() {
     return () => {
       isCurrent = false;
     };
-  }, [clearMissingBookSource, effectiveBookScope, selectedBookSource]);
+  }, [
+    clearMissingBookSource,
+    effectiveBookScope,
+    runConfiguration,
+    selectedBookSource,
+    selectedVoiceProfileId,
+    speechPolicyOverrides,
+    speechPolicyProfile,
+  ]);
 
   useEffect(() => {
     if (!selectedVoiceProfileId) {
@@ -4092,6 +4130,13 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(TELEPROMPTER_SETTINGS_STORAGE_KEY, JSON.stringify(teleprompterSettings));
   }, [teleprompterSettings]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      READER_ACCESSIBILITY_STORAGE_KEY,
+      JSON.stringify(readerAccessibilitySettings),
+    );
+  }, [readerAccessibilitySettings]);
 
   useEffect(() => {
     localStorage.setItem(THEME_STORAGE_KEY, themeName);
@@ -4500,6 +4545,8 @@ export function App() {
       ...buildVoiceJobRequest(scopedText),
       bookSourceId: book.id,
       bookScope: scope,
+      speechPolicyProfile,
+      speechPolicyOverrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
     };
     setRequestState("running");
     setError(null);
@@ -4759,6 +4806,7 @@ export function App() {
           playbackControls={playbackControls}
           playbackCursorSec={playbackCursorSec}
           progress={selectedBookProgress ?? hashProgress}
+          accessibilitySettings={readerAccessibilitySettings}
           scope={effectiveBookScope}
           scopeContent={bookScopeContent}
           highlightCue={activeHighlightCue}
@@ -4784,6 +4832,7 @@ export function App() {
           onResumeProgress={(progress, seconds) => {
             void handleResumeProgress(progress, seconds);
           }}
+          onAccessibilitySettingsChange={setReaderAccessibilitySettings}
           onTextSizeChange={setBookCinemaTextSize}
           onThemeChange={setBookCinemaThemeName}
         />
@@ -5061,6 +5110,7 @@ export function App() {
               selectedPreparedSource={selectedPreparedSource}
               sourceMode={sourceMode}
               speechPolicyError={speechPolicyError}
+              speechPolicyDefinition={speechPolicyDefinition}
               speechPolicyOverrides={speechPolicyOverrides}
               speechPolicyProfile={speechPolicyProfile}
               customSpeechPolicyProfiles={customSpeechPolicyProfiles}
@@ -7712,6 +7762,7 @@ function SourceTextPanel({
   selectedPreparedSource,
   sourceMode,
   speechPolicyError,
+  speechPolicyDefinition,
   speechPolicyOverrides,
   speechPolicyProfile,
   speechPolicyProfiles,
@@ -7753,6 +7804,7 @@ function SourceTextPanel({
   selectedPreparedSource: PreparedSource | null;
   sourceMode: SourceMode;
   speechPolicyError: string | null;
+  speechPolicyDefinition: SpeechPolicyDefinition;
   speechPolicyOverrides: SpeechPolicyOverrides;
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
@@ -7954,6 +8006,7 @@ function SourceTextPanel({
           selectedPreparedSource={selectedPreparedSource}
           showIntakeControls={showSourceIntake}
           speechPolicyError={speechPolicyError}
+          speechPolicyDefinition={speechPolicyDefinition}
           speechPolicyOverrides={speechPolicyOverrides}
           speechPolicyProfile={speechPolicyProfile}
           speechPolicyProfiles={speechPolicyProfiles}
@@ -8293,6 +8346,7 @@ function SourcePrepReview({
   selectedPreparedSource,
   showIntakeControls = true,
   speechPolicyError,
+  speechPolicyDefinition,
   speechPolicyOverrides,
   speechPolicyProfile,
   speechPolicyProfiles,
@@ -8323,6 +8377,7 @@ function SourcePrepReview({
   selectedPreparedSource: PreparedSource | null;
   showIntakeControls?: boolean;
   speechPolicyError: string | null;
+  speechPolicyDefinition: SpeechPolicyDefinition;
   speechPolicyOverrides: SpeechPolicyOverrides;
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
@@ -8411,6 +8466,7 @@ function SourcePrepReview({
         <div className="grid gap-3">
           <SpeechPolicyControls
             customProfiles={customSpeechPolicyProfiles}
+            definition={speechPolicyDefinition}
             isPreviewing={isSpeechPolicyPreviewing}
             overrides={speechPolicyOverrides}
             profile={speechPolicyProfile}
@@ -8537,6 +8593,7 @@ function PreparedSourceIntakeSummary({
 
 function SpeechPolicyControls({
   customProfiles,
+  definition,
   error,
   isPreviewing,
   overrides,
@@ -8550,6 +8607,7 @@ function SpeechPolicyControls({
   onUpdateCustomProfile,
 }: Readonly<{
   customProfiles: CustomSpeechPolicyProfile[];
+  definition: SpeechPolicyDefinition;
   error: string | null;
   isPreviewing: boolean;
   overrides: SpeechPolicyOverrides;
@@ -8576,17 +8634,9 @@ function SpeechPolicyControls({
   const [isCustomFormOpen, setIsCustomFormOpen] = useState(false);
   const activeCustomProfile = customProfiles.find((item) => item.id === profile) ?? null;
   const [customProfileName, setCustomProfileName] = useState("");
-  const profileOptions: SpeechPolicyProfile[] =
-    profiles.length > 0
-      ? profiles
-      : SPEECH_POLICY_PROFILE_OPTIONS.map(
-          (name): SpeechPolicyProfile => ({
-            description: "",
-            label: speechPolicyProfileLabel(name),
-            name,
-            settings: { ...BUILT_IN_SPEECH_POLICY_SETTINGS[name] },
-          }),
-        );
+  const definitionFields =
+    definition.fields.length > 0 ? definition.fields : DEFAULT_SPEECH_POLICY_DEFINITION.fields;
+  const profileOptions = speechPolicyProfileOptions(definition, profiles);
   const baseSettings = resolveSpeechPolicySettings(profile, profileOptions, customProfiles);
   const effectiveSettings = applySpeechPolicyOverridesToSettings(baseSettings, overrides);
   const baseProfile = activeCustomProfile?.baseProfile ?? profile;
@@ -8673,64 +8723,22 @@ function SpeechPolicyControls({
           {error}
         </p>
       ) : null}
-      {isDefaultsOpen ? <SpeechPolicyDefaultsTable profiles={profileOptions} /> : null}
+      {isDefaultsOpen ? (
+        <SpeechPolicyDefaultsTable fields={definitionFields} profiles={profileOptions} />
+      ) : null}
       {isAdvancedOpen ? (
         <div className="grid gap-3 border-t border-zinc-100 pt-3 sm:grid-cols-2">
-          <PolicyModeSelect
-            label="Tables"
-            options={TABLE_MODE_OPTIONS}
-            value={overrides.tableMode ?? ""}
-            onChange={(value) => {
-              onOverridesChange({
-                ...overrides,
-                tableMode: value as SpeechPolicyOverrides["tableMode"],
-              });
-            }}
-          />
-          <PolicyModeSelect
-            label="Code"
-            options={CODE_MODE_OPTIONS}
-            value={overrides.codeMode ?? ""}
-            onChange={(value) => {
-              onOverridesChange({
-                ...overrides,
-                codeMode: value as SpeechPolicyOverrides["codeMode"],
-              });
-            }}
-          />
-          <PolicyModeSelect
-            label="Math"
-            options={MATH_MODE_OPTIONS}
-            value={overrides.mathMode ?? ""}
-            onChange={(value) => {
-              onOverridesChange({
-                ...overrides,
-                mathMode: value as SpeechPolicyOverrides["mathMode"],
-              });
-            }}
-          />
-          <PolicyModeSelect
-            label="Notes"
-            options={FOOTNOTE_MODE_OPTIONS}
-            value={overrides.footnoteMode ?? ""}
-            onChange={(value) => {
-              onOverridesChange({
-                ...overrides,
-                footnoteMode: value as SpeechPolicyOverrides["footnoteMode"],
-              });
-            }}
-          />
-          <PolicyModeSelect
-            label="Images"
-            options={IMAGE_MODE_OPTIONS}
-            value={overrides.imageMode ?? ""}
-            onChange={(value) => {
-              onOverridesChange({
-                ...overrides,
-                imageMode: value as SpeechPolicyOverrides["imageMode"],
-              });
-            }}
-          />
+          {definitionFields.map((field) => (
+            <PolicyModeSelect
+              key={field.key}
+              label={field.label}
+              options={field.options}
+              value={overrides[field.key] ?? ""}
+              onChange={(value) => {
+                onOverridesChange(policyOverridesWithField(overrides, field.key, value));
+              }}
+            />
+          ))}
         </div>
       ) : null}
       {isCustomFormOpen ? (
@@ -8790,14 +8798,19 @@ function SpeechPolicyControls({
 }
 
 function SpeechPolicyDefaultsTable({
+  fields,
   profiles,
-}: Readonly<{ profiles: Pick<SpeechPolicyProfile, "name" | "label" | "settings">[] }>) {
+}: Readonly<{
+  fields: SpeechPolicyDefinition["fields"];
+  profiles: Pick<SpeechPolicyProfile, "name" | "label" | "settings">[];
+}>) {
+  const headers = ["Profile", "Mode", ...fields.map((field) => field.label)];
   return (
     <div className="overflow-x-auto border-t border-zinc-100 pt-3">
-      <table className="min-w-[760px] border-collapse text-left text-xs">
+      <table className="min-w-[960px] border-collapse text-left text-xs">
         <thead className="bg-zinc-50 text-[0.68rem] uppercase tracking-[0.14em] text-zinc-500">
           <tr>
-            {["Profile", "Mode", "Tables", "Code", "Math", "Notes", "Images"].map((header) => (
+            {headers.map((header) => (
               <th className="border border-zinc-200 px-3 py-2" key={header}>
                 {header}
               </th>
@@ -8810,18 +8823,51 @@ function SpeechPolicyDefaultsTable({
               <td className="border border-zinc-200 px-3 py-2 font-semibold">
                 {item.label || speechPolicyProfileLabel(item.name)}
               </td>
-              <td className="border border-zinc-200 px-3 py-2">{item.settings.mode}</td>
-              <td className="border border-zinc-200 px-3 py-2">{item.settings.tableMode}</td>
-              <td className="border border-zinc-200 px-3 py-2">{item.settings.codeMode}</td>
-              <td className="border border-zinc-200 px-3 py-2">{item.settings.mathMode}</td>
-              <td className="border border-zinc-200 px-3 py-2">{item.settings.footnoteMode}</td>
-              <td className="border border-zinc-200 px-3 py-2">{item.settings.imageMode}</td>
+              <td className="border border-zinc-200 px-3 py-2">
+                {formatPolicyModeLabel(item.settings.mode)}
+              </td>
+              {fields.map((field) => (
+                <td className="border border-zinc-200 px-3 py-2" key={field.key}>
+                  {formatPolicyModeLabel(item.settings[field.key])}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
   );
+}
+
+function speechPolicyProfileOptions(
+  definition: SpeechPolicyDefinition,
+  profiles: SpeechPolicyProfile[],
+): SpeechPolicyProfile[] {
+  if (definition.profiles.length > 0) {
+    return definition.profiles;
+  }
+  if (profiles.length > 0) {
+    return profiles;
+  }
+  return SPEECH_POLICY_PROFILE_OPTIONS.map(
+    (name): SpeechPolicyProfile => ({
+      description: "",
+      label: speechPolicyProfileLabel(name),
+      name,
+      settings: { ...BUILT_IN_SPEECH_POLICY_SETTINGS[name] },
+    }),
+  );
+}
+
+function policyOverridesWithField(
+  overrides: SpeechPolicyOverrides,
+  key: SpeechPolicyDefinition["fields"][number]["key"],
+  value: string | undefined,
+): SpeechPolicyOverrides {
+  return compactSpeechPolicyOverrides({
+    ...overrides,
+    [key]: value,
+  });
 }
 
 function PolicyModeSelect({
@@ -8831,7 +8877,7 @@ function PolicyModeSelect({
   onChange,
 }: Readonly<{
   label: string;
-  options: string[];
+  options: SpeechPolicyDefinition["fields"][number]["options"];
   value: string;
   onChange: (value: string | undefined) => void;
 }>) {
@@ -8847,8 +8893,8 @@ function PolicyModeSelect({
       >
         <option value="">Profile default</option>
         {options.map((option) => (
-          <option key={option} value={option}>
-            {formatPolicyModeLabel(option)}
+          <option key={option.value} value={option.value}>
+            {option.label || formatPolicyModeLabel(option.value)}
           </option>
         ))}
       </select>

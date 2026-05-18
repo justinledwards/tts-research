@@ -303,10 +303,10 @@
         },
         "speechPolicy": {
           "profile": "Enterprise",
-          "element": "footnote",
+          "element": "citation",
           "elementMode": "onDemand",
           "mode": "onDemand",
-          "explanation": "This note is available on demand because the Enterprise profile sets footnote to onDemand."
+          "explanation": "This citation is available on demand because the Enterprise profile sets citation to onDemand."
         }
       },
       "warnings": ["citation_skipped"],

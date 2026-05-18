@@ -117,7 +117,16 @@ export function nodesFromBlocks(blocks, options) {
       metadata: block.metadata,
       nodeId: block.nodeId,
       parentId: block.parentId,
+      alphabet: block.alphabet,
+      emphasis: block.emphasis,
+      lexiconEntryIds: block.lexiconEntryIds,
+      markId: block.markId,
+      pauseAfterMs: block.pauseAfterMs,
+      pauseBeforeMs: block.pauseBeforeMs,
+      phoneme: block.phoneme,
+      pronunciationRefs: block.pronunciationRefs,
       role: block.role,
+      sayAs: block.sayAs,
       sourceId,
       speechMode: block.speechMode,
       speechText,
@@ -142,7 +151,16 @@ export function createNode({
   metadata = {},
   nodeId,
   parentId = "",
+  alphabet = "",
+  emphasis = "",
+  lexiconEntryIds = [],
+  markId = "",
+  pauseAfterMs = 0,
+  pauseBeforeMs = 0,
+  phoneme = "",
+  pronunciationRefs = [],
   role,
+  sayAs = "",
   sourceId,
   speechMode = "speak",
   speechText,
@@ -151,8 +169,9 @@ export function createNode({
 }) {
   const cleanDisplayText = normalizeText(displayText);
   const cleanSpeechText = normalizeText(speechText ?? cleanDisplayText);
-  return {
+  const node = {
     adapterVersion,
+    ...(alphabet ? { alphabet } : {}),
     confidence,
     dir,
     displayText: cleanDisplayText,
@@ -177,13 +196,20 @@ export function createNode({
       status: "unknown",
     },
     role: role ?? kind,
+    ...(lexiconEntryIds?.length ? { lexiconEntryIds: compactStringArray(lexiconEntryIds) } : {}),
+    ...(markId ? { markId } : {}),
+    ...(phoneme ? { phoneme } : {}),
+    ...(pronunciationRefs?.length
+      ? { pronunciationRefs: normalizePronunciationRefs(pronunciationRefs) }
+      : {}),
+    ...(sayAs ? { sayAs } : {}),
     script: "Latn",
     speech: {
       policyHint: {
-        emphasis: "",
+        emphasis,
         mode: speechMode,
-        pauseAfterMs: 0,
-        pauseBeforeMs: 0,
+        pauseAfterMs,
+        pauseBeforeMs,
       },
       speechPolicy: {
         explanation: "Policy has not been evaluated yet.",
@@ -198,4 +224,23 @@ export function createNode({
     },
     warnings: compactStringArray(warnings),
   };
+  return node;
+}
+
+function normalizePronunciationRefs(refs) {
+  return (refs ?? [])
+    .map((ref) => ({
+      term: String(ref.term ?? "").trim(),
+      spoken: String(ref.spoken ?? "").trim(),
+      ...(ref.source ? { source: String(ref.source).trim() } : {}),
+      ...(ref.entryId ? { entryId: String(ref.entryId).trim() } : {}),
+      ...(ref.scope ? { scope: String(ref.scope).trim() } : {}),
+      ...(ref.protected ? { protected: Boolean(ref.protected) } : {}),
+      startOffset: Number.isFinite(ref.startOffset) ? Math.max(0, Number(ref.startOffset)) : 0,
+      endOffset: Number.isFinite(ref.endOffset) ? Math.max(0, Number(ref.endOffset)) : 0,
+      originalText: String(ref.originalText ?? ref.term ?? "").trim(),
+      ...(ref.phoneme ? { phoneme: String(ref.phoneme).trim() } : {}),
+      ...(ref.alphabet ? { alphabet: String(ref.alphabet).trim() } : {}),
+    }))
+    .filter((ref) => ref.term && ref.spoken && ref.endOffset >= ref.startOffset);
 }

@@ -1394,6 +1394,7 @@ func policyElementText(block NarrationBlock) string {
 		NarrationBlockKindImage,
 		NarrationBlockKindCaption,
 		NarrationBlockKindCitation,
+		NarrationBlockKindList,
 		NarrationBlockKindDirective,
 		NarrationBlockKindEmbedded,
 		NarrationBlockKindFrontmatter:

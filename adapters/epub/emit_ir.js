@@ -47,6 +47,8 @@ export async function emitEPUBAdapter(bytes, options = {}) {
   const metadata = packageMetadata(packageDoc);
   const blocks = [];
   const sections = [];
+  const cssSpeechStyles = [];
+  const pronunciationLexicons = [];
   const warnings = [];
   let chapterIndex = 1;
   for (const item of spine) {
@@ -65,6 +67,8 @@ export async function emitEPUBAdapter(bytes, options = {}) {
       locatorType: "epub",
       sourceName: item.href,
     });
+    cssSpeechStyles.push(...(extracted.metadata.cssSpeechStyles ?? []));
+    pronunciationLexicons.push(...(extracted.metadata.pronunciationLexicons ?? []));
     if (extracted.blocks.length === 0) {
       continue;
     }
@@ -113,8 +117,10 @@ export async function emitEPUBAdapter(bytes, options = {}) {
   const documentMetadata = {
     ...metadata,
     capabilities: epubCapabilities(),
+    cssSpeechStyles: uniqueObjects(cssSpeechStyles),
     mediaOverlays,
     packagePath,
+    pronunciationLexicons: uniqueObjects(pronunciationLexicons),
     sections,
   };
   return {
@@ -155,6 +161,9 @@ export function epubCapabilities() {
       fragments: true,
       mediaOverlays: true,
       metadata: true,
+      pronunciationLexicons: true,
+      speechMetadata: true,
+      speechStyles: true,
       spineTraversal: true,
       tables: true,
     },
@@ -397,6 +406,20 @@ function asArray(value) {
     return [];
   }
   return Array.isArray(value) ? value : [value];
+}
+
+function uniqueObjects(values) {
+  const seen = new Set();
+  const output = [];
+  for (const value of values ?? []) {
+    const key = JSON.stringify(value);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    output.push(value);
+  }
+  return output;
 }
 
 function attr(value, name) {

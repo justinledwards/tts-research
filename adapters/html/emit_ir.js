@@ -43,6 +43,28 @@ const BLOCK_TAGS = new Set([
   "code",
 ]);
 
+const CSS_SPEECH_PROPERTIES = new Set([
+  "cue",
+  "cue-after",
+  "cue-before",
+  "pause",
+  "pause-after",
+  "pause-before",
+  "rest",
+  "rest-after",
+  "rest-before",
+  "speak",
+  "speak-as",
+  "voice-balance",
+  "voice-duration",
+  "voice-family",
+  "voice-pitch",
+  "voice-range",
+  "voice-rate",
+  "voice-stress",
+  "voice-volume",
+]);
+
 export function emitHTMLAdapter(source, options = {}) {
   const sourceName = options.sourceName ?? "source.html";
   const sourceId = options.sourceId ?? "html-source";
@@ -107,6 +129,7 @@ export async function emitHTMLAdapterFromFile(sourcePath, options = {}) {
 export function extractHTMLBlocks(source, options = {}) {
   const document = parse5.parse(String(source ?? ""), { sourceCodeLocationInfo: true });
   const html = findElement(document, (node) => node.tagName === "html");
+  const body = findElement(document, (node) => node.tagName === "body");
   const lang = firstNonEmpty(attr(html, "lang"), options.lang, "und");
   const dir = firstNonEmpty(attr(html, "dir"), options.dir, "ltr");
   const title = firstNonEmpty(
@@ -119,8 +142,13 @@ export function extractHTMLBlocks(source, options = {}) {
     findElement(document, (node) => node.tagName === "article") ??
     findElement(document, (node) => node.tagName === "main") ??
     findElement(document, (node) => attr(node, "role")?.toLowerCase() === "main") ??
-    findElement(document, (node) => node.tagName === "body") ??
+    body ??
     document;
+  const documentSpeechContext = speechContextForNode(html, {});
+  const rootSpeechContext =
+    body && root !== body && root !== html
+      ? speechContextForNode(body, documentSpeechContext)
+      : documentSpeechContext;
   const context = {
     blocks: [],
     currentSection: createSection("section-document", title, 1, "html"),
@@ -128,13 +156,17 @@ export function extractHTMLBlocks(source, options = {}) {
     lang,
     dir,
     locatorType: options.locatorType ?? "html",
+    pronunciationLexicons: pronunciationLexicons(
+      document,
+      options.href ?? options.sourceName ?? "source.html",
+    ),
     sectionIndex: 1,
     sourceName: options.sourceName ?? "source.html",
     usedFragments: new Set(),
     usedSectionIds: new Set(),
     warnings: [],
   };
-  walkSemantic(root, context, []);
+  walkSemantic(root, context, [], rootSpeechContext);
   if (context.blocks.length === 0) {
     const text = normalizeText(textContent(root));
     if (text) {
@@ -143,6 +175,7 @@ export function extractHTMLBlocks(source, options = {}) {
         htmlPath: "/document",
         kind: "body",
         role: "body",
+        speechMetadata: speechMetadataForBlock(root, rootSpeechContext),
         text,
       });
     }
@@ -163,6 +196,8 @@ export function extractHTMLBlocks(source, options = {}) {
       lang,
       dir,
       title,
+      cssSpeechStyles: cssSpeechStyles(document),
+      pronunciationLexicons: context.pronunciationLexicons,
     },
     title,
     warnings: context.warnings,
@@ -179,7 +214,10 @@ export function htmlCapabilities() {
       figures: true,
       fragments: true,
       langPropagation: true,
+      pronunciationLexicons: true,
       semanticBlocks: true,
+      speechMetadata: true,
+      speechStyles: true,
       tables: true,
     },
     mimeTypes: ["text/html", "application/xhtml+xml", "application/zip"],
@@ -196,10 +234,11 @@ export function adapterDiagnostics(adapterId, warnings = []) {
   };
 }
 
-function walkSemantic(node, context, path) {
+function walkSemantic(node, context, path, speechContext = {}) {
   if (!isElement(node)) {
     return;
   }
+  const currentSpeechContext = speechContextForNode(node, speechContext);
   const tag = node.tagName;
   if (SKIP_TAGS.has(tag) || hidden(node) || chromeElement(node)) {
     return;
@@ -220,6 +259,7 @@ function walkSemantic(node, context, path) {
         htmlPath,
         kind: tag === "h1" ? "heading" : "subheading",
         role: "body",
+        speechMetadata: speechMetadataForBlock(node, currentSpeechContext),
         text,
       });
     }
@@ -227,7 +267,7 @@ function walkSemantic(node, context, path) {
   }
   if (tag === "figure") {
     for (const child of elementChildren(node)) {
-      walkSemantic(child, context, [...path, tagWithIndex(node)]);
+      walkSemantic(child, context, [...path, tagWithIndex(node)], currentSpeechContext);
     }
     return;
   }
@@ -244,6 +284,7 @@ function walkSemantic(node, context, path) {
           title: attr(node, "title") ?? "",
         },
         role: "body",
+        speechMetadata: speechMetadataForBlock(node, currentSpeechContext),
         speechMode: "summarize",
         text,
         warnings: ["image_alt_text"],
@@ -261,6 +302,7 @@ function walkSemantic(node, context, path) {
         kind: semantic.kind,
         metadata: semantic.metadata,
         role: semantic.role,
+        speechMetadata: speechMetadataForBlock(node, currentSpeechContext),
         speechMode: semantic.speechMode,
         text,
         warnings: semantic.warnings,
@@ -269,7 +311,7 @@ function walkSemantic(node, context, path) {
     return;
   }
   for (const child of elementChildren(node)) {
-    walkSemantic(child, context, [...path, tagWithIndex(node)]);
+    walkSemantic(child, context, [...path, tagWithIndex(node)], currentSpeechContext);
   }
 }
 
@@ -322,6 +364,159 @@ function tableText(node) {
   return output.length > 0 ? output.join("\n") : normalizeText(textContent(node));
 }
 
+function pronunciationLexicons(document, baseHref) {
+  return descendants(document, (item) => item.tagName === "link")
+    .map((item) => {
+      const rel = attr(item, "rel") ?? "";
+      const type = attr(item, "type") ?? "";
+      const href = attr(item, "href") ?? "";
+      if (!rel.split(/\s+/).some((token) => token.toLowerCase() === "pronunciation")) {
+        return undefined;
+      }
+      if (type.toLowerCase() !== "application/pls+xml" || !href) {
+        return undefined;
+      }
+      return {
+        href: normalizeLinkedHref(baseHref, href),
+        hreflang: attr(item, "hreflang") ?? "",
+        rel: "pronunciation",
+        title: attr(item, "title") ?? "",
+        type,
+      };
+    })
+    .filter(Boolean);
+}
+
+function cssSpeechStyles(document) {
+  return descendants(document, (item) => item.tagName === "style")
+    .map((item) => rawTextContent(item).trim())
+    .filter((text) => text && CSS_SPEECH_PROPERTIES_PATTERN.test(text));
+}
+
+const CSS_SPEECH_PROPERTIES_PATTERN = new RegExp(
+  `\\b(?:${[...CSS_SPEECH_PROPERTIES].map((item) => item.replaceAll("-", "\\-")).join("|")})\\s*:`,
+  "i",
+);
+
+function speechContextForNode(node, context) {
+  return {
+    ...context,
+    alphabet: firstNonEmpty(ssmlAttribute(node, "alphabet"), context.alphabet),
+  };
+}
+
+function speechMetadataForBlock(node, speechContext) {
+  const cssSpeech = cssSpeechHints(node);
+  const phoneme = ssmlAttribute(node, "ph");
+  const alphabet = firstNonEmpty(ssmlAttribute(node, "alphabet"), speechContext.alphabet);
+  const pronunciationRefs = pronunciationRefsForBlock(node, speechContext);
+  return {
+    alphabet: phoneme ? alphabet : undefined,
+    cssSpeech,
+    lexiconEntryIds: [],
+    pauseAfterMs: cssPauseMs(cssSpeech["pause-after"], cssSpeech.pause, "after"),
+    pauseBeforeMs: cssPauseMs(cssSpeech["pause-before"], cssSpeech.pause, "before"),
+    phoneme: phoneme || undefined,
+    pronunciationRefs,
+    sayAs: cssSpeech["speak-as"],
+  };
+}
+
+function pronunciationRefsForBlock(node, speechContext) {
+  const blockText = normalizeText(textContent(node));
+  const refs = [];
+  let searchFrom = 0;
+  const visit = (item, context) => {
+    if (!isElement(item)) {
+      return;
+    }
+    const currentContext = speechContextForNode(item, context);
+    const phoneme = ssmlAttribute(item, "ph");
+    if (phoneme) {
+      const term = inlineText(textContent(item));
+      const start = Math.max(0, blockText.indexOf(term, searchFrom));
+      const end = start + term.length;
+      searchFrom = end;
+      refs.push({
+        alphabet: firstNonEmpty(ssmlAttribute(item, "alphabet"), currentContext.alphabet),
+        endOffset: end,
+        originalText: term,
+        phoneme,
+        source: "ssml",
+        spoken: term,
+        startOffset: start,
+        term,
+      });
+      return;
+    }
+    for (const child of elementChildren(item)) {
+      visit(child, currentContext);
+    }
+  };
+  visit(node, speechContext);
+  return refs.filter((ref) => ref.term && ref.phoneme);
+}
+
+function cssSpeechHints(node) {
+  const declarations = styleDeclarations(attr(node, "style") ?? "");
+  const output = {};
+  for (const [property, value] of Object.entries(declarations)) {
+    if (CSS_SPEECH_PROPERTIES.has(property)) {
+      output[property] = value;
+    }
+  }
+  return output;
+}
+
+function styleDeclarations(value) {
+  const output = {};
+  for (const part of String(value ?? "").split(";")) {
+    const index = part.indexOf(":");
+    if (index <= 0) {
+      continue;
+    }
+    const property = part.slice(0, index).trim().toLowerCase();
+    const declarationValue = part.slice(index + 1).trim();
+    if (property && declarationValue) {
+      output[property] = declarationValue;
+    }
+  }
+  return output;
+}
+
+function cssPauseMs(value, shorthand, side) {
+  const direct = cssTimeMs(value);
+  if (direct > 0) {
+    return direct;
+  }
+  const parts = String(shorthand ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) {
+    return 0;
+  }
+  if (parts.length === 1) {
+    return cssTimeMs(parts[0]);
+  }
+  return cssTimeMs(side === "before" ? parts[0] : parts[1]);
+}
+
+function cssTimeMs(value) {
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  const match = /^(\d+(?:\.\d+)?)(ms|s)$/.exec(text);
+  if (!match) {
+    return 0;
+  }
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount < 0) {
+    return 0;
+  }
+  return match[2] === "s" ? Math.round(amount * 1000) : Math.round(amount);
+}
+
 function layoutTable(node) {
   const className = attr(node, "class") ?? "";
   const id = attr(node, "id") ?? "";
@@ -343,12 +538,15 @@ function pushBlock(context, block) {
   const fragment = fragmentForBlock(context, block.element, text);
   const section = context.currentSection;
   const words = wordCount(text);
+  const speechMetadata = block.speechMetadata ?? {};
   context.blocks.push({
+    alphabet: speechMetadata.alphabet,
     confidence: block.confidence ?? 0.92,
     dir: firstNonEmpty(attr(block.element, "dir"), context.dir),
     displayText: text,
     kind: block.kind,
     lang: firstNonEmpty(attr(block.element, "lang"), context.lang),
+    lexiconEntryIds: speechMetadata.lexiconEntryIds,
     locator: {
       html: {
         fragment,
@@ -359,8 +557,15 @@ function pushBlock(context, block) {
     },
     metadata: {
       ...block.metadata,
+      ...(speechMetadata.cssSpeech ? { cssSpeech: speechMetadata.cssSpeech } : {}),
+      ...(speechMetadata.pronunciationRefs?.length
+        ? { pronunciationRefs: speechMetadata.pronunciationRefs }
+        : {}),
       estimatedDurationMs: estimateDurationMs(words),
       htmlPath: block.htmlPath,
+      ...(context.pronunciationLexicons.length
+        ? { pronunciationLexicons: context.pronunciationLexicons }
+        : {}),
       sectionId: section.id,
       sectionIndex: section.index,
       sectionKind: section.kind,
@@ -369,7 +574,12 @@ function pushBlock(context, block) {
       wordCount: words,
     },
     nodeId: fragment,
+    pauseAfterMs: speechMetadata.pauseAfterMs,
+    pauseBeforeMs: speechMetadata.pauseBeforeMs,
+    phoneme: speechMetadata.phoneme,
+    pronunciationRefs: speechMetadata.pronunciationRefs,
     role: block.role,
+    sayAs: speechMetadata.sayAs,
     section,
     speechMode: block.speechMode ?? "speak",
     speechText: text,
@@ -475,6 +685,16 @@ function textContent(node) {
   return (node.childNodes ?? []).map((child) => textContent(child)).join(separator);
 }
 
+function rawTextContent(node) {
+  if (!node) {
+    return "";
+  }
+  if (node.nodeName === "#text") {
+    return node.value ?? "";
+  }
+  return (node.childNodes ?? []).map((child) => rawTextContent(child)).join("");
+}
+
 function elementChildren(node) {
   return (node.childNodes ?? []).filter(isElement);
 }
@@ -489,6 +709,27 @@ function attr(node, name) {
   }
   const item = node.attrs.find((attribute) => attribute.name.toLowerCase() === name.toLowerCase());
   return item?.value;
+}
+
+function ssmlAttribute(node, localName) {
+  return (
+    attr(node, `ssml:${localName}`) ??
+    attr(node, localName) ??
+    attr(node, `http://www.w3.org/2001/10/synthesis:${localName}`)
+  );
+}
+
+function normalizeLinkedHref(baseHref, href) {
+  const cleanHref = String(href ?? "").trim();
+  if (cleanHref === "" || /^[a-z][a-z0-9+.-]*:/i.test(cleanHref) || cleanHref.startsWith("#")) {
+    return cleanHref;
+  }
+  const cleanBase = String(baseHref ?? "").trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(cleanBase)) {
+    return new URL(cleanHref, cleanBase).toString();
+  }
+  const baseDir = path.posix.dirname(cleanBase || ".");
+  return path.posix.normalize(path.posix.join(baseDir, cleanHref));
 }
 
 function hidden(node) {

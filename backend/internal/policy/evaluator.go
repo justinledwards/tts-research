@@ -36,6 +36,9 @@ func NewEvaluatorForSettings(profileID string, profileLabel string, settings Set
 	if normalizedOverrides.TableMode != "" {
 		normalizedSettings.TableMode = normalizedOverrides.TableMode
 	}
+	if normalizedOverrides.TableHeaderMode != "" {
+		normalizedSettings.TableHeaderMode = normalizedOverrides.TableHeaderMode
+	}
 	if normalizedOverrides.CodeMode != "" {
 		normalizedSettings.CodeMode = normalizedOverrides.CodeMode
 	}
@@ -47,6 +50,21 @@ func NewEvaluatorForSettings(profileID string, profileLabel string, settings Set
 	}
 	if normalizedOverrides.ImageMode != "" {
 		normalizedSettings.ImageMode = normalizedOverrides.ImageMode
+	}
+	if normalizedOverrides.CaptionMode != "" {
+		normalizedSettings.CaptionMode = normalizedOverrides.CaptionMode
+	}
+	if normalizedOverrides.CitationMode != "" {
+		normalizedSettings.CitationMode = normalizedOverrides.CitationMode
+	}
+	if normalizedOverrides.ListMarkerMode != "" {
+		normalizedSettings.ListMarkerMode = normalizedOverrides.ListMarkerMode
+	}
+	if normalizedOverrides.AdmonitionMode != "" {
+		normalizedSettings.AdmonitionMode = normalizedOverrides.AdmonitionMode
+	}
+	if normalizedOverrides.QuoteMode != "" {
+		normalizedSettings.QuoteMode = normalizedOverrides.QuoteMode
 	}
 	profileID = strings.TrimSpace(profileID)
 	if profileID == "" {
@@ -90,7 +108,15 @@ func (evaluator Evaluator) Evaluate(element Element) Decision {
 	case "directive":
 		return evaluator.decision("directive", "safeFallback", ModeOnDemand, "")
 	case "admonition":
-		return evaluator.decision("admonition", string(evaluator.settings.Mode), evaluator.settings.Mode, cleanInline(element.Text))
+		return evaluator.evaluateAdmonition(element)
+	case "quote":
+		return evaluator.evaluateQuote(element)
+	case "list":
+		return evaluator.evaluateList(element)
+	case "caption":
+		return evaluator.evaluateCaption(element)
+	case "citation":
+		return evaluator.evaluateCitation(element)
 	case "table":
 		return evaluator.evaluateTable(element)
 	case "code":
@@ -110,21 +136,15 @@ func ElementKind(kind string, role string, text string, warnings []string) strin
 	lowerKind := strings.ToLower(strings.TrimSpace(kind))
 	lowerRole := strings.ToLower(strings.TrimSpace(role))
 	switch lowerKind {
-	case "admonition", "directive", "embedded", "frontmatter", "table", "code", "math", "image", "caption":
-		if lowerKind == "caption" {
-			return "image"
-		}
+	case "admonition", "directive", "embedded", "frontmatter", "table", "code", "math", "image", "caption", "citation", "list", "quote":
 		return lowerKind
-	case "citation", "footnote", "endnote":
+	case "footnote", "endnote":
 		return "footnote"
 	}
 	switch lowerRole {
-	case "admonition", "directive", "embedded", "frontmatter", "table", "code", "math", "image", "caption":
-		if lowerRole == "caption" {
-			return "image"
-		}
+	case "admonition", "directive", "embedded", "frontmatter", "table", "code", "math", "image", "caption", "citation", "list", "quote":
 		return lowerRole
-	case "citation", "footnote", "endnote":
+	case "footnote", "endnote":
 		return "footnote"
 	}
 	trimmed := strings.TrimSpace(text)
@@ -142,11 +162,65 @@ func (evaluator Evaluator) evaluateTable(element Element) Decision {
 	case TableModeSkip:
 		return evaluator.decision("table", string(TableModeSkip), ModeSkip, "")
 	case TableModeRowLinear:
-		return evaluator.decision("table", string(TableModeRowLinear), ModeSpeak, linearizeTable(element.Text))
+		return evaluator.decision("table", string(TableModeRowLinear), ModeSpeak, linearizeTable(element.Text, evaluator.settings.TableHeaderMode))
 	case TableModeInteractive:
 		return evaluator.decision("table", string(TableModeInteractive), ModeInteractive, "")
 	default:
 		return evaluator.decision("table", string(TableModeSummary), ModeSummarise, summarizeTable(element.Text))
+	}
+}
+
+func (evaluator Evaluator) evaluateCaption(element Element) Decision {
+	switch evaluator.settings.CaptionMode {
+	case CaptionModeSkip:
+		return evaluator.decision("caption", string(CaptionModeSkip), ModeSkip, "")
+	case CaptionModeOnDemand:
+		return evaluator.decision("caption", string(CaptionModeOnDemand), ModeOnDemand, "")
+	default:
+		return evaluator.decision("caption", string(CaptionModeSpeak), ModeSpeak, cleanInline(element.Text))
+	}
+}
+
+func (evaluator Evaluator) evaluateCitation(element Element) Decision {
+	switch evaluator.settings.CitationMode {
+	case CitationModeSkip:
+		return evaluator.decision("citation", string(CitationModeSkip), ModeSkip, "")
+	case CitationModeInline:
+		return evaluator.decision("citation", string(CitationModeInline), ModeSpeak, cleanInline(element.Text))
+	case CitationModeEndnote:
+		return evaluator.decision("citation", string(CitationModeEndnote), ModeOnDemand, "")
+	default:
+		return evaluator.decision("citation", string(CitationModeOnDemand), ModeOnDemand, "")
+	}
+}
+
+func (evaluator Evaluator) evaluateList(element Element) Decision {
+	text := cleanInline(element.Text)
+	if evaluator.settings.ListMarkerMode == ListMarkerModeAnnounce && text != "" {
+		text = "List item: " + text
+	}
+	return evaluator.decision("list", string(evaluator.settings.ListMarkerMode), ModeSpeak, text)
+}
+
+func (evaluator Evaluator) evaluateAdmonition(element Element) Decision {
+	switch evaluator.settings.AdmonitionMode {
+	case AdmonitionModeSkip:
+		return evaluator.decision("admonition", string(AdmonitionModeSkip), ModeSkip, "")
+	case AdmonitionModeSummarise:
+		return evaluator.decision("admonition", string(AdmonitionModeSummarise), ModeSummarise, summarizeInline("Admonition", element.Text))
+	default:
+		return evaluator.decision("admonition", string(AdmonitionModeSpeak), ModeSpeak, cleanInline(element.Text))
+	}
+}
+
+func (evaluator Evaluator) evaluateQuote(element Element) Decision {
+	switch evaluator.settings.QuoteMode {
+	case QuoteModeSkip:
+		return evaluator.decision("quote", string(QuoteModeSkip), ModeSkip, "")
+	case QuoteModeSummarise:
+		return evaluator.decision("quote", string(QuoteModeSummarise), ModeSummarise, summarizeInline("Quote", element.Text))
+	default:
+		return evaluator.decision("quote", string(QuoteModeSpeak), ModeSpeak, cleanInline(element.Text))
 	}
 }
 
@@ -228,7 +302,7 @@ func summarizeTable(text string) string {
 	return "A table appears here and is summarised for spoken playback."
 }
 
-func linearizeTable(text string) string {
+func linearizeTable(text string, headerMode TableHeaderMode) string {
 	lines := nonEmptyLines(text)
 	if len(lines) == 0 {
 		return "Empty table."
@@ -245,18 +319,34 @@ func linearizeTable(text string) string {
 		}
 		parts := make([]string, 0, len(cells))
 		for index, cell := range cells {
-			if index < len(headers) && headers[index] != "" {
+			if headerMode != TableHeaderModeNone && index < len(headers) && headers[index] != "" {
 				parts = append(parts, headers[index]+": "+cell)
 			} else {
 				parts = append(parts, cell)
 			}
 		}
-		rows = append(rows, strings.Join(parts, "; "))
+		rowText := strings.Join(parts, "; ")
+		if headerMode == TableHeaderModeRowAndColumn {
+			rowText = fmt.Sprintf("Row %d. %s", len(rows)+1, rowText)
+		}
+		rows = append(rows, rowText)
 	}
 	if len(rows) == 0 {
 		return summarizeTable(text)
 	}
 	return "Table. " + strings.Join(rows, ". ") + "."
+}
+
+func summarizeInline(label string, text string) string {
+	clean := cleanInline(text)
+	if clean == "" {
+		return label + " appears here."
+	}
+	words := strings.Fields(clean)
+	if len(words) <= 16 {
+		return label + ": " + clean
+	}
+	return fmt.Sprintf("%s summary: %s.", label, strings.Join(words[:16], " "))
 }
 
 func summarizeCode(text string, language string) string {

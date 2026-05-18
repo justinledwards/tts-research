@@ -32,8 +32,48 @@ const BOOK_PAGE_FONT_PX: Record<BookCinemaTextSize, number> = {
   large: 24,
   giant: 30,
 };
+const BOOK_CINEMA_PLAYBACK_RATES = [0.8, 1, 1.25, 1.5] as const;
+const POLICY_NOTE_KINDS = new Set([
+  "admonition",
+  "caption",
+  "citation",
+  "code",
+  "list",
+  "math",
+  "quote",
+  "table",
+]);
+export const READER_ACCESSIBILITY_STORAGE_KEY = "tts-reader-accessibility-v1";
 
 export type BookCinemaTextSize = "comfortable" | "large" | "giant";
+export type BookCinemaKeyboardCommand =
+  | "bookmark"
+  | "close"
+  | "restart"
+  | "seekBackward"
+  | "seekForward"
+  | "speedDown"
+  | "speedUp"
+  | "togglePlayback";
+
+export interface ReaderAccessibilitySettings {
+  highContrast: boolean;
+  reducedMotion: boolean;
+}
+
+export interface BookCinemaPolicyNote {
+  explanation: string;
+  id: string;
+  kind: string;
+  mode: string;
+  text?: string;
+  title: string;
+}
+
+export const DEFAULT_READER_ACCESSIBILITY_SETTINGS: ReaderAccessibilitySettings = {
+  highContrast: false,
+  reducedMotion: false,
+};
 
 interface BookScopeOption {
   key: string;
@@ -62,6 +102,82 @@ export interface BookPaginationResult {
 interface BookPaginationOptions {
   pagesPerSpread?: 1 | 2;
   wordsPerPage?: number;
+}
+
+export function normalizeReaderAccessibilitySettings(value: unknown): ReaderAccessibilitySettings {
+  if (!value || typeof value !== "object") {
+    return { ...DEFAULT_READER_ACCESSIBILITY_SETTINGS };
+  }
+  const candidate = value as Partial<ReaderAccessibilitySettings>;
+  return {
+    highContrast: candidate.highContrast === true,
+    reducedMotion: candidate.reducedMotion === true,
+  };
+}
+
+export function bookCinemaKeyboardCommandForKey(key: string): BookCinemaKeyboardCommand | null {
+  const normalized = key.length === 1 ? key.toLowerCase() : key;
+  if (normalized === " " || normalized === "k") {
+    return "togglePlayback";
+  }
+  if (normalized === "ArrowLeft" || normalized === "j") {
+    return "seekBackward";
+  }
+  if (normalized === "ArrowRight" || normalized === "l") {
+    return "seekForward";
+  }
+  if (normalized === "Home") {
+    return "restart";
+  }
+  if (normalized === "[") {
+    return "speedDown";
+  }
+  if (normalized === "]") {
+    return "speedUp";
+  }
+  if (normalized === "b") {
+    return "bookmark";
+  }
+  if (normalized === "Escape") {
+    return "close";
+  }
+  return null;
+}
+
+export function shouldIgnoreBookCinemaKeyboardTarget(target: EventTarget | null): boolean {
+  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
+    return false;
+  }
+  const tagName = target.tagName.toLowerCase();
+  return (
+    target.isContentEditable ||
+    tagName === "button" ||
+    tagName === "input" ||
+    tagName === "select" ||
+    tagName === "textarea" ||
+    Boolean(target.closest("[data-book-cinema-ignore-shortcuts]"))
+  );
+}
+
+export function nextBookCinemaPlaybackRate(currentRate: number, direction: -1 | 1): number {
+  const currentIndex = BOOK_CINEMA_PLAYBACK_RATES.findIndex(
+    (rate) => Math.abs(rate - currentRate) < 0.01,
+  );
+  let fallbackIndex = 0;
+  for (const [index, rate] of BOOK_CINEMA_PLAYBACK_RATES.entries()) {
+    if (
+      Math.abs(rate - currentRate) <
+      Math.abs(BOOK_CINEMA_PLAYBACK_RATES[fallbackIndex] - currentRate)
+    ) {
+      fallbackIndex = index;
+    }
+  }
+  const nextIndex = clampNumber(
+    (currentIndex === -1 ? fallbackIndex : currentIndex) + direction,
+    0,
+    BOOK_CINEMA_PLAYBACK_RATES.length - 1,
+  );
+  return BOOK_CINEMA_PLAYBACK_RATES[nextIndex] ?? 1;
 }
 
 export interface BookCinemaControlsProps {
@@ -614,7 +730,134 @@ function BookReadingPreview({
   );
 }
 
+function useBookCinemaKeyboardControls({
+  canBookmark,
+  onBookmark,
+  onClose,
+  onPlayPause,
+  onRestart,
+  onSkip,
+  playbackControls,
+}: Readonly<{
+  canBookmark: boolean;
+  onBookmark: () => void;
+  onClose: () => void;
+  onPlayPause: () => void;
+  onRestart: () => void;
+  onSkip: (seconds: number) => void;
+  playbackControls: {
+    isAvailable: boolean;
+    playbackRate: number;
+    setPlaybackRate?: (rate: number) => void;
+    skipBy?: (seconds: number) => void;
+  };
+}>) {
+  useEffect(() => {
+    const actions = bookCinemaKeyboardActions({
+      canBookmark,
+      onBookmark,
+      onClose,
+      onPlayPause,
+      onRestart,
+      onSkip,
+      playbackControls,
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (shouldIgnoreBookCinemaKeyboardTarget(event.target)) {
+        return;
+      }
+      const command = bookCinemaKeyboardCommandForKey(event.key);
+      if (!command) {
+        return;
+      }
+      const action = actions[command];
+      if (!action) {
+        return;
+      }
+      event.preventDefault();
+      action();
+    };
+    globalThis.addEventListener("keydown", handleKeyDown);
+    return () => {
+      globalThis.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [canBookmark, onBookmark, onClose, onPlayPause, onRestart, onSkip, playbackControls]);
+}
+
+function bookCinemaKeyboardActions({
+  canBookmark,
+  onBookmark,
+  onClose,
+  onPlayPause,
+  onRestart,
+  onSkip,
+  playbackControls,
+}: Readonly<{
+  canBookmark: boolean;
+  onBookmark: () => void;
+  onClose: () => void;
+  onPlayPause: () => void;
+  onRestart: () => void;
+  onSkip: (seconds: number) => void;
+  playbackControls: {
+    isAvailable: boolean;
+    playbackRate: number;
+    setPlaybackRate?: (rate: number) => void;
+    skipBy?: (seconds: number) => void;
+  };
+}>): Partial<Record<BookCinemaKeyboardCommand, () => void>> {
+  const actions: Partial<Record<BookCinemaKeyboardCommand, () => void>> = {
+    close: onClose,
+  };
+  if (canBookmark) {
+    actions.bookmark = onBookmark;
+  }
+  if (playbackControls.isAvailable) {
+    actions.restart = onRestart;
+    actions.togglePlayback = onPlayPause;
+  }
+  if (playbackControls.skipBy) {
+    actions.seekBackward = () => {
+      onSkip(-10);
+    };
+    actions.seekForward = () => {
+      onSkip(10);
+    };
+  }
+  const setPlaybackRate = playbackControls.setPlaybackRate;
+  if (setPlaybackRate) {
+    actions.speedDown = () => {
+      setPlaybackRate(nextBookCinemaPlaybackRate(playbackControls.playbackRate, -1));
+    };
+    actions.speedUp = () => {
+      setPlaybackRate(nextBookCinemaPlaybackRate(playbackControls.playbackRate, 1));
+    };
+  }
+  return actions;
+}
+
+function bookCinemaJobMatchesScope(
+  job: VoiceJob | null,
+  book: BookSource,
+  scope: BookScope,
+): boolean {
+  return (
+    job?.bookSourceId === book.id && bookScopeKey(job.bookScope ?? scope) === bookScopeKey(scope)
+  );
+}
+
+function bookCinemaLiveWordIndex(
+  cue: HighlightCue | null,
+  displayedActiveWordIndex: number,
+): number {
+  if (cue?.fragmentIndex !== undefined) {
+    return -1;
+  }
+  return displayedActiveWordIndex;
+}
+
 export function BookCinemaOverlay({
+  accessibilitySettings,
   book,
   canCreateAudio,
   isProcessing,
@@ -629,6 +872,7 @@ export function BookCinemaOverlay({
   textSize,
   themeName,
   onClose,
+  onAccessibilitySettingsChange,
   onBookmark,
   onCreateAudio,
   onInspectStructure,
@@ -640,6 +884,7 @@ export function BookCinemaOverlay({
   onTextSizeChange,
   onThemeChange,
 }: Readonly<{
+  accessibilitySettings: ReaderAccessibilitySettings;
   book: BookSource;
   canCreateAudio: boolean;
   isProcessing: boolean;
@@ -663,6 +908,7 @@ export function BookCinemaOverlay({
   textSize: BookCinemaTextSize;
   themeName: ThemeName;
   onClose: () => void;
+  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onBookmark: () => void;
   onCreateAudio: (book: BookSource, scope: BookScope) => void;
   onInspectStructure: (book: BookSource) => void;
@@ -675,6 +921,7 @@ export function BookCinemaOverlay({
   onThemeChange: (theme: ThemeName) => void;
 }>) {
   const normalizedScope = normalizeBookScopeForBook(book, scope);
+  const normalizedAccessibility = normalizeReaderAccessibilitySettings(accessibilitySettings);
   const scopeOptions = useMemo(() => bookScopeOptions(book), [book]);
   const scopedSpans = useMemo(
     () => scopeContent?.wordSpans ?? bookScopeSpans(book, normalizedScope),
@@ -700,22 +947,46 @@ export function BookCinemaOverlay({
     );
     return narratable.length > 0 ? narratable : scopeOptions;
   }, [scopeOptions]);
-  const activeJobMatchesBook =
-    job !== null &&
-    job.bookSourceId === book.id &&
-    bookScopeKey(job.bookScope ?? normalizedScope) === bookScopeKey(normalizedScope);
-  const isCancelledBookJob = activeJobMatchesBook && job.status === "cancelled";
+  const activeJobMatchesBook = bookCinemaJobMatchesScope(job, book, normalizedScope);
+  const isCancelledBookJob = activeJobMatchesBook && job?.status === "cancelled";
   const bookmarks = progress?.bookmarks ?? [];
   const progressPercent = progress ? formatProgressPercent(progress.progress) : "0%";
   const canBookmark = activeJobMatchesBook && playbackControls.isAvailable;
+  const policyNotes = useMemo(() => bookCinemaPolicyNotes(scopeContent), [scopeContent]);
+  const liveAnnouncementWordIndex = bookCinemaLiveWordIndex(highlightCue, displayedActiveWordIndex);
+  const liveAnnouncement = useMemo(
+    () =>
+      bookCinemaLiveAnnouncement({
+        activeWordIndex: liveAnnouncementWordIndex,
+        book,
+        fragmentIndex: highlightCue?.fragmentIndex,
+        scope: normalizedScope,
+      }),
+    [book, highlightCue?.fragmentIndex, liveAnnouncementWordIndex, normalizedScope],
+  );
+
+  useBookCinemaKeyboardControls({
+    canBookmark,
+    onBookmark,
+    onClose,
+    onPlayPause,
+    onRestart,
+    onSkip,
+    playbackControls,
+  });
 
   return (
     <div
       aria-modal="true"
       className="vs-app fixed inset-0 z-50 flex flex-col"
+      data-reader-highlight={normalizedAccessibility.highContrast ? "high-contrast" : "standard"}
+      data-reader-motion={normalizedAccessibility.reducedMotion ? "reduced" : "standard"}
       data-theme={themeName}
       role="dialog"
     >
+      <div aria-atomic="true" aria-live="polite" className="sr-only">
+        {liveAnnouncement}
+      </div>
       <header className="flex items-center justify-between gap-4 border-b px-5 py-4 vs-border sm:px-8">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-500">
@@ -862,6 +1133,7 @@ export function BookCinemaOverlay({
               className="mx-auto mt-5 flex h-14 w-14 items-center justify-center rounded-full text-xl font-semibold text-white shadow-lg shadow-orange-500/30 disabled:opacity-50 vs-accent-bg"
               disabled={!playbackControls.isAvailable}
               onClick={onPlayPause}
+              aria-keyshortcuts="Space K"
               type="button"
             >
               {playbackControls.isPlaying ? <CinemaPauseIcon /> : <CinemaPlayIcon />}
@@ -876,6 +1148,7 @@ export function BookCinemaOverlay({
                 className="rounded border px-2 py-1 font-semibold disabled:opacity-40 vs-border"
                 disabled={!canBookmark}
                 onClick={onBookmark}
+                aria-keyshortcuts="B"
                 type="button"
               >
                 Bookmark
@@ -891,6 +1164,7 @@ export function BookCinemaOverlay({
             highlightCue={highlightCue}
             highlightMap={highlightMap}
           />
+          <BookCinemaPolicyNotes notes={policyNotes} />
           <div className="mt-4 rounded-lg border p-4 vs-border">
             <div className="flex items-center justify-between gap-3">
               <p className="vs-muted text-xs font-semibold uppercase tracking-[0.2em]">Queue</p>
@@ -924,6 +1198,7 @@ export function BookCinemaOverlay({
             className="h-10 rounded-md border px-3 text-sm font-semibold disabled:opacity-40 vs-border"
             disabled={!playbackControls.isAvailable}
             onClick={onRestart}
+            aria-keyshortcuts="Home"
             type="button"
           >
             Restart
@@ -945,6 +1220,7 @@ export function BookCinemaOverlay({
             onClick={() => {
               onSkip(-10);
             }}
+            aria-keyshortcuts="ArrowLeft J"
             type="button"
           >
             -10s
@@ -953,6 +1229,7 @@ export function BookCinemaOverlay({
             className="h-12 min-w-28 rounded-full px-6 text-base font-semibold text-white shadow-lg shadow-orange-500/25 disabled:opacity-50 vs-accent-bg"
             disabled={!playbackControls.isAvailable}
             onClick={onPlayPause}
+            aria-keyshortcuts="Space K"
             type="button"
           >
             {playbackControls.isPlaying ? "Pause" : "Play"}
@@ -963,6 +1240,7 @@ export function BookCinemaOverlay({
             onClick={() => {
               onSkip(10);
             }}
+            aria-keyshortcuts="ArrowRight L"
             type="button"
           >
             +10s
@@ -976,12 +1254,16 @@ export function BookCinemaOverlay({
             }}
             value={String(playbackControls.playbackRate)}
           >
-            {[0.8, 1, 1.25, 1.5].map((rate) => (
+            {BOOK_CINEMA_PLAYBACK_RATES.map((rate) => (
               <option key={rate} value={rate}>
                 {rate.toFixed(rate === 1 ? 0 : 2)}x
               </option>
             ))}
           </select>
+          <BookCinemaAccessibilityControls
+            settings={normalizedAccessibility}
+            onChange={onAccessibilitySettingsChange}
+          />
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold vs-border"
             onClick={() => {
@@ -1017,6 +1299,7 @@ export function BookCinemaOverlay({
             className="h-10 rounded-md border px-4 text-sm font-semibold disabled:opacity-40 vs-border"
             disabled={!canBookmark}
             onClick={onBookmark}
+            aria-keyshortcuts="B"
             type="button"
           >
             Bookmark
@@ -1110,6 +1393,87 @@ function BookCinemaTimingDebug({
   );
 }
 
+function BookCinemaPolicyNotes({ notes }: Readonly<{ notes: BookCinemaPolicyNote[] }>) {
+  if (notes.length === 0) {
+    return null;
+  }
+  return (
+    <div className="mt-4 rounded-lg border p-4 vs-border">
+      <div className="flex items-center justify-between gap-3">
+        <p className="vs-muted text-xs font-semibold uppercase tracking-[0.2em]">Policy Notes</p>
+        <span className="text-xs font-semibold text-orange-500">{String(notes.length)}</span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        {notes.slice(0, 6).map((note) => (
+          <article className="rounded-md border px-3 py-2 text-xs vs-border" key={note.id}>
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <p className="truncate font-semibold" title={note.title}>
+                {note.title}
+              </p>
+              <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.68rem] vs-border">
+                {formatPolicyModeLabel(note.mode)}
+              </span>
+            </div>
+            <p className="vs-muted mt-1 leading-5">{note.explanation}</p>
+            {note.text ? (
+              <p className="mt-2 line-clamp-2 text-[0.7rem] leading-5" title={note.text}>
+                {note.text}
+              </p>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BookCinemaAccessibilityControls({
+  settings,
+  onChange,
+}: Readonly<{
+  settings: ReaderAccessibilitySettings;
+  onChange: (settings: ReaderAccessibilitySettings) => void;
+}>) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <ReaderToggle
+        checked={settings.reducedMotion}
+        label="Reduced motion"
+        onChange={(checked) => {
+          onChange({ ...settings, reducedMotion: checked });
+        }}
+      />
+      <ReaderToggle
+        checked={settings.highContrast}
+        label="High contrast"
+        onChange={(checked) => {
+          onChange({ ...settings, highContrast: checked });
+        }}
+      />
+    </div>
+  );
+}
+
+function ReaderToggle({
+  checked,
+  label,
+  onChange,
+}: Readonly<{ checked: boolean; label: string; onChange: (checked: boolean) => void }>) {
+  return (
+    <label className="inline-flex h-10 items-center gap-2 rounded-md border px-3 text-sm font-semibold vs-border">
+      <input
+        checked={checked}
+        className="h-4 w-4 accent-orange-600"
+        onChange={(event) => {
+          onChange(event.currentTarget.checked);
+        }}
+        type="checkbox"
+      />
+      <span>{label}</span>
+    </label>
+  );
+}
+
 function CinemaPlayIcon() {
   return (
     <svg aria-hidden="true" className="h-5 w-5 translate-x-px" fill="none" viewBox="0 0 24 24">
@@ -1136,7 +1500,7 @@ function BookCinemaPlaybackRateControls({
 }>) {
   return (
     <div className="mt-4 flex flex-wrap items-center gap-1.5">
-      {[0.8, 1, 1.25, 1.5].map((rate) => (
+      {BOOK_CINEMA_PLAYBACK_RATES.map((rate) => (
         <button
           className={`rounded border px-2 py-1 text-xs font-semibold ${
             Math.abs(playbackRate - rate) < 0.01
@@ -1650,6 +2014,125 @@ export function bookScopeLabel(scope: BookScope): string {
     return pageRangeLabel(scope.pageStart ?? 1, scope.pageEnd ?? scope.pageStart ?? 1);
   }
   return "Full book";
+}
+
+export function bookCinemaLiveAnnouncement({
+  activeWordIndex = -1,
+  book,
+  fragmentIndex,
+  scope,
+}: Readonly<{
+  activeWordIndex?: number;
+  book: BookSource;
+  fragmentIndex?: number;
+  scope: BookScope;
+}>): string {
+  const parts = [bookSourceName(book), bookScopeLabel(scope)];
+  if (fragmentIndex !== undefined && fragmentIndex >= 0) {
+    parts.push(`Fragment ${String(fragmentIndex + 1)}`);
+  } else if (activeWordIndex >= 0) {
+    parts.push(`Word ${String(activeWordIndex + 1)}`);
+  } else {
+    parts.push("Ready");
+  }
+  return parts.join(". ");
+}
+
+export function bookCinemaPolicyNotes(
+  scopeContent: BookSourceScopeContent | null | undefined,
+): BookCinemaPolicyNote[] {
+  const notes: BookCinemaPolicyNote[] = [];
+  const seen = new Set<string>();
+  for (const block of scopeContent?.blocks ?? []) {
+    const explanation = block.speechPolicy.explanation.trim();
+    const mode = block.speechPolicy.mode;
+    const shouldInclude =
+      explanation.length > 0 &&
+      (mode !== "speak" ||
+        block.speakMode !== "speak" ||
+        POLICY_NOTE_KINDS.has(block.kind) ||
+        Boolean(block.speechPolicy.elementMode));
+    if (!shouldInclude) {
+      continue;
+    }
+    const note = {
+      explanation,
+      id: `block:${block.id}`,
+      kind: block.kind,
+      mode,
+      text: compactBookPolicyText(block.spokenText ?? block.text),
+      title: block.label ?? formatPolicyKindLabel(block.kind),
+    };
+    const key = `${note.kind}:${note.mode}:${note.explanation}:${note.text ?? ""}`;
+    if (!seen.has(key)) {
+      notes.push(note);
+      seen.add(key);
+    }
+  }
+  for (const item of scopeContent?.skippedItems ?? []) {
+    const explanation = item.reason.trim();
+    if (!explanation) {
+      continue;
+    }
+    const note = {
+      explanation,
+      id: `skipped:${item.id}`,
+      kind: item.kind,
+      mode: "skip",
+      text: compactBookPolicyText(item.text),
+      title: formatPolicyKindLabel(item.kind),
+    };
+    const key = `${note.kind}:${note.mode}:${note.explanation}:${note.text ?? ""}`;
+    if (!seen.has(key)) {
+      notes.push(note);
+      seen.add(key);
+    }
+  }
+  return notes;
+}
+
+function compactBookPolicyText(value: string | undefined): string | undefined {
+  const clean = value?.replaceAll(/\s+/g, " ").trim() ?? "";
+  if (!clean) {
+    return undefined;
+  }
+  return clean.length > 160 ? `${clean.slice(0, 157)}...` : clean;
+}
+
+function formatPolicyKindLabel(value: string): string {
+  if (value === "math") {
+    return "Math";
+  }
+  const spaced = value.replaceAll(/([A-Z])/g, " $1");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function formatPolicyModeLabel(value: string): string {
+  if (value === "rowLinear") {
+    return "Row linear";
+  }
+  if (value === "syntaxAware") {
+    return "Syntax aware";
+  }
+  if (value === "literalsafe") {
+    return "Literal safe";
+  }
+  if (value === "altFirst") {
+    return "Alt first";
+  }
+  if (value === "describeShort") {
+    return "Describe short";
+  }
+  if (value === "describeLong") {
+    return "Describe long";
+  }
+  if (value === "onDemand") {
+    return "On demand";
+  }
+  if (value === "rowAndColumn") {
+    return "Row and column";
+  }
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 export function resolveBookActiveWordIndex(

@@ -2,6 +2,9 @@ package readiumbridge
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
@@ -11,6 +14,7 @@ func TestReadiumLocatorExportImportRoundTrips(t *testing.T) {
 	t.Parallel()
 
 	progression := 0.5
+	goldens := readiumGoldens(t)
 	cases := []struct {
 		name        string
 		locator     contentir.Locator
@@ -77,6 +81,13 @@ func TestReadiumLocatorExportImportRoundTrips(t *testing.T) {
 			if tc.wantPartial != "" && readium.Locations.PartialCFI != tc.wantPartial {
 				t.Fatalf("partial CFI = %q, want %q", readium.Locations.PartialCFI, tc.wantPartial)
 			}
+			if expected, ok := goldens[tc.name]; !ok {
+				t.Fatalf("missing golden for %q", tc.name)
+			} else if !reflect.DeepEqual(readium, expected) {
+				actualJSON, _ := json.MarshalIndent(readium, "", "  ")
+				expectedJSON, _ := json.MarshalIndent(expected, "", "  ")
+				t.Fatalf("readium golden mismatch\nactual: %s\nexpected: %s", actualJSON, expectedJSON)
+			}
 			roundTrip := ImportReadiumLocator(readium)
 			if !LocatorsMatch(&tc.locator, &roundTrip) {
 				t.Fatalf("round trip locator = %#v, want match with %#v", roundTrip, tc.locator)
@@ -107,4 +118,18 @@ func TestLocatorEnvelopeMarshalRoundTrip(t *testing.T) {
 	if decoded.SchemaVersion != contentir.LocatorEnvelopeVersion || decoded.Readium == nil {
 		t.Fatalf("decoded envelope = %#v", decoded)
 	}
+}
+
+func readiumGoldens(t *testing.T) map[string]contentir.ReadiumLocator {
+	t.Helper()
+
+	data, err := os.ReadFile(filepath.Join("testdata", "readium_roundtrip.golden.json"))
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+	var goldens map[string]contentir.ReadiumLocator
+	if err := json.Unmarshal(data, &goldens); err != nil {
+		t.Fatalf("decode golden: %v", err)
+	}
+	return goldens
 }

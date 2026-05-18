@@ -18,6 +18,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/justinedwards/tts-research/backend/internal/contentir"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
@@ -195,6 +196,21 @@ func (service *Service) GetBookSource(id string) (BookSource, error) {
 }
 
 func (service *Service) GetBookSourceScope(id string, requested *BookScope) (BookSourceScopeContent, error) {
+	return service.bookSourceScopeContent(id, requested, SpeechPolicyPreviewRequest{})
+}
+
+func (service *Service) PreviewBookSourceScopeSpeechPolicy(
+	id string,
+	request SpeechPolicyPreviewRequest,
+) (BookSourceScopeContent, error) {
+	return service.bookSourceScopeContent(id, request.Scope, request)
+}
+
+func (service *Service) bookSourceScopeContent(
+	id string,
+	requested *BookScope,
+	request SpeechPolicyPreviewRequest,
+) (BookSourceScopeContent, error) {
 	book, err := service.GetBookSource(id)
 	if err != nil {
 		return BookSourceScopeContent{}, err
@@ -212,15 +228,9 @@ func (service *Service) GetBookSourceScope(id string, requested *BookScope) (Boo
 	if section != nil {
 		warnings = append(warnings, section.Warnings...)
 	}
-	blocks, skippedItems, prepWarnings := prepareNarrationBlocks(text, service.options.SourcePrepSentenceMaxRunes)
-	policySource := applySpeechPolicyToPreparedSource(PreparedSource{
-		ID:        "book-scope-preview",
-		ProjectID: book.ProjectID,
-		Kind:      PreparedSourceKindBook,
-		Blocks:    blocks,
-	}, service.projectSpeechPolicyProfile(book.ProjectID), policy.Overrides{}, service.options.SourcePrepSentenceMaxRunes)
-	blocks = policySource.Blocks
-	skippedItems = policySource.SkippedItems
+	policySource, prepWarnings := service.bookScopePolicySource(book, scope, text, request)
+	blocks := policySource.Blocks
+	skippedItems := policySource.SkippedItems
 	warnings = append(warnings, prepWarnings...)
 	return BookSourceScopeContent{
 		BookSourceID:         book.ID,
@@ -236,6 +246,99 @@ func (service *Service) GetBookSourceScope(id string, requested *BookScope) (Boo
 		Summary:              summarizePreparedSource(blocks),
 		Warnings:             uniqueStrings(warnings),
 	}, nil
+}
+
+func (service *Service) bookScopePolicySource(
+	book BookSource,
+	scope *BookScope,
+	text string,
+	request SpeechPolicyPreviewRequest,
+) (PreparedSource, []string) {
+	blocks, warnings := service.bookScopeBlocks(book, scope, text)
+	profileName := strings.TrimSpace(request.Profile)
+	project, err := service.GetProject(book.ProjectID)
+	if err == nil && profileName == "" {
+		profileName = project.SpeechPolicyProfile
+	}
+	source := PreparedSource{
+		ID:        "book-scope-preview",
+		ProjectID: book.ProjectID,
+		Kind:      PreparedSourceKindBook,
+		Blocks:    blocks,
+	}
+	if err == nil {
+		return applySpeechPolicyToPreparedSourceWithEvaluator(
+			source,
+			projectSpeechPolicyEvaluator(project, profileName, request.Overrides),
+			service.options.SourcePrepSentenceMaxRunes,
+		), warnings
+	}
+	return applySpeechPolicyToPreparedSource(source, profileName, request.Overrides, service.options.SourcePrepSentenceMaxRunes), warnings
+}
+
+func (service *Service) bookScopeBlocks(
+	book BookSource,
+	scope *BookScope,
+	text string,
+) ([]NarrationBlock, []string) {
+	if document, err := service.bookSourceContentIR(book); err == nil {
+		nodes := contentIRNodesForBookScope(document, book, scope)
+		if len(nodes) > 0 {
+			blocks := make([]NarrationBlock, 0, len(nodes))
+			for index, node := range nodes {
+				blocks = append(blocks, narrationBlockFromIRNode(node, index))
+			}
+			return blocks, nodeWarnings(nodes)
+		}
+	}
+	blocks, _, warnings := prepareNarrationBlocks(text, service.options.SourcePrepSentenceMaxRunes)
+	return blocks, warnings
+}
+
+func contentIRNodesForBookScope(
+	document contentir.Document,
+	book BookSource,
+	scope *BookScope,
+) []contentir.Node {
+	if scope == nil || scope.Type == BookScopeTypeBook {
+		return document.Nodes
+	}
+	switch scope.Type {
+	case BookScopeTypeChapter:
+		for _, chapter := range book.Chapters {
+			if chapter.Index != scope.ChapterIndex {
+				continue
+			}
+			if strings.TrimSpace(chapter.ID) != "" {
+				if nodes := nodesForSection(document.Nodes, chapter.ID); len(nodes) > 0 {
+					return nodes
+				}
+				return nodesByChapterIndex(document.Nodes, chapter.Index)
+			}
+			return nodesByChapterIndex(document.Nodes, chapter.Index)
+		}
+	case BookScopeTypePages:
+		filtered := make([]contentir.Node, 0)
+		for _, node := range document.Nodes {
+			pageIndex := pageIndexFromIRNode(node)
+			if pageIndex >= scope.PageStart && pageIndex <= scope.PageEnd {
+				filtered = append(filtered, node)
+			}
+		}
+		return filtered
+	}
+	return nil
+}
+
+func nodesByChapterIndex(nodes []contentir.Node, chapterIndex int) []contentir.Node {
+	filtered := make([]contentir.Node, 0)
+	for _, node := range nodes {
+		if metadataValueInt(node.Metadata, "chapterIndex", 0) == chapterIndex ||
+			metadataValueInt(node.Metadata, "sectionIndex", -1)+1 == chapterIndex {
+			filtered = append(filtered, node)
+		}
+	}
+	return filtered
 }
 
 func (service *Service) CreateBookNarrationJob(
@@ -254,13 +357,25 @@ func (service *Service) CreateBookNarrationJob(
 	if err != nil {
 		return VoiceJob{}, err
 	}
-	_, _, warnings := prepareNarrationBlocks(narrationText, service.options.SourcePrepSentenceMaxRunes)
+	policySource, warnings := service.bookScopePolicySource(book, scope, narrationText, SpeechPolicyPreviewRequest{
+		Profile:        request.SpeechPolicyProfile,
+		Overrides:      request.SpeechPolicyOverrides,
+		VoiceProfileID: request.VoiceProfileID,
+		Locale:         request.Locale,
+		TTSEngine:      request.TTSEngine,
+	})
+	narrationText = strings.TrimSpace(policySource.SpeechText)
+	if narrationText == "" {
+		return VoiceJob{}, ErrEmptyText
+	}
 	request.ProjectID = book.ProjectID
 	request.BookSourceID = book.ID
 	request.BookScope = scope
 	request.SourceKind = string(PreparedSourceKindBook)
 	request.ProgressTargetID = progressTargetForBookScope(book.ID, scope)
 	request.Text = narrationText
+	request.SpeechPolicyProfile = policySource.SpeechPolicyProfile
+	request.SpeechPolicyOverrides = policy.NormalizeOverrides(request.SpeechPolicyOverrides)
 	job, err := service.CreateJob(ctx, request)
 	if err != nil {
 		return VoiceJob{}, err

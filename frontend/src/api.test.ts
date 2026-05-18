@@ -361,10 +361,16 @@ describe("API errors", () => {
           settings: {
             mode: "speak",
             tableMode: "summary",
+            tableHeaderMode: "column",
             codeMode: "literal",
             mathMode: "skip",
             footnoteMode: "inline",
             imageMode: "altFirst",
+            captionMode: "speak",
+            citationMode: "inline",
+            listMarkerMode: "announce",
+            admonitionMode: "speak",
+            quoteMode: "speak",
           },
           customProfiles: [
             {
@@ -374,10 +380,16 @@ describe("API errors", () => {
               settings: {
                 mode: "speak",
                 tableMode: "summary",
+                tableHeaderMode: "column",
                 codeMode: "literal",
                 mathMode: "skip",
                 footnoteMode: "inline",
                 imageMode: "altFirst",
+                captionMode: "speak",
+                citationMode: "inline",
+                listMarkerMode: "announce",
+                admonitionMode: "speak",
+                quoteMode: "speak",
               },
               createdAt: "2026-05-16T12:00:00Z",
               updatedAt: "2026-05-16T12:00:00Z",
@@ -394,10 +406,16 @@ describe("API errors", () => {
         settings: {
           mode: "speak",
           tableMode: "summary",
+          tableHeaderMode: "column",
           codeMode: "literal",
           mathMode: "skip",
           footnoteMode: "inline",
           imageMode: "altFirst",
+          captionMode: "speak",
+          citationMode: "inline",
+          listMarkerMode: "announce",
+          admonitionMode: "speak",
+          quoteMode: "speak",
         },
       });
       expect(policy.profile).toBe("custom-1");

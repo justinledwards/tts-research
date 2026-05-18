@@ -586,6 +586,40 @@ select {
   box-shadow: 0 0 0 0.08em color-mix(in srgb, var(--vs-accent) 16%, transparent);
 }
 
+[data-reader-motion="reduced"] .book-cinema-word-active {
+  background: color-mix(in srgb, var(--vs-accent) 22%, transparent);
+  box-shadow: 0 0 0 0.08em color-mix(in srgb, var(--vs-accent) 30%, transparent);
+  text-shadow: none;
+  transition: none;
+  -webkit-text-stroke-width: 0;
+}
+
+[data-reader-motion="reduced"] .book-cinema-word-active::after {
+  display: none;
+}
+
+[data-reader-highlight="high-contrast"] .book-cinema-word-active {
+  border-radius: 0.2em;
+  background: #fff24a;
+  box-shadow:
+    0 0 0 0.1em #111827,
+    0 0 0 0.22em #fff24a;
+  color: #111827;
+  text-decoration: none;
+  text-shadow: none;
+  -webkit-text-stroke-width: 0;
+}
+
+[data-reader-highlight="high-contrast"] .book-cinema-word-active::after {
+  display: none;
+}
+
+[data-reader-highlight="high-contrast"] .book-cinema-word-phrase {
+  background: #fff24a;
+  box-shadow: 0 0 0 0.1em #111827;
+  color: #111827;
+}
+
 @keyframes teleprompter-focus-pulse {
   from {
     transform: scale(0.97);

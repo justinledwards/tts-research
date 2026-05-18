@@ -391,8 +391,12 @@ func TestPreparedSourcePolicyPreviewAndOverrides(t *testing.T) {
 	}
 
 	override, err := service.PreviewPreparedSourceSpeechPolicy(source.ID, pipeline.SpeechPolicyPreviewRequest{
-		Profile:   "Enterprise",
-		Overrides: policy.Overrides{CodeMode: policy.CodeModeLiteral, FootnoteMode: policy.FootnoteModeInline},
+		Profile: "Enterprise",
+		Overrides: policy.Overrides{
+			CitationMode: policy.CitationModeInline,
+			CodeMode:     policy.CodeModeLiteral,
+			FootnoteMode: policy.FootnoteModeInline,
+		},
 	})
 	if err != nil {
 		t.Fatalf("PreviewPreparedSourceSpeechPolicy override returned error: %v", err)
@@ -1508,6 +1512,70 @@ func TestCreateBookSourceImportsHTMLStructure(t *testing.T) {
 	}
 	if document.Nodes[0].Provenance.Locator.Type != "html" || document.Nodes[0].Provenance.Locator.HTML == nil {
 		t.Fatalf("first locator = %#v, want HTML locator", document.Nodes[0].Provenance.Locator)
+	}
+}
+
+func TestBookSourceScopePolicyPreviewAndNarrationJobShareSettings(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	htmlPath := writeTestHTML(t, "policy-book.html")
+	info, err := os.Stat(htmlPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", htmlPath, "policy-book.html", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+
+	overrides := policy.Overrides{
+		CaptionMode:     policy.CaptionModeOnDemand,
+		TableHeaderMode: policy.TableHeaderModeRowAndColumn,
+	}
+	preview, err := service.PreviewBookSourceScopeSpeechPolicy(book.ID, pipeline.SpeechPolicyPreviewRequest{
+		Profile:   "Accessibility",
+		Overrides: overrides,
+	})
+	if err != nil {
+		t.Fatalf("PreviewBookSourceScopeSpeechPolicy returned error: %v", err)
+	}
+	table := findPreparedBlockByKind(preview.Blocks, pipeline.NarrationBlockKindTable)
+	if table == nil || table.SpeechPolicy.ElementMode != string(policy.TableModeRowLinear) {
+		t.Fatalf("table block = %#v, want row-linear Accessibility table policy", table)
+	}
+	caption := findPreparedBlockByKind(preview.Blocks, pipeline.NarrationBlockKindCaption)
+	if caption == nil || caption.SpeechPolicy.Mode != string(policy.ModeOnDemand) {
+		t.Fatalf("caption block = %#v, want on-demand caption override", caption)
+	}
+	if !strings.Contains(caption.SpeechPolicy.Explanation, "session override") {
+		t.Fatalf("caption explanation = %q, want session override", caption.SpeechPolicy.Explanation)
+	}
+
+	job, err := service.CreateBookNarrationJob(context.Background(), book.ID, pipeline.CreateJobRequest{
+		RunMode:               pipeline.RunModeDraftPreview,
+		SpeechPolicyProfile:   "Accessibility",
+		SpeechPolicyOverrides: overrides,
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			ASRCheck:  boolPtr(false),
+			AutoRetry: boolPtr(false),
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateBookNarrationJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.SpeechPolicyProfile != "Accessibility" {
+		t.Fatalf("job profile = %q, want Accessibility", completed.SpeechPolicyProfile)
+	}
+	if completed.SpeechPolicyOverrides.CaptionMode != policy.CaptionModeOnDemand {
+		t.Fatalf("job overrides = %#v, want caption on-demand", completed.SpeechPolicyOverrides)
+	}
+	if table.SpokenText != "" && !strings.Contains(completed.InputText, table.SpokenText) {
+		t.Fatalf("job input text = %q, want table speech %q", completed.InputText, table.SpokenText)
+	}
+	if strings.Contains(completed.InputText, "Useful figure caption") {
+		t.Fatalf("job input text = %q, on-demand caption should be omitted", completed.InputText)
 	}
 }
 

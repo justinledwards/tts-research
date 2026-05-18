@@ -17,6 +17,9 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 		{Kind: "citation", Text: "[^1]: Research note."},
 		{Kind: "image", Text: "![Architecture diagram](diagram.png)"},
 		{Kind: "caption", Text: "Figure: request flow overview"},
+		{Kind: "list", Text: "First item"},
+		{Kind: "admonition", Text: "Warning: rotate credentials."},
+		{Kind: "quote", Text: "Quoted material."},
 	}
 	type item struct {
 		Element     string
@@ -44,48 +47,63 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 	expected := map[string][]item{
 		"Accessibility": {
 			{"prose", "speak", "speak", "A useful paragraph."},
-			{"table", "rowLinear", "speak", "Table. Metric: Latency; Value: 12ms."},
+			{"table", "rowLinear", "speak", "Table. Row 1. Metric: Latency; Value: 12ms."},
 			{"code", "syntaxAware", "literal", "A go code block with 1 line appears here. fmt.Println(\"hello\")"},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"footnote", "inline", "speak", "[^1]: Research note."},
+			{"citation", "inline", "speak", "[^1]: Research note."},
 			{"image", "describeLong", "describeLong", "Image description: Architecture diagram."},
-			{"image", "describeLong", "describeLong", "Image or caption: Figure: request flow overview."},
+			{"caption", "speak", "speak", "Figure: request flow overview"},
+			{"list", "announce", "speak", "List item: First item"},
+			{"admonition", "speak", "speak", "Warning: rotate credentials."},
+			{"quote", "speak", "speak", "Quoted material."},
 		},
 		"Education": {
 			{"prose", "speak", "speak", "A useful paragraph."},
 			{"table", "summary", "summarise", "A table appears here with columns: Metric, Value."},
 			{"code", "summary", "summarise", "A go code block with 1 line appears here."},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"footnote", "inline", "speak", "[^1]: Research note."},
+			{"citation", "inline", "speak", "[^1]: Research note."},
 			{"image", "describeShort", "describeShort", "Image: Architecture diagram."},
-			{"image", "describeShort", "describeShort", "Figure: request flow overview"},
+			{"caption", "speak", "speak", "Figure: request flow overview"},
+			{"list", "announce", "speak", "List item: First item"},
+			{"admonition", "speak", "speak", "Warning: rotate credentials."},
+			{"quote", "speak", "speak", "Quoted material."},
 		},
 		"Enterprise": {
 			{"prose", "speak", "speak", "A useful paragraph."},
 			{"table", "summary", "summarise", "A table appears here with columns: Metric, Value."},
 			{"code", "skip", "skip", ""},
 			{"math", "skip", "skip", ""},
-			{"footnote", "onDemand", "onDemand", ""},
+			{"citation", "onDemand", "onDemand", ""},
 			{"image", "altFirst", "describeShort", "Image: Architecture diagram."},
-			{"image", "altFirst", "describeShort", "Figure: request flow overview"},
+			{"caption", "speak", "speak", "Figure: request flow overview"},
+			{"list", "omit", "speak", "First item"},
+			{"admonition", "speak", "speak", "Warning: rotate credentials."},
+			{"quote", "speak", "speak", "Quoted material."},
 		},
 		"LanguageLearning": {
 			{"prose", "speak", "speak", "A useful paragraph."},
 			{"table", "summary", "summarise", "A table appears here with columns: Metric, Value."},
 			{"code", "literal", "literal", "fmt.Println(\"hello\")"},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"footnote", "inline", "speak", "[^1]: Research note."},
+			{"citation", "inline", "speak", "[^1]: Research note."},
 			{"image", "describeShort", "describeShort", "Image: Architecture diagram."},
-			{"image", "describeShort", "describeShort", "Figure: request flow overview"},
+			{"caption", "speak", "speak", "Figure: request flow overview"},
+			{"list", "announce", "speak", "List item: First item"},
+			{"admonition", "speak", "speak", "Warning: rotate credentials."},
+			{"quote", "speak", "speak", "Quoted material."},
 		},
 		"TechnicalDocs": {
 			{"prose", "speak", "speak", "A useful paragraph."},
-			{"table", "rowLinear", "speak", "Table. Metric: Latency; Value: 12ms."},
+			{"table", "rowLinear", "speak", "Table. Row 1. Metric: Latency; Value: 12ms."},
 			{"code", "syntaxAware", "literal", "A go code block with 1 line appears here. fmt.Println(\"hello\")"},
 			{"math", "literalsafe", "literal", "Math expression: x^2 + y = 4."},
-			{"footnote", "endnote", "onDemand", ""},
+			{"citation", "endnote", "onDemand", ""},
 			{"image", "altFirst", "describeShort", "Image: Architecture diagram."},
-			{"image", "altFirst", "describeShort", "Figure: request flow overview"},
+			{"caption", "speak", "speak", "Figure: request flow overview"},
+			{"list", "announce", "speak", "List item: First item"},
+			{"admonition", "speak", "speak", "Warning: rotate credentials."},
+			{"quote", "speak", "speak", "Quoted material."},
 		},
 	}
 
@@ -119,6 +137,122 @@ func TestOverridePrecedenceIsDeterministic(t *testing.T) {
 	decision := NewEvaluator(ProfileEnterprise, Overrides{CodeMode: CodeModeLiteral}).Evaluate(Element{Kind: "code", Text: "x := 1"})
 	if decision.Policy.ElementMode != string(CodeModeLiteral) || decision.Policy.Mode != string(ModeLiteral) {
 		t.Fatalf("override decision = %#v, want literal code override to win", decision.Policy)
+	}
+}
+
+func TestDefinitionExposesSharedPolicyFields(t *testing.T) {
+	t.Parallel()
+
+	definition := PublicDefinition()
+	keys := make([]string, 0, len(definition.Fields))
+	for _, field := range definition.Fields {
+		keys = append(keys, field.Key)
+		if len(field.Options) == 0 {
+			t.Fatalf("field %q has no options", field.Key)
+		}
+	}
+	expectedKeys := []string{
+		"tableMode",
+		"tableHeaderMode",
+		"codeMode",
+		"mathMode",
+		"footnoteMode",
+		"imageMode",
+		"captionMode",
+		"citationMode",
+		"listMarkerMode",
+		"admonitionMode",
+		"quoteMode",
+	}
+	if !reflect.DeepEqual(keys, expectedKeys) {
+		t.Fatalf("definition keys = %#v, want %#v", keys, expectedKeys)
+	}
+	if len(definition.Profiles) != len(Profiles()) {
+		t.Fatalf("definition profiles = %d, want %d", len(definition.Profiles), len(Profiles()))
+	}
+}
+
+func TestPublicElementExplanationsAreDeterministic(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		element    Element
+		overrides  Overrides
+		wantMode   Mode
+		wantPhrase string
+	}{
+		{
+			name:       "caption on demand",
+			element:    Element{Kind: "caption", Text: "Figure caption"},
+			overrides:  Overrides{CaptionMode: CaptionModeOnDemand},
+			wantMode:   ModeOnDemand,
+			wantPhrase: "This caption is available on demand because a session override sets caption to onDemand.",
+		},
+		{
+			name:       "citation skip",
+			element:    Element{Kind: "citation", Text: "[1]"},
+			overrides:  Overrides{CitationMode: CitationModeSkip},
+			wantMode:   ModeSkip,
+			wantPhrase: "This citation is skipped because a session override sets citation to skip.",
+		},
+		{
+			name:       "admonition summarize",
+			element:    Element{Kind: "admonition", Text: "Warning body"},
+			overrides:  Overrides{AdmonitionMode: AdmonitionModeSummarise},
+			wantMode:   ModeSummarise,
+			wantPhrase: "This admonition is summarised because a session override sets admonition to summarise.",
+		},
+		{
+			name:       "quote summarize",
+			element:    Element{Kind: "quote", Text: "Quoted body"},
+			overrides:  Overrides{QuoteMode: QuoteModeSummarise},
+			wantMode:   ModeSummarise,
+			wantPhrase: "This quote is summarised because a session override sets quote to summarise.",
+		},
+		{
+			name:       "list markers",
+			element:    Element{Kind: "list", Text: "First"},
+			overrides:  Overrides{ListMarkerMode: ListMarkerModeAnnounce},
+			wantMode:   ModeSpeak,
+			wantPhrase: "This list item is spoken because a session override sets list to announce.",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			decision := NewEvaluator(ProfileEnterprise, tc.overrides).Evaluate(tc.element)
+			if decision.Policy.Mode != string(tc.wantMode) {
+				t.Fatalf("mode = %q, want %q", decision.Policy.Mode, tc.wantMode)
+			}
+			if decision.Policy.Explanation != tc.wantPhrase {
+				t.Fatalf("explanation = %q, want %q", decision.Policy.Explanation, tc.wantPhrase)
+			}
+		})
+	}
+}
+
+func TestTableHeaderTraversalModes(t *testing.T) {
+	t.Parallel()
+
+	text := "| Metric | Value |\n|---|---|\n| Latency | 12ms |"
+	withoutHeaders := NewEvaluator(ProfileAccessibility, Overrides{
+		TableHeaderMode: TableHeaderModeNone,
+	}).Evaluate(Element{Kind: "table", Text: text})
+	if withoutHeaders.SpeechText != "Table. Latency; 12ms." {
+		t.Fatalf("without headers = %q", withoutHeaders.SpeechText)
+	}
+
+	rowAndColumn := NewEvaluator(ProfileAccessibility, Overrides{
+		TableHeaderMode: TableHeaderModeRowAndColumn,
+	}).Evaluate(Element{Kind: "table", Text: text})
+	if rowAndColumn.SpeechText != "Table. Row 1. Metric: Latency; Value: 12ms." {
+		t.Fatalf("row and column headers = %q", rowAndColumn.SpeechText)
+	}
+	if rowAndColumn.Policy.Explanation == "" {
+		t.Fatal("expected table traversal explanation")
 	}
 }
 

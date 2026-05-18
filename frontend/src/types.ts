@@ -70,27 +70,45 @@ export type SpeechPolicyMode =
   | "interactive";
 
 export type SpeechPolicyTableMode = "skip" | "summary" | "rowLinear" | "interactive";
+export type SpeechPolicyTableHeaderMode = "none" | "column" | "rowAndColumn";
 export type SpeechPolicyCodeMode = "skip" | "summary" | "syntaxAware" | "literal";
 export type SpeechPolicyMathMode = "skip" | "semantic" | "literalsafe";
 export type SpeechPolicyFootnoteMode = "skip" | "inline" | "endnote" | "onDemand";
 export type SpeechPolicyImageMode = "skip" | "altFirst" | "describeShort" | "describeLong";
+export type SpeechPolicyCaptionMode = "skip" | "speak" | "onDemand";
+export type SpeechPolicyCitationMode = "skip" | "inline" | "endnote" | "onDemand";
+export type SpeechPolicyListMarkerMode = "omit" | "announce";
+export type SpeechPolicyAdmonitionMode = "skip" | "speak" | "summarise";
+export type SpeechPolicyQuoteMode = "skip" | "speak" | "summarise";
 
 export interface SpeechPolicySettings {
   mode: SpeechPolicyMode;
   tableMode: SpeechPolicyTableMode;
+  tableHeaderMode: SpeechPolicyTableHeaderMode;
   codeMode: SpeechPolicyCodeMode;
   mathMode: SpeechPolicyMathMode;
   footnoteMode: SpeechPolicyFootnoteMode;
   imageMode: SpeechPolicyImageMode;
+  captionMode: SpeechPolicyCaptionMode;
+  citationMode: SpeechPolicyCitationMode;
+  listMarkerMode: SpeechPolicyListMarkerMode;
+  admonitionMode: SpeechPolicyAdmonitionMode;
+  quoteMode: SpeechPolicyQuoteMode;
 }
 
 export interface SpeechPolicyOverrides {
   mode?: SpeechPolicyMode;
   tableMode?: SpeechPolicyTableMode;
+  tableHeaderMode?: SpeechPolicyTableHeaderMode;
   codeMode?: SpeechPolicyCodeMode;
   mathMode?: SpeechPolicyMathMode;
   footnoteMode?: SpeechPolicyFootnoteMode;
   imageMode?: SpeechPolicyImageMode;
+  captionMode?: SpeechPolicyCaptionMode;
+  citationMode?: SpeechPolicyCitationMode;
+  listMarkerMode?: SpeechPolicyListMarkerMode;
+  admonitionMode?: SpeechPolicyAdmonitionMode;
+  quoteMode?: SpeechPolicyQuoteMode;
 }
 
 export interface SpeechPolicyProfile {
@@ -98,6 +116,23 @@ export interface SpeechPolicyProfile {
   label: string;
   description: string;
   settings: SpeechPolicySettings;
+}
+
+export interface SpeechPolicyDefinitionOption {
+  value: string;
+  label: string;
+}
+
+export interface SpeechPolicyDefinitionField {
+  key: keyof SpeechPolicyOverrides;
+  label: string;
+  description: string;
+  options: SpeechPolicyDefinitionOption[];
+}
+
+export interface SpeechPolicyDefinition {
+  fields: SpeechPolicyDefinitionField[];
+  profiles: SpeechPolicyProfile[];
 }
 
 export interface CustomSpeechPolicyProfile {
@@ -352,6 +387,7 @@ export type NarrationBlockKind =
   | "image"
   | "caption"
   | "citation"
+  | "list"
   | "frontmatter"
   | "admonition"
   | "directive"

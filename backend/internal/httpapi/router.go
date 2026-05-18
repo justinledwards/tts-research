@@ -224,6 +224,10 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(policy.Profiles())
 	})
 
+	app.Get("/api/policies/definition", func(ctx fiber.Ctx) error {
+		return ctx.JSON(policy.PublicDefinition())
+	})
+
 	app.Get("/api/projects", func(ctx fiber.Ctx) error {
 		return ctx.JSON(service.ListProjects())
 	})
@@ -587,6 +591,24 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		if err != nil {
 			if errors.Is(err, pipeline.ErrBookSourceNotFound) {
 				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(content)
+	})
+
+	app.Post("/api/book-sources/:id/scope/speech-policy/preview", func(ctx fiber.Ctx) error {
+		var request pipeline.SpeechPolicyPreviewRequest
+		if err := json.Unmarshal(ctx.Body(), &request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		content, err := service.PreviewBookSourceScopeSpeechPolicy(ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrBookSourceNotFound) || errors.Is(err, pipeline.ErrProjectNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 			}
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 		}

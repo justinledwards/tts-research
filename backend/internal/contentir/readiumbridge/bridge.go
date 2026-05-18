@@ -9,6 +9,11 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
 )
 
+// NewLocatorEnvelope wraps a public Content IR locator with the best-effort
+// Readium locator projection used for bookmarks, playback resume, and deep-link
+// handoff. The Content IR locator remains authoritative; Readium is carried as
+// an interoperable view for clients that understand the Readium Web Publication
+// locator shape.
 func NewLocatorEnvelope(locator *contentir.Locator, context contentir.LocatorContext) contentir.LocatorEnvelope {
 	kind := strings.TrimSpace(context.Kind)
 	if kind == "" {
@@ -33,6 +38,11 @@ func NewLocatorEnvelope(locator *contentir.Locator, context contentir.LocatorCon
 	return envelope
 }
 
+// ExportReadiumLocator maps a standards-facing Content IR locator to a Readium
+// locator without changing the ingestion surface. EPUB/XHTML, HTML, PDF,
+// DOCX, Markdown, and OCR/image locators keep their native anchors where
+// Readium has an equivalent href, media type, progression, fragment, or
+// position field.
 func ExportReadiumLocator(locator contentir.Locator, context contentir.LocatorContext) contentir.ReadiumLocator {
 	textQuote := strings.TrimSpace(firstNonEmpty(context.TextQuote, locatorTextQuote(locator)))
 	output := contentir.ReadiumLocator{
@@ -120,6 +130,10 @@ func ExportReadiumLocator(locator contentir.Locator, context contentir.LocatorCo
 	return output
 }
 
+// ImportReadiumLocator converts a Readium locator back into the closest public
+// Content IR locator. The import path is intentionally conservative: it
+// restores stable document anchors and page/paragraph/line positions, while
+// leaving unsupported Readium metadata out of the Content IR locator.
 func ImportReadiumLocator(readium contentir.ReadiumLocator) contentir.Locator {
 	mediaType := strings.ToLower(strings.TrimSpace(readium.Type))
 	href := strings.TrimSpace(readium.Href)
@@ -150,6 +164,10 @@ func ImportReadiumLocator(readium contentir.ReadiumLocator) contentir.Locator {
 	}
 }
 
+// LocatorsMatch compares two Content IR locators at the durable resume-anchor
+// level used by the bridge goldens. It ignores presentation-only Readium fields
+// such as title text and focuses on the canonical href, fragment, page,
+// paragraph, or line identity for each supported source kind.
 func LocatorsMatch(left *contentir.Locator, right *contentir.Locator) bool {
 	if left == nil || right == nil || left.Type != right.Type {
 		return false
