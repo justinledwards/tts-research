@@ -386,3 +386,20 @@
 - [x] Expand shared speech policy coverage
 - [x] Harden Book Cinema accessibility controls
 - [x] Add QA checklist and run checks
+
+## 2026-05-18 19:15 CEST - Performance bundle hygiene and reader polish
+
+- [x] Split heavy frontend surfaces out of the startup path
+- [x] Add local frontend performance reporting and budgets
+- [x] Add reader timing instrumentation and low-resource smoke coverage
+- [x] Document performance guidance
+- [x] Run local validation commands
+
+## 2026-05-18 19:52 CEST - UI ergonomics audit and concept pack
+
+- [ ] Capture current UI state across primary surfaces
+- [ ] Run scroll extremes and deterministic UI fuzzing
+- [ ] Write ergonomic audit and findings
+- [ ] Generate operator studio concept images
+- [ ] Compare against previous concept images
+- [ ] Run validation checks

@@ -19,11 +19,13 @@
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "validate:local": "node scripts/validate-local/validate-local.mjs",
     "bench:local": "node scripts/validate-local/bench-local.mjs",
+    "bundle:local": "node scripts/validate-local/frontend-performance.mjs",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint . && eslint .",
     "typecheck": "pnpm package:build && pnpm --filter @tts-research/frontend typecheck",
-    "test": "pnpm package:test && pnpm test:markdown-adapter && pnpm test:pdf-adapter && pnpm --filter @tts-research/backend test && pnpm --filter @tts-research/frontend test",
+    "test": "pnpm package:test && pnpm test:scripts && pnpm test:markdown-adapter && pnpm test:pdf-adapter && pnpm --filter @tts-research/backend test && pnpm --filter @tts-research/frontend test",
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "package:build": "pnpm --filter @tts-research/schema build && pnpm --filter @tts-research/sdk-ts build && pnpm --filter @tts-research/cli build",
     "package:test": "pnpm package:boundary && pnpm --filter @tts-research/schema test && pnpm --filter @tts-research/sdk-ts test && pnpm --filter @tts-research/cli test",
     "package:boundary": "node scripts/validate-package-boundaries.mjs",
@@ -37,6 +39,7 @@
     "generate:contracts": "node scripts/generate-contract-types.mjs",
     "validate:ir": "node scripts/validate-content-ir.mjs",
     "e2e:book-cinema": "node scripts/e2e-book-cinema.mjs",
+    "e2e:book-cinema:low-resource": "E2E_LOW_RESOURCE=1 node scripts/e2e-book-cinema.mjs",
     "validate:live-ingestion": "node scripts/validate-live-ingestion.mjs"
   },
   "devDependencies": {

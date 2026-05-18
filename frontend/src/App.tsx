@@ -1,4 +1,6 @@
 import {
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -8,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { type RequestState, type StudioMode, TopProductBar } from "./AppShell";
-import { BundleFlowPanel, type BundlePanelMode } from "./BundlePanels";
+import type { BundlePanelMode } from "./BundlePanels";
 import {
   apiBaseUrl,
   audioSource,
@@ -69,8 +71,6 @@ import {
 } from "./api";
 import { formatDuration } from "./format";
 import {
-  BookCinemaOverlay,
-  BookCinemaPanel,
   DEFAULT_READER_ACCESSIBILITY_SETTINGS,
   READER_ACCESSIBILITY_STORAGE_KEY,
   normalizeReaderAccessibilitySettings,
@@ -82,11 +82,8 @@ import {
   normalizeBookScopeForBook,
   resolveBookActiveWordIndex,
   resolveDefaultBookScope,
-} from "./BookCinemaPanel";
-import { ContentIRDrawer } from "./ContentIrDrawer";
-import { MarkdownRenderer, MermaidDiagram, looksLikeMermaidDiagram } from "./MarkdownRenderer";
-import { HelpPanel, SettingsPanel } from "./ProductPanels";
-import { PronunciationPanel } from "./PronunciationPanel";
+} from "./bookCinemaModel";
+import { looksLikeMermaidDiagram } from "./markdownModel";
 import {
   KOKORO_VOICEPACKS,
   findKokoroVoicepack,
@@ -202,8 +199,7 @@ import {
   voiceProfileTargetForEngine,
   voiceProfileTargetReadinessText,
 } from "./profileTargets";
-import { VoiceSourceAnalysisPanel } from "./VoiceSourceAnalysisPanel";
-import { WorkspaceDrawer } from "./WorkspaceDrawer";
+import { endFrontendSpan, recordColdUsableMetric, startFrontendSpan } from "./performanceMetrics";
 import { buildVoiceLibraryViewModel, type VoiceLibraryEntry } from "./voiceStudioViewModels";
 import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
 
@@ -229,6 +225,50 @@ const SOURCE_TEXT_FILE_EXTENSIONS = new Set([
   "html",
   "htm",
 ]);
+
+const BundleFlowPanel = lazy(() =>
+  import("./BundlePanels").then((module) => ({ default: module.BundleFlowPanel })),
+);
+const BookCinemaPanel = lazy(() =>
+  import("./BookCinemaPanel").then((module) => ({ default: module.BookCinemaPanel })),
+);
+const BookCinemaOverlay = lazy(() =>
+  import("./BookCinemaPanel").then((module) => ({ default: module.BookCinemaOverlay })),
+);
+const ContentIRDrawer = lazy(() =>
+  import("./ContentIrDrawer").then((module) => ({ default: module.ContentIRDrawer })),
+);
+const HelpPanel = lazy(() =>
+  import("./ProductPanels").then((module) => ({ default: module.HelpPanel })),
+);
+const SettingsPanel = lazy(() =>
+  import("./ProductPanels").then((module) => ({ default: module.SettingsPanel })),
+);
+const PronunciationPanel = lazy(() =>
+  import("./PronunciationPanel").then((module) => ({ default: module.PronunciationPanel })),
+);
+const VoiceSourceAnalysisPanel = lazy(() =>
+  import("./VoiceSourceAnalysisPanel").then((module) => ({
+    default: module.VoiceSourceAnalysisPanel,
+  })),
+);
+const WorkspaceDrawer = lazy(() =>
+  import("./WorkspaceDrawer").then((module) => ({ default: module.WorkspaceDrawer })),
+);
+const MarkdownRenderer = lazy(() =>
+  import("./MarkdownRenderer").then((module) => ({ default: module.MarkdownRenderer })),
+);
+const MermaidDiagram = lazy(() =>
+  import("./MarkdownRenderer").then((module) => ({ default: module.MermaidDiagram })),
+);
+
+function LazySurfaceFallback({ label = "Loading..." }: Readonly<{ label?: string }>) {
+  return (
+    <div className="rounded-md border border-dashed p-4 text-sm font-semibold vs-border vs-muted">
+      {label}
+    </div>
+  );
+}
 
 interface PipelineStepState {
   optimization: StageStatus;
@@ -1975,28 +2015,30 @@ function MarkdownCinemaView({
   if (source.text) {
     return (
       <div ref={containerRef}>
-        <MarkdownRenderer
-          className={`markdown-cinema prose-markdown ${markdownTextClassBySize[textSize]} text-[var(--vs-text)]`}
-          blockHighlight={
-            activeWord && activeBlock && !shouldHighlightWord
-              ? {
-                  blockEndOffset: activeWord.blockEndOffset,
-                  blockStartOffset: activeWord.blockStartOffset,
-                }
-              : undefined
-          }
-          wordHighlight={
-            activeWord && shouldHighlightWord
-              ? {
-                  activeWordOffset: activeWord.wordOffset,
-                  blockEndOffset: activeWord.blockEndOffset,
-                  blockStartOffset: activeWord.blockStartOffset,
-                }
-              : undefined
-          }
-        >
-          {source.text}
-        </MarkdownRenderer>
+        <Suspense fallback={<LazySurfaceFallback label="Loading markdown..." />}>
+          <MarkdownRenderer
+            className={`markdown-cinema prose-markdown ${markdownTextClassBySize[textSize]} text-[var(--vs-text)]`}
+            blockHighlight={
+              activeWord && activeBlock && !shouldHighlightWord
+                ? {
+                    blockEndOffset: activeWord.blockEndOffset,
+                    blockStartOffset: activeWord.blockStartOffset,
+                  }
+                : undefined
+            }
+            wordHighlight={
+              activeWord && shouldHighlightWord
+                ? {
+                    activeWordOffset: activeWord.wordOffset,
+                    blockEndOffset: activeWord.blockEndOffset,
+                    blockStartOffset: activeWord.blockStartOffset,
+                  }
+                : undefined
+            }
+          >
+            {source.text}
+          </MarkdownRenderer>
+        </Suspense>
       </div>
     );
   }
@@ -2071,7 +2113,11 @@ function renderMarkdownCinemaBlockContent(
   blockText: string,
 ): ReactNode {
   if (block.kind === "code" && looksLikeMermaidDiagram(blockText)) {
-    return <MermaidDiagram chart={blockText} />;
+    return (
+      <Suspense fallback={<LazySurfaceFallback label="Loading diagram..." />}>
+        <MermaidDiagram chart={blockText} />
+      </Suspense>
+    );
   }
 
   if (block.kind === "code") {
@@ -2082,7 +2128,11 @@ function renderMarkdownCinemaBlockContent(
     );
   }
 
-  return <MarkdownRenderer className="contents">{blockText}</MarkdownRenderer>;
+  return (
+    <Suspense fallback={<LazySurfaceFallback label="Loading markdown..." />}>
+      <MarkdownRenderer className="contents">{blockText}</MarkdownRenderer>
+    </Suspense>
+  );
 }
 
 function cinemaViewModeClass(isActive: boolean): string {
@@ -2166,6 +2216,7 @@ export function App() {
   });
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
   const hasLoadedVoiceProfilesRef = useRef(false);
+  const hasRecordedColdUsableRef = useRef(false);
   const profileLoadingShowTimerRef = useRef<number | null>(null);
   const profileLoadingHideTimerRef = useRef<number | null>(null);
   const profileLoadingVisibleRequestCounter = useRef(0);
@@ -2307,6 +2358,15 @@ export function App() {
   const [savingHuggingFaceTokenKey, setSavingHuggingFaceTokenKey] = useState<string | null>(null);
   const [isClearingHuggingFaceToken, setIsClearingHuggingFaceToken] = useState(false);
   const [studioMode, setStudioMode] = useState<StudioMode>("narration");
+  const handleStudioModeChange = useCallback(
+    (mode: StudioMode) => {
+      if (mode !== studioMode) {
+        startFrontendSpan("studio-route-switch");
+      }
+      setStudioMode(mode);
+    },
+    [studioMode],
+  );
   const [contentMode, setContentMode] = useState<ContentMode>("sourceIntake");
   const [sourceMode, setSourceMode] = useState<SourceMode>("text");
   const [teleprompterOpenSignal, setTeleprompterOpenSignal] = useState(0);
@@ -2581,6 +2641,7 @@ export function App() {
   const canOpenBookCinema = selectedBookSource?.status === "ready";
   const openReadingCinema = useCallback(() => {
     if (canOpenBookCinema && (!job || Boolean(job.bookSourceId))) {
+      startFrontendSpan("book-cinema-open");
       setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
       setIsBookCinemaOpen(true);
       return;
@@ -2590,6 +2651,28 @@ export function App() {
   const ttsPipelineHint = isProcessing
     ? (job?.progress.message ?? "TTS pipeline is processing the current job.")
     : "Start a job to see live TTS pipeline status.";
+
+  useEffect(() => {
+    if (hasRecordedColdUsableRef.current) {
+      return;
+    }
+    hasRecordedColdUsableRef.current = true;
+    recordColdUsableMetric({ studioMode });
+  }, [studioMode]);
+
+  useEffect(() => {
+    endFrontendSpan("studio-route-switch", { studioMode });
+  }, [studioMode]);
+
+  useEffect(() => {
+    if (!isBookCinemaOpen || !selectedBookSource || !effectiveBookScope) {
+      return;
+    }
+    endFrontendSpan("book-cinema-open", {
+      bookSourceId: selectedBookSource.id,
+      scope: bookScopeKey(effectiveBookScope),
+    });
+  }, [effectiveBookScope, isBookCinemaOpen, selectedBookSource]);
 
   useEffect(() => {
     const syncHashPosition = () => {
@@ -2612,6 +2695,7 @@ export function App() {
     setSelectedBookSourceId(book.id);
     setSelectedBookScope(scopeFromBookScopeKey(book, hashReadingPosition.scopeKey));
     if (book.status === "ready") {
+      startFrontendSpan("book-cinema-open");
       setIsBookCinemaOpen(true);
     }
   }, [bookSources, hashReadingPosition]);
@@ -3455,6 +3539,7 @@ export function App() {
 
   const handleResumeProgress = useCallback(
     async (progress: PlaybackProgress, seconds = progress.currentTimeSec) => {
+      startFrontendSpan("reader-resume");
       if (progress.bookSourceId) {
         setSelectedBookSourceId(progress.bookSourceId);
         setSelectedBookScope(progress.bookScope ?? null);
@@ -4183,6 +4268,10 @@ export function App() {
     if (pendingPlaybackResume.autoplay) {
       void playbackControls.play();
     }
+    endFrontendSpan("reader-resume", {
+      targetSeconds,
+      usedLocator: locatorSeconds !== null,
+    });
     setPendingPlaybackResume(null);
   }, [highlightMap, pendingPlaybackResume, playbackControls, playbackCursorSec]);
 
@@ -4658,7 +4747,7 @@ export function App() {
         onSettingsOpen={() => {
           setIsSettingsOpen(true);
         }}
-        onStudioModeChange={setStudioMode}
+        onStudioModeChange={handleStudioModeChange}
         onSubmit={() => {
           void submitVoiceJob();
         }}
@@ -4668,115 +4757,135 @@ export function App() {
         runConfiguration={runConfiguration}
       />
 
-      <WorkspaceDrawer
-        activeProjectId={activeProjectId}
-        bookSources={bookSources}
-        isOpen={isWorkspaceOpen}
-        job={job}
-        metrics={systemMetrics}
-        metricsError={systemMetricsError}
-        projectError={projectError}
-        projectJobs={projectJobs}
-        projects={projects}
-        profileSource={profileSource}
-        profiles={voiceProfiles}
-        customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-        speechPolicyProfile={speechPolicyProfile}
-        speechPolicyProfiles={speechPolicyProfiles}
-        selectedProfileId={selectedVoiceProfileId}
-        cancelingProfileSourceId={cancelingProfileSourceId}
-        cancelingTargetKey={cancelingTargetKey}
-        onCancelJob={handleCancelVoiceJob}
-        onCancelProfileSource={handleCancelVoiceProfileSource}
-        onCancelProfileTarget={handleCancelVoiceProfileTarget}
-        onDeleteProject={handleDeleteProject}
-        onCreateProject={handleCreateProject}
-        onClose={() => {
-          setIsWorkspaceOpen(false);
-        }}
-        onExportOpen={() => {
-          setIsWorkspaceOpen(false);
-          setBundlePanelMode("export");
-          setIsBundlePanelOpen(true);
-        }}
-        onImportOpen={() => {
-          setIsWorkspaceOpen(false);
-          setBundlePanelMode("import");
-          setIsBundlePanelOpen(true);
-        }}
-        onOpenSettings={() => {
-          setIsWorkspaceOpen(false);
-          setIsSettingsOpen(true);
-        }}
-        onRenameProject={handleRenameProject}
-        onSelectProject={selectProject}
-        onSelectProfile={selectVoiceProfile}
-        onSpeechPolicyProfileChange={(profile) => {
-          void handleSpeechPolicyProfileChange(profile);
-        }}
-      />
-      <HelpPanel
-        isOpen={isHelpOpen}
-        job={job}
-        profileSourceDiagnostics={profileSourceDiagnostics}
-        profileSource={profileSource}
-        selectedProfile={selectedVoiceProfile}
-        onClose={() => {
-          setIsHelpOpen(false);
-        }}
-      />
-      <SettingsPanel
-        canSubmit={canSubmit}
-        isOpen={isSettingsOpen}
-        job={job}
-        metrics={systemMetrics}
-        metricsError={systemMetricsError}
-        profileSourceDiagnostics={profileSourceDiagnostics}
-        profileSource={profileSource}
-        projectStorage={projectStorage}
-        projectStorageError={projectStorageError}
-        researchModules={researchModules}
-        runConfiguration={runConfiguration}
-        selectedProfile={selectedVoiceProfile}
-        teleprompterSettings={teleprompterSettings}
-        themeName={themeName}
-        ttsEngineError={ttsEngineError}
-        ttsEngines={ttsEngines}
-        onPrepareProfileTarget={handleBuildVoiceProfileArtifact}
-        onRunConfigurationChange={setRunConfiguration}
-        onClose={() => {
-          setIsSettingsOpen(false);
-        }}
-        onSubmit={() => {
-          setIsSettingsOpen(false);
-          void submitVoiceJob();
-        }}
-        onTeleprompterSettingsChange={(settings) => {
-          setTeleprompterSettings(normalizeTeleprompterHighlightSettings(settings));
-        }}
-        onThemeChange={setThemeName}
-      />
-      <BundleFlowPanel
-        activeProjectId={activeProjectId}
-        activeProjectName={studioProjectName}
-        isOpen={isBundlePanelOpen}
-        mode={bundlePanelMode}
-        projects={projects}
-        onClose={() => {
-          setIsBundlePanelOpen(false);
-        }}
-        onImported={handleBundleImported}
-      />
-      <ContentIRDrawer
-        document={contentIRDocument}
-        error={contentIRError}
-        isLoading={isContentIRLoading}
-        isOpen={isContentIROpen}
-        title={contentIRTitle}
-        onClose={() => {
-          setIsContentIROpen(false);
-        }}
-      />
+      {isWorkspaceOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading workspace..." />}>
+          <WorkspaceDrawer
+            activeProjectId={activeProjectId}
+            bookSources={bookSources}
+            isOpen={isWorkspaceOpen}
+            job={job}
+            metrics={systemMetrics}
+            metricsError={systemMetricsError}
+            projectError={projectError}
+            projectJobs={projectJobs}
+            projects={projects}
+            profileSource={profileSource}
+            profiles={voiceProfiles}
+            customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+            speechPolicyProfile={speechPolicyProfile}
+            speechPolicyProfiles={speechPolicyProfiles}
+            selectedProfileId={selectedVoiceProfileId}
+            cancelingProfileSourceId={cancelingProfileSourceId}
+            cancelingTargetKey={cancelingTargetKey}
+            onCancelJob={handleCancelVoiceJob}
+            onCancelProfileSource={handleCancelVoiceProfileSource}
+            onCancelProfileTarget={handleCancelVoiceProfileTarget}
+            onDeleteProject={handleDeleteProject}
+            onCreateProject={handleCreateProject}
+            onClose={() => {
+              setIsWorkspaceOpen(false);
+            }}
+            onExportOpen={() => {
+              setIsWorkspaceOpen(false);
+              setBundlePanelMode("export");
+              setIsBundlePanelOpen(true);
+            }}
+            onImportOpen={() => {
+              setIsWorkspaceOpen(false);
+              setBundlePanelMode("import");
+              setIsBundlePanelOpen(true);
+            }}
+            onOpenSettings={() => {
+              setIsWorkspaceOpen(false);
+              setIsSettingsOpen(true);
+            }}
+            onRenameProject={handleRenameProject}
+            onSelectProject={selectProject}
+            onSelectProfile={selectVoiceProfile}
+            onSpeechPolicyProfileChange={(profile) => {
+              void handleSpeechPolicyProfileChange(profile);
+            }}
+          />
+        </Suspense>
+      ) : null}
+      {isHelpOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading help..." />}>
+          <HelpPanel
+            isOpen={isHelpOpen}
+            job={job}
+            profileSourceDiagnostics={profileSourceDiagnostics}
+            profileSource={profileSource}
+            selectedProfile={selectedVoiceProfile}
+            onClose={() => {
+              setIsHelpOpen(false);
+            }}
+          />
+        </Suspense>
+      ) : null}
+      {isSettingsOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading settings..." />}>
+          <SettingsPanel
+            canSubmit={canSubmit}
+            isOpen={isSettingsOpen}
+            job={job}
+            metrics={systemMetrics}
+            metricsError={systemMetricsError}
+            profileSourceDiagnostics={profileSourceDiagnostics}
+            profileSource={profileSource}
+            projectStorage={projectStorage}
+            projectStorageError={projectStorageError}
+            researchModules={researchModules}
+            runConfiguration={runConfiguration}
+            selectedProfile={selectedVoiceProfile}
+            teleprompterSettings={teleprompterSettings}
+            themeName={themeName}
+            ttsEngineError={ttsEngineError}
+            ttsEngines={ttsEngines}
+            onPrepareProfileTarget={handleBuildVoiceProfileArtifact}
+            onRunConfigurationChange={setRunConfiguration}
+            onClose={() => {
+              setIsSettingsOpen(false);
+            }}
+            onSubmit={() => {
+              setIsSettingsOpen(false);
+              void submitVoiceJob();
+            }}
+            onTeleprompterSettingsChange={(settings) => {
+              setTeleprompterSettings(normalizeTeleprompterHighlightSettings(settings));
+            }}
+            onThemeChange={setThemeName}
+          />
+        </Suspense>
+      ) : null}
+      {isBundlePanelOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading bundle tools..." />}>
+          <BundleFlowPanel
+            activeProjectId={activeProjectId}
+            activeProjectName={studioProjectName}
+            isOpen={isBundlePanelOpen}
+            mode={bundlePanelMode}
+            projects={projects}
+            onClose={() => {
+              setIsBundlePanelOpen(false);
+            }}
+            onImported={handleBundleImported}
+          />
+        </Suspense>
+      ) : null}
+      {isContentIROpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading content structure..." />}>
+          <ContentIRDrawer
+            document={contentIRDocument}
+            error={contentIRError}
+            isLoading={isContentIRLoading}
+            isOpen={isContentIROpen}
+            title={contentIRTitle}
+            onClose={() => {
+              setIsContentIROpen(false);
+            }}
+          />
+        </Suspense>
+      ) : null}
       <TeleprompterPanel
         canOpenBookCinema={canOpenBookCinema}
         isPlaybackActive={isPlaybackActive}
@@ -4798,44 +4907,46 @@ export function App() {
         }}
       />
       {isBookCinemaOpen && selectedBookSource && effectiveBookScope ? (
-        <BookCinemaOverlay
-          book={selectedBookSource}
-          canCreateAudio={!isProcessing}
-          isProcessing={isProcessing}
-          job={job}
-          playbackControls={playbackControls}
-          playbackCursorSec={playbackCursorSec}
-          progress={selectedBookProgress ?? hashProgress}
-          accessibilitySettings={readerAccessibilitySettings}
-          scope={effectiveBookScope}
-          scopeContent={bookScopeContent}
-          highlightCue={activeHighlightCue}
-          highlightMap={highlightMap}
-          textSize={bookCinemaTextSize}
-          themeName={bookCinemaThemeName}
-          onClose={() => {
-            setIsBookCinemaOpen(false);
-          }}
-          onCreateAudio={(book, scope) => {
-            void submitBookNarrationJob(book, scope);
-          }}
-          onInspectStructure={(book) => {
-            void handleInspectContentIR(book.id, bookSourceName(book));
-          }}
-          onBookmark={() => {
-            void handleAddPlaybackBookmark();
-          }}
-          onPlayPause={handleBookCinemaPlayPause}
-          onRestart={handleBookCinemaRestart}
-          onScopeChange={setSelectedBookScope}
-          onSkip={handleBookCinemaSkip}
-          onResumeProgress={(progress, seconds) => {
-            void handleResumeProgress(progress, seconds);
-          }}
-          onAccessibilitySettingsChange={setReaderAccessibilitySettings}
-          onTextSizeChange={setBookCinemaTextSize}
-          onThemeChange={setBookCinemaThemeName}
-        />
+        <Suspense fallback={<LazySurfaceFallback label="Loading Book Cinema..." />}>
+          <BookCinemaOverlay
+            book={selectedBookSource}
+            canCreateAudio={!isProcessing}
+            isProcessing={isProcessing}
+            job={job}
+            playbackControls={playbackControls}
+            playbackCursorSec={playbackCursorSec}
+            progress={selectedBookProgress ?? hashProgress}
+            accessibilitySettings={readerAccessibilitySettings}
+            scope={effectiveBookScope}
+            scopeContent={bookScopeContent}
+            highlightCue={activeHighlightCue}
+            highlightMap={highlightMap}
+            textSize={bookCinemaTextSize}
+            themeName={bookCinemaThemeName}
+            onClose={() => {
+              setIsBookCinemaOpen(false);
+            }}
+            onCreateAudio={(book, scope) => {
+              void submitBookNarrationJob(book, scope);
+            }}
+            onInspectStructure={(book) => {
+              void handleInspectContentIR(book.id, bookSourceName(book));
+            }}
+            onBookmark={() => {
+              void handleAddPlaybackBookmark();
+            }}
+            onPlayPause={handleBookCinemaPlayPause}
+            onRestart={handleBookCinemaRestart}
+            onScopeChange={setSelectedBookScope}
+            onSkip={handleBookCinemaSkip}
+            onResumeProgress={(progress, seconds) => {
+              void handleResumeProgress(progress, seconds);
+            }}
+            onAccessibilitySettingsChange={setReaderAccessibilitySettings}
+            onTextSizeChange={setBookCinemaTextSize}
+            onThemeChange={setBookCinemaThemeName}
+          />
+        </Suspense>
       ) : null}
 
       <ResearchModulesSetupCard
@@ -4958,7 +5069,7 @@ export function App() {
                 mode={rightRailMode}
                 onModeChange={setRightRailMode}
                 onOpenVoiceCloning={() => {
-                  setStudioMode("voiceCloning");
+                  handleStudioModeChange("voiceCloning");
                 }}
               />
             )}
@@ -5007,7 +5118,7 @@ export function App() {
                 }}
                 onClearSelection={clearVoiceProfileSelection}
                 onCloneVoice={() => {
-                  setStudioMode("voiceCloning");
+                  handleStudioModeChange("voiceCloning");
                 }}
                 onDeleteProfile={(id) => {
                   void handleDeleteVoiceProfile(id);
@@ -5062,7 +5173,7 @@ export function App() {
                 sourceCount={preparedSources.length + bookSources.length}
                 onModeChange={setLeftRailMode}
                 onOpenVoiceCloning={() => {
-                  setStudioMode("voiceCloning");
+                  handleStudioModeChange("voiceCloning");
                 }}
               />
             )}
@@ -5072,29 +5183,31 @@ export function App() {
             <SourceTextPanel
               projectId={activeProjectId}
               bookControls={
-                <BookCinemaPanel
-                  bookSources={bookSources}
-                  canCreateAudio={!isProcessing}
-                  diagnostics={bookCinemaDiagnostics}
-                  error={bookSourceError}
-                  isImporting={isImportingBookSource}
-                  isProcessing={isProcessing}
-                  isScopeLoading={isLoadingBookScope}
-                  scopeContent={bookScopeContent}
-                  selectedBookScope={effectiveBookScope}
-                  selectedBookSourceId={selectedBookSourceId}
-                  onCreateAudio={(book, scope) => {
-                    void submitBookNarrationJob(book, scope);
-                  }}
-                  onImport={handleImportBookSource}
-                  onOpenCinema={openReadingCinema}
-                  onInspectStructure={(book) => {
-                    void handleInspectContentIR(book.id, bookSourceName(book));
-                  }}
-                  onScopeChange={setSelectedBookScope}
-                  onSelectBook={setSelectedBookSourceId}
-                  onUseText={handleUseBookText}
-                />
+                <Suspense fallback={<LazySurfaceFallback label="Loading book tools..." />}>
+                  <BookCinemaPanel
+                    bookSources={bookSources}
+                    canCreateAudio={!isProcessing}
+                    diagnostics={bookCinemaDiagnostics}
+                    error={bookSourceError}
+                    isImporting={isImportingBookSource}
+                    isProcessing={isProcessing}
+                    isScopeLoading={isLoadingBookScope}
+                    scopeContent={bookScopeContent}
+                    selectedBookScope={effectiveBookScope}
+                    selectedBookSourceId={selectedBookSourceId}
+                    onCreateAudio={(book, scope) => {
+                      void submitBookNarrationJob(book, scope);
+                    }}
+                    onImport={handleImportBookSource}
+                    onOpenCinema={openReadingCinema}
+                    onInspectStructure={(book) => {
+                      void handleInspectContentIR(book.id, bookSourceName(book));
+                    }}
+                    onScopeChange={setSelectedBookScope}
+                    onSelectBook={setSelectedBookSourceId}
+                    onUseText={handleUseBookText}
+                  />
+                </Suspense>
               }
               canSubmit={canSubmit}
               contentMode={contentMode}
@@ -5204,7 +5317,7 @@ export function App() {
           void handleCancelVoiceJob();
         }}
         onOpenVoiceCloning={() => {
-          setStudioMode("voiceCloning");
+          handleStudioModeChange("voiceCloning");
         }}
         onModeChange={setActivityFooterMode}
         onSubmit={() => {
@@ -6193,17 +6306,19 @@ function VoiceCloningWorkspace({
         onCancelTarget={onCancelTarget}
         onRunConfigurationChange={onRunConfigurationChange}
       />
-      <VoiceSourceAnalysisPanel
-        createCandidateId={createCandidateId}
-        diagnostics={diagnostics}
-        error={error}
-        isAnalyzing={isAnalyzing}
-        researchModules={researchModules}
-        source={source}
-        ttsEngines={ttsEngines}
-        onAnalyze={onAnalyze}
-        onCreateProfile={onCreateProfile}
-      />
+      <Suspense fallback={<LazySurfaceFallback label="Loading source diagnostics..." />}>
+        <VoiceSourceAnalysisPanel
+          createCandidateId={createCandidateId}
+          diagnostics={diagnostics}
+          error={error}
+          isAnalyzing={isAnalyzing}
+          researchModules={researchModules}
+          source={source}
+          ttsEngines={ttsEngines}
+          onAnalyze={onAnalyze}
+          onCreateProfile={onCreateProfile}
+        />
+      </Suspense>
     </section>
   );
 }
@@ -10758,11 +10873,13 @@ function NarrationReviewWorkbench({
       ) : null}
       {reviewTab === "pronunciation" ? (
         <div className="overflow-hidden rounded-md border vs-border">
-          <PronunciationPanel
-            projectId={projectId}
-            source={selectedPreparedSource}
-            voiceProfileId={voiceProfileId}
-          />
+          <Suspense fallback={<LazySurfaceFallback label="Loading pronunciation..." />}>
+            <PronunciationPanel
+              projectId={projectId}
+              source={selectedPreparedSource}
+              voiceProfileId={voiceProfileId}
+            />
+          </Suspense>
         </div>
       ) : null}
       {reviewTab === "math" ? mathPanel : null}
@@ -10826,9 +10943,11 @@ function narrationReviewPreviewContent({
 }>): ReactNode {
   if (selectedPreparedSource?.renderMode === "markdown" && selectedPreparedSource.text) {
     return (
-      <MarkdownRenderer className="prose-markdown text-sm leading-6">
-        {selectedPreparedSource.text}
-      </MarkdownRenderer>
+      <Suspense fallback={<LazySurfaceFallback label="Loading markdown preview..." />}>
+        <MarkdownRenderer className="prose-markdown text-sm leading-6">
+          {selectedPreparedSource.text}
+        </MarkdownRenderer>
+      </Suspense>
     );
   }
   if (selectedBookSource) {

@@ -18,7 +18,7 @@ import {
   resolveDefaultBookScope,
   shouldIgnoreBookCinemaKeyboardTarget,
   visibleBookSpans,
-} from "./BookCinemaPanel";
+} from "./bookCinemaModel";
 import type { BookSource, VoiceJob } from "./types";
 
 describe("Book Cinema helpers", () => {

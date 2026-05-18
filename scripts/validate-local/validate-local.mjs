@@ -4,6 +4,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { loadBenchmarkConfig, runAlignmentBenchmark } from "./benchmarks.mjs";
+import { runFrontendBundleBenchmark } from "./frontend-performance.mjs";
 import { createRunContext, finalizeRun, runCallbackStep, runCommandStep } from "./reporting.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -71,6 +72,16 @@ const commandSteps = [
 for (const step of commandSteps) {
   await runCommandStep(context, step);
 }
+
+await runCallbackStep(
+  context,
+  {
+    id: "frontend-bundle-performance",
+    title: "Frontend Bundle Performance",
+    command: "pnpm bundle:local",
+  },
+  ({ log }) => runFrontendBundleBenchmark({ rootDir, thresholds, log }),
+);
 
 await runCallbackStep(
   context,

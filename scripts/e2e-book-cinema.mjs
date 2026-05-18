@@ -14,6 +14,7 @@ const artifactDir = process.env.E2E_ARTIFACT_DIR ?? path.join(rootDir, "output",
 const screenshotsDir = process.env.E2E_SCREENSHOT_DIR ?? path.join(artifactDir, "screenshots");
 const summaryPath = process.env.E2E_SUMMARY_PATH ?? path.join(artifactDir, "summary.json");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
+const lowResourceMode = process.env.E2E_LOW_RESOURCE === "1";
 const activeProjectKey = "tts-active-project-id";
 const jobTimeoutMs = Number.parseInt(process.env.E2E_JOB_TIMEOUT_MS ?? "180000", 10);
 
@@ -41,6 +42,8 @@ async function main() {
     appBaseUrl,
     apiBaseUrl,
     fixtures,
+    lowResourceMode,
+    performance: [],
     screenshots: [],
     services: services
       ? { backendLog: services.backendLog, frontendLog: services.frontendLog }
@@ -71,6 +74,10 @@ async function main() {
       ]) {
         const result = await runBookSourceE2E(browser, project.id, fixture);
         summary.screenshots.push(result.screenshot);
+        summary.performance.push({
+          kind: fixture.kind,
+          metrics: result.performance,
+        });
       }
     } finally {
       await browser.close();
@@ -124,7 +131,7 @@ async function runBookSourceE2E(browser, projectId, fixture) {
   await assertTimingArtifacts(completedJob.id, fixture.kind);
 
   const screenshot = path.join(screenshotsDir, fixture.screenshot);
-  await runBookCinemaUX(browser, {
+  const performance = await runBookCinemaUX(browser, {
     book,
     job: completedJob,
     projectId,
@@ -133,7 +140,7 @@ async function runBookSourceE2E(browser, projectId, fixture) {
     text: scopeContent.text,
   });
   console.log(`${fixture.kind.toUpperCase()} Book Cinema E2E passed.`);
-  return { screenshot };
+  return { performance, screenshot };
 }
 
 async function runBookCinemaUX(browser, { book, job, projectId, scope, screenshot, text }) {
@@ -144,13 +151,17 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
       jobId: job.id,
       text,
     }),
-    viewport: { width: 1440, height: 980 },
+    viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
   });
   const page = await context.newPage();
+  if (lowResourceMode) {
+    await applyLowResourceProfile(page);
+  }
   page.setDefaultTimeout(60_000);
   const issues = collectPageIssues(page);
   try {
     await openBookCinemaOverlay(page, book, scope);
+    const firstOpenMetrics = await readPerformanceMetrics(page);
     await assertEnabled(page.locator('.fixed.inset-0 button:has-text("Play")').last(), "Play");
     await page.locator('.fixed.inset-0 button:has-text("Play")').last().click();
     await page.locator('.fixed.inset-0 button:has-text("Pause")').last().waitFor();
@@ -172,7 +183,12 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await page.locator('.fixed.inset-0 button:has-text("Resume")').first().waitFor();
     await page.locator('.fixed.inset-0 button:has-text("Resume")').first().click();
     await page.locator('.fixed.inset-0 button:has-text("Pause")').last().waitFor();
+    const resumedMetrics = await readPerformanceMetrics(page);
     await assertNoPageIssues(issues);
+    return {
+      firstOpen: summarizePerformanceMetrics(firstOpenMetrics),
+      resumed: summarizePerformanceMetrics(resumedMetrics),
+    };
   } catch (error) {
     await page
       .screenshot({
@@ -183,6 +199,15 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     throw error;
   } finally {
     await context.close();
+  }
+}
+
+async function applyLowResourceProfile(page) {
+  try {
+    const client = await page.context().newCDPSession(page);
+    await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  } catch {
+    // Browser-level throttling is best-effort; the mock-only flow remains authoritative.
   }
 }
 
@@ -717,6 +742,21 @@ function collectPageIssues(page) {
 async function assertNoPageIssues(issues) {
   const unexpected = issues.filter((issue) => !/favicon|React DevTools/i.test(issue));
   assert(unexpected.length === 0, `Unexpected browser issues:\n${unexpected.join("\n")}`);
+}
+
+async function readPerformanceMetrics(page) {
+  return page.evaluate(() => globalThis.__ttsResearchPerformance?.metrics ?? []);
+}
+
+function summarizePerformanceMetrics(metrics) {
+  const summary = {};
+  for (const metric of metrics) {
+    summary[metric.name] = metric.durationMs;
+  }
+  return {
+    latestByName: summary,
+    metrics,
+  };
 }
 
 function assert(condition, message) {

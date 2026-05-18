@@ -13,5 +13,12 @@
     "maxTotalEmitMs": 5000,
     "maxTotalWarnings": 10,
     "minTotalNodes": 5
+  },
+  "frontendBundle": {
+    "maxInitialJsRawBytes": 520000,
+    "maxInitialJsGzipBytes": 160000,
+    "maxInitialCssGzipBytes": 14000,
+    "maxLargestAsyncAppChunkGzipBytes": 110000,
+    "requireDiagramVendorLazy": true
   }
 }
