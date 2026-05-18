@@ -47,6 +47,8 @@ coverage.txt
 __pycache__/
 *.py[cod]
 .pytest_cache/
+build/
+*.egg-info/
 
 # Generated media and local data
 backend/data/

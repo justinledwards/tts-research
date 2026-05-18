@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/token-timing.v1.schema.json",
+  "title": "Token Timing v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "source",
+    "status",
+    "durationMs",
+    "generatedAt",
+    "confidence",
+    "drift",
+    "tokens"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "timing.v1"
+    },
+    "jobId": {
+      "type": "string"
+    },
+    "source": {
+      "$ref": "fragment-timing.v1.schema.json#/$defs/timingSource"
+    },
+    "status": {
+      "type": "string"
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "confidence": {
+      "$ref": "fragment-timing.v1.schema.json#/$defs/timingConfidence"
+    },
+    "drift": {
+      "$ref": "fragment-timing.v1.schema.json#/$defs/driftStats"
+    },
+    "tokens": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tokenTiming"
+      }
+    },
+    "warnings": {
+      "$ref": "fragment-timing.v1.schema.json#/$defs/warnings"
+    }
+  },
+  "$defs": {
+    "tokenTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "fragmentIndex",
+        "segmentIndex",
+        "text",
+        "startMs",
+        "endMs",
+        "confidence",
+        "source"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fragmentIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "segmentIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        },
+        "startMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source": {
+          "$ref": "fragment-timing.v1.schema.json#/$defs/timingSource"
+        }
+      }
+    }
+  }
+}

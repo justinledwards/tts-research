@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-18 15:48 CEST - Workstream MU stable developer packages
+- [x] Add private schema, TypeScript SDK, CLI, and Python SDK packages
+- [x] Move generated contract outputs to schema package and update consumers
+- [x] Add package smoke tests, CLI parity tests, and boundary validation
+- [x] Add SDK docs and disabled packaging workflow template
+- [x] Run project checks and local validation
+
 ## 2026-05-18 13:03 CEST - Workstream Kappa local validation authority
 - [x] Add local validation and benchmark orchestration
 - [x] Add benchmark fixture manifests, thresholds, and corpus notes

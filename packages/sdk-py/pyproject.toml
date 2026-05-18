@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voice-studio-sdk"
+version = "0.0.0"
+description = "Private local Python SDK for Voice Studio APIs and schema helpers."
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+voice_studio_sdk = ["schema_files/*.json"]

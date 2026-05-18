@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "timing.v1",
+  "jobId": "contract-job",
+  "source": "heuristic",
+  "status": "complete",
+  "durationMs": 1200,
+  "generatedAt": "2026-05-18T12:00:00Z",
+  "confidence": {
+    "overall": 0.74,
+    "segment": 0.74,
+    "token": 0.68
+  },
+  "drift": {
+    "meanAbsoluteMs": 0,
+    "maxAbsoluteMs": 0,
+    "maxRatio": 0,
+    "corrected": false,
+    "lowConfidence": false
+  },
+  "tokens": [
+    {
+      "index": 0,
+      "fragmentIndex": 0,
+      "segmentIndex": 1,
+      "text": "Hello",
+      "startMs": 0,
+      "endMs": 550,
+      "confidence": 0.68,
+      "source": "heuristic"
+    },
+    {
+      "index": 1,
+      "fragmentIndex": 0,
+      "segmentIndex": 1,
+      "text": "world.",
+      "startMs": 550,
+      "endMs": 1200,
+      "confidence": 0.68,
+      "source": "heuristic"
+    }
+  ]
+}

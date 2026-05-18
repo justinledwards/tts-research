@@ -16,7 +16,7 @@ The contract separates three locator layers:
 
 Readium exports use `href`, `type`, `locations`, and `text`. EPUB exports include XHTML `href`, `application/xhtml+xml`, progression where known, fragment/CSS selector where known, and `partialCfi` when a CFI is available. PDF exports use `page` and optional `viewrect` fragments.
 
-Backend import/export helpers live in `backend/internal/contentir/readiumbridge`; serializers should call that package instead of matching every format locally. Frontend reader helpers are exposed through `frontend/src/content-ir.ts`, with `locatorCodecs.ts` kept as the private implementation.
+Backend import/export helpers live in `backend/internal/contentir/readiumbridge`; serializers should call that package instead of matching every format locally. TypeScript consumers should use `@tts-research/sdk-ts` locator helpers, with frontend files kept as compatibility wrappers for app imports.
 
 ## Examples
 

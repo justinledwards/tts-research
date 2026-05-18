@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/speech-plan.v1.schema.json",
+  "title": "Speech Plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "sourceId", "projectId", "generatedAt", "segments"],
+  "properties": {
+    "schemaVersion": {
+      "const": "speech-plan.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "jobId": {
+      "type": "string"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "policyTrace": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/policyTrace"
+      }
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/segment"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segmentId",
+        "index",
+        "nodeId",
+        "text",
+        "lang",
+        "speechPolicy",
+        "policyTrace",
+        "locatorEnvelope",
+        "serializerTargets"
+      ],
+      "properties": {
+        "segmentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "lang": {
+          "type": "string"
+        },
+        "speechPolicy": {
+          "$ref": "content-ir.v1.schema.json#/$defs/speechPolicy"
+        },
+        "policyTrace": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/policyTrace"
+          }
+        },
+        "locatorEnvelope": {
+          "$ref": "locator-envelope.v1.schema.json"
+        },
+        "pronunciationRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "content-ir.v1.schema.json#/$defs/pronunciationRef"
+          }
+        },
+        "lexiconEntryIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "serializerTargets": {
+          "$ref": "#/$defs/serializerTargets"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "policyTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "profile"],
+      "properties": {
+        "scope": {
+          "enum": ["marketProfileDefault", "projectOverride", "sourceOverride", "sessionOverride"]
+        },
+        "profile": {
+          "type": "string"
+        },
+        "overrides": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "serializerTargets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plainText", "highlightMarks"],
+      "properties": {
+        "plainText": {
+          "type": "string"
+        },
+        "ssml": {
+          "type": "string"
+        },
+        "plsRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "highlightMarks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/highlightMark"
+          }
+        }
+      }
+    },
+    "highlightMark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["markId", "nodeId"],
+      "properties": {
+        "markId": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "segmentId": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

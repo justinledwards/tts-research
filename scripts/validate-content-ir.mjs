@@ -8,9 +8,14 @@ import { promisify } from "node:util";
 
 const repoRoot = process.cwd();
 const schemaDir = path.join(repoRoot, "backend/internal/contentir/schema");
-const schemaPath = path.join(schemaDir, "content-ir.v1.schema.json");
-const locatorEnvelopeSchemaPath = path.join(schemaDir, "locator-envelope.v1.schema.json");
-const speechPlanSchemaPath = path.join(schemaDir, "speech-plan.v1.schema.json");
+const schemaPaths = {
+  contentIR: path.join(schemaDir, "content-ir.v1.schema.json"),
+  fragmentTiming: path.join(schemaDir, "fragment-timing.v1.schema.json"),
+  highlightMap: path.join(schemaDir, "highlight-map.v1.schema.json"),
+  locatorEnvelope: path.join(schemaDir, "locator-envelope.v1.schema.json"),
+  speechPlan: path.join(schemaDir, "speech-plan.v1.schema.json"),
+  tokenTiming: path.join(schemaDir, "token-timing.v1.schema.json"),
+};
 const goldenDir = path.join(repoRoot, "backend/internal/contentir/testdata/golden");
 const contractDir = path.join(repoRoot, "fixtures/contracts");
 const adapterFiles = [
@@ -24,17 +29,31 @@ await execFileAsync(process.execPath, ["scripts/generate-contract-types.mjs", "-
   cwd: repoRoot,
 });
 
-const schema = JSON.parse(await readFile(schemaPath, "utf8"));
-const locatorEnvelopeSchema = JSON.parse(await readFile(locatorEnvelopeSchemaPath, "utf8"));
-const speechPlanSchema = JSON.parse(await readFile(speechPlanSchemaPath, "utf8"));
+const schemas = Object.fromEntries(
+  await Promise.all(
+    Object.entries(schemaPaths).map(async ([kind, schemaPath]) => [
+      kind,
+      JSON.parse(await readFile(schemaPath, "utf8")),
+    ]),
+  ),
+);
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 addFormats(ajv);
-ajv.addSchema(schema, "content-ir.v1.schema.json");
-ajv.addSchema(locatorEnvelopeSchema, "locator-envelope.v1.schema.json");
-ajv.addSchema(speechPlanSchema, "speech-plan.v1.schema.json");
-const validate = ajv.compile(schema);
-const validateLocatorEnvelope = ajv.compile(locatorEnvelopeSchema);
-const validateSpeechPlan = ajv.compile(speechPlanSchema);
+ajv.addSchema(schemas.contentIR, "content-ir.v1.schema.json");
+ajv.addSchema(schemas.locatorEnvelope, "locator-envelope.v1.schema.json");
+ajv.addSchema(schemas.speechPlan, "speech-plan.v1.schema.json");
+ajv.addSchema(schemas.fragmentTiming, "fragment-timing.v1.schema.json");
+ajv.addSchema(schemas.tokenTiming, "token-timing.v1.schema.json");
+ajv.addSchema(schemas.highlightMap, "highlight-map.v1.schema.json");
+const validate = ajv.compile(schemas.contentIR);
+const validators = {
+  contentIR: validate,
+  fragmentTiming: ajv.compile(schemas.fragmentTiming),
+  highlightMap: ajv.compile(schemas.highlightMap),
+  locatorEnvelope: ajv.compile(schemas.locatorEnvelope),
+  speechPlan: ajv.compile(schemas.speechPlan),
+  tokenTiming: ajv.compile(schemas.tokenTiming),
+};
 
 const goldenFiles = (await readdir(goldenDir)).filter((file) => file.endsWith(".json")).sort();
 if (goldenFiles.length === 0) {
@@ -55,30 +74,58 @@ if (contractFiles.length === 0) {
   throw new Error("No public contract fixtures found.");
 }
 
-const contractCounts = { contentIR: 0, locatorEnvelope: 0, speechPlan: 0 };
+const contractCounts = {
+  contentIR: 0,
+  fragmentTiming: 0,
+  highlightMap: 0,
+  locatorEnvelope: 0,
+  speechPlan: 0,
+  tokenTiming: 0,
+};
 for (const file of contractFiles) {
   const fullPath = path.join(contractDir, file);
   const payload = JSON.parse(await readFile(fullPath, "utf8"));
   assertJSONRoundTrip(file, payload);
   if (file.endsWith(".content-ir.v1.json")) {
     contractCounts.contentIR += 1;
-    if (!validate(payload)) {
+    if (!validators.contentIR(payload)) {
       throw new Error(
-        `${file} failed Content IR v1 validation:\n${ajv.errorsText(validate.errors)}`,
+        `${file} failed Content IR v1 validation:\n${ajv.errorsText(validators.contentIR.errors)}`,
       );
     }
   } else if (file.endsWith(".locator-envelope.v1.json")) {
     contractCounts.locatorEnvelope += 1;
-    if (!validateLocatorEnvelope(payload)) {
+    if (!validators.locatorEnvelope(payload)) {
       throw new Error(
-        `${file} failed locator envelope validation:\n${ajv.errorsText(validateLocatorEnvelope.errors)}`,
+        `${file} failed locator envelope validation:\n${ajv.errorsText(validators.locatorEnvelope.errors)}`,
       );
     }
   } else if (file.endsWith(".speech-plan.v1.json")) {
     contractCounts.speechPlan += 1;
-    if (!validateSpeechPlan(payload)) {
+    if (!validators.speechPlan(payload)) {
       throw new Error(
-        `${file} failed speech plan validation:\n${ajv.errorsText(validateSpeechPlan.errors)}`,
+        `${file} failed speech plan validation:\n${ajv.errorsText(validators.speechPlan.errors)}`,
+      );
+    }
+  } else if (file.endsWith(".highlight-map.v1.json")) {
+    contractCounts.highlightMap += 1;
+    if (!validators.highlightMap(payload)) {
+      throw new Error(
+        `${file} failed highlight map validation:\n${ajv.errorsText(validators.highlightMap.errors)}`,
+      );
+    }
+  } else if (file.endsWith(".fragment-timing.v1.json")) {
+    contractCounts.fragmentTiming += 1;
+    if (!validators.fragmentTiming(payload)) {
+      throw new Error(
+        `${file} failed fragment timing validation:\n${ajv.errorsText(validators.fragmentTiming.errors)}`,
+      );
+    }
+  } else if (file.endsWith(".token-timing.v1.json")) {
+    contractCounts.tokenTiming += 1;
+    if (!validators.tokenTiming(payload)) {
+      throw new Error(
+        `${file} failed token timing validation:\n${ajv.errorsText(validators.tokenTiming.errors)}`,
       );
     }
   } else {
@@ -93,10 +140,17 @@ for (const [kind, count] of Object.entries(contractCounts)) {
 }
 
 const generatedTypes = await readFile(
-  path.join(repoRoot, "frontend/src/generated/contracts.ts"),
+  path.join(repoRoot, "packages/schema/src/generated/contracts.ts"),
   "utf8",
 );
-for (const expected of ["ContentIRDocument", "LocatorEnvelope", "SpeechPlanDocument"]) {
+for (const expected of [
+  "ContentIRDocument",
+  "FragmentTimingArtifact",
+  "HighlightMap",
+  "LocatorEnvelope",
+  "SpeechPlanDocument",
+  "TokenTimingArtifact",
+]) {
   if (!generatedTypes.includes(`interface ${expected}`)) {
     throw new Error(
       `Generated contract types are missing ${expected}. Run pnpm generate:contracts.`,

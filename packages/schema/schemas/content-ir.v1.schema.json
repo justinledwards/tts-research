@@ -1,0 +1,648 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/content-ir.v1.schema.json",
+  "title": "Content IR v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "sourceType",
+    "sourceId",
+    "projectId",
+    "sourceName",
+    "adapterVersion",
+    "generatedAt",
+    "nodes"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "content-ir.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "sourceName": {
+      "type": "string"
+    },
+    "adapterVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/node"
+      }
+    }
+  },
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodeId",
+        "parentId",
+        "orderKey",
+        "kind",
+        "role",
+        "displayText",
+        "normalisedText",
+        "speechText",
+        "lang",
+        "script",
+        "dir",
+        "provenance",
+        "ui",
+        "speech",
+        "warnings",
+        "confidence",
+        "rights",
+        "adapterVersion"
+      ],
+      "properties": {
+        "nodeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentId": {
+          "type": "string"
+        },
+        "orderKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string"
+        },
+        "displayText": {
+          "type": "string"
+        },
+        "normalisedText": {
+          "type": "string"
+        },
+        "speechText": {
+          "type": "string"
+        },
+        "lang": {
+          "type": "string"
+        },
+        "script": {
+          "type": "string"
+        },
+        "dir": {
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "ui": {
+          "$ref": "#/$defs/ui"
+        },
+        "speech": {
+          "$ref": "#/$defs/speech"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rights": {
+          "$ref": "#/$defs/rights"
+        },
+        "metadata": {
+          "$ref": "#/$defs/metadata"
+        },
+        "pronunciationRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pronunciationRef"
+          }
+        },
+        "lexiconEntryIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "phoneme": {
+          "type": "string"
+        },
+        "alphabet": {
+          "type": "string"
+        },
+        "sayAs": {
+          "type": "string"
+        },
+        "markId": {
+          "type": "string"
+        },
+        "adapterVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "pronunciationRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["term", "spoken", "startOffset", "endOffset", "originalText"],
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "spoken": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "entryId": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "protected": {
+          "type": "boolean"
+        },
+        "startOffset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endOffset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "originalText": {
+          "type": "string"
+        },
+        "phoneme": {
+          "type": "string"
+        },
+        "alphabet": {
+          "type": "string"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "sourceId", "locator", "offsets"],
+      "properties": {
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locator": {
+          "$ref": "#/$defs/locator"
+        },
+        "offsets": {
+          "$ref": "#/$defs/offsets"
+        },
+        "extraction": {
+          "$ref": "#/$defs/extractionProvenance"
+        }
+      }
+    },
+    "extractionProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extractor", "extractorVersion", "supportTier", "step", "confidence"],
+      "properties": {
+        "extractor": {
+          "type": "string"
+        },
+        "extractorVersion": {
+          "type": "string"
+        },
+        "supportTier": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "offsets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["markdown", "html", "epub", "pdf", "docx", "ocr"]
+        },
+        "markdown": {
+          "$ref": "#/$defs/markdownLocator"
+        },
+        "html": {
+          "$ref": "#/$defs/htmlLocator"
+        },
+        "epub": {
+          "$ref": "#/$defs/epubLocator"
+        },
+        "pdf": {
+          "$ref": "#/$defs/pdfLocator"
+        },
+        "docx": {
+          "$ref": "#/$defs/docxLocator"
+        },
+        "ocr": {
+          "$ref": "#/$defs/ocrLocator"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "markdown"
+              }
+            }
+          },
+          "then": {
+            "required": ["markdown"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "html"
+              }
+            }
+          },
+          "then": {
+            "required": ["html"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "epub"
+              }
+            }
+          },
+          "then": {
+            "required": ["epub"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "pdf"
+              }
+            }
+          },
+          "then": {
+            "required": ["pdf"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "docx"
+              }
+            }
+          },
+          "then": {
+            "required": ["docx"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "ocr"
+              }
+            }
+          },
+          "then": {
+            "required": ["ocr"]
+          }
+        }
+      ]
+    },
+    "markdownLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "lineStart", "lineEnd", "columnStart", "columnEnd", "astPath"],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "lineStart": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lineEnd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "columnStart": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "columnEnd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "astPath": {
+          "type": "string"
+        }
+      }
+    },
+    "htmlLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["href", "fragment"],
+      "properties": {
+        "href": {
+          "type": "string"
+        },
+        "fragment": {
+          "type": "string"
+        },
+        "textQuote": {
+          "type": "string"
+        },
+        "progression": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "epubCfi": {
+          "type": "string"
+        }
+      }
+    },
+    "epubLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["href"],
+      "properties": {
+        "href": {
+          "type": "string"
+        },
+        "fragment": {
+          "type": "string"
+        },
+        "textQuote": {
+          "type": "string"
+        },
+        "progression": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "epubCfi": {
+          "type": "string"
+        },
+        "spineId": {
+          "type": "string"
+        }
+      }
+    },
+    "pdfLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pageIndex"],
+      "properties": {
+        "pageIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bbox": {
+          "$ref": "#/$defs/bbox"
+        },
+        "polygon": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/point"
+          }
+        },
+        "readingOrderIndex": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "docxLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paragraphIndex"],
+      "properties": {
+        "paragraphIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bookmarkId": {
+          "type": "string"
+        }
+      }
+    },
+    "ocrLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pageIndex", "polygon", "ocrEngine", "ocrConfidence"],
+      "properties": {
+        "pageIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "polygon": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/point"
+          }
+        },
+        "ocrEngine": {
+          "type": "string"
+        },
+        "ocrConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        }
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["progressionHint", "highlightUnitHint"],
+      "properties": {
+        "progressionHint": {
+          "type": "string"
+        },
+        "highlightUnitHint": {
+          "type": "string"
+        }
+      }
+    },
+    "speech": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policyHint", "speechPolicy"],
+      "properties": {
+        "policyHint": {
+          "$ref": "#/$defs/speechPolicyHint"
+        },
+        "speechPolicy": {
+          "$ref": "#/$defs/speechPolicy"
+        }
+      }
+    },
+    "speechPolicyHint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "emphasis", "pauseBeforeMs", "pauseAfterMs"],
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "emphasis": {
+          "type": "string"
+        },
+        "pauseBeforeMs": {
+          "type": "integer"
+        },
+        "pauseAfterMs": {
+          "type": "integer"
+        }
+      }
+    },
+    "speechPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "mode", "explanation"],
+      "properties": {
+        "profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "element": {
+          "type": "string"
+        },
+        "elementMode": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "explanation": {
+          "type": "string"
+        }
+      }
+    },
+    "rights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "notes"],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

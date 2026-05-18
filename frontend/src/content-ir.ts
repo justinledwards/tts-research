@@ -1,5 +1,5 @@
-import { formatContentIRLocator as formatLocator } from "./locatorCodecs";
-import type { ContentIRLocator, ContentIRNode } from "./generated/contracts";
+import { formatContentIRLocator as formatLocator } from "@tts-research/sdk-ts";
+import type { ContentIRLocator, ContentIRNode } from "@tts-research/schema";
 
 export const CONTENT_IR_SCHEMA_VERSION = "content-ir.v1";
 
@@ -28,7 +28,7 @@ export type {
   LocatorEnvelope,
   ReadiumLocator,
   SpeechPlanDocument,
-} from "./generated/contracts";
+} from "@tts-research/schema";
 
 export function formatContentIRLocator(locator: ContentIRLocator): string {
   return formatLocator(locator);

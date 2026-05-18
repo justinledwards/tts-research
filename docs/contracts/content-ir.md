@@ -18,7 +18,7 @@ The released v1 shape includes:
 
 Older in-repo pre-release v1 documents are still accepted by the backend reader and normalized into the released v1 shape. They are not a public compatibility target.
 
-Public schemas live in `backend/internal/contentir/schema/`. Generated schema bundles live in `docs/contracts/schema-bundle.v1.json`. Golden examples live in `fixtures/contracts/`.
+Public schema inputs live in `backend/internal/contentir/schema/`. Packaged schemas, generated TypeScript types, and validators are exported from `@tts-research/schema`. Generated schema bundles live in `docs/contracts/schema-bundle.v1.json`. Golden examples live in `fixtures/contracts/`.
 
 ## Migration Notes
 

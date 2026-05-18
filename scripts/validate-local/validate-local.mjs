@@ -54,6 +54,18 @@ const commandSteps = [
     command: "pnpm",
     args: ["validate:ir"],
   },
+  {
+    id: "package-smoke",
+    title: "Package Smoke",
+    command: "pnpm",
+    args: ["package:smoke"],
+  },
+  {
+    id: "cli-parity",
+    title: "CLI Parity",
+    command: "pnpm",
+    args: ["cli:parity"],
+  },
 ];
 
 for (const step of commandSteps) {

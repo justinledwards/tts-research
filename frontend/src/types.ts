@@ -1153,7 +1153,7 @@ export interface TokenTiming {
 }
 
 export interface FragmentTimingArtifact {
-  schemaVersion: string;
+  schemaVersion: "timing.v1";
   jobId?: string;
   source: TimingSource;
   status: string;
@@ -1166,7 +1166,7 @@ export interface FragmentTimingArtifact {
 }
 
 export interface TokenTimingArtifact {
-  schemaVersion: string;
+  schemaVersion: "timing.v1";
   jobId?: string;
   source: TimingSource;
   status: string;
@@ -1217,7 +1217,7 @@ export interface HighlightToken {
 }
 
 export interface HighlightMap {
-  schemaVersion: string;
+  schemaVersion: "highlight-map.v1";
   jobId?: string;
   bookSourceId?: string;
   scopeKey?: string;

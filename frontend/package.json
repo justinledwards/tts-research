@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tts-research/schema": "workspace:*",
+    "@tts-research/sdk-ts": "workspace:*",
     "@tailwindcss/vite": "^4.1.17",
     "mermaid": "^11.15.0",
     "react": "^19.2.0",
