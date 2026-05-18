@@ -205,6 +205,8 @@ func (service *Service) CreateBookSourceFromURLWithOptions(
 			fetched.Filename = ensureFilenameExtension(fetched.Filename, ".epub")
 		} else if strings.Contains(fetched.ContentType, "wordprocessingml") || strings.Contains(fetched.ContentType, "officedocument") {
 			fetched.Filename = ensureFilenameExtension(fetched.Filename, ".docx")
+		} else if strings.Contains(fetched.ContentType, "markdown") || strings.Contains(fetched.ContentType, "x-markdown") {
+			fetched.Filename = ensureFilenameExtension(fetched.Filename, ".md")
 		} else if strings.Contains(fetched.ContentType, "html") || strings.Contains(fetched.ContentType, "xhtml") {
 			fetched.Filename = ensureFilenameExtension(fetched.Filename, ".html")
 		} else if strings.Contains(fetched.ContentType, "zip") {
@@ -214,7 +216,7 @@ func (service *Service) CreateBookSourceFromURLWithOptions(
 		}
 		kind, err = detectBookSourceKind(fetched.Filename)
 		if err != nil {
-			return BookSource{}, fmt.Errorf("URL does not point to a PDF, EPUB, DOCX, HTML, or image book source")
+			return BookSource{}, fmt.Errorf("URL does not point to a PDF, EPUB, DOCX, Markdown, HTML, or image book source")
 		}
 	}
 

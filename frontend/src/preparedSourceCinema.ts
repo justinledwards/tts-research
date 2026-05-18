@@ -31,11 +31,57 @@ export function preparedSourceCinemaTitle(source: PreparedSource): string {
 }
 
 export function preparedSourceCinemaLabel(source: PreparedSource): string {
-  return source.kind === "url" ? "Website Cinema" : "Source Cinema";
+  const kind = preparedSourceCinemaKind(source);
+  if (kind === "website") {
+    return "Website Cinema";
+  }
+  if (kind === "document") {
+    return "Document Cinema";
+  }
+  return "Source Cinema";
 }
 
 export function preparedSourceCinemaActionLabel(source: PreparedSource): string {
-  return source.kind === "url" ? "Open Website Cinema" : "Open Source Cinema";
+  const kind = preparedSourceCinemaKind(source);
+  if (kind === "website") {
+    return "Open Website Cinema";
+  }
+  if (kind === "document") {
+    return "Open Document Cinema";
+  }
+  return "Open Source Cinema";
+}
+
+export type PreparedSourceCinemaKind = "document" | "source" | "website";
+
+export function preparedSourceCinemaKind(source: PreparedSource): PreparedSourceCinemaKind {
+  if (source.kind === "url") {
+    return "website";
+  }
+  if (isPreparedSourceMarkdownDocument(source) || source.kind === "file") {
+    return "document";
+  }
+  return "source";
+}
+
+export function isPreparedSourceMarkdownDocument(source: PreparedSource): boolean {
+  const haystack = [
+    source.renderMode,
+    source.sourceFormat,
+    source.sourceContentType,
+    source.sourceName,
+    source.title,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return (
+    source.renderMode === "markdown" ||
+    source.sourceFormat === "markdown" ||
+    haystack.includes("markdown") ||
+    /\.md(?:\b|$)/.test(haystack) ||
+    /\.markdown(?:\b|$)/.test(haystack)
+  );
 }
 
 export function preparedSourceCinemaSourceHref(source: PreparedSource): string | null {

@@ -50,6 +50,11 @@ func (service *Service) extractBookSourceIR(
 	switch kind {
 	case BookSourceKindPDF, BookSourceKindImage:
 		return service.runPDFAdapter(ctx, sourcePaths, sourceFileName, book, generatedAt, options)
+	case BookSourceKindMarkdown:
+		if len(sourcePaths) == 0 {
+			return contentir.Document{}, fmt.Errorf("markdown adapter requires a source file")
+		}
+		return service.markdownBookSourceIR(sourcePaths[0], sourceFileName, book, generatedAt)
 	case BookSourceKindEPUB, BookSourceKindDOCX, BookSourceKindHTML:
 		if len(sourcePaths) == 0 {
 			return contentir.Document{}, fmt.Errorf("%s adapter requires a source file", kind)
@@ -58,6 +63,133 @@ func (service *Service) extractBookSourceIR(
 	default:
 		return contentir.Document{}, fmt.Errorf("unsupported book source type")
 	}
+}
+
+func (service *Service) markdownBookSourceIR(
+	sourcePath string,
+	sourceFileName string,
+	book BookSource,
+	generatedAt time.Time,
+) (contentir.Document, error) {
+	data, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return contentir.Document{}, fmt.Errorf("read markdown book source: %w", err)
+	}
+	sourceText := strings.TrimSpace(string(data))
+	if sourceText == "" {
+		return contentir.Document{}, ErrEmptyText
+	}
+	preprocessed := preprocessReadableSource(
+		sourceText,
+		sourceFileName,
+		"text/markdown",
+		service.options.SourcePrepSentenceMaxRunes,
+		"strict",
+	)
+	blocks, sections := markdownBookSectionsFromBlocks(preprocessed.Blocks)
+	metadata := cloneAnyMap(preprocessed.Metadata)
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	title := firstNonEmpty(preprocessed.Title, markdownFirstHeading(sourceText), cleanBookTitle(strings.TrimSuffix(filepath.Base(sourceFileName), filepath.Ext(sourceFileName))))
+	metadata["title"] = title
+	metadata["sourceFormat"] = "markdown"
+	metadata["renderMode"] = "markdown"
+	metadata["sections"] = markdownBookSectionMetadata(sections)
+	source := PreparedSource{
+		ID:                  book.ID,
+		ProjectID:           book.ProjectID,
+		Status:              PreparedSourceStatusReady,
+		Kind:                PreparedSourceKindBook,
+		SourceName:          sourceFileName,
+		SourceContentType:   "text/markdown",
+		SourceBytes:         book.SourceBytes,
+		PreprocessorID:      firstNonEmpty(preprocessed.PreprocessorID, "markdown-book"),
+		PreprocessorVersion: firstNonEmpty(preprocessed.PreprocessorVersion, "markdown-book-source-v1"),
+		SourceFormat:        "markdown",
+		RenderMode:          "markdown",
+		MarkdownParseMode:   firstNonEmpty(preprocessed.MarkdownParseMode, "strict"),
+		Title:               title,
+		Text:                sourceText,
+		Blocks:              blocks,
+		Warnings:            preprocessed.Warnings,
+		Metadata:            metadata,
+		SpeechText:          preparedSourceSpeechText(blocks),
+		WordCount:           countWords(preparedSourceSpeechText(blocks)),
+		BlockCount:          len(blocks),
+		SegmentCount:        countPreparedSegments(blocks),
+		Summary:             summarizePreparedSource(blocks),
+		CreatedAt:           generatedAt.UTC(),
+		UpdatedAt:           generatedAt.UTC(),
+	}
+	document := PreparedSourceToIR(source, generatedAt)
+	document.SourceType = "bookSource"
+	document.SourceID = book.ID
+	document.ID = book.ID
+	document.ProjectID = book.ProjectID
+	document.SourceName = sourceFileName
+	document.AdapterVersion = firstNonEmpty(source.PreprocessorVersion, "markdown-book-source-v1")
+	return document, nil
+}
+
+func markdownBookSectionsFromBlocks(blocks []NarrationBlock) ([]NarrationBlock, []BookSourceSection) {
+	if len(blocks) == 0 {
+		return nil, nil
+	}
+	nextBlocks := cloneNarrationBlocks(blocks)
+	sections := make([]BookSourceSection, 0)
+	currentIndex := -1
+	ensureSection := func(title string, role string) int {
+		if strings.TrimSpace(title) == "" {
+			title = "Document"
+		}
+		sectionID := fmt.Sprintf("markdown-section-%04d", len(sections)+1)
+		sections = append(sections, BookSourceSection{
+			ID:           sectionID,
+			Index:        len(sections),
+			Title:        title,
+			Role:         firstNonEmpty(role, bookSectionRoleBody),
+			IsNarratable: true,
+			Kind:         "chapter",
+			ChapterIndex: len(sections) + 1,
+		})
+		return len(sections) - 1
+	}
+	for index := range nextBlocks {
+		block := &nextBlocks[index]
+		if block.Kind == NarrationBlockKindHeading || block.Kind == NarrationBlockKindSubheading {
+			currentIndex = ensureSection(firstNonEmpty(strings.TrimSpace(block.Label), cleanMarkdownInline(block.Text)), bookSectionRoleBody)
+		} else if currentIndex < 0 {
+			currentIndex = ensureSection("Document", bookSectionRoleBody)
+		}
+		section := &sections[currentIndex]
+		text := strings.TrimSpace(firstNonEmpty(block.SpokenText, block.Text))
+		section.WordCount += countWords(text)
+		section.EstimatedDurationMS = estimateBookDurationMS(section.WordCount)
+		if block.Metadata == nil {
+			block.Metadata = map[string]any{}
+		}
+		block.Metadata["sectionId"] = section.ID
+	}
+	return nextBlocks, sections
+}
+
+func markdownBookSectionMetadata(sections []BookSourceSection) []map[string]any {
+	items := make([]map[string]any, 0, len(sections))
+	for _, section := range sections {
+		items = append(items, map[string]any{
+			"id":                  section.ID,
+			"index":               section.Index,
+			"title":               section.Title,
+			"role":                section.Role,
+			"isNarratable":        section.IsNarratable,
+			"kind":                section.Kind,
+			"chapterIndex":        section.ChapterIndex,
+			"wordCount":           section.WordCount,
+			"estimatedDurationMs": section.EstimatedDurationMS,
+		})
+	}
+	return items
 }
 
 func (service *Service) runPDFAdapter(
@@ -218,6 +350,21 @@ func (service *Service) AdapterCapabilities() []AdapterCapability {
 				"lists":                  true,
 				"paragraphRunProvenance": true,
 				"tables":                 true,
+			},
+		},
+		{
+			AdapterID:   "markdown",
+			Extensions:  []string{".md", ".markdown"},
+			MimeTypes:   []string{"text/markdown", "text/x-markdown"},
+			SourceKinds: []string{"file", "url", "bookSource"},
+			Features: map[string]any{
+				"headings":        true,
+				"lists":           true,
+				"tables":          true,
+				"code":            true,
+				"renderMode":      "markdown",
+				"preAudioPreview": true,
+				"speechPolicyIR":  true,
 			},
 		},
 		{

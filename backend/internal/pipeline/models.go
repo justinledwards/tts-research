@@ -324,11 +324,12 @@ const (
 type BookSourceKind string
 
 const (
-	BookSourceKindPDF   BookSourceKind = "pdf"
-	BookSourceKindEPUB  BookSourceKind = "epub"
-	BookSourceKindDOCX  BookSourceKind = "docx"
-	BookSourceKindHTML  BookSourceKind = "html"
-	BookSourceKindImage BookSourceKind = "image"
+	BookSourceKindPDF      BookSourceKind = "pdf"
+	BookSourceKindEPUB     BookSourceKind = "epub"
+	BookSourceKindDOCX     BookSourceKind = "docx"
+	BookSourceKindHTML     BookSourceKind = "html"
+	BookSourceKindMarkdown BookSourceKind = "markdown"
+	BookSourceKindImage    BookSourceKind = "image"
 )
 
 type BookImportProfile string

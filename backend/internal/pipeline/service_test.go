@@ -1583,6 +1583,62 @@ func TestCreateBookSourceImportsHTMLStructure(t *testing.T) {
 	}
 }
 
+func TestCreateBookSourceImportsMarkdownStructure(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	markdown := strings.Join([]string{
+		"# Architecture Notes",
+		"",
+		"Voice Studio validates content before audio generation.",
+		"",
+		"## Pipeline",
+		"",
+		"| Stage | Owner |",
+		"|---|---|",
+		"| Extract | Platform |",
+		"",
+		"```ts",
+		"export const ready = true",
+		"```",
+	}, "\n")
+	markdownPath := filepath.Join(t.TempDir(), "architecture.md")
+	if err := os.WriteFile(markdownPath, []byte(markdown), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	info, err := os.Stat(markdownPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", markdownPath, "architecture.md", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	if book.Kind != pipeline.BookSourceKindMarkdown || book.Status != pipeline.BookSourceStatusReady {
+		t.Fatalf("book kind/status = %q/%q error=%s", book.Kind, book.Status, book.Error)
+	}
+	if book.Title != "Architecture Notes" {
+		t.Fatalf("book title = %q, want markdown heading", book.Title)
+	}
+	if len(book.Sections) == 0 || book.DefaultSectionID == "" || len(book.WordSpans) == 0 {
+		t.Fatalf("book structure = sections:%d default:%q spans:%d", len(book.Sections), book.DefaultSectionID, len(book.WordSpans))
+	}
+	content, err := service.GetBookSourceScope(book.ID, &pipeline.BookScope{Type: pipeline.BookScopeTypeBook})
+	if err != nil {
+		t.Fatalf("GetBookSourceScope returned error: %v", err)
+	}
+	if len(content.Blocks) < 3 || content.Summary.HeadingCount == 0 {
+		t.Fatalf("scope blocks/headings = %d/%d, want rendered markdown structure", len(content.Blocks), content.Summary.HeadingCount)
+	}
+	document, err := service.GetContentIR(book.ID)
+	if err != nil {
+		t.Fatalf("GetContentIR returned error: %v", err)
+	}
+	if document.SourceType != "bookSource" || document.Nodes[0].Provenance.Locator.Markdown == nil {
+		t.Fatalf("content IR source/locator = %q/%#v, want markdown book source", document.SourceType, document.Nodes[0].Provenance.Locator)
+	}
+}
+
 func TestBookSourceScopePolicyPreviewAndNarrationJobShareSettings(t *testing.T) {
 	t.Parallel()
 

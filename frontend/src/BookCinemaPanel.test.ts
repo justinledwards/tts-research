@@ -189,15 +189,15 @@ describe("Book Cinema helpers", () => {
     ]);
   });
 
-  it("defaults EPUB narration to the first chapter", () => {
+  it("defaults EPUB narration to the full book", () => {
     const book = makeBookSource("one two three four");
     const scope = resolveDefaultBookScope(book);
 
-    expect(bookScopeKey(scope)).toBe("chapter:1");
+    expect(bookScopeKey(scope)).toBe("book");
     expect(bookScopeText(book, scope)).toBe("one two three four");
   });
 
-  it("prefers structured default sections over raw chapter order", () => {
+  it("keeps structured sections available while defaulting to the full book", () => {
     const book = {
       ...makeBookSource("copyright words one two"),
       defaultSectionId: "body-2",
@@ -229,10 +229,51 @@ describe("Book Cinema helpers", () => {
       ],
     };
 
-    expect(bookScopeKey(resolveDefaultBookScope(book))).toBe("chapter:2");
+    expect(bookScopeKey(resolveDefaultBookScope(book))).toBe("book");
     expect(bookScopeOptions(book).map((option) => option.label)).toEqual([
+      "Full book",
       "Copyright",
       "Chapter 1",
+    ]);
+  });
+
+  it("defaults Markdown documents to full-document cinema while preserving sections", () => {
+    const text = "# Report\n\n## Executive summary\n\nThe whole document should be visible.";
+    const book = {
+      ...makeBookSource(text),
+      kind: "markdown" as const,
+      sourceFile: "report.md",
+      defaultSectionId: "section-1",
+      sections: [
+        {
+          id: "section-1",
+          index: 0,
+          title: "Report",
+          role: "body" as const,
+          isNarratable: true,
+          kind: "chapter",
+          chapterIndex: 1,
+          wordCount: 1,
+        },
+        {
+          id: "section-2",
+          index: 1,
+          title: "Executive summary",
+          role: "body" as const,
+          isNarratable: true,
+          kind: "chapter",
+          chapterIndex: 2,
+          wordCount: 6,
+        },
+      ],
+    };
+
+    expect(bookScopeKey(resolveDefaultBookScope(book))).toBe("book");
+    expect(bookScopeText(book, resolveDefaultBookScope(book))).toContain("Executive summary");
+    expect(bookScopeOptions(book).map((option) => option.label)).toEqual([
+      "Full document",
+      "Report",
+      "Executive summary",
     ]);
   });
 
@@ -240,9 +281,9 @@ describe("Book Cinema helpers", () => {
     const book = makePDFBookSource();
     const options = bookScopeOptions(book);
 
-    expect(options.map((option) => option.key)).toEqual(["pages:1-2", "pages:3-3"]);
-    expect(bookScopeText(book, options[0]?.scope ?? { type: "book" })).toContain("Page one");
-    expect(bookScopeText(book, options[0]?.scope ?? { type: "book" })).toContain("Page two");
+    expect(options.map((option) => option.key)).toEqual(["book", "pages:1-2", "pages:3-3"]);
+    expect(bookScopeText(book, options[1]?.scope ?? { type: "book" })).toContain("Page one");
+    expect(bookScopeText(book, options[1]?.scope ?? { type: "book" })).toContain("Page two");
   });
 
   it("keeps the visible book span window close to the active word", () => {
@@ -302,12 +343,15 @@ describe("Book Cinema helpers", () => {
     expect(bookSourceName({ ...makeBookSource("hello"), title: "" })).toBe("demo.epub");
   });
 
-  it("accepts EPUB, PDF, DOCX, HTML, images, and zipped HTML packages", () => {
+  it("accepts EPUB, PDF, DOCX, Markdown, HTML, images, and zipped HTML packages", () => {
     expect(BOOK_SOURCE_ACCEPT).toContain(".docx");
+    expect(BOOK_SOURCE_ACCEPT).toContain(".md");
+    expect(BOOK_SOURCE_ACCEPT).toContain("text/markdown");
     expect(BOOK_SOURCE_ACCEPT).toContain(".html");
     expect(BOOK_SOURCE_ACCEPT).toContain(".zip");
     expect(BOOK_SOURCE_ACCEPT).toContain(".png");
     expect(isSupportedBookSource(new File([""], "fixture.docx"))).toBe(true);
+    expect(isSupportedBookSource(new File([""], "notes.md", { type: "text/markdown" }))).toBe(true);
     expect(isSupportedBookSource(new File([""], "article.html", { type: "text/html" }))).toBe(true);
     expect(isSupportedBookSource(new File([""], "page.png", { type: "image/png" }))).toBe(true);
     expect(isSupportedBookSource(new File([""], "package.zip", { type: "application/zip" }))).toBe(

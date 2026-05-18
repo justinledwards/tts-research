@@ -199,6 +199,7 @@ import type { ContentIRDocument } from "./content-ir";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
 import {
   preparedSourceCinemaActionLabel,
+  preparedSourceCinemaKind,
   preparedSourceCinemaJobMatchesSource,
   type PreparedSourceCinemaTextSize,
 } from "./preparedSourceCinema";
@@ -2386,7 +2387,7 @@ export function App() {
   );
   const [isBookCinemaOpen, setIsBookCinemaOpen] = useState(false);
   const [bookCinemaTextSize, setBookCinemaTextSize] = useState<BookCinemaTextSize>("large");
-  const [bookCinemaThemeName, setBookCinemaThemeName] = useState<ThemeName>("night");
+  const [bookCinemaThemeName, setBookCinemaThemeName] = useState<ThemeName>("dark");
   const [preparedSourceCinemaSourceId, setPreparedSourceCinemaSourceId] = useState<string | null>(
     null,
   );
@@ -2614,7 +2615,11 @@ export function App() {
     (source: PreparedSource) => {
       startFrontendSpan("prepared-source-cinema-open");
       setPreparedSourceCinemaSourceId(source.id);
-      setPreparedSourceCinemaThemeName(themeName === "night" ? "light" : themeName);
+      if (preparedSourceCinemaKind(source) === "website") {
+        setPreparedSourceCinemaThemeName(themeName === "night" ? "light" : themeName);
+        return;
+      }
+      setPreparedSourceCinemaThemeName("dark");
     },
     [themeName],
   );
@@ -2800,15 +2805,40 @@ export function App() {
     [activeProjectId, effectiveBookScope, hashReadingPosition, selectedBookSource],
   );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
-  const openReadingCinema = useCallback(() => {
-    if (canOpenBookCinema && (!job || Boolean(job.bookSourceId))) {
+  const openReadingCinema = useCallback(
+    (target?: "book") => {
+      const shouldOpenSelectedBook = target === "book" || !job || Boolean(job.bookSourceId);
+      if (canOpenBookCinema && shouldOpenSelectedBook) {
+        startFrontendSpan("book-cinema-open");
+        setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
+        setIsBookCinemaOpen(true);
+        return;
+      }
+      setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
+    },
+    [canOpenBookCinema, job, themeName],
+  );
+  const openSelectedBookCinema = useCallback(() => {
+    if (canOpenBookCinema) {
       startFrontendSpan("book-cinema-open");
-      setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
+      setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
       setIsBookCinemaOpen(true);
       return;
     }
     setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
-  }, [canOpenBookCinema, job, themeName]);
+  }, [canOpenBookCinema, themeName]);
+  const handleSelectBookCinemaSource = useCallback(
+    (bookId: string) => {
+      const book = bookSources.find((item) => item.id === bookId);
+      if (!book) {
+        return;
+      }
+      setSelectedBookSourceId(book.id);
+      setSelectedBookScope(resolveDefaultBookScope(book));
+      setBookScopeContent(null);
+    },
+    [bookSources],
+  );
   const ttsPipelineHint = isProcessing
     ? (job?.progress.message ?? "TTS pipeline is processing the current job.")
     : "Start a job to see live TTS pipeline status.";
@@ -2871,9 +2901,10 @@ export function App() {
     setSelectedBookScope(scopeFromBookScopeKey(book, hashReadingPosition.scopeKey));
     if (book.status === "ready") {
       startFrontendSpan("book-cinema-open");
+      setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
       setIsBookCinemaOpen(true);
     }
-  }, [bookSources, hashReadingPosition]);
+  }, [bookSources, hashReadingPosition, themeName]);
 
   const beginProfileLoadingIndicator = useCallback(() => {
     const visibleRequestToken = ++profileLoadingVisibleRequestCounter.current;
@@ -3721,7 +3752,7 @@ export function App() {
       if (progress.bookSourceId) {
         setSelectedBookSourceId(progress.bookSourceId);
         setSelectedBookScope(progress.bookScope ?? null);
-        setBookCinemaThemeName(themeName === "light" ? "night" : themeName);
+        setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
         setIsBookCinemaOpen(true);
       }
       if (progress.preparedSourceId) {
@@ -3855,6 +3886,53 @@ export function App() {
       }
     },
     [activeProjectId, refreshProjects],
+  );
+  const handlePrepareCinemaSourceFile = useCallback(
+    async (file: File) => {
+      setIsPreparingSource(true);
+      setSourcePrepError(null);
+      try {
+        const source = await createPreparedSource(activeProjectId, file, {
+          markdownParseMode: "strict",
+        });
+        setPreparedSources((currentSources) => [
+          source,
+          ...currentSources.filter((item) => item.id !== source.id),
+        ]);
+        setSelectedPreparedSourceId(source.id);
+        setPreparedSourceCinemaSourceId(source.id);
+        setSourceMode("fileUrl");
+        setContentMode("review");
+        if (source.speechText) {
+          setText(source.speechText);
+        }
+      } catch (caughtError) {
+        if (isApiNotFoundError(caughtError)) {
+          setSourcePrepError(
+            "The selected project is no longer available. I refreshed the workspace; choose a project and prepare the file again.",
+          );
+          void refreshProjects();
+          return;
+        }
+        setSourcePrepError(
+          caughtError instanceof Error ? caughtError.message : "Unable to prepare that source",
+        );
+      } finally {
+        setIsPreparingSource(false);
+      }
+    },
+    [activeProjectId, refreshProjects],
+  );
+  const handleSelectPreparedCinemaSource = useCallback(
+    (sourceId: string) => {
+      const source = preparedSources.find((item) => item.id === sourceId);
+      if (!source) {
+        return;
+      }
+      setSelectedPreparedSourceId(source.id);
+      openPreparedSourceCinema(source);
+    },
+    [openPreparedSourceCinema, preparedSources],
   );
 
   const handlePrepareSourceUrl = useCallback(
@@ -5141,7 +5219,10 @@ export function App() {
         <Suspense fallback={<LazySurfaceFallback label="Loading Book Cinema..." />}>
           <BookCinemaOverlay
             book={selectedBookSource}
+            bookSources={bookSources}
             canCreateAudio={!isProcessing}
+            importError={bookSourceError}
+            isImporting={isImportingBookSource}
             isProcessing={isProcessing}
             job={job}
             playbackControls={playbackControls}
@@ -5160,6 +5241,7 @@ export function App() {
             onCreateAudio={(book, scope) => {
               void submitBookNarrationJob(book, scope);
             }}
+            onImport={handleImportBookSource}
             onInspectStructure={(book) => {
               void handleInspectContentIR(book.id, bookSourceName(book));
             }}
@@ -5169,6 +5251,7 @@ export function App() {
             onPlayPause={handleBookCinemaPlayPause}
             onRestart={handleBookCinemaRestart}
             onScopeChange={setSelectedBookScope}
+            onSelectBook={handleSelectBookCinemaSource}
             onSkip={handleBookCinemaSkip}
             onResumeProgress={(progress, seconds) => {
               void handleResumeProgress(progress, seconds);
@@ -5184,6 +5267,8 @@ export function App() {
           <PreparedSourceCinemaOverlay
             activeWordIndex={preparedSourceCinemaCue?.documentActiveWordIndex ?? -1}
             canCreateAudio={!isProcessing}
+            importError={sourcePrepError}
+            isImporting={isPreparingSource}
             isProcessing={isProcessing}
             isPlaybackActive={
               isPlaybackActive &&
@@ -5194,6 +5279,7 @@ export function App() {
             playbackCursorSec={playbackCursorSec}
             progress={preparedSourceCinemaProgress}
             source={preparedSourceCinemaSource}
+            sources={preparedSources}
             textSize={preparedSourceCinemaTextSize}
             themeName={preparedSourceCinemaThemeName}
             onClose={() => {
@@ -5205,11 +5291,13 @@ export function App() {
             onInspectStructure={(source) => {
               void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
             }}
+            onPrepareFile={handlePrepareCinemaSourceFile}
             onPlayPause={handleBookCinemaPlayPause}
             onRestart={handleBookCinemaRestart}
             onResumeProgress={(progress) => {
               void handleResumeProgress(progress);
             }}
+            onSelectSource={handleSelectPreparedCinemaSource}
             onSkip={handleBookCinemaSkip}
             onTextSizeChange={setPreparedSourceCinemaTextSize}
             onThemeChange={setPreparedSourceCinemaThemeName}
@@ -5470,7 +5558,7 @@ export function App() {
                       void submitBookNarrationJob(book, scope);
                     }}
                     onImport={handleImportBookSource}
-                    onOpenCinema={openReadingCinema}
+                    onOpenCinema={openSelectedBookCinema}
                     onInspectStructure={(book) => {
                       void handleInspectContentIR(book.id, bookSourceName(book));
                     }}
@@ -6096,14 +6184,14 @@ function NarrationSidebar({
             value={sourceSearch}
           />
           <div className="grid gap-2">
-            {visiblePreparedSources.map((source) => (
+            {visiblePreparedSources.map((source, index) => (
               <button
                 className={`min-w-0 rounded-md border p-2 text-left transition ${
                   source.id === selectedPreparedSourceId
                     ? "border-orange-300 bg-orange-500/10"
                     : "hover:border-orange-200 vs-border vs-surface"
                 }`}
-                key={source.id}
+                key={`${source.id}-${String(index)}`}
                 onClick={() => {
                   onSelectPreparedSource(source);
                 }}
@@ -6120,14 +6208,14 @@ function NarrationSidebar({
                 </span>
               </button>
             ))}
-            {visibleBookSources.map((book) => (
+            {visibleBookSources.map((book, index) => (
               <button
                 className={`min-w-0 rounded-md border p-2 text-left transition ${
                   book.id === selectedBookSourceId
                     ? "border-orange-300 bg-orange-500/10"
                     : "hover:border-orange-200 vs-border vs-surface"
                 }`}
-                key={book.id}
+                key={`${book.id}-${String(index)}`}
                 onClick={() => {
                   onSelectBook(book.id);
                 }}

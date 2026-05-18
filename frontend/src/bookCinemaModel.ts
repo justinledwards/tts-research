@@ -8,7 +8,7 @@ import type {
 } from "./types";
 
 export const BOOK_SOURCE_ACCEPT =
-  ".pdf,.epub,.docx,.html,.htm,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/html,application/xhtml+xml,application/zip,image/png,image/jpeg,image/tiff,image/webp";
+  ".pdf,.epub,.docx,.md,.markdown,.html,.htm,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/x-markdown,text/html,application/xhtml+xml,application/zip,image/png,image/jpeg,image/tiff,image/webp";
 const BOOK_PAGE_MIN_WORDS = 18;
 const BOOK_PAGE_MAX_WORDS = 128;
 const BOOK_PAGE_DEFAULT_WORDS: Record<BookCinemaTextSize, number> = {
@@ -166,35 +166,7 @@ export function nextBookCinemaPlaybackRate(currentRate: number, direction: -1 | 
 }
 
 export function resolveDefaultBookScope(book: BookSource): BookScope {
-  const defaultSection = (book.sections ?? []).find(
-    (section) => section.id === book.defaultSectionId,
-  );
-  if (defaultSection) {
-    return scopeFromBookSection(defaultSection);
-  }
-  const firstNarratableSection = (book.sections ?? []).find((section) => section.isNarratable);
-  if (firstNarratableSection) {
-    return scopeFromBookSection(firstNarratableSection);
-  }
-  const chapters = book.chapters ?? [];
-  const pages = book.pages ?? [];
-  if (book.kind === "epub" && chapters.length > 0) {
-    const chapter = chapters.find((item) => item.isNarratable !== false) ?? chapters[0];
-    return {
-      type: "chapter",
-      chapterIndex: chapter.index,
-      label: nonEmptyString(chapter.title) ?? `Chapter ${String(chapter.index)}`,
-    };
-  }
-  if (book.kind === "pdf" && pages.length > 0) {
-    return {
-      type: "pages",
-      pageStart: 1,
-      pageEnd: Math.min(2, pages.length),
-      label: pages.length > 1 ? "Pages 1-2" : "Page 1",
-    };
-  }
-  return { type: "book", label: "Full book" };
+  return fullBookScope(book);
 }
 
 export function normalizeBookScopeForBook(book: BookSource, scope: BookScope | null): BookScope {
@@ -230,7 +202,7 @@ export function normalizeBookScopeForBook(book: BookSource, scope: BookScope | n
     };
   }
   if (scope.type === "book") {
-    return { type: "book", label: nonEmptyString(scope.label) ?? "Full book" };
+    return { type: "book", label: nonEmptyString(scope.label) ?? fullSourceScopeLabel(book) };
   }
   return resolveDefaultBookScope(book);
 }
@@ -279,9 +251,10 @@ export function bookScopeSpans(
 }
 
 export function bookScopeOptions(book: BookSource): BookScopeOption[] {
+  const fullOption = fullBookScopeOption(book);
   const sections = book.sections ?? [];
   if (sections.length > 0) {
-    return sections.map((section) => ({
+    const sectionOptions = sections.map((section) => ({
       key: bookScopeKey(scopeFromBookSection(section)),
       label: section.title,
       group: section.role,
@@ -289,22 +262,28 @@ export function bookScopeOptions(book: BookSource): BookScopeOption[] {
       wordCount: section.wordCount,
       scope: scopeFromBookSection(section),
     }));
+    return [fullOption, ...sectionOptions];
   }
   const chapters = book.chapters ?? [];
   const pages = book.pages ?? [];
   if (book.kind === "epub" && chapters.length > 0) {
-    return chapters.map((chapter) => ({
-      key: `chapter:${String(chapter.index)}`,
-      label: nonEmptyString(chapter.title) ?? `Chapter ${String(chapter.index)}`,
-      group: chapter.role ?? "body",
-      isNarratable: chapter.isNarratable ?? true,
-      wordCount: chapter.wordCount,
-      scope: {
-        type: "chapter",
-        chapterIndex: chapter.index,
-        label: nonEmptyString(chapter.title) ?? `Chapter ${String(chapter.index)}`,
-      },
-    }));
+    return [
+      fullOption,
+      ...chapters.map(
+        (chapter): BookScopeOption => ({
+          key: `chapter:${String(chapter.index)}`,
+          label: nonEmptyString(chapter.title) ?? `Chapter ${String(chapter.index)}`,
+          group: chapter.role ?? "body",
+          isNarratable: chapter.isNarratable ?? true,
+          wordCount: chapter.wordCount,
+          scope: {
+            type: "chapter",
+            chapterIndex: chapter.index,
+            label: nonEmptyString(chapter.title) ?? `Chapter ${String(chapter.index)}`,
+          },
+        }),
+      ),
+    ];
   }
   if (book.kind === "pdf" && pages.length > 0) {
     const options: BookScopeOption[] = [];
@@ -319,18 +298,9 @@ export function bookScopeOptions(book: BookSource): BookScopeOption[] {
         scope: { type: "pages", pageStart: index, pageEnd: end, label: pageRangeLabel(index, end) },
       });
     }
-    return options;
+    return [fullOption, ...options];
   }
-  return [
-    {
-      key: "book",
-      label: "Full book",
-      group: "full",
-      isNarratable: true,
-      wordCount: book.wordCount,
-      scope: { type: "book", label: "Full book" },
-    },
-  ];
+  return [fullOption];
 }
 
 export function bookScopeKey(scope: BookScope): string {
@@ -576,6 +546,26 @@ function nonEmptyString(value: string | null | undefined): string | null {
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
+function fullSourceScopeLabel(book: BookSource): string {
+  return book.kind === "epub" ? "Full book" : "Full document";
+}
+
+function fullBookScope(book: BookSource): BookScope {
+  return { type: "book", label: fullSourceScopeLabel(book) };
+}
+
+function fullBookScopeOption(book: BookSource): BookScopeOption {
+  const scope = fullBookScope(book);
+  return {
+    key: bookScopeKey(scope),
+    label: bookScopeLabel(scope),
+    group: "full",
+    isNarratable: true,
+    wordCount: book.wordCount,
+    scope,
+  };
+}
+
 function scopeFromBookSection(section: NonNullable<BookSource["sections"]>[number]): BookScope {
   if (section.kind === "pages" || (section.pageStart && section.pageEnd && !section.chapterIndex)) {
     return {
@@ -606,6 +596,8 @@ function isBookSourceExtension(extension: string): boolean {
     "pdf",
     "epub",
     "docx",
+    "md",
+    "markdown",
     "html",
     "htm",
     "zip",

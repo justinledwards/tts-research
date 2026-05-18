@@ -214,7 +214,7 @@ export interface ProjectStorageSummary {
 
 export type BookSourceStatus = "ready" | "failed";
 
-export type BookSourceKind = "pdf" | "epub" | "docx" | "html" | "image";
+export type BookSourceKind = "pdf" | "epub" | "docx" | "html" | "markdown" | "image";
 
 export type BookImportProfile = "auto" | "scholarly";
 export type PDFTableMode = "auto" | "off" | "structured";

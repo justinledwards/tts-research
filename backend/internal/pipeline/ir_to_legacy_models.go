@@ -286,8 +286,20 @@ func bookSectionsFromIRMetadata(metadata contentir.Metadata) []BookSourceSection
 	if !ok {
 		return nil
 	}
-	items, ok := raw.([]any)
-	if !ok {
+	var items []any
+	switch typed := raw.(type) {
+	case []any:
+		items = typed
+	case []map[string]any:
+		items = make([]any, 0, len(typed))
+		for _, item := range typed {
+			items = append(items, item)
+		}
+	case []BookSourceSection:
+		sections := make([]BookSourceSection, len(typed))
+		copy(sections, typed)
+		return sections
+	default:
 		return nil
 	}
 	sections := make([]BookSourceSection, 0, len(items))

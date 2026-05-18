@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { formatDuration } from "./format";
+import { useAudioWaveformBars } from "./audioWaveform";
 import { looksLikeMermaidDiagram } from "./markdownModel";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
 import { MermaidDiagram, MarkdownRenderer } from "./MarkdownRenderer";
@@ -13,6 +13,7 @@ import {
   preparedSourceCinemaSkippedGroups,
   preparedSourceCinemaSourceHref,
   preparedSourceCinemaTitle,
+  isPreparedSourceMarkdownDocument,
   type PreparedSourceCinemaOutlineItem,
   type PreparedSourceCinemaTextSize,
 } from "./preparedSourceCinema";
@@ -24,6 +25,9 @@ import type {
   ThemeName,
   VoiceJob,
 } from "./types";
+
+const PREPARED_SOURCE_CINEMA_ACCEPT =
+  ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/html,text/csv,application/json";
 
 export interface PreparedSourceCinemaPlaybackControls {
   isAvailable: boolean;
@@ -42,6 +46,8 @@ type PreparedSourceCinemaMobilePanel = "source" | "structure" | "narration";
 export function PreparedSourceCinemaOverlay({
   activeWordIndex,
   canCreateAudio,
+  importError,
+  isImporting,
   isProcessing,
   isPlaybackActive,
   job,
@@ -49,20 +55,25 @@ export function PreparedSourceCinemaOverlay({
   playbackCursorSec,
   progress,
   source,
+  sources,
   textSize,
   themeName,
   onClose,
   onCreateAudio,
   onInspectStructure,
+  onPrepareFile,
   onPlayPause,
   onRestart,
   onResumeProgress,
+  onSelectSource,
   onSkip,
   onTextSizeChange,
   onThemeChange,
 }: Readonly<{
   activeWordIndex: number;
   canCreateAudio: boolean;
+  importError: string | null;
+  isImporting: boolean;
   isProcessing: boolean;
   isPlaybackActive: boolean;
   job: VoiceJob | null;
@@ -70,14 +81,17 @@ export function PreparedSourceCinemaOverlay({
   playbackCursorSec: number;
   progress: PlaybackProgress | null;
   source: PreparedSource;
+  sources: PreparedSource[];
   textSize: PreparedSourceCinemaTextSize;
   themeName: ThemeName;
   onClose: () => void;
   onCreateAudio: (source: PreparedSource) => void;
   onInspectStructure: (source: PreparedSource) => void;
+  onPrepareFile: (file: File) => Promise<void>;
   onPlayPause: () => void;
   onRestart: () => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
+  onSelectSource: (sourceId: string) => void;
   onSkip: (seconds: number) => void;
   onTextSizeChange: (size: PreparedSourceCinemaTextSize) => void;
   onThemeChange: (theme: ThemeName) => void;
@@ -86,6 +100,7 @@ export function PreparedSourceCinemaOverlay({
   const [autoFollow, setAutoFollow] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<PreparedSourceCinemaMobilePanel | null>("source");
+  const [pointedBlockId, setPointedBlockId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const title = preparedSourceCinemaTitle(source);
   const cinemaLabel = preparedSourceCinemaLabel(source);
@@ -94,7 +109,16 @@ export function PreparedSourceCinemaOverlay({
   const effectiveActiveWordIndex =
     activeWordIndex > 0 ? activeWordIndex : (progress?.activeWordIndex ?? activeWordIndex);
   const activeBlock = preparedSourceCinemaActiveBlock(source, effectiveActiveWordIndex);
+  const pointedBlock = useMemo(
+    () => source.blocks?.find((block) => block.id === pointedBlockId) ?? null,
+    [pointedBlockId, source.blocks],
+  );
+  const displayBlock = pointedBlock ?? activeBlock;
   const outline = useMemo(() => preparedSourceCinemaOutline(source), [source]);
+  const handleOutlineNavigate = (item: PreparedSourceCinemaOutlineItem) => {
+    setPointedBlockId(item.blockId);
+    scrollToCinemaBlock(item.blockId);
+  };
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -131,6 +155,12 @@ export function PreparedSourceCinemaOverlay({
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (source.id) {
+      setPointedBlockId(null);
+    }
+  }, [source.id]);
 
   const handleFullscreenToggle = () => {
     if (document.fullscreenElement) {
@@ -212,12 +242,18 @@ export function PreparedSourceCinemaOverlay({
 
       <main className="grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 lg:grid-cols-[326px_minmax(0,1fr)_362px] lg:gap-5 lg:px-4">
         <PreparedSourceCinemaSourcePanel
-          activeBlock={activeBlock}
+          activeBlock={displayBlock}
+          importError={importError}
+          isImporting={isImporting}
           outline={outline}
           source={source}
+          sources={sources}
+          onNavigate={handleOutlineNavigate}
+          onPrepareFile={onPrepareFile}
+          onSelectSource={onSelectSource}
         />
         <PreparedSourceCinemaReader
-          activeBlockId={activeBlock?.id ?? null}
+          activeBlockId={displayBlock?.id ?? null}
           activeWordIndex={effectiveActiveWordIndex}
           autoFollow={autoFollow}
           isFullscreen={isFullscreen}
@@ -229,29 +265,35 @@ export function PreparedSourceCinemaOverlay({
           onTextSizeChange={onTextSizeChange}
         />
         <PreparedSourceCinemaNarrationPanel
-          activeBlock={activeBlock}
+          activeBlock={displayBlock}
           canCreateAudio={canCreateAudio}
           isProcessing={isProcessing}
           job={job}
           outline={outline}
           playbackControls={playbackControls}
-          playbackCursorSec={effectivePlaybackCursorSec}
           progress={progress}
           source={source}
           onCreateAudio={onCreateAudio}
+          onNavigate={handleOutlineNavigate}
           onResumeProgress={onResumeProgress}
         />
       </main>
 
       <PreparedSourceCinemaMobileSheet
-        activeBlock={activeBlock}
+        activeBlock={displayBlock}
         job={job}
         mobilePanel={mobilePanel}
         outline={outline}
         progress={progress}
         source={source}
+        sources={sources}
+        importError={importError}
+        isImporting={isImporting}
         onInspectStructure={onInspectStructure}
         onMobilePanelChange={setMobilePanel}
+        onNavigate={handleOutlineNavigate}
+        onPrepareFile={onPrepareFile}
+        onSelectSource={onSelectSource}
         onResumeProgress={onResumeProgress}
       />
 
@@ -277,12 +319,24 @@ export function PreparedSourceCinemaOverlay({
 
 function PreparedSourceCinemaSourcePanel({
   activeBlock,
+  importError,
+  isImporting,
   outline,
   source,
+  sources,
+  onNavigate,
+  onPrepareFile,
+  onSelectSource,
 }: Readonly<{
   activeBlock: NarrationBlock | null;
+  importError: string | null;
+  isImporting: boolean;
   outline: PreparedSourceCinemaOutlineItem[];
   source: PreparedSource;
+  sources: PreparedSource[];
+  onNavigate: (item: PreparedSourceCinemaOutlineItem) => void;
+  onPrepareFile: (file: File) => Promise<void>;
+  onSelectSource: (sourceId: string) => void;
 }>) {
   const metrics = preparedSourceCinemaMetrics(source);
   const href = preparedSourceCinemaSourceHref(source);
@@ -294,6 +348,14 @@ function PreparedSourceCinemaSourcePanel({
       <div className="grid gap-3">
         <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
           <h3 className="text-sm font-semibold">Source provenance</h3>
+          <PreparedSourceCinemaSourceLibrary
+            importError={importError}
+            isImporting={isImporting}
+            source={source}
+            sources={sources}
+            onPrepareFile={onPrepareFile}
+            onSelectSource={onSelectSource}
+          />
           <dl className="mt-3 grid gap-3 text-sm">
             {href ? (
               <div className="grid min-w-0 grid-cols-[5.6rem_minmax(0,1fr)] gap-3">
@@ -359,10 +421,83 @@ function PreparedSourceCinemaSourcePanel({
 
         <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
           <h3 className="text-sm font-semibold">Content Structure</h3>
-          <OutlineList activeItem={activeSection} items={outline} maxItems={7} />
+          <OutlineList
+            activeItem={activeSection}
+            items={outline}
+            maxItems={7}
+            onNavigate={onNavigate}
+          />
         </section>
       </div>
     </aside>
+  );
+}
+
+function PreparedSourceCinemaSourceLibrary({
+  importError,
+  isImporting,
+  source,
+  sources,
+  onPrepareFile,
+  onSelectSource,
+}: Readonly<{
+  importError: string | null;
+  isImporting: boolean;
+  source: PreparedSource;
+  sources: PreparedSource[];
+  onPrepareFile: (file: File) => Promise<void>;
+  onSelectSource: (sourceId: string) => void;
+}>) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  return (
+    <div className="mt-3 grid gap-2 border-b pb-3 vs-border">
+      <label className="grid gap-1 text-xs font-semibold">
+        <span className="vs-muted">Cinema source</span>
+        <select
+          aria-label="Cinema prepared source"
+          className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-medium outline-none vs-border"
+          onChange={(event) => {
+            onSelectSource(event.currentTarget.value);
+          }}
+          value={source.id}
+        >
+          {sources.map((item, index) => (
+            <option key={`${item.id}-${String(index)}`} value={item.id}>
+              {preparedSourceCinemaTitle(item)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
+        disabled={isImporting}
+        onClick={() => {
+          inputRef.current?.click();
+        }}
+        type="button"
+      >
+        {isImporting ? "Processing..." : "Prepare file"}
+      </button>
+      <input
+        accept={PREPARED_SOURCE_CINEMA_ACCEPT}
+        aria-label="Prepared cinema source files"
+        className="sr-only"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.item(0) ?? null;
+          event.currentTarget.value = "";
+          if (file) {
+            void onPrepareFile(file);
+          }
+        }}
+        ref={inputRef}
+        type="file"
+      />
+      {importError ? (
+        <p className="rounded border border-amber-400/30 bg-amber-500/10 px-2 py-1.5 text-xs leading-5 text-amber-600">
+          {importError}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -399,6 +534,7 @@ function PreparedSourceCinemaReader({
   );
   const readerRef = useRef<HTMLDivElement | null>(null);
   const blocks = preparedSourceCinemaPrimaryBlocks(source);
+  const isMarkdownDocument = isPreparedSourceMarkdownDocument(source);
   const textClass = {
     compact: "text-base leading-8 sm:text-[17px]",
     comfortable: "text-lg leading-9",
@@ -406,6 +542,59 @@ function PreparedSourceCinemaReader({
     large: "text-[21px] leading-[1.62]",
   }[textSize];
   const shouldHighlightWord = activeBlock ? isPreparedCinemaWordHighlightable(activeBlock) : false;
+  const blockHighlight =
+    activeWord && activeBlock && !shouldHighlightWord
+      ? {
+          blockEndOffset: activeWord.blockEndOffset,
+          blockStartOffset: activeWord.blockStartOffset,
+        }
+      : undefined;
+  const wordHighlight =
+    activeWord && shouldHighlightWord
+      ? {
+          activeWordOffset: activeWord.wordOffset,
+          blockEndOffset: activeWord.blockEndOffset,
+          blockStartOffset: activeWord.blockStartOffset,
+        }
+      : undefined;
+  let readerContent: ReactNode;
+
+  if (isMarkdownDocument && source.text) {
+    readerContent = (
+      <MarkdownRenderer
+        blockHighlight={blockHighlight}
+        className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
+        wordHighlight={wordHighlight}
+      >
+        {source.text}
+      </MarkdownRenderer>
+    );
+  } else if (blocks.length > 0) {
+    readerContent = (
+      <div className={`website-cinema-article ${textClass} text-[var(--vs-text)]`}>
+        {blocks.map((block) => (
+          <PreparedSourceCinemaBlock
+            activeWordOffset={
+              activeWord?.blockId === block.id && shouldHighlightWord ? activeWord.wordOffset : null
+            }
+            block={block}
+            isActive={block.id === activeBlockId}
+            key={block.id}
+          />
+        ))}
+      </div>
+    );
+  } else {
+    readerContent = (
+      <MarkdownRenderer
+        blockHighlight={blockHighlight}
+        className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
+        wordHighlight={wordHighlight}
+      >
+        {source.text ?? source.speechText ?? ""}
+      </MarkdownRenderer>
+    );
+  }
 
   useEffect(() => {
     if (!autoFollow || activeWordIndex < 0) {
@@ -417,6 +606,32 @@ function PreparedSourceCinemaReader({
       )
       ?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
   }, [activeWordIndex, autoFollow]);
+
+  useEffect(() => {
+    if (!activeBlockId) {
+      return;
+    }
+    const directBlockId = `cinema-block-${activeBlockId}`;
+    const directBlock = readerRef.current?.querySelector<HTMLElement>(
+      `#${CSS.escape(directBlockId)}`,
+    );
+    if (directBlock) {
+      directBlock.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      return;
+    }
+    const block = source.blocks?.find((item) => item.id === activeBlockId);
+    if (!block) {
+      return;
+    }
+    const label = markdownBlockText(block).trim();
+    if (!label) {
+      return;
+    }
+    const heading = [...(readerRef.current?.querySelectorAll("h1,h2,h3,h4,h5,h6") ?? [])].find(
+      (element) => element.textContent.trim() === label,
+    );
+    heading?.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" });
+  }, [activeBlockId, source.blocks]);
 
   return (
     <section className="min-h-0 min-w-0 overflow-hidden">
@@ -486,45 +701,7 @@ function PreparedSourceCinemaReader({
           className="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
           ref={readerRef}
         >
-          {blocks.length > 0 ? (
-            <div className={`website-cinema-article ${textClass} text-[var(--vs-text)]`}>
-              {blocks.map((block) => (
-                <PreparedSourceCinemaBlock
-                  activeWordOffset={
-                    activeWord?.blockId === block.id && shouldHighlightWord
-                      ? activeWord.wordOffset
-                      : null
-                  }
-                  block={block}
-                  isActive={block.id === activeBlockId}
-                  key={block.id}
-                />
-              ))}
-            </div>
-          ) : (
-            <MarkdownRenderer
-              blockHighlight={
-                activeWord && activeBlock && !shouldHighlightWord
-                  ? {
-                      blockEndOffset: activeWord.blockEndOffset,
-                      blockStartOffset: activeWord.blockStartOffset,
-                    }
-                  : undefined
-              }
-              className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
-              wordHighlight={
-                activeWord && shouldHighlightWord
-                  ? {
-                      activeWordOffset: activeWord.wordOffset,
-                      blockEndOffset: activeWord.blockEndOffset,
-                      blockStartOffset: activeWord.blockStartOffset,
-                    }
-                  : undefined
-              }
-            >
-              {source.text ?? source.speechText ?? ""}
-            </MarkdownRenderer>
-          )}
+          {readerContent}
         </div>
       </div>
     </section>
@@ -538,10 +715,10 @@ function PreparedSourceCinemaNarrationPanel({
   job,
   outline,
   playbackControls,
-  playbackCursorSec,
   progress,
   source,
   onCreateAudio,
+  onNavigate,
   onResumeProgress,
 }: Readonly<{
   activeBlock: NarrationBlock | null;
@@ -550,23 +727,14 @@ function PreparedSourceCinemaNarrationPanel({
   job: VoiceJob | null;
   outline: PreparedSourceCinemaOutlineItem[];
   playbackControls: PreparedSourceCinemaPlaybackControls;
-  playbackCursorSec: number;
   progress: PlaybackProgress | null;
   source: PreparedSource;
   onCreateAudio: (source: PreparedSource) => void;
+  onNavigate: (item: PreparedSourceCinemaOutlineItem) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
-  const metrics = preparedSourceCinemaMetrics(source);
   const activeText = activeBlock ? markdownBlockText(activeBlock) : "";
   const activeSection = activeOutlineItem(outline, activeBlock);
-  const durationSec = job ? job.durationMs / 1000 : 0;
-  const progressRatio = playbackProgressRatio(playbackCursorSec, job, progress);
-  const displayCursorSec = playbackDisplayCursorSec(
-    playbackCursorSec,
-    job,
-    progress,
-    progressRatio,
-  );
 
   return (
     <aside className="hidden min-h-0 min-w-0 overflow-y-auto pl-1 lg:block">
@@ -588,37 +756,6 @@ function PreparedSourceCinemaNarrationPanel({
           </div>
           <p className="mt-3 line-clamp-4 text-sm leading-6">
             {activeText || "Start playback to follow the current narrated block."}
-          </p>
-        </section>
-
-        <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold">Segment timeline</h3>
-            <span className="text-xs font-semibold text-orange-600">
-              {metrics.segmentCount.toLocaleString()} segments
-            </span>
-          </div>
-          <div className="mt-3 grid gap-2 text-xs">
-            {preparedSourceCinemaPrimaryBlocks(source)
-              .filter((block) => block.speakMode !== "skip")
-              .slice(0, 4)
-              .map((block, index) => (
-                <TimelineRow
-                  active={block.id === activeBlock?.id}
-                  block={block}
-                  durationSec={estimatedSegmentDuration(durationSec, metrics.segmentCount, index)}
-                  key={block.id}
-                />
-              ))}
-          </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-200">
-            <div
-              className="h-full rounded-full bg-orange-600"
-              style={{ width: `${Math.round(progressRatio * 100).toString()}%` }}
-            />
-          </div>
-          <p className="mt-1 text-right text-xs vs-muted">
-            {formatPlaybackTime(displayCursorSec, job?.durationMs ?? 0)}
           </p>
         </section>
 
@@ -661,7 +798,12 @@ function PreparedSourceCinemaNarrationPanel({
               {outline.length.toLocaleString()} sections
             </span>
           </div>
-          <OutlineList activeItem={activeSection} items={outline} maxItems={6} />
+          <OutlineList
+            activeItem={activeSection}
+            items={outline}
+            maxItems={6}
+            onNavigate={onNavigate}
+          />
         </section>
 
         {job ? null : (
@@ -697,23 +839,35 @@ function PreparedSourceCinemaNarrationPanel({
 
 function PreparedSourceCinemaMobileSheet({
   activeBlock,
+  importError,
+  isImporting,
   job,
   mobilePanel,
   outline,
   progress,
   source,
+  sources,
   onInspectStructure,
   onMobilePanelChange,
+  onNavigate,
+  onPrepareFile,
+  onSelectSource,
   onResumeProgress,
 }: Readonly<{
   activeBlock: NarrationBlock | null;
+  importError: string | null;
+  isImporting: boolean;
   job: VoiceJob | null;
   mobilePanel: PreparedSourceCinemaMobilePanel | null;
   outline: PreparedSourceCinemaOutlineItem[];
   progress: PlaybackProgress | null;
   source: PreparedSource;
+  sources: PreparedSource[];
   onInspectStructure: (source: PreparedSource) => void;
   onMobilePanelChange: (panel: PreparedSourceCinemaMobilePanel | null) => void;
+  onNavigate: (item: PreparedSourceCinemaOutlineItem) => void;
+  onPrepareFile: (file: File) => Promise<void>;
+  onSelectSource: (sourceId: string) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
   if (!mobilePanel) {
@@ -755,6 +909,14 @@ function PreparedSourceCinemaMobileSheet({
               Source Summary
             </h3>
             <div className="mt-3 rounded-md border p-3 vs-border">
+              <PreparedSourceCinemaSourceLibrary
+                importError={importError}
+                isImporting={isImporting}
+                source={source}
+                sources={sources}
+                onPrepareFile={onPrepareFile}
+                onSelectSource={onSelectSource}
+              />
               <p className="line-clamp-2 font-medium">{preparedSourceCinemaTitle(source)}</p>
               {href ? (
                 <a
@@ -792,6 +954,7 @@ function PreparedSourceCinemaMobileSheet({
             activeItem={activeOutlineItem(outline, activeBlock)}
             items={outline}
             maxItems={8}
+            onNavigate={onNavigate}
           />
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold vs-border"
@@ -900,7 +1063,11 @@ function PreparedSourceCinemaTransport({
         <span className="min-w-12 text-right text-sm tabular-nums vs-muted">
           {formatClockTime(displayCursorSec)}
         </span>
-        <Waveform progressRatio={progressRatio} />
+        {job ? (
+          <Waveform audioUrl={job.audioUrl} progressRatio={progressRatio} />
+        ) : (
+          <TransportWaveformPlaceholder />
+        )}
         <span className="min-w-12 text-sm tabular-nums vs-muted">
           {durationMs > 0 ? formatClockTime(durationMs / 1000) : "--:--"}
         </span>
@@ -908,8 +1075,9 @@ function PreparedSourceCinemaTransport({
           <VolumeIcon />
           <input
             aria-label="Volume"
-            className="h-1.5 w-32 accent-orange-600"
+            className="h-1.5 w-32 accent-orange-600 disabled:opacity-35"
             defaultValue={72}
+            disabled={!job}
             max={100}
             min={0}
             type="range"
@@ -1195,10 +1363,12 @@ function OutlineList({
   activeItem,
   items,
   maxItems,
+  onNavigate,
 }: Readonly<{
   activeItem: PreparedSourceCinemaOutlineItem | null;
   items: PreparedSourceCinemaOutlineItem[];
   maxItems: number;
+  onNavigate: (item: PreparedSourceCinemaOutlineItem) => void;
 }>) {
   if (items.length === 0) {
     return <p className="mt-3 text-sm vs-muted">No headings detected.</p>;
@@ -1212,7 +1382,7 @@ function OutlineList({
               item.id === activeItem?.id ? "bg-orange-50 text-orange-700" : ""
             } ${item.level > 1 ? "pl-7 text-xs vs-muted" : ""}`}
             onClick={() => {
-              scrollToCinemaBlock(item.blockId);
+              onNavigate(item);
             }}
             type="button"
           >
@@ -1228,45 +1398,39 @@ function OutlineList({
   );
 }
 
-function TimelineRow({
-  active,
-  block,
-  durationSec,
-}: Readonly<{ active: boolean; block: NarrationBlock; durationSec: number }>) {
+function Waveform({
+  audioUrl,
+  progressRatio,
+}: Readonly<{ audioUrl: string; progressRatio: number }>) {
+  const bars = useAudioWaveformBars(audioUrl, 96);
+  if (!bars) {
+    return <TransportWaveformPlaceholder label="Loading audio waveform..." />;
+  }
+  if (bars.length === 0) {
+    return <TransportWaveformPlaceholder label="Waveform unavailable for this audio." />;
+  }
   return (
-    <div
-      className={`grid grid-cols-[1.25rem_minmax(0,1fr)_2.5rem] items-center gap-2 rounded px-2 py-1.5 ${
-        active ? "bg-orange-50 text-orange-700" : ""
-      }`}
-    >
-      <span>{(block.index + 1).toString()}</span>
-      <span className="truncate">{blockSnippet(block, "Untitled segment")}</span>
-      <span className="text-right tabular-nums vs-muted">{formatClockTime(durationSec)}</span>
+    <div aria-hidden="true" className="flex h-12 min-w-0 flex-1 items-center gap-[2px]">
+      {bars.map((amplitude, index) => {
+        const active = index / bars.length <= progressRatio;
+        return (
+          <span
+            className={`w-[2px] rounded-full ${active ? "bg-orange-600" : "bg-zinc-300"}`}
+            key={`${audioUrl}-${index.toString()}`}
+            style={{ height: `${String(8 + Math.round(amplitude * 38))}px` }}
+          />
+        );
+      })}
     </div>
   );
 }
 
-function Waveform({ progressRatio }: Readonly<{ progressRatio: number }>) {
-  const bars = useMemo(
-    () =>
-      Array.from({ length: 96 }, (_, index) => ({
-        height: 20 + Math.round(Math.abs(Math.sin(index * 1.7) * 24 + Math.cos(index * 0.47) * 10)),
-        index,
-      })),
-    [],
-  );
+function TransportWaveformPlaceholder({
+  label = "Audio waveform appears after generation.",
+}: Readonly<{ label?: string }>) {
   return (
-    <div aria-hidden="true" className="flex h-12 min-w-0 flex-1 items-center gap-[2px]">
-      {bars.map((bar) => {
-        const active = bar.index / bars.length <= progressRatio;
-        return (
-          <span
-            className={`w-[2px] rounded-full ${active ? "bg-orange-600" : "bg-zinc-300"}`}
-            key={bar.index}
-            style={{ height: `${bar.height.toString()}px` }}
-          />
-        );
-      })}
+    <div className="flex h-12 min-w-0 flex-1 items-center rounded-md border border-dashed px-4 text-xs font-medium vs-border vs-muted">
+      {label}
     </div>
   );
 }
@@ -1370,7 +1534,7 @@ function MetadataRow({
     <div className="grid min-w-0 grid-cols-[5.6rem_minmax(0,1fr)] gap-3">
       <dt className="vs-muted">{label}</dt>
       <dd
-        className={`min-w-0 break-words text-right font-medium leading-5 ${
+        className={`min-w-0 truncate text-right font-medium leading-5 ${
           valueTone === "success" ? "text-emerald-700" : ""
         }`}
         title={value}
@@ -1450,13 +1614,6 @@ function increasePreparedSourceCinemaTextSize(
   return order[Math.min(order.length - 1, order.indexOf(size) + 1)] ?? "large";
 }
 
-function estimatedSegmentDuration(totalSeconds: number, segments: number, index: number): number {
-  if (totalSeconds <= 0 || segments <= 0) {
-    return 4 + index;
-  }
-  return Math.max(3, Math.round(totalSeconds / segments));
-}
-
 function playbackProgressRatio(
   playbackCursorSec: number,
   job: VoiceJob | null,
@@ -1487,12 +1644,6 @@ function playbackDisplayCursorSec(
     return (job.durationMs / 1000) * progressRatio;
   }
   return playbackCursorSec;
-}
-
-function formatPlaybackTime(cursorSec: number, durationMs: number): string {
-  const cursor = formatClockTime(cursorSec);
-  const duration = durationMs > 0 ? formatClockTime(durationMs / 1000) : formatDuration(durationMs);
-  return `${cursor} / ${duration}`;
 }
 
 function formatClockTime(totalSeconds: number): string {

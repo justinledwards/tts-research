@@ -885,12 +885,14 @@ func detectBookSourceKind(sourceFileName string) (BookSourceKind, error) {
 		return BookSourceKindEPUB, nil
 	case ".docx":
 		return BookSourceKindDOCX, nil
+	case ".md", ".markdown":
+		return BookSourceKindMarkdown, nil
 	case ".html", ".htm", ".zip":
 		return BookSourceKindHTML, nil
 	case ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp":
 		return BookSourceKindImage, nil
 	default:
-		return "", fmt.Errorf("unsupported book source type; upload a PDF, EPUB, DOCX, HTML, zipped HTML package, or image")
+		return "", fmt.Errorf("unsupported book source type; upload a PDF, EPUB, DOCX, Markdown, HTML, zipped HTML package, or image")
 	}
 }
 
@@ -993,7 +995,7 @@ func extractBookSource(
 		return extractPDFBookSource(ctx, sourcePath, sourceFileName)
 	case BookSourceKindEPUB:
 		return extractEPUBBookSource(sourcePath, sourceFileName)
-	case BookSourceKindDOCX, BookSourceKindHTML:
+	case BookSourceKindDOCX, BookSourceKindHTML, BookSourceKindMarkdown:
 		return bookSourceExtraction{}, fmt.Errorf("adapter-backed book source extraction requires service context")
 	default:
 		return bookSourceExtraction{}, fmt.Errorf("unsupported book source type")
@@ -1011,7 +1013,7 @@ func (service *Service) extractBookSource(
 		return service.extractPDFBookSource(ctx, sourcePath, sourceFileName)
 	case BookSourceKindEPUB:
 		return extractEPUBBookSource(sourcePath, sourceFileName)
-	case BookSourceKindDOCX, BookSourceKindHTML:
+	case BookSourceKindDOCX, BookSourceKindHTML, BookSourceKindMarkdown:
 		return bookSourceExtraction{}, fmt.Errorf("adapter-backed book source extraction uses Content IR")
 	default:
 		return bookSourceExtraction{}, fmt.Errorf("unsupported book source type")

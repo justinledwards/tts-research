@@ -5,12 +5,15 @@ import {
   preparedSourceCinemaActionLabel,
   preparedSourceCinemaActiveBlock,
   preparedSourceCinemaDomain,
+  preparedSourceCinemaKind,
   preparedSourceCinemaOutline,
   preparedSourceCinemaPlaybackStatusLabel,
   preparedSourceCinemaJobMatchesSource,
+  preparedSourceCinemaLabel,
   preparedSourceCinemaSkippedGroups,
   preparedSourceCinemaSourceHref,
   preparedSourceCinemaTitle,
+  isPreparedSourceMarkdownDocument,
 } from "./preparedSourceCinema";
 import type { PreparedSource, VoiceJob } from "./types";
 
@@ -24,8 +27,22 @@ describe("prepared source cinema helpers", () => {
       "Open Website Cinema",
     );
     expect(preparedSourceCinemaActionLabel(makePreparedSource({ kind: "file" }))).toBe(
-      "Open Source Cinema",
+      "Open Document Cinema",
     );
+    expect(
+      preparedSourceCinemaActionLabel(
+        makePreparedSource({ kind: "text", renderMode: "markdown", sourceName: "notes.md" }),
+      ),
+    ).toBe("Open Document Cinema");
+    expect(preparedSourceCinemaLabel(makePreparedSource({ kind: "file" }))).toBe("Document Cinema");
+    expect(
+      preparedSourceCinemaKind(makePreparedSource({ kind: "text", renderMode: "plain" })),
+    ).toBe("source");
+    expect(
+      isPreparedSourceMarkdownDocument(
+        makePreparedSource({ kind: "file", sourceContentType: "text/markdown" }),
+      ),
+    ).toBe(true);
   });
 
   it("resolves URL, domain, title, active block, and matching prepared-source jobs", () => {
@@ -80,6 +97,8 @@ describe("prepared source cinema helpers", () => {
       <PreparedSourceCinemaOverlay
         activeWordIndex={1}
         canCreateAudio
+        importError={null}
+        isImporting={false}
         isPlaybackActive
         isProcessing={false}
         job={makeVoiceJob({ preparedSourceId: source.id })}
@@ -95,14 +114,17 @@ describe("prepared source cinema helpers", () => {
         playbackCursorSec={12}
         progress={null}
         source={source}
+        sources={[source]}
         textSize="large"
         themeName="light"
         onClose={noop}
         onCreateAudio={noop}
         onInspectStructure={noop}
+        onPrepareFile={() => Promise.resolve()}
         onPlayPause={noop}
         onRestart={noop}
         onResumeProgress={noop}
+        onSelectSource={noop}
         onSkip={noop}
         onTextSizeChange={noop}
         onThemeChange={noop}
@@ -113,7 +135,7 @@ describe("prepared source cinema helpers", () => {
     expect(markup).toContain("Example article");
     expect(markup).toContain("Content Structure");
     expect(markup).toContain("Generated audio health");
-    expect(markup).toContain("Segment timeline");
+    expect(markup).not.toContain("Segment timeline");
     expect(markup).toContain("Source provenance");
     expect(markup).toContain("https://www.example.com/article");
   });
