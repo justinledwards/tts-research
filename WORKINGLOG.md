@@ -1,5 +1,10 @@
 # Working Log
 
+## 2026-05-18 20:55 CEST - Backend Contract Review scope cleanup
+- [x] Remove preset-only Auto/Kokoro rows from Backend Contract Review target table.
+- [x] Preserve non-table Auto/Kokoro engine selection behavior in existing run-configuration paths.
+- [x] Verify contract table remains target-driven and action-ready for profile-backed backends.
+
 ## 2026-05-18 20:46 CEST - Voice cloning completion timing freeze
 - [x] Stop cloned-profile activity timing from advancing after completion.
 - [x] Make completed clone summary rows use completion-timestamp anchors.

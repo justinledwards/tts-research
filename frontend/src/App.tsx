@@ -6679,20 +6679,6 @@ function CloneReadinessDiagnostics({
 
 const BACKEND_CONTRACTS = [
   {
-    artifact: "Provider choice",
-    engineId: "auto",
-    label: "Auto",
-    targetId: null,
-    voiceSource: "Any",
-  },
-  {
-    artifact: "Built-in voicepack",
-    engineId: "kokoro",
-    label: "Kokoro",
-    targetId: null,
-    voiceSource: "Any",
-  },
-  {
     artifact: "Reference clone",
     engineId: "kokoro-clone",
     label: "Kokoro Clone",
