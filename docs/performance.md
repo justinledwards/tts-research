@@ -9,6 +9,8 @@ diagnostic, Markdown, Mermaid, and Book Cinema surfaces must stay lazy until the
 - Keep the initial JS graph under the local bundle budgets in `benches/thresholds.json`.
 - Do not import `MarkdownRenderer`, Mermaid, Content IR drawers, bundle tools, settings/help panels,
   workspace drawers, pronunciation tools, or diagnostics panels from the default path.
+- Book Cinema's normal reader overlay must not statically import the Markdown/Mermaid renderer. The
+  Markdown document reader is lazy and should load only for Document Cinema.
 - Import contract or SDK helpers directly only when they do not pull schema validators into the
   browser entry. If a barrel import adds AJV/schema code to startup, replace it with a small local
   helper or a narrower package export.
@@ -48,6 +50,8 @@ Current local bundle gates:
 - Initial CSS gzip bytes: `<= 14000`
 - Largest async app chunk gzip bytes: `<= 110000`
 - Mermaid/diagram vendor chunks must not appear in the initial graph
+- Book Cinema must keep Markdown rendering out of its static import graph
+- Forbidden startup imports must remain absent from the initial graph
 
 Current local reader timing gates:
 
@@ -75,12 +79,29 @@ Provider latency is intentionally excluded. The low-resource smoke uses mock pro
 CPU throttling so the budget covers local UI startup, route switching, Book Cinema open, and resume
 work rather than network or model variance.
 
+## Degraded-State UX
+
+Timing confidence and slow local work should be visible without blocking the reader:
+
+- Low-confidence highlight maps show a timing status chip and use phrase/block highlighting instead
+  of presenting inaccurate word timing.
+- Phrase fallback is recorded in `window.__ttsResearchPerformance.degradedStates` and summarized in
+  local validation reports.
+- Resume opens the reader first. If restoring the saved point takes longer than 250ms, the overlay
+  shows a stable restoring state; resume work over 500ms is recorded as `slow-resume`.
+- Lazy panels use fixed-size placeholders with `aria-busy` and record `lazy-panel-loading` while
+  their chunk is loading.
+- If locator resume cannot map into the current highlight map, the reader falls back to saved elapsed
+  seconds and records that fallback in the degraded-state detail.
+
 ## UI Change Rules
 
 - New panels, diagnostics, schema viewers, Markdown/Mermaid rendering, and waveform decoding must be
   loaded behind the user action that opens them.
 - Reader resume must not wait for secondary drawers, project export/import code, provider
   diagnostics, or Markdown diagram rendering.
+- Book, provider, system, and voice-source diagnostics should load when their panels or modes become
+  visible, not during the cold reader startup path.
 - Prefer direct model/helper imports over barrels that pull validators or diagnostics into
   `main.tsx` or `App.tsx`.
 - If a feature needs reader state, put the shared state shape in a lightweight model module and keep

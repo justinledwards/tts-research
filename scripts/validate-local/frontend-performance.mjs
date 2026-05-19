@@ -11,6 +11,9 @@ import { loadBenchmarkConfig } from "./benchmarks.mjs";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const diagramVendorPattern =
   /(architectureDiagram|blockDiagram|c4Diagram|classDiagram|cose|cytoscape|dagre|diagram-|erDiagram|flowDiagram|ganttDiagram|gitGraph|graph-|ishikawa|journeyDiagram|kanban|katex|mermaid|mindmap|quadrantDiagram|requirementDiagram|sankeyDiagram|sequenceDiagram|stateDiagram|timeline|vennDiagram|wardley|xychartDiagram)/i;
+const forbiddenInitialImportPattern =
+  /(MarkdownRenderer|mermaid|ContentIrDrawer|BundlePanels|ProductPanels|VoiceSourceAnalysisPanel|WorkspaceDrawer|PronunciationPanel|ajv|schema_files|generated\/schemas)/i;
+const markdownRendererPattern = /MarkdownRenderer/i;
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { thresholds } = await loadBenchmarkConfig(rootDir);
@@ -74,6 +77,20 @@ export async function analyzeFrontendBundle(distDir) {
   const diagramVendorInitialFiles = initial
     .filter((file) => file.file.endsWith(".js") && diagramVendorPattern.test(file.file))
     .map((file) => file.file);
+  const initialForbiddenImports = manifestEntriesForFiles(manifest, initialFiles)
+    .filter((entry) => forbiddenInitialImportPattern.test(formatManifestEntry(entry)))
+    .map(formatManifestEntry);
+  const bookCinemaChunk = findManifestChunk(
+    manifest,
+    (key, chunk) => key.includes("BookCinemaPanel") || chunk.src === "src/BookCinemaPanel.tsx",
+  );
+  const bookCinemaStaticImports = (bookCinemaChunk?.imports ?? [])
+    .map((key) => manifest[key])
+    .filter(Boolean)
+    .map((chunk) => chunk.file);
+  const bookCinemaMarkdownRendererLazy = !bookCinemaStaticImports.some((file) =>
+    markdownRendererPattern.test(file),
+  );
 
   return {
     schemaVersion: "tts-research.frontend-performance.v1",
@@ -89,6 +106,10 @@ export async function analyzeFrontendBundle(distDir) {
     largestAsyncAppChunkGzipBytes: largestAsyncAppChunk?.gzipBytes ?? 0,
     diagramVendorInitialFiles,
     diagramVendorLazy: diagramVendorInitialFiles.length === 0,
+    bookCinemaMarkdownRendererLazy,
+    bookCinemaStaticImports,
+    initialForbiddenImports,
+    initialForbiddenImportsClear: initialForbiddenImports.length === 0,
   };
 }
 
@@ -136,6 +157,27 @@ export function compareFrontendBundleBudgets(metrics, thresholds) {
       threshold: "requireDiagramVendorLazy",
     });
   }
+  if (thresholds.requireBookCinemaMarkdownRendererLazy !== undefined) {
+    comparisons.push({
+      actual: metrics.bookCinemaMarkdownRendererLazy,
+      expected: thresholds.requireBookCinemaMarkdownRendererLazy,
+      metric: "bookCinemaMarkdownRendererLazy",
+      operator: "===",
+      passed:
+        metrics.bookCinemaMarkdownRendererLazy === thresholds.requireBookCinemaMarkdownRendererLazy,
+      threshold: "requireBookCinemaMarkdownRendererLazy",
+    });
+  }
+  if (thresholds.requireNoForbiddenInitialImports !== undefined) {
+    comparisons.push({
+      actual: metrics.initialForbiddenImportsClear,
+      expected: thresholds.requireNoForbiddenInitialImports,
+      metric: "initialForbiddenImportsClear",
+      operator: "===",
+      passed: metrics.initialForbiddenImportsClear === thresholds.requireNoForbiddenInitialImports,
+      threshold: "requireNoForbiddenInitialImports",
+    });
+  }
   return comparisons;
 }
 
@@ -156,9 +198,18 @@ export function formatFrontendBundleReport(metrics, comparisons = []) {
         : "none"
     }`,
     `- Diagram/Mermaid vendor lazy: ${metrics.diagramVendorLazy ? "yes" : "no"}`,
+    `- Book Cinema Markdown renderer lazy: ${
+      metrics.bookCinemaMarkdownRendererLazy ? "yes" : "no"
+    }`,
   ];
   if (metrics.diagramVendorInitialFiles.length > 0) {
     lines.push(`- Initial diagram vendor files: ${metrics.diagramVendorInitialFiles.join(", ")}`);
+  }
+  if (metrics.initialForbiddenImports.length > 0) {
+    lines.push(`- Forbidden initial imports: ${metrics.initialForbiddenImports.join(", ")}`);
+  }
+  if (metrics.bookCinemaStaticImports.length > 0) {
+    lines.push(`- Book Cinema static imports: ${metrics.bookCinemaStaticImports.join(", ")}`);
   }
   if (comparisons.length > 0) {
     lines.push("Thresholds:");
@@ -191,6 +242,24 @@ function addChunkFiles(chunk, files) {
   for (const css of chunk.css ?? []) {
     files.add(css);
   }
+}
+
+function manifestEntriesForFiles(manifest, files) {
+  const selected = new Set(files);
+  return Object.entries(manifest).filter(([, chunk]) => selected.has(chunk.file));
+}
+
+function findManifestChunk(manifest, predicate) {
+  for (const [key, chunk] of Object.entries(manifest)) {
+    if (predicate(key, chunk)) {
+      return chunk;
+    }
+  }
+  return null;
+}
+
+function formatManifestEntry([key, chunk]) {
+  return [key, chunk.src, chunk.file].filter(Boolean).join(" -> ");
 }
 
 async function summarizeFiles(distDir, files) {

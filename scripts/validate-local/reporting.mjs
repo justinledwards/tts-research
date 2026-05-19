@@ -236,6 +236,9 @@ function renderMarkdownReport(summary) {
     if (step.thresholds?.length) {
       lines.push("```text", renderThresholdTable(step.thresholds), "```");
     }
+    if (step.metrics?.degradedStates) {
+      lines.push("", renderDegradedStatesMarkdown(step.metrics.degradedStates));
+    }
   }
 
   const failedSteps = summary.steps.filter((step) => step.status !== "passed");
@@ -248,6 +251,27 @@ function renderMarkdownReport(summary) {
 
   lines.push("");
   return lines.join("\n");
+}
+
+function renderDegradedStatesMarkdown(degradedStates) {
+  if (!degradedStates?.total) {
+    return "Degraded states: none.";
+  }
+  const lines = [`Degraded states: ${String(degradedStates.total)}`];
+  for (const item of degradedStates.items ?? []) {
+    lines.push(
+      `- ${item.name} (${item.surface}, ${item.kind}): ${formatDegradedDetail(item.detail)}`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function formatDegradedDetail(detail) {
+  const entries = Object.entries(detail ?? {}).filter(([, value]) => value !== null);
+  if (entries.length === 0) {
+    return "recorded";
+  }
+  return entries.map(([key, value]) => `${key}=${String(value)}`).join(", ");
 }
 
 function renderHTMLReport(summary, markdown) {

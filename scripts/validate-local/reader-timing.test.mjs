@@ -14,6 +14,13 @@ test("summarizes reader timing metrics across Book Cinema fixtures", () => {
         kind: "epub",
         metrics: {
           firstOpen: {
+            degradedStates: [
+              {
+                detail: { reason: "fixture" },
+                name: "low-confidence-highlight",
+                surface: "book-cinema",
+              },
+            ],
             metrics: [
               { durationMs: 1400.2, name: "app-cold-usable" },
               { durationMs: 80, name: "studio-route-switch" },
@@ -50,6 +57,8 @@ test("summarizes reader timing metrics across Book Cinema fixtures", () => {
   assert.equal(metrics.metrics["book-cinema-open"].byKind.pdf, 270.1);
   assert.equal(metrics.metrics["book-cinema-open"].count, 3);
   assert.equal(metrics.metrics["studio-route-switch"].byKind.epub, 80);
+  assert.equal(metrics.degradedStates.total, 1);
+  assert.equal(metrics.degradedStates.byName["low-confidence-highlight"], 1);
   assert.deepEqual(metrics.missingMetrics, []);
 });
 

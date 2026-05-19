@@ -84,3 +84,12 @@
 - [x] Update docs and disabled UI reachability workflow example.
 - [x] Add unit and reachability coverage.
 - [x] Run project validation commands.
+
+## 2026-05-19 22:29 CEST - Low-resource and degraded-state UX hardening
+- [x] Move and extend frontend timing helpers.
+- [x] Split cinema startup paths and add stable degraded-state UI.
+- [x] Enforce critical-path import and degraded-state report checks.
+- [x] Update local-only docs and workflow examples.
+- [x] Fix duplicate wayfinding keys surfaced by Book Cinema smoke.
+- [x] Run project validation commands.
+- [x] Commit, push, and update PR body.

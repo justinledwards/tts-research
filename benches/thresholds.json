@@ -19,7 +19,9 @@
     "maxInitialJsGzipBytes": 160000,
     "maxInitialCssGzipBytes": 14000,
     "maxLargestAsyncAppChunkGzipBytes": 110000,
-    "requireDiagramVendorLazy": true
+    "requireDiagramVendorLazy": true,
+    "requireBookCinemaMarkdownRendererLazy": true,
+    "requireNoForbiddenInitialImports": true
   },
   "readerTiming": {
     "maxAppColdUsableMs": 2200,

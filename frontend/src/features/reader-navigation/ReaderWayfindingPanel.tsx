@@ -104,14 +104,14 @@ function ReaderOutlineList<TOutlineTarget>({
   }
   return (
     <div className="grid gap-2">
-      {items.map((item) => (
+      {items.map((item, index) => (
         <button
           className={`min-w-0 rounded-md border px-3 py-2 text-left text-sm transition vs-border ${
             item.isActive
               ? "border-orange-400 bg-orange-500/10 text-orange-600"
               : "hover:bg-[var(--vs-surface)]"
           }`}
-          key={item.id}
+          key={`${item.id}:${String(index)}`}
           onClick={() => {
             onNavigate(item);
           }}
@@ -144,10 +144,10 @@ function ReaderBookmarkList({
   }
   return (
     <div className="grid gap-2">
-      {items.map((item) => (
+      {items.map((item, index) => (
         <button
           className="min-w-0 rounded-md border px-3 py-2 text-left text-sm transition hover:bg-[var(--vs-surface)] vs-border"
-          key={item.id}
+          key={`${item.id}:${String(index)}`}
           onClick={() => {
             onNavigate(item);
           }}
@@ -177,10 +177,10 @@ function ReaderRecentList({
   }
   return (
     <div className="grid gap-2">
-      {items.map((item) => (
+      {items.map((item, index) => (
         <button
           className="min-w-0 rounded-md border px-3 py-2 text-left text-sm transition hover:bg-[var(--vs-surface)] vs-border"
-          key={item.id}
+          key={`${item.id}:${String(index)}`}
           onClick={() => {
             onNavigate(item);
           }}

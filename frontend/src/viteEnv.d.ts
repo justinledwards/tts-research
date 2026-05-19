@@ -1,19 +1,11 @@
 /// <reference types="vite/client" />
 
-import type { FrontendPerformanceMetric } from "./performanceMetrics";
+import type { FrontendPerformanceStore } from "./features/performance";
 
 declare global {
-  var __ttsResearchPerformance:
-    | {
-        metrics: FrontendPerformanceMetric[];
-        spans: Partial<Record<FrontendPerformanceMetric["name"], number>>;
-      }
-    | undefined;
+  var __ttsResearchPerformance: FrontendPerformanceStore | undefined;
 
   interface Window {
-    __ttsResearchPerformance?: {
-      metrics: FrontendPerformanceMetric[];
-      spans: Partial<Record<FrontendPerformanceMetric["name"], number>>;
-    };
+    __ttsResearchPerformance?: FrontendPerformanceStore;
   }
 }

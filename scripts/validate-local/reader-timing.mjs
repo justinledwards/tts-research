@@ -41,9 +41,11 @@ export function summarizeReaderTimingSummary(summary) {
   const observationsByName = Object.fromEntries(
     readerTimingMetricNames.map((metricName) => [metricName, []]),
   );
+  const degradedStateItems = [];
 
   for (const fixture of summary?.performance ?? []) {
     const kind = typeof fixture?.kind === "string" ? fixture.kind : "unknown";
+    collectDegradedStates(fixture?.metrics, kind, degradedStateItems);
     const metrics = [
       ...(fixture?.metrics?.firstOpen?.metrics ?? []),
       ...(fixture?.metrics?.resumed?.metrics ?? []),
@@ -89,6 +91,7 @@ export function summarizeReaderTimingSummary(summary) {
       Boolean,
     ),
     lowResourceMode: Boolean(summary?.lowResourceMode),
+    degradedStates: summarizeDegradedStates(degradedStateItems),
     metrics: byName,
     missingMetrics,
   };
@@ -130,6 +133,16 @@ export function formatReaderTimingReport(metrics, comparisons = []) {
   if (metrics.missingMetrics.length > 0) {
     lines.push(`- Missing metrics: ${metrics.missingMetrics.join(", ")}`);
   }
+  if (metrics.degradedStates.total > 0) {
+    lines.push("Degraded states:");
+    for (const item of metrics.degradedStates.items) {
+      lines.push(
+        `- ${item.name} (${item.surface}, ${item.kind}): ${formatDegradedDetail(item.detail)}`,
+      );
+    }
+  } else {
+    lines.push("- Degraded states: none");
+  }
   if (comparisons.length > 0) {
     lines.push("Thresholds:");
     for (const comparison of comparisons) {
@@ -141,6 +154,61 @@ export function formatReaderTimingReport(metrics, comparisons = []) {
     }
   }
   return lines.join("\n");
+}
+
+function collectDegradedStates(value, kind, output) {
+  if (!value) {
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectDegradedStates(item, kind, output);
+    }
+    return;
+  }
+  if (typeof value !== "object") {
+    return;
+  }
+  if (Array.isArray(value.degradedStates)) {
+    for (const state of value.degradedStates) {
+      if (state?.name && state?.surface) {
+        output.push({
+          detail: state.detail ?? {},
+          kind,
+          name: state.name,
+          surface: state.surface,
+        });
+      }
+    }
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (key !== "degradedStates") {
+      collectDegradedStates(child, kind, output);
+    }
+  }
+}
+
+function summarizeDegradedStates(items) {
+  const byName = {};
+  const bySurface = {};
+  for (const item of items) {
+    byName[item.name] = (byName[item.name] ?? 0) + 1;
+    bySurface[item.surface] = (bySurface[item.surface] ?? 0) + 1;
+  }
+  return {
+    byName,
+    bySurface,
+    items,
+    total: items.length,
+  };
+}
+
+function formatDegradedDetail(detail) {
+  const entries = Object.entries(detail ?? {}).filter(([, value]) => value !== null);
+  if (entries.length === 0) {
+    return "recorded";
+  }
+  return entries.map(([key, value]) => `${key}=${String(value)}`).join(", ");
 }
 
 function summarizeObservations(observations) {

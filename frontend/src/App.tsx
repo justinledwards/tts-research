@@ -211,7 +211,13 @@ import {
   voiceProfileTargetForEngine,
   voiceProfileTargetReadinessText,
 } from "./profileTargets";
-import { endFrontendSpan, recordColdUsableMetric, startFrontendSpan } from "./performanceMetrics";
+import {
+  endFrontendSpan,
+  recordColdUsableMetric,
+  recordFrontendDegradedState,
+  startFrontendSpan,
+  useDelayedBusy,
+} from "./features/performance";
 import { buildVoiceLibraryViewModel, type VoiceLibraryEntry } from "./voiceStudioViewModels";
 import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
 
@@ -298,8 +304,15 @@ const MermaidDiagram = lazy(() =>
 );
 
 function LazySurfaceFallback({ label = "Loading..." }: Readonly<{ label?: string }>) {
+  useEffect(() => {
+    recordFrontendDegradedState("lazy-panel-loading", "lazy-surface", { label });
+  }, [label]);
+
   return (
-    <div className="rounded-md border border-dashed p-4 text-sm font-semibold vs-border vs-muted">
+    <div
+      aria-busy="true"
+      className="min-h-24 rounded-md border border-dashed p-4 text-sm font-semibold vs-border vs-muted"
+    >
       {label}
     </div>
   );
@@ -2278,6 +2291,7 @@ type AudioPlaybackMode = "arrival" | "completed";
 const VOICE_PROFILE_ID_STORAGE_KEY = "tts-active-voice-profile-id";
 const PROFILE_LOADING_SHOW_DELAY_MS = 120;
 const PROFILE_LOADING_MIN_VISIBLE_MS = 260;
+const READER_RESUME_BUDGET_MS = 500;
 
 function formatErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -2293,6 +2307,24 @@ function bookScopeContentMatches(
 
 function removeBookSourceById(bookId: string): (books: BookSource[]) => BookSource[] {
   return (books) => books.filter((book) => book.id !== bookId);
+}
+
+function resolveResumeBookScope(
+  progress: PlaybackProgress,
+  bookSources: BookSource[],
+  selectedBookSource: BookSource | null,
+): BookScope | null {
+  if (!progress.bookSourceId) {
+    return null;
+  }
+  const progressBook =
+    bookSources.find((book) => book.id === progress.bookSourceId) ?? selectedBookSource;
+  return (
+    progress.bookScope ??
+    (progressBook && progress.readingPosition?.scopeKey
+      ? scopeFromBookScopeKey(progressBook, progress.readingPosition.scopeKey)
+      : null)
+  );
 }
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -2385,6 +2417,7 @@ export function App() {
     readingPosition?: ReadingPosition;
     seconds: number;
   } | null>(null);
+  const [resumeRestoreStartedAt, setResumeRestoreStartedAt] = useState<number | null>(null);
   const [bookCinemaDiagnostics, setBookCinemaDiagnostics] = useState<BookCinemaDiagnostics | null>(
     null,
   );
@@ -2796,6 +2829,7 @@ export function App() {
     [activeProjectId, effectiveBookScope, hashReadingPosition, selectedBookSource],
   );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
+  const isResumeRestoring = useDelayedBusy(resumeRestoreStartedAt !== null, 250);
   const openReadingCinema = useCallback(
     (target?: "book") => {
       const shouldOpenSelectedBook = target === "book" || !job || Boolean(job.bookSourceId);
@@ -3803,55 +3837,86 @@ export function App() {
     [applyVoiceJobToState],
   );
 
+  const hydratePreparedSourceForResume = useCallback(
+    async (progress: PlaybackProgress) => {
+      if (!progress.preparedSourceId) {
+        return;
+      }
+      setSelectedPreparedSourceId(progress.preparedSourceId);
+      const preparedSource = preparedSources.find(
+        (source) => source.id === progress.preparedSourceId,
+      );
+      if (!isPreparedSourceDisplayIncomplete(preparedSource ?? null)) {
+        return;
+      }
+      try {
+        const hydratedSource = await getPreparedSource(progress.preparedSourceId);
+        setPreparedSources((currentSources) => [
+          hydratedSource,
+          ...currentSources.filter((source) => source.id !== hydratedSource.id),
+        ]);
+      } catch (caughtError) {
+        setSourcePrepError(formatErrorMessage(caughtError, "Unable to load prepared source"));
+      }
+    },
+    [preparedSources],
+  );
+
   const handleResumeProgress = useCallback(
     async (progress: PlaybackProgress, seconds = progress.currentTimeSec) => {
+      const startedAt = performance.now();
+      setResumeRestoreStartedAt(startedAt);
       startFrontendSpan("reader-resume");
-      if (progress.bookSourceId) {
-        const progressBook =
-          bookSources.find((book) => book.id === progress.bookSourceId) ?? selectedBookSource;
-        const progressScope =
-          progress.bookScope ??
-          (progressBook && progress.readingPosition?.scopeKey
-            ? scopeFromBookScopeKey(progressBook, progress.readingPosition.scopeKey)
-            : null);
-        setSelectedBookSourceId(progress.bookSourceId);
-        setSelectedBookScope(progressScope);
-        setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
-        setIsBookCinemaOpen(true);
-      }
-      if (progress.preparedSourceId) {
-        setSelectedPreparedSourceId(progress.preparedSourceId);
-        const preparedSource = preparedSources.find(
-          (source) => source.id === progress.preparedSourceId,
-        );
-        if (isPreparedSourceDisplayIncomplete(preparedSource ?? null)) {
-          try {
-            const hydratedSource = await getPreparedSource(progress.preparedSourceId);
-            setPreparedSources((currentSources) => [
-              hydratedSource,
-              ...currentSources.filter((source) => source.id !== hydratedSource.id),
-            ]);
-          } catch (caughtError) {
-            setSourcePrepError(formatErrorMessage(caughtError, "Unable to load prepared source"));
-          }
+      try {
+        if (progress.bookSourceId) {
+          setSelectedBookSourceId(progress.bookSourceId);
+          setSelectedBookScope(resolveResumeBookScope(progress, bookSources, selectedBookSource));
+          setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
+          setIsBookCinemaOpen(true);
         }
+        await hydratePreparedSourceForResume(progress);
+        if (progress.jobId && progress.jobId !== job?.id) {
+          await handleSelectJob(progress.jobId);
+        }
+        const locatorSeconds = secondsForReadingPosition(highlightMap, progress.readingPosition);
+        if (progress.readingPosition && locatorSeconds === null) {
+          recordFrontendDegradedState("slow-resume", "reader-resume", {
+            fallback: "saved-elapsed-seconds",
+            jobId: progress.jobId ?? null,
+            targetId: progress.targetId,
+          });
+        }
+        const targetSeconds = Math.max(0, locatorSeconds ?? seconds);
+        setPlaybackCursorSec(targetSeconds);
+        const resumeElapsedMs = performance.now() - startedAt;
+        if (resumeElapsedMs > READER_RESUME_BUDGET_MS) {
+          recordFrontendDegradedState("slow-resume", "reader-resume", {
+            durationMs: Math.round(resumeElapsedMs),
+            targetSeconds,
+            usedLocator: locatorSeconds !== null,
+          });
+        }
+        endFrontendSpan("reader-resume", {
+          targetSeconds,
+          usedLocator: locatorSeconds !== null,
+        });
+        setResumeRestoreStartedAt(null);
+        setPendingPlaybackResume({
+          autoplay: true,
+          readingPosition: progress.readingPosition,
+          seconds: targetSeconds,
+        });
+      } catch (caughtError) {
+        setResumeRestoreStartedAt(null);
+        setError(formatErrorMessage(caughtError, "Unable to resume saved progress"));
       }
-      if (progress.jobId && progress.jobId !== job?.id) {
-        await handleSelectJob(progress.jobId);
-      }
-      const locatorSeconds = secondsForReadingPosition(highlightMap, progress.readingPosition);
-      setPendingPlaybackResume({
-        autoplay: true,
-        readingPosition: progress.readingPosition,
-        seconds: Math.max(0, locatorSeconds ?? seconds),
-      });
     },
     [
       bookSources,
       handleSelectJob,
       highlightMap,
+      hydratePreparedSourceForResume,
       job?.id,
-      preparedSources,
       selectedBookSource,
       themeName,
     ],
@@ -4284,20 +4349,31 @@ export function App() {
     void refreshVoiceProfiles();
     void refreshProjects();
     void refreshSpeechPolicyProfiles();
-    void refreshProfileSourceDiagnostics();
+  }, [refreshProjects, refreshSpeechPolicyProfiles, refreshVoiceProfiles]);
+
+  useEffect(() => {
+    if (sourceMode !== "book" && contentMode !== "review" && !isBookCinemaOpen) {
+      return;
+    }
     void refreshBookCinemaDiagnostics();
+  }, [contentMode, isBookCinemaOpen, refreshBookCinemaDiagnostics, sourceMode]);
+
+  useEffect(() => {
+    if (studioMode !== "voiceCloning" && !isHelpOpen && !isSettingsOpen) {
+      return;
+    }
+    void refreshProfileSourceDiagnostics();
     void refreshResearchModules();
     void refreshTTSEngines();
     void refreshVoiceProfileCredentials();
   }, [
-    refreshBookCinemaDiagnostics,
+    isHelpOpen,
+    isSettingsOpen,
     refreshProfileSourceDiagnostics,
-    refreshProjects,
     refreshResearchModules,
-    refreshSpeechPolicyProfiles,
     refreshTTSEngines,
     refreshVoiceProfileCredentials,
-    refreshVoiceProfiles,
+    studioMode,
   ]);
 
   useEffect(() => {
@@ -4663,12 +4739,28 @@ export function App() {
     if (pendingPlaybackResume.autoplay) {
       void playbackControls.play();
     }
+    const resumeElapsedMs =
+      resumeRestoreStartedAt === null ? null : performance.now() - resumeRestoreStartedAt;
+    if (resumeElapsedMs !== null && resumeElapsedMs > READER_RESUME_BUDGET_MS) {
+      recordFrontendDegradedState("slow-resume", "reader-resume", {
+        durationMs: Math.round(resumeElapsedMs),
+        targetSeconds,
+        usedLocator: locatorSeconds !== null,
+      });
+    }
     endFrontendSpan("reader-resume", {
       targetSeconds,
       usedLocator: locatorSeconds !== null,
     });
+    setResumeRestoreStartedAt(null);
     setPendingPlaybackResume(null);
-  }, [highlightMap, pendingPlaybackResume, playbackControls, playbackCursorSec]);
+  }, [
+    highlightMap,
+    pendingPlaybackResume,
+    playbackControls,
+    playbackCursorSec,
+    resumeRestoreStartedAt,
+  ]);
 
   useEffect(() => {
     const restoreJobId = new URLSearchParams(globalThis.location.search).get("jobId");
@@ -5315,6 +5407,7 @@ export function App() {
             importError={bookSourceError}
             isImporting={isImportingBookSource}
             isProcessing={isProcessing}
+            isResumeRestoring={isResumeRestoring}
             job={job}
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}

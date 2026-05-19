@@ -27,6 +27,7 @@ test("analyzes initial graph, async app chunks, and lazy diagram vendors", async
       },
       "src/BookCinemaPanel.tsx": {
         file: "assets/BookCinemaPanel.js",
+        imports: ["_react.js"],
         isDynamicEntry: true,
         src: "src/BookCinemaPanel.tsx",
       },
@@ -54,6 +55,8 @@ test("analyzes initial graph, async app chunks, and lazy diagram vendors", async
     true,
   );
   assert.equal(metrics.diagramVendorLazy, true);
+  assert.equal(metrics.bookCinemaMarkdownRendererLazy, true);
+  assert.deepEqual(metrics.initialForbiddenImports, []);
   assert.equal(metrics.largestAsyncAppChunk.file, "assets/BookCinemaPanel.js");
 });
 
@@ -65,12 +68,16 @@ test("compares configured bundle budgets and formats threshold output", () => {
     initialCssRawBytes: 60_000,
     initialJsGzipBytes: 140_000,
     initialJsRawBytes: 500_000,
+    initialForbiddenImports: [],
+    initialForbiddenImportsClear: true,
     largestAsyncAppChunk: {
       file: "assets/BookCinemaPanel.js",
       gzipBytes: 40_000,
       rawBytes: 80_000,
     },
     largestAsyncAppChunkGzipBytes: 40_000,
+    bookCinemaMarkdownRendererLazy: true,
+    bookCinemaStaticImports: ["assets/react.js"],
   };
 
   const comparisons = compareFrontendBundleBudgets(metrics, {
@@ -78,7 +85,9 @@ test("compares configured bundle budgets and formats threshold output", () => {
     maxInitialJsGzipBytes: 160_000,
     maxInitialJsRawBytes: 520_000,
     maxLargestAsyncAppChunkGzipBytes: 110_000,
+    requireBookCinemaMarkdownRendererLazy: true,
     requireDiagramVendorLazy: true,
+    requireNoForbiddenInitialImports: true,
   });
   const report = formatFrontendBundleReport(metrics, comparisons);
 
@@ -88,4 +97,5 @@ test("compares configured bundle budgets and formats threshold output", () => {
   );
   assert.match(report, /Frontend bundle performance/);
   assert.match(report, /PASS initialJsGzipBytes/);
+  assert.match(report, /PASS bookCinemaMarkdownRendererLazy/);
 });

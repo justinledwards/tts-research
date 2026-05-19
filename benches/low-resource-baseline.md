@@ -19,6 +19,9 @@ profile enabled, which applies 4x CPU throttling and keeps provider latency out 
    - `reader-resume`
 5. Set `benches/thresholds.json#readerTiming` with clear headroom for local jitter, then run
    `pnpm validate:local` and `pnpm e2e:book-cinema:low-resource`.
+6. Confirm the generated validation report includes any forced degraded states, especially
+   `low-confidence-highlight`, `phrase-fallback`, `slow-resume`, and `lazy-panel-loading`, without
+   changing the numeric timing budgets unless the three-run calibration proves they are flaky.
 
 ## Current Budget Source
 
@@ -32,3 +35,7 @@ observed representative timings were approximately:
 
 The thresholds intentionally allow moderate local noise while still failing on reader-path
 regressions that would be visible on the target machine class.
+
+Degraded-state summaries are not budget thresholds by themselves. They make confidence fallbacks,
+lazy-panel loading, and slow resume paths legible in the local reports so UX regressions can be
+checked alongside the hard timing gates.

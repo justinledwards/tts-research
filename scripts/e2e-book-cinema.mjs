@@ -160,10 +160,22 @@ async function runBookSourceE2E(browser, projectId, fixture) {
     screenshot,
     text: scopeContent.text,
   });
-  performance.firstOpen = summarizePerformanceMetrics([
-    ...routeSwitchPerformance.metrics.filter((metric) => metric.name === "studio-route-switch"),
-    ...performance.firstOpen.metrics,
-  ]);
+  performance.firstOpen = summarizePerformanceMetrics(
+    [
+      ...routeSwitchPerformance.metrics.filter((metric) => metric.name === "studio-route-switch"),
+      ...performance.firstOpen.metrics,
+    ],
+    performance.firstOpen.degradedStates,
+  );
+  if (fixture.kind === "epub") {
+    performance.forcedDegraded = await runDegradedHighlightUX(browser, {
+      book,
+      job: completedJob,
+      projectId,
+      scope,
+      text: scopeContent.text,
+    });
+  }
   console.log(`${fixture.kind.toUpperCase()} Book Cinema E2E passed.`);
   return { performance, screenshot };
 }
@@ -253,6 +265,7 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await exerciseSourcePinSmoke(page, book.id);
     await waitForSavedProgress(projectId, book.id, scope, job.id);
     await page.screenshot({ fullPage: false, path: screenshot });
+    const firstOpenDegradedStates = await readDegradedStates(page);
 
     const resumePage = await context.newPage();
     resumePage.setDefaultTimeout(60_000);
@@ -267,10 +280,11 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await resumeButton.click();
     await visibleOverlayButton(resumePage, "Pause").waitFor();
     const resumedMetrics = await readPerformanceMetrics(resumePage);
+    const resumedDegradedStates = await readDegradedStates(resumePage);
     await assertNoPageIssues([...issues, ...resumeIssues]);
     return {
-      firstOpen: summarizePerformanceMetrics(firstOpenMetrics),
-      resumed: summarizePerformanceMetrics(resumedMetrics),
+      firstOpen: summarizePerformanceMetrics(firstOpenMetrics, firstOpenDegradedStates),
+      resumed: summarizePerformanceMetrics(resumedMetrics, resumedDegradedStates),
     };
   } catch (error) {
     await page
@@ -280,6 +294,52 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
       })
       .catch(() => {});
     throw error;
+  } finally {
+    await context.close();
+  }
+}
+
+async function runDegradedHighlightUX(browser, { book, job, projectId, scope, text }) {
+  const context = await browser.newContext({
+    storageState: projectStorageState(projectId, {
+      bookScope: scope,
+      bookSourceId: book.id,
+      jobId: job.id,
+      text,
+    }),
+    viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
+  });
+  const page = await context.newPage();
+  if (lowResourceMode) {
+    await applyLowResourceProfile(page);
+  }
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
+  await page.route(`**/api/voice-jobs/${job.id}/highlight-map`, async (route) => {
+    const response = await route.fetch();
+    const map = await response.json();
+    await route.fulfill({ response, json: forceLowConfidenceHighlightMap(map) });
+  });
+  try {
+    await openBookCinemaOverlay(page, scope);
+    await page.getByText("Low confidence").first().waitFor({ timeout: 15_000 });
+    const playButton = visibleOverlayButton(page, "Play");
+    await assertEnabled(playButton, "Play");
+    await playButton.click();
+    await page.locator(".book-cinema-word-phrase").first().waitFor({ timeout: 15_000 });
+    await page.waitForFunction(
+      () =>
+        (globalThis.__ttsResearchPerformance?.degradedStates ?? []).some(
+          (state) => state.name === "low-confidence-highlight" || state.name === "phrase-fallback",
+        ),
+      undefined,
+      { timeout: 10_000 },
+    );
+    await assertNoPageIssues(issues);
+    return {
+      degradedStates: await readDegradedStates(page),
+      metrics: await readPerformanceMetrics(page),
+    };
   } finally {
     await context.close();
   }
@@ -1007,6 +1067,10 @@ async function readPerformanceMetrics(page) {
   return page.evaluate(() => globalThis.__ttsResearchPerformance?.metrics ?? []);
 }
 
+async function readDegradedStates(page) {
+  return page.evaluate(() => globalThis.__ttsResearchPerformance?.degradedStates ?? []);
+}
+
 async function performanceMetricCount(page, name) {
   return page.evaluate(
     (metricName) =>
@@ -1026,14 +1090,39 @@ async function waitForPerformanceMetricCount(page, name, minimumCount) {
   );
 }
 
-function summarizePerformanceMetrics(metrics) {
+function summarizePerformanceMetrics(metrics, degradedStates = []) {
   const summary = {};
   for (const metric of metrics) {
     summary[metric.name] = metric.durationMs;
   }
   return {
+    degradedStates,
     latestByName: summary,
     metrics,
+  };
+}
+
+function forceLowConfidenceHighlightMap(map) {
+  const summary = {
+    ...map.summary,
+    confidence: { overall: 0.48, segment: 0.48, token: 0.42 },
+    lowConfidence: true,
+    mode: "phrase",
+    reason: "forced low-confidence timing for local UX smoke",
+  };
+  return {
+    ...map,
+    mode: "phrase",
+    summary,
+    fragments: (map.fragments ?? []).map((fragment) => ({
+      ...fragment,
+      confidence: Math.min(fragment.confidence ?? 0.48, 0.48),
+    })),
+    tokens: (map.tokens ?? []).map((token) => ({
+      ...token,
+      confidence: Math.min(token.confidence ?? 0.42, 0.42),
+      mode: "phrase",
+    })),
   };
 }
 
