@@ -97,16 +97,16 @@ export function HelpPanel({
 
       <PanelSection title="Voice Studio Flow">
         <GuideStep
-          title="1. Analyze Source"
-          detail="Upload source media, detect voices, and choose the cleanest candidate reference."
+          title="1. Intake"
+          detail="Add text, books, files, or URLs and choose the active source for narration."
         />
         <GuideStep
-          title="2. Configure Run"
-          detail="Choose preview, fast output, checked master, or publish master before creating audio."
+          title="2. Review"
+          detail="Check source blocks, spoken script, and validation transcript without competing panes."
         />
         <GuideStep
-          title="3. Listen While It Arrives"
-          detail="Arrival mode buffers completed segments; Completed mode plays the final WAV."
+          title="3. Preview and Teleprompt"
+          detail="Preview the listener form, enter Teleprompt with context preserved, then Create & Listen."
         />
       </PanelSection>
 

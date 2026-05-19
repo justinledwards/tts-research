@@ -183,7 +183,7 @@ If no compatible wheel exists, startup continues with SDPA fallback unless `KOKO
 
 ## Custom Voice Profiles
 
-Create cloned voice profiles in **Voice Studio** from the left rail.
+Create cloned voice profiles in **Voice Studio** from the workspace controls.
 Upload any file containing an audio stream (audio-only or video containers), and the backend normalizes it once for speaker-aware source analysis.
 The review-first source flow uses local pyannote diarization to detect voices, score clean single-speaker spans, build preview clips, and compile bounded reference WAV candidates.
 Users can preview, name, and create one or more profiles from the detected speakers in a single source file.

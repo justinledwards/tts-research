@@ -1,5 +1,13 @@
 # Working Log
 
+## 2026-05-20 00:13 CEST - Adaptive workspace choreography
+- [x] Add shared workspace stage and layout model.
+- [x] Implement stage-based narration workspace and inline Teleprompt.
+- [x] Extract reusable rail primitives and reduce passive panel density.
+- [x] Add docs and update local UX guidance.
+- [x] Add focused tests and workspace smoke coverage.
+- [x] Run local validation commands.
+
 ## 2026-05-17 17:30 CEST - Voice Studio ergonomic foundation
 - [x] Consolidate Narration and Voice Cloning into clearer top-level modes.
 - [x] Streamline source intake, script review, rails, footer, workspace, and settings surfaces.

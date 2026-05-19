@@ -1,16 +1,28 @@
 import type { BookScope, ReadingPosition } from "./types";
+import {
+  normalizeWorkspaceStage,
+  type WorkspaceSourceType,
+  type WorkspaceStage,
+} from "./features/workspace/model";
 
 export const ACTIVE_PROJECT_ID_STORAGE_KEY = "tts-active-project-id";
 export const LEGACY_SOURCE_TEXT_DRAFT_STORAGE_KEY = "tts-source-text";
 export const LEGACY_JOB_ID_STORAGE_KEY = "tts-active-job-id";
 
 export interface ProjectWorkspaceState {
-  text: string;
-  jobId: string | null;
+  activeBlockId: string | null;
   bookSourceId: string | null;
   bookScope: BookScope | null;
+  jobId: string | null;
+  preparedSourceId: string | null;
   readingPosition: ReadingPosition | null;
+  sourceMode: "book" | "fileUrl" | "text";
+  sourceType: WorkspaceSourceType;
+  speechPolicyProfile: string | null;
+  stage: WorkspaceStage;
+  text: string;
   updatedAt: string;
+  voiceProfileId: string | null;
 }
 
 const PROJECT_WORKSPACE_STATE_PREFIX = "tts-project-state:";
@@ -21,12 +33,19 @@ export function projectWorkspaceStateKey(projectId: string): string {
 
 export function blankProjectWorkspaceState(): ProjectWorkspaceState {
   return {
-    text: "",
-    jobId: null,
+    activeBlockId: null,
     bookSourceId: null,
     bookScope: null,
+    jobId: null,
+    preparedSourceId: null,
     readingPosition: null,
+    sourceMode: "text",
+    sourceType: "draft",
+    speechPolicyProfile: null,
+    stage: "intake",
+    text: "",
     updatedAt: new Date(0).toISOString(),
+    voiceProfileId: null,
   };
 }
 
@@ -45,10 +64,7 @@ export function loadProjectWorkspaceState(projectId: string): ProjectWorkspaceSt
 
 export function saveProjectWorkspaceState(
   projectId: string,
-  state: Pick<ProjectWorkspaceState, "text"> &
-    Partial<
-      Pick<ProjectWorkspaceState, "jobId" | "bookSourceId" | "bookScope" | "readingPosition">
-    >,
+  state: Pick<ProjectWorkspaceState, "text"> & Partial<ProjectWorkspaceState>,
 ): void {
   localStorage.setItem(
     projectWorkspaceStateKey(projectId),
@@ -97,22 +113,47 @@ function normalizeProjectWorkspaceState(value: unknown): ProjectWorkspaceState {
 
   const candidate = value as Partial<ProjectWorkspaceState>;
   return {
-    text: typeof candidate.text === "string" ? candidate.text : "",
-    jobId:
-      typeof candidate.jobId === "string" && candidate.jobId.trim().length > 0
-        ? candidate.jobId
-        : null,
+    activeBlockId: normalizeOptionalString(candidate.activeBlockId),
     bookSourceId:
       typeof candidate.bookSourceId === "string" && candidate.bookSourceId.trim().length > 0
         ? candidate.bookSourceId
         : null,
     bookScope: normalizeBookScope(candidate.bookScope),
+    jobId:
+      typeof candidate.jobId === "string" && candidate.jobId.trim().length > 0
+        ? candidate.jobId
+        : null,
+    preparedSourceId: normalizeOptionalString(candidate.preparedSourceId),
     readingPosition: normalizeReadingPosition(candidate.readingPosition),
+    sourceMode: normalizeSourceMode(candidate.sourceMode),
+    sourceType: normalizeSourceType(candidate.sourceType),
+    speechPolicyProfile: normalizeOptionalString(candidate.speechPolicyProfile),
+    stage: normalizeWorkspaceStage(candidate.stage),
+    text: typeof candidate.text === "string" ? candidate.text : "",
     updatedAt:
       typeof candidate.updatedAt === "string" && candidate.updatedAt.trim().length > 0
         ? candidate.updatedAt
         : new Date(0).toISOString(),
+    voiceProfileId: normalizeOptionalString(candidate.voiceProfileId),
   };
+}
+
+function normalizeSourceMode(value: unknown): "book" | "fileUrl" | "text" {
+  if (value === "book" || value === "fileUrl" || value === "text") {
+    return value;
+  }
+  return "text";
+}
+
+function normalizeSourceType(value: unknown): WorkspaceSourceType {
+  if (value === "book" || value === "prepared" || value === "draft") {
+    return value;
+  }
+  return "draft";
+}
+
+function normalizeOptionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
 
 function normalizeReadingPosition(value: unknown): ReadingPosition | null {

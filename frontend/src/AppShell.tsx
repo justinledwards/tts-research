@@ -1,6 +1,7 @@
 import type { RunConfiguration } from "./runConfig";
 import { describePerformanceMode } from "./runConfig";
 import type { VoiceJob, VoiceProject } from "./types";
+import type { WorkspaceLayoutMode } from "./features/workspace/model";
 
 export type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 export type StudioMode = "narration" | "voiceCloning";
@@ -18,6 +19,7 @@ export function TopProductBar({
   requestState,
   runConfiguration,
   studioMode,
+  workspaceLayoutMode,
   onCancel,
   onExportOpen,
   onHelpOpen,
@@ -27,6 +29,7 @@ export function TopProductBar({
   onSettingsOpen,
   onStudioModeChange,
   onSubmit,
+  onWorkspaceLayoutModeChange,
   onWorkspaceOpen,
 }: Readonly<{
   activeJobId: string | null;
@@ -41,6 +44,7 @@ export function TopProductBar({
   requestState: RequestState;
   runConfiguration: RunConfiguration;
   studioMode: StudioMode;
+  workspaceLayoutMode: WorkspaceLayoutMode;
   onCancel: () => void;
   onExportOpen: () => void;
   onHelpOpen: () => void;
@@ -50,6 +54,7 @@ export function TopProductBar({
   onSettingsOpen: () => void;
   onStudioModeChange: (mode: StudioMode) => void;
   onSubmit: () => void;
+  onWorkspaceLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
   onWorkspaceOpen: () => void;
 }>) {
   const visibleJobs =
@@ -155,6 +160,31 @@ export function TopProductBar({
               key={mode}
               onClick={() => {
                 onStudioModeChange(mode);
+              }}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="hidden min-w-[210px] grid-cols-3 rounded-md border p-1 text-xs font-semibold shadow-sm vs-border vs-surface xl:grid">
+          {(
+            [
+              ["focus", "Focus"],
+              ["balanced", "Balanced"],
+              ["full", "Full"],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              aria-label={`${label} workspace layout`}
+              className={`h-8 whitespace-nowrap rounded px-2 transition ${
+                workspaceLayoutMode === mode
+                  ? "bg-orange-500 text-white shadow-sm"
+                  : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
+              }`}
+              key={mode}
+              onClick={() => {
+                onWorkspaceLayoutModeChange(mode);
               }}
               type="button"
             >

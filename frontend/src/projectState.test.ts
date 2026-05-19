@@ -36,18 +36,27 @@ describe("project workspace state", () => {
 
   it("starts a project blank when no scoped state exists", () => {
     expect(loadProjectWorkspaceState("new-project")).toMatchObject({
+      activeBlockId: null,
       bookScope: null,
       bookSourceId: null,
       jobId: null,
+      preparedSourceId: null,
+      sourceMode: "text",
+      sourceType: "draft",
+      speechPolicyProfile: null,
+      stage: "intake",
       text: "",
+      voiceProfileId: null,
     });
   });
 
-  it("saves draft text, active job, and selected book state per project", () => {
+  it("saves draft text, active job, stage, source, and selected book state per project", () => {
     saveProjectWorkspaceState("alpha", {
+      activeBlockId: "block-2",
       bookScope: { type: "chapter", chapterIndex: 2, label: "Chapter 2" },
       bookSourceId: "book-1",
       jobId: "job-1",
+      preparedSourceId: "source-1",
       readingPosition: {
         activeWordIndex: 12,
         bookSourceId: "book-1",
@@ -56,24 +65,37 @@ describe("project workspace state", () => {
         scopeKey: "chapter:2",
         textQuote: "exact text",
       },
+      sourceMode: "fileUrl",
+      sourceType: "prepared",
+      speechPolicyProfile: "Enterprise",
+      stage: "teleprompt",
       text: "Alpha text",
+      voiceProfileId: "voice-1",
     });
     saveProjectWorkspaceState("beta", { jobId: null, text: "Beta text" });
 
     expect(loadProjectWorkspaceState("alpha")).toMatchObject({
+      activeBlockId: "block-2",
       bookScope: { type: "chapter", chapterIndex: 2, label: "Chapter 2" },
       bookSourceId: "book-1",
       jobId: "job-1",
+      preparedSourceId: "source-1",
       readingPosition: {
         activeWordIndex: 12,
         bookSourceId: "book-1",
         nodeId: "p12",
         scopeKey: "chapter:2",
       },
+      sourceMode: "fileUrl",
+      sourceType: "prepared",
+      speechPolicyProfile: "Enterprise",
+      stage: "teleprompt",
       text: "Alpha text",
+      voiceProfileId: "voice-1",
     });
     expect(loadProjectWorkspaceState("beta")).toMatchObject({
       jobId: null,
+      stage: "intake",
       text: "Beta text",
     });
   });
@@ -107,12 +129,39 @@ describe("project workspace state", () => {
     clearProjectWorkspaceState("fresh");
 
     expect(loadProjectWorkspaceState("fresh")).toMatchObject({
+      activeBlockId: null,
       bookScope: null,
       bookSourceId: null,
       jobId: null,
+      preparedSourceId: null,
+      stage: "intake",
       text: "",
     });
     expect(localStorage.getItem(projectWorkspaceStateKey("fresh"))).toBeNull();
+  });
+
+  it("keeps older saved state valid when workspace fields are missing or legacy", () => {
+    localStorage.setItem(
+      projectWorkspaceStateKey("older"),
+      JSON.stringify({
+        jobId: "job-1",
+        stage: "sourceIntake",
+        text: "Older text",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    expect(loadProjectWorkspaceState("older")).toMatchObject({
+      activeBlockId: null,
+      jobId: "job-1",
+      preparedSourceId: null,
+      sourceMode: "text",
+      sourceType: "draft",
+      speechPolicyProfile: null,
+      stage: "intake",
+      text: "Older text",
+      voiceProfileId: null,
+    });
   });
 
   it("can clear old global keys without scoped state", () => {

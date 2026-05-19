@@ -112,6 +112,22 @@ const bookCinemaStep = await runCommandStep(context, {
 });
 await attachReaderTimingBudgets(bookCinemaStep, thresholds);
 
+await runCommandStep(context, {
+  id: "workspace-flow-e2e",
+  title: "Workspace Flow E2E Smoke",
+  command: "pnpm",
+  args: ["e2e:workspace-flow"],
+  env: {
+    E2E_ARTIFACT_DIR: path.join(context.artifactsDir, "workspace-flow-e2e"),
+    E2E_SCREENSHOT_DIR: path.join(context.artifactsDir, "workspace-flow-e2e", "screenshots"),
+    E2E_SUMMARY_PATH: path.join(context.artifactsDir, "workspace-flow-e2e", "summary.json"),
+  },
+  artifacts: {
+    e2eSummary: path.join(context.artifactsDir, "workspace-flow-e2e", "summary.json"),
+    screenshots: path.join(context.artifactsDir, "workspace-flow-e2e", "screenshots"),
+  },
+});
+
 const summary = await finalizeRun(context);
 console.log(`validate:local ${summary.status}; report: ${summary.reports.markdown}`);
 process.exitCode = summary.status === "passed" ? 0 : 1;

@@ -39,6 +39,7 @@
     "generate:contracts": "node scripts/generate-contract-types.mjs",
     "validate:ir": "node scripts/validate-content-ir.mjs",
     "e2e:book-cinema": "node scripts/e2e-book-cinema.mjs",
+    "e2e:workspace-flow": "E2E_WORKSPACE_FLOW=1 node scripts/e2e-book-cinema.mjs",
     "e2e:reader-wayfinding": "E2E_READER_WAYFINDING=1 node scripts/e2e-book-cinema.mjs",
     "e2e:book-cinema:low-resource": "E2E_LOW_RESOURCE=1 node scripts/e2e-book-cinema.mjs",
     "validate:live-ingestion": "node scripts/validate-live-ingestion.mjs"

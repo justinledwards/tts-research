@@ -138,13 +138,41 @@ import {
   type HighlightCue,
 } from "./highlightMap";
 import { THEME_STORAGE_KEY, VOICE_STUDIO_THEMES, normalizeThemeName } from "./theme";
+import { nextActivityFooterMode, type ActivityFooterMode } from "./activityFooter";
 import {
-  ACTIVITY_FOOTER_MODE_STORAGE_KEY,
-  defaultActivityFooterMode,
-  nextActivityFooterMode,
-  normalizeActivityFooterMode,
-  type ActivityFooterMode,
-} from "./activityFooter";
+  CollapsedRailButton,
+  RailMiniStack,
+  RailModeToolbar,
+  railColumnWidth,
+} from "./features/layout";
+import {
+  ReviewPaneAccordion,
+  buildReviewPaneSummaries,
+  normalizeReviewPane,
+  selectReviewBlockId,
+  type ReviewPane,
+} from "./features/review";
+import { TelepromptStage } from "./features/teleprompt";
+import {
+  WORKSPACE_LAYOUT_STORAGE_KEY,
+  createWorkspaceContext,
+  defaultWorkspaceLayoutMode,
+  enterTelepromptStage,
+  normalizeWorkspaceLayoutMode,
+  returnFromTelepromptStage,
+  transitionWorkspaceStage,
+  withWorkspaceActiveBlock,
+  withWorkspaceSource,
+  withWorkspaceSpeechPolicyProfile,
+  withWorkspaceVoiceProfile,
+  workspaceLayoutModeForRailMode,
+  workspaceLayoutRails,
+  type WorkspaceContext,
+  type WorkspaceLayoutMode,
+  type WorkspaceRailMode,
+  type WorkspaceSourceType,
+  type WorkspaceStage,
+} from "./features/workspace/model";
 import type {
   BookSource,
   BookCinemaDiagnostics,
@@ -242,8 +270,6 @@ const ARTIFACT_BUILD_TIMEOUT_ERROR = "Timeout must be blank or a positive intege
 const DEFAULT_PROJECT_NAME = "The Future of Clean Energy";
 const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
 const RESEARCH_MODULE_PROMPT_HIDDEN_KEY = "tts-research-module-prompt-hidden";
-const LEFT_RAIL_MODE_STORAGE_KEY = "tts-left-rail-mode";
-const RIGHT_RAIL_MODE_STORAGE_KEY = "tts-right-rail-mode";
 const DEFAULT_KOKORO_VOICE_ID = "af_heart";
 const VOICE_PROFILE_RECENT_STORAGE_KEY = "tts-recent-voice-profile-ids";
 const VOICE_PROFILE_PINNED_STORAGE_KEY = "tts-pinned-voice-profile-ids";
@@ -395,8 +421,17 @@ interface WritableRef<T> {
 
 type CinemaTextSize = "compact" | "comfortable" | "large" | "giant" | "massive";
 type PreparedSourceBlock = NonNullable<PreparedSource["blocks"]>[number];
-type ContentMode = "sourceIntake" | "review";
 type SourceMode = "text" | "book" | "fileUrl";
+
+function workspaceSourceType(sourceMode: SourceMode): WorkspaceSourceType {
+  if (sourceMode === "book") {
+    return "book";
+  }
+  if (sourceMode === "fileUrl") {
+    return "prepared";
+  }
+  return "draft";
+}
 
 const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   isAvailable: false,
@@ -2470,15 +2505,14 @@ export function App() {
   const [themeName, setThemeName] = useState<ThemeName>(() =>
     normalizeThemeName(localStorage.getItem(THEME_STORAGE_KEY)),
   );
-  const [activityFooterMode, setActivityFooterMode] = useState<ActivityFooterMode>(() => {
-    const storedMode = localStorage.getItem(ACTIVITY_FOOTER_MODE_STORAGE_KEY);
-    return storedMode ? normalizeActivityFooterMode(storedMode) : defaultActivityFooterMode();
-  });
-  const [leftRailMode, setLeftRailMode] = useState<ActivityFooterMode>(() =>
-    normalizeActivityFooterMode(localStorage.getItem(LEFT_RAIL_MODE_STORAGE_KEY)),
-  );
-  const [rightRailMode, setRightRailMode] = useState<ActivityFooterMode>(() =>
-    normalizeActivityFooterMode(localStorage.getItem(RIGHT_RAIL_MODE_STORAGE_KEY)),
+  const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContext>(() =>
+    createWorkspaceContext({
+      layoutMode: normalizeWorkspaceLayoutMode(
+        localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY) ?? defaultWorkspaceLayoutMode(),
+      ),
+      speechPolicyProfile,
+      voiceProfileId: selectedVoiceProfileId,
+    }),
   );
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -2518,9 +2552,36 @@ export function App() {
     },
     [studioMode],
   );
-  const [contentMode, setContentMode] = useState<ContentMode>("sourceIntake");
   const [sourceMode, setSourceMode] = useState<SourceMode>("text");
   const [teleprompterOpenSignal, setTeleprompterOpenSignal] = useState(0);
+  const workspaceRails = workspaceLayoutRails(workspaceContext.layoutMode);
+  const activityFooterMode: ActivityFooterMode = workspaceRails.activityFooterMode;
+  const leftRailMode = workspaceRails.leftRailMode;
+  const rightRailMode = workspaceRails.rightRailMode;
+  const contentMode = workspaceContext.stage;
+  const setContentMode = useCallback((stage: WorkspaceStage) => {
+    setWorkspaceContext((currentContext) => transitionWorkspaceStage(currentContext, stage));
+  }, []);
+  const setWorkspaceLayoutMode = useCallback((layoutMode: WorkspaceLayoutMode) => {
+    setWorkspaceContext((currentContext) => ({
+      ...currentContext,
+      layoutMode,
+    }));
+  }, []);
+  const handleRailModeChange = useCallback((mode: WorkspaceRailMode) => {
+    setWorkspaceContext((currentContext) => ({
+      ...currentContext,
+      layoutMode: workspaceLayoutModeForRailMode(mode),
+    }));
+  }, []);
+  const setLeftRailMode = handleRailModeChange;
+  const setRightRailMode = handleRailModeChange;
+  const setActivityFooterMode = useCallback((mode: ActivityFooterMode) => {
+    setWorkspaceContext((currentContext) => ({
+      ...currentContext,
+      layoutMode: workspaceLayoutModeForRailMode(mode),
+    }));
+  }, []);
 
   const isProcessing = requestState === "running";
   const canSubmit = useMemo(() => text.trim().length > 0 && !isProcessing, [text, isProcessing]);
@@ -2593,6 +2654,27 @@ export function App() {
         : (preparedSources[0] ?? null),
     [preparedSources, selectedPreparedSourceId],
   );
+  useEffect(() => {
+    let sourceId: string | null = null;
+    if (sourceMode === "book") {
+      sourceId = selectedBookSource?.id ?? null;
+    } else if (sourceMode === "fileUrl") {
+      sourceId = selectedPreparedSource?.id ?? null;
+    }
+    setWorkspaceContext((currentContext) =>
+      withWorkspaceSource(currentContext, workspaceSourceType(sourceMode), sourceId),
+    );
+  }, [selectedBookSource?.id, selectedPreparedSource?.id, sourceMode]);
+  useEffect(() => {
+    setWorkspaceContext((currentContext) =>
+      withWorkspaceVoiceProfile(currentContext, selectedVoiceProfileId),
+    );
+  }, [selectedVoiceProfileId]);
+  useEffect(() => {
+    setWorkspaceContext((currentContext) =>
+      withWorkspaceSpeechPolicyProfile(currentContext, speechPolicyProfile),
+    );
+  }, [speechPolicyProfile]);
   const latestProgress = (() => {
     const unfinishedProgress = projectProgress.find((progress) => !progress.finished);
     if (unfinishedProgress) {
@@ -2852,6 +2934,14 @@ export function App() {
     }
     setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
   }, [canOpenBookCinema, themeName]);
+  const openTelepromptStage = useCallback(() => {
+    setWorkspaceContext((currentContext) => enterTelepromptStage(currentContext));
+  }, []);
+  const returnToReviewFromTeleprompt = useCallback(() => {
+    setWorkspaceContext((currentContext) =>
+      transitionWorkspaceStage(returnFromTelepromptStage(currentContext), "review"),
+    );
+  }, []);
   const handleSelectBookCinemaSource = useCallback(
     (bookId: string) => {
       const book = bookSources.find((item) => item.id === bookId);
@@ -3631,6 +3721,14 @@ export function App() {
       setPreparedSources([]);
       setSelectedPreparedSourceId(null);
       setSourcePrepError(null);
+      setSourceMode("text");
+      setWorkspaceContext((currentContext) =>
+        createWorkspaceContext({
+          layoutMode: currentContext.layoutMode,
+          speechPolicyProfile,
+          voiceProfileId: selectedVoiceProfileId,
+        }),
+      );
       setProjectProgress([]);
       setActivePlaybackSession(null);
       setPendingPlaybackResume(null);
@@ -3639,7 +3737,7 @@ export function App() {
       resetPlaybackSurface();
       setProjectStateReadyId(projectId);
     },
-    [resetPlaybackSurface],
+    [resetPlaybackSurface, selectedVoiceProfileId, speechPolicyProfile],
   );
 
   const restoreProjectWorkspace = useCallback(
@@ -3660,6 +3758,27 @@ export function App() {
       resetPlaybackSurface();
       const savedState = loadProjectWorkspaceState(projectId);
       setText(savedState.text);
+      setSourceMode(savedState.sourceMode);
+      if (savedState.preparedSourceId) {
+        setSelectedPreparedSourceId(savedState.preparedSourceId);
+      }
+      if (savedState.voiceProfileId) {
+        setSelectedVoiceProfileId(savedState.voiceProfileId);
+      }
+      if (savedState.speechPolicyProfile) {
+        setSpeechPolicyProfile(savedState.speechPolicyProfile);
+      }
+      setWorkspaceContext((currentContext) =>
+        createWorkspaceContext({
+          ...currentContext,
+          activeBlockId: savedState.activeBlockId,
+          sourceId: savedState.preparedSourceId ?? savedState.bookSourceId,
+          sourceType: savedState.sourceType,
+          speechPolicyProfile: savedState.speechPolicyProfile ?? speechPolicyProfile,
+          stage: savedState.stage,
+          voiceProfileId: savedState.voiceProfileId ?? selectedVoiceProfileId,
+        }),
+      );
       if (hashPosition?.bookSourceId) {
         setSelectedBookSourceId(hashPosition.bookSourceId);
       } else {
@@ -3686,11 +3805,18 @@ export function App() {
         applyJobStatusState(restoredJob);
       } catch {
         saveProjectWorkspaceState(projectId, {
+          activeBlockId: savedState.activeBlockId,
           bookScope: savedState.bookScope,
           bookSourceId: savedState.bookSourceId,
-          readingPosition: savedState.readingPosition,
-          text: savedState.text,
           jobId: null,
+          preparedSourceId: savedState.preparedSourceId,
+          readingPosition: savedState.readingPosition,
+          sourceMode: savedState.sourceMode,
+          sourceType: savedState.sourceType,
+          speechPolicyProfile: savedState.speechPolicyProfile,
+          stage: savedState.stage,
+          text: savedState.text,
+          voiceProfileId: savedState.voiceProfileId,
         });
         setJob(null);
         setRequestState("idle");
@@ -3698,7 +3824,7 @@ export function App() {
         setProjectStateReadyId(projectId);
       }
     },
-    [applyJobStatusState, resetPlaybackSurface],
+    [applyJobStatusState, resetPlaybackSurface, selectedVoiceProfileId, speechPolicyProfile],
   );
 
   const selectProject = useCallback(
@@ -3708,11 +3834,18 @@ export function App() {
       }
       if (projectStateReadyId === activeProjectId) {
         saveProjectWorkspaceState(activeProjectId, {
+          activeBlockId: workspaceContext.activeBlockId,
           bookScope: selectedBookScope,
           bookSourceId: selectedBookSourceId,
-          readingPosition: currentReadingPosition,
-          text,
           jobId: job?.id ?? null,
+          preparedSourceId: selectedPreparedSourceId,
+          readingPosition: currentReadingPosition,
+          sourceMode,
+          sourceType: workspaceSourceType(sourceMode),
+          speechPolicyProfile,
+          stage: contentMode,
+          text,
+          voiceProfileId: selectedVoiceProfileId,
         });
       }
       setProjectStateReadyId(null);
@@ -3720,13 +3853,19 @@ export function App() {
       localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, projectId);
     },
     [
+      contentMode,
       activeProjectId,
       currentReadingPosition,
       job?.id,
       projectStateReadyId,
+      selectedPreparedSourceId,
       selectedBookScope,
       selectedBookSourceId,
+      selectedVoiceProfileId,
+      sourceMode,
+      speechPolicyProfile,
       text,
+      workspaceContext.activeBlockId,
     ],
   );
 
@@ -3792,17 +3931,39 @@ export function App() {
   const applyVoiceJobToState = useCallback(
     (nextJob: VoiceJob) => {
       const nextProjectId = nextJob.projectId || activeProjectId;
+      let nextSourceMode: SourceMode = "text";
+      if (nextJob.bookSourceId) {
+        nextSourceMode = "book";
+      } else if (nextJob.preparedSourceId) {
+        nextSourceMode = "fileUrl";
+      }
+      const nextSourceType = workspaceSourceType(nextSourceMode);
       setJob(nextJob);
       setSelectedBookSourceId(nextJob.bookSourceId ?? null);
       setSelectedBookScope(nextJob.bookScope ?? null);
+      setSelectedPreparedSourceId(nextJob.preparedSourceId ?? null);
+      setSourceMode(nextSourceMode);
+      setWorkspaceContext((currentContext) =>
+        transitionWorkspaceStage(
+          withWorkspaceSource(
+            currentContext,
+            nextSourceType,
+            nextJob.preparedSourceId ?? nextJob.bookSourceId ?? null,
+          ),
+          "preview",
+        ),
+      );
       if (nextProjectId !== activeProjectId) {
         setActiveProjectId(nextProjectId);
         localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, nextProjectId);
       }
       setProjectStateReadyId(nextProjectId);
       saveProjectWorkspaceState(nextProjectId, {
+        activeBlockId: workspaceContext.activeBlockId,
         bookScope: nextJob.bookScope ?? null,
         bookSourceId: nextJob.bookSourceId ?? null,
+        jobId: nextJob.id,
+        preparedSourceId: nextJob.preparedSourceId ?? null,
         readingPosition:
           nextJob.bookSourceId && nextJob.bookScope
             ? {
@@ -3811,15 +3972,26 @@ export function App() {
                 scopeKey: bookScopeKey(nextJob.bookScope),
               }
             : null,
+        sourceMode: nextSourceMode,
+        sourceType: nextSourceType,
+        speechPolicyProfile,
+        stage: "preview",
         text: typeof nextJob.inputText === "string" ? nextJob.inputText : text,
-        jobId: nextJob.id,
+        voiceProfileId: selectedVoiceProfileId,
       });
       if (typeof nextJob.inputText === "string") {
         setText(nextJob.inputText);
       }
       applyJobStatusState(nextJob);
     },
-    [activeProjectId, applyJobStatusState, text],
+    [
+      activeProjectId,
+      applyJobStatusState,
+      selectedVoiceProfileId,
+      speechPolicyProfile,
+      text,
+      workspaceContext.activeBlockId,
+    ],
   );
 
   const handleSelectJob = useCallback(
@@ -3961,6 +4133,8 @@ export function App() {
         setSelectedBookSourceId(book.id);
         const defaultScope = resolveDefaultBookScope(book);
         setSelectedBookScope(defaultScope);
+        setSourceMode("book");
+        setContentMode("review");
         if (book.status === "ready") {
           setText(bookScopeText(book, defaultScope));
         }
@@ -3979,7 +4153,7 @@ export function App() {
         setIsImportingBookSource(false);
       }
     },
-    [activeProjectId, refreshProjects],
+    [activeProjectId, refreshProjects, setContentMode],
   );
 
   const handlePrepareSourceFile = useCallback(
@@ -3996,6 +4170,8 @@ export function App() {
           ]);
           setSelectedBookSourceId(book.id);
           setSelectedBookScope(resolveDefaultBookScope(book));
+          setSourceMode("book");
+          setContentMode("review");
           return;
         }
         const source = await createPreparedSource(activeProjectId, file, { markdownParseMode });
@@ -4004,6 +4180,8 @@ export function App() {
           ...currentSources.filter((item) => item.id !== source.id),
         ]);
         setSelectedPreparedSourceId(source.id);
+        setSourceMode("fileUrl");
+        setContentMode("review");
         if (source.speechText) {
           setText(source.speechText);
         }
@@ -4022,7 +4200,7 @@ export function App() {
         setIsPreparingSource(false);
       }
     },
-    [activeProjectId, refreshProjects],
+    [activeProjectId, refreshProjects, setContentMode],
   );
   const handlePrepareCinemaSourceFile = useCallback(
     async (file: File) => {
@@ -4058,7 +4236,7 @@ export function App() {
         setIsPreparingSource(false);
       }
     },
-    [activeProjectId, refreshProjects],
+    [activeProjectId, refreshProjects, setContentMode],
   );
   const handleSelectPreparedCinemaSource = useCallback(
     (sourceId: string) => {
@@ -4086,6 +4264,8 @@ export function App() {
           ]);
           setSelectedBookSourceId(book.id);
           setSelectedBookScope(resolveDefaultBookScope(book));
+          setSourceMode("book");
+          setContentMode("review");
           return;
         }
         const source = await createPreparedSource(activeProjectId, {
@@ -4099,6 +4279,8 @@ export function App() {
           ...currentSources.filter((item) => item.id !== source.id),
         ]);
         setSelectedPreparedSourceId(source.id);
+        setSourceMode("fileUrl");
+        setContentMode("review");
         if (source.speechText) {
           setText(source.speechText);
         }
@@ -4117,30 +4299,35 @@ export function App() {
         setIsPreparingSource(false);
       }
     },
-    [activeProjectId, refreshProjects],
+    [activeProjectId, refreshProjects, setContentMode],
   );
 
-  const handleUsePreparedSource = useCallback(async (source: PreparedSource) => {
-    setSelectedPreparedSourceId(source.id);
-    let nextSource = source;
-    if (isPreparedSourceDisplayIncomplete(source)) {
-      try {
-        nextSource = await getPreparedSource(source.id);
-        setPreparedSources((currentSources) => [
-          nextSource,
-          ...currentSources.filter((item) => item.id !== nextSource.id),
-        ]);
-      } catch (caughtError) {
-        setSourcePrepError(
-          caughtError instanceof Error ? caughtError.message : "Unable to load prepared source",
-        );
-        return;
+  const handleUsePreparedSource = useCallback(
+    async (source: PreparedSource) => {
+      setSelectedPreparedSourceId(source.id);
+      setSourceMode("fileUrl");
+      setContentMode("review");
+      let nextSource = source;
+      if (isPreparedSourceDisplayIncomplete(source)) {
+        try {
+          nextSource = await getPreparedSource(source.id);
+          setPreparedSources((currentSources) => [
+            nextSource,
+            ...currentSources.filter((item) => item.id !== nextSource.id),
+          ]);
+        } catch (caughtError) {
+          setSourcePrepError(
+            caughtError instanceof Error ? caughtError.message : "Unable to load prepared source",
+          );
+          return;
+        }
       }
-    }
-    if (nextSource.speechText) {
-      setText(nextSource.speechText);
-    }
-  }, []);
+      if (nextSource.speechText) {
+        setText(nextSource.speechText);
+      }
+    },
+    [setContentMode],
+  );
 
   const handleInspectContentIR = useCallback(
     async (sourceId: string, title: string, previewSpeechPolicy = false) => {
@@ -4182,10 +4369,12 @@ export function App() {
       }
       setSelectedBookSourceId(book.id);
       setSelectedBookScope(scope);
+      setSourceMode("book");
+      setContentMode("review");
       setText(scopedText);
       setBookSourceError(null);
     },
-    [bookScopeContent],
+    [bookScopeContent, setContentMode],
   );
 
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
@@ -4655,20 +4844,33 @@ export function App() {
       return;
     }
     saveProjectWorkspaceState(activeProjectId, {
+      activeBlockId: workspaceContext.activeBlockId,
       bookScope: selectedBookScope,
       bookSourceId: selectedBookSourceId,
-      readingPosition: currentReadingPosition,
-      text,
       jobId: job?.id ?? null,
+      preparedSourceId: selectedPreparedSourceId,
+      readingPosition: currentReadingPosition,
+      sourceMode,
+      sourceType: workspaceSourceType(sourceMode),
+      speechPolicyProfile,
+      stage: contentMode,
+      text,
+      voiceProfileId: selectedVoiceProfileId,
     });
   }, [
     activeProjectId,
+    contentMode,
     job?.id,
     currentReadingPosition,
     projectStateReadyId,
+    selectedPreparedSourceId,
     selectedBookScope,
     selectedBookSourceId,
+    selectedVoiceProfileId,
+    sourceMode,
+    speechPolicyProfile,
     text,
+    workspaceContext.activeBlockId,
   ]);
 
   useEffect(() => {
@@ -4699,16 +4901,8 @@ export function App() {
   }, [themeName]);
 
   useEffect(() => {
-    localStorage.setItem(ACTIVITY_FOOTER_MODE_STORAGE_KEY, activityFooterMode);
-  }, [activityFooterMode]);
-
-  useEffect(() => {
-    localStorage.setItem(LEFT_RAIL_MODE_STORAGE_KEY, leftRailMode);
-  }, [leftRailMode]);
-
-  useEffect(() => {
-    localStorage.setItem(RIGHT_RAIL_MODE_STORAGE_KEY, rightRailMode);
-  }, [rightRailMode]);
+    localStorage.setItem(WORKSPACE_LAYOUT_STORAGE_KEY, workspaceContext.layoutMode);
+  }, [workspaceContext.layoutMode]);
 
   useEffect(() => {
     const hasJob = Boolean(job?.id);
@@ -5079,6 +5273,7 @@ export function App() {
     try {
       const nextJob = await createVoiceJob(request);
       setJob(nextJob);
+      setContentMode("preview");
       void refreshProjectJobs(nextJob.projectId || activeProjectId);
       setRequestState(nextJob.status === "completed" ? "complete" : "running");
     } catch (caughtError) {
@@ -5140,6 +5335,7 @@ export function App() {
       setJob(nextJob);
       setSelectedBookSourceId(nextJob.bookSourceId ?? book.id);
       setSelectedBookScope(nextJob.bookScope ?? scope);
+      setContentMode("preview");
       void refreshProjectJobs(nextJob.projectId || activeProjectId);
       setRequestState(nextJob.status === "completed" ? "complete" : "running");
     } catch (caughtError) {
@@ -5183,6 +5379,7 @@ export function App() {
     try {
       const nextJob = await createPreparedSourceJob(source.id, request);
       setJob(nextJob);
+      setContentMode("preview");
       void refreshProjectJobs(nextJob.projectId || activeProjectId);
       setRequestState(nextJob.status === "completed" ? "complete" : "running");
     } catch (caughtError) {
@@ -5242,10 +5439,12 @@ export function App() {
         onSubmit={() => {
           void submitVoiceJob();
         }}
+        onWorkspaceLayoutModeChange={setWorkspaceLayoutMode}
         onWorkspaceOpen={() => {
           setIsWorkspaceOpen(true);
         }}
         runConfiguration={runConfiguration}
+        workspaceLayoutMode={workspaceContext.layoutMode}
       />
 
       {isWorkspaceOpen ? (
@@ -5397,6 +5596,19 @@ export function App() {
           void handleResumeProgress(progress);
         }}
       />
+      {rightRailMode !== "full" && job ? (
+        <PlaybackControllerHost
+          job={job}
+          latestProgress={latestProgress}
+          onOpenCinema={openReadingCinema}
+          onPlaybackCursorChange={setPlaybackCursorSec}
+          onPlaybackControlsChange={handlePlaybackControlsChange}
+          onPlaybackStateChange={setIsPlaybackActive}
+          onResumeProgress={(progress) => {
+            void handleResumeProgress(progress);
+          }}
+        />
+      ) : null}
       {isBookCinemaOpen && selectedBookSource && effectiveBookScope ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading Book Cinema..." />}>
           <BookCinemaOverlay
@@ -5711,7 +5923,7 @@ export function App() {
                   }
                 }}
                 onCreateSource={() => {
-                  setContentMode("sourceIntake");
+                  setContentMode("intake");
                   setSourceMode("text");
                 }}
                 onRunConfigurationChange={setRunConfiguration}
@@ -5752,6 +5964,7 @@ export function App() {
 
           <section className="order-1 flex min-w-0 flex-col gap-3 p-4 lg:order-none lg:min-h-0 lg:overflow-y-auto xl:p-5">
             <SourceTextPanel
+              activeReviewBlockId={workspaceContext.activeBlockId}
               projectId={activeProjectId}
               bookControls={
                 <Suspense fallback={<LazySurfaceFallback label="Loading book tools..." />}>
@@ -5800,10 +6013,61 @@ export function App() {
               customSpeechPolicyProfiles={customSpeechPolicyProfiles}
               speechPolicyProfiles={speechPolicyProfiles}
               sourcePrepError={sourcePrepError}
+              telepromptStage={
+                <TelepromptStage
+                  activeBlockLabel={workspaceActiveBlockLabel(
+                    workspaceContext.activeBlockId,
+                    selectedPreparedSource,
+                  )}
+                  policyProfile={speechPolicyProfileDisplayName(
+                    speechPolicyProfile,
+                    customSpeechPolicyProfiles,
+                  )}
+                  sourceLabel={narrationReviewSourceLabel(
+                    selectedPreparedSource,
+                    selectedBookSource,
+                  )}
+                  sourceMeta={narrationReviewSourceMeta({
+                    bookScopeContent,
+                    selectedBookScope: effectiveBookScope,
+                    selectedBookSource,
+                    selectedPreparedSource,
+                    text,
+                  })}
+                  voiceProfile={selectedVoiceProfile?.name ?? "Default voice"}
+                  onBackToReview={returnToReviewFromTeleprompt}
+                >
+                  <TeleprompterPanel
+                    canOpenBookCinema={canOpenBookCinema}
+                    isPlaybackActive={isPlaybackActive}
+                    job={job}
+                    latestProgress={latestProgress}
+                    openSignal={0}
+                    playbackControls={playbackControls}
+                    playbackCursorSec={playbackCursorSec}
+                    preparedSourceForCinema={jobPreparedSource ?? selectedPreparedSource}
+                    settings={teleprompterSettings}
+                    themeName={themeName}
+                    onOpenBookCinema={openReadingCinema}
+                    onOpenSettings={() => {
+                      setIsSettingsOpen(true);
+                    }}
+                    onResumeProgress={(progress) => {
+                      void handleResumeProgress(progress);
+                    }}
+                  />
+                </TelepromptStage>
+              }
               text={text}
               voiceProfileId={selectedVoiceProfileId}
               onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
               onContentModeChange={setContentMode}
+              onCreateBookAudio={(book, scope) => {
+                void submitBookNarrationJob(book, scope);
+              }}
+              onCreateDraftAudio={() => {
+                void submitVoiceJob();
+              }}
               onCreatePreparedAudio={(source) => {
                 void submitPreparedSourceJob(source);
               }}
@@ -5814,13 +6078,18 @@ export function App() {
                 void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
               }}
               onOpenPreparedSourceCinema={openPreparedSourceCinema}
-              onOpenTeleprompter={openReadingCinema}
+              onOpenTeleprompter={openTelepromptStage}
               onPrepareFile={handlePrepareSourceFile}
               onPrepareUrl={handlePrepareSourceUrl}
               onSourceModeChange={setSourceMode}
               onSpeechPolicyOverridesChange={handleSpeechPolicyOverridesChange}
               onSpeechPolicyProfileChange={(profile) => {
                 void handleSpeechPolicyProfileChange(profile);
+              }}
+              onReviewBlockChange={(blockId) => {
+                setWorkspaceContext((currentContext) =>
+                  withWorkspaceActiveBlock(currentContext, blockId),
+                );
               }}
               onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
               onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
@@ -5846,24 +6115,41 @@ export function App() {
             )}
             {rightRailMode === "full" ? (
               <div className="grid gap-3 p-4 xl:p-5">
-                <AudioPanel
-                  canOpenCinema={Boolean(job) || canOpenBookCinema}
-                  job={job}
-                  latestProgress={latestProgress}
-                  onOpenCinema={openReadingCinema}
-                  onPlaybackCursorChange={setPlaybackCursorSec}
-                  onPlaybackControlsChange={handlePlaybackControlsChange}
-                  onPlaybackStateChange={setIsPlaybackActive}
-                  onResumeProgress={(progress) => {
-                    void handleResumeProgress(progress);
-                  }}
-                />
+                {job || isProcessing ? (
+                  <AudioPanel
+                    canOpenCinema={Boolean(job) || canOpenBookCinema}
+                    job={job}
+                    latestProgress={latestProgress}
+                    onOpenCinema={openReadingCinema}
+                    onPlaybackCursorChange={setPlaybackCursorSec}
+                    onPlaybackControlsChange={handlePlaybackControlsChange}
+                    onPlaybackStateChange={setIsPlaybackActive}
+                    onResumeProgress={(progress) => {
+                      void handleResumeProgress(progress);
+                    }}
+                  />
+                ) : (
+                  <NarrationStageContextPanel
+                    policyProfile={speechPolicyProfileDisplayName(
+                      speechPolicyProfile,
+                      customSpeechPolicyProfiles,
+                    )}
+                    sourceLabel={
+                      selectedPreparedSource?.title ??
+                      selectedPreparedSource?.sourceName ??
+                      (selectedBookSource ? bookSourceName(selectedBookSource) : "Draft text")
+                    }
+                    stage={contentMode}
+                  />
+                )}
                 {job?.progress.message ? <ProgressPanel job={job} now={now} /> : null}
-                <RelevantMetricsPanel
-                  job={job}
-                  metrics={systemMetrics}
-                  metricsError={systemMetricsError}
-                />
+                {job || systemMetricsError ? (
+                  <RelevantMetricsPanel
+                    job={job}
+                    metrics={systemMetrics}
+                    metricsError={systemMetricsError}
+                  />
+                ) : null}
               </div>
             ) : (
               <PlaybackRailMini
@@ -5897,72 +6183,6 @@ export function App() {
         }}
       />
     </main>
-  );
-}
-
-function railColumnWidth(mode: ActivityFooterMode, side: "left" | "right"): string {
-  if (mode === "collapsed") {
-    return "52px";
-  }
-  if (mode === "compact") {
-    return "156px";
-  }
-  if (side === "left") {
-    return "clamp(300px, 18vw, 340px)";
-  }
-  return "clamp(320px, 19vw, 360px)";
-}
-
-function RailModeToolbar({
-  label,
-  mode,
-  onModeChange,
-}: Readonly<{
-  label: string;
-  mode: ActivityFooterMode;
-  onModeChange: (mode: ActivityFooterMode) => void;
-}>) {
-  const labelByMode: Record<ActivityFooterMode, string> = {
-    collapsed: "Hide",
-    compact: "Slim",
-    full: "Full",
-  };
-  const buttonLabel = (item: ActivityFooterMode) => {
-    return labelByMode[item];
-  };
-  return (
-    <div
-      className={`sticky top-0 z-20 flex min-w-0 items-center justify-between gap-2 border-b backdrop-blur vs-border vs-raised ${
-        mode === "compact" ? "px-1.5 py-1" : "px-2 py-1.5"
-      }`}
-    >
-      <span
-        className={`min-w-0 truncate text-[0.58rem] font-semibold uppercase tracking-[0.12em] vs-muted ${
-          mode === "compact" ? "sr-only" : ""
-        }`}
-      >
-        {label}
-      </span>
-      <div className="grid shrink-0 grid-cols-3 gap-0.5 rounded-md border p-0.5 vs-border vs-surface">
-        {(["full", "compact", "collapsed"] as const).map((item) => (
-          <button
-            aria-label={`${label} ${item}`}
-            className={`h-6 rounded px-1.5 text-[0.58rem] font-semibold capitalize transition ${
-              mode === item
-                ? "bg-orange-500 text-white"
-                : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-            }`}
-            key={item}
-            onClick={() => {
-              onModeChange(item);
-            }}
-            type="button"
-          >
-            {buttonLabel(item)}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -6116,58 +6336,30 @@ function CloneReadinessRailMini({
   );
 }
 
-function RailMiniStack({
-  actionLabel,
-  items,
-  onAction,
-}: Readonly<{
-  actionLabel?: string;
-  items: { detail: string; label: string; value: string }[];
-  onAction?: () => void;
-}>) {
+function NarrationStageContextPanel({
+  policyProfile,
+  sourceLabel,
+  stage,
+}: Readonly<{ policyProfile: string; sourceLabel: string; stage: WorkspaceStage }>) {
+  const stageLabel: Record<WorkspaceStage, string> = {
+    intake: "Intake",
+    preview: "Preview",
+    review: "Review",
+    teleprompt: "Teleprompt",
+  };
   return (
-    <div className="grid min-w-0 gap-2 p-2">
-      {items.map((item) => (
-        <div className="min-w-0 rounded-md border p-2 vs-border vs-surface" key={item.label}>
-          <p className="truncate text-[0.58rem] font-semibold uppercase tracking-[0.12em] vs-muted">
-            {item.label}
-          </p>
-          <p className="mt-1 truncate text-xs font-semibold" title={item.value}>
-            {item.value}
-          </p>
-          <p className="mt-0.5 truncate text-[0.65rem] vs-muted" title={item.detail}>
-            {item.detail}
-          </p>
-        </div>
-      ))}
-      {actionLabel && onAction ? (
-        <button
-          className="min-h-8 rounded-md border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50"
-          onClick={onAction}
-          type="button"
-        >
-          {actionLabel}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function CollapsedRailButton({
-  label,
-  shortLabel,
-  onExpand,
-}: Readonly<{ label: string; shortLabel: string; onExpand: () => void }>) {
-  return (
-    <button
-      aria-label={`Expand ${label}`}
-      className="mx-auto mt-2 grid h-9 w-9 place-items-center rounded-md border text-xs font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
-      onClick={onExpand}
-      title={label}
-      type="button"
-    >
-      {shortLabel}
-    </button>
+    <section className="grid gap-3 rounded-lg border p-3 text-xs vs-border vs-raised">
+      <div>
+        <h2 className="text-sm font-semibold text-[var(--vs-text)]">{stageLabel[stage]} Context</h2>
+        <p className="mt-1 leading-5 vs-muted">
+          Playback controls appear here after Create & Listen starts.
+        </p>
+      </div>
+      <dl className="grid gap-2">
+        <SidebarFact label="Source" value={sourceLabel} />
+        <SidebarFact label="Policy" value={policyProfile} />
+      </dl>
+    </section>
   );
 }
 
@@ -8474,6 +8666,7 @@ function SidebarFact({ label, value }: Readonly<{ label: string; value: string }
 }
 
 function SourceTextPanel({
+  activeReviewBlockId,
   bookScopeContent,
   bookControls,
   canSubmit,
@@ -8496,11 +8689,14 @@ function SourceTextPanel({
   speechPolicyProfile,
   speechPolicyProfiles,
   sourcePrepError,
+  telepromptStage,
   text,
   voiceProfileId,
   onClearSpeechPolicyOverrides,
   onContentModeChange,
+  onCreateBookAudio,
   onCreateCustomSpeechPolicyProfile,
+  onCreateDraftAudio,
   onCreatePreparedAudio,
   onDeleteCustomSpeechPolicyProfile,
   onInspectBookSource,
@@ -8512,15 +8708,17 @@ function SourceTextPanel({
   onSourceModeChange,
   onSpeechPolicyOverridesChange,
   onSpeechPolicyProfileChange,
+  onReviewBlockChange,
   onUpdateCustomSpeechPolicyProfile,
   onSubmit,
   onTextChange,
   onUsePreparedSource,
 }: Readonly<{
+  activeReviewBlockId: string | null;
   bookScopeContent: BookSourceScopeContent | null;
   bookControls: ReactNode;
   canSubmit: boolean;
-  contentMode: ContentMode;
+  contentMode: WorkspaceStage;
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
   isPreparingSource: boolean;
   isProcessing: boolean;
@@ -8539,15 +8737,18 @@ function SourceTextPanel({
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
   sourcePrepError: string | null;
+  telepromptStage: ReactNode;
   text: string;
   voiceProfileId: string;
   onClearSpeechPolicyOverrides: () => void;
-  onContentModeChange: (mode: ContentMode) => void;
+  onContentModeChange: (mode: WorkspaceStage) => void;
+  onCreateBookAudio: (source: BookSource, scope: BookScope) => void;
   onCreateCustomSpeechPolicyProfile: (
     name: string,
     settings: SpeechPolicySettings,
     baseProfile: string,
   ) => Promise<void>;
+  onCreateDraftAudio: () => void;
   onCreatePreparedAudio: (source: PreparedSource) => void;
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onInspectBookSource: (source: BookSource) => void;
@@ -8559,6 +8760,7 @@ function SourceTextPanel({
   onSourceModeChange: (mode: SourceMode) => void;
   onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
+  onReviewBlockChange: (blockId: string | null) => void;
   onUpdateCustomSpeechPolicyProfile: (
     profileId: string,
     name: string,
@@ -8575,7 +8777,7 @@ function SourceTextPanel({
   const [sourceFileError, setSourceFileError] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState("");
   const [markdownParseMode, setMarkdownParseMode] = useState<MarkdownParseMode>("strict");
-  const showSourceIntake = contentMode === "sourceIntake";
+  const showSourceIntake = contentMode === "intake";
   const sourceIdentity = resolveWorkbenchSourceIdentity({
     contentMode,
     selectedBookSource,
@@ -8661,11 +8863,13 @@ function SourceTextPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 rounded-lg border bg-[var(--vs-surface)] p-1 text-sm font-semibold vs-border">
+      <div className="grid grid-cols-2 rounded-lg border bg-[var(--vs-surface)] p-1 text-sm font-semibold vs-border lg:grid-cols-4">
         {(
           [
-            ["sourceIntake", "Source Intake"],
+            ["intake", "Intake"],
             ["review", "Review"],
+            ["preview", "Preview"],
+            ["teleprompt", "Teleprompt"],
           ] as const
         ).map(([mode, label]) => (
           <button
@@ -8835,6 +9039,7 @@ function SourceTextPanel({
       {contentMode === "review" ? (
         <div className="grid gap-3">
           <NarrationReviewWorkbench
+            activeBlockId={activeReviewBlockId}
             bookScopeContent={bookScopeContent}
             job={job}
             optimizedText={optimizedText}
@@ -8848,9 +9053,28 @@ function SourceTextPanel({
             onInspectPreparedSource={onInspectPreparedSource}
             onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
             onOpenTeleprompter={onOpenTeleprompter}
+            onActiveBlockChange={onReviewBlockChange}
           />
         </div>
       ) : null}
+      {contentMode === "preview" ? (
+        <NarrationPreviewStage
+          bookScopeContent={bookScopeContent}
+          canCreate={canSubmit && !isProcessing}
+          job={job}
+          optimizedText={optimizedText}
+          selectedBookScope={selectedBookScope}
+          selectedBookSource={selectedBookSource}
+          selectedPreparedSource={selectedPreparedSource}
+          sourceMode={sourceMode}
+          text={text}
+          onCreateBookAudio={onCreateBookAudio}
+          onCreateDraftAudio={onCreateDraftAudio}
+          onCreatePreparedAudio={onCreatePreparedAudio}
+          onOpenTeleprompter={onOpenTeleprompter}
+        />
+      ) : null}
+      {contentMode === "teleprompt" ? telepromptStage : null}
       {showSourceIntake && sourceMode !== "fileUrl" ? (
         <SourceMetadataStrip
           job={job}
@@ -8867,6 +9091,152 @@ function SourceTextPanel({
       </button>
     </form>
   );
+}
+
+function NarrationPreviewStage({
+  bookScopeContent,
+  canCreate,
+  job,
+  optimizedText,
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  text,
+  onCreateBookAudio,
+  onCreateDraftAudio,
+  onCreatePreparedAudio,
+  onOpenTeleprompter,
+}: Readonly<{
+  bookScopeContent: BookSourceScopeContent | null;
+  canCreate: boolean;
+  job: VoiceJob | null;
+  optimizedText: string;
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  text: string;
+  onCreateBookAudio: (source: BookSource, scope: BookScope) => void;
+  onCreateDraftAudio: () => void;
+  onCreatePreparedAudio: (source: PreparedSource) => void;
+  onOpenTeleprompter: () => void;
+}>) {
+  const sourceLabel = narrationReviewSourceLabel(selectedPreparedSource, selectedBookSource);
+  const sourceMeta = narrationReviewSourceMeta({
+    bookScopeContent,
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+    text,
+  });
+  const previewText =
+    firstNonEmptyString(
+      selectedPreparedSource?.text,
+      selectedPreparedSource?.speechText,
+      text.trim(),
+    ) ?? "Select or prepare a source to preview spoken output.";
+  const spokenText =
+    firstNonEmptyString(optimizedText, selectedPreparedSource?.speechText, text.trim()) ??
+    "Create audio to generate listener-ready spoken text.";
+  const previewContent = narrationReviewPreviewContent({
+    bookScopeContent,
+    previewText,
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+  });
+  const canCreatePrepared =
+    sourceMode === "fileUrl" && selectedPreparedSource?.status === "ready" && canCreate;
+  const canCreateBook =
+    sourceMode === "book" &&
+    selectedBookSource?.status === "ready" &&
+    Boolean(selectedBookScope) &&
+    canCreate;
+  const canCreateDraft = sourceMode === "text" && canCreate;
+  const createDisabled = !(canCreatePrepared || canCreateBook || canCreateDraft);
+  const createDetail = job
+    ? `${job.status} · ${estimateFirstAudioETA(job)}`
+    : "Ready to create checked narration";
+  const handleCreate = () => {
+    if (sourceMode === "fileUrl" && selectedPreparedSource) {
+      onCreatePreparedAudio(selectedPreparedSource);
+      return;
+    }
+    if (sourceMode === "book" && selectedBookSource && selectedBookScope) {
+      onCreateBookAudio(selectedBookSource, selectedBookScope);
+      return;
+    }
+    onCreateDraftAudio();
+  };
+
+  return (
+    <section className="grid min-w-0 gap-3 rounded-xl border bg-[var(--vs-raised)] p-4 vs-border">
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">Preview</p>
+          <h2
+            className="mt-1 truncate text-lg font-semibold text-[var(--vs-text)]"
+            title={sourceLabel}
+          >
+            {sourceLabel}
+          </h2>
+          <p className="mt-1 text-sm vs-muted">{sourceMeta}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700"
+            onClick={onOpenTeleprompter}
+            type="button"
+          >
+            Open Teleprompt
+          </button>
+          <button
+            className="h-9 rounded-md px-4 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-zinc-300 vs-accent-bg"
+            disabled={createDisabled}
+            onClick={handleCreate}
+            type="button"
+          >
+            Create & Listen
+          </button>
+        </div>
+      </div>
+      <p className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs font-semibold vs-border vs-muted">
+        {createDetail}
+      </p>
+      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)]">
+        <div className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border">
+          {previewContent}
+        </div>
+        <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
+          <div>
+            <h3 className="text-base font-semibold">Spoken Form</h3>
+            <p className="mt-1 text-xs vs-muted">
+              Create & Listen uses this listener-oriented text.
+            </p>
+          </div>
+          <p className="max-h-[24rem] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
+            {spokenText}
+          </p>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function workspaceActiveBlockLabel(
+  activeBlockId: string | null,
+  selectedPreparedSource: PreparedSource | null,
+): string {
+  if (!activeBlockId) {
+    return "Current selection";
+  }
+  const block = selectedPreparedSource?.blocks?.find((item) => item.id === activeBlockId);
+  if (!block) {
+    return activeBlockId;
+  }
+  const label = firstNonEmptyString(block.label, block.text?.trim()) ?? block.id;
+  return `Block ${String((selectedPreparedSource?.blocks ?? []).indexOf(block) + 1)} · ${label}`;
 }
 
 function SourceKindIcon({ mode }: Readonly<{ mode: SourceMode }>) {
@@ -8926,13 +9296,13 @@ function resolveWorkbenchSourceIdentity({
   sourceMode,
   text,
 }: Readonly<{
-  contentMode: ContentMode;
+  contentMode: WorkspaceStage;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
   sourceMode: SourceMode;
   text: string;
 }>): WorkbenchSourceIdentity {
-  if (contentMode === "sourceIntake") {
+  if (contentMode === "intake") {
     return sourceIntakeIdentity(sourceMode, selectedBookSource, selectedPreparedSource, text);
   }
   if (selectedPreparedSource) {
@@ -9012,8 +9382,6 @@ function speakModeClass(mode: string): string {
   }
   return "border-emerald-200 bg-emerald-50 text-emerald-700";
 }
-
-type SourcePrepReviewTab = "blocks" | "preview" | "pronunciation" | "math" | "rules";
 
 function SourcePrepMetric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
@@ -11348,12 +11716,14 @@ interface NarrationReviewBlock {
 }
 
 function NarrationReviewWorkbench({
+  activeBlockId,
   bookScopeContent,
   job,
   onInspectBookSource,
   onOpenTeleprompter,
   onInspectPreparedSource,
   onOpenPreparedSourceCinema,
+  onActiveBlockChange,
   optimizedText,
   projectId,
   selectedBookScope,
@@ -11362,8 +11732,10 @@ function NarrationReviewWorkbench({
   text,
   voiceProfileId,
 }: Readonly<{
+  activeBlockId: string | null;
   bookScopeContent: BookSourceScopeContent | null;
   job: VoiceJob | null;
+  onActiveBlockChange: (blockId: string | null) => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onOpenPreparedSourceCinema: (source: PreparedSource) => void;
@@ -11376,7 +11748,7 @@ function NarrationReviewWorkbench({
   text: string;
   voiceProfileId: string;
 }>) {
-  const [reviewTab, setReviewTab] = useState<SourcePrepReviewTab>("blocks");
+  const [activePane, setActivePane] = useState<ReviewPane>("blocks");
   const reviewBlocks = useMemo(
     () =>
       buildNarrationReviewBlocks({
@@ -11396,9 +11768,10 @@ function NarrationReviewWorkbench({
       text,
     ],
   );
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const selectedBlockId = selectReviewBlockId(reviewBlocks, activeBlockId);
   const selectedBlock =
-    reviewBlocks.find((block) => block.id === selectedBlockId) ?? reviewBlocks[0];
+    reviewBlocks.find((block) => block.id === selectedBlockId) ??
+    (reviewBlocks.length > 0 ? reviewBlocks[0] : null);
   const sourceLabel = narrationReviewSourceLabel(selectedPreparedSource, selectedBookSource);
   const sourceMeta = narrationReviewSourceMeta({
     bookScopeContent,
@@ -11414,26 +11787,41 @@ function NarrationReviewWorkbench({
       : "Validation appears after synthesis.");
   const validationTranscript = job?.voiceCheck.transcript ?? "";
   const spokenText =
-    firstNonEmptyString(selectedBlock.spokenText, optimizedText, text.trim()) ??
+    firstNonEmptyString(selectedBlock?.spokenText, optimizedText, text.trim()) ??
     "Submit text to see spoken-form output from the optimization agent.";
-  const previewText =
-    firstNonEmptyString(selectedPreparedSource?.text, selectedBlock.text, text.trim()) ??
-    "Source preview appears after text, book, or file content is selected.";
-  const previewContent = narrationReviewPreviewContent({
-    bookScopeContent,
-    previewText,
-    selectedBookScope,
-    selectedBookSource,
-    selectedPreparedSource,
+  const reviewPaneSummaries = buildReviewPaneSummaries({
+    blockCount: reviewBlocks.length,
+    hasSpokenScript: Boolean(spokenText.trim()),
+    validationSimilarity: job?.voiceCheck.similarity ?? 0,
+    validationTranscript,
   });
   const mathPanel = narrationReviewMathPanel(selectedPreparedSource);
   const rulesPanel = narrationReviewRulesPanel(selectedPreparedSource, reviewBlocks, text);
 
   useEffect(() => {
-    if (!selectedBlockId || !reviewBlocks.some((block) => block.id === selectedBlockId)) {
-      setSelectedBlockId(reviewBlocks[0]?.id ?? null);
+    const nextBlockId = selectReviewBlockId(reviewBlocks, activeBlockId);
+    if (nextBlockId !== activeBlockId) {
+      onActiveBlockChange(nextBlockId);
     }
-  }, [reviewBlocks, selectedBlockId]);
+  }, [activeBlockId, onActiveBlockChange, reviewBlocks]);
+
+  const reviewPaneChildren: Record<ReviewPane, ReactNode> = {
+    blocks: (
+      <NarrationReviewBlockList
+        blocks={reviewBlocks}
+        selectedBlockId={selectedBlock?.id ?? null}
+        onSelectBlock={onActiveBlockChange}
+      />
+    ),
+    script: <NarrationSpokenScriptPanel block={selectedBlock} spokenText={spokenText} />,
+    validation: (
+      <NarrationValidationTranscriptPanel
+        validationReason={validationReason}
+        validationSimilarity={job?.voiceCheck.similarity ?? 0}
+        validationTranscript={validationTranscript}
+      />
+    ),
+  };
 
   return (
     <section className="grid min-w-0 gap-3 rounded-xl border bg-[var(--vs-raised)] p-4 vs-border">
@@ -11501,67 +11889,24 @@ function NarrationReviewWorkbench({
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto border-b pb-3 text-xs font-semibold vs-border">
-        {(
-          [
-            ["blocks", "Blocks"],
-            ["preview", "Preview"],
-            ["pronunciation", "Pronunciation"],
-            ["math", "Math"],
-            ["rules", "Rules"],
-          ] as const
-        ).map(([tab, label]) => (
-          <button
-            className={`rounded-md px-3 py-1.5 transition ${
-              reviewTab === tab
-                ? "bg-orange-500/10 text-orange-700 ring-1 ring-orange-300"
-                : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-            }`}
-            key={tab}
-            onClick={() => {
-              setReviewTab(tab);
-            }}
-            type="button"
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <ReviewPaneAccordion
+        activePane={activePane}
+        onActivePaneChange={(pane) => {
+          setActivePane(normalizeReviewPane(pane));
+        }}
+        panes={reviewPaneSummaries.map((summary) => ({
+          ...summary,
+          children: reviewPaneChildren[summary.id],
+        }))}
+      />
 
-      {reviewTab === "blocks" ? (
-        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(260px,0.78fr)_minmax(0,1.35fr)]">
-          <NarrationReviewBlockList
-            blocks={reviewBlocks}
-            selectedBlockId={selectedBlock.id}
-            onSelectBlock={setSelectedBlockId}
-          />
-          <NarrationSpokenScriptPanel
-            block={selectedBlock}
-            spokenText={spokenText}
-            validationReason={validationReason}
-            validationSimilarity={job?.voiceCheck.similarity ?? 0}
-            validationTranscript={validationTranscript}
-          />
-        </div>
-      ) : null}
-      {reviewTab === "preview" ? (
-        <div className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border">
-          {previewContent}
-        </div>
-      ) : null}
-      {reviewTab === "pronunciation" ? (
-        <div className="overflow-hidden rounded-md border vs-border">
-          <Suspense fallback={<LazySurfaceFallback label="Loading pronunciation..." />}>
-            <PronunciationPanel
-              projectId={projectId}
-              source={selectedPreparedSource}
-              voiceProfileId={voiceProfileId}
-            />
-          </Suspense>
-        </div>
-      ) : null}
-      {reviewTab === "math" ? mathPanel : null}
-      {reviewTab === "rules" ? rulesPanel : null}
+      <ReviewContextPanels
+        mathPanel={mathPanel}
+        projectId={projectId}
+        rulesPanel={rulesPanel}
+        selectedPreparedSource={selectedPreparedSource}
+        voiceProfileId={voiceProfileId}
+      />
     </section>
   );
 }
@@ -11742,15 +12087,9 @@ function NarrationReviewBlockList({
 function NarrationSpokenScriptPanel({
   block,
   spokenText,
-  validationReason,
-  validationSimilarity,
-  validationTranscript,
 }: Readonly<{
   block: NarrationReviewBlock | null;
   spokenText: string;
-  validationReason: string;
-  validationSimilarity: number;
-  validationTranscript: string;
 }>) {
   return (
     <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
@@ -11768,23 +12107,75 @@ function NarrationSpokenScriptPanel({
       <p className="max-h-[10rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
         {spokenText}
       </p>
-      <div className="grid gap-2 rounded-md border bg-[var(--vs-surface)] p-3 text-xs vs-border">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="font-semibold uppercase tracking-[0.14em] vs-muted">
-            Validation Transcript
-          </p>
-          <span className="font-semibold text-emerald-700">
-            {validationSimilarity ? `Match ${formatSimilarity(validationSimilarity)}` : "Waiting"}
-          </span>
-        </div>
-        <p className="break-words leading-5 vs-muted">{validationReason}</p>
-        {validationTranscript ? (
-          <p className="max-h-16 overflow-auto whitespace-pre-wrap break-words rounded border p-2 font-mono leading-5 vs-border vs-raised">
-            {validationTranscript}
-          </p>
-        ) : null}
-      </div>
     </section>
+  );
+}
+
+function NarrationValidationTranscriptPanel({
+  validationReason,
+  validationSimilarity,
+  validationTranscript,
+}: Readonly<{
+  validationReason: string;
+  validationSimilarity: number;
+  validationTranscript: string;
+}>) {
+  return (
+    <section className="grid gap-2 rounded-lg border bg-[var(--vs-raised)] p-4 text-xs vs-border">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-base font-semibold text-[var(--vs-text)]">Validation Transcript</h3>
+        <span className="font-semibold text-emerald-700">
+          {validationSimilarity ? `Match ${formatSimilarity(validationSimilarity)}` : "Waiting"}
+        </span>
+      </div>
+      <p className="break-words leading-5 vs-muted">{validationReason}</p>
+      {validationTranscript ? (
+        <p className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border bg-[var(--vs-surface)] p-3 font-mono leading-5 vs-border">
+          {validationTranscript}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function ReviewContextPanels({
+  mathPanel,
+  projectId,
+  rulesPanel,
+  selectedPreparedSource,
+  voiceProfileId,
+}: Readonly<{
+  mathPanel: ReactNode;
+  projectId: string;
+  rulesPanel: ReactNode;
+  selectedPreparedSource: PreparedSource | null;
+  voiceProfileId: string;
+}>) {
+  return (
+    <div className="grid min-w-0 gap-2">
+      {selectedPreparedSource ? (
+        <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+          <summary className="cursor-pointer text-sm font-semibold">Pronunciation</summary>
+          <div className="mt-3 overflow-hidden rounded-md border vs-border">
+            <Suspense fallback={<LazySurfaceFallback label="Loading pronunciation..." />}>
+              <PronunciationPanel
+                projectId={projectId}
+                source={selectedPreparedSource}
+                voiceProfileId={voiceProfileId}
+              />
+            </Suspense>
+          </div>
+        </details>
+      ) : null}
+      <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+        <summary className="cursor-pointer text-sm font-semibold">Math & Structured Speech</summary>
+        <div className="mt-3">{mathPanel}</div>
+      </details>
+      <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+        <summary className="cursor-pointer text-sm font-semibold">Policy Rules</summary>
+        <div className="mt-3">{rulesPanel}</div>
+      </details>
+    </div>
   );
 }
 
@@ -11980,6 +12371,38 @@ function estimateNarrationTextDurationMs(value: string): number {
     return 0;
   }
   return Math.max(1200, Math.round(value.trim().split(/\s+/).length * 430));
+}
+
+function PlaybackControllerHost({
+  job,
+  latestProgress,
+  onOpenCinema,
+  onPlaybackCursorChange,
+  onPlaybackControlsChange,
+  onPlaybackStateChange,
+  onResumeProgress,
+}: Readonly<{
+  job: VoiceJob;
+  latestProgress: PlaybackProgress | null;
+  onOpenCinema: () => void;
+  onPlaybackCursorChange?: (cursorSec: number) => void;
+  onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
+  onPlaybackStateChange?: (isPlaying: boolean) => void;
+  onResumeProgress: (progress: PlaybackProgress) => void;
+}>) {
+  return (
+    <div aria-hidden="true" className="hidden">
+      <StreamingAudioPanel
+        job={job}
+        latestProgress={latestProgress}
+        onOpenCinema={onOpenCinema}
+        onPlaybackCursorChange={onPlaybackCursorChange}
+        onPlaybackControlsChange={onPlaybackControlsChange}
+        onPlaybackStateChange={onPlaybackStateChange}
+        onResumeProgress={onResumeProgress}
+      />
+    </div>
+  );
 }
 
 function AudioPanel({

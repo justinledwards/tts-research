@@ -20,6 +20,7 @@ const summaryPath = process.env.E2E_SUMMARY_PATH ?? path.join(artifactDir, "summ
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 const lowResourceMode = process.env.E2E_LOW_RESOURCE === "1";
 const readerWayfindingOnly = process.env.E2E_READER_WAYFINDING === "1";
+const workspaceFlowOnly = process.env.E2E_WORKSPACE_FLOW === "1";
 const activeProjectKey = "tts-active-project-id";
 const jobTimeoutMs = Number.parseInt(process.env.E2E_JOB_TIMEOUT_MS ?? "180000", 10);
 
@@ -66,6 +67,21 @@ async function main() {
     });
     assert(project.id, "Project creation did not return an id.");
     summary.projectId = project.id;
+
+    if (workspaceFlowOnly) {
+      const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
+      try {
+        const result = await runWorkspaceFlowUX(browser, project.id);
+        summary.screenshots.push(...result.screenshots);
+        summary.workspaceFlow = result;
+      } finally {
+        await browser.close();
+      }
+      summary.status = "passed";
+      await writeSummary(summary);
+      console.log(`Workspace Flow E2E passed. Summary written to ${summaryPath}`);
+      return;
+    }
 
     const markdownJob = await runMarkdownSourcePrepE2E(project.id, fixtures.markdown);
     summary.markdownJobId = markdownJob.id;
@@ -197,6 +213,72 @@ async function runStudioRouteSwitchUX(browser, projectId) {
     await measureStudioRouteSwitch(page);
     await assertNoPageIssues(issues);
     return summarizePerformanceMetrics(await readPerformanceMetrics(page));
+  } finally {
+    await context.close();
+  }
+}
+
+async function runWorkspaceFlowUX(browser, projectId) {
+  const context = await browser.newContext({
+    storageState: projectStorageState(projectId, {
+      sourceMode: "text",
+      stage: "intake",
+      text: "Adaptive workspace smoke text. Review it, preview it, and create a short listening run.",
+    }),
+    viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
+  });
+  const page = await context.newPage();
+  if (lowResourceMode) {
+    await applyLowResourceProfile(page);
+  }
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
+  const screenshots = [];
+  try {
+    await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.getByRole("button", { exact: true, name: "Review" }).click();
+    await page.getByText("Source Review").first().waitFor();
+    await page.getByRole("button", { name: /Spoken Script/ }).click();
+    await page.getByText("Listener form").first().waitFor();
+    await page.getByRole("button", { name: /Validation Transcript/ }).click();
+    await page
+      .getByText(/Validation appears after synthesis|Validation was disabled/)
+      .first()
+      .waitFor();
+
+    for (const layout of ["Focus", "Balanced", "Full"]) {
+      await page.getByRole("button", { name: `${layout} workspace layout` }).click();
+      const screenshot = path.join(screenshotsDir, `workspace-${layout.toLowerCase()}.png`);
+      await page.screenshot({ fullPage: false, path: screenshot });
+      screenshots.push(screenshot);
+    }
+
+    await page.getByRole("button", { exact: true, name: "Open Teleprompter" }).click();
+    await page.getByText("Teleprompt Stage").first().waitFor();
+    await page.getByText("Default voice").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Back to Review" }).click();
+    await page.getByText("Source Review").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Preview" }).click();
+    await page.getByText("Spoken Form").first().waitFor();
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/voice-jobs") && response.request().method() === "POST",
+    );
+    await page.getByRole("button", { exact: true, name: "Create & Listen" }).last().click();
+    const response = await createResponse;
+    assert(response.ok(), `Create & Listen failed with ${String(response.status())}`);
+    await page
+      .getByText(/running|completed|Create & Listen/i)
+      .first()
+      .waitFor();
+    await assertNoPageIssues(issues);
+    return { screenshots, status: "passed" };
+  } catch (error) {
+    const failureScreenshot = path.join(screenshotsDir, "workspace-flow-failure.png");
+    await page.screenshot({ fullPage: true, path: failureScreenshot }).catch(() => {});
+    screenshots.push(failureScreenshot);
+    throw error;
   } finally {
     await context.close();
   }
@@ -416,7 +498,7 @@ async function openBookCinemaOverlay(page, scope, url = appBaseUrl) {
     await waitForOverlayScope(page, scope);
     return;
   }
-  await page.getByRole("button", { name: "Source Intake" }).click();
+  await page.getByRole("button", { exact: true, name: "Intake" }).click();
   await page.getByRole("button", { exact: true, name: "Book" }).click();
   await page.locator('h3:has-text("Book Cinema")').first().waitFor();
   await selectBookScope(page, scope);
@@ -442,7 +524,7 @@ async function selectBookScope(page, scope) {
 
 async function measureStudioRouteSwitch(page) {
   await page
-    .getByRole("button", { name: "Source Intake" })
+    .getByRole("button", { exact: true, name: "Intake" })
     .waitFor({ state: "visible", timeout: 15_000 })
     .catch(() => {});
   const voiceCloningButton = page
