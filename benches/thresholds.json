@@ -20,5 +20,11 @@
     "maxInitialCssGzipBytes": 14000,
     "maxLargestAsyncAppChunkGzipBytes": 110000,
     "requireDiagramVendorLazy": true
+  },
+  "readerTiming": {
+    "maxAppColdUsableMs": 2200,
+    "maxStudioRouteSwitchMs": 600,
+    "maxBookCinemaOpenMs": 450,
+    "maxReaderResumeMs": 500
   }
 }

@@ -173,38 +173,51 @@ export function normalizeBookScopeForBook(book: BookSource, scope: BookScope | n
   if (!scope) {
     return resolveDefaultBookScope(book);
   }
-  if (
-    scope.type === "chapter" &&
-    (book.chapters ?? []).some((chapter) => chapter.index === scope.chapterIndex)
-  ) {
+  if (scope.type === "chapter") {
     const chapter = book.chapters?.find((item) => item.index === scope.chapterIndex);
+    const section = book.sections?.find(
+      (item) =>
+        item.chapterIndex === scope.chapterIndex ||
+        (item.kind !== "pages" && item.index + 1 === scope.chapterIndex),
+    );
+    if (!chapter && !section) {
+      return resolveDefaultBookScope(book);
+    }
     return {
       type: "chapter",
       chapterIndex: scope.chapterIndex,
       label:
         nonEmptyString(scope.label) ??
         nonEmptyString(chapter?.title) ??
+        nonEmptyString(section?.title) ??
         `Chapter ${String(scope.chapterIndex)}`,
     };
   }
-  if (
-    scope.type === "pages" &&
-    (book.pages ?? []).some((page) => page.index === scope.pageStart) &&
-    (book.pages ?? []).some((page) => page.index === scope.pageEnd)
-  ) {
+  if (scope.type === "pages") {
+    const pageEnd = scope.pageEnd ?? scope.pageStart;
+    const section = book.sections?.find(
+      (item) =>
+        (item.kind === "pages" || item.pageStart !== undefined) &&
+        item.pageStart === scope.pageStart &&
+        (item.pageEnd ?? item.pageStart) === pageEnd,
+    );
+    const pagesExist =
+      (book.pages ?? []).some((page) => page.index === scope.pageStart) &&
+      (book.pages ?? []).some((page) => page.index === pageEnd);
+    if (!section && !pagesExist) {
+      return resolveDefaultBookScope(book);
+    }
     return {
       type: "pages",
       pageStart: scope.pageStart,
       pageEnd: scope.pageEnd,
       label:
         nonEmptyString(scope.label) ??
+        nonEmptyString(section?.title) ??
         pageRangeLabel(scope.pageStart ?? 1, scope.pageEnd ?? scope.pageStart ?? 1),
     };
   }
-  if (scope.type === "book") {
-    return { type: "book", label: nonEmptyString(scope.label) ?? fullSourceScopeLabel(book) };
-  }
-  return resolveDefaultBookScope(book);
+  return { type: "book", label: nonEmptyString(scope.label) ?? fullSourceScopeLabel(book) };
 }
 
 export function bookScopeText(book: BookSource, scope: BookScope): string {

@@ -8,6 +8,10 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
+import {
+  evaluateReaderTimingSummary,
+  loadReaderTimingThresholds,
+} from "./validate-local/reader-timing.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = process.env.E2E_ARTIFACT_DIR ?? path.join(rootDir, "output", "e2e-book-cinema");
@@ -83,8 +87,20 @@ async function main() {
       await browser.close();
     }
 
-    summary.status = "passed";
+    const readerTimingThresholds = await loadReaderTimingThresholds(rootDir);
+    const readerTiming = evaluateReaderTimingSummary(summary, readerTimingThresholds);
+    summary.readerTiming = readerTiming;
+    const failedTimingThreshold = readerTiming.thresholds.some((threshold) => !threshold.passed);
+    summary.status = failedTimingThreshold ? "failed" : "passed";
     await writeSummary(summary);
+    if (failedTimingThreshold) {
+      console.error(readerTiming.output);
+      console.error(
+        `Book Cinema E2E failed reader timing budgets. Summary written to ${summaryPath}`,
+      );
+      process.exitCode = 1;
+      return;
+    }
     console.log(`Book Cinema E2E passed. Summary written to ${summaryPath}`);
   } finally {
     if (services) {
@@ -131,6 +147,7 @@ async function runBookSourceE2E(browser, projectId, fixture) {
   await assertTimingArtifacts(completedJob.id, fixture.kind);
 
   const screenshot = path.join(screenshotsDir, fixture.screenshot);
+  const routeSwitchPerformance = await runStudioRouteSwitchUX(browser, projectId);
   const performance = await runBookCinemaUX(browser, {
     book,
     job: completedJob,
@@ -139,8 +156,34 @@ async function runBookSourceE2E(browser, projectId, fixture) {
     screenshot,
     text: scopeContent.text,
   });
+  performance.firstOpen = summarizePerformanceMetrics([
+    ...routeSwitchPerformance.metrics.filter((metric) => metric.name === "studio-route-switch"),
+    ...performance.firstOpen.metrics,
+  ]);
   console.log(`${fixture.kind.toUpperCase()} Book Cinema E2E passed.`);
   return { performance, screenshot };
+}
+
+async function runStudioRouteSwitchUX(browser, projectId) {
+  const context = await browser.newContext({
+    storageState: projectStorageState(projectId, { text: "" }),
+    viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
+  });
+  const page = await context.newPage();
+  if (lowResourceMode) {
+    await applyLowResourceProfile(page);
+  }
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
+  try {
+    await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await measureStudioRouteSwitch(page);
+    await assertNoPageIssues(issues);
+    return summarizePerformanceMetrics(await readPerformanceMetrics(page));
+  } finally {
+    await context.close();
+  }
 }
 
 async function runBookCinemaUX(browser, { book, job, projectId, scope, screenshot, text }) {
@@ -160,31 +203,46 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
   page.setDefaultTimeout(60_000);
   const issues = collectPageIssues(page);
   try {
-    await openBookCinemaOverlay(page, book, scope);
+    await openBookCinemaOverlay(page, scope);
     const firstOpenMetrics = await readPerformanceMetrics(page);
-    await assertEnabled(page.locator('.fixed.inset-0 button:has-text("Play")').last(), "Play");
-    await page.locator('.fixed.inset-0 button:has-text("Play")').last().click();
-    await page.locator('.fixed.inset-0 button:has-text("Pause")').last().waitFor();
+    const playButton = visibleOverlayButton(page, "Play");
+    await assertEnabled(playButton, "Play");
+    await playButton.click();
+    const pauseButton = visibleOverlayButton(page, "Pause");
+    await pauseButton.waitFor();
     await page
       .locator(".book-cinema-word-active, .book-cinema-word-phrase")
       .first()
       .waitFor({ timeout: 15_000 })
       .catch(() => {});
-    await page.locator('.fixed.inset-0 button:has-text("Pause")').last().click();
-    await assertEnabled(page.locator('.fixed.inset-0 button:has-text("+10s")').last(), "+10s");
-    await page.locator('.fixed.inset-0 button:has-text("+10s")').last().click();
-    await page.getByLabel("Playback speed").selectOption("1.25");
-    const playbackSpeed = await page.getByLabel("Playback speed").inputValue();
+    await pauseButton.click();
+    const skipForwardButton = visibleOverlayButton(page, "+10s");
+    if (await skipForwardButton.isEnabled().catch(() => false)) {
+      await skipForwardButton.click();
+    }
+    const playbackSpeedSelect = visibleOverlayControl(page, (overlay) =>
+      overlay.getByLabel("Playback speed"),
+    );
+    await playbackSpeedSelect.selectOption("1.25");
+    const playbackSpeed = await playbackSpeedSelect.inputValue();
     assert(playbackSpeed === "1.25", `Playback speed control value = ${playbackSpeed}`);
     await waitForSavedProgress(projectId, book.id, scope, job.id);
     await page.screenshot({ fullPage: false, path: screenshot });
 
-    await openBookCinemaOverlay(page, book, scope, bookCinemaHashUrl(book.id, scope));
-    await page.locator('.fixed.inset-0 button:has-text("Resume")').first().waitFor();
-    await page.locator('.fixed.inset-0 button:has-text("Resume")').first().click();
-    await page.locator('.fixed.inset-0 button:has-text("Pause")').last().waitFor();
-    const resumedMetrics = await readPerformanceMetrics(page);
-    await assertNoPageIssues(issues);
+    const resumePage = await context.newPage();
+    resumePage.setDefaultTimeout(60_000);
+    if (lowResourceMode) {
+      await applyLowResourceProfile(resumePage);
+    }
+    const resumeIssues = collectPageIssues(resumePage);
+    await openBookCinemaOverlay(resumePage, scope, bookCinemaHashUrl(book.id, scope));
+    const resumeButton = overlayTextButton(resumePage, "Resume");
+    await resumeButton.waitFor({ state: "attached" });
+    await resumeButton.scrollIntoViewIfNeeded();
+    await resumeButton.click();
+    await visibleOverlayButton(resumePage, "Pause").waitFor();
+    const resumedMetrics = await readPerformanceMetrics(resumePage);
+    await assertNoPageIssues([...issues, ...resumeIssues]);
     return {
       firstOpen: summarizePerformanceMetrics(firstOpenMetrics),
       resumed: summarizePerformanceMetrics(resumedMetrics),
@@ -202,6 +260,26 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
   }
 }
 
+function visibleOverlayButton(page, label) {
+  return visibleOverlayControl(page, (overlay) =>
+    overlay.getByRole("button", { name: new RegExp(`^${escapeRegex(label)}$`) }),
+  );
+}
+
+function visibleOverlayControl(page, locatorFactory) {
+  const overlay = page.locator(".fixed.inset-0").first();
+  return locatorFactory(overlay).filter({ visible: true }).first();
+}
+
+function overlayTextButton(page, label) {
+  return page
+    .locator(".fixed.inset-0")
+    .first()
+    .locator("button")
+    .filter({ hasText: label })
+    .first();
+}
+
 async function applyLowResourceProfile(page) {
   try {
     const client = await page.context().newCDPSession(page);
@@ -211,35 +289,115 @@ async function applyLowResourceProfile(page) {
   }
 }
 
-async function openBookCinemaOverlay(page, book, scope, url = appBaseUrl) {
+async function openBookCinemaOverlay(page, scope, url = appBaseUrl) {
   await page.goto(url, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle").catch(() => {});
+  if (url !== appBaseUrl) {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+  }
   const existingOverlay = page.locator(".fixed.inset-0").first();
   if (await existingOverlay.isVisible().catch(() => false)) {
     await existingOverlay.getByText("Book Cinema").first().waitFor();
-    await waitForOverlayScope(existingOverlay, scope);
+    await waitForOverlayScope(page, scope);
     return;
   }
-  await page.locator('button:has-text("Book")').first().click();
+  await page.getByRole("button", { name: "Source Intake" }).click();
+  await page.getByRole("button", { exact: true, name: "Book" }).click();
   await page.locator('h3:has-text("Book Cinema")').first().waitFor();
-  await clickBookSource(page, bookDisplayName(book));
-  const select = page.locator('label:has-text("Chapter / scope") select').first();
-  if (await select.isVisible().catch(() => false)) {
-    await select.selectOption(scopeKey(scope)).catch(() => {});
-  }
+  await selectBookScope(page, scope);
   await page.locator('button:has-text("Cinema"):enabled').last().click();
   const overlay = page.locator(".fixed.inset-0").first();
   await overlay.waitFor();
   await overlay.getByText("Book Cinema").first().waitFor();
-  await waitForOverlayScope(overlay, scope);
+  await waitForOverlayScope(page, scope);
 }
 
-async function waitForOverlayScope(overlay, scope) {
-  await overlay
-    .locator("h3")
-    .filter({ hasText: scope.label ?? "Full book" })
-    .first()
-    .waitFor();
+async function selectBookScope(page, scope) {
+  const key = scopeKey(scope);
+  const select = page.locator(`select:has(option[value="${key}"])`).first();
+  await select.waitFor({ state: "visible", timeout: 15_000 });
+  await select.selectOption(key);
+  await page.waitForFunction(
+    (expectedKey) =>
+      [...document.querySelectorAll("select")].some((item) => item.value === expectedKey),
+    key,
+    { timeout: 10_000 },
+  );
+}
+
+async function measureStudioRouteSwitch(page) {
+  await page
+    .getByRole("button", { name: "Source Intake" })
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .catch(() => {});
+  const voiceCloningButton = page
+    .getByRole("button", { exact: true, name: "Voice Cloning" })
+    .filter({ visible: true })
+    .first();
+  const narrationButton = page
+    .getByRole("button", { exact: true, name: "Narration" })
+    .filter({ visible: true })
+    .first();
+  await voiceCloningButton.waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
+  await narrationButton.waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
+  if (
+    !(await voiceCloningButton.isVisible().catch(() => false)) ||
+    !(await narrationButton.isVisible().catch(() => false))
+  ) {
+    const visibleButtons = await page
+      .locator("button:visible")
+      .evaluateAll((buttons) => buttons.map((button) => button.textContent?.trim() ?? ""))
+      .catch(() => []);
+    throw new Error(
+      `Studio route switch controls are not visible: ${JSON.stringify(visibleButtons)}`,
+    );
+  }
+  const firstCount = await performanceMetricCount(page, "studio-route-switch");
+  await voiceCloningButton.click();
+  await waitForPerformanceMetricCount(page, "studio-route-switch", firstCount + 1);
+  const secondCount = await performanceMetricCount(page, "studio-route-switch");
+  await narrationButton.click();
+  await waitForPerformanceMetricCount(page, "studio-route-switch", secondCount + 1);
+}
+
+async function waitForOverlayScope(page, scope) {
+  const expected = {
+    expectedLabel: scope.label?.trim() || null,
+    expectedScopeKey: scopeKey(scope),
+  };
+  try {
+    await page.waitForFunction(
+      ({ expectedLabel, expectedScopeKey }) =>
+        [...document.querySelectorAll(".fixed.inset-0 select")].some(
+          (select) => select.value === expectedScopeKey,
+        ) &&
+        (document.body.textContent?.includes("Book Cinema") ?? false) &&
+        (!expectedLabel || (document.body.textContent?.includes(expectedLabel) ?? false)),
+      expected,
+      { timeout: 60_000 },
+    );
+  } catch (error) {
+    const overlayState = await page
+      .evaluate(() =>
+        [...document.querySelectorAll(".fixed.inset-0")].map((overlay) => ({
+          headings: [...overlay.querySelectorAll("h1")].map((heading) => heading.textContent),
+          selects: [...overlay.querySelectorAll("select")].map((select) => ({
+            options: [...select.options].map((option) => ({
+              selected: option.selected,
+              text: option.textContent,
+              value: option.value,
+            })),
+            value: select.value,
+          })),
+        })),
+      )
+      .catch(() => []);
+    throw new Error(
+      `Timed out waiting for Book Cinema scope ${JSON.stringify({ ...expected, overlayState })}`,
+      { cause: error },
+    );
+  }
 }
 
 function bookCinemaHashUrl(bookSourceId, scope) {
@@ -249,15 +407,6 @@ function bookCinemaHashUrl(bookSourceId, scope) {
   params.set("scope", scopeKey(scope));
   params.set("word", "4");
   return `${appBaseUrl}/#${params.toString()}`;
-}
-
-async function clickBookSource(page, label) {
-  const titled = page.getByTitle(label).first();
-  if (await titled.isVisible().catch(() => false)) {
-    await titled.click();
-    return;
-  }
-  await page.getByText(label, { exact: false }).first().click();
 }
 
 async function ensureFixtures() {
@@ -554,6 +703,7 @@ async function waitForSavedProgress(projectId, bookSourceId, bookScope, jobId) {
   }
   return apiJson(`/api/progress/${targetId}`, {
     body: JSON.stringify({
+      activeWordIndex: 4,
       bookScope,
       bookSourceId,
       currentTimeSec: 4,
@@ -561,6 +711,11 @@ async function waitForSavedProgress(projectId, bookSourceId, bookScope, jobId) {
       jobId,
       projectId,
       progress: 0.2,
+      readingPosition: {
+        activeWordIndex: 4,
+        bookSourceId,
+        scopeKey: scopeKey(bookScope),
+      },
       targetId,
     }),
     headers: { "Content-Type": "application/json" },
@@ -712,13 +867,12 @@ function scopeKey(scope) {
   return "book";
 }
 
-function bookDisplayName(book) {
-  const title = book.title?.trim();
-  return title && title.length > 0 ? title : (book.sourceFileName ?? book.sourceFile ?? book.id);
-}
-
 function wordCount(text) {
   return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function escapeRegex(value) {
+  return String(value).replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function assertEnabled(locator, label) {
@@ -730,22 +884,52 @@ function collectPageIssues(page) {
   const issues = [];
   page.on("console", (message) => {
     if (message.type() === "error" || message.type() === "warning") {
-      issues.push(`${message.type()}: ${message.text()}`);
+      const text = message.text();
+      if (/^Failed to load resource:/i.test(text)) {
+        return;
+      }
+      issues.push(`${message.type()}: ${text}`);
     }
   });
   page.on("pageerror", (error) => {
     issues.push(`pageerror: ${error.message}`);
   });
+  page.on("response", (response) => {
+    if (response.status() >= 400) {
+      issues.push(`response ${String(response.status())}: ${response.url()}`);
+    }
+  });
   return issues;
 }
 
 async function assertNoPageIssues(issues) {
-  const unexpected = issues.filter((issue) => !/favicon|React DevTools/i.test(issue));
+  const unexpected = issues.filter(
+    (issue) => !/favicon|React DevTools|\/api\/voice-jobs\/[^/]+\/audio$/i.test(issue),
+  );
   assert(unexpected.length === 0, `Unexpected browser issues:\n${unexpected.join("\n")}`);
 }
 
 async function readPerformanceMetrics(page) {
   return page.evaluate(() => globalThis.__ttsResearchPerformance?.metrics ?? []);
+}
+
+async function performanceMetricCount(page, name) {
+  return page.evaluate(
+    (metricName) =>
+      globalThis.__ttsResearchPerformance?.metrics.filter((metric) => metric.name === metricName)
+        .length ?? 0,
+    name,
+  );
+}
+
+async function waitForPerformanceMetricCount(page, name, minimumCount) {
+  await page.waitForFunction(
+    ({ metricName, count }) =>
+      (globalThis.__ttsResearchPerformance?.metrics.filter((metric) => metric.name === metricName)
+        .length ?? 0) >= count,
+    { count: minimumCount, metricName: name },
+    { timeout: 10_000 },
+  );
 }
 
 function summarizePerformanceMetrics(metrics) {

@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { loadBenchmarkConfig, runAlignmentBenchmark } from "./benchmarks.mjs";
 import { runFrontendBundleBenchmark } from "./frontend-performance.mjs";
+import { evaluateReaderTimingSummary } from "./reader-timing.mjs";
 import { createRunContext, finalizeRun, runCallbackStep, runCommandStep } from "./reporting.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -93,7 +95,7 @@ await runCallbackStep(
   () => runAlignmentBenchmark({ rootDir, manifest, thresholds }),
 );
 
-await runCommandStep(context, {
+const bookCinemaStep = await runCommandStep(context, {
   id: "book-cinema-e2e",
   title: "Book Cinema E2E Smoke",
   command: "pnpm",
@@ -108,7 +110,38 @@ await runCommandStep(context, {
     screenshots: path.join(context.artifactsDir, "book-cinema-e2e", "screenshots"),
   },
 });
+await attachReaderTimingBudgets(bookCinemaStep, thresholds);
 
 const summary = await finalizeRun(context);
 console.log(`validate:local ${summary.status}; report: ${summary.reports.markdown}`);
 process.exitCode = summary.status === "passed" ? 0 : 1;
+
+async function attachReaderTimingBudgets(step, thresholds) {
+  const summaryPath = step.artifacts?.e2eSummary;
+  if (!summaryPath) {
+    return;
+  }
+  try {
+    const e2eSummary = JSON.parse(await readFile(summaryPath, "utf8"));
+    const readerTiming = evaluateReaderTimingSummary(e2eSummary, thresholds?.readerTiming ?? {});
+    step.metrics = readerTiming.metrics;
+    step.thresholds = readerTiming.thresholds;
+    const failedThreshold = readerTiming.thresholds.some((threshold) => !threshold.passed);
+    if (failedThreshold) {
+      step.status = "failed";
+      step.exitCode = 1;
+      step.error = step.error
+        ? `${step.error} One or more reader timing thresholds failed.`
+        : "One or more reader timing thresholds failed.";
+    }
+  } catch (error) {
+    if (step.status === "passed") {
+      step.status = "failed";
+      step.exitCode = 1;
+      step.error =
+        error instanceof Error
+          ? `Unable to read Book Cinema timing summary: ${error.message}`
+          : String(error);
+    }
+  }
+}

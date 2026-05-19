@@ -3565,16 +3565,25 @@ export function App() {
       setProjectStateReadyId(null);
       setError(null);
       setProfileSource(null);
-      setSelectedBookSourceId(null);
-      setSelectedBookScope(null);
+      const hashPosition = parseBookCinemaHash(globalThis.location.hash);
+      if (hashPosition?.bookSourceId) {
+        setSelectedBookSourceId(hashPosition.bookSourceId);
+      } else {
+        setSelectedBookSourceId(null);
+        setSelectedBookScope(null);
+      }
       setBookScopeContent(null);
       setActivePlaybackSession(null);
       setPendingPlaybackResume(null);
       resetPlaybackSurface();
       const savedState = loadProjectWorkspaceState(projectId);
       setText(savedState.text);
-      setSelectedBookSourceId(savedState.bookSourceId);
-      setSelectedBookScope(savedState.bookScope);
+      if (hashPosition?.bookSourceId) {
+        setSelectedBookSourceId(hashPosition.bookSourceId);
+      } else {
+        setSelectedBookSourceId(savedState.bookSourceId);
+        setSelectedBookScope(savedState.bookScope);
+      }
 
       if (!savedState.jobId) {
         setJob(null);
@@ -3750,8 +3759,15 @@ export function App() {
     async (progress: PlaybackProgress, seconds = progress.currentTimeSec) => {
       startFrontendSpan("reader-resume");
       if (progress.bookSourceId) {
+        const progressBook =
+          bookSources.find((book) => book.id === progress.bookSourceId) ?? selectedBookSource;
+        const progressScope =
+          progress.bookScope ??
+          (progressBook && progress.readingPosition?.scopeKey
+            ? scopeFromBookScopeKey(progressBook, progress.readingPosition.scopeKey)
+            : null);
         setSelectedBookSourceId(progress.bookSourceId);
-        setSelectedBookScope(progress.bookScope ?? null);
+        setSelectedBookScope(progressScope);
         setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
         setIsBookCinemaOpen(true);
       }
@@ -3782,7 +3798,15 @@ export function App() {
         seconds: Math.max(0, locatorSeconds ?? seconds),
       });
     },
-    [handleSelectJob, highlightMap, job?.id, preparedSources, themeName],
+    [
+      bookSources,
+      handleSelectJob,
+      highlightMap,
+      job?.id,
+      preparedSources,
+      selectedBookSource,
+      themeName,
+    ],
   );
 
   const handleBundleImported = useCallback(
@@ -4257,11 +4281,21 @@ export function App() {
       setBookScopeContent(null);
       return;
     }
+    if (
+      hashReadingPosition?.bookSourceId === selectedBookSource.id &&
+      hashReadingPosition.scopeKey
+    ) {
+      const hashScope = scopeFromBookScopeKey(selectedBookSource, hashReadingPosition.scopeKey);
+      if (JSON.stringify(hashScope) !== JSON.stringify(selectedBookScope)) {
+        setSelectedBookScope(hashScope);
+      }
+      return;
+    }
     const normalizedScope = normalizeBookScopeForBook(selectedBookSource, selectedBookScope);
     if (JSON.stringify(normalizedScope) !== JSON.stringify(selectedBookScope)) {
       setSelectedBookScope(normalizedScope);
     }
-  }, [selectedBookScope, selectedBookSource]);
+  }, [hashReadingPosition, selectedBookScope, selectedBookSource]);
 
   useEffect(() => {
     if (selectedBookSource?.status !== "ready" || !effectiveBookScope) {
@@ -14315,24 +14349,36 @@ function scopeFromBookScopeKey(book: BookSource, key: string | undefined): BookS
   if (chapter) {
     const chapterIndex = Number(chapter[1]);
     const sourceChapter = book.chapters?.find((item) => item.index === chapterIndex);
+    const sourceSection = book.sections?.find(
+      (item) =>
+        item.chapterIndex === chapterIndex ||
+        (item.kind !== "pages" && item.index + 1 === chapterIndex),
+    );
     return {
       type: "chapter",
       chapterIndex,
-      label: sourceChapter?.title ?? `Chapter ${String(chapterIndex)}`,
+      label: sourceChapter?.title ?? sourceSection?.title ?? `Chapter ${String(chapterIndex)}`,
     };
   }
   const pages = /^pages:(\d+)-(\d+)$/.exec(key);
   if (pages) {
     const pageStart = Number(pages[1]);
     const pageEnd = Number(pages[2]);
+    const sourceSection = book.sections?.find(
+      (item) =>
+        (item.kind === "pages" || item.pageStart !== undefined) &&
+        item.pageStart === pageStart &&
+        (item.pageEnd ?? item.pageStart) === pageEnd,
+    );
     return {
       type: "pages",
       pageStart,
       pageEnd,
       label:
-        pageStart === pageEnd
+        sourceSection?.title ??
+        (pageStart === pageEnd
           ? `Page ${String(pageStart)}`
-          : `Pages ${String(pageStart)}-${String(pageEnd)}`,
+          : `Pages ${String(pageStart)}-${String(pageEnd)}`),
     };
   }
   return resolveDefaultBookScope(book);
@@ -14354,6 +14400,7 @@ function playbackProgressFromReadingPosition(
   const timestamp = new Date(0).toISOString();
   return {
     activeWordIndex: position.activeWordIndex,
+    bookScope: bookScopeFromScopeKey(scopeKey),
     bookSourceId,
     createdAt: timestamp,
     currentTimeSec: 0,
@@ -14365,6 +14412,36 @@ function playbackProgressFromReadingPosition(
     targetId: `hash:${bookSourceId}:${scopeKey}`,
     updatedAt: timestamp,
   };
+}
+
+function bookScopeFromScopeKey(scopeKey: string): BookScope | undefined {
+  if (scopeKey === "book") {
+    return { type: "book", label: "Full book" };
+  }
+  const chapter = /^chapter:(\d+)$/.exec(scopeKey);
+  if (chapter) {
+    const chapterIndex = Number(chapter[1]);
+    return {
+      type: "chapter",
+      chapterIndex,
+      label: `Chapter ${String(chapterIndex)}`,
+    };
+  }
+  const pages = /^pages:(\d+)-(\d+)$/.exec(scopeKey);
+  if (pages) {
+    const pageStart = Number(pages[1]);
+    const pageEnd = Number(pages[2]);
+    return {
+      type: "pages",
+      pageStart,
+      pageEnd,
+      label:
+        pageStart === pageEnd
+          ? `Page ${String(pageStart)}`
+          : `Pages ${String(pageStart)}-${String(pageEnd)}`,
+    };
+  }
+  return undefined;
 }
 
 function progressTargetIdForJob(job: VoiceJob): string {

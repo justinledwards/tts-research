@@ -57,3 +57,13 @@
 - [x] Clean working log chronology so May 18 work starts at 17:30 CEST.
 - [x] Confirm validation status before publishing.
 - [x] Commit and push the PR update.
+
+## 2026-05-19 16:39 CEST - Reader timing hard budgets
+- [x] Inspect existing local benchmark and validation reporting.
+- [x] Promote reader timing baselines to enforced thresholds.
+- [x] Document low-resource budget procedure.
+- [x] Stabilize Book Cinema timing E2E scope checks.
+- [x] Fix hash resume scope normalization for section-backed books.
+- [x] Ensure studio route-switch timing is exercised by the E2E smoke.
+- [x] Guard hash resume from workspace restore races under low resource.
+- [x] Run local validation commands.

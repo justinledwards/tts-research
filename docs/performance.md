@@ -35,9 +35,9 @@ Run the mock-only low-resource Book Cinema smoke:
 pnpm e2e:book-cinema:low-resource
 ```
 
-`validate:local` includes a Frontend Bundle Performance section in JSON, Markdown, and HTML reports.
-The bundle gate currently fails on startup graph regressions. Browser timing metrics are recorded as
-baseline data in the Book Cinema E2E summary and do not fail validation yet.
+`validate:local` includes Frontend Bundle Performance and Book Cinema reader timing sections in JSON,
+Markdown, and HTML reports. Bundle and timing thresholds both fail locally; there is no hosted CI
+dependency for these gates.
 
 ## Budgets
 
@@ -49,13 +49,41 @@ Current local bundle gates:
 - Largest async app chunk gzip bytes: `<= 110000`
 - Mermaid/diagram vendor chunks must not appear in the initial graph
 
-Reader timing metrics exposed through `window.__ttsResearchPerformance.metrics`:
+Current local reader timing gates:
 
-- `app-cold-usable`
-- `studio-route-switch`
-- `book-cinema-open`
-- `reader-resume`
+- `app-cold-usable`: `<= 2200ms`
+- `studio-route-switch`: `<= 600ms`
+- `book-cinema-open`: `<= 450ms`
+- `reader-resume`: `<= 500ms`
 
-To convert timing baselines into hard budgets, run the low-resource smoke several times on the target
-machine class, use the slowest representative mock-stack values, then add thresholds to the local
-performance step. Keep provider latency out of those thresholds.
+Reader timing metrics are exposed through `window.__ttsResearchPerformance.metrics` and summarized
+from the Book Cinema E2E smoke. The gate uses the worst observed value across the EPUB, DOCX, and PDF
+fixtures. Missing metrics fail the threshold check, so new reader flows must keep emitting the same
+markers when the UX changes.
+
+## Low-Resource Budget Procedure
+
+Use `benches/low-resource-baseline.md` when changing the hard timing budgets. In short:
+
+1. Run `pnpm bundle:local`.
+2. Run `pnpm e2e:book-cinema:low-resource` at least three times on the target local machine class.
+3. Use the slowest representative mock-stack value for each reader metric, add modest jitter
+   headroom, and update `benches/thresholds.json#readerTiming`.
+4. Run `pnpm validate:local` and `pnpm e2e:book-cinema:low-resource`.
+
+Provider latency is intentionally excluded. The low-resource smoke uses mock providers and Chromium
+CPU throttling so the budget covers local UI startup, route switching, Book Cinema open, and resume
+work rather than network or model variance.
+
+## UI Change Rules
+
+- New panels, diagnostics, schema viewers, Markdown/Mermaid rendering, and waveform decoding must be
+  loaded behind the user action that opens them.
+- Reader resume must not wait for secondary drawers, project export/import code, provider
+  diagnostics, or Markdown diagram rendering.
+- Prefer direct model/helper imports over barrels that pull validators or diagnostics into
+  `main.tsx` or `App.tsx`.
+- If a feature needs reader state, put the shared state shape in a lightweight model module and keep
+  the React surface lazy.
+- After adding UI to the startup, studio switch, Book Cinema open, or resume path, run the low-resource
+  smoke and confirm `readerTiming.thresholds` passes in the summary.

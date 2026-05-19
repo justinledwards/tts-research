@@ -11,6 +11,7 @@ import {
   isSupportedBookSourceBatch,
   isSupportedBookSource,
   nextBookCinemaPlaybackRate,
+  normalizeBookScopeForBook,
   normalizeReaderAccessibilitySettings,
   paginateBookSpans,
   resolveBookActiveWordIndex,
@@ -235,6 +236,34 @@ describe("Book Cinema helpers", () => {
       "Copyright",
       "Chapter 1",
     ]);
+  });
+
+  it("normalizes section-backed chapter scopes without falling back to the full book", () => {
+    const book = {
+      ...makeBookSource("chapter words one two three"),
+      chapters: [],
+      sections: [
+        {
+          id: "body-1",
+          index: 0,
+          title: "Chapter One",
+          role: "body" as const,
+          isNarratable: true,
+          kind: "chapter",
+          chapterIndex: 1,
+          wordCount: 5,
+        },
+      ],
+    };
+
+    const scope = normalizeBookScopeForBook(book, {
+      type: "chapter",
+      chapterIndex: 1,
+      label: "Chapter One",
+    });
+
+    expect(bookScopeKey(scope)).toBe("chapter:1");
+    expect(scope.label).toBe("Chapter One");
   });
 
   it("defaults Markdown documents to full-document cinema while preserving sections", () => {
