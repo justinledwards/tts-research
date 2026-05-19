@@ -7,6 +7,24 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { ReaderAccessibilityControls } from "./components/reader/ReaderAccessibilityControls";
+import {
+  READER_LINE_HEIGHT_RATIO,
+  READER_LINE_SPACING_CLASS,
+  READER_MEASURE_CLASS,
+  READER_PLAYBACK_RATES,
+  READER_TEXT_SCALE_CLASS,
+  READER_TEXT_SCALE_FONT_PX,
+  normalizeReaderAccessibilitySettings,
+  readerDataAttributes,
+  readerLiveAnnouncement,
+  readerScrollBehavior,
+  useReaderKeyboardControls,
+  useReaderModalLifecycle,
+  type ReaderAccessibilitySettings,
+  type ReaderKeyboardCommand,
+  type ReaderTextScale,
+} from "./features/reader-accessibility";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { useAudioWaveformBars } from "./audioWaveform";
 import type {
@@ -34,16 +52,11 @@ const BOOK_PAGE_HORIZONTAL_PADDING = 76;
 const BOOK_PAGE_MIN_WORDS = 18;
 const BOOK_PAGE_MAX_WORDS = 128;
 const BOOK_PAGE_DEFAULT_WORDS: Record<BookCinemaTextSize, number> = {
+  compact: 116,
   comfortable: 98,
-  large: 76,
   giant: 54,
+  large: 76,
 };
-const BOOK_PAGE_FONT_PX: Record<BookCinemaTextSize, number> = {
-  comfortable: 20,
-  large: 24,
-  giant: 30,
-};
-const BOOK_CINEMA_PLAYBACK_RATES = [0.8, 1, 1.25, 1.5] as const;
 const POLICY_NOTE_KINDS = new Set([
   "admonition",
   "caption",
@@ -54,24 +67,17 @@ const POLICY_NOTE_KINDS = new Set([
   "quote",
   "table",
 ]);
-export const READER_ACCESSIBILITY_STORAGE_KEY = "tts-reader-accessibility-v1";
 
-export type BookCinemaTextSize = "comfortable" | "large" | "giant";
-export type BookCinemaKeyboardCommand =
-  | "bookmark"
-  | "close"
-  | "restart"
-  | "seekBackward"
-  | "seekForward"
-  | "speedDown"
-  | "speedUp"
-  | "togglePlayback";
+export {
+  DEFAULT_READER_ACCESSIBILITY_SETTINGS,
+  READER_ACCESSIBILITY_STORAGE_KEY,
+  normalizeReaderAccessibilitySettings,
+} from "./features/reader-accessibility";
+export type { ReaderAccessibilitySettings } from "./features/reader-accessibility";
+export type BookCinemaTextSize = ReaderTextScale;
+export type BookCinemaKeyboardCommand = ReaderKeyboardCommand;
+
 type BookCinemaMobilePanel = "narration" | "source" | "structure";
-
-export interface ReaderAccessibilitySettings {
-  highContrast: boolean;
-  reducedMotion: boolean;
-}
 
 export interface BookCinemaPolicyNote {
   explanation: string;
@@ -81,11 +87,6 @@ export interface BookCinemaPolicyNote {
   text?: string;
   title: string;
 }
-
-export const DEFAULT_READER_ACCESSIBILITY_SETTINGS: ReaderAccessibilitySettings = {
-  highContrast: false,
-  reducedMotion: false,
-};
 
 interface BookScopeOption {
   key: string;
@@ -114,82 +115,6 @@ export interface BookPaginationResult {
 interface BookPaginationOptions {
   pagesPerSpread?: 1 | 2;
   wordsPerPage?: number;
-}
-
-export function normalizeReaderAccessibilitySettings(value: unknown): ReaderAccessibilitySettings {
-  if (!value || typeof value !== "object") {
-    return { ...DEFAULT_READER_ACCESSIBILITY_SETTINGS };
-  }
-  const candidate = value as Partial<ReaderAccessibilitySettings>;
-  return {
-    highContrast: candidate.highContrast === true,
-    reducedMotion: candidate.reducedMotion === true,
-  };
-}
-
-export function bookCinemaKeyboardCommandForKey(key: string): BookCinemaKeyboardCommand | null {
-  const normalized = key.length === 1 ? key.toLowerCase() : key;
-  if (normalized === " " || normalized === "k") {
-    return "togglePlayback";
-  }
-  if (normalized === "ArrowLeft" || normalized === "j") {
-    return "seekBackward";
-  }
-  if (normalized === "ArrowRight" || normalized === "l") {
-    return "seekForward";
-  }
-  if (normalized === "Home") {
-    return "restart";
-  }
-  if (normalized === "[") {
-    return "speedDown";
-  }
-  if (normalized === "]") {
-    return "speedUp";
-  }
-  if (normalized === "b") {
-    return "bookmark";
-  }
-  if (normalized === "Escape") {
-    return "close";
-  }
-  return null;
-}
-
-export function shouldIgnoreBookCinemaKeyboardTarget(target: EventTarget | null): boolean {
-  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
-    return false;
-  }
-  const tagName = target.tagName.toLowerCase();
-  return (
-    target.isContentEditable ||
-    tagName === "button" ||
-    tagName === "input" ||
-    tagName === "select" ||
-    tagName === "textarea" ||
-    Boolean(target.closest("[data-book-cinema-ignore-shortcuts]"))
-  );
-}
-
-export function nextBookCinemaPlaybackRate(currentRate: number, direction: -1 | 1): number {
-  const currentIndex = BOOK_CINEMA_PLAYBACK_RATES.findIndex(
-    (rate) => Math.abs(rate - currentRate) < 0.01,
-  );
-  let fallbackIndex = 0;
-  for (const [index, rate] of BOOK_CINEMA_PLAYBACK_RATES.entries()) {
-    if (
-      Math.abs(rate - currentRate) <
-      Math.abs(BOOK_CINEMA_PLAYBACK_RATES[fallbackIndex] - currentRate)
-    ) {
-      fallbackIndex = index;
-    }
-  }
-  const nextIndex = clampNumber(
-    (currentIndex === -1 ? fallbackIndex : currentIndex) + direction,
-    0,
-    BOOK_CINEMA_PLAYBACK_RATES.length - 1,
-  );
-  return BOOK_CINEMA_PLAYBACK_RATES[nextIndex] ?? 1;
 }
 
 export interface BookCinemaControlsProps {
@@ -743,112 +668,6 @@ function BookReadingPreview({
   );
 }
 
-function useBookCinemaKeyboardControls({
-  canBookmark,
-  onBookmark,
-  onClose,
-  onPlayPause,
-  onRestart,
-  onSkip,
-  playbackControls,
-}: Readonly<{
-  canBookmark: boolean;
-  onBookmark: () => void;
-  onClose: () => void;
-  onPlayPause: () => void;
-  onRestart: () => void;
-  onSkip: (seconds: number) => void;
-  playbackControls: {
-    isAvailable: boolean;
-    playbackRate: number;
-    setPlaybackRate?: (rate: number) => void;
-    skipBy?: (seconds: number) => void;
-  };
-}>) {
-  useEffect(() => {
-    const actions = bookCinemaKeyboardActions({
-      canBookmark,
-      onBookmark,
-      onClose,
-      onPlayPause,
-      onRestart,
-      onSkip,
-      playbackControls,
-    });
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const command = bookCinemaKeyboardCommandForKey(event.key);
-      if (!command) {
-        return;
-      }
-      if (command !== "close" && shouldIgnoreBookCinemaKeyboardTarget(event.target)) {
-        return;
-      }
-      const action = actions[command];
-      if (!action) {
-        return;
-      }
-      event.preventDefault();
-      action();
-    };
-    globalThis.addEventListener("keydown", handleKeyDown);
-    return () => {
-      globalThis.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [canBookmark, onBookmark, onClose, onPlayPause, onRestart, onSkip, playbackControls]);
-}
-
-function bookCinemaKeyboardActions({
-  canBookmark,
-  onBookmark,
-  onClose,
-  onPlayPause,
-  onRestart,
-  onSkip,
-  playbackControls,
-}: Readonly<{
-  canBookmark: boolean;
-  onBookmark: () => void;
-  onClose: () => void;
-  onPlayPause: () => void;
-  onRestart: () => void;
-  onSkip: (seconds: number) => void;
-  playbackControls: {
-    isAvailable: boolean;
-    playbackRate: number;
-    setPlaybackRate?: (rate: number) => void;
-    skipBy?: (seconds: number) => void;
-  };
-}>): Partial<Record<BookCinemaKeyboardCommand, () => void>> {
-  const actions: Partial<Record<BookCinemaKeyboardCommand, () => void>> = {
-    close: onClose,
-  };
-  if (canBookmark) {
-    actions.bookmark = onBookmark;
-  }
-  if (playbackControls.isAvailable) {
-    actions.restart = onRestart;
-    actions.togglePlayback = onPlayPause;
-  }
-  if (playbackControls.skipBy) {
-    actions.seekBackward = () => {
-      onSkip(-10);
-    };
-    actions.seekForward = () => {
-      onSkip(10);
-    };
-  }
-  const setPlaybackRate = playbackControls.setPlaybackRate;
-  if (setPlaybackRate) {
-    actions.speedDown = () => {
-      setPlaybackRate(nextBookCinemaPlaybackRate(playbackControls.playbackRate, -1));
-    };
-    actions.speedUp = () => {
-      setPlaybackRate(nextBookCinemaPlaybackRate(playbackControls.playbackRate, 1));
-    };
-  }
-  return actions;
-}
-
 function bookCinemaJobMatchesScope(
   job: VoiceJob | null,
   book: BookSource,
@@ -886,7 +705,6 @@ export function BookCinemaOverlay({
   scopeContent,
   highlightCue,
   highlightMap,
-  textSize,
   themeName,
   onClose,
   onAccessibilitySettingsChange,
@@ -900,7 +718,6 @@ export function BookCinemaOverlay({
   onSelectBook,
   onSkip,
   onResumeProgress,
-  onTextSizeChange,
   onThemeChange,
 }: Readonly<{
   accessibilitySettings: ReaderAccessibilitySettings;
@@ -927,7 +744,6 @@ export function BookCinemaOverlay({
   scopeContent: BookSourceScopeContent | null;
   highlightCue: HighlightCue | null;
   highlightMap: HighlightMap | null;
-  textSize: BookCinemaTextSize;
   themeName: ThemeName;
   onClose: () => void;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
@@ -941,7 +757,6 @@ export function BookCinemaOverlay({
   onSelectBook: (bookId: string) => void;
   onSkip: (seconds: number) => void;
   onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
-  onTextSizeChange: (size: BookCinemaTextSize) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
   const normalizedScope = normalizeBookScopeForBook(book, scope);
@@ -1037,7 +852,7 @@ export function BookCinemaOverlay({
     setPointerScopeKey(option.key);
   };
 
-  useBookCinemaKeyboardControls({
+  useReaderKeyboardControls({
     canBookmark,
     onBookmark,
     onClose,
@@ -1047,17 +862,7 @@ export function BookCinemaOverlay({
     playbackControls,
   });
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    const activeElement = document.activeElement;
-    const previouslyFocused = activeElement instanceof HTMLElement ? activeElement : null;
-    document.body.style.overflow = "hidden";
-    dialogRef.current?.focus();
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus();
-    };
-  }, []);
+  useReaderModalLifecycle(dialogRef, { closeOnEscape: false });
 
   useEffect(() => {
     if (book.id || normalizedScopeKey) {
@@ -1070,8 +875,7 @@ export function BookCinemaOverlay({
       aria-labelledby="book-cinema-title"
       aria-modal="true"
       className="vs-app fixed inset-0 z-50 flex flex-col"
-      data-reader-highlight={normalizedAccessibility.highContrast ? "high-contrast" : "standard"}
-      data-reader-motion={normalizedAccessibility.reducedMotion ? "reduced" : "standard"}
+      {...readerDataAttributes(normalizedAccessibility)}
       data-theme={themeName}
       ref={dialogRef}
       role="dialog"
@@ -1272,11 +1076,11 @@ export function BookCinemaOverlay({
           scopedSpans={scopedSpans}
           scopedText={scopedText}
           scopeContent={scopeContent}
-          textSize={textSize}
+          accessibilitySettings={normalizedAccessibility}
           pointerLabel={pointerOption?.label ?? null}
           phraseWordEnd={phraseRange.end}
           phraseWordStart={phraseRange.start}
-          onTextSizeChange={onTextSizeChange}
+          onAccessibilitySettingsChange={onAccessibilitySettingsChange}
         />
 
         <aside className="hidden min-h-0 min-w-0 overflow-y-auto pl-1 lg:block">
@@ -1446,7 +1250,7 @@ export function BookCinemaOverlay({
             }}
             value={String(displayedPlaybackRate)}
           >
-            {BOOK_CINEMA_PLAYBACK_RATES.map((rate) => (
+            {READER_PLAYBACK_RATES.map((rate) => (
               <option key={rate} value={rate}>
                 {rate.toFixed(rate === 1 ? 0 : 2)}x
               </option>
@@ -1461,7 +1265,7 @@ export function BookCinemaOverlay({
           >
             Bookmark
           </button>
-          <BookCinemaAccessibilityControls
+          <ReaderAccessibilityControls
             settings={normalizedAccessibility}
             onChange={onAccessibilitySettingsChange}
           />
@@ -1537,7 +1341,7 @@ export function BookCinemaOverlay({
               }}
               value={String(displayedPlaybackRate)}
             >
-              {BOOK_CINEMA_PLAYBACK_RATES.map((rate) => (
+              {READER_PLAYBACK_RATES.map((rate) => (
                 <option key={rate} value={rate}>
                   {rate.toFixed(rate === 1 ? 0 : 2)}x Speed
                 </option>
@@ -2065,53 +1869,6 @@ function BookCinemaPolicyNotes({ notes }: Readonly<{ notes: BookCinemaPolicyNote
   );
 }
 
-function BookCinemaAccessibilityControls({
-  settings,
-  onChange,
-}: Readonly<{
-  settings: ReaderAccessibilitySettings;
-  onChange: (settings: ReaderAccessibilitySettings) => void;
-}>) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <ReaderToggle
-        checked={settings.reducedMotion}
-        label="Reduced motion"
-        onChange={(checked) => {
-          onChange({ ...settings, reducedMotion: checked });
-        }}
-      />
-      <ReaderToggle
-        checked={settings.highContrast}
-        label="High contrast"
-        onChange={(checked) => {
-          onChange({ ...settings, highContrast: checked });
-        }}
-      />
-    </div>
-  );
-}
-
-function ReaderToggle({
-  checked,
-  label,
-  onChange,
-}: Readonly<{ checked: boolean; label: string; onChange: (checked: boolean) => void }>) {
-  return (
-    <label className="inline-flex h-10 items-center gap-2 rounded-md border px-3 text-sm font-semibold vs-border">
-      <input
-        checked={checked}
-        className="h-4 w-4 accent-orange-600"
-        onChange={(event) => {
-          onChange(event.currentTarget.checked);
-        }}
-        type="checkbox"
-      />
-      <span>{label}</span>
-    </label>
-  );
-}
-
 function AudioCreateIcon() {
   return (
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
@@ -2272,11 +2029,11 @@ function BookCinemaReaderStage({
   scopedSpans,
   scopedText,
   scopeContent,
-  textSize,
+  accessibilitySettings,
   pointerLabel,
   phraseWordEnd,
   phraseWordStart,
-  onTextSizeChange,
+  onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
   book: BookSource;
@@ -2284,11 +2041,11 @@ function BookCinemaReaderStage({
   scopedSpans: NonNullable<BookSource["wordSpans"]>;
   scopedText: string;
   scopeContent: BookSourceScopeContent | null;
-  textSize: BookCinemaTextSize;
+  accessibilitySettings: ReaderAccessibilitySettings;
   pointerLabel: string | null;
   phraseWordEnd?: number;
   phraseWordStart?: number;
-  onTextSizeChange: (size: BookCinemaTextSize) => void;
+  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   if (book.kind === "markdown") {
     return (
@@ -2299,9 +2056,9 @@ function BookCinemaReaderStage({
         scopedSpans={scopedSpans}
         scopedText={scopedText}
         scopeContent={scopeContent}
-        textSize={textSize}
+        accessibilitySettings={accessibilitySettings}
         pointerLabel={pointerLabel}
-        onTextSizeChange={onTextSizeChange}
+        onAccessibilitySettingsChange={onAccessibilitySettingsChange}
       />
     );
   }
@@ -2312,10 +2069,10 @@ function BookCinemaReaderStage({
       scope={scope}
       scopedSpans={scopedSpans}
       scopedText={scopedText}
-      textSize={textSize}
+      accessibilitySettings={accessibilitySettings}
       phraseWordEnd={phraseWordEnd}
       phraseWordStart={phraseWordStart}
-      onTextSizeChange={onTextSizeChange}
+      onAccessibilitySettingsChange={onAccessibilitySettingsChange}
     />
   );
 }
@@ -2326,22 +2083,22 @@ function BookPagedReaderStage({
   scope,
   scopedSpans,
   scopedText,
-  textSize,
+  accessibilitySettings,
   phraseWordEnd,
   phraseWordStart,
-  onTextSizeChange,
+  onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
   book: BookSource;
   scope: BookScope;
   scopedSpans: NonNullable<BookSource["wordSpans"]>;
   scopedText: string;
-  textSize: BookCinemaTextSize;
+  accessibilitySettings: ReaderAccessibilitySettings;
   phraseWordEnd?: number;
   phraseWordStart?: number;
-  onTextSizeChange: (size: BookCinemaTextSize) => void;
+  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
-  const pageMetrics = useBookPageMetrics(textSize);
+  const pageMetrics = useBookPageMetrics(accessibilitySettings);
   const pagination = useMemo(
     () =>
       paginateBookSpans(scopedSpans, activeWordIndex, {
@@ -2355,13 +2112,15 @@ function BookPagedReaderStage({
 
   return (
     <section className="min-h-0 min-w-0 overflow-hidden">
-      <div className="mx-auto flex h-full max-w-6xl flex-col overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border">
+      <div
+        className={`mx-auto flex h-full ${READER_MEASURE_CLASS[accessibilitySettings.measure]} flex-col overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border`}
+      >
         <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
           <BookPageHeading book={book} scope={scope} />
           <BookPaginationControls
+            accessibilitySettings={accessibilitySettings}
             pagination={pagination}
-            textSize={textSize}
-            onTextSizeChange={onTextSizeChange}
+            onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           />
         </div>
         <div
@@ -2381,6 +2140,7 @@ function BookPagedReaderStage({
               fontSizePx={pageMetrics.fontSizePx}
               isActivePage={isReaderPageActive(page, activeWordIndex)}
               isRightPage={index === 1}
+              lineHeightRatio={pageMetrics.lineHeightRatio}
               key={`${book.id}-${bookScopeKey(scope)}-${String(page?.index ?? "fallback")}`}
               page={page}
               phraseWordEnd={phraseWordEnd}
@@ -2397,6 +2157,7 @@ function BookPagedReaderStage({
               fontSizePx={pageMetrics.fontSizePx}
               isActivePage={false}
               isRightPage
+              lineHeightRatio={pageMetrics.lineHeightRatio}
               page={null}
               phraseWordEnd={phraseWordEnd}
               phraseWordStart={phraseWordStart}
@@ -2411,13 +2172,13 @@ function BookPagedReaderStage({
 }
 
 function BookPaginationControls({
+  accessibilitySettings,
   pagination,
-  textSize,
-  onTextSizeChange,
+  onAccessibilitySettingsChange,
 }: Readonly<{
+  accessibilitySettings: ReaderAccessibilitySettings;
   pagination: BookPaginationResult;
-  textSize: BookCinemaTextSize;
-  onTextSizeChange: (size: BookCinemaTextSize) => void;
+  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const firstPage = pagination.spreadIndex * pagination.pagesPerSpread + 1;
   const lastPage =
@@ -2435,7 +2196,10 @@ function BookPaginationControls({
       <button
         className="h-9 rounded-md border px-3 font-semibold vs-border"
         onClick={() => {
-          onTextSizeChange(decreaseBookTextSize(textSize));
+          onAccessibilitySettingsChange({
+            ...accessibilitySettings,
+            textScale: decreaseBookTextSize(accessibilitySettings.textScale),
+          });
         }}
         type="button"
       >
@@ -2444,7 +2208,10 @@ function BookPaginationControls({
       <button
         className="h-9 rounded-md border px-3 font-semibold vs-border"
         onClick={() => {
-          onTextSizeChange(increaseBookTextSize(textSize));
+          onAccessibilitySettingsChange({
+            ...accessibilitySettings,
+            textScale: increaseBookTextSize(accessibilitySettings.textScale),
+          });
         }}
         type="button"
       >
@@ -2461,9 +2228,9 @@ function BookDocumentReaderStage({
   scopedSpans,
   scopedText,
   scopeContent,
-  textSize,
+  accessibilitySettings,
   pointerLabel,
-  onTextSizeChange,
+  onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
   book: BookSource;
@@ -2471,19 +2238,18 @@ function BookDocumentReaderStage({
   scopedSpans: NonNullable<BookSource["wordSpans"]>;
   scopedText: string;
   scopeContent: BookSourceScopeContent | null;
-  textSize: BookCinemaTextSize;
+  accessibilitySettings: ReaderAccessibilitySettings;
   pointerLabel: string | null;
-  onTextSizeChange: (size: BookCinemaTextSize) => void;
+  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const readerRef = useRef<HTMLDivElement | null>(null);
   const activeSpan = scopedSpans.find((span) => span.index === activeWordIndex) ?? null;
   const activeBlock = bookCinemaActiveBlock(scopeContent?.blocks ?? [], activeSpan);
   const highlight = bookMarkdownHighlight(activeBlock, activeSpan, scopedSpans);
-  const textClass = {
-    comfortable: "text-base leading-8 sm:text-lg",
-    large: "text-lg leading-9 sm:text-xl",
-    giant: "text-xl leading-10 sm:text-2xl",
-  }[textSize];
+  const textClass = `${READER_TEXT_SCALE_CLASS[accessibilitySettings.textScale]} ${
+    READER_LINE_SPACING_CLASS[accessibilitySettings.lineSpacing]
+  }`;
+  const scrollBehavior = readerScrollBehavior(accessibilitySettings);
 
   useEffect(() => {
     if (activeWordIndex < 0) {
@@ -2491,8 +2257,8 @@ function BookDocumentReaderStage({
     }
     readerRef.current
       ?.querySelector(".markdown-cinema-word-active, .markdown-cinema-block-active")
-      ?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-  }, [activeWordIndex]);
+      ?.scrollIntoView({ block: "center", inline: "nearest", behavior: scrollBehavior });
+  }, [activeWordIndex, scrollBehavior]);
 
   useEffect(() => {
     const label = pointerLabel?.trim();
@@ -2502,12 +2268,14 @@ function BookDocumentReaderStage({
     const heading = [...(readerRef.current?.querySelectorAll("h1,h2,h3,h4,h5,h6") ?? [])].find(
       (element) => element.textContent.trim() === label,
     );
-    heading?.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" });
-  }, [pointerLabel]);
+    heading?.scrollIntoView({ block: "start", inline: "nearest", behavior: scrollBehavior });
+  }, [pointerLabel, scrollBehavior]);
 
   return (
     <section className="min-h-0 min-w-0 overflow-hidden">
-      <div className="mx-auto flex h-full max-w-[860px] flex-col overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border max-lg:max-w-none max-lg:border-0 max-lg:shadow-none">
+      <div
+        className={`mx-auto flex h-full ${READER_MEASURE_CLASS[accessibilitySettings.measure]} flex-col overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border max-lg:max-w-none max-lg:border-0 max-lg:shadow-none`}
+      >
         <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
           <BookPageHeading book={book} scope={scope} />
           <div className="flex items-center gap-1">
@@ -2515,7 +2283,10 @@ function BookDocumentReaderStage({
               aria-label="Decrease text size"
               className="grid h-9 w-10 place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
               onClick={() => {
-                onTextSizeChange(decreaseBookTextSize(textSize));
+                onAccessibilitySettingsChange({
+                  ...accessibilitySettings,
+                  textScale: decreaseBookTextSize(accessibilitySettings.textScale),
+                });
               }}
               type="button"
             >
@@ -2525,7 +2296,10 @@ function BookDocumentReaderStage({
               aria-label="Increase text size"
               className="grid h-9 w-10 place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
               onClick={() => {
-                onTextSizeChange(increaseBookTextSize(textSize));
+                onAccessibilitySettingsChange({
+                  ...accessibilitySettings,
+                  textScale: increaseBookTextSize(accessibilitySettings.textScale),
+                });
               }}
               type="button"
             >
@@ -2557,6 +2331,7 @@ function BookReaderPage({
   fontSizePx,
   isActivePage,
   isRightPage = false,
+  lineHeightRatio,
   page,
   phraseWordEnd,
   phraseWordStart,
@@ -2569,6 +2344,7 @@ function BookReaderPage({
   fontSizePx: number;
   isActivePage: boolean;
   isRightPage?: boolean;
+  lineHeightRatio: number;
   page: BookPage | null;
   phraseWordEnd?: number;
   phraseWordStart?: number;
@@ -2592,7 +2368,12 @@ function BookReaderPage({
       </header>
       <p
         className="book-cinema-page-copy"
-        style={{ "--book-page-font-size": `${String(fontSizePx)}px` } as CSSProperties}
+        style={
+          {
+            "--book-page-font-size": `${String(fontSizePx)}px`,
+            "--book-page-line-height": String(lineHeightRatio),
+          } as CSSProperties
+        }
       >
         {page && page.spans.length > 0
           ? page.spans.map((span) => (
@@ -2620,8 +2401,9 @@ function BookReaderPage({
   );
 }
 
-function useBookPageMetrics(textSize: BookCinemaTextSize): {
+function useBookPageMetrics(settings: ReaderAccessibilitySettings): {
   fontSizePx: number;
+  lineHeightRatio: number;
   pagesPerSpread: 1 | 2;
   ref: (node: HTMLDivElement | null) => void;
   wordsPerPage: number;
@@ -2654,23 +2436,27 @@ function useBookPageMetrics(textSize: BookCinemaTextSize): {
     const pagesPerSpread: 1 | 2 = viewportWidth >= 620 ? 2 : 1;
     const pageWidth = Math.max(260, viewportWidth / pagesPerSpread - BOOK_PAGE_HORIZONTAL_PADDING);
     const pageHeight = Math.max(280, viewportHeight - BOOK_PAGE_VERTICAL_PADDING);
-    const baseFontPx = BOOK_PAGE_FONT_PX[textSize];
-    const lineHeightPx = baseFontPx * 1.76;
+    const baseFontPx = READER_TEXT_SCALE_FONT_PX[settings.textScale];
+    const lineHeightRatio = READER_LINE_HEIGHT_RATIO[settings.lineSpacing];
+    const lineHeightPx = baseFontPx * lineHeightRatio;
     const averageWordWidthPx = baseFontPx * 3.15;
     const wordsPerLine = Math.max(5, Math.floor(pageWidth / averageWordWidthPx));
     const linesPerPage = Math.max(6, Math.floor(pageHeight / lineHeightPx));
     const estimatedWords = Math.floor(wordsPerLine * linesPerPage * 0.86);
     return {
       fontSizePx: baseFontPx,
+      lineHeightRatio,
       pagesPerSpread,
       ref: setElement,
       wordsPerPage: clampNumber(
-        Number.isFinite(estimatedWords) ? estimatedWords : BOOK_PAGE_DEFAULT_WORDS[textSize],
+        Number.isFinite(estimatedWords)
+          ? estimatedWords
+          : BOOK_PAGE_DEFAULT_WORDS[settings.textScale],
         BOOK_PAGE_MIN_WORDS,
         BOOK_PAGE_MAX_WORDS,
       ),
     };
-  }, [size.height, size.width, textSize]);
+  }, [settings.lineSpacing, settings.textScale, size.height, size.width]);
 }
 
 function fallbackBookViewportWidth(): number {
@@ -2930,15 +2716,12 @@ export function bookCinemaLiveAnnouncement({
   fragmentIndex?: number;
   scope: BookScope;
 }>): string {
-  const parts = [bookSourceName(book), bookScopeLabel(scope)];
-  if (fragmentIndex !== undefined && fragmentIndex >= 0) {
-    parts.push(`Fragment ${String(fragmentIndex + 1)}`);
-  } else if (activeWordIndex >= 0) {
-    parts.push(`Word ${String(activeWordIndex + 1)}`);
-  } else {
-    parts.push("Ready");
-  }
-  return parts.join(". ");
+  return readerLiveAnnouncement({
+    activeWordIndex,
+    fragmentIndex: fragmentIndex !== undefined && fragmentIndex >= 0 ? fragmentIndex : undefined,
+    scopeLabel: bookScopeLabel(scope),
+    surfaceTitle: bookSourceName(book),
+  });
 }
 
 export function bookCinemaPolicyNotes(
@@ -3401,15 +3184,11 @@ function formatBytes(bytes: number): string {
 }
 
 function decreaseBookTextSize(size: BookCinemaTextSize): BookCinemaTextSize {
-  if (size === "giant") {
-    return "large";
-  }
-  return "comfortable";
+  const order: BookCinemaTextSize[] = ["compact", "comfortable", "large", "giant"];
+  return order[Math.max(0, order.indexOf(size) - 1)] ?? "large";
 }
 
 function increaseBookTextSize(size: BookCinemaTextSize): BookCinemaTextSize {
-  if (size === "comfortable") {
-    return "large";
-  }
-  return "giant";
+  const order: BookCinemaTextSize[] = ["compact", "comfortable", "large", "giant"];
+  return order[Math.min(order.length - 1, order.indexOf(size) + 1)] ?? "large";
 }

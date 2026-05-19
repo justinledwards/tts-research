@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useRef } from "react";
+import { useReaderModalLifecycle } from "./features/reader-accessibility";
 import type { RunConfiguration } from "./runConfig";
 import {
   KOKORO_RENDER_MODE_OPTIONS,
@@ -84,7 +85,8 @@ export function RunConfigDrawer({
   onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
   onSubmit: () => void;
 }>) {
-  useEscapeClose(isOpen, onClose);
+  const drawerRef = useRef<HTMLElement | null>(null);
+  useReaderModalLifecycle(drawerRef, { closeOnEscape: true, isOpen, onClose });
   if (!isOpen) {
     return null;
   }
@@ -93,7 +95,11 @@ export function RunConfigDrawer({
     <div className="fixed inset-0 z-40 bg-zinc-950/25" role="presentation">
       <aside
         aria-label="Run configuration"
+        aria-modal="true"
         className="vs-app ml-auto flex h-full w-full max-w-[660px] flex-col border-l shadow-2xl md:w-[620px] vs-border"
+        ref={drawerRef}
+        role="dialog"
+        tabIndex={-1}
       >
         <header className="flex items-center justify-between border-b px-5 py-4 vs-border">
           <div>
@@ -777,21 +783,4 @@ function DrawerFact({ label, value }: Readonly<{ label: string; value: string }>
       <dd className="truncate font-medium">{value}</dd>
     </div>
   );
-}
-
-function useEscapeClose(isOpen: boolean, onClose: () => void) {
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    globalThis.addEventListener("keydown", handleKeyDown);
-    return () => {
-      globalThis.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, onClose]);
 }

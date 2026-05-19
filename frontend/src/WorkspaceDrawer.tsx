@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useReaderModalLifecycle } from "./features/reader-accessibility";
 import { formatDuration } from "./format";
 import type {
   BookSource,
@@ -92,7 +93,8 @@ export function WorkspaceDrawer({
   onSelectProfile: (profileId: string) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
 }>) {
-  useEscapeClose(isOpen, onClose);
+  const drawerRef = useRef<HTMLElement | null>(null);
+  useReaderModalLifecycle(drawerRef, { closeOnEscape: true, isOpen, onClose });
   const [activeSection, setActiveSection] = useState<WorkspaceSectionId>("projects");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const visibleJobs = useMemo(() => {
@@ -152,7 +154,11 @@ export function WorkspaceDrawer({
     <div className="fixed inset-0 z-40 bg-zinc-950/25" role="presentation">
       <aside
         aria-label="Workspace"
+        aria-modal="true"
         className="vs-app flex h-full w-full max-w-[920px] flex-col border-r shadow-2xl md:w-[86vw] xl:w-[920px]"
+        ref={drawerRef}
+        role="dialog"
+        tabIndex={-1}
       >
         <header className="flex items-center justify-between border-b px-5 py-4 vs-border">
           <div className="min-w-0">
@@ -1036,29 +1042,4 @@ function formatDate(value: string): string {
     month: "short",
     year: "numeric",
   });
-}
-
-function useEscapeClose(isOpen: boolean, onClose: () => void) {
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target;
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement
-      ) {
-        return;
-      }
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    globalThis.addEventListener("keydown", handleKeyDown);
-    return () => {
-      globalThis.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, onClose]);
 }

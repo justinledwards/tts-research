@@ -411,7 +411,7 @@ select {
   color: var(--book-ink);
   font-family: Georgia, "Times New Roman", serif;
   font-size: var(--book-page-font-size, 24px);
-  line-height: 1.76;
+  line-height: var(--book-page-line-height, 1.76);
   overflow-wrap: break-word;
   word-break: normal;
 }
@@ -594,6 +594,15 @@ select {
   -webkit-text-stroke-width: 0;
 }
 
+[data-reader-motion="reduced"] .markdown-cinema-block-active,
+[data-reader-motion="reduced"] .markdown-cinema-word-active,
+[data-reader-motion="reduced"] .prepared-source-cinema-active,
+[data-reader-motion="reduced"] .website-cinema-word-active {
+  box-shadow: 0 0 0 0.08em color-mix(in srgb, var(--vs-accent) 28%, transparent);
+  text-shadow: none;
+  transition: none;
+}
+
 [data-reader-motion="reduced"] .book-cinema-word-active::after {
   display: none;
 }
@@ -618,6 +627,20 @@ select {
   background: #fff24a;
   box-shadow: 0 0 0 0.1em #111827;
   color: #111827;
+}
+
+[data-reader-highlight="high-contrast"] .markdown-cinema-block-active,
+[data-reader-highlight="high-contrast"] .markdown-cinema-word-active,
+[data-reader-highlight="high-contrast"] .prepared-source-cinema-active,
+[data-reader-highlight="high-contrast"] .website-cinema-word-active {
+  border-radius: 0.2em;
+  background: #fff24a;
+  box-shadow:
+    0 0 0 0.1em #111827,
+    0 0 0 0.22em #fff24a;
+  color: #111827;
+  text-decoration: none;
+  text-shadow: none;
 }
 
 @keyframes teleprompter-focus-pulse {

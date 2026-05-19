@@ -5,6 +5,7 @@ import {
   previewProjectBundle,
   projectBundleDownloadUrl,
 } from "./api";
+import { useReaderModalLifecycle } from "./features/reader-accessibility";
 import { formatDuration } from "./format";
 import type {
   BundleImportMode,
@@ -33,7 +34,8 @@ export function BundleFlowPanel({
   onClose: () => void;
   onImported: (result: ProjectBundleImportResult) => Promise<void> | void;
 }>) {
-  useEscapeClose(isOpen, onClose);
+  const panelRef = useRef<HTMLElement | null>(null);
+  useReaderModalLifecycle(panelRef, { closeOnEscape: true, isOpen, onClose });
   if (!isOpen) {
     return null;
   }
@@ -44,7 +46,9 @@ export function BundleFlowPanel({
         aria-label={mode === "export" ? "Export project bundle" : "Import project bundle"}
         aria-modal="true"
         className="vs-app ml-auto flex h-full w-full max-w-[760px] flex-col border-l shadow-2xl vs-raised sm:rounded-l-xl sm:border"
+        ref={panelRef}
         role="dialog"
+        tabIndex={-1}
       >
         <header className="flex items-center justify-between gap-4 border-b px-5 py-4 vs-border">
           <div className="min-w-0">
@@ -942,21 +946,4 @@ function formatBytes(bytes: number): string {
     unitIndex += 1;
   }
   return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
-}
-
-function useEscapeClose(isOpen: boolean, onClose: () => void) {
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    globalThis.addEventListener("keydown", handleKeyDown);
-    return () => {
-      globalThis.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, onClose]);
 }

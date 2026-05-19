@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PreparedSourceCinemaOverlay } from "./PreparedSourceCinema";
+import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "./features/reader-accessibility";
 import {
   preparedSourceCinemaActionLabel,
   preparedSourceCinemaActiveBlock,
@@ -95,6 +96,7 @@ describe("prepared source cinema helpers", () => {
     const source = makePreparedSource();
     const markup = renderToStaticMarkup(
       <PreparedSourceCinemaOverlay
+        accessibilitySettings={DEFAULT_READER_ACCESSIBILITY_SETTINGS}
         activeWordIndex={1}
         canCreateAudio
         importError={null}
@@ -115,8 +117,8 @@ describe("prepared source cinema helpers", () => {
         progress={null}
         source={source}
         sources={[source]}
-        textSize="large"
         themeName="light"
+        onAccessibilitySettingsChange={noop}
         onClose={noop}
         onCreateAudio={noop}
         onInspectStructure={noop}
@@ -126,7 +128,6 @@ describe("prepared source cinema helpers", () => {
         onResumeProgress={noop}
         onSelectSource={noop}
         onSkip={noop}
-        onTextSizeChange={noop}
         onThemeChange={noop}
       />,
     );
@@ -138,6 +139,9 @@ describe("prepared source cinema helpers", () => {
     expect(markup).not.toContain("Segment timeline");
     expect(markup).toContain("Source provenance");
     expect(markup).toContain("https://www.example.com/article");
+    expect(markup).toContain('data-reader-motion="standard"');
+    expect(markup).toContain('data-reader-text-scale="large"');
+    expect(markup).toContain('aria-live="polite"');
   });
 });
 

@@ -67,3 +67,11 @@
 - [x] Ensure studio route-switch timing is exercised by the E2E smoke.
 - [x] Guard hash resume from workspace restore races under low resource.
 - [x] Run local validation commands.
+
+## 2026-05-19 20:06 CEST - Cross-surface reader accessibility parity
+- [x] Add shared reader accessibility primitives.
+- [x] Apply shared preferences to cinema surfaces.
+- [x] Standardize focus, keyboard, and live status behavior.
+- [x] Update docs and disabled smoke workflow.
+- [x] Run automated validation commands.
+- [ ] Complete manual screen-reader smoke checklist with assistive tech.

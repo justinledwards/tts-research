@@ -6,17 +6,22 @@ import type {
   PlaybackProgress,
   VoiceJob,
 } from "./types";
+import {
+  readerLiveAnnouncement,
+  type ReaderKeyboardCommand,
+  type ReaderTextScale,
+} from "./features/reader-accessibility";
 
 export const BOOK_SOURCE_ACCEPT =
   ".pdf,.epub,.docx,.md,.markdown,.html,.htm,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/x-markdown,text/html,application/xhtml+xml,application/zip,image/png,image/jpeg,image/tiff,image/webp";
 const BOOK_PAGE_MIN_WORDS = 18;
 const BOOK_PAGE_MAX_WORDS = 128;
 const BOOK_PAGE_DEFAULT_WORDS: Record<BookCinemaTextSize, number> = {
+  compact: 116,
   comfortable: 98,
-  large: 76,
   giant: 54,
+  large: 76,
 };
-const BOOK_CINEMA_PLAYBACK_RATES = [0.8, 1, 1.25, 1.5] as const;
 const POLICY_NOTE_KINDS = new Set([
   "admonition",
   "caption",
@@ -28,23 +33,15 @@ const POLICY_NOTE_KINDS = new Set([
   "table",
 ]);
 
-export const READER_ACCESSIBILITY_STORAGE_KEY = "tts-reader-accessibility-v1";
-
-export type BookCinemaTextSize = "comfortable" | "large" | "giant";
-export type BookCinemaKeyboardCommand =
-  | "bookmark"
-  | "close"
-  | "restart"
-  | "seekBackward"
-  | "seekForward"
-  | "speedDown"
-  | "speedUp"
-  | "togglePlayback";
-
-export interface ReaderAccessibilitySettings {
-  highContrast: boolean;
-  reducedMotion: boolean;
-}
+export {
+  DEFAULT_READER_ACCESSIBILITY_SETTINGS,
+  READER_ACCESSIBILITY_STORAGE_KEY,
+  nextReaderPlaybackRate as nextBookCinemaPlaybackRate,
+  normalizeReaderAccessibilitySettings,
+  readerKeyboardCommandForKey as bookCinemaKeyboardCommandForKey,
+  shouldIgnoreReaderKeyboardTarget as shouldIgnoreBookCinemaKeyboardTarget,
+} from "./features/reader-accessibility";
+export type { ReaderAccessibilitySettings } from "./features/reader-accessibility";
 
 export interface BookCinemaPolicyNote {
   explanation: string;
@@ -55,10 +52,8 @@ export interface BookCinemaPolicyNote {
   title: string;
 }
 
-export const DEFAULT_READER_ACCESSIBILITY_SETTINGS: ReaderAccessibilitySettings = {
-  highContrast: false,
-  reducedMotion: false,
-};
+export type BookCinemaTextSize = ReaderTextScale;
+export type BookCinemaKeyboardCommand = ReaderKeyboardCommand;
 
 interface BookScopeOption {
   key: string;
@@ -87,82 +82,6 @@ export interface BookPaginationResult {
 interface BookPaginationOptions {
   pagesPerSpread?: 1 | 2;
   wordsPerPage?: number;
-}
-
-export function normalizeReaderAccessibilitySettings(value: unknown): ReaderAccessibilitySettings {
-  if (!value || typeof value !== "object") {
-    return { ...DEFAULT_READER_ACCESSIBILITY_SETTINGS };
-  }
-  const candidate = value as Partial<ReaderAccessibilitySettings>;
-  return {
-    highContrast: candidate.highContrast === true,
-    reducedMotion: candidate.reducedMotion === true,
-  };
-}
-
-export function bookCinemaKeyboardCommandForKey(key: string): BookCinemaKeyboardCommand | null {
-  const normalized = key.length === 1 ? key.toLowerCase() : key;
-  if (normalized === " " || normalized === "k") {
-    return "togglePlayback";
-  }
-  if (normalized === "ArrowLeft" || normalized === "j") {
-    return "seekBackward";
-  }
-  if (normalized === "ArrowRight" || normalized === "l") {
-    return "seekForward";
-  }
-  if (normalized === "Home") {
-    return "restart";
-  }
-  if (normalized === "[") {
-    return "speedDown";
-  }
-  if (normalized === "]") {
-    return "speedUp";
-  }
-  if (normalized === "b") {
-    return "bookmark";
-  }
-  if (normalized === "Escape") {
-    return "close";
-  }
-  return null;
-}
-
-export function shouldIgnoreBookCinemaKeyboardTarget(target: EventTarget | null): boolean {
-  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
-    return false;
-  }
-  const tagName = target.tagName.toLowerCase();
-  return (
-    target.isContentEditable ||
-    tagName === "button" ||
-    tagName === "input" ||
-    tagName === "select" ||
-    tagName === "textarea" ||
-    Boolean(target.closest("[data-book-cinema-ignore-shortcuts]"))
-  );
-}
-
-export function nextBookCinemaPlaybackRate(currentRate: number, direction: -1 | 1): number {
-  const currentIndex = BOOK_CINEMA_PLAYBACK_RATES.findIndex(
-    (rate) => Math.abs(rate - currentRate) < 0.01,
-  );
-  let fallbackIndex = 0;
-  for (const [index, rate] of BOOK_CINEMA_PLAYBACK_RATES.entries()) {
-    if (
-      Math.abs(rate - currentRate) <
-      Math.abs(BOOK_CINEMA_PLAYBACK_RATES[fallbackIndex] - currentRate)
-    ) {
-      fallbackIndex = index;
-    }
-  }
-  const nextIndex = clampNumber(
-    (currentIndex === -1 ? fallbackIndex : currentIndex) + direction,
-    0,
-    BOOK_CINEMA_PLAYBACK_RATES.length - 1,
-  );
-  return BOOK_CINEMA_PLAYBACK_RATES[nextIndex] ?? 1;
 }
 
 export function resolveDefaultBookScope(book: BookSource): BookScope {
@@ -350,15 +269,12 @@ export function bookCinemaLiveAnnouncement({
   fragmentIndex?: number;
   scope: BookScope;
 }>): string {
-  const parts = [bookSourceName(book), bookScopeLabel(scope)];
-  if (fragmentIndex !== undefined && fragmentIndex >= 0) {
-    parts.push(`Fragment ${String(fragmentIndex + 1)}`);
-  } else if (activeWordIndex >= 0) {
-    parts.push(`Word ${String(activeWordIndex + 1)}`);
-  } else {
-    parts.push("Ready");
-  }
-  return parts.join(". ");
+  return readerLiveAnnouncement({
+    activeWordIndex,
+    fragmentIndex: fragmentIndex !== undefined && fragmentIndex >= 0 ? fragmentIndex : undefined,
+    scopeLabel: bookScopeLabel(scope),
+    surfaceTitle: bookSourceName(book),
+  });
 }
 
 export function bookCinemaPolicyNotes(

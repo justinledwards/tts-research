@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { backendAssetUrl } from "./api";
+import { useReaderModalLifecycle } from "./features/reader-accessibility";
 import { formatDuration } from "./format";
 import { KOKORO_VOICEPACKS, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
 import type { RunConfiguration } from "./runConfig";
@@ -82,7 +83,6 @@ export function HelpPanel({
   selectedProfile: VoiceProfile | null;
   onClose: () => void;
 }>) {
-  useEscapeClose(isOpen, onClose);
   if (!isOpen) {
     return null;
   }
@@ -196,7 +196,6 @@ export function SettingsPanel({
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
-  useEscapeClose(isOpen, onClose);
   const [activeTab, setActiveTab] = useState<SettingsTab>("run");
   if (!isOpen) {
     return null;
@@ -1251,11 +1250,18 @@ function PanelShell({
   onClose: () => void;
   title: string;
 }>) {
+  const panelRef = useRef<HTMLElement | null>(null);
+  useReaderModalLifecycle(panelRef, { closeOnEscape: true, onClose });
+
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950/25" role="presentation">
       <aside
         aria-label={label}
+        aria-modal="true"
         className="vs-app ml-auto flex h-full w-full max-w-[780px] flex-col border-l shadow-2xl md:w-[740px] vs-border"
+        ref={panelRef}
+        role="dialog"
+        tabIndex={-1}
       >
         <header className="flex items-center justify-between border-b px-5 py-4 vs-border">
           <div>
@@ -1341,21 +1347,4 @@ function explainCurrentState(job: VoiceJob | null, source: VoiceProfileSource | 
     return "Completed audio is ready. Use Arrival for segment review or Completed for final playback.";
   }
   return "Upload source media or paste text, then choose a run mode before creating audio.";
-}
-
-function useEscapeClose(isOpen: boolean, onClose: () => void) {
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    globalThis.addEventListener("keydown", handleKeyDown);
-    return () => {
-      globalThis.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, onClose]);
 }

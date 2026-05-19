@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   contentIRNodePreview,
   formatContentIRLocator,
   type ContentIRDocument,
   type ContentIRNode,
 } from "./content-ir";
+import { useReaderModalLifecycle } from "./features/reader-accessibility";
 
 export function ContentIRDrawer({
   document,
@@ -21,6 +22,8 @@ export function ContentIRDrawer({
   title: string;
   onClose: () => void;
 }>) {
+  const drawerRef = useRef<HTMLElement | null>(null);
+  useReaderModalLifecycle(drawerRef, { closeOnEscape: true, isOpen, onClose });
   if (!isOpen) {
     return null;
   }
@@ -29,7 +32,11 @@ export function ContentIRDrawer({
     <div className="fixed inset-0 z-[60] bg-zinc-950/30" role="presentation">
       <aside
         aria-label="Content structure"
+        aria-modal="true"
         className="vs-app ml-auto flex h-full w-full max-w-[720px] flex-col border-l bg-[var(--vs-raised)] shadow-2xl vs-border"
+        ref={drawerRef}
+        role="dialog"
+        tabIndex={-1}
       >
         <header className="flex items-center justify-between gap-4 border-b px-5 py-4 vs-border">
           <div className="min-w-0">

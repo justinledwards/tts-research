@@ -1,4 +1,18 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ReaderAccessibilityControls } from "./components/reader/ReaderAccessibilityControls";
+import {
+  READER_LINE_SPACING_CLASS,
+  READER_MEASURE_CLASS,
+  READER_PLAYBACK_RATES,
+  READER_TEXT_SCALE_CLASS,
+  normalizeReaderAccessibilitySettings,
+  readerDataAttributes,
+  readerLiveAnnouncement,
+  readerScrollBehavior,
+  useReaderKeyboardControls,
+  useReaderModalLifecycle,
+  type ReaderAccessibilitySettings,
+} from "./features/reader-accessibility";
 import { useAudioWaveformBars } from "./audioWaveform";
 import { looksLikeMermaidDiagram } from "./markdownModel";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
@@ -44,6 +58,7 @@ export interface PreparedSourceCinemaPlaybackControls {
 type PreparedSourceCinemaMobilePanel = "source" | "structure" | "narration";
 
 export function PreparedSourceCinemaOverlay({
+  accessibilitySettings,
   activeWordIndex,
   canCreateAudio,
   importError,
@@ -56,9 +71,9 @@ export function PreparedSourceCinemaOverlay({
   progress,
   source,
   sources,
-  textSize,
   themeName,
   onClose,
+  onAccessibilitySettingsChange,
   onCreateAudio,
   onInspectStructure,
   onPrepareFile,
@@ -67,9 +82,9 @@ export function PreparedSourceCinemaOverlay({
   onResumeProgress,
   onSelectSource,
   onSkip,
-  onTextSizeChange,
   onThemeChange,
 }: Readonly<{
+  accessibilitySettings: ReaderAccessibilitySettings;
   activeWordIndex: number;
   canCreateAudio: boolean;
   importError: string | null;
@@ -82,9 +97,9 @@ export function PreparedSourceCinemaOverlay({
   progress: PlaybackProgress | null;
   source: PreparedSource;
   sources: PreparedSource[];
-  textSize: PreparedSourceCinemaTextSize;
   themeName: ThemeName;
   onClose: () => void;
+  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onCreateAudio: (source: PreparedSource) => void;
   onInspectStructure: (source: PreparedSource) => void;
   onPrepareFile: (file: File) => Promise<void>;
@@ -93,10 +108,10 @@ export function PreparedSourceCinemaOverlay({
   onResumeProgress: (progress: PlaybackProgress) => void;
   onSelectSource: (sourceId: string) => void;
   onSkip: (seconds: number) => void;
-  onTextSizeChange: (size: PreparedSourceCinemaTextSize) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const normalizedAccessibility = normalizeReaderAccessibilitySettings(accessibilitySettings);
   const [autoFollow, setAutoFollow] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<PreparedSourceCinemaMobilePanel | null>("source");
@@ -115,36 +130,36 @@ export function PreparedSourceCinemaOverlay({
   );
   const displayBlock = pointedBlock ?? activeBlock;
   const outline = useMemo(() => preparedSourceCinemaOutline(source), [source]);
+  const scrollBehavior = readerScrollBehavior(normalizedAccessibility);
+  const liveAnnouncement = useMemo(
+    () =>
+      readerLiveAnnouncement({
+        activeWordIndex: effectiveActiveWordIndex,
+        scopeLabel: displayBlock ? blockSnippet(displayBlock, "Source opening") : title,
+        surfaceTitle: `${cinemaLabel}. ${title}`,
+      }),
+    [cinemaLabel, displayBlock, effectiveActiveWordIndex, title],
+  );
   const handleOutlineNavigate = (item: PreparedSourceCinemaOutlineItem) => {
     setPointedBlockId(item.blockId);
-    scrollToCinemaBlock(item.blockId);
+    scrollToCinemaBlock(item.blockId, scrollBehavior);
   };
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    const activeElement = document.activeElement;
-    const previouslyFocused = activeElement instanceof HTMLElement ? activeElement : null;
-    document.body.style.overflow = "hidden";
-    dialogRef.current?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
+  useReaderKeyboardControls({
+    onClose: () => {
       if (settingsOpen) {
         setSettingsOpen(false);
         return;
       }
       onClose();
-    };
+    },
+    onPlayPause,
+    onRestart,
+    onSkip,
+    playbackControls,
+  });
 
-    globalThis.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      globalThis.removeEventListener("keydown", handleKeyDown);
-      previouslyFocused?.focus();
-    };
-  }, [onClose, settingsOpen]);
+  useReaderModalLifecycle(dialogRef, { closeOnEscape: false });
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -177,11 +192,15 @@ export function PreparedSourceCinemaOverlay({
       aria-labelledby="prepared-source-cinema-title"
       aria-modal="true"
       className="vs-app fixed inset-0 z-50 flex flex-col bg-[var(--vs-bg)] text-[var(--vs-text)]"
+      {...readerDataAttributes(normalizedAccessibility)}
       data-theme={themeName}
       ref={dialogRef}
       role="dialog"
       tabIndex={-1}
     >
+      <div aria-atomic="true" aria-live="polite" className="sr-only">
+        {liveAnnouncement}
+      </div>
       <header className="relative flex min-h-[4rem] items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-orange-200 text-orange-600 sm:border-zinc-900 sm:bg-zinc-950 sm:text-white">
@@ -230,11 +249,11 @@ export function PreparedSourceCinemaOverlay({
         </div>
         {settingsOpen ? (
           <PreparedSourceCinemaSettings
+            accessibilitySettings={normalizedAccessibility}
             autoFollow={autoFollow}
-            textSize={textSize}
             themeName={themeName}
+            onAccessibilitySettingsChange={onAccessibilitySettingsChange}
             onAutoFollowChange={setAutoFollow}
-            onTextSizeChange={onTextSizeChange}
             onThemeChange={onThemeChange}
           />
         ) : null}
@@ -256,13 +275,13 @@ export function PreparedSourceCinemaOverlay({
           activeBlockId={displayBlock?.id ?? null}
           activeWordIndex={effectiveActiveWordIndex}
           autoFollow={autoFollow}
+          accessibilitySettings={normalizedAccessibility}
           isFullscreen={isFullscreen}
           source={source}
-          textSize={textSize}
+          onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           onAutoFollowChange={setAutoFollow}
           onFullscreenToggle={handleFullscreenToggle}
           onInspectStructure={onInspectStructure}
-          onTextSizeChange={onTextSizeChange}
         />
         <PreparedSourceCinemaNarrationPanel
           activeBlock={displayBlock}
@@ -504,25 +523,25 @@ function PreparedSourceCinemaSourceLibrary({
 function PreparedSourceCinemaReader({
   activeBlockId,
   activeWordIndex,
+  accessibilitySettings,
   autoFollow,
   isFullscreen,
   source,
-  textSize,
+  onAccessibilitySettingsChange,
   onAutoFollowChange,
   onFullscreenToggle,
   onInspectStructure,
-  onTextSizeChange,
 }: Readonly<{
   activeBlockId: string | null;
   activeWordIndex: number;
+  accessibilitySettings: ReaderAccessibilitySettings;
   autoFollow: boolean;
   isFullscreen: boolean;
   source: PreparedSource;
-  textSize: PreparedSourceCinemaTextSize;
+  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onAutoFollowChange: (enabled: boolean) => void;
   onFullscreenToggle: () => void;
   onInspectStructure: (source: PreparedSource) => void;
-  onTextSizeChange: (size: PreparedSourceCinemaTextSize) => void;
 }>) {
   const activeWord = useMemo(
     () => resolvePreparedSourceActiveWord(source, activeWordIndex),
@@ -535,12 +554,10 @@ function PreparedSourceCinemaReader({
   const readerRef = useRef<HTMLDivElement | null>(null);
   const blocks = preparedSourceCinemaPrimaryBlocks(source);
   const isMarkdownDocument = isPreparedSourceMarkdownDocument(source);
-  const textClass = {
-    compact: "text-base leading-8 sm:text-[17px]",
-    comfortable: "text-lg leading-9",
-    giant: "text-2xl leading-[1.55] sm:text-3xl",
-    large: "text-[21px] leading-[1.62]",
-  }[textSize];
+  const textClass = `${READER_TEXT_SCALE_CLASS[accessibilitySettings.textScale]} ${
+    READER_LINE_SPACING_CLASS[accessibilitySettings.lineSpacing]
+  }`;
+  const scrollBehavior = readerScrollBehavior(accessibilitySettings);
   const shouldHighlightWord = activeBlock ? isPreparedCinemaWordHighlightable(activeBlock) : false;
   const blockHighlight =
     activeWord && activeBlock && !shouldHighlightWord
@@ -604,8 +621,8 @@ function PreparedSourceCinemaReader({
       ?.querySelector(
         ".prepared-source-cinema-active, .website-cinema-word-active, .markdown-cinema-word-active",
       )
-      ?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-  }, [activeWordIndex, autoFollow]);
+      ?.scrollIntoView({ block: "center", inline: "nearest", behavior: scrollBehavior });
+  }, [activeWordIndex, autoFollow, scrollBehavior]);
 
   useEffect(() => {
     if (!activeBlockId) {
@@ -616,7 +633,7 @@ function PreparedSourceCinemaReader({
       `#${CSS.escape(directBlockId)}`,
     );
     if (directBlock) {
-      directBlock.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      directBlock.scrollIntoView({ block: "center", inline: "nearest", behavior: scrollBehavior });
       return;
     }
     const block = source.blocks?.find((item) => item.id === activeBlockId);
@@ -630,19 +647,24 @@ function PreparedSourceCinemaReader({
     const heading = [...(readerRef.current?.querySelectorAll("h1,h2,h3,h4,h5,h6") ?? [])].find(
       (element) => element.textContent.trim() === label,
     );
-    heading?.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" });
-  }, [activeBlockId, source.blocks]);
+    heading?.scrollIntoView({ block: "start", inline: "nearest", behavior: scrollBehavior });
+  }, [activeBlockId, scrollBehavior, source.blocks]);
 
   return (
     <section className="min-h-0 min-w-0 overflow-hidden">
-      <div className="mx-auto flex h-full max-w-[780px] flex-col overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border max-lg:max-w-none max-lg:border-0 max-lg:shadow-none">
+      <div
+        className={`mx-auto flex h-full ${READER_MEASURE_CLASS[accessibilitySettings.measure]} flex-col overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border max-lg:max-w-none max-lg:border-0 max-lg:shadow-none`}
+      >
         <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
           <div className="flex items-center gap-1">
             <button
               aria-label="Decrease text size"
               className="grid h-9 w-10 place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
               onClick={() => {
-                onTextSizeChange(decreasePreparedSourceCinemaTextSize(textSize));
+                onAccessibilitySettingsChange({
+                  ...accessibilitySettings,
+                  textScale: decreasePreparedSourceCinemaTextSize(accessibilitySettings.textScale),
+                });
               }}
               type="button"
             >
@@ -652,7 +674,10 @@ function PreparedSourceCinemaReader({
               aria-label="Increase text size"
               className="grid h-9 w-10 place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
               onClick={() => {
-                onTextSizeChange(increasePreparedSourceCinemaTextSize(textSize));
+                onAccessibilitySettingsChange({
+                  ...accessibilitySettings,
+                  textScale: increasePreparedSourceCinemaTextSize(accessibilitySettings.textScale),
+                });
               }}
               type="button"
             >
@@ -1091,7 +1116,7 @@ function PreparedSourceCinemaTransport({
             }}
             value={String(playbackControls.playbackRate)}
           >
-            {[0.8, 1, 1.25, 1.5].map((rate) => (
+            {READER_PLAYBACK_RATES.map((rate) => (
               <option key={rate} value={rate}>
                 {rate.toFixed(rate === 1 ? 0 : 2)}x
               </option>
@@ -1162,7 +1187,7 @@ function PreparedSourceCinemaTransport({
             }}
             value={String(playbackControls.playbackRate)}
           >
-            {[0.8, 1, 1.25, 1.5].map((rate) => (
+            {READER_PLAYBACK_RATES.map((rate) => (
               <option key={rate} value={rate}>
                 {rate.toFixed(rate === 1 ? 0 : 2)}x Speed
               </option>
@@ -1175,23 +1200,29 @@ function PreparedSourceCinemaTransport({
 }
 
 function PreparedSourceCinemaSettings({
+  accessibilitySettings,
   autoFollow,
-  textSize,
   themeName,
+  onAccessibilitySettingsChange,
   onAutoFollowChange,
-  onTextSizeChange,
   onThemeChange,
 }: Readonly<{
+  accessibilitySettings: ReaderAccessibilitySettings;
   autoFollow: boolean;
-  textSize: PreparedSourceCinemaTextSize;
   themeName: ThemeName;
+  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onAutoFollowChange: (enabled: boolean) => void;
-  onTextSizeChange: (size: PreparedSourceCinemaTextSize) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
   return (
     <div className="absolute right-6 top-[3.6rem] z-[60] w-72 rounded-md border bg-[var(--vs-raised)] p-4 text-sm shadow-xl vs-border">
-      <h3 className="font-semibold">Website Cinema settings</h3>
+      <h3 className="font-semibold">Reader settings</h3>
+      <ReaderAccessibilityControls
+        className="mt-4"
+        settings={accessibilitySettings}
+        variant="panel"
+        onChange={onAccessibilitySettingsChange}
+      />
       <label className="mt-4 flex items-center justify-between gap-3">
         <span>Auto-follow</span>
         <input
@@ -1202,22 +1233,6 @@ function PreparedSourceCinemaSettings({
           }}
           type="checkbox"
         />
-      </label>
-      <label className="mt-3 grid gap-1">
-        <span className="vs-muted">Text size</span>
-        <select
-          className="h-10 rounded-md border bg-[var(--vs-surface)] px-3 outline-none vs-border"
-          onChange={(event) => {
-            onTextSizeChange(event.currentTarget.value as PreparedSourceCinemaTextSize);
-          }}
-          value={textSize}
-        >
-          {(["compact", "comfortable", "large", "giant"] as const).map((size) => (
-            <option key={size} value={size}>
-              {sentenceCase(size)}
-            </option>
-          ))}
-        </select>
       </label>
       <label className="mt-3 grid gap-1">
         <span className="vs-muted">Theme</span>
@@ -1246,12 +1261,6 @@ function PreparedSourceCinemaBlock({
 }: Readonly<{ activeWordOffset: number | null; block: NarrationBlock; isActive: boolean }>) {
   const ref = useRef<HTMLElement | null>(null);
   const text = markdownBlockText(block);
-
-  useEffect(() => {
-    if (isActive) {
-      ref.current?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-    }
-  }, [isActive]);
 
   if (!text.trim()) {
     return null;
@@ -1682,11 +1691,11 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function scrollToCinemaBlock(blockId: string) {
+function scrollToCinemaBlock(blockId: string, behavior: ScrollBehavior) {
   const elementId = `cinema-block-${blockId}`;
   document
     .querySelector<HTMLElement>(`#${CSS.escape(elementId)}`)
-    ?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    ?.scrollIntoView({ block: "center", inline: "nearest", behavior });
 }
 
 function panelLabel(panel: PreparedSourceCinemaMobilePanel): string {

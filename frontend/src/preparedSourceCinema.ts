@@ -1,7 +1,8 @@
 import type { NarrationBlock, PreparedSource, VoiceJob } from "./types";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
+import type { ReaderTextScale } from "./features/reader-accessibility";
 
-export type PreparedSourceCinemaTextSize = "compact" | "comfortable" | "large" | "giant";
+export type PreparedSourceCinemaTextSize = ReaderTextScale;
 
 export interface PreparedSourceCinemaMetrics {
   blockCount: number;

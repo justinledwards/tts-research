@@ -85,7 +85,7 @@ describe("Book Cinema helpers", () => {
       }
 
       closest(selector: string): FakeHTMLElement | null {
-        return selector === "[data-book-cinema-ignore-shortcuts]" && this.tagName === "DIV"
+        return selector.includes("[data-book-cinema-ignore-shortcuts]") && this.tagName === "DIV"
           ? this
           : null;
       }
@@ -117,11 +117,30 @@ describe("Book Cinema helpers", () => {
   it("normalizes reader accessibility state and speed stepping", () => {
     expect(normalizeReaderAccessibilitySettings({ highContrast: true })).toEqual({
       highContrast: true,
+      lineSpacing: "comfortable",
+      measure: "comfortable",
       reducedMotion: false,
+      textScale: "large",
     });
     expect(normalizeReaderAccessibilitySettings({ reducedMotion: true })).toEqual({
       highContrast: false,
+      lineSpacing: "comfortable",
+      measure: "comfortable",
       reducedMotion: true,
+      textScale: "large",
+    });
+    expect(
+      normalizeReaderAccessibilitySettings({
+        lineSpacing: "spacious",
+        measure: "narrow",
+        textScale: "compact",
+      }),
+    ).toEqual({
+      highContrast: false,
+      lineSpacing: "spacious",
+      measure: "narrow",
+      reducedMotion: false,
+      textScale: "compact",
     });
     expect(nextBookCinemaPlaybackRate(1, 1)).toBe(1.25);
     expect(nextBookCinemaPlaybackRate(1, -1)).toBe(0.8);

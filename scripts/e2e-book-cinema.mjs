@@ -297,8 +297,14 @@ async function openBookCinemaOverlay(page, scope, url = appBaseUrl) {
     await page.waitForLoadState("networkidle").catch(() => {});
   }
   const existingOverlay = page.locator(".fixed.inset-0").first();
-  if (await existingOverlay.isVisible().catch(() => false)) {
-    await existingOverlay.getByText("Book Cinema").first().waitFor();
+  const restoredOverlayTimeout = url === appBaseUrl ? 1_000 : 30_000;
+  const restoredOverlayVisible = await existingOverlay
+    .getByText("Book Cinema")
+    .first()
+    .waitFor({ state: "visible", timeout: restoredOverlayTimeout })
+    .then(() => true)
+    .catch(() => false);
+  if (restoredOverlayVisible) {
     await waitForOverlayScope(page, scope);
     return;
   }

@@ -77,7 +77,6 @@ import {
   DEFAULT_READER_ACCESSIBILITY_SETTINGS,
   READER_ACCESSIBILITY_STORAGE_KEY,
   normalizeReaderAccessibilitySettings,
-  type BookCinemaTextSize,
   type ReaderAccessibilitySettings,
   bookSourceName,
   bookScopeKey,
@@ -201,7 +200,6 @@ import {
   preparedSourceCinemaActionLabel,
   preparedSourceCinemaKind,
   preparedSourceCinemaJobMatchesSource,
-  type PreparedSourceCinemaTextSize,
 } from "./preparedSourceCinema";
 import {
   humanizeProfileTargetProblem,
@@ -2386,13 +2384,10 @@ export function App() {
     null,
   );
   const [isBookCinemaOpen, setIsBookCinemaOpen] = useState(false);
-  const [bookCinemaTextSize, setBookCinemaTextSize] = useState<BookCinemaTextSize>("large");
   const [bookCinemaThemeName, setBookCinemaThemeName] = useState<ThemeName>("dark");
   const [preparedSourceCinemaSourceId, setPreparedSourceCinemaSourceId] = useState<string | null>(
     null,
   );
-  const [preparedSourceCinemaTextSize, setPreparedSourceCinemaTextSize] =
-    useState<PreparedSourceCinemaTextSize>("large");
   const [preparedSourceCinemaThemeName, setPreparedSourceCinemaThemeName] =
     useState<ThemeName>("light");
   const [readerAccessibilitySettings, setReaderAccessibilitySettings] =
@@ -5267,7 +5262,6 @@ export function App() {
             scopeContent={bookScopeContent}
             highlightCue={activeHighlightCue}
             highlightMap={highlightMap}
-            textSize={bookCinemaTextSize}
             themeName={bookCinemaThemeName}
             onClose={() => {
               setIsBookCinemaOpen(false);
@@ -5291,7 +5285,6 @@ export function App() {
               void handleResumeProgress(progress, seconds);
             }}
             onAccessibilitySettingsChange={setReaderAccessibilitySettings}
-            onTextSizeChange={setBookCinemaTextSize}
             onThemeChange={setBookCinemaThemeName}
           />
         </Suspense>
@@ -5299,6 +5292,7 @@ export function App() {
       {preparedSourceCinemaSource ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading source cinema..." />}>
           <PreparedSourceCinemaOverlay
+            accessibilitySettings={readerAccessibilitySettings}
             activeWordIndex={preparedSourceCinemaCue?.documentActiveWordIndex ?? -1}
             canCreateAudio={!isProcessing}
             importError={sourcePrepError}
@@ -5314,8 +5308,8 @@ export function App() {
             progress={preparedSourceCinemaProgress}
             source={preparedSourceCinemaSource}
             sources={preparedSources}
-            textSize={preparedSourceCinemaTextSize}
             themeName={preparedSourceCinemaThemeName}
+            onAccessibilitySettingsChange={setReaderAccessibilitySettings}
             onClose={() => {
               setPreparedSourceCinemaSourceId(null);
             }}
@@ -5333,7 +5327,6 @@ export function App() {
             }}
             onSelectSource={handleSelectPreparedCinemaSource}
             onSkip={handleBookCinemaSkip}
-            onTextSizeChange={setPreparedSourceCinemaTextSize}
             onThemeChange={setPreparedSourceCinemaThemeName}
           />
         </Suspense>
