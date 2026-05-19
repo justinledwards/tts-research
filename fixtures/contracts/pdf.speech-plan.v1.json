@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "speech-plan.v1",
+  "id": "contract-pdf",
+  "sourceId": "contract-pdf",
+  "projectId": "default",
+  "generatedAt": "2026-05-17T01:00:00Z",
+  "policyTrace": [
+    {
+      "scope": "marketProfileDefault",
+      "profile": "Enterprise"
+    },
+    {
+      "scope": "projectOverride",
+      "profile": "Enterprise"
+    }
+  ],
+  "segments": [
+    {
+      "segmentId": "seg-0001",
+      "index": 1,
+      "nodeId": "pdf-0001",
+      "text": "PDF page text.",
+      "lang": "und",
+      "speechPolicy": {
+        "profile": "Enterprise",
+        "element": "prose",
+        "elementMode": "speak",
+        "mode": "speak",
+        "explanation": "PDF text-layer content is spoken."
+      },
+      "policyTrace": [
+        {
+          "scope": "marketProfileDefault",
+          "profile": "Enterprise"
+        },
+        {
+          "scope": "projectOverride",
+          "profile": "Enterprise"
+        }
+      ],
+      "locatorEnvelope": {
+        "schemaVersion": "locator-envelope.v1",
+        "kind": "highlight",
+        "sourceId": "contract-pdf",
+        "nodeId": "pdf-0001",
+        "scopeKey": "document",
+        "activeWordIndex": 0,
+        "locator": {
+          "type": "pdf",
+          "pdf": {
+            "pageIndex": 0,
+            "bbox": {
+              "x": 72,
+              "y": 90,
+              "width": 240,
+              "height": 32
+            },
+            "readingOrderIndex": 0
+          }
+        },
+        "readium": {
+          "title": "Page 1",
+          "text": {
+            "highlight": "PDF page text."
+          },
+          "href": "contract-pdf",
+          "type": "application/pdf",
+          "locations": {
+            "fragments": ["page=1", "viewrect=72,90,240,32"],
+            "position": 1
+          }
+        },
+        "textQuote": "PDF page text."
+      },
+      "serializerTargets": {
+        "plainText": "PDF page text.",
+        "ssml": "<speak version=\"1.0\" xml:lang=\"und\">PDF page text.</speak>",
+        "highlightMarks": [
+          {
+            "markId": "mark-pdf-0001",
+            "nodeId": "pdf-0001",
+            "segmentId": "seg-0001"
+          }
+        ]
+      },
+      "warnings": []
+    }
+  ]
+}

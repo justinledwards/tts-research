@@ -1,0 +1,236 @@
+import Ajv2020 from "ajv/dist/2020.js";
+import addFormats from "ajv-formats";
+import { execFile } from "node:child_process";
+import { readFile, readdir } from "node:fs/promises";
+import path from "node:path";
+import process from "node:process";
+import { promisify } from "node:util";
+
+const repoRoot = process.cwd();
+const schemaDir = path.join(repoRoot, "backend/internal/contentir/schema");
+const schemaPaths = {
+  contentIR: path.join(schemaDir, "content-ir.v1.schema.json"),
+  fragmentTiming: path.join(schemaDir, "fragment-timing.v1.schema.json"),
+  highlightMap: path.join(schemaDir, "highlight-map.v1.schema.json"),
+  locatorEnvelope: path.join(schemaDir, "locator-envelope.v1.schema.json"),
+  speechPlan: path.join(schemaDir, "speech-plan.v1.schema.json"),
+  tokenTiming: path.join(schemaDir, "token-timing.v1.schema.json"),
+};
+const goldenDir = path.join(repoRoot, "backend/internal/contentir/testdata/golden");
+const contractDir = path.join(repoRoot, "fixtures/contracts");
+const adapterFiles = [
+  "backend/internal/pipeline/prepared_source_to_ir.go",
+  "backend/internal/pipeline/book_source_to_ir.go",
+  "backend/internal/pipeline/ir_to_legacy_models.go",
+];
+const execFileAsync = promisify(execFile);
+
+await execFileAsync(process.execPath, ["scripts/generate-contract-types.mjs", "--check"], {
+  cwd: repoRoot,
+});
+
+const schemas = Object.fromEntries(
+  await Promise.all(
+    Object.entries(schemaPaths).map(async ([kind, schemaPath]) => [
+      kind,
+      JSON.parse(await readFile(schemaPath, "utf8")),
+    ]),
+  ),
+);
+const ajv = new Ajv2020({ allErrors: true, strict: false });
+addFormats(ajv);
+ajv.addSchema(schemas.contentIR, "content-ir.v1.schema.json");
+ajv.addSchema(schemas.locatorEnvelope, "locator-envelope.v1.schema.json");
+ajv.addSchema(schemas.speechPlan, "speech-plan.v1.schema.json");
+ajv.addSchema(schemas.fragmentTiming, "fragment-timing.v1.schema.json");
+ajv.addSchema(schemas.tokenTiming, "token-timing.v1.schema.json");
+ajv.addSchema(schemas.highlightMap, "highlight-map.v1.schema.json");
+const validate = ajv.compile(schemas.contentIR);
+const validators = {
+  contentIR: validate,
+  fragmentTiming: ajv.compile(schemas.fragmentTiming),
+  highlightMap: ajv.compile(schemas.highlightMap),
+  locatorEnvelope: ajv.compile(schemas.locatorEnvelope),
+  speechPlan: ajv.compile(schemas.speechPlan),
+  tokenTiming: ajv.compile(schemas.tokenTiming),
+};
+
+const goldenFiles = (await readdir(goldenDir)).filter((file) => file.endsWith(".json")).sort();
+if (goldenFiles.length === 0) {
+  throw new Error("No Content IR golden fixtures found.");
+}
+
+for (const file of goldenFiles) {
+  const fullPath = path.join(goldenDir, file);
+  const payload = JSON.parse(await readFile(fullPath, "utf8"));
+  if (!validate(payload)) {
+    throw new Error(`${file} failed schema validation:\n${ajv.errorsText(validate.errors)}`);
+  }
+  assertJSONRoundTrip(file, payload);
+}
+
+const contractFiles = (await readdir(contractDir)).filter((file) => file.endsWith(".json")).sort();
+if (contractFiles.length === 0) {
+  throw new Error("No public contract fixtures found.");
+}
+
+const contractCounts = {
+  contentIR: 0,
+  fragmentTiming: 0,
+  highlightMap: 0,
+  locatorEnvelope: 0,
+  speechPlan: 0,
+  tokenTiming: 0,
+};
+for (const file of contractFiles) {
+  const fullPath = path.join(contractDir, file);
+  const payload = JSON.parse(await readFile(fullPath, "utf8"));
+  assertJSONRoundTrip(file, payload);
+  if (file.endsWith(".content-ir.v1.json")) {
+    contractCounts.contentIR += 1;
+    if (!validators.contentIR(payload)) {
+      throw new Error(
+        `${file} failed Content IR v1 validation:\n${ajv.errorsText(validators.contentIR.errors)}`,
+      );
+    }
+  } else if (file.endsWith(".locator-envelope.v1.json")) {
+    contractCounts.locatorEnvelope += 1;
+    if (!validators.locatorEnvelope(payload)) {
+      throw new Error(
+        `${file} failed locator envelope validation:\n${ajv.errorsText(validators.locatorEnvelope.errors)}`,
+      );
+    }
+  } else if (file.endsWith(".speech-plan.v1.json")) {
+    contractCounts.speechPlan += 1;
+    if (!validators.speechPlan(payload)) {
+      throw new Error(
+        `${file} failed speech plan validation:\n${ajv.errorsText(validators.speechPlan.errors)}`,
+      );
+    }
+  } else if (file.endsWith(".highlight-map.v1.json")) {
+    contractCounts.highlightMap += 1;
+    if (!validators.highlightMap(payload)) {
+      throw new Error(
+        `${file} failed highlight map validation:\n${ajv.errorsText(validators.highlightMap.errors)}`,
+      );
+    }
+  } else if (file.endsWith(".fragment-timing.v1.json")) {
+    contractCounts.fragmentTiming += 1;
+    if (!validators.fragmentTiming(payload)) {
+      throw new Error(
+        `${file} failed fragment timing validation:\n${ajv.errorsText(validators.fragmentTiming.errors)}`,
+      );
+    }
+  } else if (file.endsWith(".token-timing.v1.json")) {
+    contractCounts.tokenTiming += 1;
+    if (!validators.tokenTiming(payload)) {
+      throw new Error(
+        `${file} failed token timing validation:\n${ajv.errorsText(validators.tokenTiming.errors)}`,
+      );
+    }
+  } else {
+    throw new Error(`${file} is not a recognized contract fixture.`);
+  }
+}
+
+for (const [kind, count] of Object.entries(contractCounts)) {
+  if (count === 0) {
+    throw new Error(`No ${kind} contract fixtures found.`);
+  }
+}
+
+const generatedTypes = await readFile(
+  path.join(repoRoot, "packages/schema/src/generated/contracts.ts"),
+  "utf8",
+);
+for (const expected of [
+  "ContentIRDocument",
+  "FragmentTimingArtifact",
+  "HighlightMap",
+  "LocatorEnvelope",
+  "SpeechPlanDocument",
+  "TokenTimingArtifact",
+]) {
+  if (!generatedTypes.includes(`interface ${expected}`)) {
+    throw new Error(
+      `Generated contract types are missing ${expected}. Run pnpm generate:contracts.`,
+    );
+  }
+}
+
+for (const adapterFile of adapterFiles) {
+  const source = await readFile(path.join(repoRoot, adapterFile), "utf8");
+  for (const fn of findGoFunctions(source)) {
+    const nonblankLines = fn.body.split("\n").filter((line) => line.trim().length > 0).length;
+    const complexity = mappingComplexity(fn.body);
+    if (nonblankLines > 90) {
+      throw new Error(`${adapterFile}:${fn.name} has ${nonblankLines} nonblank lines; max is 90.`);
+    }
+    if (complexity > 12) {
+      throw new Error(`${adapterFile}:${fn.name} has complexity ${complexity}; max is 12.`);
+    }
+  }
+}
+
+console.log(
+  `Validated ${goldenFiles.length.toString()} Content IR fixtures, ${contractFiles.length.toString()} public contract fixtures, and ${adapterFiles.length.toString()} adapter files.`,
+);
+
+function assertJSONRoundTrip(file, payload) {
+  const encoded = JSON.stringify(payload);
+  const decoded = JSON.parse(encoded);
+  const reencoded = JSON.stringify(decoded);
+  if (encoded !== reencoded) {
+    throw new Error(`${file} failed JSON parse/stringify roundtrip.`);
+  }
+}
+
+function findGoFunctions(source) {
+  const functions = [];
+  const pattern = /^func\s+(?:\([^)]+\)\s+)?([A-Za-z0-9_]+)\s*\(/gm;
+  let match = pattern.exec(source);
+  while (match !== null) {
+    const openIndex = source.indexOf("{", match.index);
+    if (openIndex < 0) {
+      continue;
+    }
+    const closeIndex = findMatchingBrace(source, openIndex);
+    if (closeIndex < 0) {
+      continue;
+    }
+    functions.push({
+      name: match[1],
+      body: source.slice(openIndex + 1, closeIndex),
+    });
+    pattern.lastIndex = closeIndex + 1;
+    match = pattern.exec(source);
+  }
+  return functions;
+}
+
+function findMatchingBrace(source, openIndex) {
+  let depth = 0;
+  for (let index = openIndex; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
+function mappingComplexity(body) {
+  const cleaned = body
+    .replaceAll(/"([^"\\]|\\.)*"/g, '""')
+    .replaceAll(/`[^`]*`/g, "``")
+    .replaceAll(/\/\/.*$/gm, "")
+    .replaceAll(/\/\*[\s\S]*?\*\//g, "");
+  const keywordMatches = cleaned.match(/\b(if|for|switch|case|default)\b/g) ?? [];
+  const logicalMatches = cleaned.match(/&&|\|\|/g) ?? [];
+  return keywordMatches.length + logicalMatches.length;
+}

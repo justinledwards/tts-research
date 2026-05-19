@@ -10,8 +10,12 @@
 .env.*
 !.env.example
 .venv/
+.venv-*/
 backend/.venv/
 backend/.venv-bonsai/
+backend/.venv-kokoclone/
+backend/.venv-*/
+backend/.koko-clone/
 
 # Logs
 *.log
@@ -43,19 +47,31 @@ coverage.txt
 __pycache__/
 *.py[cod]
 .pytest_cache/
+build/
+*.egg-info/
 
 # Generated media and local data
 backend/data/
 !backend/data/
 backend/data/**
 !backend/data/.gitkeep
+backend/model/
+backend/voice/
+backend/model-cache/
 backend/tmp/
+demo/
+model/
+voice/
 frontend/.vercel/
 
 # Tool caches
 .cache/
 .turbo/
+.upstreams/
+.playwright-cli/
 .playwright-mcp/
 
 # Local verification screenshots
 /tts-research-*.png
+/output/
+/output/playwright/

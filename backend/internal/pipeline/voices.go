@@ -144,6 +144,14 @@ func (service *Service) GetVoiceReferenceAudio(id string) ([]byte, string, error
 }
 
 func (service *Service) convertReferenceAudio(ctx context.Context, sourcePath string, outputPath string) error {
+	copied, _, _, _, err := tryCopyReferencePCM16WAV(sourcePath, outputPath, 10_000)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrInvalidVoice, err)
+	}
+	if copied {
+		return nil
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
@@ -259,6 +267,21 @@ func nativeVoices() []Voice {
 
 func defaultNativeVoiceID() string {
 	return "kokoro:af_heart"
+}
+
+func voiceSynthesisName(voice Voice) string {
+	switch voice.Kind {
+	case VoiceKindNative:
+		if name := strings.TrimPrefix(voice.ID, "kokoro:"); strings.TrimSpace(name) != "" {
+			return name
+		}
+	case VoiceKindClone:
+		return strings.TrimSpace(voice.Name)
+	}
+	if strings.TrimSpace(voice.Name) != "" {
+		return strings.TrimSpace(voice.Name)
+	}
+	return strings.TrimSpace(voice.ID)
 }
 
 func safeFilename(value string) string {

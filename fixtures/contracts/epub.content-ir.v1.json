@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "content-ir.v1",
+  "id": "contract-epub",
+  "sourceType": "bookSource",
+  "sourceId": "contract-epub",
+  "projectId": "default",
+  "sourceName": "contract.epub",
+  "adapterVersion": "contract-fixture-v1",
+  "generatedAt": "2026-05-17T01:00:00Z",
+  "nodes": [
+    {
+      "nodeId": "epub-0001",
+      "parentId": "",
+      "orderKey": "00000001",
+      "kind": "chapter",
+      "role": "body",
+      "displayText": "Opening chapter text.",
+      "normalisedText": "Opening chapter text.",
+      "speechText": "Opening chapter text.",
+      "lang": "en",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "epub",
+        "sourceId": "contract-epub",
+        "locator": {
+          "type": "epub",
+          "epub": {
+            "href": "OPS/chapter-one.xhtml",
+            "fragment": "p1",
+            "textQuote": "Opening chapter text.",
+            "progression": 0,
+            "epubCfi": "epubcfi(/6/chapter-one!/4/2)",
+            "spineId": "chapter-one"
+          }
+        },
+        "offsets": {
+          "start": 0,
+          "end": 21
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "node"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "prose",
+          "elementMode": "speak",
+          "mode": "speak",
+          "explanation": "EPUB prose is spoken."
+        }
+      },
+      "warnings": [],
+      "confidence": 0.94,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "markId": "mark-epub-0001",
+      "adapterVersion": "contract-fixture-v1"
+    }
+  ]
+}

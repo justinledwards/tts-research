@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "speech-plan.v1",
+  "id": "contract-docx",
+  "sourceId": "contract-docx",
+  "projectId": "default",
+  "generatedAt": "2026-05-17T01:00:00Z",
+  "policyTrace": [
+    {
+      "scope": "marketProfileDefault",
+      "profile": "Enterprise"
+    },
+    {
+      "scope": "projectOverride",
+      "profile": "Enterprise"
+    }
+  ],
+  "segments": [
+    {
+      "segmentId": "seg-0001",
+      "index": 1,
+      "nodeId": "docx-0001",
+      "text": "DOCX paragraph.",
+      "lang": "und",
+      "speechPolicy": {
+        "profile": "Enterprise",
+        "element": "prose",
+        "elementMode": "speak",
+        "mode": "speak",
+        "explanation": "DOCX prose is spoken."
+      },
+      "policyTrace": [
+        {
+          "scope": "marketProfileDefault",
+          "profile": "Enterprise"
+        },
+        {
+          "scope": "projectOverride",
+          "profile": "Enterprise"
+        }
+      ],
+      "locatorEnvelope": {
+        "schemaVersion": "locator-envelope.v1",
+        "kind": "highlight",
+        "sourceId": "contract-docx",
+        "nodeId": "docx-0001",
+        "scopeKey": "document",
+        "activeWordIndex": 0,
+        "locator": {
+          "type": "docx",
+          "docx": {
+            "paragraphIndex": 0,
+            "runIndex": 0,
+            "bookmarkId": "intro"
+          }
+        },
+        "readium": {
+          "title": "contract.docx",
+          "text": {
+            "highlight": "DOCX paragraph."
+          },
+          "href": "contract-docx",
+          "type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "locations": {
+            "fragments": ["paragraph=1"],
+            "position": 1
+          }
+        },
+        "textQuote": "DOCX paragraph."
+      },
+      "serializerTargets": {
+        "plainText": "DOCX paragraph.",
+        "ssml": "<speak version=\"1.0\" xml:lang=\"und\">DOCX paragraph.</speak>",
+        "highlightMarks": [
+          {
+            "markId": "mark-docx-0001",
+            "nodeId": "docx-0001",
+            "segmentId": "seg-0001"
+          }
+        ]
+      },
+      "warnings": []
+    }
+  ]
+}

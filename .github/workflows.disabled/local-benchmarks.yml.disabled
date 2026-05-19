@@ -1,0 +1,19 @@
+# Disabled GitHub Actions template.
+# This file is intentionally outside .github/workflows/ and has a .disabled suffix.
+
+name: Local Benchmarks Disabled Template
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  bench-local:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise install
+      - run: pnpm install --frozen-lockfile
+      - run: mise run bench:local

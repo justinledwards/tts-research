@@ -8,14 +8,18 @@ import (
 )
 
 const (
-	sampleRate     = 16_000
-	bitsPerSample  = 16
-	channelCount   = 1
-	bytesPerSample = bitsPerSample / 8
+	sampleRate        = 16_000
+	bitsPerSample     = 16
+	channelCount      = 1
+	bytesPerSample    = bitsPerSample / 8
+	riffHeaderID      = 0x46464952
+	waveHeaderID      = 0x45564157
+	formatChunkHeader = 0x20746d66
+	dataChunkHeader   = 0x61746164
 )
 
 func DurationForText(text string) int {
-	runeCount := len([]rune(text))
+	runeCount := runeLen(text)
 	durationMS := 800 + runeCount*35
 
 	return min(durationMS, 12_000)
@@ -65,9 +69,10 @@ func ConcatWAV(chunks [][]byte) ([]byte, WAVSpec, error) {
 	}
 
 	var spec WAVSpec
-	var pcm bytes.Buffer
+	pcmChunks := make([][]byte, 0, len(chunks))
+	totalDataBytes := 0
 	for index, chunk := range chunks {
-		chunkSpec, data, err := parsePCM16WAV(chunk)
+		chunkSpec, data, err := ParsePCM16WAV(chunk)
 		if err != nil {
 			return nil, WAVSpec{}, err
 		}
@@ -76,12 +81,16 @@ func ConcatWAV(chunks [][]byte) ([]byte, WAVSpec, error) {
 		} else if spec != chunkSpec {
 			return nil, WAVSpec{}, errors.New("WAV chunks must share the same audio format")
 		}
-		if _, err := pcm.Write(data); err != nil {
-			return nil, WAVSpec{}, err
-		}
+		pcmChunks = append(pcmChunks, data)
+		totalDataBytes += len(data)
 	}
 
-	return buildPCM16WAV(pcm.Bytes(), spec), spec, nil
+	pcmData := make([]byte, 0, totalDataBytes)
+	for _, data := range pcmChunks {
+		pcmData = append(pcmData, data...)
+	}
+
+	return BuildPCM16WAV(pcmData, spec), spec, nil
 }
 
 func DurationMSForWAVData(dataBytes int, spec WAVSpec) int {
@@ -98,11 +107,44 @@ func DurationMSForWAVData(dataBytes int, spec WAVSpec) int {
 	return int(math.Round(float64(frames) / float64(spec.SampleRate) * 1000))
 }
 
-func parsePCM16WAV(chunk []byte) (WAVSpec, []byte, error) {
+func TrimPCM16WAV(chunk []byte, maxDurationMS int) ([]byte, WAVSpec, int, bool, error) {
+	spec, data, err := ParsePCM16WAV(chunk)
+	if err != nil {
+		return nil, WAVSpec{}, 0, false, err
+	}
+
+	durationMS := DurationMSForWAVData(len(data), spec)
+	if maxDurationMS <= 0 || durationMS <= maxDurationMS {
+		output := make([]byte, len(chunk))
+		copy(output, chunk)
+		return output, spec, durationMS, false, nil
+	}
+
+	bytesPerFrame := spec.ChannelCount * spec.BitsPerSample / 8
+	if bytesPerFrame <= 0 || spec.SampleRate <= 0 {
+		return nil, WAVSpec{}, 0, false, errors.New("WAV spec cannot be trimmed")
+	}
+
+	maxFrames := int(math.Round(float64(spec.SampleRate) * float64(maxDurationMS) / 1000))
+	maxBytes := maxFrames * bytesPerFrame
+	if maxBytes > len(data) {
+		maxBytes = len(data)
+	}
+	maxBytes -= maxBytes % bytesPerFrame
+	if maxBytes <= 0 {
+		return nil, WAVSpec{}, 0, false, errors.New("trimmed WAV would be empty")
+	}
+
+	trimmedData := make([]byte, maxBytes)
+	copy(trimmedData, data[:maxBytes])
+	return BuildPCM16WAV(trimmedData, spec), spec, DurationMSForWAVData(maxBytes, spec), true, nil
+}
+
+func ParsePCM16WAV(chunk []byte) (WAVSpec, []byte, error) {
 	if len(chunk) < 44 {
 		return WAVSpec{}, nil, errors.New("WAV chunk is too short")
 	}
-	if string(chunk[0:4]) != "RIFF" || string(chunk[8:12]) != "WAVE" {
+	if binary.LittleEndian.Uint32(chunk[0:4]) != riffHeaderID || binary.LittleEndian.Uint32(chunk[8:12]) != waveHeaderID {
 		return WAVSpec{}, nil, errors.New("WAV chunk is not RIFF/WAVE")
 	}
 
@@ -110,7 +152,7 @@ func parsePCM16WAV(chunk []byte) (WAVSpec, []byte, error) {
 	var data []byte
 	cursor := 12
 	for cursor+8 <= len(chunk) {
-		chunkID := string(chunk[cursor : cursor+4])
+		chunkID := binary.LittleEndian.Uint32(chunk[cursor : cursor+4])
 		chunkSize := int(binary.LittleEndian.Uint32(chunk[cursor+4 : cursor+8]))
 		cursor += 8
 		if cursor+chunkSize > len(chunk) {
@@ -118,7 +160,7 @@ func parsePCM16WAV(chunk []byte) (WAVSpec, []byte, error) {
 		}
 
 		switch chunkID {
-		case "fmt ":
+		case formatChunkHeader:
 			if chunkSize < 16 {
 				return WAVSpec{}, nil, errors.New("WAV fmt chunk is too short")
 			}
@@ -132,7 +174,7 @@ func parsePCM16WAV(chunk []byte) (WAVSpec, []byte, error) {
 			if spec.BitsPerSample != 16 {
 				return WAVSpec{}, nil, errors.New("only 16-bit WAV chunks are supported")
 			}
-		case "data":
+		case dataChunkHeader:
 			data = chunk[cursor : cursor+chunkSize]
 		}
 
@@ -149,7 +191,7 @@ func parsePCM16WAV(chunk []byte) (WAVSpec, []byte, error) {
 	return spec, data, nil
 }
 
-func buildPCM16WAV(data []byte, spec WAVSpec) []byte {
+func BuildPCM16WAV(data []byte, spec WAVSpec) []byte {
 	buffer := bytes.NewBuffer(make([]byte, 0, 44+len(data)))
 
 	writeString(buffer, "RIFF")
@@ -168,6 +210,14 @@ func buildPCM16WAV(data []byte, spec WAVSpec) []byte {
 	_, _ = buffer.Write(data)
 
 	return buffer.Bytes()
+}
+
+func runeLen(value string) int {
+	count := 0
+	for range value {
+		count += 1
+	}
+	return count
 }
 
 func writeString(buffer *bytes.Buffer, value string) {

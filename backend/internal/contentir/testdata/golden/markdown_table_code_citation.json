@@ -1,0 +1,330 @@
+{
+  "schemaVersion": "content-ir.v1",
+  "id": "markdown-table-code-citation",
+  "sourceType": "preparedSource",
+  "sourceId": "markdown-table-code-citation",
+  "projectId": "default",
+  "sourceName": "research.md",
+  "adapterVersion": "markdown-adapter-v2",
+  "generatedAt": "2026-05-16T12:00:00Z",
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "nodes": [
+    {
+      "nodeId": "block-0001",
+      "parentId": "",
+      "orderKey": "00000001",
+      "kind": "heading",
+      "role": "heading",
+      "displayText": "# Findings",
+      "normalisedText": "# Findings",
+      "speechText": "Findings",
+      "lang": "en",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "markdown-table-code-citation",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "research.md",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "columnStart": 1,
+            "columnEnd": 11,
+            "astPath": "/children/0"
+          }
+        },
+        "offsets": {
+          "start": 0,
+          "end": 10
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "segment"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "heading",
+          "pauseBeforeMs": 420,
+          "pauseAfterMs": 520
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "prose",
+          "elementMode": "speak",
+          "mode": "speak",
+          "explanation": "Prose is spoken because the Enterprise profile sets mode to speak."
+        }
+      },
+      "warnings": [],
+      "confidence": 0.94,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 11,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "policySpeechText": "Findings",
+        "sourceSlice": "# Findings",
+        "speechRender": {
+          "plainText": "Findings",
+          "ssml": "<speak version=\"1.1\" xml:lang=\"en\">Findings</speak>",
+          "lang": "en",
+          "locale": "en-GB",
+          "languageSpans": [
+            {
+              "startOffset": 0,
+              "endOffset": 8,
+              "text": "Findings",
+              "lang": "en",
+              "script": "Latn",
+              "confidence": 0.52,
+              "source": "heuristic"
+            }
+          ]
+        }
+      },
+      "adapterVersion": "markdown-adapter-v2"
+    },
+    {
+      "nodeId": "block-0002",
+      "parentId": "",
+      "orderKey": "00000002",
+      "kind": "table",
+      "role": "table",
+      "displayText": "| Metric | Value |\n|---|---|\n| Latency | 12ms |",
+      "normalisedText": "| Metric | Value | |---|---| | Latency | 12ms |",
+      "speechText": "A table appears here with columns: Metric, Value.",
+      "lang": "en",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "markdown-table-code-citation",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "research.md",
+            "lineStart": 3,
+            "lineEnd": 5,
+            "columnStart": 1,
+            "columnEnd": 19,
+            "astPath": "/children/1"
+          }
+        },
+        "offsets": {
+          "start": 12,
+          "end": 59
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "segment"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "summarize",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "table",
+          "elementMode": "summary",
+          "mode": "summarise",
+          "explanation": "This table is summarised because the Enterprise profile sets table to summary."
+        }
+      },
+      "warnings": ["table_policy"],
+      "confidence": 0.82,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "metadata": {
+        "align": [null, null],
+        "astPath": "/children/1",
+        "columnEnd": 19,
+        "columnStart": 1,
+        "headers": ["Metric", "Value"],
+        "lineEnd": 5,
+        "lineStart": 3,
+        "policySpeechText": "A table appears here with columns: Metric, Value.",
+        "rows": [["Latency", "12ms"]],
+        "sourceSlice": "| Metric | Value |\n|---|---|\n| Latency | 12ms |",
+        "speechRender": {
+          "plainText": "A table appears here with columns: Metric, Value.",
+          "ssml": "<speak version=\"1.1\" xml:lang=\"en\">A table appears here with columns: Metric, Value.</speak>",
+          "lang": "en",
+          "locale": "en-GB",
+          "languageSpans": [
+            {
+              "startOffset": 0,
+              "endOffset": 49,
+              "text": "A table appears here with columns: Metric, Value.",
+              "lang": "en",
+              "script": "Latn",
+              "confidence": 0.52,
+              "source": "heuristic"
+            }
+          ]
+        }
+      },
+      "adapterVersion": "markdown-adapter-v2"
+    },
+    {
+      "nodeId": "block-0003",
+      "parentId": "",
+      "orderKey": "00000003",
+      "kind": "code",
+      "role": "code",
+      "displayText": "```go\nfmt.Println(\"skip\")\n```",
+      "normalisedText": "```go fmt.Println(\"skip\") ```",
+      "speechText": "",
+      "lang": "go",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "markdown-table-code-citation",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "research.md",
+            "lineStart": 7,
+            "lineEnd": 9,
+            "columnStart": 1,
+            "columnEnd": 4,
+            "astPath": "/children/2"
+          }
+        },
+        "offsets": {
+          "start": 61,
+          "end": 90
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "node"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "skip",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "code",
+          "elementMode": "skip",
+          "mode": "skip",
+          "explanation": "This code block is skipped because the Enterprise profile sets code to skip."
+        }
+      },
+      "warnings": ["code_policy"],
+      "confidence": 0.98,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "metadata": {
+        "astPath": "/children/2",
+        "codeMeta": "",
+        "columnEnd": 4,
+        "columnStart": 1,
+        "language": "go",
+        "lineEnd": 9,
+        "lineStart": 7,
+        "policySpeechText": "",
+        "sourceSlice": "```go\nfmt.Println(\"skip\")\n```"
+      },
+      "adapterVersion": "markdown-adapter-v2"
+    },
+    {
+      "nodeId": "block-0004",
+      "parentId": "",
+      "orderKey": "00000004",
+      "kind": "citation",
+      "role": "citation",
+      "displayText": "citeturn1search0",
+      "normalisedText": "citeturn1search0",
+      "speechText": "",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "markdown-table-code-citation",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "research.md",
+            "lineStart": 11,
+            "lineEnd": 11,
+            "columnStart": 1,
+            "columnEnd": 20,
+            "astPath": "/children/3"
+          }
+        },
+        "offsets": {
+          "start": 92,
+          "end": 117
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "node"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "skip",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "citation",
+          "elementMode": "onDemand",
+          "mode": "onDemand",
+          "explanation": "This citation is available on demand because the Enterprise profile sets citation to onDemand."
+        }
+      },
+      "warnings": ["citation_skipped"],
+      "confidence": 0.98,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "metadata": {
+        "astPath": "/children/3",
+        "columnEnd": 20,
+        "columnStart": 1,
+        "lineEnd": 11,
+        "lineStart": 11,
+        "policySpeechText": "",
+        "sourceSlice": "citeturn1search0"
+      },
+      "adapterVersion": "markdown-adapter-v2"
+    }
+  ]
+}

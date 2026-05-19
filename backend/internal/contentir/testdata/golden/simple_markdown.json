@@ -1,0 +1,191 @@
+{
+  "schemaVersion": "content-ir.v1",
+  "id": "simple-markdown",
+  "sourceType": "preparedSource",
+  "sourceId": "simple-markdown",
+  "projectId": "default",
+  "sourceName": "simple.md",
+  "adapterVersion": "markdown-adapter-v2",
+  "generatedAt": "2026-05-16T12:00:00Z",
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "nodes": [
+    {
+      "nodeId": "block-0001",
+      "parentId": "",
+      "orderKey": "00000001",
+      "kind": "heading",
+      "role": "heading",
+      "displayText": "# Title",
+      "normalisedText": "# Title",
+      "speechText": "Title",
+      "lang": "en",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "simple-markdown",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "simple.md",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "columnStart": 1,
+            "columnEnd": 8,
+            "astPath": "/children/0"
+          }
+        },
+        "offsets": {
+          "start": 0,
+          "end": 7
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "segment"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "heading",
+          "pauseBeforeMs": 420,
+          "pauseAfterMs": 520
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "prose",
+          "elementMode": "speak",
+          "mode": "speak",
+          "explanation": "Prose is spoken because the Enterprise profile sets mode to speak."
+        }
+      },
+      "warnings": [],
+      "confidence": 0.94,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 8,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "policySpeechText": "Title",
+        "sourceSlice": "# Title",
+        "speechRender": {
+          "plainText": "Title",
+          "ssml": "<speak version=\"1.1\" xml:lang=\"en\">Title</speak>",
+          "lang": "en",
+          "locale": "en-GB",
+          "languageSpans": [
+            {
+              "startOffset": 0,
+              "endOffset": 5,
+              "text": "Title",
+              "lang": "en",
+              "script": "Latn",
+              "confidence": 0.52,
+              "source": "heuristic"
+            }
+          ]
+        }
+      },
+      "adapterVersion": "markdown-adapter-v2"
+    },
+    {
+      "nodeId": "block-0002",
+      "parentId": "",
+      "orderKey": "00000002",
+      "kind": "body",
+      "role": "body",
+      "displayText": "Hello world.",
+      "normalisedText": "Hello world.",
+      "speechText": "Hello world.",
+      "lang": "en",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "markdown",
+        "sourceId": "simple-markdown",
+        "locator": {
+          "type": "markdown",
+          "markdown": {
+            "path": "simple.md",
+            "lineStart": 3,
+            "lineEnd": 3,
+            "columnStart": 1,
+            "columnEnd": 13,
+            "astPath": "/children/1"
+          }
+        },
+        "offsets": {
+          "start": 9,
+          "end": 21
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "segment"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "prose",
+          "elementMode": "speak",
+          "mode": "speak",
+          "explanation": "Prose is spoken because the Enterprise profile sets mode to speak."
+        }
+      },
+      "warnings": [],
+      "confidence": 0.94,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "metadata": {
+        "astPath": "/children/1",
+        "columnEnd": 13,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "policySpeechText": "Hello world.",
+        "sourceSlice": "Hello world.",
+        "speechRender": {
+          "plainText": "Hello world.",
+          "ssml": "<speak version=\"1.1\" xml:lang=\"en\">Hello world.</speak>",
+          "lang": "en",
+          "locale": "en-GB",
+          "languageSpans": [
+            {
+              "startOffset": 0,
+              "endOffset": 12,
+              "text": "Hello world.",
+              "lang": "en",
+              "script": "Latn",
+              "confidence": 0.52,
+              "source": "heuristic"
+            }
+          ]
+        }
+      },
+      "adapterVersion": "markdown-adapter-v2"
+    }
+  ]
+}

@@ -15,6 +15,8 @@ function scoped(config) {
 export default tseslint.config(
   {
     ignores: [
+      ".venv/**",
+      ".venv-*/**",
       "backend/**",
       "dist/**",
       "node_modules/**",
@@ -49,6 +51,7 @@ export default tseslint.config(
         {
           cases: {
             camelCase: true,
+            kebabCase: true,
             pascalCase: true,
           },
         },

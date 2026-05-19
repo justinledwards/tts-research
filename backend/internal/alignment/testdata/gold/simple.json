@@ -1,0 +1,25 @@
+{
+  "name": "simple-two-word",
+  "durationMs": 1000,
+  "segments": [
+    {
+      "index": 1,
+      "text": "Hello world.",
+      "startMs": 0,
+      "durationMs": 1000
+    }
+  ],
+  "tokens": [
+    {
+      "text": "Hello",
+      "startMs": 0,
+      "endMs": 480
+    },
+    {
+      "text": "world.",
+      "startMs": 480,
+      "endMs": 1000
+    }
+  ],
+  "approval": "local gold timing fixture for heuristic drift and coverage reports"
+}

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "content-ir.v1",
+  "id": "contract-docx",
+  "sourceType": "bookSource",
+  "sourceId": "contract-docx",
+  "projectId": "default",
+  "sourceName": "contract.docx",
+  "adapterVersion": "contract-fixture-v1",
+  "generatedAt": "2026-05-17T01:00:00Z",
+  "nodes": [
+    {
+      "nodeId": "docx-0001",
+      "parentId": "",
+      "orderKey": "00000001",
+      "kind": "body",
+      "role": "body",
+      "displayText": "DOCX paragraph.",
+      "normalisedText": "DOCX paragraph.",
+      "speechText": "DOCX paragraph.",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "docx",
+        "sourceId": "contract-docx",
+        "locator": {
+          "type": "docx",
+          "docx": {
+            "paragraphIndex": 0,
+            "runIndex": 0,
+            "bookmarkId": "intro"
+          }
+        },
+        "offsets": {
+          "start": 0,
+          "end": 15
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "node"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "prose",
+          "elementMode": "speak",
+          "mode": "speak",
+          "explanation": "DOCX prose is spoken."
+        }
+      },
+      "warnings": [],
+      "confidence": 0.9,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "markId": "mark-docx-0001",
+      "adapterVersion": "contract-fixture-v1"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "locator-envelope.v1",
+  "kind": "bookmark",
+  "sourceId": "contract-pdf",
+  "nodeId": "pdf-0001",
+  "scopeKey": "document",
+  "activeWordIndex": 0,
+  "locator": {
+    "type": "pdf",
+    "pdf": {
+      "pageIndex": 0,
+      "bbox": {
+        "x": 72,
+        "y": 90,
+        "width": 240,
+        "height": 32
+      },
+      "readingOrderIndex": 0
+    }
+  },
+  "readium": {
+    "title": "Page 1",
+    "text": {
+      "highlight": "PDF page text."
+    },
+    "href": "contract-pdf",
+    "type": "application/pdf",
+    "locations": {
+      "fragments": ["page=1", "viewrect=72,90,240,32"],
+      "position": 1
+    }
+  },
+  "textQuote": "PDF page text."
+}

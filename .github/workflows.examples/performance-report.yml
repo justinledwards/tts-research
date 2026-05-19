@@ -1,0 +1,21 @@
+# Disabled example only.
+# To enable later, copy this file into .github/workflows/ after the team agrees
+# local UX performance reports should run in hosted automation.
+
+name: Performance Report Example
+
+on:
+  workflow_dispatch:
+
+jobs:
+  performance-report:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise install
+      - run: pnpm install --frozen-lockfile
+      - run: mise run bundle:local
+      - run: mise run bench:local
+      - run: mise run validate:local

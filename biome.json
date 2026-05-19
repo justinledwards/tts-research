@@ -3,12 +3,27 @@
   "files": {
     "includes": [
       "**",
+      "!.venv",
+      "!.venv-*",
       "!backend/.venv",
       "!backend/.venv-bonsai",
+      "!backend/.venv-kokoclone",
+      "!backend/.venv-*",
       "!backend/go.sum",
       "!backend/data",
+      "!backend/model",
+      "!backend/model-cache",
+      "!backend/voice",
+      "!.playwright-cli",
+      "!.playwright-mcp",
+      "!.upstreams",
+      "!demo",
+      "!model",
+      "!output",
+      "!voice",
       "!node_modules",
-      "!dist"
+      "!dist",
+      "!**/dist"
     ]
   },
   "formatter": {

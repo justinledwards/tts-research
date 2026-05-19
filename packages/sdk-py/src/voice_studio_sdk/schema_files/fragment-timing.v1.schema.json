@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/fragment-timing.v1.schema.json",
+  "title": "Fragment Timing v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "source",
+    "status",
+    "durationMs",
+    "generatedAt",
+    "confidence",
+    "drift",
+    "fragments"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "timing.v1"
+    },
+    "jobId": {
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/timingSource"
+    },
+    "status": {
+      "type": "string"
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "confidence": {
+      "$ref": "#/$defs/timingConfidence"
+    },
+    "drift": {
+      "$ref": "#/$defs/driftStats"
+    },
+    "fragments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fragmentTiming"
+      }
+    },
+    "warnings": {
+      "$ref": "#/$defs/warnings"
+    }
+  },
+  "$defs": {
+    "timingSource": {
+      "type": "string",
+      "enum": ["native", "mfa", "aeneas", "gentle", "heuristic"]
+    },
+    "timingConfidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["overall", "segment", "token"],
+      "properties": {
+        "overall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "segment": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "token": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "driftStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meanAbsoluteMs", "maxAbsoluteMs", "maxRatio", "corrected", "lowConfidence"],
+      "properties": {
+        "meanAbsoluteMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAbsoluteMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxRatio": {
+          "type": "number",
+          "minimum": 0
+        },
+        "corrected": {
+          "type": "boolean"
+        },
+        "lowConfidence": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "fragmentTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "segmentIndex", "text", "startMs", "endMs", "confidence", "source"],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "segmentIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        },
+        "startMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source": {
+          "$ref": "#/$defs/timingSource"
+        },
+        "tokenStart": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tokenEnd": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

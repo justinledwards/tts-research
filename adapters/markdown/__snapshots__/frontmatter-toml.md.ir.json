@@ -1,0 +1,339 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.95,
+      "endOffset": 39,
+      "id": "block-0001",
+      "index": 1,
+      "kind": "frontmatter",
+      "label": "TOML frontmatter",
+      "language": "",
+      "metadata": {
+        "frontmatterFormat": "toml",
+        "frontmatterRaw": "title = \"TOML Title\"\nweight = 3",
+        "frontmatter": {
+          "title": "TOML Title",
+          "weight": 3
+        },
+        "astPath": "/children/0",
+        "columnEnd": 4,
+        "columnStart": 1,
+        "lineEnd": 4,
+        "lineStart": 1,
+        "sourceSlice": "+++\ntitle = \"TOML Title\"\nweight = 3\n+++"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 0,
+      "text": "+++\ntitle = \"TOML Title\"\nweight = 3\n+++",
+      "warnings": ["frontmatter_metadata"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 53,
+      "id": "block-0002",
+      "index": 2,
+      "kind": "heading",
+      "label": "TOML Title",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/1",
+        "columnEnd": 13,
+        "columnStart": 1,
+        "lineEnd": 6,
+        "lineStart": 6,
+        "sourceSlice": "# TOML Title"
+      },
+      "speakMode": "speak",
+      "spokenText": "TOML Title",
+      "startOffset": 41,
+      "text": "# TOML Title",
+      "warnings": []
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 103,
+      "id": "block-0003",
+      "index": 3,
+      "kind": "body",
+      "label": "The TOML metadata should not be spoken as",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/2",
+        "columnEnd": 49,
+        "columnStart": 1,
+        "lineEnd": 8,
+        "lineStart": 8,
+        "sourceSlice": "The TOML metadata should not be spoken as prose."
+      },
+      "speakMode": "speak",
+      "spokenText": "The TOML metadata should not be spoken as prose.",
+      "startOffset": 55,
+      "text": "The TOML metadata should not be spoken as prose.",
+      "warnings": []
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "frontmatter-toml",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": [
+        {
+          "format": "toml",
+          "metadata": {
+            "title": "TOML Title",
+            "weight": 3
+          },
+          "raw": "title = \"TOML Title\"\nweight = 3"
+        }
+      ]
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.95,
+        "dir": "ltr",
+        "displayText": "+++\ntitle = \"TOML Title\"\nweight = 3\n+++",
+        "kind": "frontmatter",
+        "lang": "und",
+        "metadata": {
+          "frontmatterFormat": "toml",
+          "frontmatterRaw": "title = \"TOML Title\"\nweight = 3",
+          "frontmatter": {
+            "title": "TOML Title",
+            "weight": 3
+          },
+          "astPath": "/children/0",
+          "columnEnd": 4,
+          "columnStart": 1,
+          "lineEnd": 4,
+          "lineStart": 1,
+          "sourceSlice": "+++\ntitle = \"TOML Title\"\nweight = 3\n+++"
+        },
+        "nodeId": "block-0001",
+        "normalisedText": "+++ title = \"TOML Title\" weight = 3 +++",
+        "orderKey": "00000001",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 4,
+              "columnStart": 1,
+              "lineEnd": 4,
+              "lineStart": 1,
+              "path": "frontmatter-toml.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 39,
+            "start": 0
+          },
+          "sourceId": "frontmatter-toml"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "frontmatter",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["frontmatter_metadata"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "# TOML Title",
+        "kind": "heading",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/1",
+          "columnEnd": 13,
+          "columnStart": 1,
+          "lineEnd": 6,
+          "lineStart": 6,
+          "sourceSlice": "# TOML Title"
+        },
+        "nodeId": "block-0002",
+        "normalisedText": "# TOML Title",
+        "orderKey": "00000002",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 13,
+              "columnStart": 1,
+              "lineEnd": 6,
+              "lineStart": 6,
+              "path": "frontmatter-toml.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 53,
+            "start": 41
+          },
+          "sourceId": "frontmatter-toml"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "heading",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "TOML Title",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "The TOML metadata should not be spoken as prose.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/2",
+          "columnEnd": 49,
+          "columnStart": 1,
+          "lineEnd": 8,
+          "lineStart": 8,
+          "sourceSlice": "The TOML metadata should not be spoken as prose."
+        },
+        "nodeId": "block-0003",
+        "normalisedText": "The TOML metadata should not be spoken as prose.",
+        "orderKey": "00000003",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 49,
+              "columnStart": 1,
+              "lineEnd": 8,
+              "lineStart": 8,
+              "path": "frontmatter-toml.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 103,
+            "start": 55
+          },
+          "sourceId": "frontmatter-toml"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "The TOML metadata should not be spoken as prose.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "frontmatter-toml",
+    "sourceName": "frontmatter-toml.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": [
+      {
+        "format": "toml",
+        "metadata": {
+          "title": "TOML Title",
+          "weight": 3
+        },
+        "raw": "title = \"TOML Title\"\nweight = 3"
+      }
+    ]
+  },
+  "parseMode": "strict",
+  "skippedItems": [
+    {
+      "id": "block-0001",
+      "kind": "frontmatter",
+      "offset": 0,
+      "reason": "frontmatter kept as metadata",
+      "text": "+++\ntitle = \"TOML Title\"\nweight = 3\n+++"
+    }
+  ],
+  "title": "TOML Title",
+  "warnings": []
+}

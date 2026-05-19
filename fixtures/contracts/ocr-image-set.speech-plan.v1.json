@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "speech-plan.v1",
+  "id": "contract-ocr",
+  "sourceId": "contract-ocr",
+  "projectId": "default",
+  "generatedAt": "2026-05-17T01:00:00Z",
+  "policyTrace": [
+    {
+      "scope": "marketProfileDefault",
+      "profile": "Accessibility"
+    },
+    {
+      "scope": "projectOverride",
+      "profile": "Accessibility"
+    }
+  ],
+  "segments": [
+    {
+      "segmentId": "seg-0001",
+      "index": 1,
+      "nodeId": "ocr-0001",
+      "text": "OCR page text.",
+      "lang": "und",
+      "speechPolicy": {
+        "profile": "Accessibility",
+        "element": "prose",
+        "elementMode": "speak",
+        "mode": "speak",
+        "explanation": "OCR text is spoken with confidence metadata."
+      },
+      "policyTrace": [
+        {
+          "scope": "marketProfileDefault",
+          "profile": "Accessibility"
+        },
+        {
+          "scope": "projectOverride",
+          "profile": "Accessibility"
+        }
+      ],
+      "locatorEnvelope": {
+        "schemaVersion": "locator-envelope.v1",
+        "kind": "highlight",
+        "sourceId": "contract-ocr",
+        "nodeId": "ocr-0001",
+        "scopeKey": "document",
+        "activeWordIndex": 0,
+        "locator": {
+          "type": "ocr",
+          "ocr": {
+            "pageIndex": 0,
+            "polygon": [
+              {
+                "x": 10,
+                "y": 20
+              },
+              {
+                "x": 260,
+                "y": 20
+              },
+              {
+                "x": 260,
+                "y": 58
+              },
+              {
+                "x": 10,
+                "y": 58
+              }
+            ],
+            "ocrEngine": "tesseract",
+            "ocrConfidence": 0.84
+          }
+        },
+        "readium": {
+          "title": "Page 1",
+          "text": {
+            "highlight": "OCR page text."
+          },
+          "href": "contract-ocr",
+          "type": "image/*",
+          "locations": {
+            "fragments": ["page=1"],
+            "position": 1
+          }
+        },
+        "textQuote": "OCR page text."
+      },
+      "serializerTargets": {
+        "plainText": "OCR page text.",
+        "ssml": "<speak version=\"1.0\" xml:lang=\"und\">OCR page text.</speak>",
+        "highlightMarks": [
+          {
+            "markId": "mark-ocr-0001",
+            "nodeId": "ocr-0001",
+            "segmentId": "seg-0001"
+          }
+        ]
+      },
+      "warnings": ["ocr_uncertain"]
+    }
+  ]
+}

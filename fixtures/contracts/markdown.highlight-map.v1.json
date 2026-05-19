@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "highlight-map.v1",
+  "jobId": "contract-job",
+  "bookSourceId": "contract-markdown",
+  "scopeKey": "prepared:contract-markdown",
+  "status": "complete",
+  "source": "heuristic",
+  "mode": "word",
+  "durationMs": 1200,
+  "generatedAt": "2026-05-18T12:00:00Z",
+  "policy": {
+    "minSegmentConfidence": 0.72,
+    "minTokenConfidence": 0.65,
+    "maxDriftMs": 250,
+    "maxDriftRatio": 0.08
+  },
+  "summary": {
+    "status": "complete",
+    "source": "heuristic",
+    "mode": "word",
+    "durationMs": 1200,
+    "fragmentCount": 1,
+    "tokenCount": 2,
+    "confidence": {
+      "overall": 0.74,
+      "segment": 0.74,
+      "token": 0.68
+    },
+    "drift": {
+      "meanAbsoluteMs": 0,
+      "maxAbsoluteMs": 0,
+      "maxRatio": 0,
+      "corrected": false,
+      "lowConfidence": false
+    },
+    "lowConfidence": false,
+    "reason": "word-level timing is within confidence policy"
+  },
+  "fragments": [
+    {
+      "index": 0,
+      "segmentIndex": 1,
+      "text": "Hello world.",
+      "startMs": 0,
+      "endMs": 1200,
+      "confidence": 0.74,
+      "tokenStart": 0,
+      "tokenEnd": 1,
+      "readingPosition": {
+        "bookSourceId": "contract-markdown",
+        "scopeKey": "prepared:contract-markdown",
+        "activeWordIndex": 0,
+        "textQuote": "Hello world."
+      }
+    }
+  ],
+  "tokens": [
+    {
+      "index": 0,
+      "fragmentIndex": 0,
+      "segmentIndex": 1,
+      "text": "Hello",
+      "startMs": 0,
+      "endMs": 550,
+      "confidence": 0.68,
+      "mode": "word",
+      "readingPosition": {
+        "bookSourceId": "contract-markdown",
+        "scopeKey": "prepared:contract-markdown",
+        "activeWordIndex": 0,
+        "textQuote": "Hello"
+      }
+    },
+    {
+      "index": 1,
+      "fragmentIndex": 0,
+      "segmentIndex": 1,
+      "text": "world.",
+      "startMs": 550,
+      "endMs": 1200,
+      "confidence": 0.68,
+      "mode": "word",
+      "readingPosition": {
+        "bookSourceId": "contract-markdown",
+        "scopeKey": "prepared:contract-markdown",
+        "activeWordIndex": 1,
+        "textQuote": "world."
+      }
+    }
+  ]
+}

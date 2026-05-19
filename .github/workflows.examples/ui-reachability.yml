@@ -1,0 +1,21 @@
+# Disabled example only.
+# To enable later, copy this file into .github/workflows/ after the team agrees
+# which UI reachability checks should become hosted gates.
+
+name: UI Reachability Example
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reader-wayfinding:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise install
+      - run: pnpm install --frozen-lockfile
+      - run: mise run validate:local
+      - run: pnpm e2e:reader-wayfinding
+      - run: echo "Run docs/reader-accessibility-qa.md for manual source-pin and assistive-tech checks before enabling this as a gate."

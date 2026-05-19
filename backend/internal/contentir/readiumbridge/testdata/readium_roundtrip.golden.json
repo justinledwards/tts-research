@@ -1,0 +1,67 @@
+{
+  "docx": {
+    "href": "source-1",
+    "type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "title": "Opening",
+    "locations": {
+      "fragments": ["paragraph=5"],
+      "position": 3
+    }
+  },
+  "epub": {
+    "href": "OPS/chapter.xhtml",
+    "type": "application/xhtml+xml",
+    "title": "Opening",
+    "locations": {
+      "fragments": ["p1"],
+      "progression": 0.5,
+      "position": 3,
+      "cssSelector": "#p1",
+      "partialCfi": "/4/2"
+    },
+    "text": {
+      "highlight": "Opening words"
+    }
+  },
+  "html": {
+    "href": "article.html",
+    "type": "text/html",
+    "title": "Opening",
+    "locations": {
+      "fragments": ["lead"],
+      "progression": 0.5,
+      "position": 3,
+      "cssSelector": "#lead"
+    },
+    "text": {
+      "highlight": "Lead"
+    }
+  },
+  "markdown": {
+    "href": "notes.md",
+    "type": "text/markdown",
+    "title": "Opening",
+    "locations": {
+      "fragments": ["line=2"],
+      "position": 3
+    }
+  },
+  "ocr": {
+    "href": "source-1",
+    "type": "image/*",
+    "title": "Opening",
+    "locations": {
+      "fragments": ["page=1"],
+      "position": 3
+    }
+  },
+  "pdf": {
+    "href": "source-1",
+    "type": "application/pdf",
+    "title": "Opening",
+    "locations": {
+      "fragments": ["page=3", "viewrect=1,2,3,4"],
+      "position": 3
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@tts-research/schema",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Private local Voice Studio schema and generated TypeScript contract package.",
+  "files": [
+    "dist",
+    "schemas",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schemas/content-ir.v1.schema.json": "./schemas/content-ir.v1.schema.json",
+    "./schemas/locator-envelope.v1.schema.json": "./schemas/locator-envelope.v1.schema.json",
+    "./schemas/speech-plan.v1.schema.json": "./schemas/speech-plan.v1.schema.json",
+    "./schemas/highlight-map.v1.schema.json": "./schemas/highlight-map.v1.schema.json",
+    "./schemas/fragment-timing.v1.schema.json": "./schemas/fragment-timing.v1.schema.json",
+    "./schemas/token-timing.v1.schema.json": "./schemas/token-timing.v1.schema.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "pnpm build && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

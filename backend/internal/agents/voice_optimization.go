@@ -19,12 +19,7 @@ func NewVoiceOptimizationAgent() *VoiceOptimizationAgent {
 func (agent *VoiceOptimizationAgent) Optimize(_ context.Context, input string) (string, error) {
 	normalized := strings.TrimSpace(input)
 	normalized = strings.ReplaceAll(normalized, "\r\n", "\n")
-	normalized = codeFencePattern.ReplaceAllString(normalized, " code sample omitted for spoken playback ")
-	normalized = strings.ReplaceAll(normalized, "&", " and ")
-	normalized = strings.ReplaceAll(normalized, "%", " percent")
-	normalized = strings.ReplaceAll(normalized, "°", " degrees ")
-	normalized = strings.ReplaceAll(normalized, "=", " equals ")
-	normalized = strings.ReplaceAll(normalized, "+", " plus ")
+	normalized = normalizeMarkdownForSpeech(normalized)
 	normalized = whitespacePattern.ReplaceAllString(normalized, " ")
 
 	return strings.TrimSpace(normalized), nil
@@ -35,6 +30,88 @@ func (agent *VoiceOptimizationAgent) ProviderName() string {
 }
 
 var (
-	codeFencePattern  = regexp.MustCompile("(?s)```.*?```")
-	whitespacePattern = regexp.MustCompile(`\s+`)
+	codeFencePattern       = regexp.MustCompile("(?s)```.*?```")
+	imagePattern           = regexp.MustCompile(`!\[([^\]]*)\]\([^)]+\)`)
+	linkPattern            = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+	htmlTagPattern         = regexp.MustCompile(`<[^>]+>`)
+	headingPattern         = regexp.MustCompile(`^#{1,6}\s+(.+)$`)
+	blockquotePattern      = regexp.MustCompile(`^>\s?(.+)$`)
+	bulletPattern          = regexp.MustCompile(`^[-*+]\s+(.+)$`)
+	numberedListPattern    = regexp.MustCompile(`^\d+[.)]\s+(.+)$`)
+	horizontalRulePattern  = regexp.MustCompile(`^[-*_]{3,}$`)
+	tableDividerPattern    = regexp.MustCompile(`^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$`)
+	inlineCodePattern      = regexp.MustCompile("`([^`]+)`")
+	markdownMarkerReplacer = strings.NewReplacer("**", "", "__", "", "*", "", "_", "", "~~", "")
+	whitespacePattern      = regexp.MustCompile(`\s+`)
 )
+
+func normalizeMarkdownForSpeech(input string) string {
+	normalized := codeFencePattern.ReplaceAllString(input, "\ncode sample omitted for spoken playback.\n")
+	normalized = imagePattern.ReplaceAllString(normalized, "$1")
+	normalized = linkPattern.ReplaceAllString(normalized, "$1")
+	normalized = htmlTagPattern.ReplaceAllString(normalized, " ")
+	normalized = inlineCodePattern.ReplaceAllString(normalized, "$1")
+
+	lines := strings.Split(normalized, "\n")
+	spokenLines := make([]string, 0, len(lines))
+	for _, line := range lines {
+		spoken := normalizeMarkdownLineForSpeech(line)
+		if spoken == "" {
+			continue
+		}
+		spokenLines = append(spokenLines, spoken)
+	}
+	return joinSpeechLines(spokenLines)
+}
+
+func normalizeMarkdownLineForSpeech(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || horizontalRulePattern.MatchString(trimmed) || tableDividerPattern.MatchString(trimmed) {
+		return ""
+	}
+	trimmed = headingPattern.ReplaceAllString(trimmed, "$1")
+	trimmed = blockquotePattern.ReplaceAllString(trimmed, "$1")
+	trimmed = bulletPattern.ReplaceAllString(trimmed, "$1")
+	trimmed = numberedListPattern.ReplaceAllString(trimmed, "$1")
+	trimmed = markdownMarkerReplacer.Replace(trimmed)
+	if strings.Contains(trimmed, "|") {
+		return normalizeMarkdownTableRow(trimmed)
+	}
+	return strings.TrimSpace(trimmed)
+}
+
+func normalizeMarkdownTableRow(row string) string {
+	cells := strings.Split(strings.Trim(row, "| "), "|")
+	spokenCells := make([]string, 0, len(cells))
+	for _, cell := range cells {
+		spokenCell := strings.TrimSpace(markdownMarkerReplacer.Replace(cell))
+		if spokenCell != "" {
+			spokenCells = append(spokenCells, spokenCell)
+		}
+	}
+	return strings.Join(spokenCells, ", ")
+}
+
+func joinSpeechLines(lines []string) string {
+	var builder strings.Builder
+	for _, line := range lines {
+		if builder.Len() > 0 {
+			if endsWithTerminalPunctuation(builder.String()) {
+				builder.WriteString(" ")
+			} else {
+				builder.WriteString(". ")
+			}
+		}
+		builder.WriteString(line)
+	}
+	return builder.String()
+}
+
+func endsWithTerminalPunctuation(value string) bool {
+	value = strings.TrimSpace(value)
+	return strings.HasSuffix(value, ".") ||
+		strings.HasSuffix(value, "!") ||
+		strings.HasSuffix(value, "?") ||
+		strings.HasSuffix(value, ";") ||
+		strings.HasSuffix(value, ":")
+}

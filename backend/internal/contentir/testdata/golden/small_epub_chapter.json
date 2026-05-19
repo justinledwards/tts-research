@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "content-ir.v1",
+  "id": "small-epub-chapter",
+  "sourceType": "bookSource",
+  "sourceId": "small-epub-chapter",
+  "projectId": "default",
+  "sourceName": "content-ir.epub",
+  "adapterVersion": "book-source-to-ir.v1",
+  "generatedAt": "2026-05-16T12:00:00Z",
+  "nodes": [
+    {
+      "nodeId": "epub-0001",
+      "parentId": "",
+      "orderKey": "00000001",
+      "kind": "chapter",
+      "role": "body",
+      "displayText": "Opening\n\nContent IR keeps structure and spoken text together.",
+      "normalisedText": "Opening Content IR keeps structure and spoken text together.",
+      "speechText": "Opening\n\nContent IR keeps structure and spoken text together.",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "epub",
+        "sourceId": "small-epub-chapter",
+        "locator": {
+          "type": "epub",
+          "epub": {
+            "href": "OPS/chapter-one.xhtml",
+            "textQuote": "Opening Content IR keeps structure and spoken text together.",
+            "progression": 0
+          }
+        },
+        "offsets": {
+          "start": 0,
+          "end": 61
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "node"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "prose",
+          "elementMode": "speak",
+          "mode": "speak",
+          "explanation": "Prose is spoken because the Enterprise profile sets mode to speak."
+        }
+      },
+      "warnings": [],
+      "confidence": 0.94,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "adapterVersion": "book-source-to-ir.v1"
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "bookmark": {
+    "schemaVersion": "locator-envelope.v1",
+    "kind": "bookmark",
+    "sourceId": "book-1",
+    "scopeKey": "pages:5",
+    "locator": {
+      "type": "pdf",
+      "pdf": {
+        "pageIndex": 4
+      }
+    },
+    "readium": {
+      "href": "book-1",
+      "type": "application/pdf",
+      "title": "Chapter bookmark",
+      "locations": {
+        "fragments": ["page=5"],
+        "position": 5
+      }
+    }
+  },
+  "highlight": {
+    "schemaVersion": "locator-envelope.v1",
+    "kind": "highlight",
+    "sourceId": "book-1",
+    "nodeId": "node-highlight",
+    "locator": {
+      "type": "html",
+      "html": {
+        "href": "article.html",
+        "fragment": "quote-1",
+        "textQuote": "Highlighted phrase",
+        "progression": 0.25
+      }
+    },
+    "readium": {
+      "href": "article.html",
+      "type": "text/html",
+      "title": "Article",
+      "locations": {
+        "fragments": ["quote-1"],
+        "progression": 0.25,
+        "position": 18,
+        "cssSelector": "#quote-1"
+      },
+      "text": {
+        "before": "words before",
+        "highlight": "Highlighted phrase",
+        "after": "words after"
+      }
+    },
+    "textQuote": "Highlighted phrase"
+  },
+  "resume": {
+    "schemaVersion": "locator-envelope.v1",
+    "kind": "resume",
+    "sourceId": "book-1",
+    "nodeId": "node-resume",
+    "scopeKey": "chapter:1",
+    "activeWordIndex": 7,
+    "locator": {
+      "type": "epub",
+      "epub": {
+        "href": "OPS/ch1.xhtml",
+        "fragment": "frag-resume",
+        "textQuote": "Resume quote",
+        "progression": 0.25,
+        "epubCfi": "epubcfi(/6/2!/4/2)"
+      }
+    },
+    "readium": {
+      "href": "OPS/ch1.xhtml",
+      "type": "application/xhtml+xml",
+      "title": "Chapter 1",
+      "locations": {
+        "fragments": ["frag-resume"],
+        "progression": 0.25,
+        "totalProgression": 0.4,
+        "position": 12,
+        "cssSelector": "#frag-resume",
+        "partialCfi": "/4/2"
+      },
+      "text": {
+        "highlight": "Resume quote"
+      }
+    },
+    "textQuote": "Resume quote"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "content-ir.v1",
+  "id": "contract-ocr",
+  "sourceType": "bookSource",
+  "sourceId": "contract-ocr",
+  "projectId": "default",
+  "sourceName": "ocr-pages.zip",
+  "adapterVersion": "contract-fixture-v1",
+  "generatedAt": "2026-05-17T01:00:00Z",
+  "nodes": [
+    {
+      "nodeId": "ocr-0001",
+      "parentId": "",
+      "orderKey": "00000001",
+      "kind": "page",
+      "role": "body",
+      "displayText": "OCR page text.",
+      "normalisedText": "OCR page text.",
+      "speechText": "OCR page text.",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "ocr",
+        "sourceId": "contract-ocr",
+        "locator": {
+          "type": "ocr",
+          "ocr": {
+            "pageIndex": 0,
+            "polygon": [
+              {
+                "x": 10,
+                "y": 20
+              },
+              {
+                "x": 260,
+                "y": 20
+              },
+              {
+                "x": 260,
+                "y": 58
+              },
+              {
+                "x": 10,
+                "y": 58
+              }
+            ],
+            "ocrEngine": "tesseract",
+            "ocrConfidence": 0.84
+          }
+        },
+        "offsets": {
+          "start": 0,
+          "end": 14
+        },
+        "extraction": {
+          "extractor": "ocr",
+          "extractorVersion": "contract-fixture-v1",
+          "supportTier": "C",
+          "step": "OCR image set",
+          "confidence": 0.84
+        }
+      },
+      "ui": {
+        "progressionHint": "paged",
+        "highlightUnitHint": "node"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Accessibility",
+          "element": "prose",
+          "elementMode": "speak",
+          "mode": "speak",
+          "explanation": "OCR text is spoken with confidence metadata."
+        }
+      },
+      "warnings": ["ocr_uncertain"],
+      "confidence": 0.84,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "markId": "mark-ocr-0001",
+      "adapterVersion": "contract-fixture-v1"
+    }
+  ]
+}

@@ -1,119 +1,95 @@
 # Working Log
 
-## 2026-05-11 09:08 EDT - Project Scaffold
-- [x] Initialize repository and root project files
-- [x] Add Go Fiber backend with typed mock TTS pipeline
-- [x] Add Vite React Tailwind frontend
-- [x] Configure Biome, ESLint, Husky, and git ignores
-- [x] Install dependencies and generate lockfiles
-- [x] Run checks and verify the scaffold
+## 2026-05-17 17:30 CEST - Voice Studio ergonomic foundation
+- [x] Consolidate Narration and Voice Cloning into clearer top-level modes.
+- [x] Streamline source intake, script review, rails, footer, workspace, and settings surfaces.
+- [x] Iterate against approved Voice Studio concepts with rendered QA.
+- [x] Run full checks and visual validation.
 
-## 2026-05-11 09:30 EDT - Kokoro TTS Integration
-- [x] Pin Kokoro-compatible Python tooling
-- [x] Add Python Kokoro synthesis script
-- [x] Add Go Kokoro TTS agent and env-based provider selection
-- [x] Expose provider metadata in the API and frontend
-- [x] Install Kokoro dependencies and generate lockfiles
-- [x] Verify real Kokoro audio generation
+## 2026-05-18 17:30 CEST - Reader standards and performance foundation
+- [x] Harden reader standards, accessibility controls, and locator behavior.
+- [x] Add local frontend performance reporting, budgets, and low-resource smoke coverage.
+- [x] Preserve structured source policy and reader diagnostics.
+- [x] Run local validation commands.
 
-## 2026-05-11 09:40 EDT - OpenRouter Voice Optimization
-- [x] Inspect helper OpenRouter references without copying secrets
-- [x] Add OpenRouter-backed VoiceOptimization agent
-- [x] Add env configuration and rule-based fallback
-- [x] Update docs and examples
-- [x] Keep rotating free router and add few-shot optimizer examples
-- [x] Expose optimizer provider metadata separately from TTS provider
-- [x] Run checks and verify the OpenRouter optimization path
+## 2026-05-18 19:52 CEST - UI ergonomics audit and concept pack
+- [x] Capture current UI state across primary surfaces.
+- [x] Run scroll extremes and deterministic UI fuzzing.
+- [x] Write ergonomic audit and findings.
+- [x] Generate Operator Studio concept images.
+- [x] Compare against previous concept images after new concepts were created.
+- [x] Run validation checks.
 
-## 2026-05-11 10:03 EDT - Full Checker Loop PoC
-- [x] Make voice jobs asynchronous with live stage state
-- [x] Add local Qwen3-ASR-backed checker
-- [x] Compare ASR transcript to optimized text and detect clean cutoffs
-- [x] Retry/resume bounded incomplete segments and merge audio
-- [x] Add numeric ASR normalization for spoken percentages and compact units
-- [x] Poll job state from the frontend instead of static done markers
-- [x] Run checks and verify full-cycle behavior
+## 2026-05-18 20:30 CEST - Website Cinema strengthening
+- [x] Generate Website Cinema concept references.
+- [x] Implement prepared-source cinema shell and entry points.
+- [x] Align desktop and mobile Website Cinema to accepted concept.
+- [x] Add focused helper coverage for derived UI data.
+- [x] Run Playwright screenshot, scroll, and fuzz validation.
+- [x] Run frontend and project checks.
 
-## 2026-05-12 08:51 EDT - Long Job Progress Feedback
-- [x] Inspect timed-out checker behavior and clean stale processes
-- [x] Add server-sent job progress updates
-- [x] Show live stage details and animated processing indicators
-- [x] Make source text read-only while a job is running
-- [x] Improve long checker feedback and timeout visibility
-- [x] Split long optimized text into bounded synthesis/checking segments
-- [x] Run checks and verify long-job progress behavior
+## 2026-05-18 22:09 CEST - Book and Document Cinema alignment
+- [x] Generate fresh Book and Document Cinema concept pack.
+- [x] Align Book Cinema to the shared Website Cinema visual language.
+- [x] Restore Document Cinema with Markdown rendering.
+- [x] Add Markdown book import support.
+- [x] Add pre-audio cinema entry for Book, Document, and Website modes.
+- [x] Run Playwright desktop/mobile scroll and fuzz validation.
+- [x] Run frontend and project checks.
 
-## 2026-05-12 10:06 EDT - Start Script
-- [x] Add a single command startup script
-- [x] Load root and backend environment files safely
-- [x] Wire root package scripts to the startup script
-- [x] Document local startup usage
-- [x] Run checks and verify script behavior
+## 2026-05-18 23:11 CEST - Book and Document Cinema reachability validation
+- [x] Reproduce PDF and Markdown cinema entry from visible UI.
+- [x] Fix blocked pre-audio entry paths.
+- [x] Validate in-cinema file/source selection for document workflows.
+- [x] Repair Markdown reader rendering and right-rail overflow.
+- [x] Re-run Playwright reachability validation.
+- [x] Run focused checks.
 
-## 2026-05-12 10:19 EDT - Streaming Optimizer And Retry Loop Repair
-- [x] Inspect helper OpenRouter streaming code
-- [x] Stream VoiceOptimization partial output into job state
-- [x] Retry same-segment checker failures before exhausting
-- [x] Keep clean cutoff resume behavior for partial audio
-- [x] Run checks and verify progress events expose streamed optimizer text
+## 2026-05-19 00:06 CEST - Cinema outline pointer and transport simplification
+- [x] Make full source generation the default for book/document modes.
+- [x] Change outline clicks to reader navigation pointers.
+- [x] Remove duplicate right-rail waveform/timeline controls.
+- [x] Add decoded audio waveform rendering for generated audio.
+- [x] Validate desktop/mobile with Playwright.
+- [x] Run project checks.
 
-## 2026-05-12 11:10 EDT - Final Audio Persistence
-- [x] Stop exposing partial in-progress audio as final playback
-- [x] Save completed job audio and metadata to disk
-- [x] Cache-bust completed audio playback
-- [x] Run checks and verify persistence behavior
+## 2026-05-19 00:36 CEST - PR cleanup and publish
+- [x] Clean working log chronology so May 18 work starts at 17:30 CEST.
+- [x] Confirm validation status before publishing.
+- [x] Commit and push the PR update.
 
-## 2026-05-12 11:23 EDT - Persistent ASR Worker
-- [x] Keep ASR verification on every segment
-- [x] Reuse one loaded Qwen ASR worker across checks
-- [x] Update docs and environment examples
-- [x] Run checks
-- [x] Restart local dev stack with persistent checker enabled
-- [x] Verify live short job with Kokoro and Qwen ASR
+## 2026-05-19 16:39 CEST - Reader timing hard budgets
+- [x] Inspect existing local benchmark and validation reporting.
+- [x] Promote reader timing baselines to enforced thresholds.
+- [x] Document low-resource budget procedure.
+- [x] Stabilize Book Cinema timing E2E scope checks.
+- [x] Fix hash resume scope normalization for section-backed books.
+- [x] Ensure studio route-switch timing is exercised by the E2E smoke.
+- [x] Guard hash resume from workspace restore races under low resource.
+- [x] Run local validation commands.
 
-## 2026-05-13 10:27 EDT - Git Artifact And Secret Audit
-- [x] Ignore and remove generated artifacts
-- [x] Stage intended source files only
-- [x] Scan staged contents for secrets and artifacts
-- [x] Commit locally
+## 2026-05-19 20:06 CEST - Cross-surface reader accessibility parity
+- [x] Add shared reader accessibility primitives.
+- [x] Apply shared preferences to cinema surfaces.
+- [x] Standardize focus, keyboard, and live status behavior.
+- [x] Update docs and disabled smoke workflow.
+- [x] Run automated validation commands.
+- [ ] Complete manual screen-reader smoke checklist with assistive tech.
 
-## 2026-05-13 10:38 EDT - Bonsai Optimizer Evaluation
-- [x] Inspect Bonsai 8B MLX requirements
-- [x] Build local versus OpenRouter optimizer comparison harness
-- [x] Run shared pre-TTS samples through both models
-- [x] Summarize whether Bonsai can handle prompt processing
+## 2026-05-19 21:21 CEST - Wayfinding bookmarks and policy scope
+- [x] Add shared reader navigation helpers and panels.
+- [x] Add shared policy scope chips and source pin controls.
+- [x] Wire Book, Document, and Website Cinema to shared navigation and policy scope UI.
+- [x] Fix policy preview/job request scope so project profile is not sent as a session override.
+- [x] Update docs and disabled UI reachability workflow example.
+- [x] Add unit and reachability coverage.
+- [x] Run project validation commands.
 
-## 2026-05-13 11:24 EDT - Local Bonsai Stack And Publish
-- [x] Add Bonsai as the default local voice optimizer
-- [x] Verify local Bonsai plus Kokoro plus Qwen pipeline
-- [x] Audit committed files for secrets and generated artifacts
-- [x] Create public GitHub repository with gh and push
-
-## 2026-05-13 12:10 EDT - Long Technical Article Reliability
-- [x] Inspect failed locality-domain job output and checker metadata
-- [x] Improve local pre-TTS normalization around domains, dates, abbreviations, and section labels
-- [x] Fix failed-stage reporting for checker retry exhaustion
-- [x] Add regression coverage for the long technical article path
-- [x] Run checks and verify behavior
-
-## 2026-05-13 16:52 EDT - Missing Prefix Checker Recovery
-- [x] Reproduce domain-heavy ASR mismatch from locality-domain article segment
-- [x] Add checker tolerance for omitted domain separators and ASR artifacts
-- [x] Lower default segment size so paragraph and numbered-field text are less likely to mix
-- [x] Add regression tests for missing domain separators in ASR output
-- [x] Run checks and verify behavior
-
-## 2026-05-13 17:00 EDT - Exact Prompt Verification
-- [x] Restart local stack on current code
-- [x] Submit the full locality-domain article prompt
-- [x] Record completion or failing segment details
-- [x] Apply follow-up fixes if the exact prompt still fails
-- [x] Re-run the exact prompt on the follow-up fix
-
-## 2026-05-14 12:32 EDT - Voice Selection And Clone Streaming
-- [x] Inspect current voice pipeline and frontend playback flow
-- [x] Review Kokoclone requirements and local integration points
-- [x] Add voice listing, upload, extraction, and clone registration API
-- [x] Add parallel segment workers with progressive audio availability
-- [x] Add frontend voice selection, clone upload, and streaming playback UI
-- [x] Run checks and verify the flow
+## 2026-05-19 22:29 CEST - Low-resource and degraded-state UX hardening
+- [x] Move and extend frontend timing helpers.
+- [x] Split cinema startup paths and add stable degraded-state UI.
+- [x] Enforce critical-path import and degraded-state report checks.
+- [x] Update local-only docs and workflow examples.
+- [x] Fix duplicate wayfinding keys surfaced by Book Cinema smoke.
+- [x] Run project validation commands.
+- [x] Commit, push, and update PR body.

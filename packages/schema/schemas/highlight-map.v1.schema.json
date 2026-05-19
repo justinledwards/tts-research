@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/highlight-map.v1.schema.json",
+  "title": "Highlight Map v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "source",
+    "mode",
+    "durationMs",
+    "generatedAt",
+    "summary",
+    "fragments",
+    "tokens"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "highlight-map.v1"
+    },
+    "jobId": {
+      "type": "string"
+    },
+    "bookSourceId": {
+      "type": "string"
+    },
+    "scopeKey": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "source": {
+      "$ref": "fragment-timing.v1.schema.json#/$defs/timingSource"
+    },
+    "mode": {
+      "$ref": "#/$defs/highlightMode"
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "policy": {
+      "$ref": "#/$defs/confidencePolicy"
+    },
+    "summary": {
+      "$ref": "#/$defs/highlightMapSummary"
+    },
+    "fragments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/highlightFragment"
+      }
+    },
+    "tokens": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/highlightToken"
+      }
+    },
+    "warnings": {
+      "$ref": "fragment-timing.v1.schema.json#/$defs/warnings"
+    }
+  },
+  "$defs": {
+    "highlightMode": {
+      "type": "string",
+      "enum": ["word", "phrase"]
+    },
+    "confidencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minSegmentConfidence", "minTokenConfidence", "maxDriftMs", "maxDriftRatio"],
+      "properties": {
+        "minSegmentConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "minTokenConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "maxDriftMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxDriftRatio": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "readingPosition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bookSourceId": {
+          "type": "string"
+        },
+        "scopeKey": {
+          "type": "string"
+        },
+        "activeWordIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "content-ir.v1.schema.json#/$defs/locator"
+        },
+        "locatorEnvelope": {
+          "$ref": "locator-envelope.v1.schema.json"
+        },
+        "textQuote": {
+          "type": "string"
+        }
+      }
+    },
+    "highlightMapSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source",
+        "mode",
+        "durationMs",
+        "fragmentCount",
+        "tokenCount",
+        "confidence",
+        "drift",
+        "lowConfidence"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "fragment-timing.v1.schema.json#/$defs/timingSource"
+        },
+        "mode": {
+          "$ref": "#/$defs/highlightMode"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fragmentCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tokenCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confidence": {
+          "$ref": "fragment-timing.v1.schema.json#/$defs/timingConfidence"
+        },
+        "drift": {
+          "$ref": "fragment-timing.v1.schema.json#/$defs/driftStats"
+        },
+        "lowConfidence": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "warnings": {
+          "$ref": "fragment-timing.v1.schema.json#/$defs/warnings"
+        }
+      }
+    },
+    "highlightFragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "segmentIndex", "text", "startMs", "endMs", "confidence"],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "segmentIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        },
+        "startMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "tokenStart": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tokenEnd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "readingPosition": {
+          "$ref": "#/$defs/readingPosition"
+        }
+      }
+    },
+    "highlightToken": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "fragmentIndex",
+        "segmentIndex",
+        "text",
+        "startMs",
+        "endMs",
+        "confidence",
+        "mode"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fragmentIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "segmentIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        },
+        "startMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "mode": {
+          "$ref": "#/$defs/highlightMode"
+        },
+        "readingPosition": {
+          "$ref": "#/$defs/readingPosition"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "tts-research.bench-thresholds.v1",
+  "alignment": {
+    "maxMeanMaeMs": 50,
+    "maxP95Ms": 75,
+    "maxMeanDriftMs": 25,
+    "minMeanCoverage": 1,
+    "minTokenCount": 2
+  },
+  "markdown": {
+    "maxTotalParseMs": 5000,
+    "maxTotalTransformMs": 5000,
+    "maxTotalEmitMs": 5000,
+    "maxTotalWarnings": 10,
+    "minTotalNodes": 5
+  },
+  "frontendBundle": {
+    "maxInitialJsRawBytes": 520000,
+    "maxInitialJsGzipBytes": 160000,
+    "maxInitialCssGzipBytes": 14000,
+    "maxLargestAsyncAppChunkGzipBytes": 110000,
+    "requireDiagramVendorLazy": true,
+    "requireBookCinemaMarkdownRendererLazy": true,
+    "requireNoForbiddenInitialImports": true
+  },
+  "readerTiming": {
+    "maxAppColdUsableMs": 2200,
+    "maxStudioRouteSwitchMs": 600,
+    "maxBookCinemaOpenMs": 450,
+    "maxReaderResumeMs": 500
+  }
+}

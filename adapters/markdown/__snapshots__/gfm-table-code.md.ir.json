@@ -1,0 +1,491 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.98,
+      "endOffset": 16,
+      "id": "block-0001",
+      "index": 1,
+      "kind": "heading",
+      "label": "GFM Structures",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 17,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# GFM Structures"
+      },
+      "speakMode": "speak",
+      "spokenText": "GFM Structures",
+      "startOffset": 0,
+      "text": "# GFM Structures",
+      "warnings": []
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 89,
+      "id": "block-0002",
+      "index": 2,
+      "kind": "table",
+      "label": "Table",
+      "language": "",
+      "metadata": {
+        "align": [null, "right"],
+        "headers": ["Metric", "Value"],
+        "rows": [["Latency", "12ms"], ["Quality", "Good"]],
+        "astPath": "/children/1",
+        "columnEnd": 19,
+        "columnStart": 1,
+        "lineEnd": 6,
+        "lineStart": 3,
+        "sourceSlice": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |"
+      },
+      "speakMode": "speak",
+      "spokenText": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |",
+      "startOffset": 18,
+      "text": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |",
+      "warnings": ["table_policy"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 121,
+      "id": "block-0003",
+      "index": 3,
+      "kind": "code",
+      "label": "Code sample",
+      "language": "go",
+      "metadata": {
+        "codeMeta": "",
+        "language": "go",
+        "astPath": "/children/2",
+        "columnEnd": 4,
+        "columnStart": 1,
+        "lineEnd": 10,
+        "lineStart": 8,
+        "sourceSlice": "```go\nfmt.Println(\"hello\")\n```"
+      },
+      "speakMode": "speak",
+      "spokenText": "fmt.Println(\"hello\")",
+      "startOffset": 91,
+      "text": "```go\nfmt.Println(\"hello\")\n```",
+      "warnings": ["code_policy"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 140,
+      "id": "block-0004",
+      "index": 4,
+      "kind": "body",
+      "label": "Parsed task",
+      "language": "",
+      "metadata": {
+        "checked": true,
+        "listOrdered": false,
+        "astPath": "/children/3/children/0",
+        "columnEnd": 18,
+        "columnStart": 1,
+        "lineEnd": 12,
+        "lineStart": 12,
+        "sourceSlice": "- [x] Parsed task"
+      },
+      "speakMode": "speak",
+      "spokenText": "Parsed task",
+      "startOffset": 123,
+      "text": "- [x] Parsed task",
+      "warnings": []
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 156,
+      "id": "block-0005",
+      "index": 5,
+      "kind": "body",
+      "label": "Open task",
+      "language": "",
+      "metadata": {
+        "checked": false,
+        "listOrdered": false,
+        "astPath": "/children/3/children/1",
+        "columnEnd": 16,
+        "columnStart": 1,
+        "lineEnd": 13,
+        "lineStart": 13,
+        "sourceSlice": "- [ ] Open task"
+      },
+      "speakMode": "speak",
+      "spokenText": "Open task",
+      "startOffset": 141,
+      "text": "- [ ] Open task",
+      "warnings": []
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "gfm-table-code",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": []
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "# GFM Structures",
+        "kind": "heading",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/0",
+          "columnEnd": 17,
+          "columnStart": 1,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "# GFM Structures"
+        },
+        "nodeId": "block-0001",
+        "normalisedText": "# GFM Structures",
+        "orderKey": "00000001",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 17,
+              "columnStart": 1,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "gfm-table-code.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 16,
+            "start": 0
+          },
+          "sourceId": "gfm-table-code"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "heading",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "GFM Structures",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |",
+        "kind": "table",
+        "lang": "und",
+        "metadata": {
+          "align": [null, "right"],
+          "headers": ["Metric", "Value"],
+          "rows": [["Latency", "12ms"], ["Quality", "Good"]],
+          "astPath": "/children/1",
+          "columnEnd": 19,
+          "columnStart": 1,
+          "lineEnd": 6,
+          "lineStart": 3,
+          "sourceSlice": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |"
+        },
+        "nodeId": "block-0002",
+        "normalisedText": "| Metric | Value | | --- | ---: | | Latency | 12ms | | Quality | Good |",
+        "orderKey": "00000002",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 19,
+              "columnStart": 1,
+              "lineEnd": 6,
+              "lineStart": 3,
+              "path": "gfm-table-code.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 89,
+            "start": 18
+          },
+          "sourceId": "gfm-table-code"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "table",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["table_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "```go\nfmt.Println(\"hello\")\n```",
+        "kind": "code",
+        "lang": "go",
+        "metadata": {
+          "codeMeta": "",
+          "language": "go",
+          "astPath": "/children/2",
+          "columnEnd": 4,
+          "columnStart": 1,
+          "lineEnd": 10,
+          "lineStart": 8,
+          "sourceSlice": "```go\nfmt.Println(\"hello\")\n```"
+        },
+        "nodeId": "block-0003",
+        "normalisedText": "```go fmt.Println(\"hello\") ```",
+        "orderKey": "00000003",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 4,
+              "columnStart": 1,
+              "lineEnd": 10,
+              "lineStart": 8,
+              "path": "gfm-table-code.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 121,
+            "start": 91
+          },
+          "sourceId": "gfm-table-code"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "code",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "fmt.Println(\"hello\")",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["code_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "- [x] Parsed task",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "checked": true,
+          "listOrdered": false,
+          "astPath": "/children/3/children/0",
+          "columnEnd": 18,
+          "columnStart": 1,
+          "lineEnd": 12,
+          "lineStart": 12,
+          "sourceSlice": "- [x] Parsed task"
+        },
+        "nodeId": "block-0004",
+        "normalisedText": "- [x] Parsed task",
+        "orderKey": "00000004",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3/children/0",
+              "columnEnd": 18,
+              "columnStart": 1,
+              "lineEnd": 12,
+              "lineStart": 12,
+              "path": "gfm-table-code.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 140,
+            "start": 123
+          },
+          "sourceId": "gfm-table-code"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Parsed task",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "- [ ] Open task",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "checked": false,
+          "listOrdered": false,
+          "astPath": "/children/3/children/1",
+          "columnEnd": 16,
+          "columnStart": 1,
+          "lineEnd": 13,
+          "lineStart": 13,
+          "sourceSlice": "- [ ] Open task"
+        },
+        "nodeId": "block-0005",
+        "normalisedText": "- [ ] Open task",
+        "orderKey": "00000005",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3/children/1",
+              "columnEnd": 16,
+              "columnStart": 1,
+              "lineEnd": 13,
+              "lineStart": 13,
+              "path": "gfm-table-code.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 156,
+            "start": 141
+          },
+          "sourceId": "gfm-table-code"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Open task",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "gfm-table-code",
+    "sourceName": "gfm-table-code.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "parseMode": "strict",
+  "skippedItems": [],
+  "title": "GFM Structures",
+  "warnings": []
+}

@@ -1,0 +1,309 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.98,
+      "endOffset": 11,
+      "id": "block-0001",
+      "index": 1,
+      "kind": "heading",
+      "label": "Citations",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 12,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# Citations"
+      },
+      "speakMode": "speak",
+      "spokenText": "Citations",
+      "startOffset": 0,
+      "text": "# Citations",
+      "warnings": []
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 75,
+      "id": "block-0002",
+      "index": 2,
+      "kind": "body",
+      "label": "The corporate moat remains useful.",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/1",
+        "columnEnd": 57,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "The corporate moat remains useful. citeturn40search10"
+      },
+      "speakMode": "speak",
+      "spokenText": "The corporate moat remains useful.",
+      "startOffset": 13,
+      "text": "The corporate moat remains useful. citeturn40search10",
+      "warnings": ["citation_removed"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 102,
+      "id": "block-0003",
+      "index": 3,
+      "kind": "citation",
+      "label": "Citation",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/2",
+        "columnEnd": 20,
+        "columnStart": 1,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "sourceSlice": "citeturn1search0"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 77,
+      "text": "citeturn1search0",
+      "warnings": ["citation_skipped"]
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "citations",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": []
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "# Citations",
+        "kind": "heading",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/0",
+          "columnEnd": 12,
+          "columnStart": 1,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "# Citations"
+        },
+        "nodeId": "block-0001",
+        "normalisedText": "# Citations",
+        "orderKey": "00000001",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 12,
+              "columnStart": 1,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 11,
+            "start": 0
+          },
+          "sourceId": "citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "heading",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Citations",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "The corporate moat remains useful. citeturn40search10",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/1",
+          "columnEnd": 57,
+          "columnStart": 1,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "The corporate moat remains useful. citeturn40search10"
+        },
+        "nodeId": "block-0002",
+        "normalisedText": "The corporate moat remains useful. citeturn40search10",
+        "orderKey": "00000002",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 57,
+              "columnStart": 1,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 75,
+            "start": 13
+          },
+          "sourceId": "citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "The corporate moat remains useful.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["citation_removed"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "citeturn1search0",
+        "kind": "citation",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/2",
+          "columnEnd": 20,
+          "columnStart": 1,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "citeturn1search0"
+        },
+        "nodeId": "block-0003",
+        "normalisedText": "citeturn1search0",
+        "orderKey": "00000003",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 20,
+              "columnStart": 1,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 102,
+            "start": 77
+          },
+          "sourceId": "citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "citation",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["citation_skipped"]
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "citations",
+    "sourceName": "citations.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "parseMode": "strict",
+  "skippedItems": [
+    {
+      "id": "block-0003",
+      "kind": "citation",
+      "offset": 77,
+      "reason": "skipped by markdown adapter",
+      "text": "citeturn1search0"
+    }
+  ],
+  "title": "Citations",
+  "warnings": []
+}

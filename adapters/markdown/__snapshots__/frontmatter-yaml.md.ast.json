@@ -1,0 +1,99 @@
+{
+  "type": "root",
+  "position": {
+    "start": {
+      "line": 1,
+      "column": 1,
+      "offset": 0
+    },
+    "end": {
+      "line": 10,
+      "column": 1,
+      "offset": 135
+    }
+  },
+  "children": [
+    {
+      "type": "yaml",
+      "value": "title: Frontmatter Title\nspeaker: narrator\ndraft: false",
+      "position": {
+        "start": {
+          "line": 1,
+          "column": 1,
+          "offset": 0
+        },
+        "end": {
+          "line": 5,
+          "column": 4,
+          "offset": 63
+        }
+      }
+    },
+    {
+      "type": "heading",
+      "position": {
+        "start": {
+          "line": 7,
+          "column": 1,
+          "offset": 65
+        },
+        "end": {
+          "line": 7,
+          "column": 20,
+          "offset": 84
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "Frontmatter Title",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 3,
+              "offset": 67
+            },
+            "end": {
+              "line": 7,
+              "column": 20,
+              "offset": 84
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 9,
+          "column": 1,
+          "offset": 86
+        },
+        "end": {
+          "line": 9,
+          "column": 49,
+          "offset": 134
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "The YAML metadata should not be spoken as prose.",
+          "position": {
+            "start": {
+              "line": 9,
+              "column": 1,
+              "offset": 86
+            },
+            "end": {
+              "line": 9,
+              "column": 49,
+              "offset": 134
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

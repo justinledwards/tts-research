@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "content-ir.v1",
+  "id": "pdf-fixture",
+  "sourceType": "bookSource",
+  "sourceId": "pdf-fixture",
+  "projectId": "default",
+  "sourceName": "page.pdf",
+  "adapterVersion": "book-source-to-ir.v1",
+  "generatedAt": "2026-05-16T12:00:00Z",
+  "nodes": [
+    {
+      "nodeId": "page-0001",
+      "parentId": "",
+      "orderKey": "00000001",
+      "kind": "page",
+      "role": "body",
+      "displayText": "The first page has a born-digital text layer.",
+      "normalisedText": "The first page has a born-digital text layer.",
+      "speechText": "The first page has a born-digital text layer.",
+      "lang": "und",
+      "script": "Latn",
+      "dir": "ltr",
+      "provenance": {
+        "format": "pdf",
+        "sourceId": "pdf-fixture",
+        "locator": {
+          "type": "pdf",
+          "pdf": {
+            "pageIndex": 0,
+            "readingOrderIndex": 0
+          }
+        },
+        "offsets": {
+          "start": 0,
+          "end": 45
+        }
+      },
+      "ui": {
+        "progressionHint": "linear",
+        "highlightUnitHint": "node"
+      },
+      "speech": {
+        "policyHint": {
+          "mode": "speak",
+          "emphasis": "",
+          "pauseBeforeMs": 0,
+          "pauseAfterMs": 0
+        },
+        "speechPolicy": {
+          "profile": "Enterprise",
+          "element": "prose",
+          "elementMode": "speak",
+          "mode": "speak",
+          "explanation": "Prose is spoken because the Enterprise profile sets mode to speak."
+        }
+      },
+      "warnings": [],
+      "confidence": 0.9,
+      "rights": {
+        "status": "unknown",
+        "notes": ""
+      },
+      "adapterVersion": "book-source-to-ir.v1"
+    }
+  ]
+}

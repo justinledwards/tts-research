@@ -1,0 +1,13 @@
+%PDF-1.4
+% TTS_RESEARCH_PDF_FIXTURE: {
+%   "title": "Table Fixture",
+%   "tagged": false,
+%   "pages": [
+%     {"index": 1, "label": "Page 1", "text": "The table below summarizes the tiny result set."}
+%   ],
+%   "tables": [
+%     {"pageIndex": 1, "tableIndex": 1, "rows": [["Metric", "Value"], ["Latency", "12 ms"], ["Errors", "0"]], "confidence": 0.83}
+%   ]
+% }
+%%EOF
+

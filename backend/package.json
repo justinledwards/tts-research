@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "go run ./cmd/api",
-    "test": "go test ./...",
-    "check": "go test ./..."
+    "test": "GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./...",
+    "check": "GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./..."
   }
 }

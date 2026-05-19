@@ -1,0 +1,46 @@
+import { describe, expect, it } from "vitest";
+import { getTheme, normalizeThemeName, VOICE_STUDIO_THEMES } from "./theme";
+
+describe("Voice Studio themes", () => {
+  it("normalizes persisted theme names", () => {
+    expect(normalizeThemeName("light")).toBe("light");
+    expect(normalizeThemeName("dark")).toBe("dark");
+    expect(normalizeThemeName("dawn")).toBe("dawn");
+    expect(normalizeThemeName("night")).toBe("night");
+    expect(normalizeThemeName("papery")).toBe("papery");
+    expect(normalizeThemeName("tokyo")).toBe("light");
+  });
+
+  it("keeps dark and night visually distinct", () => {
+    const dark = getTheme("dark");
+    const night = getTheme("night");
+
+    expect(VOICE_STUDIO_THEMES.map((theme) => theme.name)).toEqual([
+      "light",
+      "dark",
+      "dawn",
+      "papery",
+      "night",
+    ]);
+    expect(dark.swatches.background).not.toBe(night.swatches.background);
+    expect(dark.swatches.surface).not.toBe(night.swatches.surface);
+    expect(night.description).toContain("reading");
+  });
+
+  it("defines readable book reader colors for every theme", () => {
+    for (const theme of VOICE_STUDIO_THEMES) {
+      expect(theme.book.paper).toMatch(/^#/);
+      expect(theme.book.ink).toMatch(/^#/);
+      expect(theme.book.paper).not.toBe(theme.book.ink);
+    }
+    expect(getTheme("dark").book.paper).not.toBe(getTheme("night").book.paper);
+    expect(getTheme("light").book.ink).not.toBe(getTheme("dark").book.ink);
+  });
+
+  it("keeps theme registry ordering stable for selector-backed lists", () => {
+    const names = VOICE_STUDIO_THEMES.map((theme) => theme.name);
+    const uniqueCount = new Set(names).size;
+
+    expect(uniqueCount).toBe(names.length);
+  });
+});

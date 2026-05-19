@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "speech-plan.v1",
+  "id": "contract-epub",
+  "sourceId": "contract-epub",
+  "projectId": "default",
+  "generatedAt": "2026-05-17T01:00:00Z",
+  "policyTrace": [
+    {
+      "scope": "marketProfileDefault",
+      "profile": "Enterprise"
+    },
+    {
+      "scope": "projectOverride",
+      "profile": "Enterprise"
+    }
+  ],
+  "segments": [
+    {
+      "segmentId": "seg-0001",
+      "index": 1,
+      "nodeId": "epub-0001",
+      "text": "Opening chapter text.",
+      "lang": "en",
+      "speechPolicy": {
+        "profile": "Enterprise",
+        "element": "prose",
+        "elementMode": "speak",
+        "mode": "speak",
+        "explanation": "EPUB prose is spoken."
+      },
+      "policyTrace": [
+        {
+          "scope": "marketProfileDefault",
+          "profile": "Enterprise"
+        },
+        {
+          "scope": "projectOverride",
+          "profile": "Enterprise"
+        }
+      ],
+      "locatorEnvelope": {
+        "schemaVersion": "locator-envelope.v1",
+        "kind": "highlight",
+        "sourceId": "contract-epub",
+        "nodeId": "epub-0001",
+        "scopeKey": "document",
+        "activeWordIndex": 0,
+        "locator": {
+          "type": "epub",
+          "epub": {
+            "href": "OPS/chapter-one.xhtml",
+            "fragment": "p1",
+            "textQuote": "Opening chapter text.",
+            "progression": 0,
+            "epubCfi": "epubcfi(/6/chapter-one!/4/2)",
+            "spineId": "chapter-one"
+          }
+        },
+        "readium": {
+          "title": "contract.epub",
+          "text": {
+            "highlight": "Opening chapter text."
+          },
+          "href": "OPS/chapter-one.xhtml",
+          "type": "application/xhtml+xml",
+          "locations": {
+            "fragments": ["p1"],
+            "cssSelector": "#p1",
+            "progression": 0,
+            "partialCfi": "/4/2"
+          }
+        },
+        "textQuote": "Opening chapter text."
+      },
+      "serializerTargets": {
+        "plainText": "Opening chapter text.",
+        "ssml": "<speak version=\"1.0\" xml:lang=\"en\">Opening chapter text.</speak>",
+        "highlightMarks": [
+          {
+            "markId": "mark-epub-0001",
+            "nodeId": "epub-0001",
+            "segmentId": "seg-0001"
+          }
+        ]
+      },
+      "warnings": []
+    }
+  ]
+}

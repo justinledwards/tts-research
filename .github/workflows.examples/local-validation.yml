@@ -1,0 +1,19 @@
+# Disabled example only.
+# To enable later, copy this file into .github/workflows/ after the team agrees
+# which checks should become blocking.
+
+name: Local Validation Example
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate-local:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise install
+      - run: pnpm install --frozen-lockfile
+      - run: mise run validate:local

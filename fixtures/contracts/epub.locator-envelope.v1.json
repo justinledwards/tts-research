@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "locator-envelope.v1",
+  "kind": "bookmark",
+  "sourceId": "contract-epub",
+  "nodeId": "epub-0001",
+  "scopeKey": "document",
+  "activeWordIndex": 0,
+  "locator": {
+    "type": "epub",
+    "epub": {
+      "href": "OPS/chapter-one.xhtml",
+      "fragment": "p1",
+      "textQuote": "Opening chapter text.",
+      "progression": 0,
+      "epubCfi": "epubcfi(/6/chapter-one!/4/2)",
+      "spineId": "chapter-one"
+    }
+  },
+  "readium": {
+    "title": "contract.epub",
+    "text": {
+      "highlight": "Opening chapter text."
+    },
+    "href": "OPS/chapter-one.xhtml",
+    "type": "application/xhtml+xml",
+    "locations": {
+      "fragments": ["p1"],
+      "cssSelector": "#p1",
+      "progression": 0,
+      "partialCfi": "/4/2"
+    }
+  },
+  "textQuote": "Opening chapter text."
+}

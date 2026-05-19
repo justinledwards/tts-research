@@ -1,0 +1,23 @@
+# Disabled example only.
+# To enable later, copy this file into .github/workflows/ after the team agrees
+# which accessibility checks should become hosted gates.
+
+name: Accessibility Smoke Example
+
+on:
+  workflow_dispatch:
+
+jobs:
+  accessibility-smoke:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise install
+      - run: pnpm install --frozen-lockfile
+      - run: mise doctor
+      - run: mise run validate:local
+      - run: pnpm e2e:book-cinema
+      - run: pnpm e2e:book-cinema:low-resource
+      - run: echo "Run docs/reader-accessibility-qa.md manually for Book, Document, and Website Cinema before enabling this as a gate."

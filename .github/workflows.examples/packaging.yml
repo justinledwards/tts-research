@@ -1,0 +1,20 @@
+# Disabled example only.
+# To enable later, copy this file into .github/workflows/ after the team agrees
+# which packaging checks should become hosted gates and Omega/legal work is complete.
+
+name: Packaging Example
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package-smoke:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise install
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm package:smoke
+      - run: pnpm cli:parity

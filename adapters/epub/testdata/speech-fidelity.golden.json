@@ -1,0 +1,71 @@
+{
+  "pronunciationLexicons": [
+    {
+      "href": "EPUB/speech/en.pls",
+      "hreflang": "en",
+      "rel": "pronunciation",
+      "title": "",
+      "type": "application/pls+xml"
+    }
+  ],
+  "cssSpeechStyles": [".initialism { speak-as: spell-out; pause-after: 120ms; }"],
+  "nodes": [
+    {
+      "displayText": "EPUB 3 speech metadata.",
+      "phoneme": "iːpʌb θriː spiːtʃ ˈmɛtədəɪtə",
+      "alphabet": "ipa",
+      "sayAs": "spell-out",
+      "pauseBeforeMs": 250,
+      "pauseAfterMs": 0,
+      "cssSpeech": {
+        "speak-as": "spell-out",
+        "pause-before": "250ms"
+      },
+      "pronunciationRefs": [
+        {
+          "term": "EPUB 3 speech metadata.",
+          "originalText": "EPUB 3 speech metadata.",
+          "phoneme": "iːpʌb θriː spiːtʃ ˈmɛtədəɪtə",
+          "alphabet": "ipa",
+          "source": "ssml",
+          "startOffset": 0,
+          "endOffset": 23
+        }
+      ]
+    },
+    {
+      "displayText": "Inherited alphabet keeps\nnested term\npronunciation.",
+      "phoneme": "",
+      "alphabet": "",
+      "sayAs": "",
+      "pauseBeforeMs": 0,
+      "pauseAfterMs": 0,
+      "cssSpeech": {},
+      "pronunciationRefs": [
+        {
+          "term": "nested term",
+          "originalText": "nested term",
+          "phoneme": "nɛstɪd tɝm",
+          "alphabet": "ipa",
+          "source": "ssml",
+          "startOffset": 25,
+          "endOffset": 36
+        }
+      ]
+    },
+    {
+      "displayText": "CSS speech hints are inline.",
+      "phoneme": "",
+      "alphabet": "",
+      "sayAs": "digits",
+      "pauseBeforeMs": 100,
+      "pauseAfterMs": 220,
+      "cssSpeech": {
+        "speak-as": "digits",
+        "pause": "100ms 220ms",
+        "voice-rate": "slow"
+      },
+      "pronunciationRefs": []
+    }
+  ]
+}
