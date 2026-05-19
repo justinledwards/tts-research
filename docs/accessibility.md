@@ -35,6 +35,8 @@ Every cinema surface exposes a polite live region for the current source and sco
 
 Policy Notes are rendered as normal text, including the shared policy explanation string, so skipped, summarised, on-demand, literal, code, table, citation, math, caption, quote, list, and admonition decisions are inspectable outside visual highlighting.
 
+Wayfinding controls share one model for outlines, bookmarks, recent positions, and locator-backed resume. The concise UX contract lives in `docs/wayfinding-scope-ux.md`.
+
 ## Non-Book Parity
 
 Document Cinema and Website Cinema use the shared focus lifecycle, keyboard map, live-region helper, reduced-motion behavior, high-contrast treatment, and typography/reflow controls. Auto-follow scrolling uses instant movement when reduced motion is enabled. Prepared-source reader settings live in the same settings menu as theme and auto-follow so the preferences remain shared across formats.

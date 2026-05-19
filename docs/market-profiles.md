@@ -13,6 +13,8 @@ Policy resolution has one precedence order across prepared sources, book sources
 
 Old sources are not retroactively frozen. A source follows the current project profile until `sourceSpeechPolicyProfile` or `sourceSpeechPolicyOverrides` is set. Source pins can be cleared with the source speech-policy PATCH endpoints.
 
+Reader surfaces show project defaults, source pins, session overrides, and the current resolved profile as separate chips. See `docs/wayfinding-scope-ux.md` for the UI contract.
+
 ## Profile Matrix
 
 | Profile | mode | tableMode | tableHeaderMode | codeMode | mathMode | footnoteMode | imageMode | captionMode | citationMode | listMarkerMode | admonitionMode | quoteMode |

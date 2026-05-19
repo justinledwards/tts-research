@@ -75,3 +75,12 @@
 - [x] Update docs and disabled smoke workflow.
 - [x] Run automated validation commands.
 - [ ] Complete manual screen-reader smoke checklist with assistive tech.
+
+## 2026-05-19 21:21 CEST - Wayfinding bookmarks and policy scope
+- [x] Add shared reader navigation helpers and panels.
+- [x] Add shared policy scope chips and source pin controls.
+- [x] Wire Book, Document, and Website Cinema to shared navigation and policy scope UI.
+- [x] Fix policy preview/job request scope so project profile is not sent as a session override.
+- [x] Update docs and disabled UI reachability workflow example.
+- [x] Add unit and reachability coverage.
+- [x] Run project validation commands.

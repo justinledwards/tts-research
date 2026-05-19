@@ -19,6 +19,7 @@ const screenshotsDir = process.env.E2E_SCREENSHOT_DIR ?? path.join(artifactDir, 
 const summaryPath = process.env.E2E_SUMMARY_PATH ?? path.join(artifactDir, "summary.json");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 const lowResourceMode = process.env.E2E_LOW_RESOURCE === "1";
+const readerWayfindingOnly = process.env.E2E_READER_WAYFINDING === "1";
 const activeProjectKey = "tts-active-project-id";
 const jobTimeoutMs = Number.parseInt(process.env.E2E_JOB_TIMEOUT_MS ?? "180000", 10);
 
@@ -71,11 +72,14 @@ async function main() {
 
     const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
     try {
-      for (const fixture of [
+      const fixturesUnderTest = [
         { file: fixtures.epub, kind: "epub", screenshot: "book-cinema-epub.png" },
         { file: fixtures.docx, kind: "docx", screenshot: "book-cinema-docx.png" },
         { file: fixtures.pdf, kind: "pdf", screenshot: "book-cinema-pdf.png" },
-      ]) {
+      ];
+      for (const fixture of readerWayfindingOnly
+        ? fixturesUnderTest.slice(0, 1)
+        : fixturesUnderTest) {
         const result = await runBookSourceE2E(browser, project.id, fixture);
         summary.screenshots.push(result.screenshot);
         summary.performance.push({
@@ -226,6 +230,27 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await playbackSpeedSelect.selectOption("1.25");
     const playbackSpeed = await playbackSpeedSelect.inputValue();
     assert(playbackSpeed === "1.25", `Playback speed control value = ${playbackSpeed}`);
+    const overlay = page.locator(".fixed.inset-0").first();
+    const bookmarkButton = visibleOverlayButton(page, "Bookmark");
+    await assertEnabled(bookmarkButton, "Bookmark");
+    await bookmarkButton.click();
+    await waitForSavedBookmark(projectId, book.id, scope, job.id);
+    await overlay.getByRole("button", { exact: true, name: "Bookmarks" }).first().click();
+    await overlay
+      .getByText(/Scope|Word|Saved position/)
+      .first()
+      .waitFor({ timeout: 15_000 });
+    await overlay.getByRole("button", { exact: true, name: "Recent" }).first().click();
+    await overlay
+      .getByText(/Book|Chapter|Page|Full/)
+      .first()
+      .waitFor({ timeout: 15_000 });
+    await overlay.getByRole("button", { exact: true, name: "Outline" }).first().click();
+    await overlay
+      .getByRole("button", { name: /Full|Chapter|Page/ })
+      .first()
+      .click();
+    await exerciseSourcePinSmoke(page, book.id);
     await waitForSavedProgress(projectId, book.id, scope, job.id);
     await page.screenshot({ fullPage: false, path: screenshot });
 
@@ -258,6 +283,29 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
   } finally {
     await context.close();
   }
+}
+
+async function exerciseSourcePinSmoke(page, bookSourceId) {
+  const pinEndpoint = `/api/book-sources/${encodeURIComponent(bookSourceId)}/speech-policy`;
+  const savePinButton = visibleOverlayButton(page, "Save pin");
+  await assertEnabled(savePinButton, "Save pin");
+  const saveResponse = page.waitForResponse(
+    (response) => response.request().method() === "PATCH" && response.url().includes(pinEndpoint),
+  );
+  await savePinButton.click();
+  const saved = await saveResponse;
+  assert(saved.ok(), `Source policy save failed with ${String(saved.status())}`);
+  await page.locator(".fixed.inset-0").first().getByText("Pinned").first().waitFor();
+
+  const clearPinButton = visibleOverlayButton(page, "Clear pin");
+  await assertEnabled(clearPinButton, "Clear pin");
+  const clearResponse = page.waitForResponse(
+    (response) => response.request().method() === "PATCH" && response.url().includes(pinEndpoint),
+  );
+  await clearPinButton.click();
+  const cleared = await clearResponse;
+  assert(cleared.ok(), `Source policy clear failed with ${String(cleared.status())}`);
+  await page.locator(".fixed.inset-0").first().getByText("Project default").first().waitFor();
 }
 
 function visibleOverlayButton(page, label) {
@@ -710,6 +758,46 @@ async function waitForSavedProgress(projectId, bookSourceId, bookScope, jobId) {
   return apiJson(`/api/progress/${targetId}`, {
     body: JSON.stringify({
       activeWordIndex: 4,
+      bookScope,
+      bookSourceId,
+      currentTimeSec: 4,
+      durationSec: 20,
+      jobId,
+      projectId,
+      progress: 0.2,
+      readingPosition: {
+        activeWordIndex: 4,
+        bookSourceId,
+        scopeKey: scopeKey(bookScope),
+      },
+      targetId,
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "PATCH",
+  });
+}
+
+async function waitForSavedBookmark(projectId, bookSourceId, bookScope, jobId) {
+  const progress = await waitForSavedProgress(projectId, bookSourceId, bookScope, jobId);
+  if ((progress.bookmarks ?? []).length > 0) {
+    return progress;
+  }
+  const targetId = `book:${bookSourceId}:${scopeKey(bookScope)}`;
+  return apiJson(`/api/progress/${targetId}`, {
+    body: JSON.stringify({
+      activeWordIndex: 4,
+      addBookmark: {
+        activeWordIndex: 4,
+        createdAt: new Date().toISOString(),
+        currentTimeSec: 4,
+        id: `bookmark-${Date.now().toString(36)}`,
+        label: "0:04",
+        readingPosition: {
+          activeWordIndex: 4,
+          bookSourceId,
+          scopeKey: scopeKey(bookScope),
+        },
+      },
       bookScope,
       bookSourceId,
       currentTimeSec: 4,

@@ -9,6 +9,39 @@ import {
 } from "react";
 import { ReaderAccessibilityControls } from "./components/reader/ReaderAccessibilityControls";
 import {
+  BOOK_SOURCE_ACCEPT,
+  bookCinemaLiveAnnouncement,
+  bookCinemaPolicyNotes,
+  bookScopeKey,
+  bookScopeLabel,
+  bookScopeOptions,
+  bookScopeSpans,
+  bookScopeText,
+  bookSourceName,
+  isSupportedBookSourceBatch,
+  normalizeBookScopeForBook,
+  paginateBookSpans,
+  resolveBookActiveWordIndex,
+  resolveDefaultBookScope,
+  resolveDisplayedBookActiveWordIndex,
+  visibleBookSpans,
+  type BookCinemaPolicyNote,
+  type BookPage,
+  type BookPaginationResult,
+  type BookScopeOption,
+} from "./bookCinemaModel";
+import {
+  ReaderWayfindingPanel,
+  playbackProgressForBookmark,
+  readerBookmarksFromProgress,
+  readerOutlineFromBookScopes,
+  readerRecentPositionsFromProgress,
+  type ReaderBookmarkItem,
+  type ReaderOutlineItem,
+  type ReaderRecentPositionItem,
+} from "./features/reader-navigation";
+import { PolicyScopeChips, SourcePolicyPinEditor } from "./features/policy";
+import {
   READER_LINE_HEIGHT_RATIO,
   READER_LINE_SPACING_CLASS,
   READER_MEASURE_CLASS,
@@ -17,7 +50,6 @@ import {
   READER_TEXT_SCALE_FONT_PX,
   normalizeReaderAccessibilitySettings,
   readerDataAttributes,
-  readerLiveAnnouncement,
   readerScrollBehavior,
   useReaderKeyboardControls,
   useReaderModalLifecycle,
@@ -33,20 +65,22 @@ import type {
   BookScope,
   BookSource,
   BookSourceImportOptions,
-  BookSourceSectionRole,
   BookSourceScopeContent,
   BookSourceWordSpan,
+  CustomSpeechPolicyProfile,
   HighlightMap,
   NarrationBlock,
   PDFTableMode,
   PlaybackProgress,
+  SourceSpeechPolicyUpdateRequest,
+  SpeechPolicyDefinition,
+  SpeechPolicyOverrides,
+  SpeechPolicyProfile,
   ThemeName,
   VoiceJob,
 } from "./types";
 import type { HighlightCue } from "./highlightMap";
 
-export const BOOK_SOURCE_ACCEPT =
-  ".pdf,.epub,.docx,.md,.markdown,.html,.htm,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/x-markdown,text/html,application/xhtml+xml,application/zip,image/png,image/jpeg,image/tiff,image/webp";
 const BOOK_PAGE_VERTICAL_PADDING = 108;
 const BOOK_PAGE_HORIZONTAL_PADDING = 76;
 const BOOK_PAGE_MIN_WORDS = 18;
@@ -57,65 +91,41 @@ const BOOK_PAGE_DEFAULT_WORDS: Record<BookCinemaTextSize, number> = {
   giant: 54,
   large: 76,
 };
-const POLICY_NOTE_KINDS = new Set([
-  "admonition",
-  "caption",
-  "citation",
-  "code",
-  "list",
-  "math",
-  "quote",
-  "table",
-]);
-
+export {
+  BOOK_SOURCE_ACCEPT,
+  bookCinemaLiveAnnouncement,
+  bookCinemaPolicyNotes,
+  bookScopeKey,
+  bookScopeLabel,
+  bookScopeOptions,
+  bookScopeSpans,
+  bookScopeText,
+  bookSourceName,
+  isSupportedBookSource,
+  isSupportedBookSourceBatch,
+  normalizeBookScopeForBook,
+  paginateBookSpans,
+  resolveBookActiveWordIndex,
+  resolveDefaultBookScope,
+  resolveDisplayedBookActiveWordIndex,
+  visibleBookSpans,
+} from "./bookCinemaModel";
 export {
   DEFAULT_READER_ACCESSIBILITY_SETTINGS,
   READER_ACCESSIBILITY_STORAGE_KEY,
   normalizeReaderAccessibilitySettings,
 } from "./features/reader-accessibility";
+export type {
+  BookCinemaPolicyNote,
+  BookPage,
+  BookPaginationResult,
+  BookScopeOption,
+} from "./bookCinemaModel";
 export type { ReaderAccessibilitySettings } from "./features/reader-accessibility";
 export type BookCinemaTextSize = ReaderTextScale;
 export type BookCinemaKeyboardCommand = ReaderKeyboardCommand;
 
 type BookCinemaMobilePanel = "narration" | "source" | "structure";
-
-export interface BookCinemaPolicyNote {
-  explanation: string;
-  id: string;
-  kind: string;
-  mode: string;
-  text?: string;
-  title: string;
-}
-
-interface BookScopeOption {
-  key: string;
-  label: string;
-  group: BookSourceSectionRole | "pages" | "full";
-  isNarratable: boolean;
-  wordCount?: number;
-  scope: BookScope;
-}
-
-export interface BookPage {
-  endWordIndex: number;
-  index: number;
-  spans: NonNullable<BookSource["wordSpans"]>;
-  startWordIndex: number;
-}
-
-export interface BookPaginationResult {
-  activePageIndex: number;
-  pages: BookPage[];
-  pagesPerSpread: 1 | 2;
-  spreadIndex: number;
-  totalPages: number;
-}
-
-interface BookPaginationOptions {
-  pagesPerSpread?: 1 | 2;
-  wordsPerPage?: number;
-}
 
 export interface BookCinemaControlsProps {
   bookSources: BookSource[];
@@ -694,15 +704,23 @@ export function BookCinemaOverlay({
   book,
   bookSources,
   canCreateAudio,
+  customPolicyProfiles,
   importError,
   isImporting,
   isProcessing,
   job,
   playbackCursorSec,
   playbackControls,
+  policyDefinition,
+  policyError,
+  policyOverrides,
+  policyProfile,
+  policyProfiles,
   progress,
+  progressItems,
   scope,
   scopeContent,
+  sourcePolicySaving,
   highlightCue,
   highlightMap,
   themeName,
@@ -717,19 +735,29 @@ export function BookCinemaOverlay({
   onScopeChange,
   onSelectBook,
   onSkip,
+  onClearSourcePolicy,
   onResumeProgress,
+  onSaveSourcePolicy,
   onThemeChange,
 }: Readonly<{
   accessibilitySettings: ReaderAccessibilitySettings;
   book: BookSource;
   bookSources: BookSource[];
   canCreateAudio: boolean;
+  customPolicyProfiles: CustomSpeechPolicyProfile[];
   importError: string | null;
   isImporting: boolean;
   isProcessing: boolean;
   job: VoiceJob | null;
   playbackCursorSec: number;
+  policyDefinition: SpeechPolicyDefinition;
+  policyError: string | null;
+  policyOverrides: SpeechPolicyOverrides;
+  policyProfile: string;
+  policyProfiles: SpeechPolicyProfile[];
   progress: PlaybackProgress | null;
+  progressItems: PlaybackProgress[];
+  sourcePolicySaving: boolean;
   playbackControls: {
     isAvailable: boolean;
     isPlaying: boolean;
@@ -756,7 +784,9 @@ export function BookCinemaOverlay({
   onScopeChange: (scope: BookScope) => void;
   onSelectBook: (bookId: string) => void;
   onSkip: (seconds: number) => void;
+  onClearSourcePolicy: () => Promise<void> | void;
   onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
+  onSaveSourcePolicy: (request: SourceSpeechPolicyUpdateRequest) => Promise<void> | void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
   const normalizedScope = normalizeBookScopeForBook(book, scope);
@@ -805,11 +835,24 @@ export function BookCinemaOverlay({
   const activeBookJob = activeJobMatchesBook ? job : null;
   const isCancelledBookJob = activeJobMatchesBook && job?.status === "cancelled";
   const bookmarks = progress?.bookmarks ?? [];
+  const bookmarkItems = useMemo(() => readerBookmarksFromProgress(progress), [progress]);
   const canBookmark = activeJobMatchesBook && playbackControls.isAvailable;
   const policyNotes = useMemo(() => bookCinemaPolicyNotes(scopeContent), [scopeContent]);
   const activeSpan = scopedSpans.find((span) => span.index === readerActiveWordIndex) ?? null;
   const activeBlock = bookCinemaActiveBlock(scopeContent?.blocks ?? [], activeSpan);
   const activePassage = bookCinemaActivePassage(activeBlock, scopedText);
+  const bookSourceLabels = useMemo(
+    () => new Map(bookSources.map((source) => [source.id, bookSourceName(source)])),
+    [bookSources],
+  );
+  const recentItems = useMemo(
+    () => readerRecentPositionsFromProgress(progressItems, { bookSources: bookSourceLabels }),
+    [bookSourceLabels, progressItems],
+  );
+  const outlineItems = useMemo(
+    () => readerOutlineFromBookScopes(scopeOptions, pointerScopeKey ?? normalizedScopeKey),
+    [normalizedScopeKey, pointerScopeKey, scopeOptions],
+  );
   const hasPlayableAudio = Boolean(activeBookJob && playbackControls.isAvailable);
   const createAudioScope = pointerOption?.scope ?? normalizedScope;
   const playbackTransportIcon = playbackControls.isPlaying ? (
@@ -850,6 +893,24 @@ export function BookCinemaOverlay({
   };
   const handleNavigateToScope = (option: BookScopeOption) => {
     setPointerScopeKey(option.key);
+  };
+  const handleWayfindingOutlineNavigate = (item: ReaderOutlineItem<BookScope>) => {
+    const option = scopeOptions.find((scopeOption) => scopeOption.key === item.id);
+    if (option) {
+      setPointerScopeKey(option.key);
+      onScopeChange(option.scope);
+      return;
+    }
+    setPointerScopeKey(item.id);
+  };
+  const handleBookmarkNavigate = (bookmark: ReaderBookmarkItem) => {
+    if (!progress) {
+      return;
+    }
+    onResumeProgress(playbackProgressForBookmark(progress, bookmark), bookmark.currentTimeSec);
+  };
+  const handleRecentNavigate = (item: ReaderRecentPositionItem) => {
+    onResumeProgress(item.progressItem, item.currentTimeSec);
   };
 
   useReaderKeyboardControls({
@@ -1034,15 +1095,19 @@ export function BookCinemaOverlay({
               </div>
             </BookCinemaRailCard>
 
-            <BookCinemaRailCard title="Structure outline">
-              <BookCinemaScopeQueue
-                activeScope={normalizedScope}
-                maxItems={8}
-                options={scopeOptions}
-                pointerScopeKey={pointerScopeKey}
-                onNavigate={handleNavigateToScope}
-              />
-            </BookCinemaRailCard>
+            <ReaderWayfindingPanel
+              activeTab="outline"
+              bookmarks={bookmarkItems}
+              canBookmark={canBookmark}
+              maxItems={8}
+              outlineItems={outlineItems}
+              recentItems={recentItems}
+              title="Structure outline"
+              onAddBookmark={onBookmark}
+              onBookmarkNavigate={handleBookmarkNavigate}
+              onOutlineNavigate={handleWayfindingOutlineNavigate}
+              onRecentNavigate={handleRecentNavigate}
+            />
 
             <BookCinemaRailCard title="Warnings & skipped content">
               <div className="grid gap-2 text-sm">
@@ -1099,13 +1164,38 @@ export function BookCinemaOverlay({
             </BookCinemaRailCard>
 
             <BookCinemaRailCard title="Speech policy">
-              <div className="grid gap-2 text-sm">
+              <div className="grid gap-3 text-sm">
+                <PolicyScopeChips
+                  state={{
+                    projectProfile: policyProfile,
+                    resolvedProfile: activeBlock?.speechPolicy.profile,
+                    sessionOverrides: policyOverrides,
+                    sourceOverrides: book.sourceSpeechPolicyOverrides,
+                    sourceProfile: book.sourceSpeechPolicyProfile,
+                  }}
+                />
                 <MetadataRow label="Generation" value={bookScopeLabel(createAudioScope)} />
                 <MetadataRow label="Voice" value={activeBookJob?.voice ?? "Default narrative"} />
                 <MetadataRow label="Speed" value={`${playbackControls.playbackRate.toFixed(2)}x`} />
                 <MetadataRow
                   label="Policy"
-                  value={book.sourceSpeechPolicyProfile ?? "Project default"}
+                  value={
+                    activeBlock?.speechPolicy.profile ??
+                    book.sourceSpeechPolicyProfile ??
+                    "Project default"
+                  }
+                />
+                <SourcePolicyPinEditor
+                  customProfiles={customPolicyProfiles}
+                  definition={policyDefinition}
+                  disabled={book.status !== "ready"}
+                  error={policyError}
+                  isSaving={sourcePolicySaving}
+                  profiles={policyProfiles}
+                  sourceOverrides={book.sourceSpeechPolicyOverrides}
+                  sourceProfile={book.sourceSpeechPolicyProfile}
+                  onClear={onClearSourcePolicy}
+                  onSave={onSaveSourcePolicy}
                 />
               </div>
             </BookCinemaRailCard>
@@ -1129,6 +1219,18 @@ export function BookCinemaOverlay({
             </BookCinemaRailCard>
 
             <BookCinemaPolicyNotes notes={policyNotes} />
+
+            <ReaderWayfindingPanel
+              bookmarks={bookmarkItems}
+              canBookmark={canBookmark}
+              maxItems={6}
+              outlineItems={outlineItems}
+              recentItems={recentItems}
+              onAddBookmark={onBookmark}
+              onBookmarkNavigate={handleBookmarkNavigate}
+              onOutlineNavigate={handleWayfindingOutlineNavigate}
+              onRecentNavigate={handleRecentNavigate}
+            />
 
             <BookCinemaRailCard title="Section queue">
               <BookCinemaScopeQueue
@@ -1161,16 +1263,21 @@ export function BookCinemaOverlay({
         importError={importError}
         isImporting={isImporting}
         mobilePanel={mobilePanel}
-        options={scopeOptions}
+        bookmarkItems={bookmarkItems}
+        outlineItems={outlineItems}
         progress={progress}
-        pointerScopeKey={pointerScopeKey}
+        recentItems={recentItems}
         scopeContent={scopeContent}
+        canBookmark={canBookmark}
+        onAddBookmark={onBookmark}
+        onBookmarkNavigate={handleBookmarkNavigate}
         onImport={onImport}
         onInspectStructure={onInspectStructure}
         onMobilePanelChange={setMobilePanel}
         onSelectBook={onSelectBook}
         onResumeProgress={onResumeProgress}
-        onNavigate={handleNavigateToScope}
+        onRecentNavigate={handleRecentNavigate}
+        onOutlineNavigate={handleWayfindingOutlineNavigate}
       />
 
       <footer className="border-t bg-[var(--vs-raised)] px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.18)] vs-border lg:px-7">
@@ -1594,35 +1701,45 @@ function BookCinemaMobileSheet({
   importError,
   isImporting,
   mobilePanel,
-  options,
+  bookmarkItems,
+  canBookmark,
+  outlineItems,
   progress,
-  pointerScopeKey,
+  recentItems,
   scopeContent,
+  onAddBookmark,
+  onBookmarkNavigate,
   onImport,
   onInspectStructure,
   onMobilePanelChange,
+  onOutlineNavigate,
+  onRecentNavigate,
   onSelectBook,
   onResumeProgress,
-  onNavigate,
 }: Readonly<{
   activePassage: string;
   activeScope: BookScope;
   book: BookSource;
   bookSources: BookSource[];
+  bookmarkItems: ReaderBookmarkItem[];
+  canBookmark: boolean;
   hasPlayableAudio: boolean;
   importError: string | null;
   isImporting: boolean;
   mobilePanel: BookCinemaMobilePanel | null;
-  options: BookScopeOption[];
+  outlineItems: ReaderOutlineItem<BookScope>[];
   progress: PlaybackProgress | null;
-  pointerScopeKey?: string | null;
+  recentItems: ReaderRecentPositionItem[];
   scopeContent: BookSourceScopeContent | null;
+  onAddBookmark: () => void;
+  onBookmarkNavigate: (bookmark: ReaderBookmarkItem) => void;
   onImport: (files: File[], options: BookSourceImportOptions) => Promise<void>;
   onInspectStructure: (book: BookSource) => void;
   onMobilePanelChange: (panel: BookCinemaMobilePanel | null) => void;
+  onOutlineNavigate: (item: ReaderOutlineItem<BookScope>) => void;
+  onRecentNavigate: (item: ReaderRecentPositionItem) => void;
   onSelectBook: (bookId: string) => void;
   onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
-  onNavigate: (option: BookScopeOption) => void;
 }>) {
   if (!mobilePanel) {
     return null;
@@ -1684,12 +1801,17 @@ function BookCinemaMobileSheet({
       ) : null}
       {mobilePanel === "structure" ? (
         <div className="grid gap-3 text-sm">
-          <BookCinemaScopeQueue
-            activeScope={activeScope}
+          <ReaderWayfindingPanel
+            activeTab="outline"
+            bookmarks={bookmarkItems}
+            canBookmark={canBookmark}
             maxItems={8}
-            options={options}
-            pointerScopeKey={pointerScopeKey}
-            onNavigate={onNavigate}
+            outlineItems={outlineItems}
+            recentItems={recentItems}
+            onAddBookmark={onAddBookmark}
+            onBookmarkNavigate={onBookmarkNavigate}
+            onOutlineNavigate={onOutlineNavigate}
+            onRecentNavigate={onRecentNavigate}
           />
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold vs-border"
@@ -2544,255 +2666,6 @@ function useSelectedBook(
   }, [bookSources, selectedBookSourceId]);
 }
 
-export function resolveDefaultBookScope(book: BookSource): BookScope {
-  return fullBookScope(book);
-}
-
-export function normalizeBookScopeForBook(book: BookSource, scope: BookScope | null): BookScope {
-  if (!scope) {
-    return resolveDefaultBookScope(book);
-  }
-  if (
-    scope.type === "chapter" &&
-    (book.chapters ?? []).some((chapter) => chapter.index === scope.chapterIndex)
-  ) {
-    const chapter = book.chapters?.find((item) => item.index === scope.chapterIndex);
-    return {
-      type: "chapter",
-      chapterIndex: scope.chapterIndex,
-      label:
-        nonEmptyString(scope.label) ??
-        nonEmptyString(chapter?.title) ??
-        `Chapter ${String(scope.chapterIndex)}`,
-    };
-  }
-  if (
-    scope.type === "pages" &&
-    (book.pages ?? []).some((page) => page.index === scope.pageStart) &&
-    (book.pages ?? []).some((page) => page.index === scope.pageEnd)
-  ) {
-    return {
-      type: "pages",
-      pageStart: scope.pageStart,
-      pageEnd: scope.pageEnd,
-      label:
-        nonEmptyString(scope.label) ??
-        pageRangeLabel(scope.pageStart ?? 1, scope.pageEnd ?? scope.pageStart ?? 1),
-    };
-  }
-  if (scope.type === "book") {
-    return { type: "book", label: nonEmptyString(scope.label) ?? fullSourceScopeLabel(book) };
-  }
-  return resolveDefaultBookScope(book);
-}
-
-export function bookScopeText(book: BookSource, scope: BookScope): string {
-  if (scope.type === "chapter") {
-    const chapter = book.chapters?.find((item) => item.index === scope.chapterIndex);
-    if (chapter?.text) {
-      return chapter.text;
-    }
-    if (chapter?.pageStart && chapter.pageEnd) {
-      return (book.pages ?? [])
-        .filter(
-          (page) => page.index >= (chapter.pageStart ?? 1) && page.index <= (chapter.pageEnd ?? 1),
-        )
-        .map((page) => page.text ?? "")
-        .join("\n\n");
-    }
-    return "";
-  }
-  if (scope.type === "pages") {
-    const start = scope.pageStart ?? 1;
-    const end = scope.pageEnd ?? start;
-    return (book.pages ?? [])
-      .filter((page) => page.index >= start && page.index <= end)
-      .map((page) => page.text ?? "")
-      .join("\n\n");
-  }
-  return book.text ?? "";
-}
-
-export function bookScopeSpans(
-  book: BookSource,
-  scope: BookScope,
-): NonNullable<BookSource["wordSpans"]> {
-  const spans = book.wordSpans ?? [];
-  if (scope.type === "chapter") {
-    return spans.filter((span) => span.chapter === scope.chapterIndex);
-  }
-  if (scope.type === "pages") {
-    const start = scope.pageStart ?? 1;
-    const end = scope.pageEnd ?? start;
-    return spans.filter((span) => (span.pageIndex ?? 0) >= start && (span.pageIndex ?? 0) <= end);
-  }
-  return spans;
-}
-
-export function bookScopeOptions(book: BookSource): BookScopeOption[] {
-  const fullOption = fullBookScopeOption(book);
-  const sections = book.sections ?? [];
-  if (sections.length > 0) {
-    const sectionOptions = sections.map((section) => ({
-      key: bookScopeKey(scopeFromBookSection(section)),
-      label: section.title,
-      group: section.role,
-      isNarratable: section.isNarratable,
-      wordCount: section.wordCount,
-      scope: scopeFromBookSection(section),
-    }));
-    return [fullOption, ...sectionOptions];
-  }
-  const chapters = book.chapters ?? [];
-  const pages = book.pages ?? [];
-  if (book.kind === "epub" && chapters.length > 0) {
-    return [
-      fullOption,
-      ...chapters.map(
-        (chapter): BookScopeOption => ({
-          key: `chapter:${String(chapter.index)}`,
-          label: nonEmptyString(chapter.title) ?? `Chapter ${String(chapter.index)}`,
-          group: chapter.role ?? "body",
-          isNarratable: chapter.isNarratable ?? true,
-          wordCount: chapter.wordCount,
-          scope: {
-            type: "chapter",
-            chapterIndex: chapter.index,
-            label: nonEmptyString(chapter.title) ?? `Chapter ${String(chapter.index)}`,
-          },
-        }),
-      ),
-    ];
-  }
-  if (book.kind === "pdf" && pages.length > 0) {
-    const options: BookScopeOption[] = [];
-    for (let index = 1; index <= pages.length; index += 2) {
-      const end = Math.min(index + 1, pages.length);
-      options.push({
-        key: `pages:${String(index)}-${String(end)}`,
-        label: pageRangeLabel(index, end),
-        group: "pages",
-        isNarratable: true,
-        wordCount: pages.slice(index - 1, end).reduce((total, page) => total + page.wordCount, 0),
-        scope: { type: "pages", pageStart: index, pageEnd: end, label: pageRangeLabel(index, end) },
-      });
-    }
-    return [fullOption, ...options];
-  }
-  return [fullOption];
-}
-
-export function bookScopeKey(scope: BookScope): string {
-  if (scope.type === "chapter") {
-    return `chapter:${String(scope.chapterIndex ?? 1)}`;
-  }
-  if (scope.type === "pages") {
-    return `pages:${String(scope.pageStart ?? 1)}-${String(scope.pageEnd ?? scope.pageStart ?? 1)}`;
-  }
-  return "book";
-}
-
-export function bookScopeLabel(scope: BookScope): string {
-  if (scope.label && scope.label.trim().length > 0) {
-    return scope.label;
-  }
-  if (scope.type === "chapter") {
-    return `Chapter ${String(scope.chapterIndex ?? 1)}`;
-  }
-  if (scope.type === "pages") {
-    return pageRangeLabel(scope.pageStart ?? 1, scope.pageEnd ?? scope.pageStart ?? 1);
-  }
-  return "Full book";
-}
-
-export function bookCinemaLiveAnnouncement({
-  activeWordIndex = -1,
-  book,
-  fragmentIndex,
-  scope,
-}: Readonly<{
-  activeWordIndex?: number;
-  book: BookSource;
-  fragmentIndex?: number;
-  scope: BookScope;
-}>): string {
-  return readerLiveAnnouncement({
-    activeWordIndex,
-    fragmentIndex: fragmentIndex !== undefined && fragmentIndex >= 0 ? fragmentIndex : undefined,
-    scopeLabel: bookScopeLabel(scope),
-    surfaceTitle: bookSourceName(book),
-  });
-}
-
-export function bookCinemaPolicyNotes(
-  scopeContent: BookSourceScopeContent | null | undefined,
-): BookCinemaPolicyNote[] {
-  const notes: BookCinemaPolicyNote[] = [];
-  const seen = new Set<string>();
-  for (const block of scopeContent?.blocks ?? []) {
-    const explanation = block.speechPolicy.explanation.trim();
-    const mode = block.speechPolicy.mode;
-    const shouldInclude =
-      explanation.length > 0 &&
-      (mode !== "speak" ||
-        block.speakMode !== "speak" ||
-        POLICY_NOTE_KINDS.has(block.kind) ||
-        Boolean(block.speechPolicy.elementMode));
-    if (!shouldInclude) {
-      continue;
-    }
-    const note = {
-      explanation,
-      id: `block:${block.id}`,
-      kind: block.kind,
-      mode,
-      text: compactBookPolicyText(block.spokenText ?? block.text),
-      title: block.label ?? formatPolicyKindLabel(block.kind),
-    };
-    const key = `${note.kind}:${note.mode}:${note.explanation}:${note.text ?? ""}`;
-    if (!seen.has(key)) {
-      notes.push(note);
-      seen.add(key);
-    }
-  }
-  for (const item of scopeContent?.skippedItems ?? []) {
-    const explanation = item.reason.trim();
-    if (!explanation) {
-      continue;
-    }
-    const note = {
-      explanation,
-      id: `skipped:${item.id}`,
-      kind: item.kind,
-      mode: "skip",
-      text: compactBookPolicyText(item.text),
-      title: formatPolicyKindLabel(item.kind),
-    };
-    const key = `${note.kind}:${note.mode}:${note.explanation}:${note.text ?? ""}`;
-    if (!seen.has(key)) {
-      notes.push(note);
-      seen.add(key);
-    }
-  }
-  return notes;
-}
-
-function compactBookPolicyText(value: string | undefined): string | undefined {
-  const clean = value?.replaceAll(/\s+/g, " ").trim() ?? "";
-  if (!clean) {
-    return undefined;
-  }
-  return clean.length > 160 ? `${clean.slice(0, 157)}...` : clean;
-}
-
-function formatPolicyKindLabel(value: string): string {
-  if (value === "math") {
-    return "Math";
-  }
-  const spaced = value.replaceAll(/([A-Z])/g, " $1");
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
-
 function formatPolicyModeLabel(value: string): string {
   if (value === "rowLinear") {
     return "Row linear";
@@ -2819,39 +2692,6 @@ function formatPolicyModeLabel(value: string): string {
     return "Row and column";
   }
   return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-export function resolveBookActiveWordIndex(
-  book: BookSource,
-  job: VoiceJob | null,
-  playbackCursorSec: number,
-  scope: BookScope | null = null,
-  scopeContent: BookSourceScopeContent | null = null,
-): number {
-  const normalizedScope = normalizeBookScopeForBook(book, scope);
-  const spans = scopeContent?.wordSpans ?? bookScopeSpans(book, normalizedScope);
-  if (spans.length === 0 || !job || job.durationMs <= 0 || playbackCursorSec <= 0) {
-    return -1;
-  }
-  if (job.bookSourceId && job.bookSourceId !== book.id) {
-    return -1;
-  }
-  const scopedText = (scopeContent?.text ?? bookScopeText(book, normalizedScope)).trim();
-  const jobText = job.inputText.trim();
-  if (scopedText.length > 0 && jobText.length > 0 && scopedText !== jobText) {
-    return -1;
-  }
-  const progress = Math.min(0.999, Math.max(0, playbackCursorSec / (job.durationMs / 1000)));
-  return (
-    spans[Math.min(spans.length - 1, Math.max(0, Math.floor(progress * spans.length)))]?.index ?? -1
-  );
-}
-
-export function resolveDisplayedBookActiveWordIndex(
-  activeWordIndex: number,
-  progress: PlaybackProgress | null,
-): number {
-  return activeWordIndex >= 0 ? activeWordIndex : (progress?.activeWordIndex ?? -1);
 }
 
 function resolveHighlightPhraseRange(cue: HighlightCue | null): {
@@ -2884,85 +2724,8 @@ function bookWordClassName(
   return index === activeWordIndex ? "book-cinema-word-active" : "";
 }
 
-export function visibleBookSpans(
-  spans: BookSource["wordSpans"],
-  activeWordIndex: number,
-  maxWords = 220,
-): NonNullable<BookSource["wordSpans"]> {
-  const sourceSpans = spans ?? [];
-  if (sourceSpans.length <= maxWords) {
-    return sourceSpans;
-  }
-  if (activeWordIndex < 0) {
-    return sourceSpans.slice(0, maxWords);
-  }
-  const activeOffset = Math.max(
-    0,
-    sourceSpans.findIndex((span) => span.index === activeWordIndex),
-  );
-  const start = Math.max(0, activeOffset - Math.floor(maxWords * 0.4));
-  return sourceSpans.slice(start, Math.min(sourceSpans.length, start + maxWords));
-}
-
-export function paginateBookSpans(
-  spans: NonNullable<BookSource["wordSpans"]>,
-  activeWordIndex: number,
-  options: BookPaginationOptions = {},
-): BookPaginationResult {
-  const wordsPerPage = clampNumber(
-    options.wordsPerPage ?? BOOK_PAGE_DEFAULT_WORDS.large,
-    BOOK_PAGE_MIN_WORDS,
-    BOOK_PAGE_MAX_WORDS,
-  );
-  const pagesPerSpread = options.pagesPerSpread ?? 2;
-  if (spans.length === 0) {
-    return {
-      activePageIndex: 0,
-      pages: [],
-      pagesPerSpread,
-      spreadIndex: 0,
-      totalPages: 0,
-    };
-  }
-
-  const pages: BookPage[] = [];
-  for (let start = 0; start < spans.length; start += wordsPerPage) {
-    const pageSpans = spans.slice(start, start + wordsPerPage);
-    const firstSpan = pageSpans[0];
-    const lastSpan = pageSpans.at(-1) ?? firstSpan;
-    pages.push({
-      endWordIndex: lastSpan.index,
-      index: pages.length,
-      spans: pageSpans,
-      startWordIndex: firstSpan.index,
-    });
-  }
-
-  const activeOffset = spans.findIndex((span) => span.index === activeWordIndex);
-  const activePageIndex = activeOffset === -1 ? 0 : Math.floor(activeOffset / wordsPerPage);
-  const spreadIndex = Math.floor(activePageIndex / pagesPerSpread);
-  const firstPageIndex = spreadIndex * pagesPerSpread;
-
-  return {
-    activePageIndex,
-    pages: pages.slice(firstPageIndex, firstPageIndex + pagesPerSpread),
-    pagesPerSpread,
-    spreadIndex,
-    totalPages: pages.length,
-  };
-}
-
-export function bookSourceName(book: BookSource): string {
-  return nonEmptyString(book.title) ?? book.sourceFile;
-}
-
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function nonEmptyString(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
 function stringsFirstNonEmpty(...values: (string | null | undefined)[]): string {
@@ -2973,42 +2736,6 @@ function stringsFirstNonEmpty(...values: (string | null | undefined)[]): string 
     }
   }
   return "";
-}
-
-function fullSourceScopeLabel(book: BookSource): string {
-  return book.kind === "epub" ? "Full book" : "Full document";
-}
-
-function fullBookScope(book: BookSource): BookScope {
-  return { type: "book", label: fullSourceScopeLabel(book) };
-}
-
-function fullBookScopeOption(book: BookSource): BookScopeOption {
-  const scope = fullBookScope(book);
-  return {
-    key: bookScopeKey(scope),
-    label: bookScopeLabel(scope),
-    group: "full",
-    isNarratable: true,
-    wordCount: book.wordCount,
-    scope,
-  };
-}
-
-function scopeFromBookSection(section: NonNullable<BookSource["sections"]>[number]): BookScope {
-  if (section.kind === "pages" || (section.pageStart && section.pageEnd && !section.chapterIndex)) {
-    return {
-      type: "pages",
-      pageStart: section.pageStart ?? 1,
-      pageEnd: section.pageEnd ?? section.pageStart ?? 1,
-      label: section.title,
-    };
-  }
-  return {
-    type: "chapter",
-    chapterIndex: section.chapterIndex ?? section.index + 1,
-    label: section.title,
-  };
 }
 
 function groupBookScopeOptions(options: BookScopeOption[]): {
@@ -3052,10 +2779,6 @@ function bookCreateLabel(scope: BookScope, book?: BookSource): string {
     return "Create Book Audio";
   }
   return "Create Document Audio";
-}
-
-function pageRangeLabel(start: number, end: number): string {
-  return start === end ? `Page ${String(start)}` : `Pages ${String(start)}-${String(end)}`;
 }
 
 function formatEstimatedDuration(durationMs: number | null | undefined): string {
@@ -3116,46 +2839,6 @@ function formatBookCount(book: BookSource): string {
     return `${book.pageCount.toLocaleString()} pages · ${book.wordCount.toLocaleString()} words`;
   }
   return `${book.wordCount.toLocaleString()} words`;
-}
-
-export function isSupportedBookSource(file: File): boolean {
-  const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  return isBookSourceExtension(extension);
-}
-
-export function isSupportedBookSourceBatch(files: File[]): boolean {
-  if (files.length === 0) {
-    return false;
-  }
-  if (files.length === 1) {
-    return isSupportedBookSource(files[0]);
-  }
-  return files.every((file) => isImageBookSource(file));
-}
-
-function isImageBookSource(file: File): boolean {
-  const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  return ["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"].includes(extension);
-}
-
-function isBookSourceExtension(extension: string): boolean {
-  return [
-    "pdf",
-    "epub",
-    "docx",
-    "md",
-    "markdown",
-    "html",
-    "htm",
-    "zip",
-    "png",
-    "jpg",
-    "jpeg",
-    "tif",
-    "tiff",
-    "bmp",
-    "webp",
-  ].includes(extension);
 }
 
 function formatAdapterDiagnostics(diagnostics: BookCinemaDiagnostics | null): string {

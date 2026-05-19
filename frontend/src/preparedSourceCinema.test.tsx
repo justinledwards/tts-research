@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PreparedSourceCinemaOverlay } from "./PreparedSourceCinema";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "./features/reader-accessibility";
+import { DEFAULT_SPEECH_POLICY_DEFINITION } from "./speechPolicy";
 import {
   preparedSourceCinemaActionLabel,
   preparedSourceCinemaActiveBlock,
@@ -99,6 +100,7 @@ describe("prepared source cinema helpers", () => {
         accessibilitySettings={DEFAULT_READER_ACCESSIBILITY_SETTINGS}
         activeWordIndex={1}
         canCreateAudio
+        customPolicyProfiles={[]}
         importError={null}
         isImporting={false}
         isPlaybackActive
@@ -114,11 +116,20 @@ describe("prepared source cinema helpers", () => {
           skipBy: noop,
         }}
         playbackCursorSec={12}
+        policyDefinition={DEFAULT_SPEECH_POLICY_DEFINITION}
+        policyError={null}
+        policyOverrides={{}}
+        policyProfile="Enterprise"
+        policyProfiles={DEFAULT_SPEECH_POLICY_DEFINITION.profiles}
         progress={null}
+        progressItems={[]}
         source={source}
+        sourcePolicySaving={false}
         sources={[source]}
         themeName="light"
         onAccessibilitySettingsChange={noop}
+        onBookmark={noop}
+        onClearSourcePolicy={noop}
         onClose={noop}
         onCreateAudio={noop}
         onInspectStructure={noop}
@@ -126,6 +137,7 @@ describe("prepared source cinema helpers", () => {
         onPlayPause={noop}
         onRestart={noop}
         onResumeProgress={noop}
+        onSaveSourcePolicy={noop}
         onSelectSource={noop}
         onSkip={noop}
         onThemeChange={noop}
@@ -135,6 +147,9 @@ describe("prepared source cinema helpers", () => {
     expect(markup).toContain("Website Cinema");
     expect(markup).toContain("Example article");
     expect(markup).toContain("Content Structure");
+    expect(markup).toContain("Wayfinding");
+    expect(markup).toContain("Source policy pin");
+    expect(markup).toContain("Project default");
     expect(markup).toContain("Generated audio health");
     expect(markup).not.toContain("Segment timeline");
     expect(markup).toContain("Source provenance");

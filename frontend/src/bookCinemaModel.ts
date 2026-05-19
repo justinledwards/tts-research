@@ -55,7 +55,7 @@ export interface BookCinemaPolicyNote {
 export type BookCinemaTextSize = ReaderTextScale;
 export type BookCinemaKeyboardCommand = ReaderKeyboardCommand;
 
-interface BookScopeOption {
+export interface BookScopeOption {
   key: string;
   label: string;
   group: BookSourceSectionRole | "pages" | "full";

@@ -13,6 +13,16 @@ import {
   useReaderModalLifecycle,
   type ReaderAccessibilitySettings,
 } from "./features/reader-accessibility";
+import {
+  ReaderWayfindingPanel,
+  playbackProgressForBookmark,
+  readerBookmarksFromProgress,
+  readerRecentPositionsFromProgress,
+  type ReaderBookmarkItem,
+  type ReaderOutlineItem,
+  type ReaderRecentPositionItem,
+} from "./features/reader-navigation";
+import { PolicyScopeChips, SourcePolicyPinEditor } from "./features/policy";
 import { useAudioWaveformBars } from "./audioWaveform";
 import { looksLikeMermaidDiagram } from "./markdownModel";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
@@ -33,9 +43,14 @@ import {
 } from "./preparedSourceCinema";
 import { normalizeThemeName, VOICE_STUDIO_THEMES } from "./theme";
 import type {
+  CustomSpeechPolicyProfile,
   NarrationBlock,
   PlaybackProgress,
   PreparedSource,
+  SourceSpeechPolicyUpdateRequest,
+  SpeechPolicyDefinition,
+  SpeechPolicyOverrides,
+  SpeechPolicyProfile,
   ThemeName,
   VoiceJob,
 } from "./types";
@@ -61,6 +76,7 @@ export function PreparedSourceCinemaOverlay({
   accessibilitySettings,
   activeWordIndex,
   canCreateAudio,
+  customPolicyProfiles,
   importError,
   isImporting,
   isProcessing,
@@ -68,18 +84,28 @@ export function PreparedSourceCinemaOverlay({
   job,
   playbackControls,
   playbackCursorSec,
+  policyDefinition,
+  policyError,
+  policyOverrides,
+  policyProfile,
+  policyProfiles,
   progress,
+  progressItems,
   source,
+  sourcePolicySaving,
   sources,
   themeName,
   onClose,
   onAccessibilitySettingsChange,
+  onBookmark,
+  onClearSourcePolicy,
   onCreateAudio,
   onInspectStructure,
   onPrepareFile,
   onPlayPause,
   onRestart,
   onResumeProgress,
+  onSaveSourcePolicy,
   onSelectSource,
   onSkip,
   onThemeChange,
@@ -87,6 +113,7 @@ export function PreparedSourceCinemaOverlay({
   accessibilitySettings: ReaderAccessibilitySettings;
   activeWordIndex: number;
   canCreateAudio: boolean;
+  customPolicyProfiles: CustomSpeechPolicyProfile[];
   importError: string | null;
   isImporting: boolean;
   isProcessing: boolean;
@@ -94,18 +121,28 @@ export function PreparedSourceCinemaOverlay({
   job: VoiceJob | null;
   playbackControls: PreparedSourceCinemaPlaybackControls;
   playbackCursorSec: number;
+  policyDefinition: SpeechPolicyDefinition;
+  policyError: string | null;
+  policyOverrides: SpeechPolicyOverrides;
+  policyProfile: string;
+  policyProfiles: SpeechPolicyProfile[];
   progress: PlaybackProgress | null;
+  progressItems: PlaybackProgress[];
   source: PreparedSource;
+  sourcePolicySaving: boolean;
   sources: PreparedSource[];
   themeName: ThemeName;
   onClose: () => void;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
+  onBookmark: () => void;
+  onClearSourcePolicy: () => Promise<void> | void;
   onCreateAudio: (source: PreparedSource) => void;
   onInspectStructure: (source: PreparedSource) => void;
   onPrepareFile: (file: File) => Promise<void>;
   onPlayPause: () => void;
   onRestart: () => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
+  onSaveSourcePolicy: (request: SourceSpeechPolicyUpdateRequest) => Promise<void> | void;
   onSelectSource: (sourceId: string) => void;
   onSkip: (seconds: number) => void;
   onThemeChange: (theme: ThemeName) => void;
@@ -130,6 +167,29 @@ export function PreparedSourceCinemaOverlay({
   );
   const displayBlock = pointedBlock ?? activeBlock;
   const outline = useMemo(() => preparedSourceCinemaOutline(source), [source]);
+  const outlineItems = useMemo(
+    () =>
+      outline.map(
+        (item): ReaderOutlineItem<PreparedSourceCinemaOutlineItem> => ({
+          detail: item.level > 1 ? "Subheading" : "Heading",
+          id: item.id,
+          isActive: item.blockId === displayBlock?.id,
+          label: item.label,
+          level: item.level,
+          target: item,
+        }),
+      ),
+    [displayBlock?.id, outline],
+  );
+  const sourceLabels = useMemo(
+    () => new Map(sources.map((item) => [item.id, preparedSourceCinemaTitle(item)])),
+    [sources],
+  );
+  const bookmarkItems = useMemo(() => readerBookmarksFromProgress(progress), [progress]);
+  const recentItems = useMemo(
+    () => readerRecentPositionsFromProgress(progressItems, { preparedSources: sourceLabels }),
+    [progressItems, sourceLabels],
+  );
   const scrollBehavior = readerScrollBehavior(normalizedAccessibility);
   const liveAnnouncement = useMemo(
     () =>
@@ -144,8 +204,25 @@ export function PreparedSourceCinemaOverlay({
     setPointedBlockId(item.blockId);
     scrollToCinemaBlock(item.blockId, scrollBehavior);
   };
+  const handleWayfindingOutlineNavigate = (
+    item: ReaderOutlineItem<PreparedSourceCinemaOutlineItem>,
+  ) => {
+    handleOutlineNavigate(item.target);
+  };
+  const handleBookmarkNavigate = (bookmark: ReaderBookmarkItem) => {
+    if (!progress) {
+      return;
+    }
+    onResumeProgress(playbackProgressForBookmark(progress, bookmark));
+  };
+  const handleRecentNavigate = (item: ReaderRecentPositionItem) => {
+    onResumeProgress(item.progressItem);
+  };
+  const canBookmark = Boolean(job && playbackControls.isAvailable);
 
   useReaderKeyboardControls({
+    canBookmark,
+    onBookmark,
     onClose: () => {
       if (settingsOpen) {
         setSettingsOpen(false);
@@ -285,33 +362,55 @@ export function PreparedSourceCinemaOverlay({
         />
         <PreparedSourceCinemaNarrationPanel
           activeBlock={displayBlock}
+          bookmarkItems={bookmarkItems}
           canCreateAudio={canCreateAudio}
+          canBookmark={canBookmark}
+          customPolicyProfiles={customPolicyProfiles}
           isProcessing={isProcessing}
           job={job}
           outline={outline}
+          outlineItems={outlineItems}
           playbackControls={playbackControls}
+          policyDefinition={policyDefinition}
+          policyError={policyError}
+          policyOverrides={policyOverrides}
+          policyProfile={policyProfile}
+          policyProfiles={policyProfiles}
           progress={progress}
+          recentItems={recentItems}
           source={source}
+          sourcePolicySaving={sourcePolicySaving}
+          onAddBookmark={onBookmark}
+          onBookmarkNavigate={handleBookmarkNavigate}
+          onClearSourcePolicy={onClearSourcePolicy}
           onCreateAudio={onCreateAudio}
-          onNavigate={handleOutlineNavigate}
+          onOutlineNavigate={handleWayfindingOutlineNavigate}
+          onRecentNavigate={handleRecentNavigate}
           onResumeProgress={onResumeProgress}
+          onSaveSourcePolicy={onSaveSourcePolicy}
         />
       </main>
 
       <PreparedSourceCinemaMobileSheet
         activeBlock={displayBlock}
+        bookmarkItems={bookmarkItems}
+        canBookmark={canBookmark}
         job={job}
         mobilePanel={mobilePanel}
-        outline={outline}
+        outlineItems={outlineItems}
         progress={progress}
+        recentItems={recentItems}
         source={source}
         sources={sources}
         importError={importError}
         isImporting={isImporting}
+        onAddBookmark={onBookmark}
+        onBookmarkNavigate={handleBookmarkNavigate}
         onInspectStructure={onInspectStructure}
         onMobilePanelChange={setMobilePanel}
-        onNavigate={handleOutlineNavigate}
+        onOutlineNavigate={handleWayfindingOutlineNavigate}
         onPrepareFile={onPrepareFile}
+        onRecentNavigate={handleRecentNavigate}
         onSelectSource={onSelectSource}
         onResumeProgress={onResumeProgress}
       />
@@ -735,28 +834,60 @@ function PreparedSourceCinemaReader({
 
 function PreparedSourceCinemaNarrationPanel({
   activeBlock,
+  bookmarkItems,
   canCreateAudio,
+  canBookmark,
+  customPolicyProfiles,
   isProcessing,
   job,
   outline,
+  outlineItems,
   playbackControls,
+  policyDefinition,
+  policyError,
+  policyOverrides,
+  policyProfile,
+  policyProfiles,
   progress,
+  recentItems,
   source,
+  sourcePolicySaving,
+  onAddBookmark,
+  onBookmarkNavigate,
+  onClearSourcePolicy,
   onCreateAudio,
-  onNavigate,
+  onOutlineNavigate,
+  onRecentNavigate,
   onResumeProgress,
+  onSaveSourcePolicy,
 }: Readonly<{
   activeBlock: NarrationBlock | null;
+  bookmarkItems: ReaderBookmarkItem[];
   canCreateAudio: boolean;
+  canBookmark: boolean;
+  customPolicyProfiles: CustomSpeechPolicyProfile[];
   isProcessing: boolean;
   job: VoiceJob | null;
   outline: PreparedSourceCinemaOutlineItem[];
+  outlineItems: ReaderOutlineItem<PreparedSourceCinemaOutlineItem>[];
   playbackControls: PreparedSourceCinemaPlaybackControls;
+  policyDefinition: SpeechPolicyDefinition;
+  policyError: string | null;
+  policyOverrides: SpeechPolicyOverrides;
+  policyProfile: string;
+  policyProfiles: SpeechPolicyProfile[];
   progress: PlaybackProgress | null;
+  recentItems: ReaderRecentPositionItem[];
   source: PreparedSource;
+  sourcePolicySaving: boolean;
+  onAddBookmark: () => void;
+  onBookmarkNavigate: (bookmark: ReaderBookmarkItem) => void;
+  onClearSourcePolicy: () => Promise<void> | void;
   onCreateAudio: (source: PreparedSource) => void;
-  onNavigate: (item: PreparedSourceCinemaOutlineItem) => void;
+  onOutlineNavigate: (item: ReaderOutlineItem<PreparedSourceCinemaOutlineItem>) => void;
+  onRecentNavigate: (item: ReaderRecentPositionItem) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
+  onSaveSourcePolicy: (request: SourceSpeechPolicyUpdateRequest) => Promise<void> | void;
 }>) {
   const activeText = activeBlock ? markdownBlockText(activeBlock) : "";
   const activeSection = activeOutlineItem(outline, activeBlock);
@@ -785,21 +916,37 @@ function PreparedSourceCinemaNarrationPanel({
         </section>
 
         <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold">Speech policy</h3>
-            <button className="text-xs font-medium text-blue-600" type="button">
-              View
-            </button>
-          </div>
-          <div className="mt-3 grid grid-cols-[repeat(4,minmax(0,1fr))] gap-2 text-center text-[11px]">
-            <PolicyMetric icon={<MicrophoneIcon />} label="Voice" value={job?.voice ?? "Alloy"} />
-            <PolicyMetric
-              icon={<DialIcon />}
-              label="Std"
-              value={`${playbackControls.playbackRate.toFixed(2)}x`}
+          <h3 className="text-sm font-semibold">Speech policy</h3>
+          <div className="mt-3 grid gap-3 text-sm">
+            <PolicyScopeChips
+              state={{
+                projectProfile: policyProfile,
+                resolvedProfile: activeBlock?.speechPolicy.profile ?? source.speechPolicyProfile,
+                sessionOverrides: policyOverrides,
+                sourceOverrides: source.sourceSpeechPolicyOverrides,
+                sourceProfile: source.sourceSpeechPolicyProfile,
+              }}
             />
-            <PolicyMetric icon={<ToneIcon />} label="Tone" value="Neutral" />
-            <PolicyMetric icon={<GlobeIcon />} label="Language" value="Auto" />
+            <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2 text-center text-[11px]">
+              <PolicyMetric icon={<MicrophoneIcon />} label="Voice" value={job?.voice ?? "Alloy"} />
+              <PolicyMetric
+                icon={<DialIcon />}
+                label="Speed"
+                value={`${playbackControls.playbackRate.toFixed(2)}x`}
+              />
+            </div>
+            <SourcePolicyPinEditor
+              customProfiles={customPolicyProfiles}
+              definition={policyDefinition}
+              disabled={source.status !== "ready"}
+              error={policyError}
+              isSaving={sourcePolicySaving}
+              profiles={policyProfiles}
+              sourceOverrides={source.sourceSpeechPolicyOverrides}
+              sourceProfile={source.sourceSpeechPolicyProfile}
+              onClear={onClearSourcePolicy}
+              onSave={onSaveSourcePolicy}
+            />
           </div>
         </section>
 
@@ -816,20 +963,17 @@ function PreparedSourceCinemaNarrationPanel({
           </div>
         </section>
 
-        <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold">Section queue</h3>
-            <span className="text-xs font-semibold text-orange-600">
-              {outline.length.toLocaleString()} sections
-            </span>
-          </div>
-          <OutlineList
-            activeItem={activeSection}
-            items={outline}
-            maxItems={6}
-            onNavigate={onNavigate}
-          />
-        </section>
+        <ReaderWayfindingPanel
+          bookmarks={bookmarkItems}
+          canBookmark={canBookmark}
+          maxItems={6}
+          outlineItems={outlineItems}
+          recentItems={recentItems}
+          onAddBookmark={onAddBookmark}
+          onBookmarkNavigate={onBookmarkNavigate}
+          onOutlineNavigate={onOutlineNavigate}
+          onRecentNavigate={onRecentNavigate}
+        />
 
         {job ? null : (
           <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
@@ -864,34 +1008,46 @@ function PreparedSourceCinemaNarrationPanel({
 
 function PreparedSourceCinemaMobileSheet({
   activeBlock,
+  bookmarkItems,
+  canBookmark,
   importError,
   isImporting,
   job,
   mobilePanel,
-  outline,
+  outlineItems,
   progress,
+  recentItems,
   source,
   sources,
+  onAddBookmark,
+  onBookmarkNavigate,
   onInspectStructure,
   onMobilePanelChange,
-  onNavigate,
+  onOutlineNavigate,
   onPrepareFile,
+  onRecentNavigate,
   onSelectSource,
   onResumeProgress,
 }: Readonly<{
   activeBlock: NarrationBlock | null;
+  bookmarkItems: ReaderBookmarkItem[];
+  canBookmark: boolean;
   importError: string | null;
   isImporting: boolean;
   job: VoiceJob | null;
   mobilePanel: PreparedSourceCinemaMobilePanel | null;
-  outline: PreparedSourceCinemaOutlineItem[];
+  outlineItems: ReaderOutlineItem<PreparedSourceCinemaOutlineItem>[];
   progress: PlaybackProgress | null;
+  recentItems: ReaderRecentPositionItem[];
   source: PreparedSource;
   sources: PreparedSource[];
+  onAddBookmark: () => void;
+  onBookmarkNavigate: (bookmark: ReaderBookmarkItem) => void;
   onInspectStructure: (source: PreparedSource) => void;
   onMobilePanelChange: (panel: PreparedSourceCinemaMobilePanel | null) => void;
-  onNavigate: (item: PreparedSourceCinemaOutlineItem) => void;
+  onOutlineNavigate: (item: ReaderOutlineItem<PreparedSourceCinemaOutlineItem>) => void;
   onPrepareFile: (file: File) => Promise<void>;
+  onRecentNavigate: (item: ReaderRecentPositionItem) => void;
   onSelectSource: (sourceId: string) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
@@ -975,11 +1131,17 @@ function PreparedSourceCinemaMobileSheet({
       ) : null}
       {mobilePanel === "structure" ? (
         <div className="grid gap-3 text-sm">
-          <OutlineList
-            activeItem={activeOutlineItem(outline, activeBlock)}
-            items={outline}
+          <ReaderWayfindingPanel
+            activeTab="outline"
+            bookmarks={bookmarkItems}
+            canBookmark={canBookmark}
             maxItems={8}
-            onNavigate={onNavigate}
+            outlineItems={outlineItems}
+            recentItems={recentItems}
+            onAddBookmark={onAddBookmark}
+            onBookmarkNavigate={onBookmarkNavigate}
+            onOutlineNavigate={onOutlineNavigate}
+            onRecentNavigate={onRecentNavigate}
           />
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold vs-border"
@@ -1952,20 +2114,6 @@ function StructureIcon() {
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
       <path
         d="M12 4v5M6 20v-5h12v5M6 15v-3h12v3M12 9h6"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
-function ToneIcon() {
-  return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-      <path
-        d="M4 12h4l2-6 4 12 2-6h4"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"

@@ -68,9 +68,11 @@ import {
   startPlaybackSession,
   subscribeToVoiceJob,
   syncPlaybackSession,
+  updateBookSourceSpeechPolicy,
   updateProjectSpeechPolicy,
   updateCustomSpeechPolicyProfile,
   updatePlaybackProgress,
+  updatePreparedSourceSpeechPolicy,
 } from "./api";
 import { formatDuration } from "./format";
 import {
@@ -166,6 +168,7 @@ import type {
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
   SpeechPolicySettings,
+  SourceSpeechPolicyUpdateRequest,
   StageStatus,
   SystemMetrics,
   ThemeName,
@@ -196,6 +199,7 @@ import {
 } from "./speechPolicy";
 import type { ContentIRDocument } from "./content-ir";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
+import { sessionSpeechPolicyRequest } from "./features/policy";
 import {
   preparedSourceCinemaActionLabel,
   preparedSourceCinemaKind,
@@ -2367,6 +2371,7 @@ export function App() {
   );
   const [speechPolicyError, setSpeechPolicyError] = useState<string | null>(null);
   const [isSpeechPolicyPreviewing, setIsSpeechPolicyPreviewing] = useState(false);
+  const [sourcePolicySavingKey, setSourcePolicySavingKey] = useState<string | null>(null);
   const [jobPreparedSource, setJobPreparedSource] = useState<PreparedSource | null>(null);
   const [projectProgress, setProjectProgress] = useState<PlaybackProgress[]>([]);
   const [hashReadingPosition, setHashReadingPosition] = useState<ReadingPosition | null>(() =>
@@ -2658,23 +2663,13 @@ export function App() {
       setJobPreparedSource(null);
       return;
     }
-    const requestedProfile = normalizeSpeechPolicyProfile(
-      job.speechPolicyProfile ?? speechPolicyProfile,
-    );
-    const requestedOverrides = compactSpeechPolicyOverrides(
-      job.speechPolicyOverrides ?? speechPolicyOverrides,
-    );
-    if (
-      jobPreparedSource?.id === preparedSourceId &&
-      jobPreparedSource.text &&
-      jobPreparedSource.speechPolicyProfile === requestedProfile
-    ) {
+    const requestedOverrides = compactSpeechPolicyOverrides(job.speechPolicyOverrides ?? {});
+    if (jobPreparedSource?.id === preparedSourceId && jobPreparedSource.text) {
       return;
     }
     let isCancelled = false;
     void previewPreparedSourceSpeechPolicy(preparedSourceId, {
-      profile: requestedProfile,
-      overrides: requestedOverrides,
+      ...sessionSpeechPolicyRequest(requestedOverrides),
       locale: resolveRunLocale(runConfiguration),
       ttsEngine: runConfiguration.ttsEngine,
       voiceProfileId: selectedVoiceProfileId,
@@ -2706,25 +2701,26 @@ export function App() {
   }, [
     job?.preparedSourceId,
     job?.speechPolicyOverrides,
-    job?.speechPolicyProfile,
     jobPreparedSource?.id,
-    jobPreparedSource?.speechPolicyProfile,
     jobPreparedSource?.text,
     runConfiguration,
     selectedVoiceProfileId,
-    speechPolicyOverrides,
-    speechPolicyProfile,
   ]);
 
   useEffect(() => {
     if (!selectedPreparedSource?.id || selectedPreparedSource.status !== "ready") {
       return;
     }
+    // The request omits profile on purpose; this guard keeps backend-resolved previews fresh
+    // after the saved project profile changes without sending it as a session profile.
+    const projectPolicyProfile = normalizeSpeechPolicyProfile(speechPolicyProfile);
+    if (!projectPolicyProfile) {
+      return;
+    }
     let isCancelled = false;
     setIsSpeechPolicyPreviewing(true);
     void previewPreparedSourceSpeechPolicy(selectedPreparedSource.id, {
-      profile: speechPolicyProfile,
-      overrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
+      ...sessionSpeechPolicyRequest(speechPolicyOverrides),
       locale: resolveRunLocale(runConfiguration),
       ttsEngine: runConfiguration.ttsEngine,
       voiceProfileId: selectedVoiceProfileId,
@@ -3405,6 +3401,63 @@ export function App() {
     clearSpeechPolicyOverrides(activeProjectId);
   }, [activeProjectId]);
 
+  const handleSavePreparedSourcePolicy = useCallback(
+    async (sourceId: string, request: SourceSpeechPolicyUpdateRequest) => {
+      const savingKey = `prepared:${sourceId}`;
+      setSourcePolicySavingKey(savingKey);
+      try {
+        const source = await updatePreparedSourceSpeechPolicy(sourceId, request);
+        setPreparedSources((currentSources) => upsertPreparedSource(currentSources, source));
+        setJobPreparedSource((currentSource) =>
+          currentSource?.id === source.id ? source : currentSource,
+        );
+        setSpeechPolicyError(null);
+      } catch (caughtError) {
+        setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to save source policy pin"));
+      } finally {
+        setSourcePolicySavingKey((currentKey) => (currentKey === savingKey ? null : currentKey));
+      }
+    },
+    [],
+  );
+
+  const handleClearPreparedSourcePolicy = useCallback(
+    async (sourceId: string) => {
+      await handleSavePreparedSourcePolicy(sourceId, { clear: true });
+    },
+    [handleSavePreparedSourcePolicy],
+  );
+
+  const handleSaveBookSourcePolicy = useCallback(
+    async (bookId: string, request: SourceSpeechPolicyUpdateRequest) => {
+      const savingKey = `book:${bookId}`;
+      setSourcePolicySavingKey(savingKey);
+      try {
+        const book = await updateBookSourceSpeechPolicy(bookId, request);
+        setBookSources((currentBooks) => [
+          book,
+          ...currentBooks.filter((item) => item.id !== book.id),
+        ]);
+        setBookScopeContent((currentContent) =>
+          currentContent?.bookSourceId === book.id ? null : currentContent,
+        );
+        setSpeechPolicyError(null);
+      } catch (caughtError) {
+        setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to save source policy pin"));
+      } finally {
+        setSourcePolicySavingKey((currentKey) => (currentKey === savingKey ? null : currentKey));
+      }
+    },
+    [],
+  );
+
+  const handleClearBookSourcePolicy = useCallback(
+    async (bookId: string) => {
+      await handleSaveBookSourcePolicy(bookId, { clear: true });
+    },
+    [handleSaveBookSourcePolicy],
+  );
+
   const applyProjectSpeechPolicyState = useCallback(
     (settings: Awaited<ReturnType<typeof getProjectSpeechPolicy>>) => {
       const storedProfile = normalizeSpeechPolicyProfile(settings.profile);
@@ -4035,8 +4088,7 @@ export function App() {
         setContentIRDocument(
           previewSpeechPolicy
             ? await previewContentIRSpeechPolicy(sourceId, {
-                profile: speechPolicyProfile,
-                overrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
+                ...sessionSpeechPolicyRequest(speechPolicyOverrides),
                 locale: resolveRunLocale(runConfiguration),
                 ttsEngine: runConfiguration.ttsEngine,
                 voiceProfileId: selectedVoiceProfileId,
@@ -4049,7 +4101,7 @@ export function App() {
         setIsContentIRLoading(false);
       }
     },
-    [runConfiguration, selectedVoiceProfileId, speechPolicyOverrides, speechPolicyProfile],
+    [runConfiguration, selectedVoiceProfileId, speechPolicyOverrides],
   );
 
   const handleUseBookText = useCallback(
@@ -4298,11 +4350,16 @@ export function App() {
       setIsLoadingBookScope(false);
       return;
     }
+    // The request omits profile on purpose; this guard keeps backend-resolved previews fresh
+    // after the saved project profile changes without sending it as a session profile.
+    const projectPolicyProfile = normalizeSpeechPolicyProfile(speechPolicyProfile);
+    if (!projectPolicyProfile) {
+      return;
+    }
     let isCurrent = true;
     setIsLoadingBookScope(true);
     void previewBookSourceScopeSpeechPolicy(selectedBookSource.id, {
-      profile: speechPolicyProfile,
-      overrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
+      ...sessionSpeechPolicyRequest(speechPolicyOverrides),
       scope: effectiveBookScope,
       locale: resolveRunLocale(runConfiguration),
       ttsEngine: runConfiguration.ttsEngine,
@@ -4968,12 +5025,14 @@ export function App() {
     if (!scopedText) {
       return;
     }
+    const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
     const request = {
       ...buildVoiceJobRequest(scopedText),
       bookSourceId: book.id,
       bookScope: scope,
-      speechPolicyProfile,
-      speechPolicyOverrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
+      ...(hasSpeechPolicyOverrides(sessionOverrides)
+        ? { speechPolicyOverrides: sessionOverrides }
+        : {}),
     };
     setRequestState("running");
     setError(null);
@@ -5009,6 +5068,7 @@ export function App() {
       setSourcePrepError("Prepared source has no speakable blocks.");
       return;
     }
+    const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
     const request = {
       ...buildVoiceJobRequest(speechText, source),
       preparedSourceId: source.id,
@@ -5016,8 +5076,9 @@ export function App() {
         source.blocks?.filter((block) => block.speakMode !== "skip").map((block) => block.id) ?? [],
       sourceKind: source.kind,
       progressTargetId: `prepared:${source.id}`,
-      speechPolicyProfile,
-      speechPolicyOverrides: compactSpeechPolicyOverrides(speechPolicyOverrides),
+      ...(hasSpeechPolicyOverrides(sessionOverrides)
+        ? { speechPolicyOverrides: sessionOverrides }
+        : {}),
     };
     setRequestState("running");
     setError(null);
@@ -5250,13 +5311,21 @@ export function App() {
             book={selectedBookSource}
             bookSources={bookSources}
             canCreateAudio={!isProcessing}
+            customPolicyProfiles={customSpeechPolicyProfiles}
             importError={bookSourceError}
             isImporting={isImportingBookSource}
             isProcessing={isProcessing}
             job={job}
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
+            policyDefinition={speechPolicyDefinition}
+            policyError={speechPolicyError}
+            policyOverrides={speechPolicyOverrides}
+            policyProfile={speechPolicyProfile}
+            policyProfiles={speechPolicyProfiles}
             progress={selectedBookProgress ?? hashProgress}
+            progressItems={projectProgress}
+            sourcePolicySaving={sourcePolicySavingKey === `book:${selectedBookSource.id}`}
             accessibilitySettings={readerAccessibilitySettings}
             scope={effectiveBookScope}
             scopeContent={bookScopeContent}
@@ -5281,9 +5350,13 @@ export function App() {
             onScopeChange={setSelectedBookScope}
             onSelectBook={handleSelectBookCinemaSource}
             onSkip={handleBookCinemaSkip}
+            onClearSourcePolicy={() => handleClearBookSourcePolicy(selectedBookSource.id)}
             onResumeProgress={(progress, seconds) => {
               void handleResumeProgress(progress, seconds);
             }}
+            onSaveSourcePolicy={(request) =>
+              handleSaveBookSourcePolicy(selectedBookSource.id, request)
+            }
             onAccessibilitySettingsChange={setReaderAccessibilitySettings}
             onThemeChange={setBookCinemaThemeName}
           />
@@ -5305,11 +5378,27 @@ export function App() {
             job={preparedSourceCinemaJob}
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
+            customPolicyProfiles={customSpeechPolicyProfiles}
+            policyDefinition={speechPolicyDefinition}
+            policyError={speechPolicyError}
+            policyOverrides={speechPolicyOverrides}
+            policyProfile={speechPolicyProfile}
+            policyProfiles={speechPolicyProfiles}
             progress={preparedSourceCinemaProgress}
+            progressItems={projectProgress}
             source={preparedSourceCinemaSource}
+            sourcePolicySaving={
+              sourcePolicySavingKey === `prepared:${preparedSourceCinemaSource.id}`
+            }
             sources={preparedSources}
             themeName={preparedSourceCinemaThemeName}
             onAccessibilitySettingsChange={setReaderAccessibilitySettings}
+            onBookmark={() => {
+              void handleAddPlaybackBookmark();
+            }}
+            onClearSourcePolicy={() =>
+              handleClearPreparedSourcePolicy(preparedSourceCinemaSource.id)
+            }
             onClose={() => {
               setPreparedSourceCinemaSourceId(null);
             }}
@@ -5325,6 +5414,9 @@ export function App() {
             onResumeProgress={(progress) => {
               void handleResumeProgress(progress);
             }}
+            onSaveSourcePolicy={(request) =>
+              handleSavePreparedSourcePolicy(preparedSourceCinemaSource.id, request)
+            }
             onSelectSource={handleSelectPreparedCinemaSource}
             onSkip={handleBookCinemaSkip}
             onThemeChange={setPreparedSourceCinemaThemeName}
