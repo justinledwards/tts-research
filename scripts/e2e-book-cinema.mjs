@@ -480,6 +480,10 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await resumeButton.click();
     await visibleOverlayButton(resumePage, "Pause").waitFor();
     const resumedMetrics = await readPerformanceMetrics(resumePage);
+    assert(
+      resumedMetrics.some((metric) => metric.name === "reader-resume"),
+      "Resume timing metric was not recorded after playback controls applied.",
+    );
     const resumedDegradedStates = await readDegradedStates(resumePage);
     await assertNoPageIssues([...issues, ...resumeIssues]);
     return {
@@ -523,6 +527,10 @@ async function runDegradedHighlightUX(browser, { book, job, projectId, scope, te
   try {
     await openBookCinemaOverlay(page, scope);
     await page.getByText("Low confidence").first().waitFor({ timeout: 15_000 });
+    await page
+      .getByText(/forced low-confidence timing for local UX smoke/)
+      .first()
+      .waitFor({ timeout: 15_000 });
     const playButton = visibleOverlayButton(page, "Play");
     await assertEnabled(playButton, "Play");
     await playButton.click();

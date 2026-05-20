@@ -237,11 +237,11 @@ import {
   voiceProfileTargetReadinessText,
 } from "./profileTargets";
 import {
-  endFrontendSpan,
+  LazyPanelFallback,
   recordColdUsableMetric,
   recordFrontendDegradedState,
-  startFrontendSpan,
   useDelayedBusy,
+  useInteractionTiming,
 } from "./features/performance";
 import { buildVoiceLibraryViewModel, type VoiceLibraryEntry } from "./voiceStudioViewModels";
 import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
@@ -335,18 +335,24 @@ const MermaidDiagram = lazy(() =>
   import("./MarkdownRenderer").then((module) => ({ default: module.MermaidDiagram })),
 );
 
-function LazySurfaceFallback({ label = "Loading..." }: Readonly<{ label?: string }>) {
-  useEffect(() => {
-    recordFrontendDegradedState("lazy-panel-loading", "lazy-surface", { label });
-  }, [label]);
-
+function LazySurfaceFallback({
+  detail,
+  label = "Loading...",
+  minHeightClassName,
+  surface,
+}: Readonly<{
+  detail?: string;
+  label?: string;
+  minHeightClassName?: string;
+  surface?: string;
+}>) {
   return (
-    <div
-      aria-busy="true"
-      className="min-h-24 rounded-md border border-dashed p-4 text-sm font-semibold vs-border vs-muted"
-    >
-      {label}
-    </div>
+    <LazyPanelFallback
+      detail={detail}
+      label={label}
+      minHeightClassName={minHeightClassName}
+      surface={surface}
+    />
   );
 }
 
@@ -2406,6 +2412,10 @@ export function App() {
   const profileLoadingHideTimerRef = useRef<number | null>(null);
   const profileLoadingVisibleRequestCounter = useRef(0);
   const profileLoadingVisibleSinceRef = useRef(0);
+  const studioRouteTiming = useInteractionTiming("studio-route-switch");
+  const bookCinemaOpenTiming = useInteractionTiming("book-cinema-open");
+  const preparedSourceCinemaOpenTiming = useInteractionTiming("prepared-source-cinema-open");
+  const readerResumeTiming = useInteractionTiming("reader-resume");
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSource, setProfileSource] = useState<VoiceProfileSource | null>(null);
   const [profileSourceDiagnostics, setProfileSourceDiagnostics] =
@@ -2458,6 +2468,7 @@ export function App() {
     readingPosition?: ReadingPosition;
     seconds: number;
   } | null>(null);
+  const [resumeFallbackNotice, setResumeFallbackNotice] = useState<string | null>(null);
   const [resumeRestoreStartedAt, setResumeRestoreStartedAt] = useState<number | null>(null);
   const [bookCinemaDiagnostics, setBookCinemaDiagnostics] = useState<BookCinemaDiagnostics | null>(
     null,
@@ -2552,11 +2563,11 @@ export function App() {
   const handleStudioModeChange = useCallback(
     (mode: StudioMode) => {
       if (mode !== studioMode) {
-        startFrontendSpan("studio-route-switch");
+        studioRouteTiming.start({ fromMode: studioMode, toMode: mode });
       }
       setStudioMode(mode);
     },
-    [studioMode],
+    [studioMode, studioRouteTiming],
   );
   const [sourceMode, setSourceMode] = useState<SourceMode>("text");
   const [teleprompterOpenSignal, setTeleprompterOpenSignal] = useState(0);
@@ -2734,7 +2745,10 @@ export function App() {
   }, [latestProgress, preparedSourceCinemaJob, preparedSourceCinemaSource, projectProgress]);
   const openPreparedSourceCinema = useCallback(
     (source: PreparedSource) => {
-      startFrontendSpan("prepared-source-cinema-open");
+      preparedSourceCinemaOpenTiming.start({
+        kind: preparedSourceCinemaKind(source),
+        preparedSourceId: source.id,
+      });
       setPreparedSourceCinemaSourceId(source.id);
       if (preparedSourceCinemaKind(source) === "website") {
         setPreparedSourceCinemaThemeName(themeName === "night" ? "light" : themeName);
@@ -2742,7 +2756,7 @@ export function App() {
       }
       setPreparedSourceCinemaThemeName("dark");
     },
-    [themeName],
+    [preparedSourceCinemaOpenTiming, themeName],
   );
   useEffect(() => {
     if (
@@ -2922,24 +2936,24 @@ export function App() {
     (target?: "book") => {
       const shouldOpenSelectedBook = target === "book" || !job || Boolean(job.bookSourceId);
       if (canOpenBookCinema && shouldOpenSelectedBook) {
-        startFrontendSpan("book-cinema-open");
+        bookCinemaOpenTiming.start({ target: "book" });
         setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
         setIsBookCinemaOpen(true);
         return;
       }
       setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
     },
-    [canOpenBookCinema, job, themeName],
+    [bookCinemaOpenTiming, canOpenBookCinema, job, themeName],
   );
   const openSelectedBookCinema = useCallback(() => {
     if (canOpenBookCinema) {
-      startFrontendSpan("book-cinema-open");
+      bookCinemaOpenTiming.start({ target: "selected-book" });
       setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
       setIsBookCinemaOpen(true);
       return;
     }
     setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
-  }, [canOpenBookCinema, themeName]);
+  }, [bookCinemaOpenTiming, canOpenBookCinema, themeName]);
   const openTelepromptStage = useCallback(() => {
     setWorkspaceContext((currentContext) => enterTelepromptStage(currentContext));
   }, []);
@@ -2973,18 +2987,18 @@ export function App() {
   }, [studioMode]);
 
   useEffect(() => {
-    endFrontendSpan("studio-route-switch", { studioMode });
-  }, [studioMode]);
+    studioRouteTiming.end({ studioMode });
+  }, [studioMode, studioRouteTiming]);
 
   useEffect(() => {
     if (!isBookCinemaOpen || !selectedBookSource || !effectiveBookScope) {
       return;
     }
-    endFrontendSpan("book-cinema-open", {
+    bookCinemaOpenTiming.end({
       bookSourceId: selectedBookSource.id,
       scope: bookScopeKey(effectiveBookScope),
     });
-  }, [effectiveBookScope, isBookCinemaOpen, selectedBookSource]);
+  }, [bookCinemaOpenTiming, effectiveBookScope, isBookCinemaOpen, selectedBookSource]);
 
   useEffect(() => {
     if (!preparedSourceCinemaSourceId) {
@@ -2994,11 +3008,11 @@ export function App() {
       setPreparedSourceCinemaSourceId(null);
       return;
     }
-    endFrontendSpan("prepared-source-cinema-open", {
+    preparedSourceCinemaOpenTiming.end({
       preparedSourceId: preparedSourceCinemaSource.id,
       kind: preparedSourceCinemaSource.kind,
     });
-  }, [preparedSourceCinemaSource, preparedSourceCinemaSourceId]);
+  }, [preparedSourceCinemaOpenTiming, preparedSourceCinemaSource, preparedSourceCinemaSourceId]);
 
   useEffect(() => {
     const syncHashPosition = () => {
@@ -3021,11 +3035,14 @@ export function App() {
     setSelectedBookSourceId(book.id);
     setSelectedBookScope(scopeFromBookScopeKey(book, hashReadingPosition.scopeKey));
     if (book.status === "ready") {
-      startFrontendSpan("book-cinema-open");
+      bookCinemaOpenTiming.start({
+        bookSourceId: book.id,
+        reason: "hash-resume",
+      });
       setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
       setIsBookCinemaOpen(true);
     }
-  }, [bookSources, hashReadingPosition, themeName]);
+  }, [bookCinemaOpenTiming, bookSources, hashReadingPosition, themeName]);
 
   const beginProfileLoadingIndicator = useCallback(() => {
     const visibleRequestToken = ++profileLoadingVisibleRequestCounter.current;
@@ -4043,8 +4060,12 @@ export function App() {
   const handleResumeProgress = useCallback(
     async (progress: PlaybackProgress, seconds = progress.currentTimeSec) => {
       const startedAt = performance.now();
+      setResumeFallbackNotice(null);
       setResumeRestoreStartedAt(startedAt);
-      startFrontendSpan("reader-resume");
+      readerResumeTiming.start({
+        jobId: progress.jobId ?? null,
+        targetId: progress.targetId,
+      });
       try {
         if (progress.bookSourceId) {
           setSelectedBookSourceId(progress.bookSourceId);
@@ -4057,34 +4078,15 @@ export function App() {
           await handleSelectJob(progress.jobId);
         }
         const locatorSeconds = secondsForReadingPosition(highlightMap, progress.readingPosition);
-        if (progress.readingPosition && locatorSeconds === null) {
-          recordFrontendDegradedState("slow-resume", "reader-resume", {
-            fallback: "saved-elapsed-seconds",
-            jobId: progress.jobId ?? null,
-            targetId: progress.targetId,
-          });
-        }
         const targetSeconds = Math.max(0, locatorSeconds ?? seconds);
         setPlaybackCursorSec(targetSeconds);
-        const resumeElapsedMs = performance.now() - startedAt;
-        if (resumeElapsedMs > READER_RESUME_BUDGET_MS) {
-          recordFrontendDegradedState("slow-resume", "reader-resume", {
-            durationMs: Math.round(resumeElapsedMs),
-            targetSeconds,
-            usedLocator: locatorSeconds !== null,
-          });
-        }
-        endFrontendSpan("reader-resume", {
-          targetSeconds,
-          usedLocator: locatorSeconds !== null,
-        });
-        setResumeRestoreStartedAt(null);
         setPendingPlaybackResume({
           autoplay: true,
           readingPosition: progress.readingPosition,
           seconds: targetSeconds,
         });
       } catch (caughtError) {
+        readerResumeTiming.cancel();
         setResumeRestoreStartedAt(null);
         setError(formatErrorMessage(caughtError, "Unable to resume saved progress"));
       }
@@ -4095,6 +4097,7 @@ export function App() {
       highlightMap,
       hydratePreparedSourceForResume,
       job?.id,
+      readerResumeTiming,
       selectedBookSource,
       themeName,
     ],
@@ -4916,6 +4919,7 @@ export function App() {
     setPlaybackControls(DISABLED_PLAYBACK_CONTROLLER);
     setActivePlaybackSession(null);
     setPendingPlaybackResume(null);
+    setResumeFallbackNotice(null);
     if (hasJob) {
       setIsPlaybackActive(false);
     }
@@ -4929,7 +4933,19 @@ export function App() {
       highlightMap,
       pendingPlaybackResume.readingPosition,
     );
+    const usedLocator = locatorSeconds !== null;
     const targetSeconds = Math.max(0, locatorSeconds ?? pendingPlaybackResume.seconds);
+    if (pendingPlaybackResume.readingPosition && !usedLocator) {
+      recordFrontendDegradedState("resume-position-fallback", "reader-resume", {
+        fallback: "saved-elapsed-seconds",
+        targetSeconds,
+      });
+      setResumeFallbackNotice(
+        "Saved locator could not be mapped in this timing pass, so resume used saved elapsed time.",
+      );
+    } else {
+      setResumeFallbackNotice(null);
+    }
     if (playbackControls.seekTo) {
       playbackControls.seekTo(targetSeconds);
     } else if (playbackControls.skipBy) {
@@ -4945,12 +4961,12 @@ export function App() {
       recordFrontendDegradedState("slow-resume", "reader-resume", {
         durationMs: Math.round(resumeElapsedMs),
         targetSeconds,
-        usedLocator: locatorSeconds !== null,
+        usedLocator,
       });
     }
-    endFrontendSpan("reader-resume", {
+    readerResumeTiming.end({
       targetSeconds,
-      usedLocator: locatorSeconds !== null,
+      usedLocator,
     });
     setResumeRestoreStartedAt(null);
     setPendingPlaybackResume(null);
@@ -4959,6 +4975,7 @@ export function App() {
     pendingPlaybackResume,
     playbackControls,
     playbackCursorSec,
+    readerResumeTiming,
     resumeRestoreStartedAt,
   ]);
 
@@ -5678,6 +5695,7 @@ export function App() {
             policyProfiles={speechPolicyProfiles}
             progress={selectedBookProgress ?? hashProgress}
             progressItems={projectProgress}
+            resumeFallbackNotice={resumeFallbackNotice}
             sourcePolicySaving={sourcePolicySavingKey === `book:${selectedBookSource.id}`}
             accessibilitySettings={readerAccessibilitySettings}
             scope={effectiveBookScope}

@@ -125,3 +125,16 @@
 - [x] Standardize settings/help affordances across workspace and cinema surfaces.
 - [x] Update docs and local UI smoke coverage.
 - [x] Run local validation commands.
+
+## 2026-05-20 12:12 CEST - Low-resource UX hardening follow-up
+- [x] Add shared interaction timing hook.
+- [x] Improve degraded-state UI copy and recording.
+- [x] Defer expensive prepared-source renderers.
+- [x] Promote degraded-state report sections.
+- [x] Add focused tests and E2E checks.
+- [x] Run local validation commands.
+
+## 2026-05-20 12:43 CEST - Publish low-resource UX hardening
+- [x] Review final worktree scope.
+- [x] Commit hardening package.
+- [x] Push branch and update PR body.

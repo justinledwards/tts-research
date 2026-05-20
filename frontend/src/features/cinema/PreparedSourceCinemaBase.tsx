@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
 import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
@@ -36,12 +36,12 @@ import {
   type ReaderRecentPositionItem,
 } from "../reader-navigation";
 import { PolicyScopeChips, SourcePolicyPinEditor } from "../policy";
+import { LazyPanelFallback } from "../performance";
 import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
 import { ExitIcon, SettingsIcon } from "../navigation";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { looksLikeMermaidDiagram } from "../../markdownModel";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdownCinema";
-import { MermaidDiagram, MarkdownRenderer } from "../../MarkdownRenderer";
 import {
   preparedSourceCinemaActiveBlock,
   preparedSourceCinemaLabel,
@@ -72,6 +72,13 @@ import type {
 
 const PREPARED_SOURCE_CINEMA_ACCEPT =
   ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/html,text/csv,application/json";
+
+const PreparedMarkdownRenderer = lazy(() =>
+  import("../../MarkdownRenderer").then((module) => ({ default: module.MarkdownRenderer })),
+);
+const PreparedMermaidDiagram = lazy(() =>
+  import("../../MarkdownRenderer").then((module) => ({ default: module.MermaidDiagram })),
+);
 
 export interface PreparedSourceCinemaPlaybackControls {
   isAvailable: boolean;
@@ -742,13 +749,23 @@ function PreparedSourceCinemaReader({
 
   if (isMarkdownDocument && source.text) {
     readerContent = (
-      <MarkdownRenderer
-        blockHighlight={blockHighlight}
-        className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
-        wordHighlight={wordHighlight}
+      <Suspense
+        fallback={
+          <LazyPanelFallback
+            label="Loading source renderer..."
+            minHeightClassName="min-h-64"
+            surface="prepared-source-markdown-renderer"
+          />
+        }
       >
-        {source.text}
-      </MarkdownRenderer>
+        <PreparedMarkdownRenderer
+          blockHighlight={blockHighlight}
+          className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
+          wordHighlight={wordHighlight}
+        >
+          {source.text}
+        </PreparedMarkdownRenderer>
+      </Suspense>
     );
   } else if (blocks.length > 0) {
     readerContent = (
@@ -767,13 +784,23 @@ function PreparedSourceCinemaReader({
     );
   } else {
     readerContent = (
-      <MarkdownRenderer
-        blockHighlight={blockHighlight}
-        className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
-        wordHighlight={wordHighlight}
+      <Suspense
+        fallback={
+          <LazyPanelFallback
+            label="Loading source renderer..."
+            minHeightClassName="min-h-64"
+            surface="prepared-source-markdown-renderer"
+          />
+        }
       >
-        {source.text ?? source.speechText ?? ""}
-      </MarkdownRenderer>
+        <PreparedMarkdownRenderer
+          blockHighlight={blockHighlight}
+          className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
+          wordHighlight={wordHighlight}
+        >
+          {source.text ?? source.speechText ?? ""}
+        </PreparedMarkdownRenderer>
+      </Suspense>
     );
   }
 
@@ -1240,9 +1267,15 @@ function renderPreparedSourceCinemaBlockContent(
   if (block.kind === "code" && looksLikeMermaidDiagram(text)) {
     return (
       <Suspense
-        fallback={<div className="rounded-md border p-4 text-sm vs-border">Loading diagram...</div>}
+        fallback={
+          <LazyPanelFallback
+            label="Loading diagram..."
+            minHeightClassName="min-h-36"
+            surface="prepared-source-diagram-renderer"
+          />
+        }
       >
-        <MermaidDiagram chart={text} />
+        <PreparedMermaidDiagram chart={text} />
       </Suspense>
     );
   }

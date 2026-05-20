@@ -740,6 +740,7 @@ export function BookCinemaOverlay({
   policyProfiles,
   progress,
   progressItems,
+  resumeFallbackNotice,
   scope,
   scopeContent,
   sourcePolicySaving,
@@ -780,6 +781,7 @@ export function BookCinemaOverlay({
   policyProfiles: SpeechPolicyProfile[];
   progress: PlaybackProgress | null;
   progressItems: PlaybackProgress[];
+  resumeFallbackNotice: string | null;
   sourcePolicySaving: boolean;
   playbackControls: {
     isAvailable: boolean;
@@ -915,6 +917,12 @@ export function BookCinemaOverlay({
     () => resolveTimingConfidenceDisplay(highlightMap),
     [highlightMap],
   );
+  const audioNotice = resolveBookCinemaAudioNotice({
+    activeBookJob,
+    book,
+    hasPlayableAudio,
+    isProcessing,
+  });
   const handleScopeChange = (nextScope: BookScope) => {
     setPointerScopeKey(null);
     onScopeChange(nextScope);
@@ -1167,6 +1175,17 @@ export function BookCinemaOverlay({
     }
   }, [book.kind, highlightMap]);
 
+  useEffect(() => {
+    if (!activeBookJob || hasPlayableAudio) {
+      return;
+    }
+    recordFrontendDegradedState("audio-not-ready", "book-cinema", {
+      hasAudioUrl: Boolean(activeBookJob.audioUrl),
+      jobId: activeBookJob.id,
+      status: activeBookJob.status,
+    });
+  }, [activeBookJob, hasPlayableAudio]);
+
   const bookTransportModel: CinemaTransportModel = {
     bookmark: {
       disabled: !canBookmark,
@@ -1262,6 +1281,12 @@ export function BookCinemaOverlay({
               This narration was cancelled. The selected scope is ready to create again.
             </p>
           ) : null}
+          <BookCinemaReaderNoticeList
+            audioNotice={audioNotice}
+            isResumeRestoring={isResumeRestoring}
+            resumeFallbackNotice={resumeFallbackNotice}
+            timingConfidence={timingConfidence}
+          />
         </>
       }
       header={
@@ -1782,7 +1807,106 @@ function BookCinemaMobileSheet({
   );
 }
 
-function BookCinemaStatusChip({
+export function resolveBookCinemaAudioNotice({
+  activeBookJob,
+  book,
+  hasPlayableAudio,
+  isProcessing,
+}: Readonly<{
+  activeBookJob: VoiceJob | null;
+  book: BookSource;
+  hasPlayableAudio: boolean;
+  isProcessing: boolean;
+}>): string | null {
+  if (hasPlayableAudio) {
+    return null;
+  }
+  if (activeBookJob) {
+    if (activeBookJob.audioUrl) {
+      return "Generated audio is present, but playback controls are still initializing.";
+    }
+    if (
+      isProcessing ||
+      ["queued", "optimizing", "synthesizing", "checking", "retrying"].includes(
+        activeBookJob.status,
+      )
+    ) {
+      return "Audio is still being generated; the reader remains usable for review.";
+    }
+    return "Narration exists for this scope, but generated audio is not ready yet.";
+  }
+  return `Audio has not been generated for this ${book.kind.toUpperCase()} scope yet.`;
+}
+
+interface BookCinemaReaderNotice {
+  label: string;
+  text: string;
+  tone: "info" | "warning";
+}
+
+export function BookCinemaReaderNoticeList({
+  audioNotice,
+  isResumeRestoring,
+  resumeFallbackNotice,
+  timingConfidence,
+}: Readonly<{
+  audioNotice: string | null;
+  isResumeRestoring: boolean;
+  resumeFallbackNotice: string | null;
+  timingConfidence: ReturnType<typeof resolveTimingConfidenceDisplay>;
+}>) {
+  const notices = [
+    timingConfidence.isDegraded
+      ? {
+          label: timingConfidence.label,
+          text: timingConfidence.detail,
+          tone: "warning",
+        }
+      : null,
+    isResumeRestoring
+      ? {
+          label: "Restoring saved point",
+          text: "The reader is open while saved playback position and audio controls catch up.",
+          tone: "info",
+        }
+      : null,
+    resumeFallbackNotice
+      ? {
+          label: "Resume fallback",
+          text: resumeFallbackNotice,
+          tone: "info",
+        }
+      : null,
+    audioNotice
+      ? {
+          label: "Audio not ready",
+          text: audioNotice,
+          tone: "warning",
+        }
+      : null,
+  ].filter(Boolean) as BookCinemaReaderNotice[];
+
+  if (notices.length === 0) {
+    return null;
+  }
+
+  return (
+    <div aria-live="polite" className="grid border-t bg-[var(--vs-raised)] vs-border">
+      {notices.map((notice) => (
+        <p
+          className={`px-4 py-2 text-center text-xs leading-5 ${
+            notice.tone === "warning" ? "text-amber-600" : "text-sky-600"
+          }`}
+          key={`${notice.label}:${notice.text}`}
+        >
+          <span className="font-semibold">{notice.label}:</span> {notice.text}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+export function BookCinemaStatusChip({
   hasPlayableAudio,
   isPlaying,
   job,
@@ -1816,7 +1940,7 @@ function bookCinemaStatusLabel({
   return job?.status ?? "Pre-audio";
 }
 
-function BookCinemaTimingStatusChip({
+export function BookCinemaTimingStatusChip({
   display,
 }: Readonly<{ display: ReturnType<typeof resolveTimingConfidenceDisplay> }>) {
   return (
