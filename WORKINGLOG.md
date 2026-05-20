@@ -170,3 +170,15 @@
 - [x] Add responsive E2E screenshot and interaction coverage.
 - [x] Update touch accessibility and Cinema docs.
 - [x] Run local validation commands.
+
+## 2026-05-20 19:26 CEST - Workstream IOTA UI action audit
+- [x] Inspect existing frontend/e2e script patterns
+- [x] Add UI action registry and metadata modules
+- [x] Add local Playwright action audit scripts
+- [x] Wire pnpm scripts for local UI validation
+- [x] Update audit outputs/report behavior
+- [x] Bound per-action replay waits and add audit progress output
+- [x] Scope modal inventories to reachable modal controls
+- [x] Run pnpm check
+- [x] Run bounded UI action audit smoke
+- [ ] Run full exhaustive UI action audit and local E2E suite
