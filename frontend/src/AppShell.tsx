@@ -2,6 +2,7 @@ import type { RunConfiguration } from "./runConfig";
 import { describePerformanceMode } from "./runConfig";
 import type { VoiceJob, VoiceProject } from "./types";
 import type { WorkspaceLayoutMode } from "./features/workspace/model";
+import { HelpIcon, SettingsIcon } from "./features/navigation";
 
 export type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 export type StudioMode = "narration" | "voiceCloning";
@@ -286,40 +287,6 @@ function MenuIcon() {
         stroke="currentColor"
         strokeLinecap="round"
         strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
-function HelpIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path
-        d="M9.5 9a2.7 2.7 0 1 1 4.7 1.8c-.9.8-2.2 1.5-2.2 3.2"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.8"
-      />
-      <path d="M12 17.2v.1" stroke="currentColor" strokeLinecap="round" strokeWidth="2.4" />
-      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path
-        d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path
-        d="m19 13.5.1-1.5-.1-1.5 2-1.5-2-3.4-2.5 1a7.5 7.5 0 0 0-2.6-1.5L13.5 2h-4l-.4 2.6A7.5 7.5 0 0 0 6.5 6.1L4 5.1 2 8.5l2 1.5-.1 1.5L4 13l-2 1.5 2 3.4 2.5-1a7.5 7.5 0 0 0 2.6 1.5l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 2.6-1.5l2.5 1 2-3.4-2-1.5Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.4"
       />
     </svg>
   );

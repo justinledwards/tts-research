@@ -14,7 +14,7 @@ Wayfinding now lives in the shared cinema inspector model:
 - Bookmark creation is placed with the wayfinding panel and footer transport controls, not in separate per-surface rail stacks.
 - Switching focus modes must not change active outline position, saved bookmarks, or recent-position ordering.
 
-Policy scope is shown as visible chips near the active reading surface:
+Policy scope is shown as visible chips near the active reading surface. Shared settings scope labels live in `docs/settings-scope.md`:
 
 - `Project default` is the durable project profile for unpinned sources.
 - `Source pin` is a prepared-source or book-source profile/override that survives project profile changes.
@@ -29,4 +29,4 @@ Provenance, policy, and health information remain discoverable through inspector
 
 Footer transport is shared across Book, Document, and Website Cinema. Left/J and Right/L seek by 10 seconds, matching the visible `-10s` and `+10s` controls. The mobile bottom sheet uses `Source`, `Structure`, and `Narration` panels so source selection, outline/bookmark/recent navigation, and current narration context stay in predictable places.
 
-Source pins are edited through the existing source speech-policy PATCH APIs. Clearing a pin returns the source to project-default behaviour; it does not clear session overrides.
+Source pins are edited through the existing source speech-policy PATCH APIs. Clearing a pin returns the source to project-default behaviour; it does not clear session overrides. Studio Settings mirrors this same split under `Sources` so users can distinguish session overrides, source pins, project defaults, and machine/runtime settings.

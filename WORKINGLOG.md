@@ -118,3 +118,10 @@
 - [x] Update focus-mode and wayfinding docs.
 - [x] Extend unit and E2E validation coverage.
 - [x] Run local validation commands.
+
+## 2026-05-20 11:21 CEST - Settings menus and configuration IA
+- [x] Add shared settings scope and group metadata.
+- [x] Refactor settings and help panels into feature modules.
+- [x] Standardize settings/help affordances across workspace and cinema surfaces.
+- [x] Update docs and local UI smoke coverage.
+- [x] Run local validation commands.

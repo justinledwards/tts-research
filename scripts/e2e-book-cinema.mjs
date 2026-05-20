@@ -21,6 +21,7 @@ const summaryPath = process.env.E2E_SUMMARY_PATH ?? path.join(artifactDir, "summ
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 const lowResourceMode = process.env.E2E_LOW_RESOURCE === "1";
 const readerWayfindingOnly = process.env.E2E_READER_WAYFINDING === "1";
+const settingsIAOnly = process.env.E2E_SETTINGS_IA === "1";
 const workspaceFlowOnly = process.env.E2E_WORKSPACE_FLOW === "1";
 const activeProjectKey = "tts-active-project-id";
 const jobTimeoutMs = Number.parseInt(process.env.E2E_JOB_TIMEOUT_MS ?? "180000", 10);
@@ -68,6 +69,21 @@ async function main() {
     });
     assert(project.id, "Project creation did not return an id.");
     summary.projectId = project.id;
+
+    if (settingsIAOnly) {
+      const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
+      try {
+        const result = await runSettingsIAUX(browser, project.id);
+        summary.screenshots.push(...result.screenshots);
+        summary.settingsIA = result;
+      } finally {
+        await browser.close();
+      }
+      summary.status = "passed";
+      await writeSummary(summary);
+      console.log(`Settings IA E2E passed. Summary written to ${summaryPath}`);
+      return;
+    }
 
     if (workspaceFlowOnly) {
       const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
@@ -317,6 +333,60 @@ async function runWorkspaceFlowUX(browser, projectId) {
     return { screenshots, status: "passed" };
   } catch (error) {
     const failureScreenshot = path.join(screenshotsDir, "workspace-flow-failure.png");
+    await page.screenshot({ fullPage: true, path: failureScreenshot }).catch(() => {});
+    screenshots.push(failureScreenshot);
+    throw error;
+  } finally {
+    await context.close();
+  }
+}
+
+async function runSettingsIAUX(browser, projectId) {
+  const context = await browser.newContext({
+    storageState: projectStorageState(projectId, {
+      sourceMode: "text",
+      stage: "intake",
+      text: "Settings IA smoke text for lightweight configuration review.",
+    }),
+    viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
+  });
+  const page = await context.newPage();
+  if (lowResourceMode) {
+    await applyLowResourceProfile(page);
+  }
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
+  const screenshots = [];
+  try {
+    await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+
+    await page.getByRole("button", { exact: true, name: "Open settings" }).click();
+    await page.getByText("Studio Settings").first().waitFor();
+    await page.getByText("Quick settings").first().waitFor();
+    const settingsScreenshot = path.join(screenshotsDir, "settings-ia-settings.png");
+    await page.screenshot({ fullPage: false, path: settingsScreenshot });
+    screenshots.push(settingsScreenshot);
+    await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
+
+    await page.getByRole("button", { exact: true, name: "Open help" }).click();
+    await page.getByText("Context Guide").first().waitFor();
+    await page.getByText("Workflow anchors").first().waitFor();
+    const helpScreenshot = path.join(screenshotsDir, "settings-ia-context-guide.png");
+    await page.screenshot({ fullPage: false, path: helpScreenshot });
+    screenshots.push(helpScreenshot);
+    await page.getByRole("button", { exact: true, name: "Close Help" }).click();
+
+    await page.getByRole("button", { exact: true, name: "Open workspace" }).click();
+    await page.getByText("Project library and current chapter context").first().waitFor();
+    const workspaceScreenshot = path.join(screenshotsDir, "settings-ia-project-library.png");
+    await page.screenshot({ fullPage: false, path: workspaceScreenshot });
+    screenshots.push(workspaceScreenshot);
+
+    await assertNoPageIssues(issues);
+    return { screenshots, status: "passed" };
+  } catch (error) {
+    const failureScreenshot = path.join(screenshotsDir, "settings-ia-failure.png");
     await page.screenshot({ fullPage: true, path: failureScreenshot }).catch(() => {});
     screenshots.push(failureScreenshot);
     throw error;

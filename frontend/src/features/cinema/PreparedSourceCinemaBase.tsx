@@ -36,6 +36,8 @@ import {
   type ReaderRecentPositionItem,
 } from "../reader-navigation";
 import { PolicyScopeChips, SourcePolicyPinEditor } from "../policy";
+import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
+import { ExitIcon, SettingsIcon } from "../navigation";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { looksLikeMermaidDiagram } from "../../markdownModel";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdownCinema";
@@ -55,7 +57,6 @@ import {
   type PreparedSourceCinemaKind,
   type PreparedSourceCinemaTextSize,
 } from "./preparedSourceModel";
-import { normalizeThemeName, VOICE_STUDIO_THEMES } from "../../theme";
 import type {
   CustomSpeechPolicyProfile,
   NarrationBlock,
@@ -557,7 +558,7 @@ export function PreparedSourceCinemaOverlay({
             </button>
           </div>
           {settingsOpen ? (
-            <PreparedSourceCinemaSettings
+            <ReaderSettingsPopover
               accessibilitySettings={normalizedAccessibility}
               autoFollow={autoFollow}
               themeName={themeName}
@@ -1177,61 +1178,6 @@ function PreparedSourceCinemaTransport({
   return <CinemaTransportBar model={transportModel} />;
 }
 
-function PreparedSourceCinemaSettings({
-  accessibilitySettings,
-  autoFollow,
-  themeName,
-  onAccessibilitySettingsChange,
-  onAutoFollowChange,
-  onThemeChange,
-}: Readonly<{
-  accessibilitySettings: ReaderAccessibilitySettings;
-  autoFollow: boolean;
-  themeName: ThemeName;
-  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
-  onAutoFollowChange: (enabled: boolean) => void;
-  onThemeChange: (theme: ThemeName) => void;
-}>) {
-  return (
-    <div className="absolute right-6 top-[3.6rem] z-[60] w-72 rounded-md border bg-[var(--vs-raised)] p-4 text-sm shadow-xl vs-border">
-      <h3 className="font-semibold">Reader settings</h3>
-      <ReaderAccessibilityControls
-        className="mt-4"
-        settings={accessibilitySettings}
-        variant="panel"
-        onChange={onAccessibilitySettingsChange}
-      />
-      <label className="mt-4 flex items-center justify-between gap-3">
-        <span>Auto-follow</span>
-        <input
-          checked={autoFollow}
-          className="h-4 w-4 accent-orange-600"
-          onChange={(event) => {
-            onAutoFollowChange(event.currentTarget.checked);
-          }}
-          type="checkbox"
-        />
-      </label>
-      <label className="mt-3 grid gap-1">
-        <span className="vs-muted">Theme</span>
-        <select
-          className="h-10 rounded-md border bg-[var(--vs-surface)] px-3 outline-none vs-border"
-          onChange={(event) => {
-            onThemeChange(normalizeThemeName(event.currentTarget.value));
-          }}
-          value={themeName}
-        >
-          {VOICE_STUDIO_THEMES.map((theme) => (
-            <option key={theme.name} value={theme.name}>
-              {theme.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    </div>
-  );
-}
-
 function PreparedSourceCinemaBlock({
   activeWordOffset,
   block,
@@ -1666,19 +1612,6 @@ function DialIcon() {
   );
 }
 
-function ExitIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path
-        d="M9 6H5v12h4M14 8l4 4-4 4M18 12H9"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
 function FullscreenIcon() {
   return (
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
@@ -1774,20 +1707,6 @@ function RestartIcon() {
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
       <path
         d="M4 12a8 8 0 1 0 2.34-5.66L4 8.68M4 4v4.68h4.68"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M17.7 6.3l-1.4 1.4M7.7 16.3l-1.4 1.4"
         stroke="currentColor"
         strokeLinecap="round"
         strokeWidth="1.8"

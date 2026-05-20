@@ -58,6 +58,8 @@ import {
   type ReaderRecentPositionItem,
 } from "../reader-navigation";
 import { PolicyScopeChips, SourcePolicyPinEditor } from "../policy";
+import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
+import { ExitIcon, SettingsIcon } from "../navigation";
 import {
   READER_LINE_HEIGHT_RATIO,
   READER_MEASURE_CLASS,
@@ -814,6 +816,7 @@ export function BookCinemaOverlay({
   const normalizedAccessibility = normalizeReaderAccessibilitySettings(accessibilitySettings);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const [mobilePanel, setMobilePanel] = useState<BookCinemaMobilePanel | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [pointerScopeKey, setPointerScopeKey] = useState<string | null>(null);
   const scopeOptions = useMemo(() => bookScopeOptions(book), [book]);
   const normalizedScopeKey = bookScopeKey(normalizedScope);
@@ -1344,11 +1347,11 @@ export function BookCinemaOverlay({
             <button
               className="hidden h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
               onClick={() => {
-                onThemeChange(themeName === "light" ? "dark" : "light");
+                setSettingsOpen((current) => !current);
               }}
               type="button"
             >
-              <SettingsTinyIcon />
+              <SettingsIcon />
               Settings
             </button>
             <button
@@ -1356,10 +1359,18 @@ export function BookCinemaOverlay({
               onClick={onClose}
               type="button"
             >
-              <ExitTinyIcon />
+              <ExitIcon />
               <span className="hidden sm:inline">Exit</span>
             </button>
           </div>
+          {settingsOpen ? (
+            <ReaderSettingsPopover
+              accessibilitySettings={normalizedAccessibility}
+              themeName={themeName}
+              onAccessibilitySettingsChange={onAccessibilitySettingsChange}
+              onThemeChange={onThemeChange}
+            />
+          ) : null}
         </header>
       }
       inspector={
@@ -1946,19 +1957,6 @@ function CinemaFilmIcon() {
   );
 }
 
-function ExitTinyIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path
-        d="M9 6H5v12h4M14 8l4 4-4 4M18 12H9"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
 function MoreTinyIcon() {
   return (
     <svg aria-hidden="true" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1972,20 +1970,6 @@ function RestartTinyIcon() {
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
       <path
         d="M4 12a8 8 0 1 0 2.34-5.66L4 8.68M4 4v4.68h4.68"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
-function SettingsTinyIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M17.7 6.3l-1.4 1.4M7.7 16.3l-1.4 1.4"
         stroke="currentColor"
         strokeLinecap="round"
         strokeWidth="1.8"

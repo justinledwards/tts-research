@@ -17,6 +17,8 @@ import {
   speechPolicyProfileOptions,
   type PolicyScopeState,
 } from "./model";
+import { ScopeBadge } from "../settings/ScopeBadge";
+import { settingsScopeAppliesTo } from "../settings/model";
 
 export function PolicyScopeChips({ state }: Readonly<{ state: PolicyScopeState }>) {
   return (
@@ -87,17 +89,19 @@ export function SourcePolicyPinEditor({
   return (
     <div className="grid gap-3 rounded-md border p-3 vs-border">
       <div className="flex items-center justify-between gap-3">
-        <h4 className="text-sm font-semibold">Source policy pin</h4>
-        {hasPin ? (
-          <span className="rounded-full border border-orange-300 bg-orange-500/10 px-2 py-0.5 text-xs font-semibold text-orange-700">
-            Pinned
-          </span>
-        ) : (
-          <span className="rounded-full border px-2 py-0.5 text-xs font-semibold vs-border vs-muted">
-            Project default
-          </span>
-        )}
+        <h4 className="flex items-center gap-2 text-sm font-semibold">
+          Source policy pin
+          <ScopeBadge scope="source" />
+        </h4>
+        <span
+          className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
+            hasPin ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "vs-border vs-muted"
+          }`}
+        >
+          {hasPin ? "Pinned" : "Project default"}
+        </span>
       </div>
+      <p className="vs-muted text-xs leading-5">{settingsScopeAppliesTo("source")}</p>
       <label className="grid gap-1 text-xs font-semibold">
         <span className="vs-muted">Profile</span>
         <select

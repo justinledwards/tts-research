@@ -1,5 +1,11 @@
 export { PolicyScopeChips, SourcePolicyPinEditor } from "./PolicyScopeControls";
 export {
+  SpeechPolicyControls,
+  formatPolicyModeLabel,
+  policyOverridesWithField,
+  resolveSpeechPolicyProfileOptions,
+} from "./SpeechPolicyControls";
+export {
   policyScopeChips,
   sessionSpeechPolicyRequest,
   sourcePolicyUpdateRequest,
