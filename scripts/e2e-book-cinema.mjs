@@ -1069,6 +1069,11 @@ async function captureCinemaFocusModeScreenshots(page, screenshotPrefix) {
     await page.screenshot({ fullPage: false, path: screenshot });
     screenshots.push(screenshot);
   }
+  await openCinemaAdvancedMenu(page);
+  const advancedScreenshot = `${screenshotPrefix}-advanced.png`;
+  await page.screenshot({ fullPage: false, path: advancedScreenshot });
+  screenshots.push(advancedScreenshot);
+  await visibleOverlayButton(page, "More").click();
 
   await switchCinemaFocusMode(page, "Inspect");
   await selectCinemaInspectorPanel(page, "Source");
@@ -1223,11 +1228,21 @@ async function assertCinemaActiveTargetVisible(page) {
 }
 
 async function switchCinemaFocusMode(page, mode) {
+  if (mode === "Debug") {
+    await openCinemaAdvancedMenu(page);
+    await cinemaOverlay(page).getByRole("menuitemradio", { exact: true, name: "Debug" }).click();
+    return;
+  }
   await page
     .locator(cinemaOverlaySelector)
     .first()
     .getByRole("button", { exact: true, name: mode })
     .click();
+}
+
+async function openCinemaAdvancedMenu(page) {
+  await visibleOverlayButton(page, "More").click();
+  await cinemaOverlay(page).getByRole("menuitemradio", { exact: true, name: "Debug" }).waitFor();
 }
 
 async function selectCinemaInspectorPanel(page, label) {

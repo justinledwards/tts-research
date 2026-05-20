@@ -153,7 +153,8 @@ describe("prepared source cinema helpers", () => {
     expect(markup).toContain("Read");
     expect(markup).toContain("Inspect");
     expect(markup).toContain("Review");
-    expect(markup).toContain("Debug");
+    expect(markup).toContain("More");
+    expect(markup).not.toContain("Debug");
     expect(markup).not.toContain("Source policy pin");
     expect(markup).not.toContain("Source provenance");
     expect(markup).not.toContain("Generated audio health");

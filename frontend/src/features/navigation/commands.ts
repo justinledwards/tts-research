@@ -89,13 +89,19 @@ export function buildWorkspaceCommandMetadata(): CommandMetadata<WorkspaceComman
 export function buildCinemaFocusCommandMetadata(): CommandMetadata<CinemaFocusCommandTarget>[] {
   return CINEMA_FOCUS_MODES.map((mode) => {
     const meta = cinemaFocusModeMeta(mode);
+    const advanced = mode === "debug";
     return {
-      detail: meta.description,
+      detail: advanced ? `Advanced diagnostics. ${meta.description}` : meta.description,
       id: `cinema:focus:${mode}`,
-      keywords: ["cinema", "focus", ...meta.keywords],
+      keywords: [
+        "cinema",
+        "focus",
+        ...(advanced ? ["advanced", "operator"] : []),
+        ...meta.keywords,
+      ],
       section: "Cinema" as const,
       target: { mode },
-      title: `${meta.label} cinema focus`,
+      title: advanced ? "Advanced: Debug cinema focus" : `${meta.label} cinema focus`,
     };
   });
 }

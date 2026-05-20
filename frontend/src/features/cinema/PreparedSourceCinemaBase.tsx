@@ -16,7 +16,7 @@ import {
   buildCinemaInspectorPanel,
   buildCinemaWayfindingPanel,
 } from "./CinemaInspectorPanels";
-import type { CinemaPanelDefinition } from "./model";
+import { deriveCinemaPlaybackState, type CinemaPanelDefinition } from "./model";
 import {
   READER_LINE_SPACING_CLASS,
   READER_MEASURE_CLASS,
@@ -269,6 +269,14 @@ export function PreparedSourceCinemaOverlay({
     onResumeProgress(item.progressItem);
   };
   const canBookmark = Boolean(job && playbackControls.isAvailable);
+  const playbackState = deriveCinemaPlaybackState({
+    hasAudio: Boolean(job?.audioUrl),
+    isGenerating: isProcessing && !job,
+    isPlayable: Boolean(job && playbackControls.isAvailable),
+    isPlaying: playbackControls.isPlaying,
+    progressRatio: progress?.progress,
+    status: job?.status,
+  });
   const metrics = preparedSourceCinemaMetrics(source);
   const href = preparedSourceCinemaSourceHref(source);
   const skippedGroups = preparedSourceCinemaSkippedGroups(source);
@@ -516,6 +524,7 @@ export function PreparedSourceCinemaOverlay({
           isMobileSheetOpen={mobilePanel !== null}
           isProcessing={isProcessing}
           job={job}
+          playbackState={playbackState}
           playbackControls={playbackControls}
           playbackCursorSec={effectivePlaybackCursorSec}
           progress={progress}
@@ -1144,6 +1153,7 @@ function PreparedSourceCinemaTransport({
   isMobileSheetOpen,
   isProcessing,
   job,
+  playbackState,
   playbackControls,
   playbackCursorSec,
   progress,
@@ -1162,6 +1172,7 @@ function PreparedSourceCinemaTransport({
   isMobileSheetOpen: boolean;
   isProcessing: boolean;
   job: VoiceJob | null;
+  playbackState: ReturnType<typeof deriveCinemaPlaybackState>;
   playbackControls: PreparedSourceCinemaPlaybackControls;
   playbackCursorSec: number;
   progress: PlaybackProgress | null;
@@ -1183,13 +1194,24 @@ function PreparedSourceCinemaTransport({
     progressRatio,
   );
   const canStart = canCreateAudio && !isProcessing && source.status === "ready";
-  let primaryLabel = "Create & Listen";
-  if (job) {
-    primaryLabel = playbackControls.isPlaying ? "Pause" : "Play";
+  const isPlaybackTransport =
+    playbackState === "playable" ||
+    playbackState === "playing" ||
+    playbackState === "paused" ||
+    playbackState === "completed";
+  const primaryLabel = playbackPrimaryLabel(playbackState, playbackControls.isPlaying);
+  let primaryDisabled = !canStart;
+  if (isPlaybackTransport) {
+    primaryDisabled = !playbackControls.isAvailable;
+  } else if (playbackState === "generating") {
+    primaryDisabled = true;
   }
-  const primaryDisabled = job ? !playbackControls.isAvailable : !canStart;
+  let primaryIcon: ReactNode = <AudioBarsIcon />;
+  if (isPlaybackTransport) {
+    primaryIcon = playbackControls.isPlaying ? <PauseIcon /> : <PlayIcon />;
+  }
   const handlePrimary = () => {
-    if (job) {
+    if (isPlaybackTransport) {
       onPlayPause();
       return;
     }
@@ -1206,6 +1228,14 @@ function PreparedSourceCinemaTransport({
         onChange={onAccessibilitySettingsChange}
       />
     ),
+    generationSettings: (
+      <TransportSettingPills
+        items={[
+          source.sourceSpeechPolicyProfile ?? "Project voice",
+          `${preparedSourceCinemaMetrics(source).wordCount.toLocaleString()} words`,
+        ]}
+      />
+    ),
     mobileMore: {
       active: isMobileSheetOpen,
       controlsId: PREPARED_SOURCE_CINEMA_MOBILE_SHEET_ID,
@@ -1217,10 +1247,14 @@ function PreparedSourceCinemaTransport({
       value: playbackControls.playbackRate,
       onChange: playbackControls.setPlaybackRate,
     },
+    playbackState,
     primary: {
-      className: "bg-orange-600 text-white shadow-orange-500/25",
+      className:
+        playbackState === "preAudio"
+          ? "bg-amber-400 text-zinc-950 shadow-amber-500/20"
+          : "bg-orange-600 text-white shadow-orange-500/25",
       disabled: primaryDisabled,
-      icon: playbackControls.isPlaying ? <PauseIcon /> : <PlayIcon />,
+      icon: primaryIcon,
       label: primaryLabel,
       onClick: handlePrimary,
     },
@@ -1253,9 +1287,84 @@ function PreparedSourceCinemaTransport({
         onSkip(READER_SEEK_SECONDS);
       },
     },
+    stateSummary: {
+      detail: preparedSourceTransportDetail(source, job, playbackState),
+      title: preparedSourceTransportTitle(playbackState),
+    },
   };
 
   return <CinemaTransportBar model={transportModel} />;
+}
+
+function playbackPrimaryLabel(
+  playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
+  isPlaying: boolean,
+): string {
+  if (playbackState === "generating") {
+    return "Creating audio";
+  }
+  if (playbackState === "degraded") {
+    return "Rebuild audio";
+  }
+  if (playbackState === "preAudio") {
+    return "Create audio";
+  }
+  return isPlaying ? "Pause" : "Play";
+}
+
+function preparedSourceTransportTitle(
+  playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
+): string {
+  if (playbackState === "generating") {
+    return "Creating audio";
+  }
+  if (playbackState === "degraded") {
+    return "Audio needs attention";
+  }
+  if (playbackState === "preAudio") {
+    return "Ready to create audio";
+  }
+  return "Audio ready";
+}
+
+function preparedSourceTransportDetail(
+  source: PreparedSource,
+  job: VoiceJob | null,
+  playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
+): string {
+  const title = preparedSourceCinemaTitle(source);
+  if (playbackState === "generating") {
+    return `${title} is being narrated. You can keep reading while audio is prepared.`;
+  }
+  if (playbackState === "degraded") {
+    if (job?.status === "failed") {
+      return job.error ?? "Generation failed for this source. Rebuild audio when ready.";
+    }
+    if (job?.status === "cancelled") {
+      return "Generation was cancelled. Rebuild audio for this source when ready.";
+    }
+    return "Generated audio is not playable yet. Rebuild audio if the controls do not recover.";
+  }
+  if (playbackState === "preAudio") {
+    return `${title} is ready to read. Create audio when you want synchronized playback.`;
+  }
+  return `${title} has generated audio.`;
+}
+
+function TransportSettingPills({ items }: Readonly<{ items: string[] }>) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      {items.map((item) => (
+        <span
+          className="max-w-40 truncate rounded-md border px-2 py-1 text-xs font-semibold vs-border vs-muted"
+          key={item}
+          title={item}
+        >
+          {item}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function PreparedSourceCinemaBlock({

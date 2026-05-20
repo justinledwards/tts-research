@@ -6,6 +6,8 @@ export {
 } from "../layout/responsive";
 
 export const CINEMA_FOCUS_MODES = ["read", "inspect", "review", "debug"] as const;
+export const CINEMA_PRIMARY_FOCUS_MODES = ["read", "inspect", "review"] as const;
+export const CINEMA_ADVANCED_FOCUS_MODES = ["debug"] as const;
 export const CINEMA_INSPECTOR_PANEL_IDS = [
   "current",
   "wayfinding",
@@ -16,10 +18,30 @@ export const CINEMA_INSPECTOR_PANEL_IDS = [
   "queue",
   "debug",
 ] as const;
+export const CINEMA_PLAYBACK_STATES = [
+  "preAudio",
+  "generating",
+  "playable",
+  "playing",
+  "paused",
+  "completed",
+  "degraded",
+] as const;
 
 export type CinemaFocusMode = (typeof CINEMA_FOCUS_MODES)[number];
 export type CinemaSurfaceKind = "book" | "document" | "website";
 export type CinemaInspectorPanelId = (typeof CINEMA_INSPECTOR_PANEL_IDS)[number];
+export type CinemaPlaybackState = (typeof CINEMA_PLAYBACK_STATES)[number];
+
+export interface CinemaPlaybackStateInput {
+  degraded?: boolean;
+  hasAudio?: boolean;
+  isGenerating?: boolean;
+  isPlayable?: boolean;
+  isPlaying?: boolean;
+  progressRatio?: number | null;
+  status?: string | null;
+}
 
 export interface CinemaPanelDefinition {
   children: ReactNode;
@@ -91,6 +113,40 @@ export function normalizeCinemaInspectorPanelId(value: unknown): CinemaInspector
   return CINEMA_INSPECTOR_PANEL_IDS.includes(value as CinemaInspectorPanelId)
     ? (value as CinemaInspectorPanelId)
     : null;
+}
+
+export function deriveCinemaPlaybackState(input: CinemaPlaybackStateInput): CinemaPlaybackState {
+  const status = input.status?.toLowerCase() ?? null;
+  if (input.degraded || status === "failed" || status === "cancelled") {
+    return "degraded";
+  }
+  if (
+    input.isGenerating ||
+    status === "queued" ||
+    status === "optimizing" ||
+    status === "synthesizing" ||
+    status === "checking" ||
+    status === "retrying"
+  ) {
+    return "generating";
+  }
+  if (!input.hasAudio && !input.isPlayable) {
+    return "preAudio";
+  }
+  if (!input.isPlayable) {
+    return "degraded";
+  }
+  if (input.isPlaying) {
+    return "playing";
+  }
+  const progressRatio = normalizePlaybackProgressRatio(input.progressRatio);
+  if (progressRatio >= 0.995) {
+    return "completed";
+  }
+  if (progressRatio > 0) {
+    return "paused";
+  }
+  return "playable";
 }
 
 export function buildCinemaLayoutState({
@@ -172,4 +228,11 @@ function includePanel(
     return panels;
   }
   return [panel, ...panels];
+}
+
+function normalizePlaybackProgressRatio(value: number | null | undefined): number {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, value));
 }

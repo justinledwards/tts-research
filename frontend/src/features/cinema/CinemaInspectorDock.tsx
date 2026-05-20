@@ -61,24 +61,37 @@ export function CinemaInspectorDock({
             </div>
             {state.availablePanels.length > 1 ? (
               <div className="mt-3 grid gap-1.5">
-                {state.availablePanels.map((panel) => (
-                  <button
-                    aria-current={panel.id === state.activePanelId ? "true" : undefined}
-                    className={`cinema-touch-target min-w-0 rounded-md border px-3 py-2 text-left transition vs-border ${
-                      panel.id === state.activePanelId
-                        ? "border-orange-400 bg-orange-500/10 text-orange-600"
-                        : "hover:bg-[var(--vs-surface)]"
-                    }`}
-                    key={panel.id}
-                    onClick={() => {
-                      onActivePanelChange(panel.id);
-                    }}
-                    type="button"
-                  >
-                    <span className="block truncate text-sm font-semibold">{panel.title}</span>
-                    <span className="mt-1 block truncate text-xs vs-muted">{panel.detail}</span>
-                  </button>
-                ))}
+                {state.availablePanels.map((panel) => {
+                  const panelPinned = panel.id === state.pinnedPanelId;
+                  const panelActive = panel.id === state.activePanelId && !panelPinned;
+                  return (
+                    <button
+                      aria-current={panelActive ? "true" : undefined}
+                      className={`cinema-touch-target min-w-0 rounded-md border px-3 py-2 text-left transition vs-border ${
+                        panelActive
+                          ? "border-orange-400 bg-orange-500/10 text-orange-600"
+                          : "hover:bg-[var(--vs-surface)]"
+                      }`}
+                      key={panel.id}
+                      onClick={() => {
+                        onActivePanelChange(panel.id);
+                      }}
+                      type="button"
+                    >
+                      <span className="flex min-w-0 items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-sm font-semibold">
+                          {panel.title}
+                        </span>
+                        {panelPinned ? (
+                          <span className="shrink-0 rounded border border-orange-400/40 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-normal text-orange-600">
+                            Pinned
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="mt-1 block truncate text-xs vs-muted">{panel.detail}</span>
+                    </button>
+                  );
+                })}
               </div>
             ) : null}
           </div>

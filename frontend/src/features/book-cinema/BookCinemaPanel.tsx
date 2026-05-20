@@ -20,6 +20,7 @@ import {
   buildCinemaCurrentReadingPanel,
   buildCinemaInspectorPanel,
   buildCinemaWayfindingPanel,
+  deriveCinemaPlaybackState,
   returnFocusToCinemaReaderCanvas,
   useCinemaFocusController,
   type CinemaMobilePanelSpec,
@@ -890,23 +891,35 @@ export function BookCinemaOverlay({
   );
   const hasPlayableAudio = Boolean(activeBookJob && playbackControls.isAvailable);
   const createAudioScope = pointerOption?.scope ?? normalizedScope;
-  const playbackTransportIcon = playbackControls.isPlaying ? (
-    <CinemaPauseIcon />
-  ) : (
-    <CinemaPlayIcon />
-  );
-  const primaryTransportIcon = hasPlayableAudio ? playbackTransportIcon : <AudioCreateIcon />;
+  const playbackState = deriveCinemaPlaybackState({
+    hasAudio: Boolean(activeBookJob?.audioUrl),
+    isGenerating: isProcessing && !activeBookJob,
+    isPlayable: hasPlayableAudio,
+    isPlaying: playbackControls.isPlaying,
+    progressRatio: progress?.progress,
+    status: activeBookJob?.status,
+  });
+  const isPlaybackTransport =
+    playbackState === "playable" ||
+    playbackState === "playing" ||
+    playbackState === "paused" ||
+    playbackState === "completed";
+  let primaryTransportIcon: ReactNode = <AudioCreateIcon />;
+  if (isPlaybackTransport) {
+    primaryTransportIcon = playbackControls.isPlaying ? <CinemaPauseIcon /> : <CinemaPlayIcon />;
+  }
   const playbackTransportLabel = playbackControls.isPlaying ? "Pause" : "Play";
-  const desktopPrimaryTransportLabel = hasPlayableAudio
-    ? playbackTransportLabel
-    : bookCreateLabel(createAudioScope, book);
-  const mobilePrimaryTransportLabel = hasPlayableAudio ? playbackTransportLabel : "Create Audio";
-  const primaryTransportStyle = hasPlayableAudio
-    ? "text-white shadow-orange-500/25 vs-accent-bg"
-    : "bg-amber-400 text-zinc-950 shadow-amber-500/20";
-  const primaryTransportDisabled = hasPlayableAudio
-    ? !playbackControls.isAvailable
-    : !canCreateAudio || isProcessing || book.status !== "ready";
+  const primaryTransportLabel = bookPrimaryTransportLabel(playbackState, playbackTransportLabel);
+  const primaryTransportStyle =
+    playbackState === "preAudio"
+      ? "bg-amber-400 text-zinc-950 shadow-amber-500/20"
+      : "text-white shadow-orange-500/25 vs-accent-bg";
+  let primaryTransportDisabled = !canCreateAudio || isProcessing || book.status !== "ready";
+  if (isPlaybackTransport) {
+    primaryTransportDisabled = !playbackControls.isAvailable;
+  } else if (playbackState === "generating") {
+    primaryTransportDisabled = true;
+  }
   const canUseTransportControls = hasPlayableAudio && playbackControls.isAvailable;
   const canUseSkipControls = hasPlayableAudio && Boolean(playbackControls.skipBy);
   const canChangePlaybackRate = hasPlayableAudio && Boolean(playbackControls.setPlaybackRate);
@@ -1223,14 +1236,15 @@ export function BookCinemaOverlay({
       value: displayedPlaybackRate,
       onChange: playbackControls.setPlaybackRate,
     },
+    playbackState,
     primary: {
       className: primaryTransportStyle,
       disabled: primaryTransportDisabled,
       icon: primaryTransportIcon,
-      label: desktopPrimaryTransportLabel,
-      mobileLabel: mobilePrimaryTransportLabel,
+      label: primaryTransportLabel,
+      mobileLabel: primaryTransportLabel,
       onClick: () => {
-        if (hasPlayableAudio) {
+        if (isPlaybackTransport) {
           onPlayPause();
         } else {
           onCreateAudio(book, createAudioScope);
@@ -1259,12 +1273,30 @@ export function BookCinemaOverlay({
         onSkip(-READER_SEEK_SECONDS);
       },
     },
+    generationSettings: (
+      <BookTransportSettingPills
+        items={[
+          bookScopeLabel(createAudioScope),
+          formatEstimatedDuration(scopeContent?.estimatedDurationMs),
+          activeBlock?.speechPolicy.profile ?? book.sourceSpeechPolicyProfile ?? "Project voice",
+        ]}
+      />
+    ),
     skipForward: {
       disabled: !canUseSkipControls,
       icon: <SkipForwardTinyIcon />,
       onClick: () => {
         onSkip(READER_SEEK_SECONDS);
       },
+    },
+    stateSummary: {
+      detail: bookTransportStateDetail({
+        activeBookJob,
+        createAudioScope,
+        playbackState,
+        scopeContent,
+      }),
+      title: bookTransportStateTitle(playbackState),
     },
   };
 
@@ -1291,13 +1323,8 @@ export function BookCinemaOverlay({
       footer={
         <>
           <CinemaTransportBar model={bookTransportModel} />
-          {isCancelledBookJob ? (
-            <p className="border-t bg-[var(--vs-raised)] px-4 py-2 text-center text-xs text-amber-600 vs-border">
-              This narration was cancelled. The selected scope is ready to create again.
-            </p>
-          ) : null}
           <BookCinemaReaderNoticeList
-            audioNotice={audioNotice}
+            audioNotice={playbackState === "degraded" && !isCancelledBookJob ? audioNotice : null}
             isResumeRestoring={isResumeRestoring}
             resumeFallbackNotice={resumeFallbackNotice}
             timingConfidence={timingConfidence}
@@ -1464,6 +1491,84 @@ export function BookCinemaOverlay({
       rootRef={dialogRef}
       themeName={themeName}
     />
+  );
+}
+
+function bookPrimaryTransportLabel(
+  playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
+  playbackLabel: string,
+): string {
+  if (playbackState === "preAudio") {
+    return "Create audio";
+  }
+  if (playbackState === "generating") {
+    return "Creating audio";
+  }
+  if (playbackState === "degraded") {
+    return "Rebuild audio";
+  }
+  return playbackLabel;
+}
+
+function bookTransportStateTitle(
+  playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
+): string {
+  if (playbackState === "preAudio") {
+    return "Ready to create audio";
+  }
+  if (playbackState === "generating") {
+    return "Creating audio";
+  }
+  if (playbackState === "degraded") {
+    return "Audio needs attention";
+  }
+  return "Audio ready";
+}
+
+function bookTransportStateDetail({
+  activeBookJob,
+  createAudioScope,
+  playbackState,
+  scopeContent,
+}: Readonly<{
+  activeBookJob: VoiceJob | null;
+  createAudioScope: BookScope;
+  playbackState: ReturnType<typeof deriveCinemaPlaybackState>;
+  scopeContent: BookSourceScopeContent | null;
+}>): string {
+  const scopeLabel = bookScopeLabel(createAudioScope);
+  const estimate = formatEstimatedDuration(scopeContent?.estimatedDurationMs);
+  if (playbackState === "preAudio") {
+    return `${scopeLabel} is ready to read. Create audio for synchronized playback, estimated ${estimate}.`;
+  }
+  if (playbackState === "generating") {
+    return `${scopeLabel} is being narrated. You can keep reading while audio is prepared.`;
+  }
+  if (playbackState === "degraded") {
+    if (activeBookJob?.status === "failed") {
+      return activeBookJob.error ?? `${scopeLabel} generation failed. Rebuild audio when ready.`;
+    }
+    if (activeBookJob?.status === "cancelled") {
+      return `${scopeLabel} generation was cancelled. Rebuild audio when ready.`;
+    }
+    return `${scopeLabel} has audio metadata, but playback is not available yet. Rebuild if it does not recover.`;
+  }
+  return `${scopeLabel} has generated audio.`;
+}
+
+function BookTransportSettingPills({ items }: Readonly<{ items: string[] }>) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      {items.map((item) => (
+        <span
+          className="max-w-40 truncate rounded-md border px-2 py-1 text-xs font-semibold vs-border vs-muted"
+          key={item}
+          title={item}
+        >
+          {item}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -1984,7 +2089,16 @@ function bookCinemaStatusLabel({
   if (hasPlayableAudio) {
     return "Ready";
   }
-  return job?.status ?? "Pre-audio";
+  if (!job) {
+    return "Reader ready";
+  }
+  if (["queued", "optimizing", "synthesizing", "checking", "retrying"].includes(job.status)) {
+    return "Creating";
+  }
+  if (job.status === "failed" || job.status === "cancelled") {
+    return "Needs audio";
+  }
+  return job.status;
 }
 
 export function BookCinemaTimingStatusChip({
@@ -2305,14 +2419,15 @@ function BookPagedReaderStage({
   );
   const displayedPages: (BookPage | null)[] =
     pagination.pages.length > 0 ? pagination.pages : [null];
+  const pagesPerSpread = pagination.totalPages <= 1 ? 1 : pagination.pagesPerSpread;
 
   return (
     <ReaderCanvasFrame
       canvasFirst={canvasFirst}
       contentClassName={`book-cinema-spread grid min-h-0 flex-1 overflow-hidden ${
-        pagination.pagesPerSpread === 2 ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"
+        pagesPerSpread === 2 ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"
       }`}
-      contentDataAttributes={{ "data-book-pages-per-spread": pagination.pagesPerSpread }}
+      contentDataAttributes={{ "data-book-pages-per-spread": pagesPerSpread }}
       contentRef={pageMetrics.ref}
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={
@@ -2343,7 +2458,7 @@ function BookPagedReaderStage({
           totalPages={pagination.totalPages}
         />
       ))}
-      {displayedPages.length === 1 && pagination.pagesPerSpread === 2 ? (
+      {displayedPages.length === 1 && pagesPerSpread === 2 && pagination.totalPages > 1 ? (
         <BookReaderPage
           activeWordIndex={activeWordIndex}
           book={book}

@@ -182,3 +182,11 @@
 - [x] Run pnpm check
 - [x] Run bounded UI action audit smoke
 - [ ] Run full exhaustive UI action audit and local E2E suite
+
+## 2026-05-20 20:06 CEST - Workstream KAPPA Cinema simplification
+- [x] Map existing Cinema playback, modes, transport, and reader layout
+- [x] Add shared CinemaPlaybackState mapper and state-aware transport UI
+- [x] Simplify Debug access and pinned focus visuals
+- [x] Improve short-source reader pagination
+- [x] Update Cinema focus-mode documentation
+- [x] Run project validation commands

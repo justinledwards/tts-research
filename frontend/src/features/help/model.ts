@@ -47,7 +47,7 @@ export const HELP_ANCHORS: HelpAnchor[] = [
     label: "Run",
   },
   {
-    detail: "Read, inspect, review, and debug generated sources.",
+    detail: "Read, inspect, review, and use advanced diagnostics for generated sources.",
     id: "cinema",
     label: "Cinema",
   },

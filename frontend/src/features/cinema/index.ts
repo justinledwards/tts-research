@@ -22,16 +22,20 @@ export {
 export { CinemaShell } from "./CinemaShell";
 export { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 export {
+  CINEMA_ADVANCED_FOCUS_MODES,
   CINEMA_FOCUS_MODES,
   CINEMA_FOCUS_MODE_META,
   CINEMA_INSPECTOR_PANEL_IDS,
   CINEMA_NARROW_VIEWPORT_QUERY,
+  CINEMA_PLAYBACK_STATES,
+  CINEMA_PRIMARY_FOCUS_MODES,
   CINEMA_RESPONSIVE_QA_VIEWPORTS,
   CINEMA_TOUCH_TARGET_MIN_PX,
   buildCinemaLayoutState,
   cinemaFocusModeMeta,
   cinemaFocusModeLabel,
   defaultCinemaPanelForMode,
+  deriveCinemaPlaybackState,
   normalizeCinemaFocusMode,
   normalizeCinemaInspectorPanelId,
   type CinemaFocusMode,
@@ -39,5 +43,7 @@ export {
   type CinemaLayoutInput,
   type CinemaLayoutState,
   type CinemaPanelDefinition,
+  type CinemaPlaybackState,
+  type CinemaPlaybackStateInput,
   type CinemaSurfaceKind,
 } from "./model";

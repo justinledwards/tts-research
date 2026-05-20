@@ -12,6 +12,7 @@ import {
   buildCinemaLayoutState,
   cinemaFocusModeMeta,
   defaultCinemaPanelForMode,
+  deriveCinemaPlaybackState,
   normalizeCinemaInspectorPanelId,
   type CinemaPanelDefinition,
 } from "./model";
@@ -66,6 +67,26 @@ describe("cinema focus layout model", () => {
   it("exposes searchable focus-mode metadata", () => {
     expect(cinemaFocusModeMeta("review").keywords).toContain("bookmarks");
     expect(cinemaFocusModeMeta("read").description).toContain("canvas");
+  });
+
+  it("derives canonical playback state for transport visibility", () => {
+    expect(deriveCinemaPlaybackState({})).toBe("preAudio");
+    expect(deriveCinemaPlaybackState({ isGenerating: true })).toBe("generating");
+    expect(
+      deriveCinemaPlaybackState({
+        hasAudio: true,
+        isPlayable: true,
+        isPlaying: true,
+        progressRatio: 0.4,
+      }),
+    ).toBe("playing");
+    expect(
+      deriveCinemaPlaybackState({ hasAudio: true, isPlayable: true, progressRatio: 0.4 }),
+    ).toBe("paused");
+    expect(deriveCinemaPlaybackState({ hasAudio: true, isPlayable: true, progressRatio: 1 })).toBe(
+      "completed",
+    );
+    expect(deriveCinemaPlaybackState({ status: "failed" })).toBe("degraded");
   });
 });
 
@@ -136,6 +157,22 @@ describe("CinemaInspectorDock", () => {
     expect(markup).toContain("The current paragraph is narrated here.");
     expect(markup).not.toContain("Health body");
   });
+
+  it("shows pinned inspector panels as badges instead of selected tabs", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaInspectorDock
+        activePanelId="policy"
+        mode="read"
+        panels={makePanels()}
+        pinnedPanelId="policy"
+        onActivePanelChange={() => null}
+        onPinnedPanelChange={() => null}
+      />,
+    );
+
+    expect(markup).toContain("Pinned");
+    expect(markup).not.toContain('aria-current="true"');
+  });
 });
 
 describe("CinemaTransportBar", () => {
@@ -165,6 +202,36 @@ describe("CinemaTransportBar", () => {
 
     expect(markup).toContain('aria-controls="cinema-more-sheet"');
     expect(markup).toContain('aria-expanded="true"');
+  });
+
+  it("renders pre-audio as create, summary, and settings without disabled playback controls", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaTransportBar
+        model={{
+          ...makeTransportModel(),
+          generationSettings: <span>Chapter 1</span>,
+          playbackState: "preAudio",
+          primary: {
+            className: "bg-amber-400 text-zinc-950",
+            disabled: false,
+            label: "Create audio",
+            onClick: () => null,
+          },
+          stateSummary: {
+            detail: "Chapter 1 is ready to read.",
+            title: "Ready to create audio",
+          },
+        }}
+      />,
+    );
+
+    expect(markup).toContain("Create audio");
+    expect(markup).toContain("Chapter 1 is ready to read.");
+    expect(markup).toContain("Chapter 1");
+    expect(markup).not.toContain("-10s");
+    expect(markup).not.toContain("Playback speed");
+    expect(markup).not.toContain("Bookmark");
+    expect(markup).not.toContain("Waveform");
   });
 });
 
@@ -239,6 +306,7 @@ function makeTransportModel(): CinemaTransportModel {
       value: 1,
       onChange: () => null,
     },
+    playbackState: "playing",
     primary: {
       className: "bg-orange-600 text-white",
       disabled: false,
