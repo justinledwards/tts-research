@@ -14,6 +14,12 @@ import {
   workspaceLayoutRails,
   workspaceStageMeta,
 } from "./model";
+import {
+  transitionWorkspaceContextForStageAction,
+  workspaceStageActionLabel,
+  workspaceStageNavigationAction,
+  workspaceStagePrimaryAction,
+} from "./stageActions";
 
 describe("workspace stage model", () => {
   it("normalizes legacy and unknown stage values", () => {
@@ -102,5 +108,44 @@ describe("workspace stage model", () => {
   it("exposes searchable metadata for stages and layouts", () => {
     expect(workspaceStageMeta("teleprompt").keywords).toContain("script");
     expect(workspaceLayoutModeMeta("focus").description).toContain("Collapse");
+  });
+
+  it("centralizes stage action labels, primary actions, and transitions", () => {
+    const context = createWorkspaceContext({
+      activeBlockId: "block-2",
+      sourceId: "source-1",
+      sourceType: "prepared",
+      speechPolicyProfile: "policy-1",
+      stage: "review",
+      voiceProfileId: "voice-1",
+    });
+
+    expect(workspaceStageActionLabel("createAndListen")).toBe("Create & Listen");
+    expect(workspaceStageActionLabel("previewSpeech")).toBe("Preview Speech");
+    expect(workspaceStageNavigationAction("preview")).toBe("previewSpeech");
+    expect(workspaceStagePrimaryAction("review")).toBe("previewSpeech");
+    expect(workspaceStagePrimaryAction("teleprompt")).toBe("createAndListen");
+
+    const preview = transitionWorkspaceContextForStageAction(context, "previewSpeech");
+    expect(preview).toMatchObject({
+      activeBlockId: "block-2",
+      sourceId: "source-1",
+      sourceType: "prepared",
+      speechPolicyProfile: "policy-1",
+      stage: "preview",
+      telepromptReturnStage: "preview",
+      voiceProfileId: "voice-1",
+    });
+
+    const teleprompt = transitionWorkspaceContextForStageAction(preview, "openTeleprompt");
+    expect(teleprompt).toMatchObject({
+      activeBlockId: "block-2",
+      sourceId: "source-1",
+      sourceType: "prepared",
+      speechPolicyProfile: "policy-1",
+      stage: "teleprompt",
+      telepromptReturnStage: "preview",
+      voiceProfileId: "voice-1",
+    });
   });
 });

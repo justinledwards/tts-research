@@ -9,10 +9,7 @@
   --vs-muted: #667085;
   --vs-border: #e4e7eb;
   --vs-accent: #ff6a00;
-  --vs-success: #16a34a;
   --vs-generating: #2563eb;
-  --vs-queued: #f59e0b;
-  --vs-danger: #dc2626;
   --vs-shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 12px 32px rgb(15 23 42 / 0.04);
   --book-paper: #f8f0df;
   --book-paper-raised: #fff8eb;
@@ -44,28 +41,6 @@ select {
   font: inherit;
 }
 
-[data-theme="light"] {
-  color-scheme: light;
-  --vs-bg: #ffffff;
-  --vs-surface: #f8fafc;
-  --vs-raised: #ffffff;
-  --vs-text: #111827;
-  --vs-muted: #667085;
-  --vs-border: #e4e7eb;
-  --vs-accent: #ff6a00;
-  --vs-success: #16a34a;
-  --vs-generating: #2563eb;
-  --vs-queued: #f59e0b;
-  --vs-danger: #dc2626;
-  --vs-shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 12px 32px rgb(15 23 42 / 0.04);
-  --book-paper: #f8f0df;
-  --book-paper-raised: #fff8eb;
-  --book-ink: #1f2937;
-  --book-muted: #776b58;
-  --book-gutter: #d9ccb6;
-  --book-shadow: 0 22px 56px rgb(74 48 25 / 0.18);
-}
-
 [data-theme="dark"] {
   color-scheme: dark;
   --vs-bg: #0b0f14;
@@ -75,10 +50,7 @@ select {
   --vs-muted: #9ca3af;
   --vs-border: #2f333b;
   --vs-accent: #ff6a00;
-  --vs-success: #22c55e;
   --vs-generating: #3b82f6;
-  --vs-queued: #fbbf24;
-  --vs-danger: #dc2626;
   --vs-shadow: 0 1px 2px rgb(0 0 0 / 0.38), 0 18px 40px rgb(0 0 0 / 0.22);
   --book-paper: #f7eedc;
   --book-paper-raised: #fff8ea;
@@ -97,10 +69,7 @@ select {
   --vs-muted: #64748b;
   --vs-border: #e1daca;
   --vs-accent: #ff6a00;
-  --vs-success: #16a34a;
   --vs-generating: #3656f4;
-  --vs-queued: #f59e0b;
-  --vs-danger: #dc2626;
   --vs-shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 12px 32px rgb(15 23 42 / 0.04);
   --book-paper: #fbecd6;
   --book-paper-raised: #fff7e7;
@@ -119,10 +88,7 @@ select {
   --vs-muted: #766f61;
   --vs-border: #dccdad;
   --vs-accent: #ff6a00;
-  --vs-success: #16845b;
   --vs-generating: #556a88;
-  --vs-queued: #b66a1d;
-  --vs-danger: #b42318;
   --vs-shadow: 0 1px 1px rgb(80 63 36 / 0.08), 0 8px 18px rgb(80 63 36 / 0.06);
   --book-paper: #fff4da;
   --book-paper-raised: #fff8e9;
@@ -141,10 +107,7 @@ select {
   --vs-muted: #9ca3bf;
   --vs-border: #1e2440;
   --vs-accent: #ff6a00;
-  --vs-success: #22c55e;
   --vs-generating: #60a5fa;
-  --vs-queued: #fbbf24;
-  --vs-danger: #dc2626;
   --vs-shadow: 0 1px 2px rgb(0 0 0 / 0.44), 0 22px 52px rgb(0 0 0 / 0.32);
   --book-paper: #0c1020;
   --book-paper-raised: #12182a;
@@ -208,10 +171,6 @@ select {
 
 .vs-accent-bg {
   background: var(--vs-accent);
-}
-
-.vs-accent-text {
-  color: var(--vs-accent);
 }
 
 .vs-border {

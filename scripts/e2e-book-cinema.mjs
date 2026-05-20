@@ -362,12 +362,14 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await runCommandPaletteAction(page, "go review", /Go to Review/);
     await page.getByText("Source Review").first().waitFor();
 
-    await page.getByRole("button", { exact: true, name: "Open Teleprompter" }).click();
+    await page.getByTestId("workspace-stage-action-previewSpeech").click();
+    await page.getByText("Spoken Form").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Stage").first().waitFor();
     await page.getByText("Default voice").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Back to Review" }).click();
     await page.getByText("Source Review").first().waitFor();
-    await page.getByRole("button", { exact: true, name: "Preview" }).click();
+    await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Stage").first().waitFor();
@@ -391,7 +393,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.getByRole("button", { exact: true, name: "Review" }).click();
     await page.getByText("Source Review").first().waitFor();
     await assertReviewPaneSelected(page, "Block Review");
-    await page.getByRole("button", { exact: true, name: "Preview" }).click();
+    await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
     const createResponse = page.waitForResponse(
       (response) =>
@@ -400,10 +402,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await runCommandPaletteAction(page, "create listen", /Create & Listen/);
     const response = await createResponse;
     assert(response.ok(), `Create & Listen failed with ${String(response.status())}`);
-    await page
-      .getByText(/running|completed|Create & Listen/i)
-      .first()
-      .waitFor();
+    await page.getByTestId("workspace-stage-action-createAndListen").waitFor({ state: "visible" });
     await assertNoPageIssues(issues);
     return { screenshots, status: "passed" };
   } catch (error) {

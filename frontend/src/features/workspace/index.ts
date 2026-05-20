@@ -23,3 +23,17 @@ export {
   type WorkspaceSourceType,
   type WorkspaceStage,
 } from "./model";
+export {
+  WORKSPACE_STAGE_ACTIONS,
+  WORKSPACE_STAGE_NAVIGATION_ACTIONS,
+  WORKSPACE_STAGE_PRIMARY_ACTIONS,
+  transitionWorkspaceContextForStageAction,
+  workspaceStageAction,
+  workspaceStageActionLabel,
+  workspaceStageActionTestId,
+  workspaceStageNavigationAction,
+  workspaceStagePrimaryAction,
+  type WorkspaceStageAction,
+  type WorkspaceStageActionId,
+  type WorkspaceStageActionKind,
+} from "./stageActions";

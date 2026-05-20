@@ -168,13 +168,9 @@ import {
   type UiMemoryState,
 } from "./features/preferences";
 import { HeaderContextSummary } from "./features/header";
-import { TelepromptStage } from "./features/teleprompt";
 import {
   createWorkspaceContext,
   defaultWorkspaceLayoutMode,
-  enterTelepromptStage,
-  returnFromTelepromptStage,
-  transitionWorkspaceStage,
   withWorkspaceActiveBlock,
   withWorkspaceSource,
   withWorkspaceSpeechPolicyProfile,
@@ -188,6 +184,13 @@ import {
   type WorkspaceSourceType,
   type WorkspaceStage,
 } from "./features/workspace/model";
+import {
+  transitionWorkspaceContextForStageAction,
+  workspaceStageActionLabel,
+  workspaceStageActionTestId,
+  workspaceStageNavigationAction,
+  type WorkspaceStageActionId,
+} from "./features/workspace/stageActions";
 import type {
   BookSource,
   BookCinemaDiagnostics,
@@ -239,7 +242,7 @@ import {
 } from "./speechPolicy";
 import type { ContentIRDocument } from "./content-ir";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
-import { SpeechPolicyControls, sessionSpeechPolicyRequest } from "./features/policy";
+import { sessionSpeechPolicyRequest } from "./features/policy/model";
 import {
   preparedSourceCinemaActionLabel,
   preparedSourceCinemaKind,
@@ -344,6 +347,14 @@ const HelpPanel = lazy(() =>
 );
 const SettingsPanel = lazy(() =>
   import("./features/settings").then((module) => ({ default: module.SettingsPanel })),
+);
+const SpeechPolicyControls = lazy(() =>
+  import("./features/policy/SpeechPolicyControls").then((module) => ({
+    default: module.SpeechPolicyControls,
+  })),
+);
+const TelepromptStage = lazy(() =>
+  import("./features/teleprompt").then((module) => ({ default: module.TelepromptStage })),
 );
 const PronunciationPanel = lazy(() =>
   import("./PronunciationPanel").then((module) => ({ default: module.PronunciationPanel })),
@@ -1364,6 +1375,7 @@ function TeleprompterPanel({
   job,
   latestProgress,
   openSignal,
+  showCinemaAction = true,
   showInlinePreview = true,
   onOpenBookCinema,
   onResumeProgress,
@@ -1379,6 +1391,7 @@ function TeleprompterPanel({
   job: VoiceJob | null;
   latestProgress: PlaybackProgress | null;
   openSignal: number;
+  showCinemaAction?: boolean;
   showInlinePreview?: boolean;
   onOpenBookCinema: () => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
@@ -1473,14 +1486,16 @@ function TeleprompterPanel({
       <section className="rounded-lg border p-5 shadow-sm vs-raised">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold">Teleprompter</h2>
-          <button
-            className="h-8 rounded-md border px-3 text-xs font-semibold transition disabled:opacity-50 vs-border"
-            disabled={!canOpenCinema}
-            onClick={handleOpenCinema}
-            type="button"
-          >
-            Cinema
-          </button>
+          {showCinemaAction ? (
+            <button
+              className="h-8 rounded-md border px-3 text-xs font-semibold transition disabled:opacity-50 vs-border"
+              disabled={!canOpenCinema}
+              onClick={handleOpenCinema}
+              type="button"
+            >
+              Cinema
+            </button>
+          ) : null}
         </div>
         <p className="vs-muted mt-4 rounded-lg border border-dashed p-6 text-sm leading-6 vs-border">
           Generate audio to see a listener-friendly script with word-level focus.
@@ -1568,13 +1583,15 @@ function TeleprompterPanel({
           >
             {playbackControls.isPlaying ? "Pause" : "Play"}
           </button>
-          <button
-            className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
-            onClick={handleOpenCinema}
-            type="button"
-          >
-            Cinema
-          </button>
+          {showCinemaAction ? (
+            <button
+              className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
+              onClick={handleOpenCinema}
+              type="button"
+            >
+              Cinema
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -2723,16 +2740,24 @@ export function App() {
   const leftRailMode = workspaceRails.leftRailMode;
   const rightRailMode = workspaceRails.rightRailMode;
   const contentMode = workspaceContext.stage;
-  const setContentMode = useCallback(
-    (stage: WorkspaceStage) => {
-      if (stage === "teleprompt") {
+  const runWorkspaceStageAction = useCallback(
+    (actionId: WorkspaceStageActionId) => {
+      if (actionId === "openTeleprompt") {
         setUiMemory((currentMemory) =>
           rememberTelepromptReturnStage(currentMemory, activeProjectId, contentMode),
         );
       }
-      setWorkspaceContext((currentContext) => transitionWorkspaceStage(currentContext, stage));
+      setWorkspaceContext((currentContext) =>
+        transitionWorkspaceContextForStageAction(currentContext, actionId),
+      );
     },
     [activeProjectId, contentMode],
+  );
+  const setContentMode = useCallback(
+    (stage: WorkspaceStage) => {
+      runWorkspaceStageAction(workspaceStageNavigationAction(stage));
+    },
+    [runWorkspaceStageAction],
   );
   const setWorkspaceLayoutMode = useCallback(
     (layoutMode: WorkspaceLayoutMode) => {
@@ -2825,7 +2850,6 @@ export function App() {
   );
 
   const isProcessing = requestState === "running";
-  const canSubmit = useMemo(() => text.trim().length > 0 && !isProcessing, [text, isProcessing]);
   const activeJobId =
     job && !["completed", "failed", "cancelled"].includes(job.status) ? job.id : null;
   const ttsPipeline = useMemo(() => resolveTTSPipelineState(job), [job]);
@@ -2895,6 +2919,8 @@ export function App() {
         : (preparedSources[0] ?? null),
     [preparedSources, selectedPreparedSourceId],
   );
+  const activeNarrationBookSource = sourceMode === "book" ? selectedBookSource : null;
+  const activeNarrationPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
   useEffect(() => {
     let sourceId: string | null = null;
     if (sourceMode === "book") {
@@ -3155,6 +3181,17 @@ export function App() {
     [activeProjectId, effectiveBookScope, hashReadingPosition, selectedBookSource],
   );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
+  const canOpenCurrentCinema = Boolean(job) || canOpenBookCinema;
+  let canCreateCurrentSource = false;
+  if (!isProcessing && sourceMode === "book") {
+    canCreateCurrentSource = selectedBookSource?.status === "ready" && Boolean(effectiveBookScope);
+  } else if (!isProcessing && sourceMode === "fileUrl") {
+    canCreateCurrentSource =
+      selectedPreparedSource?.status === "ready" &&
+      Boolean((selectedPreparedSource.speechText ?? selectedPreparedSource.text ?? "").trim());
+  } else if (!isProcessing) {
+    canCreateCurrentSource = text.trim().length > 0;
+  }
   const isResumeRestoring = useDelayedBusy(resumeRestoreStartedAt !== null, 250);
   const openReadingCinema = useCallback(
     (target?: "book") => {
@@ -3179,14 +3216,8 @@ export function App() {
     setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
   }, [bookCinemaOpenTiming, canOpenBookCinema, themeName]);
   const openTelepromptStage = useCallback(() => {
-    setUiMemory((currentMemory) =>
-      rememberTelepromptReturnStage(currentMemory, activeProjectId, contentMode),
-    );
-    setWorkspaceContext((currentContext) => enterTelepromptStage(currentContext));
-  }, [activeProjectId, contentMode]);
-  const returnFromTeleprompt = useCallback(() => {
-    setWorkspaceContext((currentContext) => returnFromTelepromptStage(currentContext));
-  }, []);
+    runWorkspaceStageAction("openTeleprompt");
+  }, [runWorkspaceStageAction]);
   const handleSelectBookCinemaSource = useCallback(
     (bookId: string) => {
       const book = bookSources.find((item) => item.id === bookId);
@@ -4204,13 +4235,13 @@ export function App() {
       setSelectedPreparedSourceId(nextJob.preparedSourceId ?? null);
       setSourceMode(nextSourceMode);
       setWorkspaceContext((currentContext) =>
-        transitionWorkspaceStage(
+        transitionWorkspaceContextForStageAction(
           withWorkspaceSource(
             currentContext,
             nextSourceType,
             nextJob.preparedSourceId ?? nextJob.bookSourceId ?? null,
           ),
-          "preview",
+          "previewSpeech",
         ),
       );
       if (nextProjectId !== activeProjectId) {
@@ -5478,11 +5509,11 @@ export function App() {
   function handleSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!canSubmit) {
+    if (!canCreateCurrentSource) {
       return;
     }
 
-    void submitVoiceJob();
+    createAndListenFromCurrentSource();
   }
 
   async function handleCancelVoiceJob() {
@@ -5651,6 +5682,21 @@ export function App() {
     }
   }
 
+  function createAndListenFromCurrentSource() {
+    if (!canCreateCurrentSource) {
+      return;
+    }
+    if (sourceMode === "book" && selectedBookSource && effectiveBookScope) {
+      void submitBookNarrationJob(selectedBookSource, effectiveBookScope);
+      return;
+    }
+    if (sourceMode === "fileUrl" && selectedPreparedSource) {
+      void submitPreparedSourceJob(selectedPreparedSource);
+      return;
+    }
+    void submitVoiceJob();
+  }
+
   const studioJobName = getStudioJobName(job);
   const studioProjectName = activeProject?.name ?? DEFAULT_PROJECT_NAME;
   const studioGridStyle = {
@@ -5773,15 +5819,17 @@ export function App() {
     },
     {
       detail: "Create audio from the current draft, book, or prepared source.",
-      disabled: !canSubmit,
-      disabledReason: canSubmit ? undefined : "Add source text or wait for the current run.",
+      disabled: !canCreateCurrentSource,
+      disabledReason: canCreateCurrentSource
+        ? undefined
+        : "Select a ready source or wait for the current run.",
       id: "playback:create-listen",
       keywords: ["run", "generate", "listen", "audio"],
       perform: () => {
-        void submitVoiceJob();
+        createAndListenFromCurrentSource();
       },
       section: "Playback",
-      title: "Create & Listen",
+      title: workspaceStageActionLabel("createAndListen"),
     },
     {
       detail: "Follow the current script inline with preserved context.",
@@ -5791,7 +5839,7 @@ export function App() {
         openTelepromptStage();
       },
       section: "Workspace",
-      title: "Open Teleprompt",
+      title: workspaceStageActionLabel("openTeleprompt"),
     },
   ];
   const workspaceCommandEntries = (commandMetadata?.workspace ?? []).map<CommandEntry>(
@@ -5928,7 +5976,6 @@ export function App() {
       },
     ];
   });
-  const canOpenCurrentCinema = Boolean(job) || canOpenBookCinema;
   const openCurrentCinemaCommand: CommandEntry = {
     detail: "Open the current narration or selected book in Cinema.",
     disabled: !canOpenCurrentCinema,
@@ -6004,7 +6051,7 @@ export function App() {
       <TopProductBar
         activeJobId={activeJobId}
         activeProjectId={activeProjectId}
-        canSubmit={canSubmit}
+        canSubmit={canCreateCurrentSource}
         isProcessing={isProcessing}
         job={job}
         jobName={studioJobName}
@@ -6013,6 +6060,7 @@ export function App() {
         projects={projects}
         requestState={requestState}
         studioMode={studioMode}
+        showSubmitAction={false}
         onCancel={() => {
           void handleCancelVoiceJob();
         }}
@@ -6039,7 +6087,7 @@ export function App() {
         }}
         onStudioModeChange={handleStudioModeChange}
         onSubmit={() => {
-          void submitVoiceJob();
+          createAndListenFromCurrentSource();
         }}
         onWorkspaceLayoutModeChange={setWorkspaceLayoutMode}
         onWorkspaceOpen={() => {
@@ -6135,7 +6183,7 @@ export function App() {
       {isSettingsOpen ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading settings..." />}>
           <SettingsPanel
-            canSubmit={canSubmit}
+            canSubmit={canCreateCurrentSource}
             commandTarget={settingsCommandTarget}
             customSpeechPolicyProfiles={customSpeechPolicyProfiles}
             isOpen={isSettingsOpen}
@@ -6186,7 +6234,7 @@ export function App() {
             }}
             onSubmit={() => {
               setIsSettingsOpen(false);
-              void submitVoiceJob();
+              createAndListenFromCurrentSource();
             }}
             onTeleprompterSettingsChange={(settings) => {
               setTeleprompterSettings(normalizeTeleprompterHighlightSettings(settings));
@@ -6605,8 +6653,10 @@ export function App() {
             ) : (
               <NarrationRailMini
                 activeSourceLabel={
-                  selectedPreparedSource?.title ??
-                  (selectedBookSource ? bookSourceName(selectedBookSource) : undefined)
+                  activeNarrationPreparedSource?.title ??
+                  (activeNarrationBookSource
+                    ? bookSourceName(activeNarrationBookSource)
+                    : undefined)
                 }
                 mode={leftRailMode}
                 profile={selectedVoiceProfile}
@@ -6651,7 +6701,7 @@ export function App() {
                   />
                 </Suspense>
               }
-              canSubmit={canSubmit}
+              canSubmit={canCreateCurrentSource}
               contentMode={contentMode}
               isPreparingSource={isPreparingSource}
               isProcessing={isProcessing}
@@ -6676,67 +6726,79 @@ export function App() {
               speechPolicyProfiles={speechPolicyProfiles}
               sourcePrepError={sourcePrepError}
               telepromptStage={
-                <TelepromptStage
-                  activeBlockLabel={workspaceActiveBlockLabel(
-                    workspaceContext.activeBlockId,
-                    selectedPreparedSource,
-                  )}
-                  policyProfile={speechPolicyProfileDisplayName(
-                    speechPolicyProfile,
-                    customSpeechPolicyProfiles,
-                  )}
-                  returnLabel={
-                    workspaceContext.telepromptReturnStage === "preview"
-                      ? "Back to Preview"
-                      : "Back to Review"
-                  }
-                  sourceLabel={narrationReviewSourceLabel(
-                    selectedPreparedSource,
-                    selectedBookSource,
-                  )}
-                  sourceMeta={narrationReviewSourceMeta({
-                    bookScopeContent,
-                    selectedBookScope: effectiveBookScope,
-                    selectedBookSource,
-                    selectedPreparedSource,
-                    text,
-                  })}
-                  voiceProfile={selectedVoiceProfile?.name ?? "Default voice"}
-                  onBackToReview={returnFromTeleprompt}
-                >
-                  <TeleprompterPanel
-                    canOpenBookCinema={canOpenBookCinema}
-                    isPlaybackActive={isPlaybackActive}
-                    job={job}
-                    latestProgress={latestProgress}
-                    openSignal={0}
-                    playbackControls={playbackControls}
-                    playbackCursorSec={playbackCursorSec}
-                    preparedSourceForCinema={jobPreparedSource ?? selectedPreparedSource}
-                    settings={teleprompterSettings}
-                    themeName={themeName}
-                    onOpenBookCinema={openReadingCinema}
-                    onOpenSettings={() => {
-                      setSettingsCommandTarget(null);
-                      setIsSettingsOpen(true);
+                <Suspense fallback={<LazySurfaceFallback label="Loading teleprompt..." />}>
+                  <TelepromptStage
+                    activeBlockLabel={workspaceActiveBlockLabel({
+                      activeBlockId: workspaceContext.activeBlockId,
+                      bookScopeContent,
+                      optimizedText: job?.optimizedText ?? "",
+                      selectedBookScope: effectiveBookScope,
+                      selectedBookSource: activeNarrationBookSource,
+                      selectedPreparedSource: activeNarrationPreparedSource,
+                      text,
+                    })}
+                    canCreate={canCreateCurrentSource}
+                    canOpenCinema={canOpenCurrentCinema}
+                    policyProfile={speechPolicyProfileDisplayName(
+                      speechPolicyProfile,
+                      customSpeechPolicyProfiles,
+                    )}
+                    scopeLabel={workbenchScopeTitle({
+                      selectedBookScope: effectiveBookScope,
+                      selectedBookSource: activeNarrationBookSource,
+                      selectedPreparedSource: activeNarrationPreparedSource,
+                      sourceMode,
+                    })}
+                    sourceLabel={narrationReviewSourceLabel(
+                      activeNarrationPreparedSource,
+                      activeNarrationBookSource,
+                    )}
+                    sourceMeta={narrationReviewSourceMeta({
+                      bookScopeContent,
+                      selectedBookScope: effectiveBookScope,
+                      selectedBookSource: activeNarrationBookSource,
+                      selectedPreparedSource: activeNarrationPreparedSource,
+                      text,
+                    })}
+                    voiceProfile={selectedVoiceProfile?.name ?? "Default voice"}
+                    onBackToPreview={() => {
+                      runWorkspaceStageAction("previewSpeech");
                     }}
-                    onResumeProgress={(progress) => {
-                      void handleResumeProgress(progress);
+                    onBackToReview={() => {
+                      runWorkspaceStageAction("reviewBlocks");
                     }}
-                  />
-                </TelepromptStage>
+                    onCreateAndListen={createAndListenFromCurrentSource}
+                    onOpenCinema={openReadingCinema}
+                  >
+                    <TeleprompterPanel
+                      canOpenBookCinema={canOpenBookCinema}
+                      isPlaybackActive={isPlaybackActive}
+                      job={job}
+                      latestProgress={latestProgress}
+                      openSignal={0}
+                      playbackControls={playbackControls}
+                      playbackCursorSec={playbackCursorSec}
+                      preparedSourceForCinema={jobPreparedSource ?? activeNarrationPreparedSource}
+                      settings={teleprompterSettings}
+                      showCinemaAction={false}
+                      themeName={themeName}
+                      onOpenBookCinema={openReadingCinema}
+                      onOpenSettings={() => {
+                        setSettingsCommandTarget(null);
+                        setIsSettingsOpen(true);
+                      }}
+                      onResumeProgress={(progress) => {
+                        void handleResumeProgress(progress);
+                      }}
+                    />
+                  </TelepromptStage>
+                </Suspense>
               }
               text={text}
               voiceProfileId={selectedVoiceProfileId}
               voiceProfileLabel={selectedVoiceProfile?.name ?? "Default voice"}
               onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
-              onContentModeChange={setContentMode}
-              onCreateBookAudio={(book, scope) => {
-                void submitBookNarrationJob(book, scope);
-              }}
-              onCreateDraftAudio={() => {
-                void submitVoiceJob();
-              }}
+              onCreateAndListen={createAndListenFromCurrentSource}
               onCreatePreparedAudio={(source) => {
                 void submitPreparedSourceJob(source);
               }}
@@ -6746,11 +6808,12 @@ export function App() {
               onInspectPreparedSource={(source) => {
                 void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
               }}
+              onOpenCinema={openReadingCinema}
               onOpenPreparedSourceCinema={openPreparedSourceCinema}
-              onOpenTeleprompter={openTelepromptStage}
               onPrepareFile={handlePrepareSourceFile}
               onPrepareUrl={handlePrepareSourceUrl}
               onSourceModeChange={setSourceMode}
+              onStageAction={runWorkspaceStageAction}
               onSpeechPolicyOverridesChange={handleSpeechPolicyOverridesChange}
               onSpeechPolicyProfileChange={(profile) => {
                 void handleSpeechPolicyProfileChange(profile);
@@ -6805,9 +6868,11 @@ export function App() {
                       customSpeechPolicyProfiles,
                     )}
                     sourceLabel={
-                      selectedPreparedSource?.title ??
-                      selectedPreparedSource?.sourceName ??
-                      (selectedBookSource ? bookSourceName(selectedBookSource) : "Draft text")
+                      activeNarrationPreparedSource?.title ??
+                      activeNarrationPreparedSource?.sourceName ??
+                      (activeNarrationBookSource
+                        ? bookSourceName(activeNarrationBookSource)
+                        : "Draft text")
                     }
                     stage={contentMode}
                   />
@@ -6827,6 +6892,7 @@ export function App() {
                 mode={rightRailMode}
                 onModeChange={setRightRailMode}
                 onOpenCinema={openReadingCinema}
+                showCinemaAction={contentMode !== "preview" && contentMode !== "teleprompt"}
               />
             )}
           </aside>
@@ -6834,12 +6900,13 @@ export function App() {
       )}
       <PipelineStatusFooter
         activeJobId={activeJobId}
-        canSubmit={canSubmit}
+        canSubmit={canCreateCurrentSource}
         hint={ttsPipelineHint}
         isProcessing={isProcessing}
         job={job}
         mode={activityFooterMode}
         pipeline={ttsPipeline}
+        showNarrationAction={false}
         voiceCloningActivity={voiceCloningActivity}
         onCancel={() => {
           void handleCancelVoiceJob();
@@ -6849,7 +6916,7 @@ export function App() {
         }}
         onModeChange={setActivityFooterMode}
         onSubmit={() => {
-          void submitVoiceJob();
+          createAndListenFromCurrentSource();
         }}
       />
     </main>
@@ -6935,11 +7002,13 @@ function PlaybackRailMini({
   mode,
   onModeChange,
   onOpenCinema,
+  showCinemaAction = true,
 }: Readonly<{
   job: VoiceJob | null;
   mode: ActivityFooterMode;
   onModeChange: (mode: ActivityFooterMode) => void;
   onOpenCinema: () => void;
+  showCinemaAction?: boolean;
 }>) {
   const total = job?.retries.totalSegments ?? job?.segments?.length ?? 0;
   const ready = job?.audioReadySegments ?? 0;
@@ -6965,8 +7034,8 @@ function PlaybackRailMini({
         },
         { label: "Check", value: formatSimilarity(job?.voiceCheck.similarity ?? 0), detail: "ASR" },
       ]}
-      actionLabel="Cinema"
-      onAction={onOpenCinema}
+      actionLabel={showCinemaAction ? "Cinema" : undefined}
+      onAction={showCinemaAction ? onOpenCinema : undefined}
     />
   );
 }
@@ -8835,6 +8904,7 @@ function PipelineStatusFooter({
   job,
   mode,
   pipeline,
+  showNarrationAction = true,
   voiceCloningActivity,
   onCancel,
   onModeChange,
@@ -8848,6 +8918,7 @@ function PipelineStatusFooter({
   job: VoiceJob | null;
   mode: ActivityFooterMode;
   pipeline: PipelineStepState;
+  showNarrationAction?: boolean;
   voiceCloningActivity: VoiceCloningActivitySummary;
   onCancel: () => void;
   onModeChange: (mode: ActivityFooterMode) => void;
@@ -8862,25 +8933,30 @@ function PipelineStatusFooter({
     { label: "Synthesize", status: pipeline.synthesis },
     { label: "Check", status: pipeline.checker },
   ];
-  const narrationAction = isProcessing ? (
-    <button
-      className="h-10 rounded-md border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-      disabled={!activeJobId}
-      onClick={onCancel}
-      type="button"
-    >
-      Cancel Run
-    </button>
-  ) : (
-    <button
-      className="h-10 rounded-md px-4 text-sm font-semibold text-white transition disabled:bg-zinc-300 vs-accent-bg"
-      disabled={!canSubmit}
-      onClick={onSubmit}
-      type="button"
-    >
-      Create & Listen
-    </button>
-  );
+  let narrationAction: ReactNode = null;
+  if (isProcessing) {
+    narrationAction = (
+      <button
+        className="h-10 rounded-md border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+        disabled={!activeJobId}
+        onClick={onCancel}
+        type="button"
+      >
+        Cancel Run
+      </button>
+    );
+  } else if (showNarrationAction) {
+    narrationAction = (
+      <button
+        className="h-10 rounded-md px-4 text-sm font-semibold text-white transition disabled:bg-zinc-300 vs-accent-bg"
+        disabled={!canSubmit}
+        onClick={onSubmit}
+        type="button"
+      >
+        {workspaceStageActionLabel("createAndListen")}
+      </button>
+    );
+  }
   const voiceCloningAction = (
     <button
       className={`h-10 rounded-md px-4 text-sm font-semibold transition ${
@@ -9061,7 +9137,7 @@ function ActivityLanePanel({
             {message}
           </p>
         </div>
-        <div className="shrink-0">{action}</div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
       <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
         {stages.map((stage) => (
@@ -9163,7 +9239,7 @@ function CompactActivityLane({
           </p>
         </div>
       </div>
-      <div className="shrink-0">{action}</div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </section>
   );
 }
@@ -9335,6 +9411,20 @@ function SidebarFact({ label, value }: Readonly<{ label: string; value: string }
   );
 }
 
+function activeBookSourceForWorkbench(
+  sourceMode: SourceMode,
+  selectedBookSource: BookSource | null,
+): BookSource | null {
+  return sourceMode === "book" ? selectedBookSource : null;
+}
+
+function activePreparedSourceForWorkbench(
+  sourceMode: SourceMode,
+  selectedPreparedSource: PreparedSource | null,
+): PreparedSource | null {
+  return sourceMode === "fileUrl" ? selectedPreparedSource : null;
+}
+
 function SourceTextPanel({
   activeReviewPane,
   activeReviewBlockId,
@@ -9366,19 +9456,18 @@ function SourceTextPanel({
   voiceProfileId,
   voiceProfileLabel,
   onClearSpeechPolicyOverrides,
-  onContentModeChange,
-  onCreateBookAudio,
+  onCreateAndListen,
   onCreateCustomSpeechPolicyProfile,
-  onCreateDraftAudio,
   onCreatePreparedAudio,
   onDeleteCustomSpeechPolicyProfile,
   onInspectBookSource,
   onInspectPreparedSource,
+  onOpenCinema,
   onOpenPreparedSourceCinema,
-  onOpenTeleprompter,
   onPrepareFile,
   onPrepareUrl,
   onSourceModeChange,
+  onStageAction,
   onSpeechPolicyOverridesChange,
   onSpeechPolicyProfileChange,
   onReviewBlockChange,
@@ -9418,23 +9507,22 @@ function SourceTextPanel({
   voiceProfileId: string;
   voiceProfileLabel: string;
   onClearSpeechPolicyOverrides: () => void;
-  onContentModeChange: (mode: WorkspaceStage) => void;
-  onCreateBookAudio: (source: BookSource, scope: BookScope) => void;
+  onCreateAndListen: () => void;
   onCreateCustomSpeechPolicyProfile: (
     name: string,
     settings: SpeechPolicySettings,
     baseProfile: string,
   ) => Promise<void>;
-  onCreateDraftAudio: () => void;
   onCreatePreparedAudio: (source: PreparedSource) => void;
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
+  onOpenCinema: () => void;
   onOpenPreparedSourceCinema: (source: PreparedSource) => void;
-  onOpenTeleprompter: () => void;
   onPrepareFile: (file: File, markdownParseMode: MarkdownParseMode) => Promise<void>;
   onPrepareUrl: (url: string, markdownParseMode: MarkdownParseMode) => Promise<void>;
   onSourceModeChange: (mode: SourceMode) => void;
+  onStageAction: (actionId: WorkspaceStageActionId) => void;
   onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onReviewBlockChange: (blockId: string | null) => void;
@@ -9456,17 +9544,19 @@ function SourceTextPanel({
   const [sourceUrl, setSourceUrl] = useState("");
   const [markdownParseMode, setMarkdownParseMode] = useState<MarkdownParseMode>("strict");
   const showSourceIntake = contentMode === "intake";
+  const activeBookSource = activeBookSourceForWorkbench(sourceMode, selectedBookSource);
+  const activePreparedSource = activePreparedSourceForWorkbench(sourceMode, selectedPreparedSource);
   const sourceIdentity = resolveWorkbenchSourceIdentity({
     contentMode,
-    selectedBookSource,
-    selectedPreparedSource,
+    selectedBookSource: activeBookSource,
+    selectedPreparedSource: activePreparedSource,
     sourceMode,
     text,
   });
   const scopeTitle = workbenchScopeTitle({
     selectedBookScope,
-    selectedBookSource,
-    selectedPreparedSource,
+    selectedBookSource: activeBookSource,
+    selectedPreparedSource: activePreparedSource,
     sourceMode,
   });
   const stageLabel = workspaceStageMeta(contentMode).label;
@@ -9492,7 +9582,7 @@ function SourceTextPanel({
         if (sourceMode === "fileUrl") {
           await onPrepareFile(fileArray[0], markdownParseMode);
           setSourceFileLabel(formatSourceTextFileLabel(fileArray));
-          onContentModeChange("review");
+          onStageAction("reviewBlocks");
           return;
         }
         const parts = await Promise.all(fileArray.map((file) => file.text()));
@@ -9507,7 +9597,7 @@ function SourceTextPanel({
         setSourceFileError("Unable to read that file locally.");
       }
     },
-    [isProcessing, markdownParseMode, onContentModeChange, onPrepareFile, onTextChange, sourceMode],
+    [isProcessing, markdownParseMode, onPrepareFile, onStageAction, onTextChange, sourceMode],
   );
 
   return (
@@ -9559,7 +9649,7 @@ function SourceTextPanel({
             }`}
             key={mode}
             onClick={() => {
-              onContentModeChange(mode);
+              onStageAction(workspaceStageNavigationAction(mode));
             }}
             type="button"
           >
@@ -9635,7 +9725,7 @@ function SourceTextPanel({
           onPrepareUrl={() => {
             if (sourceUrl.trim()) {
               void onPrepareUrl(sourceUrl.trim(), markdownParseMode);
-              onContentModeChange("review");
+              onStageAction("reviewBlocks");
             }
           }}
           onClearSpeechPolicyOverrides={onClearSpeechPolicyOverrides}
@@ -9645,7 +9735,7 @@ function SourceTextPanel({
           onSourceUrlChange={setSourceUrl}
           onMarkdownParseModeChange={setMarkdownParseMode}
           onUsePreparedSource={(source) => {
-            onContentModeChange("review");
+            onStageAction("reviewBlocks");
             void onUsePreparedSource(source);
           }}
         >
@@ -9722,17 +9812,18 @@ function SourceTextPanel({
             policyProfileLabel={speechPolicyProfileLabel}
             projectId={projectId}
             selectedBookScope={selectedBookScope}
-            selectedBookSource={selectedBookSource}
-            selectedPreparedSource={selectedPreparedSource}
+            selectedBookSource={activeBookSource}
+            selectedPreparedSource={activePreparedSource}
             text={text}
             voiceProfileLabel={voiceProfileLabel}
             voiceProfileId={voiceProfileId}
             onInspectBookSource={onInspectBookSource}
             onInspectPreparedSource={onInspectPreparedSource}
-            onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
-            onOpenTeleprompter={onOpenTeleprompter}
             onActiveBlockChange={onReviewBlockChange}
             onActivePaneChange={onReviewPaneChange}
+            onPreviewSpeech={() => {
+              onStageAction("previewSpeech");
+            }}
           />
         </div>
       ) : null}
@@ -9740,36 +9831,35 @@ function SourceTextPanel({
         <NarrationPreviewStage
           bookScopeContent={bookScopeContent}
           canCreate={canSubmit && !isProcessing}
+          canOpenCinema={Boolean(job)}
           job={job}
           optimizedText={optimizedText}
           policyProfileLabel={speechPolicyProfileLabel}
           selectedBookScope={selectedBookScope}
-          selectedBookSource={selectedBookSource}
-          selectedPreparedSource={selectedPreparedSource}
+          selectedBookSource={activeBookSource}
+          selectedPreparedSource={activePreparedSource}
           sourceMode={sourceMode}
           text={text}
           voiceProfileLabel={voiceProfileLabel}
-          onCreateBookAudio={onCreateBookAudio}
-          onCreateDraftAudio={onCreateDraftAudio}
-          onCreatePreparedAudio={onCreatePreparedAudio}
-          onOpenTeleprompter={onOpenTeleprompter}
+          onCreateAndListen={onCreateAndListen}
+          onOpenCinema={onOpenCinema}
+          onOpenTeleprompt={() => {
+            onStageAction("openTeleprompt");
+          }}
         />
       ) : null}
       {contentMode === "teleprompt" ? telepromptStage : null}
       {showSourceIntake && sourceMode !== "fileUrl" ? (
         <SourceMetadataStrip
           job={job}
-          selectedBookSource={selectedBookSource}
+          selectedBookSource={activeBookSource}
           selectedBookScope={selectedBookScope}
           bookScopeContent={bookScopeContent}
-          selectedPreparedSource={selectedPreparedSource}
+          selectedPreparedSource={activePreparedSource}
           sourceMode={sourceMode}
           text={text}
         />
       ) : null}
-      <button className="sr-only" disabled={!canSubmit} type="submit">
-        Create & Listen
-      </button>
     </form>
   );
 }
@@ -9777,6 +9867,7 @@ function SourceTextPanel({
 function NarrationPreviewStage({
   bookScopeContent,
   canCreate,
+  canOpenCinema,
   job,
   optimizedText,
   policyProfileLabel,
@@ -9786,13 +9877,13 @@ function NarrationPreviewStage({
   sourceMode,
   text,
   voiceProfileLabel,
-  onCreateBookAudio,
-  onCreateDraftAudio,
-  onCreatePreparedAudio,
-  onOpenTeleprompter,
+  onCreateAndListen,
+  onOpenCinema,
+  onOpenTeleprompt,
 }: Readonly<{
   bookScopeContent: BookSourceScopeContent | null;
   canCreate: boolean;
+  canOpenCinema: boolean;
   job: VoiceJob | null;
   optimizedText: string;
   policyProfileLabel: string;
@@ -9802,10 +9893,9 @@ function NarrationPreviewStage({
   sourceMode: SourceMode;
   text: string;
   voiceProfileLabel: string;
-  onCreateBookAudio: (source: BookSource, scope: BookScope) => void;
-  onCreateDraftAudio: () => void;
-  onCreatePreparedAudio: (source: PreparedSource) => void;
-  onOpenTeleprompter: () => void;
+  onCreateAndListen: () => void;
+  onOpenCinema: () => void;
+  onOpenTeleprompt: () => void;
 }>) {
   const sourceLabel = narrationReviewSourceLabel(selectedPreparedSource, selectedBookSource);
   const sourceMeta = narrationReviewSourceMeta({
@@ -9837,29 +9927,19 @@ function NarrationPreviewStage({
     selectedBookSource,
     selectedPreparedSource,
   });
-  const canCreatePrepared =
-    sourceMode === "fileUrl" && selectedPreparedSource?.status === "ready" && canCreate;
-  const canCreateBook =
-    sourceMode === "book" &&
-    selectedBookSource?.status === "ready" &&
-    Boolean(selectedBookScope) &&
-    canCreate;
-  const canCreateDraft = sourceMode === "text" && canCreate;
-  const createDisabled = !(canCreatePrepared || canCreateBook || canCreateDraft);
+  const createDisabled = !canCreate;
   const createDetail = job
     ? `${job.status} · ${estimateFirstAudioETA(job)}`
     : "Ready to create checked narration";
-  const handleCreate = () => {
-    if (sourceMode === "fileUrl" && selectedPreparedSource) {
-      onCreatePreparedAudio(selectedPreparedSource);
-      return;
-    }
-    if (sourceMode === "book" && selectedBookSource && selectedBookScope) {
-      onCreateBookAudio(selectedBookSource, selectedBookScope);
-      return;
-    }
-    onCreateDraftAudio();
-  };
+  const policyNotes = narrationPreviewPolicyNotes({
+    bookScopeContent,
+    policyProfileLabel,
+    scopeTitle,
+    selectedBookSource,
+    selectedPreparedSource,
+    sourceMode,
+    voiceProfileLabel,
+  });
 
   return (
     <section className="grid min-w-0 gap-3 rounded-xl border bg-[var(--vs-raised)] p-4 vs-border">
@@ -9879,57 +9959,201 @@ function NarrationPreviewStage({
         <div className="flex flex-wrap items-center gap-2">
           <button
             className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700"
-            onClick={onOpenTeleprompter}
+            data-testid={workspaceStageActionTestId("openTeleprompt")}
+            onClick={onOpenTeleprompt}
             type="button"
           >
-            Open Teleprompt
+            {workspaceStageActionLabel("openTeleprompt")}
+          </button>
+          <button
+            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-50 vs-border vs-raised"
+            data-disabled-reason={canOpenCinema ? undefined : "Create audio before opening Cinema."}
+            data-testid={workspaceStageActionTestId("openCinema")}
+            disabled={!canOpenCinema}
+            onClick={onOpenCinema}
+            type="button"
+          >
+            {workspaceStageActionLabel("openCinema")}
           </button>
           <button
             className="h-9 rounded-md px-4 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-zinc-300 vs-accent-bg"
+            data-disabled-reason={
+              canCreate ? undefined : "Select a ready source before creating audio."
+            }
+            data-testid={workspaceStageActionTestId("createAndListen")}
             disabled={createDisabled}
-            onClick={handleCreate}
+            onClick={onCreateAndListen}
             type="button"
           >
-            Create & Listen
+            {workspaceStageActionLabel("createAndListen")}
           </button>
         </div>
       </div>
       <p className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs font-semibold vs-border vs-muted">
         {createDetail}
       </p>
+      <dl className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 text-xs sm:grid-cols-3 vs-border">
+        <PreviewFact label="Voice choice" value={voiceProfileLabel} />
+        <PreviewFact label="Speech policy" value={policyProfileLabel} />
+        <PreviewFact label="Scope" value={scopeTitle} />
+      </dl>
       <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)]">
         <div className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border">
           {previewContent}
         </div>
-        <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
-          <div>
-            <h3 className="text-base font-semibold">Spoken Form</h3>
-            <p className="mt-1 text-xs vs-muted">
-              Create & Listen uses this listener-oriented text.
+        <div className="grid min-w-0 gap-3">
+          <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
+            <div>
+              <h3 className="text-base font-semibold">Spoken Form</h3>
+              <p className="mt-1 text-xs vs-muted">
+                This is the listener-ready text Create & Listen will turn into audio.
+              </p>
+            </div>
+            <p className="max-h-[20rem] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
+              {spokenText}
             </p>
-          </div>
-          <p className="max-h-[24rem] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
-            {spokenText}
-          </p>
-        </section>
+          </section>
+          <section className="grid min-w-0 gap-2 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
+            <h3 className="text-sm font-semibold">Policy Notes</h3>
+            <ul className="grid gap-2 text-xs leading-5 vs-muted">
+              {policyNotes.map((note) => (
+                <li
+                  className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 vs-border"
+                  key={note.label}
+                >
+                  <span className="font-semibold text-[var(--vs-text)]">{note.label}: </span>
+                  {note.detail}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
       </div>
     </section>
   );
 }
 
-function workspaceActiveBlockLabel(
-  activeBlockId: string | null,
-  selectedPreparedSource: PreparedSource | null,
-): string {
-  if (!activeBlockId) {
-    return "Current selection";
+function PreviewFact({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="min-w-0">
+      <dt className="font-semibold uppercase tracking-[0.14em] vs-muted">{label}</dt>
+      <dd className="mt-1 truncate text-sm font-semibold text-[var(--vs-text)]" title={value}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+interface NarrationPreviewPolicyNote {
+  detail: string;
+  label: string;
+}
+
+function narrationPreviewPolicyNotes({
+  bookScopeContent,
+  policyProfileLabel,
+  scopeTitle,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  voiceProfileLabel,
+}: Readonly<{
+  bookScopeContent: BookSourceScopeContent | null;
+  policyProfileLabel: string;
+  scopeTitle: string;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  voiceProfileLabel: string;
+}>): NarrationPreviewPolicyNote[] {
+  if (selectedPreparedSource) {
+    return [
+      {
+        detail: `${selectedPreparedSource.summary.spokenBlockCount.toLocaleString()} spoken blocks and ${selectedPreparedSource.summary.citationSkipCount.toLocaleString()} citation-only items skipped.`,
+        label: "Prepared blocks",
+      },
+      {
+        detail: `${selectedPreparedSource.summary.sentenceSegmentCount.toLocaleString()} sentence-safe segments are queued for ${voiceProfileLabel}.`,
+        label: "Segmentation",
+      },
+      {
+        detail: `${policyProfileLabel} applies to the full prepared source.`,
+        label: "Policy",
+      },
+    ];
   }
-  const block = selectedPreparedSource?.blocks?.find((item) => item.id === activeBlockId);
+  if (selectedBookSource) {
+    const blockCount = bookScopeContent?.blocks?.length ?? 0;
+    return [
+      {
+        detail: `${scopeTitle} from ${bookSourceName(selectedBookSource)} is the active narration scope.`,
+        label: "Book scope",
+      },
+      {
+        detail:
+          blockCount > 0
+            ? `${blockCount.toLocaleString()} source blocks are preserved for review and playback.`
+            : "The selected scope will be split into listener-sized blocks during generation.",
+        label: "Blocks",
+      },
+      {
+        detail: `${policyProfileLabel} and ${voiceProfileLabel} stay attached to this scope.`,
+        label: "Policy",
+      },
+    ];
+  }
+  return [
+    {
+      detail: `${sourceMode === "text" ? "Draft text" : scopeTitle} will be narrated with ${voiceProfileLabel}.`,
+      label: "Source",
+    },
+    {
+      detail: `${policyProfileLabel} is applied before audio is generated.`,
+      label: "Policy",
+    },
+    {
+      detail:
+        "Paragraphs are chunked into listener-sized blocks for Review, Teleprompt, and Cinema.",
+      label: "Blocks",
+    },
+  ];
+}
+
+function workspaceActiveBlockLabel({
+  activeBlockId,
+  bookScopeContent,
+  optimizedText,
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  text,
+}: Readonly<{
+  activeBlockId: string | null;
+  bookScopeContent: BookSourceScopeContent | null;
+  optimizedText: string;
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  text: string;
+}>): string {
+  const blocks = buildNarrationReviewBlocks({
+    bookScopeContent,
+    optimizedText,
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+    text,
+  });
+  if (!activeBlockId) {
+    return blocks[0]
+      ? `Block ${blocks[0].index.toString()} · ${blocks[0].label}`
+      : "Current selection";
+  }
+  const block = blocks.find((item) => item.id === activeBlockId);
   if (!block) {
     return activeBlockId;
   }
-  const label = firstNonEmptyString(block.label, block.text?.trim()) ?? block.id;
-  return `Block ${String((selectedPreparedSource?.blocks ?? []).indexOf(block) + 1)} · ${label}`;
+  return `Block ${block.index.toString()} · ${block.label}`;
 }
 
 function SourceKindIcon({ mode }: Readonly<{ mode: SourceMode }>) {
@@ -10260,21 +10484,23 @@ function SourcePrepReview({
 
       {preparedSources.length > 0 ? (
         <div className="grid gap-3">
-          <SpeechPolicyControls
-            customProfiles={customSpeechPolicyProfiles}
-            definition={speechPolicyDefinition}
-            isPreviewing={isSpeechPolicyPreviewing}
-            overrides={speechPolicyOverrides}
-            profile={speechPolicyProfile}
-            profiles={speechPolicyProfiles}
-            error={speechPolicyError}
-            onClearOverrides={onClearSpeechPolicyOverrides}
-            onCreateCustomProfile={onCreateCustomSpeechPolicyProfile}
-            onDeleteCustomProfile={onDeleteCustomSpeechPolicyProfile}
-            onOverridesChange={onSpeechPolicyOverridesChange}
-            onProfileChange={onSpeechPolicyProfileChange}
-            onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
-          />
+          <Suspense fallback={<LazySurfaceFallback label="Loading policy controls..." />}>
+            <SpeechPolicyControls
+              customProfiles={customSpeechPolicyProfiles}
+              definition={speechPolicyDefinition}
+              isPreviewing={isSpeechPolicyPreviewing}
+              overrides={speechPolicyOverrides}
+              profile={speechPolicyProfile}
+              profiles={speechPolicyProfiles}
+              error={speechPolicyError}
+              onClearOverrides={onClearSpeechPolicyOverrides}
+              onCreateCustomProfile={onCreateCustomSpeechPolicyProfile}
+              onDeleteCustomProfile={onDeleteCustomSpeechPolicyProfile}
+              onOverridesChange={onSpeechPolicyOverridesChange}
+              onProfileChange={onSpeechPolicyProfileChange}
+              onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
+            />
+          </Suspense>
           <div className="grid gap-2 rounded-lg border bg-[var(--vs-raised)] p-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center vs-border">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">Prepared</p>
@@ -10383,7 +10609,7 @@ function PreparedSourceIntakeSummary({
             }}
             type="button"
           >
-            Create & Listen
+            {workspaceStageActionLabel("createAndListen")}
           </button>
         </div>
       </div>
@@ -12077,11 +12303,10 @@ function NarrationReviewWorkbench({
   bookScopeContent,
   job,
   onInspectBookSource,
-  onOpenTeleprompter,
   onInspectPreparedSource,
-  onOpenPreparedSourceCinema,
   onActiveBlockChange,
   onActivePaneChange,
+  onPreviewSpeech,
   optimizedText,
   policyProfileLabel,
   projectId,
@@ -12100,8 +12325,7 @@ function NarrationReviewWorkbench({
   onActivePaneChange: (pane: ReviewPane) => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
-  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
-  onOpenTeleprompter: () => void;
+  onPreviewSpeech: () => void;
   optimizedText: string;
   policyProfileLabel: string;
   projectId: string;
@@ -12215,43 +12439,35 @@ function NarrationReviewWorkbench({
         />
         <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
           <button
-            className="h-9 flex-1 whitespace-nowrap rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 sm:flex-none"
-            onClick={onOpenTeleprompter}
+            className="h-9 flex-1 whitespace-nowrap rounded-md px-4 text-xs font-semibold text-white transition hover:brightness-95 sm:flex-none vs-accent-bg"
+            data-testid={workspaceStageActionTestId("previewSpeech")}
+            onClick={onPreviewSpeech}
             type="button"
           >
-            Open Teleprompter
+            {workspaceStageActionLabel("previewSpeech")}
           </button>
           {selectedPreparedSource ? (
             <button
-              className="h-9 flex-1 whitespace-nowrap rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 sm:flex-none"
-              onClick={() => {
-                onOpenPreparedSourceCinema(selectedPreparedSource);
-              }}
-              type="button"
-            >
-              {preparedSourceCinemaActionLabel(selectedPreparedSource)}
-            </button>
-          ) : null}
-          {selectedPreparedSource ? (
-            <button
               className="h-9 flex-1 whitespace-nowrap rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 sm:flex-none vs-border vs-raised"
+              data-testid={workspaceStageActionTestId("inspectStructure")}
               onClick={() => {
                 onInspectPreparedSource(selectedPreparedSource);
               }}
               type="button"
             >
-              Content Structure
+              {workspaceStageActionLabel("inspectStructure")}
             </button>
           ) : null}
           {!selectedPreparedSource && selectedBookSource ? (
             <button
               className="h-9 flex-1 whitespace-nowrap rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 sm:flex-none vs-border vs-raised"
+              data-testid={workspaceStageActionTestId("inspectStructure")}
               onClick={() => {
                 onInspectBookSource(selectedBookSource);
               }}
               type="button"
             >
-              Content Structure
+              {workspaceStageActionLabel("inspectStructure")}
             </button>
           ) : null}
         </div>

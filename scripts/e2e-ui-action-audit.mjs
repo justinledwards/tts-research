@@ -75,6 +75,10 @@ async function main() {
     const screenshots = [];
 
     try {
+      const traversal = await runWorkspaceStageTraversal(browser, seed);
+      results.push(traversal.result);
+      screenshots.push(...traversal.screenshots);
+
       for (const scenario of scenarios) {
         console.log(`[ui-actions] inventory ${scenario.id}`);
         const scenarioInventory = await inventoryScenario(browser, scenario);
@@ -291,8 +295,7 @@ async function seedAuditData(fixtures) {
 }
 
 function createScenarios(seed) {
-  const workspaceText =
-    "Adaptive workspace action-audit text. Review it, preview it, and open teleprompt controls.";
+  const workspaceText = workspaceAuditText();
   return [
     {
       description: "PDF Book source before a narration job exists.",
@@ -422,6 +425,93 @@ function createScenarios(seed) {
   ];
 }
 
+async function runWorkspaceStageTraversal(browser, seed) {
+  console.log("[ui-actions] traversal workspace-stage-parity");
+  const context = await browser.newContext({
+    storageState: projectStorageState(seed.projectId, {
+      bookScope: seed.pdf.scope,
+      bookSourceId: seed.pdf.book.id,
+      sourceMode: "book",
+      stage: "intake",
+      text: seed.pdf.text,
+    }),
+    viewport: { height: 980, width: 1440 },
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
+  const screenshots = [];
+  try {
+    await gotoApp(page);
+    await page.getByRole("button", { exact: true, name: "Intake" }).click();
+    await page.getByRole("button", { exact: true, name: "Book" }).click();
+    await page.getByText("Book Cinema").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Review" }).click();
+    await page.getByText("Source Review").first().waitFor();
+    await page.getByTestId("workspace-stage-action-previewSpeech").click();
+    await page.getByText("Spoken Form").first().waitFor();
+    await page.getByText("Policy Notes").first().waitFor();
+    await page.getByText("Default voice").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
+    await page.getByText("Teleprompt Stage").first().waitFor();
+    await page
+      .getByText(/Block 1/i)
+      .first()
+      .waitFor();
+    await page.getByText("Default voice").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
+    await page.getByText("Spoken Form").first().waitFor();
+
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/book-sources/") &&
+        response.url().includes("/voice-jobs") &&
+        response.request().method() === "POST",
+    );
+    await page.getByTestId("workspace-stage-action-createAndListen").click();
+    const response = await createResponse;
+    assert(response.ok(), `Create & Listen failed with ${String(response.status())}`);
+    const createdJob = await response.json();
+    if (createdJob?.id) {
+      await waitForJob(createdJob.id);
+    }
+    await page.getByTestId("workspace-stage-action-openCinema").click();
+    await cinemaOverlay(page).waitFor({ state: "visible" });
+    await cinemaOverlay(page)
+      .getByText(/Book Cinema|Document Cinema|Cinema/i)
+      .first()
+      .waitFor();
+
+    const screenshot = path.join(screenshotsDir, "workspace-stage-traversal.png");
+    await page.screenshot({ fullPage: false, path: screenshot });
+    screenshots.push(screenshot);
+    await assertNoPageIssues(issues);
+    return {
+      result: {
+        actionClass: "navigation",
+        actionId: "workspace-stage-traversal",
+        activationMode: "scripted",
+        destructive: false,
+        expectedTransition: "full stage traversal",
+        label: "Intake → Review → Preview → Teleprompt → Preview → Create & Listen → Cinema",
+        outcome: "stage context preserved through full traversal",
+        passed: true,
+        scenarioId: "workspace-stage-traversal",
+        status: "passed",
+        surface: "Workspace",
+      },
+      screenshots,
+    };
+  } catch (error) {
+    const screenshot = path.join(screenshotsDir, "workspace-stage-traversal-failure.png");
+    await page.screenshot({ fullPage: true, path: screenshot }).catch(() => {});
+    screenshots.push(screenshot);
+    throw error;
+  } finally {
+    await context.close();
+  }
+}
+
 function workspaceScenario(projectId, id, label, surface, text) {
   return {
     description: `Workspace ${label} stage controls.`,
@@ -439,7 +529,10 @@ function workspaceScenario(projectId, id, label, surface, text) {
 
 async function openWorkspaceStage(page, label) {
   await gotoApp(page);
-  const button = page.getByRole("button", { exact: true, name: label });
+  const button =
+    label === "Preview"
+      ? page.getByTestId("workspace-stage-action-previewSpeech")
+      : page.getByRole("button", { exact: true, name: label }).first();
   if (await button.isVisible().catch(() => false)) {
     await button.click();
   }
@@ -468,8 +561,8 @@ async function openSettings(page) {
 }
 
 async function openTeleprompt(page) {
-  await openWorkspaceStage(page, "Review");
-  await page.getByRole("button", { exact: true, name: "Open Teleprompter" }).click();
+  await openWorkspaceStage(page, "Preview");
+  await page.getByTestId("workspace-stage-action-openTeleprompt").click();
   await page.getByText("Teleprompt Stage").first().waitFor();
 }
 
@@ -1052,6 +1145,10 @@ function summarizeResults(results) {
 
 function wordCount(text) {
   return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function workspaceAuditText() {
+  return "Adaptive workspace action-audit text. Review it, preview it, and open teleprompt controls.";
 }
 
 function escapeRegex(value) {

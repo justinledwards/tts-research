@@ -1,4 +1,5 @@
 import type { UiActionClass, UiActionExpectedTransition, UiActionSurface } from "./actionScopes";
+import { workspaceStageActionLabel } from "../workspace/stageActions";
 
 export interface UiActionMetadata {
   readonly id: string;
@@ -47,13 +48,42 @@ export const STATIC_UI_ACTION_METADATA = [
   action("settings-open", "Open settings", "Settings", "settings", "menu-or-panel-opened"),
   action("project-import", "Import", "Workspace", "navigation", "menu-or-panel-opened"),
   action("project-export", "Export", "Workspace", "navigation", "menu-or-panel-opened"),
-  action("create-listen", "Create & Listen", "Workspace", "primary", "live-status-updated"),
+  action(
+    "create-listen",
+    workspaceStageActionLabel("createAndListen"),
+    "Workspace",
+    "primary",
+    "live-status-updated",
+  ),
   action("cancel-job", "Cancel Job", "Workspace", "destructive", "menu-or-panel-opened", true),
-  action("workspace-intake", "Intake", "Intake", "mode", "state-changed"),
-  action("workspace-review", "Review", "Review", "mode", "state-changed"),
-  action("workspace-preview", "Preview", "Preview", "mode", "state-changed"),
-  action("teleprompt-open", "Open Teleprompt", "Teleprompt", "navigation", "state-changed"),
-  action("teleprompter-open", "Open Teleprompter", "Teleprompt", "navigation", "state-changed"),
+  action(
+    "workspace-intake",
+    workspaceStageActionLabel("intakeSource"),
+    "Intake",
+    "mode",
+    "state-changed",
+  ),
+  action(
+    "workspace-review",
+    workspaceStageActionLabel("reviewBlocks"),
+    "Review",
+    "mode",
+    "state-changed",
+  ),
+  action(
+    "workspace-preview",
+    workspaceStageActionLabel("previewSpeech"),
+    "Preview",
+    "mode",
+    "state-changed",
+  ),
+  action(
+    "teleprompt-open",
+    workspaceStageActionLabel("openTeleprompt"),
+    "Teleprompt",
+    "navigation",
+    "state-changed",
+  ),
   action("teleprompt-back-review", "Back to Review", "Teleprompt", "navigation", "state-changed"),
   action("teleprompt-back-preview", "Back to Preview", "Teleprompt", "navigation", "state-changed"),
   action(

@@ -19,6 +19,7 @@ export function TopProductBar({
   projects,
   requestState,
   runConfiguration,
+  showSubmitAction = true,
   studioMode,
   workspaceLayoutMode,
   onCancel,
@@ -45,6 +46,7 @@ export function TopProductBar({
   projects: VoiceProject[];
   requestState: RequestState;
   runConfiguration: RunConfiguration;
+  showSubmitAction?: boolean;
   studioMode: StudioMode;
   workspaceLayoutMode: WorkspaceLayoutMode;
   onCancel: () => void;
@@ -239,26 +241,15 @@ export function TopProductBar({
             Export
           </button>
         </div>
-        {isProcessing ? (
-          <button
-            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!activeJobId}
-            onClick={onCancel}
-            type="button"
-          >
-            <StopIcon />
-            Cancel Job
-          </button>
-        ) : (
-          <button
-            className="inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-md px-3 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none vs-accent-bg hover:brightness-95"
-            disabled={!canSubmit}
-            onClick={onSubmit}
-            type="button"
-          >
-            {primaryButtonLabel}
-          </button>
-        )}
+        <TopProductBarPrimaryAction
+          activeJobId={activeJobId}
+          canSubmit={canSubmit}
+          isProcessing={isProcessing}
+          label={primaryButtonLabel}
+          showSubmitAction={showSubmitAction}
+          onCancel={onCancel}
+          onSubmit={onSubmit}
+        />
       </div>
       <div className="flex items-center gap-1.5 md:hidden">
         <button
@@ -286,16 +277,65 @@ export function TopProductBar({
         >
           <SettingsIcon />
         </button>
-        <button
-          className="inline-flex h-10 items-center rounded-md bg-orange-500 px-3 text-xs font-semibold text-white disabled:bg-zinc-300"
-          disabled={!canSubmit || isProcessing}
-          onClick={onSubmit}
-          type="button"
-        >
-          Run
-        </button>
+        {showSubmitAction ? (
+          <button
+            className="inline-flex h-10 items-center rounded-md bg-orange-500 px-3 text-xs font-semibold text-white disabled:bg-zinc-300"
+            disabled={!canSubmit || isProcessing}
+            onClick={onSubmit}
+            type="button"
+          >
+            Run
+          </button>
+        ) : null}
       </div>
     </header>
+  );
+}
+
+function TopProductBarPrimaryAction({
+  activeJobId,
+  canSubmit,
+  isProcessing,
+  label,
+  showSubmitAction,
+  onCancel,
+  onSubmit,
+}: Readonly<{
+  activeJobId: string | null;
+  canSubmit: boolean;
+  isProcessing: boolean;
+  label: string;
+  showSubmitAction: boolean;
+  onCancel: () => void;
+  onSubmit: () => void;
+}>) {
+  if (isProcessing) {
+    return (
+      <button
+        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={!activeJobId}
+        onClick={onCancel}
+        type="button"
+      >
+        <StopIcon />
+        Cancel Job
+      </button>
+    );
+  }
+
+  if (!showSubmitAction) {
+    return null;
+  }
+
+  return (
+    <button
+      className="inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-md px-3 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none vs-accent-bg hover:brightness-95"
+      disabled={!canSubmit}
+      onClick={onSubmit}
+      type="button"
+    >
+      {label}
+    </button>
   );
 }
 

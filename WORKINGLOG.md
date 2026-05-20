@@ -205,3 +205,12 @@
 - [x] Document compact versus expanded scope display rules
 - [x] Run requested local validation commands and screenshot review
 - [ ] Low-resource reader-resume timing budget remains above threshold
+
+## 2026-05-20 23:58 CEST - Teleprompt Preview Review action parity
+- [x] Map existing stage action, Review, Preview, Teleprompt, and Cinema transitions
+- [x] Centralize shared stage action model and route/state effects
+- [x] Consolidate duplicate primary actions across Review and Preview
+- [x] Make Teleprompt part of the studio workflow with return paths
+- [x] Extend local UI action audit for full stage traversal
+- [x] Remove remaining audit-visible stage action duplication
+- [x] Run local validation commands
