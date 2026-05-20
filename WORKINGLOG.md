@@ -138,3 +138,9 @@
 - [x] Review final worktree scope.
 - [x] Commit hardening package.
 - [x] Push branch and update PR body.
+
+## 2026-05-20 12:55 CEST - Organize follow-up draft PR
+- [x] Sync fork main with upstream main.
+- [x] Replay follow-up commits onto fresh upstream base.
+- [x] Validate fresh follow-up branch.
+- [x] Push branch and open draft PR.
