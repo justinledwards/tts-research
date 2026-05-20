@@ -50,7 +50,7 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 			{"table", "rowLinear", "speak", "Table. Row 1. Metric: Latency; Value: 12ms."},
 			{"code", "syntaxAware", "literal", "A go code block with 1 line appears here. fmt.Println(\"hello\")"},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"citation", "inline", "speak", "[^1]: Research note."},
+			{"citation", "inline", "speak", "Research note."},
 			{"image", "describeLong", "describeLong", "Image description: Architecture diagram."},
 			{"caption", "speak", "speak", "Figure: request flow overview"},
 			{"list", "announce", "speak", "List item: First item"},
@@ -62,7 +62,7 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 			{"table", "summary", "summarise", "A table appears here with columns: Metric, Value."},
 			{"code", "summary", "summarise", "A go code block with 1 line appears here."},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"citation", "inline", "speak", "[^1]: Research note."},
+			{"citation", "inline", "speak", "Research note."},
 			{"image", "describeShort", "describeShort", "Image: Architecture diagram."},
 			{"caption", "speak", "speak", "Figure: request flow overview"},
 			{"list", "announce", "speak", "List item: First item"},
@@ -86,7 +86,7 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 			{"table", "summary", "summarise", "A table appears here with columns: Metric, Value."},
 			{"code", "literal", "literal", "fmt.Println(\"hello\")"},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"citation", "inline", "speak", "[^1]: Research note."},
+			{"citation", "onDemand", "onDemand", ""},
 			{"image", "describeShort", "describeShort", "Image: Architecture diagram."},
 			{"caption", "speak", "speak", "Figure: request flow overview"},
 			{"list", "announce", "speak", "List item: First item"},
@@ -109,6 +109,25 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("profile snapshot mismatch\nactual: %#v\nexpected: %#v", actual, expected)
+	}
+}
+
+func TestArtifactCitationTokensUseSafeSpeech(t *testing.T) {
+	t.Parallel()
+
+	enterprise := NewEvaluator(ProfileEnterprise, Overrides{}).Evaluate(Element{Kind: "artifact_token", Text: "[cite][turn40search10]"})
+	if enterprise.Policy.Mode != string(ModeOnDemand) || enterprise.SpeechText != "" {
+		t.Fatalf("enterprise artifact decision = %#v, speech %q; want on-demand without speech", enterprise.Policy, enterprise.SpeechText)
+	}
+
+	accessibility := NewEvaluator(ProfileAccessibility, Overrides{}).Evaluate(Element{Kind: "artifact_token", Text: "[cite][turn40search10]"})
+	if accessibility.Policy.Mode != string(ModeSpeak) || accessibility.SpeechText == "[cite][turn40search10]" || accessibility.SpeechText == "" {
+		t.Fatalf("accessibility artifact speech = %q, want safe non-empty label", accessibility.SpeechText)
+	}
+
+	literal := NewEvaluator(ProfileLanguageLearning, Overrides{Mode: ModeLiteral}).Evaluate(Element{Kind: "artifact_token", Text: "[cite][turn40search10]"})
+	if literal.Policy.Mode != string(ModeLiteral) || literal.SpeechText != "[cite][turn40search10]" {
+		t.Fatalf("literal artifact speech = %#v, want exact literal token only under explicit literal mode", literal)
 	}
 }
 

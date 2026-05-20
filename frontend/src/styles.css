@@ -539,6 +539,43 @@ select {
   min-width: 8rem;
 }
 
+.document-inline-artifact {
+  display: inline-flex;
+  align-items: center;
+  max-width: 7rem;
+  margin: 0 0.12rem;
+  border: 1px solid color-mix(in srgb, var(--vs-accent) 38%, var(--vs-border));
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--vs-accent) 12%, var(--vs-surface));
+  color: var(--vs-text);
+  font-size: 0.68em;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 0.02rem 0.3rem;
+  text-transform: uppercase;
+  vertical-align: 0.08em;
+}
+
+.document-inline-artifact--artifact_token,
+.document-inline-artifact--unknown_inline_marker {
+  border-color: color-mix(in srgb, #64748b 42%, var(--vs-border));
+  background: color-mix(in srgb, #64748b 12%, var(--vs-surface));
+}
+
+.document-inline-artifact--footnote,
+.document-inline-artifact--reference {
+  border-color: color-mix(in srgb, #0f766e 36%, var(--vs-border));
+  background: color-mix(in srgb, #0f766e 10%, var(--vs-surface));
+}
+
+.document-inline-artifact-link {
+  text-underline-offset: 0.18em;
+}
+
+.document-inline-artifact-code {
+  box-shadow: inset 0 -0.08em 0 color-mix(in srgb, var(--vs-accent) 35%, transparent);
+}
+
 .markdown-cinema-block-active {
   border-radius: 0.22em;
   background: color-mix(in srgb, var(--vs-accent) 13%, transparent);

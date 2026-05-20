@@ -101,7 +101,7 @@ func BuildFromContentIR(document contentir.Document, options BuildOptions) (Docu
 	}
 	for _, node := range ir.Nodes {
 		text := strings.TrimSpace(node.SpeechText)
-		if text == "" || strings.EqualFold(node.Speech.SpeechPolicy.Mode, string(policy.ModeSkip)) {
+		if text == "" || !isSpeakablePolicyMode(node.Speech.SpeechPolicy.Mode) {
 			continue
 		}
 		index := len(plan.Segments) + 1
@@ -142,6 +142,15 @@ func BuildFromContentIR(document contentir.Document, options BuildOptions) (Docu
 		})
 	}
 	return plan, nil
+}
+
+func isSpeakablePolicyMode(mode string) bool {
+	switch policy.Mode(strings.TrimSpace(mode)) {
+	case policy.ModeSkip, policy.ModeOnDemand, policy.ModeInteractive:
+		return false
+	default:
+		return true
+	}
 }
 
 func Encode(document Document) ([]byte, error) {

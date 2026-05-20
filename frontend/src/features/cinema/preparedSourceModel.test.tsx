@@ -18,6 +18,7 @@ import {
   preparedSourceCinemaTitle,
   isPreparedSourceMarkdownDocument,
 } from "./preparedSourceModel";
+import { preparedSourceCinemaPolicyNotes } from "./preparedSourcePolicyNotes";
 import type { PreparedSource, VoiceJob } from "../../types";
 
 const noop = () => {
@@ -92,6 +93,73 @@ describe("prepared source cinema helpers", () => {
     expect(preparedSourceCinemaPlaybackStatusLabel(true, null)).toBe("Playing");
     expect(preparedSourceCinemaPlaybackStatusLabel(false, null)).toBe("Source ready");
     expect(preparedSourceCinemaPlaybackStatusLabel(false, makeVoiceJob())).toBe("Ready");
+  });
+
+  it("builds policy notes for inline document artifacts", () => {
+    const source = makePreparedSource({
+      blocks: [
+        {
+          endOffset: 64,
+          id: "block-cited",
+          index: 0,
+          kind: "body",
+          metadata: {
+            inlineArtifacts: [
+              {
+                kind: "citation",
+                startOffset: 42,
+                visualLabel: "cite",
+              },
+            ],
+          },
+          segments: [],
+          speakMode: "speak",
+          speechPolicy: {
+            explanation: "Prose is spoken because the Enterprise profile sets mode to speak.",
+            mode: "speak",
+            profile: "Enterprise",
+          },
+          spokenText: "The claim is ready.",
+          startOffset: 0,
+          text: "The claim is ready. [cite][turn40search10]",
+          warnings: ["citation_removed"],
+        },
+        {
+          endOffset: 64,
+          id: "block-token",
+          index: 1,
+          kind: "artifact_token",
+          segments: [],
+          speakMode: "skip",
+          speechPolicy: {
+            element: "artifact_token",
+            elementMode: "onDemand",
+            explanation:
+              "This artifact token is available on demand because the Enterprise profile sets artifact_token to onDemand.",
+            mode: "onDemand",
+            profile: "Enterprise",
+          },
+          spokenText: "",
+          startOffset: 42,
+          text: "turn40search10",
+        },
+      ],
+      skippedItems: [
+        {
+          id: "block-token",
+          kind: "artifact_token",
+          reason: "Artifact token is available on demand.",
+          text: "turn40search10",
+        },
+      ],
+    });
+
+    expect(preparedSourceCinemaPolicyNotes(source).map((note) => [note.kind, note.mode])).toEqual([
+      ["body", "speak"],
+      ["citation", "skip"],
+      ["artifact_token", "onDemand"],
+      ["artifact_token", "skip"],
+    ]);
   });
 
   it("renders a code-native Website Cinema shell for a prepared URL source", () => {

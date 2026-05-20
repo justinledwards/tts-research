@@ -3,178 +3,157 @@
   "blocks": [
     {
       "confidence": 0.98,
-      "endOffset": 16,
+      "endOffset": 22,
       "id": "block-0001",
       "index": 1,
       "kind": "heading",
-      "label": "Plain Markdown",
+      "label": "Mixed Research Notes",
       "language": "",
       "metadata": {
         "astPath": "/children/0",
-        "columnEnd": 17,
+        "columnEnd": 23,
         "columnStart": 1,
         "lineEnd": 1,
         "lineStart": 1,
-        "sourceSlice": "# Plain Markdown"
+        "sourceSlice": "# Mixed Research Notes"
       },
       "speakMode": "speak",
-      "spokenText": "Plain Markdown",
+      "spokenText": "Mixed Research Notes",
       "startOffset": 0,
-      "text": "# Plain Markdown",
+      "text": "# Mixed Research Notes",
       "warnings": []
     },
     {
       "confidence": 0.98,
-      "endOffset": 113,
+      "endOffset": 89,
       "id": "block-0002",
       "index": 2,
       "kind": "body",
-      "label": "This paragraph has strong text, inline code, and",
+      "label": "Use prepareSource() before reviewing citation-heavy notes.",
       "language": "",
       "metadata": {
         "inlineArtifacts": [
           {
-            "endOffset": 67,
+            "endOffset": 45,
             "identifier": "",
             "kind": "code",
             "markerType": "markdown_code_span",
-            "raw": "`inline code`",
-            "speechText": "inline code",
-            "startOffset": 54,
+            "raw": "`prepareSource()`",
+            "speechText": "prepareSource()",
+            "startOffset": 28,
             "url": "",
             "visualLabel": "code"
           },
           {
-            "endOffset": 112,
+            "endOffset": 88,
             "identifier": "",
             "kind": "reference",
-            "markerType": "markdown_link",
-            "raw": "[reference link](https://example.com)",
-            "speechText": "reference link",
-            "startOffset": 75,
-            "url": "https://example.com",
-            "visualLabel": "link"
+            "markerType": "reference_marker",
+            "raw": "[12]",
+            "speechText": "Reference 12.",
+            "startOffset": 84,
+            "url": "",
+            "visualLabel": "ref"
           }
         ],
         "astPath": "/children/1",
-        "columnEnd": 96,
+        "columnEnd": 66,
         "columnStart": 1,
         "lineEnd": 3,
         "lineStart": 3,
-        "sourceSlice": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com)."
+        "sourceSlice": "Use `prepareSource()` before reviewing citation-heavy notes [12]."
       },
       "speakMode": "speak",
-      "spokenText": "This paragraph has strong text, inline code, and a reference link.",
-      "startOffset": 18,
-      "text": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
-      "warnings": ["inline_code_policy", "link_reference"]
+      "spokenText": "Use prepareSource() before reviewing citation-heavy notes.",
+      "startOffset": 24,
+      "text": "Use `prepareSource()` before reviewing citation-heavy notes [12].",
+      "warnings": ["inline_code_policy", "reference_marker_removed", "citation_removed"]
     },
     {
       "confidence": 0.98,
-      "endOffset": 112,
+      "endOffset": 88,
       "id": "block-0003",
       "index": 3,
       "kind": "reference",
-      "label": "Link",
+      "label": "Reference",
       "language": "",
       "metadata": {
-        "endOffset": 112,
+        "endOffset": 88,
         "identifier": "",
         "kind": "reference",
-        "markerType": "markdown_link",
-        "raw": "[reference link](https://example.com)",
-        "speechText": "reference link",
-        "startOffset": 75,
-        "url": "https://example.com",
-        "visualLabel": "link",
+        "markerType": "reference_marker",
+        "raw": "[12]",
+        "speechText": "Reference 12.",
+        "startOffset": 84,
+        "url": "",
+        "visualLabel": "ref",
         "astPath": "/children/1/inline-artifact/1",
-        "columnEnd": 95,
-        "columnStart": 58,
+        "columnEnd": 65,
+        "columnStart": 61,
         "lineEnd": 3,
         "lineStart": 3,
-        "sourceSlice": "[reference link](https://example.com)"
+        "sourceSlice": "[12]"
       },
       "speakMode": "skip",
-      "spokenText": "reference link",
-      "startOffset": 75,
-      "text": "[reference link](https://example.com)",
-      "warnings": ["inline_artifact", "link_reference", "reference_policy"]
+      "spokenText": "Reference 12.",
+      "startOffset": 84,
+      "text": "[12]",
+      "warnings": ["inline_artifact", "reference_marker_removed", "reference_policy"]
     },
     {
       "confidence": 0.98,
-      "endOffset": 156,
+      "endOffset": 163,
       "id": "block-0004",
       "index": 4,
-      "kind": "quote",
-      "label": "Quote",
+      "kind": "table",
+      "label": "Table",
       "language": "",
       "metadata": {
+        "align": [null, null],
+        "headers": ["Claim", "Status"],
+        "rows": [["Links render visibly", ""]],
         "astPath": "/children/2",
-        "columnEnd": 42,
-        "columnStart": 1,
-        "lineEnd": 5,
-        "lineStart": 5,
-        "sourceSlice": "> A quoted line should remain narratable."
-      },
-      "speakMode": "speak",
-      "spokenText": "A quoted line should remain narratable.",
-      "startOffset": 115,
-      "text": "> A quoted line should remain narratable.",
-      "warnings": []
-    },
-    {
-      "confidence": 0.98,
-      "endOffset": 170,
-      "id": "block-0005",
-      "index": 5,
-      "kind": "body",
-      "label": "First item",
-      "language": "",
-      "metadata": {
-        "checked": null,
-        "listOrdered": false,
-        "astPath": "/children/3/children/0",
-        "columnEnd": 13,
+        "columnEnd": 40,
         "columnStart": 1,
         "lineEnd": 7,
-        "lineStart": 7,
-        "sourceSlice": "- First item"
+        "lineStart": 5,
+        "sourceSlice": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |"
       },
       "speakMode": "speak",
-      "spokenText": "First item",
-      "startOffset": 158,
-      "text": "- First item",
-      "warnings": []
+      "spokenText": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |",
+      "startOffset": 91,
+      "text": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |",
+      "warnings": ["table_policy"]
     },
     {
       "confidence": 0.98,
-      "endOffset": 184,
-      "id": "block-0006",
-      "index": 6,
-      "kind": "body",
-      "label": "Second item",
+      "endOffset": 229,
+      "id": "block-0005",
+      "index": 5,
+      "kind": "admonition",
+      "label": "Note",
       "language": "",
       "metadata": {
-        "checked": null,
-        "listOrdered": false,
-        "astPath": "/children/3/children/1",
-        "columnEnd": 14,
+        "admonitionKind": "note",
+        "directiveName": "note",
+        "astPath": "/children/3",
+        "columnEnd": 55,
         "columnStart": 1,
-        "lineEnd": 8,
-        "lineStart": 8,
-        "sourceSlice": "- Second item"
+        "lineEnd": 10,
+        "lineStart": 9,
+        "sourceSlice": "> [!NOTE]\n> Keep table, code, and citation handling explainable."
       },
       "speakMode": "speak",
-      "spokenText": "Second item",
-      "startOffset": 171,
-      "text": "- Second item",
-      "warnings": []
+      "spokenText": "Keep table, code, and citation handling explainable.",
+      "startOffset": 165,
+      "text": "> [!NOTE]\n> Keep table, code, and citation handling explainable.",
+      "warnings": ["admonition_callout"]
     }
   ],
   "document": {
     "adapterVersion": "markdown-adapter-v2",
     "generatedAt": "1970-01-01T00:00:00.000Z",
-    "id": "plain",
+    "id": "mixed-citation-code-table",
     "metadata": {
       "capabilities": {
         "commonmark": true,
@@ -191,19 +170,19 @@
         "adapterVersion": "markdown-adapter-v2",
         "confidence": 0.98,
         "dir": "ltr",
-        "displayText": "# Plain Markdown",
+        "displayText": "# Mixed Research Notes",
         "kind": "heading",
         "lang": "und",
         "metadata": {
           "astPath": "/children/0",
-          "columnEnd": 17,
+          "columnEnd": 23,
           "columnStart": 1,
           "lineEnd": 1,
           "lineStart": 1,
-          "sourceSlice": "# Plain Markdown"
+          "sourceSlice": "# Mixed Research Notes"
         },
         "nodeId": "block-0001",
-        "normalisedText": "# Plain Markdown",
+        "normalisedText": "# Mixed Research Notes",
         "orderKey": "00000001",
         "parentId": "",
         "provenance": {
@@ -211,19 +190,19 @@
           "locator": {
             "markdown": {
               "astPath": "/children/0",
-              "columnEnd": 17,
+              "columnEnd": 23,
               "columnStart": 1,
               "lineEnd": 1,
               "lineStart": 1,
-              "path": "plain.md"
+              "path": "mixed-citation-code-table.md"
             },
             "type": "markdown"
           },
           "offsets": {
-            "end": 16,
+            "end": 22,
             "start": 0
           },
-          "sourceId": "plain"
+          "sourceId": "mixed-citation-code-table"
         },
         "rights": {
           "notes": "",
@@ -244,7 +223,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "Plain Markdown",
+        "speechText": "Mixed Research Notes",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
@@ -255,43 +234,43 @@
         "adapterVersion": "markdown-adapter-v2",
         "confidence": 0.98,
         "dir": "ltr",
-        "displayText": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
+        "displayText": "Use `prepareSource()` before reviewing citation-heavy notes [12].",
         "kind": "body",
         "lang": "und",
         "metadata": {
           "inlineArtifacts": [
             {
-              "endOffset": 67,
+              "endOffset": 45,
               "identifier": "",
               "kind": "code",
               "markerType": "markdown_code_span",
-              "raw": "`inline code`",
-              "speechText": "inline code",
-              "startOffset": 54,
+              "raw": "`prepareSource()`",
+              "speechText": "prepareSource()",
+              "startOffset": 28,
               "url": "",
               "visualLabel": "code"
             },
             {
-              "endOffset": 112,
+              "endOffset": 88,
               "identifier": "",
               "kind": "reference",
-              "markerType": "markdown_link",
-              "raw": "[reference link](https://example.com)",
-              "speechText": "reference link",
-              "startOffset": 75,
-              "url": "https://example.com",
-              "visualLabel": "link"
+              "markerType": "reference_marker",
+              "raw": "[12]",
+              "speechText": "Reference 12.",
+              "startOffset": 84,
+              "url": "",
+              "visualLabel": "ref"
             }
           ],
           "astPath": "/children/1",
-          "columnEnd": 96,
+          "columnEnd": 66,
           "columnStart": 1,
           "lineEnd": 3,
           "lineStart": 3,
-          "sourceSlice": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com)."
+          "sourceSlice": "Use `prepareSource()` before reviewing citation-heavy notes [12]."
         },
         "nodeId": "block-0002",
-        "normalisedText": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
+        "normalisedText": "Use `prepareSource()` before reviewing citation-heavy notes [12].",
         "orderKey": "00000002",
         "parentId": "",
         "provenance": {
@@ -299,19 +278,19 @@
           "locator": {
             "markdown": {
               "astPath": "/children/1",
-              "columnEnd": 96,
+              "columnEnd": 66,
               "columnStart": 1,
               "lineEnd": 3,
               "lineStart": 3,
-              "path": "plain.md"
+              "path": "mixed-citation-code-table.md"
             },
             "type": "markdown"
           },
           "offsets": {
-            "end": 113,
-            "start": 18
+            "end": 89,
+            "start": 24
           },
-          "sourceId": "plain"
+          "sourceId": "mixed-citation-code-table"
         },
         "rights": {
           "notes": "",
@@ -332,39 +311,39 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "This paragraph has strong text, inline code, and a reference link.",
+        "speechText": "Use prepareSource() before reviewing citation-heavy notes.",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
         },
-        "warnings": ["inline_code_policy", "link_reference"]
+        "warnings": ["inline_code_policy", "reference_marker_removed", "citation_removed"]
       },
       {
         "adapterVersion": "markdown-adapter-v2",
         "confidence": 0.98,
         "dir": "ltr",
-        "displayText": "[reference link](https://example.com)",
+        "displayText": "[12]",
         "kind": "reference",
         "lang": "und",
         "metadata": {
-          "endOffset": 112,
+          "endOffset": 88,
           "identifier": "",
           "kind": "reference",
-          "markerType": "markdown_link",
-          "raw": "[reference link](https://example.com)",
-          "speechText": "reference link",
-          "startOffset": 75,
-          "url": "https://example.com",
-          "visualLabel": "link",
+          "markerType": "reference_marker",
+          "raw": "[12]",
+          "speechText": "Reference 12.",
+          "startOffset": 84,
+          "url": "",
+          "visualLabel": "ref",
           "astPath": "/children/1/inline-artifact/1",
-          "columnEnd": 95,
-          "columnStart": 58,
+          "columnEnd": 65,
+          "columnStart": 61,
           "lineEnd": 3,
           "lineStart": 3,
-          "sourceSlice": "[reference link](https://example.com)"
+          "sourceSlice": "[12]"
         },
         "nodeId": "block-0003",
-        "normalisedText": "[reference link](https://example.com)",
+        "normalisedText": "[12]",
         "orderKey": "00000003",
         "parentId": "",
         "provenance": {
@@ -372,19 +351,19 @@
           "locator": {
             "markdown": {
               "astPath": "/children/1/inline-artifact/1",
-              "columnEnd": 95,
-              "columnStart": 58,
+              "columnEnd": 65,
+              "columnStart": 61,
               "lineEnd": 3,
               "lineStart": 3,
-              "path": "plain.md"
+              "path": "mixed-citation-code-table.md"
             },
             "type": "markdown"
           },
           "offsets": {
-            "end": 112,
-            "start": 75
+            "end": 88,
+            "start": 84
           },
-          "sourceId": "plain"
+          "sourceId": "mixed-citation-code-table"
         },
         "rights": {
           "notes": "",
@@ -405,30 +384,33 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "reference link",
+        "speechText": "Reference 12.",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
         },
-        "warnings": ["inline_artifact", "link_reference", "reference_policy"]
+        "warnings": ["inline_artifact", "reference_marker_removed", "reference_policy"]
       },
       {
         "adapterVersion": "markdown-adapter-v2",
         "confidence": 0.98,
         "dir": "ltr",
-        "displayText": "> A quoted line should remain narratable.",
-        "kind": "quote",
+        "displayText": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |",
+        "kind": "table",
         "lang": "und",
         "metadata": {
+          "align": [null, null],
+          "headers": ["Claim", "Status"],
+          "rows": [["Links render visibly", ""]],
           "astPath": "/children/2",
-          "columnEnd": 42,
+          "columnEnd": 40,
           "columnStart": 1,
-          "lineEnd": 5,
+          "lineEnd": 7,
           "lineStart": 5,
-          "sourceSlice": "> A quoted line should remain narratable."
+          "sourceSlice": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |"
         },
         "nodeId": "block-0004",
-        "normalisedText": "> A quoted line should remain narratable.",
+        "normalisedText": "| Claim | Status | | --- | --- | | Links render visibly | [Smith 2024] |",
         "orderKey": "00000004",
         "parentId": "",
         "provenance": {
@@ -436,25 +418,25 @@
           "locator": {
             "markdown": {
               "astPath": "/children/2",
-              "columnEnd": 42,
+              "columnEnd": 40,
               "columnStart": 1,
-              "lineEnd": 5,
+              "lineEnd": 7,
               "lineStart": 5,
-              "path": "plain.md"
+              "path": "mixed-citation-code-table.md"
             },
             "type": "markdown"
           },
           "offsets": {
-            "end": 156,
-            "start": 115
+            "end": 163,
+            "start": 91
           },
-          "sourceId": "plain"
+          "sourceId": "mixed-citation-code-table"
         },
         "rights": {
           "notes": "",
           "status": "unknown"
         },
-        "role": "quote",
+        "role": "table",
         "script": "Latn",
         "speech": {
           "policyHint": {
@@ -469,58 +451,58 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "A quoted line should remain narratable.",
+        "speechText": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
         },
-        "warnings": []
+        "warnings": ["table_policy"]
       },
       {
         "adapterVersion": "markdown-adapter-v2",
         "confidence": 0.98,
         "dir": "ltr",
-        "displayText": "- First item",
-        "kind": "body",
+        "displayText": "> [!NOTE]\n> Keep table, code, and citation handling explainable.",
+        "kind": "admonition",
         "lang": "und",
         "metadata": {
-          "checked": null,
-          "listOrdered": false,
-          "astPath": "/children/3/children/0",
-          "columnEnd": 13,
+          "admonitionKind": "note",
+          "directiveName": "note",
+          "astPath": "/children/3",
+          "columnEnd": 55,
           "columnStart": 1,
-          "lineEnd": 7,
-          "lineStart": 7,
-          "sourceSlice": "- First item"
+          "lineEnd": 10,
+          "lineStart": 9,
+          "sourceSlice": "> [!NOTE]\n> Keep table, code, and citation handling explainable."
         },
         "nodeId": "block-0005",
-        "normalisedText": "- First item",
+        "normalisedText": "> [!NOTE] > Keep table, code, and citation handling explainable.",
         "orderKey": "00000005",
         "parentId": "",
         "provenance": {
           "format": "markdown",
           "locator": {
             "markdown": {
-              "astPath": "/children/3/children/0",
-              "columnEnd": 13,
+              "astPath": "/children/3",
+              "columnEnd": 55,
               "columnStart": 1,
-              "lineEnd": 7,
-              "lineStart": 7,
-              "path": "plain.md"
+              "lineEnd": 10,
+              "lineStart": 9,
+              "path": "mixed-citation-code-table.md"
             },
             "type": "markdown"
           },
           "offsets": {
-            "end": 170,
-            "start": 158
+            "end": 229,
+            "start": 165
           },
-          "sourceId": "plain"
+          "sourceId": "mixed-citation-code-table"
         },
         "rights": {
           "notes": "",
           "status": "unknown"
         },
-        "role": "body",
+        "role": "admonition",
         "script": "Latn",
         "speech": {
           "policyHint": {
@@ -535,84 +517,18 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "First item",
+        "speechText": "Keep table, code, and citation handling explainable.",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
         },
-        "warnings": []
-      },
-      {
-        "adapterVersion": "markdown-adapter-v2",
-        "confidence": 0.98,
-        "dir": "ltr",
-        "displayText": "- Second item",
-        "kind": "body",
-        "lang": "und",
-        "metadata": {
-          "checked": null,
-          "listOrdered": false,
-          "astPath": "/children/3/children/1",
-          "columnEnd": 14,
-          "columnStart": 1,
-          "lineEnd": 8,
-          "lineStart": 8,
-          "sourceSlice": "- Second item"
-        },
-        "nodeId": "block-0006",
-        "normalisedText": "- Second item",
-        "orderKey": "00000006",
-        "parentId": "",
-        "provenance": {
-          "format": "markdown",
-          "locator": {
-            "markdown": {
-              "astPath": "/children/3/children/1",
-              "columnEnd": 14,
-              "columnStart": 1,
-              "lineEnd": 8,
-              "lineStart": 8,
-              "path": "plain.md"
-            },
-            "type": "markdown"
-          },
-          "offsets": {
-            "end": 184,
-            "start": 171
-          },
-          "sourceId": "plain"
-        },
-        "rights": {
-          "notes": "",
-          "status": "unknown"
-        },
-        "role": "body",
-        "script": "Latn",
-        "speech": {
-          "policyHint": {
-            "emphasis": "",
-            "mode": "speak",
-            "pauseAfterMs": 0,
-            "pauseBeforeMs": 0
-          },
-          "speechPolicy": {
-            "explanation": "Policy has not been evaluated yet.",
-            "mode": "speak",
-            "profile": "Enterprise"
-          }
-        },
-        "speechText": "Second item",
-        "ui": {
-          "highlightUnitHint": "node",
-          "progressionHint": "linear"
-        },
-        "warnings": []
+        "warnings": ["admonition_callout"]
       }
     ],
     "projectId": "",
     "schemaVersion": "content-ir.v1",
-    "sourceId": "plain",
-    "sourceName": "plain.md",
+    "sourceId": "mixed-citation-code-table",
+    "sourceName": "mixed-citation-code-table.md",
     "sourceType": "preparedSource"
   },
   "metadata": {
@@ -631,11 +547,11 @@
     {
       "id": "block-0003",
       "kind": "reference",
-      "offset": 75,
+      "offset": 84,
       "reason": "reference marker available through citation policy",
-      "text": "[reference link](https://example.com)"
+      "text": "[12]"
     }
   ],
-  "title": "Plain Markdown",
+  "title": "Mixed Research Notes",
   "warnings": []
 }

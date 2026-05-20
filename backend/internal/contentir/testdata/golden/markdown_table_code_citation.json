@@ -85,7 +85,7 @@
         "sourceSlice": "# Findings",
         "speechRender": {
           "plainText": "Findings",
-          "ssml": "<speak version=\"1.1\" xml:lang=\"en\">Findings</speak>",
+          "ssml": "\u003cspeak version=\"1.1\" xml:lang=\"en\"\u003eFindings\u003c/speak\u003e",
           "lang": "en",
           "locale": "en-GB",
           "languageSpans": [
@@ -172,7 +172,7 @@
         "sourceSlice": "| Metric | Value |\n|---|---|\n| Latency | 12ms |",
         "speechRender": {
           "plainText": "A table appears here with columns: Metric, Value.",
-          "ssml": "<speak version=\"1.1\" xml:lang=\"en\">A table appears here with columns: Metric, Value.</speak>",
+          "ssml": "\u003cspeak version=\"1.1\" xml:lang=\"en\"\u003eA table appears here with columns: Metric, Value.\u003c/speak\u003e",
           "lang": "en",
           "locale": "en-GB",
           "languageSpans": [
@@ -309,7 +309,7 @@
           "explanation": "This citation is available on demand because the Enterprise profile sets citation to onDemand."
         }
       },
-      "warnings": ["citation_skipped"],
+      "warnings": ["citation_skipped", "citation_removed"],
       "confidence": 0.98,
       "rights": {
         "status": "unknown",
@@ -319,6 +319,19 @@
         "astPath": "/children/3",
         "columnEnd": 20,
         "columnStart": 1,
+        "inlineArtifacts": [
+          {
+            "endOffset": 117,
+            "identifier": "",
+            "kind": "citation",
+            "markerType": "chatgpt_glyph_citation",
+            "raw": "citeturn1search0",
+            "speechText": "Citation marker.",
+            "startOffset": 92,
+            "url": "",
+            "visualLabel": "cite"
+          }
+        ],
         "lineEnd": 11,
         "lineStart": 11,
         "policySpeechText": "",

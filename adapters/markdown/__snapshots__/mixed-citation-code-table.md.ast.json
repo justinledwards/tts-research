@@ -1,0 +1,348 @@
+{
+  "type": "root",
+  "position": {
+    "start": {
+      "line": 1,
+      "column": 1,
+      "offset": 0
+    },
+    "end": {
+      "line": 11,
+      "column": 1,
+      "offset": 230
+    }
+  },
+  "children": [
+    {
+      "type": "heading",
+      "position": {
+        "start": {
+          "line": 1,
+          "column": 1,
+          "offset": 0
+        },
+        "end": {
+          "line": 1,
+          "column": 23,
+          "offset": 22
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "Mixed Research Notes",
+          "position": {
+            "start": {
+              "line": 1,
+              "column": 3,
+              "offset": 2
+            },
+            "end": {
+              "line": 1,
+              "column": 23,
+              "offset": 22
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 3,
+          "column": 1,
+          "offset": 24
+        },
+        "end": {
+          "line": 3,
+          "column": 66,
+          "offset": 89
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "Use ",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 1,
+              "offset": 24
+            },
+            "end": {
+              "line": 3,
+              "column": 5,
+              "offset": 28
+            }
+          }
+        },
+        {
+          "type": "inlineCode",
+          "value": "prepareSource()",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 5,
+              "offset": 28
+            },
+            "end": {
+              "line": 3,
+              "column": 22,
+              "offset": 45
+            }
+          }
+        },
+        {
+          "type": "text",
+          "value": " before reviewing citation-heavy notes [12].",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 22,
+              "offset": 45
+            },
+            "end": {
+              "line": 3,
+              "column": 66,
+              "offset": 89
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "position": {
+        "start": {
+          "line": 5,
+          "column": 1,
+          "offset": 91
+        },
+        "end": {
+          "line": 7,
+          "column": 40,
+          "offset": 163
+        }
+      },
+      "children": [
+        {
+          "type": "tableRow",
+          "position": {
+            "start": {
+              "line": 5,
+              "column": 1,
+              "offset": 91
+            },
+            "end": {
+              "line": 5,
+              "column": 19,
+              "offset": 109
+            }
+          },
+          "children": [
+            {
+              "type": "tableCell",
+              "position": {
+                "start": {
+                  "line": 5,
+                  "column": 1,
+                  "offset": 91
+                },
+                "end": {
+                  "line": 5,
+                  "column": 9,
+                  "offset": 99
+                }
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Claim",
+                  "position": {
+                    "start": {
+                      "line": 5,
+                      "column": 3,
+                      "offset": 93
+                    },
+                    "end": {
+                      "line": 5,
+                      "column": 8,
+                      "offset": 98
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "position": {
+                "start": {
+                  "line": 5,
+                  "column": 9,
+                  "offset": 99
+                },
+                "end": {
+                  "line": 5,
+                  "column": 19,
+                  "offset": 109
+                }
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Status",
+                  "position": {
+                    "start": {
+                      "line": 5,
+                      "column": 11,
+                      "offset": 101
+                    },
+                    "end": {
+                      "line": 5,
+                      "column": 17,
+                      "offset": 107
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tableRow",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 1,
+              "offset": 124
+            },
+            "end": {
+              "line": 7,
+              "column": 40,
+              "offset": 163
+            }
+          },
+          "children": [
+            {
+              "type": "tableCell",
+              "position": {
+                "start": {
+                  "line": 7,
+                  "column": 1,
+                  "offset": 124
+                },
+                "end": {
+                  "line": 7,
+                  "column": 24,
+                  "offset": 147
+                }
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Links render visibly",
+                  "position": {
+                    "start": {
+                      "line": 7,
+                      "column": 3,
+                      "offset": 126
+                    },
+                    "end": {
+                      "line": 7,
+                      "column": 23,
+                      "offset": 146
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "position": {
+                "start": {
+                  "line": 7,
+                  "column": 24,
+                  "offset": 147
+                },
+                "end": {
+                  "line": 7,
+                  "column": 40,
+                  "offset": 163
+                }
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "value": "[Smith 2024]",
+                  "position": {
+                    "start": {
+                      "line": 7,
+                      "column": 26,
+                      "offset": 149
+                    },
+                    "end": {
+                      "line": 7,
+                      "column": 38,
+                      "offset": 161
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "position": {
+        "start": {
+          "line": 9,
+          "column": 1,
+          "offset": 165
+        },
+        "end": {
+          "line": 10,
+          "column": 55,
+          "offset": 229
+        }
+      },
+      "children": [
+        {
+          "type": "paragraph",
+          "position": {
+            "start": {
+              "line": 9,
+              "column": 3,
+              "offset": 167
+            },
+            "end": {
+              "line": 10,
+              "column": 55,
+              "offset": 229
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "[!NOTE]\nKeep table, code, and citation handling explainable.",
+              "position": {
+                "start": {
+                  "line": 9,
+                  "column": 3,
+                  "offset": 167
+                },
+                "end": {
+                  "line": 10,
+                  "column": 55,
+                  "offset": 229
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

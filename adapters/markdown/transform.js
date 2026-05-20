@@ -27,8 +27,24 @@ const EMBEDDED_TYPES = new Set([
 ]);
 
 const CITATION_GLYPH_PATTERN = /\uE200cite[^\uE201]*\uE201/g;
+const CHATGPT_BRACKET_CITATION_PATTERN =
+  /\[cite\]\s*\[\s*turn\d+(?:search|view|news|fetch)\d+\s*\]/gi;
+const CONTENT_REFERENCE_PATTERN = /:contentReference\[[^\]\n]+\]\{[^}\n]*\}/g;
+const MALFORMED_CITATION_PATTERN = /\[(?:cite|citation|source|reference)(?::[^\]\n]*)?\]/gi;
 const TURN_CITATION_PATTERN = /\bturn\d+(?:search|view|news|fetch)\d+\b/g;
+const FOOTNOTE_REFERENCE_PATTERN = /\[\^[^\]\s]+\]/g;
+const REFERENCE_MARKER_PATTERN =
+  /\[(?:\d+(?:\s*(?:,|-|–)\s*\d+)*(?:,\s*p\.?\s*\d+)?|[A-Z][A-Za-z .'-]{1,40}(?:19|20)\d{2}[^\]\n]{0,20})\]/g;
+const BRACKETED_METADATA_PATTERN =
+  /\[(?:todo|note|metadata|draft|review|debug|loc(?:ator)?|id|ref)[:\s][^\]\n]{0,80}\]/gi;
 const MYST_ROLE_PATTERN = /\{([A-Za-z][\w-]*)\}`([^`]+)`/g;
+const POLICY_INLINE_ARTIFACT_KINDS = new Set([
+  "artifact_token",
+  "citation",
+  "footnote",
+  "reference",
+  "unknown_inline_marker",
+]);
 
 export function transformMarkdownAst(tree, source, options = {}) {
   const byteMap = buildByteOffsetMap(source);
@@ -118,17 +134,37 @@ function transformNode(node, astPath, parentId, context) {
         warnings: ["image_policy"],
       });
       return;
-    case "thematicBreak":
     case "definition":
+      pushSemanticNode(node, astPath, parentId, context, {
+        kind: "reference",
+        label: "Reference",
+        metadata: {
+          identifier: node.identifier ?? "",
+          url: node.url ?? "",
+        },
+        speakMode: "skip",
+        speechText: "",
+        warnings: ["reference_on_demand"],
+      });
+      return;
     case "footnoteDefinition":
       pushSemanticNode(node, astPath, parentId, context, {
-        kind: "citation",
-        label: "Citation",
+        kind: "footnote",
+        label: "Footnote",
         metadata: {
           identifier: node.identifier ?? "",
         },
         speechText: cleanSpeechText(mdastToString(node)),
-        warnings: ["citation_skipped"],
+        warnings: ["footnote_policy"],
+      });
+      return;
+    case "thematicBreak":
+      pushSemanticNode(node, astPath, parentId, context, {
+        kind: "embedded",
+        label: "Thematic break",
+        speakMode: "skip",
+        speechText: "",
+        warnings: ["markdown_thematic_break"],
       });
       return;
     case "containerDirective":
@@ -192,27 +228,47 @@ function pushParagraph(node, astPath, parentId, context) {
     .map((child, index) => ({ child, index }))
     .filter(({ child }) => EMBEDDED_TYPES.has(child.type));
   const mystRoles = findMystRoles(node, context);
+  const inlineArtifacts = findInlineArtifacts(node, context);
   const warnings = [];
   if (embeddedChildren.length > 0 || mystRoles.length > 0) {
     warnings.push("embedded_fallback");
   }
   const speechText = cleanSpeechText(inlineSpeechText(node));
   const raw = sourceSlice(node, context);
+  const emitsSyntheticArtifacts =
+    inlineArtifacts.length > 0 && speechText !== "" && !shouldSkipCitationBlock(raw);
   if (speechText !== "") {
     pushSemanticNode(node, astPath, parentId, context, {
       kind: shouldSkipCitationBlock(raw) ? "citation" : "body",
       label: firstWords(speechText, 8),
+      metadata:
+        inlineArtifacts.length > 0
+          ? {
+              inlineArtifacts: inlineArtifacts.map((artifact) => artifactMetadata(artifact)),
+            }
+          : {},
       speechText,
-      warnings: citationWarnings(raw, speechText, warnings),
+      warnings: inlineArtifactWarnings(inlineArtifacts, raw, speechText, warnings),
     });
-  } else if (containsCitationMarkup(raw)) {
+  } else if (inlineArtifacts.length > 0 || containsCitationMarkup(raw)) {
     pushSemanticNode(node, astPath, parentId, context, {
       kind: "citation",
       label: "Citation",
+      metadata:
+        inlineArtifacts.length > 0
+          ? {
+              inlineArtifacts: inlineArtifacts.map((artifact) => artifactMetadata(artifact)),
+            }
+          : {},
       speakMode: "skip",
       speechText: "",
-      warnings: ["citation_skipped"],
+      warnings: inlineArtifactWarnings(inlineArtifacts, raw, speechText, ["citation_skipped"]),
     });
+  }
+  for (const artifact of emitsSyntheticArtifacts ? inlineArtifacts : []) {
+    if (POLICY_INLINE_ARTIFACT_KINDS.has(artifact.kind)) {
+      pushSyntheticInlineArtifact(artifact, astPath, parentId, context);
+    }
   }
   for (const { child, index } of embeddedChildren) {
     pushEmbedded(child, `${astPath}/children/${index}`, parentId, context, {
@@ -352,6 +408,29 @@ function pushSyntheticEmbedded(role, astPath, parentId, context) {
   });
 }
 
+function pushSyntheticInlineArtifact(artifact, astPath, parentId, context) {
+  context.nodes.push({
+    astPath: `${astPath}/inline-artifact/${artifact.index}`,
+    columnEnd: artifact.columnEnd,
+    columnStart: artifact.columnStart,
+    displayText: artifact.raw,
+    endOffset: artifact.endOffset,
+    kind: artifact.kind,
+    label: artifact.label,
+    language: "",
+    lineEnd: artifact.lineEnd,
+    lineStart: artifact.lineStart,
+    metadata: artifactMetadata(artifact),
+    parentId,
+    role: artifact.kind,
+    sourceSlice: artifact.raw,
+    speakMode: "skip",
+    speechText: artifact.speechText,
+    startOffset: artifact.startOffset,
+    warnings: uniqueStrings(["inline_artifact", artifact.warning, `${artifact.kind}_policy`]),
+  });
+}
+
 function pushSemanticNode(node, astPath, parentId, context, fields) {
   const span = spanForNode(node, context);
   const displayText = sourceSlice(node, context);
@@ -398,8 +477,10 @@ function spanForNode(node, context) {
     columnEnd: end.column ?? 0,
     columnStart: start.column ?? 0,
     endOffset: byteOffsetAt(context.byteMap, endCodeOffset),
+    endCodeOffset,
     lineEnd: end.line ?? 0,
     lineStart: start.line ?? 0,
+    startCodeOffset,
     startOffset: byteOffsetAt(context.byteMap, startCodeOffset),
   };
 }
@@ -431,9 +512,19 @@ function inlineChildSpeech(node) {
       return " ";
     case "image":
       return node.alt ?? "";
+    case "footnoteReference":
+      return "";
+    case "textDirective":
+      if (node.name === "contentReference") {
+        return "";
+      }
+      return (node.children ?? []).map((child) => inlineChildSpeech(child)).join(" ");
     case "inlineCode":
     case "text":
       return node.value ?? "";
+    case "link":
+    case "linkReference":
+      return (node.children ?? []).map((child) => inlineChildSpeech(child)).join(" ");
     default:
       if (Array.isArray(node.children)) {
         return node.children.map((child) => inlineChildSpeech(child)).join(" ");
@@ -443,20 +534,25 @@ function inlineChildSpeech(node) {
 }
 
 function cleanSpeechText(value) {
-  let clean = String(value)
-    .replaceAll(CITATION_GLYPH_PATTERN, " ")
-    .replaceAll(TURN_CITATION_PATTERN, " ")
+  let clean = stripInlineArtifactsForSpeech(value)
     .replaceAll(MYST_ROLE_PATTERN, "$2")
     .replaceAll("**", "")
     .replaceAll("__", "")
     .replaceAll("~~", "")
     .replaceAll("•", "");
   clean = clean.trim().replaceAll(/^[\s>*_.-]+|[\s`*_>-]+$/g, "");
-  return clean.split(/\s+/).filter(Boolean).join(" ");
+  return clean
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" ")
+    .replaceAll(/\s+([.,;:!?])/g, "$1");
 }
 
-function citationWarnings(raw, speechText, warnings) {
+function inlineArtifactWarnings(artifacts, raw, speechText, warnings) {
   const output = [...warnings];
+  for (const artifact of artifacts) {
+    output.push(artifact.warning);
+  }
   if (containsCitationMarkup(raw)) {
     output.push(shouldSkipCitationBlock(speechText) ? "citation_skipped" : "citation_removed");
   }
@@ -464,10 +560,10 @@ function citationWarnings(raw, speechText, warnings) {
 }
 
 function containsCitationMarkup(value) {
-  return (
-    /\uE200cite[^\uE201]*\uE201/.test(value) ||
-    /\bturn\d+(?:search|view|news|fetch)\d+\b/.test(value)
-  );
+  return inlineArtifactPatterns().some(({ pattern }) => {
+    pattern.lastIndex = 0;
+    return pattern.test(value);
+  });
 }
 
 function shouldSkipCitationBlock(value) {
@@ -475,10 +571,303 @@ function shouldSkipCitationBlock(value) {
   if (trimmed === "") {
     return false;
   }
-  const citationStripped = trimmed
-    .replaceAll(CITATION_GLYPH_PATTERN, "")
-    .replaceAll(TURN_CITATION_PATTERN, "");
+  const citationStripped = stripInlineArtifactsForSpeech(trimmed);
   return citationStripped.replaceAll(/[\s[\]().,;:|]/g, "") === "";
+}
+
+function stripInlineArtifactsForSpeech(value) {
+  let clean = String(value);
+  for (const { pattern } of inlineArtifactPatterns()) {
+    pattern.lastIndex = 0;
+    clean = clean.replaceAll(pattern, " ");
+  }
+  return clean;
+}
+
+function findInlineArtifacts(node, context) {
+  const artifacts = [];
+  collectInlineArtifacts(node, context, artifacts);
+  return withoutOverlappingArtifacts(artifacts)
+    .sort((left, right) => left.startCodeOffset - right.startCodeOffset)
+    .map((artifact, index) => ({ ...artifact, index }));
+}
+
+function collectInlineArtifacts(node, context, artifacts) {
+  for (const child of node.children ?? []) {
+    switch (child.type) {
+      case "text":
+        artifacts.push(...findTextInlineArtifacts(child, context));
+        break;
+      case "inlineCode":
+        artifacts.push(
+          inlineArtifactForNode(child, context, {
+            kind: "code",
+            label: "Code span",
+            markerType: "markdown_code_span",
+            speechText: child.value ?? "",
+            visualLabel: "code",
+            warning: "inline_code_policy",
+          }),
+        );
+        break;
+      case "link":
+      case "linkReference":
+        artifacts.push(
+          inlineArtifactForNode(child, context, {
+            kind: "reference",
+            label: "Link",
+            markerType: "markdown_link",
+            speechText: cleanSpeechText(mdastToString(child)),
+            url: child.url ?? "",
+            visualLabel: "link",
+            warning: "link_reference",
+          }),
+        );
+        break;
+      case "footnoteReference":
+        artifacts.push(
+          inlineArtifactForNode(child, context, {
+            identifier: child.identifier ?? "",
+            kind: "footnote",
+            label: "Footnote",
+            markerType: "markdown_footnote_marker",
+            speechText: footnoteSpeechText(child.identifier ?? sourceSlice(child, context)),
+            visualLabel: "fn",
+            warning: "footnote_reference",
+          }),
+        );
+        break;
+      case "textDirective":
+        if (child.name === "contentReference") {
+          artifacts.push(
+            inlineArtifactForNode(child, context, {
+              kind: "artifact_token",
+              label: "Artifact token",
+              markerType: "content_reference",
+              speechText: "Artifact reference.",
+              visualLabel: "token",
+              warning: "artifact_token_removed",
+            }),
+          );
+        } else if (Array.isArray(child.children)) {
+          collectInlineArtifacts(child, context, artifacts);
+        }
+        break;
+      default:
+        if (Array.isArray(child.children)) {
+          collectInlineArtifacts(child, context, artifacts);
+        }
+        break;
+    }
+  }
+}
+
+function findTextInlineArtifacts(node, context) {
+  const value = node.value ?? "";
+  const startCodeOffset = node.position?.start?.offset ?? 0;
+  const span = spanForNode(node, context);
+  const artifacts = [];
+  for (const definition of inlineArtifactPatterns()) {
+    definition.pattern.lastIndex = 0;
+    let match = definition.pattern.exec(value);
+    while (match) {
+      const raw = match[0];
+      artifacts.push(
+        inlineArtifactFromMatch({
+          context,
+          definition,
+          raw,
+          startCodeOffset: startCodeOffset + match.index,
+          endCodeOffset: startCodeOffset + match.index + raw.length,
+          span,
+        }),
+      );
+      match = definition.pattern.exec(value);
+    }
+  }
+  return artifacts;
+}
+
+function inlineArtifactPatterns() {
+  return [
+    {
+      kind: "citation",
+      label: "Citation",
+      markerType: "chatgpt_glyph_citation",
+      pattern: CITATION_GLYPH_PATTERN,
+      speechText: "Citation marker.",
+      visualLabel: "cite",
+      warning: "citation_removed",
+    },
+    {
+      kind: "citation",
+      label: "Citation",
+      markerType: "chatgpt_bracket_citation",
+      pattern: CHATGPT_BRACKET_CITATION_PATTERN,
+      speechText: "Citation marker.",
+      visualLabel: "cite",
+      warning: "citation_removed",
+    },
+    {
+      kind: "artifact_token",
+      label: "Artifact token",
+      markerType: "content_reference",
+      pattern: CONTENT_REFERENCE_PATTERN,
+      speechText: "Artifact reference.",
+      visualLabel: "token",
+      warning: "artifact_token_removed",
+    },
+    {
+      kind: "artifact_token",
+      label: "Artifact token",
+      markerType: "raw_locator_token",
+      pattern: TURN_CITATION_PATTERN,
+      speechText: "Citation locator.",
+      visualLabel: "token",
+      warning: "artifact_token_removed",
+    },
+    {
+      kind: "footnote",
+      label: "Footnote",
+      markerType: "markdown_footnote_marker",
+      pattern: FOOTNOTE_REFERENCE_PATTERN,
+      speechText: "Footnote marker.",
+      visualLabel: "fn",
+      warning: "footnote_reference",
+    },
+    {
+      kind: "citation",
+      label: "Citation",
+      markerType: "malformed_citation_placeholder",
+      pattern: MALFORMED_CITATION_PATTERN,
+      speechText: "Citation placeholder.",
+      visualLabel: "cite",
+      warning: "malformed_citation_placeholder",
+    },
+    {
+      kind: "reference",
+      label: "Reference",
+      markerType: "reference_marker",
+      pattern: REFERENCE_MARKER_PATTERN,
+      speechText: "Reference marker.",
+      visualLabel: "ref",
+      warning: "reference_marker_removed",
+    },
+    {
+      kind: "unknown_inline_marker",
+      label: "Inline marker",
+      markerType: "bracketed_metadata",
+      pattern: BRACKETED_METADATA_PATTERN,
+      speechText: "Inline metadata marker.",
+      visualLabel: "meta",
+      warning: "unknown_inline_marker_removed",
+    },
+  ];
+}
+
+function inlineArtifactFromMatch({
+  context,
+  definition,
+  raw,
+  startCodeOffset,
+  endCodeOffset,
+  span,
+}) {
+  return {
+    columnEnd: span.columnStart + (endCodeOffset - (span.startCodeOffset ?? startCodeOffset)),
+    columnStart: span.columnStart + (startCodeOffset - (span.startCodeOffset ?? startCodeOffset)),
+    endCodeOffset,
+    endOffset: byteOffsetAt(context.byteMap, endCodeOffset),
+    kind: definition.kind,
+    label: definition.label,
+    lineEnd: span.lineEnd,
+    lineStart: span.lineStart,
+    markerType: definition.markerType,
+    raw,
+    speechText: speechTextForInlineArtifact(definition, raw),
+    startCodeOffset,
+    startOffset: byteOffsetAt(context.byteMap, startCodeOffset),
+    visualLabel: definition.visualLabel,
+    warning: definition.warning,
+  };
+}
+
+function inlineArtifactForNode(node, context, fields) {
+  const span = spanForNode(node, context);
+  const raw = sourceSlice(node, context);
+  return {
+    columnEnd: span.columnEnd,
+    columnStart: span.columnStart,
+    endCodeOffset: node.position?.end?.offset ?? node.position?.start?.offset ?? 0,
+    endOffset: span.endOffset,
+    identifier: fields.identifier ?? "",
+    kind: fields.kind,
+    label: fields.label,
+    lineEnd: span.lineEnd,
+    lineStart: span.lineStart,
+    markerType: fields.markerType,
+    raw,
+    speechText: fields.speechText,
+    startCodeOffset: node.position?.start?.offset ?? 0,
+    startOffset: span.startOffset,
+    url: fields.url ?? "",
+    visualLabel: fields.visualLabel,
+    warning: fields.warning,
+  };
+}
+
+function speechTextForInlineArtifact(definition, raw) {
+  if (definition.kind === "footnote") {
+    return footnoteSpeechText(raw);
+  }
+  if (definition.kind === "reference") {
+    const marker = raw.replaceAll(/^\[|\]$/g, "").trim();
+    return marker ? `Reference ${marker}.` : definition.speechText;
+  }
+  return definition.speechText;
+}
+
+function footnoteSpeechText(value) {
+  const marker = String(value)
+    .replaceAll(/^\[\^?|\]$/g, "")
+    .trim();
+  return marker ? `Footnote ${marker}.` : "Footnote marker.";
+}
+
+function artifactMetadata(artifact) {
+  return {
+    endOffset: artifact.endOffset,
+    identifier: artifact.identifier ?? "",
+    kind: artifact.kind,
+    markerType: artifact.markerType,
+    raw: artifact.raw,
+    speechText: artifact.speechText,
+    startOffset: artifact.startOffset,
+    url: artifact.url ?? "",
+    visualLabel: artifact.visualLabel,
+  };
+}
+
+function withoutOverlappingArtifacts(artifacts) {
+  const output = [];
+  const sorted = [...artifacts].sort(
+    (left, right) =>
+      left.startCodeOffset - right.startCodeOffset ||
+      right.endCodeOffset - right.startCodeOffset - (left.endCodeOffset - left.startCodeOffset),
+  );
+  for (const artifact of sorted) {
+    if (
+      output.some(
+        (existing) =>
+          artifact.startCodeOffset < existing.endCodeOffset &&
+          artifact.endCodeOffset > existing.startCodeOffset,
+      )
+    ) {
+      continue;
+    }
+    output.push(artifact);
+  }
+  return output;
 }
 
 function parseCallout(raw) {

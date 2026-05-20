@@ -76,6 +76,32 @@ describe("Markdown rendering helpers", () => {
     expect(markup).toContain('rel="noopener noreferrer"');
     expect(markup).toContain('href="/docs/example"');
   });
+
+  it("renders document citation artifacts as speech-safe chips", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer artifactRendering="document-cinema">
+        {"Claim [cite][turn40search10] and :contentReference[oaicite:3]{index=3}."}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain("document-inline-artifact--citation");
+    expect(markup).toContain("document-inline-artifact--artifact_token");
+    expect(markup).toContain('data-speech-mode="skip"');
+    expect(markup).not.toContain("turn40search10");
+    expect(markup).not.toContain("oaicite");
+  });
+
+  it("keeps document links and code spans visually classified", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer artifactRendering="document-cinema">
+        {"Use [`voice_id`](https://example.com/docs) with `tts.run`."}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain("document-inline-artifact-link");
+    expect(markup).toContain("document-inline-artifact-code");
+    expect(markup).toContain("tts.run");
+  });
 });
 
 function makePreparedSource(blocks: NarrationBlock[]): PreparedSource {

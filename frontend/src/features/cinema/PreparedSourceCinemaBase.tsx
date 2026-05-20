@@ -62,6 +62,8 @@ import {
   type PreparedSourceCinemaKind,
   type PreparedSourceCinemaTextSize,
 } from "./preparedSourceModel";
+import { preparedSourceCinemaPolicyNotes } from "./preparedSourcePolicyNotes";
+import { PreparedSourcePolicyNotes } from "./policy-notes/PreparedSourcePolicyNotes";
 import type {
   CustomSpeechPolicyProfile,
   NarrationBlock,
@@ -280,6 +282,7 @@ export function PreparedSourceCinemaOverlay({
   const metrics = preparedSourceCinemaMetrics(source);
   const href = preparedSourceCinemaSourceHref(source);
   const skippedGroups = preparedSourceCinemaSkippedGroups(source);
+  const policyNotes = useMemo(() => preparedSourceCinemaPolicyNotes(source), [source]);
   const activeText = displayBlock ? markdownBlockText(displayBlock) : "";
   const activeSection = activeOutlineItem(outline, displayBlock);
   const generatedHealth = (
@@ -397,6 +400,13 @@ export function PreparedSourceCinemaOverlay({
       id: "policy",
       modeAffinity: ["inspect", "review"],
       title: "Speech policy",
+    }),
+    buildCinemaInspectorPanel({
+      children: <PreparedSourcePolicyNotes notes={policyNotes} />,
+      detail: `${policyNotes.length.toLocaleString()} policy notes`,
+      id: "policy-notes",
+      modeAffinity: ["inspect", "review", "debug"],
+      title: "Policy notes",
     }),
     buildCinemaInspectorPanel({
       children: (
@@ -792,6 +802,7 @@ function PreparedSourceCinemaReader({
         }
       >
         <PreparedMarkdownRenderer
+          artifactRendering="document-cinema"
           blockHighlight={blockHighlight}
           className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
           wordHighlight={wordHighlight}
@@ -827,6 +838,7 @@ function PreparedSourceCinemaReader({
         }
       >
         <PreparedMarkdownRenderer
+          artifactRendering="document-cinema"
           blockHighlight={blockHighlight}
           className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
           wordHighlight={wordHighlight}

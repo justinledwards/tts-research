@@ -235,7 +235,7 @@ func OverrideSourceForElement(element string, overrides Overrides) string {
 		if normalizeCaptionMode(overrides.CaptionMode) != "" {
 			return "session override"
 		}
-	case "citation":
+	case "citation", "reference", "artifact_token", "unknown_inline_marker":
 		if normalizeCitationMode(overrides.CitationMode) != "" {
 			return "session override"
 		}

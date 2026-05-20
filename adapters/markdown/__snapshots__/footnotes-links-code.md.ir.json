@@ -1,0 +1,601 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.98,
+      "endOffset": 28,
+      "id": "block-0001",
+      "index": 1,
+      "kind": "heading",
+      "label": "Footnotes, Links, And Code",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 29,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# Footnotes, Links, And Code"
+      },
+      "speakMode": "speak",
+      "spokenText": "Footnotes, Links, And Code",
+      "startOffset": 0,
+      "text": "# Footnotes, Links, And Code",
+      "warnings": []
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 131,
+      "id": "block-0002",
+      "index": 2,
+      "kind": "body",
+      "label": "The method is reproducible and the project notes",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 60,
+            "identifier": "1",
+            "kind": "footnote",
+            "markerType": "markdown_footnote_marker",
+            "raw": "[^1]",
+            "speechText": "Footnote 1.",
+            "startOffset": 56,
+            "url": "",
+            "visualLabel": "fn"
+          },
+          {
+            "endOffset": 111,
+            "identifier": "",
+            "kind": "reference",
+            "markerType": "markdown_link",
+            "raw": "[project notes](https://example.com/notes)",
+            "speechText": "project notes",
+            "startOffset": 69,
+            "url": "https://example.com/notes",
+            "visualLabel": "link"
+          },
+          {
+            "endOffset": 130,
+            "identifier": "",
+            "kind": "code",
+            "markerType": "markdown_code_span",
+            "raw": "`voice_id`",
+            "speechText": "voice_id",
+            "startOffset": 120,
+            "url": "",
+            "visualLabel": "code"
+          }
+        ],
+        "astPath": "/children/1",
+        "columnEnd": 102,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "The method is reproducible[^1] and the [project notes](https://example.com/notes) mention `voice_id`."
+      },
+      "speakMode": "speak",
+      "spokenText": "The method is reproducible and the project notes mention voice_id.",
+      "startOffset": 30,
+      "text": "The method is reproducible[^1] and the [project notes](https://example.com/notes) mention `voice_id`.",
+      "warnings": ["footnote_reference", "link_reference", "inline_code_policy", "citation_removed"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 60,
+      "id": "block-0003",
+      "index": 3,
+      "kind": "footnote",
+      "label": "Footnote",
+      "language": "",
+      "metadata": {
+        "endOffset": 60,
+        "identifier": "1",
+        "kind": "footnote",
+        "markerType": "markdown_footnote_marker",
+        "raw": "[^1]",
+        "speechText": "Footnote 1.",
+        "startOffset": 56,
+        "url": "",
+        "visualLabel": "fn",
+        "astPath": "/children/1/inline-artifact/0",
+        "columnEnd": 31,
+        "columnStart": 27,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "[^1]"
+      },
+      "speakMode": "skip",
+      "spokenText": "Footnote 1.",
+      "startOffset": 56,
+      "text": "[^1]",
+      "warnings": ["inline_artifact", "footnote_reference", "footnote_policy"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 111,
+      "id": "block-0004",
+      "index": 4,
+      "kind": "reference",
+      "label": "Link",
+      "language": "",
+      "metadata": {
+        "endOffset": 111,
+        "identifier": "",
+        "kind": "reference",
+        "markerType": "markdown_link",
+        "raw": "[project notes](https://example.com/notes)",
+        "speechText": "project notes",
+        "startOffset": 69,
+        "url": "https://example.com/notes",
+        "visualLabel": "link",
+        "astPath": "/children/1/inline-artifact/1",
+        "columnEnd": 82,
+        "columnStart": 40,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "[project notes](https://example.com/notes)"
+      },
+      "speakMode": "skip",
+      "spokenText": "project notes",
+      "startOffset": 69,
+      "text": "[project notes](https://example.com/notes)",
+      "warnings": ["inline_artifact", "link_reference", "reference_policy"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 219,
+      "id": "block-0005",
+      "index": 5,
+      "kind": "footnote",
+      "label": "Footnote",
+      "language": "",
+      "metadata": {
+        "identifier": "1",
+        "astPath": "/children/2",
+        "columnEnd": 87,
+        "columnStart": 1,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "sourceSlice": "[^1]: The note should be policy controlled rather than read as prose by every profile."
+      },
+      "speakMode": "speak",
+      "spokenText": "The note should be policy controlled rather than read as prose by every profile.",
+      "startOffset": 133,
+      "text": "[^1]: The note should be policy controlled rather than read as prose by every profile.",
+      "warnings": ["footnote_policy"]
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "footnotes-links-code",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": []
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "# Footnotes, Links, And Code",
+        "kind": "heading",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/0",
+          "columnEnd": 29,
+          "columnStart": 1,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "# Footnotes, Links, And Code"
+        },
+        "nodeId": "block-0001",
+        "normalisedText": "# Footnotes, Links, And Code",
+        "orderKey": "00000001",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 29,
+              "columnStart": 1,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "footnotes-links-code.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 28,
+            "start": 0
+          },
+          "sourceId": "footnotes-links-code"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "heading",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Footnotes, Links, And Code",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "The method is reproducible[^1] and the [project notes](https://example.com/notes) mention `voice_id`.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 60,
+              "identifier": "1",
+              "kind": "footnote",
+              "markerType": "markdown_footnote_marker",
+              "raw": "[^1]",
+              "speechText": "Footnote 1.",
+              "startOffset": 56,
+              "url": "",
+              "visualLabel": "fn"
+            },
+            {
+              "endOffset": 111,
+              "identifier": "",
+              "kind": "reference",
+              "markerType": "markdown_link",
+              "raw": "[project notes](https://example.com/notes)",
+              "speechText": "project notes",
+              "startOffset": 69,
+              "url": "https://example.com/notes",
+              "visualLabel": "link"
+            },
+            {
+              "endOffset": 130,
+              "identifier": "",
+              "kind": "code",
+              "markerType": "markdown_code_span",
+              "raw": "`voice_id`",
+              "speechText": "voice_id",
+              "startOffset": 120,
+              "url": "",
+              "visualLabel": "code"
+            }
+          ],
+          "astPath": "/children/1",
+          "columnEnd": 102,
+          "columnStart": 1,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "The method is reproducible[^1] and the [project notes](https://example.com/notes) mention `voice_id`."
+        },
+        "nodeId": "block-0002",
+        "normalisedText": "The method is reproducible[^1] and the [project notes](https://example.com/notes) mention `voice_id`.",
+        "orderKey": "00000002",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 102,
+              "columnStart": 1,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "footnotes-links-code.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 131,
+            "start": 30
+          },
+          "sourceId": "footnotes-links-code"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "The method is reproducible and the project notes mention voice_id.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": [
+          "footnote_reference",
+          "link_reference",
+          "inline_code_policy",
+          "citation_removed"
+        ]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[^1]",
+        "kind": "footnote",
+        "lang": "und",
+        "metadata": {
+          "endOffset": 60,
+          "identifier": "1",
+          "kind": "footnote",
+          "markerType": "markdown_footnote_marker",
+          "raw": "[^1]",
+          "speechText": "Footnote 1.",
+          "startOffset": 56,
+          "url": "",
+          "visualLabel": "fn",
+          "astPath": "/children/1/inline-artifact/0",
+          "columnEnd": 31,
+          "columnStart": 27,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "[^1]"
+        },
+        "nodeId": "block-0003",
+        "normalisedText": "[^1]",
+        "orderKey": "00000003",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1/inline-artifact/0",
+              "columnEnd": 31,
+              "columnStart": 27,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "footnotes-links-code.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 60,
+            "start": 56
+          },
+          "sourceId": "footnotes-links-code"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "footnote",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Footnote 1.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_artifact", "footnote_reference", "footnote_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[project notes](https://example.com/notes)",
+        "kind": "reference",
+        "lang": "und",
+        "metadata": {
+          "endOffset": 111,
+          "identifier": "",
+          "kind": "reference",
+          "markerType": "markdown_link",
+          "raw": "[project notes](https://example.com/notes)",
+          "speechText": "project notes",
+          "startOffset": 69,
+          "url": "https://example.com/notes",
+          "visualLabel": "link",
+          "astPath": "/children/1/inline-artifact/1",
+          "columnEnd": 82,
+          "columnStart": 40,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "[project notes](https://example.com/notes)"
+        },
+        "nodeId": "block-0004",
+        "normalisedText": "[project notes](https://example.com/notes)",
+        "orderKey": "00000004",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1/inline-artifact/1",
+              "columnEnd": 82,
+              "columnStart": 40,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "footnotes-links-code.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 111,
+            "start": 69
+          },
+          "sourceId": "footnotes-links-code"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "reference",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "project notes",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_artifact", "link_reference", "reference_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[^1]: The note should be policy controlled rather than read as prose by every profile.",
+        "kind": "footnote",
+        "lang": "und",
+        "metadata": {
+          "identifier": "1",
+          "astPath": "/children/2",
+          "columnEnd": 87,
+          "columnStart": 1,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "[^1]: The note should be policy controlled rather than read as prose by every profile."
+        },
+        "nodeId": "block-0005",
+        "normalisedText": "[^1]: The note should be policy controlled rather than read as prose by every profile.",
+        "orderKey": "00000005",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 87,
+              "columnStart": 1,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "footnotes-links-code.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 219,
+            "start": 133
+          },
+          "sourceId": "footnotes-links-code"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "footnote",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "The note should be policy controlled rather than read as prose by every profile.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["footnote_policy"]
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "footnotes-links-code",
+    "sourceName": "footnotes-links-code.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "parseMode": "strict",
+  "skippedItems": [
+    {
+      "id": "block-0003",
+      "kind": "footnote",
+      "offset": 56,
+      "reason": "footnote marker available through citation policy",
+      "text": "[^1]"
+    },
+    {
+      "id": "block-0004",
+      "kind": "reference",
+      "offset": 69,
+      "reason": "reference marker available through citation policy",
+      "text": "[project notes](https://example.com/notes)"
+    }
+  ],
+  "title": "Footnotes, Links, And Code",
+  "warnings": []
+}

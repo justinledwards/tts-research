@@ -83,7 +83,7 @@
       "id": "block-0004",
       "index": 4,
       "kind": "body",
-      "label": "This custom directive should remain explicit. ::",
+      "label": "This custom directive should remain explicit.::",
       "language": "",
       "metadata": {
         "astPath": "/children/3",
@@ -94,7 +94,7 @@
         "sourceSlice": "This custom directive should remain explicit.\n::"
       },
       "speakMode": "speak",
-      "spokenText": "This custom directive should remain explicit. ::",
+      "spokenText": "This custom directive should remain explicit.::",
       "startOffset": 115,
       "text": "This custom directive should remain explicit.\n::",
       "warnings": []
@@ -375,7 +375,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "This custom directive should remain explicit. ::",
+        "speechText": "This custom directive should remain explicit.::",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"

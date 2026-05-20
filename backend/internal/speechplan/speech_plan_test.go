@@ -24,6 +24,7 @@ func TestBuildFromContentIROrdersSpeakableSegmentsAndTargets(t *testing.T) {
 			node("n1", "Hello world.", policy.ModeSpeak),
 			node("n2", "", policy.ModeSkip),
 			node("n3", "Dr Nguyen arrived.", policy.ModeSpeak),
+			node("n4", "turn40search10", policy.ModeOnDemand),
 		},
 	)
 	document.Nodes[2].Metadata = contentir.Metadata{
@@ -52,7 +53,7 @@ func TestBuildFromContentIROrdersSpeakableSegmentsAndTargets(t *testing.T) {
 		t.Fatalf("BuildFromContentIR returned error: %v", err)
 	}
 	if plan.SchemaVersion != SchemaVersion || len(plan.Segments) != 2 {
-		t.Fatalf("plan = %#v, want two speakable segments", plan)
+		t.Fatalf("plan = %#v, want two speakable segments and no on-demand citation token", plan)
 	}
 	if plan.Segments[0].SegmentID != "seg-0001" || plan.Segments[1].NodeID != "n3" {
 		t.Fatalf("segments are not stable and ordered: %#v", plan.Segments)

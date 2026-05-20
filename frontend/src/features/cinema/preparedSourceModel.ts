@@ -282,7 +282,14 @@ function ensureSkippedGroup(
   if (/ad|promo|sponsor/.test(haystack)) {
     return ensure("ads", "Ads / Promotions");
   }
-  if (kind === "citation" || /related|trend|citation|footnote/.test(haystack)) {
+  if (
+    kind === "citation" ||
+    kind === "footnote" ||
+    kind === "reference" ||
+    kind === "artifact_token" ||
+    kind === "unknown_inline_marker" ||
+    /related|trend|citation|footnote|reference|artifact/.test(haystack)
+  ) {
     return ensure("related", "Related / Citations");
   }
   if (haystack.includes("comment")) {

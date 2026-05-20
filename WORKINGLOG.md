@@ -190,3 +190,10 @@
 - [x] Improve short-source reader pagination
 - [x] Update Cinema focus-mode documentation
 - [x] Run project validation commands
+
+## 2026-05-20 20:58 CEST - Workstream LAMBDA document artifact rendering
+- [x] Map citation and inline artifact handling across IR, speech plan, UI, and tests
+- [x] Add shared artifact classification metadata and fixtures
+- [x] Render citations and artifact tokens as speech-safe visual notes
+- [x] Update policy notes and profile-specific speech behavior
+- [x] Run requested validation commands

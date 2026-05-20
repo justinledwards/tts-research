@@ -145,8 +145,23 @@ function skippedReason(block) {
   if (block.kind === "frontmatter") {
     return "frontmatter kept as metadata";
   }
+  if (block.kind === "artifact_token") {
+    return "raw artifact token kept out of spoken playback";
+  }
+  if (block.kind === "citation") {
+    return "citation marker kept out of spoken playback";
+  }
   if (block.kind === "embedded") {
     return "embedded construct kept as safe fallback";
+  }
+  if (block.kind === "footnote") {
+    return "footnote marker available through citation policy";
+  }
+  if (block.kind === "reference") {
+    return "reference marker available through citation policy";
+  }
+  if (block.kind === "unknown_inline_marker") {
+    return "unknown inline marker kept out of spoken playback";
   }
   if (block.kind === "directive") {
     return "unsupported directive kept as safe fallback";

@@ -72,7 +72,7 @@ func Profiles() []Profile {
 				FootnoteMode:    FootnoteModeInline,
 				ImageMode:       ImageModeDescribeShort,
 				CaptionMode:     CaptionModeSpeak,
-				CitationMode:    CitationModeInline,
+				CitationMode:    CitationModeOnDemand,
 				ListMarkerMode:  ListMarkerModeAnnounce,
 				AdmonitionMode:  AdmonitionModeSpeak,
 				QuoteMode:       QuoteModeSpeak,

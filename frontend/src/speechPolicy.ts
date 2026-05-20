@@ -97,7 +97,7 @@ export const BUILT_IN_SPEECH_POLICY_SETTINGS: Record<
     footnoteMode: "inline",
     imageMode: "describeShort",
     captionMode: "speak",
-    citationMode: "inline",
+    citationMode: "onDemand",
     listMarkerMode: "announce",
     admonitionMode: "speak",
     quoteMode: "speak",

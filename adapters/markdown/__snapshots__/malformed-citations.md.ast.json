@@ -1,0 +1,149 @@
+{
+  "type": "root",
+  "position": {
+    "start": {
+      "line": 1,
+      "column": 1,
+      "offset": 0
+    },
+    "end": {
+      "line": 8,
+      "column": 1,
+      "offset": 181
+    }
+  },
+  "children": [
+    {
+      "type": "heading",
+      "position": {
+        "start": {
+          "line": 1,
+          "column": 1,
+          "offset": 0
+        },
+        "end": {
+          "line": 1,
+          "column": 34,
+          "offset": 33
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "Malformed Citation Placeholders",
+          "position": {
+            "start": {
+              "line": 1,
+              "column": 3,
+              "offset": 2
+            },
+            "end": {
+              "line": 1,
+              "column": 34,
+              "offset": 33
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 3,
+          "column": 1,
+          "offset": 35
+        },
+        "end": {
+          "line": 3,
+          "column": 54,
+          "offset": 88
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "This sentence kept a placeholder [cite] after export.",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 1,
+              "offset": 35
+            },
+            "end": {
+              "line": 3,
+              "column": 54,
+              "offset": 88
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 5,
+          "column": 1,
+          "offset": 90
+        },
+        "end": {
+          "line": 5,
+          "column": 81,
+          "offset": 170
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "Another paragraph has [citation: pending source] and a raw turn2search3 locator.",
+          "position": {
+            "start": {
+              "line": 5,
+              "column": 1,
+              "offset": 90
+            },
+            "end": {
+              "line": 5,
+              "column": 81,
+              "offset": 170
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 7,
+          "column": 1,
+          "offset": 172
+        },
+        "end": {
+          "line": 7,
+          "column": 9,
+          "offset": 180
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "[source]",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 1,
+              "offset": 172
+            },
+            "end": {
+              "line": 7,
+              "column": 9,
+              "offset": 180
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

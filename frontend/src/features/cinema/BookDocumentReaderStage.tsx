@@ -106,6 +106,7 @@ export function BookDocumentReaderStage({
       }
     >
       <MarkdownRenderer
+        artifactRendering="document-cinema"
         blockHighlight={highlight.blockHighlight}
         className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
         wordHighlight={highlight.wordHighlight}

@@ -75,7 +75,13 @@ type sourcePreprocessResult struct {
 
 var (
 	citationGlyphPattern      = regexp.MustCompile(`cite[^]*`)
+	chatGPTCitationPattern    = regexp.MustCompile(`(?i)\[cite\]\s*\[\s*turn\d+(?:search|view|news|fetch)\d+\s*\]`)
+	contentReferencePattern   = regexp.MustCompile(`:contentReference\[[^\]\n]+\]\{[^}\n]*\}`)
+	malformedCitationPattern  = regexp.MustCompile(`(?i)\[(?:cite|citation|source|reference)(?::[^\]\n]*)?\]`)
 	turnCitationPattern       = regexp.MustCompile(`\bturn\d+(?:search|view|news|fetch)\d+\b`)
+	footnoteReferencePattern  = regexp.MustCompile(`\[\^[^\]\s]+\]`)
+	referenceMarkerPattern    = regexp.MustCompile(`\[(?:\d+(?:\s*(?:,|-|–)\s*\d+)*(?:,\s*p\.?\s*\d+)?|[A-Z][A-Za-z .'-]{1,40}(?:19|20)\d{2}[^\]\n]{0,20})\]`)
+	bracketedMetadataPattern  = regexp.MustCompile(`(?i)\[(?:todo|note|metadata|draft|review|debug|loc(?:ator)?|id|ref)[:\s][^\]\n]{0,80}\]`)
 	markdownLinkPattern       = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 	markdownImagePattern      = regexp.MustCompile(`!\[([^\]]*)\]\([^)]+\)`)
 	markdownImageOnlyLine     = regexp.MustCompile(`^!\[[^\]]*\]\([^)]+\)\s*$`)
@@ -1444,6 +1450,10 @@ func policyElementText(block NarrationBlock) string {
 		NarrationBlockKindImage,
 		NarrationBlockKindCaption,
 		NarrationBlockKindCitation,
+		NarrationBlockKindFootnote,
+		NarrationBlockKindReference,
+		NarrationBlockKindArtifact,
+		NarrationBlockKindUnknownMark,
 		NarrationBlockKindList,
 		NarrationBlockKindDirective,
 		NarrationBlockKindEmbedded,
@@ -1548,8 +1558,7 @@ func normalizeReadableSourceText(input string) string {
 }
 
 func cleanMarkdownInline(input string) string {
-	clean := citationGlyphPattern.ReplaceAllString(input, " ")
-	clean = turnCitationPattern.ReplaceAllString(clean, " ")
+	clean := stripMarkdownInlineArtifacts(input)
 	clean = markdownImagePattern.ReplaceAllString(clean, "$1")
 	clean = markdownLinkPattern.ReplaceAllString(clean, "$1")
 	clean = inlineCodeSpeechPattern.ReplaceAllString(clean, "$1")
@@ -1563,8 +1572,7 @@ func shouldSkipCitationBlock(text string) bool {
 	if trimmed == "" {
 		return false
 	}
-	citationStripped := citationGlyphPattern.ReplaceAllString(trimmed, "")
-	citationStripped = turnCitationPattern.ReplaceAllString(citationStripped, "")
+	citationStripped := stripMarkdownInlineArtifacts(trimmed)
 	citationStripped = strings.Trim(citationStripped, " []().,;:|")
 	if citationStripped == "" {
 		return true
@@ -1573,7 +1581,33 @@ func shouldSkipCitationBlock(text string) bool {
 }
 
 func containsCitationMarkup(text string) bool {
-	return citationGlyphPattern.MatchString(text) || turnCitationPattern.MatchString(text)
+	for _, pattern := range markdownInlineArtifactPatterns() {
+		if pattern.MatchString(text) {
+			return true
+		}
+	}
+	return false
+}
+
+func stripMarkdownInlineArtifacts(text string) string {
+	clean := text
+	for _, pattern := range markdownInlineArtifactPatterns() {
+		clean = pattern.ReplaceAllString(clean, " ")
+	}
+	return clean
+}
+
+func markdownInlineArtifactPatterns() []*regexp.Regexp {
+	return []*regexp.Regexp{
+		chatGPTCitationPattern,
+		citationGlyphPattern,
+		contentReferencePattern,
+		malformedCitationPattern,
+		turnCitationPattern,
+		footnoteReferencePattern,
+		referenceMarkerPattern,
+		bracketedMetadataPattern,
+	}
 }
 
 func tableLinesOrRaw(raw string) []string {
@@ -1640,7 +1674,7 @@ func summarizePreparedSource(blocks []NarrationBlock) PreparedSourceSummary {
 		switch block.Kind {
 		case NarrationBlockKindHeading, NarrationBlockKindSubheading:
 			summary.HeadingCount += 1
-		case NarrationBlockKindCitation:
+		case NarrationBlockKindCitation, NarrationBlockKindFootnote, NarrationBlockKindReference, NarrationBlockKindArtifact, NarrationBlockKindUnknownMark:
 			if block.SpeakMode == NarrationSpeakModeSkip {
 				summary.CitationSkipCount += 1
 			}

@@ -29,7 +29,7 @@
       "id": "block-0002",
       "index": 2,
       "kind": "body",
-      "label": "The chart below is interactive: .",
+      "label": "The chart below is interactive:.",
       "language": "",
       "metadata": {
         "astPath": "/children/1",
@@ -40,7 +40,7 @@
         "sourceSlice": "The chart below is interactive: <Chart data=\"revenue\" />."
       },
       "speakMode": "speak",
-      "spokenText": "The chart below is interactive: .",
+      "spokenText": "The chart below is interactive:.",
       "startOffset": 23,
       "text": "The chart below is interactive: <Chart data=\"revenue\" />.",
       "warnings": ["embedded_fallback"]
@@ -127,6 +127,19 @@
       "label": "Use the workbook <files/report.xlsx> when available.",
       "language": "",
       "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 224,
+            "identifier": "",
+            "kind": "code",
+            "markerType": "markdown_code_span",
+            "raw": "`the workbook <files/report.xlsx>`",
+            "speechText": "the workbook <files/report.xlsx>",
+            "startOffset": 190,
+            "url": "",
+            "visualLabel": "code"
+          }
+        ],
         "astPath": "/children/4",
         "columnEnd": 65,
         "columnStart": 1,
@@ -138,7 +151,7 @@
       "spokenText": "Use the workbook <files/report.xlsx> when available.",
       "startOffset": 176,
       "text": "Use {download}`the workbook <files/report.xlsx>` when available.",
-      "warnings": ["embedded_fallback"]
+      "warnings": ["embedded_fallback", "inline_code_policy"]
     },
     {
       "confidence": 0.72,
@@ -325,7 +338,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "The chart below is interactive: .",
+        "speechText": "The chart below is interactive:.",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
@@ -539,6 +552,19 @@
         "kind": "body",
         "lang": "und",
         "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 224,
+              "identifier": "",
+              "kind": "code",
+              "markerType": "markdown_code_span",
+              "raw": "`the workbook <files/report.xlsx>`",
+              "speechText": "the workbook <files/report.xlsx>",
+              "startOffset": 190,
+              "url": "",
+              "visualLabel": "code"
+            }
+          ],
           "astPath": "/children/4",
           "columnEnd": 65,
           "columnStart": 1,
@@ -593,7 +619,7 @@
           "highlightUnitHint": "node",
           "progressionHint": "linear"
         },
-        "warnings": ["embedded_fallback"]
+        "warnings": ["embedded_fallback", "inline_code_policy"]
       },
       {
         "adapterVersion": "markdown-adapter-v2",

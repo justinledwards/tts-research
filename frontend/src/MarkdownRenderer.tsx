@@ -10,14 +10,17 @@ import {
 } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { documentCinemaInlineArtifactPlugin } from "./features/document-cinema/rendering/inlineArtifacts";
 export { looksLikeMermaidDiagram } from "./markdownModel";
 
 export function MarkdownRenderer({
   children,
+  artifactRendering = "none",
   blockHighlight,
   className = "prose-markdown",
   wordHighlight,
 }: Readonly<{
+  artifactRendering?: "document-cinema" | "none";
   children: string;
   blockHighlight?: MarkdownBlockHighlight;
   className?: string;
@@ -25,10 +28,11 @@ export function MarkdownRenderer({
 }>) {
   const rehypePlugins = useMemo(
     () => [
+      ...(artifactRendering === "document-cinema" ? [documentCinemaInlineArtifactPlugin] : []),
       ...(blockHighlight ? [createBlockHighlightPlugin(blockHighlight)] : []),
       ...(wordHighlight ? [createWordHighlightPlugin(wordHighlight)] : []),
     ],
-    [blockHighlight, wordHighlight],
+    [artifactRendering, blockHighlight, wordHighlight],
   );
 
   return (
@@ -261,10 +265,18 @@ function transformChildren(
       nextChildren.push(...splitHighlightedTextNode(child, highlight, nextWordOffset));
       continue;
     }
+    if (isSpeechSkippedElement(child)) {
+      nextChildren.push(child);
+      continue;
+    }
     transformChildren(child, highlight, nextWordOffset);
     nextChildren.push(child);
   }
   node.children = nextChildren;
+}
+
+function isSpeechSkippedElement(node: HastNode): boolean {
+  return node.type === "element" && node.properties?.["data-speech-mode"] === "skip";
 }
 
 function splitHighlightedTextNode(

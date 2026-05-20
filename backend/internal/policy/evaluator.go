@@ -7,6 +7,25 @@ import (
 )
 
 var markdownLinkLikePattern = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]+\)`)
+var rawCitationGlyphPattern = regexp.MustCompile(`cite[^]*`)
+var rawChatGPTBracketCitationPattern = regexp.MustCompile(`(?i)\[cite\]\s*\[\s*turn\d+(?:search|view|news|fetch)\d+\s*\]`)
+var rawContentReferencePattern = regexp.MustCompile(`:contentReference\[[^\]\n]+\]\{[^}\n]*\}`)
+var rawMalformedCitationPattern = regexp.MustCompile(`(?i)\[(?:cite|citation|source|reference)(?::[^\]\n]*)?\]`)
+var rawTurnCitationPattern = regexp.MustCompile(`\bturn\d+(?:search|view|news|fetch)\d+\b`)
+var rawFootnoteReferencePattern = regexp.MustCompile(`\[\^[^\]\s]+\]`)
+var rawReferenceMarkerPattern = regexp.MustCompile(`\[(?:\d+(?:\s*(?:,|-|–)\s*\d+)*(?:,\s*p\.?\s*\d+)?|[A-Z][A-Za-z .'-]{1,40}(?:19|20)\d{2}[^\]\n]{0,20})\]`)
+var rawBracketedMetadataPattern = regexp.MustCompile(`(?i)\[(?:todo|note|metadata|draft|review|debug|loc(?:ator)?|id|ref)[:\s][^\]\n]{0,80}\]`)
+
+var rawInlineArtifactPatterns = []*regexp.Regexp{
+	rawChatGPTBracketCitationPattern,
+	rawCitationGlyphPattern,
+	rawContentReferencePattern,
+	rawMalformedCitationPattern,
+	rawTurnCitationPattern,
+	rawFootnoteReferencePattern,
+	rawReferenceMarkerPattern,
+	rawBracketedMetadataPattern,
+}
 
 type Evaluator struct {
 	profile          ProfileName
@@ -137,6 +156,10 @@ func (evaluator Evaluator) Evaluate(element Element) Decision {
 		return evaluator.evaluateCaption(element)
 	case "citation":
 		return evaluator.evaluateCitation(element)
+	case "reference":
+		return evaluator.evaluateReference(element)
+	case "artifact_token", "unknown_inline_marker":
+		return evaluator.evaluateArtifactToken(elementKind, element)
 	case "table":
 		return evaluator.evaluateTable(element)
 	case "code":
@@ -156,18 +179,21 @@ func ElementKind(kind string, role string, text string, warnings []string) strin
 	lowerKind := strings.ToLower(strings.TrimSpace(kind))
 	lowerRole := strings.ToLower(strings.TrimSpace(role))
 	switch lowerKind {
-	case "admonition", "directive", "embedded", "frontmatter", "table", "code", "math", "image", "caption", "citation", "list", "quote":
+	case "admonition", "directive", "embedded", "frontmatter", "table", "code", "math", "image", "caption", "citation", "reference", "artifact_token", "unknown_inline_marker", "list", "quote":
 		return lowerKind
 	case "footnote", "endnote":
 		return "footnote"
 	}
 	switch lowerRole {
-	case "admonition", "directive", "embedded", "frontmatter", "table", "code", "math", "image", "caption", "citation", "list", "quote":
+	case "admonition", "directive", "embedded", "frontmatter", "table", "code", "math", "image", "caption", "citation", "reference", "artifact_token", "unknown_inline_marker", "list", "quote":
 		return lowerRole
 	case "footnote", "endnote":
 		return "footnote"
 	}
 	trimmed := strings.TrimSpace(text)
+	if containsRawInlineArtifact(trimmed) && strings.TrimSpace(stripRawInlineArtifacts(trimmed)) == "" {
+		return "citation"
+	}
 	if strings.HasPrefix(trimmed, "$$") && strings.HasSuffix(trimmed, "$$") {
 		return "math"
 	}
@@ -206,11 +232,40 @@ func (evaluator Evaluator) evaluateCitation(element Element) Decision {
 	case CitationModeSkip:
 		return evaluator.decision("citation", string(CitationModeSkip), ModeSkip, "")
 	case CitationModeInline:
-		return evaluator.decision("citation", string(CitationModeInline), ModeSpeak, cleanInline(element.Text))
+		return evaluator.decision("citation", string(CitationModeInline), ModeSpeak, safeCitationSpeech(element.Text, "Citation marker."))
 	case CitationModeEndnote:
 		return evaluator.decision("citation", string(CitationModeEndnote), ModeOnDemand, "")
 	default:
 		return evaluator.decision("citation", string(CitationModeOnDemand), ModeOnDemand, "")
+	}
+}
+
+func (evaluator Evaluator) evaluateReference(element Element) Decision {
+	switch evaluator.settings.CitationMode {
+	case CitationModeSkip:
+		return evaluator.decision("reference", string(CitationModeSkip), ModeSkip, "")
+	case CitationModeInline:
+		return evaluator.decision("reference", string(CitationModeInline), ModeSpeak, safeCitationSpeech(element.Text, "Reference marker."))
+	case CitationModeEndnote:
+		return evaluator.decision("reference", string(CitationModeEndnote), ModeOnDemand, "")
+	default:
+		return evaluator.decision("reference", string(CitationModeOnDemand), ModeOnDemand, "")
+	}
+}
+
+func (evaluator Evaluator) evaluateArtifactToken(elementName string, element Element) Decision {
+	if evaluator.settings.Mode == ModeLiteral {
+		return evaluator.decision(elementName, string(ModeLiteral), ModeLiteral, strings.TrimSpace(element.Text))
+	}
+	switch evaluator.settings.CitationMode {
+	case CitationModeSkip:
+		return evaluator.decision(elementName, string(CitationModeSkip), ModeSkip, "")
+	case CitationModeInline:
+		return evaluator.decision(elementName, string(CitationModeInline), ModeSpeak, safeCitationSpeech(element.Text, "Artifact marker."))
+	case CitationModeEndnote:
+		return evaluator.decision(elementName, string(CitationModeEndnote), ModeOnDemand, "")
+	default:
+		return evaluator.decision(elementName, string(CitationModeOnDemand), ModeOnDemand, "")
 	}
 }
 
@@ -473,9 +528,43 @@ func looksLikeTableDivider(line string) bool {
 
 func cleanInline(input string) string {
 	clean := markdownLinkLikePattern.ReplaceAllString(input, "$1")
+	clean = stripRawInlineArtifacts(clean)
 	clean = strings.NewReplacer("**", "", "__", "", "~~", "", "`", "", "•", "").Replace(clean)
 	clean = strings.Trim(clean, " \t-*`_")
+	clean = strings.TrimLeft(clean, " \t:;,.")
 	return strings.Join(strings.Fields(clean), " ")
+}
+
+func safeCitationSpeech(input string, fallback string) string {
+	if containsRawInlineArtifact(input) {
+		clean := cleanInline(input)
+		if clean == "" {
+			return fallback
+		}
+		return clean
+	}
+	clean := cleanInline(input)
+	if clean == "" {
+		return fallback
+	}
+	return clean
+}
+
+func containsRawInlineArtifact(input string) bool {
+	for _, pattern := range rawInlineArtifactPatterns {
+		if pattern.MatchString(input) {
+			return true
+		}
+	}
+	return false
+}
+
+func stripRawInlineArtifacts(input string) string {
+	clean := input
+	for _, pattern := range rawInlineArtifactPatterns {
+		clean = pattern.ReplaceAllString(clean, " ")
+	}
+	return clean
 }
 
 func pluralSuffix(count int) string {

@@ -13,6 +13,7 @@ export const CINEMA_INSPECTOR_PANEL_IDS = [
   "wayfinding",
   "provenance",
   "policy",
+  "policy-notes",
   "health",
   "notes",
   "queue",
