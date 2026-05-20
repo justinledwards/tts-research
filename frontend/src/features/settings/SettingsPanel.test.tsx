@@ -4,6 +4,7 @@ import { DEFAULT_SPEECH_POLICY_DEFINITION } from "../../speechPolicy";
 import { createRunConfiguration } from "../../runConfig";
 import { DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS } from "../../teleprompter";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
+import { defaultUiMemoryState } from "../preferences";
 import { SettingsPanel } from "./SettingsPanel";
 
 const noop = () => {
@@ -46,6 +47,7 @@ describe("SettingsPanel", () => {
         themeName="light"
         ttsEngineError={null}
         ttsEngines={[]}
+        uiMemory={defaultUiMemoryState()}
         onClearBookSourcePolicy={asyncNoop}
         onClearPreparedSourcePolicy={asyncNoop}
         onClearSpeechPolicyOverrides={noop}
@@ -54,6 +56,8 @@ describe("SettingsPanel", () => {
         onDeleteCustomSpeechPolicyProfile={asyncNoop}
         onPrepareProfileTarget={asyncNoop}
         onReaderAccessibilitySettingsChange={noop}
+        onRememberLayoutChange={noop}
+        onResetUiMemory={noop}
         onRunConfigurationChange={noop}
         onSaveBookSourcePolicy={asyncNoop}
         onSavePreparedSourcePolicy={asyncNoop}

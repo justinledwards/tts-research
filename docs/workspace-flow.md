@@ -13,6 +13,14 @@ Workspace density is controlled by one shell mode:
 - `Balanced` is the default and keeps rails/footer compact.
 - `Full` expands both rails and the activity footer for operators who need all controls visible.
 
+UI memory is opt-in from Studio Settings:
+
+- `Remember my layout` is off by default. With it off, reopening the app uses the documented shell default: `Balanced`.
+- With it on, shell mode is remembered on this browser. The active project can override the browser default, so restore order is project shell mode, browser shell mode, then `Balanced`.
+- The last active `Review` pane is remembered per project. Resetting UI memory returns Review to `Block Review`.
+- Teleprompt return targets are remembered per project only for `Review` and `Preview`. Reopening into Teleprompt restores the valid return target, otherwise it falls back to `Review`.
+- `Reset UI memory` clears remembered layout while preserving whether `Remember my layout` is on. It does not clear source text, selected sources, bookmarks, progress, source pins, voice profiles, speech policy, or playback transport.
+
 Context preservation rules:
 
 - Entering and leaving Teleprompt keeps the active source, active block, voice profile, and speech policy profile.
@@ -24,5 +32,7 @@ Local UX smoke:
 1. Start with a new Intake source.
 2. Move to Review and switch between Block Review, Spoken Script, and Validation Transcript.
 3. Open Teleprompt, then return to Review.
-4. Open Preview and run `Create & Listen`.
-5. Compare Focus, Balanced, and Full layouts and confirm the primary stage remains visually dominant.
+4. Enable `Remember my layout`, reopen, and confirm shell mode, Review pane, and Teleprompt return target restore.
+5. Reset UI memory and confirm Workspace returns to `Balanced`, `Block Review`, and the documented Teleprompt fallback.
+6. Open Preview and run `Create & Listen`.
+7. Compare Focus, Balanced, and Full layouts and confirm the primary stage remains visually dominant.

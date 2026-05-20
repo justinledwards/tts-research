@@ -144,3 +144,11 @@
 - [x] Replay follow-up commits onto fresh upstream base.
 - [x] Validate fresh follow-up branch.
 - [x] Push branch and open draft PR.
+
+## 2026-05-20 15:16 CEST - Persistent continuity and adaptive defaults
+- [x] Add shared UI memory model and tests.
+- [x] Wire workspace, review, teleprompt, and settings.
+- [x] Wire cinema focus memory and reset behavior.
+- [x] Update docs and E2E coverage.
+- [x] Fix StrictMode-safe cinema reset handling.
+- [x] Run requested validation commands.

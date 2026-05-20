@@ -25,6 +25,7 @@ import {
   type CinemaPanelDefinition,
   type CinemaTransportModel,
 } from "../cinema";
+import type { UiMemoryCinemaState } from "../preferences";
 import {
   BOOK_SOURCE_ACCEPT,
   bookCinemaLiveAnnouncement,
@@ -744,6 +745,8 @@ export function BookCinemaOverlay({
   scope,
   scopeContent,
   sourcePolicySaving,
+  uiMemoryFocusState,
+  uiMemoryResetSignal,
   highlightCue,
   highlightMap,
   themeName,
@@ -761,6 +764,7 @@ export function BookCinemaOverlay({
   onClearSourcePolicy,
   onResumeProgress,
   onSaveSourcePolicy,
+  onUiMemoryFocusStateChange,
   onThemeChange,
 }: Readonly<{
   accessibilitySettings: ReaderAccessibilitySettings;
@@ -783,6 +787,8 @@ export function BookCinemaOverlay({
   progressItems: PlaybackProgress[];
   resumeFallbackNotice: string | null;
   sourcePolicySaving: boolean;
+  uiMemoryFocusState: UiMemoryCinemaState;
+  uiMemoryResetSignal: number;
   playbackControls: {
     isAvailable: boolean;
     isPlaying: boolean;
@@ -812,6 +818,7 @@ export function BookCinemaOverlay({
   onClearSourcePolicy: () => Promise<void> | void;
   onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
   onSaveSourcePolicy: (request: SourceSpeechPolicyUpdateRequest) => Promise<void> | void;
+  onUiMemoryFocusStateChange: (state: UiMemoryCinemaState) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
   const normalizedScope = normalizeBookScopeForBook(book, scope);
@@ -1127,7 +1134,11 @@ export function BookCinemaOverlay({
       title: "Timing debug",
     }),
   ];
-  const cinemaFocus = useCinemaFocusController(bookInspectorPanels);
+  const cinemaFocus = useCinemaFocusController(bookInspectorPanels, {
+    initialState: uiMemoryFocusState,
+    onStateChange: onUiMemoryFocusStateChange,
+    resetSignal: uiMemoryResetSignal,
+  });
 
   useReaderKeyboardControls({
     canBookmark,

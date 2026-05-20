@@ -39,6 +39,7 @@ import { PolicyScopeChips, SourcePolicyPinEditor } from "../policy";
 import { LazyPanelFallback } from "../performance";
 import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
 import { ExitIcon, SettingsIcon } from "../navigation";
+import type { UiMemoryCinemaState } from "../preferences";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { looksLikeMermaidDiagram } from "../../markdownModel";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdownCinema";
@@ -132,6 +133,8 @@ export function PreparedSourceCinemaOverlay({
   sourcePolicySaving,
   sources,
   themeName,
+  uiMemoryFocusState,
+  uiMemoryResetSignal,
   onClose,
   onAccessibilitySettingsChange,
   onBookmark,
@@ -146,6 +149,7 @@ export function PreparedSourceCinemaOverlay({
   onSelectSource,
   onSkip,
   onThemeChange,
+  onUiMemoryFocusStateChange,
 }: Readonly<{
   accessibilitySettings: ReaderAccessibilitySettings;
   activeWordIndex: number;
@@ -170,6 +174,8 @@ export function PreparedSourceCinemaOverlay({
   sourcePolicySaving: boolean;
   sources: PreparedSource[];
   themeName: ThemeName;
+  uiMemoryFocusState: UiMemoryCinemaState;
+  uiMemoryResetSignal: number;
   onClose: () => void;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onBookmark: () => void;
@@ -184,6 +190,7 @@ export function PreparedSourceCinemaOverlay({
   onSelectSource: (sourceId: string) => void;
   onSkip: (seconds: number) => void;
   onThemeChange: (theme: ThemeName) => void;
+  onUiMemoryFocusStateChange: (state: UiMemoryCinemaState) => void;
 }>) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const normalizedAccessibility = normalizeReaderAccessibilitySettings(accessibilitySettings);
@@ -427,7 +434,11 @@ export function PreparedSourceCinemaOverlay({
       title: "Skipped content",
     }),
   ];
-  const cinemaFocus = useCinemaFocusController(sourceInspectorPanels);
+  const cinemaFocus = useCinemaFocusController(sourceInspectorPanels, {
+    initialState: uiMemoryFocusState,
+    onStateChange: onUiMemoryFocusStateChange,
+    resetSignal: uiMemoryResetSignal,
+  });
 
   useReaderKeyboardControls({
     canBookmark,

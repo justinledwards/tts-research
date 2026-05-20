@@ -152,13 +152,26 @@ import {
   selectReviewBlockId,
   type ReviewPane,
 } from "./features/review";
+import {
+  loadUiMemory,
+  rememberCinemaFocusState,
+  rememberReviewPane,
+  rememberTelepromptReturnStage,
+  rememberWorkspaceLayoutMode,
+  resetUiMemory,
+  resolveCinemaFocusState,
+  resolveReviewPane,
+  resolveTelepromptReturnStage,
+  resolveWorkspaceLayoutMode,
+  saveUiMemory,
+  type UiMemoryCinemaState,
+  type UiMemoryState,
+} from "./features/preferences";
 import { TelepromptStage } from "./features/teleprompt";
 import {
-  WORKSPACE_LAYOUT_STORAGE_KEY,
   createWorkspaceContext,
   defaultWorkspaceLayoutMode,
   enterTelepromptStage,
-  normalizeWorkspaceLayoutMode,
   returnFromTelepromptStage,
   transitionWorkspaceStage,
   withWorkspaceActiveBlock,
@@ -2427,6 +2440,8 @@ export function App() {
   const [activeProjectId, setActiveProjectId] = useState(
     () => localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default",
   );
+  const [uiMemory, setUiMemory] = useState<UiMemoryState>(() => loadUiMemory());
+  const [uiMemoryResetSignal, setUiMemoryResetSignal] = useState(0);
   const [projectStateReadyId, setProjectStateReadyId] = useState<string | null>(null);
   const [projectJobs, setProjectJobs] = useState<VoiceJob[]>([]);
   const [bookSources, setBookSources] = useState<BookSource[]>([]);
@@ -2524,13 +2539,15 @@ export function App() {
   );
   const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContext>(() =>
     createWorkspaceContext({
-      layoutMode: normalizeWorkspaceLayoutMode(
-        localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY) ?? defaultWorkspaceLayoutMode(),
-      ),
+      layoutMode: resolveWorkspaceLayoutMode(uiMemory, activeProjectId),
       speechPolicyProfile,
       voiceProfileId: selectedVoiceProfileId,
     }),
   );
+  const [activeReviewPane, setActiveReviewPane] = useState<ReviewPane>(() =>
+    resolveReviewPane(uiMemory, activeProjectId),
+  );
+  const uiMemoryRef = useRef(uiMemory);
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -2576,29 +2593,75 @@ export function App() {
   const leftRailMode = workspaceRails.leftRailMode;
   const rightRailMode = workspaceRails.rightRailMode;
   const contentMode = workspaceContext.stage;
-  const setContentMode = useCallback((stage: WorkspaceStage) => {
-    setWorkspaceContext((currentContext) => transitionWorkspaceStage(currentContext, stage));
-  }, []);
-  const setWorkspaceLayoutMode = useCallback((layoutMode: WorkspaceLayoutMode) => {
-    setWorkspaceContext((currentContext) => ({
-      ...currentContext,
-      layoutMode,
-    }));
-  }, []);
-  const handleRailModeChange = useCallback((mode: WorkspaceRailMode) => {
-    setWorkspaceContext((currentContext) => ({
-      ...currentContext,
-      layoutMode: workspaceLayoutModeForRailMode(mode),
-    }));
-  }, []);
+  const setContentMode = useCallback(
+    (stage: WorkspaceStage) => {
+      if (stage === "teleprompt") {
+        setUiMemory((currentMemory) =>
+          rememberTelepromptReturnStage(currentMemory, activeProjectId, contentMode),
+        );
+      }
+      setWorkspaceContext((currentContext) => transitionWorkspaceStage(currentContext, stage));
+    },
+    [activeProjectId, contentMode],
+  );
+  const setWorkspaceLayoutMode = useCallback(
+    (layoutMode: WorkspaceLayoutMode) => {
+      setWorkspaceContext((currentContext) => ({
+        ...currentContext,
+        layoutMode,
+      }));
+      setUiMemory((currentMemory) =>
+        rememberWorkspaceLayoutMode(currentMemory, activeProjectId, layoutMode),
+      );
+    },
+    [activeProjectId],
+  );
+  const handleRailModeChange = useCallback(
+    (mode: WorkspaceRailMode) => {
+      setWorkspaceLayoutMode(workspaceLayoutModeForRailMode(mode));
+    },
+    [setWorkspaceLayoutMode],
+  );
   const setLeftRailMode = handleRailModeChange;
   const setRightRailMode = handleRailModeChange;
-  const setActivityFooterMode = useCallback((mode: ActivityFooterMode) => {
-    setWorkspaceContext((currentContext) => ({
-      ...currentContext,
-      layoutMode: workspaceLayoutModeForRailMode(mode),
+  const setActivityFooterMode = useCallback(
+    (mode: ActivityFooterMode) => {
+      setWorkspaceLayoutMode(workspaceLayoutModeForRailMode(mode));
+    },
+    [setWorkspaceLayoutMode],
+  );
+  const handleReviewPaneChange = useCallback(
+    (pane: ReviewPane) => {
+      const normalizedPane = normalizeReviewPane(pane);
+      setActiveReviewPane(normalizedPane);
+      setUiMemory((currentMemory) =>
+        rememberReviewPane(currentMemory, activeProjectId, normalizedPane),
+      );
+    },
+    [activeProjectId],
+  );
+  const handleRememberLayoutChange = useCallback((rememberLayout: boolean) => {
+    setUiMemory((currentMemory) => ({
+      ...currentMemory,
+      rememberLayout,
     }));
   }, []);
+  const handleResetUiMemory = useCallback(() => {
+    setUiMemory((currentMemory) => resetUiMemory(currentMemory));
+    setWorkspaceContext((currentContext) => ({
+      ...currentContext,
+      layoutMode: defaultWorkspaceLayoutMode(),
+      telepromptReturnStage: "review",
+    }));
+    setActiveReviewPane("blocks");
+    setUiMemoryResetSignal((currentSignal) => currentSignal + 1);
+  }, []);
+  const handleCinemaFocusStateChange = useCallback(
+    (surfaceKind: "book" | "document" | "website", state: UiMemoryCinemaState) => {
+      setUiMemory((currentMemory) => rememberCinemaFocusState(currentMemory, surfaceKind, state));
+    },
+    [],
+  );
 
   const isProcessing = requestState === "running";
   const canSubmit = useMemo(() => text.trim().length > 0 && !isProcessing, [text, isProcessing]);
@@ -2955,12 +3018,13 @@ export function App() {
     setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
   }, [bookCinemaOpenTiming, canOpenBookCinema, themeName]);
   const openTelepromptStage = useCallback(() => {
-    setWorkspaceContext((currentContext) => enterTelepromptStage(currentContext));
-  }, []);
-  const returnToReviewFromTeleprompt = useCallback(() => {
-    setWorkspaceContext((currentContext) =>
-      transitionWorkspaceStage(returnFromTelepromptStage(currentContext), "review"),
+    setUiMemory((currentMemory) =>
+      rememberTelepromptReturnStage(currentMemory, activeProjectId, contentMode),
     );
+    setWorkspaceContext((currentContext) => enterTelepromptStage(currentContext));
+  }, [activeProjectId, contentMode]);
+  const returnFromTeleprompt = useCallback(() => {
+    setWorkspaceContext((currentContext) => returnFromTelepromptStage(currentContext));
   }, []);
   const handleSelectBookCinemaSource = useCallback(
     (bookId: string) => {
@@ -3731,6 +3795,7 @@ export function App() {
 
   const clearVisibleProjectWorkspace = useCallback(
     (projectId: string) => {
+      const currentUiMemory = uiMemoryRef.current;
       clearProjectWorkspaceState(projectId);
       setText("");
       setJob(null);
@@ -3745,13 +3810,14 @@ export function App() {
       setSelectedPreparedSourceId(null);
       setSourcePrepError(null);
       setSourceMode("text");
-      setWorkspaceContext((currentContext) =>
+      setWorkspaceContext(() =>
         createWorkspaceContext({
-          layoutMode: currentContext.layoutMode,
+          layoutMode: resolveWorkspaceLayoutMode(currentUiMemory, projectId),
           speechPolicyProfile,
           voiceProfileId: selectedVoiceProfileId,
         }),
       );
+      setActiveReviewPane(resolveReviewPane(currentUiMemory, projectId));
       setProjectProgress([]);
       setActivePlaybackSession(null);
       setPendingPlaybackResume(null);
@@ -3765,6 +3831,7 @@ export function App() {
 
   const restoreProjectWorkspace = useCallback(
     async (projectId: string) => {
+      const currentUiMemory = uiMemoryRef.current;
       setProjectStateReadyId(null);
       setError(null);
       setProfileSource(null);
@@ -3791,14 +3858,23 @@ export function App() {
       if (savedState.speechPolicyProfile) {
         setSpeechPolicyProfile(savedState.speechPolicyProfile);
       }
+      setActiveReviewPane(resolveReviewPane(currentUiMemory, projectId));
+      let telepromptReturnStage: Exclude<WorkspaceStage, "teleprompt"> = "review";
+      if (savedState.stage === "teleprompt") {
+        telepromptReturnStage = resolveTelepromptReturnStage(currentUiMemory, projectId);
+      } else if (savedState.stage === "preview") {
+        telepromptReturnStage = "preview";
+      }
       setWorkspaceContext((currentContext) =>
         createWorkspaceContext({
           ...currentContext,
           activeBlockId: savedState.activeBlockId,
+          layoutMode: resolveWorkspaceLayoutMode(currentUiMemory, projectId),
           sourceId: savedState.preparedSourceId ?? savedState.bookSourceId,
           sourceType: savedState.sourceType,
           speechPolicyProfile: savedState.speechPolicyProfile ?? speechPolicyProfile,
           stage: savedState.stage,
+          telepromptReturnStage,
           voiceProfileId: savedState.voiceProfileId ?? selectedVoiceProfileId,
         }),
       );
@@ -4910,8 +4986,9 @@ export function App() {
   }, [themeName]);
 
   useEffect(() => {
-    localStorage.setItem(WORKSPACE_LAYOUT_STORAGE_KEY, workspaceContext.layoutMode);
-  }, [workspaceContext.layoutMode]);
+    saveUiMemory(uiMemory);
+    uiMemoryRef.current = uiMemory;
+  }, [uiMemory]);
 
   useEffect(() => {
     const hasJob = Boolean(job?.id);
@@ -5419,10 +5496,24 @@ export function App() {
     "--studio-left-column": railColumnWidth(leftRailMode, "left"),
     "--studio-right-column": railColumnWidth(rightRailMode, "right"),
   } as CSSProperties;
-  const PreparedCinemaOverlay =
+  const preparedSourceCinemaSurfaceKind =
     preparedSourceCinemaSource && preparedSourceCinemaKind(preparedSourceCinemaSource) === "website"
-      ? WebsiteCinemaOverlay
-      : DocumentCinemaOverlay;
+      ? "website"
+      : "document";
+  const PreparedCinemaOverlay =
+    preparedSourceCinemaSurfaceKind === "website" ? WebsiteCinemaOverlay : DocumentCinemaOverlay;
+  const handleBookCinemaFocusStateChange = useCallback(
+    (state: UiMemoryCinemaState) => {
+      handleCinemaFocusStateChange("book", state);
+    },
+    [handleCinemaFocusStateChange],
+  );
+  const handlePreparedCinemaFocusStateChange = useCallback(
+    (state: UiMemoryCinemaState) => {
+      handleCinemaFocusStateChange(preparedSourceCinemaSurfaceKind, state);
+    },
+    [handleCinemaFocusStateChange, preparedSourceCinemaSurfaceKind],
+  );
   let activeHelpCinema: "book" | "prepared" | null = null;
   if (isBookCinemaOpen) {
     activeHelpCinema = "book";
@@ -5583,6 +5674,7 @@ export function App() {
             themeName={themeName}
             ttsEngineError={ttsEngineError}
             ttsEngines={ttsEngines}
+            uiMemory={uiMemory}
             onClearBookSourcePolicy={handleClearBookSourcePolicy}
             onClearPreparedSourcePolicy={handleClearPreparedSourcePolicy}
             onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
@@ -5590,6 +5682,8 @@ export function App() {
             onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
             onPrepareProfileTarget={handleBuildVoiceProfileArtifact}
             onReaderAccessibilitySettingsChange={setReaderAccessibilitySettings}
+            onRememberLayoutChange={handleRememberLayoutChange}
+            onResetUiMemory={handleResetUiMemory}
             onRunConfigurationChange={setRunConfiguration}
             onSaveBookSourcePolicy={handleSaveBookSourcePolicy}
             onSavePreparedSourcePolicy={handleSavePreparedSourcePolicy}
@@ -5697,6 +5791,8 @@ export function App() {
             progressItems={projectProgress}
             resumeFallbackNotice={resumeFallbackNotice}
             sourcePolicySaving={sourcePolicySavingKey === `book:${selectedBookSource.id}`}
+            uiMemoryFocusState={resolveCinemaFocusState(uiMemory, "book")}
+            uiMemoryResetSignal={uiMemoryResetSignal}
             accessibilitySettings={readerAccessibilitySettings}
             scope={effectiveBookScope}
             scopeContent={bookScopeContent}
@@ -5730,6 +5826,7 @@ export function App() {
             }
             onAccessibilitySettingsChange={setReaderAccessibilitySettings}
             onThemeChange={setBookCinemaThemeName}
+            onUiMemoryFocusStateChange={handleBookCinemaFocusStateChange}
           />
         </Suspense>
       ) : null}
@@ -5763,6 +5860,8 @@ export function App() {
             }
             sources={preparedSources}
             themeName={preparedSourceCinemaThemeName}
+            uiMemoryFocusState={resolveCinemaFocusState(uiMemory, preparedSourceCinemaSurfaceKind)}
+            uiMemoryResetSignal={uiMemoryResetSignal}
             onAccessibilitySettingsChange={setReaderAccessibilitySettings}
             onBookmark={() => {
               void handleAddPlaybackBookmark();
@@ -5791,6 +5890,7 @@ export function App() {
             onSelectSource={handleSelectPreparedCinemaSource}
             onSkip={handleBookCinemaSkip}
             onThemeChange={setPreparedSourceCinemaThemeName}
+            onUiMemoryFocusStateChange={handlePreparedCinemaFocusStateChange}
           />
         </Suspense>
       ) : null}
@@ -6030,6 +6130,7 @@ export function App() {
 
           <section className="order-1 flex min-w-0 flex-col gap-3 p-4 lg:order-none lg:min-h-0 lg:overflow-y-auto xl:p-5">
             <SourceTextPanel
+              activeReviewPane={activeReviewPane}
               activeReviewBlockId={workspaceContext.activeBlockId}
               projectId={activeProjectId}
               bookControls={
@@ -6089,6 +6190,11 @@ export function App() {
                     speechPolicyProfile,
                     customSpeechPolicyProfiles,
                   )}
+                  returnLabel={
+                    workspaceContext.telepromptReturnStage === "preview"
+                      ? "Back to Preview"
+                      : "Back to Review"
+                  }
                   sourceLabel={narrationReviewSourceLabel(
                     selectedPreparedSource,
                     selectedBookSource,
@@ -6101,7 +6207,7 @@ export function App() {
                     text,
                   })}
                   voiceProfile={selectedVoiceProfile?.name ?? "Default voice"}
-                  onBackToReview={returnToReviewFromTeleprompt}
+                  onBackToReview={returnFromTeleprompt}
                 >
                   <TeleprompterPanel
                     canOpenBookCinema={canOpenBookCinema}
@@ -6157,6 +6263,7 @@ export function App() {
                   withWorkspaceActiveBlock(currentContext, blockId),
                 );
               }}
+              onReviewPaneChange={handleReviewPaneChange}
               onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
               onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
               onUpdateCustomSpeechPolicyProfile={handleUpdateCustomSpeechPolicyProfile}
@@ -8732,6 +8839,7 @@ function SidebarFact({ label, value }: Readonly<{ label: string; value: string }
 }
 
 function SourceTextPanel({
+  activeReviewPane,
   activeReviewBlockId,
   bookScopeContent,
   bookControls,
@@ -8775,11 +8883,13 @@ function SourceTextPanel({
   onSpeechPolicyOverridesChange,
   onSpeechPolicyProfileChange,
   onReviewBlockChange,
+  onReviewPaneChange,
   onUpdateCustomSpeechPolicyProfile,
   onSubmit,
   onTextChange,
   onUsePreparedSource,
 }: Readonly<{
+  activeReviewPane: ReviewPane;
   activeReviewBlockId: string | null;
   bookScopeContent: BookSourceScopeContent | null;
   bookControls: ReactNode;
@@ -8827,6 +8937,7 @@ function SourceTextPanel({
   onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onReviewBlockChange: (blockId: string | null) => void;
+  onReviewPaneChange: (pane: ReviewPane) => void;
   onUpdateCustomSpeechPolicyProfile: (
     profileId: string,
     name: string,
@@ -9105,6 +9216,7 @@ function SourceTextPanel({
       {contentMode === "review" ? (
         <div className="grid gap-3">
           <NarrationReviewWorkbench
+            activePane={activeReviewPane}
             activeBlockId={activeReviewBlockId}
             bookScopeContent={bookScopeContent}
             job={job}
@@ -9120,6 +9232,7 @@ function SourceTextPanel({
             onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
             onOpenTeleprompter={onOpenTeleprompter}
             onActiveBlockChange={onReviewBlockChange}
+            onActivePaneChange={onReviewPaneChange}
           />
         </div>
       ) : null}
@@ -11446,6 +11559,7 @@ interface NarrationReviewBlock {
 }
 
 function NarrationReviewWorkbench({
+  activePane,
   activeBlockId,
   bookScopeContent,
   job,
@@ -11454,6 +11568,7 @@ function NarrationReviewWorkbench({
   onInspectPreparedSource,
   onOpenPreparedSourceCinema,
   onActiveBlockChange,
+  onActivePaneChange,
   optimizedText,
   projectId,
   selectedBookScope,
@@ -11462,10 +11577,12 @@ function NarrationReviewWorkbench({
   text,
   voiceProfileId,
 }: Readonly<{
+  activePane: ReviewPane;
   activeBlockId: string | null;
   bookScopeContent: BookSourceScopeContent | null;
   job: VoiceJob | null;
   onActiveBlockChange: (blockId: string | null) => void;
+  onActivePaneChange: (pane: ReviewPane) => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onOpenPreparedSourceCinema: (source: PreparedSource) => void;
@@ -11478,7 +11595,6 @@ function NarrationReviewWorkbench({
   text: string;
   voiceProfileId: string;
 }>) {
-  const [activePane, setActivePane] = useState<ReviewPane>("blocks");
   const reviewBlocks = useMemo(
     () =>
       buildNarrationReviewBlocks({
@@ -11622,7 +11738,7 @@ function NarrationReviewWorkbench({
       <ReviewPaneAccordion
         activePane={activePane}
         onActivePaneChange={(pane) => {
-          setActivePane(normalizeReviewPane(pane));
+          onActivePaneChange(normalizeReviewPane(pane));
         }}
         panes={reviewPaneSummaries.map((summary) => ({
           ...summary,

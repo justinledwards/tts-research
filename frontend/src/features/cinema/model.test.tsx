@@ -10,6 +10,7 @@ import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransport
 import {
   buildCinemaLayoutState,
   defaultCinemaPanelForMode,
+  normalizeCinemaInspectorPanelId,
   type CinemaPanelDefinition,
 } from "./model";
 
@@ -43,6 +44,8 @@ describe("cinema focus layout model", () => {
     expect(defaultCinemaPanelForMode(panels, "inspect")).toBe("provenance");
     expect(defaultCinemaPanelForMode(panels, "review")).toBe("current");
     expect(defaultCinemaPanelForMode(panels, "debug")).toBe("health");
+    expect(normalizeCinemaInspectorPanelId("policy")).toBe("policy");
+    expect(normalizeCinemaInspectorPanelId("missing")).toBeNull();
   });
 
   it("falls back when active or pinned panel ids are no longer available", () => {

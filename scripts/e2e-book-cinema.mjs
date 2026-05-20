@@ -28,6 +28,7 @@ const jobTimeoutMs = Number.parseInt(process.env.E2E_JOB_TIMEOUT_MS ?? "180000",
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
+let hasRunBookCinemaMemorySmoke = false;
 
 main().catch(async (error) => {
   const message = error instanceof Error ? error.stack || error.message : String(error);
@@ -294,6 +295,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
   try {
     await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
+    await setRememberLayout(page, true);
     await page.getByRole("button", { exact: true, name: "Review" }).click();
     await page.getByText("Source Review").first().waitFor();
     await page.getByRole("button", { name: /Spoken Script/ }).click();
@@ -316,6 +318,30 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.getByText("Default voice").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Back to Review" }).click();
     await page.getByText("Source Review").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Preview" }).click();
+    await page.getByText("Spoken Form").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
+    await page.getByText("Teleprompt Stage").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
+    await page.getByText("Spoken Form").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
+    await page.getByText("Teleprompt Stage").first().waitFor();
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.getByText("Teleprompt Stage").first().waitFor();
+    await assertWorkspaceLayoutSelected(page, "Full");
+    await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
+    await page.getByText("Spoken Form").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Review" }).click();
+    await page.getByText("Source Review").first().waitFor();
+    await assertReviewPaneSelected(page, "Validation Transcript");
+    await setRememberLayout(page, true, { reset: true });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await assertWorkspaceLayoutSelected(page, "Balanced");
+    await page.getByRole("button", { exact: true, name: "Review" }).click();
+    await page.getByText("Source Review").first().waitFor();
+    await assertReviewPaneSelected(page, "Block Review");
     await page.getByRole("button", { exact: true, name: "Preview" }).click();
     await page.getByText("Spoken Form").first().waitFor();
     const createResponse = page.waitForResponse(
@@ -395,6 +421,35 @@ async function runSettingsIAUX(browser, projectId) {
   }
 }
 
+async function setRememberLayout(page, enabled, { reset = false } = {}) {
+  await page.getByRole("button", { exact: true, name: "Open settings" }).click();
+  await page.getByText("Studio Settings").first().waitFor();
+  await page
+    .getByRole("button", { name: /^Reader/ })
+    .first()
+    .click();
+  await page.getByLabel("Remember my layout").setChecked(enabled);
+  if (reset) {
+    await page.getByRole("button", { exact: true, name: "Reset UI memory" }).click();
+  }
+  await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
+}
+
+async function assertWorkspaceLayoutSelected(page, label) {
+  const button = page.getByRole("button", { name: `${label} workspace layout` });
+  const className = await button.getAttribute("class");
+  assert(
+    className?.includes("bg-orange-500"),
+    `${label} workspace layout was not selected after reopen.`,
+  );
+}
+
+async function assertReviewPaneSelected(page, label) {
+  const button = page.getByRole("button", { name: new RegExp(label) }).first();
+  const expanded = await button.getAttribute("aria-expanded");
+  assert(expanded === "true", `${label} review pane was not restored.`);
+}
+
 async function runBookCinemaUX(browser, { book, job, projectId, scope, screenshot, text }) {
   const context = await browser.newContext({
     storageState: projectStorageState(projectId, {
@@ -412,7 +467,19 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
   page.setDefaultTimeout(60_000);
   const issues = collectPageIssues(page);
   try {
+    const runMemorySmoke = !hasRunBookCinemaMemorySmoke;
+    if (runMemorySmoke) {
+      await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await setRememberLayout(page, true);
+    }
     await openBookCinemaOverlay(page, scope);
+    if (runMemorySmoke) {
+      await exerciseCinemaFocusMemoryPersistence(page, "book", () =>
+        openBookCinemaOverlay(page, scope),
+      );
+      hasRunBookCinemaMemorySmoke = true;
+    }
     const firstOpenMetrics = await readPerformanceMetrics(page);
     const playButton = visibleOverlayButton(page, "Play");
     await assertEnabled(playButton, "Play");
@@ -603,6 +670,7 @@ async function runPreparedCinemaSurfaceFocusUX(
   try {
     await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
+    await setRememberLayout(page, true);
     await page.getByRole("button", { exact: true, name: "Intake" }).click();
     await page.getByRole("button", { exact: true, name: "File / URL" }).click();
     await page
@@ -615,6 +683,18 @@ async function runPreparedCinemaSurfaceFocusUX(
       page,
       path.join(screenshotsDir, screenshotPrefix),
     );
+    const surfaceKind = expectedLabel === "Website Cinema" ? "website" : "document";
+    await exerciseCinemaFocusMemoryPersistence(page, surfaceKind, async () => {
+      await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.getByRole("button", { exact: true, name: "Intake" }).click();
+      await page.getByRole("button", { exact: true, name: "File / URL" }).click();
+      await page
+        .getByRole("button", { name: new RegExp(`Open ${expectedLabel}`) })
+        .first()
+        .click();
+      await page.locator(".fixed.inset-0").first().getByText(expectedLabel).first().waitFor();
+    });
     await assertNoPageIssues(issues);
     return screenshots;
   } finally {
@@ -646,6 +726,56 @@ async function captureCinemaFocusModeScreenshots(page, screenshotPrefix) {
   return screenshots;
 }
 
+async function exerciseCinemaFocusMemoryPersistence(page, surfaceKind, reopenOverlay) {
+  await switchCinemaFocusMode(page, "Review");
+  await selectCinemaInspectorPanel(page, "Speech policy");
+  await visibleOverlayButton(page, "Pin").click();
+  await assertCinemaFocusModeSelected(page, "Review");
+  await waitForRememberedCinemaFocusState(page, surfaceKind, "review", "policy");
+  await visibleOverlayButton(page, "Exit").click();
+  await waitForRememberedCinemaFocusState(page, surfaceKind, "review", "policy");
+
+  await reopenOverlay();
+  await assertCinemaFocusModeSelected(page, "Review");
+  await assertCinemaFocusModeLayout(page, "Review", { pinned: true });
+  await page
+    .locator(".fixed.inset-0")
+    .first()
+    .locator('[data-cinema-inspector-panel="policy"]')
+    .waitFor();
+  await visibleOverlayButton(page, "Exit").click();
+
+  await setRememberLayout(page, true, { reset: true });
+  await waitForRememberedCinemaFocusState(page, surfaceKind, "read", null);
+  await reopenOverlay();
+  await assertCinemaFocusModeSelected(page, "Read");
+  await assertCinemaFocusModeLayout(page, "Read");
+}
+
+async function waitForRememberedCinemaFocusState(page, surfaceKind, mode, pinnedPanelId) {
+  await page.waitForFunction(
+    ({ expectedMode, expectedPinnedPanelId, expectedSurfaceKind }) => {
+      const raw = localStorage.getItem("tts-ui-memory");
+      if (!raw) {
+        return false;
+      }
+      const memory = JSON.parse(raw);
+      const surface = memory?.cinema?.[expectedSurfaceKind];
+      return (
+        memory?.rememberLayout === true &&
+        surface?.mode === expectedMode &&
+        (surface?.pinnedPanelId ?? null) === expectedPinnedPanelId
+      );
+    },
+    {
+      expectedMode: mode,
+      expectedPinnedPanelId: pinnedPanelId,
+      expectedSurfaceKind: surfaceKind,
+    },
+    { timeout: 10_000 },
+  );
+}
+
 async function assertCinemaFocusModeLayout(page, mode, { pinned = false } = {}) {
   const overlay = page.locator(".fixed.inset-0").first();
   const inspectorPanels = overlay.locator("[data-cinema-inspector-panel]");
@@ -661,6 +791,27 @@ async function assertCinemaFocusModeLayout(page, mode, { pinned = false } = {}) 
   assert(panelCount === 0, "Read mode should hide inspector panels unless pinned.");
   assert(bodyCount === 0, "Read mode should hide inspector bodies unless pinned.");
   await assertCinemaCanvasDominant(page);
+}
+
+async function assertCinemaFocusModeSelected(page, mode) {
+  const overlay = page.locator(".fixed.inset-0").first();
+  const pressed = await overlay
+    .getByRole("button", { exact: true, name: mode })
+    .getAttribute("aria-pressed");
+  if (pressed === "true") {
+    return;
+  }
+  const diagnostics = await page.evaluate(() => ({
+    buttons: [...document.querySelectorAll(".fixed.inset-0 button")].map((button) => ({
+      ariaPressed: button.getAttribute("aria-pressed"),
+      text: button.textContent?.replace(/\s+/g, " ").trim() ?? "",
+    })),
+    memory: localStorage.getItem("tts-ui-memory"),
+  }));
+  assert(
+    false,
+    `${mode} focus mode was not restored. Toolbar/memory state: ${JSON.stringify(diagnostics)}`,
+  );
 }
 
 async function assertCinemaCanvasDominant(page) {

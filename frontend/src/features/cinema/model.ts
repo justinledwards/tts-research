@@ -1,18 +1,20 @@
 import type { ReactNode } from "react";
 
 export const CINEMA_FOCUS_MODES = ["read", "inspect", "review", "debug"] as const;
+export const CINEMA_INSPECTOR_PANEL_IDS = [
+  "current",
+  "wayfinding",
+  "provenance",
+  "policy",
+  "health",
+  "notes",
+  "queue",
+  "debug",
+] as const;
 
 export type CinemaFocusMode = (typeof CINEMA_FOCUS_MODES)[number];
 export type CinemaSurfaceKind = "book" | "document" | "website";
-export type CinemaInspectorPanelId =
-  | "current"
-  | "wayfinding"
-  | "provenance"
-  | "policy"
-  | "health"
-  | "notes"
-  | "queue"
-  | "debug";
+export type CinemaInspectorPanelId = (typeof CINEMA_INSPECTOR_PANEL_IDS)[number];
 
 export interface CinemaPanelDefinition {
   children: ReactNode;
@@ -44,6 +46,12 @@ export function normalizeCinemaFocusMode(value: unknown): CinemaFocusMode {
   return CINEMA_FOCUS_MODES.includes(value as CinemaFocusMode)
     ? (value as CinemaFocusMode)
     : "read";
+}
+
+export function normalizeCinemaInspectorPanelId(value: unknown): CinemaInspectorPanelId | null {
+  return CINEMA_INSPECTOR_PANEL_IDS.includes(value as CinemaInspectorPanelId)
+    ? (value as CinemaInspectorPanelId)
+    : null;
 }
 
 export function buildCinemaLayoutState({

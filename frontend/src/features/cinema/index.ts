@@ -1,5 +1,9 @@
 export { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
-export { useCinemaFocusController, type CinemaFocusController } from "./CinemaFocusController";
+export {
+  useCinemaFocusController,
+  type CinemaFocusController,
+  type CinemaFocusControllerOptions,
+} from "./CinemaFocusController";
 export {
   buildCinemaCurrentReadingPanel,
   buildCinemaInspectorPanel,
@@ -15,10 +19,12 @@ export { CinemaShell } from "./CinemaShell";
 export { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 export {
   CINEMA_FOCUS_MODES,
+  CINEMA_INSPECTOR_PANEL_IDS,
   buildCinemaLayoutState,
   cinemaFocusModeLabel,
   defaultCinemaPanelForMode,
   normalizeCinemaFocusMode,
+  normalizeCinemaInspectorPanelId,
   type CinemaFocusMode,
   type CinemaInspectorPanelId,
   type CinemaLayoutInput,

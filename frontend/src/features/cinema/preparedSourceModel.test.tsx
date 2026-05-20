@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PreparedSourceCinemaOverlay } from "./PreparedSourceCinemaBase";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
 import { DEFAULT_SPEECH_POLICY_DEFINITION } from "../../speechPolicy";
+import { defaultUiMemoryState } from "../preferences";
 import {
   preparedSourceCinemaActionLabel,
   preparedSourceCinemaActiveBlock,
@@ -127,6 +128,8 @@ describe("prepared source cinema helpers", () => {
         sourcePolicySaving={false}
         sources={[source]}
         themeName="light"
+        uiMemoryFocusState={defaultUiMemoryState().cinema.website}
+        uiMemoryResetSignal={0}
         onAccessibilitySettingsChange={noop}
         onBookmark={noop}
         onClearSourcePolicy={noop}
@@ -141,6 +144,7 @@ describe("prepared source cinema helpers", () => {
         onSelectSource={noop}
         onSkip={noop}
         onThemeChange={noop}
+        onUiMemoryFocusStateChange={noop}
       />,
     );
 

@@ -19,6 +19,7 @@ import {
   SourcePolicyPinEditor,
   resolveSpeechPolicyProfileOptions,
 } from "../policy";
+import type { UiMemoryState } from "../preferences";
 import {
   buildTeleprompterWordCues,
   type TeleprompterEffectStyle,
@@ -128,6 +129,7 @@ export function SettingsPanel({
   themeName,
   ttsEngineError,
   ttsEngines,
+  uiMemory,
   onClearBookSourcePolicy,
   onClearPreparedSourcePolicy,
   onClearSpeechPolicyOverrides,
@@ -136,6 +138,8 @@ export function SettingsPanel({
   onDeleteCustomSpeechPolicyProfile,
   onPrepareProfileTarget,
   onReaderAccessibilitySettingsChange,
+  onRememberLayoutChange,
+  onResetUiMemory,
   onRunConfigurationChange,
   onSaveBookSourcePolicy,
   onSavePreparedSourcePolicy,
@@ -174,6 +178,7 @@ export function SettingsPanel({
   themeName: ThemeName;
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
+  uiMemory: UiMemoryState;
   onClearBookSourcePolicy: (sourceId: string) => Promise<void>;
   onClearPreparedSourcePolicy: (sourceId: string) => Promise<void>;
   onClearSpeechPolicyOverrides: () => void;
@@ -186,6 +191,8 @@ export function SettingsPanel({
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
+  onRememberLayoutChange: (rememberLayout: boolean) => void;
+  onResetUiMemory: () => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onSaveBookSourcePolicy: (
     sourceId: string,
@@ -283,7 +290,10 @@ export function SettingsPanel({
               runConfiguration={runConfiguration}
               teleprompterSettings={teleprompterSettings}
               themeName={themeName}
+              uiMemory={uiMemory}
               onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
+              onRememberLayoutChange={onRememberLayoutChange}
+              onResetUiMemory={onResetUiMemory}
               onTeleprompterSettingsChange={onTeleprompterSettingsChange}
               onThemeChange={onThemeChange}
             />
@@ -694,7 +704,10 @@ function ReaderSettingsGroup({
   runConfiguration,
   teleprompterSettings,
   themeName,
+  uiMemory,
   onReaderAccessibilitySettingsChange,
+  onRememberLayoutChange,
+  onResetUiMemory,
   onTeleprompterSettingsChange,
   onThemeChange,
 }: Readonly<{
@@ -702,7 +715,10 @@ function ReaderSettingsGroup({
   runConfiguration: RunConfiguration;
   teleprompterSettings: TeleprompterHighlightSettings;
   themeName: ThemeName;
+  uiMemory: UiMemoryState;
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
+  onRememberLayoutChange: (rememberLayout: boolean) => void;
+  onResetUiMemory: () => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
@@ -724,11 +740,63 @@ function ReaderSettingsGroup({
         onChange={onReaderAccessibilitySettingsChange}
       />
       <ThemeSettingsControls themeName={themeName} onThemeChange={onThemeChange} />
+      <UiMemorySettingsControls
+        rememberLayout={uiMemory.rememberLayout}
+        onRememberLayoutChange={onRememberLayoutChange}
+        onResetUiMemory={onResetUiMemory}
+      />
       <TeleprompterSettingsControls
         settings={teleprompterSettings}
         onChange={onTeleprompterSettingsChange}
       />
     </PanelSection>
+  );
+}
+
+function UiMemorySettingsControls({
+  rememberLayout,
+  onRememberLayoutChange,
+  onResetUiMemory,
+}: Readonly<{
+  rememberLayout: boolean;
+  onRememberLayoutChange: (rememberLayout: boolean) => void;
+  onResetUiMemory: () => void;
+}>) {
+  return (
+    <div className="grid gap-3 rounded-md border p-3 vs-border vs-surface">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="flex items-center gap-2 text-sm font-semibold">
+            UI memory
+            <ScopeBadge scope="machine" />
+          </h4>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            Remember presentation-only workspace and cinema layout on this machine.
+          </p>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold vs-border vs-raised">
+          <input
+            checked={rememberLayout}
+            className="h-4 w-4 accent-orange-500"
+            onChange={(event) => {
+              onRememberLayoutChange(event.currentTarget.checked);
+            }}
+            type="checkbox"
+          />
+          Remember my layout
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-xs vs-border">
+        <span className="vs-muted">Reset returns Workspace and Cinema to documented defaults.</span>
+        <button
+          className="h-9 rounded-md border px-3 font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-raised"
+          onClick={onResetUiMemory}
+          type="button"
+        >
+          Reset UI memory
+        </button>
+      </div>
+    </div>
   );
 }
 

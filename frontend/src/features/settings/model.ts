@@ -115,6 +115,12 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     scope: "machine",
   },
   {
+    description: "Controls whether local presentation layout is remembered on this machine.",
+    id: "uiMemory",
+    label: "UI memory",
+    scope: "machine",
+  },
+  {
     description: "Sets the durable speech-policy default for unpinned project sources.",
     id: "projectSpeechPolicy",
     label: "Project policy",

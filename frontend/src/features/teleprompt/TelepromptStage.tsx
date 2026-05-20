@@ -4,6 +4,7 @@ export function TelepromptStage({
   activeBlockLabel,
   children,
   policyProfile,
+  returnLabel = "Back to Review",
   sourceLabel,
   sourceMeta,
   voiceProfile,
@@ -12,6 +13,7 @@ export function TelepromptStage({
   activeBlockLabel: string;
   children: ReactNode;
   policyProfile: string;
+  returnLabel?: string;
   sourceLabel: string;
   sourceMeta: string;
   voiceProfile: string;
@@ -37,7 +39,7 @@ export function TelepromptStage({
           onClick={onBackToReview}
           type="button"
         >
-          Back to Review
+          {returnLabel}
         </button>
       </div>
       <dl className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 text-xs sm:grid-cols-3 vs-border">
