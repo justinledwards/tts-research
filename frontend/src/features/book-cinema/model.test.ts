@@ -19,8 +19,8 @@ import {
   resolveDefaultBookScope,
   shouldIgnoreBookCinemaKeyboardTarget,
   visibleBookSpans,
-} from "./bookCinemaModel";
-import type { BookSource, VoiceJob } from "./types";
+} from "./model";
+import type { BookSource, VoiceJob } from "../../types";
 
 describe("Book Cinema helpers", () => {
   it("maps playback progress onto book word spans without changing text color state", () => {

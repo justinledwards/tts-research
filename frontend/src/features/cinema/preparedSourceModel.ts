@@ -1,6 +1,6 @@
-import type { NarrationBlock, PreparedSource, VoiceJob } from "./types";
-import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
-import type { ReaderTextScale } from "./features/reader-accessibility";
+import type { NarrationBlock, PreparedSource, VoiceJob } from "../../types";
+import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdownCinema";
+import type { ReaderTextScale } from "../reader-accessibility";
 
 export type PreparedSourceCinemaTextSize = ReaderTextScale;
 

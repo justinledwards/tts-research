@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PreparedSourceCinemaOverlay } from "./PreparedSourceCinema";
-import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "./features/reader-accessibility";
-import { DEFAULT_SPEECH_POLICY_DEFINITION } from "./speechPolicy";
+import { PreparedSourceCinemaOverlay } from "./PreparedSourceCinemaBase";
+import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
+import { DEFAULT_SPEECH_POLICY_DEFINITION } from "../../speechPolicy";
 import {
   preparedSourceCinemaActionLabel,
   preparedSourceCinemaActiveBlock,
@@ -16,8 +16,8 @@ import {
   preparedSourceCinemaSourceHref,
   preparedSourceCinemaTitle,
   isPreparedSourceMarkdownDocument,
-} from "./preparedSourceCinema";
-import type { PreparedSource, VoiceJob } from "./types";
+} from "./preparedSourceModel";
+import type { PreparedSource, VoiceJob } from "../../types";
 
 const noop = () => {
   // Intentionally empty test callback.
@@ -146,14 +146,15 @@ describe("prepared source cinema helpers", () => {
 
     expect(markup).toContain("Website Cinema");
     expect(markup).toContain("Example article");
-    expect(markup).toContain("Content Structure");
-    expect(markup).toContain("Wayfinding");
-    expect(markup).toContain("Source policy pin");
-    expect(markup).toContain("Project default");
-    expect(markup).toContain("Generated audio health");
+    expect(markup).toContain("Read");
+    expect(markup).toContain("Inspect");
+    expect(markup).toContain("Review");
+    expect(markup).toContain("Debug");
+    expect(markup).not.toContain("Source policy pin");
+    expect(markup).not.toContain("Source provenance");
+    expect(markup).not.toContain("Generated audio health");
     expect(markup).not.toContain("Segment timeline");
-    expect(markup).toContain("Source provenance");
-    expect(markup).toContain("https://www.example.com/article");
+    expect(markup).not.toContain("https://www.example.com/article");
     expect(markup).toContain('data-reader-motion="standard"');
     expect(markup).toContain('data-reader-text-scale="large"');
     expect(markup).toContain('aria-live="polite"');

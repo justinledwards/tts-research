@@ -1,5 +1,14 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ReaderAccessibilityControls } from "./components/reader/ReaderAccessibilityControls";
+import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
+import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
+import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
+import { CinemaInspectorDock } from "./CinemaInspectorDock";
+import {
+  buildCinemaLayoutState,
+  type CinemaFocusMode,
+  type CinemaInspectorPanelId,
+  type CinemaPanelDefinition,
+} from "./model";
 import {
   READER_LINE_SPACING_CLASS,
   READER_MEASURE_CLASS,
@@ -12,7 +21,7 @@ import {
   useReaderKeyboardControls,
   useReaderModalLifecycle,
   type ReaderAccessibilitySettings,
-} from "./features/reader-accessibility";
+} from "../reader-accessibility";
 import {
   ReaderWayfindingPanel,
   playbackProgressForBookmark,
@@ -21,12 +30,12 @@ import {
   type ReaderBookmarkItem,
   type ReaderOutlineItem,
   type ReaderRecentPositionItem,
-} from "./features/reader-navigation";
-import { PolicyScopeChips, SourcePolicyPinEditor } from "./features/policy";
-import { useAudioWaveformBars } from "./audioWaveform";
-import { looksLikeMermaidDiagram } from "./markdownModel";
-import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
-import { MermaidDiagram, MarkdownRenderer } from "./MarkdownRenderer";
+} from "../reader-navigation";
+import { PolicyScopeChips, SourcePolicyPinEditor } from "../policy";
+import { useAudioWaveformBars } from "../../audioWaveform";
+import { looksLikeMermaidDiagram } from "../../markdownModel";
+import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdownCinema";
+import { MermaidDiagram, MarkdownRenderer } from "../../MarkdownRenderer";
 import {
   preparedSourceCinemaActiveBlock,
   preparedSourceCinemaLabel,
@@ -39,9 +48,10 @@ import {
   preparedSourceCinemaTitle,
   isPreparedSourceMarkdownDocument,
   type PreparedSourceCinemaOutlineItem,
+  type PreparedSourceCinemaKind,
   type PreparedSourceCinemaTextSize,
-} from "./preparedSourceCinema";
-import { normalizeThemeName, VOICE_STUDIO_THEMES } from "./theme";
+} from "./preparedSourceModel";
+import { normalizeThemeName, VOICE_STUDIO_THEMES } from "../../theme";
 import type {
   CustomSpeechPolicyProfile,
   NarrationBlock,
@@ -53,7 +63,7 @@ import type {
   SpeechPolicyProfile,
   ThemeName,
   VoiceJob,
-} from "./types";
+} from "../../types";
 
 const PREPARED_SOURCE_CINEMA_ACCEPT =
   ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/html,text/csv,application/json";
@@ -72,6 +82,20 @@ export interface PreparedSourceCinemaPlaybackControls {
 
 type PreparedSourceCinemaMobilePanel = "source" | "structure" | "narration";
 
+function preparedSourceCinemaLabelForKind(
+  source: PreparedSource,
+  surfaceKind: PreparedSourceCinemaKind | undefined,
+): string {
+  if (surfaceKind === "website") {
+    return "Website Cinema";
+  }
+  if (surfaceKind === "document") {
+    return "Document Cinema";
+  }
+  return preparedSourceCinemaLabel(source);
+}
+
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function PreparedSourceCinemaOverlay({
   accessibilitySettings,
   activeWordIndex,
@@ -92,6 +116,7 @@ export function PreparedSourceCinemaOverlay({
   progress,
   progressItems,
   source,
+  surfaceKind,
   sourcePolicySaving,
   sources,
   themeName,
@@ -129,6 +154,7 @@ export function PreparedSourceCinemaOverlay({
   progress: PlaybackProgress | null;
   progressItems: PlaybackProgress[];
   source: PreparedSource;
+  surfaceKind?: PreparedSourceCinemaKind;
   sourcePolicySaving: boolean;
   sources: PreparedSource[];
   themeName: ThemeName;
@@ -151,11 +177,16 @@ export function PreparedSourceCinemaOverlay({
   const normalizedAccessibility = normalizeReaderAccessibilitySettings(accessibilitySettings);
   const [autoFollow, setAutoFollow] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<PreparedSourceCinemaMobilePanel | null>("source");
+  const [mobilePanel, setMobilePanel] = useState<PreparedSourceCinemaMobilePanel | null>(null);
   const [pointedBlockId, setPointedBlockId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState<CinemaFocusMode>("read");
+  const [activeInspectorPanelId, setActiveInspectorPanelId] =
+    useState<CinemaInspectorPanelId | null>(null);
+  const [pinnedInspectorPanelId, setPinnedInspectorPanelId] =
+    useState<CinemaInspectorPanelId | null>(null);
   const title = preparedSourceCinemaTitle(source);
-  const cinemaLabel = preparedSourceCinemaLabel(source);
+  const cinemaLabel = preparedSourceCinemaLabelForKind(source, surfaceKind);
   const effectivePlaybackCursorSec =
     playbackCursorSec > 0 ? playbackCursorSec : (progress?.currentTimeSec ?? playbackCursorSec);
   const effectiveActiveWordIndex =
@@ -219,6 +250,215 @@ export function PreparedSourceCinemaOverlay({
     onResumeProgress(item.progressItem);
   };
   const canBookmark = Boolean(job && playbackControls.isAvailable);
+  const metrics = preparedSourceCinemaMetrics(source);
+  const href = preparedSourceCinemaSourceHref(source);
+  const skippedGroups = preparedSourceCinemaSkippedGroups(source);
+  const activeText = displayBlock ? markdownBlockText(displayBlock) : "";
+  const activeSection = activeOutlineItem(outline, displayBlock);
+  const generatedHealth = (
+    <div className="grid gap-2 text-sm">
+      <HealthRow label="TTS engine" value={job ? "Healthy" : "Waiting"} />
+      <HealthRow label="Audio quality" value={job ? "Good" : "Pending"} />
+      <HealthRow label="Alignment" value={job?.voiceCheck.complete ? "Good" : "Pending"} />
+      <HealthRow
+        label="Coverage"
+        value={job ? `${Math.round(job.voiceCheck.similarity * 100).toString()}%` : "0%"}
+      />
+    </div>
+  );
+  const sourceInspectorPanels: CinemaPanelDefinition[] = [
+    {
+      children: (
+        <div className="grid gap-3">
+          <PreparedSourceCinemaSourceLibrary
+            importError={importError}
+            isImporting={isImporting}
+            source={source}
+            sources={sources}
+            onPrepareFile={onPrepareFile}
+            onSelectSource={onSelectSource}
+          />
+          <dl className="grid gap-3 text-sm">
+            {href ? (
+              <div className="grid min-w-0 grid-cols-[5.6rem_minmax(0,1fr)] gap-3">
+                <dt className="vs-muted">URL</dt>
+                <dd className="min-w-0 truncate text-blue-600" title={href}>
+                  <a href={href} rel="noreferrer" target="_blank">
+                    {href}
+                  </a>
+                </dd>
+              </div>
+            ) : null}
+            <MetadataRow label="Fetched" value={formatDateTime(source.updatedAt)} />
+            <MetadataRow label="Page title" value={preparedSourceCinemaTitle(source)} />
+            <MetadataRow
+              label="Content type"
+              value={source.sourceContentType ?? source.sourceFormat ?? source.kind}
+            />
+            <MetadataRow label="Reader mode" value={readerModeLabel(source)} valueTone="success" />
+          </dl>
+          <button
+            className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+            onClick={() => {
+              onInspectStructure(source);
+            }}
+            type="button"
+          >
+            Inspect structure
+          </button>
+        </div>
+      ),
+      detail: href ?? source.sourceName,
+      id: "provenance",
+      modeAffinity: "inspect",
+      title: "Source provenance",
+    },
+    {
+      children: (
+        <div className="grid gap-3">
+          <p className="truncate text-sm font-semibold">
+            {activeSection ? activeSection.label : blockSnippet(displayBlock, "Source opening")}
+          </p>
+          <p className="text-xs vs-muted">
+            {displayBlock
+              ? `${blockKindLabel(displayBlock)} ${(displayBlock.index + 1).toString()}`
+              : "No block selected"}
+          </p>
+          <p className="line-clamp-5 text-sm leading-6">
+            {activeText || "Start playback to follow the current narrated block."}
+          </p>
+        </div>
+      ),
+      detail: displayBlock ? blockKindLabel(displayBlock) : "No block selected",
+      id: "current",
+      modeAffinity: ["inspect", "review"],
+      title: "Current block",
+    },
+    {
+      children: (
+        <ReaderWayfindingPanel
+          bookmarks={bookmarkItems}
+          canBookmark={canBookmark}
+          className="border-0 bg-transparent p-0 shadow-none"
+          maxItems={7}
+          outlineItems={outlineItems}
+          recentItems={recentItems}
+          onAddBookmark={onBookmark}
+          onBookmarkNavigate={handleBookmarkNavigate}
+          onOutlineNavigate={handleWayfindingOutlineNavigate}
+          onRecentNavigate={handleRecentNavigate}
+        />
+      ),
+      detail: "Outline, bookmarks, recent",
+      id: "wayfinding",
+      modeAffinity: "review",
+      title: "Wayfinding",
+    },
+    {
+      children: (
+        <div className="grid gap-3 text-sm">
+          <PolicyScopeChips
+            state={{
+              projectProfile: policyProfile,
+              resolvedProfile: displayBlock?.speechPolicy.profile ?? source.speechPolicyProfile,
+              sessionOverrides: policyOverrides,
+              sourceOverrides: source.sourceSpeechPolicyOverrides,
+              sourceProfile: source.sourceSpeechPolicyProfile,
+            }}
+          />
+          <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2 text-center text-[11px]">
+            <PolicyMetric icon={<MicrophoneIcon />} label="Voice" value={job?.voice ?? "Alloy"} />
+            <PolicyMetric
+              icon={<DialIcon />}
+              label="Speed"
+              value={`${playbackControls.playbackRate.toFixed(2)}x`}
+            />
+          </div>
+          <SourcePolicyPinEditor
+            customProfiles={customPolicyProfiles}
+            definition={policyDefinition}
+            disabled={source.status !== "ready"}
+            error={policyError}
+            isSaving={sourcePolicySaving}
+            profiles={policyProfiles}
+            sourceOverrides={source.sourceSpeechPolicyOverrides}
+            sourceProfile={source.sourceSpeechPolicyProfile}
+            onClear={onClearSourcePolicy}
+            onSave={onSaveSourcePolicy}
+          />
+        </div>
+      ),
+      detail:
+        displayBlock?.speechPolicy.profile ?? source.sourceSpeechPolicyProfile ?? "Project default",
+      id: "policy",
+      modeAffinity: ["inspect", "review"],
+      title: "Speech policy",
+    },
+    {
+      children: (
+        <div className="grid gap-3 text-sm">
+          <HealthRow label="Main content" value="Detected" />
+          <HealthRow
+            label="Readability"
+            value={source.warnings && source.warnings.length > 0 ? "Warnings" : "Good"}
+          />
+          <HealthRow label="Content length" value={`${metrics.wordCount.toLocaleString()} words`} />
+          <HealthRow
+            label="You're ready"
+            value={source.status === "ready" ? "Looks good!" : "Needs review"}
+          />
+          {generatedHealth}
+        </div>
+      ),
+      detail: source.status === "ready" ? "Looks good" : "Needs review",
+      id: "health",
+      modeAffinity: ["inspect", "debug"],
+      title: "Health",
+    },
+    {
+      children: (
+        <div className="grid gap-2 text-sm">
+          {skippedGroups.length > 0 ? (
+            skippedGroups.map((group) => (
+              <div className="flex items-center justify-between gap-3" key={group.key}>
+                <span className="flex min-w-0 items-center gap-2">
+                  <SkippedIcon />
+                  <span className="truncate">{group.label}</span>
+                </span>
+                <span className="font-semibold">{group.count.toLocaleString()}</span>
+              </div>
+            ))
+          ) : (
+            <p className="vs-muted">No skipped source items.</p>
+          )}
+          <div className="mt-1 flex items-center justify-between border-t pt-2 text-sm font-semibold vs-border">
+            <span>Total skipped</span>
+            <span>{metrics.skippedCount.toLocaleString()}</span>
+          </div>
+        </div>
+      ),
+      detail: `${metrics.skippedCount.toLocaleString()} skipped`,
+      id: "notes",
+      modeAffinity: "debug",
+      title: "Skipped content",
+    },
+  ];
+  const cinemaLayoutState = buildCinemaLayoutState({
+    activePanelId: activeInspectorPanelId,
+    mode: focusMode,
+    panels: sourceInspectorPanels,
+    pinnedPanelId: pinnedInspectorPanelId,
+  });
+  const handleFocusModeChange = (nextMode: CinemaFocusMode) => {
+    const nextState = buildCinemaLayoutState({
+      activePanelId: activeInspectorPanelId,
+      mode: nextMode,
+      panels: sourceInspectorPanels,
+      pinnedPanelId: pinnedInspectorPanelId,
+    });
+    setFocusMode(nextMode);
+    setActiveInspectorPanelId(nextState.activePanelId);
+  };
 
   useReaderKeyboardControls({
     canBookmark,
@@ -298,6 +538,9 @@ export function PreparedSourceCinemaOverlay({
           </div>
         </div>
         <PlaybackStatusChip isPlaybackActive={isPlaybackActive} job={job} />
+        <div className="hidden min-w-[20rem] shrink-0 md:block">
+          <CinemaFocusModeToolbar mode={focusMode} onModeChange={handleFocusModeChange} />
+        </div>
         <p
           className="hidden min-w-0 flex-1 truncate text-center text-sm vs-muted lg:block"
           title={title}
@@ -336,23 +579,17 @@ export function PreparedSourceCinemaOverlay({
         ) : null}
       </header>
 
-      <main className="grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 lg:grid-cols-[326px_minmax(0,1fr)_362px] lg:gap-5 lg:px-4">
-        <PreparedSourceCinemaSourcePanel
-          activeBlock={displayBlock}
-          importError={importError}
-          isImporting={isImporting}
-          outline={outline}
-          source={source}
-          sources={sources}
-          onNavigate={handleOutlineNavigate}
-          onPrepareFile={onPrepareFile}
-          onSelectSource={onSelectSource}
-        />
+      <main
+        className={`grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 lg:gap-5 lg:px-4 ${
+          cinemaLayoutState.railVisible ? "lg:grid-cols-[minmax(0,1fr)_362px]" : "lg:grid-cols-1"
+        }`}
+      >
         <PreparedSourceCinemaReader
           activeBlockId={displayBlock?.id ?? null}
           activeWordIndex={effectiveActiveWordIndex}
           autoFollow={autoFollow}
           accessibilitySettings={normalizedAccessibility}
+          canvasFirst={cinemaLayoutState.canvasFirst}
           isFullscreen={isFullscreen}
           source={source}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
@@ -360,34 +597,13 @@ export function PreparedSourceCinemaOverlay({
           onFullscreenToggle={handleFullscreenToggle}
           onInspectStructure={onInspectStructure}
         />
-        <PreparedSourceCinemaNarrationPanel
-          activeBlock={displayBlock}
-          bookmarkItems={bookmarkItems}
-          canCreateAudio={canCreateAudio}
-          canBookmark={canBookmark}
-          customPolicyProfiles={customPolicyProfiles}
-          isProcessing={isProcessing}
-          job={job}
-          outline={outline}
-          outlineItems={outlineItems}
-          playbackControls={playbackControls}
-          policyDefinition={policyDefinition}
-          policyError={policyError}
-          policyOverrides={policyOverrides}
-          policyProfile={policyProfile}
-          policyProfiles={policyProfiles}
-          progress={progress}
-          recentItems={recentItems}
-          source={source}
-          sourcePolicySaving={sourcePolicySaving}
-          onAddBookmark={onBookmark}
-          onBookmarkNavigate={handleBookmarkNavigate}
-          onClearSourcePolicy={onClearSourcePolicy}
-          onCreateAudio={onCreateAudio}
-          onOutlineNavigate={handleWayfindingOutlineNavigate}
-          onRecentNavigate={handleRecentNavigate}
-          onResumeProgress={onResumeProgress}
-          onSaveSourcePolicy={onSaveSourcePolicy}
+        <CinemaInspectorDock
+          activePanelId={cinemaLayoutState.activePanelId}
+          mode={focusMode}
+          panels={sourceInspectorPanels}
+          pinnedPanelId={pinnedInspectorPanelId}
+          onActivePanelChange={setActiveInspectorPanelId}
+          onPinnedPanelChange={setPinnedInspectorPanelId}
         />
       </main>
 
@@ -432,122 +648,6 @@ export function PreparedSourceCinemaOverlay({
         }}
       />
     </div>
-  );
-}
-
-function PreparedSourceCinemaSourcePanel({
-  activeBlock,
-  importError,
-  isImporting,
-  outline,
-  source,
-  sources,
-  onNavigate,
-  onPrepareFile,
-  onSelectSource,
-}: Readonly<{
-  activeBlock: NarrationBlock | null;
-  importError: string | null;
-  isImporting: boolean;
-  outline: PreparedSourceCinemaOutlineItem[];
-  source: PreparedSource;
-  sources: PreparedSource[];
-  onNavigate: (item: PreparedSourceCinemaOutlineItem) => void;
-  onPrepareFile: (file: File) => Promise<void>;
-  onSelectSource: (sourceId: string) => void;
-}>) {
-  const metrics = preparedSourceCinemaMetrics(source);
-  const href = preparedSourceCinemaSourceHref(source);
-  const skippedGroups = preparedSourceCinemaSkippedGroups(source);
-  const activeSection = activeOutlineItem(outline, activeBlock);
-
-  return (
-    <aside className="hidden min-h-0 min-w-0 overflow-y-auto pr-1 lg:block">
-      <div className="grid gap-3">
-        <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-          <h3 className="text-sm font-semibold">Source provenance</h3>
-          <PreparedSourceCinemaSourceLibrary
-            importError={importError}
-            isImporting={isImporting}
-            source={source}
-            sources={sources}
-            onPrepareFile={onPrepareFile}
-            onSelectSource={onSelectSource}
-          />
-          <dl className="mt-3 grid gap-3 text-sm">
-            {href ? (
-              <div className="grid min-w-0 grid-cols-[5.6rem_minmax(0,1fr)] gap-3">
-                <dt className="vs-muted">URL</dt>
-                <dd className="min-w-0 truncate text-blue-600" title={href}>
-                  <a href={href} rel="noreferrer" target="_blank">
-                    {href}
-                  </a>
-                </dd>
-              </div>
-            ) : null}
-            <MetadataRow label="Fetched" value={formatDateTime(source.updatedAt)} />
-            <MetadataRow label="Page title" value={preparedSourceCinemaTitle(source)} />
-            <MetadataRow
-              label="Content type"
-              value={source.sourceContentType ?? source.sourceFormat ?? source.kind}
-            />
-            <MetadataRow label="Reader mode" value={readerModeLabel(source)} valueTone="success" />
-          </dl>
-        </section>
-
-        <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-          <h3 className="text-sm font-semibold">Extraction health</h3>
-          <div className="mt-3 grid gap-2 text-sm">
-            <HealthRow label="Main content" value="Detected" />
-            <HealthRow
-              label="Readability"
-              value={source.warnings && source.warnings.length > 0 ? "Warnings" : "Good"}
-            />
-            <HealthRow
-              label="Content length"
-              value={`${metrics.wordCount.toLocaleString()} words`}
-            />
-            <HealthRow
-              label="You're ready"
-              value={source.status === "ready" ? "Looks good!" : "Needs review"}
-            />
-          </div>
-        </section>
-
-        <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-          <h3 className="text-sm font-semibold">Skipped content</h3>
-          <div className="mt-3 grid gap-2 text-sm">
-            {skippedGroups.length > 0 ? (
-              skippedGroups.map((group) => (
-                <div className="flex items-center justify-between gap-3" key={group.key}>
-                  <span className="flex min-w-0 items-center gap-2">
-                    <SkippedIcon />
-                    <span className="truncate">{group.label}</span>
-                  </span>
-                  <span className="font-semibold">{group.count.toLocaleString()}</span>
-                </div>
-              ))
-            ) : (
-              <p className="vs-muted">No skipped source items.</p>
-            )}
-            <div className="mt-1 flex items-center justify-between border-t pt-2 text-sm font-semibold vs-border">
-              <span>Total skipped</span>
-              <span>{metrics.skippedCount.toLocaleString()}</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-          <h3 className="text-sm font-semibold">Content Structure</h3>
-          <OutlineList
-            activeItem={activeSection}
-            items={outline}
-            maxItems={7}
-            onNavigate={onNavigate}
-          />
-        </section>
-      </div>
-    </aside>
   );
 }
 
@@ -624,6 +724,7 @@ function PreparedSourceCinemaReader({
   activeWordIndex,
   accessibilitySettings,
   autoFollow,
+  canvasFirst,
   isFullscreen,
   source,
   onAccessibilitySettingsChange,
@@ -635,6 +736,7 @@ function PreparedSourceCinemaReader({
   activeWordIndex: number;
   accessibilitySettings: ReaderAccessibilitySettings;
   autoFollow: boolean;
+  canvasFirst: boolean;
   isFullscreen: boolean;
   source: PreparedSource;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
@@ -750,10 +852,12 @@ function PreparedSourceCinemaReader({
   }, [activeBlockId, scrollBehavior, source.blocks]);
 
   return (
-    <section className="min-h-0 min-w-0 overflow-hidden">
-      <div
-        className={`mx-auto flex h-full ${READER_MEASURE_CLASS[accessibilitySettings.measure]} flex-col overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border max-lg:max-w-none max-lg:border-0 max-lg:shadow-none`}
-      >
+    <ReaderCanvasFrame
+      canvasFirst={canvasFirst}
+      contentClassName="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
+      contentRef={readerRef}
+      measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
+      toolbar={
         <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
           <div className="flex items-center gap-1">
             <button
@@ -821,188 +925,10 @@ function PreparedSourceCinemaReader({
             </button>
           </div>
         </div>
-        <div
-          className="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
-          ref={readerRef}
-        >
-          {readerContent}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function PreparedSourceCinemaNarrationPanel({
-  activeBlock,
-  bookmarkItems,
-  canCreateAudio,
-  canBookmark,
-  customPolicyProfiles,
-  isProcessing,
-  job,
-  outline,
-  outlineItems,
-  playbackControls,
-  policyDefinition,
-  policyError,
-  policyOverrides,
-  policyProfile,
-  policyProfiles,
-  progress,
-  recentItems,
-  source,
-  sourcePolicySaving,
-  onAddBookmark,
-  onBookmarkNavigate,
-  onClearSourcePolicy,
-  onCreateAudio,
-  onOutlineNavigate,
-  onRecentNavigate,
-  onResumeProgress,
-  onSaveSourcePolicy,
-}: Readonly<{
-  activeBlock: NarrationBlock | null;
-  bookmarkItems: ReaderBookmarkItem[];
-  canCreateAudio: boolean;
-  canBookmark: boolean;
-  customPolicyProfiles: CustomSpeechPolicyProfile[];
-  isProcessing: boolean;
-  job: VoiceJob | null;
-  outline: PreparedSourceCinemaOutlineItem[];
-  outlineItems: ReaderOutlineItem<PreparedSourceCinemaOutlineItem>[];
-  playbackControls: PreparedSourceCinemaPlaybackControls;
-  policyDefinition: SpeechPolicyDefinition;
-  policyError: string | null;
-  policyOverrides: SpeechPolicyOverrides;
-  policyProfile: string;
-  policyProfiles: SpeechPolicyProfile[];
-  progress: PlaybackProgress | null;
-  recentItems: ReaderRecentPositionItem[];
-  source: PreparedSource;
-  sourcePolicySaving: boolean;
-  onAddBookmark: () => void;
-  onBookmarkNavigate: (bookmark: ReaderBookmarkItem) => void;
-  onClearSourcePolicy: () => Promise<void> | void;
-  onCreateAudio: (source: PreparedSource) => void;
-  onOutlineNavigate: (item: ReaderOutlineItem<PreparedSourceCinemaOutlineItem>) => void;
-  onRecentNavigate: (item: ReaderRecentPositionItem) => void;
-  onResumeProgress: (progress: PlaybackProgress) => void;
-  onSaveSourcePolicy: (request: SourceSpeechPolicyUpdateRequest) => Promise<void> | void;
-}>) {
-  const activeText = activeBlock ? markdownBlockText(activeBlock) : "";
-  const activeSection = activeOutlineItem(outline, activeBlock);
-
-  return (
-    <aside className="hidden min-h-0 min-w-0 overflow-y-auto pl-1 lg:block">
-      <div className="grid gap-3">
-        <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold">Current block</h3>
-              <p className="mt-2 truncate text-sm font-medium">
-                {activeSection ? activeSection.label : blockSnippet(activeBlock, "Source opening")}
-              </p>
-              <p className="mt-1 text-xs vs-muted">
-                {activeBlock
-                  ? `${blockKindLabel(activeBlock)} ${(activeBlock.index + 1).toString()}`
-                  : "No block selected"}
-              </p>
-            </div>
-            <span className="mt-5 h-2 w-2 shrink-0 rounded-full bg-orange-600" />
-          </div>
-          <p className="mt-3 line-clamp-4 text-sm leading-6">
-            {activeText || "Start playback to follow the current narrated block."}
-          </p>
-        </section>
-
-        <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-          <h3 className="text-sm font-semibold">Speech policy</h3>
-          <div className="mt-3 grid gap-3 text-sm">
-            <PolicyScopeChips
-              state={{
-                projectProfile: policyProfile,
-                resolvedProfile: activeBlock?.speechPolicy.profile ?? source.speechPolicyProfile,
-                sessionOverrides: policyOverrides,
-                sourceOverrides: source.sourceSpeechPolicyOverrides,
-                sourceProfile: source.sourceSpeechPolicyProfile,
-              }}
-            />
-            <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2 text-center text-[11px]">
-              <PolicyMetric icon={<MicrophoneIcon />} label="Voice" value={job?.voice ?? "Alloy"} />
-              <PolicyMetric
-                icon={<DialIcon />}
-                label="Speed"
-                value={`${playbackControls.playbackRate.toFixed(2)}x`}
-              />
-            </div>
-            <SourcePolicyPinEditor
-              customProfiles={customPolicyProfiles}
-              definition={policyDefinition}
-              disabled={source.status !== "ready"}
-              error={policyError}
-              isSaving={sourcePolicySaving}
-              profiles={policyProfiles}
-              sourceOverrides={source.sourceSpeechPolicyOverrides}
-              sourceProfile={source.sourceSpeechPolicyProfile}
-              onClear={onClearSourcePolicy}
-              onSave={onSaveSourcePolicy}
-            />
-          </div>
-        </section>
-
-        <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-          <h3 className="text-sm font-semibold">Generated audio health</h3>
-          <div className="mt-3 grid gap-2 text-sm">
-            <HealthRow label="TTS engine" value={job ? "Healthy" : "Waiting"} />
-            <HealthRow label="Audio quality" value={job ? "Good" : "Pending"} />
-            <HealthRow label="Alignment" value={job?.voiceCheck.complete ? "Good" : "Pending"} />
-            <HealthRow
-              label="Coverage"
-              value={job ? `${Math.round(job.voiceCheck.similarity * 100).toString()}%` : "0%"}
-            />
-          </div>
-        </section>
-
-        <ReaderWayfindingPanel
-          bookmarks={bookmarkItems}
-          canBookmark={canBookmark}
-          maxItems={6}
-          outlineItems={outlineItems}
-          recentItems={recentItems}
-          onAddBookmark={onAddBookmark}
-          onBookmarkNavigate={onBookmarkNavigate}
-          onOutlineNavigate={onOutlineNavigate}
-          onRecentNavigate={onRecentNavigate}
-        />
-
-        {job ? null : (
-          <section className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 shadow-sm vs-border">
-            <button
-              className="h-11 w-full rounded-md bg-orange-600 px-3 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 disabled:opacity-50"
-              disabled={!canCreateAudio || isProcessing || source.status !== "ready"}
-              onClick={() => {
-                onCreateAudio(source);
-              }}
-              type="button"
-            >
-              Create & Listen
-            </button>
-          </section>
-        )}
-
-        {progress ? (
-          <button
-            className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-left text-xs font-semibold text-orange-700"
-            onClick={() => {
-              onResumeProgress(progress);
-            }}
-            type="button"
-          >
-            Resume saved point {formatProgressPercent(progress.progress)}
-          </button>
-        ) : null}
-      </div>
-    </aside>
+      }
+    >
+      {readerContent}
+    </ReaderCanvasFrame>
   );
 }
 
@@ -1530,45 +1456,6 @@ function renderTextWithActiveWord(text: string, activeWordOffset: number | null)
   });
 }
 
-function OutlineList({
-  activeItem,
-  items,
-  maxItems,
-  onNavigate,
-}: Readonly<{
-  activeItem: PreparedSourceCinemaOutlineItem | null;
-  items: PreparedSourceCinemaOutlineItem[];
-  maxItems: number;
-  onNavigate: (item: PreparedSourceCinemaOutlineItem) => void;
-}>) {
-  if (items.length === 0) {
-    return <p className="mt-3 text-sm vs-muted">No headings detected.</p>;
-  }
-  return (
-    <ol className="mt-3 grid gap-1 text-sm">
-      {items.slice(0, maxItems).map((item, index) => (
-        <li key={item.id}>
-          <button
-            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition hover:bg-[var(--vs-surface)] ${
-              item.id === activeItem?.id ? "bg-orange-50 text-orange-700" : ""
-            } ${item.level > 1 ? "pl-7 text-xs vs-muted" : ""}`}
-            onClick={() => {
-              onNavigate(item);
-            }}
-            type="button"
-          >
-            <span className="min-w-0 flex-1 truncate">
-              {item.level === 1 ? `${(index + 1).toString()}. ` : ""}
-              {item.label}
-            </span>
-            {item.id === activeItem?.id ? <PlayTinyIcon /> : null}
-          </button>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 function Waveform({
   audioUrl,
   progressRatio,
@@ -1840,10 +1727,6 @@ function formatDateTime(value: string): string {
   }).format(date);
 }
 
-function formatProgressPercent(progress: number): string {
-  return `${Math.round(clamp01(progress) * 100).toString()}%`;
-}
-
 function sentenceCase(value: string): string {
   const normalised = value.replaceAll(/[-_]+/g, " ").trim();
   return normalised ? `${normalised.charAt(0).toUpperCase()}${normalised.slice(1)}` : value;
@@ -2035,14 +1918,6 @@ function PlayIcon() {
   );
 }
 
-function PlayTinyIcon() {
-  return (
-    <svg aria-hidden="true" className="h-3 w-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-      <path d="m6 4 10 6-10 6V4Z" />
-    </svg>
-  );
-}
-
 function RestartIcon() {
   return (
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
@@ -2132,4 +2007,4 @@ function VolumeIcon() {
   );
 }
 
-export { preparedSourceCinemaActionLabel } from "./preparedSourceCinema";
+export { preparedSourceCinemaActionLabel } from "./preparedSourceModel";

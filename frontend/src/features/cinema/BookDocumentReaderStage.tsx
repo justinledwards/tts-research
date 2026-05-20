@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
 import { MarkdownRenderer } from "../../MarkdownRenderer";
-import { bookScopeLabel, bookSourceName, type BookCinemaTextSize } from "../../bookCinemaModel";
+import { bookScopeLabel, bookSourceName, type BookCinemaTextSize } from "../book-cinema/model";
 import {
   READER_LINE_SPACING_CLASS,
   READER_MEASURE_CLASS,
@@ -24,6 +25,7 @@ export function BookDocumentReaderStage({
   scopedText,
   scopeContent,
   accessibilitySettings,
+  canvasFirst = false,
   pointerLabel,
   onAccessibilitySettingsChange,
 }: Readonly<{
@@ -34,6 +36,7 @@ export function BookDocumentReaderStage({
   scopedText: string;
   scopeContent: BookSourceScopeContent | null;
   accessibilitySettings: ReaderAccessibilitySettings;
+  canvasFirst?: boolean;
   pointerLabel: string | null;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
@@ -67,10 +70,12 @@ export function BookDocumentReaderStage({
   }, [pointerLabel, scrollBehavior]);
 
   return (
-    <section className="min-h-0 min-w-0 overflow-hidden">
-      <div
-        className={`mx-auto flex h-full ${READER_MEASURE_CLASS[accessibilitySettings.measure]} flex-col overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border max-lg:max-w-none max-lg:border-0 max-lg:shadow-none`}
-      >
+    <ReaderCanvasFrame
+      canvasFirst={canvasFirst}
+      contentClassName="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
+      contentRef={readerRef}
+      measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
+      toolbar={
         <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
           <BookDocumentHeading book={book} scope={scope} />
           <div className="flex items-center gap-1">
@@ -98,20 +103,16 @@ export function BookDocumentReaderStage({
             </BookDocumentTextButton>
           </div>
         </div>
-        <div
-          className="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
-          ref={readerRef}
-        >
-          <MarkdownRenderer
-            blockHighlight={highlight.blockHighlight}
-            className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
-            wordHighlight={highlight.wordHighlight}
-          >
-            {scopedText}
-          </MarkdownRenderer>
-        </div>
-      </div>
-    </section>
+      }
+    >
+      <MarkdownRenderer
+        blockHighlight={highlight.blockHighlight}
+        className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
+        wordHighlight={highlight.wordHighlight}
+      >
+        {scopedText}
+      </MarkdownRenderer>
+    </ReaderCanvasFrame>
   );
 }
 

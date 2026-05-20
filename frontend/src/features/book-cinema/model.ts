@@ -5,12 +5,12 @@ import type {
   BookSourceSectionRole,
   PlaybackProgress,
   VoiceJob,
-} from "./types";
+} from "../../types";
 import {
   readerLiveAnnouncement,
   type ReaderKeyboardCommand,
   type ReaderTextScale,
-} from "./features/reader-accessibility";
+} from "../reader-accessibility";
 
 export const BOOK_SOURCE_ACCEPT =
   ".pdf,.epub,.docx,.md,.markdown,.html,.htm,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/x-markdown,text/html,application/xhtml+xml,application/zip,image/png,image/jpeg,image/tiff,image/webp";
@@ -40,8 +40,8 @@ export {
   normalizeReaderAccessibilitySettings,
   readerKeyboardCommandForKey as bookCinemaKeyboardCommandForKey,
   shouldIgnoreReaderKeyboardTarget as shouldIgnoreBookCinemaKeyboardTarget,
-} from "./features/reader-accessibility";
-export type { ReaderAccessibilitySettings } from "./features/reader-accessibility";
+} from "../reader-accessibility";
+export type { ReaderAccessibilitySettings } from "../reader-accessibility";
 
 export interface BookCinemaPolicyNote {
   explanation: string;

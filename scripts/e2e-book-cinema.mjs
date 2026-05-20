@@ -3,7 +3,8 @@
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createNetServer } from "node:net";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -83,8 +84,10 @@ async function main() {
       return;
     }
 
-    const markdownJob = await runMarkdownSourcePrepE2E(project.id, fixtures.markdown);
-    summary.markdownJobId = markdownJob.id;
+    const markdownPrep = await runMarkdownSourcePrepE2E(project.id, fixtures.markdown);
+    summary.markdownJobId = markdownPrep.job.id;
+    const websitePrep = await runWebsiteSourcePrepE2E(project.id);
+    summary.websiteJobId = websitePrep.job.id;
 
     const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
     try {
@@ -103,6 +106,14 @@ async function main() {
           metrics: result.performance,
         });
       }
+      const preparedFocus = await runPreparedCinemaFocusUX(browser, {
+        documentJob: markdownPrep.job,
+        documentSource: markdownPrep.source,
+        projectId: project.id,
+        websiteJob: websitePrep.job,
+        websiteSource: websitePrep.source,
+      });
+      summary.screenshots.push(...preparedFocus.screenshots);
     } finally {
       await browser.close();
     }
@@ -150,7 +161,37 @@ async function runMarkdownSourcePrepE2E(projectId, markdownPath) {
   );
   await assertTimingArtifacts(completedJob.id, "markdown");
   console.log("Markdown import and narration E2E passed.");
-  return completedJob;
+  return { job: completedJob, source };
+}
+
+async function runWebsiteSourcePrepE2E(projectId) {
+  const fixtureServer = await startWebsiteFixtureServer();
+  try {
+    const source = await apiJson(`/api/projects/${projectId}/source-preps`, {
+      body: JSON.stringify({
+        kind: "url",
+        url: fixtureServer.url,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    assert(source.status === "ready", `Website source prep is not ready: ${source.status}`);
+    assert((source.blocks?.length ?? 0) > 0, "Website source prep has no blocks.");
+    const selectedBlockIds = (source.blocks ?? [])
+      .filter((block) => block.speakMode !== "skip")
+      .slice(0, 3)
+      .map((block) => block.id);
+    const job = await createPreparedNarrationJob(projectId, source.id, selectedBlockIds, "url");
+    const completedJob = await waitForJob(job.id);
+    assert(
+      completedJob.preparedSourceId === source.id,
+      "Website source job did not store preparedSourceId.",
+    );
+    console.log("Website import and narration E2E passed.");
+    return { job: completedJob, source };
+  } finally {
+    await fixtureServer.stop();
+  }
 }
 
 async function runBookSourceE2E(browser, projectId, fixture) {
@@ -329,6 +370,8 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await assertEnabled(bookmarkButton, "Bookmark");
     await bookmarkButton.click();
     await waitForSavedBookmark(projectId, book.id, scope, job.id);
+    await switchCinemaFocusMode(page, "Review");
+    await selectCinemaInspectorPanel(page, "Wayfinding");
     await overlay.getByRole("button", { exact: true, name: "Bookmarks" }).first().click();
     await overlay
       .getByText(/Scope|Word|Saved position/)
@@ -344,6 +387,9 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
       .getByRole("button", { name: /Full|Chapter|Page/ })
       .first()
       .click();
+    await captureCinemaFocusModeScreenshots(page, screenshot.replace(/\.png$/i, "-focus"));
+    await switchCinemaFocusMode(page, "Review");
+    await selectCinemaInspectorPanel(page, "Speech policy");
     await exerciseSourcePinSmoke(page, book.id);
     await waitForSavedProgress(projectId, book.id, scope, job.id);
     await page.screenshot({ fullPage: false, path: screenshot });
@@ -356,6 +402,8 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     }
     const resumeIssues = collectPageIssues(resumePage);
     await openBookCinemaOverlay(resumePage, scope, bookCinemaHashUrl(book.id, scope));
+    await switchCinemaFocusMode(resumePage, "Review");
+    await selectCinemaInspectorPanel(resumePage, "Current passage");
     const resumeButton = overlayTextButton(resumePage, "Resume");
     await resumeButton.waitFor({ state: "attached" });
     await resumeButton.scrollIntoViewIfNeeded();
@@ -425,6 +473,123 @@ async function runDegradedHighlightUX(browser, { book, job, projectId, scope, te
   } finally {
     await context.close();
   }
+}
+
+async function runPreparedCinemaFocusUX(
+  browser,
+  { documentJob, documentSource, projectId, websiteJob, websiteSource },
+) {
+  const screenshots = [];
+  screenshots.push(
+    ...(await runPreparedCinemaSurfaceFocusUX(browser, {
+      expectedLabel: "Document Cinema",
+      job: documentJob,
+      projectId,
+      screenshotPrefix: "document-cinema-focus",
+      source: documentSource,
+    })),
+  );
+  screenshots.push(
+    ...(await runPreparedCinemaSurfaceFocusUX(browser, {
+      expectedLabel: "Website Cinema",
+      job: websiteJob,
+      projectId,
+      screenshotPrefix: "website-cinema-focus",
+      source: websiteSource,
+    })),
+  );
+  return { screenshots };
+}
+
+async function runPreparedCinemaSurfaceFocusUX(
+  browser,
+  { expectedLabel, job, projectId, screenshotPrefix, source },
+) {
+  const context = await browser.newContext({
+    storageState: projectStorageState(projectId, {
+      jobId: job.id,
+      preparedSourceId: source.id,
+      sourceMode: "fileUrl",
+      sourceType: "prepared",
+      stage: "intake",
+      text: source.speechText ?? source.text ?? "",
+    }),
+    viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
+  });
+  const page = await context.newPage();
+  if (lowResourceMode) {
+    await applyLowResourceProfile(page);
+  }
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
+  try {
+    await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.getByRole("button", { exact: true, name: "Intake" }).click();
+    await page.getByRole("button", { exact: true, name: "File / URL" }).click();
+    await page
+      .getByRole("button", { name: new RegExp(`Open ${expectedLabel}`) })
+      .first()
+      .click();
+    const overlay = page.locator(".fixed.inset-0").first();
+    await overlay.getByText(expectedLabel).first().waitFor();
+    const screenshots = await captureCinemaFocusModeScreenshots(
+      page,
+      path.join(screenshotsDir, screenshotPrefix),
+    );
+    await assertNoPageIssues(issues);
+    return screenshots;
+  } finally {
+    await context.close();
+  }
+}
+
+async function captureCinemaFocusModeScreenshots(page, screenshotPrefix) {
+  const screenshots = [];
+  for (const mode of ["Read", "Inspect", "Review", "Debug"]) {
+    await switchCinemaFocusMode(page, mode);
+    const overlay = page.locator(".fixed.inset-0").first();
+    if (mode === "Read") {
+      await overlay
+        .getByText("Inspector")
+        .waitFor({ state: "detached", timeout: 5_000 })
+        .catch(() => {});
+    } else {
+      await overlay.getByText("Inspector").first().waitFor({ timeout: 10_000 });
+    }
+    const screenshot = `${screenshotPrefix}-${mode.toLowerCase()}.png`;
+    await page.screenshot({ fullPage: false, path: screenshot });
+    screenshots.push(screenshot);
+  }
+
+  await switchCinemaFocusMode(page, "Inspect");
+  await selectCinemaInspectorPanel(page, "Source");
+  await visibleOverlayButton(page, "Pin").click();
+  await switchCinemaFocusMode(page, "Read");
+  await page.locator(".fixed.inset-0").first().getByText("Inspector").first().waitFor();
+  const pinnedScreenshot = `${screenshotPrefix}-read-pinned.png`;
+  await page.screenshot({ fullPage: false, path: pinnedScreenshot });
+  screenshots.push(pinnedScreenshot);
+  await visibleOverlayButton(page, "Pinned").click();
+  await switchCinemaFocusMode(page, "Read");
+  return screenshots;
+}
+
+async function switchCinemaFocusMode(page, mode) {
+  await page
+    .locator(".fixed.inset-0")
+    .first()
+    .getByRole("button", { exact: true, name: mode })
+    .click();
+}
+
+async function selectCinemaInspectorPanel(page, label) {
+  await page
+    .locator(".fixed.inset-0")
+    .first()
+    .getByRole("button", { name: new RegExp(label) })
+    .first()
+    .click();
 }
 
 async function exerciseSourcePinSmoke(page, bookSourceId) {
@@ -686,6 +851,7 @@ async function startLocalServices() {
     VOICE_SOURCE_PREP_DATA_DIR: path.join(runtimeDir, "source-preps"),
     VOICE_PROGRESS_DATA_DIR: path.join(runtimeDir, "progress"),
     VOICE_PLAYBACK_SESSION_DATA_DIR: path.join(runtimeDir, "playback-sessions"),
+    VOICE_SOURCE_URL_ALLOW_PRIVATE: "1",
   };
   const frontendEnv = {
     BACKEND_PORT: String(backendPort),
@@ -788,7 +954,7 @@ async function waitForHTTP(url, label) {
 
 async function freePort() {
   return new Promise((resolve, reject) => {
-    const server = createServer();
+    const server = createNetServer();
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
@@ -801,6 +967,39 @@ async function freePort() {
       });
     });
   });
+}
+
+async function startWebsiteFixtureServer() {
+  const html = `<!doctype html>
+<html lang="en">
+  <head><title>Website Cinema Focus Fixture</title></head>
+  <body>
+    <main>
+      <h1>Website Cinema Focus Fixture</h1>
+      <p>This local website article gives the cinema focus-mode smoke test a stable source.</p>
+      <h2>Readable Section</h2>
+      <p>Bookmarks, review panels, generated audio diagnostics, and source provenance should remain discoverable without competing with the reading canvas.</p>
+      <aside>Navigation, adverts, and boilerplate should be easy to inspect but quiet in read mode.</aside>
+    </main>
+  </body>
+</html>`;
+  const server = createHttpServer((_request, response) => {
+    response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    response.end(html);
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert(address && typeof address === "object", "Unable to start website fixture server.");
+  return {
+    url: `http://127.0.0.1:${String(address.port)}/fixture.html`,
+    stop: () =>
+      new Promise((resolve) => {
+        server.close(resolve);
+      }),
+  };
 }
 
 async function uploadBook(projectId, filePath) {
@@ -823,7 +1022,12 @@ async function uploadPreparedSource(projectId, filePath) {
   });
 }
 
-async function createPreparedNarrationJob(projectId, preparedSourceId, selectedBlockIds) {
+async function createPreparedNarrationJob(
+  projectId,
+  preparedSourceId,
+  selectedBlockIds,
+  sourceKind = "file",
+) {
   return apiJson(`/api/source-preps/${preparedSourceId}/voice-jobs`, {
     body: JSON.stringify({
       performanceMode: "throughput",
@@ -840,7 +1044,7 @@ async function createPreparedNarrationJob(projectId, preparedSourceId, selectedB
       projectId,
       runMode: "draftPreview",
       selectedBlockIds,
-      sourceKind: "file",
+      sourceKind,
       text: "",
     }),
     headers: { "Content-Type": "application/json" },

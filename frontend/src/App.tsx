@@ -86,7 +86,7 @@ import {
   normalizeBookScopeForBook,
   resolveBookActiveWordIndex,
   resolveDefaultBookScope,
-} from "./bookCinemaModel";
+} from "./features/book-cinema/model";
 import { looksLikeMermaidDiagram } from "./markdownModel";
 import {
   KOKORO_VOICEPACKS,
@@ -232,7 +232,7 @@ import {
   preparedSourceCinemaActionLabel,
   preparedSourceCinemaKind,
   preparedSourceCinemaJobMatchesSource,
-} from "./preparedSourceCinema";
+} from "./features/cinema/preparedSourceModel";
 import {
   humanizeProfileTargetProblem,
   isVoiceProfileTargetReadyForEngine,
@@ -292,17 +292,26 @@ const BundleFlowPanel = lazy(() =>
   import("./BundlePanels").then((module) => ({ default: module.BundleFlowPanel })),
 );
 const BookCinemaPanel = lazy(() =>
-  import("./BookCinemaPanel").then((module) => ({ default: module.BookCinemaPanel })),
+  import("./features/book-cinema/BookCinemaPanel").then((module) => ({
+    default: module.BookCinemaPanel,
+  })),
 );
 const BookCinemaOverlay = lazy(() =>
-  import("./BookCinemaPanel").then((module) => ({ default: module.BookCinemaOverlay })),
+  import("./features/book-cinema/BookCinemaPanel").then((module) => ({
+    default: module.BookCinemaOverlay,
+  })),
 );
 const ContentIRDrawer = lazy(() =>
   import("./ContentIrDrawer").then((module) => ({ default: module.ContentIRDrawer })),
 );
-const PreparedSourceCinemaOverlay = lazy(() =>
-  import("./PreparedSourceCinema").then((module) => ({
-    default: module.PreparedSourceCinemaOverlay,
+const DocumentCinemaOverlay = lazy(() =>
+  import("./features/document-cinema/DocumentCinemaOverlay").then((module) => ({
+    default: module.DocumentCinemaOverlay,
+  })),
+);
+const WebsiteCinemaOverlay = lazy(() =>
+  import("./features/website-cinema/WebsiteCinemaOverlay").then((module) => ({
+    default: module.WebsiteCinemaOverlay,
   })),
 );
 const HelpPanel = lazy(() =>
@@ -5396,6 +5405,10 @@ export function App() {
     "--studio-left-column": railColumnWidth(leftRailMode, "left"),
     "--studio-right-column": railColumnWidth(rightRailMode, "right"),
   } as CSSProperties;
+  const PreparedCinemaOverlay =
+    preparedSourceCinemaSource && preparedSourceCinemaKind(preparedSourceCinemaSource) === "website"
+      ? WebsiteCinemaOverlay
+      : DocumentCinemaOverlay;
 
   return (
     <main
@@ -5669,7 +5682,7 @@ export function App() {
       ) : null}
       {preparedSourceCinemaSource ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading source cinema..." />}>
-          <PreparedSourceCinemaOverlay
+          <PreparedCinemaOverlay
             accessibilitySettings={readerAccessibilitySettings}
             activeWordIndex={preparedSourceCinemaCue?.documentActiveWordIndex ?? -1}
             canCreateAudio={!isProcessing}

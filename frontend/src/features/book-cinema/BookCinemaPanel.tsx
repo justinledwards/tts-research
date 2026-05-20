@@ -9,7 +9,16 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { ReaderAccessibilityControls } from "./components/reader/ReaderAccessibilityControls";
+import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
+import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
+import {
+  CinemaFocusModeToolbar,
+  CinemaInspectorDock,
+  buildCinemaLayoutState,
+  type CinemaFocusMode,
+  type CinemaInspectorPanelId,
+  type CinemaPanelDefinition,
+} from "../cinema";
 import {
   BOOK_SOURCE_ACCEPT,
   bookCinemaLiveAnnouncement,
@@ -31,7 +40,7 @@ import {
   type BookPage,
   type BookPaginationResult,
   type BookScopeOption,
-} from "./bookCinemaModel";
+} from "./model";
 import {
   ReaderWayfindingPanel,
   playbackProgressForBookmark,
@@ -41,8 +50,8 @@ import {
   type ReaderBookmarkItem,
   type ReaderOutlineItem,
   type ReaderRecentPositionItem,
-} from "./features/reader-navigation";
-import { PolicyScopeChips, SourcePolicyPinEditor } from "./features/policy";
+} from "../reader-navigation";
+import { PolicyScopeChips, SourcePolicyPinEditor } from "../policy";
 import {
   READER_LINE_HEIGHT_RATIO,
   READER_MEASURE_CLASS,
@@ -55,12 +64,9 @@ import {
   type ReaderAccessibilitySettings,
   type ReaderKeyboardCommand,
   type ReaderTextScale,
-} from "./features/reader-accessibility";
-import {
-  recordFrontendDegradedState,
-  resolveTimingConfidenceDisplay,
-} from "./features/performance";
-import { useAudioWaveformBars } from "./audioWaveform";
+} from "../reader-accessibility";
+import { recordFrontendDegradedState, resolveTimingConfidenceDisplay } from "../performance";
+import { useAudioWaveformBars } from "../../audioWaveform";
 import type {
   BookCinemaDiagnostics,
   BookImportProfile,
@@ -80,8 +86,8 @@ import type {
   SpeechPolicyProfile,
   ThemeName,
   VoiceJob,
-} from "./types";
-import type { HighlightCue } from "./highlightMap";
+} from "../../types";
+import type { HighlightCue } from "../../highlightMap";
 
 const BOOK_PAGE_VERTICAL_PADDING = 108;
 const BOOK_PAGE_HORIZONTAL_PADDING = 76;
@@ -94,7 +100,7 @@ const BOOK_PAGE_DEFAULT_WORDS: Record<BookCinemaTextSize, number> = {
   large: 76,
 };
 const LazyBookDocumentReaderStage = lazy(() =>
-  import("./features/cinema/BookDocumentReaderStage").then((module) => ({
+  import("../cinema/BookDocumentReaderStage").then((module) => ({
     default: module.BookDocumentReaderStage,
   })),
 );
@@ -116,19 +122,19 @@ export {
   resolveDefaultBookScope,
   resolveDisplayedBookActiveWordIndex,
   visibleBookSpans,
-} from "./bookCinemaModel";
+} from "./model";
 export {
   DEFAULT_READER_ACCESSIBILITY_SETTINGS,
   READER_ACCESSIBILITY_STORAGE_KEY,
   normalizeReaderAccessibilitySettings,
-} from "./features/reader-accessibility";
+} from "../reader-accessibility";
 export type {
   BookCinemaPolicyNote,
   BookPage,
   BookPaginationResult,
   BookScopeOption,
-} from "./bookCinemaModel";
-export type { ReaderAccessibilitySettings } from "./features/reader-accessibility";
+} from "./model";
+export type { ReaderAccessibilitySettings } from "../reader-accessibility";
 export type BookCinemaTextSize = ReaderTextScale;
 export type BookCinemaKeyboardCommand = ReaderKeyboardCommand;
 
@@ -801,8 +807,13 @@ export function BookCinemaOverlay({
   const normalizedScope = normalizeBookScopeForBook(book, scope);
   const normalizedAccessibility = normalizeReaderAccessibilitySettings(accessibilitySettings);
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const [mobilePanel, setMobilePanel] = useState<BookCinemaMobilePanel | null>("source");
+  const [mobilePanel, setMobilePanel] = useState<BookCinemaMobilePanel | null>(null);
   const [pointerScopeKey, setPointerScopeKey] = useState<string | null>(null);
+  const [focusMode, setFocusMode] = useState<CinemaFocusMode>("read");
+  const [activeInspectorPanelId, setActiveInspectorPanelId] =
+    useState<CinemaInspectorPanelId | null>(null);
+  const [pinnedInspectorPanelId, setPinnedInspectorPanelId] =
+    useState<CinemaInspectorPanelId | null>(null);
   const scopeOptions = useMemo(() => bookScopeOptions(book), [book]);
   const normalizedScopeKey = bookScopeKey(normalizedScope);
   const pointerOption = useMemo(
@@ -925,6 +936,225 @@ export function BookCinemaOverlay({
   const handleRecentNavigate = (item: ReaderRecentPositionItem) => {
     onResumeProgress(item.progressItem, item.currentTimeSec);
   };
+  const structuralWarnings = scopeContent?.warnings ?? book.warnings ?? [];
+  const bookInspectorPanels: CinemaPanelDefinition[] = [
+    {
+      children: (
+        <div className="grid gap-3">
+          <BookCinemaSourceLibrary
+            book={book}
+            bookSources={bookSources}
+            importError={importError}
+            isImporting={isImporting}
+            onImport={onImport}
+            onSelectBook={onSelectBook}
+          />
+          <dl className="grid gap-3 text-sm">
+            <MetadataRow label="File" value={book.sourceFile} />
+            <MetadataRow label="Type" value={book.kind.toUpperCase()} />
+            <MetadataRow label="Size" value={formatBytes(book.sourceBytes)} />
+            <MetadataRow label="Imported" value={formatDateTime(book.createdAt)} />
+            <MetadataRow label="Structure" value={book.structureVersion ? "Detected" : "Basic"} />
+          </dl>
+          <button
+            className="h-10 w-full rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+            onClick={() => {
+              onInspectStructure(book);
+            }}
+            type="button"
+          >
+            Inspect structure
+          </button>
+        </div>
+      ),
+      detail: book.sourceFile,
+      id: "provenance",
+      modeAffinity: "inspect",
+      title: "Source & provenance",
+    },
+    {
+      children: (
+        <div className="grid gap-3">
+          <p className="text-sm font-semibold">
+            {pointerOption?.label ?? bookScopeLabel(normalizedScope)}
+          </p>
+          <p className="text-xs vs-muted">
+            {activeBlock ? `Block ${(activeBlock.index + 1).toString()}` : "Preview start"}
+          </p>
+          <p className="line-clamp-5 text-sm leading-6">
+            {activePassage ||
+              "Open the cinema before audio generation to validate the reading view."}
+          </p>
+          {progress ? (
+            <BookCinemaResumeButton progress={progress} onResumeProgress={onResumeProgress} />
+          ) : null}
+        </div>
+      ),
+      detail: activeBlock ? `Block ${(activeBlock.index + 1).toString()}` : "Preview start",
+      id: "current",
+      modeAffinity: ["inspect", "review"],
+      title: "Current passage",
+    },
+    {
+      children: (
+        <ReaderWayfindingPanel
+          bookmarks={bookmarkItems}
+          canBookmark={canBookmark}
+          className="border-0 bg-transparent p-0 shadow-none"
+          maxItems={7}
+          outlineItems={outlineItems}
+          recentItems={recentItems}
+          onAddBookmark={onBookmark}
+          onBookmarkNavigate={handleBookmarkNavigate}
+          onOutlineNavigate={handleWayfindingOutlineNavigate}
+          onRecentNavigate={handleRecentNavigate}
+        />
+      ),
+      detail: "Outline, bookmarks, recent",
+      id: "wayfinding",
+      modeAffinity: "review",
+      title: "Wayfinding",
+    },
+    {
+      children: (
+        <div className="grid gap-3 text-sm">
+          <PolicyScopeChips
+            state={{
+              projectProfile: policyProfile,
+              resolvedProfile: activeBlock?.speechPolicy.profile,
+              sessionOverrides: policyOverrides,
+              sourceOverrides: book.sourceSpeechPolicyOverrides,
+              sourceProfile: book.sourceSpeechPolicyProfile,
+            }}
+          />
+          <MetadataRow label="Generation" value={bookScopeLabel(createAudioScope)} />
+          <MetadataRow label="Voice" value={activeBookJob?.voice ?? "Default narrative"} />
+          <MetadataRow label="Speed" value={`${playbackControls.playbackRate.toFixed(2)}x`} />
+          <MetadataRow
+            label="Policy"
+            value={
+              activeBlock?.speechPolicy.profile ??
+              book.sourceSpeechPolicyProfile ??
+              "Project default"
+            }
+          />
+          <SourcePolicyPinEditor
+            customProfiles={customPolicyProfiles}
+            definition={policyDefinition}
+            disabled={book.status !== "ready"}
+            error={policyError}
+            isSaving={sourcePolicySaving}
+            profiles={policyProfiles}
+            sourceOverrides={book.sourceSpeechPolicyOverrides}
+            sourceProfile={book.sourceSpeechPolicyProfile}
+            onClear={onClearSourcePolicy}
+            onSave={onSaveSourcePolicy}
+          />
+        </div>
+      ),
+      detail:
+        activeBlock?.speechPolicy.profile ?? book.sourceSpeechPolicyProfile ?? "Project default",
+      id: "policy",
+      modeAffinity: ["inspect", "review"],
+      title: "Speech policy",
+    },
+    {
+      children: (
+        <div className="grid gap-3 text-sm">
+          <BookCinemaHealthRow
+            label="Readable text"
+            value={scopedText.trim() ? "Ready" : "Empty"}
+          />
+          <BookCinemaHealthRow
+            label="Structure"
+            value={
+              scopeContent?.sourceStructureValid || book.structureVersion ? "Detected" : "Basic"
+            }
+          />
+          <BookCinemaHealthRow
+            label="Scope words"
+            value={`${(scopeContent?.wordCount ?? scopedSpans.length).toLocaleString()} words`}
+          />
+          <BookCinemaHealthRow
+            label="Audio"
+            value={hasPlayableAudio ? "Generated" : "Not generated"}
+          />
+          <BookCinemaHealthRow label="Job status" value={activeBookJob?.status ?? "Pre-audio"} />
+          <BookCinemaHealthRow label="Alignment" value={highlightMap ? "Mapped" : "Pending"} />
+          <BookCinemaHealthRow label="Bookmarks" value={bookmarks.length.toLocaleString()} />
+          {structuralWarnings.length > 0 ? (
+            <div className="grid gap-2">
+              {structuralWarnings.slice(0, 4).map((warning) => (
+                <p
+                  className="rounded border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-amber-500"
+                  key={warning}
+                >
+                  {warning}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="vs-muted">No structural warnings for this scope.</p>
+          )}
+        </div>
+      ),
+      detail: hasPlayableAudio ? "Generated audio ready" : "Pre-audio",
+      id: "health",
+      modeAffinity: ["inspect", "debug"],
+      title: "Health",
+    },
+    {
+      children: <BookCinemaPolicyNotes notes={policyNotes} />,
+      detail: `${policyNotes.length.toLocaleString()} policy notes`,
+      id: "notes",
+      modeAffinity: "debug",
+      title: "Policy notes",
+    },
+    {
+      children: (
+        <BookCinemaScopeQueue
+          activeScope={normalizedScope}
+          maxItems={8}
+          options={queueOptions}
+          pointerScopeKey={pointerScopeKey}
+          onNavigate={handleNavigateToScope}
+        />
+      ),
+      detail: "Narratable sections",
+      id: "queue",
+      modeAffinity: "review",
+      title: "Section queue",
+    },
+    {
+      children: (
+        <BookCinemaTimingDebug
+          cursorSec={playbackCursorSec}
+          highlightCue={highlightCue}
+          highlightMap={highlightMap}
+        />
+      ),
+      detail: timingConfidence.isDegraded ? timingConfidence.label : "Timing map",
+      id: "debug",
+      modeAffinity: "debug",
+      title: "Timing debug",
+    },
+  ];
+  const cinemaLayoutState = buildCinemaLayoutState({
+    activePanelId: activeInspectorPanelId,
+    mode: focusMode,
+    panels: bookInspectorPanels,
+    pinnedPanelId: pinnedInspectorPanelId,
+  });
+  const handleFocusModeChange = (nextMode: CinemaFocusMode) => {
+    const nextState = buildCinemaLayoutState({
+      activePanelId: activeInspectorPanelId,
+      mode: nextMode,
+      panels: bookInspectorPanels,
+      pinnedPanelId: pinnedInspectorPanelId,
+    });
+    setFocusMode(nextMode);
+    setActiveInspectorPanelId(nextState.activePanelId);
+  };
 
   useReaderKeyboardControls({
     canBookmark,
@@ -1011,6 +1241,9 @@ export function BookCinemaOverlay({
           isPlaying={playbackControls.isPlaying}
           job={activeBookJob}
         />
+        <div className="hidden min-w-[20rem] shrink-0 md:block">
+          <CinemaFocusModeToolbar mode={focusMode} onModeChange={handleFocusModeChange} />
+        </div>
         {timingConfidence.isDegraded ? (
           <BookCinemaTimingStatusChip display={timingConfidence} />
         ) : null}
@@ -1082,103 +1315,11 @@ export function BookCinemaOverlay({
           </button>
         </div>
       </header>
-      <main className="grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 lg:grid-cols-[326px_minmax(0,1fr)_362px] lg:gap-5 lg:px-4">
-        <aside className="hidden min-h-0 min-w-0 overflow-y-auto pr-1 lg:block">
-          <div className="grid gap-3">
-            <BookCinemaRailCard title="Source & provenance">
-              <BookCinemaSourceLibrary
-                book={book}
-                bookSources={bookSources}
-                importError={importError}
-                isImporting={isImporting}
-                onImport={onImport}
-                onSelectBook={onSelectBook}
-              />
-              <dl className="grid gap-3 text-sm">
-                <MetadataRow label="File" value={book.sourceFile} />
-                <MetadataRow label="Type" value={book.kind.toUpperCase()} />
-                <MetadataRow label="Size" value={formatBytes(book.sourceBytes)} />
-                <MetadataRow label="Imported" value={formatDateTime(book.createdAt)} />
-                <MetadataRow
-                  label="Structure"
-                  value={book.structureVersion ? "Detected" : "Basic"}
-                />
-              </dl>
-              <button
-                className="mt-3 h-10 w-full rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
-                onClick={() => {
-                  onInspectStructure(book);
-                }}
-                type="button"
-              >
-                Inspect structure
-              </button>
-            </BookCinemaRailCard>
-
-            <BookCinemaRailCard title="Extraction health">
-              <div className="grid gap-2 text-sm">
-                <BookCinemaHealthRow
-                  label="Readable text"
-                  value={scopedText.trim() ? "Ready" : "Empty"}
-                />
-                <BookCinemaHealthRow
-                  label="Structure"
-                  value={
-                    scopeContent?.sourceStructureValid || book.structureVersion
-                      ? "Detected"
-                      : "Basic"
-                  }
-                />
-                <BookCinemaHealthRow
-                  label="Scope words"
-                  value={`${(scopeContent?.wordCount ?? scopedSpans.length).toLocaleString()} words`}
-                />
-                <BookCinemaHealthRow
-                  label="Audio state"
-                  value={hasPlayableAudio ? "Generated" : "Pre-audio"}
-                />
-              </div>
-            </BookCinemaRailCard>
-
-            <ReaderWayfindingPanel
-              activeTab="outline"
-              bookmarks={bookmarkItems}
-              canBookmark={canBookmark}
-              maxItems={8}
-              outlineItems={outlineItems}
-              recentItems={recentItems}
-              title="Structure outline"
-              onAddBookmark={onBookmark}
-              onBookmarkNavigate={handleBookmarkNavigate}
-              onOutlineNavigate={handleWayfindingOutlineNavigate}
-              onRecentNavigate={handleRecentNavigate}
-            />
-
-            <BookCinemaRailCard title="Warnings & skipped content">
-              <div className="grid gap-2 text-sm">
-                {(scopeContent?.warnings ?? book.warnings ?? []).length > 0 ? (
-                  (scopeContent?.warnings ?? book.warnings ?? []).slice(0, 4).map((warning) => (
-                    <p
-                      className="rounded border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-amber-500"
-                      key={warning}
-                    >
-                      {warning}
-                    </p>
-                  ))
-                ) : (
-                  <p className="vs-muted">No structural warnings for this scope.</p>
-                )}
-                {(scopeContent?.skippedItems ?? []).length > 0 ? (
-                  <p className="text-xs vs-muted">
-                    {(scopeContent?.skippedItems ?? []).length.toLocaleString()} skipped items are
-                    available in policy notes.
-                  </p>
-                ) : null}
-              </div>
-            </BookCinemaRailCard>
-          </div>
-        </aside>
-
+      <main
+        className={`grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 lg:gap-5 lg:px-4 ${
+          cinemaLayoutState.railVisible ? "lg:grid-cols-[minmax(0,1fr)_362px]" : "lg:grid-cols-1"
+        }`}
+      >
         <BookCinemaReaderStage
           activeWordIndex={readerActiveWordIndex}
           book={book}
@@ -1187,117 +1328,20 @@ export function BookCinemaOverlay({
           scopedText={scopedText}
           scopeContent={scopeContent}
           accessibilitySettings={normalizedAccessibility}
+          canvasFirst={cinemaLayoutState.canvasFirst}
           pointerLabel={pointerOption?.label ?? null}
           phraseWordEnd={phraseRange.end}
           phraseWordStart={phraseRange.start}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
         />
-
-        <aside className="hidden min-h-0 min-w-0 overflow-y-auto pl-1 lg:block">
-          <div className="grid gap-3">
-            <BookCinemaRailCard title="Current passage">
-              <p className="text-sm font-semibold">
-                {pointerOption?.label ?? bookScopeLabel(normalizedScope)}
-              </p>
-              <p className="mt-1 text-xs vs-muted">
-                {activeBlock ? `Block ${(activeBlock.index + 1).toString()}` : "Preview start"}
-              </p>
-              <p className="mt-3 line-clamp-5 text-sm leading-6">
-                {activePassage ||
-                  "Open the cinema before audio generation to validate the reading view."}
-              </p>
-            </BookCinemaRailCard>
-
-            <BookCinemaRailCard title="Speech policy">
-              <div className="grid gap-3 text-sm">
-                <PolicyScopeChips
-                  state={{
-                    projectProfile: policyProfile,
-                    resolvedProfile: activeBlock?.speechPolicy.profile,
-                    sessionOverrides: policyOverrides,
-                    sourceOverrides: book.sourceSpeechPolicyOverrides,
-                    sourceProfile: book.sourceSpeechPolicyProfile,
-                  }}
-                />
-                <MetadataRow label="Generation" value={bookScopeLabel(createAudioScope)} />
-                <MetadataRow label="Voice" value={activeBookJob?.voice ?? "Default narrative"} />
-                <MetadataRow label="Speed" value={`${playbackControls.playbackRate.toFixed(2)}x`} />
-                <MetadataRow
-                  label="Policy"
-                  value={
-                    activeBlock?.speechPolicy.profile ??
-                    book.sourceSpeechPolicyProfile ??
-                    "Project default"
-                  }
-                />
-                <SourcePolicyPinEditor
-                  customProfiles={customPolicyProfiles}
-                  definition={policyDefinition}
-                  disabled={book.status !== "ready"}
-                  error={policyError}
-                  isSaving={sourcePolicySaving}
-                  profiles={policyProfiles}
-                  sourceOverrides={book.sourceSpeechPolicyOverrides}
-                  sourceProfile={book.sourceSpeechPolicyProfile}
-                  onClear={onClearSourcePolicy}
-                  onSave={onSaveSourcePolicy}
-                />
-              </div>
-            </BookCinemaRailCard>
-
-            <BookCinemaRailCard title="Generated audio health">
-              <div className="grid gap-2 text-sm">
-                <BookCinemaHealthRow
-                  label="Audio"
-                  value={hasPlayableAudio ? "Generated" : "Not generated"}
-                />
-                <BookCinemaHealthRow
-                  label="Job status"
-                  value={activeBookJob?.status ?? "Pre-audio"}
-                />
-                <BookCinemaHealthRow
-                  label="Alignment"
-                  value={highlightMap ? "Mapped" : "Pending"}
-                />
-                <BookCinemaHealthRow label="Bookmarks" value={bookmarks.length.toLocaleString()} />
-              </div>
-            </BookCinemaRailCard>
-
-            <BookCinemaPolicyNotes notes={policyNotes} />
-
-            <ReaderWayfindingPanel
-              bookmarks={bookmarkItems}
-              canBookmark={canBookmark}
-              maxItems={6}
-              outlineItems={outlineItems}
-              recentItems={recentItems}
-              onAddBookmark={onBookmark}
-              onBookmarkNavigate={handleBookmarkNavigate}
-              onOutlineNavigate={handleWayfindingOutlineNavigate}
-              onRecentNavigate={handleRecentNavigate}
-            />
-
-            <BookCinemaRailCard title="Section queue">
-              <BookCinemaScopeQueue
-                activeScope={normalizedScope}
-                maxItems={6}
-                options={queueOptions}
-                pointerScopeKey={pointerScopeKey}
-                onNavigate={handleNavigateToScope}
-              />
-            </BookCinemaRailCard>
-
-            {progress ? (
-              <BookCinemaResumeButton progress={progress} onResumeProgress={onResumeProgress} />
-            ) : null}
-
-            <BookCinemaTimingDebug
-              cursorSec={playbackCursorSec}
-              highlightCue={highlightCue}
-              highlightMap={highlightMap}
-            />
-          </div>
-        </aside>
+        <CinemaInspectorDock
+          activePanelId={cinemaLayoutState.activePanelId}
+          mode={focusMode}
+          panels={bookInspectorPanels}
+          pinnedPanelId={pinnedInspectorPanelId}
+          onActivePanelChange={setActiveInspectorPanelId}
+          onPinnedPanelChange={setPinnedInspectorPanelId}
+        />
       </main>
       <BookCinemaMobileSheet
         activePassage={activePassage}
@@ -2213,6 +2257,7 @@ function BookPageHeading({
 function BookCinemaReaderStage({
   activeWordIndex,
   book,
+  canvasFirst,
   scope,
   scopedSpans,
   scopedText,
@@ -2225,6 +2270,7 @@ function BookCinemaReaderStage({
 }: Readonly<{
   activeWordIndex: number;
   book: BookSource;
+  canvasFirst: boolean;
   scope: BookScope;
   scopedSpans: NonNullable<BookSource["wordSpans"]>;
   scopedText: string;
@@ -2241,6 +2287,7 @@ function BookCinemaReaderStage({
         <LazyBookDocumentReaderStage
           activeWordIndex={activeWordIndex}
           book={book}
+          canvasFirst={canvasFirst}
           scope={scope}
           scopedSpans={scopedSpans}
           scopedText={scopedText}
@@ -2256,6 +2303,7 @@ function BookCinemaReaderStage({
     <BookPagedReaderStage
       activeWordIndex={activeWordIndex}
       book={book}
+      canvasFirst={canvasFirst}
       scope={scope}
       scopedSpans={scopedSpans}
       scopedText={scopedText}
@@ -2270,6 +2318,7 @@ function BookCinemaReaderStage({
 function BookPagedReaderStage({
   activeWordIndex,
   book,
+  canvasFirst,
   scope,
   scopedSpans,
   scopedText,
@@ -2280,6 +2329,7 @@ function BookPagedReaderStage({
 }: Readonly<{
   activeWordIndex: number;
   book: BookSource;
+  canvasFirst: boolean;
   scope: BookScope;
   scopedSpans: NonNullable<BookSource["wordSpans"]>;
   scopedText: string;
@@ -2301,10 +2351,15 @@ function BookPagedReaderStage({
     pagination.pages.length > 0 ? pagination.pages : [null];
 
   return (
-    <section className="min-h-0 min-w-0 overflow-hidden">
-      <div
-        className={`mx-auto flex h-full ${READER_MEASURE_CLASS[accessibilitySettings.measure]} flex-col overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border`}
-      >
+    <ReaderCanvasFrame
+      canvasFirst={canvasFirst}
+      contentClassName={`book-cinema-spread grid min-h-0 flex-1 overflow-hidden ${
+        pagination.pagesPerSpread === 2 ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"
+      }`}
+      contentDataAttributes={{ "data-book-pages-per-spread": pagination.pagesPerSpread }}
+      contentRef={pageMetrics.ref}
+      measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
+      toolbar={
         <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
           <BookPageHeading book={book} scope={scope} />
           <BookPaginationControls
@@ -2313,51 +2368,42 @@ function BookPagedReaderStage({
             onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           />
         </div>
-        <div
-          className={`book-cinema-spread grid min-h-0 flex-1 overflow-hidden ${
-            pagination.pagesPerSpread === 2
-              ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-              : "grid-cols-1"
-          }`}
-          data-book-pages-per-spread={pagination.pagesPerSpread}
-          ref={pageMetrics.ref}
-        >
-          {displayedPages.map((page, index) => (
-            <BookReaderPage
-              activeWordIndex={activeWordIndex}
-              book={book}
-              fallbackText={index === 0 ? scopedText : ""}
-              fontSizePx={pageMetrics.fontSizePx}
-              isActivePage={isReaderPageActive(page, activeWordIndex)}
-              isRightPage={index === 1}
-              lineHeightRatio={pageMetrics.lineHeightRatio}
-              key={`${book.id}-${bookScopeKey(scope)}-${String(page?.index ?? "fallback")}`}
-              page={page}
-              phraseWordEnd={phraseWordEnd}
-              phraseWordStart={phraseWordStart}
-              scope={scope}
-              totalPages={pagination.totalPages}
-            />
-          ))}
-          {displayedPages.length === 1 && pagination.pagesPerSpread === 2 ? (
-            <BookReaderPage
-              activeWordIndex={activeWordIndex}
-              book={book}
-              fallbackText=""
-              fontSizePx={pageMetrics.fontSizePx}
-              isActivePage={false}
-              isRightPage
-              lineHeightRatio={pageMetrics.lineHeightRatio}
-              page={null}
-              phraseWordEnd={phraseWordEnd}
-              phraseWordStart={phraseWordStart}
-              scope={scope}
-              totalPages={pagination.totalPages}
-            />
-          ) : null}
-        </div>
-      </div>
-    </section>
+      }
+    >
+      {displayedPages.map((page, index) => (
+        <BookReaderPage
+          activeWordIndex={activeWordIndex}
+          book={book}
+          fallbackText={index === 0 ? scopedText : ""}
+          fontSizePx={pageMetrics.fontSizePx}
+          isActivePage={isReaderPageActive(page, activeWordIndex)}
+          isRightPage={index === 1}
+          lineHeightRatio={pageMetrics.lineHeightRatio}
+          key={`${book.id}-${bookScopeKey(scope)}-${String(page?.index ?? "fallback")}`}
+          page={page}
+          phraseWordEnd={phraseWordEnd}
+          phraseWordStart={phraseWordStart}
+          scope={scope}
+          totalPages={pagination.totalPages}
+        />
+      ))}
+      {displayedPages.length === 1 && pagination.pagesPerSpread === 2 ? (
+        <BookReaderPage
+          activeWordIndex={activeWordIndex}
+          book={book}
+          fallbackText=""
+          fontSizePx={pageMetrics.fontSizePx}
+          isActivePage={false}
+          isRightPage
+          lineHeightRatio={pageMetrics.lineHeightRatio}
+          page={null}
+          phraseWordEnd={phraseWordEnd}
+          phraseWordStart={phraseWordStart}
+          scope={scope}
+          totalPages={pagination.totalPages}
+        />
+      ) : null}
+    </ReaderCanvasFrame>
   );
 }
 

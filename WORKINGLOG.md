@@ -1,5 +1,15 @@
 # Working Log
 
+## 2026-05-20 09:09 CEST - Cinema focus modes and inspector ergonomics
+- [x] Add shared cinema focus-mode model and UI primitives.
+- [x] Move Book Cinema into feature adapter directory.
+- [x] Split Document and Website Cinema adapters.
+- [x] Panelize cinema inspectors and add session-only pin behavior.
+- [x] Add canvas-first reader mode.
+- [x] Update cinema focus and wayfinding docs.
+- [x] Add focused tests and E2E coverage.
+- [x] Run local validation commands.
+
 ## 2026-05-20 00:13 CEST - Adaptive workspace choreography
 - [x] Add shared workspace stage and layout model.
 - [x] Implement stage-based narration workspace and inline Teleprompt.
