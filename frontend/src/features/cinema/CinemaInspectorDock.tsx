@@ -31,7 +31,10 @@ export function CinemaInspectorDock({
       data-cinema-inspector-mode={mode}
     >
       <div className="grid gap-3">
-        <section className="min-w-0 overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border">
+        <section
+          className="min-w-0 overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border"
+          data-cinema-inspector-panel={state.activePanel.id}
+        >
           <div className="border-b p-3 vs-border">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -79,7 +82,9 @@ export function CinemaInspectorDock({
               </div>
             ) : null}
           </div>
-          <div className="p-3">{state.activePanel.children}</div>
+          <div className="p-3" data-cinema-inspector-body="">
+            {state.activePanel.children}
+          </div>
         </section>
       </div>
     </aside>

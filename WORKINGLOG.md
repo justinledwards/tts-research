@@ -111,3 +111,10 @@
 - [x] Fix duplicate wayfinding keys surfaced by Book Cinema smoke.
 - [x] Run project validation commands.
 - [x] Commit, push, and update PR body.
+
+## 2026-05-20 10:26 CEST - Cinema focus modes convergence
+- [x] Build shared cinema focus controller and layout primitives.
+- [x] Rewire Book, Document, and Website Cinema to shared shell, inspector, transport, and mobile patterns.
+- [x] Update focus-mode and wayfinding docs.
+- [x] Extend unit and E2E validation coverage.
+- [x] Run local validation commands.

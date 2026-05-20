@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import {
+  READER_SEEK_SECONDS,
   nextReaderPlaybackRate,
   readerKeyboardCommandForKey,
   shouldIgnoreReaderKeyboardTarget,
@@ -85,10 +86,10 @@ export function readerKeyboardActions({
   }
   if (playbackControls.skipBy) {
     actions.seekBackward = () => {
-      onSkip(-10);
+      onSkip(-READER_SEEK_SECONDS);
     };
     actions.seekForward = () => {
-      onSkip(10);
+      onSkip(READER_SEEK_SECONDS);
     };
   }
   const setPlaybackRate = playbackControls.setPlaybackRate;

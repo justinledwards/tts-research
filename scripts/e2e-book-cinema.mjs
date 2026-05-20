@@ -548,15 +548,8 @@ async function captureCinemaFocusModeScreenshots(page, screenshotPrefix) {
   const screenshots = [];
   for (const mode of ["Read", "Inspect", "Review", "Debug"]) {
     await switchCinemaFocusMode(page, mode);
-    const overlay = page.locator(".fixed.inset-0").first();
-    if (mode === "Read") {
-      await overlay
-        .getByText("Inspector")
-        .waitFor({ state: "detached", timeout: 5_000 })
-        .catch(() => {});
-    } else {
-      await overlay.getByText("Inspector").first().waitFor({ timeout: 10_000 });
-    }
+    await assertCinemaFocusModeLayout(page, mode);
+    await assertCinemaActiveTargetVisible(page);
     const screenshot = `${screenshotPrefix}-${mode.toLowerCase()}.png`;
     await page.screenshot({ fullPage: false, path: screenshot });
     screenshots.push(screenshot);
@@ -566,13 +559,82 @@ async function captureCinemaFocusModeScreenshots(page, screenshotPrefix) {
   await selectCinemaInspectorPanel(page, "Source");
   await visibleOverlayButton(page, "Pin").click();
   await switchCinemaFocusMode(page, "Read");
-  await page.locator(".fixed.inset-0").first().getByText("Inspector").first().waitFor();
+  await assertCinemaFocusModeLayout(page, "Read", { pinned: true });
   const pinnedScreenshot = `${screenshotPrefix}-read-pinned.png`;
   await page.screenshot({ fullPage: false, path: pinnedScreenshot });
   screenshots.push(pinnedScreenshot);
   await visibleOverlayButton(page, "Pinned").click();
   await switchCinemaFocusMode(page, "Read");
   return screenshots;
+}
+
+async function assertCinemaFocusModeLayout(page, mode, { pinned = false } = {}) {
+  const overlay = page.locator(".fixed.inset-0").first();
+  const inspectorPanels = overlay.locator("[data-cinema-inspector-panel]");
+  const inspectorBodies = overlay.locator("[data-cinema-inspector-body]");
+  const panelCount = await inspectorPanels.count();
+  const bodyCount = await inspectorBodies.count();
+  const shouldShowInspector = mode !== "Read" || pinned;
+  if (shouldShowInspector) {
+    assert(panelCount === 1, `${mode} mode should show one inspector panel, saw ${panelCount}.`);
+    assert(bodyCount === 1, `${mode} mode should show one inspector body, saw ${bodyCount}.`);
+    return;
+  }
+  assert(panelCount === 0, "Read mode should hide inspector panels unless pinned.");
+  assert(bodyCount === 0, "Read mode should hide inspector bodies unless pinned.");
+  await assertCinemaCanvasDominant(page);
+}
+
+async function assertCinemaCanvasDominant(page) {
+  await page.waitForFunction(
+    () => {
+      const overlay = document.querySelector('[data-cinema-canvas-first="true"]');
+      const main = overlay?.querySelector("main");
+      const canvas = main?.firstElementChild;
+      if (!(main instanceof HTMLElement) || !(canvas instanceof HTMLElement)) {
+        return false;
+      }
+      const mainRect = main.getBoundingClientRect();
+      const canvasRect = canvas.getBoundingClientRect();
+      return mainRect.width > 0 && canvasRect.width / mainRect.width > 0.9;
+    },
+    undefined,
+    { timeout: 5_000 },
+  );
+}
+
+async function assertCinemaActiveTargetVisible(page) {
+  await page.waitForFunction(
+    () => {
+      const overlay = document.querySelector(".fixed.inset-0");
+      if (!overlay) {
+        return false;
+      }
+      const target = overlay.querySelector(
+        [
+          ".book-cinema-page-shell--active",
+          ".book-cinema-word-active",
+          ".book-cinema-word-phrase",
+          ".prepared-source-cinema-active",
+          ".markdown-cinema-block-active",
+          ".markdown-cinema-word-active",
+          ".website-cinema-word-active",
+        ].join(", "),
+      );
+      if (!(target instanceof HTMLElement)) {
+        return true;
+      }
+      const rect = target.getBoundingClientRect();
+      return (
+        rect.bottom > 0 &&
+        rect.right > 0 &&
+        rect.top < window.innerHeight &&
+        rect.left < window.innerWidth
+      );
+    },
+    undefined,
+    { timeout: 5_000 },
+  );
 }
 
 async function switchCinemaFocusMode(page, mode) {

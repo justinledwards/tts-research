@@ -34,6 +34,7 @@ export interface ReaderLiveAnnouncementInput {
 }
 
 export const READER_PLAYBACK_RATES = [0.8, 1, 1.25, 1.5] as const;
+export const READER_SEEK_SECONDS = 10;
 
 export const DEFAULT_READER_ACCESSIBILITY_SETTINGS: ReaderAccessibilitySettings = {
   highContrast: false,

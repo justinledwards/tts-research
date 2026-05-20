@@ -23,8 +23,10 @@ Policy scope is shown as visible chips near the active reading surface:
 
 Provenance, policy, and health information remain discoverable through inspector modes:
 
-- `Inspect` groups source provenance, current passage/block context, policy scope, and extraction health.
+- `Inspect` groups source provenance, current passage context, policy scope, and extraction health.
 - `Debug` groups skipped content, policy notes, generated-audio health, and timing diagnostics.
 - Pinned inspector panels are session-only and may stay visible in `Read` without expanding all other panels.
+
+Footer transport is shared across Book, Document, and Website Cinema. Left/J and Right/L seek by 10 seconds, matching the visible `-10s` and `+10s` controls. The mobile bottom sheet uses `Source`, `Structure`, and `Narration` panels so source selection, outline/bookmark/recent navigation, and current narration context stay in predictable places.
 
 Source pins are edited through the existing source speech-policy PATCH APIs. Clearing a pin returns the source to project-default behaviour; it does not clear session overrides.

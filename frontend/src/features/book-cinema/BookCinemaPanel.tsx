@@ -14,10 +14,16 @@ import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
 import {
   CinemaFocusModeToolbar,
   CinemaInspectorDock,
-  buildCinemaLayoutState,
-  type CinemaFocusMode,
-  type CinemaInspectorPanelId,
+  CinemaMobileSheet,
+  CinemaShell,
+  CinemaTransportBar,
+  buildCinemaCurrentReadingPanel,
+  buildCinemaInspectorPanel,
+  buildCinemaWayfindingPanel,
+  useCinemaFocusController,
+  type CinemaMobilePanelSpec,
   type CinemaPanelDefinition,
+  type CinemaTransportModel,
 } from "../cinema";
 import {
   BOOK_SOURCE_ACCEPT,
@@ -55,7 +61,7 @@ import { PolicyScopeChips, SourcePolicyPinEditor } from "../policy";
 import {
   READER_LINE_HEIGHT_RATIO,
   READER_MEASURE_CLASS,
-  READER_PLAYBACK_RATES,
+  READER_SEEK_SECONDS,
   READER_TEXT_SCALE_FONT_PX,
   normalizeReaderAccessibilitySettings,
   readerDataAttributes,
@@ -809,11 +815,6 @@ export function BookCinemaOverlay({
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const [mobilePanel, setMobilePanel] = useState<BookCinemaMobilePanel | null>(null);
   const [pointerScopeKey, setPointerScopeKey] = useState<string | null>(null);
-  const [focusMode, setFocusMode] = useState<CinemaFocusMode>("read");
-  const [activeInspectorPanelId, setActiveInspectorPanelId] =
-    useState<CinemaInspectorPanelId | null>(null);
-  const [pinnedInspectorPanelId, setPinnedInspectorPanelId] =
-    useState<CinemaInspectorPanelId | null>(null);
   const scopeOptions = useMemo(() => bookScopeOptions(book), [book]);
   const normalizedScopeKey = bookScopeKey(normalizedScope);
   const pointerOption = useMemo(
@@ -938,7 +939,7 @@ export function BookCinemaOverlay({
   };
   const structuralWarnings = scopeContent?.warnings ?? book.warnings ?? [];
   const bookInspectorPanels: CinemaPanelDefinition[] = [
-    {
+    buildCinemaInspectorPanel({
       children: (
         <div className="grid gap-3">
           <BookCinemaSourceLibrary
@@ -971,51 +972,27 @@ export function BookCinemaOverlay({
       id: "provenance",
       modeAffinity: "inspect",
       title: "Source & provenance",
-    },
-    {
-      children: (
-        <div className="grid gap-3">
-          <p className="text-sm font-semibold">
-            {pointerOption?.label ?? bookScopeLabel(normalizedScope)}
-          </p>
-          <p className="text-xs vs-muted">
-            {activeBlock ? `Block ${(activeBlock.index + 1).toString()}` : "Preview start"}
-          </p>
-          <p className="line-clamp-5 text-sm leading-6">
-            {activePassage ||
-              "Open the cinema before audio generation to validate the reading view."}
-          </p>
-          {progress ? (
-            <BookCinemaResumeButton progress={progress} onResumeProgress={onResumeProgress} />
-          ) : null}
-        </div>
-      ),
+    }),
+    buildCinemaCurrentReadingPanel({
+      action: progress ? (
+        <BookCinemaResumeButton progress={progress} onResumeProgress={onResumeProgress} />
+      ) : null,
       detail: activeBlock ? `Block ${(activeBlock.index + 1).toString()}` : "Preview start",
-      id: "current",
-      modeAffinity: ["inspect", "review"],
-      title: "Current passage",
-    },
-    {
-      children: (
-        <ReaderWayfindingPanel
-          bookmarks={bookmarkItems}
-          canBookmark={canBookmark}
-          className="border-0 bg-transparent p-0 shadow-none"
-          maxItems={7}
-          outlineItems={outlineItems}
-          recentItems={recentItems}
-          onAddBookmark={onBookmark}
-          onBookmarkNavigate={handleBookmarkNavigate}
-          onOutlineNavigate={handleWayfindingOutlineNavigate}
-          onRecentNavigate={handleRecentNavigate}
-        />
-      ),
-      detail: "Outline, bookmarks, recent",
-      id: "wayfinding",
-      modeAffinity: "review",
-      title: "Wayfinding",
-    },
-    {
+      emptyText: "Open the cinema before audio generation to validate the reading view.",
+      excerpt: activePassage,
+      label: pointerOption?.label ?? bookScopeLabel(normalizedScope),
+    }),
+    buildCinemaWayfindingPanel({
+      bookmarks: bookmarkItems,
+      canBookmark,
+      outlineItems,
+      recentItems,
+      onAddBookmark: onBookmark,
+      onBookmarkNavigate: handleBookmarkNavigate,
+      onOutlineNavigate: handleWayfindingOutlineNavigate,
+      onRecentNavigate: handleRecentNavigate,
+    }),
+    buildCinemaInspectorPanel({
       children: (
         <div className="grid gap-3 text-sm">
           <PolicyScopeChips
@@ -1057,8 +1034,8 @@ export function BookCinemaOverlay({
       id: "policy",
       modeAffinity: ["inspect", "review"],
       title: "Speech policy",
-    },
-    {
+    }),
+    buildCinemaInspectorPanel({
       children: (
         <div className="grid gap-3 text-sm">
           <BookCinemaHealthRow
@@ -1102,15 +1079,15 @@ export function BookCinemaOverlay({
       id: "health",
       modeAffinity: ["inspect", "debug"],
       title: "Health",
-    },
-    {
+    }),
+    buildCinemaInspectorPanel({
       children: <BookCinemaPolicyNotes notes={policyNotes} />,
       detail: `${policyNotes.length.toLocaleString()} policy notes`,
       id: "notes",
       modeAffinity: "debug",
       title: "Policy notes",
-    },
-    {
+    }),
+    buildCinemaInspectorPanel({
       children: (
         <BookCinemaScopeQueue
           activeScope={normalizedScope}
@@ -1124,8 +1101,8 @@ export function BookCinemaOverlay({
       id: "queue",
       modeAffinity: "review",
       title: "Section queue",
-    },
-    {
+    }),
+    buildCinemaInspectorPanel({
       children: (
         <BookCinemaTimingDebug
           cursorSec={playbackCursorSec}
@@ -1137,24 +1114,9 @@ export function BookCinemaOverlay({
       id: "debug",
       modeAffinity: "debug",
       title: "Timing debug",
-    },
+    }),
   ];
-  const cinemaLayoutState = buildCinemaLayoutState({
-    activePanelId: activeInspectorPanelId,
-    mode: focusMode,
-    panels: bookInspectorPanels,
-    pinnedPanelId: pinnedInspectorPanelId,
-  });
-  const handleFocusModeChange = (nextMode: CinemaFocusMode) => {
-    const nextState = buildCinemaLayoutState({
-      activePanelId: activeInspectorPanelId,
-      mode: nextMode,
-      panels: bookInspectorPanels,
-      pinnedPanelId: pinnedInspectorPanelId,
-    });
-    setFocusMode(nextMode);
-    setActiveInspectorPanelId(nextState.activePanelId);
-  };
+  const cinemaFocus = useCinemaFocusController(bookInspectorPanels);
 
   useReaderKeyboardControls({
     canBookmark,
@@ -1202,63 +1164,167 @@ export function BookCinemaOverlay({
     }
   }, [book.kind, highlightMap]);
 
+  const bookTransportModel: CinemaTransportModel = {
+    bookmark: {
+      disabled: !canBookmark,
+      onClick: onBookmark,
+    },
+    displayControls: (
+      <ReaderAccessibilityControls
+        settings={normalizedAccessibility}
+        onChange={onAccessibilitySettingsChange}
+      />
+    ),
+    mobileMore: {
+      icon: <MoreTinyIcon />,
+      onClick: () => {
+        setMobilePanel((current) => (current ? null : "source"));
+      },
+    },
+    playbackRate: {
+      disabled: !canChangePlaybackRate,
+      value: displayedPlaybackRate,
+      onChange: playbackControls.setPlaybackRate,
+    },
+    primary: {
+      className: primaryTransportStyle,
+      disabled: primaryTransportDisabled,
+      icon: primaryTransportIcon,
+      label: desktopPrimaryTransportLabel,
+      mobileLabel: mobilePrimaryTransportLabel,
+      onClick: () => {
+        if (hasPlayableAudio) {
+          onPlayPause();
+        } else {
+          onCreateAudio(book, createAudioScope);
+        }
+      },
+    },
+    progress: {
+      currentLabel: progress ? formatEstimatedDuration(progress.currentTimeSec * 1000) : "0:00",
+      durationLabel: formatEstimatedDuration(scopeContent?.estimatedDurationMs),
+      ratio: progress?.progress ?? 0,
+      waveform: activeBookJob ? (
+        <BookCinemaWaveform audioUrl={activeBookJob.audioUrl} progress={progress?.progress ?? 0} />
+      ) : (
+        <BookCinemaWaveformPlaceholder />
+      ),
+    },
+    restart: {
+      disabled: !canUseTransportControls,
+      icon: <RestartTinyIcon />,
+      onClick: onRestart,
+    },
+    skipBackward: {
+      disabled: !canUseSkipControls,
+      icon: <SkipBackTinyIcon />,
+      onClick: () => {
+        onSkip(-READER_SEEK_SECONDS);
+      },
+    },
+    skipForward: {
+      disabled: !canUseSkipControls,
+      icon: <SkipForwardTinyIcon />,
+      onClick: () => {
+        onSkip(READER_SEEK_SECONDS);
+      },
+    },
+  };
+
   return (
-    <div
-      aria-labelledby="book-cinema-title"
-      aria-modal="true"
-      className="vs-app fixed inset-0 z-50 flex flex-col"
-      {...readerDataAttributes(normalizedAccessibility)}
-      data-theme={themeName}
-      ref={dialogRef}
-      role="dialog"
-      tabIndex={-1}
-    >
-      <div aria-atomic="true" aria-live="polite" className="sr-only">
-        {liveAnnouncement}
-      </div>
-      <header className="relative flex min-h-[4rem] items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-orange-400/30 bg-orange-500/10 text-orange-400">
-            <CinemaFilmIcon />
-          </span>
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <h2
-                className="truncate text-base font-semibold tracking-[-0.01em] text-[var(--vs-text)] sm:text-xl"
-                id="book-cinema-title"
-                title={bookSourceName(book)}
-              >
-                {book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}
-              </h2>
+    <CinemaShell
+      ariaLabelledBy="book-cinema-title"
+      canvas={
+        <BookCinemaReaderStage
+          activeWordIndex={readerActiveWordIndex}
+          book={book}
+          scope={normalizedScope}
+          scopedSpans={scopedSpans}
+          scopedText={scopedText}
+          scopeContent={scopeContent}
+          accessibilitySettings={normalizedAccessibility}
+          canvasFirst={cinemaFocus.layoutState.canvasFirst}
+          pointerLabel={pointerOption?.label ?? null}
+          phraseWordEnd={phraseRange.end}
+          phraseWordStart={phraseRange.start}
+          onAccessibilitySettingsChange={onAccessibilitySettingsChange}
+        />
+      }
+      canvasFirst={cinemaFocus.layoutState.canvasFirst}
+      footer={
+        <>
+          <CinemaTransportBar model={bookTransportModel} />
+          {isCancelledBookJob ? (
+            <p className="border-t bg-[var(--vs-raised)] px-4 py-2 text-center text-xs text-amber-600 vs-border">
+              This narration was cancelled. The selected scope is ready to create again.
+            </p>
+          ) : null}
+        </>
+      }
+      header={
+        <header className="relative flex min-h-[4rem] items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-orange-400/30 bg-orange-500/10 text-orange-400">
+              <CinemaFilmIcon />
+            </span>
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <h2
+                  className="truncate text-base font-semibold tracking-[-0.01em] text-[var(--vs-text)] sm:text-xl"
+                  id="book-cinema-title"
+                  title={bookSourceName(book)}
+                >
+                  {book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}
+                </h2>
+              </div>
+              <p className="hidden" title={bookSourceName(book)}>
+                {bookSourceName(book)}
+              </p>
             </div>
-            <p className="hidden" title={bookSourceName(book)}>
+          </div>
+          <BookCinemaStatusChip
+            hasPlayableAudio={hasPlayableAudio}
+            isPlaying={playbackControls.isPlaying}
+            job={activeBookJob}
+          />
+          <div className="hidden min-w-[20rem] shrink-0 md:block">
+            <CinemaFocusModeToolbar mode={cinemaFocus.mode} onModeChange={cinemaFocus.setMode} />
+          </div>
+          {timingConfidence.isDegraded ? (
+            <BookCinemaTimingStatusChip display={timingConfidence} />
+          ) : null}
+          {isResumeRestoring ? <BookCinemaResumeChip /> : null}
+          <div className="hidden min-w-0 flex-1 px-4 text-center lg:block">
+            <p className="truncate text-sm font-medium" title={bookSourceName(book)}>
               {bookSourceName(book)}
             </p>
+            <p className="truncate text-xs vs-muted">{bookScopeLabel(normalizedScope)}</p>
           </div>
-        </div>
-        <BookCinemaStatusChip
-          hasPlayableAudio={hasPlayableAudio}
-          isPlaying={playbackControls.isPlaying}
-          job={activeBookJob}
-        />
-        <div className="hidden min-w-[20rem] shrink-0 md:block">
-          <CinemaFocusModeToolbar mode={focusMode} onModeChange={handleFocusModeChange} />
-        </div>
-        {timingConfidence.isDegraded ? (
-          <BookCinemaTimingStatusChip display={timingConfidence} />
-        ) : null}
-        {isResumeRestoring ? <BookCinemaResumeChip /> : null}
-        <div className="hidden min-w-0 flex-1 px-4 text-center lg:block">
-          <p className="truncate text-sm font-medium" title={bookSourceName(book)}>
-            {bookSourceName(book)}
-          </p>
-          <p className="truncate text-xs vs-muted">{bookScopeLabel(normalizedScope)}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <label className="hidden items-center gap-2 text-sm vs-muted md:flex">
-            <span>Scope</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <label className="hidden items-center gap-2 text-sm vs-muted md:flex">
+              <span>Scope</span>
+              <select
+                className="h-10 max-w-64 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold text-[var(--vs-text)] outline-none vs-border"
+                onChange={(event) => {
+                  const nextScope = scopeOptions.find(
+                    (option) => option.key === event.currentTarget.value,
+                  )?.scope;
+                  if (nextScope) {
+                    handleScopeChange(nextScope);
+                  }
+                }}
+                value={normalizedScopeKey}
+              >
+                {scopeOptions.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <select
-              className="h-10 max-w-64 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold text-[var(--vs-text)] outline-none vs-border"
+              aria-label="Book scope"
+              className="hidden h-10 max-w-[9rem] rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-semibold outline-none vs-border"
               onChange={(event) => {
                 const nextScope = scopeOptions.find(
                   (option) => option.key === event.currentTarget.value,
@@ -1275,298 +1341,71 @@ export function BookCinemaOverlay({
                 </option>
               ))}
             </select>
-          </label>
-          <select
-            aria-label="Book scope"
-            className="hidden h-10 max-w-[9rem] rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-semibold outline-none vs-border"
-            onChange={(event) => {
-              const nextScope = scopeOptions.find(
-                (option) => option.key === event.currentTarget.value,
-              )?.scope;
-              if (nextScope) {
-                handleScopeChange(nextScope);
-              }
-            }}
-            value={normalizedScopeKey}
-          >
-            {scopeOptions.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <button
-            className="hidden h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
-            onClick={() => {
-              onThemeChange(themeName === "light" ? "dark" : "light");
-            }}
-            type="button"
-          >
-            <SettingsTinyIcon />
-            Settings
-          </button>
-          <button
-            className="inline-flex h-10 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
-            onClick={onClose}
-            type="button"
-          >
-            <ExitTinyIcon />
-            <span className="hidden sm:inline">Exit</span>
-          </button>
-        </div>
-      </header>
-      <main
-        className={`grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 lg:gap-5 lg:px-4 ${
-          cinemaLayoutState.railVisible ? "lg:grid-cols-[minmax(0,1fr)_362px]" : "lg:grid-cols-1"
-        }`}
-      >
-        <BookCinemaReaderStage
-          activeWordIndex={readerActiveWordIndex}
-          book={book}
-          scope={normalizedScope}
-          scopedSpans={scopedSpans}
-          scopedText={scopedText}
-          scopeContent={scopeContent}
-          accessibilitySettings={normalizedAccessibility}
-          canvasFirst={cinemaLayoutState.canvasFirst}
-          pointerLabel={pointerOption?.label ?? null}
-          phraseWordEnd={phraseRange.end}
-          phraseWordStart={phraseRange.start}
-          onAccessibilitySettingsChange={onAccessibilitySettingsChange}
-        />
-        <CinemaInspectorDock
-          activePanelId={cinemaLayoutState.activePanelId}
-          mode={focusMode}
-          panels={bookInspectorPanels}
-          pinnedPanelId={pinnedInspectorPanelId}
-          onActivePanelChange={setActiveInspectorPanelId}
-          onPinnedPanelChange={setPinnedInspectorPanelId}
-        />
-      </main>
-      <BookCinemaMobileSheet
-        activePassage={activePassage}
-        activeScope={normalizedScope}
-        book={book}
-        bookSources={bookSources}
-        hasPlayableAudio={hasPlayableAudio}
-        importError={importError}
-        isImporting={isImporting}
-        mobilePanel={mobilePanel}
-        bookmarkItems={bookmarkItems}
-        outlineItems={outlineItems}
-        progress={progress}
-        recentItems={recentItems}
-        scopeContent={scopeContent}
-        canBookmark={canBookmark}
-        onAddBookmark={onBookmark}
-        onBookmarkNavigate={handleBookmarkNavigate}
-        onImport={onImport}
-        onInspectStructure={onInspectStructure}
-        onMobilePanelChange={setMobilePanel}
-        onSelectBook={onSelectBook}
-        onResumeProgress={onResumeProgress}
-        onRecentNavigate={handleRecentNavigate}
-        onOutlineNavigate={handleWayfindingOutlineNavigate}
-      />
-
-      <footer className="border-t bg-[var(--vs-raised)] px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.18)] vs-border lg:px-7">
-        <div className="hidden items-center gap-5 lg:flex">
-          <button
-            className="inline-flex h-12 items-center gap-2 rounded-md border px-4 text-sm font-medium transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
-            disabled={!canUseTransportControls}
-            onClick={onRestart}
-            aria-keyshortcuts="Home"
-            type="button"
-          >
-            <RestartTinyIcon />
-            Restart
-          </button>
-          <button
-            className="grid h-12 w-14 place-items-center rounded-md border transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
-            disabled={!canUseSkipControls}
-            onClick={() => {
-              onSkip(-10);
-            }}
-            aria-label="Back 10 seconds"
-            aria-keyshortcuts="ArrowLeft J"
-            type="button"
-          >
-            <SkipBackTinyIcon />
-          </button>
-          <button
-            className={`inline-flex h-16 min-w-40 items-center justify-center gap-3 rounded-full px-6 text-base font-semibold shadow-lg disabled:opacity-50 ${primaryTransportStyle}`}
-            disabled={primaryTransportDisabled}
-            onClick={() => {
-              if (hasPlayableAudio) {
-                onPlayPause();
-              } else {
-                onCreateAudio(book, createAudioScope);
-              }
-            }}
-            aria-keyshortcuts="Space K"
-            type="button"
-          >
-            {primaryTransportIcon}
-            {desktopPrimaryTransportLabel}
-          </button>
-          <button
-            className="grid h-12 w-14 place-items-center rounded-md border transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
-            disabled={!canUseSkipControls}
-            onClick={() => {
-              onSkip(10);
-            }}
-            aria-label="Forward 10 seconds"
-            aria-keyshortcuts="ArrowRight L"
-            type="button"
-          >
-            <SkipForwardTinyIcon />
-          </button>
-          <div className="min-w-0 flex-1">
-            {activeBookJob ? (
-              <BookCinemaWaveform
-                audioUrl={activeBookJob.audioUrl}
-                progress={progress?.progress ?? 0}
-              />
-            ) : (
-              <BookCinemaWaveformPlaceholder />
-            )}
-            <div className="mt-1 flex items-center justify-between text-xs tabular-nums vs-muted">
-              <span>
-                {progress ? formatEstimatedDuration(progress.currentTimeSec * 1000) : "0:00"}
-              </span>
-              <span>{formatEstimatedDuration(scopeContent?.estimatedDurationMs)}</span>
-            </div>
-          </div>
-          <select
-            aria-label="Playback speed"
-            className="h-12 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold outline-none disabled:opacity-40 vs-border"
-            disabled={!canChangePlaybackRate}
-            onChange={(event) => {
-              playbackControls.setPlaybackRate?.(Number(event.currentTarget.value));
-            }}
-            value={String(displayedPlaybackRate)}
-          >
-            {READER_PLAYBACK_RATES.map((rate) => (
-              <option key={rate} value={rate}>
-                {rate.toFixed(rate === 1 ? 0 : 2)}x
-              </option>
-            ))}
-          </select>
-          <button
-            className="h-12 rounded-md border px-4 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
-            disabled={!canBookmark}
-            onClick={onBookmark}
-            aria-keyshortcuts="B"
-            type="button"
-          >
-            Bookmark
-          </button>
-          <ReaderAccessibilityControls
-            settings={normalizedAccessibility}
-            onChange={onAccessibilitySettingsChange}
-          />
-        </div>
-
-        <div className="grid gap-3 lg:hidden">
-          <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-3 text-sm tabular-nums vs-muted">
-            <span>
-              {progress ? formatEstimatedDuration(progress.currentTimeSec * 1000) : "0:00"}
-            </span>
-            <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-surface)]">
-              <div
-                className="h-full rounded-full vs-accent-bg"
-                style={{
-                  width: progress ? `${Math.round(progress.progress * 100).toString()}%` : "0%",
-                }}
-              />
-            </div>
-            <span className="text-right">
-              {formatEstimatedDuration(scopeContent?.estimatedDurationMs)}
-            </span>
-          </div>
-          <div className="grid grid-cols-5 items-center gap-2">
-            <IconBookTransportButton
-              disabled={!canUseSkipControls}
-              label="Back"
-              onClick={() => {
-                onSkip(-10);
-              }}
-            >
-              <SkipBackTinyIcon />
-            </IconBookTransportButton>
             <button
-              className={`col-span-2 inline-flex h-16 items-center justify-center gap-3 rounded-md px-4 text-base font-semibold shadow-lg disabled:opacity-50 ${primaryTransportStyle}`}
-              disabled={primaryTransportDisabled}
+              className="hidden h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
               onClick={() => {
-                if (hasPlayableAudio) {
-                  onPlayPause();
-                } else {
-                  onCreateAudio(book, createAudioScope);
-                }
+                onThemeChange(themeName === "light" ? "dark" : "light");
               }}
               type="button"
             >
-              {primaryTransportIcon}
-              <span>{mobilePrimaryTransportLabel}</span>
+              <SettingsTinyIcon />
+              Settings
             </button>
-            <IconBookTransportButton
-              disabled={!canUseSkipControls}
-              label="Forward"
-              onClick={() => {
-                onSkip(10);
-              }}
+            <button
+              className="inline-flex h-10 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
+              onClick={onClose}
+              type="button"
             >
-              <SkipForwardTinyIcon />
-            </IconBookTransportButton>
-            <IconBookTransportButton
-              label="More"
-              onClick={() => {
-                setMobilePanel((current) => (current ? null : "source"));
-              }}
-            >
-              <MoreTinyIcon />
-            </IconBookTransportButton>
+              <ExitTinyIcon />
+              <span className="hidden sm:inline">Exit</span>
+            </button>
           </div>
-          <div className="flex items-center justify-center gap-2">
-            <select
-              aria-label="Playback speed"
-              className="h-8 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-medium outline-none disabled:opacity-40 vs-border"
-              disabled={!canChangePlaybackRate}
-              onChange={(event) => {
-                playbackControls.setPlaybackRate?.(Number(event.currentTarget.value));
-              }}
-              value={String(displayedPlaybackRate)}
-            >
-              {READER_PLAYBACK_RATES.map((rate) => (
-                <option key={rate} value={rate}>
-                  {rate.toFixed(rate === 1 ? 0 : 2)}x Speed
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="hidden">
-          <button
-            className="h-10 rounded-md px-4 text-sm font-semibold text-white disabled:opacity-50 vs-accent-bg"
-            disabled={!canCreateAudio || isProcessing || book.status !== "ready"}
-            onClick={() => {
-              onCreateAudio(book, createAudioScope);
-            }}
-            type="button"
-          >
-            {isCancelledBookJob
-              ? `${bookCreateLabel(createAudioScope, book)} Again`
-              : bookCreateLabel(createAudioScope, book)}
-          </button>
-        </div>
-        {isCancelledBookJob ? (
-          <p className="mt-3 text-center text-xs text-amber-600">
-            This narration was cancelled. The selected scope is ready to create again.
-          </p>
-        ) : null}
-      </footer>
-    </div>
+        </header>
+      }
+      inspector={
+        cinemaFocus.layoutState.railVisible ? (
+          <CinemaInspectorDock
+            activePanelId={cinemaFocus.activePanelId}
+            mode={cinemaFocus.mode}
+            panels={bookInspectorPanels}
+            pinnedPanelId={cinemaFocus.pinnedPanelId}
+            onActivePanelChange={cinemaFocus.setActivePanelId}
+            onPinnedPanelChange={cinemaFocus.setPinnedPanelId}
+          />
+        ) : undefined
+      }
+      liveAnnouncement={liveAnnouncement}
+      mobileSheet={
+        <BookCinemaMobileSheet
+          activePassage={activePassage}
+          activeScope={normalizedScope}
+          book={book}
+          bookSources={bookSources}
+          hasPlayableAudio={hasPlayableAudio}
+          importError={importError}
+          isImporting={isImporting}
+          mobilePanel={mobilePanel}
+          bookmarkItems={bookmarkItems}
+          outlineItems={outlineItems}
+          progress={progress}
+          recentItems={recentItems}
+          scopeContent={scopeContent}
+          canBookmark={canBookmark}
+          onAddBookmark={onBookmark}
+          onBookmarkNavigate={handleBookmarkNavigate}
+          onImport={onImport}
+          onInspectStructure={onInspectStructure}
+          onMobilePanelChange={setMobilePanel}
+          onSelectBook={onSelectBook}
+          onResumeProgress={onResumeProgress}
+          onRecentNavigate={handleRecentNavigate}
+          onOutlineNavigate={handleWayfindingOutlineNavigate}
+        />
+      }
+      readerAttributes={readerDataAttributes(normalizedAccessibility)}
+      rootRef={dialogRef}
+      themeName={themeName}
+    />
   );
 }
 
@@ -1830,31 +1669,9 @@ function BookCinemaMobileSheet({
   onSelectBook: (bookId: string) => void;
   onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
 }>) {
-  if (!mobilePanel) {
-    return null;
-  }
-  return (
-    <section className="fixed inset-x-0 bottom-[8.75rem] z-[55] max-h-[42vh] overflow-y-auto rounded-t-2xl border bg-[var(--vs-raised)] px-4 pb-5 pt-3 shadow-2xl vs-border lg:hidden">
-      <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-zinc-500/50" />
-      <div className="mb-4 grid grid-cols-3 border-b text-sm font-semibold vs-border">
-        {(["source", "structure", "narration"] as const).map((panel) => (
-          <button
-            className={`border-b-2 px-2 pb-3 ${
-              mobilePanel === panel
-                ? "border-orange-500 text-orange-500"
-                : "border-transparent vs-muted"
-            }`}
-            key={panel}
-            onClick={() => {
-              onMobilePanelChange(panel);
-            }}
-            type="button"
-          >
-            {bookCinemaMobilePanelLabel(panel)}
-          </button>
-        ))}
-      </div>
-      {mobilePanel === "source" ? (
+  const panels: CinemaMobilePanelSpec<BookCinemaMobilePanel>[] = [
+    {
+      children: (
         <div className="grid gap-4 text-sm">
           <BookCinemaRailCard title="Cinema source">
             <BookCinemaSourceLibrary
@@ -1887,8 +1704,12 @@ function BookCinemaMobileSheet({
             </div>
           </BookCinemaRailCard>
         </div>
-      ) : null}
-      {mobilePanel === "structure" ? (
+      ),
+      id: "source",
+      label: "Source",
+    },
+    {
+      children: (
         <div className="grid gap-3 text-sm">
           <ReaderWayfindingPanel
             activeTab="outline"
@@ -1912,8 +1733,12 @@ function BookCinemaMobileSheet({
             Inspect structure
           </button>
         </div>
-      ) : null}
-      {mobilePanel === "narration" ? (
+      ),
+      id: "structure",
+      label: "Structure",
+    },
+    {
+      children: (
         <div className="grid gap-3 text-sm">
           <p className="line-clamp-4 leading-6">
             {activePassage ||
@@ -1931,42 +1756,18 @@ function BookCinemaMobileSheet({
             </button>
           ) : null}
         </div>
-      ) : null}
-    </section>
-  );
-}
+      ),
+      id: "narration",
+      label: "Narration",
+    },
+  ];
 
-function bookCinemaMobilePanelLabel(panel: BookCinemaMobilePanel): string {
-  if (panel === "source") {
-    return "Source";
-  }
-  if (panel === "structure") {
-    return "Structure";
-  }
-  return "Narration";
-}
-
-function IconBookTransportButton({
-  children,
-  disabled,
-  label,
-  onClick,
-}: Readonly<{
-  children: ReactNode;
-  disabled?: boolean;
-  label: string;
-  onClick: () => void;
-}>) {
   return (
-    <button
-      aria-label={label}
-      className="grid h-14 place-items-center rounded-md border text-sm font-medium disabled:opacity-35 vs-border"
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
+    <CinemaMobileSheet
+      activePanelId={mobilePanel}
+      panels={panels}
+      onPanelChange={onMobilePanelChange}
+    />
   );
 }
 

@@ -3,16 +3,20 @@ import { ReaderAccessibilityControls } from "../../components/reader/ReaderAcces
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
 import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
 import { CinemaInspectorDock } from "./CinemaInspectorDock";
+import { CinemaMobileSheet, type CinemaMobilePanelSpec } from "./CinemaMobileSheet";
+import { CinemaShell } from "./CinemaShell";
+import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
+import { useCinemaFocusController } from "./CinemaFocusController";
 import {
-  buildCinemaLayoutState,
-  type CinemaFocusMode,
-  type CinemaInspectorPanelId,
-  type CinemaPanelDefinition,
-} from "./model";
+  buildCinemaCurrentReadingPanel,
+  buildCinemaInspectorPanel,
+  buildCinemaWayfindingPanel,
+} from "./CinemaInspectorPanels";
+import type { CinemaPanelDefinition } from "./model";
 import {
   READER_LINE_SPACING_CLASS,
   READER_MEASURE_CLASS,
-  READER_PLAYBACK_RATES,
+  READER_SEEK_SECONDS,
   READER_TEXT_SCALE_CLASS,
   normalizeReaderAccessibilitySettings,
   readerDataAttributes,
@@ -180,11 +184,6 @@ export function PreparedSourceCinemaOverlay({
   const [mobilePanel, setMobilePanel] = useState<PreparedSourceCinemaMobilePanel | null>(null);
   const [pointedBlockId, setPointedBlockId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [focusMode, setFocusMode] = useState<CinemaFocusMode>("read");
-  const [activeInspectorPanelId, setActiveInspectorPanelId] =
-    useState<CinemaInspectorPanelId | null>(null);
-  const [pinnedInspectorPanelId, setPinnedInspectorPanelId] =
-    useState<CinemaInspectorPanelId | null>(null);
   const title = preparedSourceCinemaTitle(source);
   const cinemaLabel = preparedSourceCinemaLabelForKind(source, surfaceKind);
   const effectivePlaybackCursorSec =
@@ -267,7 +266,7 @@ export function PreparedSourceCinemaOverlay({
     </div>
   );
   const sourceInspectorPanels: CinemaPanelDefinition[] = [
-    {
+    buildCinemaInspectorPanel({
       children: (
         <div className="grid gap-3">
           <PreparedSourceCinemaSourceLibrary
@@ -312,49 +311,26 @@ export function PreparedSourceCinemaOverlay({
       id: "provenance",
       modeAffinity: "inspect",
       title: "Source provenance",
-    },
-    {
-      children: (
-        <div className="grid gap-3">
-          <p className="truncate text-sm font-semibold">
-            {activeSection ? activeSection.label : blockSnippet(displayBlock, "Source opening")}
-          </p>
-          <p className="text-xs vs-muted">
-            {displayBlock
-              ? `${blockKindLabel(displayBlock)} ${(displayBlock.index + 1).toString()}`
-              : "No block selected"}
-          </p>
-          <p className="line-clamp-5 text-sm leading-6">
-            {activeText || "Start playback to follow the current narrated block."}
-          </p>
-        </div>
-      ),
-      detail: displayBlock ? blockKindLabel(displayBlock) : "No block selected",
-      id: "current",
-      modeAffinity: ["inspect", "review"],
-      title: "Current block",
-    },
-    {
-      children: (
-        <ReaderWayfindingPanel
-          bookmarks={bookmarkItems}
-          canBookmark={canBookmark}
-          className="border-0 bg-transparent p-0 shadow-none"
-          maxItems={7}
-          outlineItems={outlineItems}
-          recentItems={recentItems}
-          onAddBookmark={onBookmark}
-          onBookmarkNavigate={handleBookmarkNavigate}
-          onOutlineNavigate={handleWayfindingOutlineNavigate}
-          onRecentNavigate={handleRecentNavigate}
-        />
-      ),
-      detail: "Outline, bookmarks, recent",
-      id: "wayfinding",
-      modeAffinity: "review",
-      title: "Wayfinding",
-    },
-    {
+    }),
+    buildCinemaCurrentReadingPanel({
+      detail: displayBlock
+        ? `${blockKindLabel(displayBlock)} ${(displayBlock.index + 1).toString()}`
+        : "No block selected",
+      emptyText: "Start playback to follow the current narrated block.",
+      excerpt: activeText,
+      label: activeSection ? activeSection.label : blockSnippet(displayBlock, "Source opening"),
+    }),
+    buildCinemaWayfindingPanel({
+      bookmarks: bookmarkItems,
+      canBookmark,
+      outlineItems,
+      recentItems,
+      onAddBookmark: onBookmark,
+      onBookmarkNavigate: handleBookmarkNavigate,
+      onOutlineNavigate: handleWayfindingOutlineNavigate,
+      onRecentNavigate: handleRecentNavigate,
+    }),
+    buildCinemaInspectorPanel({
       children: (
         <div className="grid gap-3 text-sm">
           <PolicyScopeChips
@@ -393,8 +369,8 @@ export function PreparedSourceCinemaOverlay({
       id: "policy",
       modeAffinity: ["inspect", "review"],
       title: "Speech policy",
-    },
-    {
+    }),
+    buildCinemaInspectorPanel({
       children: (
         <div className="grid gap-3 text-sm">
           <HealthRow label="Main content" value="Detected" />
@@ -414,8 +390,8 @@ export function PreparedSourceCinemaOverlay({
       id: "health",
       modeAffinity: ["inspect", "debug"],
       title: "Health",
-    },
-    {
+    }),
+    buildCinemaInspectorPanel({
       children: (
         <div className="grid gap-2 text-sm">
           {skippedGroups.length > 0 ? (
@@ -441,24 +417,9 @@ export function PreparedSourceCinemaOverlay({
       id: "notes",
       modeAffinity: "debug",
       title: "Skipped content",
-    },
+    }),
   ];
-  const cinemaLayoutState = buildCinemaLayoutState({
-    activePanelId: activeInspectorPanelId,
-    mode: focusMode,
-    panels: sourceInspectorPanels,
-    pinnedPanelId: pinnedInspectorPanelId,
-  });
-  const handleFocusModeChange = (nextMode: CinemaFocusMode) => {
-    const nextState = buildCinemaLayoutState({
-      activePanelId: activeInspectorPanelId,
-      mode: nextMode,
-      panels: sourceInspectorPanels,
-      pinnedPanelId: pinnedInspectorPanelId,
-    });
-    setFocusMode(nextMode);
-    setActiveInspectorPanelId(nextState.activePanelId);
-  };
+  const cinemaFocus = useCinemaFocusController(sourceInspectorPanels);
 
   useReaderKeyboardControls({
     canBookmark,
@@ -505,91 +466,15 @@ export function PreparedSourceCinemaOverlay({
   };
 
   return (
-    <div
-      aria-labelledby="prepared-source-cinema-title"
-      aria-modal="true"
-      className="vs-app fixed inset-0 z-50 flex flex-col bg-[var(--vs-bg)] text-[var(--vs-text)]"
-      {...readerDataAttributes(normalizedAccessibility)}
-      data-theme={themeName}
-      ref={dialogRef}
-      role="dialog"
-      tabIndex={-1}
-    >
-      <div aria-atomic="true" aria-live="polite" className="sr-only">
-        {liveAnnouncement}
-      </div>
-      <header className="relative flex min-h-[4rem] items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-orange-200 text-orange-600 sm:border-zinc-900 sm:bg-zinc-950 sm:text-white">
-            <CinemaFilmIcon />
-          </span>
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <h2
-                className="truncate text-base font-semibold tracking-[-0.01em] text-[var(--vs-text)] sm:text-xl"
-                id="prepared-source-cinema-title"
-              >
-                {cinemaLabel}
-              </h2>
-            </div>
-            <p className="max-w-[54vw] truncate text-sm vs-muted sm:hidden" title={title}>
-              {title}
-            </p>
-          </div>
-        </div>
-        <PlaybackStatusChip isPlaybackActive={isPlaybackActive} job={job} />
-        <div className="hidden min-w-[20rem] shrink-0 md:block">
-          <CinemaFocusModeToolbar mode={focusMode} onModeChange={handleFocusModeChange} />
-        </div>
-        <p
-          className="hidden min-w-0 flex-1 truncate text-center text-sm vs-muted lg:block"
-          title={title}
-        >
-          {title}
-        </p>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            className="hidden h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
-            onClick={() => {
-              setSettingsOpen((current) => !current);
-            }}
-            type="button"
-          >
-            <SettingsIcon />
-            Settings
-          </button>
-          <button
-            className="inline-flex h-10 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
-            onClick={onClose}
-            type="button"
-          >
-            <ExitIcon />
-            Exit
-          </button>
-        </div>
-        {settingsOpen ? (
-          <PreparedSourceCinemaSettings
-            accessibilitySettings={normalizedAccessibility}
-            autoFollow={autoFollow}
-            themeName={themeName}
-            onAccessibilitySettingsChange={onAccessibilitySettingsChange}
-            onAutoFollowChange={setAutoFollow}
-            onThemeChange={onThemeChange}
-          />
-        ) : null}
-      </header>
-
-      <main
-        className={`grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-3 lg:gap-5 lg:px-4 ${
-          cinemaLayoutState.railVisible ? "lg:grid-cols-[minmax(0,1fr)_362px]" : "lg:grid-cols-1"
-        }`}
-      >
+    <CinemaShell
+      ariaLabelledBy="prepared-source-cinema-title"
+      canvas={
         <PreparedSourceCinemaReader
           activeBlockId={displayBlock?.id ?? null}
           activeWordIndex={effectiveActiveWordIndex}
           autoFollow={autoFollow}
           accessibilitySettings={normalizedAccessibility}
-          canvasFirst={cinemaLayoutState.canvasFirst}
+          canvasFirst={cinemaFocus.layoutState.canvasFirst}
           isFullscreen={isFullscreen}
           source={source}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
@@ -597,57 +482,134 @@ export function PreparedSourceCinemaOverlay({
           onFullscreenToggle={handleFullscreenToggle}
           onInspectStructure={onInspectStructure}
         />
-        <CinemaInspectorDock
-          activePanelId={cinemaLayoutState.activePanelId}
-          mode={focusMode}
-          panels={sourceInspectorPanels}
-          pinnedPanelId={pinnedInspectorPanelId}
-          onActivePanelChange={setActiveInspectorPanelId}
-          onPinnedPanelChange={setPinnedInspectorPanelId}
+      }
+      canvasFirst={cinemaFocus.layoutState.canvasFirst}
+      footer={
+        <PreparedSourceCinemaTransport
+          accessibilitySettings={normalizedAccessibility}
+          canBookmark={canBookmark}
+          canCreateAudio={canCreateAudio}
+          isProcessing={isProcessing}
+          job={job}
+          playbackControls={playbackControls}
+          playbackCursorSec={effectivePlaybackCursorSec}
+          progress={progress}
+          source={source}
+          onAccessibilitySettingsChange={onAccessibilitySettingsChange}
+          onBookmark={onBookmark}
+          onCreateAudio={onCreateAudio}
+          onPlayPause={onPlayPause}
+          onRestart={onRestart}
+          onSkip={onSkip}
+          onToggleMobilePanel={() => {
+            setMobilePanel((current) => (current ? null : "source"));
+          }}
         />
-      </main>
-
-      <PreparedSourceCinemaMobileSheet
-        activeBlock={displayBlock}
-        bookmarkItems={bookmarkItems}
-        canBookmark={canBookmark}
-        job={job}
-        mobilePanel={mobilePanel}
-        outlineItems={outlineItems}
-        progress={progress}
-        recentItems={recentItems}
-        source={source}
-        sources={sources}
-        importError={importError}
-        isImporting={isImporting}
-        onAddBookmark={onBookmark}
-        onBookmarkNavigate={handleBookmarkNavigate}
-        onInspectStructure={onInspectStructure}
-        onMobilePanelChange={setMobilePanel}
-        onOutlineNavigate={handleWayfindingOutlineNavigate}
-        onPrepareFile={onPrepareFile}
-        onRecentNavigate={handleRecentNavigate}
-        onSelectSource={onSelectSource}
-        onResumeProgress={onResumeProgress}
-      />
-
-      <PreparedSourceCinemaTransport
-        canCreateAudio={canCreateAudio}
-        isProcessing={isProcessing}
-        job={job}
-        playbackControls={playbackControls}
-        playbackCursorSec={effectivePlaybackCursorSec}
-        progress={progress}
-        source={source}
-        onCreateAudio={onCreateAudio}
-        onPlayPause={onPlayPause}
-        onRestart={onRestart}
-        onSkip={onSkip}
-        onToggleMobilePanel={() => {
-          setMobilePanel((current) => (current ? null : "source"));
-        }}
-      />
-    </div>
+      }
+      header={
+        <header className="relative flex min-h-[4rem] items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-orange-200 text-orange-600 sm:border-zinc-900 sm:bg-zinc-950 sm:text-white">
+              <CinemaFilmIcon />
+            </span>
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <h2
+                  className="truncate text-base font-semibold tracking-[-0.01em] text-[var(--vs-text)] sm:text-xl"
+                  id="prepared-source-cinema-title"
+                >
+                  {cinemaLabel}
+                </h2>
+              </div>
+              <p className="max-w-[54vw] truncate text-sm vs-muted sm:hidden" title={title}>
+                {title}
+              </p>
+            </div>
+          </div>
+          <PlaybackStatusChip isPlaybackActive={isPlaybackActive} job={job} />
+          <div className="hidden min-w-[20rem] shrink-0 md:block">
+            <CinemaFocusModeToolbar mode={cinemaFocus.mode} onModeChange={cinemaFocus.setMode} />
+          </div>
+          <p
+            className="hidden min-w-0 flex-1 truncate text-center text-sm vs-muted lg:block"
+            title={title}
+          >
+            {title}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              className="hidden h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
+              onClick={() => {
+                setSettingsOpen((current) => !current);
+              }}
+              type="button"
+            >
+              <SettingsIcon />
+              Settings
+            </button>
+            <button
+              className="inline-flex h-10 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
+              onClick={onClose}
+              type="button"
+            >
+              <ExitIcon />
+              Exit
+            </button>
+          </div>
+          {settingsOpen ? (
+            <PreparedSourceCinemaSettings
+              accessibilitySettings={normalizedAccessibility}
+              autoFollow={autoFollow}
+              themeName={themeName}
+              onAccessibilitySettingsChange={onAccessibilitySettingsChange}
+              onAutoFollowChange={setAutoFollow}
+              onThemeChange={onThemeChange}
+            />
+          ) : null}
+        </header>
+      }
+      inspector={
+        cinemaFocus.layoutState.railVisible ? (
+          <CinemaInspectorDock
+            activePanelId={cinemaFocus.activePanelId}
+            mode={cinemaFocus.mode}
+            panels={sourceInspectorPanels}
+            pinnedPanelId={cinemaFocus.pinnedPanelId}
+            onActivePanelChange={cinemaFocus.setActivePanelId}
+            onPinnedPanelChange={cinemaFocus.setPinnedPanelId}
+          />
+        ) : undefined
+      }
+      liveAnnouncement={liveAnnouncement}
+      mobileSheet={
+        <PreparedSourceCinemaMobileSheet
+          activeBlock={displayBlock}
+          bookmarkItems={bookmarkItems}
+          canBookmark={canBookmark}
+          job={job}
+          mobilePanel={mobilePanel}
+          outlineItems={outlineItems}
+          progress={progress}
+          recentItems={recentItems}
+          source={source}
+          sources={sources}
+          importError={importError}
+          isImporting={isImporting}
+          onAddBookmark={onBookmark}
+          onBookmarkNavigate={handleBookmarkNavigate}
+          onInspectStructure={onInspectStructure}
+          onMobilePanelChange={setMobilePanel}
+          onOutlineNavigate={handleWayfindingOutlineNavigate}
+          onPrepareFile={onPrepareFile}
+          onRecentNavigate={handleRecentNavigate}
+          onSelectSource={onSelectSource}
+          onResumeProgress={onResumeProgress}
+        />
+      }
+      readerAttributes={readerDataAttributes(normalizedAccessibility)}
+      rootRef={dialogRef}
+      themeName={themeName}
+    />
   );
 }
 
@@ -977,38 +939,12 @@ function PreparedSourceCinemaMobileSheet({
   onSelectSource: (sourceId: string) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
-  if (!mobilePanel) {
-    return null;
-  }
   const metrics = preparedSourceCinemaMetrics(source);
   const activeText = activeBlock ? markdownBlockText(activeBlock) : "";
   const href = preparedSourceCinemaSourceHref(source);
-
-  return (
-    <section className="fixed inset-x-0 bottom-[8.75rem] z-[55] max-h-[39vh] overflow-y-auto rounded-t-2xl border bg-[var(--vs-raised)] px-4 pb-5 pt-3 shadow-2xl vs-border lg:hidden">
-      <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-zinc-300" />
-      <div className="mb-4 grid grid-cols-3 border-b text-sm font-semibold vs-border">
-        {(["source", "structure", "narration"] as const).map((panel) => (
-          <button
-            className={`flex items-center justify-center gap-2 border-b-2 px-2 pb-3 ${
-              mobilePanel === panel
-                ? "border-orange-600 text-orange-600"
-                : "border-transparent vs-muted"
-            }`}
-            key={panel}
-            onClick={() => {
-              onMobilePanelChange(panel);
-            }}
-            type="button"
-          >
-            {panel === "source" ? <LinkIcon /> : null}
-            {panel === "structure" ? <ListIcon /> : null}
-            {panel === "narration" ? <AudioBarsIcon /> : null}
-            {panelLabel(panel)}
-          </button>
-        ))}
-      </div>
-      {mobilePanel === "source" ? (
+  const panels: CinemaMobilePanelSpec<PreparedSourceCinemaMobilePanel>[] = [
+    {
+      children: (
         <div className="grid gap-4 text-sm">
           <div>
             <h3 className="flex items-center gap-2 text-base font-semibold">
@@ -1054,8 +990,13 @@ function PreparedSourceCinemaMobileSheet({
             </div>
           </div>
         </div>
-      ) : null}
-      {mobilePanel === "structure" ? (
+      ),
+      icon: <LinkIcon />,
+      id: "source",
+      label: "Source",
+    },
+    {
+      children: (
         <div className="grid gap-3 text-sm">
           <ReaderWayfindingPanel
             activeTab="outline"
@@ -1079,8 +1020,13 @@ function PreparedSourceCinemaMobileSheet({
             Content Structure
           </button>
         </div>
-      ) : null}
-      {mobilePanel === "narration" ? (
+      ),
+      icon: <ListIcon />,
+      id: "structure",
+      label: "Structure",
+    },
+    {
+      children: (
         <div className="grid gap-3 text-sm">
           <p className="line-clamp-4 leading-6">
             {activeText || "Playback will show the current narrated block here."}
@@ -1098,12 +1044,25 @@ function PreparedSourceCinemaMobileSheet({
             </button>
           ) : null}
         </div>
-      ) : null}
-    </section>
+      ),
+      icon: <AudioBarsIcon />,
+      id: "narration",
+      label: "Narration",
+    },
+  ];
+
+  return (
+    <CinemaMobileSheet
+      activePanelId={mobilePanel}
+      panels={panels}
+      onPanelChange={onMobilePanelChange}
+    />
   );
 }
 
 function PreparedSourceCinemaTransport({
+  accessibilitySettings,
+  canBookmark,
   canCreateAudio,
   isProcessing,
   job,
@@ -1111,12 +1070,16 @@ function PreparedSourceCinemaTransport({
   playbackCursorSec,
   progress,
   source,
+  onAccessibilitySettingsChange,
+  onBookmark,
   onCreateAudio,
   onPlayPause,
   onRestart,
   onSkip,
   onToggleMobilePanel,
 }: Readonly<{
+  accessibilitySettings: ReaderAccessibilitySettings;
+  canBookmark: boolean;
   canCreateAudio: boolean;
   isProcessing: boolean;
   job: VoiceJob | null;
@@ -1124,6 +1087,8 @@ function PreparedSourceCinemaTransport({
   playbackCursorSec: number;
   progress: PlaybackProgress | null;
   source: PreparedSource;
+  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
+  onBookmark: () => void;
   onCreateAudio: (source: PreparedSource) => void;
   onPlayPause: () => void;
   onRestart: () => void;
@@ -1151,140 +1116,65 @@ function PreparedSourceCinemaTransport({
     }
     onCreateAudio(source);
   };
+  const transportModel: CinemaTransportModel = {
+    bookmark: {
+      disabled: !canBookmark,
+      onClick: onBookmark,
+    },
+    displayControls: (
+      <ReaderAccessibilityControls
+        settings={accessibilitySettings}
+        onChange={onAccessibilitySettingsChange}
+      />
+    ),
+    mobileMore: {
+      icon: <MoreIcon />,
+      onClick: onToggleMobilePanel,
+    },
+    playbackRate: {
+      disabled: !playbackControls.setPlaybackRate,
+      value: playbackControls.playbackRate,
+      onChange: playbackControls.setPlaybackRate,
+    },
+    primary: {
+      className: "bg-orange-600 text-white shadow-orange-500/25",
+      disabled: primaryDisabled,
+      icon: playbackControls.isPlaying ? <PauseIcon /> : <PlayIcon />,
+      label: primaryLabel,
+      onClick: handlePrimary,
+    },
+    progress: {
+      currentLabel: formatClockTime(displayCursorSec),
+      durationLabel: durationMs > 0 ? formatClockTime(durationMs / 1000) : "--:--",
+      ratio: progressRatio,
+      waveform: job ? (
+        <Waveform audioUrl={job.audioUrl} progressRatio={progressRatio} />
+      ) : (
+        <TransportWaveformPlaceholder />
+      ),
+    },
+    restart: {
+      disabled: !playbackControls.isAvailable,
+      icon: <RestartIcon />,
+      onClick: onRestart,
+    },
+    skipBackward: {
+      disabled: !playbackControls.skipBy,
+      icon: <SkipBackIcon />,
+      onClick: () => {
+        onSkip(-READER_SEEK_SECONDS);
+      },
+    },
+    skipForward: {
+      disabled: !playbackControls.skipBy,
+      icon: <SkipForwardIcon />,
+      onClick: () => {
+        onSkip(READER_SEEK_SECONDS);
+      },
+    },
+  };
 
-  return (
-    <footer className="border-t bg-[var(--vs-raised)] px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.06)] vs-border lg:px-7">
-      <div className="hidden items-center gap-5 lg:flex">
-        <button
-          className="inline-flex h-12 min-w-32 items-center justify-center gap-3 rounded-md bg-orange-600 px-5 text-base font-semibold text-white shadow-lg shadow-orange-500/25 disabled:opacity-45"
-          disabled={primaryDisabled}
-          onClick={handlePrimary}
-          type="button"
-        >
-          {playbackControls.isPlaying ? <PauseIcon /> : <PlayIcon />}
-          {primaryLabel}
-        </button>
-        <button
-          className="inline-flex h-12 items-center gap-2 rounded-md border px-4 text-sm font-medium transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
-          disabled={!playbackControls.isAvailable}
-          onClick={onRestart}
-          type="button"
-        >
-          <RestartIcon />
-          Restart
-        </button>
-        <span className="min-w-12 text-right text-sm tabular-nums vs-muted">
-          {formatClockTime(displayCursorSec)}
-        </span>
-        {job ? (
-          <Waveform audioUrl={job.audioUrl} progressRatio={progressRatio} />
-        ) : (
-          <TransportWaveformPlaceholder />
-        )}
-        <span className="min-w-12 text-sm tabular-nums vs-muted">
-          {durationMs > 0 ? formatClockTime(durationMs / 1000) : "--:--"}
-        </span>
-        <div className="ml-auto flex items-center gap-3">
-          <VolumeIcon />
-          <input
-            aria-label="Volume"
-            className="h-1.5 w-32 accent-orange-600 disabled:opacity-35"
-            defaultValue={72}
-            disabled={!job}
-            max={100}
-            min={0}
-            type="range"
-          />
-          <select
-            aria-label="Playback speed"
-            className="h-12 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-medium outline-none disabled:opacity-40 vs-border"
-            disabled={!playbackControls.setPlaybackRate}
-            onChange={(event) => {
-              playbackControls.setPlaybackRate?.(Number(event.currentTarget.value));
-            }}
-            value={String(playbackControls.playbackRate)}
-          >
-            {READER_PLAYBACK_RATES.map((rate) => (
-              <option key={rate} value={rate}>
-                {rate.toFixed(rate === 1 ? 0 : 2)}x
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="grid gap-3 lg:hidden">
-        <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-3 text-sm tabular-nums vs-muted">
-          <span>{formatClockTime(displayCursorSec)}</span>
-          <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
-            <div
-              className="h-full rounded-full bg-orange-600"
-              style={{ width: `${Math.round(progressRatio * 100).toString()}%` }}
-            />
-          </div>
-          <span className="text-right">
-            {durationMs > 0 ? formatClockTime(durationMs / 1000) : "--:--"}
-          </span>
-        </div>
-        <div className="grid grid-cols-6 items-center gap-2">
-          <IconTransportButton
-            disabled={!playbackControls.isAvailable}
-            label="Restart"
-            onClick={onRestart}
-          >
-            <RestartIcon />
-          </IconTransportButton>
-          <IconTransportButton
-            disabled={!playbackControls.skipBy}
-            label="-15"
-            onClick={() => {
-              onSkip(-15);
-            }}
-          >
-            <SkipBackIcon />
-          </IconTransportButton>
-          <button
-            className="col-span-2 inline-flex h-16 items-center justify-center gap-3 rounded-full bg-orange-600 px-4 text-lg font-semibold text-white shadow-lg shadow-orange-500/25 disabled:opacity-45"
-            disabled={primaryDisabled}
-            onClick={handlePrimary}
-            type="button"
-          >
-            {playbackControls.isPlaying ? <PauseIcon /> : <PlayIcon />}
-            <span className="hidden min-[360px]:inline">{primaryLabel}</span>
-          </button>
-          <IconTransportButton
-            disabled={!playbackControls.skipBy}
-            label="+15"
-            onClick={() => {
-              onSkip(15);
-            }}
-          >
-            <SkipForwardIcon />
-          </IconTransportButton>
-          <IconTransportButton label="More" onClick={onToggleMobilePanel}>
-            <MoreIcon />
-          </IconTransportButton>
-        </div>
-        <div className="flex items-center justify-center">
-          <select
-            aria-label="Playback speed"
-            className="h-8 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-medium outline-none disabled:opacity-40 vs-border"
-            disabled={!playbackControls.setPlaybackRate}
-            onChange={(event) => {
-              playbackControls.setPlaybackRate?.(Number(event.currentTarget.value));
-            }}
-            value={String(playbackControls.playbackRate)}
-          >
-            {READER_PLAYBACK_RATES.map((rate) => (
-              <option key={rate} value={rate}>
-                {rate.toFixed(rate === 1 ? 0 : 2)}x Speed
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-    </footer>
-  );
+  return <CinemaTransportBar model={transportModel} />;
 }
 
 function PreparedSourceCinemaSettings({
@@ -1558,31 +1448,6 @@ function MobileMetric({
   );
 }
 
-function IconTransportButton({
-  children,
-  disabled,
-  label,
-  onClick,
-}: Readonly<{
-  children: ReactNode;
-  disabled?: boolean;
-  label: string;
-  onClick: () => void;
-}>) {
-  return (
-    <button
-      aria-label={label}
-      className="grid h-14 place-items-center rounded-md text-sm font-medium disabled:opacity-35"
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-      <span className="sr-only">{label}</span>
-    </button>
-  );
-}
-
 function MetadataRow({
   label,
   value,
@@ -1741,20 +1606,6 @@ function scrollToCinemaBlock(blockId: string, behavior: ScrollBehavior) {
   document
     .querySelector<HTMLElement>(`#${CSS.escape(elementId)}`)
     ?.scrollIntoView({ block: "center", inline: "nearest", behavior });
-}
-
-function panelLabel(panel: PreparedSourceCinemaMobilePanel): string {
-  switch (panel) {
-    case "narration": {
-      return "Narration";
-    }
-    case "structure": {
-      return "Structure";
-    }
-    default: {
-      return "Source";
-    }
-  }
 }
 
 function CinemaFilmIcon() {
@@ -1994,15 +1845,6 @@ function StructureIcon() {
         strokeLinejoin="round"
         strokeWidth="1.8"
       />
-    </svg>
-  );
-}
-
-function VolumeIcon() {
-  return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-      <path d="M4 8v4h3l4 3V5L7 8H4Z" />
-      <path d="M14.2 6.8a1 1 0 0 0-1.4 1.4 2.5 2.5 0 0 1 0 3.6 1 1 0 0 0 1.4 1.4 4.5 4.5 0 0 0 0-6.4Z" />
     </svg>
   );
 }
