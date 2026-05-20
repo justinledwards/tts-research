@@ -13,6 +13,7 @@ import {
 } from "../../speechPolicy";
 import {
   policyScopeChips,
+  policyScopeSummary,
   sourcePolicyUpdateRequest,
   speechPolicyProfileOptions,
   type PolicyScopeState,
@@ -37,6 +38,45 @@ export function PolicyScopeChips({ state }: Readonly<{ state: PolicyScopeState }
           <span className="max-w-32 truncate font-medium">{chip.detail}</span>
         </span>
       ))}
+    </div>
+  );
+}
+
+export function PolicyScopeSummary({
+  display = "compact",
+  state,
+}: Readonly<{ display?: "compact" | "expanded" | "debug"; state: PolicyScopeState }>) {
+  const summary = policyScopeSummary(state);
+  if (display === "compact") {
+    return (
+      <span
+        className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold border-orange-300 bg-orange-500/10 text-orange-700"
+        title={summary.description}
+      >
+        <span className="sr-only">{summary.description}</span>
+        <span className="shrink-0">Policy</span>
+        <span className="min-w-0 truncate">{summary.compactLabel}</span>
+      </span>
+    );
+  }
+
+  return (
+    <div className="grid gap-2">
+      <div
+        className="grid gap-1 rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs vs-border"
+        title={summary.description}
+      >
+        <span className="font-semibold text-[var(--vs-text)]">
+          Policy: {summary.currentProfileLabel}
+        </span>
+        <span className="vs-muted">Applies from {summary.ownershipLabel}</span>
+      </div>
+      <PolicyScopeChips state={state} />
+      {display === "debug" ? (
+        <p className="rounded-md border border-dashed px-3 py-2 text-xs leading-5 vs-border vs-muted">
+          {summary.description}
+        </p>
+      ) : null}
     </div>
   );
 }

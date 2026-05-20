@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { backendAssetUrl } from "../../api";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
+import { HeaderContextSummary } from "../header";
 import { useReaderModalLifecycle, type ReaderAccessibilitySettings } from "../reader-accessibility";
 import {
   KOKORO_RENDER_MODE_OPTIONS,
@@ -574,7 +575,8 @@ function QuickSelect({
 
 function ScopeLegend() {
   return (
-    <div className="grid gap-2 text-xs sm:grid-cols-2">
+    <fieldset className="grid gap-2 text-xs sm:grid-cols-2">
+      <legend className="sr-only">Settings applies-to scopes</legend>
       {(["session", "source", "project", "machine"] as const).map((scope) => (
         <div className="rounded-md border px-3 py-2 vs-border vs-raised" key={scope}>
           <div className="flex items-center gap-2">
@@ -584,7 +586,7 @@ function ScopeLegend() {
           <p className="vs-muted mt-1 leading-5">{settingsScopeAppliesTo(scope)}</p>
         </div>
       ))}
-    </div>
+    </fieldset>
   );
 }
 
@@ -1681,10 +1683,15 @@ function PanelShell({
         tabIndex={-1}
       >
         <header className="flex items-center justify-between border-b px-5 py-4 vs-border">
-          <div>
-            <p className="vs-muted text-xs font-medium uppercase tracking-wide">{label}</p>
-            <h2 className="text-lg font-semibold">{title}</h2>
-          </div>
+          <HeaderContextSummary
+            density="compact"
+            metadata={[
+              { label: "Groups", value: "Run, Reader, Voices, Sources, Runtime, Diagnostics" },
+            ]}
+            scopeTitle="Session, Source, Project, Machine"
+            sourceTitle={title}
+            surfaceName={label}
+          />
           <button
             aria-label={`Close ${label}`}
             className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-surface)] vs-border"
@@ -1732,10 +1739,19 @@ function PanelSection({
           <h3 className="text-base font-semibold">{title}</h3>
           <p className="vs-muted mt-1 text-sm leading-6">{subtitle}</p>
         </div>
-        <ScopeBadge scope={scope} />
+        <AppliesToScope scope={scope} />
       </div>
       {children}
     </section>
+  );
+}
+
+function AppliesToScope({ scope }: Readonly<{ scope: SettingsScope }>) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-2 rounded-md border px-2 py-1 text-xs font-semibold vs-border vs-surface">
+      <span className="vs-muted">Applies to</span>
+      <ScopeBadge scope={scope} />
+    </span>
   );
 }
 

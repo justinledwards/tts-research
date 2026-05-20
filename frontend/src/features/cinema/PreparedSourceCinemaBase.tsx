@@ -39,7 +39,8 @@ import {
   type ReaderOutlineItem,
   type ReaderRecentPositionItem,
 } from "../reader-navigation";
-import { PolicyScopeChips, SourcePolicyPinEditor } from "../policy";
+import { HeaderContextSummary } from "../header";
+import { PolicyScopeSummary, SourcePolicyPinEditor, policyScopeSummary } from "../policy";
 import { LazyPanelFallback } from "../performance";
 import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
 import { ExitIcon, SettingsIcon } from "../navigation";
@@ -285,6 +286,14 @@ export function PreparedSourceCinemaOverlay({
   const policyNotes = useMemo(() => preparedSourceCinemaPolicyNotes(source), [source]);
   const activeText = displayBlock ? markdownBlockText(displayBlock) : "";
   const activeSection = activeOutlineItem(outline, displayBlock);
+  const sourcePolicyState = {
+    projectProfile: policyProfile,
+    resolvedProfile: displayBlock?.speechPolicy.profile ?? source.speechPolicyProfile,
+    sessionOverrides: policyOverrides,
+    sourceOverrides: source.sourceSpeechPolicyOverrides,
+    sourceProfile: source.sourceSpeechPolicyProfile,
+  };
+  const sourcePolicySummary = policyScopeSummary(sourcePolicyState);
   const generatedHealth = (
     <div className="grid gap-2 text-sm">
       <HealthRow label="TTS engine" value={job ? "Healthy" : "Waiting"} />
@@ -364,15 +373,7 @@ export function PreparedSourceCinemaOverlay({
     buildCinemaInspectorPanel({
       children: (
         <div className="grid gap-3 text-sm">
-          <PolicyScopeChips
-            state={{
-              projectProfile: policyProfile,
-              resolvedProfile: displayBlock?.speechPolicy.profile ?? source.speechPolicyProfile,
-              sessionOverrides: policyOverrides,
-              sourceOverrides: source.sourceSpeechPolicyOverrides,
-              sourceProfile: source.sourceSpeechPolicyProfile,
-            }}
-          />
+          <PolicyScopeSummary display="expanded" state={sourcePolicyState} />
           <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2 text-center text-[11px]">
             <PolicyMetric icon={<MicrophoneIcon />} label="Voice" value={job?.voice ?? "Alloy"} />
             <PolicyMetric
@@ -402,7 +403,12 @@ export function PreparedSourceCinemaOverlay({
       title: "Speech policy",
     }),
     buildCinemaInspectorPanel({
-      children: <PreparedSourcePolicyNotes notes={policyNotes} />,
+      children: (
+        <div className="grid gap-3">
+          <PolicyScopeSummary display="debug" state={sourcePolicyState} />
+          <PreparedSourcePolicyNotes notes={policyNotes} />
+        </div>
+      ),
       detail: `${policyNotes.length.toLocaleString()} policy notes`,
       id: "policy-notes",
       modeAffinity: ["inspect", "review", "debug"],
@@ -552,34 +558,29 @@ export function PreparedSourceCinemaOverlay({
       }
       header={
         <header className="relative flex min-h-[4rem] items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-orange-200 text-orange-600 sm:border-zinc-900 sm:bg-zinc-950 sm:text-white">
-              <CinemaFilmIcon />
-            </span>
-            <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-2">
-                <h2
-                  className="truncate text-base font-semibold tracking-[-0.01em] text-[var(--vs-text)] sm:text-xl"
-                  id="prepared-source-cinema-title"
-                >
-                  {cinemaLabel}
-                </h2>
-              </div>
-              <p className="max-w-[54vw] truncate text-sm vs-muted sm:hidden" title={title}>
-                {title}
-              </p>
-            </div>
-          </div>
+          <HeaderContextSummary
+            className="flex-1 lg:max-w-[min(36rem,42vw)]"
+            density="compact"
+            icon={
+              <span className="grid h-9 w-9 place-items-center rounded-md border border-orange-200 text-orange-600 sm:border-zinc-900 sm:bg-zinc-950 sm:text-white">
+                <CinemaFilmIcon />
+              </span>
+            }
+            id="prepared-source-cinema-title"
+            metadata={[
+              { label: "Policy", value: sourcePolicySummary.compactLabel },
+              { label: "Voice", value: job?.voice ?? "Default narrative" },
+            ]}
+            scopeTitle="Full source"
+            sourceTitle={title}
+            stateLabel={preparedSourceCinemaPlaybackStatusLabel(isPlaybackActive, job)}
+            surfaceName={cinemaLabel}
+            variant="bar"
+          />
           <PlaybackStatusChip isPlaybackActive={isPlaybackActive} job={job} />
           <div className="hidden min-w-[20rem] shrink-0 lg:block">
             <CinemaFocusModeToolbar mode={cinemaFocus.mode} onModeChange={cinemaFocus.setMode} />
           </div>
-          <p
-            className="hidden min-w-0 flex-1 truncate text-center text-sm vs-muted lg:block"
-            title={title}
-          >
-            {title}
-          </p>
           <div className="flex shrink-0 items-center gap-2">
             <button
               className="cinema-touch-target hidden h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"

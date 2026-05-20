@@ -60,7 +60,8 @@ import {
   type ReaderOutlineItem,
   type ReaderRecentPositionItem,
 } from "../reader-navigation";
-import { PolicyScopeChips, SourcePolicyPinEditor } from "../policy";
+import { HeaderContextSummary } from "../header";
+import { PolicyScopeSummary, SourcePolicyPinEditor, policyScopeSummary } from "../policy";
 import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
 import { ExitIcon, SettingsIcon } from "../navigation";
 import {
@@ -547,17 +548,26 @@ function BookScopeActionHeader({
   onOpenCinema: () => void;
   onUseText: (book: BookSource, scope: BookScope) => void;
 }>) {
+  const selectedBookFileLabel = selectedBook.author
+    ? `${selectedBook.author} · ${selectedBook.sourceFile}`
+    : selectedBook.sourceFile;
+
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <div className="min-w-0">
-        <h3 className="truncate text-sm font-semibold" title={bookSourceName(selectedBook)}>
-          {bookSourceName(selectedBook)}
-        </h3>
-        <p className="vs-muted mt-1 truncate text-xs" title={selectedBook.sourceFile}>
-          {selectedBook.author ? `${selectedBook.author} · ` : ""}
-          {selectedBook.sourceFile}
-        </p>
-      </div>
+      <HeaderContextSummary
+        density="compact"
+        metadata={[
+          { label: "Kind", value: selectedBook.kind.toUpperCase() },
+          {
+            label: "File",
+            value: selectedBookFileLabel,
+          },
+        ]}
+        scopeTitle={bookScopeLabel(scope)}
+        sourceTitle={bookSourceName(selectedBook)}
+        stateLabel={selectedBook.status === "ready" ? "Ready" : "Needs attention"}
+        surfaceName="Book Source"
+      />
       <div className="flex min-w-0 flex-wrap gap-2">
         <button
           className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
@@ -877,6 +887,14 @@ export function BookCinemaOverlay({
   const activeSpan = scopedSpans.find((span) => span.index === readerActiveWordIndex) ?? null;
   const activeBlock = bookCinemaActiveBlock(scopeContent?.blocks ?? [], activeSpan);
   const activePassage = bookCinemaActivePassage(activeBlock, scopedText);
+  const bookPolicyState = {
+    projectProfile: policyProfile,
+    resolvedProfile: activeBlock?.speechPolicy.profile,
+    sessionOverrides: policyOverrides,
+    sourceOverrides: book.sourceSpeechPolicyOverrides,
+    sourceProfile: book.sourceSpeechPolicyProfile,
+  };
+  const bookPolicySummary = policyScopeSummary(bookPolicyState);
   const bookSourceLabels = useMemo(
     () => new Map(bookSources.map((source) => [source.id, bookSourceName(source)])),
     [bookSources],
@@ -1028,15 +1046,7 @@ export function BookCinemaOverlay({
     buildCinemaInspectorPanel({
       children: (
         <div className="grid gap-3 text-sm">
-          <PolicyScopeChips
-            state={{
-              projectProfile: policyProfile,
-              resolvedProfile: activeBlock?.speechPolicy.profile,
-              sessionOverrides: policyOverrides,
-              sourceOverrides: book.sourceSpeechPolicyOverrides,
-              sourceProfile: book.sourceSpeechPolicyProfile,
-            }}
-          />
+          <PolicyScopeSummary display="expanded" state={bookPolicyState} />
           <MetadataRow label="Generation" value={bookScopeLabel(createAudioScope)} />
           <MetadataRow label="Voice" value={activeBookJob?.voice ?? "Default narrative"} />
           <MetadataRow label="Speed" value={`${playbackControls.playbackRate.toFixed(2)}x`} />
@@ -1114,7 +1124,12 @@ export function BookCinemaOverlay({
       title: "Health",
     }),
     buildCinemaInspectorPanel({
-      children: <BookCinemaPolicyNotes notes={policyNotes} />,
+      children: (
+        <div className="grid gap-3">
+          <PolicyScopeSummary display="debug" state={bookPolicyState} />
+          <BookCinemaPolicyNotes notes={policyNotes} />
+        </div>
+      ),
       detail: `${policyNotes.length.toLocaleString()} policy notes`,
       id: "notes",
       modeAffinity: "debug",
@@ -1333,25 +1348,25 @@ export function BookCinemaOverlay({
       }
       header={
         <header className="relative flex min-h-[4rem] items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-orange-400/30 bg-orange-500/10 text-orange-400">
-              <CinemaFilmIcon />
-            </span>
-            <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-2">
-                <h2
-                  className="truncate text-base font-semibold tracking-[-0.01em] text-[var(--vs-text)] sm:text-xl"
-                  id="book-cinema-title"
-                  title={bookSourceName(book)}
-                >
-                  {book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}
-                </h2>
-              </div>
-              <p className="hidden" title={bookSourceName(book)}>
-                {bookSourceName(book)}
-              </p>
-            </div>
-          </div>
+          <HeaderContextSummary
+            className="flex-1 lg:max-w-[min(36rem,42vw)]"
+            density="compact"
+            icon={
+              <span className="grid h-9 w-9 place-items-center rounded-md border border-orange-400/30 bg-orange-500/10 text-orange-400">
+                <CinemaFilmIcon />
+              </span>
+            }
+            id="book-cinema-title"
+            metadata={[
+              { label: "Policy", value: bookPolicySummary.compactLabel },
+              { label: "Voice", value: activeBookJob?.voice ?? "Default narrative" },
+            ]}
+            scopeTitle={bookScopeLabel(normalizedScope)}
+            sourceTitle={bookSourceName(book)}
+            stateLabel={bookTransportStateTitle(playbackState)}
+            surfaceName={book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}
+            variant="bar"
+          />
           <BookCinemaStatusChip
             hasPlayableAudio={hasPlayableAudio}
             isPlaying={playbackControls.isPlaying}
@@ -1364,16 +1379,11 @@ export function BookCinemaOverlay({
             <BookCinemaTimingStatusChip display={timingConfidence} />
           ) : null}
           {isResumeRestoring ? <BookCinemaResumeChip /> : null}
-          <div className="hidden min-w-0 flex-1 px-4 text-center lg:block">
-            <p className="truncate text-sm font-medium" title={bookSourceName(book)}>
-              {bookSourceName(book)}
-            </p>
-            <p className="truncate text-xs vs-muted">{bookScopeLabel(normalizedScope)}</p>
-          </div>
           <div className="flex shrink-0 items-center gap-2">
             <label className="hidden items-center gap-2 text-sm vs-muted lg:flex">
               <span>Scope</span>
               <select
+                aria-label={`Book scope: ${bookScopeLabel(normalizedScope)}`}
                 className="cinema-touch-target max-w-64 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold text-[var(--vs-text)] outline-none vs-border"
                 onChange={(event) => {
                   const nextScope = scopeOptions.find(
@@ -1383,6 +1393,7 @@ export function BookCinemaOverlay({
                     handleScopeChange(nextScope);
                   }
                 }}
+                title={`Scope: ${bookScopeLabel(normalizedScope)}`}
                 value={normalizedScopeKey}
               >
                 {scopeOptions.map((option) => (

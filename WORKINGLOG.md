@@ -197,3 +197,11 @@
 - [x] Render citations and artifact tokens as speech-safe visual notes
 - [x] Update policy notes and profile-specific speech behavior
 - [x] Run requested validation commands
+
+## 2026-05-20 22:09 CEST - Workstream MU header scope ergonomics
+- [x] Map current header, scope, policy, settings, workspace, and teleprompt presentation
+- [x] Add shared header context summary and compact/expanded policy summary
+- [x] Wire shared summary across Cinema, Workspace, Settings, and Teleprompt surfaces
+- [x] Document compact versus expanded scope display rules
+- [x] Run requested local validation commands and screenshot review
+- [ ] Low-resource reader-resume timing budget remains above threshold

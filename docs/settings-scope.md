@@ -25,6 +25,15 @@ Speech policy still resolves in the same order:
 - Scope badges and “applies to” copy must come from shared settings metadata, not hand-written text in each panel.
 - Source pin editors and Policy Scope chips use the same `Session`, `Source`, `Project`, and `Machine` labels as Studio Settings.
 
+## Compact and Expanded Display
+
+- Header summaries show the surface, full source title, scope title, current state, and a short metadata line. If the visible title truncates, the full source and scope names must remain available through the title tooltip and the shared context popover.
+- Normal Read mode uses compact policy copy such as `Policy: Enterprise · Project` or `Policy: Accessibility · Source + Session`.
+- Inspect and Review mode may expand policy into the current profile, project default, source pin, and session override layers.
+- Debug and Policy Notes must keep the full trace text visible, including current profile, project default, source pin, and session override details.
+- Settings panels use `Applies to Session`, `Applies to Source`, `Applies to Project`, and `Applies to Machine` as the compact form of the shared scope vocabulary.
+- Workspace Intake, Review, Preview, and Teleprompt use the same source/scope/profile summary model as Cinema headers so stage changes do not rename ownership concepts.
+
 ## Local Smoke
 
 Run the lightweight settings IA screenshot smoke with:

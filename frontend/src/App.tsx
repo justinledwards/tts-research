@@ -167,6 +167,7 @@ import {
   type UiMemoryCinemaState,
   type UiMemoryState,
 } from "./features/preferences";
+import { HeaderContextSummary } from "./features/header";
 import { TelepromptStage } from "./features/teleprompt";
 import {
   createWorkspaceContext,
@@ -178,6 +179,7 @@ import {
   withWorkspaceSource,
   withWorkspaceSpeechPolicyProfile,
   withWorkspaceVoiceProfile,
+  workspaceStageMeta,
   workspaceLayoutModeForRailMode,
   workspaceLayoutRails,
   type WorkspaceContext,
@@ -6666,6 +6668,10 @@ export function App() {
               speechPolicyDefinition={speechPolicyDefinition}
               speechPolicyOverrides={speechPolicyOverrides}
               speechPolicyProfile={speechPolicyProfile}
+              speechPolicyProfileLabel={speechPolicyProfileDisplayName(
+                speechPolicyProfile,
+                customSpeechPolicyProfiles,
+              )}
               customSpeechPolicyProfiles={customSpeechPolicyProfiles}
               speechPolicyProfiles={speechPolicyProfiles}
               sourcePrepError={sourcePrepError}
@@ -6722,6 +6728,7 @@ export function App() {
               }
               text={text}
               voiceProfileId={selectedVoiceProfileId}
+              voiceProfileLabel={selectedVoiceProfile?.name ?? "Default voice"}
               onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
               onContentModeChange={setContentMode}
               onCreateBookAudio={(book, scope) => {
@@ -9351,11 +9358,13 @@ function SourceTextPanel({
   speechPolicyDefinition,
   speechPolicyOverrides,
   speechPolicyProfile,
+  speechPolicyProfileLabel,
   speechPolicyProfiles,
   sourcePrepError,
   telepromptStage,
   text,
   voiceProfileId,
+  voiceProfileLabel,
   onClearSpeechPolicyOverrides,
   onContentModeChange,
   onCreateBookAudio,
@@ -9401,11 +9410,13 @@ function SourceTextPanel({
   speechPolicyDefinition: SpeechPolicyDefinition;
   speechPolicyOverrides: SpeechPolicyOverrides;
   speechPolicyProfile: string;
+  speechPolicyProfileLabel: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
   sourcePrepError: string | null;
   telepromptStage: ReactNode;
   text: string;
   voiceProfileId: string;
+  voiceProfileLabel: string;
   onClearSpeechPolicyOverrides: () => void;
   onContentModeChange: (mode: WorkspaceStage) => void;
   onCreateBookAudio: (source: BookSource, scope: BookScope) => void;
@@ -9452,6 +9463,13 @@ function SourceTextPanel({
     sourceMode,
     text,
   });
+  const scopeTitle = workbenchScopeTitle({
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+    sourceMode,
+  });
+  const stageLabel = workspaceStageMeta(contentMode).label;
 
   const loadSourceFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -9513,22 +9531,16 @@ function SourceTextPanel({
         void loadSourceFiles(event.dataTransfer.files);
       }}
     >
-      <div className="flex flex-col gap-1">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
-            Narration Workbench
-          </p>
-          <label
-            className="mt-1 block text-lg font-semibold text-[var(--vs-text)]"
-            htmlFor="source-text"
-          >
-            Content Workbench
-          </label>
-          <p className="mt-1 text-sm vs-muted">
-            {sourceIdentity.label} · {sourceIdentity.meta}
-          </p>
-        </div>
-      </div>
+      <HeaderContextSummary
+        metadata={[
+          { label: "Policy", value: speechPolicyProfileLabel },
+          { label: "Voice", value: voiceProfileLabel },
+        ]}
+        scopeTitle={scopeTitle}
+        sourceTitle={sourceIdentity.label}
+        stateLabel={stageLabel}
+        surfaceName="Narration Workbench"
+      />
 
       <div className="grid grid-cols-2 rounded-lg border bg-[var(--vs-surface)] p-1 text-sm font-semibold vs-border lg:grid-cols-4">
         {(
@@ -9556,18 +9568,13 @@ function SourceTextPanel({
         ))}
       </div>
 
-      <div className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center vs-border">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center vs-border">
+        <div className="flex min-w-0 items-center gap-3 text-sm">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md border text-orange-600 vs-border vs-surface">
             <SourceKindIcon mode={sourceIdentity.mode} />
           </span>
           <div className="min-w-0">
-            <p
-              className="truncate text-sm font-semibold text-[var(--vs-text)]"
-              title={sourceIdentity.label}
-            >
-              {sourceIdentity.label}
-            </p>
+            <p className="font-semibold text-[var(--vs-text)]">Source type</p>
             <p className="mt-1 truncate text-xs vs-muted" title={sourceIdentity.meta}>
               {sourceIdentity.meta}
             </p>
@@ -9689,6 +9696,7 @@ function SourceTextPanel({
           </div>
           {sourceFileError ? <p className="text-xs text-red-700">{sourceFileError}</p> : null}
           <textarea
+            aria-label="Source text"
             className="min-h-[240px] w-full resize-none rounded-lg border bg-[var(--vs-raised)] p-4 font-mono text-sm leading-6 outline-none transition read-only:opacity-70 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
             id="source-text"
             onChange={(event) => {
@@ -9711,11 +9719,13 @@ function SourceTextPanel({
             bookScopeContent={bookScopeContent}
             job={job}
             optimizedText={optimizedText}
+            policyProfileLabel={speechPolicyProfileLabel}
             projectId={projectId}
             selectedBookScope={selectedBookScope}
             selectedBookSource={selectedBookSource}
             selectedPreparedSource={selectedPreparedSource}
             text={text}
+            voiceProfileLabel={voiceProfileLabel}
             voiceProfileId={voiceProfileId}
             onInspectBookSource={onInspectBookSource}
             onInspectPreparedSource={onInspectPreparedSource}
@@ -9732,11 +9742,13 @@ function SourceTextPanel({
           canCreate={canSubmit && !isProcessing}
           job={job}
           optimizedText={optimizedText}
+          policyProfileLabel={speechPolicyProfileLabel}
           selectedBookScope={selectedBookScope}
           selectedBookSource={selectedBookSource}
           selectedPreparedSource={selectedPreparedSource}
           sourceMode={sourceMode}
           text={text}
+          voiceProfileLabel={voiceProfileLabel}
           onCreateBookAudio={onCreateBookAudio}
           onCreateDraftAudio={onCreateDraftAudio}
           onCreatePreparedAudio={onCreatePreparedAudio}
@@ -9767,11 +9779,13 @@ function NarrationPreviewStage({
   canCreate,
   job,
   optimizedText,
+  policyProfileLabel,
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
   sourceMode,
   text,
+  voiceProfileLabel,
   onCreateBookAudio,
   onCreateDraftAudio,
   onCreatePreparedAudio,
@@ -9781,11 +9795,13 @@ function NarrationPreviewStage({
   canCreate: boolean;
   job: VoiceJob | null;
   optimizedText: string;
+  policyProfileLabel: string;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
   sourceMode: SourceMode;
   text: string;
+  voiceProfileLabel: string;
   onCreateBookAudio: (source: BookSource, scope: BookScope) => void;
   onCreateDraftAudio: () => void;
   onCreatePreparedAudio: (source: PreparedSource) => void;
@@ -9798,6 +9814,12 @@ function NarrationPreviewStage({
     selectedBookSource,
     selectedPreparedSource,
     text,
+  });
+  const scopeTitle = workbenchScopeTitle({
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+    sourceMode,
   });
   const previewText =
     firstNonEmptyString(
@@ -9842,16 +9864,18 @@ function NarrationPreviewStage({
   return (
     <section className="grid min-w-0 gap-3 rounded-xl border bg-[var(--vs-raised)] p-4 vs-border">
       <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">Preview</p>
-          <h2
-            className="mt-1 truncate text-lg font-semibold text-[var(--vs-text)]"
-            title={sourceLabel}
-          >
-            {sourceLabel}
-          </h2>
-          <p className="mt-1 text-sm vs-muted">{sourceMeta}</p>
-        </div>
+        <HeaderContextSummary
+          className="flex-1"
+          metadata={[
+            { label: "Policy", value: policyProfileLabel },
+            { label: "Voice", value: voiceProfileLabel },
+            { label: "Size", value: sourceMeta },
+          ]}
+          scopeTitle={scopeTitle}
+          sourceTitle={sourceLabel}
+          stateLabel={job?.status ?? "Waiting"}
+          surfaceName="Preview"
+        />
         <div className="flex flex-wrap items-center gap-2">
           <button
             className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700"
@@ -10260,6 +10284,7 @@ function SourcePrepReview({
               </p>
             </div>
             <select
+              aria-label="Prepared source"
               className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold outline-none focus:border-orange-400 vs-border"
               onChange={(event) => {
                 const nextSource = preparedSources.find(
@@ -10269,6 +10294,7 @@ function SourcePrepReview({
                   onUsePreparedSource(nextSource);
                 }
               }}
+              title={source ? `Prepared source: ${source.title ?? source.sourceName}` : undefined}
               value={source?.id ?? ""}
             >
               {preparedSources.map((item) => (
@@ -10321,18 +10347,15 @@ function PreparedSourceIntakeSummary({
   return (
     <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
-            Prepared Source
-          </p>
-          <h3
-            className="mt-1 truncate text-base font-semibold"
-            title={source.title ?? source.sourceName}
-          >
-            {source.title ?? source.sourceName}
-          </h3>
-          <p className="mt-1 text-xs vs-muted">{preparedSourceSummaryLine(source)}</p>
-        </div>
+        <HeaderContextSummary
+          className="flex-1"
+          density="compact"
+          metadata={[{ label: "Size", value: preparedSourceSummaryLine(source) }]}
+          scopeTitle="Full source"
+          sourceTitle={source.title ?? source.sourceName}
+          stateLabel={source.status === "ready" ? "Ready" : "Preparing"}
+          surfaceName="Prepared Source"
+        />
         <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
           <button
             className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 transition hover:bg-orange-500/15"
@@ -12060,11 +12083,13 @@ function NarrationReviewWorkbench({
   onActiveBlockChange,
   onActivePaneChange,
   optimizedText,
+  policyProfileLabel,
   projectId,
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
   text,
+  voiceProfileLabel,
   voiceProfileId,
 }: Readonly<{
   activePane: ReviewPane;
@@ -12078,11 +12103,13 @@ function NarrationReviewWorkbench({
   onOpenPreparedSourceCinema: (source: PreparedSource) => void;
   onOpenTeleprompter: () => void;
   optimizedText: string;
+  policyProfileLabel: string;
   projectId: string;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
   text: string;
+  voiceProfileLabel: string;
   voiceProfileId: string;
 }>) {
   const reviewBlocks = useMemo(
@@ -12115,6 +12142,18 @@ function NarrationReviewWorkbench({
     selectedBookSource,
     selectedPreparedSource,
     text,
+  });
+  let reviewSourceMode: SourceMode = "text";
+  if (selectedPreparedSource) {
+    reviewSourceMode = "fileUrl";
+  } else if (selectedBookSource) {
+    reviewSourceMode = "book";
+  }
+  const scopeTitle = workbenchScopeTitle({
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+    sourceMode: reviewSourceMode,
   });
   const validationReason =
     job?.voiceCheck.reason ??
@@ -12162,26 +12201,19 @@ function NarrationReviewWorkbench({
   return (
     <section className="grid min-w-0 gap-3 rounded-xl border bg-[var(--vs-raised)] p-4 vs-border">
       <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 max-w-full">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
-            Source Review
-          </p>
-          <h2
-            className="mt-1 max-w-full truncate text-lg font-semibold text-[var(--vs-text)]"
-            title={sourceLabel}
-          >
-            {sourceLabel}
-          </h2>
-          <p className="mt-1 text-sm vs-muted">{sourceMeta}</p>
-        </div>
+        <HeaderContextSummary
+          className="flex-1"
+          metadata={[
+            { label: "Policy", value: policyProfileLabel },
+            { label: "Voice", value: voiceProfileLabel },
+            { label: "Size", value: sourceMeta },
+          ]}
+          scopeTitle={scopeTitle}
+          sourceTitle={sourceLabel}
+          stateLabel={optimizedText ? "Optimized" : "Waiting"}
+          surfaceName="Source Review"
+        />
         <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
-          <span
-            className={`rounded-md px-2 py-1 text-xs font-semibold ${
-              optimizedText ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-600"
-            }`}
-          >
-            {optimizedText ? "Optimized" : "Waiting"}
-          </span>
           <button
             className="h-9 flex-1 whitespace-nowrap rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 sm:flex-none"
             onClick={onOpenTeleprompter}
@@ -12335,6 +12367,26 @@ function bookScopeLabelForReview(scope: BookScope): string {
     return start === end ? `Page ${String(start)}` : `Pages ${String(start)}-${String(end)}`;
   }
   return "Full book";
+}
+
+function workbenchScopeTitle({
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+}: Readonly<{
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+}>): string {
+  if (selectedPreparedSource) {
+    return "Full source";
+  }
+  if (selectedBookSource) {
+    return selectedBookScope ? bookScopeLabelForReview(selectedBookScope) : "Full book";
+  }
+  return sourceMode === "text" ? "Draft text" : "No source scope";
 }
 
 function narrationReviewMathPanel(selectedPreparedSource: PreparedSource | null): ReactNode {
