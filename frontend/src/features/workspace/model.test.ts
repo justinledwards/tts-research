@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createWorkspaceContext,
+  defaultWorkspaceLayoutMode,
   enterTelepromptStage,
   normalizeWorkspaceLayoutMode,
   normalizeWorkspaceStage,
@@ -24,6 +25,7 @@ describe("workspace stage model", () => {
 
   it("uses balanced layout as the default shell density", () => {
     expect(normalizeWorkspaceLayoutMode(null)).toBe("balanced");
+    expect(defaultWorkspaceLayoutMode()).toBe("balanced");
     expect(workspaceLayoutRails("balanced")).toEqual({
       activityFooterMode: "compact",
       leftRailMode: "compact",
@@ -42,6 +44,18 @@ describe("workspace stage model", () => {
     expect(workspaceLayoutModeForRailMode("collapsed")).toBe("focus");
     expect(workspaceLayoutModeForRailMode("compact")).toBe("balanced");
     expect(workspaceLayoutModeForRailMode("full")).toBe("full");
+  });
+
+  it("defaults narrow viewports to focus density when layout memory is off", () => {
+    const original = globalThis.matchMedia;
+    globalThis.matchMedia = vi.fn(
+      (query: string) => ({ matches: query === "(max-width: 1023px)" }) as MediaQueryList,
+    );
+
+    expect(defaultWorkspaceLayoutMode()).toBe("focus");
+    expect(normalizeWorkspaceLayoutMode(null)).toBe("focus");
+
+    globalThis.matchMedia = original;
   });
 
   it("preserves context while entering and returning from Teleprompt", () => {

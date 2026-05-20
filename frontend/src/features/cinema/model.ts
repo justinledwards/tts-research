@@ -1,4 +1,9 @@
 import type { ReactNode } from "react";
+export {
+  NARROW_VIEWPORT_QUERY as CINEMA_NARROW_VIEWPORT_QUERY,
+  RESPONSIVE_QA_VIEWPORTS as CINEMA_RESPONSIVE_QA_VIEWPORTS,
+  TOUCH_TARGET_MIN_PX as CINEMA_TOUCH_TARGET_MIN_PX,
+} from "../layout/responsive";
 
 export const CINEMA_FOCUS_MODES = ["read", "inspect", "review", "debug"] as const;
 export const CINEMA_INSPECTOR_PANEL_IDS = [

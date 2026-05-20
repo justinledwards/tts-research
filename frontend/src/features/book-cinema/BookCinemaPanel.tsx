@@ -20,6 +20,7 @@ import {
   buildCinemaCurrentReadingPanel,
   buildCinemaInspectorPanel,
   buildCinemaWayfindingPanel,
+  returnFocusToCinemaReaderCanvas,
   useCinemaFocusController,
   type CinemaMobilePanelSpec,
   type CinemaPanelDefinition,
@@ -148,6 +149,7 @@ export type BookCinemaTextSize = ReaderTextScale;
 export type BookCinemaKeyboardCommand = ReaderKeyboardCommand;
 
 type BookCinemaMobilePanel = "narration" | "source" | "structure";
+const BOOK_CINEMA_MOBILE_SHEET_ID = "book-cinema-mobile-sheet";
 
 export interface BookCinemaControlsProps {
   bookSources: BookSource[];
@@ -252,7 +254,7 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
           <label className="grid gap-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] vs-muted">
             <span>Profile</span>
             <select
-              className="h-9 rounded-md border bg-[var(--vs-surface)] px-2 text-xs font-medium normal-case tracking-normal text-[var(--vs-text)] vs-border"
+              className="cinema-touch-target rounded-md border bg-[var(--vs-surface)] px-2 text-xs font-medium normal-case tracking-normal text-[var(--vs-text)] vs-border"
               onChange={(event) => {
                 setImportProfile(event.currentTarget.value as BookImportProfile);
               }}
@@ -265,7 +267,7 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
           <label className="grid gap-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] vs-muted">
             <span>Tables</span>
             <select
-              className="h-9 rounded-md border bg-[var(--vs-surface)] px-2 text-xs font-medium normal-case tracking-normal text-[var(--vs-text)] vs-border"
+              className="cinema-touch-target rounded-md border bg-[var(--vs-surface)] px-2 text-xs font-medium normal-case tracking-normal text-[var(--vs-text)] vs-border"
               onChange={(event) => {
                 setPDFTableMode(event.currentTarget.value as PDFTableMode);
               }}
@@ -277,7 +279,7 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
             </select>
           </label>
           <button
-            className="h-9 shrink-0 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
+            className="cinema-touch-target shrink-0 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
             disabled={isImporting || isProcessing}
             onClick={() => {
               inputRef.current?.click();
@@ -976,7 +978,7 @@ export function BookCinemaOverlay({
             <MetadataRow label="Structure" value={book.structureVersion ? "Detected" : "Basic"} />
           </dl>
           <button
-            className="h-10 w-full rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+            className="cinema-touch-target w-full rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
             onClick={() => {
               onInspectStructure(book);
             }}
@@ -1209,6 +1211,8 @@ export function BookCinemaOverlay({
       />
     ),
     mobileMore: {
+      active: mobilePanel !== null,
+      controlsId: BOOK_CINEMA_MOBILE_SHEET_ID,
       icon: <MoreTinyIcon />,
       onClick: () => {
         setMobilePanel((current) => (current ? null : "source"));
@@ -1326,7 +1330,7 @@ export function BookCinemaOverlay({
             isPlaying={playbackControls.isPlaying}
             job={activeBookJob}
           />
-          <div className="hidden min-w-[20rem] shrink-0 md:block">
+          <div className="hidden min-w-[20rem] shrink-0 lg:block">
             <CinemaFocusModeToolbar mode={cinemaFocus.mode} onModeChange={cinemaFocus.setMode} />
           </div>
           {timingConfidence.isDegraded ? (
@@ -1340,10 +1344,10 @@ export function BookCinemaOverlay({
             <p className="truncate text-xs vs-muted">{bookScopeLabel(normalizedScope)}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <label className="hidden items-center gap-2 text-sm vs-muted md:flex">
+            <label className="hidden items-center gap-2 text-sm vs-muted lg:flex">
               <span>Scope</span>
               <select
-                className="h-10 max-w-64 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold text-[var(--vs-text)] outline-none vs-border"
+                className="cinema-touch-target max-w-64 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold text-[var(--vs-text)] outline-none vs-border"
                 onChange={(event) => {
                   const nextScope = scopeOptions.find(
                     (option) => option.key === event.currentTarget.value,
@@ -1363,7 +1367,7 @@ export function BookCinemaOverlay({
             </label>
             <select
               aria-label="Book scope"
-              className="hidden h-10 max-w-[9rem] rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-semibold outline-none vs-border"
+              className="cinema-touch-target hidden max-w-[9rem] rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-semibold outline-none vs-border"
               onChange={(event) => {
                 const nextScope = scopeOptions.find(
                   (option) => option.key === event.currentTarget.value,
@@ -1381,7 +1385,7 @@ export function BookCinemaOverlay({
               ))}
             </select>
             <button
-              className="hidden h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
+              className="cinema-touch-target hidden h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
               onClick={() => {
                 setSettingsOpen((current) => !current);
               }}
@@ -1391,7 +1395,7 @@ export function BookCinemaOverlay({
               Settings
             </button>
             <button
-              className="inline-flex h-10 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
+              className="cinema-touch-target inline-flex h-11 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
               onClick={onClose}
               type="button"
             >
@@ -1432,6 +1436,13 @@ export function BookCinemaOverlay({
           importError={importError}
           isImporting={isImporting}
           mobilePanel={mobilePanel}
+          displayControls={
+            <ReaderAccessibilityControls
+              settings={normalizedAccessibility}
+              variant="panel"
+              onChange={onAccessibilitySettingsChange}
+            />
+          }
           bookmarkItems={bookmarkItems}
           outlineItems={outlineItems}
           progress={progress}
@@ -1514,7 +1525,7 @@ function BookCinemaSourceLibrary({
         <span className="vs-muted">Cinema source</span>
         <select
           aria-label="Cinema source"
-          className="h-9 min-w-0 rounded-md border bg-[var(--vs-raised)] px-2 text-sm font-medium outline-none vs-border"
+          className="cinema-touch-target min-w-0 rounded-md border bg-[var(--vs-raised)] px-2 text-sm font-medium outline-none vs-border"
           onChange={(event) => {
             onSelectBook(event.currentTarget.value);
           }}
@@ -1529,7 +1540,7 @@ function BookCinemaSourceLibrary({
       </label>
       <div className="flex min-w-0 items-center gap-2">
         <button
-          className="h-9 min-w-0 flex-1 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+          className="cinema-touch-target min-w-0 flex-1 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
           disabled={isImporting}
           onClick={() => {
             inputRef.current?.click();
@@ -1672,6 +1683,7 @@ function BookCinemaMobileSheet({
   activeScope,
   book,
   bookSources,
+  displayControls,
   hasPlayableAudio,
   importError,
   isImporting,
@@ -1698,6 +1710,7 @@ function BookCinemaMobileSheet({
   bookSources: BookSource[];
   bookmarkItems: ReaderBookmarkItem[];
   canBookmark: boolean;
+  displayControls: ReactNode;
   hasPlayableAudio: boolean;
   importError: string | null;
   isImporting: boolean;
@@ -1716,6 +1729,26 @@ function BookCinemaMobileSheet({
   onSelectBook: (bookId: string) => void;
   onResumeProgress: (progress: PlaybackProgress, seconds?: number) => void;
 }>) {
+  const returnToCanvas = () => {
+    onMobilePanelChange(null);
+    returnFocusToCinemaReaderCanvas();
+  };
+  const handleBookmarkNavigate = (bookmark: ReaderBookmarkItem) => {
+    onBookmarkNavigate(bookmark);
+    returnToCanvas();
+  };
+  const handleOutlineNavigate = (item: ReaderOutlineItem<BookScope>) => {
+    onOutlineNavigate(item);
+    returnToCanvas();
+  };
+  const handleRecentNavigate = (item: ReaderRecentPositionItem) => {
+    onRecentNavigate(item);
+    returnToCanvas();
+  };
+  const handleResumeProgress = (nextProgress: PlaybackProgress) => {
+    onResumeProgress(nextProgress);
+    returnToCanvas();
+  };
   const panels: CinemaMobilePanelSpec<BookCinemaMobilePanel>[] = [
     {
       children: (
@@ -1766,12 +1799,12 @@ function BookCinemaMobileSheet({
             outlineItems={outlineItems}
             recentItems={recentItems}
             onAddBookmark={onAddBookmark}
-            onBookmarkNavigate={onBookmarkNavigate}
-            onOutlineNavigate={onOutlineNavigate}
-            onRecentNavigate={onRecentNavigate}
+            onBookmarkNavigate={handleBookmarkNavigate}
+            onOutlineNavigate={handleOutlineNavigate}
+            onRecentNavigate={handleRecentNavigate}
           />
           <button
-            className="h-10 rounded-md border px-3 text-sm font-semibold vs-border"
+            className="cinema-touch-target rounded-md border px-3 text-sm font-semibold vs-border"
             onClick={() => {
               onInspectStructure(book);
             }}
@@ -1793,9 +1826,9 @@ function BookCinemaMobileSheet({
           </p>
           {progress ? (
             <button
-              className="h-10 rounded-md border border-orange-300 bg-orange-500/10 px-3 font-semibold text-orange-500"
+              className="cinema-touch-target rounded-md border border-orange-300 bg-orange-500/10 px-3 font-semibold text-orange-500"
               onClick={() => {
-                onResumeProgress(progress);
+                handleResumeProgress(progress);
               }}
               type="button"
             >
@@ -1812,6 +1845,9 @@ function BookCinemaMobileSheet({
   return (
     <CinemaMobileSheet
       activePanelId={mobilePanel}
+      displayControls={displayControls}
+      id={BOOK_CINEMA_MOBILE_SHEET_ID}
+      label="Book Cinema more controls"
       panels={panels}
       onPanelChange={onMobilePanelChange}
     />
@@ -2350,7 +2386,7 @@ function BookPaginationControls({
         {String(Math.max(1, pagination.totalPages))}
       </span>
       <button
-        className="h-9 rounded-md border px-3 font-semibold vs-border"
+        className="cinema-touch-target rounded-md border px-3 font-semibold vs-border"
         onClick={() => {
           onAccessibilitySettingsChange({
             ...accessibilitySettings,
@@ -2362,7 +2398,7 @@ function BookPaginationControls({
         A-
       </button>
       <button
-        className="h-9 rounded-md border px-3 font-semibold vs-border"
+        className="cinema-touch-target rounded-md border px-3 font-semibold vs-border"
         onClick={() => {
           onAccessibilitySettingsChange({
             ...accessibilitySettings,

@@ -9,10 +9,16 @@ export interface CinemaMobilePanelSpec<TPanelId extends string = string> {
 
 export function CinemaMobileSheet<TPanelId extends string>({
   activePanelId,
+  displayControls,
+  id,
+  label,
   panels,
   onPanelChange,
 }: Readonly<{
   activePanelId: TPanelId | null;
+  displayControls?: ReactNode;
+  id: string;
+  label: string;
   panels: readonly CinemaMobilePanelSpec<TPanelId>[];
   onPanelChange: (panel: TPanelId | null) => void;
 }>) {
@@ -25,7 +31,12 @@ export function CinemaMobileSheet<TPanelId extends string>({
   const activePanel = panels.find((panel) => panel.id === activePanelId) ?? panels[0];
 
   return (
-    <section className="fixed inset-x-0 bottom-[8.75rem] z-[55] max-h-[42vh] overflow-y-auto rounded-t-2xl border bg-[var(--vs-raised)] px-4 pb-5 pt-3 shadow-2xl vs-border lg:hidden">
+    <section
+      aria-label={label}
+      className="z-[55] max-h-[min(44vh,24rem)] overflow-y-auto rounded-t-2xl border-t bg-[var(--vs-raised)] px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl vs-border lg:hidden"
+      data-cinema-mobile-sheet=""
+      id={id}
+    >
       <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-zinc-500/50" />
       <div
         className="mb-4 grid border-b text-sm font-semibold vs-border"
@@ -33,7 +44,7 @@ export function CinemaMobileSheet<TPanelId extends string>({
       >
         {panels.map((panel) => (
           <button
-            className={`flex items-center justify-center gap-2 border-b-2 px-2 pb-3 ${
+            className={`cinema-touch-target flex items-center justify-center gap-2 border-b-2 px-2 pb-3 ${
               activePanel.id === panel.id
                 ? "border-orange-500 text-orange-500"
                 : "border-transparent vs-muted"
@@ -49,7 +60,34 @@ export function CinemaMobileSheet<TPanelId extends string>({
           </button>
         ))}
       </div>
+      {displayControls ? (
+        <section
+          aria-label="Display controls"
+          className="mb-4 rounded-md border bg-[var(--vs-surface)] p-3 vs-border"
+          data-cinema-mobile-display-controls=""
+        >
+          {displayControls}
+        </section>
+      ) : null}
       {activePanel.children}
     </section>
   );
+}
+
+export function returnFocusToCinemaReaderCanvas(): void {
+  const runtime = globalThis as unknown as {
+    document?: Document;
+    requestAnimationFrame?: typeof requestAnimationFrame;
+  };
+  const ownerDocument = runtime.document;
+  const scheduleFrame = runtime.requestAnimationFrame;
+  if (!ownerDocument || !scheduleFrame) {
+    return;
+  }
+  scheduleFrame(() => {
+    const target = ownerDocument.querySelector("[data-cinema-reader-canvas]");
+    if (target instanceof HTMLElement) {
+      target.focus({ preventScroll: true });
+    }
+  });
 }

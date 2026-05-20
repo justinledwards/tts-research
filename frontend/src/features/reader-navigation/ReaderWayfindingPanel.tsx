@@ -50,7 +50,7 @@ export function ReaderWayfindingPanel<TOutlineTarget = unknown>({
         {onAddBookmark ? (
           <button
             aria-keyshortcuts="B"
-            className="h-8 rounded-md border px-2 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
+            className="cinema-touch-target rounded-md border px-2 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
             disabled={!canBookmark}
             onClick={onAddBookmark}
             type="button"
@@ -62,7 +62,7 @@ export function ReaderWayfindingPanel<TOutlineTarget = unknown>({
       <div className="mt-3 grid grid-cols-3 rounded-md border p-0.5 text-xs font-semibold vs-border">
         {(["outline", "bookmarks", "recent"] as const).map((item) => (
           <button
-            className={`h-8 rounded px-2 transition ${
+            className={`cinema-touch-target rounded px-2 transition ${
               tab === item
                 ? "bg-orange-500/10 text-orange-600"
                 : "vs-muted hover:text-[var(--vs-text)]"
@@ -103,10 +103,10 @@ function ReaderOutlineList<TOutlineTarget>({
     return <p className="vs-muted text-sm">No outline available.</p>;
   }
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2" data-reader-wayfinding-list="outline">
       {items.map((item, index) => (
         <button
-          className={`min-w-0 rounded-md border px-3 py-2 text-left text-sm transition vs-border ${
+          className={`cinema-touch-target min-w-0 rounded-md border px-3 py-2 text-left text-sm transition vs-border ${
             item.isActive
               ? "border-orange-400 bg-orange-500/10 text-orange-600"
               : "hover:bg-[var(--vs-surface)]"
@@ -143,10 +143,10 @@ function ReaderBookmarkList({
     return <p className="vs-muted text-sm">No bookmarks saved for this narration.</p>;
   }
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2" data-reader-wayfinding-list="bookmarks">
       {items.map((item, index) => (
         <button
-          className="min-w-0 rounded-md border px-3 py-2 text-left text-sm transition hover:bg-[var(--vs-surface)] vs-border"
+          className="cinema-touch-target min-w-0 rounded-md border px-3 py-2 text-left text-sm transition hover:bg-[var(--vs-surface)] vs-border"
           key={`${item.id}:${String(index)}`}
           onClick={() => {
             onNavigate(item);
@@ -176,10 +176,10 @@ function ReaderRecentList({
     return <p className="vs-muted text-sm">No recent positions yet.</p>;
   }
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2" data-reader-wayfinding-list="recent">
       {items.map((item, index) => (
         <button
-          className="min-w-0 rounded-md border px-3 py-2 text-left text-sm transition hover:bg-[var(--vs-surface)] vs-border"
+          className="cinema-touch-target min-w-0 rounded-md border px-3 py-2 text-left text-sm transition hover:bg-[var(--vs-surface)] vs-border"
           key={`${item.id}:${String(index)}`}
           onClick={() => {
             onNavigate(item);

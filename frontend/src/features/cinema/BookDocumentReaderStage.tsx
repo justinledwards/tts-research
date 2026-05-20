@@ -138,7 +138,7 @@ function BookDocumentTextButton({
   return (
     <button
       aria-label={label}
-      className="grid h-9 w-10 place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
+      className="cinema-touch-target grid place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
       onClick={onClick}
       type="button"
     >

@@ -31,7 +31,7 @@ export function CinemaShell({
     <div
       aria-labelledby={ariaLabelledBy}
       aria-modal="true"
-      className="vs-app fixed inset-0 z-50 flex flex-col bg-[var(--vs-bg)] text-[var(--vs-text)]"
+      className="vs-app fixed inset-0 z-50 flex flex-col bg-[var(--vs-bg)] pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] text-[var(--vs-text)]"
       {...readerAttributes}
       data-cinema-canvas-first={canvasFirst ? "true" : "false"}
       data-theme={themeName}

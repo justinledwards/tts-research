@@ -14,13 +14,20 @@ export {
   type CinemaWayfindingModel,
 } from "./CinemaInspectorPanels";
 export { CinemaInspectorDock } from "./CinemaInspectorDock";
-export { CinemaMobileSheet, type CinemaMobilePanelSpec } from "./CinemaMobileSheet";
+export {
+  CinemaMobileSheet,
+  returnFocusToCinemaReaderCanvas,
+  type CinemaMobilePanelSpec,
+} from "./CinemaMobileSheet";
 export { CinemaShell } from "./CinemaShell";
 export { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 export {
   CINEMA_FOCUS_MODES,
   CINEMA_FOCUS_MODE_META,
   CINEMA_INSPECTOR_PANEL_IDS,
+  CINEMA_NARROW_VIEWPORT_QUERY,
+  CINEMA_RESPONSIVE_QA_VIEWPORTS,
+  CINEMA_TOUCH_TARGET_MIN_PX,
   buildCinemaLayoutState,
   cinemaFocusModeMeta,
   cinemaFocusModeLabel,

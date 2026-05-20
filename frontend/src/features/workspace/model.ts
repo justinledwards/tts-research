@@ -1,3 +1,5 @@
+import { isNarrowViewport } from "../layout/responsive";
+
 export type WorkspaceStage = "intake" | "review" | "preview" | "teleprompt";
 export type WorkspaceLayoutMode = "focus" | "balanced" | "full";
 export type WorkspaceRailMode = "collapsed" | "compact" | "full";
@@ -94,7 +96,7 @@ export const WORKSPACE_LAYOUT_MODE_META: Record<WorkspaceLayoutMode, WorkspaceLa
 };
 
 export function defaultWorkspaceLayoutMode(): WorkspaceLayoutMode {
-  return "balanced";
+  return isNarrowViewport() ? "focus" : "balanced";
 }
 
 export function workspaceStageMeta(stage: WorkspaceStage): WorkspaceStageMeta {

@@ -218,6 +218,12 @@ select {
   border-color: var(--vs-border);
 }
 
+.cinema-touch-target {
+  min-width: 44px;
+  min-height: 44px;
+  touch-action: manipulation;
+}
+
 .teleprompter-word {
   --teleprompter-accent: #f97316;
   --teleprompter-intensity: 0;

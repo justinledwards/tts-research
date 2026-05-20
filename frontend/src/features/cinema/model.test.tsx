@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { CinemaInspectorDock } from "./CinemaInspectorDock";
+import { CinemaMobileSheet } from "./CinemaMobileSheet";
 import {
   buildCinemaCurrentReadingPanel,
   buildCinemaInspectorPanel,
@@ -147,6 +148,45 @@ describe("CinemaTransportBar", () => {
     expect(markup).toContain("Playback speed");
     expect(markup).toContain("Display");
   });
+
+  it("links the mobile More control to the active bottom sheet", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaTransportBar
+        model={{
+          ...makeTransportModel(),
+          mobileMore: {
+            active: true,
+            controlsId: "cinema-more-sheet",
+            onClick: () => null,
+          },
+        }}
+      />,
+    );
+
+    expect(markup).toContain('aria-controls="cinema-more-sheet"');
+    expect(markup).toContain('aria-expanded="true"');
+  });
+});
+
+describe("CinemaMobileSheet", () => {
+  it("renders stable sheet semantics and display controls", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaMobileSheet
+        activePanelId="source"
+        displayControls={<div>Display panel</div>}
+        id="cinema-more-sheet"
+        label="Cinema more controls"
+        panels={[{ children: <p>Source body</p>, id: "source", label: "Source" }]}
+        onPanelChange={() => null}
+      />,
+    );
+
+    expect(markup).toContain('id="cinema-more-sheet"');
+    expect(markup).toContain('aria-label="Cinema more controls"');
+    expect(markup).toContain('data-cinema-mobile-display-controls=""');
+    expect(markup).toContain("Display panel");
+    expect(markup).toContain("Source body");
+  });
 });
 
 function makePanels(): CinemaPanelDefinition[] {
@@ -190,6 +230,8 @@ function makeTransportModel(): CinemaTransportModel {
     },
     displayControls: <span>Display</span>,
     mobileMore: {
+      active: false,
+      controlsId: "cinema-more-sheet",
       onClick: () => null,
     },
     playbackRate: {

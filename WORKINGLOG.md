@@ -162,3 +162,11 @@
 - [x] Update docs and E2E coverage.
 - [x] Fix StrictMode-safe cinema reset handling.
 - [x] Run requested validation commands.
+
+## 2026-05-20 17:44 CEST - Responsive touch and narrow-width Cinema hardening
+- [x] Add shared narrow-width and touch constants.
+- [x] Harden shared Cinema shell, footer, and mobile sheet ergonomics.
+- [x] Suppress workspace rails by default on narrow viewports.
+- [x] Add responsive E2E screenshot and interaction coverage.
+- [x] Update touch accessibility and Cinema docs.
+- [x] Run local validation commands.

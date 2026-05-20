@@ -21,10 +21,19 @@ const summaryPath = process.env.E2E_SUMMARY_PATH ?? path.join(artifactDir, "summ
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 const lowResourceMode = process.env.E2E_LOW_RESOURCE === "1";
 const readerWayfindingOnly = process.env.E2E_READER_WAYFINDING === "1";
+const responsiveCinemaOnly = process.env.E2E_RESPONSIVE_CINEMA === "1";
 const settingsIAOnly = process.env.E2E_SETTINGS_IA === "1";
 const workspaceFlowOnly = process.env.E2E_WORKSPACE_FLOW === "1";
 const activeProjectKey = "tts-active-project-id";
 const jobTimeoutMs = Number.parseInt(process.env.E2E_JOB_TIMEOUT_MS ?? "180000", 10);
+const responsiveCinemaViewports = [
+  { height: 844, name: "phone", width: 390 },
+  { height: 1024, name: "tablet-portrait", width: 768 },
+  { height: 768, name: "tablet-landscape", width: 1024 },
+  { height: 820, name: "narrow-desktop", width: 1180 },
+];
+const cinemaOverlaySelector =
+  '[role="dialog"][aria-labelledby="book-cinema-title"], [role="dialog"][aria-labelledby="prepared-source-cinema-title"]';
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
@@ -105,6 +114,38 @@ async function main() {
     summary.markdownJobId = markdownPrep.job.id;
     const websitePrep = await runWebsiteSourcePrepE2E(project.id);
     summary.websiteJobId = websitePrep.job.id;
+
+    if (responsiveCinemaOnly) {
+      const book = await uploadBook(project.id, fixtures.epub);
+      verifyBook(book, "epub");
+      const scope = pickNarrationScope(book);
+      const scopeContent = await apiJson(`/api/book-sources/${book.id}/scope?${scopeQuery(scope)}`);
+      const bookJob = await waitForJob(
+        (await createBookNarrationJob(project.id, book.id, scope)).id,
+      );
+      const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
+      try {
+        const result = await runResponsiveCinemaUX(browser, {
+          book,
+          bookJob,
+          documentJob: markdownPrep.job,
+          documentSource: markdownPrep.source,
+          projectId: project.id,
+          scope,
+          text: scopeContent.text,
+          websiteJob: websitePrep.job,
+          websiteSource: websitePrep.source,
+        });
+        summary.responsiveCinema = result;
+        summary.screenshots.push(...result.screenshots);
+      } finally {
+        await browser.close();
+      }
+      summary.status = "passed";
+      await writeSummary(summary);
+      console.log(`Responsive Cinema E2E passed. Summary written to ${summaryPath}`);
+      return;
+    }
 
     const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
     try {
@@ -534,7 +575,7 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await playbackSpeedSelect.selectOption("1.25");
     const playbackSpeed = await playbackSpeedSelect.inputValue();
     assert(playbackSpeed === "1.25", `Playback speed control value = ${playbackSpeed}`);
-    const overlay = page.locator(".fixed.inset-0").first();
+    const overlay = cinemaOverlay(page);
     await runCommandPaletteAction(page, "review cinema focus", /Review cinema focus/);
     await assertCinemaFocusModeSelected(page, "Review");
     await runCommandPaletteAction(page, "bookmark current", /Bookmark current position/);
@@ -570,15 +611,14 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
       await applyLowResourceProfile(resumePage);
     }
     const resumeIssues = collectPageIssues(resumePage);
-    await openBookCinemaOverlay(resumePage, scope, bookCinemaHashUrl(book.id, scope));
+    await openBookCinemaOverlay(resumePage, scope, bookCinemaHashUrl(book.id, scope, job.id));
     await switchCinemaFocusMode(resumePage, "Review");
     await selectCinemaInspectorPanel(resumePage, "Current passage");
     const resumeButton = overlayTextButton(resumePage, "Resume");
     await resumeButton.waitFor({ state: "attached" });
     await resumeButton.scrollIntoViewIfNeeded();
     await resumeButton.click();
-    await visibleOverlayButton(resumePage, "Pause").waitFor();
-    const resumedMetrics = await readPerformanceMetrics(resumePage);
+    const resumedMetrics = await waitForReaderResumeApplied(resumePage);
     assert(
       resumedMetrics.some((metric) => metric.name === "reader-resume"),
       "Resume timing metric was not recorded after playback controls applied.",
@@ -678,6 +718,291 @@ async function runPreparedCinemaFocusUX(
   return { screenshots };
 }
 
+async function runResponsiveCinemaUX(
+  browser,
+  { book, bookJob, documentJob, documentSource, projectId, scope, text, websiteJob, websiteSource },
+) {
+  await waitForSavedBookmark(projectId, book.id, scope, bookJob.id);
+  await waitForPreparedSavedBookmark(projectId, documentSource.id, documentJob.id);
+  await waitForPreparedSavedBookmark(projectId, websiteSource.id, websiteJob.id);
+
+  const screenshots = [];
+  for (const viewport of responsiveCinemaViewports) {
+    screenshots.push(
+      ...(await runResponsiveBookCinemaSurface(browser, {
+        book,
+        job: bookJob,
+        projectId,
+        scope,
+        text,
+        viewport,
+      })),
+    );
+    screenshots.push(
+      ...(await runResponsivePreparedCinemaSurface(browser, {
+        expectedLabel: "Document Cinema",
+        job: documentJob,
+        projectId,
+        source: documentSource,
+        surface: "document",
+        viewport,
+      })),
+    );
+    screenshots.push(
+      ...(await runResponsivePreparedCinemaSurface(browser, {
+        expectedLabel: "Website Cinema",
+        job: websiteJob,
+        projectId,
+        source: websiteSource,
+        surface: "website",
+        viewport,
+      })),
+    );
+  }
+
+  return {
+    screenshots,
+    status: "passed",
+    viewports: responsiveCinemaViewports,
+  };
+}
+
+async function runResponsiveBookCinemaSurface(
+  browser,
+  { book, job, projectId, scope, text, viewport },
+) {
+  const context = await browser.newContext({
+    hasTouch: viewport.width < 1024,
+    isMobile: viewport.width < 1024,
+    storageState: projectStorageState(projectId, {
+      bookScope: scope,
+      bookSourceId: book.id,
+      jobId: job.id,
+      text,
+    }),
+    viewport: { height: viewport.height, width: viewport.width },
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
+  const surface = "book";
+  const screenshots = [];
+  try {
+    await openBookCinemaOverlay(page, scope);
+    screenshots.push(
+      await captureResponsiveCinemaSurface(page, {
+        surface,
+        viewport,
+      }),
+    );
+    if (viewport.width < 1024) {
+      screenshots.push(
+        await exerciseResponsiveCinemaMobileSheet(page, {
+          surface,
+          viewport,
+        }),
+      );
+    }
+    await assertNoPageIssues(issues);
+    return screenshots;
+  } finally {
+    await context.close();
+  }
+}
+
+async function runResponsivePreparedCinemaSurface(
+  browser,
+  { expectedLabel, job, projectId, source, surface, viewport },
+) {
+  const context = await browser.newContext({
+    hasTouch: viewport.width < 1024,
+    isMobile: viewport.width < 1024,
+    storageState: projectStorageState(projectId, {
+      jobId: job.id,
+      preparedSourceId: source.id,
+      sourceMode: "fileUrl",
+      sourceType: "prepared",
+      stage: "intake",
+      text: source.speechText ?? source.text ?? "",
+    }),
+    viewport: { height: viewport.height, width: viewport.width },
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
+  const screenshots = [];
+  try {
+    await openPreparedCinemaOverlay(page, expectedLabel);
+    screenshots.push(
+      await captureResponsiveCinemaSurface(page, {
+        surface,
+        viewport,
+      }),
+    );
+    if (viewport.width < 1024) {
+      screenshots.push(
+        await exerciseResponsiveCinemaMobileSheet(page, {
+          surface,
+          viewport,
+        }),
+      );
+    }
+    await assertNoPageIssues(issues);
+    return screenshots;
+  } finally {
+    await context.close();
+  }
+}
+
+async function openPreparedCinemaOverlay(page, expectedLabel) {
+  await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.getByRole("button", { exact: true, name: "Intake" }).click();
+  await page.getByRole("button", { exact: true, name: "File / URL" }).click();
+  await page
+    .getByRole("button", { name: new RegExp(`Open ${expectedLabel}`) })
+    .first()
+    .click();
+  await cinemaOverlay(page).getByText(expectedLabel).first().waitFor();
+}
+
+async function captureResponsiveCinemaSurface(page, { surface, viewport }) {
+  await assertCinemaFocusModeSelected(page, "Read");
+  await assertCinemaResponsiveContract(page, `${surface}:${viewport.name}`);
+  const screenshot = path.join(screenshotsDir, `responsive-${surface}-${viewport.name}.png`);
+  await page.screenshot({ fullPage: false, path: screenshot });
+  return screenshot;
+}
+
+async function exerciseResponsiveCinemaMobileSheet(page, { surface, viewport }) {
+  await assertCinemaFocusModeSelected(page, "Read");
+  const moreButton = visibleOverlayButton(page, "More");
+  await assertEnabled(moreButton, "More");
+  await moreButton.click();
+  const overlay = cinemaOverlay(page);
+  const sheet = overlay.locator("[data-cinema-mobile-sheet]").first();
+  await sheet.waitFor({ state: "visible" });
+  await sheet.locator("[data-cinema-mobile-display-controls]").getByText("Text scale").waitFor();
+  await assertCinemaMobileSheetInFlow(page);
+  await assertCinemaResponsiveContract(page, `${surface}:${viewport.name}:sheet`);
+  await sheet.getByRole("button", { exact: true, name: "Structure" }).click();
+  await sheet.getByRole("button", { exact: true, name: "Bookmarks" }).click();
+  await sheet
+    .getByText(/No bookmarks saved|Saved position|Scope|Word|0:04/)
+    .first()
+    .waitFor();
+  const screenshot = path.join(screenshotsDir, `responsive-${surface}-${viewport.name}-sheet.png`);
+  await page.screenshot({ fullPage: false, path: screenshot });
+  await sheet.getByRole("button", { exact: true, name: "Outline" }).click();
+  const outlineButtons = sheet.locator('[data-reader-wayfinding-list="outline"] button');
+  if ((await outlineButtons.count()) > 0) {
+    await outlineButtons.first().click();
+  } else {
+    await sheet.getByRole("button", { exact: true, name: "Recent" }).click();
+    await sheet.locator('[data-reader-wayfinding-list="recent"] button').first().click();
+  }
+  await sheet.waitFor({ state: "hidden" });
+  await page.waitForFunction(
+    () => document.activeElement?.hasAttribute("data-cinema-reader-canvas") === true,
+    undefined,
+    { timeout: 5_000 },
+  );
+  await assertCinemaFocusModeSelected(page, "Read");
+  return screenshot;
+}
+
+async function assertCinemaResponsiveContract(page, label) {
+  await assertCinemaActiveTargetVisible(page);
+  await assertNoHorizontalOverflow(page, label);
+  await assertCinemaTouchTargets(page, label);
+}
+
+async function assertCinemaMobileSheetInFlow(page) {
+  const result = await page.evaluate((selector) => {
+    const overlay = document.querySelector(selector);
+    const sheet = overlay?.querySelector("[data-cinema-mobile-sheet]");
+    const footer = overlay?.querySelector("[data-cinema-transport-footer]");
+    if (!(sheet instanceof HTMLElement) || !(footer instanceof HTMLElement)) {
+      return { ok: false, reason: "missing sheet or footer" };
+    }
+    const sheetRect = sheet.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    return {
+      footerTop: footerRect.top,
+      ok: getComputedStyle(sheet).position !== "fixed" && sheetRect.bottom <= footerRect.top + 1,
+      position: getComputedStyle(sheet).position,
+      sheetBottom: sheetRect.bottom,
+    };
+  }, cinemaOverlaySelector);
+  assert(
+    result.ok,
+    `Mobile Cinema sheet should stay in flow above footer: ${JSON.stringify(result)}`,
+  );
+}
+
+async function assertNoHorizontalOverflow(page, label) {
+  const issues = await page.evaluate((selector) => {
+    const elements = [
+      document.documentElement,
+      document.body,
+      document.querySelector(selector),
+      ...document.querySelectorAll(`${selector} main, ${selector} [data-cinema-mobile-sheet]`),
+    ].filter((element) => element instanceof HTMLElement);
+    return elements.flatMap((element) => {
+      const overflow = element.scrollWidth - element.clientWidth;
+      if (overflow <= 1) {
+        return [];
+      }
+      return [
+        {
+          className: element.className,
+          clientWidth: element.clientWidth,
+          overflow,
+          scrollWidth: element.scrollWidth,
+          tagName: element.tagName,
+        },
+      ];
+    });
+  }, cinemaOverlaySelector);
+  assert(issues.length === 0, `${label} has horizontal overflow: ${JSON.stringify(issues)}`);
+}
+
+async function assertCinemaTouchTargets(page, label) {
+  const issues = await page.evaluate((selector) => {
+    const minimum = 44;
+    return [...document.querySelectorAll(`${selector} .cinema-touch-target`)].flatMap((element) => {
+      if (!(element instanceof HTMLElement)) {
+        return [];
+      }
+      const rect = element.getBoundingClientRect();
+      const styles = getComputedStyle(element);
+      if (
+        rect.width <= 0 ||
+        rect.height <= 0 ||
+        styles.display === "none" ||
+        styles.visibility === "hidden"
+      ) {
+        return [];
+      }
+      if (rect.width >= minimum && rect.height >= minimum) {
+        return [];
+      }
+      return [
+        {
+          height: Math.round(rect.height),
+          label:
+            element.getAttribute("aria-label") ??
+            element.textContent?.replace(/\s+/g, " ").trim() ??
+            element.tagName,
+          tagName: element.tagName,
+          width: Math.round(rect.width),
+        },
+      ];
+    });
+  }, cinemaOverlaySelector);
+  assert(issues.length === 0, `${label} has undersized touch targets: ${JSON.stringify(issues)}`);
+}
+
 async function runPreparedCinemaSurfaceFocusUX(
   browser,
   { expectedLabel, job, projectId, screenshotPrefix, source },
@@ -709,7 +1034,7 @@ async function runPreparedCinemaSurfaceFocusUX(
       .getByRole("button", { name: new RegExp(`Open ${expectedLabel}`) })
       .first()
       .click();
-    const overlay = page.locator(".fixed.inset-0").first();
+    const overlay = cinemaOverlay(page);
     await overlay.getByText(expectedLabel).first().waitFor();
     const screenshots = await captureCinemaFocusModeScreenshots(
       page,
@@ -725,7 +1050,7 @@ async function runPreparedCinemaSurfaceFocusUX(
         .getByRole("button", { name: new RegExp(`Open ${expectedLabel}`) })
         .first()
         .click();
-      await page.locator(".fixed.inset-0").first().getByText(expectedLabel).first().waitFor();
+      await cinemaOverlay(page).getByText(expectedLabel).first().waitFor();
     });
     await assertNoPageIssues(issues);
     return screenshots;
@@ -770,11 +1095,7 @@ async function exerciseCinemaFocusMemoryPersistence(page, surfaceKind, reopenOve
   await reopenOverlay();
   await assertCinemaFocusModeSelected(page, "Review");
   await assertCinemaFocusModeLayout(page, "Review", { pinned: true });
-  await page
-    .locator(".fixed.inset-0")
-    .first()
-    .locator('[data-cinema-inspector-panel="policy"]')
-    .waitFor();
+  await cinemaOverlay(page).locator('[data-cinema-inspector-panel="policy"]').waitFor();
   await visibleOverlayButton(page, "Exit").click();
 
   await setRememberLayout(page, true, { reset: true });
@@ -809,7 +1130,7 @@ async function waitForRememberedCinemaFocusState(page, surfaceKind, mode, pinned
 }
 
 async function assertCinemaFocusModeLayout(page, mode, { pinned = false } = {}) {
-  const overlay = page.locator(".fixed.inset-0").first();
+  const overlay = cinemaOverlay(page);
   const inspectorPanels = overlay.locator("[data-cinema-inspector-panel]");
   const inspectorBodies = overlay.locator("[data-cinema-inspector-body]");
   const panelCount = await inspectorPanels.count();
@@ -826,20 +1147,23 @@ async function assertCinemaFocusModeLayout(page, mode, { pinned = false } = {}) 
 }
 
 async function assertCinemaFocusModeSelected(page, mode) {
-  const overlay = page.locator(".fixed.inset-0").first();
+  const overlay = cinemaOverlay(page);
   const pressed = await overlay
-    .getByRole("button", { exact: true, name: mode })
+    .getByRole("button", { exact: true, includeHidden: true, name: mode })
     .getAttribute("aria-pressed");
   if (pressed === "true") {
     return;
   }
-  const diagnostics = await page.evaluate(() => ({
-    buttons: [...document.querySelectorAll(".fixed.inset-0 button")].map((button) => ({
-      ariaPressed: button.getAttribute("aria-pressed"),
-      text: button.textContent?.replace(/\s+/g, " ").trim() ?? "",
-    })),
-    memory: localStorage.getItem("tts-ui-memory"),
-  }));
+  const diagnostics = await page.evaluate(
+    (selector) => ({
+      buttons: [...document.querySelectorAll(`${selector} button`)].map((button) => ({
+        ariaPressed: button.getAttribute("aria-pressed"),
+        text: button.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      })),
+      memory: localStorage.getItem("tts-ui-memory"),
+    }),
+    cinemaOverlaySelector,
+  );
   assert(
     false,
     `${mode} focus mode was not restored. Toolbar/memory state: ${JSON.stringify(diagnostics)}`,
@@ -866,8 +1190,8 @@ async function assertCinemaCanvasDominant(page) {
 
 async function assertCinemaActiveTargetVisible(page) {
   await page.waitForFunction(
-    () => {
-      const overlay = document.querySelector(".fixed.inset-0");
+    (selector) => {
+      const overlay = document.querySelector(selector);
       if (!overlay) {
         return false;
       }
@@ -893,14 +1217,14 @@ async function assertCinemaActiveTargetVisible(page) {
         rect.left < window.innerWidth
       );
     },
-    undefined,
+    cinemaOverlaySelector,
     { timeout: 5_000 },
   );
 }
 
 async function switchCinemaFocusMode(page, mode) {
   await page
-    .locator(".fixed.inset-0")
+    .locator(cinemaOverlaySelector)
     .first()
     .getByRole("button", { exact: true, name: mode })
     .click();
@@ -908,7 +1232,7 @@ async function switchCinemaFocusMode(page, mode) {
 
 async function selectCinemaInspectorPanel(page, label) {
   await page
-    .locator(".fixed.inset-0")
+    .locator(cinemaOverlaySelector)
     .first()
     .getByRole("button", { name: new RegExp(label) })
     .first()
@@ -925,7 +1249,7 @@ async function exerciseSourcePinSmoke(page, bookSourceId) {
   await savePinButton.click();
   const saved = await saveResponse;
   assert(saved.ok(), `Source policy save failed with ${String(saved.status())}`);
-  await page.locator(".fixed.inset-0").first().getByText("Pinned").first().waitFor();
+  await cinemaOverlay(page).getByText("Pinned").first().waitFor();
 
   const clearPinButton = visibleOverlayButton(page, "Clear pin");
   await assertEnabled(clearPinButton, "Clear pin");
@@ -935,7 +1259,7 @@ async function exerciseSourcePinSmoke(page, bookSourceId) {
   await clearPinButton.click();
   const cleared = await clearResponse;
   assert(cleared.ok(), `Source policy clear failed with ${String(cleared.status())}`);
-  await page.locator(".fixed.inset-0").first().getByText("Project default").first().waitFor();
+  await cinemaOverlay(page).getByText("Project default").first().waitFor();
 }
 
 function visibleOverlayButton(page, label) {
@@ -944,18 +1268,17 @@ function visibleOverlayButton(page, label) {
   );
 }
 
+function cinemaOverlay(page) {
+  return page.locator(cinemaOverlaySelector).first();
+}
+
 function visibleOverlayControl(page, locatorFactory) {
-  const overlay = page.locator(".fixed.inset-0").first();
+  const overlay = cinemaOverlay(page);
   return locatorFactory(overlay).filter({ visible: true }).first();
 }
 
 function overlayTextButton(page, label) {
-  return page
-    .locator(".fixed.inset-0")
-    .first()
-    .locator("button")
-    .filter({ hasText: label })
-    .first();
+  return cinemaOverlay(page).locator("button").filter({ hasText: label }).first();
 }
 
 async function applyLowResourceProfile(page) {
@@ -974,11 +1297,11 @@ async function openBookCinemaOverlay(page, scope, url = appBaseUrl) {
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
   }
-  const existingOverlay = page.locator(".fixed.inset-0").first();
+  const existingOverlay = page
+    .locator('[role="dialog"][aria-labelledby="book-cinema-title"]')
+    .first();
   const restoredOverlayTimeout = url === appBaseUrl ? 1_000 : 30_000;
   const restoredOverlayVisible = await existingOverlay
-    .getByText("Book Cinema")
-    .first()
     .waitFor({ state: "visible", timeout: restoredOverlayTimeout })
     .then(() => true)
     .catch(() => false);
@@ -991,9 +1314,8 @@ async function openBookCinemaOverlay(page, scope, url = appBaseUrl) {
   await page.locator('h3:has-text("Book Cinema")').first().waitFor();
   await selectBookScope(page, scope);
   await page.locator('button:has-text("Cinema"):enabled').last().click();
-  const overlay = page.locator(".fixed.inset-0").first();
-  await overlay.waitFor();
-  await overlay.getByText("Book Cinema").first().waitFor();
+  const overlay = page.locator('[role="dialog"][aria-labelledby="book-cinema-title"]').first();
+  await overlay.waitFor({ state: "visible" });
   await waitForOverlayScope(page, scope);
 }
 
@@ -1052,29 +1374,31 @@ async function waitForOverlayScope(page, scope) {
   };
   try {
     await page.waitForFunction(
-      ({ expectedLabel, expectedScopeKey }) =>
-        [...document.querySelectorAll(".fixed.inset-0 select")].some(
+      ({ expectedLabel, expectedScopeKey, selector }) =>
+        [...document.querySelectorAll(`${selector} select`)].some(
           (select) => select.value === expectedScopeKey,
         ) &&
         (document.body.textContent?.includes("Book Cinema") ?? false) &&
         (!expectedLabel || (document.body.textContent?.includes(expectedLabel) ?? false)),
-      expected,
+      { ...expected, selector: '[role="dialog"][aria-labelledby="book-cinema-title"]' },
       { timeout: 60_000 },
     );
   } catch (error) {
     const overlayState = await page
-      .evaluate(() =>
-        [...document.querySelectorAll(".fixed.inset-0")].map((overlay) => ({
-          headings: [...overlay.querySelectorAll("h1")].map((heading) => heading.textContent),
-          selects: [...overlay.querySelectorAll("select")].map((select) => ({
-            options: [...select.options].map((option) => ({
-              selected: option.selected,
-              text: option.textContent,
-              value: option.value,
+      .evaluate(
+        (selector) =>
+          [...document.querySelectorAll(selector)].map((overlay) => ({
+            headings: [...overlay.querySelectorAll("h1")].map((heading) => heading.textContent),
+            selects: [...overlay.querySelectorAll("select")].map((select) => ({
+              options: [...select.options].map((option) => ({
+                selected: option.selected,
+                text: option.textContent,
+                value: option.value,
+              })),
+              value: select.value,
             })),
-            value: select.value,
           })),
-        })),
+        '[role="dialog"][aria-labelledby="book-cinema-title"]',
       )
       .catch(() => []);
     throw new Error(
@@ -1084,13 +1408,18 @@ async function waitForOverlayScope(page, scope) {
   }
 }
 
-function bookCinemaHashUrl(bookSourceId, scope) {
+function bookCinemaHashUrl(bookSourceId, scope, jobId = null) {
   const params = new URLSearchParams();
   params.set("cinema", "book");
   params.set("book", bookSourceId);
   params.set("scope", scopeKey(scope));
   params.set("word", "4");
-  return `${appBaseUrl}/#${params.toString()}`;
+  const url = new URL(appBaseUrl);
+  if (jobId) {
+    url.searchParams.set("jobId", jobId);
+  }
+  url.hash = params.toString();
+  return url.toString();
 }
 
 async function ensureFixtures() {
@@ -1486,6 +1815,39 @@ async function waitForSavedBookmark(projectId, bookSourceId, bookScope, jobId) {
   });
 }
 
+async function waitForPreparedSavedBookmark(projectId, preparedSourceId, jobId) {
+  const targetId = `prepared:${preparedSourceId}`;
+  return apiJson(`/api/progress/${targetId}`, {
+    body: JSON.stringify({
+      activeWordIndex: 4,
+      addBookmark: {
+        activeWordIndex: 4,
+        createdAt: new Date().toISOString(),
+        currentTimeSec: 4,
+        id: `bookmark-${Date.now().toString(36)}-${preparedSourceId}`,
+        label: "0:04",
+        readingPosition: {
+          activeWordIndex: 4,
+          nodeId: "responsive-smoke",
+        },
+      },
+      currentTimeSec: 4,
+      durationSec: 20,
+      jobId,
+      preparedSourceId,
+      progress: 0.2,
+      projectId,
+      readingPosition: {
+        activeWordIndex: 4,
+        nodeId: "responsive-smoke",
+      },
+      targetId,
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "PATCH",
+  });
+}
+
 async function assertTimingArtifacts(jobId, label) {
   const highlightMap = await apiJson(`/api/voice-jobs/${jobId}/highlight-map`);
   assert(
@@ -1674,6 +2036,62 @@ async function assertNoPageIssues(issues) {
 
 async function readPerformanceMetrics(page) {
   return page.evaluate(() => globalThis.__ttsResearchPerformance?.metrics ?? []);
+}
+
+async function waitForReaderResumeApplied(page) {
+  try {
+    await page.waitForFunction(
+      () =>
+        globalThis.__ttsResearchPerformance?.metrics.some(
+          (metric) => metric.name === "reader-resume",
+        ),
+      undefined,
+      { timeout: lowResourceMode ? 120_000 : 60_000 },
+    );
+  } catch (error) {
+    await page
+      .screenshot({
+        fullPage: false,
+        path: path.join(screenshotsDir, "book-cinema-resume-failure.png"),
+      })
+      .catch(() => {});
+    const diagnostics = await page.evaluate(() => ({
+      buttons: Array.from(document.querySelectorAll('[role="dialog"] button')).map((button) => ({
+        disabled: button.disabled,
+        label: button.getAttribute("aria-label"),
+        text: button.textContent?.replace(/\s+/g, " ").trim() ?? "",
+        visible: Boolean(
+          button.offsetWidth || button.offsetHeight || button.getClientRects().length,
+        ),
+      })),
+      metrics: globalThis.__ttsResearchPerformance?.metrics ?? [],
+      overlayText:
+        document
+          .querySelector('[role="dialog"][aria-labelledby="book-cinema-title"]')
+          ?.textContent?.replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 1200) ?? null,
+      url: window.location.href,
+    }));
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Reader resume metric was not recorded after clicking Resume.\n${JSON.stringify(
+        diagnostics,
+        null,
+        2,
+      )}\n${message}`,
+    );
+  }
+  const pauseButton = visibleOverlayButton(page, "Pause");
+  const playButton = visibleOverlayButton(page, "Play");
+  const hasUsablePlaybackControl =
+    (await pauseButton.isEnabled().catch(() => false)) ||
+    (await playButton.isEnabled().catch(() => false));
+  assert(
+    hasUsablePlaybackControl,
+    "Resume returned without an enabled playback transport control.",
+  );
+  return readPerformanceMetrics(page);
 }
 
 async function readDegradedStates(page) {

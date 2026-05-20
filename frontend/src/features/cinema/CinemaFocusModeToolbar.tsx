@@ -12,7 +12,7 @@ export function CinemaFocusModeToolbar({
       {CINEMA_FOCUS_MODES.map((item) => (
         <button
           aria-pressed={mode === item}
-          className={`h-9 rounded px-2 transition ${
+          className={`cinema-touch-target rounded px-2 transition ${
             mode === item
               ? "bg-orange-500 text-white shadow-sm"
               : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"

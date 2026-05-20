@@ -19,4 +19,8 @@ When `Remember my layout` is enabled:
 
 The shared footer keeps restart, 10-second seek, primary play/create, progress, speed, bookmark, and display controls in the same order across Book, Document, and Website Cinema. Bookmarks remain part of wayfinding and are also reachable from the footer transport.
 
-Mobile cinema surfaces use the same bottom sheet pattern: `Source`, `Structure`, and `Narration`. The sheet is opened from the shared footer `More` control and does not change the active focus mode.
+Mobile cinema surfaces use the same bottom sheet pattern below `1024px`: `Source`, `Structure`, and `Narration`. The sheet is opened from the shared footer `More` control, exposes display controls inside the sheet, and does not change the active focus mode. Navigation from bookmarks, recent positions, or outlines closes the sheet and returns focus to the reader canvas.
+
+The `More` control owns the bottom sheet with `aria-controls` and `aria-expanded`. The sheet is rendered in the dialog flow above the footer so one-handed users can keep playback, bookmark, speed, and More controls reachable while the sheet is open.
+
+Desktop-width layouts at `1024px` and above may show the toolbar and rails; phone and tablet portrait widths must derive their rail suppression and bottom-sheet behavior from the shared Cinema shell primitives, not per-surface overrides.

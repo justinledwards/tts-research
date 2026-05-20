@@ -3,7 +3,11 @@ import { ReaderAccessibilityControls } from "../../components/reader/ReaderAcces
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
 import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
 import { CinemaInspectorDock } from "./CinemaInspectorDock";
-import { CinemaMobileSheet, type CinemaMobilePanelSpec } from "./CinemaMobileSheet";
+import {
+  CinemaMobileSheet,
+  returnFocusToCinemaReaderCanvas,
+  type CinemaMobilePanelSpec,
+} from "./CinemaMobileSheet";
 import { CinemaShell } from "./CinemaShell";
 import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 import { useCinemaFocusController } from "./CinemaFocusController";
@@ -94,6 +98,7 @@ export interface PreparedSourceCinemaPlaybackControls {
 }
 
 type PreparedSourceCinemaMobilePanel = "source" | "structure" | "narration";
+const PREPARED_SOURCE_CINEMA_MOBILE_SHEET_ID = "prepared-source-cinema-mobile-sheet";
 
 function preparedSourceCinemaLabelForKind(
   source: PreparedSource,
@@ -312,7 +317,7 @@ export function PreparedSourceCinemaOverlay({
             <MetadataRow label="Reader mode" value={readerModeLabel(source)} valueTone="success" />
           </dl>
           <button
-            className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+            className="cinema-touch-target rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
             onClick={() => {
               onInspectStructure(source);
             }}
@@ -508,6 +513,7 @@ export function PreparedSourceCinemaOverlay({
           accessibilitySettings={normalizedAccessibility}
           canBookmark={canBookmark}
           canCreateAudio={canCreateAudio}
+          isMobileSheetOpen={mobilePanel !== null}
           isProcessing={isProcessing}
           job={job}
           playbackControls={playbackControls}
@@ -546,7 +552,7 @@ export function PreparedSourceCinemaOverlay({
             </div>
           </div>
           <PlaybackStatusChip isPlaybackActive={isPlaybackActive} job={job} />
-          <div className="hidden min-w-[20rem] shrink-0 md:block">
+          <div className="hidden min-w-[20rem] shrink-0 lg:block">
             <CinemaFocusModeToolbar mode={cinemaFocus.mode} onModeChange={cinemaFocus.setMode} />
           </div>
           <p
@@ -557,7 +563,7 @@ export function PreparedSourceCinemaOverlay({
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <button
-              className="hidden h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
+              className="cinema-touch-target hidden h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
               onClick={() => {
                 setSettingsOpen((current) => !current);
               }}
@@ -567,7 +573,7 @@ export function PreparedSourceCinemaOverlay({
               Settings
             </button>
             <button
-              className="inline-flex h-10 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
+              className="cinema-touch-target inline-flex h-11 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
               onClick={onClose}
               type="button"
             >
@@ -605,6 +611,13 @@ export function PreparedSourceCinemaOverlay({
           activeBlock={displayBlock}
           bookmarkItems={bookmarkItems}
           canBookmark={canBookmark}
+          displayControls={
+            <ReaderAccessibilityControls
+              settings={normalizedAccessibility}
+              variant="panel"
+              onChange={onAccessibilitySettingsChange}
+            />
+          }
           job={job}
           mobilePanel={mobilePanel}
           outlineItems={outlineItems}
@@ -654,7 +667,7 @@ function PreparedSourceCinemaSourceLibrary({
         <span className="vs-muted">Cinema source</span>
         <select
           aria-label="Cinema prepared source"
-          className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-medium outline-none vs-border"
+          className="cinema-touch-target min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-medium outline-none vs-border"
           onChange={(event) => {
             onSelectSource(event.currentTarget.value);
           }}
@@ -668,7 +681,7 @@ function PreparedSourceCinemaSourceLibrary({
         </select>
       </label>
       <button
-        className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
+        className="cinema-touch-target rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
         disabled={isImporting}
         onClick={() => {
           inputRef.current?.click();
@@ -863,7 +876,7 @@ function PreparedSourceCinemaReader({
           <div className="flex items-center gap-1">
             <button
               aria-label="Decrease text size"
-              className="grid h-9 w-10 place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
+              className="cinema-touch-target grid place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
               onClick={() => {
                 onAccessibilitySettingsChange({
                   ...accessibilitySettings,
@@ -876,7 +889,7 @@ function PreparedSourceCinemaReader({
             </button>
             <button
               aria-label="Increase text size"
-              className="grid h-9 w-10 place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
+              className="cinema-touch-target grid place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
               onClick={() => {
                 onAccessibilitySettingsChange({
                   ...accessibilitySettings,
@@ -889,7 +902,7 @@ function PreparedSourceCinemaReader({
             </button>
             <button
               aria-label="Content Structure"
-              className="grid h-9 w-10 place-items-center rounded-md transition hover:bg-[var(--vs-surface)]"
+              className="cinema-touch-target grid place-items-center rounded-md transition hover:bg-[var(--vs-surface)]"
               onClick={() => {
                 onInspectStructure(source);
               }}
@@ -918,7 +931,7 @@ function PreparedSourceCinemaReader({
             </button>
             <button
               aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              className="grid h-9 w-10 place-items-center rounded-md transition hover:bg-[var(--vs-surface)]"
+              className="cinema-touch-target grid place-items-center rounded-md transition hover:bg-[var(--vs-surface)]"
               onClick={onFullscreenToggle}
               type="button"
             >
@@ -937,6 +950,7 @@ function PreparedSourceCinemaMobileSheet({
   activeBlock,
   bookmarkItems,
   canBookmark,
+  displayControls,
   importError,
   isImporting,
   job,
@@ -959,6 +973,7 @@ function PreparedSourceCinemaMobileSheet({
   activeBlock: NarrationBlock | null;
   bookmarkItems: ReaderBookmarkItem[];
   canBookmark: boolean;
+  displayControls: ReactNode;
   importError: string | null;
   isImporting: boolean;
   job: VoiceJob | null;
@@ -978,6 +993,26 @@ function PreparedSourceCinemaMobileSheet({
   onSelectSource: (sourceId: string) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
+  const returnToCanvas = () => {
+    onMobilePanelChange(null);
+    returnFocusToCinemaReaderCanvas();
+  };
+  const handleBookmarkNavigate = (bookmark: ReaderBookmarkItem) => {
+    onBookmarkNavigate(bookmark);
+    returnToCanvas();
+  };
+  const handleOutlineNavigate = (item: ReaderOutlineItem<PreparedSourceCinemaOutlineItem>) => {
+    onOutlineNavigate(item);
+    returnToCanvas();
+  };
+  const handleRecentNavigate = (item: ReaderRecentPositionItem) => {
+    onRecentNavigate(item);
+    returnToCanvas();
+  };
+  const handleResumeProgress = (nextProgress: PlaybackProgress) => {
+    onResumeProgress(nextProgress);
+    returnToCanvas();
+  };
   const metrics = preparedSourceCinemaMetrics(source);
   const activeText = activeBlock ? markdownBlockText(activeBlock) : "";
   const href = preparedSourceCinemaSourceHref(source);
@@ -1045,12 +1080,12 @@ function PreparedSourceCinemaMobileSheet({
             outlineItems={outlineItems}
             recentItems={recentItems}
             onAddBookmark={onAddBookmark}
-            onBookmarkNavigate={onBookmarkNavigate}
-            onOutlineNavigate={onOutlineNavigate}
-            onRecentNavigate={onRecentNavigate}
+            onBookmarkNavigate={handleBookmarkNavigate}
+            onOutlineNavigate={handleOutlineNavigate}
+            onRecentNavigate={handleRecentNavigate}
           />
           <button
-            className="h-10 rounded-md border px-3 text-sm font-semibold vs-border"
+            className="cinema-touch-target rounded-md border px-3 text-sm font-semibold vs-border"
             onClick={() => {
               onInspectStructure(source);
             }}
@@ -1073,9 +1108,9 @@ function PreparedSourceCinemaMobileSheet({
           <MetadataRow label="Audio" value={job ? "Generated" : "Not generated"} />
           {progress ? (
             <button
-              className="h-10 rounded-md border border-orange-300 bg-orange-500/10 px-3 font-semibold text-orange-700"
+              className="cinema-touch-target rounded-md border border-orange-300 bg-orange-500/10 px-3 font-semibold text-orange-700"
               onClick={() => {
-                onResumeProgress(progress);
+                handleResumeProgress(progress);
               }}
               type="button"
             >
@@ -1093,6 +1128,9 @@ function PreparedSourceCinemaMobileSheet({
   return (
     <CinemaMobileSheet
       activePanelId={mobilePanel}
+      displayControls={displayControls}
+      id={PREPARED_SOURCE_CINEMA_MOBILE_SHEET_ID}
+      label="Cinema more controls"
       panels={panels}
       onPanelChange={onMobilePanelChange}
     />
@@ -1103,6 +1141,7 @@ function PreparedSourceCinemaTransport({
   accessibilitySettings,
   canBookmark,
   canCreateAudio,
+  isMobileSheetOpen,
   isProcessing,
   job,
   playbackControls,
@@ -1120,6 +1159,7 @@ function PreparedSourceCinemaTransport({
   accessibilitySettings: ReaderAccessibilitySettings;
   canBookmark: boolean;
   canCreateAudio: boolean;
+  isMobileSheetOpen: boolean;
   isProcessing: boolean;
   job: VoiceJob | null;
   playbackControls: PreparedSourceCinemaPlaybackControls;
@@ -1167,6 +1207,8 @@ function PreparedSourceCinemaTransport({
       />
     ),
     mobileMore: {
+      active: isMobileSheetOpen,
+      controlsId: PREPARED_SOURCE_CINEMA_MOBILE_SHEET_ID,
       icon: <MoreIcon />,
       onClick: onToggleMobilePanel,
     },

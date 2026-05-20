@@ -29,7 +29,13 @@ export function ReaderCanvasFrame({
         }`}
       >
         {canvasFirst ? null : toolbar}
-        <div className={contentClassName} ref={contentRef} {...contentDataAttributes}>
+        <div
+          className={contentClassName}
+          data-cinema-reader-canvas=""
+          ref={contentRef}
+          tabIndex={-1}
+          {...contentDataAttributes}
+        >
           {children}
         </div>
       </div>

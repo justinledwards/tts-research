@@ -29,6 +29,14 @@ Text scale, line spacing, and measure control reader typography and reflow for p
 
 All reader preferences are persisted in local storage under `tts-reader-accessibility-v1` and are expressed as reader data attributes/CSS variables rather than playback engine settings. Older saved values with only reduced motion and high contrast are normalized with default typography values.
 
+## Touch And Narrow Widths
+
+Narrow Cinema means any viewport below `1024px`. Book, Document, and Website Cinema must use the shared bottom-sheet pattern below that breakpoint, keep the reader canvas as the primary target, and suppress inspector rails unless the user is on a desktop-width layout.
+
+Touch targets in Cinema transport, More sheet tabs, bookmarks, wayfinding rows, display controls, focus-mode controls, and source actions must be at least `44px` wide and `44px` tall. The shared `.cinema-touch-target` class is the local implementation contract for these controls.
+
+Cinema overlays, footers, and bottom sheets must account for `env(safe-area-inset-*)`; the frontend viewport meta includes `viewport-fit=cover` so phones and tablets with display cutouts expose those values. The bottom sheet is part of the dialog flow above the transport footer, not a fixed overlay covering playback controls.
+
 ## Screen Reader Status
 
 Every cinema surface exposes a polite live region for the current source and scope. Fragment-based playback announces the fragment number. Word-based playback announces the current word index. Scope or block changes update the announcement with the new chapter, page range, document block, website block, or full-source label.
@@ -57,3 +65,5 @@ Run this after automated checks:
 - With a screen reader running, confirm the dialog name, current source, current scope/block, fragment or word announcement, and Policy Notes are understandable.
 
 The expanded checkbox version lives in `docs/reader-accessibility-qa.md`.
+
+The narrow-width checklist lives in `docs/narrow-width-cinema-qa.md`.

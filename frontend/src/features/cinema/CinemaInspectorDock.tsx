@@ -46,7 +46,7 @@ export function CinemaInspectorDock({
               </div>
               <button
                 aria-pressed={pinned}
-                className={`h-8 shrink-0 rounded-md border px-2 text-xs font-semibold transition vs-border ${
+                className={`cinema-touch-target shrink-0 rounded-md border px-2 text-xs font-semibold transition vs-border ${
                   pinned
                     ? "bg-orange-500/10 text-orange-600"
                     : "vs-muted hover:bg-[var(--vs-surface)] hover:text-[var(--vs-text)]"
@@ -64,7 +64,7 @@ export function CinemaInspectorDock({
                 {state.availablePanels.map((panel) => (
                   <button
                     aria-current={panel.id === state.activePanelId ? "true" : undefined}
-                    className={`min-w-0 rounded-md border px-3 py-2 text-left transition vs-border ${
+                    className={`cinema-touch-target min-w-0 rounded-md border px-3 py-2 text-left transition vs-border ${
                       panel.id === state.activePanelId
                         ? "border-orange-400 bg-orange-500/10 text-orange-600"
                         : "hover:bg-[var(--vs-surface)]"

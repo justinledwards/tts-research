@@ -113,6 +113,26 @@ const bookCinemaStep = await runCommandStep(context, {
 await attachReaderTimingBudgets(bookCinemaStep, thresholds);
 
 await runCommandStep(context, {
+  id: "book-cinema-responsive-e2e",
+  title: "Book Cinema Responsive E2E Smoke",
+  command: "pnpm",
+  args: ["e2e:book-cinema:responsive"],
+  env: {
+    E2E_ARTIFACT_DIR: path.join(context.artifactsDir, "book-cinema-responsive-e2e"),
+    E2E_SCREENSHOT_DIR: path.join(
+      context.artifactsDir,
+      "book-cinema-responsive-e2e",
+      "screenshots",
+    ),
+    E2E_SUMMARY_PATH: path.join(context.artifactsDir, "book-cinema-responsive-e2e", "summary.json"),
+  },
+  artifacts: {
+    e2eSummary: path.join(context.artifactsDir, "book-cinema-responsive-e2e", "summary.json"),
+    screenshots: path.join(context.artifactsDir, "book-cinema-responsive-e2e", "screenshots"),
+  },
+});
+
+await runCommandStep(context, {
   id: "workspace-flow-e2e",
   title: "Workspace Flow E2E Smoke",
   command: "pnpm",
