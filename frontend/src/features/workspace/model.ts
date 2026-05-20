@@ -31,8 +31,78 @@ export const WORKSPACE_STAGES: readonly WorkspaceStage[] = [
 
 export const WORKSPACE_LAYOUT_MODES: readonly WorkspaceLayoutMode[] = ["focus", "balanced", "full"];
 
+export interface WorkspaceStageMeta {
+  description: string;
+  id: WorkspaceStage;
+  keywords: string[];
+  label: string;
+}
+
+export interface WorkspaceLayoutModeMeta {
+  description: string;
+  id: WorkspaceLayoutMode;
+  keywords: string[];
+  label: string;
+}
+
+export const WORKSPACE_STAGE_META: Record<WorkspaceStage, WorkspaceStageMeta> = {
+  intake: {
+    description: "Collect draft text, books, prepared files, and URLs.",
+    id: "intake",
+    keywords: ["source", "draft", "book", "file", "url"],
+    label: "Intake",
+  },
+  preview: {
+    description: "Confirm the spoken form before creating audio.",
+    id: "preview",
+    keywords: ["spoken", "form", "confirm", "listen"],
+    label: "Preview",
+  },
+  review: {
+    description: "Check source blocks, listener text, and validation context.",
+    id: "review",
+    keywords: ["blocks", "script", "validation", "source"],
+    label: "Review",
+  },
+  teleprompt: {
+    description: "Follow the script with preserved source and policy context.",
+    id: "teleprompt",
+    keywords: ["teleprompter", "script", "read"],
+    label: "Teleprompt",
+  },
+};
+
+export const WORKSPACE_LAYOUT_MODE_META: Record<WorkspaceLayoutMode, WorkspaceLayoutModeMeta> = {
+  balanced: {
+    description: "Keep rails and the footer compact around the main stage.",
+    id: "balanced",
+    keywords: ["default", "compact", "rails"],
+    label: "Balanced",
+  },
+  focus: {
+    description: "Collapse rails and footer for the most stage-dominant workspace.",
+    id: "focus",
+    keywords: ["collapse", "minimal", "stage"],
+    label: "Focus",
+  },
+  full: {
+    description: "Expand rails and footer for operators who need all controls visible.",
+    id: "full",
+    keywords: ["expanded", "rails", "operator"],
+    label: "Full",
+  },
+};
+
 export function defaultWorkspaceLayoutMode(): WorkspaceLayoutMode {
   return "balanced";
+}
+
+export function workspaceStageMeta(stage: WorkspaceStage): WorkspaceStageMeta {
+  return WORKSPACE_STAGE_META[stage];
+}
+
+export function workspaceLayoutModeMeta(mode: WorkspaceLayoutMode): WorkspaceLayoutModeMeta {
+  return WORKSPACE_LAYOUT_MODE_META[mode];
 }
 
 export function normalizeWorkspaceStage(value: unknown): WorkspaceStage {

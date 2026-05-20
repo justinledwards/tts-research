@@ -21,6 +21,7 @@ export function HelpPanel({
   profileSourceDiagnostics,
   profileSource,
   selectedProfile,
+  preferredAnchorId,
   onClose,
 }: Readonly<{
   context: HelpWorkflowContext;
@@ -29,13 +30,14 @@ export function HelpPanel({
   profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
   profileSource: VoiceProfileSource | null;
   selectedProfile: VoiceProfile | null;
+  preferredAnchorId?: (typeof HELP_ANCHORS)[number]["id"] | null;
   onClose: () => void;
 }>) {
   if (!isOpen) {
     return null;
   }
 
-  const activeAnchor = resolveActiveHelpAnchor(context);
+  const activeAnchor = preferredAnchorId ?? resolveActiveHelpAnchor(context);
   const currentExplanation = explainCurrentState(job, profileSource);
   const runPreset = getRunModePreset(context.runConfiguration.runMode);
   return (

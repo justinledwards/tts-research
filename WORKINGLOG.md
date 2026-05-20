@@ -1,5 +1,15 @@
 # Working Log
 
+## 2026-05-20 16:24 CEST - Command palette and quick actions
+- [x] Add shared command model and palette UI.
+- [x] Generate commands from settings, workspace, cinema, help, sources, and progress metadata.
+- [x] Wire app actions and visible top-bar entry point.
+- [x] Add docs and shortcut reference.
+- [x] Add unit and E2E coverage.
+- [x] Deduplicate recent-position command entries caught by full validation.
+- [x] Remove SDK schema validators from the initial locator-formatting path.
+- [x] Run requested validation commands.
+
 ## 2026-05-20 09:09 CEST - Cinema focus modes and inspector ergonomics
 - [x] Add shared cinema focus-mode model and UI primitives.
 - [x] Move Book Cinema into feature adapter directory.

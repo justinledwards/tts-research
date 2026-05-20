@@ -19,8 +19,10 @@ export { CinemaShell } from "./CinemaShell";
 export { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 export {
   CINEMA_FOCUS_MODES,
+  CINEMA_FOCUS_MODE_META,
   CINEMA_INSPECTOR_PANEL_IDS,
   buildCinemaLayoutState,
+  cinemaFocusModeMeta,
   cinemaFocusModeLabel,
   defaultCinemaPanelForMode,
   normalizeCinemaFocusMode,

@@ -29,4 +29,6 @@ Provenance, policy, and health information remain discoverable through inspector
 
 Footer transport is shared across Book, Document, and Website Cinema. Left/J and Right/L seek by 10 seconds, matching the visible `-10s` and `+10s` controls. The mobile bottom sheet uses `Source`, `Structure`, and `Narration` panels so source selection, outline/bookmark/recent navigation, and current narration context stay in predictable places.
 
+The global command palette also exposes bookmark navigation, recent-position jumps, and cinema focus-mode switches. Its shortcut reference and UX contract live in `docs/command-palette.md`; the visible wayfinding panel remains the primary non-palette path.
+
 Source pins are edited through the existing source speech-policy PATCH APIs. Clearing a pin returns the source to project-default behaviour; it does not clear session overrides. Studio Settings mirrors this same split under `Sources` so users can distinguish session overrides, source pins, project defaults, and machine/runtime settings.

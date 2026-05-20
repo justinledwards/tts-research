@@ -58,6 +58,22 @@ export function useCinemaFocusController(
   };
 
   useEffect(() => {
+    if (!initialState) {
+      return;
+    }
+    const nextMode = normalizeCinemaFocusMode(initialState.mode);
+    const nextActivePanelId = normalizeCinemaInspectorPanelId(initialState.activePanelId);
+    const nextPinnedPanelId = normalizeCinemaInspectorPanelId(initialState.pinnedPanelId);
+    setModeState((currentMode) => (currentMode === nextMode ? currentMode : nextMode));
+    setActivePanelId((currentPanelId) =>
+      currentPanelId === nextActivePanelId ? currentPanelId : nextActivePanelId,
+    );
+    setPinnedPanelId((currentPanelId) =>
+      currentPanelId === nextPinnedPanelId ? currentPanelId : nextPinnedPanelId,
+    );
+  }, [initialState]);
+
+  useEffect(() => {
     if (resetSignal === lastResetSignalRef.current) {
       return;
     }

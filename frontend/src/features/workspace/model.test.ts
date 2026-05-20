@@ -9,7 +9,9 @@ import {
   withWorkspaceActiveBlock,
   withWorkspaceSource,
   workspaceLayoutModeForRailMode,
+  workspaceLayoutModeMeta,
   workspaceLayoutRails,
+  workspaceStageMeta,
 } from "./model";
 
 describe("workspace stage model", () => {
@@ -81,5 +83,10 @@ describe("workspace stage model", () => {
     expect(withWorkspaceActiveBlock(context, "block-3").activeBlockId).toBe("block-3");
     expect(withWorkspaceSource(context, "prepared", "source-1").activeBlockId).toBe("block-1");
     expect(withWorkspaceSource(context, "prepared", "source-2").activeBlockId).toBeNull();
+  });
+
+  it("exposes searchable metadata for stages and layouts", () => {
+    expect(workspaceStageMeta("teleprompt").keywords).toContain("script");
+    expect(workspaceLayoutModeMeta("focus").description).toContain("Collapse");
   });
 });

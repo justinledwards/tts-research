@@ -63,6 +63,20 @@ export function HelpIcon({ className = "h-4 w-4" }: Readonly<{ className?: strin
   );
 }
 
+export function CommandIcon({ className = "h-4 w-4" }: Readonly<{ className?: string }>) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path
+        d="M9 7H7a2 2 0 1 0 2 2V7ZM15 7h2a2 2 0 1 1-2 2V7ZM9 17H7a2 2 0 1 1 2-2v2ZM15 17h2a2 2 0 1 0-2-2v2ZM9 9h6M9 15h6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
 export function ExitIcon({ className = "h-4 w-4" }: Readonly<{ className?: string }>) {
   return (
     <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  SETTINGS_FIELD_META,
   SETTINGS_GROUPS,
   SETTINGS_SCOPE_META,
+  settingsFieldMeta,
   settingsGroupMeta,
   settingsScopeAppliesTo,
 } from "./model";
@@ -25,5 +27,11 @@ describe("settings metadata", () => {
     expect(settingsScopeAppliesTo("source")).toContain("selected source");
     expect(settingsScopeAppliesTo("project")).toContain("project");
     expect(settingsScopeAppliesTo("machine")).toContain("local runtime");
+  });
+
+  it("assigns searchable fields to settings groups", () => {
+    expect(SETTINGS_FIELD_META.every((field) => field.group.length > 0)).toBe(true);
+    expect(settingsFieldMeta("sourceSpeechPolicy")?.group).toBe("sources");
+    expect(settingsFieldMeta("runtimeDiagnostics")?.group).toBe("runtime");
   });
 });

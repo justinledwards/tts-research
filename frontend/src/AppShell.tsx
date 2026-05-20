@@ -2,7 +2,7 @@ import type { RunConfiguration } from "./runConfig";
 import { describePerformanceMode } from "./runConfig";
 import type { VoiceJob, VoiceProject } from "./types";
 import type { WorkspaceLayoutMode } from "./features/workspace/model";
-import { HelpIcon, SettingsIcon } from "./features/navigation";
+import { CommandIcon, HelpIcon, SettingsIcon } from "./features/navigation/SurfaceActions";
 
 export type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 export type StudioMode = "narration" | "voiceCloning";
@@ -22,6 +22,7 @@ export function TopProductBar({
   studioMode,
   workspaceLayoutMode,
   onCancel,
+  onCommandPaletteOpen,
   onExportOpen,
   onHelpOpen,
   onImportOpen,
@@ -47,6 +48,7 @@ export function TopProductBar({
   studioMode: StudioMode;
   workspaceLayoutMode: WorkspaceLayoutMode;
   onCancel: () => void;
+  onCommandPaletteOpen: () => void;
   onExportOpen: () => void;
   onHelpOpen: () => void;
   onImportOpen: () => void;
@@ -194,6 +196,16 @@ export function TopProductBar({
           ))}
         </div>
         <button
+          aria-label="Open command palette"
+          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-semibold shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised"
+          onClick={onCommandPaletteOpen}
+          title="Actions (Ctrl/⌘ K)"
+          type="button"
+        >
+          <CommandIcon />
+          <span className="hidden xl:inline">Actions</span>
+        </button>
+        <button
           aria-label="Open help"
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-sm font-semibold shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised"
           onClick={onHelpOpen}
@@ -257,6 +269,14 @@ export function TopProductBar({
           type="button"
         >
           {studioMode === "narration" ? "Narration" : "Cloning"}
+        </button>
+        <button
+          aria-label="Open command palette"
+          className="grid h-10 w-10 place-items-center rounded-md border text-orange-600 vs-border vs-raised"
+          onClick={onCommandPaletteOpen}
+          type="button"
+        >
+          <CommandIcon />
         </button>
         <button
           aria-label="Open settings"

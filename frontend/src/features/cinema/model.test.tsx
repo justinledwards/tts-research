@@ -9,6 +9,7 @@ import {
 import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 import {
   buildCinemaLayoutState,
+  cinemaFocusModeMeta,
   defaultCinemaPanelForMode,
   normalizeCinemaInspectorPanelId,
   type CinemaPanelDefinition,
@@ -59,6 +60,11 @@ describe("cinema focus layout model", () => {
     expect(state.activePanelId).toBe("provenance");
     expect(state.pinnedPanelId).toBeNull();
     expect(state.railVisible).toBe(true);
+  });
+
+  it("exposes searchable focus-mode metadata", () => {
+    expect(cinemaFocusModeMeta("review").keywords).toContain("bookmarks");
+    expect(cinemaFocusModeMeta("read").description).toContain("canvas");
   });
 });
 

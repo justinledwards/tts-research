@@ -37,6 +37,8 @@ Policy Notes are rendered as normal text, including the shared policy explanatio
 
 Wayfinding controls share one model for outlines, bookmarks, recent positions, and locator-backed resume. The concise UX contract lives in `docs/wayfinding-scope-ux.md`.
 
+The command palette shortcut and keyboard contract live in `docs/command-palette.md`. Reader shortcuts remain active only inside reader surfaces; the global palette is additive and closes before returning focus to the current surface.
+
 ## Non-Book Parity
 
 Document Cinema and Website Cinema use the shared focus lifecycle, keyboard map, live-region helper, reduced-motion behavior, high-contrast treatment, and typography/reflow controls. Auto-follow scrolling uses instant movement when reduced motion is enabled. Prepared-source reader settings live in the same settings menu as theme and auto-follow so the preferences remain shared across formats.

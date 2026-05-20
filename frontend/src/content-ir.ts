@@ -1,5 +1,5 @@
-import { formatContentIRLocator as formatLocator } from "@tts-research/sdk-ts";
 import type { ContentIRLocator, ContentIRNode } from "@tts-research/schema";
+import { formatContentIRLocator as formatLocator } from "./locatorCodecs";
 
 export const CONTENT_IR_SCHEMA_VERSION = "content-ir.v1";
 

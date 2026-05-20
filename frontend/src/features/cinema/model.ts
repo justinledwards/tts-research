@@ -24,6 +24,40 @@ export interface CinemaPanelDefinition {
   title: string;
 }
 
+export interface CinemaFocusModeMeta {
+  description: string;
+  id: CinemaFocusMode;
+  keywords: string[];
+  label: string;
+}
+
+export const CINEMA_FOCUS_MODE_META: Record<CinemaFocusMode, CinemaFocusModeMeta> = {
+  debug: {
+    description: "Show generated-audio, skipped-content, and timing diagnostics.",
+    id: "debug",
+    keywords: ["diagnostics", "timing", "debug"],
+    label: "Debug",
+  },
+  inspect: {
+    description: "Inspect source, structure, policy scope, and current passage.",
+    id: "inspect",
+    keywords: ["source", "structure", "policy", "passage"],
+    label: "Inspect",
+  },
+  read: {
+    description: "Keep the reading canvas dominant and hide inspector panels unless pinned.",
+    id: "read",
+    keywords: ["reader", "canvas", "clean"],
+    label: "Read",
+  },
+  review: {
+    description: "Expose wayfinding, notes, queue, and review-focused panels.",
+    id: "review",
+    keywords: ["wayfinding", "bookmarks", "recent", "review"],
+    label: "Review",
+  },
+};
+
 export interface CinemaLayoutInput {
   activePanelId?: CinemaInspectorPanelId | null;
   mode: CinemaFocusMode;
@@ -106,16 +140,11 @@ export function defaultCinemaPanelForMode(
 }
 
 export function cinemaFocusModeLabel(mode: CinemaFocusMode): string {
-  if (mode === "inspect") {
-    return "Inspect";
-  }
-  if (mode === "review") {
-    return "Review";
-  }
-  if (mode === "debug") {
-    return "Debug";
-  }
-  return "Read";
+  return CINEMA_FOCUS_MODE_META[mode].label;
+}
+
+export function cinemaFocusModeMeta(mode: CinemaFocusMode): CinemaFocusModeMeta {
+  return CINEMA_FOCUS_MODE_META[mode];
 }
 
 function findPanel(

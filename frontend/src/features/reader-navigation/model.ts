@@ -92,12 +92,27 @@ export function readerRecentPositionsFromProgress(
   labels: ReaderNavigationSourceLabels = {},
   limit = 8,
 ): ReaderRecentPositionItem[] {
-  return sortByTimeDescending(
-    progressItems.filter((progress) => !progress.hidden),
-    (progress) => progress.updatedAt,
+  return uniqueByTargetId(
+    sortByTimeDescending(
+      progressItems.filter((progress) => !progress.hidden),
+      (progress) => progress.updatedAt,
+    ),
   )
     .slice(0, limit)
     .map((progress) => readerRecentPositionFromProgress(progress, labels));
+}
+
+function uniqueByTargetId(progressItems: readonly PlaybackProgress[]): PlaybackProgress[] {
+  const seen = new Set<string>();
+  const unique: PlaybackProgress[] = [];
+  for (const progress of progressItems) {
+    if (seen.has(progress.targetId)) {
+      continue;
+    }
+    seen.add(progress.targetId);
+    unique.push(progress);
+  }
+  return unique;
 }
 
 export function readerRecentPositionFromProgress(

@@ -19,9 +19,16 @@ export interface SettingsGroupMeta {
 
 export interface SettingsFieldMeta {
   description: string;
+  group: SettingsGroupId;
   id: string;
   label: string;
   scope: SettingsScope;
+}
+
+export interface SettingsCommandTarget {
+  fieldId?: string;
+  groupId: SettingsGroupId;
+  scope?: SettingsScope;
 }
 
 export const SETTINGS_SCOPE_META: Record<SettingsScope, SettingsScopeMeta> = {
@@ -98,42 +105,49 @@ export const SETTINGS_GROUPS: SettingsGroupMeta[] = [
 export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
   {
     description: "Controls the preset and enabled pipeline steps for the next job.",
+    group: "run",
     id: "runMode",
     label: "Run mode",
     scope: "session",
   },
   {
     description: "Controls the balance between throughput and steadier rendering.",
+    group: "run",
     id: "performanceMode",
     label: "Performance",
     scope: "session",
   },
   {
     description: "Controls typography and motion across reader surfaces on this machine.",
+    group: "reader",
     id: "readerPreferences",
     label: "Reader preferences",
     scope: "machine",
   },
   {
     description: "Controls whether local presentation layout is remembered on this machine.",
+    group: "reader",
     id: "uiMemory",
     label: "UI memory",
     scope: "machine",
   },
   {
     description: "Sets the durable speech-policy default for unpinned project sources.",
+    group: "sources",
     id: "projectSpeechPolicy",
     label: "Project policy",
     scope: "project",
   },
   {
     description: "Pins a selected source to its own profile or field overrides.",
+    group: "sources",
     id: "sourceSpeechPolicy",
     label: "Source pin",
     scope: "source",
   },
   {
     description: "Shows local engine, model, provider, and backend readiness.",
+    group: "runtime",
     id: "runtimeDiagnostics",
     label: "Runtime diagnostics",
     scope: "machine",
@@ -142,6 +156,10 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
 
 export function settingsGroupMeta(id: SettingsGroupId): SettingsGroupMeta {
   return SETTINGS_GROUPS.find((group) => group.id === id) ?? SETTINGS_GROUPS[0];
+}
+
+export function settingsFieldMeta(id: string): SettingsFieldMeta | null {
+  return SETTINGS_FIELD_META.find((field) => field.id === id) ?? null;
 }
 
 export function settingsScopeAppliesTo(scope: SettingsScope): string {

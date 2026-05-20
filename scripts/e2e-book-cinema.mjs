@@ -312,6 +312,14 @@ async function runWorkspaceFlowUX(browser, projectId) {
       await page.screenshot({ fullPage: false, path: screenshot });
       screenshots.push(screenshot);
     }
+    await runCommandPaletteAction(page, "focus layout", /Focus workspace layout/);
+    await assertWorkspaceLayoutSelected(page, "Focus");
+    await runCommandPaletteAction(page, "balanced layout", /Balanced workspace layout/);
+    await assertWorkspaceLayoutSelected(page, "Balanced");
+    await runCommandPaletteAction(page, "full layout", /Full workspace layout/);
+    await assertWorkspaceLayoutSelected(page, "Full");
+    await runCommandPaletteAction(page, "go review", /Go to Review/);
+    await page.getByText("Source Review").first().waitFor();
 
     await page.getByRole("button", { exact: true, name: "Open Teleprompter" }).click();
     await page.getByText("Teleprompt Stage").first().waitFor();
@@ -348,7 +356,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
       (response) =>
         response.url().includes("/api/voice-jobs") && response.request().method() === "POST",
     );
-    await page.getByRole("button", { exact: true, name: "Create & Listen" }).last().click();
+    await runCommandPaletteAction(page, "create listen", /Create & Listen/);
     const response = await createResponse;
     assert(response.ok(), `Create & Listen failed with ${String(response.status())}`);
     await page
@@ -395,12 +403,25 @@ async function runSettingsIAUX(browser, projectId) {
     screenshots.push(settingsScreenshot);
     await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
 
+    await runCommandPaletteAction(page, "project policy", /Project policy/);
+    await page.getByText("Project defaults, session overrides").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
+
+    await runCommandPaletteAction(page, "machine scope", /Machine scope/);
+    await page.getByText("Remember presentation-only workspace").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
+
     await page.getByRole("button", { exact: true, name: "Open help" }).click();
     await page.getByText("Context Guide").first().waitFor();
     await page.getByText("Workflow anchors").first().waitFor();
     const helpScreenshot = path.join(screenshotsDir, "settings-ia-context-guide.png");
     await page.screenshot({ fullPage: false, path: helpScreenshot });
     screenshots.push(helpScreenshot);
+    await page.getByRole("button", { exact: true, name: "Close Help" }).click();
+
+    await runCommandPaletteAction(page, "help cinema", /Help: Cinema/);
+    await page.getByText("Context Guide").first().waitFor();
+    await page.getByRole("dialog", { name: "Help" }).getByText("Cinema").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Close Help" }).click();
 
     await page.getByRole("button", { exact: true, name: "Open workspace" }).click();
@@ -448,6 +469,17 @@ async function assertReviewPaneSelected(page, label) {
   const button = page.getByRole("button", { name: new RegExp(label) }).first();
   const expanded = await button.getAttribute("aria-expanded");
   assert(expanded === "true", `${label} review pane was not restored.`);
+}
+
+async function runCommandPaletteAction(page, query, optionName) {
+  await page.keyboard.press("Control+K");
+  const palette = page.getByRole("dialog", { name: "Command palette" });
+  await palette.waitFor({ state: "visible" });
+  await page.getByPlaceholder("Search actions, settings, sources, bookmarks...").fill(query);
+  const option = palette.getByRole("option", { name: optionName }).first();
+  await option.waitFor({ state: "visible" });
+  await option.click();
+  await palette.waitFor({ state: "hidden" }).catch(() => {});
 }
 
 async function runBookCinemaUX(browser, { book, job, projectId, scope, screenshot, text }) {
@@ -503,11 +535,10 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     const playbackSpeed = await playbackSpeedSelect.inputValue();
     assert(playbackSpeed === "1.25", `Playback speed control value = ${playbackSpeed}`);
     const overlay = page.locator(".fixed.inset-0").first();
-    const bookmarkButton = visibleOverlayButton(page, "Bookmark");
-    await assertEnabled(bookmarkButton, "Bookmark");
-    await bookmarkButton.click();
+    await runCommandPaletteAction(page, "review cinema focus", /Review cinema focus/);
+    await assertCinemaFocusModeSelected(page, "Review");
+    await runCommandPaletteAction(page, "bookmark current", /Bookmark current position/);
     await waitForSavedBookmark(projectId, book.id, scope, job.id);
-    await switchCinemaFocusMode(page, "Review");
     await selectCinemaInspectorPanel(page, "Wayfinding");
     await overlay.getByRole("button", { exact: true, name: "Bookmarks" }).first().click();
     await overlay
@@ -524,6 +555,7 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
       .getByRole("button", { name: /Full|Chapter|Page/ })
       .first()
       .click();
+    await runCommandPaletteAction(page, "recent", /^Recent:/);
     await captureCinemaFocusModeScreenshots(page, screenshot.replace(/\.png$/i, "-focus"));
     await switchCinemaFocusMode(page, "Review");
     await selectCinemaInspectorPanel(page, "Speech policy");

@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { backendAssetUrl } from "../../api";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { useReaderModalLifecycle, type ReaderAccessibilitySettings } from "../reader-accessibility";
@@ -53,6 +53,7 @@ import {
   SETTINGS_SCOPE_META,
   settingsGroupMeta,
   settingsScopeAppliesTo,
+  type SettingsCommandTarget,
   type SettingsGroupId,
   type SettingsScope,
 } from "./model";
@@ -102,6 +103,7 @@ interface SourcePolicyTarget {
 
 export function SettingsPanel({
   canSubmit,
+  commandTarget,
   customSpeechPolicyProfiles,
   isOpen,
   isSpeechPolicyPreviewing,
@@ -151,6 +153,7 @@ export function SettingsPanel({
   onUpdateCustomSpeechPolicyProfile,
 }: Readonly<{
   canSubmit: boolean;
+  commandTarget?: SettingsCommandTarget | null;
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
   isOpen: boolean;
   isSpeechPolicyPreviewing: boolean;
@@ -215,6 +218,25 @@ export function SettingsPanel({
   ) => Promise<void>;
 }>) {
   const [activeGroup, setActiveGroup] = useState<SettingsGroupId>("run");
+  const highlightedCommandToken = commandTarget ? settingsCommandTargetToken(commandTarget) : null;
+
+  useEffect(() => {
+    if (!commandTarget) {
+      return;
+    }
+    setActiveGroup(commandTarget.groupId);
+    const targetToken = settingsCommandTargetToken(commandTarget);
+    const animationFrameId = globalThis.requestAnimationFrame(() => {
+      findSettingsCommandTargetElement(targetToken)?.scrollIntoView({
+        block: "center",
+        inline: "nearest",
+      });
+    });
+    return () => {
+      globalThis.cancelAnimationFrame(animationFrameId);
+    };
+  }, [commandTarget]);
+
   if (!isOpen) {
     return null;
   }
@@ -278,6 +300,7 @@ export function SettingsPanel({
           {activeGroup === "run" ? (
             <RunSettingsGroup
               canSubmit={canSubmit}
+              highlightedCommandToken={highlightedCommandToken}
               job={job}
               runConfiguration={runConfiguration}
               onRunConfigurationChange={onRunConfigurationChange}
@@ -286,6 +309,7 @@ export function SettingsPanel({
           ) : null}
           {activeGroup === "reader" ? (
             <ReaderSettingsGroup
+              highlightedCommandToken={highlightedCommandToken}
               readerAccessibilitySettings={readerAccessibilitySettings}
               runConfiguration={runConfiguration}
               teleprompterSettings={teleprompterSettings}
@@ -300,6 +324,7 @@ export function SettingsPanel({
           ) : null}
           {activeGroup === "voices" ? (
             <VoiceSettingsGroup
+              highlightedCommandToken={highlightedCommandToken}
               runConfiguration={runConfiguration}
               selectedProfile={selectedProfile}
               ttsEngineError={ttsEngineError}
@@ -311,6 +336,7 @@ export function SettingsPanel({
           {activeGroup === "sources" ? (
             <SourceSettingsGroup
               customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+              highlightedCommandToken={highlightedCommandToken}
               isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
               selectedBookSource={selectedBookSource}
               selectedPreparedSource={selectedPreparedSource}
@@ -335,6 +361,7 @@ export function SettingsPanel({
           ) : null}
           {activeGroup === "runtime" ? (
             <RuntimeSettingsGroup
+              highlightedCommandToken={highlightedCommandToken}
               metrics={metrics}
               metricsError={metricsError}
               profileSourceDiagnostics={profileSourceDiagnostics}
@@ -347,6 +374,7 @@ export function SettingsPanel({
           ) : null}
           {activeGroup === "diagnostics" ? (
             <DiagnosticsSettingsGroup
+              highlightedCommandToken={highlightedCommandToken}
               job={job}
               metrics={metrics}
               metricsError={metricsError}
@@ -562,12 +590,14 @@ function ScopeLegend() {
 
 function RunSettingsGroup({
   canSubmit,
+  highlightedCommandToken,
   job,
   runConfiguration,
   onRunConfigurationChange,
   onSubmit,
 }: Readonly<{
   canSubmit: boolean;
+  highlightedCommandToken: string | null;
   job: VoiceJob | null;
   runConfiguration: RunConfiguration;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
@@ -575,6 +605,8 @@ function RunSettingsGroup({
 }>) {
   return (
     <PanelSection
+      commandTargetTokens={["group-run", "field-runMode", "field-performanceMode", "scope-session"]}
+      highlightedCommandToken={highlightedCommandToken}
       scope="session"
       title="Run"
       subtitle={SETTINGS_FIELD_META.find((field) => field.id === "runMode")?.description ?? ""}
@@ -700,6 +732,7 @@ function PipelineToggles({
 }
 
 function ReaderSettingsGroup({
+  highlightedCommandToken,
   readerAccessibilitySettings,
   runConfiguration,
   teleprompterSettings,
@@ -711,6 +744,7 @@ function ReaderSettingsGroup({
   onTeleprompterSettingsChange,
   onThemeChange,
 }: Readonly<{
+  highlightedCommandToken: string | null;
   readerAccessibilitySettings: ReaderAccessibilitySettings;
   runConfiguration: RunConfiguration;
   teleprompterSettings: TeleprompterHighlightSettings;
@@ -724,6 +758,13 @@ function ReaderSettingsGroup({
 }>) {
   return (
     <PanelSection
+      commandTargetTokens={[
+        "group-reader",
+        "field-readerPreferences",
+        "field-uiMemory",
+        "scope-machine",
+      ]}
+      highlightedCommandToken={highlightedCommandToken}
       scope="machine"
       title="Reader"
       subtitle={
@@ -1008,6 +1049,7 @@ function TeleprompterHighlightDemo({
 }
 
 function VoiceSettingsGroup({
+  highlightedCommandToken,
   runConfiguration,
   selectedProfile,
   ttsEngineError,
@@ -1015,6 +1057,7 @@ function VoiceSettingsGroup({
   onPrepareProfileTarget,
   onRunConfigurationChange,
 }: Readonly<{
+  highlightedCommandToken: string | null;
   runConfiguration: RunConfiguration;
   selectedProfile: VoiceProfile | null;
   ttsEngineError: string | null;
@@ -1028,6 +1071,8 @@ function VoiceSettingsGroup({
   );
   return (
     <PanelSection
+      commandTargetTokens={["group-voices", "scope-session"]}
+      highlightedCommandToken={highlightedCommandToken}
       scope="session"
       title="Voices"
       subtitle="Select the render path for the next run."
@@ -1096,6 +1141,7 @@ function VoiceSettingsGroup({
 
 function SourceSettingsGroup({
   customSpeechPolicyProfiles,
+  highlightedCommandToken,
   isSpeechPolicyPreviewing,
   selectedBookSource,
   selectedPreparedSource,
@@ -1118,6 +1164,7 @@ function SourceSettingsGroup({
   onUpdateCustomSpeechPolicyProfile,
 }: Readonly<{
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  highlightedCommandToken: string | null;
   isSpeechPolicyPreviewing: boolean;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
@@ -1179,6 +1226,14 @@ function SourceSettingsGroup({
 
   return (
     <PanelSection
+      commandTargetTokens={[
+        "group-sources",
+        "field-projectSpeechPolicy",
+        "field-sourceSpeechPolicy",
+        "scope-project",
+        "scope-source",
+      ]}
+      highlightedCommandToken={highlightedCommandToken}
       scope="project"
       title="Sources"
       subtitle="Project defaults, session overrides, and selected-source pins use separate scopes."
@@ -1232,6 +1287,7 @@ function SourceSettingsGroup({
 }
 
 function RuntimeSettingsGroup({
+  highlightedCommandToken,
   metrics,
   metricsError,
   profileSourceDiagnostics,
@@ -1241,6 +1297,7 @@ function RuntimeSettingsGroup({
   ttsEngines,
   onRunConfigurationChange,
 }: Readonly<{
+  highlightedCommandToken: string | null;
   metrics: SystemMetrics | null;
   metricsError: string | null;
   profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
@@ -1252,6 +1309,8 @@ function RuntimeSettingsGroup({
 }>) {
   return (
     <PanelSection
+      commandTargetTokens={["group-runtime", "field-runtimeDiagnostics", "scope-machine"]}
+      highlightedCommandToken={highlightedCommandToken}
       scope="machine"
       title="Runtime"
       subtitle={
@@ -1285,6 +1344,7 @@ function RuntimeSettingsGroup({
 }
 
 function DiagnosticsSettingsGroup({
+  highlightedCommandToken,
   job,
   metrics,
   metricsError,
@@ -1296,6 +1356,7 @@ function DiagnosticsSettingsGroup({
   ttsEngineError,
   ttsEngines,
 }: Readonly<{
+  highlightedCommandToken: string | null;
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
   metricsError: string | null;
@@ -1310,6 +1371,8 @@ function DiagnosticsSettingsGroup({
   const gpu = metrics?.gpus?.[0];
   return (
     <PanelSection
+      commandTargetTokens={["group-diagnostics", "scope-machine"]}
+      highlightedCommandToken={highlightedCommandToken}
       scope="machine"
       title="Diagnostics"
       subtitle="Operational health and storage facts."
@@ -1639,12 +1702,31 @@ function PanelShell({
 
 function PanelSection({
   children,
+  commandTargetTokens,
+  highlightedCommandToken,
   scope,
   subtitle,
   title,
-}: Readonly<{ children: ReactNode; scope: SettingsScope; subtitle: string; title: string }>) {
+}: Readonly<{
+  children: ReactNode;
+  commandTargetTokens: string[];
+  highlightedCommandToken: string | null;
+  scope: SettingsScope;
+  subtitle: string;
+  title: string;
+}>) {
+  const isHighlighted = highlightedCommandToken
+    ? commandTargetTokens.includes(highlightedCommandToken)
+    : false;
   return (
-    <section className="grid gap-3 rounded-md border p-4 vs-border vs-raised">
+    <section
+      className={`grid gap-3 rounded-md border p-4 transition ${
+        isHighlighted
+          ? "border-orange-300 bg-orange-500/10 ring-2 ring-orange-200"
+          : "vs-border vs-raised"
+      }`}
+      data-settings-command-targets={commandTargetTokens.join(" ")}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold">{title}</h3>
@@ -1655,6 +1737,26 @@ function PanelSection({
       {children}
     </section>
   );
+}
+
+function settingsCommandTargetToken(target: SettingsCommandTarget): string {
+  if (target.fieldId) {
+    return `field-${target.fieldId}`;
+  }
+  if (target.scope) {
+    return `scope-${target.scope}`;
+  }
+  return `group-${target.groupId}`;
+}
+
+function findSettingsCommandTargetElement(token: string): HTMLElement | null {
+  const elements = document.querySelectorAll<HTMLElement>("[data-settings-command-targets]");
+  for (const element of elements) {
+    if (element.dataset.settingsCommandTargets?.split(" ").includes(token)) {
+      return element;
+    }
+  }
+  return null;
 }
 
 function DiagnosticLine({ label, value }: Readonly<{ label: string; value: string }>) {
