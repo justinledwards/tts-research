@@ -242,6 +242,18 @@ export const STATIC_UI_ACTION_METADATA = [
   action("cinema-exit", "Exit", "BookCinema", "navigation", "state-changed"),
   action("settings-close", "Close Settings", "Settings", "navigation", "state-changed"),
   action(
+    "reader-accessibility-preset",
+    "Accessibility preset",
+    "Settings",
+    "settings",
+    "state-changed",
+  ),
+  action("reader-reduced-motion", "Reduced motion", "Settings", "settings", "state-changed"),
+  action("reader-high-contrast", "High contrast", "Settings", "settings", "state-changed"),
+  action("reader-text-scale", "Text scale", "Settings", "settings", "state-changed"),
+  action("reader-line-spacing", "Line spacing", "Settings", "settings", "state-changed"),
+  action("reader-measure", "Measure", "Settings", "settings", "state-changed"),
+  action(
     "settings-reset-ui-memory",
     "Reset UI memory",
     "Settings",

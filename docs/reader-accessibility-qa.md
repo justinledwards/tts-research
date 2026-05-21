@@ -2,7 +2,8 @@
 
 Use this checklist for manual validation after `mise doctor`,
 `mise run validate:local`, `pnpm validate:local`, `pnpm e2e:book-cinema`,
-and `pnpm e2e:book-cinema:low-resource` pass locally.
+`pnpm e2e:book-cinema:low-resource`, `pnpm e2e:accessibility-audit`,
+and `pnpm e2e:responsive-snapshots` pass locally.
 
 ## Keyboard-Only Smoke Run
 
@@ -30,6 +31,7 @@ and `pnpm e2e:book-cinema:low-resource` pass locally.
 
 ## Highlight And Motion
 
+- [ ] Set Accessibility preset to Standard, High contrast, Reduced motion, Dyslexic friendly, Large text, and Low-vision measure.
 - [ ] Enable Reduced motion and confirm active-word/block highlights use a static treatment without glow motion in Book, Document, and Website Cinema.
 - [ ] Enable High contrast and confirm active words, phrase highlights, Markdown highlights, and website block highlights remain legible in light and dark reader themes.
 - [ ] Toggle Reduced motion and High contrast together and confirm page layout does not shift.
@@ -49,3 +51,12 @@ and `pnpm e2e:book-cinema:low-resource` pass locally.
 - [ ] Change scope or active outline block and confirm the live announcement reflects the new chapter, page range, document block, or website block.
 - [ ] Inspect Policy Notes and confirm explanations are readable as normal text, not only visual badges.
 - [ ] Confirm Reduced motion, High contrast, Text scale, Line spacing, and Measure controls expose state and can be changed from the keyboard.
+
+## Responsive And Language Smoke
+
+- [ ] At a phone-width viewport, confirm the settings drawer, bottom sheet, and mini-player do not create horizontal overflow.
+- [ ] At a `1024px` to `1180px` viewport, confirm rails, settings, and reader controls do not collide or hide primary actions.
+- [ ] At a desktop viewport, confirm the context panel and reader canvas can coexist without nested scroll traps.
+- [ ] Change Supertonic language and confirm available language choices are constrained to the engine-supported list.
+- [ ] Choose a non-English source language and confirm saved voice profiles and Kokoro voicepacks show whether they match that language.
+- [ ] Confirm locale-formatted dates and numbers remain readable in dashboards and source summaries.

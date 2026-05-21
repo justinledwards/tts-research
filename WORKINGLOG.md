@@ -300,3 +300,16 @@
 - [x] Reduce normal workspace project/voice management clutter to summaries
 - [x] Update docs and UI action coverage
 - [x] Run local validation commands
+
+## 2026-05-21 19:37 CEST - Accessibility Responsive I18n Hardening
+- [x] Map current accessibility, responsive, and language support
+- [x] Add accessibility audit and responsive snapshot scripts
+- [x] Add accessibility preset and i18n foundation modules
+- [x] Wire language-aware voice and locale metadata into UI/action coverage
+- [x] Update accessibility, reader QA, and i18n docs
+- [x] Run local validation commands
+- [ ] Follow up low-resource reader timing budget failures
+
+## 2026-05-21 21:23 CEST - Commit Workpackage 10
+- [x] Stage accessibility, responsive, and i18n hardening changes
+- [x] Commit workpackage 10

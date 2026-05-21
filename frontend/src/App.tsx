@@ -87,12 +87,7 @@ import {
   resolveDefaultBookScope,
 } from "./features/book-cinema/model";
 import { looksLikeMermaidDiagram } from "./markdownModel";
-import {
-  KOKORO_VOICEPACKS,
-  findKokoroVoicepack,
-  kokoroVoicepackDetail,
-  kokoroVoicepackLabel,
-} from "./kokoroVoices";
+import { findKokoroVoicepack, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
 import {
   applyKokoroRenderMode,
   buildCreateVoiceJobRequest,
@@ -282,6 +277,10 @@ import {
 } from "./features/performance";
 import { buildVoiceLibraryViewModel, type VoiceLibraryEntry } from "./voiceStudioViewModels";
 import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
+import {
+  orderedKokoroVoicepacksForLanguage,
+  voiceProfileMatchesLanguage,
+} from "./features/i18n/languageVoiceMapping";
 
 type VoiceProfileArtifactBuildAction = (
   profileId: string,
@@ -570,8 +569,8 @@ function createPipelineBase(job?: VoiceJob): PipelineStepState {
 
 function resolveRunLocale(config: RunConfiguration): string {
   const lang = config.ttsEngine === "supertonic-3" ? config.engineOptions.lang : undefined;
-  if (lang === "sv") {
-    return "sv-SE";
+  if (lang && lang !== "na") {
+    return lang;
   }
   return "en-GB";
 }
@@ -10661,13 +10660,20 @@ function VoiceProfileDropdown({
       : false;
   const supertonicVoices = selectedEngine?.voices ?? voicePanelSupertonicVoices();
   const supertonicLanguages = voicePanelSupertonicLanguages(selectedEngine);
+  const activeLanguage =
+    runConfiguration.ttsEngine === "supertonic-3"
+      ? (runConfiguration.engineOptions.lang ?? "na")
+      : (selectedProfile?.language ?? "en-US");
+  const effectiveLanguage =
+    activeLanguage === "na" ? (selectedProfile?.language ?? "en-US") : activeLanguage;
+  const orderedKokoroVoicepacks = orderedKokoroVoicepacksForLanguage(effectiveLanguage);
   const activeName = selectedProfile?.name ?? "Default Voice";
   const likenessBadge = selectedProfile ? formatLikenessLabel(selectedProfile) : "Provider voice";
   const activeDetail = selectedProfile
     ? `${selectedProfile.language} · ${formatDuration(
         selectedProfile.referenceDurationMs ?? selectedProfile.durationMs,
       )} reference · ${likenessBadge}`
-    : "Kokoro voicepacks · ready";
+    : `${effectiveLanguage} voicepacks · ready`;
   let kokoroDetailSuffix = "";
   if (runConfiguration.ttsEngine === "supertonic-3") {
     kokoroDetailSuffix = " · kept for Auto/Kokoro runs";
@@ -10885,9 +10891,10 @@ function VoiceProfileDropdown({
                   onSelectKokoroVoice(event.currentTarget.value);
                 }}
               >
-                {KOKORO_VOICEPACKS.map((voicepack) => (
-                  <option key={voicepack.id} value={voicepack.id}>
-                    {voicepack.name} · {voicepack.locale} · {voicepack.id}
+                {orderedKokoroVoicepacks.map(({ languageMatched, voice }) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.name} · {voice.locale} · {voice.id}
+                    {languageMatched ? " · recommended" : ""}
                   </option>
                 ))}
               </select>
@@ -10926,6 +10933,7 @@ function VoiceProfileDropdown({
               detail={`${profile.status} · ${profile.language} · ${formatDuration(profile.referenceDurationMs ?? profile.durationMs)}`}
               isActive={profile.id === selectedProfileId}
               key={profile.id}
+              languageMatched={voiceProfileMatchesLanguage(effectiveLanguage, profile)}
               likeness={profile.likeness}
               name={profile.name}
               score={profile.referenceScore}
@@ -11838,6 +11846,7 @@ function VoiceProfileOption({
   artifactSummary,
   detail,
   isActive,
+  languageMatched = false,
   likeness,
   name,
   score,
@@ -11847,6 +11856,7 @@ function VoiceProfileOption({
   artifactSummary?: ReactNode;
   detail: string;
   isActive: boolean;
+  languageMatched?: boolean;
   likeness?: VoiceProfile["likeness"];
   name: string;
   score?: number;
@@ -11863,6 +11873,11 @@ function VoiceProfileOption({
           <span className="mt-1 block truncate text-xs text-zinc-500" title={detail}>
             {detail}
           </span>
+          {languageMatched ? (
+            <span className="mt-1 inline-flex rounded bg-sky-50 px-2 py-1 text-[0.65rem] font-semibold text-sky-700">
+              Language match
+            </span>
+          ) : null}
           {artifactSummary}
         </button>
         <div className="flex shrink-0 items-center gap-2">

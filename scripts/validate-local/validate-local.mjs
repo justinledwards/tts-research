@@ -133,6 +133,42 @@ await runCommandStep(context, {
 });
 
 await runCommandStep(context, {
+  id: "accessibility-audit-e2e",
+  title: "Accessibility Audit E2E",
+  command: "pnpm",
+  args: ["e2e:accessibility-audit"],
+  env: {
+    E2E_ACCESSIBILITY_OUTPUT_DIR: path.join(context.artifactsDir, "accessibility-audit-e2e"),
+  },
+  artifacts: {
+    accessibilityResults: path.join(
+      context.artifactsDir,
+      "accessibility-audit-e2e",
+      "accessibility-results.json",
+    ),
+    screenshots: path.join(context.artifactsDir, "accessibility-audit-e2e", "screenshots"),
+  },
+});
+
+await runCommandStep(context, {
+  id: "responsive-snapshots-e2e",
+  title: "Responsive Snapshot E2E",
+  command: "pnpm",
+  args: ["e2e:responsive-snapshots"],
+  env: {
+    E2E_RESPONSIVE_OUTPUT_DIR: path.join(context.artifactsDir, "responsive-snapshots-e2e"),
+  },
+  artifacts: {
+    responsiveResults: path.join(
+      context.artifactsDir,
+      "responsive-snapshots-e2e",
+      "responsive-results.json",
+    ),
+    screenshots: path.join(context.artifactsDir, "responsive-snapshots-e2e", "screenshots"),
+  },
+});
+
+await runCommandStep(context, {
   id: "workspace-flow-e2e",
   title: "Workspace Flow E2E Smoke",
   command: "pnpm",

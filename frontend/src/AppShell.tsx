@@ -130,6 +130,11 @@ export function TopProductBar({
           <select
             aria-label="Select chapter"
             className="min-w-0 truncate rounded-md border-0 bg-transparent px-1 py-0.5 text-sm font-semibold outline-none"
+            data-disabled-reason={
+              visibleJobs.length === 0
+                ? "Create audio before selecting a generated chapter."
+                : undefined
+            }
             disabled={visibleJobs.length === 0}
             onChange={(event) => {
               onJobSelect(event.currentTarget.value);

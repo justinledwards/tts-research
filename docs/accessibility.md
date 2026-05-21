@@ -27,6 +27,19 @@ High contrast uses a stronger active-word, phrase, block, and prepared-source hi
 
 Text scale, line spacing, and measure control reader typography and reflow for paged books, Markdown documents, prepared documents, and extracted websites. These settings are format-agnostic and should not change audio generation, playback progress, locators, or transport state.
 
+Reader preferences now expose preset shortcuts backed by `frontend/src/features/accessibility/accessibilityAudit.ts`:
+
+| Preset | Intent |
+|---|---|
+| Standard | Default reader comfort with large text and standard motion. |
+| High contrast | Stronger contrast without otherwise changing reading geometry. |
+| Reduced motion | Instant scrolling and no nonessential motion. |
+| Dyslexic friendly | Spacious line height, wider measure, and reduced motion. |
+| Large text | Giant text and spacious line height. |
+| Low-vision measure | High contrast, giant text, spacious line height, narrow measure, and reduced motion. |
+
+Presets are not separate storage. Choosing a preset writes the same reduced-motion, high-contrast, text-scale, line-spacing, and measure values users can still fine tune one by one.
+
 All reader preferences are persisted in local storage under `tts-reader-accessibility-v1` and are expressed as reader data attributes/CSS variables rather than playback engine settings. Older saved values with only reduced motion and high contrast are normalized with default typography values.
 
 ## Touch And Narrow Widths
@@ -63,6 +76,21 @@ Run this after automated checks:
 - Change text scale, line spacing, and measure while highlights are active and verify layout remains readable without clipping.
 - Resume from a saved locator and verify the same visible text is highlighted.
 - With a screen reader running, confirm the dialog name, current source, current scope/block, fragment or word announcement, and Policy Notes are understandable.
+
+## Local Audit Gate
+
+Run the local browser checks with:
+
+```sh
+pnpm e2e:accessibility-audit
+pnpm e2e:responsive-snapshots
+```
+
+`e2e:accessibility-audit` starts the mock local stack, scans visible interactive controls for accessible names, disabled reasons, touch-target warnings, live regions, image alt text, first-tab focus, and browser console/page issues. It writes `output/accessibility-audit/latest/accessibility-results.json`, `accessibility-report.md`, and screenshots.
+
+`e2e:responsive-snapshots` captures the workspace and settings drawer at `390px`, `1100px`, and `1440px`. It checks for meaningful content, browser issues, and horizontal overflow while saving screenshots under `output/responsive-snapshots/latest/screenshots/`.
+
+`pnpm validate:local` includes both checks so accessibility and responsive coverage remain part of the local gate, not an afterthought.
 
 The expanded checkbox version lives in `docs/reader-accessibility-qa.md`.
 

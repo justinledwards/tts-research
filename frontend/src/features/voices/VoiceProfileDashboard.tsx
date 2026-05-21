@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Panel, StatusChip } from "../../design";
+import { formatLocaleNumber, languageDisplayName } from "../i18n";
 import { useReaderModalLifecycle } from "../reader-accessibility";
 import type {
   ResearchModuleDiagnostics,
@@ -143,16 +144,22 @@ export function VoiceProfileDashboard({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
           <DashboardStatGrid>
-            <DashboardStat label="Saved Voices" value={model.totals.profiles.toString()} />
-            <DashboardStat label="Ready Voices" value={model.totals.readyProfiles.toString()} />
-            <DashboardStat label="Candidates" value={model.totals.candidates.toString()} />
-            <DashboardStat label="Clone Targets" value={model.totals.targets.toString()} />
-            <DashboardStat label="Ready Targets" value={model.totals.readyTargets.toString()} />
+            <DashboardStat label="Saved Voices" value={formatLocaleNumber(model.totals.profiles)} />
+            <DashboardStat
+              label="Ready Voices"
+              value={formatLocaleNumber(model.totals.readyProfiles)}
+            />
+            <DashboardStat label="Candidates" value={formatLocaleNumber(model.totals.candidates)} />
+            <DashboardStat label="Clone Targets" value={formatLocaleNumber(model.totals.targets)} />
+            <DashboardStat
+              label="Ready Targets"
+              value={formatLocaleNumber(model.totals.readyTargets)}
+            />
           </DashboardStatGrid>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
             <div className="grid min-w-0 gap-4">
-              <Panel title={`Saved Voices (${model.profiles.length.toString()})`}>
+              <Panel title={`Saved Voices (${formatLocaleNumber(model.profiles.length)})`}>
                 <div className="grid gap-3 p-3">
                   {model.profiles.map((profile) => (
                     <VoiceProfileRow
@@ -173,7 +180,7 @@ export function VoiceProfileDashboard({
                 </div>
               </Panel>
 
-              <Panel title={`Candidates (${model.candidates.length.toString()})`}>
+              <Panel title={`Candidates (${formatLocaleNumber(model.candidates.length)})`}>
                 <div className="grid gap-2 p-3">
                   {model.candidates.map((candidate) => (
                     <CandidateRow candidate={candidate} key={candidate.id} />
@@ -184,7 +191,7 @@ export function VoiceProfileDashboard({
                 </div>
               </Panel>
 
-              <Panel title={`Targets (${model.targets.length.toString()})`}>
+              <Panel title={`Targets (${formatLocaleNumber(model.targets.length)})`}>
                 <div className="grid gap-2 p-3">
                   {model.targets.map((target) => (
                     <TargetRow
@@ -215,7 +222,7 @@ export function VoiceProfileDashboard({
                           {selectedProfile.name}
                         </p>
                         <p className="vs-muted mt-1 text-sm">
-                          {selectedProfile.language} ·{" "}
+                          {languageDisplayName(selectedProfile.language)} ·{" "}
                           {formatDuration(
                             selectedProfile.referenceDurationMs ?? selectedProfile.durationMs,
                           )}
@@ -234,7 +241,7 @@ export function VoiceProfileDashboard({
                       />
                       <DetailFact
                         label="Clone artifacts"
-                        value={selectedArtifacts.length.toString()}
+                        value={formatLocaleNumber(selectedArtifacts.length)}
                       />
                     </>
                   ) : (
@@ -253,7 +260,7 @@ export function VoiceProfileDashboard({
                       <DetailFact label="Status" value={model.source.status} />
                       <DetailFact
                         label="Candidates"
-                        value={model.source.candidateCount.toString()}
+                        value={formatLocaleNumber(model.source.candidateCount)}
                       />
                       <p className="vs-muted rounded-md border p-3 text-xs leading-5 vs-border vs-surface">
                         {model.source.progress}
@@ -350,9 +357,10 @@ function VoiceProfileRow({
             </StatusChip>
           </div>
           <p className="vs-muted mt-1 text-xs">
-            {profile.language} · {formatDuration(profile.sourceDurationMs)} ·{" "}
-            {profile.targetCount.toString()} target
-            {profile.targetCount === 1 ? "" : "s"} · {profile.artifactCount.toString()} artifact
+            {languageDisplayName(profile.language)} · {formatDuration(profile.sourceDurationMs)} ·{" "}
+            {formatLocaleNumber(profile.targetCount)} target
+            {profile.targetCount === 1 ? "" : "s"} · {formatLocaleNumber(profile.artifactCount)}{" "}
+            artifact
             {profile.artifactCount === 1 ? "" : "s"}
           </p>
           <p className="vs-muted mt-1 truncate text-xs" title={profile.candidateSource}>
@@ -431,7 +439,7 @@ function CandidateRow({ candidate }: Readonly<{ candidate: VoiceCandidateSummary
         </StatusChip>
       </div>
       <p className="vs-muted mt-1 text-xs">
-        Score {Math.round(candidate.score * 100).toString()}% · {candidate.status}
+        Score {formatLocaleNumber(Math.round(candidate.score * 100))}% · {candidate.status}
       </p>
       {candidate.warnings.length > 0 ? (
         <p className="vs-muted mt-2 text-xs leading-5">{candidate.warnings.join(" ")}</p>

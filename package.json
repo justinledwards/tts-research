@@ -43,6 +43,8 @@
     "e2e:settings-ia": "E2E_SETTINGS_IA=1 node scripts/e2e-book-cinema.mjs",
     "e2e:reader-wayfinding": "E2E_READER_WAYFINDING=1 node scripts/e2e-book-cinema.mjs",
     "e2e:ui-actions": "node scripts/e2e-ui-action-audit.mjs",
+    "e2e:accessibility-audit": "node scripts/e2e-accessibility-audit.mjs",
+    "e2e:responsive-snapshots": "node scripts/e2e-responsive-snapshots.mjs",
     "e2e:ui-action-inventory": "node scripts/e2e-ui-action-inventory.mjs",
     "ui:component-baseline": "node scripts/ui-component-baseline-snapshots.mjs",
     "e2e:book-cinema:low-resource": "E2E_LOW_RESOURCE=1 node scripts/e2e-book-cinema.mjs",

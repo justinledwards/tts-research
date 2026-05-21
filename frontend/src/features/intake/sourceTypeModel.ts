@@ -143,23 +143,7 @@ export function sourceTypeLabel(sourceType: IntakeSourceType): string {
 }
 
 export function languageLabel(language: string): string {
-  switch (language) {
-    case "sv-SE": {
-      return "Swedish";
-    }
-    case "es-ES": {
-      return "Spanish";
-    }
-    case "fr-FR": {
-      return "French";
-    }
-    case "de-DE": {
-      return "German";
-    }
-    default: {
-      return "English";
-    }
-  }
+  return languageDisplayName(language);
 }
 
 export function extensionForName(value: string | null | undefined): string {
@@ -217,7 +201,9 @@ function detectPastedTextSource(
   const clean = text?.trim() ?? "";
   const sourceType = templateSourceType === "document" ? "document" : "draft";
   const paragraphCount = estimateParagraphCount(clean);
-  const paragraphLabel = `${paragraphCount.toLocaleString()} paragraph${paragraphCount === 1 ? "" : "s"}`;
+  const paragraphLabel = `${formatLocaleNumber(paragraphCount)} paragraph${
+    paragraphCount === 1 ? "" : "s"
+  }`;
   return {
     confidence: clean ? "medium" : "low",
     language: detectLanguage(clean),
@@ -354,3 +340,4 @@ function detectLanguage(value: string): string {
   }
   return "en-US";
 }
+import { formatLocaleNumber, languageDisplayName } from "../i18n";

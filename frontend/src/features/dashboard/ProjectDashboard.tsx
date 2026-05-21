@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Panel, StatusChip, type StatusChipTone } from "../../design";
+import { formatLocaleDate, formatLocaleNumber } from "../i18n";
 import { useReaderModalLifecycle } from "../reader-accessibility";
 import type {
   BookSource,
@@ -118,14 +119,14 @@ export function ProjectDashboard({
             <div className="grid min-w-0 gap-4">
               <DashboardStatGrid>
                 <DashboardStat label="Active Project" value={activeProject?.name ?? "Draft"} />
-                <DashboardStat label="Projects" value={projects.length.toString()} />
+                <DashboardStat label="Projects" value={formatLocaleNumber(projects.length)} />
                 <DashboardStat
                   label="Sources"
-                  value={(preparedSources.length + bookSources.length).toString()}
+                  value={formatLocaleNumber(preparedSources.length + bookSources.length)}
                 />
                 <DashboardStat
                   label="Generated Audio"
-                  value={visibleJobs.length.toString()}
+                  value={formatLocaleNumber(visibleJobs.length)}
                   detail={formatDuration(generatedDurationMs)}
                 />
                 <DashboardStat
@@ -151,7 +152,7 @@ export function ProjectDashboard({
                     New Project
                   </Button>
                 }
-                title={`Projects (${projects.length.toString()})`}
+                title={`Projects (${formatLocaleNumber(projects.length)})`}
               >
                 <div className="grid gap-3 p-3">
                   {isCreatingProject ? (
@@ -185,12 +186,14 @@ export function ProjectDashboard({
               </Panel>
 
               <Panel
-                title={`Sources (${(preparedSources.length + bookSources.length).toString()})`}
+                title={`Sources (${formatLocaleNumber(preparedSources.length + bookSources.length)})`}
               >
                 <div className="grid gap-2 p-3">
                   {preparedSources.map((source) => (
                     <SourceRow
-                      detail={`${source.kind.toUpperCase()} · ${source.wordCount.toLocaleString()} words · ${source.status}`}
+                      detail={`${source.kind.toUpperCase()} · ${formatLocaleNumber(
+                        source.wordCount,
+                      )} words · ${source.status}`}
                       key={source.id}
                       label={source.title ?? source.sourceName}
                       tone={source.status === "ready" ? "success" : "warning"}
@@ -198,7 +201,9 @@ export function ProjectDashboard({
                   ))}
                   {bookSources.map((book) => (
                     <SourceRow
-                      detail={`${book.kind.toUpperCase()} · ${book.wordCount.toLocaleString()} words · ${book.status}`}
+                      detail={`${book.kind.toUpperCase()} · ${formatLocaleNumber(
+                        book.wordCount,
+                      )} words · ${book.status}`}
                       key={book.id}
                       label={book.title ?? book.sourceFile}
                       tone={book.status === "ready" ? "success" : "danger"}
@@ -694,7 +699,8 @@ function GeneratedAudioRow({ job }: Readonly<{ job: VoiceJob }>) {
         <StatusChip tone={job.status === "completed" ? "success" : "info"}>{job.status}</StatusChip>
       </div>
       <p className="vs-muted mt-1 text-xs">
-        {ready.toString()} / {total.toString()} ready · {formatDuration(job.durationMs)}
+        {formatLocaleNumber(ready)} / {formatLocaleNumber(total)} ready ·{" "}
+        {formatDuration(job.durationMs)}
       </p>
     </div>
   );
@@ -745,15 +751,7 @@ function uniqueJobs(jobs: VoiceJob[]): VoiceJob[] {
 }
 
 function formatDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "recently";
-  }
-  return parsed.toLocaleDateString(undefined, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatLocaleDate(value);
 }
 
 function formatDuration(milliseconds: number): string {
