@@ -210,6 +210,7 @@ import type {
   ReadingPosition,
   ProjectStorageSummary,
   ResearchModuleDiagnostics,
+  RunMode,
   SpeechPolicyDefinition,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
@@ -334,6 +335,9 @@ const LazyIntakeWizard = lazy(() =>
 );
 const LazyTelepromptStudio = lazy(() =>
   import("./features/teleprompt").then((module) => ({ default: module.TelepromptStudio })),
+);
+const LazyGlobalPreviewPlayer = lazy(() =>
+  import("./features/preview").then((module) => ({ default: module.GlobalPreviewPlayer })),
 );
 const LazyHeaderContextSummary = lazy(() =>
   import("./features/header").then((module) => ({ default: module.HeaderContextSummary })),
@@ -2915,6 +2919,11 @@ export function App() {
         : (preparedSources[0] ?? null),
     [preparedSources, selectedPreparedSourceId],
   );
+  const effectiveBookScope = useMemo(
+    () =>
+      selectedBookSource ? normalizeBookScopeForBook(selectedBookSource, selectedBookScope) : null,
+    [selectedBookScope, selectedBookSource],
+  );
   const activeNarrationBookSource = sourceMode === "book" ? selectedBookSource : null;
   const activeNarrationPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
   let activeNarrationSourceType: WorkspaceSourceType = "draft";
@@ -2923,6 +2932,60 @@ export function App() {
   } else if (activeNarrationBookSource) {
     activeNarrationSourceType = "book";
   }
+  const narrationPreviewBlocks = useMemo(
+    () =>
+      buildNarrationReviewBlocks({
+        optimizedText: job?.optimizedText ?? "",
+        bookScopeContent,
+        selectedBookScope: effectiveBookScope,
+        selectedBookSource: activeNarrationBookSource,
+        selectedPreparedSource: activeNarrationPreparedSource,
+        text,
+      }),
+    [
+      activeNarrationBookSource,
+      activeNarrationPreparedSource,
+      bookScopeContent,
+      effectiveBookScope,
+      job?.optimizedText,
+      text,
+    ],
+  );
+  const globalPreviewVoiceOptions = useMemo(
+    () => [
+      {
+        detail: "Use the current engine default voice.",
+        id: "default",
+        label: "Default voice",
+      },
+      ...voiceProfiles.map((profile) => ({
+        detail: `${profile.language || "language"} · ${profile.status}`,
+        id: profile.id,
+        label: profile.name,
+      })),
+    ],
+    [voiceProfiles],
+  );
+  const globalPreviewPolicyOptions = useMemo(() => {
+    const builtInProfiles =
+      speechPolicyProfiles.length > 0
+        ? speechPolicyProfiles
+        : DEFAULT_SPEECH_POLICY_DEFINITION.profiles;
+    return [
+      ...builtInProfiles.map((profile) => ({
+        detail: profile.description || "Built-in speech policy profile.",
+        id: profile.name,
+        label: profile.label,
+      })),
+      ...customSpeechPolicyProfiles.map((profile) => ({
+        detail: profile.baseProfile
+          ? `Custom profile based on ${profile.baseProfile}.`
+          : "Custom profile.",
+        id: profile.id,
+        label: profile.name,
+      })),
+    ];
+  }, [customSpeechPolicyProfiles, speechPolicyProfiles]);
   useEffect(() => {
     let sourceId: string | null = null;
     if (sourceMode === "book") {
@@ -3147,11 +3210,6 @@ export function App() {
     sourceMode,
   ]);
 
-  const effectiveBookScope = useMemo(
-    () =>
-      selectedBookSource ? normalizeBookScopeForBook(selectedBookSource, selectedBookScope) : null,
-    [selectedBookScope, selectedBookSource],
-  );
   const selectedBookProgress = useMemo(() => {
     if (!selectedBookSource || !effectiveBookScope) {
       return null;
@@ -4690,6 +4748,28 @@ export function App() {
 
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
     setPlaybackControls(controls ?? DISABLED_PLAYBACK_CONTROLLER);
+  }, []);
+
+  const handleGlobalPreviewVoiceChange = useCallback(
+    (profileId: string) => {
+      if (profileId === "default") {
+        clearVoiceProfileSelection();
+        return;
+      }
+      selectVoiceProfile(profileId);
+    },
+    [clearVoiceProfileSelection, selectVoiceProfile],
+  );
+
+  const handleGlobalPreviewRunModeChange = useCallback((runMode: RunMode) => {
+    setRunConfiguration((currentConfiguration) => {
+      const nextConfiguration = createRunConfiguration(runMode);
+      return {
+        ...nextConfiguration,
+        engineOptions: currentConfiguration.engineOptions,
+        ttsEngine: currentConfiguration.ttsEngine,
+      };
+    });
   }, []);
 
   const handleBookCinemaPlayPause = useCallback(() => {
@@ -6294,6 +6374,55 @@ export function App() {
           />
         </Suspense>
       ) : null}
+      {studioMode === "narration" ? (
+        <Suspense fallback={null}>
+          <LazyGlobalPreviewPlayer
+            activeBlockId={workspaceContext.activeBlockId}
+            blocks={narrationPreviewBlocks}
+            canOpenCinema={canOpenCurrentCinema}
+            currentPolicyId={speechPolicyProfile}
+            currentRunMode={runConfiguration.runMode}
+            currentVoiceId={selectedVoiceProfileId || "default"}
+            hidden={
+              contentMode === "teleprompt" ||
+              isBookCinemaOpen ||
+              Boolean(preparedSourceCinemaSource)
+            }
+            isPlaybackActive={isPlaybackActive}
+            job={job}
+            playbackControls={playbackControls}
+            playbackCursorSec={playbackCursorSec}
+            policyOptions={globalPreviewPolicyOptions}
+            policyProfileLabel={speechPolicyProfileDisplayName(
+              speechPolicyProfile,
+              customSpeechPolicyProfiles,
+            )}
+            runConfigurationLabel={getRunModePreset(runConfiguration.runMode).label}
+            scopeLabel={workbenchScopeTitle({
+              selectedBookScope: effectiveBookScope,
+              selectedBookSource: activeNarrationBookSource,
+              selectedPreparedSource: activeNarrationPreparedSource,
+              sourceMode,
+            })}
+            sourceLabel={narrationReviewSourceLabel(
+              activeNarrationPreparedSource,
+              activeNarrationBookSource,
+            )}
+            variant={contentMode === "preview" || isSettingsOpen ? "full" : "compact"}
+            voiceOptions={globalPreviewVoiceOptions}
+            voiceProfileLabel={selectedVoiceProfile?.name ?? "Default voice"}
+            onActiveBlockChange={(blockId) => {
+              setWorkspaceContext((currentContext) =>
+                withWorkspaceActiveBlock(currentContext, blockId),
+              );
+            }}
+            onOpenCinema={openReadingCinema}
+            onPolicyProfileChange={handleSpeechPolicyProfileChange}
+            onRunModeChange={handleGlobalPreviewRunModeChange}
+            onVoiceProfileChange={handleGlobalPreviewVoiceChange}
+          />
+        </Suspense>
+      ) : null}
       <TeleprompterPanel
         canOpenBookCinema={canOpenBookCinema}
         isPlaybackActive={isPlaybackActive}
@@ -6719,14 +6848,7 @@ export function App() {
                 <Suspense fallback={<LazySurfaceFallback label="Loading teleprompt..." />}>
                   <LazyTelepromptStudio
                     activeBlockId={workspaceContext.activeBlockId}
-                    blocks={buildNarrationReviewBlocks({
-                      optimizedText: job?.optimizedText ?? "",
-                      bookScopeContent,
-                      selectedBookScope: effectiveBookScope,
-                      selectedBookSource: activeNarrationBookSource,
-                      selectedPreparedSource: activeNarrationPreparedSource,
-                      text,
-                    })}
+                    blocks={narrationPreviewBlocks}
                     canCreate={canCreateCurrentSource}
                     canOpenCinema={canOpenCurrentCinema}
                     isPlaybackActive={isPlaybackActive}

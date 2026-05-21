@@ -275,3 +275,11 @@
 - [x] Hide advanced highlight customization from the default UI
 - [x] Update docs and UI action coverage
 - [x] Run local validation commands
+
+## 2026-05-21 15:10 CEST - Global Preview Mini-Player
+- [x] Map existing Preview, playback, and Cinema transport semantics
+- [x] Add preview queue and A/B comparison models
+- [x] Add persistent Global Preview Player outside Cinema
+- [x] Wire mini-player to Workspace, Review, Preview, and Settings without duplicating Cinema transport
+- [x] Update docs and UI action coverage
+- [x] Run local validation commands

@@ -497,6 +497,12 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await page.getByText("Spoken Form").first().waitFor();
     await page.getByText("Policy Notes").first().waitFor();
     await page.getByText("Default voice").first().waitFor();
+    await page.getByTestId("global-preview-player").waitFor();
+    await page.getByTestId("ui-action-preview-mini-next").click();
+    await page.getByTestId("ui-action-preview-mini-previous").click();
+    await page.getByTestId("ui-action-preview-mini-skip-silence").click();
+    await page.getByTestId("ui-action-preview-mini-run-b").selectOption("draftPreview");
+    await page.getByTestId("ui-action-preview-mini-apply-b").click();
     await capture("workspace-stage-04-preview-after");
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Studio").first().waitFor();
@@ -515,9 +521,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
 
     const createResponse = page.waitForResponse(
       (response) =>
-        response.url().includes("/api/book-sources/") &&
-        response.url().includes("/voice-jobs") &&
-        response.request().method() === "POST",
+        response.url().includes("/voice-jobs") && response.request().method() === "POST",
     );
     await page.getByTestId("workspace-stage-action-createAndListen").click();
     const response = await createResponse;
@@ -526,6 +530,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
     if (createdJob?.id) {
       await waitForJob(createdJob.id);
     }
+    await clickPreviewMiniPlayerIfReady(page);
     await capture("workspace-stage-07-create-listen-after");
     await page.getByTestId("workspace-stage-action-openCinema").click();
     await cinemaOverlay(page).waitFor({ state: "visible" });
@@ -605,6 +610,23 @@ async function openWorkspaceStage(page, label) {
       .getByText(/Spoken Form|Create & Listen/i)
       .first()
       .waitFor();
+  }
+}
+
+async function clickPreviewMiniPlayerIfReady(page) {
+  const player = page.getByTestId("global-preview-player");
+  await player.waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
+  const segment = page.getByTestId("ui-action-preview-mini-segment");
+  if (await segment.isEnabled().catch(() => false)) {
+    await segment.click();
+  }
+  const speed = page.getByTestId("ui-action-preview-mini-speed");
+  if (await speed.isEnabled().catch(() => false)) {
+    await speed.selectOption("1.25");
+  }
+  const source = page.getByTestId("ui-action-preview-mini-source");
+  if (await source.isEnabled().catch(() => false)) {
+    await source.click();
   }
 }
 

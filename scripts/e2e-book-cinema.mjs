@@ -364,6 +364,12 @@ async function runWorkspaceFlowUX(browser, projectId) {
 
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
+    await page.getByTestId("global-preview-player").waitFor();
+    await page.getByTestId("ui-action-preview-mini-next").click();
+    await page.getByTestId("ui-action-preview-mini-previous").click();
+    await page.getByTestId("ui-action-preview-mini-skip-silence").click();
+    await page.getByTestId("ui-action-preview-mini-run-b").selectOption("draftPreview");
+    await page.getByTestId("ui-action-preview-mini-apply-b").click();
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Studio").first().waitFor();
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
@@ -405,6 +411,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
     const response = await createResponse;
     assert(response.ok(), `Create & Listen failed with ${String(response.status())}`);
     await page.getByTestId("workspace-stage-action-createAndListen").waitFor({ state: "visible" });
+    await clickPreviewMiniPlayerIfReady(page);
     await assertNoPageIssues(issues);
     return { screenshots, status: "passed" };
   } catch (error) {
@@ -528,6 +535,23 @@ async function runCommandPaletteAction(page, query, optionName) {
   await option.waitFor({ state: "visible" });
   await option.click();
   await palette.waitFor({ state: "hidden" }).catch(() => {});
+}
+
+async function clickPreviewMiniPlayerIfReady(page) {
+  const player = page.getByTestId("global-preview-player");
+  await player.waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
+  const segment = page.getByTestId("ui-action-preview-mini-segment");
+  if (await segment.isEnabled().catch(() => false)) {
+    await segment.click();
+  }
+  const speed = page.getByTestId("ui-action-preview-mini-speed");
+  if (await speed.isEnabled().catch(() => false)) {
+    await speed.selectOption("1.25");
+  }
+  const source = page.getByTestId("ui-action-preview-mini-source");
+  if (await source.isEnabled().catch(() => false)) {
+    await source.click();
+  }
 }
 
 async function runBookCinemaUX(browser, { book, job, projectId, scope, screenshot, text }) {
