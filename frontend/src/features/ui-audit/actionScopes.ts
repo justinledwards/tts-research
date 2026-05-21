@@ -13,13 +13,14 @@ export const UI_ACTION_SURFACES = [
 export type UiActionSurface = (typeof UI_ACTION_SURFACES)[number];
 
 export const UI_ACTION_CLASSES = [
-  "primary",
-  "transport",
   "navigation",
+  "transport",
   "mode",
   "settings",
   "destructive",
   "diagnostic",
+  "preview",
+  "generation",
   "hidden",
   "disabled",
 ] as const;

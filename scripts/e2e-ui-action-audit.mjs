@@ -30,6 +30,7 @@ const actionTimeoutMs = Number.parseInt(
   10,
 );
 const failOnFindings = process.env.UI_ACTION_AUDIT_FAIL_ON_FINDINGS === "1";
+const inventoryOnly = process.env.UI_ACTION_AUDIT_INVENTORY_ONLY === "1";
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
@@ -75,15 +76,20 @@ async function main() {
     const screenshots = [];
 
     try {
-      const traversal = await runWorkspaceStageTraversal(browser, seed);
-      results.push(traversal.result);
-      screenshots.push(...traversal.screenshots);
+      if (!inventoryOnly) {
+        const traversal = await runWorkspaceStageTraversal(browser, seed);
+        results.push(traversal.result);
+        screenshots.push(...traversal.screenshots);
+      }
 
       for (const scenario of scenarios) {
         console.log(`[ui-actions] inventory ${scenario.id}`);
         const scenarioInventory = await inventoryScenario(browser, scenario);
         actions.push(...scenarioInventory.actions);
         screenshots.push(scenarioInventory.screenshot);
+        if (inventoryOnly) {
+          continue;
+        }
         const runnableActions =
           maxActions > 0
             ? scenarioInventory.actions.slice(0, maxActions)
@@ -124,7 +130,11 @@ async function main() {
       generatedAt,
       results,
       schemaVersion: "ui-action-results.v1",
-      status: summarizeResults(results).failed === 0 ? "passed" : "completed-with-findings",
+      status: inventoryOnly
+        ? "inventory-only"
+        : summarizeResults(results).failed === 0
+          ? "passed"
+          : "completed-with-findings",
       summary: summarizeResults(results),
     };
 
@@ -210,6 +220,7 @@ async function exerciseScenarioAction(browser, scenario, action, activationMode)
     );
     await page.screenshot({ fullPage: true, path: screenshot }).catch(() => {});
     return {
+      accessibleName: action.accessibleName,
       actionClass: action.actionClass,
       actionId: action.actionId,
       activationMode,
@@ -223,6 +234,7 @@ async function exerciseScenarioAction(browser, scenario, action, activationMode)
       screenshot,
       status: "failed",
       surface: action.surface,
+      visibleLabel: action.visibleLabel,
     };
   } finally {
     await context.close();
@@ -441,17 +453,27 @@ async function runWorkspaceStageTraversal(browser, seed) {
   page.setDefaultTimeout(60_000);
   const issues = collectPageIssues(page);
   const screenshots = [];
+  const capture = async (name) => {
+    const screenshot = path.join(screenshotsDir, `${name}.png`);
+    await page.screenshot({ fullPage: false, path: screenshot });
+    screenshots.push(screenshot);
+  };
   try {
     await gotoApp(page);
+    await capture("workspace-stage-00-intake-before");
     await page.getByRole("button", { exact: true, name: "Intake" }).click();
+    await capture("workspace-stage-01-intake-after");
     await page.getByRole("button", { exact: true, name: "Book" }).click();
     await page.getByText("Book Cinema").first().waitFor();
+    await capture("workspace-stage-02-source-selected");
     await page.getByRole("button", { exact: true, name: "Review" }).click();
     await page.getByText("Source Review").first().waitFor();
+    await capture("workspace-stage-03-review-after");
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
     await page.getByText("Policy Notes").first().waitFor();
     await page.getByText("Default voice").first().waitFor();
+    await capture("workspace-stage-04-preview-after");
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Stage").first().waitFor();
     await page
@@ -459,8 +481,10 @@ async function runWorkspaceStageTraversal(browser, seed) {
       .first()
       .waitFor();
     await page.getByText("Default voice").first().waitFor();
+    await capture("workspace-stage-05-teleprompt-after");
     await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
     await page.getByText("Spoken Form").first().waitFor();
+    await capture("workspace-stage-06-back-preview-after");
 
     const createResponse = page.waitForResponse(
       (response) =>
@@ -475,6 +499,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
     if (createdJob?.id) {
       await waitForJob(createdJob.id);
     }
+    await capture("workspace-stage-07-create-listen-after");
     await page.getByTestId("workspace-stage-action-openCinema").click();
     await cinemaOverlay(page).waitFor({ state: "visible" });
     await cinemaOverlay(page)
@@ -488,6 +513,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await assertNoPageIssues(issues);
     return {
       result: {
+        accessibleName: "Full stage traversal",
         actionClass: "navigation",
         actionId: "workspace-stage-traversal",
         activationMode: "scripted",
@@ -499,6 +525,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
         scenarioId: "workspace-stage-traversal",
         status: "passed",
         surface: "Workspace",
+        visibleLabel: "Full stage traversal",
       },
       screenshots,
     };

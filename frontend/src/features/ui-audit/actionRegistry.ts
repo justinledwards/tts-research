@@ -12,6 +12,7 @@ export interface UiActionRegistrySummary {
   readonly total: number;
   readonly missingTestIds: number;
   readonly missingLabels: number;
+  readonly missingAccessibleNames: number;
   readonly disabledWithoutReason: number;
   readonly destructiveWithoutConfirmation: number;
 }
@@ -41,6 +42,9 @@ export class UiActionRegistry {
       missingTestIds: entries.filter((entry) => entry.issues.includes("missing-stable-data-testid"))
         .length,
       missingLabels: entries.filter((entry) => entry.issues.includes("missing-human-label")).length,
+      missingAccessibleNames: entries.filter((entry) =>
+        entry.issues.includes("missing-accessible-name"),
+      ).length,
       disabledWithoutReason: entries.filter((entry) =>
         entry.issues.includes("disabled-without-explicit-reason"),
       ).length,
@@ -59,7 +63,9 @@ export function describeUiActionElement(
   element: Element,
   fallbackSurface: UiActionSurface,
 ): UiActionMetadataInput {
-  const label = labelForElement(element);
+  const visibleLabel = visibleLabelForElement(element);
+  const accessibleName = accessibleNameForElement(element);
+  const label = accessibleName || visibleLabel || "Unlabeled control";
   const testId = element instanceof HTMLElement ? (element.dataset.testid ?? null) : null;
   const disabled =
     element instanceof HTMLButtonElement ||
@@ -70,6 +76,8 @@ export function describeUiActionElement(
       : element.getAttribute("aria-disabled") === "true";
   return {
     label,
+    visibleLabel,
+    accessibleName,
     surface: fallbackSurface,
     role: element.getAttribute("role") ?? implicitRoleForElement(element),
     testId,
@@ -97,8 +105,18 @@ export function validateUiActionMetadata(metadata: UiActionMetadata, disabled: b
   if (!metadata.testId || metadata.testId.startsWith("ui-action-Workspace-unlabeled")) {
     issues.push("missing-stable-data-testid");
   }
-  if (!normalizeUiActionLabel(metadata.label) || metadata.label === "Unlabeled control") {
+  const humanLabel =
+    normalizeUiActionLabel(metadata.visibleLabel) ||
+    normalizeUiActionLabel(metadata.accessibleName) ||
+    normalizeUiActionLabel(metadata.label);
+  if (!humanLabel || metadata.label === "Unlabeled control") {
     issues.push("missing-human-label");
+  }
+  if (
+    !normalizeUiActionLabel(metadata.accessibleName) ||
+    metadata.accessibleName === "Unlabeled control"
+  ) {
+    issues.push("missing-accessible-name");
   }
   if (disabled && !metadata.disabledReason) {
     issues.push("disabled-without-explicit-reason");
@@ -109,7 +127,7 @@ export function validateUiActionMetadata(metadata: UiActionMetadata, disabled: b
   return issues;
 }
 
-function labelForElement(element: Element): string {
+function accessibleNameForElement(element: Element): string {
   const ariaLabel = element.getAttribute("aria-label");
   if (ariaLabel) {
     return normalizeUiActionLabel(ariaLabel);
@@ -143,6 +161,34 @@ function labelForElement(element: Element): string {
   }
   return normalizeUiActionLabel(
     firstText(element.textContent, element.getAttribute("title"), element.getAttribute("name")),
+  );
+}
+
+function visibleLabelForElement(element: Element): string {
+  const text = normalizeUiActionLabel(element.textContent);
+  if (text) {
+    return text;
+  }
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLSelectElement ||
+    element instanceof HTMLTextAreaElement
+  ) {
+    const labels = associatedLabelText(element);
+    if (normalizeUiActionLabel(labels)) {
+      return normalizeUiActionLabel(labels);
+    }
+    if ("placeholder" in element && element.placeholder) {
+      return normalizeUiActionLabel(element.placeholder);
+    }
+  }
+  return normalizeUiActionLabel(
+    firstText(
+      element instanceof HTMLElement ? (element.dataset.uiLabel ?? null) : null,
+      element.getAttribute("title"),
+      element.getAttribute("aria-label"),
+      element.getAttribute("name"),
+    ),
   );
 }
 

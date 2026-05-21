@@ -18,7 +18,7 @@ const interactiveSelector = [
 
 const destructivePattern =
   /\b(delete|remove|reset|clear|cancel job|discard|overwrite|revoke|disconnect)\b/i;
-const transportPattern = /\b(play|pause|resume|restart|seek|\+10s|-10s|speed)\b/i;
+const transportPattern = /(?:\b(play|pause|resume|restart|seek|speed)\b|[+-]10s)/i;
 const modePattern =
   /\b(intake|review|preview|read|inspect|debug|narration|voice cloning|focus|balanced|full|teleprompt)\b/i;
 const settingsPattern =
@@ -27,7 +27,9 @@ const diagnosticPattern =
   /\b(help|diagnostic|debug|pipeline|validation|source|inspect|context guide|details)\b/i;
 const navigationPattern =
   /\b(open|close|back|exit|workspace|actions|import|export|book|file \/ url|website|cinema|more|outline|recent|bookmarks|structure)\b/i;
-const primaryPattern = /\b(create|listen|save|apply|submit|upload|analyze|refresh|generate)\b/i;
+const previewPattern = /\b(preview speech|spoken form|preview spoken|speech preview)\b/i;
+const generationPattern =
+  /\b(create|listen|save|apply|submit|upload|analyze|refresh|generate|retry|bookmark)\b/i;
 
 export function actionAuditSelector() {
   return interactiveSelector;
@@ -52,7 +54,11 @@ export async function buildActionInventory(page, scenario) {
         }
         seen.add(element);
         const rect = element.getBoundingClientRect();
+        const visibleLabel = visibleLabelFor(element);
+        const accessibleName = accessibleNameFor(element);
+        const label = accessibleName || visibleLabel || "Unlabeled control";
         controls.push({
+          accessibleName,
           ariaControls: element.getAttribute("aria-controls"),
           ariaExpanded: element.getAttribute("aria-expanded"),
           ariaHasPopup: element.getAttribute("aria-haspopup"),
@@ -67,7 +73,7 @@ export async function buildActionInventory(page, scenario) {
             element.getAttribute("data-ui-noop-reason") ??
             element.getAttribute("data-noop-reason") ??
             null,
-          label: labelFor(element),
+          label,
           name: element.getAttribute("name"),
           placeholder:
             element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
@@ -93,6 +99,7 @@ export async function buildActionInventory(page, scenario) {
             element instanceof HTMLTextAreaElement
               ? element.value
               : null,
+          visibleLabel,
         });
       }
       return controls;
@@ -122,7 +129,7 @@ export async function buildActionInventory(page, scenario) {
         return element.getAttribute("aria-disabled") === "true";
       }
 
-      function labelFor(element) {
+      function accessibleNameFor(element) {
         const ariaLabel = element.getAttribute("aria-label");
         if (ariaLabel) {
           return normalizeText(ariaLabel);
@@ -155,6 +162,35 @@ export async function buildActionInventory(page, scenario) {
         return normalizeText(
           element.textContent ??
             element.getAttribute("title") ??
+            element.getAttribute("name") ??
+            "",
+        );
+      }
+
+      function visibleLabelFor(element) {
+        const text = normalizeText(element.textContent ?? "");
+        if (text) {
+          return text;
+        }
+        if (
+          element instanceof HTMLInputElement ||
+          element instanceof HTMLSelectElement ||
+          element instanceof HTMLTextAreaElement
+        ) {
+          const labels = [...(element.labels ?? [])]
+            .map((label) => label.textContent ?? "")
+            .join(" ");
+          if (normalizeText(labels)) {
+            return normalizeText(labels);
+          }
+          if ("placeholder" in element && element.placeholder) {
+            return normalizeText(element.placeholder);
+          }
+        }
+        return normalizeText(
+          element.getAttribute("data-ui-label") ??
+            element.getAttribute("title") ??
+            element.getAttribute("aria-label") ??
             element.getAttribute("name") ??
             "",
         );
@@ -226,7 +262,11 @@ export async function buildActionInventory(page, scenario) {
 
   const counters = new Map();
   return rawActions.map((rawAction) => {
-    const label = rawAction.label || rawAction.title || rawAction.text || "Unlabeled control";
+    const visibleLabel =
+      rawAction.visibleLabel || rawAction.text || rawAction.title || rawAction.label || "";
+    const accessibleName =
+      rawAction.accessibleName || rawAction.label || visibleLabel || "Unlabeled control";
+    const label = accessibleName || visibleLabel || "Unlabeled control";
     const actionClass = rawAction.disabled
       ? "disabled"
       : classifyAction({ label, role: rawAction.role, tagName: rawAction.tagName });
@@ -252,6 +292,7 @@ export async function buildActionInventory(page, scenario) {
       ...rawAction,
       actionClass,
       actionId: rawAction.testId ?? generatedTestId,
+      accessibleName,
       destructive,
       expectedTransition: expectedTransitionFor({
         actionClass,
@@ -264,12 +305,14 @@ export async function buildActionInventory(page, scenario) {
       label,
       matchIndex,
       metadataIssues,
+      visibleLabel,
     };
   });
 }
 
 export async function exerciseAction(page, action, { activationMode }) {
   const resultBase = {
+    accessibleName: action.accessibleName,
     actionClass: action.actionClass,
     actionId: action.actionId,
     activationMode,
@@ -278,6 +321,7 @@ export async function exerciseAction(page, action, { activationMode }) {
     label: action.label,
     scenarioId: action.scenarioId,
     surface: action.surface,
+    visibleLabel: action.visibleLabel,
   };
   const locator = locateAction(page, action);
   const count = await locator.count().catch(() => 0);
@@ -368,15 +412,47 @@ export async function exerciseAction(page, action, { activationMode }) {
 }
 
 export function summarizeDuplicates(actions) {
+  const exactDuplicates = groupedActions(
+    actions,
+    (action) =>
+      [
+        action.surface,
+        action.actionClass,
+        normalize(action.label).toLowerCase(),
+        action.destructive ? "destructive" : "safe",
+      ].join("|"),
+    (group) => group.length > 1,
+    "same-label-same-surface",
+  );
+  const labelConflicts = groupedActions(
+    actions.filter((action) => action.label && action.label !== "Unlabeled control"),
+    (action) => normalize(action.label).toLowerCase(),
+    (group) => new Set(group.map(behaviorKeyFor)).size > 1,
+    "same-label-different-behavior",
+  );
+  const overexposedActions = groupedActions(
+    actions.filter((action) => action.label && action.label !== "Unlabeled control"),
+    (action) =>
+      [
+        action.actionClass,
+        normalize(action.label).toLowerCase(),
+        action.expectedTransition,
+        action.destructive ? "destructive" : "safe",
+      ].join("|"),
+    (group) => group.length > 3 || new Set(group.map((action) => action.surface)).size > 2,
+    "identical-action-overexposed",
+  );
+
+  return [...exactDuplicates, ...labelConflicts, ...overexposedActions].sort((left, right) =>
+    `${left.kind}:${left.label}`.localeCompare(`${right.kind}:${right.label}`),
+  );
+}
+
+function groupedActions(actions, keyFor, shouldReport, kind) {
   return [
     ...actions
       .reduce((groups, action) => {
-        const key = [
-          action.surface,
-          action.actionClass,
-          normalize(action.label).toLowerCase(),
-          action.destructive ? "destructive" : "safe",
-        ].join("|");
+        const key = keyFor(action);
         const group = groups.get(key) ?? [];
         group.push(action);
         groups.set(key, group);
@@ -384,15 +460,30 @@ export function summarizeDuplicates(actions) {
       }, new Map())
       .values(),
   ]
-    .filter((group) => group.length > 1)
-    .map((group) => ({
-      actionClass: group[0].actionClass,
-      actionIds: group.map((action) => action.actionId),
-      count: group.length,
-      label: group[0].label,
-      scenarios: [...new Set(group.map((action) => action.scenarioId))],
-      surface: group[0].surface,
-    }));
+    .filter(shouldReport)
+    .map((group) => {
+      const surfaces = [...new Set(group.map((action) => action.surface))];
+      return {
+        actionClass: group[0].actionClass,
+        actionIds: group.map((action) => action.actionId),
+        behaviorKeys: [...new Set(group.map(behaviorKeyFor))],
+        count: group.length,
+        kind,
+        label: group[0].label,
+        scenarios: [...new Set(group.map((action) => action.scenarioId))],
+        surface: surfaces.join(", "),
+        surfaces,
+      };
+    });
+}
+
+function behaviorKeyFor(action) {
+  return [
+    action.surface,
+    action.actionClass,
+    action.expectedTransition,
+    action.destructive ? "destructive" : "safe",
+  ].join("|");
 }
 
 function classifyAction({ label, role }) {
@@ -402,8 +493,17 @@ function classifyAction({ label, role }) {
   if (transportPattern.test(label)) {
     return "transport";
   }
-  if (role === "tab" || modePattern.test(label)) {
+  if (role === "tab" || /^preview$/i.test(label)) {
     return "mode";
+  }
+  if (navigationPattern.test(label)) {
+    return "navigation";
+  }
+  if (previewPattern.test(label)) {
+    return "preview";
+  }
+  if (generationPattern.test(label)) {
+    return "generation";
   }
   if (settingsPattern.test(label)) {
     return "settings";
@@ -411,13 +511,10 @@ function classifyAction({ label, role }) {
   if (diagnosticPattern.test(label)) {
     return "diagnostic";
   }
-  if (navigationPattern.test(label)) {
-    return "navigation";
+  if (modePattern.test(label)) {
+    return "mode";
   }
-  if (primaryPattern.test(label)) {
-    return "primary";
-  }
-  return "primary";
+  return "generation";
 }
 
 function expectedTransitionFor({ actionClass, label, role, tagName }) {
@@ -432,7 +529,11 @@ function expectedTransitionFor({ actionClass, label, role, tagName }) {
       ? "menu/panel opened"
       : "state changed as expected";
   }
-  if (actionClass === "transport" || /\b(create|listen|save|refresh)\b/i.test(label)) {
+  if (
+    actionClass === "transport" ||
+    actionClass === "generation" ||
+    /\b(create|listen|save|refresh)\b/i.test(label)
+  ) {
     return "live status updated";
   }
   return "state changed as expected";
@@ -614,8 +715,14 @@ function metadataIssuesFor(action) {
   if (!action.testId) {
     issues.push("missing-stable-data-testid");
   }
-  if (!action.label || action.label === "Unlabeled control") {
+  if (
+    (!action.label && !action.visibleLabel && !action.accessibleName) ||
+    action.label === "Unlabeled control"
+  ) {
     issues.push("missing-human-label");
+  }
+  if (!action.accessibleName || action.accessibleName === "Unlabeled control") {
+    issues.push("missing-accessible-name");
   }
   if (action.disabled && !action.disabledReason) {
     issues.push("disabled-without-explicit-reason");

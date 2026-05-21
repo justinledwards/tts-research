@@ -214,3 +214,17 @@
 - [x] Extend local UI action audit for full stage traversal
 - [x] Remove remaining audit-visible stage action duplication
 - [x] Run local validation commands
+
+## 2026-05-21 01:55 CEST - Browser Action Audit and Dead-Control Inventory
+- [x] Compare requested audit package against current implementation
+- [x] Add missing inventory/dead-control scripts and registry metadata
+- [x] Wire package scripts and reports
+- [x] Run local validation commands
+- [x] pnpm check
+- [x] pnpm e2e:book-cinema
+- [x] pnpm e2e:workspace-flow
+- [x] pnpm e2e:settings-ia
+- [x] pnpm e2e:reader-wayfinding
+- [x] pnpm e2e:ui-actions
+- [x] pnpm e2e:ui-action-inventory
+- [x] pnpm validate:local

@@ -13,6 +13,9 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
   const missingLabels = actions.filter((action) =>
     action.metadataIssues.includes("missing-human-label"),
   );
+  const missingAccessibleNames = actions.filter((action) =>
+    action.metadataIssues.includes("missing-accessible-name"),
+  );
   const disabledWithoutReason = actions.filter((action) =>
     action.metadataIssues.includes("disabled-without-explicit-reason"),
   );
@@ -34,6 +37,7 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
     `- No-op activations: ${String(noOps.length)}`,
     `- Missing stable data-testid: ${String(missingTestIds.length)}`,
     `- Missing human label: ${String(missingLabels.length)}`,
+    `- Missing accessible name: ${String(missingAccessibleNames.length)}`,
     `- Disabled without explicit reason: ${String(disabledWithoutReason.length)}`,
     `- Destructive without confirmation affordance: ${String(destructiveWithoutConfirmation.length)}`,
     "",
@@ -50,12 +54,20 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
     "## Missing mandatory metadata",
     "",
     ...table(
-      [...new Set([...missingTestIds, ...missingLabels, ...disabledWithoutReason])],
-      ["Surface", "Scenario", "Label", "Issues"],
+      [
+        ...new Set([
+          ...missingTestIds,
+          ...missingLabels,
+          ...missingAccessibleNames,
+          ...disabledWithoutReason,
+        ]),
+      ],
+      ["Surface", "Scenario", "Visible label", "Accessible name", "Issues"],
       (action) => [
         action.surface,
         action.scenarioId,
-        action.label,
+        action.visibleLabel ?? action.label,
+        action.accessibleName ?? action.label,
         action.metadataIssues.join(", "),
       ],
     ),
@@ -92,8 +104,13 @@ export function renderDuplicatesReport({ duplicates, generatedAt }) {
     lines.push(`## ${duplicate.surface}: ${duplicate.label}`);
     lines.push("");
     lines.push(`- Action class: ${duplicate.actionClass}`);
+    lines.push(`- Finding type: ${duplicate.kind ?? "same-label-same-surface"}`);
     lines.push(`- Count: ${String(duplicate.count)}`);
+    lines.push(`- Surfaces: ${(duplicate.surfaces ?? [duplicate.surface]).join(", ")}`);
     lines.push(`- Scenarios: ${duplicate.scenarios.join(", ")}`);
+    if (duplicate.behaviorKeys?.length > 1) {
+      lines.push(`- Behaviour keys: ${duplicate.behaviorKeys.join("; ")}`);
+    }
     lines.push(`- Action IDs: ${duplicate.actionIds.join(", ")}`);
     lines.push("");
   }

@@ -5,6 +5,8 @@ export interface UiActionMetadata {
   readonly id: string;
   readonly testId: string;
   readonly label: string;
+  readonly visibleLabel: string;
+  readonly accessibleName: string;
   readonly surface: UiActionSurface;
   readonly actionClass: UiActionClass;
   readonly expectedTransition: UiActionExpectedTransition;
@@ -15,6 +17,8 @@ export interface UiActionMetadata {
 
 export interface UiActionMetadataInput {
   readonly label: string;
+  readonly visibleLabel?: string | null;
+  readonly accessibleName?: string | null;
   readonly surface: UiActionSurface;
   readonly role?: string | null;
   readonly testId?: string | null;
@@ -22,7 +26,7 @@ export interface UiActionMetadataInput {
   readonly disabledReason?: string | null;
 }
 
-const transportPattern = /\b(play|pause|resume|restart|seek|\+10s|-10s|speed)\b/i;
+const transportPattern = /(?:\b(play|pause|resume|restart|seek|speed)\b|[+-]10s)/i;
 const modePattern =
   /\b(intake|review|preview|read|inspect|debug|narration|voice cloning|focus|balanced|full|teleprompt)\b/i;
 const settingsPattern =
@@ -33,7 +37,9 @@ const diagnosticPattern =
   /\b(help|diagnostic|debug|pipeline|validation|source|inspect|context guide|details)\b/i;
 const navigationPattern =
   /\b(open|close|back|exit|workspace|actions|import|export|book|file \/ url|website|cinema|more|outline|recent|bookmarks|structure)\b/i;
-const primaryPattern = /\b(create|listen|save|apply|submit|upload|analyze|refresh|generate)\b/i;
+const previewPattern = /\b(preview speech|spoken form|preview spoken|speech preview)\b/i;
+const generationPattern =
+  /\b(create|listen|save|apply|submit|upload|analyze|refresh|generate|retry|bookmark)\b/i;
 
 export const STATIC_UI_ACTION_METADATA = [
   action("workspace-open", "Open workspace", "Workspace", "navigation", "menu-or-panel-opened"),
@@ -52,7 +58,7 @@ export const STATIC_UI_ACTION_METADATA = [
     "create-listen",
     workspaceStageActionLabel("createAndListen"),
     "Workspace",
-    "primary",
+    "generation",
     "live-status-updated",
   ),
   action("cancel-job", "Cancel Job", "Workspace", "destructive", "menu-or-panel-opened", true),
@@ -74,7 +80,7 @@ export const STATIC_UI_ACTION_METADATA = [
     "workspace-preview",
     workspaceStageActionLabel("previewSpeech"),
     "Preview",
-    "mode",
+    "preview",
     "state-changed",
   ),
   action(
@@ -112,7 +118,7 @@ export const STATIC_UI_ACTION_METADATA = [
   action("cinema-restart", "Restart", "BookCinema", "transport", "state-changed"),
   action("cinema-back-10", "-10s", "BookCinema", "transport", "state-changed"),
   action("cinema-forward-10", "+10s", "BookCinema", "transport", "state-changed"),
-  action("cinema-bookmark", "Bookmark", "BookCinema", "primary", "live-status-updated"),
+  action("cinema-bookmark", "Bookmark", "BookCinema", "generation", "live-status-updated"),
   action("cinema-read-mode", "Read", "BookCinema", "mode", "state-changed"),
   action("cinema-inspect-mode", "Inspect", "BookCinema", "mode", "state-changed"),
   action("cinema-review-mode", "Review", "BookCinema", "mode", "state-changed"),
@@ -136,12 +142,18 @@ export const STATIC_UI_ACTION_METADATA_BY_TEST_ID: Readonly<
 > = Object.fromEntries(STATIC_UI_ACTION_METADATA.map((metadata) => [metadata.testId, metadata]));
 
 export function inferUiActionMetadata(input: UiActionMetadataInput): UiActionMetadata {
-  const label = normalizeUiActionLabel(input.label) || "Unlabeled control";
+  const visibleLabel =
+    normalizeUiActionLabel(input.visibleLabel ?? input.label) || "Unlabeled control";
+  const accessibleName =
+    normalizeUiActionLabel(input.accessibleName ?? input.label) || visibleLabel;
+  const label = accessibleName || visibleLabel || "Unlabeled control";
   const staticMatch = findStaticUiActionMetadata(label, input.testId);
   if (staticMatch) {
     return {
       ...staticMatch,
+      accessibleName: accessibleName || staticMatch.accessibleName,
       disabledReason: input.disabledReason ?? staticMatch.disabledReason,
+      visibleLabel: visibleLabel || staticMatch.visibleLabel,
       surface: input.surface,
     };
   }
@@ -155,6 +167,8 @@ export function inferUiActionMetadata(input: UiActionMetadataInput): UiActionMet
     id: generatedId,
     testId: input.testId ?? `ui-action-${generatedId}`,
     label,
+    visibleLabel,
+    accessibleName,
     surface: input.surface,
     actionClass,
     expectedTransition: inferExpectedTransition(label, actionClass, input.role ?? undefined),
@@ -190,8 +204,17 @@ export function inferUiActionClass(label: string, role?: string): UiActionClass 
   if (transportPattern.test(label)) {
     return "transport";
   }
-  if (role === "tab" || modePattern.test(label)) {
+  if (role === "tab" || /^preview$/i.test(label)) {
     return "mode";
+  }
+  if (navigationPattern.test(label)) {
+    return "navigation";
+  }
+  if (previewPattern.test(label)) {
+    return "preview";
+  }
+  if (generationPattern.test(label)) {
+    return "generation";
   }
   if (settingsPattern.test(label)) {
     return "settings";
@@ -199,13 +222,10 @@ export function inferUiActionClass(label: string, role?: string): UiActionClass 
   if (diagnosticPattern.test(label)) {
     return "diagnostic";
   }
-  if (navigationPattern.test(label)) {
-    return "navigation";
+  if (modePattern.test(label)) {
+    return "mode";
   }
-  if (primaryPattern.test(label)) {
-    return "primary";
-  }
-  return "primary";
+  return "generation";
 }
 
 export function inferExpectedTransition(
@@ -224,7 +244,11 @@ export function inferExpectedTransition(
       ? "menu-or-panel-opened"
       : "state-changed";
   }
-  if (actionClass === "transport" || /\b(create|listen|save|refresh)\b/i.test(label)) {
+  if (
+    actionClass === "transport" ||
+    actionClass === "generation" ||
+    /\b(create|listen|save|refresh)\b/i.test(label)
+  ) {
     return "live-status-updated";
   }
   return "state-changed";
@@ -254,6 +278,8 @@ function action(
     id,
     testId: `ui-action-${id}`,
     label,
+    visibleLabel: label,
+    accessibleName: label,
     surface,
     actionClass,
     expectedTransition,
