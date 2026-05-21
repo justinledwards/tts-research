@@ -1,3 +1,4 @@
+import { fieldControlClassName, Toggle } from "../../design";
 import {
   READER_LINE_SPACING_LABELS,
   READER_LINE_SPACING_OPTIONS,
@@ -81,19 +82,7 @@ function ReaderToggle({
   label,
   onChange,
 }: Readonly<{ checked: boolean; label: string; onChange: (checked: boolean) => void }>) {
-  return (
-    <label className="cinema-touch-target inline-flex h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold vs-border">
-      <input
-        checked={checked}
-        className="h-4 w-4 accent-orange-600"
-        onChange={(event) => {
-          onChange(event.currentTarget.checked);
-        }}
-        type="checkbox"
-      />
-      <span>{label}</span>
-    </label>
-  );
+  return <Toggle checked={checked} label={label} onChange={onChange} />;
 }
 
 function ReaderSelect<T extends ReaderLineSpacing | ReaderMeasure | ReaderTextScale>({
@@ -113,7 +102,7 @@ function ReaderSelect<T extends ReaderLineSpacing | ReaderMeasure | ReaderTextSc
     <label className="grid min-w-[8rem] gap-1 text-xs font-semibold vs-muted">
       <span>{label}</span>
       <select
-        className="cinema-touch-target h-11 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold text-[var(--vs-text)] outline-none vs-border"
+        className={`${fieldControlClassName} h-11`}
         onChange={(event) => {
           onChange(event.currentTarget.value as T);
         }}

@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
+import { Button, Toggle, fieldControlClassName } from "../../design";
 import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
 import { CinemaInspectorDock } from "./CinemaInspectorDock";
 import {
@@ -336,15 +337,15 @@ export function PreparedSourceCinemaOverlay({
             />
             <MetadataRow label="Reader mode" value={readerModeLabel(source)} valueTone="success" />
           </dl>
-          <button
-            className="cinema-touch-target rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+          <Button
             onClick={() => {
               onInspectStructure(source);
             }}
-            type="button"
+            size="md"
+            variant="secondary"
           >
             Inspect structure
-          </button>
+          </Button>
         </div>
       ),
       detail: href ?? source.sourceName,
@@ -582,24 +583,26 @@ export function PreparedSourceCinemaOverlay({
             <CinemaFocusModeToolbar mode={cinemaFocus.mode} onModeChange={cinemaFocus.setMode} />
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button
-              className="cinema-touch-target hidden h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
+            <Button
+              className="hidden gap-2 sm:inline-flex"
               onClick={() => {
                 setSettingsOpen((current) => !current);
               }}
-              type="button"
+              size="md"
+              variant="secondary"
             >
               <SettingsIcon />
               Settings
-            </button>
-            <button
-              className="cinema-touch-target inline-flex h-11 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
+            </Button>
+            <Button
+              className="gap-1.5 px-2.5 sm:gap-2 sm:px-3"
               onClick={onClose}
-              type="button"
+              size="md"
+              variant="secondary"
             >
               <ExitIcon />
               Exit
-            </button>
+            </Button>
           </div>
           {settingsOpen ? (
             <ReaderSettingsPopover
@@ -687,7 +690,7 @@ function PreparedSourceCinemaSourceLibrary({
         <span className="vs-muted">Cinema source</span>
         <select
           aria-label="Cinema prepared source"
-          className="cinema-touch-target min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-medium outline-none vs-border"
+          className={`${fieldControlClassName} min-w-0 px-2`}
           onChange={(event) => {
             onSelectSource(event.currentTarget.value);
           }}
@@ -700,19 +703,19 @@ function PreparedSourceCinemaSourceLibrary({
           ))}
         </select>
       </label>
-      <button
-        className="cinema-touch-target rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
+      <Button
         disabled={isImporting}
         onClick={() => {
           inputRef.current?.click();
         }}
-        type="button"
+        size="sm"
+        variant="secondary"
       >
         {isImporting ? "Processing..." : "Prepare file"}
-      </button>
+      </Button>
       <input
         accept={PREPARED_SOURCE_CINEMA_ACCEPT}
-        aria-label="Prepared cinema source files"
+        aria-hidden="true"
         className="sr-only"
         onChange={(event) => {
           const file = event.currentTarget.files?.item(0) ?? null;
@@ -722,6 +725,7 @@ function PreparedSourceCinemaSourceLibrary({
           }
         }}
         ref={inputRef}
+        tabIndex={-1}
         type="file"
       />
       {importError ? (
@@ -896,69 +900,62 @@ function PreparedSourceCinemaReader({
       toolbar={
         <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
           <div className="flex items-center gap-1">
-            <button
+            <Button
               aria-label="Decrease text size"
-              className="cinema-touch-target grid place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
+              className="grid place-items-center text-lg font-medium"
               onClick={() => {
                 onAccessibilitySettingsChange({
                   ...accessibilitySettings,
                   textScale: decreasePreparedSourceCinemaTextSize(accessibilitySettings.textScale),
                 });
               }}
-              type="button"
+              size="icon"
+              variant="ghost"
             >
               A-
-            </button>
-            <button
+            </Button>
+            <Button
               aria-label="Increase text size"
-              className="cinema-touch-target grid place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
+              className="grid place-items-center text-lg font-medium"
               onClick={() => {
                 onAccessibilitySettingsChange({
                   ...accessibilitySettings,
                   textScale: increasePreparedSourceCinemaTextSize(accessibilitySettings.textScale),
                 });
               }}
-              type="button"
+              size="icon"
+              variant="ghost"
             >
               A+
-            </button>
-            <button
+            </Button>
+            <Button
               aria-label="Content Structure"
-              className="cinema-touch-target grid place-items-center rounded-md transition hover:bg-[var(--vs-surface)]"
+              className="grid place-items-center"
               onClick={() => {
                 onInspectStructure(source);
               }}
-              type="button"
+              size="icon"
+              variant="ghost"
             >
               <ListIcon />
-            </button>
+            </Button>
           </div>
           <div className="hidden items-center gap-3 text-sm sm:flex">
-            <span className="font-medium">Auto-follow</span>
-            <button
-              aria-pressed={autoFollow}
-              className={`relative h-7 w-12 rounded-full transition ${
-                autoFollow ? "bg-emerald-500" : "bg-zinc-300"
-              }`}
-              onClick={() => {
-                onAutoFollowChange(!autoFollow);
-              }}
-              type="button"
-            >
-              <span
-                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${
-                  autoFollow ? "left-6" : "left-1"
-                }`}
-              />
-            </button>
-            <button
+            <Toggle
+              checked={autoFollow}
+              className="border-0 bg-transparent px-2 py-1"
+              label="Auto-follow"
+              onChange={onAutoFollowChange}
+            />
+            <Button
               aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              className="cinema-touch-target grid place-items-center rounded-md transition hover:bg-[var(--vs-surface)]"
+              className="grid place-items-center"
               onClick={onFullscreenToggle}
-              type="button"
+              size="icon"
+              variant="ghost"
             >
               <FullscreenIcon />
-            </button>
+            </Button>
           </div>
         </div>
       }
@@ -1106,15 +1103,15 @@ function PreparedSourceCinemaMobileSheet({
             onOutlineNavigate={handleOutlineNavigate}
             onRecentNavigate={handleRecentNavigate}
           />
-          <button
-            className="cinema-touch-target rounded-md border px-3 text-sm font-semibold vs-border"
+          <Button
             onClick={() => {
               onInspectStructure(source);
             }}
-            type="button"
+            size="md"
+            variant="secondary"
           >
             Content Structure
-          </button>
+          </Button>
         </div>
       ),
       icon: <ListIcon />,
@@ -1129,15 +1126,15 @@ function PreparedSourceCinemaMobileSheet({
           </p>
           <MetadataRow label="Audio" value={job ? "Generated" : "Not generated"} />
           {progress ? (
-            <button
-              className="cinema-touch-target rounded-md border border-orange-300 bg-orange-500/10 px-3 font-semibold text-orange-700"
+            <Button
               onClick={() => {
                 handleResumeProgress(progress);
               }}
-              type="button"
+              size="md"
+              variant="soft"
             >
               Resume saved point
-            </button>
+            </Button>
           ) : null}
         </div>
       ),

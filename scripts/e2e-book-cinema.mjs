@@ -498,9 +498,10 @@ async function setRememberLayout(page, enabled, { reset = false } = {}) {
 
 async function assertWorkspaceLayoutSelected(page, label) {
   const button = page.getByRole("button", { name: `${label} workspace layout` });
-  const className = await button.getAttribute("class");
+  const pressed = await button.getAttribute("aria-pressed");
+  const selected = await button.getAttribute("data-selected");
   assert(
-    className?.includes("bg-orange-500"),
+    pressed === "true" || selected === "true",
     `${label} workspace layout was not selected after reopen.`,
   );
 }

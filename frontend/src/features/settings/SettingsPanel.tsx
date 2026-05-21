@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { backendAssetUrl } from "../../api";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
-import { HeaderContextSummary } from "../header";
+import { Button, Drawer, Panel, StatusChip, Toggle, fieldControlClassName } from "../../design";
 import { useReaderModalLifecycle, type ReaderAccessibilitySettings } from "../reader-accessibility";
 import {
   KOKORO_RENDER_MODE_OPTIONS,
@@ -261,34 +261,27 @@ export function SettingsPanel({
       />
 
       <div className="mt-5 grid min-h-0 gap-4 lg:grid-cols-[210px_minmax(0,1fr)]">
-        <nav className="grid content-start gap-2 rounded-md border p-2 vs-border vs-surface">
+        <Panel as="nav" className="grid content-start gap-2 p-2" variant="surface">
           {SETTINGS_GROUPS.map((group) => (
-            <button
-              className={`grid gap-1 rounded-md border px-3 py-2 text-left transition ${
-                activeGroup === group.id
-                  ? "border-orange-300 bg-orange-500 text-white shadow-sm"
-                  : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
-              }`}
+            <Button
+              align="start"
+              className="grid gap-1 px-3 py-2"
               key={group.id}
               onClick={() => {
                 setActiveGroup(group.id);
               }}
-              type="button"
+              selected={activeGroup === group.id}
+              size="md"
+              variant="mode"
             >
               <span className="text-sm font-semibold">{group.label}</span>
-              <span
-                className={`text-[0.68rem] leading-4 ${
-                  activeGroup === group.id ? "text-white/80" : "vs-muted"
-                }`}
-              >
-                {group.detail}
-              </span>
-            </button>
+              <span className="text-[0.68rem] leading-4 vs-muted">{group.detail}</span>
+            </Button>
           ))}
-        </nav>
+        </Panel>
 
         <div className="min-w-0">
-          <section className="mb-4 grid gap-3 rounded-md border p-4 vs-border vs-surface">
+          <Panel className="mb-4 grid gap-3 p-4" variant="surface">
             <div>
               <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
                 {activeMeta.label}
@@ -296,7 +289,7 @@ export function SettingsPanel({
               <h3 className="mt-1 text-xl font-semibold">{activeMeta.summary}</h3>
             </div>
             <ScopeLegend />
-          </section>
+          </Panel>
 
           {activeGroup === "run" ? (
             <RunSettingsGroup
@@ -423,7 +416,7 @@ function QuickSettings({
 }>) {
   const profileOptions = resolveSpeechPolicyProfileOptions(definition, speechPolicyProfiles);
   return (
-    <section className="grid gap-3 rounded-md border p-4 vs-border vs-raised">
+    <Panel className="grid gap-3 p-4" variant="raised">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
@@ -537,7 +530,7 @@ function QuickSettings({
           ))}
         </QuickSelect>
       </div>
-    </section>
+    </Panel>
   );
 }
 
@@ -561,7 +554,7 @@ function QuickSelect({
         <ScopeBadge scope={scope} />
       </span>
       <select
-        className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold outline-none vs-border"
+        className={`${fieldControlClassName} min-w-0`}
         onChange={(event) => {
           onChange(event.currentTarget.value);
         }}
@@ -578,13 +571,13 @@ function ScopeLegend() {
     <fieldset className="grid gap-2 text-xs sm:grid-cols-2">
       <legend className="sr-only">Settings applies-to scopes</legend>
       {(["session", "source", "project", "machine"] as const).map((scope) => (
-        <div className="rounded-md border px-3 py-2 vs-border vs-raised" key={scope}>
+        <Panel className="px-3 py-2" key={scope} variant="raised">
           <div className="flex items-center gap-2">
             <ScopeBadge scope={scope} />
             <span className="font-semibold">{SETTINGS_SCOPE_META[scope].label}</span>
           </div>
           <p className="vs-muted mt-1 leading-5">{settingsScopeAppliesTo(scope)}</p>
-        </div>
+        </Panel>
       ))}
     </fieldset>
   );
@@ -615,12 +608,9 @@ function RunSettingsGroup({
     >
       <div className="grid gap-3 sm:grid-cols-2">
         {RUN_MODE_PRESETS.map((preset) => (
-          <button
-            className={`rounded-md border p-3 text-left transition ${
-              preset.mode === runConfiguration.runMode
-                ? "border-orange-300 bg-orange-500/10"
-                : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
-            }`}
+          <Button
+            align="start"
+            className="grid p-3"
             key={preset.mode}
             onClick={() => {
               const next = createRunConfiguration(preset.mode);
@@ -630,35 +620,34 @@ function RunSettingsGroup({
                 ttsEngine: runConfiguration.ttsEngine,
               });
             }}
-            type="button"
+            selected={preset.mode === runConfiguration.runMode}
+            variant="mode"
           >
             <span className="flex items-center justify-between gap-3">
               <span className="font-semibold">{preset.label}</span>
               <span className="vs-muted text-xs">{preset.primaryLabel}</span>
             </span>
             <span className="vs-muted mt-2 block text-sm leading-5">{preset.description}</span>
-          </button>
+          </Button>
         ))}
       </div>
       <div className="grid gap-2 sm:grid-cols-3">
         {(["balanced", "throughput", "quality"] as const).map((mode) => (
-          <button
-            className={`rounded-md border px-3 py-3 text-left text-sm capitalize transition ${
-              mode === runConfiguration.performanceMode
-                ? "border-orange-300 bg-orange-500/10"
-                : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
-            }`}
+          <Button
+            align="start"
+            className="grid px-3 py-3 capitalize"
             key={mode}
             onClick={() => {
               onRunConfigurationChange({ ...runConfiguration, performanceMode: mode });
             }}
-            type="button"
+            selected={mode === runConfiguration.performanceMode}
+            variant="mode"
           >
             <span className="font-semibold">{mode}</span>
             <span className="vs-muted mt-1 block text-xs leading-5">
               {describePerformanceMode(mode)}
             </span>
-          </button>
+          </Button>
         ))}
       </div>
       <PipelineToggles
@@ -677,16 +666,11 @@ function RunSettingsGroup({
         </div>
       </details>
       <DiagnosticLine label="Current job" value={job?.status ?? "No job yet"} />
-      <button
-        className="h-11 w-full rounded-md px-5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none vs-accent-bg hover:brightness-95"
-        disabled={!canSubmit}
-        onClick={onSubmit}
-        type="button"
-      >
+      <Button fullWidth disabled={!canSubmit} onClick={onSubmit} variant="primary">
         {job?.status === "completed"
           ? "Create Again"
           : getRunModePreset(runConfiguration.runMode).primaryLabel}
-      </button>
+      </Button>
     </PanelSection>
   );
 }
@@ -703,31 +687,21 @@ function PipelineToggles({
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {keys.map((key) => (
-        <label
-          className="flex cursor-pointer items-start justify-between gap-4 rounded-md border p-3 transition hover:bg-[var(--vs-surface)] vs-border vs-raised"
+        <Toggle
+          checked={runConfiguration.options[key]}
+          detail={PIPELINE_OPTION_LABELS[key].detail}
           key={key}
-        >
-          <span>
-            <span className="block text-sm font-semibold">{PIPELINE_OPTION_LABELS[key].label}</span>
-            <span className="vs-muted mt-1 block text-xs leading-5">
-              {PIPELINE_OPTION_LABELS[key].detail}
-            </span>
-          </span>
-          <input
-            checked={runConfiguration.options[key]}
-            className="mt-1 h-5 w-5 accent-orange-500"
-            onChange={(event) => {
-              onRunConfigurationChange({
-                ...runConfiguration,
-                options: {
-                  ...runConfiguration.options,
-                  [key]: event.currentTarget.checked,
-                },
-              });
-            }}
-            type="checkbox"
-          />
-        </label>
+          label={PIPELINE_OPTION_LABELS[key].label}
+          onChange={(checked) => {
+            onRunConfigurationChange({
+              ...runConfiguration,
+              options: {
+                ...runConfiguration.options,
+                [key]: checked,
+              },
+            });
+          }}
+        />
       ))}
     </div>
   );
@@ -806,7 +780,7 @@ function UiMemorySettingsControls({
   onResetUiMemory: () => void;
 }>) {
   return (
-    <div className="grid gap-3 rounded-md border p-3 vs-border vs-surface">
+    <Panel className="grid gap-3 p-3" variant="surface">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h4 className="flex items-center gap-2 text-sm font-semibold">
@@ -817,29 +791,20 @@ function UiMemorySettingsControls({
             Remember presentation-only workspace and cinema layout on this machine.
           </p>
         </div>
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold vs-border vs-raised">
-          <input
-            checked={rememberLayout}
-            className="h-4 w-4 accent-orange-500"
-            onChange={(event) => {
-              onRememberLayoutChange(event.currentTarget.checked);
-            }}
-            type="checkbox"
-          />
-          Remember my layout
-        </label>
+        <Toggle
+          checked={rememberLayout}
+          className="text-xs"
+          label="Remember my layout"
+          onChange={onRememberLayoutChange}
+        />
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-xs vs-border">
         <span className="vs-muted">Reset returns Workspace and Cinema to documented defaults.</span>
-        <button
-          className="h-9 rounded-md border px-3 font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-raised"
-          onClick={onResetUiMemory}
-          type="button"
-        >
+        <Button onClick={onResetUiMemory} size="sm" variant="secondary">
           Reset UI memory
-        </button>
+        </Button>
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -848,7 +813,7 @@ function ThemeSettingsControls({
   onThemeChange,
 }: Readonly<{ themeName: ThemeName; onThemeChange: (theme: ThemeName) => void }>) {
   return (
-    <div className="grid gap-3 rounded-md border p-3 vs-border vs-surface">
+    <Panel className="grid gap-3 p-3" variant="surface">
       <div className="flex items-center justify-between gap-3">
         <h4 className="flex items-center gap-2 text-sm font-semibold">
           Theme
@@ -858,17 +823,15 @@ function ThemeSettingsControls({
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {VOICE_STUDIO_THEMES.map((theme) => (
-          <button
-            className={`rounded-md border p-3 text-left transition ${
-              themeName === theme.name
-                ? "border-orange-300 bg-orange-50 text-orange-950"
-                : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
-            }`}
+          <Button
+            align="start"
+            className="grid p-3"
             key={theme.name}
             onClick={() => {
               onThemeChange(theme.name);
             }}
-            type="button"
+            selected={themeName === theme.name}
+            variant="mode"
           >
             <span className="flex items-center justify-between gap-3">
               <span className="font-semibold">{theme.label}</span>
@@ -890,10 +853,10 @@ function ThemeSettingsControls({
                 />
               ))}
             </span>
-          </button>
+          </Button>
         ))}
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -912,7 +875,7 @@ function TeleprompterSettingsControls({
   };
 
   return (
-    <div className="grid gap-4 rounded-md border p-3 vs-border vs-surface">
+    <Panel className="grid gap-4 p-3" variant="surface">
       <div>
         <h4 className="flex items-center gap-2 text-sm font-semibold">
           Teleprompter focus
@@ -954,24 +917,22 @@ function TeleprompterSettingsControls({
       />
       <div className="flex flex-wrap gap-2">
         {(["spark", "classic"] as const).map((style) => (
-          <button
-            className={`rounded-md border px-3 py-2 text-xs font-semibold capitalize ${
-              settings.effectStyle === style
-                ? "border-orange-300 bg-orange-500/10 text-[var(--vs-text)]"
-                : "vs-border vs-raised"
-            }`}
+          <Button
+            className="capitalize"
             key={style}
             onClick={() => {
               updateEffect(style);
             }}
-            type="button"
+            selected={settings.effectStyle === style}
+            size="sm"
+            variant="mode"
           >
             {style === "spark" ? "Spark Demo" : "Outline Glow"}
-          </button>
+          </Button>
         ))}
       </div>
       <TeleprompterHighlightDemo settings={settings} />
-    </div>
+    </Panel>
   );
 }
 
@@ -1023,7 +984,7 @@ function TeleprompterHighlightDemo({
   const wordCues = buildTeleprompterWordCues(sample, 1800, 5200, settings);
   const words = sample.split(" ");
   return (
-    <div className="rounded-md border p-3 vs-border vs-raised">
+    <Panel className="p-3" variant="raised">
       <p className="text-xs font-semibold uppercase tracking-wide text-[#cc0d55]">Highlight demo</p>
       <p className="mt-3 whitespace-pre-wrap text-lg leading-10">
         {words.map((word, index) => {
@@ -1046,7 +1007,7 @@ function TeleprompterHighlightDemo({
           );
         })}
       </p>
-    </div>
+    </Panel>
   );
 }
 
@@ -1097,37 +1058,35 @@ function VoiceSettingsGroup({
       {isKokoroRenderEngine(runConfiguration.ttsEngine) ? (
         <div className="grid gap-2">
           {KOKORO_RENDER_MODE_OPTIONS.map((option) => (
-            <button
-              className={`rounded-md border p-3 text-left transition ${
-                option.id === activeKokoroRenderMode
-                  ? "border-orange-300 bg-orange-500/10"
-                  : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
-              }`}
+            <Button
+              align="start"
+              className="grid p-3"
               key={option.id}
               onClick={() => {
                 onRunConfigurationChange(applyKokoroRenderMode(runConfiguration, option.id));
               }}
-              type="button"
+              selected={option.id === activeKokoroRenderMode}
+              variant="mode"
             >
               <span className="flex items-center justify-between gap-3">
                 <span className="font-semibold">{option.label}</span>
                 <ScopeBadge scope="session" />
               </span>
               <span className="vs-muted mt-1 block text-xs leading-5">{option.detail}</span>
-            </button>
+            </Button>
           ))}
         </div>
       ) : null}
       {selectedProfile && activeKokoroRenderMode === "kokoro-embed" ? (
-        <button
-          className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700"
+        <Button
           onClick={() => {
             void onPrepareProfileTarget(selectedProfile.id, "kokoro-embed");
           }}
-          type="button"
+          size="sm"
+          variant="soft"
         >
           Prepare selected profile target
-        </button>
+        </Button>
       ) : null}
       <TTSEngineDiagnosticsList
         engines={ttsEngines}
@@ -1255,7 +1214,7 @@ function SourceSettingsGroup({
         onProfileChange={onSpeechPolicyProfileChange}
         onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
       />
-      <div className="rounded-md border p-3 vs-border vs-surface">
+      <Panel className="p-3" variant="surface">
         <div className="mb-2 flex items-center justify-between gap-3">
           <h4 className="text-sm font-semibold">Selected source</h4>
           <ScopeBadge scope="source" />
@@ -1283,7 +1242,7 @@ function SourceSettingsGroup({
             Select a prepared source or book source to set a durable source-level pin.
           </p>
         )}
-      </div>
+      </Panel>
     </PanelSection>
   );
 }
@@ -1435,7 +1394,7 @@ function ProjectStorageSummaryPanel({
   selectedProfile: VoiceProfile | null;
 }>) {
   return (
-    <div className="grid gap-3 rounded-md border p-3 vs-border vs-surface">
+    <Panel className="grid gap-3 p-3" variant="surface">
       <div className="flex items-center justify-between gap-3">
         <h4 className="text-sm font-semibold">Storage</h4>
         <ScopeBadge scope="machine" />
@@ -1504,18 +1463,18 @@ function ProjectStorageSummaryPanel({
           ))}
         </dl>
       </details>
-    </div>
+    </Panel>
   );
 }
 
 function StorageStat({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
-    <div className="rounded-md border p-3 vs-border vs-surface">
+    <Panel className="p-3" variant="surface">
       <dt className="vs-muted text-xs font-semibold uppercase tracking-wide">{label}</dt>
       <dd className="mt-1 truncate text-sm font-semibold" title={value}>
         {value}
       </dd>
-    </div>
+    </Panel>
   );
 }
 
@@ -1534,7 +1493,7 @@ function TTSEngineDiagnosticsList({
     return <p className="text-sm leading-6 text-red-700">{error}</p>;
   }
   return (
-    <div className="grid gap-3 rounded-md border p-3 text-xs vs-border vs-surface">
+    <Panel className="grid gap-3 p-3 text-xs" variant="surface">
       <div>
         <h4 className="flex items-center gap-2 text-sm font-semibold">
           Narration engine
@@ -1547,31 +1506,27 @@ function TTSEngineDiagnosticsList({
       <ul className="grid gap-2">
         {engines.map((engine) => (
           <li key={engine.id}>
-            <button
-              className={`grid w-full gap-2 rounded-md border p-3 text-left transition ${
-                selectedEngine === engine.id
-                  ? "border-orange-300 bg-orange-500/10"
-                  : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
-              }`}
+            <Button
+              align="start"
+              className="grid w-full gap-2 p-3"
               disabled={engine.status !== "ready"}
+              disabledReason={engine.reason ?? engine.setup ?? "Engine is not ready."}
               onClick={() => {
                 onSelectEngine(engine.id);
               }}
-              type="button"
+              selected={selectedEngine === engine.id}
+              variant="mode"
             >
               <span className="flex min-w-0 items-center justify-between gap-2">
                 <span className="min-w-0 truncate font-semibold" title={engine.label}>
                   {engine.label}
                 </span>
-                <span
-                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${
-                    engine.status === "ready"
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                      : "border-amber-300 bg-amber-50 text-amber-800"
-                  }`}
+                <StatusChip
+                  className="rounded-full py-0.5 text-[0.65rem]"
+                  tone={engine.status === "ready" ? "success" : "warning"}
                 >
                   {engine.status}
-                </span>
+                </StatusChip>
               </span>
               <span className="vs-muted break-words">
                 {engine.supportsSSML ? "SSML" : "plain text"} ·{" "}
@@ -1581,11 +1536,11 @@ function TTSEngineDiagnosticsList({
               {engine.reason || engine.setup ? (
                 <span className="vs-muted break-words">{engine.reason ?? engine.setup}</span>
               ) : null}
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
-    </div>
+    </Panel>
   );
 }
 
@@ -1594,7 +1549,7 @@ function TTSEngineHealthFacts({ engines }: Readonly<{ engines: TTSEngineDiagnost
     return null;
   }
   return (
-    <div className="grid gap-2 rounded-md border p-3 text-xs vs-border vs-surface">
+    <Panel className="grid gap-2 p-3 text-xs" variant="surface">
       <h4 className="text-sm font-semibold">Engine health</h4>
       {engines.map((engine) => (
         <DiagnosticLine
@@ -1603,7 +1558,7 @@ function TTSEngineHealthFacts({ engines }: Readonly<{ engines: TTSEngineDiagnost
           value={`${engine.status} · ${engine.reason ?? engine.setup ?? formatProviderLanguageSummary(engine)}`}
         />
       ))}
-    </div>
+    </Panel>
   );
 }
 
@@ -1614,7 +1569,7 @@ function ResearchModuleDiagnosticsList({
     return null;
   }
   return (
-    <div className="grid gap-3 rounded-md border p-3 text-xs vs-border vs-surface">
+    <Panel className="grid gap-3 p-3 text-xs" variant="surface">
       <div>
         <h4 className="flex items-center gap-2 text-sm font-semibold">
           Research modules
@@ -1627,20 +1582,17 @@ function ResearchModuleDiagnosticsList({
       </div>
       <ul className="grid gap-2">
         {modules.map((module) => (
-          <li className="grid gap-1 rounded-md border p-3 vs-border" key={module.id}>
+          <Panel as="li" className="grid gap-1 p-3" key={module.id} variant="raised">
             <span className="flex min-w-0 items-center justify-between gap-2">
               <span className="truncate font-semibold" title={module.label}>
                 {module.label}
               </span>
-              <span
-                className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${
-                  module.status === "ready"
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                    : "border-amber-300 bg-amber-50 text-amber-800"
-                }`}
+              <StatusChip
+                className="rounded-full py-0.5 text-[0.65rem]"
+                tone={module.status === "ready" ? "success" : "warning"}
               >
                 {module.status}
-              </span>
+              </StatusChip>
             </span>
             <span className="vs-muted break-words">{module.reason ?? module.setup}</span>
             {module.setupCommand ? (
@@ -1651,10 +1603,10 @@ function ResearchModuleDiagnosticsList({
             <code className="truncate rounded bg-[var(--vs-raised)] px-2 py-1 font-mono text-[11px]">
               {module.localPath}
             </code>
-          </li>
+          </Panel>
         ))}
       </ul>
-    </div>
+    </Panel>
   );
 }
 
@@ -1673,37 +1625,16 @@ function PanelShell({
   useReaderModalLifecycle(panelRef, { closeOnEscape: true, onClose });
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/25" role="presentation">
-      <aside
-        aria-label={label}
-        aria-modal="true"
-        className="vs-app ml-auto flex h-full w-full max-w-[860px] flex-col border-l shadow-2xl md:w-[820px] vs-border"
-        ref={panelRef}
-        role="dialog"
-        tabIndex={-1}
-      >
-        <header className="flex items-center justify-between border-b px-5 py-4 vs-border">
-          <HeaderContextSummary
-            density="compact"
-            metadata={[
-              { label: "Groups", value: "Run, Reader, Voices, Sources, Runtime, Diagnostics" },
-            ]}
-            scopeTitle="Session, Source, Project, Machine"
-            sourceTitle={title}
-            surfaceName={label}
-          />
-          <button
-            aria-label={`Close ${label}`}
-            className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-surface)] vs-border"
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
-      </aside>
-    </div>
+    <Drawer
+      label={label}
+      metadata={[{ label: "Groups", value: "Run, Reader, Voices, Sources, Runtime, Diagnostics" }]}
+      onClose={onClose}
+      ref={panelRef}
+      scopeTitle="Session, Source, Project, Machine"
+      title={title}
+    >
+      {children}
+    </Drawer>
   );
 }
 
@@ -1726,13 +1657,11 @@ function PanelSection({
     ? commandTargetTokens.includes(highlightedCommandToken)
     : false;
   return (
-    <section
-      className={`grid gap-3 rounded-md border p-4 transition ${
-        isHighlighted
-          ? "border-orange-300 bg-orange-500/10 ring-2 ring-orange-200"
-          : "vs-border vs-raised"
-      }`}
+    <Panel
+      className="grid gap-3 p-4"
       data-settings-command-targets={commandTargetTokens.join(" ")}
+      highlighted={isHighlighted}
+      variant="raised"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -1742,16 +1671,16 @@ function PanelSection({
         <AppliesToScope scope={scope} />
       </div>
       {children}
-    </section>
+    </Panel>
   );
 }
 
 function AppliesToScope({ scope }: Readonly<{ scope: SettingsScope }>) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-2 rounded-md border px-2 py-1 text-xs font-semibold vs-border vs-surface">
+    <StatusChip className="gap-2" tone="neutral">
       <span className="vs-muted">Applies to</span>
       <ScopeBadge scope={scope} />
-    </span>
+    </StatusChip>
   );
 }
 

@@ -52,7 +52,6 @@ export function CommandPalette({
     if (!isOpen) {
       return;
     }
-    setQuery("");
     setActiveIndex(0);
     const focusId = globalThis.requestAnimationFrame(() => {
       inputRef.current?.focus();

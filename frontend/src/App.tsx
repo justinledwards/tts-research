@@ -168,6 +168,7 @@ import {
   type UiMemoryState,
 } from "./features/preferences";
 import { HeaderContextSummary } from "./features/header";
+import { Button, Panel, SegmentedControl, StatusChip, fieldControlClassName } from "./design";
 import {
   createWorkspaceContext,
   defaultWorkspaceLayoutMode,
@@ -9632,33 +9633,25 @@ function SourceTextPanel({
         surfaceName="Narration Workbench"
       />
 
-      <div className="grid grid-cols-2 rounded-lg border bg-[var(--vs-surface)] p-1 text-sm font-semibold vs-border lg:grid-cols-4">
-        {(
-          [
-            ["intake", "Intake"],
-            ["review", "Review"],
-            ["preview", "Preview"],
-            ["teleprompt", "Teleprompt"],
-          ] as const
-        ).map(([mode, label]) => (
-          <button
-            className={`rounded-md px-3 py-2 transition ${
-              contentMode === mode
-                ? "bg-[var(--vs-raised)] text-orange-700 shadow-sm"
-                : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-            }`}
-            key={mode}
-            onClick={() => {
-              onStageAction(workspaceStageNavigationAction(mode));
-            }}
-            type="button"
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        ariaLabel="Workspace stage"
+        columns={4}
+        options={[
+          { label: "Intake", value: "intake" },
+          { label: "Review", value: "review" },
+          { label: "Preview", value: "preview" },
+          { label: "Teleprompt", value: "teleprompt" },
+        ]}
+        value={contentMode}
+        onChange={(mode) => {
+          onStageAction(workspaceStageNavigationAction(mode));
+        }}
+      />
 
-      <div className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center vs-border">
+      <Panel
+        className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
+        variant="surface"
+      >
         <div className="flex min-w-0 items-center gap-3 text-sm">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md border text-orange-600 vs-border vs-surface">
             <SourceKindIcon mode={sourceIdentity.mode} />
@@ -9670,31 +9663,19 @@ function SourceTextPanel({
             </p>
           </div>
         </div>
-        <div className="grid min-w-0 grid-cols-3 rounded-md border bg-[var(--vs-surface)] p-1 text-xs font-semibold lg:w-[22rem] vs-border">
-          {(
-            [
-              ["text", "Text"],
-              ["book", "Book"],
-              ["fileUrl", "File / URL"],
-            ] as const
-          ).map(([mode, label]) => (
-            <button
-              className={`rounded px-3 py-1.5 transition ${
-                sourceIdentity.mode === mode
-                  ? "bg-orange-500/10 text-orange-700 shadow-sm ring-1 ring-orange-300"
-                  : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-              }`}
-              key={mode}
-              onClick={() => {
-                onSourceModeChange(mode);
-              }}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+        <SegmentedControl
+          ariaLabel="Source type"
+          className="min-w-0 lg:w-[22rem]"
+          columns={3}
+          options={[
+            { label: "Text", value: "text" },
+            { label: "Book", value: "book" },
+            { label: "File / URL", value: "fileUrl" },
+          ]}
+          value={sourceIdentity.mode}
+          onChange={onSourceModeChange}
+        />
+      </Panel>
       {showSourceIntake && sourceMode === "book" ? bookControls : null}
       {showSourceIntake && sourceMode === "fileUrl" ? (
         <SourcePrepReview
@@ -9741,8 +9722,10 @@ function SourceTextPanel({
         >
           <input
             ref={fileInputRef}
+            aria-hidden="true"
             accept={SOURCE_TEXT_FILE_ACCEPT}
             className="sr-only"
+            tabIndex={-1}
             type="file"
             onChange={(event) => {
               const file = event.currentTarget.files?.item(0);
@@ -9756,25 +9739,30 @@ function SourceTextPanel({
       ) : null}
       {showSourceIntake && sourceMode === "text" ? (
         <div className="grid gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed bg-[var(--vs-raised)] px-3 py-2 text-xs vs-border">
+          <Panel
+            className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
+            variant="dashed"
+          >
             <span className="min-w-0 flex-1 basis-48 truncate" title={sourceFileLabel ?? undefined}>
               {sourceFileLabel ?? "Drop text or Markdown files here"}
             </span>
-            <button
-              className="rounded border px-3 py-1.5 font-semibold transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50 vs-border vs-surface"
+            <Button
               disabled={isProcessing}
               onClick={() => {
                 fileInputRef.current?.click();
               }}
-              type="button"
+              size="sm"
+              variant="secondary"
             >
               Browse Text
-            </button>
+            </Button>
             <input
               ref={fileInputRef}
+              aria-hidden="true"
               accept={SOURCE_TEXT_FILE_ACCEPT}
               className="sr-only"
               multiple
+              tabIndex={-1}
               type="file"
               onChange={(event) => {
                 if (event.currentTarget.files) {
@@ -9783,11 +9771,11 @@ function SourceTextPanel({
                 event.currentTarget.value = "";
               }}
             />
-          </div>
+          </Panel>
           {sourceFileError ? <p className="text-xs text-red-700">{sourceFileError}</p> : null}
           <textarea
             aria-label="Source text"
-            className="min-h-[240px] w-full resize-none rounded-lg border bg-[var(--vs-raised)] p-4 font-mono text-sm leading-6 outline-none transition read-only:opacity-70 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
+            className={`${fieldControlClassName} min-h-[240px] w-full resize-none bg-[var(--vs-raised)] p-4 font-mono leading-6 read-only:opacity-70`}
             id="source-text"
             onChange={(event) => {
               if (!isProcessing) {
@@ -9942,7 +9930,7 @@ function NarrationPreviewStage({
   });
 
   return (
-    <section className="grid min-w-0 gap-3 rounded-xl border bg-[var(--vs-raised)] p-4 vs-border">
+    <Panel className="grid gap-3 p-4" variant="raised">
       <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <HeaderContextSummary
           className="flex-1"
@@ -9957,41 +9945,39 @@ function NarrationPreviewStage({
           surfaceName="Preview"
         />
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700"
+          <Button
             data-testid={workspaceStageActionTestId("openTeleprompt")}
             onClick={onOpenTeleprompt}
-            type="button"
+            size="sm"
+            variant="soft"
           >
             {workspaceStageActionLabel("openTeleprompt")}
-          </button>
-          <button
-            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-50 vs-border vs-raised"
-            data-disabled-reason={canOpenCinema ? undefined : "Create audio before opening Cinema."}
+          </Button>
+          <Button
+            disabledReason={canOpenCinema ? undefined : "Create audio before opening Cinema."}
             data-testid={workspaceStageActionTestId("openCinema")}
             disabled={!canOpenCinema}
             onClick={onOpenCinema}
-            type="button"
+            size="sm"
+            variant="secondary"
           >
             {workspaceStageActionLabel("openCinema")}
-          </button>
-          <button
-            className="h-9 rounded-md px-4 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-zinc-300 vs-accent-bg"
-            data-disabled-reason={
-              canCreate ? undefined : "Select a ready source before creating audio."
-            }
+          </Button>
+          <Button
+            disabledReason={canCreate ? undefined : "Select a ready source before creating audio."}
             data-testid={workspaceStageActionTestId("createAndListen")}
             disabled={createDisabled}
             onClick={onCreateAndListen}
-            type="button"
+            size="sm"
+            variant="primary"
           >
             {workspaceStageActionLabel("createAndListen")}
-          </button>
+          </Button>
         </div>
       </div>
-      <p className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs font-semibold vs-border vs-muted">
+      <StatusChip className="justify-self-start" tone={job ? "info" : "neutral"}>
         {createDetail}
-      </p>
+      </StatusChip>
       <dl className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 text-xs sm:grid-cols-3 vs-border">
         <PreviewFact label="Voice choice" value={voiceProfileLabel} />
         <PreviewFact label="Speech policy" value={policyProfileLabel} />
@@ -10002,7 +9988,7 @@ function NarrationPreviewStage({
           {previewContent}
         </div>
         <div className="grid min-w-0 gap-3">
-          <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
+          <Panel className="grid gap-3 p-4" variant="raised">
             <div>
               <h3 className="text-base font-semibold">Spoken Form</h3>
               <p className="mt-1 text-xs vs-muted">
@@ -10012,8 +9998,8 @@ function NarrationPreviewStage({
             <p className="max-h-[20rem] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
               {spokenText}
             </p>
-          </section>
-          <section className="grid min-w-0 gap-2 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
+          </Panel>
+          <Panel className="grid gap-2 p-4" variant="raised">
             <h3 className="text-sm font-semibold">Policy Notes</h3>
             <ul className="grid gap-2 text-xs leading-5 vs-muted">
               {policyNotes.map((note) => (
@@ -10026,10 +10012,10 @@ function NarrationPreviewStage({
                 </li>
               ))}
             </ul>
-          </section>
+          </Panel>
         </div>
       </div>
-    </section>
+    </Panel>
   );
 }
 
@@ -10323,24 +10309,15 @@ function MarkdownParseModeControl({
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs vs-border">
       <span className="font-semibold text-[var(--vs-text)]">Markdown parser</span>
-      <div className="grid grid-cols-2 rounded-md border p-1 font-semibold vs-border vs-surface">
-        {(["strict", "legacy"] as const).map((item) => (
-          <button
-            className={`rounded px-3 py-1.5 capitalize transition ${
-              mode === item
-                ? "bg-orange-500/10 text-orange-700 shadow-sm ring-1 ring-orange-300"
-                : "vs-muted hover:text-[var(--vs-text)]"
-            }`}
-            key={item}
-            onClick={() => {
-              onChange(item);
-            }}
-            type="button"
-          >
-            {item}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        ariaLabel="Markdown parser"
+        options={[
+          { label: "Strict", value: "strict" },
+          { label: "Legacy", value: "legacy" },
+        ]}
+        value={mode}
+        onChange={onChange}
+      />
     </div>
   );
 }
@@ -10440,10 +10417,10 @@ function SourcePrepReview({
   return (
     <div className="grid min-w-0 gap-3">
       {showIntakeControls ? (
-        <div className="grid min-w-0 gap-3 overflow-hidden rounded-lg border bg-[var(--vs-raised)] p-3 vs-border">
+        <Panel className="grid gap-3 overflow-hidden p-3" variant="raised">
           <div className="grid max-w-full min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
             <input
-              className="h-10 w-full min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
+              className={`${fieldControlClassName} w-full min-w-0 bg-[var(--vs-raised)]`}
               onChange={(event) => {
                 onSourceUrlChange(event.currentTarget.value);
               }}
@@ -10451,14 +10428,14 @@ function SourcePrepReview({
               type="url"
               value={sourceUrl}
             />
-            <button
-              className="h-10 w-full rounded-md border border-orange-300 bg-orange-500/10 px-4 text-sm font-semibold text-orange-700 transition hover:bg-orange-500/15 disabled:opacity-50 md:w-auto"
+            <Button
+              className="w-full md:w-auto"
               disabled={isPreparing || sourceUrl.trim().length === 0}
               onClick={onPrepareUrl}
-              type="button"
+              variant="soft"
             >
               {isPreparing ? "Preparing..." : "Fetch & Prepare"}
-            </button>
+            </Button>
           </div>
           <MarkdownParseModeControl mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
           <div className="flex max-w-full min-w-0 flex-wrap items-center justify-between gap-2 text-xs vs-muted">
@@ -10466,18 +10443,13 @@ function SourcePrepReview({
               {sourceFileLabel ??
                 "Drop a file here, or browse for text, PDF, EPUB, HTML, CSV, JSON, or logs"}
             </span>
-            <button
-              className="rounded border bg-[var(--vs-raised)] px-3 py-1.5 font-semibold transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50 vs-border"
-              disabled={isPreparing}
-              onClick={onBrowse}
-              type="button"
-            >
+            <Button disabled={isPreparing} onClick={onBrowse} size="sm" variant="secondary">
               Browse File
-            </button>
+            </Button>
             {children}
           </div>
           {intakeErrorNode}
-        </div>
+        </Panel>
       ) : (
         intakeErrorNode
       )}
@@ -10501,7 +10473,10 @@ function SourcePrepReview({
               onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
             />
           </Suspense>
-          <div className="grid gap-2 rounded-lg border bg-[var(--vs-raised)] p-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center vs-border">
+          <Panel
+            className="grid gap-2 p-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center"
+            variant="raised"
+          >
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">Prepared</p>
               <p className="mt-1 text-xs vs-muted">
@@ -10511,7 +10486,7 @@ function SourcePrepReview({
             </div>
             <select
               aria-label="Prepared source"
-              className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold outline-none focus:border-orange-400 vs-border"
+              className={`${fieldControlClassName} min-w-0`}
               onChange={(event) => {
                 const nextSource = preparedSources.find(
                   (item) => item.id === event.currentTarget.value,
@@ -10530,7 +10505,7 @@ function SourcePrepReview({
                 </option>
               ))}
             </select>
-          </div>
+          </Panel>
           <PreparedSourceIntakeSummary
             isPreparing={isPreparing}
             source={source}
@@ -10540,10 +10515,10 @@ function SourcePrepReview({
           />
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed bg-[var(--vs-raised)] p-5 text-sm vs-border">
+        <Panel className="p-5 text-sm" variant="dashed">
           Prepare a file or URL to review headings, skipped citations, and sentence-safe narration
           blocks before generating audio.
-        </div>
+        </Panel>
       )}
     </div>
   );
@@ -10564,14 +10539,14 @@ function PreparedSourceIntakeSummary({
 }>) {
   if (!source) {
     return (
-      <div className="rounded-lg border border-dashed bg-[var(--vs-raised)] p-5 text-sm vs-border">
+      <Panel className="p-5 text-sm" variant="dashed">
         Prepare a file or URL to make it available for the Review workbench.
-      </div>
+      </Panel>
     );
   }
 
   return (
-    <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
+    <Panel className="grid gap-3 p-4" variant="raised">
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <HeaderContextSummary
           className="flex-1"
@@ -10583,34 +10558,34 @@ function PreparedSourceIntakeSummary({
           surfaceName="Prepared Source"
         />
         <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-          <button
-            className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 transition hover:bg-orange-500/15"
+          <Button
             onClick={() => {
               onOpenPreparedSourceCinema(source);
             }}
-            type="button"
+            size="sm"
+            variant="soft"
           >
             {preparedSourceCinemaActionLabel(source)}
-          </button>
-          <button
-            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border"
+          </Button>
+          <Button
             onClick={() => {
               onInspectPreparedSource(source);
             }}
-            type="button"
+            size="sm"
+            variant="secondary"
           >
             Inspect structure
-          </button>
-          <button
-            className="h-9 rounded-md bg-orange-600 px-3 text-xs font-semibold text-white shadow-sm shadow-orange-500/20 disabled:opacity-50"
+          </Button>
+          <Button
             disabled={isPreparing}
             onClick={() => {
               onCreatePreparedAudio(source);
             }}
-            type="button"
+            size="sm"
+            variant="primary"
           >
             {workspaceStageActionLabel("createAndListen")}
-          </button>
+          </Button>
         </div>
       </div>
       <dl className="grid gap-3 text-sm sm:grid-cols-5">
@@ -10620,7 +10595,7 @@ function PreparedSourceIntakeSummary({
         <SourcePrepMetric label="Citations" value={String(source.summary.citationSkipCount)} />
         <SourcePrepMetric label="Skipped" value={String(source.skippedItems?.length ?? 0)} />
       </dl>
-    </section>
+    </Panel>
   );
 }
 
@@ -12423,7 +12398,7 @@ function NarrationReviewWorkbench({
   };
 
   return (
-    <section className="grid min-w-0 gap-3 rounded-xl border bg-[var(--vs-raised)] p-4 vs-border">
+    <Panel className="grid gap-3 p-4" variant="raised">
       <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <HeaderContextSummary
           className="flex-1"
@@ -12438,37 +12413,40 @@ function NarrationReviewWorkbench({
           surfaceName="Source Review"
         />
         <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
-          <button
-            className="h-9 flex-1 whitespace-nowrap rounded-md px-4 text-xs font-semibold text-white transition hover:brightness-95 sm:flex-none vs-accent-bg"
+          <Button
+            className="flex-1 whitespace-nowrap sm:flex-none"
             data-testid={workspaceStageActionTestId("previewSpeech")}
             onClick={onPreviewSpeech}
-            type="button"
+            size="sm"
+            variant="primary"
           >
             {workspaceStageActionLabel("previewSpeech")}
-          </button>
+          </Button>
           {selectedPreparedSource ? (
-            <button
-              className="h-9 flex-1 whitespace-nowrap rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 sm:flex-none vs-border vs-raised"
+            <Button
+              className="flex-1 whitespace-nowrap sm:flex-none"
               data-testid={workspaceStageActionTestId("inspectStructure")}
               onClick={() => {
                 onInspectPreparedSource(selectedPreparedSource);
               }}
-              type="button"
+              size="sm"
+              variant="secondary"
             >
               {workspaceStageActionLabel("inspectStructure")}
-            </button>
+            </Button>
           ) : null}
           {!selectedPreparedSource && selectedBookSource ? (
-            <button
-              className="h-9 flex-1 whitespace-nowrap rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 sm:flex-none vs-border vs-raised"
+            <Button
+              className="flex-1 whitespace-nowrap sm:flex-none"
               data-testid={workspaceStageActionTestId("inspectStructure")}
               onClick={() => {
                 onInspectBookSource(selectedBookSource);
               }}
-              type="button"
+              size="sm"
+              variant="secondary"
             >
               {workspaceStageActionLabel("inspectStructure")}
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
@@ -12491,7 +12469,7 @@ function NarrationReviewWorkbench({
         selectedPreparedSource={selectedPreparedSource}
         voiceProfileId={voiceProfileId}
       />
-    </section>
+    </Panel>
   );
 }
 
@@ -12646,22 +12624,22 @@ function NarrationReviewBlockList({
   onSelectBlock: (id: string) => void;
 }>) {
   return (
-    <section className="min-w-0 overflow-hidden rounded-lg border bg-[var(--vs-raised)] vs-border">
+    <Panel className="overflow-hidden" variant="raised">
       <div className="flex items-center justify-between gap-3 border-b bg-[var(--vs-surface)] px-3 py-2 vs-border">
         <h3 className="text-sm font-semibold">Blocks ({blocks.length.toString()})</h3>
         <span className="text-xs vs-muted">review order</span>
       </div>
       <div className="max-h-[18rem] overflow-y-auto">
         {blocks.map((block) => (
-          <button
-            className={`grid w-full min-w-0 grid-cols-[2rem_minmax(0,1fr)_auto] gap-2 border-b px-3 py-3 text-left text-sm transition last:border-b-0 vs-border ${
-              selectedBlockId === block.id ? "bg-orange-500/10" : "hover:bg-[var(--vs-raised)]"
-            }`}
+          <Button
+            align="start"
+            className="grid w-full min-w-0 grid-cols-[2rem_minmax(0,1fr)_auto] gap-2 rounded-none border-x-0 border-t-0 px-3 py-3 text-sm last:border-b-0"
             key={block.id}
             onClick={() => {
               onSelectBlock(block.id);
             }}
-            type="button"
+            selected={selectedBlockId === block.id}
+            variant="ghost"
           >
             <span className="vs-muted font-semibold">{block.index.toString()}</span>
             <span className="min-w-0">
@@ -12676,15 +12654,13 @@ function NarrationReviewBlockList({
                 {formatDuration(block.estimatedDurationMs)}
               </span>
             </span>
-            <span
-              className={`h-fit rounded-md border px-2 py-1 text-[0.68rem] font-semibold ${speakModeClass(block.speakMode)}`}
-            >
+            <StatusChip className={`h-fit text-[0.68rem] ${speakModeClass(block.speakMode)}`}>
               {block.speakMode}
-            </span>
-          </button>
+            </StatusChip>
+          </Button>
         ))}
       </div>
-    </section>
+    </Panel>
   );
 }
 
@@ -12696,7 +12672,7 @@ function NarrationSpokenScriptPanel({
   spokenText: string;
 }>) {
   return (
-    <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
+    <Panel className="grid gap-3 p-4" variant="raised">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-base font-semibold">Spoken Script</h3>
@@ -12704,14 +12680,12 @@ function NarrationSpokenScriptPanel({
             {block ? `Block ${block.index.toString()} · ${block.kind}` : "Waiting for source"}
           </p>
         </div>
-        <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-          Listener form
-        </span>
+        <StatusChip tone="success">Listener form</StatusChip>
       </div>
       <p className="max-h-[10rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
         {spokenText}
       </p>
-    </section>
+    </Panel>
   );
 }
 
@@ -13037,17 +13011,12 @@ function AudioPanel({
 
   if (!job) {
     return (
-      <section className="min-w-0 rounded-lg border p-3 shadow-sm vs-raised">
+      <Panel className="p-3 shadow-sm" variant="raised">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold">Audio Player</h2>
-          <button
-            className="h-8 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
-            disabled={!canOpenCinema}
-            onClick={onOpenCinema}
-            type="button"
-          >
+          <Button disabled={!canOpenCinema} onClick={onOpenCinema} size="sm" variant="secondary">
             Cinema
-          </button>
+          </Button>
         </div>
         <div className="mt-3 grid min-h-32 place-items-center rounded-md border border-dashed px-4 py-5 text-center vs-border">
           <div>
@@ -13056,19 +13025,20 @@ function AudioPanel({
               Choose a run mode, then create audio to start buffering playback.
             </p>
             {latestProgress ? (
-              <button
-                className="mt-4 inline-flex h-9 items-center rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
+              <Button
+                className="mt-4"
                 onClick={() => {
                   onResumeProgress(latestProgress);
                 }}
-                type="button"
+                size="sm"
+                variant="soft"
               >
                 Continue Listening · {formatPercentage(latestProgress.progress)}
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
-      </section>
+      </Panel>
     );
   }
 

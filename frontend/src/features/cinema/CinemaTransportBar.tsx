@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button, fieldControlClassName } from "../../design";
 import { READER_PLAYBACK_RATES, READER_SEEK_SECONDS } from "../reader-accessibility";
 import type { CinemaPlaybackState } from "./model";
 
@@ -79,15 +80,16 @@ function PreAudioTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
   return (
     <TransportFooter>
       <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
-        <button
-          className={`cinema-touch-target inline-flex h-14 min-w-44 items-center justify-center gap-2 rounded-md px-5 text-sm font-semibold shadow-lg disabled:opacity-50 ${model.primary.className}`}
+        <Button
+          className={`h-14 min-w-44 gap-2 px-5 shadow-lg ${model.primary.className}`}
           disabled={model.primary.disabled}
           onClick={model.primary.onClick}
-          type="button"
+          size="lg"
+          variant="primary"
         >
           {model.primary.icon}
           {model.primary.label}
-        </button>
+        </Button>
         <TransportStateSummary
           detail={model.stateSummary?.detail ?? "Audio has not been generated for this source yet."}
           title={model.stateSummary?.title ?? "Ready to create audio"}
@@ -119,15 +121,16 @@ function GeneratingTransport({ model }: Readonly<{ model: CinemaTransportModel }
   return (
     <TransportFooter>
       <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
-        <button
-          className={`cinema-touch-target inline-flex h-14 min-w-44 items-center justify-center gap-2 rounded-md px-5 text-sm font-semibold shadow-lg disabled:opacity-50 ${model.primary.className}`}
+        <Button
+          className={`h-14 min-w-44 gap-2 px-5 shadow-lg ${model.primary.className}`}
           disabled={model.primary.disabled}
           onClick={model.primary.onClick}
-          type="button"
+          size="lg"
+          variant="primary"
         >
           {model.primary.icon}
           {model.primary.label}
-        </button>
+        </Button>
         <div className="min-w-0">
           <TransportStateSummary
             detail={
@@ -176,15 +179,16 @@ function DegradedTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
           title={model.stateSummary?.title ?? "Audio needs attention"}
         />
         <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
-          <button
-            className={`cinema-touch-target inline-flex h-12 min-w-36 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold shadow disabled:opacity-50 ${model.primary.className}`}
+          <Button
+            className={`h-12 min-w-36 gap-2 shadow ${model.primary.className}`}
             disabled={model.primary.disabled}
             onClick={model.primary.onClick}
-            type="button"
+            size="lg"
+            variant="primary"
           >
             {model.primary.icon}
             {model.primary.label}
-          </button>
+          </Button>
           {model.mobileMore ? (
             <TextTransportButton
               active={model.mobileMore.active}
@@ -215,48 +219,52 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
     <TransportFooter>
       <div className="hidden items-center gap-4 lg:flex">
         {showRestart ? (
-          <button
+          <Button
             aria-keyshortcuts="Home"
-            className="cinema-touch-target inline-flex h-12 items-center gap-2 rounded-md border px-4 text-sm font-medium transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
+            className="h-12 gap-2"
             disabled={model.restart.disabled}
             onClick={model.restart.onClick}
-            type="button"
+            size="lg"
+            variant="secondary"
           >
             {model.restart.icon}
             {model.restart.label ?? "Restart"}
-          </button>
+          </Button>
         ) : null}
         {showSkipBackward ? (
-          <button
+          <Button
             aria-keyshortcuts="ArrowLeft J"
-            className="cinema-touch-target inline-flex h-12 min-w-16 items-center justify-center gap-1 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
+            className="h-12 min-w-16 gap-1 px-3"
             disabled={model.skipBackward.disabled}
             onClick={model.skipBackward.onClick}
-            type="button"
+            size="md"
+            variant="secondary"
           >
             {model.skipBackward.icon}-{READER_SEEK_SECONDS.toString()}s
-          </button>
+          </Button>
         ) : null}
-        <button
+        <Button
           aria-keyshortcuts="Space K"
-          className={`cinema-touch-target inline-flex h-16 min-w-36 items-center justify-center gap-3 rounded-full px-6 text-base font-semibold shadow-lg disabled:opacity-50 ${model.primary.className}`}
+          className={`h-16 min-w-36 gap-3 rounded-full px-6 text-base shadow-lg ${model.primary.className}`}
           disabled={model.primary.disabled}
           onClick={model.primary.onClick}
-          type="button"
+          size="lg"
+          variant="primary"
         >
           {model.primary.icon}
           {model.primary.label}
-        </button>
+        </Button>
         {showSkipForward ? (
-          <button
+          <Button
             aria-keyshortcuts="ArrowRight L"
-            className="cinema-touch-target inline-flex h-12 min-w-16 items-center justify-center gap-1 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
+            className="h-12 min-w-16 gap-1 px-3"
             disabled={model.skipForward.disabled}
             onClick={model.skipForward.onClick}
-            type="button"
+            size="md"
+            variant="secondary"
           >
             {model.skipForward.icon}+{READER_SEEK_SECONDS.toString()}s
-          </button>
+          </Button>
         ) : null}
         <div className="min-w-0 flex-1">
           {model.progress.waveform}
@@ -267,15 +275,16 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
         </div>
         {showPlaybackRate ? <PlaybackRateSelect model={model} /> : null}
         {showBookmark && model.bookmark ? (
-          <button
+          <Button
             aria-keyshortcuts="B"
-            className="cinema-touch-target h-12 rounded-md border px-4 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
+            className="h-12"
             disabled={model.bookmark.disabled}
             onClick={model.bookmark.onClick}
-            type="button"
+            size="lg"
+            variant="secondary"
           >
             {model.bookmark.label ?? "Bookmark"}
-          </button>
+          </Button>
         ) : null}
         {model.displayControls}
       </div>
@@ -303,16 +312,17 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
           ) : (
             <span aria-hidden="true" />
           )}
-          <button
+          <Button
             aria-keyshortcuts="Space K"
-            className={`cinema-touch-target col-span-2 inline-flex h-16 items-center justify-center gap-3 rounded-md px-4 text-base font-semibold shadow-lg disabled:opacity-50 ${model.primary.className}`}
+            className={`col-span-2 h-16 gap-3 px-4 text-base shadow-lg ${model.primary.className}`}
             disabled={model.primary.disabled}
             onClick={model.primary.onClick}
-            type="button"
+            size="lg"
+            variant="primary"
           >
             {model.primary.icon}
             <span>{primaryMobileLabel}</span>
-          </button>
+          </Button>
           {showSkipForward ? (
             <IconTransportButton
               disabled={model.skipForward.disabled}
@@ -338,15 +348,16 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
         <div className="flex items-center justify-center gap-2">
           {showPlaybackRate ? <PlaybackRateSelect model={model} mobile /> : null}
           {showBookmark && model.bookmark ? (
-            <button
+            <Button
               aria-keyshortcuts="B"
-              className="cinema-touch-target h-11 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
+              className="h-11"
               disabled={model.bookmark.disabled}
               onClick={model.bookmark.onClick}
-              type="button"
+              size="md"
+              variant="secondary"
             >
               {model.bookmark.label ?? "Bookmark"}
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
@@ -388,16 +399,18 @@ function TextTransportButton({
   onClick: () => void;
 }>) {
   return (
-    <button
+    <Button
       aria-controls={ariaControls}
       aria-expanded={active}
       aria-label={label}
-      className="cinema-touch-target inline-flex h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+      className="h-11 gap-2"
       onClick={onClick}
-      type="button"
+      selected={active}
+      size="md"
+      variant="secondary"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -408,9 +421,7 @@ function PlaybackRateSelect({
   return (
     <select
       aria-label="Playback speed"
-      className={`cinema-touch-target rounded-md border bg-[var(--vs-surface)] px-3 text-sm outline-none disabled:opacity-40 vs-border ${
-        mobile ? "h-11 font-medium" : "h-12 font-semibold"
-      }`}
+      className={`${fieldControlClassName} ${mobile ? "h-11 font-medium" : "h-12 font-semibold"}`}
       disabled={model.playbackRate.disabled}
       onChange={(event) => {
         model.playbackRate.onChange?.(Number(event.currentTarget.value));
@@ -442,17 +453,18 @@ function IconTransportButton({
   onClick: () => void;
 }>) {
   return (
-    <button
+    <Button
       aria-controls={ariaControls}
       aria-expanded={ariaExpanded}
-      className="cinema-touch-target grid h-12 place-items-center rounded-md border text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
+      className="grid h-12 place-items-center"
       disabled={disabled}
       onClick={onClick}
-      type="button"
+      size="icon"
+      variant="secondary"
     >
       {children}
       <span className="sr-only">{label}</span>
-    </button>
+    </Button>
   );
 }
 

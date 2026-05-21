@@ -1,3 +1,4 @@
+import { Button, Panel, StatusChip } from "../../design";
 import {
   buildCinemaLayoutState,
   type CinemaInspectorPanelId,
@@ -31,10 +32,7 @@ export function CinemaInspectorDock({
       data-cinema-inspector-mode={mode}
     >
       <div className="grid gap-3">
-        <section
-          className="min-w-0 overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border"
-          data-cinema-inspector-panel={state.activePanel.id}
-        >
+        <Panel className="overflow-hidden" data-cinema-inspector-panel={state.activePanel.id}>
           <div className="border-b p-3 vs-border">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -44,20 +42,18 @@ export function CinemaInspectorDock({
                 <h3 className="mt-1 truncate text-sm font-semibold">{state.activePanel.title}</h3>
                 <p className="mt-1 truncate text-xs vs-muted">{state.activePanel.detail}</p>
               </div>
-              <button
+              <Button
                 aria-pressed={pinned}
-                className={`cinema-touch-target shrink-0 rounded-md border px-2 text-xs font-semibold transition vs-border ${
-                  pinned
-                    ? "bg-orange-500/10 text-orange-600"
-                    : "vs-muted hover:bg-[var(--vs-surface)] hover:text-[var(--vs-text)]"
-                }`}
+                className="shrink-0"
                 onClick={() => {
                   onPinnedPanelChange(pinned ? null : (state.activePanel?.id ?? null));
                 }}
-                type="button"
+                selected={pinned}
+                size="sm"
+                variant={pinned ? "pinned" : "ghost"}
               >
                 {pinned ? "Pinned" : "Pin"}
-              </button>
+              </Button>
             </div>
             {state.availablePanels.length > 1 ? (
               <div className="mt-3 grid gap-1.5">
@@ -65,31 +61,29 @@ export function CinemaInspectorDock({
                   const panelPinned = panel.id === state.pinnedPanelId;
                   const panelActive = panel.id === state.activePanelId && !panelPinned;
                   return (
-                    <button
+                    <Button
+                      align="start"
                       aria-current={panelActive ? "true" : undefined}
-                      className={`cinema-touch-target min-w-0 rounded-md border px-3 py-2 text-left transition vs-border ${
-                        panelActive
-                          ? "border-orange-400 bg-orange-500/10 text-orange-600"
-                          : "hover:bg-[var(--vs-surface)]"
-                      }`}
+                      className="min-w-0 flex-col gap-1 px-3 py-2"
                       key={panel.id}
                       onClick={() => {
                         onActivePanelChange(panel.id);
                       }}
-                      type="button"
+                      selected={panelActive}
+                      variant={panelPinned ? "pinned" : "secondary"}
                     >
                       <span className="flex min-w-0 items-center justify-between gap-2">
                         <span className="min-w-0 truncate text-sm font-semibold">
                           {panel.title}
                         </span>
                         {panelPinned ? (
-                          <span className="shrink-0 rounded border border-orange-400/40 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-normal text-orange-600">
+                          <StatusChip className="py-0.5 text-[0.65rem]" tone="pinned">
                             Pinned
-                          </span>
+                          </StatusChip>
                         ) : null}
                       </span>
                       <span className="mt-1 block truncate text-xs vs-muted">{panel.detail}</span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -98,7 +92,7 @@ export function CinemaInspectorDock({
           <div className="p-3" data-cinema-inspector-body="">
             {state.activePanel.children}
           </div>
-        </section>
+        </Panel>
       </div>
     </aside>
   );

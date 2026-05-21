@@ -228,3 +228,13 @@
 - [x] pnpm e2e:ui-actions
 - [x] pnpm e2e:ui-action-inventory
 - [x] pnpm validate:local
+
+## 2026-05-21 02:55 CEST - Design Token and Component Baseline Consolidation
+- [x] Audit current visual primitives and surface variants
+- [x] Add shared design tokens and component baseline
+- [x] Migrate Studio surfaces to shared primitives
+- [x] Add component inventory documentation and snapshots
+- [x] Restore workspace-flow selection checks to shared component state
+- [x] Remove command palette query reset race
+- [x] Retune CSS bundle budget after token consolidation
+- [x] Run local validation commands

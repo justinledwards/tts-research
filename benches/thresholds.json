@@ -17,7 +17,7 @@
   "frontendBundle": {
     "maxInitialJsRawBytes": 520000,
     "maxInitialJsGzipBytes": 160000,
-    "maxInitialCssGzipBytes": 14000,
+    "maxInitialCssGzipBytes": 15000,
     "maxLargestAsyncAppChunkGzipBytes": 110000,
     "requireDiagramVendorLazy": true,
     "requireBookCinemaMarkdownRendererLazy": true,

@@ -292,10 +292,11 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
           </button>
         </div>
         <input
-          aria-label="Book source files"
           accept={BOOK_SOURCE_ACCEPT}
+          aria-hidden="true"
           className="sr-only"
           ref={inputRef}
+          tabIndex={-1}
           type="file"
           multiple
           onChange={(event) => {
@@ -551,6 +552,20 @@ function BookScopeActionHeader({
   const selectedBookFileLabel = selectedBook.author
     ? `${selectedBook.author} · ${selectedBook.sourceFile}`
     : selectedBook.sourceFile;
+  const isSourceReady = selectedBook.status === "ready";
+  const hasScopeContent = Boolean(scopeContent);
+  const scopeUnavailableReason = isScopeLoading
+    ? "Scope content is loading."
+    : "Scope text is not available.";
+  const sourceUnavailableReason = isSourceReady ? undefined : "Book source is not ready.";
+  const useTextDisabledReason =
+    sourceUnavailableReason ?? (hasScopeContent ? undefined : scopeUnavailableReason);
+  const cinemaDisabledReason =
+    sourceUnavailableReason ?? (isScopeLoading ? scopeUnavailableReason : undefined);
+  const createAudioDisabledReason =
+    sourceUnavailableReason ??
+    (isScopeLoading ? scopeUnavailableReason : undefined) ??
+    (canCreateAudio ? undefined : "Select a ready scope before creating audio.");
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -580,6 +595,7 @@ function BookScopeActionHeader({
         </button>
         <button
           className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+          data-disabled-reason={useTextDisabledReason}
           disabled={selectedBook.status !== "ready" || isScopeLoading || !scopeContent}
           onClick={() => {
             onUseText(selectedBook, scope);
@@ -590,6 +606,7 @@ function BookScopeActionHeader({
         </button>
         <button
           className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 disabled:opacity-50"
+          data-disabled-reason={cinemaDisabledReason}
           disabled={selectedBook.status !== "ready" || isScopeLoading}
           onClick={onOpenCinema}
           type="button"
@@ -598,6 +615,7 @@ function BookScopeActionHeader({
         </button>
         <button
           className="h-8 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          data-disabled-reason={createAudioDisabledReason}
           disabled={!canCreateAudio || selectedBook.status !== "ready" || isScopeLoading}
           onClick={() => {
             onCreateAudio(selectedBook, scope);
@@ -1667,7 +1685,7 @@ function BookCinemaSourceLibrary({
         </button>
         <input
           accept={BOOK_SOURCE_ACCEPT}
-          aria-label="Cinema source files"
+          aria-hidden="true"
           className="sr-only"
           multiple
           onChange={(event) => {
@@ -1678,6 +1696,7 @@ function BookCinemaSourceLibrary({
             }
           }}
           ref={inputRef}
+          tabIndex={-1}
           type="file"
         />
       </div>

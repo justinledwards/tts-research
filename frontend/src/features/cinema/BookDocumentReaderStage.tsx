@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
+import { Button } from "../../design";
 import { MarkdownRenderer } from "../../MarkdownRenderer";
 import { bookScopeLabel, bookSourceName, type BookCinemaTextSize } from "../book-cinema/model";
 import {
@@ -137,14 +138,15 @@ function BookDocumentTextButton({
   onClick,
 }: Readonly<{ children: ReactNode; label: string; onClick: () => void }>) {
   return (
-    <button
+    <Button
       aria-label={label}
-      className="cinema-touch-target grid place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
+      className="grid place-items-center text-lg font-medium"
       onClick={onClick}
-      type="button"
+      size="icon"
+      variant="ghost"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

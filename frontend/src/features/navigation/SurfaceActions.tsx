@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button } from "../../design";
 
 export function SurfaceActionButton({
   children,
@@ -16,16 +17,17 @@ export function SurfaceActionButton({
   title?: string;
 }>) {
   return (
-    <button
+    <Button
       aria-label={label}
-      className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised ${className}`}
+      className={className}
       onClick={onClick}
+      size="md"
       title={title ?? label}
-      type="button"
+      variant="secondary"
     >
       {icon}
       {children}
-    </button>
+    </Button>
   );
 }
 

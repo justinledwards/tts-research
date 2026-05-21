@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button, Panel } from "../../design";
 
 export interface CinemaMobilePanelSpec<TPanelId extends string = string> {
   children: ReactNode;
@@ -43,31 +44,29 @@ export function CinemaMobileSheet<TPanelId extends string>({
         style={{ gridTemplateColumns: `repeat(${panels.length.toString()}, minmax(0, 1fr))` }}
       >
         {panels.map((panel) => (
-          <button
-            className={`cinema-touch-target flex items-center justify-center gap-2 border-b-2 px-2 pb-3 ${
-              activePanel.id === panel.id
-                ? "border-orange-500 text-orange-500"
-                : "border-transparent vs-muted"
-            }`}
+          <Button
+            className="gap-2 rounded-none border-x-0 border-t-0 px-2 pb-3 shadow-none"
             key={panel.id}
             onClick={() => {
               onPanelChange(panel.id);
             }}
-            type="button"
+            selected={activePanel.id === panel.id}
+            variant="ghost"
           >
             {panel.icon}
             {panel.label}
-          </button>
+          </Button>
         ))}
       </div>
       {displayControls ? (
-        <section
+        <Panel
           aria-label="Display controls"
-          className="mb-4 rounded-md border bg-[var(--vs-surface)] p-3 vs-border"
+          className="mb-4 p-3"
           data-cinema-mobile-display-controls=""
+          variant="surface"
         >
           {displayControls}
-        </section>
+        </Panel>
       ) : null}
       {activePanel.children}
     </section>

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button, Panel, StatusChip } from "../../design";
 import type { ReviewPane } from "./model";
 
 export interface ReviewPaneItem {
@@ -22,19 +23,20 @@ export function ReviewPaneAccordion({
       {panes.map((pane) => {
         const isActive = pane.id === activePane;
         return (
-          <section
-            className={`overflow-hidden rounded-lg border vs-border ${
-              isActive ? "bg-[var(--vs-raised)] shadow-sm" : "bg-[var(--vs-surface)]"
-            }`}
+          <Panel
+            className="overflow-hidden"
             key={pane.id}
+            variant={isActive ? "raised" : "surface"}
           >
-            <button
+            <Button
+              align="start"
               aria-expanded={isActive}
-              className="flex min-h-12 w-full min-w-0 items-center justify-between gap-3 px-3 py-2 text-left"
+              className="w-full min-w-0 justify-between rounded-none border-0 px-3 py-2 shadow-none"
               onClick={() => {
                 onActivePaneChange(pane.id);
               }}
-              type="button"
+              selected={isActive}
+              variant="ghost"
             >
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold text-[var(--vs-text)]">
@@ -42,12 +44,12 @@ export function ReviewPaneAccordion({
                 </span>
                 <span className="mt-0.5 block truncate text-xs vs-muted">{pane.detail}</span>
               </span>
-              <span className="shrink-0 text-xs font-semibold text-orange-700">
+              <StatusChip tone={isActive ? "accent" : "neutral"}>
                 {isActive ? "Active" : "Open"}
-              </span>
-            </button>
+              </StatusChip>
+            </Button>
             {isActive ? <div className="border-t p-3 vs-border">{pane.children}</div> : null}
-          </section>
+          </Panel>
         );
       })}
     </div>

@@ -3,6 +3,7 @@ import { describePerformanceMode } from "./runConfig";
 import type { VoiceJob, VoiceProject } from "./types";
 import type { WorkspaceLayoutMode } from "./features/workspace/model";
 import { CommandIcon, HelpIcon, SettingsIcon } from "./features/navigation/SurfaceActions";
+import { Button, SegmentedControl, StatusChip } from "./design";
 
 export type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 export type StudioMode = "narration" | "voiceCloning";
@@ -72,14 +73,9 @@ export function TopProductBar({
   return (
     <header className="vs-raised grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 lg:grid-cols-[minmax(205px,auto)_minmax(330px,0.9fr)_auto] lg:px-4">
       <div className="flex min-w-0 items-center gap-2.5">
-        <button
-          aria-label="Open workspace"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-transparent transition hover:border-[var(--vs-border)] hover:bg-[var(--vs-surface)]"
-          onClick={onWorkspaceOpen}
-          type="button"
-        >
+        <Button aria-label="Open workspace" onClick={onWorkspaceOpen} size="icon" variant="ghost">
           <MenuIcon />
-        </button>
+        </Button>
         <div className="min-w-0 md:shrink-0">
           <h1 className="truncate text-sm font-semibold tracking-normal sm:text-xl md:whitespace-nowrap">
             Voice Studio
@@ -88,16 +84,18 @@ export function TopProductBar({
             Reading studio · {describePerformanceMode(runConfiguration.performanceMode)}
           </p>
         </div>
-        <button
-          className="hidden h-10 shrink-0 grid-cols-[auto_auto] items-center gap-2 rounded-md border px-3 text-left text-xs font-semibold transition hover:border-orange-200 hover:bg-orange-50 vs-raised xl:grid"
+        <Button
+          align="start"
+          className="hidden grid-cols-[auto_auto] items-center gap-2 xl:grid"
           onClick={onWorkspaceOpen}
-          type="button"
+          size="md"
+          variant="secondary"
         >
           <span>Workspace</span>
-          <span className="rounded-full border px-2 py-0.5 text-[0.65rem] capitalize vs-border vs-muted">
+          <StatusChip className="rounded-full py-0.5 text-[0.65rem] capitalize">
             {requestState}
-          </span>
-        </button>
+          </StatusChip>
+        </Button>
       </div>
       <div className="hidden min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 vs-surface lg:flex">
         <label className="grid min-w-0 flex-1 gap-0.5">
@@ -149,97 +147,74 @@ export function TopProductBar({
         </label>
       </div>
       <div className="hidden min-w-0 items-center justify-end gap-1.5 md:flex">
-        <div className="grid min-w-[210px] grid-cols-2 rounded-md border p-1 text-xs font-semibold shadow-sm vs-border vs-surface">
-          {(
-            [
-              ["narration", "Narration"],
-              ["voiceCloning", "Voice Cloning"],
-            ] as const
-          ).map(([mode, label]) => (
-            <button
-              className={`h-8 whitespace-nowrap rounded px-3 transition ${
-                studioMode === mode
-                  ? "bg-orange-500 text-white shadow-sm"
-                  : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-              }`}
-              key={mode}
-              onClick={() => {
-                onStudioModeChange(mode);
-              }}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="hidden min-w-[210px] grid-cols-3 rounded-md border p-1 text-xs font-semibold shadow-sm vs-border vs-surface xl:grid">
-          {(
-            [
-              ["focus", "Focus"],
-              ["balanced", "Balanced"],
-              ["full", "Full"],
-            ] as const
-          ).map(([mode, label]) => (
-            <button
-              aria-label={`${label} workspace layout`}
-              className={`h-8 whitespace-nowrap rounded px-2 transition ${
-                workspaceLayoutMode === mode
-                  ? "bg-orange-500 text-white shadow-sm"
-                  : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-              }`}
-              key={mode}
-              onClick={() => {
-                onWorkspaceLayoutModeChange(mode);
-              }}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <button
+        <SegmentedControl
+          ariaLabel="Studio mode"
+          className="min-w-[230px]"
+          options={[
+            { label: "Narration", value: "narration" },
+            { label: "Voice Cloning", value: "voiceCloning" },
+          ]}
+          value={studioMode}
+          onChange={onStudioModeChange}
+        />
+        <SegmentedControl
+          ariaLabel="Workspace layout"
+          className="hidden min-w-[230px] xl:grid"
+          columns={3}
+          options={[
+            { ariaLabel: "Focus workspace layout", label: "Focus", value: "focus" },
+            { ariaLabel: "Balanced workspace layout", label: "Balanced", value: "balanced" },
+            { ariaLabel: "Full workspace layout", label: "Full", value: "full" },
+          ]}
+          value={workspaceLayoutMode}
+          onChange={onWorkspaceLayoutModeChange}
+        />
+        <Button
           aria-label="Open command palette"
-          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-semibold shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised"
+          className="gap-2"
           onClick={onCommandPaletteOpen}
+          size="md"
           title="Actions (Ctrl/⌘ K)"
-          type="button"
+          variant="secondary"
         >
           <CommandIcon />
           <span className="hidden xl:inline">Actions</span>
-        </button>
-        <button
+        </Button>
+        <Button
           aria-label="Open help"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-sm font-semibold shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised"
           onClick={onHelpOpen}
+          size="icon"
           title="Open help"
-          type="button"
+          variant="secondary"
         >
           <HelpIcon />
-        </button>
-        <button
+        </Button>
+        <Button
           aria-label="Open settings"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-sm font-semibold shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised"
           onClick={onSettingsOpen}
+          size="icon"
           title="Settings"
-          type="button"
+          variant="secondary"
         >
           <SettingsIcon />
-        </button>
+        </Button>
         <div className="hidden h-10 shrink-0 overflow-hidden rounded-md border text-sm font-semibold shadow-sm vs-raised xl:inline-flex">
-          <button
-            className="px-3 transition hover:bg-orange-50"
+          <Button
+            className="rounded-none border-0 shadow-none"
             onClick={onImportOpen}
-            type="button"
+            size="md"
+            variant="ghost"
           >
             Import
-          </button>
-          <button
-            className="border-l border-zinc-200 px-3 transition hover:bg-orange-50"
+          </Button>
+          <Button
+            className="rounded-none border-y-0 border-r-0 shadow-none"
             onClick={onExportOpen}
-            type="button"
+            size="md"
+            variant="ghost"
           >
             Export
-          </button>
+          </Button>
         </div>
         <TopProductBarPrimaryAction
           activeJobId={activeJobId}
@@ -252,40 +227,43 @@ export function TopProductBar({
         />
       </div>
       <div className="flex items-center gap-1.5 md:hidden">
-        <button
-          className="grid h-10 place-items-center rounded-md border px-2 text-xs font-semibold text-orange-600 vs-border vs-raised"
+        <Button
+          className="px-2 text-orange-600"
           onClick={() => {
             onStudioModeChange(studioMode === "narration" ? "voiceCloning" : "narration");
           }}
-          type="button"
+          size="sm"
+          variant="secondary"
         >
           {studioMode === "narration" ? "Narration" : "Cloning"}
-        </button>
-        <button
+        </Button>
+        <Button
           aria-label="Open command palette"
-          className="grid h-10 w-10 place-items-center rounded-md border text-orange-600 vs-border vs-raised"
+          className="text-orange-600"
           onClick={onCommandPaletteOpen}
-          type="button"
+          size="icon"
+          variant="secondary"
         >
           <CommandIcon />
-        </button>
-        <button
+        </Button>
+        <Button
           aria-label="Open settings"
-          className="grid h-10 w-10 place-items-center rounded-md border text-orange-600 vs-border vs-raised"
+          className="text-orange-600"
           onClick={onSettingsOpen}
-          type="button"
+          size="icon"
+          variant="secondary"
         >
           <SettingsIcon />
-        </button>
+        </Button>
         {showSubmitAction ? (
-          <button
-            className="inline-flex h-10 items-center rounded-md bg-orange-500 px-3 text-xs font-semibold text-white disabled:bg-zinc-300"
+          <Button
             disabled={!canSubmit || isProcessing}
             onClick={onSubmit}
-            type="button"
+            size="sm"
+            variant="primary"
           >
             Run
-          </button>
+          </Button>
         ) : null}
       </div>
     </header>
@@ -311,15 +289,16 @@ function TopProductBarPrimaryAction({
 }>) {
   if (isProcessing) {
     return (
-      <button
-        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+      <Button
+        className="gap-2"
         disabled={!activeJobId}
         onClick={onCancel}
-        type="button"
+        size="md"
+        variant="destructive"
       >
         <StopIcon />
         Cancel Job
-      </button>
+      </Button>
     );
   }
 
@@ -328,14 +307,15 @@ function TopProductBarPrimaryAction({
   }
 
   return (
-    <button
-      className="inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-md px-3 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none vs-accent-bg hover:brightness-95"
+    <Button
+      className="whitespace-nowrap"
       disabled={!canSubmit}
       onClick={onSubmit}
-      type="button"
+      size="md"
+      variant="primary"
     >
       {label}
-    </button>
+    </Button>
   );
 }
 
