@@ -19,6 +19,7 @@ import {
 import { RunConfigurationWizard } from "../run-config/RunConfigurationWizard";
 import { applyRunEngineSelection } from "../run-config/runConfigSteps";
 import { SpeechPolicyWizard } from "../speech-policy/SpeechPolicyWizard";
+import { ShortcutSettings, type ShortcutPreferences } from "./shortcutSettings";
 import {
   SpeechPolicyControls,
   SourcePolicyPinEditor,
@@ -132,6 +133,7 @@ export function SettingsPanel({
   speechPolicyOverrides,
   speechPolicyProfile,
   speechPolicyProfiles,
+  shortcutPreferences,
   teleprompterSettings,
   themeName,
   ttsEngineError,
@@ -150,6 +152,8 @@ export function SettingsPanel({
   onRunConfigurationChange,
   onSaveBookSourcePolicy,
   onSavePreparedSourcePolicy,
+  onShortcutPreferencesChange,
+  onShortcutPreferencesReset,
   onSpeechPolicyOverridesChange,
   onSpeechPolicyProfileChange,
   onSubmit,
@@ -182,6 +186,7 @@ export function SettingsPanel({
   speechPolicyOverrides: SpeechPolicyOverrides;
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
+  shortcutPreferences: ShortcutPreferences;
   teleprompterSettings: TeleprompterHighlightSettings;
   themeName: ThemeName;
   ttsEngineError: string | null;
@@ -210,6 +215,8 @@ export function SettingsPanel({
     sourceId: string,
     request: SourceSpeechPolicyUpdateRequest,
   ) => Promise<void>;
+  onShortcutPreferencesChange: (preferences: ShortcutPreferences) => void;
+  onShortcutPreferencesReset: () => void;
   onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onSubmit: () => void;
@@ -317,12 +324,15 @@ export function SettingsPanel({
               highlightedCommandToken={highlightedCommandToken}
               readerAccessibilitySettings={readerAccessibilitySettings}
               runConfiguration={runConfiguration}
+              shortcutPreferences={shortcutPreferences}
               teleprompterSettings={teleprompterSettings}
               themeName={themeName}
               uiMemory={uiMemory}
               onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
               onRememberLayoutChange={onRememberLayoutChange}
               onResetUiMemory={onResetUiMemory}
+              onShortcutPreferencesChange={onShortcutPreferencesChange}
+              onShortcutPreferencesReset={onShortcutPreferencesReset}
               onTeleprompterSettingsChange={onTeleprompterSettingsChange}
               onThemeChange={onThemeChange}
             />
@@ -747,24 +757,30 @@ function ReaderSettingsGroup({
   highlightedCommandToken,
   readerAccessibilitySettings,
   runConfiguration,
+  shortcutPreferences,
   teleprompterSettings,
   themeName,
   uiMemory,
   onReaderAccessibilitySettingsChange,
   onRememberLayoutChange,
   onResetUiMemory,
+  onShortcutPreferencesChange,
+  onShortcutPreferencesReset,
   onTeleprompterSettingsChange,
   onThemeChange,
 }: Readonly<{
   highlightedCommandToken: string | null;
   readerAccessibilitySettings: ReaderAccessibilitySettings;
   runConfiguration: RunConfiguration;
+  shortcutPreferences: ShortcutPreferences;
   teleprompterSettings: TeleprompterHighlightSettings;
   themeName: ThemeName;
   uiMemory: UiMemoryState;
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onRememberLayoutChange: (rememberLayout: boolean) => void;
   onResetUiMemory: () => void;
+  onShortcutPreferencesChange: (preferences: ShortcutPreferences) => void;
+  onShortcutPreferencesReset: () => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
@@ -774,6 +790,7 @@ function ReaderSettingsGroup({
         "group-reader",
         "field-readerPreferences",
         "field-uiMemory",
+        "field-shortcuts",
         "scope-machine",
       ]}
       highlightedCommandToken={highlightedCommandToken}
@@ -797,6 +814,11 @@ function ReaderSettingsGroup({
         rememberLayout={uiMemory.rememberLayout}
         onRememberLayoutChange={onRememberLayoutChange}
         onResetUiMemory={onResetUiMemory}
+      />
+      <ShortcutSettings
+        preferences={shortcutPreferences}
+        onChange={onShortcutPreferencesChange}
+        onReset={onShortcutPreferencesReset}
       />
       <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
         <summary className="cursor-pointer text-sm font-semibold">

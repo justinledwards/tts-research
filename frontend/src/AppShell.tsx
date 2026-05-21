@@ -2,7 +2,7 @@ import type { RunConfiguration } from "./runConfig";
 import { describePerformanceMode } from "./runConfig";
 import type { VoiceJob, VoiceProject } from "./types";
 import type { WorkspaceLayoutMode } from "./features/workspace/model";
-import { CommandIcon, HelpIcon, SettingsIcon } from "./features/navigation/SurfaceActions";
+import { CommandIcon, SettingsIcon } from "./features/navigation/SurfaceActions";
 import { Button, SegmentedControl, StatusChip } from "./design";
 
 export type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
@@ -12,6 +12,7 @@ export function TopProductBar({
   activeJobId,
   activeProjectId,
   canSubmit,
+  commandPaletteShortcutLabel,
   isProcessing,
   jobName,
   job,
@@ -20,13 +21,13 @@ export function TopProductBar({
   projects,
   requestState,
   runConfiguration,
+  settingsShortcutLabel,
   showSubmitAction = true,
   studioMode,
   workspaceLayoutMode,
   onCancel,
   onCommandPaletteOpen,
   onExportOpen,
-  onHelpOpen,
   onImportOpen,
   onJobSelect,
   onProjectSelect,
@@ -39,6 +40,7 @@ export function TopProductBar({
   activeJobId: string | null;
   activeProjectId: string;
   canSubmit: boolean;
+  commandPaletteShortcutLabel: string;
   isProcessing: boolean;
   jobName: string;
   job: VoiceJob | null;
@@ -47,13 +49,13 @@ export function TopProductBar({
   projects: VoiceProject[];
   requestState: RequestState;
   runConfiguration: RunConfiguration;
+  settingsShortcutLabel: string;
   showSubmitAction?: boolean;
   studioMode: StudioMode;
   workspaceLayoutMode: WorkspaceLayoutMode;
   onCancel: () => void;
   onCommandPaletteOpen: () => void;
   onExportOpen: () => void;
-  onHelpOpen: () => void;
   onImportOpen: () => void;
   onJobSelect: (jobId: string) => void;
   onProjectSelect: (projectId: string) => void;
@@ -172,28 +174,21 @@ export function TopProductBar({
         <Button
           aria-label="Open command palette"
           className="gap-2"
+          data-testid="ui-action-command-palette-open"
           onClick={onCommandPaletteOpen}
           size="md"
-          title="Actions (Ctrl/⌘ K)"
+          title={`Actions (${commandPaletteShortcutLabel})`}
           variant="secondary"
         >
           <CommandIcon />
           <span className="hidden xl:inline">Actions</span>
         </Button>
         <Button
-          aria-label="Open help"
-          onClick={onHelpOpen}
-          size="icon"
-          title="Open help"
-          variant="secondary"
-        >
-          <HelpIcon />
-        </Button>
-        <Button
           aria-label="Open settings"
+          data-testid="ui-action-settings-open"
           onClick={onSettingsOpen}
           size="icon"
-          title="Settings"
+          title={`Settings (${settingsShortcutLabel})`}
           variant="secondary"
         >
           <SettingsIcon />
@@ -240,8 +235,10 @@ export function TopProductBar({
         <Button
           aria-label="Open command palette"
           className="text-orange-600"
+          data-testid="ui-action-command-palette-open"
           onClick={onCommandPaletteOpen}
           size="icon"
+          title={`Actions (${commandPaletteShortcutLabel})`}
           variant="secondary"
         >
           <CommandIcon />
@@ -249,8 +246,10 @@ export function TopProductBar({
         <Button
           aria-label="Open settings"
           className="text-orange-600"
+          data-testid="ui-action-settings-open"
           onClick={onSettingsOpen}
           size="icon"
+          title={`Settings (${settingsShortcutLabel})`}
           variant="secondary"
         >
           <SettingsIcon />

@@ -11,6 +11,7 @@ describe("HelpPanel", () => {
   it("renders compact contextual anchors instead of a long pipeline guide", () => {
     const markup = renderToStaticMarkup(
       <HelpPanel
+        commandPaletteShortcutLabel="Ctrl+K / Cmd+K"
         context={{
           activeCinema: null,
           runConfiguration: createRunConfiguration("checkedMaster"),
@@ -23,11 +24,13 @@ describe("HelpPanel", () => {
         profileSource={null}
         profileSourceDiagnostics={null}
         selectedProfile={null}
+        shortcutCheatSheetLabel="?"
         onClose={noop}
       />,
     );
 
     expect(markup).toContain("Context Guide");
+    expect(markup).toContain("Fast access");
     expect(markup).toContain("Workflow anchors");
     expect(markup).toContain("Intake");
     expect(markup).toContain("Review");

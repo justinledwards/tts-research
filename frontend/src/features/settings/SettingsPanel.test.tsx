@@ -5,6 +5,7 @@ import { createRunConfiguration } from "../../runConfig";
 import { DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS } from "../../teleprompter";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
 import { defaultUiMemoryState } from "../preferences";
+import { DEFAULT_SHORTCUT_PREFERENCES } from "../shortcuts/shortcutRegistry";
 import { SettingsPanel } from "./SettingsPanel";
 
 const noop = () => {
@@ -43,6 +44,7 @@ describe("SettingsPanel", () => {
         speechPolicyOverrides={{}}
         speechPolicyProfile="Enterprise"
         speechPolicyProfiles={DEFAULT_SPEECH_POLICY_DEFINITION.profiles}
+        shortcutPreferences={DEFAULT_SHORTCUT_PREFERENCES}
         teleprompterSettings={DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS}
         themeName="light"
         ttsEngineError={null}
@@ -61,6 +63,8 @@ describe("SettingsPanel", () => {
         onRunConfigurationChange={noop}
         onSaveBookSourcePolicy={asyncNoop}
         onSavePreparedSourcePolicy={asyncNoop}
+        onShortcutPreferencesChange={noop}
+        onShortcutPreferencesReset={noop}
         onSpeechPolicyOverridesChange={noop}
         onSpeechPolicyProfileChange={noop}
         onSubmit={noop}

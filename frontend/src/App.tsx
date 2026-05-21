@@ -256,7 +256,17 @@ import type {
   SettingsCommandTarget,
   WorkspaceCommandTarget,
 } from "./features/navigation/commands";
-import type { CommandEntry, CommandMetadata } from "./features/navigation/model";
+import type { CommandEntry, CommandMetadata } from "./features/command-palette/commandRegistry";
+import type { CommandPaletteView } from "./features/command-palette/CommandPalette";
+import {
+  loadShortcutPreferences,
+  resetShortcutPreferences,
+  resolveGlobalShortcutCommand,
+  saveShortcutPreferences,
+  shortcutLabelForCommand,
+  shouldIgnoreGlobalShortcutTarget,
+  type ShortcutPreferences,
+} from "./features/shortcuts/shortcutRegistry";
 import {
   humanizeProfileTargetProblem,
   isVoiceProfileTargetReadyForEngine,
@@ -320,7 +330,7 @@ const WebsiteCinemaOverlay = lazy(() =>
   })),
 );
 const CommandPalette = lazy(() =>
-  import("./features/navigation/CommandPalette").then((module) => ({
+  import("./features/command-palette/CommandPalette").then((module) => ({
     default: module.CommandPalette,
   })),
 );
@@ -396,24 +406,6 @@ interface CommandRecentData {
 interface CommandWayfindingState {
   bookmarks: CommandBookmarkData[];
   recentPositions: CommandRecentData[];
-}
-
-function isCommandPaletteShortcut(event: KeyboardEvent): boolean {
-  return event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey) && !event.shiftKey;
-}
-
-function shouldIgnoreCommandShortcutTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-  const tagName = target.tagName.toLowerCase();
-  return (
-    target.isContentEditable ||
-    tagName === "input" ||
-    tagName === "select" ||
-    tagName === "textarea" ||
-    Boolean(target.closest("[data-command-palette-ignore-shortcuts]"))
-  );
 }
 
 function LazySurfaceFallback({
@@ -2638,6 +2630,10 @@ export function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [commandPaletteView, setCommandPaletteView] = useState<CommandPaletteView>("commands");
+  const [shortcutPreferences, setShortcutPreferences] = useState<ShortcutPreferences>(() =>
+    loadShortcutPreferences(),
+  );
   const [settingsCommandTarget, setSettingsCommandTarget] = useState<SettingsCommandTarget | null>(
     null,
   );
@@ -2654,30 +2650,27 @@ export function App() {
     document: null,
     website: null,
   });
-  const openCommandPalette = useCallback(() => {
+  const openCommandPalette = useCallback((view: CommandPaletteView = "commands") => {
+    setCommandPaletteView(view);
     setIsCommandPaletteOpen(true);
   }, []);
   const closeCommandPalette = useCallback(() => {
     setIsCommandPaletteOpen(false);
   }, []);
+  const openShortcutCheatSheet = useCallback(() => {
+    openCommandPalette("shortcuts");
+  }, [openCommandPalette]);
+  const openShortcutSettings = useCallback(() => {
+    closeCommandPalette();
+    setSettingsCommandTarget({ fieldId: "shortcuts", groupId: "reader", scope: "machine" });
+    setIsSettingsOpen(true);
+  }, [closeCommandPalette]);
+  const createAndListenFromCurrentSourceRef = useRef<() => void>(() => {
+    return;
+  });
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && isCommandPaletteOpen) {
-        event.preventDefault();
-        closeCommandPalette();
-        return;
-      }
-      if (!isCommandPaletteShortcut(event) || shouldIgnoreCommandShortcutTarget(event.target)) {
-        return;
-      }
-      event.preventDefault();
-      openCommandPalette();
-    };
-    globalThis.addEventListener("keydown", handleKeyDown);
-    return () => {
-      globalThis.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [closeCommandPalette, isCommandPaletteOpen, openCommandPalette]);
+    saveShortcutPreferences(shortcutPreferences);
+  }, [shortcutPreferences]);
   useEffect(() => {
     if (!isCommandPaletteOpen || commandMetadata) {
       return;
@@ -5797,6 +5790,63 @@ export function App() {
     }
     void submitVoiceJob();
   }
+  createAndListenFromCurrentSourceRef.current = createAndListenFromCurrentSource;
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && isCommandPaletteOpen) {
+        event.preventDefault();
+        closeCommandPalette();
+        return;
+      }
+      const shortcutCommand = resolveGlobalShortcutCommand(event, shortcutPreferences);
+      if (
+        !shortcutCommand ||
+        (shortcutCommand === "command.palette"
+          ? !isCommandPaletteOpen && shouldIgnoreGlobalShortcutTarget(event.target)
+          : shouldIgnoreGlobalShortcutTarget(event.target))
+      ) {
+        return;
+      }
+      event.preventDefault();
+      if (shortcutCommand === "command.palette") {
+        if (isCommandPaletteOpen) {
+          closeCommandPalette();
+          return;
+        }
+        openCommandPalette("commands");
+        return;
+      }
+      if (shortcutCommand === "shortcut.cheatsheet") {
+        openShortcutCheatSheet();
+        return;
+      }
+      if (shortcutCommand === "settings.open") {
+        setSettingsCommandTarget(null);
+        setIsSettingsOpen(true);
+        return;
+      }
+      if (shortcutCommand === "help.open") {
+        setHelpCommandTarget(null);
+        setIsHelpOpen(true);
+        return;
+      }
+      if (shortcutCommand === "playback.createListen" && canCreateCurrentSource) {
+        createAndListenFromCurrentSourceRef.current();
+      }
+    };
+    globalThis.addEventListener("keydown", handleKeyDown);
+    return () => {
+      globalThis.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [
+    canCreateCurrentSource,
+    closeCommandPalette,
+    isCommandPaletteOpen,
+    openCommandPalette,
+    openShortcutCheatSheet,
+    shortcutPreferences,
+  ]);
 
   const studioJobName = getStudioJobName(job);
   const studioProjectName = activeProject?.name ?? DEFAULT_PROJECT_NAME;
@@ -5887,6 +5937,7 @@ export function App() {
   }, [commandBookmarkProgress, isCommandPaletteOpen, projectProgress, readerNavigationLabels]);
   const coreCommandEntries: CommandEntry[] = [
     {
+      category: "Navigation",
       detail: "Open the project library and current chapter context.",
       id: "workspace:open",
       keywords: ["drawer", "project", "library"],
@@ -5897,6 +5948,7 @@ export function App() {
       title: "Open workspace",
     },
     {
+      category: "Settings",
       detail: "Open Studio Settings.",
       id: "settings:open",
       keywords: ["configuration", "preferences"],
@@ -5905,9 +5957,23 @@ export function App() {
         setIsSettingsOpen(true);
       },
       section: "Settings",
+      shortcutCommandId: "settings.open",
       title: "Open settings",
     },
     {
+      category: "Settings",
+      detail: "Show available keyboard shortcuts and customization entry.",
+      id: "shortcuts:open",
+      keywords: ["keyboard", "hotkey", "cheat sheet"],
+      perform: () => {
+        openShortcutCheatSheet();
+      },
+      section: "Settings",
+      shortcutCommandId: "shortcut.cheatsheet",
+      title: "Open shortcut cheat sheet",
+    },
+    {
+      category: "Diagnostics",
       detail: "Open contextual workflow help.",
       id: "help:open",
       keywords: ["guide", "support", "workflow"],
@@ -5916,9 +5982,11 @@ export function App() {
         setIsHelpOpen(true);
       },
       section: "Help",
+      shortcutCommandId: "help.open",
       title: "Open help",
     },
     {
+      category: "Playback",
       detail: "Create audio from the current draft, book, or prepared source.",
       disabled: !canCreateCurrentSource,
       disabledReason: canCreateCurrentSource
@@ -5930,9 +5998,11 @@ export function App() {
         createAndListenFromCurrentSource();
       },
       section: "Playback",
+      shortcutCommandId: "playback.createListen",
       title: workspaceStageActionLabel("createAndListen"),
     },
     {
+      category: "Teleprompt",
       detail: "Follow the current script inline with preserved context.",
       id: "workspace:teleprompt",
       keywords: ["script", "read", "stage"],
@@ -5955,6 +6025,7 @@ export function App() {
         }
         setWorkspaceLayoutMode(metadata.target.layoutMode);
       },
+      category: metadata.category,
       section: metadata.section,
       title: metadata.title,
     }),
@@ -5969,6 +6040,7 @@ export function App() {
         setSettingsCommandTarget(metadata.target);
         setIsSettingsOpen(true);
       },
+      category: metadata.category,
       section: metadata.section,
       title: metadata.title,
     }),
@@ -5981,6 +6053,7 @@ export function App() {
       setHelpCommandTarget(metadata.target);
       setIsHelpOpen(true);
     },
+    category: metadata.category,
     section: metadata.section,
     title: metadata.title,
   }));
@@ -5998,11 +6071,13 @@ export function App() {
           setCinemaFocusModeFromCommand(activeCinemaSurfaceKind, metadata.target.mode);
         }
       },
+      category: metadata.category,
       section: metadata.section,
       title: metadata.title,
     }),
   );
   const projectCommandEntries = projects.map<CommandEntry>((project) => ({
+    category: "Project",
     detail: project.id === activeProjectId ? "Current project" : "Switch active project.",
     disabled: project.id === activeProjectId,
     disabledReason: project.id === activeProjectId ? "Already selected." : undefined,
@@ -6017,6 +6092,7 @@ export function App() {
     title: `Switch project: ${project.name}`,
   }));
   const draftSourceCommand: CommandEntry = {
+    category: "Source",
     detail: "Return to draft text intake.",
     id: "source:text",
     keywords: ["draft", "text", "source"],
@@ -6032,6 +6108,7 @@ export function App() {
     const isReady = book.status === "ready";
     const label = bookSourceName(book);
     return {
+      category: "Source",
       detail: isReady
         ? "Use this book source in Review."
         : (book.error ?? "Book source is still preparing."),
@@ -6052,6 +6129,7 @@ export function App() {
     const disabledReason = isReady ? undefined : (source.error ?? "Prepared source is not ready.");
     return [
       {
+        category: "Source",
         detail: "Use this prepared source in Review.",
         disabled: !isReady,
         disabledReason,
@@ -6064,6 +6142,7 @@ export function App() {
         title: `Use source: ${label}`,
       },
       {
+        category: "Source",
         detail: preparedSourceCinemaActionLabel(source),
         disabled: !isReady,
         disabledReason,
@@ -6078,6 +6157,7 @@ export function App() {
     ];
   });
   const openCurrentCinemaCommand: CommandEntry = {
+    category: "Playback",
     detail: "Open the current narration or selected book in Cinema.",
     disabled: !canOpenCurrentCinema,
     disabledReason: canOpenCurrentCinema ? undefined : "Create audio or select a ready book first.",
@@ -6096,6 +6176,7 @@ export function App() {
     bookmarkDisabledReason = "Create audio before saving bookmarks.";
   }
   const bookmarkCurrentCommand: CommandEntry = {
+    category: "Review",
     detail: "Save the current reader position as a bookmark.",
     disabled: Boolean(bookmarkDisabledReason),
     disabledReason: bookmarkDisabledReason,
@@ -6109,6 +6190,7 @@ export function App() {
     title: "Bookmark current position",
   };
   const bookmarkCommandEntries = commandWayfinding.bookmarks.map<CommandEntry>((bookmark) => ({
+    category: "Review",
     detail: bookmark.detail,
     id: bookmark.id,
     keywords: bookmark.keywords,
@@ -6119,6 +6201,7 @@ export function App() {
     title: `Bookmark: ${bookmark.label}`,
   }));
   const recentCommandEntries = commandWayfinding.recentPositions.map<CommandEntry>((recent) => ({
+    category: "Navigation",
     detail: recent.detail,
     id: recent.id,
     keywords: recent.keywords,
@@ -6153,6 +6236,9 @@ export function App() {
         activeJobId={activeJobId}
         activeProjectId={activeProjectId}
         canSubmit={canCreateCurrentSource}
+        commandPaletteShortcutLabel={
+          shortcutLabelForCommand("command.palette", shortcutPreferences) ?? "Ctrl+K / Cmd+K"
+        }
         isProcessing={isProcessing}
         job={job}
         jobName={studioJobName}
@@ -6160,6 +6246,9 @@ export function App() {
         projectName={studioProjectName}
         projects={projects}
         requestState={requestState}
+        settingsShortcutLabel={
+          shortcutLabelForCommand("settings.open", shortcutPreferences) ?? "Ctrl+, / Cmd+,"
+        }
         studioMode={studioMode}
         showSubmitAction={false}
         onCancel={() => {
@@ -6169,10 +6258,6 @@ export function App() {
         onExportOpen={() => {
           setBundlePanelMode("export");
           setIsBundlePanelOpen(true);
-        }}
-        onHelpOpen={() => {
-          setHelpCommandTarget(null);
-          setIsHelpOpen(true);
         }}
         onImportOpen={() => {
           setBundlePanelMode("import");
@@ -6202,7 +6287,11 @@ export function App() {
           <CommandPalette
             entries={commandEntries}
             isOpen={isCommandPaletteOpen}
+            shortcutPreferences={shortcutPreferences}
+            view={commandPaletteView}
             onClose={closeCommandPalette}
+            onCustomizeShortcuts={openShortcutSettings}
+            onViewChange={setCommandPaletteView}
           />
         </Suspense>
       ) : null}
@@ -6262,6 +6351,9 @@ export function App() {
       {isHelpOpen ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading help..." />}>
           <HelpPanel
+            commandPaletteShortcutLabel={
+              shortcutLabelForCommand("command.palette", shortcutPreferences) ?? "Ctrl+K / Cmd+K"
+            }
             context={{
               activeCinema: activeHelpCinema,
               runConfiguration,
@@ -6275,6 +6367,9 @@ export function App() {
             profileSource={profileSource}
             preferredAnchorId={helpCommandTarget?.anchorId ?? null}
             selectedProfile={selectedVoiceProfile}
+            shortcutCheatSheetLabel={
+              shortcutLabelForCommand("shortcut.cheatsheet", shortcutPreferences) ?? "?"
+            }
             onClose={() => {
               setIsHelpOpen(false);
             }}
@@ -6309,6 +6404,7 @@ export function App() {
             speechPolicyOverrides={speechPolicyOverrides}
             speechPolicyProfile={speechPolicyProfile}
             speechPolicyProfiles={speechPolicyProfiles}
+            shortcutPreferences={shortcutPreferences}
             teleprompterSettings={teleprompterSettings}
             themeName={themeName}
             ttsEngineError={ttsEngineError}
@@ -6326,6 +6422,10 @@ export function App() {
             onRunConfigurationChange={setRunConfiguration}
             onSaveBookSourcePolicy={handleSaveBookSourcePolicy}
             onSavePreparedSourcePolicy={handleSavePreparedSourcePolicy}
+            onShortcutPreferencesChange={setShortcutPreferences}
+            onShortcutPreferencesReset={() => {
+              setShortcutPreferences(resetShortcutPreferences());
+            }}
             onClose={() => {
               setIsSettingsOpen(false);
             }}

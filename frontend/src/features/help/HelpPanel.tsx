@@ -15,21 +15,25 @@ import {
 } from "./model";
 
 export function HelpPanel({
+  commandPaletteShortcutLabel,
   context,
   isOpen,
   job,
   profileSourceDiagnostics,
   profileSource,
   selectedProfile,
+  shortcutCheatSheetLabel,
   preferredAnchorId,
   onClose,
 }: Readonly<{
+  commandPaletteShortcutLabel: string;
   context: HelpWorkflowContext;
   isOpen: boolean;
   job: VoiceJob | null;
   profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
   profileSource: VoiceProfileSource | null;
   selectedProfile: VoiceProfile | null;
+  shortcutCheatSheetLabel: string;
   preferredAnchorId?: (typeof HELP_ANCHORS)[number]["id"] | null;
   onClose: () => void;
 }>) {
@@ -50,6 +54,14 @@ export function HelpPanel({
           </span>
         </div>
         <p className="text-sm leading-6 text-orange-900">{currentExplanation}</p>
+      </section>
+
+      <section className="mt-4 grid gap-2 rounded-md border p-4 vs-border vs-surface">
+        <h3 className="text-sm font-semibold">Fast access</h3>
+        <div className="grid gap-2 text-sm sm:grid-cols-2">
+          <ShortcutHint label="Command palette" value={commandPaletteShortcutLabel} />
+          <ShortcutHint label="Shortcut cheat sheet" value={shortcutCheatSheetLabel} />
+        </div>
       </section>
 
       <section className="mt-5 grid gap-3">
@@ -99,6 +111,17 @@ export function HelpPanel({
         <DiagnosticLine label="TTS job" value={job?.status ?? "No active job"} />
       </PanelSection>
     </PanelShell>
+  );
+}
+
+function ShortcutHint({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border bg-[var(--vs-raised)] px-3 py-2 vs-border">
+      <span className="vs-muted text-xs font-semibold">{label}</span>
+      <kbd className="rounded border bg-[var(--vs-surface)] px-2 py-1 text-[0.68rem] font-semibold vs-border">
+        {value}
+      </kbd>
+    </div>
   );
 }
 

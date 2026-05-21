@@ -460,8 +460,27 @@ async function runSettingsIAUX(browser, projectId) {
     await page.getByText("Remember presentation-only workspace").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
 
-    await page.getByRole("button", { exact: true, name: "Open help" }).click();
+    await page.keyboard.press("Shift+/");
+    const shortcutPalette = page.getByRole("dialog", { name: "Command palette" });
+    await shortcutPalette.waitFor({ state: "visible" });
+    await shortcutPalette.getByText("Shortcut cheat sheet").first().waitFor();
+    const shortcutsScreenshot = path.join(screenshotsDir, "settings-ia-shortcuts.png");
+    await page.screenshot({ fullPage: false, path: shortcutsScreenshot });
+    screenshots.push(shortcutsScreenshot);
+    await shortcutPalette
+      .getByRole("button", { exact: true, name: "Customize in Settings" })
+      .click();
+    await page.getByText("Studio Settings").first().waitFor();
+    await page.getByText("Keyboard shortcuts").first().waitFor();
+    await page.getByTestId("shortcut-setting-settings-open").selectOption("alt-s");
+    await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
+    await page.keyboard.press("Alt+S");
+    await page.getByText("Studio Settings").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
+
+    await runCommandPaletteAction(page, "open help", /Open help/);
     await page.getByText("Context Guide").first().waitFor();
+    await page.getByText("Fast access").first().waitFor();
     await page.getByText("Workflow anchors").first().waitFor();
     const helpScreenshot = path.join(screenshotsDir, "settings-ia-context-guide.png");
     await page.screenshot({ fullPage: false, path: helpScreenshot });

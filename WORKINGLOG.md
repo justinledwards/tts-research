@@ -1,5 +1,14 @@
 # Working Log
 
+## 2026-05-21 17:12 CEST - Command Palette Shortcuts Settings Consolidation
+- [x] Map existing command palette, shortcut, help, and settings entry paths
+- [x] Add shared command and shortcut registries
+- [x] Add shortcut cheat sheet and configurable shortcut settings
+- [x] Consolidate settings/help entry points through shared commands
+- [x] Update docs and UI action coverage
+- [x] Run local validation commands
+- [x] Confirm isolated backend pipeline test passes after validate:local flake
+
 ## 2026-05-20 16:24 CEST - Command palette and quick actions
 - [x] Add shared command model and palette UI.
 - [x] Generate commands from settings, workspace, cinema, help, sources, and progress metadata.

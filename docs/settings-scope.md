@@ -7,7 +7,7 @@ Voice Studio settings use one shared scope vocabulary across Studio Settings, so
 | Session | Applies to the current browser session or next run. | Run mode, performance mode, pipeline toggles, session speech-policy overrides. |
 | Source | Applies to the selected source until cleared. | Prepared-source and book-source speech-policy pins. |
 | Project | Applies to this project by default. | Project speech-policy profile and custom policy profiles. |
-| Machine | Applies to this browser or local runtime. | Reader preferences, theme, teleprompter focus, engine readiness, model paths, provider diagnostics. |
+| Machine | Applies to this browser or local runtime. | Reader preferences, shortcuts, theme, teleprompter focus, engine readiness, model paths, provider diagnostics. |
 
 ## Precedence
 
@@ -24,6 +24,7 @@ Speech policy still resolves in the same order:
 - Quick settings expose the most common session, project, and machine changes before the detailed groups.
 - Scope badges and “applies to” copy must come from shared settings metadata, not hand-written text in each panel.
 - Source pin editors and Policy Scope chips use the same `Session`, `Source`, `Project`, and `Machine` labels as Studio Settings.
+- Keyboard shortcuts live under the `Reader` task group and use `Machine` scope because they are stored for the local browser/runtime.
 
 ## Compact and Expanded Display
 
@@ -42,4 +43,4 @@ Run the lightweight settings IA screenshot smoke with:
 pnpm e2e:settings-ia
 ```
 
-It captures Studio Settings, the contextual help surface, and the Workspace project-library overlay.
+It captures Studio Settings, the shortcut cheat sheet, the contextual help surface, and the Workspace project-library overlay.

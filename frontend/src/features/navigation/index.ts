@@ -1,4 +1,4 @@
-export { CommandPalette, useCommandPaletteShortcut } from "./CommandPalette";
+export { CommandPalette } from "./CommandPalette";
 export {
   buildCinemaFocusCommandMetadata,
   buildHelpCommandMetadata,

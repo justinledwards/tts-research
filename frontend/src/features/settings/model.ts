@@ -132,6 +132,13 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     scope: "machine",
   },
   {
+    description: "Controls global command, Help, Settings, and Create & Listen shortcuts.",
+    group: "reader",
+    id: "shortcuts",
+    label: "Keyboard shortcuts",
+    scope: "machine",
+  },
+  {
     description: "Sets the durable speech-policy default for unpinned project sources.",
     group: "sources",
     id: "projectSpeechPolicy",

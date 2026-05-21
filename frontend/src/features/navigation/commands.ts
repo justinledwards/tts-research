@@ -16,7 +16,7 @@ import {
   type WorkspaceLayoutMode,
   type WorkspaceStage,
 } from "../workspace/model";
-import type { CommandMetadata } from "./model";
+import type { CommandCategory, CommandMetadata } from "./model";
 
 export type { SettingsCommandTarget } from "../settings/model";
 
@@ -34,6 +34,7 @@ export interface HelpCommandTarget {
 
 export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandTarget>[] {
   const groupCommands = SETTINGS_GROUPS.map((group) => ({
+    category: "Settings" as const,
     detail: group.summary,
     id: `settings:group:${group.id}`,
     keywords: ["settings", group.detail],
@@ -42,6 +43,7 @@ export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandT
     title: `Open ${group.label} settings`,
   }));
   const fieldCommands = SETTINGS_FIELD_META.map((field) => ({
+    category: "Settings" as const,
     detail: `${SETTINGS_SCOPE_META[field.scope].label} scope · ${field.description}`,
     id: `settings:field:${field.id}`,
     keywords: ["settings", field.scope, SETTINGS_SCOPE_META[field.scope].description],
@@ -50,6 +52,7 @@ export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandT
     title: field.label,
   }));
   const scopeCommands = (Object.keys(SETTINGS_SCOPE_META) as SettingsScope[]).map((scope) => ({
+    category: "Settings" as const,
     detail: SETTINGS_SCOPE_META[scope].appliesTo,
     id: `settings:scope:${scope}`,
     keywords: ["scope", "settings", SETTINGS_SCOPE_META[scope].description],
@@ -64,6 +67,7 @@ export function buildWorkspaceCommandMetadata(): CommandMetadata<WorkspaceComman
   const stageCommands = WORKSPACE_STAGES.map((stage) => {
     const meta = workspaceStageMeta(stage);
     return {
+      category: workspaceStageCommandCategory(stage),
       detail: meta.description,
       id: `workspace:stage:${stage}`,
       keywords: ["stage", "workspace", ...meta.keywords],
@@ -75,6 +79,7 @@ export function buildWorkspaceCommandMetadata(): CommandMetadata<WorkspaceComman
   const layoutCommands = WORKSPACE_LAYOUT_MODES.map((layoutMode) => {
     const meta = workspaceLayoutModeMeta(layoutMode);
     return {
+      category: "Navigation" as const,
       detail: meta.description,
       id: `workspace:layout:${layoutMode}`,
       keywords: ["layout", "workspace", ...meta.keywords],
@@ -91,6 +96,7 @@ export function buildCinemaFocusCommandMetadata(): CommandMetadata<CinemaFocusCo
     const meta = cinemaFocusModeMeta(mode);
     const advanced = mode === "debug";
     return {
+      category: cinemaFocusCommandCategory(mode),
       detail: advanced ? `Advanced diagnostics. ${meta.description}` : meta.description,
       id: `cinema:focus:${mode}`,
       keywords: [
@@ -108,6 +114,7 @@ export function buildCinemaFocusCommandMetadata(): CommandMetadata<CinemaFocusCo
 
 export function buildHelpCommandMetadata(): CommandMetadata<HelpCommandTarget>[] {
   return HELP_ANCHORS.map((anchor) => ({
+    category: "Diagnostics" as const,
     detail: anchor.detail,
     id: `help:${anchor.id}`,
     keywords: ["help", "guide", "workflow"],
@@ -115,6 +122,29 @@ export function buildHelpCommandMetadata(): CommandMetadata<HelpCommandTarget>[]
     target: { anchorId: anchor.id },
     title: `Help: ${anchor.label}`,
   }));
+}
+
+function workspaceStageCommandCategory(stage: WorkspaceStage): CommandCategory {
+  if (stage === "intake") {
+    return "Source";
+  }
+  if (stage === "review") {
+    return "Review";
+  }
+  if (stage === "teleprompt") {
+    return "Teleprompt";
+  }
+  return "Playback";
+}
+
+function cinemaFocusCommandCategory(mode: CinemaFocusMode): CommandCategory {
+  if (mode === "review") {
+    return "Review";
+  }
+  if (mode === "debug" || mode === "inspect") {
+    return "Diagnostics";
+  }
+  return "Navigation";
 }
 
 function defaultSettingsGroupForScope(scope: SettingsScope): SettingsGroupId {

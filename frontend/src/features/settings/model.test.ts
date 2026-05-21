@@ -33,5 +33,6 @@ describe("settings metadata", () => {
     expect(SETTINGS_FIELD_META.every((field) => field.group.length > 0)).toBe(true);
     expect(settingsFieldMeta("sourceSpeechPolicy")?.group).toBe("sources");
     expect(settingsFieldMeta("runtimeDiagnostics")?.group).toBe("runtime");
+    expect(settingsFieldMeta("shortcuts")?.group).toBe("reader");
   });
 });
