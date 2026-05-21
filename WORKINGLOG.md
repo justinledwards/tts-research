@@ -292,3 +292,11 @@
 - [x] Wire mini-player to Workspace, Review, Preview, and Settings without duplicating Cinema transport
 - [x] Update docs and UI action coverage
 - [x] Run local validation commands
+
+## 2026-05-21 18:32 CEST - Project Voice Management Dashboard
+- [x] Map current project and voice management surfaces
+- [x] Add project dashboard model and UI
+- [x] Add voice profile dashboard model, diagnostics, and UI
+- [x] Reduce normal workspace project/voice management clutter to summaries
+- [x] Update docs and UI action coverage
+- [x] Run local validation commands

@@ -353,6 +353,12 @@ async function runWorkspaceFlowUX(browser, projectId) {
       await page.screenshot({ fullPage: false, path: screenshot });
       screenshots.push(screenshot);
     }
+    await page.getByTestId("ui-action-project-dashboard-open-rail").click();
+    await page.getByText("Project Dashboard").first().waitFor();
+    await page.getByTestId("ui-action-project-dashboard-close").click();
+    await page.getByTestId("ui-action-voice-dashboard-open-rail").click();
+    await page.getByText("Voice Profile Dashboard").first().waitFor();
+    await page.getByTestId("ui-action-voice-dashboard-close").click();
     await runCommandPaletteAction(page, "focus layout", /Focus workspace layout/);
     await assertWorkspaceLayoutSelected(page, "Focus");
     await runCommandPaletteAction(page, "balanced layout", /Balanced workspace layout/);

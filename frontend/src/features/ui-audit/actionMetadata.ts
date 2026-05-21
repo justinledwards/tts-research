@@ -52,6 +52,57 @@ export const STATIC_UI_ACTION_METADATA = [
   ),
   action("help-open", "Open help", "Workspace", "diagnostic", "menu-or-panel-opened"),
   action("settings-open", "Open settings", "Settings", "settings", "menu-or-panel-opened"),
+  action(
+    "project-dashboard-open-rail",
+    "Manage Sources",
+    "Workspace",
+    "navigation",
+    "menu-or-panel-opened",
+    false,
+    ["Project Dashboard", "Manage projects"],
+  ),
+  action(
+    "project-dashboard-open-drawer",
+    "Project Dashboard",
+    "Workspace",
+    "navigation",
+    "menu-or-panel-opened",
+  ),
+  action("project-dashboard-close", "Close", "Workspace", "navigation", "state-changed"),
+  action("project-dashboard-new", "New Project", "Workspace", "generation", "menu-or-panel-opened"),
+  action(
+    "voice-dashboard-open-rail",
+    "Manage Voices",
+    "Workspace",
+    "navigation",
+    "menu-or-panel-opened",
+    false,
+    ["Voice Dashboard"],
+  ),
+  action(
+    "voice-dashboard-open-drawer",
+    "Voice Dashboard",
+    "Workspace",
+    "navigation",
+    "menu-or-panel-opened",
+  ),
+  action(
+    "voice-dashboard-open-cloning-rail",
+    "Dashboard",
+    "Workspace",
+    "navigation",
+    "menu-or-panel-opened",
+    false,
+    ["Voice Dashboard"],
+  ),
+  action("voice-dashboard-close", "Close", "Workspace", "navigation", "state-changed"),
+  action(
+    "voice-dashboard-open-cloning",
+    "Open Voice Studio",
+    "Workspace",
+    "navigation",
+    "route-changed",
+  ),
   action("project-import", "Import", "Workspace", "navigation", "menu-or-panel-opened"),
   action("project-export", "Export", "Workspace", "navigation", "menu-or-panel-opened"),
   action(
@@ -336,6 +387,7 @@ function action(
   actionClass: UiActionClass,
   expectedTransition: UiActionExpectedTransition,
   destructive = false,
+  aliases?: readonly string[],
 ): UiActionMetadata {
   return {
     id,
@@ -347,5 +399,6 @@ function action(
     actionClass,
     expectedTransition,
     destructive,
+    aliases,
   };
 }

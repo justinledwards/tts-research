@@ -484,6 +484,15 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await capture("workspace-stage-02-source-selected");
     await page.getByRole("button", { exact: true, name: "Review" }).click();
     await page.getByText("Revision Panel").first().waitFor();
+    await page.getByRole("button", { name: "Full workspace layout" }).click();
+    await page.getByTestId("ui-action-project-dashboard-open-rail").click();
+    await page.getByText("Project Dashboard").first().waitFor();
+    await capture("workspace-stage-03-project-dashboard");
+    await page.getByTestId("ui-action-project-dashboard-close").click();
+    await page.getByTestId("ui-action-voice-dashboard-open-rail").click();
+    await page.getByText("Voice Profile Dashboard").first().waitFor();
+    await capture("workspace-stage-03-voice-dashboard");
+    await page.getByTestId("ui-action-voice-dashboard-close").click();
     await page.getByTestId("revision-tab-blocks").click();
     await page.getByTestId("revision-select-visible").check();
     await page.getByTestId("ui-action-revision-batch-approve").click();

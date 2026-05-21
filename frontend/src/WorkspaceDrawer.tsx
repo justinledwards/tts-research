@@ -4,6 +4,8 @@ import { formatDuration } from "./format";
 import type {
   BookSource,
   CustomSpeechPolicyProfile,
+  PreparedSource,
+  ProjectStorageSummary,
   SpeechPolicyProfile,
   SystemMetrics,
   VoiceJob,
@@ -37,8 +39,11 @@ export function WorkspaceDrawer({
   job,
   metrics,
   metricsError,
+  preparedSources,
   projectError,
   projectJobs,
+  projectStorage,
+  projectStorageError,
   projects,
   profileSource,
   profiles,
@@ -57,6 +62,8 @@ export function WorkspaceDrawer({
   onExportOpen,
   onImportOpen,
   onOpenSettings,
+  onOpenProjectDashboard,
+  onOpenVoiceDashboard,
   onRenameProject,
   onSelectProject,
   onSelectProfile,
@@ -68,8 +75,11 @@ export function WorkspaceDrawer({
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
   metricsError: string | null;
+  preparedSources: PreparedSource[];
   projectError: string | null;
   projectJobs: VoiceJob[];
+  projectStorage: ProjectStorageSummary | null;
+  projectStorageError: string | null;
   projects: VoiceProject[];
   profileSource: VoiceProfileSource | null;
   profiles: VoiceProfile[];
@@ -88,6 +98,8 @@ export function WorkspaceDrawer({
   onExportOpen: () => void;
   onImportOpen: () => void;
   onOpenSettings: () => void;
+  onOpenProjectDashboard: () => void;
+  onOpenVoiceDashboard: () => void;
   onRenameProject: (id: string, name: string) => Promise<void>;
   onSelectProject: (id: string) => void;
   onSelectProfile: (profileId: string) => void;
@@ -146,7 +158,7 @@ export function WorkspaceDrawer({
     imports: "",
     projects: projects.length.toString(),
     reports: metrics || metricsError ? "1" : "",
-    sources: (bookSources.length + (profileSource ? 1 : 0)).toString(),
+    sources: (bookSources.length + preparedSources.length + (profileSource ? 1 : 0)).toString(),
     voices: profiles.length.toString(),
   };
 
@@ -250,16 +262,27 @@ export function WorkspaceDrawer({
             {activeSection === "projects" ? (
               <WorkspaceSection
                 actions={
-                  <button
-                    className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
-                    disabled={isCreatingProject}
-                    onClick={() => {
-                      setIsCreatingProject(true);
-                    }}
-                    type="button"
-                  >
-                    New Project
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                      data-testid="ui-action-project-dashboard-open-drawer"
+                      data-ui-action-surface="Workspace"
+                      onClick={onOpenProjectDashboard}
+                      type="button"
+                    >
+                      Project Dashboard
+                    </button>
+                    <button
+                      className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
+                      disabled={isCreatingProject}
+                      onClick={() => {
+                        setIsCreatingProject(true);
+                      }}
+                      type="button"
+                    >
+                      New Project
+                    </button>
+                  </div>
                 }
                 id="workspace-projects"
                 title={`Projects (${projects.length.toString()})`}
@@ -281,6 +304,14 @@ export function WorkspaceDrawer({
                       {projectError}
                     </p>
                   ) : null}
+                  <WorkspaceDashboardSummary
+                    detail={
+                      projectStorageError ??
+                      `${formatBytes(projectStorage?.totalBytes ?? 0)} in current project storage`
+                    }
+                    label={activeProject?.name ?? "Draft"}
+                    value={`${(preparedSources.length + bookSources.length).toString()} sources`}
+                  />
                   {projects.length > 0 ? (
                     projects.map((project) => (
                       <ProjectLibraryRow
@@ -320,7 +351,33 @@ export function WorkspaceDrawer({
 
             {activeSection === "voices" ? (
               <>
-                <WorkspaceSection id="workspace-voices" title="Voices">
+                <WorkspaceSection
+                  actions={
+                    <button
+                      className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                      data-testid="ui-action-voice-dashboard-open-drawer"
+                      data-ui-action-surface="Workspace"
+                      onClick={onOpenVoiceDashboard}
+                      type="button"
+                    >
+                      Voice Dashboard
+                    </button>
+                  }
+                  id="workspace-voices"
+                  title="Voices"
+                >
+                  <WorkspaceDashboardSummary
+                    detail={
+                      selectedProfileId
+                        ? "Selected profile is active for narration and preview."
+                        : "Default voice is active until a profile is selected."
+                    }
+                    label={
+                      profiles.find((profile) => profile.id === selectedProfileId)?.name ??
+                      "Default voice"
+                    }
+                    value={`${profiles.length.toString()} saved`}
+                  />
                   <div className="grid gap-2 md:grid-cols-2">
                     {profiles.length > 0 ? (
                       profiles.slice(0, 8).map((profile) => (
@@ -432,7 +489,29 @@ export function WorkspaceDrawer({
                       ))}
                     </div>
                   ) : null}
-                  {!profileSource && bookSources.length === 0 ? (
+                  {preparedSources.length > 0 ? (
+                    <div className="grid gap-2">
+                      {preparedSources.slice(0, 5).map((source) => (
+                        <div className="min-w-0 rounded-md border p-3 vs-raised" key={source.id}>
+                          <div className="flex min-w-0 items-center justify-between gap-3">
+                            <p
+                              className="min-w-0 truncate text-sm font-semibold"
+                              title={source.title ?? source.sourceName}
+                            >
+                              {source.title ?? source.sourceName}
+                            </p>
+                            <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
+                              {source.kind}
+                            </span>
+                          </div>
+                          <p className="vs-muted mt-1 truncate text-xs" title={source.sourceName}>
+                            {source.wordCount.toLocaleString()} words · {source.status}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {!profileSource && bookSources.length === 0 && preparedSources.length === 0 ? (
                     <EmptyDrawerText>No source analysis or book source staged.</EmptyDrawerText>
                   ) : null}
                 </div>
@@ -489,6 +568,26 @@ export function WorkspaceDrawer({
           </div>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function WorkspaceDashboardSummary({
+  detail,
+  label,
+  value,
+}: Readonly<{ detail: string; label: string; value: string }>) {
+  return (
+    <div className="mb-3 grid min-w-0 gap-2 rounded-md border p-3 vs-border vs-surface">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-sm font-semibold" title={label}>
+          {label}
+        </p>
+        <span className="shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold vs-border">
+          {value}
+        </span>
+      </div>
+      <p className="vs-muted text-xs leading-5">{detail}</p>
     </div>
   );
 }
@@ -1042,4 +1141,18 @@ function formatDate(value: string): string {
     month: "short",
     year: "numeric",
   });
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
 }

@@ -373,6 +373,12 @@ const VoiceSourceAnalysisPanel = lazy(() =>
 const WorkspaceDrawer = lazy(() =>
   import("./WorkspaceDrawer").then((module) => ({ default: module.WorkspaceDrawer })),
 );
+const ProjectDashboard = lazy(() =>
+  import("./features/dashboard").then((module) => ({ default: module.ProjectDashboard })),
+);
+const VoiceProfileDashboard = lazy(() =>
+  import("./features/voices").then((module) => ({ default: module.VoiceProfileDashboard })),
+);
 const MarkdownRenderer = lazy(() =>
   import("./MarkdownRenderer").then((module) => ({ default: module.MarkdownRenderer })),
 );
@@ -2627,6 +2633,8 @@ export function App() {
   );
   const uiMemoryRef = useRef(uiMemory);
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
+  const [isProjectDashboardOpen, setIsProjectDashboardOpen] = useState(false);
+  const [isVoiceDashboardOpen, setIsVoiceDashboardOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -6305,8 +6313,11 @@ export function App() {
             job={job}
             metrics={systemMetrics}
             metricsError={systemMetricsError}
+            preparedSources={preparedSources}
             projectError={projectError}
             projectJobs={projectJobs}
+            projectStorage={projectStorage}
+            projectStorageError={projectStorageError}
             projects={projects}
             profileSource={profileSource}
             profiles={voiceProfiles}
@@ -6339,12 +6350,81 @@ export function App() {
               setSettingsCommandTarget(null);
               setIsSettingsOpen(true);
             }}
+            onOpenProjectDashboard={() => {
+              setIsWorkspaceOpen(false);
+              setIsProjectDashboardOpen(true);
+            }}
+            onOpenVoiceDashboard={() => {
+              setIsWorkspaceOpen(false);
+              setIsVoiceDashboardOpen(true);
+            }}
             onRenameProject={handleRenameProject}
             onSelectProject={selectProject}
             onSelectProfile={selectVoiceProfile}
             onSpeechPolicyProfileChange={(profile) => {
               void handleSpeechPolicyProfileChange(profile);
             }}
+          />
+        </Suspense>
+      ) : null}
+      {isProjectDashboardOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading project dashboard..." />}>
+          <ProjectDashboard
+            activeProjectId={activeProjectId}
+            bookSources={bookSources}
+            job={job}
+            preparedSources={preparedSources}
+            projectError={projectError}
+            projectJobs={projectJobs}
+            projectStorage={projectStorage}
+            projectStorageError={projectStorageError}
+            projects={projects}
+            onClose={() => {
+              setIsProjectDashboardOpen(false);
+            }}
+            onCreateProject={handleCreateProject}
+            onDeleteProject={handleDeleteProject}
+            onExportOpen={() => {
+              setIsProjectDashboardOpen(false);
+              setBundlePanelMode("export");
+              setIsBundlePanelOpen(true);
+            }}
+            onImportOpen={() => {
+              setIsProjectDashboardOpen(false);
+              setBundlePanelMode("import");
+              setIsBundlePanelOpen(true);
+            }}
+            onRenameProject={handleRenameProject}
+            onSelectProject={selectProject}
+          />
+        </Suspense>
+      ) : null}
+      {isVoiceDashboardOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading voice dashboard..." />}>
+          <VoiceProfileDashboard
+            buildingArtifactKey={buildingArtifactKey}
+            cancelingProfileSourceId={cancelingProfileSourceId}
+            cancelingTargetKey={cancelingTargetKey}
+            diagnostics={profileSourceDiagnostics}
+            profileSource={profileSource}
+            profiles={voiceProfiles}
+            researchModules={researchModules}
+            selectedProfileId={selectedVoiceProfileId}
+            ttsEngines={ttsEngines}
+            onBuildArtifact={handleBuildVoiceProfileArtifact}
+            onCancelProfileSource={handleCancelVoiceProfileSource}
+            onCancelProfileTarget={handleCancelVoiceProfileTarget}
+            onClose={() => {
+              setIsVoiceDashboardOpen(false);
+            }}
+            onDeleteProfile={(id) => {
+              void handleDeleteVoiceProfile(id);
+            }}
+            onOpenVoiceCloning={() => {
+              setIsVoiceDashboardOpen(false);
+              handleStudioModeChange("voiceCloning");
+            }}
+            onSelectProfile={selectVoiceProfile}
           />
         </Suspense>
       ) : null}
@@ -6736,6 +6816,9 @@ export function App() {
                 onDeleteProfile={(id) => {
                   void handleDeleteVoiceProfile(id);
                 }}
+                onOpenVoiceDashboard={() => {
+                  setIsVoiceDashboardOpen(true);
+                }}
                 onRunConfigurationChange={setRunConfiguration}
                 onSaveHuggingFaceToken={handleSaveHuggingFaceTokenAndValidate}
                 onSelectKokoroVoice={selectKokoroVoice}
@@ -6829,17 +6912,11 @@ export function App() {
             {leftRailMode === "full" ? (
               <NarrationSidebar
                 bookSources={bookSources}
-                buildingArtifactKey={buildingArtifactKey}
                 customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-                isClearingHuggingFaceToken={isClearingHuggingFaceToken}
-                isLoadingProfiles={isLoadingProfiles}
                 preparedSources={preparedSources}
                 profiles={voiceProfiles}
-                pinnedProfileIds={pinnedVoiceProfileIds}
-                recentProfileIds={recentVoiceProfileIds}
                 researchModules={researchModules}
                 runConfiguration={runConfiguration}
-                savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
                 selectedBookSourceId={selectedBookSourceId}
                 selectedKokoroVoiceId={selectedKokoroVoiceId}
                 selectedPreparedSourceId={selectedPreparedSourceId}
@@ -6848,18 +6925,9 @@ export function App() {
                 speechPolicyProfile={speechPolicyProfile}
                 speechPolicyProfiles={speechPolicyProfiles}
                 ttsEngines={ttsEngines}
-                voiceProfileCredentialError={voiceProfileCredentialError}
-                voiceProfileCredentials={voiceProfileCredentials}
-                onBuildArtifact={handleBuildVoiceProfileArtifact}
-                onClearHuggingFaceToken={() => {
-                  void handleClearLocalHuggingFaceToken();
-                }}
                 onClearSelection={clearVoiceProfileSelection}
                 onCloneVoice={() => {
                   handleStudioModeChange("voiceCloning");
-                }}
-                onDeleteProfile={(id) => {
-                  void handleDeleteVoiceProfile(id);
                 }}
                 onInspectSelectedSource={() => {
                   if (selectedPreparedSource) {
@@ -6881,24 +6949,16 @@ export function App() {
                   setContentMode("intake");
                   setSourceMode("text");
                 }}
-                onRunConfigurationChange={setRunConfiguration}
-                onSaveHuggingFaceToken={handleSaveHuggingFaceTokenAndValidate}
-                onSelectBook={(bookId) => {
-                  setSelectedBookSourceId(bookId);
-                  setSourceMode("book");
-                  setContentMode("review");
+                onOpenProjectDashboard={() => {
+                  setIsProjectDashboardOpen(true);
                 }}
-                onSelectKokoroVoice={selectKokoroVoice}
-                onSelectPreparedSource={(source) => {
-                  setSourceMode("fileUrl");
-                  setContentMode("review");
-                  void handleUsePreparedSource(source);
+                onOpenVoiceDashboard={() => {
+                  setIsVoiceDashboardOpen(true);
                 }}
                 onSelectProfile={selectVoiceProfile}
                 onSpeechPolicyProfileChange={(profile) => {
                   void handleSpeechPolicyProfileChange(profile);
                 }}
-                onTogglePinnedProfile={togglePinnedVoiceProfile}
               />
             ) : (
               <NarrationRailMini
@@ -7403,17 +7463,11 @@ function ProductMetric({
 
 function NarrationSidebar({
   bookSources,
-  buildingArtifactKey,
   customSpeechPolicyProfiles,
-  isClearingHuggingFaceToken,
-  isLoadingProfiles,
   preparedSources,
-  pinnedProfileIds,
   profiles,
-  recentProfileIds,
   researchModules,
   runConfiguration,
-  savingHuggingFaceTokenKey,
   selectedBookSourceId,
   selectedKokoroVoiceId,
   selectedPreparedSourceId,
@@ -7422,36 +7476,21 @@ function NarrationSidebar({
   speechPolicyProfile,
   speechPolicyProfiles,
   ttsEngines,
-  voiceProfileCredentialError,
-  voiceProfileCredentials,
-  onBuildArtifact,
-  onClearHuggingFaceToken,
   onClearSelection,
   onCloneVoice,
   onCreateSource,
-  onDeleteProfile,
   onInspectSelectedSource,
-  onRunConfigurationChange,
-  onSaveHuggingFaceToken,
-  onSelectBook,
-  onSelectKokoroVoice,
-  onSelectPreparedSource,
+  onOpenProjectDashboard,
+  onOpenVoiceDashboard,
   onSelectProfile,
   onSpeechPolicyProfileChange,
-  onTogglePinnedProfile,
 }: Readonly<{
   bookSources: BookSource[];
-  buildingArtifactKey: string | null;
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
-  isClearingHuggingFaceToken: boolean;
-  isLoadingProfiles: boolean;
   preparedSources: PreparedSource[];
-  pinnedProfileIds: string[];
   profiles: VoiceProfile[];
-  recentProfileIds: string[];
   researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
-  savingHuggingFaceTokenKey: string | null;
   selectedBookSourceId: string | null;
   selectedKokoroVoiceId: string;
   selectedPreparedSourceId: string | null;
@@ -7460,165 +7499,129 @@ function NarrationSidebar({
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
   ttsEngines: TTSEngineDiagnostics[];
-  voiceProfileCredentialError: string | null;
-  voiceProfileCredentials: VoiceProfileCredentialStatus | null;
-  onBuildArtifact: VoiceProfileArtifactBuildAction;
-  onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onCloneVoice: () => void;
   onCreateSource: () => void;
-  onDeleteProfile: (id: string) => void;
   onInspectSelectedSource: () => void;
-  onRunConfigurationChange: (configuration: RunConfiguration) => void;
-  onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
-  onSelectBook: (bookId: string) => void;
-  onSelectKokoroVoice: (voiceId: string) => void;
-  onSelectPreparedSource: (source: PreparedSource) => void;
+  onOpenProjectDashboard: () => void;
+  onOpenVoiceDashboard: () => void;
   onSelectProfile: (id: string) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
-  onTogglePinnedProfile: (id: string) => void;
 }>) {
-  const voiceLibrary = buildVoiceLibraryViewModel({
-    pinnedIds: pinnedProfileIds,
-    profiles,
-    recentIds: recentProfileIds,
-    selectedProfileId,
-  });
-  const [sourceSearch, setSourceSearch] = useState("");
-  const sourceNeedle = sourceSearch.trim().toLowerCase();
-  const matchesSourceSearch = useCallback(
-    (value: string) => !sourceNeedle || value.toLowerCase().includes(sourceNeedle),
-    [sourceNeedle],
+  const selectedPreparedSource = preparedSources.find(
+    (source) => source.id === selectedPreparedSourceId,
   );
-  const visiblePreparedSources = preparedSources
-    .filter((source) =>
-      matchesSourceSearch(`${source.title ?? ""} ${source.sourceName} ${source.kind}`),
-    )
-    .slice(0, sourceNeedle ? 7 : 4);
-  const visibleBookSources = bookSources
-    .filter((book) => matchesSourceSearch(`${bookSourceName(book)} ${book.kind}`))
-    .slice(0, sourceNeedle ? 7 : 3);
-  const hasSourceResults = visiblePreparedSources.length > 0 || visibleBookSources.length > 0;
+  const selectedBookSource = bookSources.find((book) => book.id === selectedBookSourceId);
+  const activeSourceLabel =
+    selectedPreparedSource?.title ??
+    selectedPreparedSource?.sourceName ??
+    (selectedBookSource ? bookSourceName(selectedBookSource) : "Draft text");
+  const activeSourceDetail = narrationSourceSummaryDetail({
+    bookSource: selectedBookSource,
+    preparedSource: selectedPreparedSource,
+    sourceCount: preparedSources.length + bookSources.length,
+  });
+  const voiceRuntimeLabel = selectedProfile?.name ?? kokoroVoicepackLabel(selectedKokoroVoiceId);
+  const readyCloneModules = researchModules.filter((module) => module.cloneAllowed).length;
+  const readyVoiceEngines = ttsEngines.filter((engine) => engine.supportsVoice).length;
   return (
     <section className="min-h-full min-w-0 overflow-visible">
       <div className="grid min-w-0 gap-3 p-4 xl:p-5">
         <section className="grid gap-3 rounded-lg border p-3 vs-border vs-raised">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Source Library</h2>
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="vs-muted text-xs">
-                {String(preparedSources.length + bookSources.length)}
-              </span>
-              <button
-                className="h-7 rounded-md border px-2 text-[0.68rem] font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
-                onClick={onCreateSource}
-                type="button"
-              >
-                New
-              </button>
-            </div>
+            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Active Source</h2>
+            <span className="vs-muted text-xs">
+              {String(preparedSources.length + bookSources.length)} managed
+            </span>
           </div>
-          <input
-            className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-xs outline-none transition placeholder:text-[var(--vs-muted)] focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
-            onChange={(event) => {
-              setSourceSearch(event.currentTarget.value);
-            }}
-            placeholder="Search sources..."
-            type="search"
-            value={sourceSearch}
-          />
-          <div className="grid gap-2">
-            {visiblePreparedSources.map((source, index) => (
-              <button
-                className={`min-w-0 rounded-md border p-2 text-left transition ${
-                  source.id === selectedPreparedSourceId
-                    ? "border-orange-300 bg-orange-500/10"
-                    : "hover:border-orange-200 vs-border vs-surface"
-                }`}
-                key={`${source.id}-${String(index)}`}
-                onClick={() => {
-                  onSelectPreparedSource(source);
-                }}
-                type="button"
-              >
-                <span
-                  className="block truncate text-sm font-semibold"
-                  title={source.title ?? source.sourceName}
-                >
-                  {source.title ?? source.sourceName}
-                </span>
-                <span className="vs-muted mt-1 block truncate text-xs">
-                  {source.kind.toUpperCase()} · {source.wordCount.toLocaleString()} words
-                </span>
-              </button>
-            ))}
-            {visibleBookSources.map((book, index) => (
-              <button
-                className={`min-w-0 rounded-md border p-2 text-left transition ${
-                  book.id === selectedBookSourceId
-                    ? "border-orange-300 bg-orange-500/10"
-                    : "hover:border-orange-200 vs-border vs-surface"
-                }`}
-                key={`${book.id}-${String(index)}`}
-                onClick={() => {
-                  onSelectBook(book.id);
-                }}
-                type="button"
-              >
-                <span className="block truncate text-sm font-semibold" title={bookSourceName(book)}>
-                  {bookSourceName(book)}
-                </span>
-                <span className="vs-muted mt-1 block truncate text-xs">
-                  {book.kind.toUpperCase()} · {book.wordCount.toLocaleString()} words
-                </span>
-              </button>
-            ))}
-            {preparedSources.length === 0 && bookSources.length === 0 ? (
-              <p className="vs-muted rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-surface">
-                Text drafts, prepared files, URLs, and books appear here as reusable sources.
-              </p>
-            ) : null}
-            {preparedSources.length + bookSources.length > 0 && !hasSourceResults ? (
-              <p className="vs-muted rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-surface">
-                No sources match that search.
-              </p>
-            ) : null}
+          <div className="rounded-md border p-3 vs-border vs-surface">
+            <p className="truncate text-sm font-semibold" title={activeSourceLabel}>
+              {activeSourceLabel}
+            </p>
+            <p className="vs-muted mt-1 truncate text-xs" title={activeSourceDetail}>
+              {activeSourceDetail}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              className="h-9 rounded-md border px-2 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              data-testid="ui-action-project-dashboard-open-rail"
+              data-ui-action-surface="Workspace"
+              onClick={onOpenProjectDashboard}
+              type="button"
+            >
+              Manage Sources
+            </button>
+            <button
+              className="h-9 rounded-md border px-2 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              onClick={onCreateSource}
+              type="button"
+            >
+              New Source
+            </button>
           </div>
         </section>
 
-        <VoiceProfileDropdown
-          buildingArtifactKey={buildingArtifactKey}
-          isClearingHuggingFaceToken={isClearingHuggingFaceToken}
-          isLoading={isLoadingProfiles}
-          profiles={profiles}
-          researchModules={researchModules}
-          runConfiguration={runConfiguration}
-          savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
-          selectedKokoroVoiceId={selectedKokoroVoiceId}
-          selectedProfile={selectedProfile}
-          selectedProfileId={selectedProfileId}
-          ttsEngines={ttsEngines}
-          voiceProfileCredentialError={voiceProfileCredentialError}
-          voiceProfileCredentials={voiceProfileCredentials}
-          showArtifactControls={false}
-          showBackendControls={false}
-          showBackendSummary={false}
-          onBuildArtifact={onBuildArtifact}
-          onClearHuggingFaceToken={onClearHuggingFaceToken}
-          onClearSelection={onClearSelection}
-          onDeleteProfile={onDeleteProfile}
-          onRunConfigurationChange={onRunConfigurationChange}
-          onSaveHuggingFaceToken={onSaveHuggingFaceToken}
-          onSelectKokoroVoice={onSelectKokoroVoice}
-          onSelectProfile={onSelectProfile}
-        />
-
-        <SavedVoicesRailPanel
-          entries={voiceLibrary.entries}
-          total={voiceLibrary.total}
-          onSelectProfile={onSelectProfile}
-          onTogglePinnedProfile={onTogglePinnedProfile}
-        />
+        <section className="grid gap-3 rounded-lg border p-3 vs-border vs-raised">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Active Voice</h2>
+            <span className="vs-muted text-xs">{profiles.length.toString()} saved</span>
+          </div>
+          <div className="rounded-md border p-3 vs-border vs-surface">
+            <p className="truncate text-sm font-semibold" title={voiceRuntimeLabel}>
+              {voiceRuntimeLabel}
+            </p>
+            <p className="vs-muted mt-1 truncate text-xs">
+              {selectedProfile
+                ? `${selectedProfile.language} · ${selectedProfile.status}`
+                : `Default Kokoro voice · ${readyVoiceEngines.toString()} voice engines`}
+            </p>
+          </div>
+          <label className="grid gap-1 text-xs font-semibold">
+            <span className="vs-muted">Voice profile</span>
+            <select
+              className="h-9 min-w-0 rounded-md border px-2 text-xs font-semibold vs-border vs-surface"
+              onChange={(event) => {
+                const nextProfileId = event.currentTarget.value;
+                if (nextProfileId) {
+                  onSelectProfile(nextProfileId);
+                } else {
+                  onClearSelection();
+                }
+              }}
+              value={selectedProfileId}
+            >
+              <option value="">Default Kokoro</option>
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              className="h-9 rounded-md border px-2 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              data-testid="ui-action-voice-dashboard-open-rail"
+              data-ui-action-surface="Workspace"
+              onClick={onOpenVoiceDashboard}
+              type="button"
+            >
+              Manage Voices
+            </button>
+            <button
+              className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-2 text-xs font-semibold text-orange-700 transition hover:bg-orange-500/15"
+              onClick={onCloneVoice}
+              type="button"
+            >
+              Clone Voice
+            </button>
+          </div>
+          <p className="vs-muted text-xs leading-5">
+            {readyCloneModules.toString()} clone module
+            {readyCloneModules === 1 ? "" : "s"} available for profile preparation.
+          </p>
+        </section>
 
         <section className="grid gap-3 rounded-lg border p-3 text-xs vs-border vs-raised">
           <div className="flex items-center justify-between gap-3">
@@ -7670,13 +7673,6 @@ function NarrationSidebar({
               </optgroup>
             ) : null}
           </select>
-          <button
-            className="h-9 rounded-md border border-orange-300 bg-orange-500/10 text-xs font-semibold text-orange-700 transition hover:bg-orange-500/15"
-            onClick={onCloneVoice}
-            type="button"
-          >
-            Clone Voice
-          </button>
         </section>
       </div>
     </section>
@@ -7703,6 +7699,7 @@ function VoiceCloningVoiceRail({
   onClearHuggingFaceToken,
   onClearSelection,
   onDeleteProfile,
+  onOpenVoiceDashboard,
   onRunConfigurationChange,
   onSaveHuggingFaceToken,
   onSelectKokoroVoice,
@@ -7728,6 +7725,7 @@ function VoiceCloningVoiceRail({
   onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onDeleteProfile: (id: string) => void;
+  onOpenVoiceDashboard: () => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
   onSelectKokoroVoice: (voiceId: string) => void;
@@ -7760,7 +7758,15 @@ function VoiceCloningVoiceRail({
         <section className="grid gap-3 rounded-lg border p-3 vs-border vs-raised">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-[var(--vs-text)]">Voice Profile Library</h2>
-            <span className="vs-muted text-xs">{profiles.length.toString()}</span>
+            <button
+              className="h-8 rounded-md border px-2 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              data-testid="ui-action-voice-dashboard-open-cloning-rail"
+              data-ui-action-surface="Workspace"
+              onClick={onOpenVoiceDashboard}
+              type="button"
+            >
+              Dashboard
+            </button>
           </div>
           <input
             className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-xs outline-none transition placeholder:text-[var(--vs-muted)] focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
@@ -9599,6 +9605,24 @@ function narrationActivityMessage(job: VoiceJob | null, hint: string): string {
     return progressMessage;
   }
   return hint;
+}
+
+function narrationSourceSummaryDetail({
+  bookSource,
+  preparedSource,
+  sourceCount,
+}: Readonly<{
+  bookSource: BookSource | undefined;
+  preparedSource: PreparedSource | undefined;
+  sourceCount: number;
+}>): string {
+  if (preparedSource) {
+    return `${preparedSource.kind.toUpperCase()} · ${preparedSource.wordCount.toLocaleString()} words`;
+  }
+  if (bookSource) {
+    return `${bookSource.kind.toUpperCase()} · ${bookSource.wordCount.toLocaleString()} words`;
+  }
+  return `${sourceCount.toString()} managed sources`;
 }
 
 function SidebarFact({ label, value }: Readonly<{ label: string; value: string }>) {
