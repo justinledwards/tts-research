@@ -5,10 +5,10 @@ export {
   type CinemaFocusControllerOptions,
 } from "./CinemaFocusController";
 export {
-  buildCinemaCurrentReadingPanel,
-  buildCinemaInspectorPanel,
+  buildCinemaCurrentReadingSection,
+  buildCinemaInspectorSection,
   buildCinemaInspectorPanels,
-  buildCinemaWayfindingPanel,
+  buildCinemaWayfindingSection,
   type CinemaCurrentReading,
   type CinemaInspectorSection,
   type CinemaWayfindingModel,

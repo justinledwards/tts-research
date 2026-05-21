@@ -143,10 +143,18 @@ describe("UI memory model", () => {
     } as unknown as UiMemoryState;
     const panels: CinemaPanelDefinition[] = [
       {
-        children: "Policy",
         detail: "Policy",
         id: "policy",
         modeAffinity: "review",
+        sections: [
+          {
+            children: "Policy",
+            detail: "Policy",
+            id: "policy-section",
+            kind: "speech-policy",
+            title: "Policy",
+          },
+        ],
         title: "Policy",
       },
     ];

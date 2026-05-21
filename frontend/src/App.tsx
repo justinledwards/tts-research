@@ -146,12 +146,11 @@ import {
   railColumnWidth,
 } from "./features/layout";
 import {
-  ReviewPaneAccordion,
   buildReviewPaneSummaries,
   normalizeReviewPane,
   selectReviewBlockId,
   type ReviewPane,
-} from "./features/review";
+} from "./features/review/model";
 import {
   loadUiMemory,
   rememberCinemaFocusState,
@@ -167,7 +166,7 @@ import {
   type UiMemoryCinemaState,
   type UiMemoryState,
 } from "./features/preferences";
-import { HeaderContextSummary } from "./features/header";
+import type { HeaderContextSummaryProps } from "./features/header";
 import { Button, Panel, SegmentedControl, StatusChip, fieldControlClassName } from "./design";
 import {
   createWorkspaceContext,
@@ -357,8 +356,21 @@ const SpeechPolicyControls = lazy(() =>
 const TelepromptStage = lazy(() =>
   import("./features/teleprompt").then((module) => ({ default: module.TelepromptStage })),
 );
-const PronunciationPanel = lazy(() =>
-  import("./PronunciationPanel").then((module) => ({ default: module.PronunciationPanel })),
+const LazyHeaderContextSummary = lazy(() =>
+  import("./features/header").then((module) => ({ default: module.HeaderContextSummary })),
+);
+const LazyReviewPaneAccordion = lazy(() =>
+  import("./features/review/ReviewPaneAccordion").then((module) => ({
+    default: module.ReviewPaneAccordion,
+  })),
+);
+const LazyReviewContextPanel = lazy(() =>
+  import("./features/context-panel").then((module) => ({ default: module.ReviewContextPanel })),
+);
+const LazyWorkspaceStageContextPanel = lazy(() =>
+  import("./features/context-panel").then((module) => ({
+    default: module.WorkspaceStageContextPanel,
+  })),
 );
 const VoiceSourceAnalysisPanel = lazy(() =>
   import("./VoiceSourceAnalysisPanel").then((module) => ({
@@ -439,6 +451,14 @@ function LazySurfaceFallback({
       minHeightClassName={minHeightClassName}
       surface={surface}
     />
+  );
+}
+
+function HeaderContextSummary(props: Readonly<HeaderContextSummaryProps>) {
+  return (
+    <Suspense fallback={null}>
+      <LazyHeaderContextSummary {...props} />
+    </Suspense>
   );
 }
 
@@ -7081,25 +7101,18 @@ function NarrationStageContextPanel({
   sourceLabel,
   stage,
 }: Readonly<{ policyProfile: string; sourceLabel: string; stage: WorkspaceStage }>) {
-  const stageLabel: Record<WorkspaceStage, string> = {
-    intake: "Intake",
-    preview: "Preview",
-    review: "Review",
-    teleprompt: "Teleprompt",
-  };
   return (
-    <section className="grid gap-3 rounded-lg border p-3 text-xs vs-border vs-raised">
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--vs-text)]">{stageLabel[stage]} Context</h2>
-        <p className="mt-1 leading-5 vs-muted">
-          Playback controls appear here after Create & Listen starts.
-        </p>
-      </div>
-      <dl className="grid gap-2">
-        <SidebarFact label="Source" value={sourceLabel} />
-        <SidebarFact label="Policy" value={policyProfile} />
-      </dl>
-    </section>
+    <Suspense
+      fallback={
+        <LazySurfaceFallback label="Loading context..." surface="workspace-context-panel" />
+      }
+    >
+      <LazyWorkspaceStageContextPanel
+        policyProfile={policyProfile}
+        sourceLabel={sourceLabel}
+        stage={stage}
+      />
+    </Suspense>
   );
 }
 
@@ -12451,16 +12464,26 @@ function NarrationReviewWorkbench({
         </div>
       </div>
 
-      <ReviewPaneAccordion
-        activePane={activePane}
-        onActivePaneChange={(pane) => {
-          onActivePaneChange(normalizeReviewPane(pane));
-        }}
-        panes={reviewPaneSummaries.map((summary) => ({
-          ...summary,
-          children: reviewPaneChildren[summary.id],
-        }))}
-      />
+      <Suspense
+        fallback={
+          <LazySurfaceFallback
+            label="Loading review panes..."
+            minHeightClassName="min-h-24"
+            surface="review-panes"
+          />
+        }
+      >
+        <LazyReviewPaneAccordion
+          activePane={activePane}
+          onActivePaneChange={(pane) => {
+            onActivePaneChange(normalizeReviewPane(pane));
+          }}
+          panes={reviewPaneSummaries.map((summary) => ({
+            ...summary,
+            children: reviewPaneChildren[summary.id],
+          }))}
+        />
+      </Suspense>
 
       <ReviewContextPanels
         mathPanel={mathPanel}
@@ -12730,30 +12753,17 @@ function ReviewContextPanels({
   voiceProfileId: string;
 }>) {
   return (
-    <div className="grid min-w-0 gap-2">
-      {selectedPreparedSource ? (
-        <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
-          <summary className="cursor-pointer text-sm font-semibold">Pronunciation</summary>
-          <div className="mt-3 overflow-hidden rounded-md border vs-border">
-            <Suspense fallback={<LazySurfaceFallback label="Loading pronunciation..." />}>
-              <PronunciationPanel
-                projectId={projectId}
-                source={selectedPreparedSource}
-                voiceProfileId={voiceProfileId}
-              />
-            </Suspense>
-          </div>
-        </details>
-      ) : null}
-      <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
-        <summary className="cursor-pointer text-sm font-semibold">Math & Structured Speech</summary>
-        <div className="mt-3">{mathPanel}</div>
-      </details>
-      <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
-        <summary className="cursor-pointer text-sm font-semibold">Policy Rules</summary>
-        <div className="mt-3">{rulesPanel}</div>
-      </details>
-    </div>
+    <Suspense
+      fallback={<LazySurfaceFallback label="Loading context..." surface="review-context-panel" />}
+    >
+      <LazyReviewContextPanel
+        mathPanel={mathPanel}
+        projectId={projectId}
+        rulesPanel={rulesPanel}
+        selectedPreparedSource={selectedPreparedSource}
+        voiceProfileId={voiceProfileId}
+      />
+    </Suspense>
   );
 }
 

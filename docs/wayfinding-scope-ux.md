@@ -7,10 +7,10 @@ Reader surfaces expose the same navigation model across Book, Document, and Webs
 - Recent positions come from non-hidden project progress rows, sorted by `updatedAt`.
 - Resume uses locator data first, then falls back to `activeWordIndex` and text quote context.
 
-Wayfinding now lives in the shared cinema inspector model:
+Wayfinding now lives in the shared context panel model:
 
-- `Read` mode hides wayfinding unless the panel is pinned, keeping the canvas dominant.
-- `Review` mode exposes the Wayfinding panel with Outline, Bookmarks, and Recent tabs.
+- `Read` mode hides wayfinding unless the `History` tab is pinned, keeping the canvas dominant.
+- `Review` mode opens the `Review` tab by default and keeps Outline, Bookmarks, and Recent positions in `History`.
 - Bookmark creation is placed with the wayfinding panel and footer transport controls, not in separate per-surface rail stacks.
 - Switching focus modes must not change active outline position, saved bookmarks, or recent-position ordering.
 
@@ -21,11 +21,12 @@ Policy scope is shown as visible chips near the active reading surface. Shared s
 - `Session override` is the current browser-session override set and wins only for previews or jobs.
 - `Current profile` reflects the resolved profile returned by the active block policy decision.
 
-Provenance, policy, and health information remain discoverable through inspector modes:
+Provenance, policy, and health information remain discoverable through context tabs:
 
-- `Inspect` groups source provenance, current passage context, policy scope, and extraction health.
-- `Debug` groups skipped content, policy notes, generated-audio health, and timing diagnostics.
-- Pinned inspector panels are session-only and may stay visible in `Read` without expanding all other panels.
+- `Overview` groups source provenance, current passage context, and readiness summary.
+- `Policy` groups speech policy scope, source pins, voice-policy facts, and policy notes.
+- `Diagnostics` groups skipped content, extraction health, generated-audio health, highlight confidence, and timing diagnostics.
+- Pinned context tabs are session-only and may stay visible in `Read` without expanding all other panels.
 
 Footer transport is shared across Book, Document, and Website Cinema. Left/J and Right/L seek by 10 seconds, matching the visible `-10s` and `+10s` controls. The mobile bottom sheet uses `Source`, `Structure`, and `Narration` panels so source selection, outline/bookmark/recent navigation, and current narration context stay in predictable places.
 

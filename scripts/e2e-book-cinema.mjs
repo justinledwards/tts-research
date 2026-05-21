@@ -580,7 +580,7 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await assertCinemaFocusModeSelected(page, "Review");
     await runCommandPaletteAction(page, "bookmark current", /Bookmark current position/);
     await waitForSavedBookmark(projectId, book.id, scope, job.id);
-    await selectCinemaInspectorPanel(page, "Wayfinding");
+    await selectCinemaInspectorPanel(page, "History");
     await overlay.getByRole("button", { exact: true, name: "Bookmarks" }).first().click();
     await overlay
       .getByText(/Scope|Word|Saved position/)
@@ -599,7 +599,7 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await runCommandPaletteAction(page, "recent", /^Recent:/);
     await captureCinemaFocusModeScreenshots(page, screenshot.replace(/\.png$/i, "-focus"));
     await switchCinemaFocusMode(page, "Review");
-    await selectCinemaInspectorPanel(page, "Speech policy");
+    await selectCinemaInspectorPanel(page, "Policy");
     await exerciseSourcePinSmoke(page, book.id);
     await waitForSavedProgress(projectId, book.id, scope, job.id);
     await page.screenshot({ fullPage: false, path: screenshot });
@@ -613,7 +613,7 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     const resumeIssues = collectPageIssues(resumePage);
     await openBookCinemaOverlay(resumePage, scope, bookCinemaHashUrl(book.id, scope, job.id));
     await switchCinemaFocusMode(resumePage, "Review");
-    await selectCinemaInspectorPanel(resumePage, "Current passage");
+    await selectCinemaInspectorPanel(resumePage, "Overview");
     const resumeButton = overlayTextButton(resumePage, "Resume");
     await resumeButton.waitFor({ state: "attached" });
     await resumeButton.scrollIntoViewIfNeeded();
@@ -1076,7 +1076,7 @@ async function captureCinemaFocusModeScreenshots(page, screenshotPrefix) {
   await visibleOverlayButton(page, "More").click();
 
   await switchCinemaFocusMode(page, "Inspect");
-  await selectCinemaInspectorPanel(page, "Source");
+  await selectCinemaInspectorPanel(page, "Overview");
   await visibleOverlayButton(page, "Pin").click();
   await switchCinemaFocusMode(page, "Read");
   await assertCinemaFocusModeLayout(page, "Read", { pinned: true });
@@ -1090,7 +1090,7 @@ async function captureCinemaFocusModeScreenshots(page, screenshotPrefix) {
 
 async function exerciseCinemaFocusMemoryPersistence(page, surfaceKind, reopenOverlay) {
   await switchCinemaFocusMode(page, "Review");
-  await selectCinemaInspectorPanel(page, "Speech policy");
+  await selectCinemaInspectorPanel(page, "Policy");
   await visibleOverlayButton(page, "Pin").click();
   await assertCinemaFocusModeSelected(page, "Review");
   await waitForRememberedCinemaFocusState(page, surfaceKind, "review", "policy");
@@ -1246,12 +1246,14 @@ async function openCinemaAdvancedMenu(page) {
 }
 
 async function selectCinemaInspectorPanel(page, label) {
-  await page
-    .locator(cinemaOverlaySelector)
-    .first()
-    .getByRole("button", { name: new RegExp(label) })
-    .first()
-    .click();
+  const overlay = page.locator(cinemaOverlaySelector).first();
+  const name = new RegExp(label);
+  const tab = overlay.getByRole("tab", { name }).first();
+  if ((await tab.count()) > 0) {
+    await tab.click();
+    return;
+  }
+  await overlay.getByRole("button", { name }).first().click();
 }
 
 async function exerciseSourcePinSmoke(page, bookSourceId) {

@@ -238,3 +238,10 @@
 - [x] Remove command palette query reset race
 - [x] Retune CSS bundle budget after token consolidation
 - [x] Run local validation commands
+
+## 2026-05-21 05:41 CEST - Unified Context Panel
+- [x] Map duplicated inspector, review, diagnostics, and policy surfaces
+- [x] Add shared context panel model and tabs
+- [x] Wire Book, Document, Website, Review, and Teleprompt context surfaces
+- [x] Update context panel and wayfinding docs
+- [x] Run local validation commands

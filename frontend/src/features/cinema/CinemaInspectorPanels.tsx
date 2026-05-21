@@ -5,6 +5,7 @@ import {
   type ReaderOutlineItem,
   type ReaderRecentPositionItem,
 } from "../reader-navigation";
+import { buildContextPanelTabs, type ContextPanelSectionKind } from "../context-panel";
 import type { CinemaFocusMode, CinemaInspectorPanelId, CinemaPanelDefinition } from "./model";
 
 export interface CinemaCurrentReading {
@@ -31,15 +32,17 @@ export interface CinemaWayfindingModel<TOutlineTarget = unknown> {
 export interface CinemaInspectorSection {
   children: ReactNode;
   detail: string;
-  id: CinemaInspectorPanelId;
+  id: string;
+  kind: ContextPanelSectionKind;
   modeAffinity: CinemaFocusMode | readonly CinemaFocusMode[];
+  tabId: CinemaInspectorPanelId;
   title: string;
 }
 
-export function buildCinemaCurrentReadingPanel(
+export function buildCinemaCurrentReadingSection(
   reading: CinemaCurrentReading,
-): CinemaPanelDefinition {
-  return buildCinemaInspectorPanel({
+): CinemaInspectorSection {
+  return buildCinemaInspectorSection({
     children: (
       <div className="grid gap-3">
         <p className="text-sm font-semibold">{reading.label}</p>
@@ -50,16 +53,18 @@ export function buildCinemaCurrentReadingPanel(
       </div>
     ),
     detail: reading.detail,
-    id: "current",
+    id: "current-passage",
+    kind: "current-passage",
     modeAffinity: ["inspect", "review"],
+    tabId: "overview",
     title: "Current passage",
   });
 }
 
-export function buildCinemaWayfindingPanel<TOutlineTarget>(
+export function buildCinemaWayfindingSection<TOutlineTarget>(
   wayfinding: CinemaWayfindingModel<TOutlineTarget>,
-): CinemaPanelDefinition {
-  return buildCinemaInspectorPanel({
+): CinemaInspectorSection {
+  return buildCinemaInspectorSection({
     children: (
       <ReaderWayfindingPanel
         bookmarks={wayfinding.bookmarks}
@@ -76,23 +81,48 @@ export function buildCinemaWayfindingPanel<TOutlineTarget>(
     ),
     detail: "Outline, bookmarks, recent",
     id: "wayfinding",
+    kind: "wayfinding",
     modeAffinity: "review",
+    tabId: "history",
     title: "Wayfinding",
   });
 }
 
-export function buildCinemaInspectorPanel(section: CinemaInspectorSection): CinemaPanelDefinition {
-  return {
-    children: section.children,
-    detail: section.detail,
-    id: section.id,
-    modeAffinity: section.modeAffinity,
-    title: section.title,
-  };
+export function buildCinemaInspectorSection(
+  section: CinemaInspectorSection,
+): CinemaInspectorSection {
+  return section;
 }
 
 export function buildCinemaInspectorPanels(
   sections: readonly CinemaInspectorSection[],
 ): CinemaPanelDefinition[] {
-  return sections.map((section) => buildCinemaInspectorPanel(section));
+  return buildContextPanelTabs(
+    sections.map((section) => ({
+      children: section.children,
+      detail: section.detail,
+      id: section.id,
+      kind: section.kind,
+      tabId: section.tabId,
+      title: section.title,
+    })),
+  ).map((tab) => ({
+    ...tab,
+    modeAffinity: mergeModeAffinities(
+      sections.filter((section) => section.tabId === tab.id).map((section) => section.modeAffinity),
+    ),
+  }));
+}
+
+function mergeModeAffinities(
+  affinities: readonly (CinemaFocusMode | readonly CinemaFocusMode[])[],
+): CinemaFocusMode[] {
+  const modes = new Set<CinemaFocusMode>();
+  for (const affinity of affinities) {
+    const items: readonly CinemaFocusMode[] = Array.isArray(affinity) ? affinity : [affinity];
+    for (const mode of items) {
+      modes.add(mode);
+    }
+  }
+  return [...modes];
 }

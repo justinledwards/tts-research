@@ -13,11 +13,12 @@ import { CinemaShell } from "./CinemaShell";
 import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 import { useCinemaFocusController } from "./CinemaFocusController";
 import {
-  buildCinemaCurrentReadingPanel,
-  buildCinemaInspectorPanel,
-  buildCinemaWayfindingPanel,
+  buildCinemaCurrentReadingSection,
+  buildCinemaInspectorPanels,
+  buildCinemaInspectorSection,
+  buildCinemaWayfindingSection,
 } from "./CinemaInspectorPanels";
-import { deriveCinemaPlaybackState, type CinemaPanelDefinition } from "./model";
+import { deriveCinemaPlaybackState } from "./model";
 import {
   READER_LINE_SPACING_CLASS,
   READER_MEASURE_CLASS,
@@ -306,8 +307,8 @@ export function PreparedSourceCinemaOverlay({
       />
     </div>
   );
-  const sourceInspectorPanels: CinemaPanelDefinition[] = [
-    buildCinemaInspectorPanel({
+  const sourceInspectorPanels = buildCinemaInspectorPanels([
+    buildCinemaInspectorSection({
       children: (
         <div className="grid gap-3">
           <PreparedSourceCinemaSourceLibrary
@@ -349,11 +350,13 @@ export function PreparedSourceCinemaOverlay({
         </div>
       ),
       detail: href ?? source.sourceName,
-      id: "provenance",
+      id: "source-provenance",
+      kind: "source-provenance",
       modeAffinity: "inspect",
+      tabId: "overview",
       title: "Source provenance",
     }),
-    buildCinemaCurrentReadingPanel({
+    buildCinemaCurrentReadingSection({
       detail: displayBlock
         ? `${blockKindLabel(displayBlock)} ${(displayBlock.index + 1).toString()}`
         : "No block selected",
@@ -361,7 +364,7 @@ export function PreparedSourceCinemaOverlay({
       excerpt: activeText,
       label: activeSection ? activeSection.label : blockSnippet(displayBlock, "Source opening"),
     }),
-    buildCinemaWayfindingPanel({
+    buildCinemaWayfindingSection({
       bookmarks: bookmarkItems,
       canBookmark,
       outlineItems,
@@ -371,7 +374,34 @@ export function PreparedSourceCinemaOverlay({
       onOutlineNavigate: handleWayfindingOutlineNavigate,
       onRecentNavigate: handleRecentNavigate,
     }),
-    buildCinemaInspectorPanel({
+    buildCinemaInspectorSection({
+      children: (
+        <div className="grid gap-2 text-sm">
+          <MetadataRow
+            label="Block"
+            value={
+              displayBlock
+                ? `${blockKindLabel(displayBlock)} ${(displayBlock.index + 1).toString()}`
+                : "None"
+            }
+          />
+          <MetadataRow label="Segments" value={(displayBlock?.segments?.length ?? 0).toString()} />
+          <MetadataRow label="Speak mode" value={displayBlock?.speakMode ?? "waiting"} />
+          <p className="line-clamp-4 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs leading-5 vs-border">
+            {activeText || "Start playback to review narration block status."}
+          </p>
+        </div>
+      ),
+      detail: displayBlock
+        ? `${(displayBlock.segments?.length ?? 0).toLocaleString()} segments`
+        : "Waiting",
+      id: "narration-block-status",
+      kind: "narration-block-status",
+      modeAffinity: "review",
+      tabId: "review",
+      title: "Narration block status",
+    }),
+    buildCinemaInspectorSection({
       children: (
         <div className="grid gap-3 text-sm">
           <PolicyScopeSummary display="expanded" state={sourcePolicyState} />
@@ -399,11 +429,13 @@ export function PreparedSourceCinemaOverlay({
       ),
       detail:
         displayBlock?.speechPolicy.profile ?? source.sourceSpeechPolicyProfile ?? "Project default",
-      id: "policy",
-      modeAffinity: ["inspect", "review"],
+      id: "speech-policy",
+      kind: "speech-policy",
+      modeAffinity: ["inspect", "review", "debug"],
+      tabId: "policy",
       title: "Speech policy",
     }),
-    buildCinemaInspectorPanel({
+    buildCinemaInspectorSection({
       children: (
         <div className="grid gap-3">
           <PolicyScopeSummary display="debug" state={sourcePolicyState} />
@@ -412,10 +444,12 @@ export function PreparedSourceCinemaOverlay({
       ),
       detail: `${policyNotes.length.toLocaleString()} policy notes`,
       id: "policy-notes",
+      kind: "policy-notes",
       modeAffinity: ["inspect", "review", "debug"],
+      tabId: "policy",
       title: "Policy notes",
     }),
-    buildCinemaInspectorPanel({
+    buildCinemaInspectorSection({
       children: (
         <div className="grid gap-3 text-sm">
           <HealthRow label="Main content" value="Detected" />
@@ -432,11 +466,13 @@ export function PreparedSourceCinemaOverlay({
         </div>
       ),
       detail: source.status === "ready" ? "Looks good" : "Needs review",
-      id: "health",
-      modeAffinity: ["inspect", "debug"],
+      id: "extraction-health",
+      kind: "extraction-health",
+      modeAffinity: "debug",
+      tabId: "diagnostics",
       title: "Health",
     }),
-    buildCinemaInspectorPanel({
+    buildCinemaInspectorSection({
       children: (
         <div className="grid gap-2 text-sm">
           {skippedGroups.length > 0 ? (
@@ -459,11 +495,13 @@ export function PreparedSourceCinemaOverlay({
         </div>
       ),
       detail: `${metrics.skippedCount.toLocaleString()} skipped`,
-      id: "notes",
+      id: "skipped-content",
+      kind: "skipped-content",
       modeAffinity: "debug",
+      tabId: "diagnostics",
       title: "Skipped content",
     }),
-  ];
+  ]);
   const cinemaFocus = useCinemaFocusController(sourceInspectorPanels, {
     initialState: uiMemoryFocusState,
     onStateChange: onUiMemoryFocusStateChange,
@@ -623,6 +661,7 @@ export function PreparedSourceCinemaOverlay({
             mode={cinemaFocus.mode}
             panels={sourceInspectorPanels}
             pinnedPanelId={cinemaFocus.pinnedPanelId}
+            surface={surfaceKind === "website" ? "website" : "document"}
             onActivePanelChange={cinemaFocus.setActivePanelId}
             onPinnedPanelChange={cinemaFocus.setPinnedPanelId}
           />

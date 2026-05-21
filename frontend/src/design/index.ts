@@ -10,7 +10,6 @@ export {
   touchTargetClassName,
 } from "./tokens";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./components/Button";
-export { Drawer, type DrawerProps } from "./components/Drawer";
 export { Panel, type PanelElement, type PanelVariant } from "./components/Panel";
 export {
   SegmentedControl,

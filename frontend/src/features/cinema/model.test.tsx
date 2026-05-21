@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 import { CinemaInspectorDock } from "./CinemaInspectorDock";
 import { CinemaMobileSheet } from "./CinemaMobileSheet";
 import {
-  buildCinemaCurrentReadingPanel,
-  buildCinemaInspectorPanel,
-  buildCinemaWayfindingPanel,
+  buildCinemaCurrentReadingSection,
+  buildCinemaInspectorPanels,
+  buildCinemaInspectorSection,
+  buildCinemaWayfindingSection,
 } from "./CinemaInspectorPanels";
 import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 import {
@@ -44,22 +45,22 @@ describe("cinema focus layout model", () => {
   it("chooses mode-affinity defaults for inspector modes", () => {
     const panels = makePanels();
 
-    expect(defaultCinemaPanelForMode(panels, "inspect")).toBe("provenance");
-    expect(defaultCinemaPanelForMode(panels, "review")).toBe("current");
-    expect(defaultCinemaPanelForMode(panels, "debug")).toBe("health");
+    expect(defaultCinemaPanelForMode(panels, "inspect")).toBe("overview");
+    expect(defaultCinemaPanelForMode(panels, "review")).toBe("review");
+    expect(defaultCinemaPanelForMode(panels, "debug")).toBe("diagnostics");
     expect(normalizeCinemaInspectorPanelId("policy")).toBe("policy");
     expect(normalizeCinemaInspectorPanelId("missing")).toBeNull();
   });
 
-  it("falls back when active or pinned panel ids are no longer available", () => {
+  it("falls back when active panel ids are no longer available", () => {
     const state = buildCinemaLayoutState({
-      activePanelId: "notes",
+      activePanelId: "history",
       mode: "inspect",
       panels: makePanels(),
-      pinnedPanelId: "debug",
+      pinnedPanelId: null,
     });
 
-    expect(state.activePanelId).toBe("provenance");
+    expect(state.activePanelId).toBe("overview");
     expect(state.pinnedPanelId).toBeNull();
     expect(state.railVisible).toBe(true);
   });
@@ -94,29 +95,30 @@ describe("CinemaInspectorDock", () => {
   it("renders only the active panel body", () => {
     const markup = renderToStaticMarkup(
       <CinemaInspectorDock
-        activePanelId="current"
+        activePanelId="review"
         mode="review"
         panels={makePanels()}
         pinnedPanelId={null}
+        surface="book"
         onActivePanelChange={() => null}
         onPinnedPanelChange={() => null}
       />,
     );
 
-    expect(markup).toContain("Current body");
+    expect(markup).toContain("Review body");
     expect(markup).not.toContain("Policy body");
     expect(markup).not.toContain("Health body");
   });
 
   it("renders shared current and wayfinding panel builders through the dock", () => {
-    const panels = [
-      buildCinemaCurrentReadingPanel({
+    const panels = buildCinemaInspectorPanels([
+      buildCinemaCurrentReadingSection({
         detail: "Block 3",
         emptyText: "No current passage",
         excerpt: "The current paragraph is narrated here.",
         label: "Readable Section",
       }),
-      buildCinemaWayfindingPanel({
+      buildCinemaWayfindingSection({
         bookmarks: [],
         canBookmark: true,
         outlineItems: [
@@ -133,21 +135,24 @@ describe("CinemaInspectorDock", () => {
         onOutlineNavigate: () => null,
         onRecentNavigate: () => null,
       }),
-      buildCinemaInspectorPanel({
+      buildCinemaInspectorSection({
         children: <p>Health body</p>,
         detail: "Generated audio",
-        id: "health",
+        id: "generated-audio-health",
+        kind: "generated-audio-health",
         modeAffinity: "debug",
+        tabId: "diagnostics",
         title: "Health",
       }),
-    ];
+    ]);
 
     const markup = renderToStaticMarkup(
       <CinemaInspectorDock
-        activePanelId="current"
-        mode="review"
+        activePanelId="overview"
+        mode="inspect"
         panels={panels}
         pinnedPanelId={null}
+        surface="book"
         onActivePanelChange={() => null}
         onPinnedPanelChange={() => null}
       />,
@@ -165,6 +170,7 @@ describe("CinemaInspectorDock", () => {
         mode="read"
         panels={makePanels()}
         pinnedPanelId="policy"
+        surface="book"
         onActivePanelChange={() => null}
         onPinnedPanelChange={() => null}
       />,
@@ -259,32 +265,64 @@ describe("CinemaMobileSheet", () => {
 function makePanels(): CinemaPanelDefinition[] {
   return [
     {
-      children: <p>Current body</p>,
-      detail: "Current passage",
-      id: "current",
-      modeAffinity: "review",
-      title: "Current",
-    },
-    {
-      children: <p>Provenance body</p>,
-      detail: "Source provenance",
-      id: "provenance",
+      detail: "Source and passage",
+      id: "overview",
       modeAffinity: "inspect",
-      title: "Provenance",
+      sections: [
+        {
+          children: <p>Overview body</p>,
+          detail: "Current passage",
+          id: "current",
+          kind: "current-passage",
+          title: "Current",
+        },
+      ],
+      title: "Overview",
     },
     {
-      children: <p>Policy body</p>,
+      detail: "Review tasks",
+      id: "review",
+      modeAffinity: "review",
+      sections: [
+        {
+          children: <p>Review body</p>,
+          detail: "Block status",
+          id: "review-blocks",
+          kind: "narration-block-status",
+          title: "Blocks",
+        },
+      ],
+      title: "Review",
+    },
+    {
       detail: "Pinned policy",
       id: "policy",
       modeAffinity: ["inspect", "review"],
+      sections: [
+        {
+          children: <p>Policy body</p>,
+          detail: "Pinned policy",
+          id: "policy-section",
+          kind: "speech-policy",
+          title: "Policy",
+        },
+      ],
       title: "Policy",
     },
     {
-      children: <p>Health body</p>,
       detail: "Generated audio",
-      id: "health",
+      id: "diagnostics",
       modeAffinity: "debug",
-      title: "Health",
+      sections: [
+        {
+          children: <p>Health body</p>,
+          detail: "Generated audio",
+          id: "health",
+          kind: "generated-audio-health",
+          title: "Health",
+        },
+      ],
+      title: "Diagnostics",
     },
   ];
 }

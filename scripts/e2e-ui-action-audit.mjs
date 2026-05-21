@@ -611,15 +611,21 @@ async function openPinnedInspector(page, scope) {
   await openBookCinemaOverlay(page, scope);
   const overlay = cinemaOverlay(page);
   await overlay.getByRole("button", { exact: true, name: "Inspect" }).click();
-  await overlay
-    .getByRole("button", { name: /Source/ })
-    .first()
-    .click();
+  await clickContextPanelTab(overlay, /Overview|Source/);
   const pin = overlay.getByRole("button", { exact: true, name: "Pin" }).first();
   if (await pin.isVisible().catch(() => false)) {
     await pin.click();
   }
   await overlay.getByRole("button", { exact: true, name: "Read" }).click();
+}
+
+async function clickContextPanelTab(overlay, name) {
+  const tab = overlay.getByRole("tab", { name }).first();
+  if ((await tab.count()) > 0) {
+    await tab.click();
+    return;
+  }
+  await overlay.getByRole("button", { name }).first().click();
 }
 
 async function openPreparedCinemaOverlay(page, expectedLabel) {

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { backendAssetUrl } from "../../api";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
-import { Button, Drawer, Panel, StatusChip, Toggle, fieldControlClassName } from "../../design";
+import { Button, Panel, StatusChip, Toggle, fieldControlClassName } from "../../design";
+import { Drawer } from "../../design/components/Drawer";
 import { useReaderModalLifecycle, type ReaderAccessibilitySettings } from "../reader-accessibility";
 import {
   KOKORO_RENDER_MODE_OPTIONS,

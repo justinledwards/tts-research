@@ -1,4 +1,8 @@
-import type { ReactNode } from "react";
+import {
+  contextPanelDefaultTabForFocusMode,
+  type ContextPanelTabDefinition,
+  type ContextPanelTabId,
+} from "../context-panel";
 export {
   NARROW_VIEWPORT_QUERY as CINEMA_NARROW_VIEWPORT_QUERY,
   RESPONSIVE_QA_VIEWPORTS as CINEMA_RESPONSIVE_QA_VIEWPORTS,
@@ -9,15 +13,11 @@ export const CINEMA_FOCUS_MODES = ["read", "inspect", "review", "debug"] as cons
 export const CINEMA_PRIMARY_FOCUS_MODES = ["read", "inspect", "review"] as const;
 export const CINEMA_ADVANCED_FOCUS_MODES = ["debug"] as const;
 export const CINEMA_INSPECTOR_PANEL_IDS = [
-  "current",
-  "wayfinding",
-  "provenance",
+  "overview",
+  "review",
+  "diagnostics",
   "policy",
-  "policy-notes",
-  "health",
-  "notes",
-  "queue",
-  "debug",
+  "history",
 ] as const;
 export const CINEMA_PLAYBACK_STATES = [
   "preAudio",
@@ -31,7 +31,7 @@ export const CINEMA_PLAYBACK_STATES = [
 
 export type CinemaFocusMode = (typeof CINEMA_FOCUS_MODES)[number];
 export type CinemaSurfaceKind = "book" | "document" | "website";
-export type CinemaInspectorPanelId = (typeof CINEMA_INSPECTOR_PANEL_IDS)[number];
+export type CinemaInspectorPanelId = ContextPanelTabId;
 export type CinemaPlaybackState = (typeof CINEMA_PLAYBACK_STATES)[number];
 
 export interface CinemaPlaybackStateInput {
@@ -44,12 +44,8 @@ export interface CinemaPlaybackStateInput {
   status?: string | null;
 }
 
-export interface CinemaPanelDefinition {
-  children: ReactNode;
-  detail: string;
-  id: CinemaInspectorPanelId;
+export interface CinemaPanelDefinition extends ContextPanelTabDefinition {
   modeAffinity: CinemaFocusMode | readonly CinemaFocusMode[];
-  title: string;
 }
 
 export interface CinemaFocusModeMeta {
@@ -175,7 +171,7 @@ export function buildCinemaLayoutState({
   }
 
   const requestedActivePanel = findPanel(availablePanels, activePanelId);
-  const fallbackPanel = availablePanels.length > 0 ? availablePanels[0] : null;
+  const fallbackPanel = selectDefaultPanelForMode(availablePanels, normalizedMode);
   const activePanel = pinnedPanel ?? requestedActivePanel ?? fallbackPanel;
 
   return {
@@ -194,11 +190,12 @@ export function defaultCinemaPanelForMode(
   panels: readonly CinemaPanelDefinition[],
   mode: CinemaFocusMode,
 ): CinemaInspectorPanelId | null {
-  const modePanel = panels.find((panel) => panelMatchesMode(panel, mode));
-  if (modePanel) {
-    return modePanel.id;
-  }
-  return panels.length > 0 ? panels[0].id : null;
+  return (
+    selectDefaultPanelForMode(
+      panels.filter((panel) => panelMatchesMode(panel, mode)),
+      mode,
+    )?.id ?? null
+  );
 }
 
 export function cinemaFocusModeLabel(mode: CinemaFocusMode): string {
@@ -229,6 +226,20 @@ function includePanel(
     return panels;
   }
   return [panel, ...panels];
+}
+
+function selectDefaultPanelForMode(
+  panels: readonly CinemaPanelDefinition[],
+  mode: CinemaFocusMode,
+): CinemaPanelDefinition | null {
+  const preferredTabId = contextPanelDefaultTabForFocusMode(mode);
+  if (preferredTabId) {
+    const preferred = panels.find((panel) => panel.id === preferredTabId);
+    if (preferred) {
+      return preferred;
+    }
+  }
+  return panels[0] ?? null;
 }
 
 function normalizePlaybackProgressRatio(value: number | null | undefined): number {

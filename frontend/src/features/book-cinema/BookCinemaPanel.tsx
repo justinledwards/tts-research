@@ -17,14 +17,14 @@ import {
   CinemaMobileSheet,
   CinemaShell,
   CinemaTransportBar,
-  buildCinemaCurrentReadingPanel,
-  buildCinemaInspectorPanel,
-  buildCinemaWayfindingPanel,
+  buildCinemaCurrentReadingSection,
+  buildCinemaInspectorPanels,
+  buildCinemaInspectorSection,
+  buildCinemaWayfindingSection,
   deriveCinemaPlaybackState,
   returnFocusToCinemaReaderCanvas,
   useCinemaFocusController,
   type CinemaMobilePanelSpec,
-  type CinemaPanelDefinition,
   type CinemaTransportModel,
 } from "../cinema";
 import type { UiMemoryCinemaState } from "../preferences";
@@ -1007,8 +1007,8 @@ export function BookCinemaOverlay({
     onResumeProgress(item.progressItem, item.currentTimeSec);
   };
   const structuralWarnings = scopeContent?.warnings ?? book.warnings ?? [];
-  const bookInspectorPanels: CinemaPanelDefinition[] = [
-    buildCinemaInspectorPanel({
+  const bookInspectorPanels = buildCinemaInspectorPanels([
+    buildCinemaInspectorSection({
       children: (
         <div className="grid gap-3">
           <BookCinemaSourceLibrary
@@ -1038,11 +1038,13 @@ export function BookCinemaOverlay({
         </div>
       ),
       detail: book.sourceFile,
-      id: "provenance",
+      id: "source-provenance",
+      kind: "source-provenance",
       modeAffinity: "inspect",
+      tabId: "overview",
       title: "Source & provenance",
     }),
-    buildCinemaCurrentReadingPanel({
+    buildCinemaCurrentReadingSection({
       action: progress ? (
         <BookCinemaResumeButton progress={progress} onResumeProgress={onResumeProgress} />
       ) : null,
@@ -1051,7 +1053,7 @@ export function BookCinemaOverlay({
       excerpt: activePassage,
       label: pointerOption?.label ?? bookScopeLabel(normalizedScope),
     }),
-    buildCinemaWayfindingPanel({
+    buildCinemaWayfindingSection({
       bookmarks: bookmarkItems,
       canBookmark,
       outlineItems,
@@ -1061,7 +1063,7 @@ export function BookCinemaOverlay({
       onOutlineNavigate: handleWayfindingOutlineNavigate,
       onRecentNavigate: handleRecentNavigate,
     }),
-    buildCinemaInspectorPanel({
+    buildCinemaInspectorSection({
       children: (
         <div className="grid gap-3 text-sm">
           <PolicyScopeSummary display="expanded" state={bookPolicyState} />
@@ -1092,11 +1094,13 @@ export function BookCinemaOverlay({
       ),
       detail:
         activeBlock?.speechPolicy.profile ?? book.sourceSpeechPolicyProfile ?? "Project default",
-      id: "policy",
-      modeAffinity: ["inspect", "review"],
+      id: "speech-policy",
+      kind: "speech-policy",
+      modeAffinity: ["inspect", "review", "debug"],
+      tabId: "policy",
       title: "Speech policy",
     }),
-    buildCinemaInspectorPanel({
+    buildCinemaInspectorSection({
       children: (
         <div className="grid gap-3 text-sm">
           <BookCinemaHealthRow
@@ -1137,11 +1141,13 @@ export function BookCinemaOverlay({
         </div>
       ),
       detail: hasPlayableAudio ? "Generated audio ready" : "Pre-audio",
-      id: "health",
-      modeAffinity: ["inspect", "debug"],
+      id: "extraction-health",
+      kind: "extraction-health",
+      modeAffinity: "debug",
+      tabId: "diagnostics",
       title: "Health",
     }),
-    buildCinemaInspectorPanel({
+    buildCinemaInspectorSection({
       children: (
         <div className="grid gap-3">
           <PolicyScopeSummary display="debug" state={bookPolicyState} />
@@ -1149,11 +1155,13 @@ export function BookCinemaOverlay({
         </div>
       ),
       detail: `${policyNotes.length.toLocaleString()} policy notes`,
-      id: "notes",
-      modeAffinity: "debug",
+      id: "policy-notes",
+      kind: "policy-notes",
+      modeAffinity: ["inspect", "review", "debug"],
+      tabId: "policy",
       title: "Policy notes",
     }),
-    buildCinemaInspectorPanel({
+    buildCinemaInspectorSection({
       children: (
         <BookCinemaScopeQueue
           activeScope={normalizedScope}
@@ -1164,11 +1172,22 @@ export function BookCinemaOverlay({
         />
       ),
       detail: "Narratable sections",
-      id: "queue",
+      id: "narration-queue",
+      kind: "narration-block-status",
       modeAffinity: "review",
+      tabId: "review",
       title: "Section queue",
     }),
-    buildCinemaInspectorPanel({
+    buildCinemaInspectorSection({
+      children: <BookCinemaHighlightConfidence display={timingConfidence} />,
+      detail: timingConfidence.detail,
+      id: "highlight-confidence",
+      kind: "highlight-confidence",
+      modeAffinity: "debug",
+      tabId: "diagnostics",
+      title: "Highlight confidence",
+    }),
+    buildCinemaInspectorSection({
       children: (
         <BookCinemaTimingDebug
           cursorSec={playbackCursorSec}
@@ -1177,11 +1196,13 @@ export function BookCinemaOverlay({
         />
       ),
       detail: timingConfidence.isDegraded ? timingConfidence.label : "Timing map",
-      id: "debug",
+      id: "timing-map",
+      kind: "timing-map",
       modeAffinity: "debug",
+      tabId: "diagnostics",
       title: "Timing debug",
     }),
-  ];
+  ]);
   const cinemaFocus = useCinemaFocusController(bookInspectorPanels, {
     initialState: uiMemoryFocusState,
     onStateChange: onUiMemoryFocusStateChange,
@@ -1476,6 +1497,7 @@ export function BookCinemaOverlay({
             mode={cinemaFocus.mode}
             panels={bookInspectorPanels}
             pinnedPanelId={cinemaFocus.pinnedPanelId}
+            surface={book.kind === "markdown" ? "document" : "book"}
             onActivePanelChange={cinemaFocus.setActivePanelId}
             onPinnedPanelChange={cinemaFocus.setPinnedPanelId}
           />
@@ -2141,6 +2163,22 @@ export function BookCinemaTimingStatusChip({
     >
       {display.label}
     </span>
+  );
+}
+
+function BookCinemaHighlightConfidence({
+  display,
+}: Readonly<{ display: ReturnType<typeof resolveTimingConfidenceDisplay> }>) {
+  return (
+    <div className="grid gap-2 text-sm">
+      <BookCinemaHealthRow
+        label="Timing mode"
+        value={display.isDegraded ? display.label : "Word sync"}
+      />
+      <p className="rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs leading-5 vs-border vs-muted">
+        {display.detail}
+      </p>
+    </div>
   );
 }
 

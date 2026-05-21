@@ -1,15 +1,15 @@
 # Cinema Focus Modes
 
-Cinema surfaces share one focus model across Book, Document, and Website Cinema.
+Cinema surfaces share one focus model across Book, Document, and Website Cinema. Their right-side rail is the shared context panel described in `docs/context-panel.md`.
 
-- `Read` is the default for every newly opened cinema overlay. It is canvas-first: desktop inspector rails are hidden unless a panel is pinned, and secondary reader chrome is suppressed inside the canvas.
-- `Inspect` prioritizes source provenance, current passage, speech policy, and extraction health.
-- `Review` prioritizes the current passage, wayfinding, bookmarks, recent positions, speech policy, and section queues.
-- `Debug` prioritizes extraction warnings, skipped content, generated-audio health, policy notes, and timing diagnostics. It is advanced-only by default: keep it behind `More`, advanced command-palette entries, keyboard/operator paths, or an explicit developer preference instead of placing it in the primary reader mode strip.
+- `Read` is the default for every newly opened cinema overlay. It is canvas-first: the context panel is hidden unless a tab is pinned, and secondary reader chrome is suppressed inside the canvas.
+- `Inspect` opens the `Overview` context tab for source provenance, current passage, and readiness summary.
+- `Review` opens the `Review` context tab for review tasks, narration block status, and section queues. Outline, bookmarks, and recent positions remain one tab away in `History`.
+- `Debug` opens the `Diagnostics` context tab for extraction warnings, skipped content, generated-audio health, highlight confidence, and timing diagnostics. It is advanced-only by default: keep it behind `More`, advanced command-palette entries, keyboard/operator paths, or an explicit developer preference instead of placing it in the primary reader mode strip.
 
-Inspector panels are single-panel docks. Switching focus mode changes the available panel group instead of expanding every card at once. The `Pin` control keeps the current panel visible while moving between modes, including `Read`; unpinning returns `Read` to a fully canvas-first layout.
+Context tabs are single-panel docks. Switching focus mode changes the default context tab instead of expanding every card at once. The `Pin` control keeps the current tab visible while moving between modes, including `Read`; unpinning returns `Read` to a fully canvas-first layout.
 
-Pinned panel state must not look like a second active reader mode. The active mode uses the strongest selected state. A pinned inspector panel uses only the pin control or a small pin badge in the panel list; its tab/list item must not also use the selected styling reserved for active panels.
+Pinned context state must not look like a second active reader mode. The active mode uses the strongest selected state. A pinned context tab uses only the pin control or a small pin badge; its tab item must not also use the selected styling reserved for the active tab.
 
 Focus mode, active panel, and pinned panel state are session-only overlay state by default. Closing and reopening a cinema surface starts in `Read` mode with no pinned inspector panel unless the user has enabled `Remember my layout` in Studio Settings.
 
