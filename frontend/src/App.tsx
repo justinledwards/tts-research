@@ -33,7 +33,6 @@ import {
   deleteProject,
   deleteCustomSpeechPolicyProfile,
   deleteVoiceProfile,
-  getBookCinemaDiagnostics,
   getBookSourceScope,
   getContentIR,
   getHighlightMap,
@@ -167,7 +166,7 @@ import {
   type UiMemoryState,
 } from "./features/preferences";
 import type { HeaderContextSummaryProps } from "./features/header";
-import { Button, Panel, SegmentedControl, StatusChip, fieldControlClassName } from "./design";
+import { Button, Panel, SegmentedControl, StatusChip } from "./design";
 import {
   createWorkspaceContext,
   defaultWorkspaceLayoutMode,
@@ -191,9 +190,9 @@ import {
   workspaceStageNavigationAction,
   type WorkspaceStageActionId,
 } from "./features/workspace/stageActions";
+import type { IntakePreparationTarget } from "./features/intake";
 import type {
   BookSource,
-  BookCinemaDiagnostics,
   BookScope,
   BookSourceImportOptions,
   BookSourceScopeContent,
@@ -297,27 +296,8 @@ const DEFAULT_KOKORO_VOICE_ID = "af_heart";
 const VOICE_PROFILE_RECENT_STORAGE_KEY = "tts-recent-voice-profile-ids";
 const VOICE_PROFILE_PINNED_STORAGE_KEY = "tts-pinned-voice-profile-ids";
 const PROFILE_ARTIFACT_MODULE_ORDER = ["kokoro-embed", "supertonic-embed"] as const;
-const SOURCE_TEXT_FILE_ACCEPT =
-  ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,image/png,image/jpeg,image/tiff,image/webp";
-const SOURCE_TEXT_FILE_EXTENSIONS = new Set([
-  "txt",
-  "md",
-  "markdown",
-  "text",
-  "log",
-  "csv",
-  "json",
-  "html",
-  "htm",
-]);
-
 const BundleFlowPanel = lazy(() =>
   import("./BundlePanels").then((module) => ({ default: module.BundleFlowPanel })),
-);
-const BookCinemaPanel = lazy(() =>
-  import("./features/book-cinema/BookCinemaPanel").then((module) => ({
-    default: module.BookCinemaPanel,
-  })),
 );
 const BookCinemaOverlay = lazy(() =>
   import("./features/book-cinema/BookCinemaPanel").then((module) => ({
@@ -348,10 +328,8 @@ const HelpPanel = lazy(() =>
 const SettingsPanel = lazy(() =>
   import("./features/settings").then((module) => ({ default: module.SettingsPanel })),
 );
-const SpeechPolicyControls = lazy(() =>
-  import("./features/policy/SpeechPolicyControls").then((module) => ({
-    default: module.SpeechPolicyControls,
-  })),
+const LazyIntakeWizard = lazy(() =>
+  import("./features/intake").then((module) => ({ default: module.IntakeWizard })),
 );
 const TelepromptStage = lazy(() =>
   import("./features/teleprompt").then((module) => ({ default: module.TelepromptStage })),
@@ -2555,7 +2533,6 @@ export function App() {
   const [selectedBookSourceId, setSelectedBookSourceId] = useState<string | null>(null);
   const [selectedBookScope, setSelectedBookScope] = useState<BookScope | null>(null);
   const [bookScopeContent, setBookScopeContent] = useState<BookSourceScopeContent | null>(null);
-  const [isLoadingBookScope, setIsLoadingBookScope] = useState(false);
   const [preparedSources, setPreparedSources] = useState<PreparedSource[]>([]);
   const [selectedPreparedSourceId, setSelectedPreparedSourceId] = useState<string | null>(null);
   const [hydratingPreparedSourceId, setHydratingPreparedSourceId] = useState<string | null>(null);
@@ -2592,9 +2569,6 @@ export function App() {
   } | null>(null);
   const [resumeFallbackNotice, setResumeFallbackNotice] = useState<string | null>(null);
   const [resumeRestoreStartedAt, setResumeRestoreStartedAt] = useState<number | null>(null);
-  const [bookCinemaDiagnostics, setBookCinemaDiagnostics] = useState<BookCinemaDiagnostics | null>(
-    null,
-  );
   const [isBookCinemaOpen, setIsBookCinemaOpen] = useState(false);
   const [bookCinemaThemeName, setBookCinemaThemeName] = useState<ThemeName>("dark");
   const [preparedSourceCinemaSourceId, setPreparedSourceCinemaSourceId] = useState<string | null>(
@@ -3031,6 +3005,7 @@ export function App() {
   );
   useEffect(() => {
     if (
+      sourceMode !== "fileUrl" ||
       !selectedPreparedSource ||
       !isPreparedSourceDisplayIncomplete(selectedPreparedSource) ||
       hydratingPreparedSourceId === selectedPreparedSource.id
@@ -3061,7 +3036,7 @@ export function App() {
     return () => {
       isCancelled = true;
     };
-  }, [hydratingPreparedSourceId, selectedPreparedSource]);
+  }, [hydratingPreparedSourceId, selectedPreparedSource, sourceMode]);
 
   useEffect(() => {
     const preparedSourceId = job?.preparedSourceId;
@@ -3114,7 +3089,11 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!selectedPreparedSource?.id || selectedPreparedSource.status !== "ready") {
+    if (
+      sourceMode !== "fileUrl" ||
+      !selectedPreparedSource?.id ||
+      selectedPreparedSource.status !== "ready"
+    ) {
       return;
     }
     // The request omits profile on purpose; this guard keeps backend-resolved previews fresh
@@ -3158,6 +3137,7 @@ export function App() {
     selectedVoiceProfileId,
     speechPolicyOverrides,
     speechPolicyProfile,
+    sourceMode,
   ]);
 
   const effectiveBookScope = useMemo(
@@ -3739,14 +3719,6 @@ export function App() {
     }
   }, []);
 
-  const refreshBookCinemaDiagnostics = useCallback(async () => {
-    try {
-      setBookCinemaDiagnostics(await getBookCinemaDiagnostics());
-    } catch {
-      setBookCinemaDiagnostics(null);
-    }
-  }, []);
-
   const refreshProfileSourceDiagnostics = useCallback(async () => {
     try {
       const diagnostics = await getVoiceProfileSourceDiagnostics();
@@ -4085,10 +4057,10 @@ export function App() {
           layoutMode: resolveWorkspaceLayoutMode(currentUiMemory, projectId),
           sourceId: savedState.preparedSourceId ?? savedState.bookSourceId,
           sourceType: savedState.sourceType,
-          speechPolicyProfile: savedState.speechPolicyProfile ?? speechPolicyProfile,
+          speechPolicyProfile: savedState.speechPolicyProfile ?? currentContext.speechPolicyProfile,
           stage: savedState.stage,
           telepromptReturnStage,
-          voiceProfileId: savedState.voiceProfileId ?? selectedVoiceProfileId,
+          voiceProfileId: savedState.voiceProfileId ?? currentContext.voiceProfileId,
         }),
       );
       if (hashPosition?.bookSourceId) {
@@ -4136,7 +4108,7 @@ export function App() {
         setProjectStateReadyId(projectId);
       }
     },
-    [applyJobStatusState, resetPlaybackSurface, selectedVoiceProfileId, speechPolicyProfile],
+    [applyJobStatusState, resetPlaybackSurface],
   );
 
   const selectProject = useCallback(
@@ -4455,12 +4427,19 @@ export function App() {
   );
 
   const handlePrepareSourceFile = useCallback(
-    async (file: File, markdownParseMode: MarkdownParseMode = "strict") => {
+    async (
+      file: File,
+      markdownParseMode: MarkdownParseMode = "strict",
+      preparationTarget: IntakePreparationTarget = "auto",
+    ) => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
       try {
         const extension = file.name.toLowerCase().split(".").pop() ?? "";
-        if (isBookSourceExtension(extension)) {
+        if (
+          preparationTarget === "book" ||
+          (preparationTarget === "auto" && isBookSourceExtension(extension))
+        ) {
           const book = await createBookSource(activeProjectId, file);
           setBookSources((currentBooks) => [
             book,
@@ -4549,12 +4528,19 @@ export function App() {
   );
 
   const handlePrepareSourceUrl = useCallback(
-    async (url: string, markdownParseMode: MarkdownParseMode = "strict") => {
+    async (
+      url: string,
+      markdownParseMode: MarkdownParseMode = "strict",
+      preparationTarget: IntakePreparationTarget = "auto",
+    ) => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
       try {
         const lowerURL = url.toLowerCase().split("?")[0] ?? "";
-        if (isBookSourceURL(lowerURL)) {
+        if (
+          preparationTarget === "book" ||
+          (preparationTarget === "auto" && isBookSourceURL(lowerURL))
+        ) {
           const book = await createBookSourceFromUrl(activeProjectId, url);
           setBookSources((currentBooks) => [
             book,
@@ -4673,6 +4659,26 @@ export function App() {
       setBookSourceError(null);
     },
     [bookScopeContent, setContentMode],
+  );
+  const openBookCinemaFromIntake = useCallback(
+    (book?: BookSource, scope?: BookScope) => {
+      const nextBook = book ?? selectedBookSource;
+      if (nextBook?.status === "ready") {
+        const nextScope = scope ?? resolveDefaultBookScope(nextBook);
+        setSelectedBookSourceId(nextBook.id);
+        setSelectedBookScope(nextScope);
+        setSourceMode("book");
+        setContentMode("review");
+        setText(bookScopeText(nextBook, nextScope));
+        setBookSourceError(null);
+        bookCinemaOpenTiming.start({ target: "intake-book" });
+        setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
+        setIsBookCinemaOpen(true);
+        return;
+      }
+      openSelectedBookCinema();
+    },
+    [bookCinemaOpenTiming, openSelectedBookCinema, selectedBookSource, setContentMode, themeName],
   );
 
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
@@ -4839,13 +4845,6 @@ export function App() {
   }, [refreshProjects, refreshSpeechPolicyProfiles, refreshVoiceProfiles]);
 
   useEffect(() => {
-    if (sourceMode !== "book" && contentMode !== "review" && !isBookCinemaOpen) {
-      return;
-    }
-    void refreshBookCinemaDiagnostics();
-  }, [contentMode, isBookCinemaOpen, refreshBookCinemaDiagnostics, sourceMode]);
-
-  useEffect(() => {
     if (studioMode !== "voiceCloning" && !isHelpOpen && !isSettingsOpen) {
       return;
     }
@@ -4908,9 +4907,8 @@ export function App() {
   }, [hashReadingPosition, selectedBookScope, selectedBookSource]);
 
   useEffect(() => {
-    if (selectedBookSource?.status !== "ready" || !effectiveBookScope) {
+    if (sourceMode !== "book" || selectedBookSource?.status !== "ready" || !effectiveBookScope) {
       setBookScopeContent(null);
-      setIsLoadingBookScope(false);
       return;
     }
     // The request omits profile on purpose; this guard keeps backend-resolved previews fresh
@@ -4920,7 +4918,6 @@ export function App() {
       return;
     }
     let isCurrent = true;
-    setIsLoadingBookScope(true);
     void previewBookSourceScopeSpeechPolicy(selectedBookSource.id, {
       ...sessionSpeechPolicyRequest(speechPolicyOverrides),
       scope: effectiveBookScope,
@@ -4945,11 +4942,6 @@ export function App() {
           return;
         }
         setBookSourceError(formatErrorMessage(caughtError, "Unable to load selected book scope"));
-      })
-      .finally(() => {
-        if (isCurrent) {
-          setIsLoadingBookScope(false);
-        }
       });
     return () => {
       isCurrent = false;
@@ -4962,6 +4954,7 @@ export function App() {
     selectedVoiceProfileId,
     speechPolicyOverrides,
     speechPolicyProfile,
+    sourceMode,
   ]);
 
   useEffect(() => {
@@ -6695,38 +6688,13 @@ export function App() {
               activeReviewPane={activeReviewPane}
               activeReviewBlockId={workspaceContext.activeBlockId}
               projectId={activeProjectId}
-              bookControls={
-                <Suspense fallback={<LazySurfaceFallback label="Loading book tools..." />}>
-                  <BookCinemaPanel
-                    bookSources={bookSources}
-                    canCreateAudio={!isProcessing}
-                    diagnostics={bookCinemaDiagnostics}
-                    error={bookSourceError}
-                    isImporting={isImportingBookSource}
-                    isProcessing={isProcessing}
-                    isScopeLoading={isLoadingBookScope}
-                    scopeContent={bookScopeContent}
-                    selectedBookScope={effectiveBookScope}
-                    selectedBookSourceId={selectedBookSourceId}
-                    onCreateAudio={(book, scope) => {
-                      void submitBookNarrationJob(book, scope);
-                    }}
-                    onImport={handleImportBookSource}
-                    onOpenCinema={openSelectedBookCinema}
-                    onInspectStructure={(book) => {
-                      void handleInspectContentIR(book.id, bookSourceName(book));
-                    }}
-                    onScopeChange={setSelectedBookScope}
-                    onSelectBook={setSelectedBookSourceId}
-                    onUseText={handleUseBookText}
-                  />
-                </Suspense>
-              }
+              bookSourceError={bookSourceError}
+              bookSources={bookSources}
               canSubmit={canCreateCurrentSource}
               contentMode={contentMode}
+              isImportingBookSource={isImportingBookSource}
               isPreparingSource={isPreparingSource}
               isProcessing={isProcessing}
-              isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
               job={job}
               bookScopeContent={bookScopeContent}
               optimizedText={job?.optimizedText ?? ""}
@@ -6735,16 +6703,10 @@ export function App() {
               selectedBookSource={selectedBookSource}
               selectedPreparedSource={selectedPreparedSource}
               sourceMode={sourceMode}
-              speechPolicyError={speechPolicyError}
-              speechPolicyDefinition={speechPolicyDefinition}
-              speechPolicyOverrides={speechPolicyOverrides}
-              speechPolicyProfile={speechPolicyProfile}
               speechPolicyProfileLabel={speechPolicyProfileDisplayName(
                 speechPolicyProfile,
                 customSpeechPolicyProfiles,
               )}
-              customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-              speechPolicyProfiles={speechPolicyProfiles}
               sourcePrepError={sourcePrepError}
               telepromptStage={
                 <Suspense fallback={<LazySurfaceFallback label="Loading teleprompt..." />}>
@@ -6818,11 +6780,8 @@ export function App() {
               text={text}
               voiceProfileId={selectedVoiceProfileId}
               voiceProfileLabel={selectedVoiceProfile?.name ?? "Default voice"}
-              onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
+              voiceProfiles={voiceProfiles}
               onCreateAndListen={createAndListenFromCurrentSource}
-              onCreatePreparedAudio={(source) => {
-                void submitPreparedSourceJob(source);
-              }}
               onInspectBookSource={(book) => {
                 void handleInspectContentIR(book.id, bookSourceName(book));
               }}
@@ -6830,12 +6789,18 @@ export function App() {
                 void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
               }}
               onOpenCinema={openReadingCinema}
+              onOpenBookCinema={openBookCinemaFromIntake}
+              onOpenVoiceCloning={() => {
+                handleStudioModeChange("voiceCloning");
+              }}
               onOpenPreparedSourceCinema={openPreparedSourceCinema}
+              onImportBookSource={handleImportBookSource}
+              onBookScopeChange={setSelectedBookScope}
               onPrepareFile={handlePrepareSourceFile}
               onPrepareUrl={handlePrepareSourceUrl}
+              onSelectVoiceProfile={selectVoiceProfile}
               onSourceModeChange={setSourceMode}
               onStageAction={runWorkspaceStageAction}
-              onSpeechPolicyOverridesChange={handleSpeechPolicyOverridesChange}
               onSpeechPolicyProfileChange={(profile) => {
                 void handleSpeechPolicyProfileChange(profile);
               }}
@@ -6845,11 +6810,9 @@ export function App() {
                 );
               }}
               onReviewPaneChange={handleReviewPaneChange}
-              onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
-              onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
-              onUpdateCustomSpeechPolicyProfile={handleUpdateCustomSpeechPolicyProfile}
               onSubmit={handleSubmit}
               onTextChange={setText}
+              onUseBookSource={handleUseBookText}
               onUsePreparedSource={handleUsePreparedSource}
             />
             {error ? (
@@ -9443,13 +9406,13 @@ function SourceTextPanel({
   activeReviewPane,
   activeReviewBlockId,
   bookScopeContent,
-  bookControls,
+  bookSourceError,
+  bookSources,
   canSubmit,
   contentMode,
-  customSpeechPolicyProfiles,
+  isImportingBookSource,
   isPreparingSource,
   isProcessing,
-  isSpeechPolicyPreviewing,
   job,
   optimizedText,
   preparedSources,
@@ -9458,49 +9421,45 @@ function SourceTextPanel({
   selectedBookSource,
   selectedPreparedSource,
   sourceMode,
-  speechPolicyError,
-  speechPolicyDefinition,
-  speechPolicyOverrides,
-  speechPolicyProfile,
   speechPolicyProfileLabel,
-  speechPolicyProfiles,
   sourcePrepError,
   telepromptStage,
   text,
   voiceProfileId,
   voiceProfileLabel,
-  onClearSpeechPolicyOverrides,
+  voiceProfiles,
   onCreateAndListen,
-  onCreateCustomSpeechPolicyProfile,
-  onCreatePreparedAudio,
-  onDeleteCustomSpeechPolicyProfile,
   onInspectBookSource,
   onInspectPreparedSource,
   onOpenCinema,
+  onOpenBookCinema,
+  onOpenVoiceCloning,
   onOpenPreparedSourceCinema,
+  onImportBookSource,
+  onBookScopeChange,
   onPrepareFile,
   onPrepareUrl,
+  onSelectVoiceProfile,
   onSourceModeChange,
   onStageAction,
-  onSpeechPolicyOverridesChange,
   onSpeechPolicyProfileChange,
   onReviewBlockChange,
   onReviewPaneChange,
-  onUpdateCustomSpeechPolicyProfile,
   onSubmit,
   onTextChange,
+  onUseBookSource,
   onUsePreparedSource,
 }: Readonly<{
   activeReviewPane: ReviewPane;
   activeReviewBlockId: string | null;
   bookScopeContent: BookSourceScopeContent | null;
-  bookControls: ReactNode;
+  bookSourceError: string | null;
+  bookSources: BookSource[];
   canSubmit: boolean;
   contentMode: WorkspaceStage;
-  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  isImportingBookSource: boolean;
   isPreparingSource: boolean;
   isProcessing: boolean;
-  isSpeechPolicyPreviewing: boolean;
   job: VoiceJob | null;
   optimizedText: string;
   preparedSources: PreparedSource[];
@@ -9509,54 +9468,43 @@ function SourceTextPanel({
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
   sourceMode: SourceMode;
-  speechPolicyError: string | null;
-  speechPolicyDefinition: SpeechPolicyDefinition;
-  speechPolicyOverrides: SpeechPolicyOverrides;
-  speechPolicyProfile: string;
   speechPolicyProfileLabel: string;
-  speechPolicyProfiles: SpeechPolicyProfile[];
   sourcePrepError: string | null;
   telepromptStage: ReactNode;
   text: string;
   voiceProfileId: string;
   voiceProfileLabel: string;
-  onClearSpeechPolicyOverrides: () => void;
+  voiceProfiles: VoiceProfile[];
   onCreateAndListen: () => void;
-  onCreateCustomSpeechPolicyProfile: (
-    name: string,
-    settings: SpeechPolicySettings,
-    baseProfile: string,
-  ) => Promise<void>;
-  onCreatePreparedAudio: (source: PreparedSource) => void;
-  onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onOpenCinema: () => void;
+  onOpenBookCinema: (source?: BookSource, scope?: BookScope) => void;
+  onOpenVoiceCloning: () => void;
   onOpenPreparedSourceCinema: (source: PreparedSource) => void;
-  onPrepareFile: (file: File, markdownParseMode: MarkdownParseMode) => Promise<void>;
-  onPrepareUrl: (url: string, markdownParseMode: MarkdownParseMode) => Promise<void>;
+  onImportBookSource: (files: File[], options?: BookSourceImportOptions) => Promise<void>;
+  onBookScopeChange: (scope: BookScope) => void;
+  onPrepareFile: (
+    file: File,
+    markdownParseMode: MarkdownParseMode,
+    preparationTarget?: IntakePreparationTarget,
+  ) => Promise<void>;
+  onPrepareUrl: (
+    url: string,
+    markdownParseMode: MarkdownParseMode,
+    preparationTarget?: IntakePreparationTarget,
+  ) => Promise<void>;
+  onSelectVoiceProfile: (profileId: string) => void;
   onSourceModeChange: (mode: SourceMode) => void;
   onStageAction: (actionId: WorkspaceStageActionId) => void;
-  onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onReviewBlockChange: (blockId: string | null) => void;
   onReviewPaneChange: (pane: ReviewPane) => void;
-  onUpdateCustomSpeechPolicyProfile: (
-    profileId: string,
-    name: string,
-    settings: SpeechPolicySettings,
-    baseProfile: string,
-  ) => Promise<void>;
   onSubmit: (event: React.SyntheticEvent<HTMLFormElement>) => void;
   onTextChange: (text: string) => void;
+  onUseBookSource: (source: BookSource, scope: BookScope) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
 }>) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [isDragActive, setIsDragActive] = useState(false);
-  const [sourceFileLabel, setSourceFileLabel] = useState<string | null>(null);
-  const [sourceFileError, setSourceFileError] = useState<string | null>(null);
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [markdownParseMode, setMarkdownParseMode] = useState<MarkdownParseMode>("strict");
   const showSourceIntake = contentMode === "intake";
   const activeBookSource = activeBookSourceForWorkbench(sourceMode, selectedBookSource);
   const activePreparedSource = activePreparedSourceForWorkbench(sourceMode, selectedPreparedSource);
@@ -9575,65 +9523,10 @@ function SourceTextPanel({
   });
   const stageLabel = workspaceStageMeta(contentMode).label;
 
-  const loadSourceFiles = useCallback(
-    async (files: FileList | File[]) => {
-      if (isProcessing) {
-        return;
-      }
-
-      setSourceFileError(null);
-      const fileArray = [...files].filter((file) =>
-        sourceMode === "fileUrl"
-          ? isSupportedSourcePrepFile(file)
-          : isSupportedSourceTextFile(file),
-      );
-      if (fileArray.length === 0) {
-        setSourceFileError("Drop a text, HTML, PDF, EPUB, CSV, JSON, or log file.");
-        return;
-      }
-
-      try {
-        if (sourceMode === "fileUrl") {
-          await onPrepareFile(fileArray[0], markdownParseMode);
-          setSourceFileLabel(formatSourceTextFileLabel(fileArray));
-          onStageAction("reviewBlocks");
-          return;
-        }
-        const parts = await Promise.all(fileArray.map((file) => file.text()));
-        onTextChange(
-          parts
-            .map((part) => part.trim())
-            .filter(Boolean)
-            .join("\n\n"),
-        );
-        setSourceFileLabel(formatSourceTextFileLabel(fileArray));
-      } catch {
-        setSourceFileError("Unable to read that file locally.");
-      }
-    },
-    [isProcessing, markdownParseMode, onPrepareFile, onStageAction, onTextChange, sourceMode],
-  );
-
   return (
     <form
-      className={`grid min-w-0 gap-4 rounded-xl border bg-[var(--vs-raised)] p-4 xl:p-5 ${
-        isDragActive ? "border-orange-300 ring-2 ring-orange-100" : "vs-border"
-      }`}
+      className="grid min-w-0 gap-4 rounded-xl border bg-[var(--vs-raised)] p-4 xl:p-5 vs-border"
       onSubmit={onSubmit}
-      onDragOver={(event) => {
-        event.preventDefault();
-        if (!isProcessing) {
-          setIsDragActive(true);
-        }
-      }}
-      onDragLeave={() => {
-        setIsDragActive(false);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        setIsDragActive(false);
-        void loadSourceFiles(event.dataTransfer.files);
-      }}
     >
       <HeaderContextSummary
         metadata={[
@@ -9650,10 +9543,10 @@ function SourceTextPanel({
         ariaLabel="Workspace stage"
         columns={4}
         options={[
-          { label: "Intake", value: "intake" },
-          { label: "Review", value: "review" },
-          { label: "Preview", value: "preview" },
-          { label: "Teleprompt", value: "teleprompt" },
+          { label: "Intake", testId: "workspace-stage-intake", value: "intake" },
+          { label: "Review", testId: "workspace-stage-review", value: "review" },
+          { label: "Preview", testId: "workspace-stage-preview", value: "preview" },
+          { label: "Teleprompt", testId: "workspace-stage-teleprompt", value: "teleprompt" },
         ]}
         value={contentMode}
         onChange={(mode) => {
@@ -9661,146 +9554,46 @@ function SourceTextPanel({
         }}
       />
 
-      <Panel
-        className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
-        variant="surface"
-      >
-        <div className="flex min-w-0 items-center gap-3 text-sm">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md border text-orange-600 vs-border vs-surface">
-            <SourceKindIcon mode={sourceIdentity.mode} />
-          </span>
-          <div className="min-w-0">
-            <p className="font-semibold text-[var(--vs-text)]">Source type</p>
-            <p className="mt-1 truncate text-xs vs-muted" title={sourceIdentity.meta}>
-              {sourceIdentity.meta}
-            </p>
-          </div>
-        </div>
-        <SegmentedControl
-          ariaLabel="Source type"
-          className="min-w-0 lg:w-[22rem]"
-          columns={3}
-          options={[
-            { label: "Text", value: "text" },
-            { label: "Book", value: "book" },
-            { label: "File / URL", value: "fileUrl" },
-          ]}
-          value={sourceIdentity.mode}
-          onChange={onSourceModeChange}
-        />
-      </Panel>
-      {showSourceIntake && sourceMode === "book" ? bookControls : null}
-      {showSourceIntake && sourceMode === "fileUrl" ? (
-        <SourcePrepReview
-          isPreparing={isPreparingSource}
-          isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
-          customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-          preparedSources={preparedSources}
-          selectedPreparedSource={selectedPreparedSource}
-          showIntakeControls={showSourceIntake}
-          speechPolicyError={speechPolicyError}
-          speechPolicyDefinition={speechPolicyDefinition}
-          speechPolicyOverrides={speechPolicyOverrides}
-          speechPolicyProfile={speechPolicyProfile}
-          speechPolicyProfiles={speechPolicyProfiles}
-          sourceFileError={sourceFileError}
-          sourceFileLabel={sourceFileLabel}
-          markdownParseMode={markdownParseMode}
-          sourcePrepError={sourcePrepError}
-          sourceUrl={sourceUrl}
-          onBrowse={() => {
-            fileInputRef.current?.click();
-          }}
-          onCreatePreparedAudio={onCreatePreparedAudio}
-          onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
-          onCreateCustomSpeechPolicyProfile={onCreateCustomSpeechPolicyProfile}
-          onDeleteCustomSpeechPolicyProfile={onDeleteCustomSpeechPolicyProfile}
-          onInspectPreparedSource={onInspectPreparedSource}
-          onPrepareUrl={() => {
-            if (sourceUrl.trim()) {
-              void onPrepareUrl(sourceUrl.trim(), markdownParseMode);
-              onStageAction("reviewBlocks");
-            }
-          }}
-          onClearSpeechPolicyOverrides={onClearSpeechPolicyOverrides}
-          onSpeechPolicyOverridesChange={onSpeechPolicyOverridesChange}
-          onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
-          onUpdateCustomSpeechPolicyProfile={onUpdateCustomSpeechPolicyProfile}
-          onSourceUrlChange={setSourceUrl}
-          onMarkdownParseModeChange={setMarkdownParseMode}
-          onUsePreparedSource={(source) => {
-            onStageAction("reviewBlocks");
-            void onUsePreparedSource(source);
-          }}
-        >
-          <input
-            ref={fileInputRef}
-            aria-hidden="true"
-            accept={SOURCE_TEXT_FILE_ACCEPT}
-            className="sr-only"
-            tabIndex={-1}
-            type="file"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.item(0);
-              if (file) {
-                void loadSourceFiles([file]);
-              }
-              event.currentTarget.value = "";
+      {showSourceIntake ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading intake wizard..." />}>
+          <LazyIntakeWizard
+            bookSourceError={bookSourceError}
+            bookSources={bookSources}
+            bookScopeContent={bookScopeContent}
+            isImportingBookSource={isImportingBookSource}
+            isPreparingSource={isPreparingSource}
+            preparedSources={preparedSources}
+            selectedBookScope={selectedBookScope}
+            selectedBookSource={selectedBookSource}
+            selectedPreparedSource={selectedPreparedSource}
+            selectedVoiceProfileId={voiceProfileId}
+            sourceMode={sourceMode}
+            sourcePrepError={sourcePrepError}
+            text={text}
+            voiceProfileLabel={voiceProfileLabel}
+            voiceProfiles={voiceProfiles}
+            onImportBookFiles={onImportBookSource}
+            onInspectBookSource={onInspectBookSource}
+            onInspectPreparedSource={onInspectPreparedSource}
+            onOpenBookCinema={onOpenBookCinema}
+            onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
+            onOpenVoiceCloning={onOpenVoiceCloning}
+            onPrepareFile={onPrepareFile}
+            onPrepareUrl={onPrepareUrl}
+            onScopeChange={onBookScopeChange}
+            onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+            onStageChange={(stage) => {
+              onStageAction(stage === "review" ? "reviewBlocks" : "previewSpeech");
             }}
-          />
-        </SourcePrepReview>
-      ) : null}
-      {showSourceIntake && sourceMode === "text" ? (
-        <div className="grid gap-3">
-          <Panel
-            className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
-            variant="dashed"
-          >
-            <span className="min-w-0 flex-1 basis-48 truncate" title={sourceFileLabel ?? undefined}>
-              {sourceFileLabel ?? "Drop text or Markdown files here"}
-            </span>
-            <Button
-              disabled={isProcessing}
-              onClick={() => {
-                fileInputRef.current?.click();
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              Browse Text
-            </Button>
-            <input
-              ref={fileInputRef}
-              aria-hidden="true"
-              accept={SOURCE_TEXT_FILE_ACCEPT}
-              className="sr-only"
-              multiple
-              tabIndex={-1}
-              type="file"
-              onChange={(event) => {
-                if (event.currentTarget.files) {
-                  void loadSourceFiles(event.currentTarget.files);
-                }
-                event.currentTarget.value = "";
-              }}
-            />
-          </Panel>
-          {sourceFileError ? <p className="text-xs text-red-700">{sourceFileError}</p> : null}
-          <textarea
-            aria-label="Source text"
-            className={`${fieldControlClassName} min-h-[240px] w-full resize-none bg-[var(--vs-raised)] p-4 font-mono leading-6 read-only:opacity-70`}
-            id="source-text"
-            onChange={(event) => {
-              if (!isProcessing) {
-                onTextChange(event.currentTarget.value);
-              }
+            onUseBookSource={onUseBookSource}
+            onUseDraftText={(nextText) => {
+              onSourceModeChange("text");
+              onTextChange(nextText);
             }}
-            placeholder="Paste the text you want to listen to."
-            readOnly={isProcessing}
-            spellCheck={false}
-            value={text}
+            onUsePreparedSource={onUsePreparedSource}
+            onVoiceProfileChange={onSelectVoiceProfile}
           />
-        </div>
+        </Suspense>
       ) : null}
       {contentMode === "review" ? (
         <div className="grid gap-3">
@@ -10155,50 +9948,6 @@ function workspaceActiveBlockLabel({
   return `Block ${block.index.toString()} · ${block.label}`;
 }
 
-function SourceKindIcon({ mode }: Readonly<{ mode: SourceMode }>) {
-  if (mode === "book") {
-    return (
-      <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-        <path
-          d="M4.5 5.5A2.5 2.5 0 0 1 7 3h12.5v16H7a2.5 2.5 0 0 0-2.5 2.5v-16Z"
-          stroke="currentColor"
-          strokeLinejoin="round"
-          strokeWidth="1.7"
-        />
-        <path d="M8 7h7M8 10h6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-      </svg>
-    );
-  }
-  if (mode === "fileUrl") {
-    return (
-      <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-        <path
-          d="M7 3.5h7l4 4v13H7v-17Z"
-          stroke="currentColor"
-          strokeLinejoin="round"
-          strokeWidth="1.7"
-        />
-        <path
-          d="M14 3.5v4h4M8.5 13h7M8.5 16h5"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeWidth="1.7"
-        />
-      </svg>
-    );
-  }
-  return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-      <path
-        d="M5 6h14M5 12h14M5 18h9"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
 interface WorkbenchSourceIdentity {
   label: string;
   meta: string;
@@ -10281,14 +10030,6 @@ function draftTextIdentity(text: string): WorkbenchSourceIdentity {
   };
 }
 
-function isSupportedSourceTextFile(file: File): boolean {
-  if (file.type.startsWith("text/") || file.type === "application/json") {
-    return true;
-  }
-  const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  return SOURCE_TEXT_FILE_EXTENSIONS.has(extension);
-}
-
 function speakModeClass(mode: string): string {
   if (mode === "skip") {
     return "border-amber-200 bg-amber-50 text-amber-700";
@@ -10309,306 +10050,6 @@ function SourcePrepMetric({ label, value }: Readonly<{ label: string; value: str
         {value}
       </dd>
     </div>
-  );
-}
-
-function MarkdownParseModeControl({
-  mode,
-  onChange,
-}: Readonly<{
-  mode: MarkdownParseMode;
-  onChange: (mode: MarkdownParseMode) => void;
-}>) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs vs-border">
-      <span className="font-semibold text-[var(--vs-text)]">Markdown parser</span>
-      <SegmentedControl
-        ariaLabel="Markdown parser"
-        options={[
-          { label: "Strict", value: "strict" },
-          { label: "Legacy", value: "legacy" },
-        ]}
-        value={mode}
-        onChange={onChange}
-      />
-    </div>
-  );
-}
-
-function preparedSourceSummaryLine(source: PreparedSource | null): string {
-  const base = `${String(source?.summary.sentenceSegmentCount ?? 0)} sentence segments · ${String(
-    source?.summary.citationSkipCount ?? 0,
-  )} citations skipped`;
-  if (source?.sourceFormat !== "markdown") {
-    return base;
-  }
-  return `${base} · ${source.markdownParseMode ?? "strict"} markdown`;
-}
-
-function SourcePrepReview({
-  children,
-  customSpeechPolicyProfiles,
-  isPreparing,
-  isSpeechPolicyPreviewing,
-  preparedSources,
-  selectedPreparedSource,
-  showIntakeControls = true,
-  speechPolicyError,
-  speechPolicyDefinition,
-  speechPolicyOverrides,
-  speechPolicyProfile,
-  speechPolicyProfiles,
-  sourceFileError,
-  sourceFileLabel,
-  markdownParseMode,
-  sourcePrepError,
-  sourceUrl,
-  onBrowse,
-  onClearSpeechPolicyOverrides,
-  onCreateCustomSpeechPolicyProfile,
-  onCreatePreparedAudio,
-  onDeleteCustomSpeechPolicyProfile,
-  onInspectPreparedSource,
-  onMarkdownParseModeChange,
-  onOpenPreparedSourceCinema,
-  onPrepareUrl,
-  onSpeechPolicyOverridesChange,
-  onSpeechPolicyProfileChange,
-  onSourceUrlChange,
-  onUpdateCustomSpeechPolicyProfile,
-  onUsePreparedSource,
-}: Readonly<{
-  children: ReactNode;
-  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
-  isPreparing: boolean;
-  isSpeechPolicyPreviewing: boolean;
-  preparedSources: PreparedSource[];
-  selectedPreparedSource: PreparedSource | null;
-  showIntakeControls?: boolean;
-  speechPolicyError: string | null;
-  speechPolicyDefinition: SpeechPolicyDefinition;
-  speechPolicyOverrides: SpeechPolicyOverrides;
-  speechPolicyProfile: string;
-  speechPolicyProfiles: SpeechPolicyProfile[];
-  sourceFileError: string | null;
-  sourceFileLabel: string | null;
-  markdownParseMode: MarkdownParseMode;
-  sourcePrepError: string | null;
-  sourceUrl: string;
-  onBrowse: () => void;
-  onClearSpeechPolicyOverrides: () => void;
-  onCreateCustomSpeechPolicyProfile: (
-    name: string,
-    settings: SpeechPolicySettings,
-    baseProfile: string,
-  ) => Promise<void>;
-  onCreatePreparedAudio: (source: PreparedSource) => void;
-  onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
-  onInspectPreparedSource: (source: PreparedSource) => void;
-  onMarkdownParseModeChange: (mode: MarkdownParseMode) => void;
-  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
-  onPrepareUrl: () => void;
-  onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
-  onSpeechPolicyProfileChange: (profile: string) => void;
-  onSourceUrlChange: (url: string) => void;
-  onUpdateCustomSpeechPolicyProfile: (
-    profileId: string,
-    name: string,
-    settings: SpeechPolicySettings,
-    baseProfile: string,
-  ) => Promise<void>;
-  onUsePreparedSource: (source: PreparedSource) => void;
-}>) {
-  const source = selectedPreparedSource;
-  const intakeError = sourceFileError ?? sourcePrepError;
-  const intakeErrorNode = intakeError ? (
-    <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-      {intakeError}
-    </p>
-  ) : null;
-
-  return (
-    <div className="grid min-w-0 gap-3">
-      {showIntakeControls ? (
-        <Panel className="grid gap-3 overflow-hidden p-3" variant="raised">
-          <div className="grid max-w-full min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-            <input
-              className={`${fieldControlClassName} w-full min-w-0 bg-[var(--vs-raised)]`}
-              onChange={(event) => {
-                onSourceUrlChange(event.currentTarget.value);
-              }}
-              placeholder="Paste a readable web page, raw text, PDF, or EPUB URL"
-              type="url"
-              value={sourceUrl}
-            />
-            <Button
-              className="w-full md:w-auto"
-              disabled={isPreparing || sourceUrl.trim().length === 0}
-              onClick={onPrepareUrl}
-              variant="soft"
-            >
-              {isPreparing ? "Preparing..." : "Fetch & Prepare"}
-            </Button>
-          </div>
-          <MarkdownParseModeControl mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
-          <div className="flex max-w-full min-w-0 flex-wrap items-center justify-between gap-2 text-xs vs-muted">
-            <span className="min-w-0 flex-1 truncate" title={sourceFileLabel ?? undefined}>
-              {sourceFileLabel ??
-                "Drop a file here, or browse for text, PDF, EPUB, HTML, CSV, JSON, or logs"}
-            </span>
-            <Button disabled={isPreparing} onClick={onBrowse} size="sm" variant="secondary">
-              Browse File
-            </Button>
-            {children}
-          </div>
-          {intakeErrorNode}
-        </Panel>
-      ) : (
-        intakeErrorNode
-      )}
-
-      {preparedSources.length > 0 ? (
-        <div className="grid gap-3">
-          <Suspense fallback={<LazySurfaceFallback label="Loading policy controls..." />}>
-            <SpeechPolicyControls
-              customProfiles={customSpeechPolicyProfiles}
-              definition={speechPolicyDefinition}
-              isPreviewing={isSpeechPolicyPreviewing}
-              overrides={speechPolicyOverrides}
-              profile={speechPolicyProfile}
-              profiles={speechPolicyProfiles}
-              error={speechPolicyError}
-              onClearOverrides={onClearSpeechPolicyOverrides}
-              onCreateCustomProfile={onCreateCustomSpeechPolicyProfile}
-              onDeleteCustomProfile={onDeleteCustomSpeechPolicyProfile}
-              onOverridesChange={onSpeechPolicyOverridesChange}
-              onProfileChange={onSpeechPolicyProfileChange}
-              onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
-            />
-          </Suspense>
-          <Panel
-            className="grid gap-2 p-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center"
-            variant="raised"
-          >
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">Prepared</p>
-              <p className="mt-1 text-xs vs-muted">
-                {preparedSources.length.toLocaleString()} reusable source
-                {preparedSources.length === 1 ? "" : "s"}
-              </p>
-            </div>
-            <select
-              aria-label="Prepared source"
-              className={`${fieldControlClassName} min-w-0`}
-              onChange={(event) => {
-                const nextSource = preparedSources.find(
-                  (item) => item.id === event.currentTarget.value,
-                );
-                if (nextSource) {
-                  onUsePreparedSource(nextSource);
-                }
-              }}
-              title={source ? `Prepared source: ${source.title ?? source.sourceName}` : undefined}
-              value={source?.id ?? ""}
-            >
-              {preparedSources.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.title ?? item.sourceName} · {item.kind.toUpperCase()} ·{" "}
-                  {item.wordCount.toLocaleString()} words
-                </option>
-              ))}
-            </select>
-          </Panel>
-          <PreparedSourceIntakeSummary
-            isPreparing={isPreparing}
-            source={source}
-            onCreatePreparedAudio={onCreatePreparedAudio}
-            onInspectPreparedSource={onInspectPreparedSource}
-            onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
-          />
-        </div>
-      ) : (
-        <Panel className="p-5 text-sm" variant="dashed">
-          Prepare a file or URL to review headings, skipped citations, and sentence-safe narration
-          blocks before generating audio.
-        </Panel>
-      )}
-    </div>
-  );
-}
-
-function PreparedSourceIntakeSummary({
-  isPreparing,
-  source,
-  onCreatePreparedAudio,
-  onInspectPreparedSource,
-  onOpenPreparedSourceCinema,
-}: Readonly<{
-  isPreparing: boolean;
-  source: PreparedSource | null;
-  onCreatePreparedAudio: (source: PreparedSource) => void;
-  onInspectPreparedSource: (source: PreparedSource) => void;
-  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
-}>) {
-  if (!source) {
-    return (
-      <Panel className="p-5 text-sm" variant="dashed">
-        Prepare a file or URL to make it available for the Review workbench.
-      </Panel>
-    );
-  }
-
-  return (
-    <Panel className="grid gap-3 p-4" variant="raised">
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <HeaderContextSummary
-          className="flex-1"
-          density="compact"
-          metadata={[{ label: "Size", value: preparedSourceSummaryLine(source) }]}
-          scopeTitle="Full source"
-          sourceTitle={source.title ?? source.sourceName}
-          stateLabel={source.status === "ready" ? "Ready" : "Preparing"}
-          surfaceName="Prepared Source"
-        />
-        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-          <Button
-            onClick={() => {
-              onOpenPreparedSourceCinema(source);
-            }}
-            size="sm"
-            variant="soft"
-          >
-            {preparedSourceCinemaActionLabel(source)}
-          </Button>
-          <Button
-            onClick={() => {
-              onInspectPreparedSource(source);
-            }}
-            size="sm"
-            variant="secondary"
-          >
-            Inspect structure
-          </Button>
-          <Button
-            disabled={isPreparing}
-            onClick={() => {
-              onCreatePreparedAudio(source);
-            }}
-            size="sm"
-            variant="primary"
-          >
-            {workspaceStageActionLabel("createAndListen")}
-          </Button>
-        </div>
-      </div>
-      <dl className="grid gap-3 text-sm sm:grid-cols-5">
-        <SourcePrepMetric label="Blocks" value={String(source.blockCount)} />
-        <SourcePrepMetric label="Speak" value={String(source.summary.spokenBlockCount)} />
-        <SourcePrepMetric label="Segments" value={String(source.summary.sentenceSegmentCount)} />
-        <SourcePrepMetric label="Citations" value={String(source.summary.citationSkipCount)} />
-        <SourcePrepMetric label="Skipped" value={String(source.skippedItems?.length ?? 0)} />
-      </dl>
-    </Panel>
   );
 }
 
@@ -10712,14 +10153,6 @@ function SourcePrepRulesPanel({ source }: Readonly<{ source: PreparedSource | nu
   );
 }
 
-function isSupportedSourcePrepFile(file: File): boolean {
-  if (isSupportedSourceTextFile(file)) {
-    return true;
-  }
-  const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  return isBookSourceExtension(extension);
-}
-
 function isBookSourceExtension(extension: string): boolean {
   return [
     "pdf",
@@ -10754,14 +10187,6 @@ function isBookSourceURL(lowerURL: string): boolean {
     ".bmp",
     ".webp",
   ].some((extension) => lowerURL.endsWith(extension));
-}
-
-function formatSourceTextFileLabel(files: File[]): string {
-  if (files.length === 1) {
-    return `${files[0].name} · ${formatBytes(files[0].size)}`;
-  }
-  const totalBytes = files.reduce((total, file) => total + file.size, 0);
-  return `${files.length.toString()} files · ${formatBytes(totalBytes)}`;
 }
 
 function SourceMetadataStrip({

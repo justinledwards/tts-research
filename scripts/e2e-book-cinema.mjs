@@ -529,6 +529,9 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
       bookScope: scope,
       bookSourceId: book.id,
       jobId: job.id,
+      sourceMode: "book",
+      sourceType: "book",
+      stage: "intake",
       text,
     }),
     viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
@@ -648,6 +651,9 @@ async function runDegradedHighlightUX(browser, { book, job, projectId, scope, te
       bookScope: scope,
       bookSourceId: book.id,
       jobId: job.id,
+      sourceMode: "book",
+      sourceType: "book",
+      stage: "intake",
       text,
     }),
     viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
@@ -778,6 +784,9 @@ async function runResponsiveBookCinemaSurface(
       bookScope: scope,
       bookSourceId: book.id,
       jobId: job.id,
+      sourceMode: "book",
+      sourceType: "book",
+      stage: "intake",
       text,
     }),
     viewport: { height: viewport.height, width: viewport.width },
@@ -858,7 +867,7 @@ async function openPreparedCinemaOverlay(page, expectedLabel) {
   await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.getByRole("button", { exact: true, name: "Intake" }).click();
-  await page.getByRole("button", { exact: true, name: "File / URL" }).click();
+  await openIntakeDestination(page);
   await page
     .getByRole("button", { name: new RegExp(`Open ${expectedLabel}`) })
     .first()
@@ -1029,7 +1038,7 @@ async function runPreparedCinemaSurfaceFocusUX(
     await page.waitForLoadState("networkidle").catch(() => {});
     await setRememberLayout(page, true);
     await page.getByRole("button", { exact: true, name: "Intake" }).click();
-    await page.getByRole("button", { exact: true, name: "File / URL" }).click();
+    await openIntakeDestination(page);
     await page
       .getByRole("button", { name: new RegExp(`Open ${expectedLabel}`) })
       .first()
@@ -1045,7 +1054,7 @@ async function runPreparedCinemaSurfaceFocusUX(
       await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle").catch(() => {});
       await page.getByRole("button", { exact: true, name: "Intake" }).click();
-      await page.getByRole("button", { exact: true, name: "File / URL" }).click();
+      await openIntakeDestination(page);
       await page
         .getByRole("button", { name: new RegExp(`Open ${expectedLabel}`) })
         .first()
@@ -1327,13 +1336,18 @@ async function openBookCinemaOverlay(page, scope, url = appBaseUrl) {
     return;
   }
   await page.getByRole("button", { exact: true, name: "Intake" }).click();
-  await page.getByRole("button", { exact: true, name: "Book" }).click();
-  await page.locator('h3:has-text("Book Cinema")').first().waitFor();
+  await openIntakeDestination(page);
+  await page.getByTestId("intake-wizard-open-book-cinema").waitFor();
   await selectBookScope(page, scope);
-  await page.locator('button:has-text("Cinema"):enabled').last().click();
+  await page.getByTestId("intake-wizard-open-book-cinema").click();
   const overlay = page.locator('[role="dialog"][aria-labelledby="book-cinema-title"]').first();
   await overlay.waitFor({ state: "visible" });
   await waitForOverlayScope(page, scope);
+}
+
+async function openIntakeDestination(page) {
+  await page.getByText("Guided Intake").first().waitFor();
+  await page.getByTestId("intake-step-destination").click();
 }
 
 async function selectBookScope(page, scope) {

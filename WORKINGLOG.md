@@ -245,3 +245,10 @@
 - [x] Wire Book, Document, Website, Review, and Teleprompt context surfaces
 - [x] Update context panel and wayfinding docs
 - [x] Run local validation commands
+
+## 2026-05-21 07:26 CEST - Guided Intake Wizard
+- [x] Map existing intake source creation paths
+- [x] Add shared intake wizard model and templates
+- [x] Wire wizard into Intake without duplicating adapter logic
+- [x] Update intake wizard docs and action audit coverage
+- [x] Run local validation commands

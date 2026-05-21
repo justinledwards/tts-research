@@ -6,6 +6,7 @@ export interface SegmentedControlOption<T extends string> {
   ariaLabel?: string;
   disabled?: boolean;
   label: ReactNode;
+  testId?: string;
   value: T;
 }
 
@@ -19,7 +20,7 @@ export function SegmentedControl<T extends string>({
 }: Readonly<{
   ariaLabel: string;
   className?: string;
-  columns?: 2 | 3 | 4;
+  columns?: 2 | 3 | 4 | 5;
   options: readonly SegmentedControlOption<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -30,6 +31,9 @@ export function SegmentedControl<T extends string>({
   }
   if (columns === 4) {
     columnClassName = "grid-cols-2 lg:grid-cols-4";
+  }
+  if (columns === 5) {
+    columnClassName = "grid-cols-2 lg:grid-cols-5";
   }
   return (
     <fieldset
@@ -44,6 +48,7 @@ export function SegmentedControl<T extends string>({
         <Button
           aria-label={option.ariaLabel}
           className="min-w-0 whitespace-nowrap border-transparent shadow-none"
+          data-testid={option.testId}
           disabled={option.disabled}
           key={option.value}
           onClick={() => {

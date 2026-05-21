@@ -462,9 +462,11 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await gotoApp(page);
     await capture("workspace-stage-00-intake-before");
     await page.getByRole("button", { exact: true, name: "Intake" }).click();
+    await page.getByText("Guided Intake").first().waitFor();
     await capture("workspace-stage-01-intake-after");
-    await page.getByRole("button", { exact: true, name: "Book" }).click();
-    await page.getByText("Book Cinema").first().waitFor();
+    await openIntakeDestination(page);
+    await page.getByTestId("intake-wizard-open-book-cinema").waitFor();
+    await selectBookScope(page, seed.pdf.scope);
     await capture("workspace-stage-02-source-selected");
     await page.getByRole("button", { exact: true, name: "Review" }).click();
     await page.getByText("Source Review").first().waitFor();
@@ -565,7 +567,7 @@ async function openWorkspaceStage(page, label) {
   }
   if (label === "Intake") {
     await page
-      .getByText(/Voice Studio|Start with text|Book|File \/ URL/i)
+      .getByText(/Voice Studio|Guided Intake|Narrate a book|Read a document/i)
       .first()
       .waitFor();
   } else if (label === "Review") {
@@ -596,14 +598,14 @@ async function openTeleprompt(page) {
 async function openBookPanel(page, scope) {
   await gotoApp(page);
   await page.getByRole("button", { exact: true, name: "Intake" }).click();
-  await page.getByRole("button", { exact: true, name: "Book" }).click();
-  await page.locator('h3:has-text("Book Cinema")').first().waitFor();
+  await openIntakeDestination(page);
+  await page.getByTestId("intake-wizard-open-book-cinema").waitFor();
   await selectBookScope(page, scope);
 }
 
 async function openBookCinemaOverlay(page, scope) {
   await openBookPanel(page, scope);
-  await page.locator('button:has-text("Cinema"):enabled').last().click();
+  await page.getByTestId("intake-wizard-open-book-cinema").click();
   await cinemaOverlay(page).waitFor({ state: "visible" });
 }
 
@@ -631,12 +633,17 @@ async function clickContextPanelTab(overlay, name) {
 async function openPreparedCinemaOverlay(page, expectedLabel) {
   await gotoApp(page);
   await page.getByRole("button", { exact: true, name: "Intake" }).click();
-  await page.getByRole("button", { exact: true, name: "File / URL" }).click();
+  await openIntakeDestination(page);
   await page
     .getByRole("button", { name: new RegExp(`Open ${escapeRegex(expectedLabel)}`) })
     .first()
     .click();
   await cinemaOverlay(page).getByText(expectedLabel).first().waitFor();
+}
+
+async function openIntakeDestination(page) {
+  await page.getByText("Guided Intake").first().waitFor();
+  await page.getByTestId("intake-step-destination").click();
 }
 
 async function gotoApp(page) {
@@ -1123,7 +1130,12 @@ function collectPageIssues(page) {
   const issues = [];
   page.on("console", (message) => {
     if (message.type() === "error" || message.type() === "warning") {
-      const text = message.text();
+      const location = message.location();
+      const locationSuffix =
+        location.url && location.lineNumber > 0
+          ? ` (${location.url}:${String(location.lineNumber)}:${String(location.columnNumber)})`
+          : "";
+      const text = `${message.text()}${locationSuffix}`;
       if (/^Failed to load resource:/i.test(text)) {
         return;
       }
