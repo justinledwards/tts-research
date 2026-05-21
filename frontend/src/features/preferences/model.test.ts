@@ -46,6 +46,10 @@ describe("UI memory model", () => {
     const memory = loadUiMemory();
 
     expect(memory.rememberLayout).toBe(false);
+    expect(memory.rememberPanelPins).toBe(false);
+    expect(memory.rememberReaderPreferences).toBe(true);
+    expect(memory.rememberTelepromptReturnTarget).toBe(true);
+    expect(memory.rememberTheme).toBe(true);
     expect(resolveWorkspaceLayoutMode(memory, "alpha")).toBe("balanced");
     expect(resolveReviewPane(memory, "alpha")).toBe("blocks");
     expect(resolveTelepromptReturnStage(memory, "alpha")).toBe("review");
@@ -70,7 +74,11 @@ describe("UI memory model", () => {
   });
 
   it("does not persist remembered layout details while memory is disabled", () => {
-    const disabled = defaultUiMemoryState(false);
+    const disabled = defaultUiMemoryState({
+      rememberLayout: false,
+      rememberPanelPins: false,
+      rememberTelepromptReturnTarget: false,
+    });
 
     expect(rememberWorkspaceLayoutMode(disabled, "alpha", "full")).toBe(disabled);
     expect(rememberReviewPane(disabled, "alpha", "script")).toBe(disabled);
@@ -126,9 +134,16 @@ describe("UI memory model", () => {
 
   it("normalizes review panes, teleprompt returns, and cinema panels", () => {
     const memory = {
-      ...defaultUiMemoryState(true),
+      ...defaultUiMemoryState({
+        rememberLayout: true,
+        rememberPanelPins: true,
+        rememberTelepromptReturnTarget: true,
+      }),
       cinema: {
-        ...defaultUiMemoryState(true).cinema,
+        ...defaultUiMemoryState({
+          rememberLayout: true,
+          rememberPanelPins: true,
+        }).cinema,
         book: {
           activePanelId: "policy",
           mode: "review",

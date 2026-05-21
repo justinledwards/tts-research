@@ -31,6 +31,7 @@ const actionTimeoutMs = Number.parseInt(
 );
 const failOnFindings = process.env.UI_ACTION_AUDIT_FAIL_ON_FINDINGS === "1";
 const inventoryOnly = process.env.UI_ACTION_AUDIT_INVENTORY_ONLY === "1";
+const scenarioFilter = parseScenarioFilter(process.env.UI_ACTION_AUDIT_SCENARIOS);
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
@@ -69,14 +70,14 @@ async function main() {
     await assertServerReady();
     const { chromium } = await loadPlaywright();
     const seed = await seedAuditData(fixtures);
-    const scenarios = createScenarios(seed);
+    const scenarios = filterScenarios(createScenarios(seed), scenarioFilter);
     const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
     const actions = [];
     const results = [];
     const screenshots = [];
 
     try {
-      if (!inventoryOnly) {
+      if (!inventoryOnly && shouldRunTraversal(scenarioFilter)) {
         const traversal = await runWorkspaceStageTraversal(browser, seed);
         results.push(traversal.result);
         screenshots.push(...traversal.screenshots);
@@ -164,6 +165,29 @@ async function main() {
       await services.stop();
     }
   }
+}
+
+function parseScenarioFilter(value) {
+  const ids = (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return ids.length > 0 ? new Set(ids) : null;
+}
+
+function filterScenarios(scenarios, filter) {
+  if (!filter) {
+    return scenarios;
+  }
+  const filtered = scenarios.filter((scenario) => filter.has(scenario.id));
+  if (filtered.length === 0 && !filter.has("workspace-stage-traversal")) {
+    throw new Error(`No UI action audit scenarios matched: ${[...filter].join(", ")}`);
+  }
+  return filtered;
+}
+
+function shouldRunTraversal(filter) {
+  return !filter || filter.has("workspace-stage-traversal");
 }
 
 async function inventoryScenario(browser, scenario) {
@@ -402,6 +426,7 @@ function createScenarios(seed) {
           "tts-ui-memory": JSON.stringify({
             cinema: { book: { mode: "inspect", pinnedPanelId: "source" } },
             rememberLayout: true,
+            rememberPanelPins: true,
           }),
         },
       ),
@@ -412,6 +437,18 @@ function createScenarios(seed) {
       id: "settings-open",
       label: "Settings open",
       open: openSettings,
+      storageState: projectStorageState(seed.projectId, {
+        sourceMode: "text",
+        stage: "intake",
+        text: workspaceText,
+      }),
+      surface: "Settings",
+    },
+    {
+      description: "Settings drawer opened to UI memory controls.",
+      id: "settings-ui-memory",
+      label: "Settings UI memory",
+      open: openSettingsUiMemory,
       storageState: projectStorageState(seed.projectId, {
         sourceMode: "text",
         stage: "intake",
@@ -649,6 +686,15 @@ async function openSettingsGroup(page, groupLabel) {
   await openSettings(page);
   await page.getByRole("button", { name: new RegExp(`^${groupLabel}`) }).click();
   await page.getByText("Speech policy wizard").first().waitFor();
+}
+
+async function openSettingsUiMemory(page) {
+  await openSettings(page);
+  await page
+    .getByRole("button", { name: /^Reader/ })
+    .first()
+    .click();
+  await page.getByTestId("ui-memory-preferences").waitFor();
 }
 
 async function openTeleprompt(page) {

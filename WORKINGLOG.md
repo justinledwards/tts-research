@@ -313,3 +313,11 @@
 ## 2026-05-21 21:23 CEST - Commit Workpackage 10
 - [x] Stage accessibility, responsive, and i18n hardening changes
 - [x] Commit workpackage 10
+
+## 2026-05-21 21:27 CEST - UI Memory Preferences
+- [x] Map persisted UI memory keys and settings surfaces
+- [x] Add UI memory model, export/import, and preferences panel
+- [x] Wire safe reset/export/import into Settings and action audit
+- [x] Add UI action scenario filtering for targeted audit reruns
+- [x] Update UI memory docs
+- [x] Run local validation commands

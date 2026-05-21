@@ -18,6 +18,7 @@ const interactiveSelector = [
 
 const destructivePattern =
   /\b(delete|remove|reset|clear|cancel job|discard|overwrite|revoke|disconnect)\b/i;
+const nonDestructiveClearPattern = /\bclear selection\b/i;
 const transportPattern = /(?:\b(play|pause|resume|restart|seek|speed)\b|[+-]10s)/i;
 const modePattern =
   /\b(intake|review|preview|read|inspect|debug|narration|voice cloning|focus|balanced|full|teleprompt)\b/i;
@@ -270,7 +271,7 @@ export async function buildActionInventory(page, scenario) {
     const actionClass = rawAction.disabled
       ? "disabled"
       : classifyAction({ label, role: rawAction.role, tagName: rawAction.tagName });
-    const destructive = actionClass === "destructive" || destructivePattern.test(label);
+    const destructive = actionClass === "destructive" || isDestructiveLabel(label);
     const fingerprint = [
       rawAction.surface,
       rawAction.role ?? rawAction.tagName,
@@ -487,7 +488,7 @@ function behaviorKeyFor(action) {
 }
 
 function classifyAction({ label, role }) {
-  if (destructivePattern.test(label)) {
+  if (isDestructiveLabel(label)) {
     return "destructive";
   }
   if (transportPattern.test(label)) {
@@ -515,6 +516,10 @@ function classifyAction({ label, role }) {
     return "mode";
   }
   return "generation";
+}
+
+function isDestructiveLabel(label) {
+  return destructivePattern.test(label) && !nonDestructiveClearPattern.test(label);
 }
 
 function expectedTransitionFor({ actionClass, label, role, tagName }) {

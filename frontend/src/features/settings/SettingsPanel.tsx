@@ -25,7 +25,12 @@ import {
   SourcePolicyPinEditor,
   resolveSpeechPolicyProfileOptions,
 } from "../policy";
-import type { UiMemoryState } from "../preferences";
+import type { UiMemoryPreferenceId, UiMemoryState } from "../preferences";
+import {
+  UiMemoryPreferences,
+  type UiMemoryImportApplyResult,
+  type UiMemoryResetScope,
+} from "../ui-memory";
 import {
   buildTeleprompterWordCues,
   type TeleprompterEffectStyle,
@@ -147,8 +152,6 @@ export function SettingsPanel({
   onDeleteCustomSpeechPolicyProfile,
   onPrepareProfileTarget,
   onReaderAccessibilitySettingsChange,
-  onRememberLayoutChange,
-  onResetUiMemory,
   onRunConfigurationChange,
   onSaveBookSourcePolicy,
   onSavePreparedSourcePolicy,
@@ -159,6 +162,10 @@ export function SettingsPanel({
   onSubmit,
   onTeleprompterSettingsChange,
   onThemeChange,
+  onUiMemoryExportPreferences,
+  onUiMemoryImportPreferences,
+  onUiMemoryPreferenceChange,
+  onUiMemoryReset,
   onUpdateCustomSpeechPolicyProfile,
 }: Readonly<{
   canSubmit: boolean;
@@ -204,8 +211,6 @@ export function SettingsPanel({
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
-  onRememberLayoutChange: (rememberLayout: boolean) => void;
-  onResetUiMemory: () => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onSaveBookSourcePolicy: (
     sourceId: string,
@@ -222,6 +227,12 @@ export function SettingsPanel({
   onSubmit: () => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
+  onUiMemoryExportPreferences: () => Promise<string> | string;
+  onUiMemoryImportPreferences: (
+    json: string,
+  ) => Promise<UiMemoryImportApplyResult> | UiMemoryImportApplyResult;
+  onUiMemoryPreferenceChange: (preferenceId: UiMemoryPreferenceId, enabled: boolean) => void;
+  onUiMemoryReset: (scope: UiMemoryResetScope) => void;
   onUpdateCustomSpeechPolicyProfile: (
     profileId: string,
     name: string,
@@ -329,12 +340,14 @@ export function SettingsPanel({
               themeName={themeName}
               uiMemory={uiMemory}
               onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
-              onRememberLayoutChange={onRememberLayoutChange}
-              onResetUiMemory={onResetUiMemory}
               onShortcutPreferencesChange={onShortcutPreferencesChange}
               onShortcutPreferencesReset={onShortcutPreferencesReset}
               onTeleprompterSettingsChange={onTeleprompterSettingsChange}
               onThemeChange={onThemeChange}
+              onUiMemoryExportPreferences={onUiMemoryExportPreferences}
+              onUiMemoryImportPreferences={onUiMemoryImportPreferences}
+              onUiMemoryPreferenceChange={onUiMemoryPreferenceChange}
+              onUiMemoryReset={onUiMemoryReset}
             />
           ) : null}
           {activeGroup === "voices" ? (
@@ -762,12 +775,14 @@ function ReaderSettingsGroup({
   themeName,
   uiMemory,
   onReaderAccessibilitySettingsChange,
-  onRememberLayoutChange,
-  onResetUiMemory,
   onShortcutPreferencesChange,
   onShortcutPreferencesReset,
   onTeleprompterSettingsChange,
   onThemeChange,
+  onUiMemoryExportPreferences,
+  onUiMemoryImportPreferences,
+  onUiMemoryPreferenceChange,
+  onUiMemoryReset,
 }: Readonly<{
   highlightedCommandToken: string | null;
   readerAccessibilitySettings: ReaderAccessibilitySettings;
@@ -777,12 +792,16 @@ function ReaderSettingsGroup({
   themeName: ThemeName;
   uiMemory: UiMemoryState;
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
-  onRememberLayoutChange: (rememberLayout: boolean) => void;
-  onResetUiMemory: () => void;
   onShortcutPreferencesChange: (preferences: ShortcutPreferences) => void;
   onShortcutPreferencesReset: () => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
+  onUiMemoryExportPreferences: () => Promise<string> | string;
+  onUiMemoryImportPreferences: (
+    json: string,
+  ) => Promise<UiMemoryImportApplyResult> | UiMemoryImportApplyResult;
+  onUiMemoryPreferenceChange: (preferenceId: UiMemoryPreferenceId, enabled: boolean) => void;
+  onUiMemoryReset: (scope: UiMemoryResetScope) => void;
 }>) {
   return (
     <PanelSection
@@ -810,10 +829,12 @@ function ReaderSettingsGroup({
         onChange={onReaderAccessibilitySettingsChange}
       />
       <ThemeSettingsControls themeName={themeName} onThemeChange={onThemeChange} />
-      <UiMemorySettingsControls
-        rememberLayout={uiMemory.rememberLayout}
-        onRememberLayoutChange={onRememberLayoutChange}
-        onResetUiMemory={onResetUiMemory}
+      <UiMemoryPreferences
+        uiMemory={uiMemory}
+        onExportPreferences={onUiMemoryExportPreferences}
+        onImportPreferences={onUiMemoryImportPreferences}
+        onPreferenceChange={onUiMemoryPreferenceChange}
+        onResetMemory={onUiMemoryReset}
       />
       <ShortcutSettings
         preferences={shortcutPreferences}
@@ -836,44 +857,6 @@ function ReaderSettingsGroup({
         </div>
       </details>
     </PanelSection>
-  );
-}
-
-function UiMemorySettingsControls({
-  rememberLayout,
-  onRememberLayoutChange,
-  onResetUiMemory,
-}: Readonly<{
-  rememberLayout: boolean;
-  onRememberLayoutChange: (rememberLayout: boolean) => void;
-  onResetUiMemory: () => void;
-}>) {
-  return (
-    <Panel className="grid gap-3 p-3" variant="surface">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h4 className="flex items-center gap-2 text-sm font-semibold">
-            UI memory
-            <ScopeBadge scope="machine" />
-          </h4>
-          <p className="vs-muted mt-1 text-xs leading-5">
-            Remember presentation-only workspace and cinema layout on this machine.
-          </p>
-        </div>
-        <Toggle
-          checked={rememberLayout}
-          className="text-xs"
-          label="Remember my layout"
-          onChange={onRememberLayoutChange}
-        />
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-xs vs-border">
-        <span className="vs-muted">Reset returns Workspace and Cinema to documented defaults.</span>
-        <Button onClick={onResetUiMemory} size="sm" variant="secondary">
-          Reset UI memory
-        </Button>
-      </div>
-    </Panel>
   );
 }
 

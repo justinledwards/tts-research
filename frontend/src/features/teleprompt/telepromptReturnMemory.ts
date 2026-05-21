@@ -11,7 +11,7 @@ export interface TelepromptReturnSnapshot {
   readonly updatedAt: string;
 }
 
-const TELEPROMPT_RETURN_MEMORY_KEY = "tts-teleprompt-studio-memory";
+export const TELEPROMPT_RETURN_MEMORY_KEY = "tts-teleprompt-studio-memory";
 
 export function normalizeTelepromptReturnTarget(
   value: unknown,
@@ -62,6 +62,10 @@ export function rememberTelepromptReturnSnapshot(snapshot: TelepromptReturnSnaps
     updatedAt: snapshot.updatedAt.length > 0 ? snapshot.updatedAt : new Date().toISOString(),
   };
   safeStorageSet(TELEPROMPT_RETURN_MEMORY_KEY, JSON.stringify(snapshots));
+}
+
+export function clearTelepromptReturnMemory(): void {
+  safeStorageRemove(TELEPROMPT_RETURN_MEMORY_KEY);
 }
 
 function readTelepromptReturnMemory(): Partial<Record<string, TelepromptReturnSnapshot>> {
@@ -129,6 +133,14 @@ function safeStorageGet(key: string): string | null {
 function safeStorageSet(key: string, value: string): void {
   try {
     globalThis.localStorage.setItem(key, value);
+  } catch {
+    // Storage can be unavailable in private or test contexts; Teleprompt still works without it.
+  }
+}
+
+function safeStorageRemove(key: string): void {
+  try {
+    globalThis.localStorage.removeItem(key);
   } catch {
     // Storage can be unavailable in private or test contexts; Teleprompt still works without it.
   }

@@ -66,6 +66,7 @@ export interface TelepromptStudioProps {
   readonly playbackCursorSec: number;
   readonly policyProfile: string;
   readonly projectId: string;
+  readonly rememberReturnMemory: boolean;
   readonly returnStage: Exclude<WorkspaceStage, "teleprompt">;
   readonly scopeLabel: string;
   readonly settings: TeleprompterHighlightSettings;
@@ -93,6 +94,7 @@ export function TelepromptStudio({
   playbackCursorSec,
   policyProfile,
   projectId,
+  rememberReturnMemory,
   returnStage,
   scopeLabel,
   settings,
@@ -148,6 +150,9 @@ export function TelepromptStudio({
       nextReturnTarget: TelepromptReturnTarget = returnTarget,
       nextBlockId: string | null = activeBlock?.id ?? null,
     ) => {
+      if (!rememberReturnMemory) {
+        return;
+      }
       rememberTelepromptReturnSnapshot({
         activeBlockId: nextBlockId,
         projectId,
@@ -157,11 +162,11 @@ export function TelepromptStudio({
         updatedAt: new Date().toISOString(),
       });
     },
-    [activeBlock?.id, projectId, returnTarget, sourceKey],
+    [activeBlock?.id, projectId, rememberReturnMemory, returnTarget, sourceKey],
   );
 
   useEffect(() => {
-    if (blocks.length === 0 || restoredMemoryRef.current) {
+    if (!rememberReturnMemory || blocks.length === 0 || restoredMemoryRef.current) {
       return;
     }
     restoredMemoryRef.current = true;
@@ -180,7 +185,7 @@ export function TelepromptStudio({
         }
       });
     }
-  }, [activeBlockId, blocks, onActiveBlockChange, projectId, sourceKey]);
+  }, [activeBlockId, blocks, onActiveBlockChange, projectId, rememberReturnMemory, sourceKey]);
 
   useEffect(() => {
     if (!activeBlock && blocks[0]) {

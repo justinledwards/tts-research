@@ -13,6 +13,8 @@ export {
   type TelepromptPresetId,
 } from "./telepromptPresets";
 export {
+  TELEPROMPT_RETURN_MEMORY_KEY,
+  clearTelepromptReturnMemory,
   normalizeTelepromptReturnTarget,
   readTelepromptReturnSnapshot,
   rememberTelepromptReturnSnapshot,

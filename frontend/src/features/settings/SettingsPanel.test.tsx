@@ -58,8 +58,6 @@ describe("SettingsPanel", () => {
         onDeleteCustomSpeechPolicyProfile={asyncNoop}
         onPrepareProfileTarget={asyncNoop}
         onReaderAccessibilitySettingsChange={noop}
-        onRememberLayoutChange={noop}
-        onResetUiMemory={noop}
         onRunConfigurationChange={noop}
         onSaveBookSourcePolicy={asyncNoop}
         onSavePreparedSourcePolicy={asyncNoop}
@@ -70,6 +68,10 @@ describe("SettingsPanel", () => {
         onSubmit={noop}
         onTeleprompterSettingsChange={noop}
         onThemeChange={noop}
+        onUiMemoryExportPreferences={() => "{}"}
+        onUiMemoryImportPreferences={() => ({ message: "Imported.", ok: true })}
+        onUiMemoryPreferenceChange={noop}
+        onUiMemoryReset={noop}
         onUpdateCustomSpeechPolicyProfile={asyncNoop}
       />,
     );

@@ -131,7 +131,12 @@ import {
   secondsForReadingPosition,
   type HighlightCue,
 } from "./highlightMap";
-import { THEME_STORAGE_KEY, VOICE_STUDIO_THEMES, normalizeThemeName } from "./theme";
+import {
+  DEFAULT_THEME_NAME,
+  THEME_STORAGE_KEY,
+  VOICE_STUDIO_THEMES,
+  normalizeThemeName,
+} from "./theme";
 import { nextActivityFooterMode, type ActivityFooterMode } from "./activityFooter";
 import {
   CollapsedRailButton,
@@ -153,14 +158,19 @@ import {
   rememberTelepromptReturnStage,
   rememberWorkspaceLayoutMode,
   resetUiMemory,
+  resetWorkspaceUiMemory,
   resolveCinemaFocusState,
   resolveReviewPane,
   resolveTelepromptReturnStage,
   resolveWorkspaceLayoutMode,
   saveUiMemory,
+  updateUiMemoryPreference,
   type UiMemoryCinemaState,
+  type UiMemoryPreferenceId,
   type UiMemoryState,
 } from "./features/preferences";
+import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPreferences";
+import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
 import type { HeaderContextSummaryProps } from "./features/header";
 import { Button, Panel, SegmentedControl, StatusChip } from "./design";
 import {
@@ -384,6 +394,12 @@ const MarkdownRenderer = lazy(() =>
 const MermaidDiagram = lazy(() =>
   import("./MarkdownRenderer").then((module) => ({ default: module.MermaidDiagram })),
 );
+
+function clearStoredTelepromptReturnMemory(): void {
+  void import("./features/teleprompt/telepromptReturnMemory").then((module) => {
+    module.clearTelepromptReturnMemory();
+  });
+}
 
 interface CommandMetadataState {
   cinemaFocus: CommandMetadata<CinemaFocusCommandTarget>[];
@@ -2523,11 +2539,13 @@ export function App() {
   const [isAnalyzingProfileSource, setIsAnalyzingProfileSource] = useState(false);
   const [profileCandidateCreateId, setProfileCandidateCreateId] = useState<string | null>(null);
   const [refreshingTranscriptKey, setRefreshingTranscriptKey] = useState<string | null>(null);
-  const [projects, setProjects] = useState<VoiceProject[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState(
-    () => localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default",
-  );
   const [uiMemory, setUiMemory] = useState<UiMemoryState>(() => loadUiMemory());
+  const [projects, setProjects] = useState<VoiceProject[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState(() =>
+    uiMemory.rememberLastProject
+      ? (localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default")
+      : "default",
+  );
   const [uiMemoryResetSignal, setUiMemoryResetSignal] = useState(0);
   const [projectStateReadyId, setProjectStateReadyId] = useState<string | null>(null);
   const [projectJobs, setProjectJobs] = useState<VoiceJob[]>([]);
@@ -2551,7 +2569,7 @@ export function App() {
     DEFAULT_SPEECH_POLICY_PROFILE,
   );
   const [speechPolicyOverrides, setSpeechPolicyOverrides] = useState<SpeechPolicyOverrides>(() =>
-    loadSpeechPolicyOverrides(localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default"),
+    loadSpeechPolicyOverrides(activeProjectId),
   );
   const [speechPolicyError, setSpeechPolicyError] = useState<string | null>(null);
   const [isSpeechPolicyPreviewing, setIsSpeechPolicyPreviewing] = useState(false);
@@ -2580,6 +2598,9 @@ export function App() {
     useState<ThemeName>("light");
   const [readerAccessibilitySettings, setReaderAccessibilitySettings] =
     useState<ReaderAccessibilitySettings>(() => {
+      if (!uiMemory.rememberReaderPreferences) {
+        return DEFAULT_READER_ACCESSIBILITY_SETTINGS;
+      }
       try {
         return normalizeReaderAccessibilitySettings(
           JSON.parse(localStorage.getItem(READER_ACCESSIBILITY_STORAGE_KEY) ?? "null") as unknown,
@@ -2618,7 +2639,9 @@ export function App() {
     },
   );
   const [themeName, setThemeName] = useState<ThemeName>(() =>
-    normalizeThemeName(localStorage.getItem(THEME_STORAGE_KEY)),
+    uiMemory.rememberTheme
+      ? normalizeThemeName(localStorage.getItem(THEME_STORAGE_KEY))
+      : DEFAULT_THEME_NAME,
   );
   const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContext>(() =>
     createWorkspaceContext({
@@ -2631,6 +2654,13 @@ export function App() {
     resolveReviewPane(uiMemory, activeProjectId),
   );
   const uiMemoryRef = useRef(uiMemory);
+  const rememberActiveProjectId = useCallback((projectId: string) => {
+    if (uiMemoryRef.current.rememberLastProject) {
+      localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, projectId);
+      return;
+    }
+    localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+  }, []);
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [isProjectDashboardOpen, setIsProjectDashboardOpen] = useState(false);
   const [isVoiceDashboardOpen, setIsVoiceDashboardOpen] = useState(false);
@@ -2795,14 +2825,61 @@ export function App() {
     },
     [activeProjectId],
   );
-  const handleRememberLayoutChange = useCallback((rememberLayout: boolean) => {
-    setUiMemory((currentMemory) => ({
-      ...currentMemory,
-      rememberLayout,
-    }));
-  }, []);
-  const handleResetUiMemory = useCallback(() => {
-    setUiMemory((currentMemory) => resetUiMemory(currentMemory));
+  const handleUiMemoryPreferenceChange = useCallback(
+    (preferenceId: UiMemoryPreferenceId, enabled: boolean) => {
+      setUiMemory((currentMemory) => {
+        const nextMemory = updateUiMemoryPreference(currentMemory, preferenceId, enabled);
+        uiMemoryRef.current = nextMemory;
+        return nextMemory;
+      });
+      if (enabled) {
+        return;
+      }
+      if (preferenceId === "rememberLastProject") {
+        localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+      }
+      if (preferenceId === "rememberReaderPreferences") {
+        localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+      }
+      if (preferenceId === "rememberTelepromptReturnTarget") {
+        clearStoredTelepromptReturnMemory();
+      }
+      if (preferenceId === "rememberTheme") {
+        localStorage.removeItem(THEME_STORAGE_KEY);
+      }
+    },
+    [],
+  );
+  const handleUiMemoryReset = useCallback((scope: UiMemoryResetScope) => {
+    if (scope === "reader") {
+      setReaderAccessibilitySettings(DEFAULT_READER_ACCESSIBILITY_SETTINGS);
+      localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+      return;
+    }
+    if (scope === "workspace") {
+      setUiMemory((currentMemory) => {
+        const nextMemory = resetWorkspaceUiMemory(currentMemory);
+        uiMemoryRef.current = nextMemory;
+        return nextMemory;
+      });
+      setWorkspaceContext((currentContext) => ({
+        ...currentContext,
+        layoutMode: defaultWorkspaceLayoutMode(),
+      }));
+      setActiveReviewPane("blocks");
+      return;
+    }
+    setUiMemory((currentMemory) => {
+      const nextMemory = resetUiMemory(currentMemory, { preservePreferences: false });
+      uiMemoryRef.current = nextMemory;
+      return nextMemory;
+    });
+    clearStoredTelepromptReturnMemory();
+    localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+    localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+    localStorage.removeItem(THEME_STORAGE_KEY);
+    setReaderAccessibilitySettings(DEFAULT_READER_ACCESSIBILITY_SETTINGS);
+    setThemeName(DEFAULT_THEME_NAME);
     setCinemaFocusOverrides({
       book: null,
       document: null,
@@ -3619,13 +3696,15 @@ export function App() {
       const nextProjects = await listProjects();
       setProjects(nextProjects);
       setActiveProjectId((currentProjectId) => {
-        const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+        const storedProjectId = uiMemoryRef.current.rememberLastProject
+          ? localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY)
+          : null;
         const candidate =
           currentProjectId.trim().length > 0 ? currentProjectId : (storedProjectId ?? "default");
         const resolved = nextProjects.some((project) => project.id === candidate)
           ? candidate
           : (nextProjects[0]?.id ?? "default");
-        localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, resolved);
+        rememberActiveProjectId(resolved);
         return resolved;
       });
     } catch (caughtError) {
@@ -3633,7 +3712,7 @@ export function App() {
         caughtError instanceof Error ? caughtError.message : "Unable to load projects",
       );
     }
-  }, []);
+  }, [rememberActiveProjectId]);
 
   const refreshProjectJobs = useCallback(async (projectId: string) => {
     if (projectId.trim().length === 0) {
@@ -4199,7 +4278,7 @@ export function App() {
       }
       setProjectStateReadyId(null);
       setActiveProjectId(projectId);
-      localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, projectId);
+      rememberActiveProjectId(projectId);
     },
     [
       contentMode,
@@ -4214,6 +4293,7 @@ export function App() {
       sourceMode,
       speechPolicyProfile,
       text,
+      rememberActiveProjectId,
       workspaceContext.activeBlockId,
     ],
   );
@@ -4237,6 +4317,54 @@ export function App() {
       }
     },
     [clearVisibleProjectWorkspace, selectProject],
+  );
+
+  const handleUiMemoryExportPreferences = useCallback(async () => {
+    const { buildUiMemoryExportJson } = await import("./features/ui-memory/uiMemoryExport");
+    return buildUiMemoryExportJson({
+      lastProjectId: activeProjectId,
+      readerAccessibilitySettings,
+      themeName,
+      uiMemory,
+    });
+  }, [activeProjectId, readerAccessibilitySettings, themeName, uiMemory]);
+
+  const handleUiMemoryImportPreferences = useCallback(
+    async (json: string): Promise<UiMemoryImportApplyResult> => {
+      try {
+        const { parseUiMemoryImportJson } = await import("./features/ui-memory/uiMemoryExport");
+        const imported = parseUiMemoryImportJson(json);
+        uiMemoryRef.current = imported.uiMemory;
+        setUiMemory(imported.uiMemory);
+        if (imported.readerAccessibilitySettings) {
+          setReaderAccessibilitySettings(imported.readerAccessibilitySettings);
+        }
+        if (imported.themeName) {
+          setThemeName(imported.themeName);
+        }
+        if (
+          imported.lastProjectId &&
+          imported.lastProjectId !== activeProjectId &&
+          projects.some((project) => project.id === imported.lastProjectId)
+        ) {
+          selectProject(imported.lastProjectId);
+        }
+        return {
+          message:
+            "Preferences imported. Project content, generated audio, secrets, and model paths were not included.",
+          ok: true,
+        };
+      } catch (caughtError) {
+        return {
+          message:
+            caughtError instanceof Error
+              ? caughtError.message
+              : "Unable to import UI preferences JSON.",
+          ok: false,
+        };
+      }
+    },
+    [activeProjectId, projects, selectProject],
   );
 
   const handleRenameProject = useCallback(async (id: string, name: string) => {
@@ -4265,7 +4393,7 @@ export function App() {
           const nextProjectId = remainingProjects[0]?.id ?? "default";
           clearVisibleProjectWorkspace(nextProjectId);
           setActiveProjectId(nextProjectId);
-          localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, nextProjectId);
+          rememberActiveProjectId(nextProjectId);
         }
         void refreshProjects();
       } catch (caughtError) {
@@ -4274,7 +4402,13 @@ export function App() {
         );
       }
     },
-    [activeProjectId, clearVisibleProjectWorkspace, projects, refreshProjects],
+    [
+      activeProjectId,
+      clearVisibleProjectWorkspace,
+      projects,
+      refreshProjects,
+      rememberActiveProjectId,
+    ],
   );
 
   const applyVoiceJobToState = useCallback(
@@ -4304,7 +4438,7 @@ export function App() {
       );
       if (nextProjectId !== activeProjectId) {
         setActiveProjectId(nextProjectId);
-        localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, nextProjectId);
+        rememberActiveProjectId(nextProjectId);
       }
       setProjectStateReadyId(nextProjectId);
       saveProjectWorkspaceState(nextProjectId, {
@@ -4336,6 +4470,7 @@ export function App() {
     [
       activeProjectId,
       applyJobStatusState,
+      rememberActiveProjectId,
       selectedVoiceProfileId,
       speechPolicyProfile,
       text,
@@ -4950,7 +5085,7 @@ export function App() {
   ]);
 
   useEffect(() => {
-    localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, activeProjectId);
+    rememberActiveProjectId(activeProjectId);
     migrateLegacyWorkspaceState(activeProjectId);
     void refreshProjectJobs(activeProjectId);
     void refreshBookSources(activeProjectId);
@@ -4968,6 +5103,7 @@ export function App() {
     refreshProjectProgress,
     refreshProjectStorage,
     refreshProjectSpeechPolicy,
+    rememberActiveProjectId,
     restoreProjectWorkspace,
   ]);
 
@@ -5268,20 +5404,40 @@ export function App() {
   }, [teleprompterSettings]);
 
   useEffect(() => {
+    if (!uiMemory.rememberReaderPreferences) {
+      localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+      return;
+    }
     localStorage.setItem(
       READER_ACCESSIBILITY_STORAGE_KEY,
       JSON.stringify(readerAccessibilitySettings),
     );
-  }, [readerAccessibilitySettings]);
+  }, [readerAccessibilitySettings, uiMemory.rememberReaderPreferences]);
 
   useEffect(() => {
+    if (!uiMemory.rememberTheme) {
+      localStorage.removeItem(THEME_STORAGE_KEY);
+      return;
+    }
     localStorage.setItem(THEME_STORAGE_KEY, themeName);
-  }, [themeName]);
+  }, [themeName, uiMemory.rememberTheme]);
 
   useEffect(() => {
     saveUiMemory(uiMemory);
     uiMemoryRef.current = uiMemory;
   }, [uiMemory]);
+
+  useEffect(() => {
+    if (!uiMemory.rememberLastProject) {
+      localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+    }
+  }, [uiMemory.rememberLastProject]);
+
+  useEffect(() => {
+    if (!uiMemory.rememberTelepromptReturnTarget) {
+      clearStoredTelepromptReturnMemory();
+    }
+  }, [uiMemory.rememberTelepromptReturnTarget]);
 
   useEffect(() => {
     const hasJob = Boolean(job?.id);
@@ -6496,8 +6652,6 @@ export function App() {
             onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
             onPrepareProfileTarget={handleBuildVoiceProfileArtifact}
             onReaderAccessibilitySettingsChange={setReaderAccessibilitySettings}
-            onRememberLayoutChange={handleRememberLayoutChange}
-            onResetUiMemory={handleResetUiMemory}
             onRunConfigurationChange={setRunConfiguration}
             onSaveBookSourcePolicy={handleSaveBookSourcePolicy}
             onSavePreparedSourcePolicy={handleSavePreparedSourcePolicy}
@@ -6520,6 +6674,10 @@ export function App() {
               setTeleprompterSettings(normalizeTeleprompterHighlightSettings(settings));
             }}
             onThemeChange={setThemeName}
+            onUiMemoryExportPreferences={handleUiMemoryExportPreferences}
+            onUiMemoryImportPreferences={handleUiMemoryImportPreferences}
+            onUiMemoryPreferenceChange={handleUiMemoryPreferenceChange}
+            onUiMemoryReset={handleUiMemoryReset}
             onUpdateCustomSpeechPolicyProfile={handleUpdateCustomSpeechPolicyProfile}
           />
         </Suspense>
@@ -7019,6 +7177,7 @@ export function App() {
                       customSpeechPolicyProfiles,
                     )}
                     projectId={activeProjectId}
+                    rememberReturnMemory={uiMemory.rememberTelepromptReturnTarget}
                     returnStage={workspaceContext.telepromptReturnStage}
                     scopeLabel={workbenchScopeTitle({
                       selectedBookScope: effectiveBookScope,

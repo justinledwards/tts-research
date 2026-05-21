@@ -1,8 +1,8 @@
 import {
   contextPanelDefaultTabForFocusMode,
   type ContextPanelTabDefinition,
-  type ContextPanelTabId,
-} from "../context-panel";
+} from "../context-panel/contextPanelModel";
+import type { ContextPanelTabId } from "../context-panel/contextPanelTabs";
 export {
   NARROW_VIEWPORT_QUERY as CINEMA_NARROW_VIEWPORT_QUERY,
   RESPONSIVE_QA_VIEWPORTS as CINEMA_RESPONSIVE_QA_VIEWPORTS,

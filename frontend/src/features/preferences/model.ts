@@ -21,6 +21,24 @@ export const UI_MEMORY_STORAGE_KEY = "tts-ui-memory";
 export const UI_MEMORY_VERSION = 1;
 
 type TelepromptReturnStage = Extract<WorkspaceStage, "review" | "preview">;
+export type UiMemoryPreferenceId =
+  | "rememberLastProject"
+  | "rememberLayout"
+  | "rememberPanelPins"
+  | "rememberReaderPreferences"
+  | "rememberTelepromptReturnTarget"
+  | "rememberTheme";
+
+export const UI_MEMORY_PREFERENCE_IDS: readonly UiMemoryPreferenceId[] = [
+  "rememberLayout",
+  "rememberTheme",
+  "rememberLastProject",
+  "rememberReaderPreferences",
+  "rememberTelepromptReturnTarget",
+  "rememberPanelPins",
+];
+
+type UiMemoryPreferenceValues = Pick<UiMemoryState, UiMemoryPreferenceId>;
 
 export interface UiMemoryCinemaState {
   activePanelId: CinemaInspectorPanelId | null;
@@ -30,7 +48,12 @@ export interface UiMemoryCinemaState {
 
 export interface UiMemoryState {
   cinema: Record<CinemaSurfaceKind, UiMemoryCinemaState>;
+  rememberLastProject: boolean;
   rememberLayout: boolean;
+  rememberPanelPins: boolean;
+  rememberReaderPreferences: boolean;
+  rememberTelepromptReturnTarget: boolean;
+  rememberTheme: boolean;
   version: typeof UI_MEMORY_VERSION;
   workspace: {
     layoutMode: WorkspaceLayoutMode | null;
@@ -42,14 +65,29 @@ export interface UiMemoryState {
 
 const CINEMA_SURFACES: readonly CinemaSurfaceKind[] = ["book", "document", "website"];
 
-export function defaultUiMemoryState(rememberLayout = false): UiMemoryState {
+export const DEFAULT_UI_MEMORY_PREFERENCES: UiMemoryPreferenceValues = {
+  rememberLastProject: true,
+  rememberLayout: false,
+  rememberPanelPins: false,
+  rememberReaderPreferences: true,
+  rememberTelepromptReturnTarget: true,
+  rememberTheme: true,
+};
+
+export function defaultUiMemoryState(
+  preferences: Partial<UiMemoryPreferenceValues> | boolean = {},
+): UiMemoryState {
+  const normalizedPreferences =
+    typeof preferences === "boolean"
+      ? { ...DEFAULT_UI_MEMORY_PREFERENCES, rememberLayout: preferences }
+      : normalizeUiMemoryPreferences(preferences);
   return {
     cinema: {
       book: defaultCinemaMemoryState(),
       document: defaultCinemaMemoryState(),
       website: defaultCinemaMemoryState(),
     },
-    rememberLayout,
+    ...normalizedPreferences,
     version: UI_MEMORY_VERSION,
     workspace: {
       layoutMode: null,
@@ -99,11 +137,40 @@ export function loadUiMemory(): UiMemoryState {
 }
 
 export function saveUiMemory(memory: UiMemoryState): void {
-  safeStorageSet(UI_MEMORY_STORAGE_KEY, JSON.stringify(normalizeUiMemoryState(memory)));
+  safeStorageSet(UI_MEMORY_STORAGE_KEY, JSON.stringify(persistableUiMemoryState(memory)));
 }
 
-export function resetUiMemory(memory: UiMemoryState = loadUiMemory()): UiMemoryState {
-  return defaultUiMemoryState(memory.rememberLayout);
+export function resetUiMemory(
+  memory: UiMemoryState = loadUiMemory(),
+  options: { preservePreferences?: boolean } = {},
+): UiMemoryState {
+  if (options.preservePreferences === false) {
+    return defaultUiMemoryState();
+  }
+  return defaultUiMemoryState(uiMemoryPreferenceValues(memory));
+}
+
+export function resetWorkspaceUiMemory(memory: UiMemoryState): UiMemoryState {
+  return {
+    ...memory,
+    workspace: {
+      ...memory.workspace,
+      layoutMode: null,
+      projectLayoutModes: {},
+      reviewPanes: {},
+    },
+  };
+}
+
+export function updateUiMemoryPreference(
+  memory: UiMemoryState,
+  preferenceId: UiMemoryPreferenceId,
+  enabled: boolean,
+): UiMemoryState {
+  return clearDisabledUiMemory({
+    ...memory,
+    [preferenceId]: enabled,
+  });
 }
 
 export function resolveWorkspaceLayoutMode(
@@ -183,7 +250,7 @@ export function resolveTelepromptReturnStage(
   memory: UiMemoryState,
   projectId: string,
 ): TelepromptReturnStage {
-  if (!memory.rememberLayout) {
+  if (!memory.rememberTelepromptReturnTarget) {
     return "review";
   }
   return normalizeTelepromptReturnStage(
@@ -196,7 +263,7 @@ export function rememberTelepromptReturnStage(
   projectId: string,
   stage: WorkspaceStage,
 ): UiMemoryState {
-  if (!memory.rememberLayout) {
+  if (!memory.rememberTelepromptReturnTarget) {
     return memory;
   }
   const normalizedStage = normalizeTelepromptReturnStage(stage);
@@ -220,7 +287,7 @@ export function resolveCinemaFocusState(
   surfaceKind: CinemaSurfaceKind,
   panels: readonly CinemaPanelDefinition[] = [],
 ): UiMemoryCinemaState {
-  if (!memory.rememberLayout) {
+  if (!memory.rememberPanelPins) {
     return defaultCinemaMemoryState();
   }
   return normalizeCinemaMemoryState(memory.cinema[surfaceKind], panels);
@@ -231,7 +298,7 @@ export function rememberCinemaFocusState(
   surfaceKind: CinemaSurfaceKind,
   state: UiMemoryCinemaState,
 ): UiMemoryState {
-  if (!memory.rememberLayout) {
+  if (!memory.rememberPanelPins) {
     return memory;
   }
   const normalizedState = normalizeCinemaMemoryState(state);
@@ -252,17 +319,83 @@ export function rememberCinemaFocusState(
   };
 }
 
-function normalizeUiMemoryState(value: unknown): UiMemoryState {
+export function normalizeUiMemoryState(value: unknown): UiMemoryState {
   if (!value || typeof value !== "object") {
     return defaultUiMemoryState();
   }
   const candidate = value as Partial<UiMemoryState>;
-  const blank = defaultUiMemoryState(Boolean(candidate.rememberLayout));
-  return {
+  const blank = defaultUiMemoryState(normalizeUiMemoryPreferences(candidate));
+  return clearDisabledUiMemory({
     ...blank,
     cinema: normalizeCinemaMemoryMap(candidate.cinema),
     version: UI_MEMORY_VERSION,
     workspace: normalizeWorkspaceMemory(candidate.workspace),
+  });
+}
+
+export function persistableUiMemoryState(memory: UiMemoryState): UiMemoryState {
+  return clearDisabledUiMemory(normalizeUiMemoryState(memory));
+}
+
+function normalizeUiMemoryPreferences(value: unknown): UiMemoryPreferenceValues {
+  const candidate = value && typeof value === "object" ? (value as Partial<UiMemoryState>) : {};
+  return {
+    rememberLastProject: normalizeBooleanPreference(
+      candidate.rememberLastProject,
+      DEFAULT_UI_MEMORY_PREFERENCES.rememberLastProject,
+    ),
+    rememberLayout: normalizeBooleanPreference(
+      candidate.rememberLayout,
+      DEFAULT_UI_MEMORY_PREFERENCES.rememberLayout,
+    ),
+    rememberPanelPins: normalizeBooleanPreference(
+      candidate.rememberPanelPins,
+      DEFAULT_UI_MEMORY_PREFERENCES.rememberPanelPins,
+    ),
+    rememberReaderPreferences: normalizeBooleanPreference(
+      candidate.rememberReaderPreferences,
+      DEFAULT_UI_MEMORY_PREFERENCES.rememberReaderPreferences,
+    ),
+    rememberTelepromptReturnTarget: normalizeBooleanPreference(
+      candidate.rememberTelepromptReturnTarget,
+      DEFAULT_UI_MEMORY_PREFERENCES.rememberTelepromptReturnTarget,
+    ),
+    rememberTheme: normalizeBooleanPreference(
+      candidate.rememberTheme,
+      DEFAULT_UI_MEMORY_PREFERENCES.rememberTheme,
+    ),
+  };
+}
+
+function normalizeBooleanPreference(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function uiMemoryPreferenceValues(memory: UiMemoryState): UiMemoryPreferenceValues {
+  return {
+    rememberLastProject: memory.rememberLastProject,
+    rememberLayout: memory.rememberLayout,
+    rememberPanelPins: memory.rememberPanelPins,
+    rememberReaderPreferences: memory.rememberReaderPreferences,
+    rememberTelepromptReturnTarget: memory.rememberTelepromptReturnTarget,
+    rememberTheme: memory.rememberTheme,
+  };
+}
+
+function clearDisabledUiMemory(memory: UiMemoryState): UiMemoryState {
+  const workspace = {
+    ...memory.workspace,
+    layoutMode: memory.rememberLayout ? memory.workspace.layoutMode : null,
+    projectLayoutModes: memory.rememberLayout ? memory.workspace.projectLayoutModes : {},
+    reviewPanes: memory.rememberLayout ? memory.workspace.reviewPanes : {},
+    telepromptReturnStages: memory.rememberTelepromptReturnTarget
+      ? memory.workspace.telepromptReturnStages
+      : {},
+  };
+  return {
+    ...memory,
+    cinema: memory.rememberPanelPins ? memory.cinema : normalizeCinemaMemoryMap(null),
+    workspace,
   };
 }
 

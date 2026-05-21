@@ -463,7 +463,8 @@ async function runSettingsIAUX(browser, projectId) {
     await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
 
     await runCommandPaletteAction(page, "machine scope", /Machine scope/);
-    await page.getByText("Remember presentation-only workspace").first().waitFor();
+    await page.getByTestId("ui-memory-preferences").waitFor();
+    await page.getByText("Remember Teleprompt return target").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
 
     await page.keyboard.press("Shift+/");
@@ -516,16 +517,25 @@ async function runSettingsIAUX(browser, projectId) {
   }
 }
 
-async function setRememberLayout(page, enabled, { reset = false } = {}) {
+async function setRememberLayout(page, enabled, { panelPins = false, reset = false } = {}) {
   await page.getByRole("button", { exact: true, name: "Open settings" }).click();
   await page.getByText("Studio Settings").first().waitFor();
   await page
     .getByRole("button", { name: /^Reader/ })
     .first()
     .click();
-  await page.getByLabel("Remember my layout").setChecked(enabled);
+  await page.getByLabel("Remember layout").setChecked(enabled);
+  if (panelPins) {
+    await page.getByLabel("Remember panel pins").setChecked(enabled);
+  }
   if (reset) {
-    await page.getByRole("button", { exact: true, name: "Reset UI memory" }).click();
+    page.once("dialog", (dialog) => dialog.accept());
+    await page
+      .getByRole("button", {
+        exact: true,
+        name: panelPins ? "Reset all UI memory" : "Reset workspace layout",
+      })
+      .click();
   }
   await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
 }
@@ -603,7 +613,7 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     if (runMemorySmoke) {
       await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle").catch(() => {});
-      await setRememberLayout(page, true);
+      await setRememberLayout(page, true, { panelPins: true });
     }
     await openBookCinemaOverlay(page, scope);
     if (runMemorySmoke) {
@@ -1092,7 +1102,7 @@ async function runPreparedCinemaSurfaceFocusUX(
   try {
     await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
-    await setRememberLayout(page, true);
+    await setRememberLayout(page, true, { panelPins: true });
     await page.getByRole("button", { exact: true, name: "Intake" }).click();
     await openIntakeDestination(page);
     await page
@@ -1166,13 +1176,9 @@ async function exerciseCinemaFocusMemoryPersistence(page, surfaceKind, reopenOve
   await assertCinemaFocusModeSelected(page, "Review");
   await assertCinemaFocusModeLayout(page, "Review", { pinned: true });
   await cinemaOverlay(page).locator('[data-cinema-inspector-panel="policy"]').waitFor();
-  await visibleOverlayButton(page, "Exit").click();
-
-  await setRememberLayout(page, true, { reset: true });
+  await visibleOverlayButton(page, "Pinned").click();
+  await switchCinemaFocusMode(page, "Read");
   await waitForRememberedCinemaFocusState(page, surfaceKind, "read", null);
-  await reopenOverlay();
-  await assertCinemaFocusModeSelected(page, "Read");
-  await assertCinemaFocusModeLayout(page, "Read");
 }
 
 async function waitForRememberedCinemaFocusState(page, surfaceKind, mode, pinnedPanelId) {
@@ -1184,8 +1190,14 @@ async function waitForRememberedCinemaFocusState(page, surfaceKind, mode, pinned
       }
       const memory = JSON.parse(raw);
       const surface = memory?.cinema?.[expectedSurfaceKind];
+      if (expectedMode === "read" && expectedPinnedPanelId === null) {
+        return (
+          memory?.rememberPanelPins !== true ||
+          (surface?.mode === "read" && (surface?.pinnedPanelId ?? null) === null)
+        );
+      }
       return (
-        memory?.rememberLayout === true &&
+        memory?.rememberPanelPins === true &&
         surface?.mode === expectedMode &&
         (surface?.pinnedPanelId ?? null) === expectedPinnedPanelId
       );

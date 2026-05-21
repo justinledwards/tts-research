@@ -33,6 +33,7 @@ const settingsPattern =
   /\b(settings|reader|policy|profile|scope|motion|contrast|typography|font|spacing|voice)\b/i;
 const destructivePattern =
   /\b(delete|remove|reset|clear|cancel job|discard|overwrite|revoke|disconnect)\b/i;
+const nonDestructiveClearPattern = /\bclear selection\b/i;
 const diagnosticPattern =
   /\b(help|diagnostic|debug|pipeline|validation|source|inspect|context guide|details)\b/i;
 const navigationPattern =
@@ -253,9 +254,69 @@ export const STATIC_UI_ACTION_METADATA = [
   action("reader-text-scale", "Text scale", "Settings", "settings", "state-changed"),
   action("reader-line-spacing", "Line spacing", "Settings", "settings", "state-changed"),
   action("reader-measure", "Measure", "Settings", "settings", "state-changed"),
+  action("ui-memory-remember-layout", "Remember layout", "Settings", "settings", "state-changed"),
+  action("ui-memory-remember-theme", "Remember theme", "Settings", "settings", "state-changed"),
   action(
-    "settings-reset-ui-memory",
-    "Reset UI memory",
+    "ui-memory-remember-last-project",
+    "Remember last project",
+    "Settings",
+    "settings",
+    "state-changed",
+  ),
+  action(
+    "ui-memory-remember-reader-preferences",
+    "Remember reader preferences",
+    "Settings",
+    "settings",
+    "state-changed",
+  ),
+  action(
+    "ui-memory-remember-teleprompt-return-target",
+    "Remember Teleprompt return target",
+    "Settings",
+    "settings",
+    "state-changed",
+  ),
+  action(
+    "ui-memory-remember-panel-pins",
+    "Remember panel pins",
+    "Settings",
+    "settings",
+    "state-changed",
+  ),
+  action(
+    "ui-memory-export-json",
+    "Export preferences JSON",
+    "Settings",
+    "navigation",
+    "state-changed",
+  ),
+  action(
+    "ui-memory-import-json",
+    "Import preferences JSON",
+    "Settings",
+    "settings",
+    "state-changed",
+  ),
+  action(
+    "ui-memory-reset-workspace",
+    "Reset workspace layout",
+    "Settings",
+    "destructive",
+    "menu-or-panel-opened",
+    true,
+  ),
+  action(
+    "ui-memory-reset-reader",
+    "Reset reader preferences",
+    "Settings",
+    "destructive",
+    "menu-or-panel-opened",
+    true,
+  ),
+  action(
+    "ui-memory-reset-all",
+    "Reset all UI memory",
     "Settings",
     "destructive",
     "menu-or-panel-opened",
@@ -287,7 +348,7 @@ export function inferUiActionMetadata(input: UiActionMetadataInput): UiActionMet
   const actionClass = input.disabled
     ? "disabled"
     : inferUiActionClass(label, input.role ?? undefined);
-  const destructive = actionClass === "destructive" || destructivePattern.test(label);
+  const destructive = actionClass === "destructive" || isDestructiveLabel(label);
   const generatedId = slugUiActionLabel(`${input.surface}-${label}`);
   return {
     id: generatedId,
@@ -324,7 +385,7 @@ export function findStaticUiActionMetadata(
 }
 
 export function inferUiActionClass(label: string, role?: string): UiActionClass {
-  if (destructivePattern.test(label)) {
+  if (isDestructiveLabel(label)) {
     return "destructive";
   }
   if (transportPattern.test(label)) {
@@ -413,4 +474,8 @@ function action(
     destructive,
     aliases,
   };
+}
+
+function isDestructiveLabel(label: string): boolean {
+  return destructivePattern.test(label) && !nonDestructiveClearPattern.test(label);
 }

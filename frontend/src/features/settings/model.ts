@@ -125,7 +125,8 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     scope: "machine",
   },
   {
-    description: "Controls whether local presentation layout is remembered on this machine.",
+    description:
+      "Controls local memory for layout, theme, last project, reader preferences, Teleprompt returns, and panel pins.",
     group: "reader",
     id: "uiMemory",
     label: "UI memory",
