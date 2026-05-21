@@ -267,3 +267,11 @@
 - [x] Wire Revision Panel into Review/context workflow
 - [x] Update UI action coverage and remove duplicated review controls where safe
 - [x] Run local validation commands
+
+## 2026-05-21 13:38 CEST - Dedicated Teleprompt Studio
+- [x] Map current Teleprompt stage, return context, shortcuts, and highlight controls
+- [x] Add Teleprompt Studio model, presets, toolbar, and return memory
+- [x] Wire Teleprompt Studio into workspace stage transitions
+- [x] Hide advanced highlight customization from the default UI
+- [x] Update docs and UI action coverage
+- [x] Run local validation commands

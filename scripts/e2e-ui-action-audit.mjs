@@ -499,11 +499,14 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await page.getByText("Default voice").first().waitFor();
     await capture("workspace-stage-04-preview-after");
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
-    await page.getByText("Teleprompt Stage").first().waitFor();
+    await page.getByText("Teleprompt Studio").first().waitFor();
     await page
-      .getByText(/Block 1/i)
+      .getByText(/Current block|Cue 1/i)
       .first()
       .waitFor();
+    await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
+    await page.getByTestId("ui-action-teleprompt-mirror").check();
+    await page.getByTestId("ui-action-teleprompt-preset-highContrast").click();
     await page.getByText("Default voice").first().waitFor();
     await capture("workspace-stage-05-teleprompt-after");
     await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
@@ -620,7 +623,7 @@ async function openSettingsGroup(page, groupLabel) {
 async function openTeleprompt(page) {
   await openWorkspaceStage(page, "Preview");
   await page.getByTestId("workspace-stage-action-openTeleprompt").click();
-  await page.getByText("Teleprompt Stage").first().waitFor();
+  await page.getByText("Teleprompt Studio").first().waitFor();
 }
 
 async function openBookPanel(page, scope) {

@@ -798,10 +798,21 @@ function ReaderSettingsGroup({
         onRememberLayoutChange={onRememberLayoutChange}
         onResetUiMemory={onResetUiMemory}
       />
-      <TeleprompterSettingsControls
-        settings={teleprompterSettings}
-        onChange={onTeleprompterSettingsChange}
-      />
+      <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+        <summary className="cursor-pointer text-sm font-semibold">
+          Advanced teleprompt highlight timing
+        </summary>
+        <p className="vs-muted mt-2 text-xs leading-5">
+          Recording presets live in Teleprompt Studio. Use these timing controls only when the
+          default cue behavior needs fine tuning.
+        </p>
+        <div className="mt-3">
+          <TeleprompterSettingsControls
+            settings={teleprompterSettings}
+            onChange={onTeleprompterSettingsChange}
+          />
+        </div>
+      </details>
     </PanelSection>
   );
 }

@@ -332,8 +332,8 @@ const SettingsPanel = lazy(() =>
 const LazyIntakeWizard = lazy(() =>
   import("./features/intake").then((module) => ({ default: module.IntakeWizard })),
 );
-const TelepromptStage = lazy(() =>
-  import("./features/teleprompt").then((module) => ({ default: module.TelepromptStage })),
+const LazyTelepromptStudio = lazy(() =>
+  import("./features/teleprompt").then((module) => ({ default: module.TelepromptStudio })),
 );
 const LazyHeaderContextSummary = lazy(() =>
   import("./features/header").then((module) => ({ default: module.HeaderContextSummary })),
@@ -2917,6 +2917,12 @@ export function App() {
   );
   const activeNarrationBookSource = sourceMode === "book" ? selectedBookSource : null;
   const activeNarrationPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
+  let activeNarrationSourceType: WorkspaceSourceType = "draft";
+  if (activeNarrationPreparedSource) {
+    activeNarrationSourceType = "prepared";
+  } else if (activeNarrationBookSource) {
+    activeNarrationSourceType = "book";
+  }
   useEffect(() => {
     let sourceId: string | null = null;
     if (sourceMode === "book") {
@@ -6711,11 +6717,11 @@ export function App() {
               sourcePrepError={sourcePrepError}
               telepromptStage={
                 <Suspense fallback={<LazySurfaceFallback label="Loading teleprompt..." />}>
-                  <TelepromptStage
-                    activeBlockLabel={workspaceActiveBlockLabel({
-                      activeBlockId: workspaceContext.activeBlockId,
-                      bookScopeContent,
+                  <LazyTelepromptStudio
+                    activeBlockId={workspaceContext.activeBlockId}
+                    blocks={buildNarrationReviewBlocks({
                       optimizedText: job?.optimizedText ?? "",
+                      bookScopeContent,
                       selectedBookScope: effectiveBookScope,
                       selectedBookSource: activeNarrationBookSource,
                       selectedPreparedSource: activeNarrationPreparedSource,
@@ -6723,10 +6729,16 @@ export function App() {
                     })}
                     canCreate={canCreateCurrentSource}
                     canOpenCinema={canOpenCurrentCinema}
+                    isPlaybackActive={isPlaybackActive}
+                    job={job}
+                    playbackControls={playbackControls}
+                    playbackCursorSec={playbackCursorSec}
                     policyProfile={speechPolicyProfileDisplayName(
                       speechPolicyProfile,
                       customSpeechPolicyProfiles,
                     )}
+                    projectId={activeProjectId}
+                    returnStage={workspaceContext.telepromptReturnStage}
                     scopeLabel={workbenchScopeTitle({
                       selectedBookScope: effectiveBookScope,
                       selectedBookSource: activeNarrationBookSource,
@@ -6744,7 +6756,17 @@ export function App() {
                       selectedPreparedSource: activeNarrationPreparedSource,
                       text,
                     })}
+                    settings={teleprompterSettings}
+                    sourceId={
+                      activeNarrationPreparedSource?.id ?? activeNarrationBookSource?.id ?? null
+                    }
                     voiceProfile={selectedVoiceProfile?.name ?? "Default voice"}
+                    sourceType={activeNarrationSourceType}
+                    onActiveBlockChange={(blockId) => {
+                      setWorkspaceContext((currentContext) =>
+                        withWorkspaceActiveBlock(currentContext, blockId),
+                      );
+                    }}
                     onBackToPreview={() => {
                       runWorkspaceStageAction("previewSpeech");
                     }}
@@ -6753,29 +6775,7 @@ export function App() {
                     }}
                     onCreateAndListen={createAndListenFromCurrentSource}
                     onOpenCinema={openReadingCinema}
-                  >
-                    <TeleprompterPanel
-                      canOpenBookCinema={canOpenBookCinema}
-                      isPlaybackActive={isPlaybackActive}
-                      job={job}
-                      latestProgress={latestProgress}
-                      openSignal={0}
-                      playbackControls={playbackControls}
-                      playbackCursorSec={playbackCursorSec}
-                      preparedSourceForCinema={jobPreparedSource ?? activeNarrationPreparedSource}
-                      settings={teleprompterSettings}
-                      showCinemaAction={false}
-                      themeName={themeName}
-                      onOpenBookCinema={openReadingCinema}
-                      onOpenSettings={() => {
-                        setSettingsCommandTarget(null);
-                        setIsSettingsOpen(true);
-                      }}
-                      onResumeProgress={(progress) => {
-                        void handleResumeProgress(progress);
-                      }}
-                    />
-                  </TelepromptStage>
+                  />
                 </Suspense>
               }
               text={text}
@@ -9914,43 +9914,6 @@ function narrationPreviewPolicyNotes({
       label: "Blocks",
     },
   ];
-}
-
-function workspaceActiveBlockLabel({
-  activeBlockId,
-  bookScopeContent,
-  optimizedText,
-  selectedBookScope,
-  selectedBookSource,
-  selectedPreparedSource,
-  text,
-}: Readonly<{
-  activeBlockId: string | null;
-  bookScopeContent: BookSourceScopeContent | null;
-  optimizedText: string;
-  selectedBookScope: BookScope | null;
-  selectedBookSource: BookSource | null;
-  selectedPreparedSource: PreparedSource | null;
-  text: string;
-}>): string {
-  const blocks = buildNarrationReviewBlocks({
-    bookScopeContent,
-    optimizedText,
-    selectedBookScope,
-    selectedBookSource,
-    selectedPreparedSource,
-    text,
-  });
-  if (!activeBlockId) {
-    return blocks[0]
-      ? `Block ${blocks[0].index.toString()} · ${blocks[0].label}`
-      : "Current selection";
-  }
-  const block = blocks.find((item) => item.id === activeBlockId);
-  if (!block) {
-    return activeBlockId;
-  }
-  return `Block ${block.index.toString()} · ${block.label}`;
 }
 
 interface WorkbenchSourceIdentity {

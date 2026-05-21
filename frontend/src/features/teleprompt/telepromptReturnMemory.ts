@@ -1,0 +1,135 @@
+import type { WorkspaceStage, WorkspaceSourceType } from "../workspace";
+
+export type TelepromptReturnTarget = "preview" | "review";
+
+export interface TelepromptReturnSnapshot {
+  readonly activeBlockId: string | null;
+  readonly projectId: string;
+  readonly returnTarget: TelepromptReturnTarget;
+  readonly scrollTop: number;
+  readonly sourceKey: string;
+  readonly updatedAt: string;
+}
+
+const TELEPROMPT_RETURN_MEMORY_KEY = "tts-teleprompt-studio-memory";
+
+export function normalizeTelepromptReturnTarget(
+  value: unknown,
+  fallback: TelepromptReturnTarget = "review",
+): TelepromptReturnTarget {
+  return value === "preview" || value === "review" ? value : fallback;
+}
+
+export function workspaceStageToTelepromptReturnTarget(
+  stage: WorkspaceStage,
+): TelepromptReturnTarget {
+  return stage === "preview" ? "preview" : "review";
+}
+
+export function telepromptSourceKey(input: {
+  readonly scopeLabel: string;
+  readonly sourceId: string | null;
+  readonly sourceLabel: string;
+  readonly sourceType: WorkspaceSourceType;
+}): string {
+  return [
+    input.sourceType,
+    cleanKeyPart(input.sourceId ?? "draft"),
+    cleanKeyPart(input.sourceLabel),
+    cleanKeyPart(input.scopeLabel),
+  ].join(":");
+}
+
+export function readTelepromptReturnSnapshot(
+  projectId: string,
+  sourceKey: string,
+): TelepromptReturnSnapshot | null {
+  const snapshots = readTelepromptReturnMemory();
+  const snapshot = snapshots[cleanKeyPart(projectId)];
+  if (snapshot?.sourceKey !== sourceKey) {
+    return null;
+  }
+  return snapshot;
+}
+
+export function rememberTelepromptReturnSnapshot(snapshot: TelepromptReturnSnapshot): void {
+  const snapshots = readTelepromptReturnMemory();
+  snapshots[cleanKeyPart(snapshot.projectId)] = {
+    ...snapshot,
+    activeBlockId: cleanOptionalSnapshotId(snapshot.activeBlockId),
+    returnTarget: normalizeTelepromptReturnTarget(snapshot.returnTarget),
+    scrollTop: Math.max(0, Math.round(snapshot.scrollTop)),
+    updatedAt: snapshot.updatedAt.length > 0 ? snapshot.updatedAt : new Date().toISOString(),
+  };
+  safeStorageSet(TELEPROMPT_RETURN_MEMORY_KEY, JSON.stringify(snapshots));
+}
+
+function readTelepromptReturnMemory(): Partial<Record<string, TelepromptReturnSnapshot>> {
+  const raw = safeStorageGet(TELEPROMPT_RETURN_MEMORY_KEY);
+  if (!raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+    return normalizeSnapshotMap(parsed as Record<string, unknown>);
+  } catch {
+    return {};
+  }
+}
+
+function normalizeSnapshotMap(
+  value: Record<string, unknown>,
+): Partial<Record<string, TelepromptReturnSnapshot>> {
+  const snapshots: Partial<Record<string, TelepromptReturnSnapshot>> = {};
+  for (const [projectId, snapshot] of Object.entries(value)) {
+    if (!snapshot || typeof snapshot !== "object") {
+      continue;
+    }
+    const candidate = snapshot as Partial<TelepromptReturnSnapshot>;
+    if (typeof candidate.projectId !== "string" || typeof candidate.sourceKey !== "string") {
+      continue;
+    }
+    snapshots[cleanKeyPart(projectId)] = {
+      activeBlockId:
+        typeof candidate.activeBlockId === "string" && candidate.activeBlockId.trim()
+          ? candidate.activeBlockId
+          : null,
+      projectId: candidate.projectId,
+      returnTarget: normalizeTelepromptReturnTarget(candidate.returnTarget),
+      scrollTop: Number.isFinite(candidate.scrollTop)
+        ? Math.max(0, Number(candidate.scrollTop))
+        : 0,
+      sourceKey: candidate.sourceKey,
+      updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : "",
+    };
+  }
+  return snapshots;
+}
+
+function cleanKeyPart(value: string): string {
+  return value.trim().replaceAll(/\s+/g, "-").toLowerCase();
+}
+
+function cleanOptionalSnapshotId(value: string | null): string | null {
+  const cleaned = value?.trim() ?? "";
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function safeStorageGet(key: string): string | null {
+  try {
+    return globalThis.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSet(key: string, value: string): void {
+  try {
+    globalThis.localStorage.setItem(key, value);
+  } catch {
+    // Storage can be unavailable in private or test contexts; Teleprompt still works without it.
+  }
+}
