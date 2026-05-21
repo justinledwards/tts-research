@@ -1282,6 +1282,7 @@ async function exerciseSourcePinSmoke(page, bookSourceId) {
   const clearResponse = page.waitForResponse(
     (response) => response.request().method() === "PATCH" && response.url().includes(pinEndpoint),
   );
+  page.once("dialog", (dialog) => dialog.accept());
   await clearPinButton.click();
   const cleared = await clearResponse;
   assert(cleared.ok(), `Source policy clear failed with ${String(cleared.status())}`);

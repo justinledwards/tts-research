@@ -252,3 +252,11 @@
 - [x] Wire wizard into Intake without duplicating adapter logic
 - [x] Update intake wizard docs and action audit coverage
 - [x] Run local validation commands
+
+## 2026-05-21 10:21 CEST - Run Configuration and Speech Policy Wizard
+- [x] Map current run configuration and speech policy settings surfaces
+- [x] Add guided run configuration and speech policy wizard models
+- [x] Wire wizards into Settings without duplicating advanced controls
+- [x] Add JSON import/export and real-time policy preview
+- [x] Update docs and UI action coverage
+- [x] Run local validation commands

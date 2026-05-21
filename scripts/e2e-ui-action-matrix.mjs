@@ -634,6 +634,7 @@ async function capturePageState(page) {
     const controls = [...document.querySelectorAll("button, select, a[href], input, [role]")]
       .filter((element) => element instanceof HTMLElement && visible(element))
       .map((element) => ({
+        checked: element instanceof HTMLInputElement ? element.checked : null,
         expanded: element.getAttribute("aria-expanded"),
         label:
           element.getAttribute("aria-label") ??

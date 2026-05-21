@@ -16,6 +16,9 @@ import {
   kokoroRenderModeForConfiguration,
   type RunConfiguration,
 } from "../../runConfig";
+import { RunConfigurationWizard } from "../run-config/RunConfigurationWizard";
+import { applyRunEngineSelection } from "../run-config/runConfigSteps";
+import { SpeechPolicyWizard } from "../speech-policy/SpeechPolicyWizard";
 import {
   SpeechPolicyControls,
   SourcePolicyPinEditor,
@@ -295,10 +298,17 @@ export function SettingsPanel({
           {activeGroup === "run" ? (
             <RunSettingsGroup
               canSubmit={canSubmit}
+              customSpeechPolicyProfiles={customSpeechPolicyProfiles}
               highlightedCommandToken={highlightedCommandToken}
               job={job}
               runConfiguration={runConfiguration}
+              selectedProfile={selectedProfile}
+              speechPolicyDefinition={speechPolicyDefinition}
+              speechPolicyProfile={speechPolicyProfile}
+              speechPolicyProfiles={speechPolicyProfiles}
+              ttsEngines={ttsEngines}
               onRunConfigurationChange={onRunConfigurationChange}
+              onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
               onSubmit={onSubmit}
             />
           ) : null}
@@ -521,7 +531,7 @@ function QuickSettings({
           scope="session"
           value={kokoroEngineFamilyValue(runConfiguration.ttsEngine)}
           onChange={(value) => {
-            onRunConfigurationChange(applyEngineSelection(runConfiguration, value, ttsEngines));
+            onRunConfigurationChange(applyRunEngineSelection(runConfiguration, value, ttsEngines));
           }}
         >
           {engineFamilyOptions(ttsEngines).map((engine) => (
@@ -586,17 +596,31 @@ function ScopeLegend() {
 
 function RunSettingsGroup({
   canSubmit,
+  customSpeechPolicyProfiles,
   highlightedCommandToken,
   job,
   runConfiguration,
+  selectedProfile,
+  speechPolicyDefinition,
+  speechPolicyProfile,
+  speechPolicyProfiles,
+  ttsEngines,
   onRunConfigurationChange,
+  onSpeechPolicyProfileChange,
   onSubmit,
 }: Readonly<{
   canSubmit: boolean;
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
   highlightedCommandToken: string | null;
   job: VoiceJob | null;
   runConfiguration: RunConfiguration;
+  selectedProfile: VoiceProfile | null;
+  speechPolicyDefinition: SpeechPolicyDefinition;
+  speechPolicyProfile: string;
+  speechPolicyProfiles: SpeechPolicyProfile[];
+  ttsEngines: TTSEngineDiagnostics[];
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
   onSubmit: () => void;
 }>) {
   return (
@@ -607,58 +631,69 @@ function RunSettingsGroup({
       title="Run"
       subtitle={SETTINGS_FIELD_META.find((field) => field.id === "runMode")?.description ?? ""}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        {RUN_MODE_PRESETS.map((preset) => (
-          <Button
-            align="start"
-            className="grid p-3"
-            key={preset.mode}
-            onClick={() => {
-              const next = createRunConfiguration(preset.mode);
-              onRunConfigurationChange({
-                ...next,
-                engineOptions: runConfiguration.engineOptions,
-                ttsEngine: runConfiguration.ttsEngine,
-              });
-            }}
-            selected={preset.mode === runConfiguration.runMode}
-            variant="mode"
-          >
-            <span className="flex items-center justify-between gap-3">
-              <span className="font-semibold">{preset.label}</span>
-              <span className="vs-muted text-xs">{preset.primaryLabel}</span>
-            </span>
-            <span className="vs-muted mt-2 block text-sm leading-5">{preset.description}</span>
-          </Button>
-        ))}
-      </div>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {(["balanced", "throughput", "quality"] as const).map((mode) => (
-          <Button
-            align="start"
-            className="grid px-3 py-3 capitalize"
-            key={mode}
-            onClick={() => {
-              onRunConfigurationChange({ ...runConfiguration, performanceMode: mode });
-            }}
-            selected={mode === runConfiguration.performanceMode}
-            variant="mode"
-          >
-            <span className="font-semibold">{mode}</span>
-            <span className="vs-muted mt-1 block text-xs leading-5">
-              {describePerformanceMode(mode)}
-            </span>
-          </Button>
-        ))}
-      </div>
-      <PipelineToggles
-        keys={COMMON_PIPELINE_OPTIONS}
+      <RunConfigurationWizard
+        customSpeechPolicyProfiles={customSpeechPolicyProfiles}
         runConfiguration={runConfiguration}
+        selectedProfile={selectedProfile}
+        speechPolicyDefinition={speechPolicyDefinition}
+        speechPolicyProfile={speechPolicyProfile}
+        speechPolicyProfiles={speechPolicyProfiles}
+        ttsEngines={ttsEngines}
         onRunConfigurationChange={onRunConfigurationChange}
+        onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
       />
       <details className="rounded-md border p-3 vs-border vs-surface">
-        <summary className="cursor-pointer text-sm font-semibold">Advanced pipeline checks</summary>
-        <div className="mt-3">
+        <summary className="cursor-pointer text-sm font-semibold">Advanced run controls</summary>
+        <div className="mt-3 grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {RUN_MODE_PRESETS.map((preset) => (
+              <Button
+                align="start"
+                className="grid p-3"
+                key={preset.mode}
+                onClick={() => {
+                  const next = createRunConfiguration(preset.mode);
+                  onRunConfigurationChange({
+                    ...next,
+                    engineOptions: runConfiguration.engineOptions,
+                    ttsEngine: runConfiguration.ttsEngine,
+                  });
+                }}
+                selected={preset.mode === runConfiguration.runMode}
+                variant="mode"
+              >
+                <span className="flex items-center justify-between gap-3">
+                  <span className="font-semibold">{preset.label}</span>
+                  <span className="vs-muted text-xs">{preset.primaryLabel}</span>
+                </span>
+                <span className="vs-muted mt-2 block text-sm leading-5">{preset.description}</span>
+              </Button>
+            ))}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {(["balanced", "throughput", "quality"] as const).map((mode) => (
+              <Button
+                align="start"
+                className="grid px-3 py-3 capitalize"
+                key={mode}
+                onClick={() => {
+                  onRunConfigurationChange({ ...runConfiguration, performanceMode: mode });
+                }}
+                selected={mode === runConfiguration.performanceMode}
+                variant="mode"
+              >
+                <span className="font-semibold">{mode}</span>
+                <span className="vs-muted mt-1 block text-xs leading-5">
+                  {describePerformanceMode(mode)}
+                </span>
+              </Button>
+            ))}
+          </div>
+          <PipelineToggles
+            keys={COMMON_PIPELINE_OPTIONS}
+            runConfiguration={runConfiguration}
+            onRunConfigurationChange={onRunConfigurationChange}
+          />
           <PipelineToggles
             keys={Object.keys(PIPELINE_OPTION_LABELS) as (keyof PipelineOptions)[]}
             runConfiguration={runConfiguration}
@@ -1047,7 +1082,7 @@ function VoiceSettingsGroup({
         scope="session"
         value={kokoroEngineFamilyValue(runConfiguration.ttsEngine)}
         onChange={(value) => {
-          onRunConfigurationChange(applyEngineSelection(runConfiguration, value, ttsEngines));
+          onRunConfigurationChange(applyRunEngineSelection(runConfiguration, value, ttsEngines));
         }}
       >
         {engineFamilyOptions(ttsEngines).map((engine) => (
@@ -1094,7 +1129,7 @@ function VoiceSettingsGroup({
         error={ttsEngineError}
         selectedEngine={runConfiguration.ttsEngine}
         onSelectEngine={(engineId) => {
-          onRunConfigurationChange(applyEngineSelection(runConfiguration, engineId, ttsEngines));
+          onRunConfigurationChange(applyRunEngineSelection(runConfiguration, engineId, ttsEngines));
         }}
       />
     </PanelSection>
@@ -1200,7 +1235,7 @@ function SourceSettingsGroup({
       title="Sources"
       subtitle="Project defaults, session overrides, and selected-source pins use separate scopes."
     >
-      <SpeechPolicyControls
+      <SpeechPolicyWizard
         customProfiles={customSpeechPolicyProfiles}
         definition={speechPolicyDefinition}
         error={speechPolicyError}
@@ -1215,6 +1250,26 @@ function SourceSettingsGroup({
         onProfileChange={onSpeechPolicyProfileChange}
         onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
       />
+      <details className="rounded-md border p-3 vs-border vs-surface">
+        <summary className="cursor-pointer text-sm font-semibold">Advanced policy editor</summary>
+        <div className="mt-3">
+          <SpeechPolicyControls
+            customProfiles={customSpeechPolicyProfiles}
+            definition={speechPolicyDefinition}
+            error={speechPolicyError}
+            isPreviewing={isSpeechPolicyPreviewing}
+            overrides={speechPolicyOverrides}
+            profile={speechPolicyProfile}
+            profiles={speechPolicyProfiles}
+            onClearOverrides={onClearSpeechPolicyOverrides}
+            onCreateCustomProfile={onCreateCustomSpeechPolicyProfile}
+            onDeleteCustomProfile={onDeleteCustomSpeechPolicyProfile}
+            onOverridesChange={onSpeechPolicyOverridesChange}
+            onProfileChange={onSpeechPolicyProfileChange}
+            onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
+          />
+        </div>
+      </details>
       <Panel className="p-3" variant="surface">
         <div className="mb-2 flex items-center justify-between gap-3">
           <h4 className="text-sm font-semibold">Selected source</h4>
@@ -1297,7 +1352,7 @@ function RuntimeSettingsGroup({
         error={ttsEngineError}
         selectedEngine={runConfiguration.ttsEngine}
         onSelectEngine={(engineId) => {
-          onRunConfigurationChange(applyEngineSelection(runConfiguration, engineId, ttsEngines));
+          onRunConfigurationChange(applyRunEngineSelection(runConfiguration, engineId, ttsEngines));
         }}
       />
       <ResearchModuleDiagnosticsList modules={researchModules} />
@@ -1712,30 +1767,6 @@ function DiagnosticLine({ label, value }: Readonly<{ label: string; value: strin
       <dd className="max-w-[65%] break-words text-right font-medium">{value}</dd>
     </div>
   );
-}
-
-function applyEngineSelection(
-  runConfiguration: RunConfiguration,
-  engineId: string,
-  engines: TTSEngineDiagnostics[],
-): RunConfiguration {
-  const selectedEngine = engines.find((item) => item.id === engineId);
-  const firstVoice = selectedEngine?.voices?.[0]?.id;
-  if (engineId === "kokoro") {
-    return applyKokoroRenderMode(runConfiguration, "voicepack");
-  }
-  return {
-    ...runConfiguration,
-    engineOptions:
-      engineId === "supertonic-3"
-        ? {
-            ...runConfiguration.engineOptions,
-            lang: runConfiguration.engineOptions.lang ?? "na",
-            voiceStyle: runConfiguration.engineOptions.voiceStyle ?? firstVoice ?? "M1",
-          }
-        : {},
-    ttsEngine: engineId,
-  };
 }
 
 function engineFamilyOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiagnostics[] {

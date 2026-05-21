@@ -76,6 +76,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       )}
       data-disabled-reason={disabledReason}
       data-selected={selected ? "true" : undefined}
+      data-ui-noop-reason={selected ? "Already selected." : undefined}
       ref={ref}
       type={type}
     >

@@ -125,6 +125,9 @@ export function SourcePolicyPinEditor({
 
   const hasPin =
     Boolean(sourceProfile) || Object.keys(compactSpeechPolicyOverrides(sourceOverrides)).length > 0;
+  const savingDisabledReason =
+    disabled || isSaving ? "Source policy pin is currently saving." : undefined;
+  const clearPinDisabledReason = hasPin ? savingDisabledReason : "No source policy pin is set.";
 
   return (
     <div className="grid gap-3 rounded-md border p-3 vs-border">
@@ -146,6 +149,8 @@ export function SourcePolicyPinEditor({
         <span className="vs-muted">Profile</span>
         <select
           className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-medium outline-none vs-border"
+          data-testid="source-policy-pin-profile"
+          data-disabled-reason={savingDisabledReason}
           disabled={disabled || isSaving}
           onChange={(event) => {
             setProfile(event.currentTarget.value);
@@ -189,7 +194,9 @@ export function SourcePolicyPinEditor({
       <div className="grid grid-cols-2 gap-2">
         <button
           className="h-9 rounded-md bg-orange-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
+          data-testid="source-policy-save-pin"
           disabled={disabled || isSaving}
+          data-disabled-reason={savingDisabledReason}
           onClick={() => {
             void onSave(sourcePolicyUpdateRequest(profile, overrides));
           }}
@@ -199,10 +206,16 @@ export function SourcePolicyPinEditor({
         </button>
         <button
           className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
+          data-confirm="Clear source policy pin"
+          data-disabled-reason={clearPinDisabledReason}
+          data-testid="source-policy-clear-pin"
           disabled={disabled || isSaving || !hasPin}
           onClick={() => {
-            void onClear();
+            if (globalThis.confirm("Clear the selected source policy pin?")) {
+              void onClear();
+            }
           }}
+          title={hasPin ? "Clear source policy pin" : "No source policy pin is set."}
           type="button"
         >
           Clear pin

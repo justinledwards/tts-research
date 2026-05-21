@@ -72,6 +72,7 @@ export function ContextPanel({
                   aria-controls={isActive ? tabPanelId : undefined}
                   aria-selected={isActive}
                   className="min-w-0 flex-col gap-1 px-3 py-2"
+                  data-testid={`context-panel-${surface}-${tab.id}`}
                   key={tab.id}
                   onClick={() => {
                     onTabChange(tab.id);

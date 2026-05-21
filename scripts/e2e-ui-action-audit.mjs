@@ -419,6 +419,20 @@ function createScenarios(seed) {
       }),
       surface: "Settings",
     },
+    {
+      description: "Settings drawer opened to the source and speech-policy controls.",
+      id: "settings-speech-policy",
+      label: "Settings speech policy",
+      open: (page) => openSettingsGroup(page, "Sources"),
+      storageState: projectStorageState(seed.projectId, {
+        preparedSourceId: seed.markdown.source.id,
+        sourceMode: "fileUrl",
+        sourceType: "prepared",
+        stage: "intake",
+        text: seed.markdown.source.speechText ?? seed.markdown.source.text ?? workspaceText,
+      }),
+      surface: "Settings",
+    },
     workspaceScenario(seed.projectId, "workspace-intake", "Intake", "Intake", workspaceText),
     workspaceScenario(seed.projectId, "workspace-review", "Review", "Review", workspaceText),
     workspaceScenario(seed.projectId, "workspace-preview", "Preview", "Preview", workspaceText),
@@ -587,6 +601,12 @@ async function openSettings(page) {
   await gotoApp(page);
   await page.getByRole("button", { exact: true, name: "Open settings" }).click();
   await page.getByText("Studio Settings").first().waitFor();
+}
+
+async function openSettingsGroup(page, groupLabel) {
+  await openSettings(page);
+  await page.getByRole("button", { name: new RegExp(`^${groupLabel}`) }).click();
+  await page.getByText("Speech policy wizard").first().waitFor();
 }
 
 async function openTeleprompt(page) {
