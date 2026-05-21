@@ -483,7 +483,15 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await selectBookScope(page, seed.pdf.scope);
     await capture("workspace-stage-02-source-selected");
     await page.getByRole("button", { exact: true, name: "Review" }).click();
-    await page.getByText("Source Review").first().waitFor();
+    await page.getByText("Revision Panel").first().waitFor();
+    await page.getByTestId("revision-tab-blocks").click();
+    await page.getByTestId("revision-select-visible").check();
+    await page.getByTestId("ui-action-revision-batch-approve").click();
+    await page
+      .getByTestId("revision-status-message")
+      .getByText(/approved/i)
+      .waitFor();
+    await page.getByTestId("revision-tab-overview").click();
     await capture("workspace-stage-03-review-after");
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
@@ -586,7 +594,7 @@ async function openWorkspaceStage(page, label) {
       .waitFor();
   } else if (label === "Review") {
     await page
-      .getByText(/Source Review|Block Review/i)
+      .getByText(/Revision Panel|Source Review|Block Review/i)
       .first()
       .waitFor();
   } else {

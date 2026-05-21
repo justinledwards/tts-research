@@ -47,11 +47,11 @@ export function ReviewContextPanel({
     {
       children: (
         <p className="text-xs leading-5 vs-muted">
-          Block review, spoken script, and validation transcript live in the Review task area above.
-          Supporting source, policy, and diagnostics details stay here.
+          Search, batch actions, inline speech edits, and revision history live in the Review
+          workflow. Supporting source, policy, and diagnostics details stay here.
         </p>
       ),
-      detail: "Active review task",
+      detail: "Active revision workflow",
       id: "review-task-context",
       kind: "narration-block-status",
       tabId: "review",

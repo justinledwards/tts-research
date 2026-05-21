@@ -260,3 +260,10 @@
 - [x] Add JSON import/export and real-time policy preview
 - [x] Update docs and UI action coverage
 - [x] Run local validation commands
+
+## 2026-05-21 12:03 CEST - Enhanced Revision Panel
+- [x] Map current Review, Inspector, diagnostics, and block state surfaces
+- [x] Add revision model, filters, batch actions, inline edit, and history modules
+- [x] Wire Revision Panel into Review/context workflow
+- [x] Update UI action coverage and remove duplicated review controls where safe
+- [x] Run local validation commands

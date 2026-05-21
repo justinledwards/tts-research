@@ -338,10 +338,10 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.waitForLoadState("networkidle").catch(() => {});
     await setRememberLayout(page, true);
     await page.getByRole("button", { exact: true, name: "Review" }).click();
-    await page.getByText("Source Review").first().waitFor();
-    await page.getByRole("button", { name: /Spoken Script/ }).click();
-    await page.getByText("Listener form").first().waitFor();
-    await page.getByRole("button", { name: /Validation Transcript/ }).click();
+    await page.getByText("Revision Panel").first().waitFor();
+    await page.getByTestId("revision-tab-overview").click();
+    await page.getByText("Inline Speech Edit").first().waitFor();
+    await page.getByTestId("revision-tab-diagnostics").click();
     await page
       .getByText(/Validation appears after synthesis|Validation was disabled/)
       .first()
@@ -360,7 +360,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await runCommandPaletteAction(page, "full layout", /Full workspace layout/);
     await assertWorkspaceLayoutSelected(page, "Full");
     await runCommandPaletteAction(page, "go review", /Go to Review/);
-    await page.getByText("Source Review").first().waitFor();
+    await page.getByText("Revision Panel").first().waitFor();
 
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
@@ -368,7 +368,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.getByText("Teleprompt Stage").first().waitFor();
     await page.getByText("Default voice").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Back to Review" }).click();
-    await page.getByText("Source Review").first().waitFor();
+    await page.getByText("Revision Panel").first().waitFor();
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
@@ -384,15 +384,15 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
     await page.getByText("Spoken Form").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Review" }).click();
-    await page.getByText("Source Review").first().waitFor();
-    await assertReviewPaneSelected(page, "Validation Transcript");
+    await page.getByText("Revision Panel").first().waitFor();
+    await assertReviewPaneSelected(page, "Diagnostics");
     await setRememberLayout(page, true, { reset: true });
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
     await assertWorkspaceLayoutSelected(page, "Balanced");
     await page.getByRole("button", { exact: true, name: "Review" }).click();
-    await page.getByText("Source Review").first().waitFor();
-    await assertReviewPaneSelected(page, "Block Review");
+    await page.getByText("Revision Panel").first().waitFor();
+    await assertReviewPaneSelected(page, "Blocks");
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
     const createResponse = page.waitForResponse(
@@ -509,7 +509,12 @@ async function assertWorkspaceLayoutSelected(page, label) {
 async function assertReviewPaneSelected(page, label) {
   const button = page.getByRole("button", { name: new RegExp(label) }).first();
   const expanded = await button.getAttribute("aria-expanded");
-  assert(expanded === "true", `${label} review pane was not restored.`);
+  const pressed = await button.getAttribute("aria-pressed");
+  const selected = await button.getAttribute("data-selected");
+  assert(
+    expanded === "true" || pressed === "true" || selected === "true",
+    `${label} review pane was not restored.`,
+  );
 }
 
 async function runCommandPaletteAction(page, query, optionName) {

@@ -144,12 +144,13 @@ import {
   RailModeToolbar,
   railColumnWidth,
 } from "./features/layout";
+import { normalizeReviewPane, selectReviewBlockId, type ReviewPane } from "./features/review/model";
 import {
-  buildReviewPaneSummaries,
-  normalizeReviewPane,
-  selectReviewBlockId,
-  type ReviewPane,
-} from "./features/review/model";
+  deriveRevisionBlockStatus,
+  normalizeRevisionPolicyNoteType,
+  type RevisionBlock,
+  type RevisionTabId,
+} from "./features/revision";
 import {
   loadUiMemory,
   rememberCinemaFocusState,
@@ -337,9 +338,9 @@ const TelepromptStage = lazy(() =>
 const LazyHeaderContextSummary = lazy(() =>
   import("./features/header").then((module) => ({ default: module.HeaderContextSummary })),
 );
-const LazyReviewPaneAccordion = lazy(() =>
-  import("./features/review/ReviewPaneAccordion").then((module) => ({
-    default: module.ReviewPaneAccordion,
+const LazyRevisionPanel = lazy(() =>
+  import("./features/revision").then((module) => ({
+    default: module.RevisionPanel,
   })),
 );
 const LazyReviewContextPanel = lazy(() =>
@@ -6814,6 +6815,7 @@ export function App() {
               onTextChange={setText}
               onUseBookSource={handleUseBookText}
               onUsePreparedSource={handleUsePreparedSource}
+              runConfigurationLabel={getRunModePreset(runConfiguration.runMode).label}
             />
             {error ? (
               <section className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900">
@@ -9449,6 +9451,7 @@ function SourceTextPanel({
   onTextChange,
   onUseBookSource,
   onUsePreparedSource,
+  runConfigurationLabel,
 }: Readonly<{
   activeReviewPane: ReviewPane;
   activeReviewBlockId: string | null;
@@ -9504,6 +9507,7 @@ function SourceTextPanel({
   onTextChange: (text: string) => void;
   onUseBookSource: (source: BookSource, scope: BookScope) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
+  runConfigurationLabel: string;
 }>) {
   const showSourceIntake = contentMode === "intake";
   const activeBookSource = activeBookSourceForWorkbench(sourceMode, selectedBookSource);
@@ -9605,6 +9609,7 @@ function SourceTextPanel({
             optimizedText={optimizedText}
             policyProfileLabel={speechPolicyProfileLabel}
             projectId={projectId}
+            runConfigurationLabel={runConfigurationLabel}
             selectedBookScope={selectedBookScope}
             selectedBookSource={activeBookSource}
             selectedPreparedSource={activePreparedSource}
@@ -10028,16 +10033,6 @@ function draftTextIdentity(text: string): WorkbenchSourceIdentity {
     meta: `${text.trim().length.toLocaleString()} characters queued`,
     mode: "text",
   };
-}
-
-function speakModeClass(mode: string): string {
-  if (mode === "skip") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-  if (mode === "summarize") {
-    return "border-blue-200 bg-blue-50 text-blue-700";
-  }
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
 }
 
 function SourcePrepMetric({ label, value }: Readonly<{ label: string; value: string }>) {
@@ -11698,18 +11693,6 @@ function VoiceProfileOption({
   );
 }
 
-interface NarrationReviewBlock {
-  estimatedDurationMs: number;
-  id: string;
-  index: number;
-  kind: string;
-  label: string;
-  segmentCount: number;
-  speakMode: string;
-  spokenText: string;
-  text: string;
-}
-
 function NarrationReviewWorkbench({
   activePane,
   activeBlockId,
@@ -11723,6 +11706,7 @@ function NarrationReviewWorkbench({
   optimizedText,
   policyProfileLabel,
   projectId,
+  runConfigurationLabel,
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
@@ -11742,6 +11726,7 @@ function NarrationReviewWorkbench({
   optimizedText: string;
   policyProfileLabel: string;
   projectId: string;
+  runConfigurationLabel: string;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
@@ -11798,17 +11783,20 @@ function NarrationReviewWorkbench({
       ? "Validation was disabled for this run."
       : "Validation appears after synthesis.");
   const validationTranscript = job?.voiceCheck.transcript ?? "";
-  const spokenText =
-    firstNonEmptyString(selectedBlock?.spokenText, optimizedText, text.trim()) ??
-    "Submit text to see spoken-form output from the optimization agent.";
-  const reviewPaneSummaries = buildReviewPaneSummaries({
-    blockCount: reviewBlocks.length,
-    hasSpokenScript: Boolean(spokenText.trim()),
-    validationSimilarity: job?.voiceCheck.similarity ?? 0,
-    validationTranscript,
-  });
   const mathPanel = narrationReviewMathPanel(selectedPreparedSource);
   const rulesPanel = narrationReviewRulesPanel(selectedPreparedSource, reviewBlocks, text);
+  const inspectStructure =
+    selectedPreparedSource || selectedBookSource
+      ? () => {
+          if (selectedPreparedSource) {
+            onInspectPreparedSource(selectedPreparedSource);
+            return;
+          }
+          if (selectedBookSource) {
+            onInspectBookSource(selectedBookSource);
+          }
+        }
+      : undefined;
 
   useEffect(() => {
     const nextBlockId = selectReviewBlockId(reviewBlocks, activeBlockId);
@@ -11817,96 +11805,36 @@ function NarrationReviewWorkbench({
     }
   }, [activeBlockId, onActiveBlockChange, reviewBlocks]);
 
-  const reviewPaneChildren: Record<ReviewPane, ReactNode> = {
-    blocks: (
-      <NarrationReviewBlockList
-        blocks={reviewBlocks}
-        selectedBlockId={selectedBlock?.id ?? null}
-        onSelectBlock={onActiveBlockChange}
-      />
-    ),
-    script: <NarrationSpokenScriptPanel block={selectedBlock} spokenText={spokenText} />,
-    validation: (
-      <NarrationValidationTranscriptPanel
-        validationReason={validationReason}
-        validationSimilarity={job?.voiceCheck.similarity ?? 0}
-        validationTranscript={validationTranscript}
-      />
-    ),
-  };
-
   return (
     <Panel className="grid gap-3 p-4" variant="raised">
-      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <HeaderContextSummary
-          className="flex-1"
-          metadata={[
-            { label: "Policy", value: policyProfileLabel },
-            { label: "Voice", value: voiceProfileLabel },
-            { label: "Size", value: sourceMeta },
-          ]}
-          scopeTitle={scopeTitle}
-          sourceTitle={sourceLabel}
-          stateLabel={optimizedText ? "Optimized" : "Waiting"}
-          surfaceName="Source Review"
-        />
-        <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
-          <Button
-            className="flex-1 whitespace-nowrap sm:flex-none"
-            data-testid={workspaceStageActionTestId("previewSpeech")}
-            onClick={onPreviewSpeech}
-            size="sm"
-            variant="primary"
-          >
-            {workspaceStageActionLabel("previewSpeech")}
-          </Button>
-          {selectedPreparedSource ? (
-            <Button
-              className="flex-1 whitespace-nowrap sm:flex-none"
-              data-testid={workspaceStageActionTestId("inspectStructure")}
-              onClick={() => {
-                onInspectPreparedSource(selectedPreparedSource);
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              {workspaceStageActionLabel("inspectStructure")}
-            </Button>
-          ) : null}
-          {!selectedPreparedSource && selectedBookSource ? (
-            <Button
-              className="flex-1 whitespace-nowrap sm:flex-none"
-              data-testid={workspaceStageActionTestId("inspectStructure")}
-              onClick={() => {
-                onInspectBookSource(selectedBookSource);
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              {workspaceStageActionLabel("inspectStructure")}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
       <Suspense
         fallback={
           <LazySurfaceFallback
-            label="Loading review panes..."
+            label="Loading revision panel..."
             minHeightClassName="min-h-24"
-            surface="review-panes"
+            surface="revision-panel"
           />
         }
       >
-        <LazyReviewPaneAccordion
-          activePane={activePane}
-          onActivePaneChange={(pane) => {
-            onActivePaneChange(normalizeReviewPane(pane));
+        <LazyRevisionPanel
+          activeBlockId={selectedBlock?.id ?? null}
+          blocks={reviewBlocks}
+          initialTabId={revisionTabForReviewPane(activePane)}
+          policyProfileLabel={policyProfileLabel}
+          runConfigurationLabel={runConfigurationLabel}
+          scopeLabel={scopeTitle}
+          sourceLabel={sourceLabel}
+          sourceMeta={sourceMeta}
+          validationReason={validationReason}
+          validationSimilarity={job?.voiceCheck.similarity ?? 0}
+          validationTranscript={validationTranscript}
+          voiceProfileLabel={voiceProfileLabel}
+          onActiveBlockChange={onActiveBlockChange}
+          onInspectStructure={inspectStructure}
+          onPreviewSpeech={onPreviewSpeech}
+          onTabChange={(tabId) => {
+            onActivePaneChange(reviewPaneForRevisionTab(tabId));
           }}
-          panes={reviewPaneSummaries.map((summary) => ({
-            ...summary,
-            children: reviewPaneChildren[summary.id],
-          }))}
         />
       </Suspense>
 
@@ -11919,6 +11847,26 @@ function NarrationReviewWorkbench({
       />
     </Panel>
   );
+}
+
+function revisionTabForReviewPane(pane: ReviewPane): RevisionTabId {
+  if (pane === "validation") {
+    return "diagnostics";
+  }
+  if (pane === "blocks") {
+    return "blocks";
+  }
+  return "overview";
+}
+
+function reviewPaneForRevisionTab(tabId: RevisionTabId): ReviewPane {
+  if (tabId === "diagnostics") {
+    return "validation";
+  }
+  if (tabId === "blocks") {
+    return "blocks";
+  }
+  return "script";
 }
 
 function narrationReviewSourceLabel(
@@ -12049,7 +11997,7 @@ function narrationReviewMathPanel(selectedPreparedSource: PreparedSource | null)
 
 function narrationReviewRulesPanel(
   selectedPreparedSource: PreparedSource | null,
-  reviewBlocks: NarrationReviewBlock[],
+  reviewBlocks: RevisionBlock[],
   text: string,
 ): ReactNode {
   if (selectedPreparedSource) {
@@ -12060,108 +12008,6 @@ function narrationReviewRulesPanel(
     );
   }
   return <NarrationDraftRulesPanel blocks={reviewBlocks} text={text} />;
-}
-
-function NarrationReviewBlockList({
-  blocks,
-  selectedBlockId,
-  onSelectBlock,
-}: Readonly<{
-  blocks: NarrationReviewBlock[];
-  selectedBlockId: string | null;
-  onSelectBlock: (id: string) => void;
-}>) {
-  return (
-    <Panel className="overflow-hidden" variant="raised">
-      <div className="flex items-center justify-between gap-3 border-b bg-[var(--vs-surface)] px-3 py-2 vs-border">
-        <h3 className="text-sm font-semibold">Blocks ({blocks.length.toString()})</h3>
-        <span className="text-xs vs-muted">review order</span>
-      </div>
-      <div className="max-h-[18rem] overflow-y-auto">
-        {blocks.map((block) => (
-          <Button
-            align="start"
-            className="grid w-full min-w-0 grid-cols-[2rem_minmax(0,1fr)_auto] gap-2 rounded-none border-x-0 border-t-0 px-3 py-3 text-sm last:border-b-0"
-            key={block.id}
-            onClick={() => {
-              onSelectBlock(block.id);
-            }}
-            selected={selectedBlockId === block.id}
-            variant="ghost"
-          >
-            <span className="vs-muted font-semibold">{block.index.toString()}</span>
-            <span className="min-w-0">
-              <span className="block truncate font-semibold" title={block.label}>
-                {block.label}
-              </span>
-              <span className="mt-1 block truncate text-xs vs-muted" title={block.text}>
-                {block.text}
-              </span>
-              <span className="mt-2 block text-xs vs-muted">
-                {block.segmentCount.toString()} segment{block.segmentCount === 1 ? "" : "s"} ·{" "}
-                {formatDuration(block.estimatedDurationMs)}
-              </span>
-            </span>
-            <StatusChip className={`h-fit text-[0.68rem] ${speakModeClass(block.speakMode)}`}>
-              {block.speakMode}
-            </StatusChip>
-          </Button>
-        ))}
-      </div>
-    </Panel>
-  );
-}
-
-function NarrationSpokenScriptPanel({
-  block,
-  spokenText,
-}: Readonly<{
-  block: NarrationReviewBlock | null;
-  spokenText: string;
-}>) {
-  return (
-    <Panel className="grid gap-3 p-4" variant="raised">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold">Spoken Script</h3>
-          <p className="mt-1 truncate text-xs vs-muted" title={block?.label}>
-            {block ? `Block ${block.index.toString()} · ${block.kind}` : "Waiting for source"}
-          </p>
-        </div>
-        <StatusChip tone="success">Listener form</StatusChip>
-      </div>
-      <p className="max-h-[10rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
-        {spokenText}
-      </p>
-    </Panel>
-  );
-}
-
-function NarrationValidationTranscriptPanel({
-  validationReason,
-  validationSimilarity,
-  validationTranscript,
-}: Readonly<{
-  validationReason: string;
-  validationSimilarity: number;
-  validationTranscript: string;
-}>) {
-  return (
-    <section className="grid gap-2 rounded-lg border bg-[var(--vs-raised)] p-4 text-xs vs-border">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-semibold text-[var(--vs-text)]">Validation Transcript</h3>
-        <span className="font-semibold text-emerald-700">
-          {validationSimilarity ? `Match ${formatSimilarity(validationSimilarity)}` : "Waiting"}
-        </span>
-      </div>
-      <p className="break-words leading-5 vs-muted">{validationReason}</p>
-      {validationTranscript ? (
-        <p className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded border bg-[var(--vs-surface)] p-3 font-mono leading-5 vs-border">
-          {validationTranscript}
-        </p>
-      ) : null}
-    </section>
-  );
 }
 
 function ReviewContextPanels({
@@ -12204,7 +12050,7 @@ function NarrationReviewEmptyState({ detail, title }: Readonly<{ detail: string;
 function NarrationDraftRulesPanel({
   blocks,
   text,
-}: Readonly<{ blocks: NarrationReviewBlock[]; text: string }>) {
+}: Readonly<{ blocks: RevisionBlock[]; text: string }>) {
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   return (
     <dl className="grid gap-px overflow-hidden rounded-md border text-sm sm:grid-cols-3 vs-border">
@@ -12234,7 +12080,7 @@ function buildNarrationReviewBlocks({
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
   text: string;
-}>): NarrationReviewBlock[] {
+}>): RevisionBlock[] {
   if (selectedPreparedSource?.blocks && selectedPreparedSource.blocks.length > 0) {
     return selectedPreparedSource.blocks.map((block, index) =>
       narrationBlockToReviewBlock(block, index),
@@ -12251,68 +12097,56 @@ function buildNarrationReviewBlocks({
       bookScopeContent?.text ??
       (selectedBookScope ? bookScopeText(selectedBookSource, selectedBookScope) : "");
     if (scopedBookText.trim()) {
-      return splitNarrationDraftIntoBlocks(scopedBookText.trim()).map((part, index) => ({
-        estimatedDurationMs: estimateNarrationTextDurationMs(part),
-        id: `book-${index.toString()}`,
-        index: index + 1,
-        kind: "body",
-        label: firstWords(part, 8),
-        segmentCount: estimateNarrationSegmentCount(part),
-        speakMode: "speak",
-        spokenText: part,
-        text: part,
-      }));
+      return splitNarrationDraftIntoBlocks(scopedBookText.trim()).map((part, index) =>
+        draftTextToRevisionBlock(part, index, "book", "body", "Book scope"),
+      );
     }
   }
 
   const draft = (optimizedText || text).trim();
   if (draft) {
-    return splitNarrationDraftIntoBlocks(draft).map((part, index) => ({
-      estimatedDurationMs: estimateNarrationTextDurationMs(part),
-      id: `draft-${index.toString()}`,
-      index: index + 1,
-      kind: "text",
-      label: firstWords(part, 8),
-      segmentCount: estimateNarrationSegmentCount(part),
-      speakMode: "speak",
-      spokenText: part,
-      text: part,
-    }));
+    return splitNarrationDraftIntoBlocks(draft).map((part, index) =>
+      draftTextToRevisionBlock(part, index, "draft", "text", "Draft text"),
+    );
   }
 
   if (selectedBookSource) {
     return [
-      {
-        estimatedDurationMs: 0,
+      emptyRevisionBlock({
         id: `book-${selectedBookSource.id}`,
-        index: 1,
         kind: selectedBookSource.kind,
         label: bookSourceName(selectedBookSource),
-        segmentCount: 0,
-        speakMode: "speak",
+        sourceSection: "Book source",
         spokenText: "Choose a book scope or create audio to review the listener-ready script.",
         text: `${bookSourceName(selectedBookSource)} · ${selectedBookSource.wordCount.toLocaleString()} words`,
-      },
+      }),
     ];
   }
 
   return [
-    {
-      estimatedDurationMs: 0,
+    emptyRevisionBlock({
       id: "empty-draft",
-      index: 1,
       kind: "text",
       label: "Waiting for source",
-      segmentCount: 0,
-      speakMode: "speak",
+      sourceSection: "Draft text",
       spokenText: "Paste text, select a book, or prepare a file/URL to begin review.",
       text: "No source content selected.",
-    },
+    }),
   ];
 }
 
-function narrationBlockToReviewBlock(block: NarrationBlock, index: number): NarrationReviewBlock {
+function narrationBlockToReviewBlock(block: NarrationBlock, index: number): RevisionBlock {
+  const confidence = typeof block.confidence === "number" ? block.confidence : null;
+  const warnings = block.warnings ?? [];
+  const status = deriveRevisionBlockStatus({
+    confidence,
+    speakMode: block.speakMode,
+    warnings,
+  });
+  const sourceSection = narrationBlockSourceSection(block, index);
+  const policyNoteType = normalizeRevisionPolicyNoteType(block.speechPolicy.element ?? block.kind);
   return {
+    confidence,
     estimatedDurationMs:
       block.estimatedDurationMs ??
       estimateNarrationTextDurationMs(block.spokenText ?? block.text ?? ""),
@@ -12320,11 +12154,105 @@ function narrationBlockToReviewBlock(block: NarrationBlock, index: number): Narr
     index: index + 1,
     kind: block.kind,
     label: block.label ?? firstWords(block.spokenText ?? block.text ?? "", 8),
+    mathSpeech: block.mathPreview?.speech,
+    needsAttention: status === "needsReview" || warnings.length > 0,
+    normalisationCount: block.normalisations?.length ?? 0,
+    policyNote:
+      block.speechPolicy.explanation ||
+      `${block.speechPolicy.profile} policy rendered this block as ${block.speechPolicy.mode}.`,
+    policyNoteType,
+    pronunciationCount: block.pronunciations?.length ?? 0,
     segmentCount: block.segments?.length ?? 0,
+    sourceSection,
     speakMode: block.speakMode,
     spokenText: block.spokenText ?? block.text ?? "",
+    status,
     text: block.text ?? block.spokenText ?? block.label ?? "",
+    warnings,
   };
+}
+
+function draftTextToRevisionBlock(
+  part: string,
+  index: number,
+  idPrefix: string,
+  kind: string,
+  sourceSection: string,
+): RevisionBlock {
+  return {
+    confidence: 1,
+    estimatedDurationMs: estimateNarrationTextDurationMs(part),
+    id: `${idPrefix}-${index.toString()}`,
+    index: index + 1,
+    kind,
+    label: firstWords(part, 8),
+    needsAttention: false,
+    normalisationCount: 0,
+    policyNote: "Draft prose is spoken as written before source-specific policy decisions exist.",
+    policyNoteType: "spoken",
+    pronunciationCount: 0,
+    segmentCount: estimateNarrationSegmentCount(part),
+    sourceSection,
+    speakMode: "speak",
+    spokenText: part,
+    status: "waiting",
+    text: part,
+    warnings: [],
+  };
+}
+
+function emptyRevisionBlock({
+  id,
+  kind,
+  label,
+  sourceSection,
+  spokenText,
+  text,
+}: Readonly<{
+  id: string;
+  kind: string;
+  label: string;
+  sourceSection: string;
+  spokenText: string;
+  text: string;
+}>): RevisionBlock {
+  return {
+    confidence: null,
+    estimatedDurationMs: 0,
+    id,
+    index: 1,
+    kind,
+    label,
+    needsAttention: false,
+    normalisationCount: 0,
+    policyNote: "No source block is ready for speech policy review yet.",
+    policyNoteType: "spoken",
+    pronunciationCount: 0,
+    segmentCount: 0,
+    sourceSection,
+    speakMode: "speak",
+    spokenText,
+    status: "waiting",
+    text,
+    warnings: [],
+  };
+}
+
+function narrationBlockSourceSection(block: NarrationBlock, index: number): string {
+  const metadata = block.metadata ?? {};
+  return (
+    metadataString(metadata, "sectionTitle") ??
+    metadataString(metadata, "section") ??
+    metadataString(metadata, "heading") ??
+    metadataString(metadata, "chapterTitle") ??
+    block.label ??
+    `Block ${String(index + 1)}`
+  );
+}
+
+function metadataString(metadata: Record<string, unknown>, key: string): string | null {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function splitNarrationDraftIntoBlocks(value: string): string[] {
