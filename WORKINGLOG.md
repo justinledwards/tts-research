@@ -321,3 +321,11 @@
 - [x] Add UI action scenario filtering for targeted audit reruns
 - [x] Update UI memory docs
 - [x] Run local validation commands
+
+## 2026-05-22 01:04 CEST - Local QA Expansion
+- [x] Map existing local validation scripts and report artifacts
+- [x] Add focused command palette, Teleprompt memory, and context panel E2E scripts
+- [x] Wire expanded QA sections into validate-local reports
+- [x] Add local workflow examples without enabling hosted CI
+- [x] Run local validation commands
+- [ ] Follow up low-resource reader timing budget failures

@@ -832,7 +832,18 @@ async function runResponsiveCinemaUX(
     );
   }
 
+  const mobileSurfaceCount =
+    responsiveCinemaViewports.filter((viewport) => viewport.width < 1024).length * 3;
+  const bottomSheetScreenshots = screenshots.filter((screenshot) =>
+    /responsive-(book|document|website)-[^/]+-sheet\.png$/.test(screenshot),
+  );
+
   return {
+    bottomSheetReachability: {
+      expectedSurfaces: mobileSurfaceCount,
+      passed: bottomSheetScreenshots.length >= mobileSurfaceCount,
+      screenshots: bottomSheetScreenshots,
+    },
     screenshots,
     status: "passed",
     viewports: responsiveCinemaViewports,

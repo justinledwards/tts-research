@@ -462,11 +462,9 @@ function createScenarios(seed) {
       label: "Settings speech policy",
       open: (page) => openSettingsGroup(page, "Sources"),
       storageState: projectStorageState(seed.projectId, {
-        preparedSourceId: seed.markdown.source.id,
-        sourceMode: "fileUrl",
-        sourceType: "prepared",
+        sourceMode: "text",
         stage: "intake",
-        text: seed.markdown.source.speechText ?? seed.markdown.source.text ?? workspaceText,
+        text: workspaceText,
       }),
       surface: "Settings",
     },

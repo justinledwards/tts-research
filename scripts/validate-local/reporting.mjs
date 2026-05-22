@@ -230,6 +230,7 @@ export function renderMarkdownReport(summary) {
   }
 
   lines.push("", "## Degraded States", "", renderDegradedStatesMarkdown(summary.degradedStates));
+  lines.push("", "## QA Report Artifacts", "", renderArtifactsMarkdown(summary));
 
   for (const step of summary.steps.filter((item) => item.thresholds?.length || item.metrics)) {
     lines.push("", `## ${step.title}`, "");
@@ -327,6 +328,10 @@ export function renderHTMLReport(summary, markdown) {
     ${renderDegradedStatesHTML(summary.degradedStates)}
   </section>
   <section class="section">
+    <h2>QA Report Artifacts</h2>
+    ${renderArtifactsHTML(summary)}
+  </section>
+  <section class="section">
     <h2>Step Details</h2>
     ${renderStepDetailsHTML(summary)}
   </section>
@@ -379,6 +384,55 @@ function renderDegradedStatesHTML(degradedStates) {
               item.stepTitle ?? item.stepId ?? "-",
             )}</td><td>${escapeHTML(formatDegradedDetail(item.detail))}</td></tr>`,
         )
+        .join("\n")}
+    </tbody>
+  </table>`;
+}
+
+function renderArtifactsMarkdown(summary) {
+  const rows = summary.steps.flatMap((step) =>
+    Object.entries(step.artifacts ?? {}).map(([name, artifactPath]) => ({
+      name,
+      path: artifactPath,
+      step,
+    })),
+  );
+  if (rows.length === 0) {
+    return "No QA artifacts recorded.";
+  }
+  return [
+    "| Step | Artifact | Path |",
+    "| --- | --- | --- |",
+    ...rows.map((row) => {
+      const relativePath = path.relative(summary.outputDir, row.path);
+      return `| ${escapeMarkdown(row.step.title)} | ${escapeMarkdown(row.name)} | [${escapeMarkdown(relativePath)}](${encodeURI(relativePath)}) |`;
+    }),
+  ].join("\n");
+}
+
+function renderArtifactsHTML(summary) {
+  const rows = summary.steps.flatMap((step) =>
+    Object.entries(step.artifacts ?? {}).map(([name, artifactPath]) => ({
+      name,
+      path: artifactPath,
+      step,
+    })),
+  );
+  if (rows.length === 0) {
+    return '<p class="muted">No QA artifacts recorded.</p>';
+  }
+  return `<table>
+    <thead><tr><th>Step</th><th>Artifact</th><th>Path</th></tr></thead>
+    <tbody>
+      ${rows
+        .map((row) => {
+          const relativePath = path.relative(summary.outputDir, row.path);
+          return `<tr><td>${escapeHTML(row.step.title)}</td><td>${escapeHTML(
+            row.name,
+          )}</td><td><a href="${escapeHTML(encodeURI(relativePath))}">${escapeHTML(
+            relativePath,
+          )}</a></td></tr>`;
+        })
         .join("\n")}
     </tbody>
   </table>`;

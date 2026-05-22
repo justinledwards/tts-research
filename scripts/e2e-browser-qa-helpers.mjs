@@ -129,6 +129,59 @@ export async function assertFile(filePath, label) {
   }
 }
 
+export async function apiJson(apiBaseUrl, pathname, init = {}) {
+  const response = await fetch(`${apiBaseUrl}${pathname}`, init);
+  if (!response.ok) {
+    throw new Error(`${init.method ?? "GET"} ${pathname} failed: ${await response.text()}`);
+  }
+  return response.json();
+}
+
+export async function createQaProject(apiBaseUrl, name) {
+  const project = await apiJson(apiBaseUrl, "/api/projects", {
+    body: JSON.stringify({ name }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  if (!project?.id) {
+    throw new Error("Project creation did not return an id.");
+  }
+  return project;
+}
+
+export function projectStorageState(appBaseUrl, projectId, projectState, extraLocalStorage = {}) {
+  return {
+    cookies: [],
+    origins: [
+      {
+        localStorage: [
+          { name: "tts-active-project-id", value: projectId },
+          {
+            name: `tts-project-state:${projectId}`,
+            value: JSON.stringify({ ...projectState, updatedAt: new Date().toISOString() }),
+          },
+          ...Object.entries(extraLocalStorage).map(([name, value]) => ({ name, value })),
+        ],
+        origin: new URL(appBaseUrl).origin,
+      },
+    ],
+  };
+}
+
+export async function gotoApp(page, appBaseUrl) {
+  await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForSelector("body");
+}
+
+export function workspaceQaText() {
+  return [
+    "Local QA expansion text for Voice Studio.",
+    "Review this paragraph, preview the spoken form, and return through Teleprompt without losing source context.",
+    "The final sentence gives block navigation enough material for browser regression checks.",
+  ].join(" ");
+}
+
 function spawnLogged(command, args, { cwd, env, logPath }) {
   const stream = createWriteStream(logPath, { flags: "a" });
   stream.write(`$ ${command} ${args.join(" ")}\n\n`);

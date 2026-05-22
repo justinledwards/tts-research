@@ -12,8 +12,22 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.
 const diagramVendorPattern =
   /(architectureDiagram|blockDiagram|c4Diagram|classDiagram|cose|cytoscape|dagre|diagram-|erDiagram|flowDiagram|ganttDiagram|gitGraph|graph-|ishikawa|journeyDiagram|kanban|katex|mermaid|mindmap|quadrantDiagram|requirementDiagram|sankeyDiagram|sequenceDiagram|stateDiagram|timeline|vennDiagram|wardley|xychartDiagram)/i;
 const forbiddenInitialImportPattern =
-  /(MarkdownRenderer|mermaid|ContentIrDrawer|BundlePanels|ProductPanels|VoiceSourceAnalysisPanel|WorkspaceDrawer|PronunciationPanel|ajv|schema_files|generated\/schemas)/i;
+  /(MarkdownRenderer|mermaid|ContentIrDrawer|BundlePanels|ProductPanels|VoiceSourceAnalysisPanel|WorkspaceDrawer|PronunciationPanel|CommandPalette|TelepromptStudio|GlobalPreviewPlayer|RevisionPanel|ContextPanel|SettingsPanel|HelpPanel|ajv|schema_files|generated\/schemas)/i;
 const markdownRendererPattern = /MarkdownRenderer/i;
+const expectedLazyChunkPatterns = [
+  { id: "bookCinema", pattern: /src\/features\/book-cinema\/BookCinemaPanel\.tsx|BookCinemaPanel/ },
+  {
+    id: "commandPalette",
+    pattern: /src\/features\/command-palette\/CommandPalette\.tsx|CommandPalette/,
+  },
+  { id: "contextPanel", pattern: /src\/features\/context-panel\/index\.ts|ContextPanel/ },
+  { id: "help", pattern: /src\/features\/help\/index\.ts|HelpPanel/ },
+  { id: "markdownRenderer", pattern: /MarkdownRenderer/ },
+  { id: "previewPlayer", pattern: /src\/features\/preview\/index\.ts|GlobalPreviewPlayer/ },
+  { id: "revision", pattern: /src\/features\/revision\/index\.ts|RevisionPanel/ },
+  { id: "settings", pattern: /src\/features\/settings\/index\.ts|SettingsPanel/ },
+  { id: "teleprompt", pattern: /src\/features\/teleprompt\/index\.ts|TelepromptStudio/ },
+];
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { thresholds } = await loadBenchmarkConfig(rootDir);
@@ -80,6 +94,9 @@ export async function analyzeFrontendBundle(distDir) {
   const initialForbiddenImports = manifestEntriesForFiles(manifest, initialFiles)
     .filter((entry) => forbiddenInitialImportPattern.test(formatManifestEntry(entry)))
     .map(formatManifestEntry);
+  const expectedLazyChunks = expectedLazyChunkPatterns.map((expectation) =>
+    expectedLazyChunkStatus(manifest, initialFiles, expectation),
+  );
   const bookCinemaChunk = findManifestChunk(
     manifest,
     (key, chunk) => key.includes("BookCinemaPanel") || chunk.src === "src/BookCinemaPanel.tsx",
@@ -110,6 +127,8 @@ export async function analyzeFrontendBundle(distDir) {
     bookCinemaStaticImports,
     initialForbiddenImports,
     initialForbiddenImportsClear: initialForbiddenImports.length === 0,
+    expectedLazyChunks,
+    expectedLazyChunksReady: expectedLazyChunks.every((chunk) => chunk.present && chunk.lazy),
   };
 }
 
@@ -178,6 +197,16 @@ export function compareFrontendBundleBudgets(metrics, thresholds) {
       threshold: "requireNoForbiddenInitialImports",
     });
   }
+  if (thresholds.requireExpectedLazyChunks !== undefined) {
+    comparisons.push({
+      actual: metrics.expectedLazyChunksReady,
+      expected: thresholds.requireExpectedLazyChunks,
+      metric: "expectedLazyChunksReady",
+      operator: "===",
+      passed: metrics.expectedLazyChunksReady === thresholds.requireExpectedLazyChunks,
+      threshold: "requireExpectedLazyChunks",
+    });
+  }
   return comparisons;
 }
 
@@ -201,6 +230,7 @@ export function formatFrontendBundleReport(metrics, comparisons = []) {
     `- Book Cinema Markdown renderer lazy: ${
       metrics.bookCinemaMarkdownRendererLazy ? "yes" : "no"
     }`,
+    `- Expected heavy surfaces lazy: ${metrics.expectedLazyChunksReady ? "yes" : "no"}`,
   ];
   if (metrics.diagramVendorInitialFiles.length > 0) {
     lines.push(`- Initial diagram vendor files: ${metrics.diagramVendorInitialFiles.join(", ")}`);
@@ -210,6 +240,16 @@ export function formatFrontendBundleReport(metrics, comparisons = []) {
   }
   if (metrics.bookCinemaStaticImports.length > 0) {
     lines.push(`- Book Cinema static imports: ${metrics.bookCinemaStaticImports.join(", ")}`);
+  }
+  const missingLazyChunks = (metrics.expectedLazyChunks ?? []).filter(
+    (chunk) => !chunk.present || !chunk.lazy,
+  );
+  if (missingLazyChunks.length > 0) {
+    lines.push(
+      `- Heavy surface lazy findings: ${missingLazyChunks
+        .map((chunk) => `${chunk.id}(${chunk.present ? "initial" : "missing"})`)
+        .join(", ")}`,
+    );
   }
   if (comparisons.length > 0) {
     lines.push("Thresholds:");
@@ -260,6 +300,23 @@ function findManifestChunk(manifest, predicate) {
 
 function formatManifestEntry([key, chunk]) {
   return [key, chunk.src, chunk.file].filter(Boolean).join(" -> ");
+}
+
+function expectedLazyChunkStatus(manifest, initialFiles, expectation) {
+  const matches = Object.entries(manifest)
+    .filter((entry) => expectation.pattern.test(formatManifestEntry(entry)))
+    .map(([key, chunk]) => ({
+      file: chunk.file,
+      initial: initialFiles.has(chunk.file),
+      key,
+      src: chunk.src ?? null,
+    }));
+  return {
+    id: expectation.id,
+    files: matches.map((match) => match.file),
+    lazy: matches.length > 0 && matches.every((match) => !match.initial),
+    present: matches.length > 0,
+  };
 }
 
 async function summarizeFiles(distDir, files) {

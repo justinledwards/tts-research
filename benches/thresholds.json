@@ -21,7 +21,8 @@
     "maxLargestAsyncAppChunkGzipBytes": 110000,
     "requireDiagramVendorLazy": true,
     "requireBookCinemaMarkdownRendererLazy": true,
-    "requireNoForbiddenInitialImports": true
+    "requireNoForbiddenInitialImports": true,
+    "requireExpectedLazyChunks": true
   },
   "readerTiming": {
     "maxAppColdUsableMs": 2200,

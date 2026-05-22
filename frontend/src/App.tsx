@@ -6175,6 +6175,18 @@ export function App() {
       section: "Workspace",
       title: workspaceStageActionLabel("openTeleprompt"),
     },
+    {
+      category: "Voice",
+      detail: "Open saved voices, candidates, targets, and voice diagnostics.",
+      id: "voice:dashboard",
+      keywords: ["voice", "profile", "candidate", "diagnostics"],
+      perform: () => {
+        setIsWorkspaceOpen(false);
+        setIsVoiceDashboardOpen(true);
+      },
+      section: "Voice",
+      title: "Open voice dashboard",
+    },
   ];
   const workspaceCommandEntries = (commandMetadata?.workspace ?? []).map<CommandEntry>(
     (metadata) => ({
