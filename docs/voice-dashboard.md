@@ -20,8 +20,11 @@ The Voice Profile Dashboard is the management surface for saved voices, source r
 - Import/export controls remain disabled with a visible reason until the backend supports voice bundle operations.
 - Running source analysis and clone targets expose cancellation only while cancellable.
 - Diagnostics summarize runtime readiness instead of scattering setup details across normal reading panels.
+- Voice Dashboard owns voice create/select/clone/delete/import/export, voice readiness, and voice-source diagnostics.
+- Settings owns voice behavior for the next run; Preview owns audition and A/B comparison; Runtime/Diagnostics owns engine readiness and failures.
 
 ## Validation
 
 - `pnpm e2e:workspace-flow` opens the Voice Profile Dashboard from the Workspace rail.
 - `pnpm e2e:ui-actions` captures dashboard screenshots during the full stage traversal.
+- `frontend/src/features/dashboard/dashboardOwnership.test.ts` locks voice dashboard action ownership.

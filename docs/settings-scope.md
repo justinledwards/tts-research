@@ -31,6 +31,8 @@ Speech policy still resolves in the same order:
 - Source policy pin copy must also name the local application boundary: it applies only to the selected source card/detail path, while project and session settings continue to apply elsewhere.
 - Keyboard shortcuts live under the `Reader` task group and use `Machine` scope because they are stored for the local browser/runtime.
 - Command palette settings actions target the same layer, group, field, and scope metadata used by the Settings drawer.
+- Voice settings configure selected run behavior and render path only. Voice creation, cloning, artifact preparation, readiness, import/export, and deletion stay in the Voice Profile Dashboard.
+- A/B comparison and temporary auditioning stay in Preview; full generated playback stays in Cinema; engine readiness and failures stay in Runtime/Diagnostics.
 
 ## Compact and Expanded Display
 

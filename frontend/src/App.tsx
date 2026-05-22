@@ -6688,7 +6688,6 @@ export function App() {
             onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
             onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
             onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
-            onPrepareProfileTarget={handleBuildVoiceProfileArtifact}
             onReaderAccessibilitySettingsChange={setReaderAccessibilitySettings}
             onRunConfigurationChange={setRunConfiguration}
             onSaveBookSourcePolicy={handleSaveBookSourcePolicy}

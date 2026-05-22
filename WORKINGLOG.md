@@ -395,3 +395,11 @@
 - [x] Run project validation checks
 - [ ] Resolve validate:local frontend bundle CSS gzip budget failure
 - [ ] Track validate:local backend pipeline transcript reload flake
+
+## 2026-05-22 18:08 CEST - Dashboard IA and Voice/Project Ownership
+- [x] Inspect Project Dashboard, Voice Dashboard, Settings, Run Config, and Preview ownership overlap
+- [x] Add explicit dashboard action ownership metadata and docs
+- [x] Remove dashboard/settings clutter that belongs to another owner
+- [x] Align tests and UI action coverage with dashboard ownership
+- [x] Run project validation checks
+- [ ] Resolve existing validate:local frontend CSS gzip budget failure

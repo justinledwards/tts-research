@@ -56,7 +56,6 @@ describe("SettingsPanel", () => {
         onClose={noop}
         onCreateCustomSpeechPolicyProfile={asyncNoop}
         onDeleteCustomSpeechPolicyProfile={asyncNoop}
-        onPrepareProfileTarget={asyncNoop}
         onReaderAccessibilitySettingsChange={noop}
         onRunConfigurationChange={noop}
         onSaveBookSourcePolicy={asyncNoop}

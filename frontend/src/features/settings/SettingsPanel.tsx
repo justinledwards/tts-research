@@ -156,7 +156,6 @@ export function SettingsPanel({
   onClose,
   onCreateCustomSpeechPolicyProfile,
   onDeleteCustomSpeechPolicyProfile,
-  onPrepareProfileTarget,
   onReaderAccessibilitySettingsChange,
   onRunConfigurationChange,
   onSaveBookSourcePolicy,
@@ -215,7 +214,6 @@ export function SettingsPanel({
     baseProfile: string,
   ) => Promise<void>;
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
-  onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onSaveBookSourcePolicy: (
@@ -388,9 +386,7 @@ export function SettingsPanel({
                 highlightedCommandToken={highlightedCommandToken}
                 runConfiguration={runConfiguration}
                 selectedProfile={selectedProfile}
-                ttsEngineError={ttsEngineError}
                 ttsEngines={ttsEngines}
-                onPrepareProfileTarget={onPrepareProfileTarget}
                 onRunConfigurationChange={onRunConfigurationChange}
               />
             ) : null}
@@ -1273,17 +1269,13 @@ function VoiceSettingsGroup({
   highlightedCommandToken,
   runConfiguration,
   selectedProfile,
-  ttsEngineError,
   ttsEngines,
-  onPrepareProfileTarget,
   onRunConfigurationChange,
 }: Readonly<{
   highlightedCommandToken: string | null;
   runConfiguration: RunConfiguration;
   selectedProfile: VoiceProfile | null;
-  ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
-  onPrepareProfileTarget: (profileId: string, targetId: string) => Promise<void>;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
   const activeKokoroRenderMode = kokoroRenderModeForConfiguration(
@@ -1335,25 +1327,6 @@ function VoiceSettingsGroup({
           ))}
         </div>
       ) : null}
-      {selectedProfile && activeKokoroRenderMode === "kokoro-embed" ? (
-        <Button
-          onClick={() => {
-            void onPrepareProfileTarget(selectedProfile.id, "kokoro-embed");
-          }}
-          size="sm"
-          variant="soft"
-        >
-          Prepare selected profile target
-        </Button>
-      ) : null}
-      <TTSEngineDiagnosticsList
-        engines={ttsEngines}
-        error={ttsEngineError}
-        selectedEngine={runConfiguration.ttsEngine}
-        onSelectEngine={(engineId) => {
-          onRunConfigurationChange(applyRunEngineSelection(runConfiguration, engineId, ttsEngines));
-        }}
-      />
     </PanelSection>
   );
 }
