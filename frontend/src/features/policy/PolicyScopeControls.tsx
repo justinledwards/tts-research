@@ -144,7 +144,10 @@ export function SourcePolicyPinEditor({
           {hasPin ? "Pinned" : "Project default"}
         </span>
       </div>
-      <p className="vs-muted text-xs leading-5">{settingsScopeAppliesTo("source")}</p>
+      <p className="vs-muted text-xs leading-5">
+        {settingsScopeAppliesTo("source")} Applies to the selected source only; project and session
+        settings still apply everywhere else.
+      </p>
       <label className="grid gap-1 text-xs font-semibold">
         <span className="vs-muted">Profile</span>
         <select

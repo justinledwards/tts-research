@@ -177,6 +177,7 @@ import {
   shouldShowGlobalPreviewPlayer,
   shouldShowRailCinemaShortcut,
 } from "./features/playback";
+import type { SourceCardModel } from "./features/sources";
 import { Button, Panel, SegmentedControl, StatusChip } from "./design";
 import {
   createWorkspaceContext,
@@ -4849,6 +4850,60 @@ export function App() {
     [bookCinemaOpenTiming, openSelectedBookCinema, selectedBookSource, setContentMode, themeName],
   );
 
+  const handleReviewSourceCard = useCallback(
+    (model: SourceCardModel) => {
+      if (model.owner === "book") {
+        const book = bookSources.find((source) => source.id === model.id);
+        if (book) {
+          handleUseBookText(book, resolveDefaultBookScope(book));
+        }
+        return;
+      }
+      const source = preparedSources.find((item) => item.id === model.id);
+      if (source) {
+        void handleUsePreparedSource(source);
+      }
+    },
+    [bookSources, handleUseBookText, handleUsePreparedSource, preparedSources],
+  );
+
+  const handlePreviewSourceCard = useCallback(
+    (model: SourceCardModel) => {
+      if (model.owner === "book") {
+        const book = bookSources.find((source) => source.id === model.id);
+        if (book) {
+          handleUseBookText(book, resolveDefaultBookScope(book));
+          setContentMode("preview");
+        }
+        return;
+      }
+      const source = preparedSources.find((item) => item.id === model.id);
+      if (source) {
+        void handleUsePreparedSource(source).then(() => {
+          setContentMode("preview");
+        });
+      }
+    },
+    [bookSources, handleUseBookText, handleUsePreparedSource, preparedSources, setContentMode],
+  );
+
+  const handleOpenSourceCardCinema = useCallback(
+    (model: SourceCardModel) => {
+      if (model.owner === "book") {
+        const book = bookSources.find((source) => source.id === model.id);
+        if (book) {
+          openBookCinemaFromIntake(book, resolveDefaultBookScope(book));
+        }
+        return;
+      }
+      const source = preparedSources.find((item) => item.id === model.id);
+      if (source) {
+        openPreparedSourceCinema(source);
+      }
+    },
+    [bookSources, openBookCinemaFromIntake, openPreparedSourceCinema, preparedSources],
+  );
+
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
     setPlaybackControls(controls ?? DISABLED_PLAYBACK_CONTROLLER);
   }, []);
@@ -6527,8 +6582,13 @@ export function App() {
               setBundlePanelMode("import");
               setIsBundlePanelOpen(true);
             }}
+            onOpenSourceCinema={handleOpenSourceCardCinema}
+            onPreviewSource={handlePreviewSourceCard}
             onRenameProject={handleRenameProject}
+            onReviewSource={handleReviewSourceCard}
             onSelectProject={selectProject}
+            selectedBookSourceId={selectedBookSourceId}
+            selectedPreparedSourceId={selectedPreparedSourceId}
           />
         </Suspense>
       ) : null}

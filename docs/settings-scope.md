@@ -24,6 +24,7 @@ Speech policy still resolves in the same order:
 - Quick settings expose the most common session, project, and machine changes before the detailed groups.
 - Scope badges and “applies to” copy must come from shared settings metadata, not hand-written text in each panel.
 - Source pin editors and Policy Scope chips use the same `Session`, `Source`, `Project`, and `Machine` labels as Studio Settings.
+- Source policy pin copy must also name the local application boundary: it applies only to the selected source card/detail path, while project and session settings continue to apply elsewhere.
 - Keyboard shortcuts live under the `Reader` task group and use `Machine` scope because they are stored for the local browser/runtime.
 
 ## Compact and Expanded Display

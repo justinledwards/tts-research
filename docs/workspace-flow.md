@@ -27,6 +27,7 @@ Context preservation rules:
 - Choosing a new source through Intake resets only the active block selection for the previous source.
 - `Create & Listen` is an action from Preview and global controls, not a separate workspace stage.
 - The mini-player preserves the same active source, active block, voice profile, speech policy profile, run configuration, and generated-audio state as Review and Preview. It is hidden when Cinema is open because Cinema transport wins there.
+- Project Dashboard source cards are the canonical reopen path for imported and prepared sources. A card reuses the source lifecycle model, shows what scope will be narrated, and routes to Review, Preview, or Cinema without creating another import control for the same source.
 
 Local UX smoke:
 

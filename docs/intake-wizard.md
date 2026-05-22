@@ -32,3 +32,9 @@ The wizard is the UI model. Existing source adapters still own ingestion:
 - Existing books and prepared sources can be reopened without creating duplicate import controls.
 
 Teleprompt, Preview, Review, and Cinema read the same selected source, scope, voice profile, and speech policy profile from workspace state after the wizard opens a stage.
+
+## Source Lifecycle
+
+All imported, prepared, and reopened sources share the same lifecycle vocabulary: `imported`, `extracting`, `extracted`, `prepared`, `reviewable`, `previewable`, `narratable`, `generated`, `stale`, and `failed`.
+
+The project source list renders each Book, Website, Document, PDF, EPUB, DOCX, Markdown, pasted text, and prepared source through one source card contract. Each card shows title, type, extraction state, narratable scope count, active state, source policy pin state, and the single route set for Review, Preview, and Cinema. Format-specific ingestion remains below this lifecycle model.

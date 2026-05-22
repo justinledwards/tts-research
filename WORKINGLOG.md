@@ -1,5 +1,14 @@
 # Working Log
 
+## 2026-05-22 14:41 CEST - Source Lifecycle and Intake Mental Model
+- [x] Inspect intake, source, workspace, cinema, and policy-pin source models
+- [x] Add canonical source lifecycle model and SourceCard
+- [x] Wire source lifecycle cards into existing source reopen/detail paths
+- [x] Add source-scope/applies-to copy for policy pins
+- [x] Run project validation checks
+- [ ] Resolve upstream live-ingestion 429 from Hacker News target
+- [ ] Resolve existing frontend bundle CSS gzip budget failure
+
 ## 2026-05-21 17:12 CEST - Command Palette Shortcuts Settings Consolidation
 - [x] Map existing command palette, shortcut, help, and settings entry paths
 - [x] Add shared command and shortcut registries

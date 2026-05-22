@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Button, Panel, StatusChip, type StatusChipTone } from "../../design";
+import { Button, Panel, StatusChip } from "../../design";
 import { formatLocaleDate, formatLocaleNumber } from "../i18n";
 import { useReaderModalLifecycle } from "../reader-accessibility";
+import { SourceCard, sourceLifecycleModelsFromSources, type SourceCardModel } from "../sources";
 import type {
   BookSource,
   PreparedSource,
@@ -26,7 +27,12 @@ export interface ProjectDashboardProps {
   onExportOpen: () => void;
   onImportOpen: () => void;
   onRenameProject: (id: string, name: string) => Promise<void>;
+  onOpenSourceCinema?: (model: SourceCardModel) => void;
+  onPreviewSource?: (model: SourceCardModel) => void;
+  onReviewSource?: (model: SourceCardModel) => void;
   onSelectProject: (id: string) => void;
+  selectedBookSourceId?: string | null;
+  selectedPreparedSourceId?: string | null;
 }
 
 export function ProjectDashboard({
@@ -44,8 +50,13 @@ export function ProjectDashboard({
   onDeleteProject,
   onExportOpen,
   onImportOpen,
+  onOpenSourceCinema,
+  onPreviewSource,
   onRenameProject,
+  onReviewSource,
   onSelectProject,
+  selectedBookSourceId = null,
+  selectedPreparedSourceId = null,
 }: Readonly<ProjectDashboardProps>) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useReaderModalLifecycle(dialogRef, { closeOnEscape: true, isOpen: true, onClose });
@@ -54,6 +65,17 @@ export function ProjectDashboard({
   const visibleJobs = useMemo(
     () => uniqueJobs(job ? [job, ...projectJobs] : projectJobs),
     [job, projectJobs],
+  );
+  const sourceModels = useMemo(
+    () =>
+      sourceLifecycleModelsFromSources({
+        activeBookSourceId: selectedBookSourceId,
+        activePreparedSourceId: selectedPreparedSourceId,
+        bookSources,
+        jobs: visibleJobs,
+        preparedSources,
+      }),
+    [bookSources, preparedSources, selectedBookSourceId, selectedPreparedSourceId, visibleJobs],
   );
   const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
 
@@ -189,27 +211,16 @@ export function ProjectDashboard({
                 title={`Sources (${formatLocaleNumber(preparedSources.length + bookSources.length)})`}
               >
                 <div className="grid gap-2 p-3">
-                  {preparedSources.map((source) => (
-                    <SourceRow
-                      detail={`${source.kind.toUpperCase()} · ${formatLocaleNumber(
-                        source.wordCount,
-                      )} words · ${source.status}`}
-                      key={source.id}
-                      label={source.title ?? source.sourceName}
-                      tone={source.status === "ready" ? "success" : "warning"}
+                  {sourceModels.map((source) => (
+                    <SourceCard
+                      key={`${source.owner}:${source.id}`}
+                      model={source}
+                      onOpenCinema={onOpenSourceCinema}
+                      onPreview={onPreviewSource}
+                      onReview={onReviewSource}
                     />
                   ))}
-                  {bookSources.map((book) => (
-                    <SourceRow
-                      detail={`${book.kind.toUpperCase()} · ${formatLocaleNumber(
-                        book.wordCount,
-                      )} words · ${book.status}`}
-                      key={book.id}
-                      label={book.title ?? book.sourceFile}
-                      tone={book.status === "ready" ? "success" : "danger"}
-                    />
-                  ))}
-                  {preparedSources.length === 0 && bookSources.length === 0 ? (
+                  {sourceModels.length === 0 ? (
                     <EmptyState>
                       Imported files, URLs, pasted text, and books will appear here after intake.
                     </EmptyState>
@@ -663,26 +674,6 @@ function DashboardStat({
           {detail}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-function SourceRow({
-  detail,
-  label,
-  tone,
-}: Readonly<{ detail: string; label: string; tone: StatusChipTone }>) {
-  return (
-    <div className="grid gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center vs-border vs-surface">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold" title={label}>
-          {label}
-        </p>
-        <p className="vs-muted mt-1 truncate text-xs" title={detail}>
-          {detail}
-        </p>
-      </div>
-      <StatusChip tone={tone}>{detail.split(" · ").at(-1) ?? "ready"}</StatusChip>
     </div>
   );
 }
