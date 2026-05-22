@@ -13,6 +13,7 @@ import {
   preparedSourceCinemaPlaybackStatusLabel,
   preparedSourceCinemaJobMatchesSource,
   preparedSourceCinemaLabel,
+  preparedSourceCinemaPrimaryBlocks,
   preparedSourceCinemaSkippedGroups,
   preparedSourceCinemaSourceHref,
   preparedSourceCinemaTitle,
@@ -93,6 +94,86 @@ describe("prepared source cinema helpers", () => {
     expect(preparedSourceCinemaPlaybackStatusLabel(true, null)).toBe("Playing");
     expect(preparedSourceCinemaPlaybackStatusLabel(false, null)).toBe("Source ready");
     expect(preparedSourceCinemaPlaybackStatusLabel(false, makeVoiceJob())).toBe("Ready");
+  });
+
+  it("focuses website cinema blocks on the article instead of page chrome", () => {
+    const source = makePreparedSource({
+      blocks: [
+        {
+          endOffset: 8,
+          id: "chrome-features",
+          index: 0,
+          kind: "body",
+          segments: [],
+          speakMode: "speak",
+          speechPolicy: { explanation: "Legacy web chrome.", mode: "speak", profile: "default" },
+          spokenText: "Features",
+          startOffset: 0,
+          text: "Features",
+        },
+        {
+          endOffset: 18,
+          id: "chrome-instagram",
+          index: 1,
+          kind: "body",
+          segments: [],
+          speakMode: "speak",
+          speechPolicy: { explanation: "Legacy web chrome.", mode: "speak", profile: "default" },
+          spokenText: "Instagram",
+          startOffset: 10,
+          text: "Instagram",
+        },
+        {
+          endOffset: 128,
+          id: "article-title",
+          index: 2,
+          kind: "heading",
+          segments: [],
+          speakMode: "speak",
+          speechPolicy: { explanation: "Heading is spoken.", mode: "speak", profile: "default" },
+          spokenText:
+            "Amazon, Facebook, ICE, and the FBI have access to a private intelligence-sharing network operated by Seattle police",
+          startOffset: 20,
+          text: "Amazon, Facebook, ICE, and the FBI have access to a private intelligence-sharing network operated by Seattle police",
+        },
+        {
+          endOffset: 238,
+          id: "article-lede",
+          index: 3,
+          kind: "body",
+          segments: [],
+          speakMode: "speak",
+          speechPolicy: { explanation: "Body is spoken.", mode: "speak", profile: "default" },
+          spokenText:
+            "Seattle Shield requests suspicious activity reports from local private companies.",
+          startOffset: 130,
+          text: "Seattle Shield requests suspicious activity reports from local private companies.",
+        },
+        {
+          endOffset: 250,
+          id: "footer",
+          index: 4,
+          kind: "body",
+          segments: [],
+          speakMode: "skip",
+          speechPolicy: { explanation: "Footer skipped.", mode: "skip", profile: "default" },
+          spokenText: "",
+          startOffset: 240,
+          text: "Subscribe",
+        },
+      ],
+      title:
+        "Amazon, Facebook, ICE, and the FBI have access to a private intelligence-sharing network operated by Seattle police",
+    });
+
+    expect(preparedSourceCinemaPrimaryBlocks(source).map((block) => block.id)).toEqual([
+      "article-title",
+      "article-lede",
+    ]);
+    expect(preparedSourceCinemaOutline(source).map((item) => item.label)).toEqual([
+      "Amazon, Facebook, ICE, and the FBI have access to a private intelligence-sharing network operated by Seattle police",
+    ]);
+    expect(preparedSourceCinemaActiveBlock(source, -1)?.id).toBe("article-title");
   });
 
   it("builds policy notes for inline document artifacts", () => {
@@ -218,6 +299,7 @@ describe("prepared source cinema helpers", () => {
 
     expect(markup).toContain("Website Cinema");
     expect(markup).toContain("Example article");
+    expect(markup).toContain("Select cinema source");
     expect(markup).toContain("Read");
     expect(markup).toContain("Inspect");
     expect(markup).toContain("Review");

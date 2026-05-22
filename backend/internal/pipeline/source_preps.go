@@ -87,6 +87,13 @@ var (
 	markdownImageOnlyLine     = regexp.MustCompile(`^!\[[^\]]*\]\([^)]+\)\s*$`)
 	inlineCodeSpeechPattern   = regexp.MustCompile("`([^`]+)`")
 	htmlScriptStylePattern    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>|<noscript[^>]*>.*?</noscript>`)
+	htmlChromePattern         = regexp.MustCompile(`(?is)<(?:nav|header|footer|aside|form|dialog)\b[^>]*>.*?</(?:nav|header|footer|aside|form|dialog)>`)
+	htmlArticlePattern        = regexp.MustCompile(`(?is)<article\b[^>]*>(.*?)</article>`)
+	htmlMainPattern           = regexp.MustCompile(`(?is)<main\b[^>]*>(.*?)</main>`)
+	htmlRoleMainPattern       = regexp.MustCompile(`(?is)<(?:div|section)\b[^>]*\brole=["']main["'][^>]*>(.*?)</(?:div|section)>`)
+	htmlReadableClassPattern  = regexp.MustCompile(`(?is)<(?:div|section)\b[^>]*(?:class|id)=["'][^"']*(?:article|post|entry-content|story|main-content)[^"']*["'][^>]*>(.*?)</(?:div|section)>`)
+	htmlHeadingOnePattern     = regexp.MustCompile(`(?is)<h1\b[^>]*>(.*?)</h1>`)
+	htmlTitlePattern          = regexp.MustCompile(`(?is)<title\b[^>]*>(.*?)</title>`)
 	htmlBlockBreakPattern     = regexp.MustCompile(`(?i)</(p|div|section|article|br|h[1-6]|li|tr)>`)
 	htmlTagSpeechPattern      = regexp.MustCompile(`(?s)<[^>]+>`)
 	markdownHeadingLine       = regexp.MustCompile(`^(#{1,6})\s+(.+)$`)
@@ -903,16 +910,18 @@ func preprocessReadableSource(
 	sourceFormat := detectPreparedSourceFormat(sourceName, contentType, input)
 	switch sourceFormat {
 	case "html":
-		blocks, skipped, warnings := preparePlainNarrationBlocks(normalizeReadableSourceText(input), maxSentenceRunes)
+		readableHTML := readableHTMLFragment(input)
+		readableText := normalizeReadableSourceText(readableHTML)
+		blocks, skipped, warnings := preparePlainNarrationBlocks(readableText, maxSentenceRunes)
 		return sourcePreprocessResult{
 			Blocks:              blocks,
 			SkippedItems:        skipped,
 			Warnings:            warnings,
 			PreprocessorID:      "html-readable",
-			PreprocessorVersion: "html-readable-v1",
+			PreprocessorVersion: "html-readable-v2",
 			SourceFormat:        sourceFormat,
 			RenderMode:          "blocks",
-			Title:               inferPreparedSourceTitle(normalizeReadableSourceText(input), sourceName),
+			Title:               inferReadableHTMLTitle(input, readableText, sourceName),
 		}
 	case "structured":
 		blocks, skipped, warnings := preparePlainNarrationBlocks(input, maxSentenceRunes)
@@ -1555,6 +1564,71 @@ func normalizeReadableSourceText(input string) string {
 		trimmed = html.UnescapeString(trimmed)
 	}
 	return strings.TrimSpace(trimmed)
+}
+
+func readableHTMLFragment(input string) string {
+	cleaned := strings.TrimSpace(input)
+	if cleaned == "" {
+		return cleaned
+	}
+	cleaned = htmlScriptStylePattern.ReplaceAllString(cleaned, " ")
+	cleaned = htmlChromePattern.ReplaceAllString(cleaned, " ")
+
+	best := ""
+	bestWords := 0
+	for _, pattern := range []*regexp.Regexp{
+		htmlArticlePattern,
+		htmlMainPattern,
+		htmlRoleMainPattern,
+		htmlReadableClassPattern,
+	} {
+		for _, match := range pattern.FindAllStringSubmatch(cleaned, -1) {
+			if len(match) < 2 {
+				continue
+			}
+			candidate := strings.TrimSpace(match[len(match)-1])
+			wordCount := countWords(normalizeReadableSourceText(candidate))
+			if wordCount > bestWords {
+				best = candidate
+				bestWords = wordCount
+			}
+		}
+		if bestWords >= 80 {
+			return best
+		}
+	}
+	if bestWords >= 24 {
+		return best
+	}
+	return cleaned
+}
+
+func inferReadableHTMLTitle(input string, readableText string, fallback string) string {
+	if title := firstHTMLText(input, htmlHeadingOnePattern); title != "" {
+		return title
+	}
+	if title := firstHTMLText(input, htmlTitlePattern); title != "" {
+		return title
+	}
+	for _, line := range strings.Split(readableText, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		words := countWords(line)
+		if words >= 3 && words <= 24 {
+			return line
+		}
+	}
+	return inferPreparedSourceTitle(readableText, fallback)
+}
+
+func firstHTMLText(input string, pattern *regexp.Regexp) string {
+	matches := pattern.FindStringSubmatch(input)
+	if len(matches) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(normalizeReadableSourceText(matches[1]))
 }
 
 func cleanMarkdownInline(input string) string {

@@ -159,7 +159,10 @@ export function preparedSourceCinemaSkippedGroups(
 export function preparedSourceCinemaOutline(
   source: PreparedSource,
 ): PreparedSourceCinemaOutlineItem[] {
-  const blocks = source.blocks ?? [];
+  const blocks =
+    preparedSourceCinemaKind(source) === "website"
+      ? preparedSourceCinemaPrimaryBlocks(source)
+      : (source.blocks ?? []);
   const outline = blocks
     .filter((block) => block.kind === "heading" || block.kind === "subheading")
     .map((block, index) => ({
@@ -181,7 +184,17 @@ export function preparedSourceCinemaOutline(
 export function preparedSourceCinemaPrimaryBlocks(source: PreparedSource): NarrationBlock[] {
   const blocks = source.blocks ?? [];
   if (blocks.length > 0) {
-    return blocks.filter((block) => markdownBlockText(block).trim().length > 0);
+    const spokenBlocks = blocks.filter(
+      (block) => block.speakMode !== "skip" && markdownBlockText(block).trim().length > 0,
+    );
+    const readableBlocks =
+      spokenBlocks.length > 0
+        ? spokenBlocks
+        : blocks.filter((block) => markdownBlockText(block).trim().length > 0);
+    if (preparedSourceCinemaKind(source) === "website") {
+      return focusWebsiteCinemaBlocks(readableBlocks, source);
+    }
+    return readableBlocks;
   }
   const text = firstNonEmptyPreparedSourceValue(source.text, source.speechText);
   if (!text) {
@@ -211,13 +224,16 @@ export function preparedSourceCinemaActiveBlock(
   source: PreparedSource,
   activeWordIndex: number,
 ): NarrationBlock | null {
+  const primaryBlocks = preparedSourceCinemaPrimaryBlocks(source);
+  const primaryBlockIds = new Set(primaryBlocks.map((block) => block.id));
   const activeWord = resolvePreparedSourceActiveWord(source, activeWordIndex);
   if (activeWord) {
-    return source.blocks?.find((block) => block.id === activeWord.blockId) ?? null;
+    const activeBlock = source.blocks?.find((block) => block.id === activeWord.blockId) ?? null;
+    if (activeBlock && primaryBlockIds.has(activeBlock.id)) {
+      return activeBlock;
+    }
   }
-  return (
-    preparedSourceCinemaPrimaryBlocks(source).find((block) => block.speakMode !== "skip") ?? null
-  );
+  return primaryBlocks.find((block) => block.speakMode !== "skip") ?? null;
 }
 
 export function preparedSourceCinemaJobMatchesSource(
@@ -270,6 +286,119 @@ function firstNonEmptyPreparedSourceValue(...values: (string | undefined)[]): st
     }
   }
   return "";
+}
+
+function focusWebsiteCinemaBlocks(
+  blocks: NarrationBlock[],
+  source: PreparedSource,
+): NarrationBlock[] {
+  if (blocks.length === 0) {
+    return blocks;
+  }
+  const articleStart = findWebsiteArticleStart(blocks, source);
+  const focused = blocks
+    .slice(articleStart)
+    .filter((block) => !isWebsiteChromeBlockText(markdownBlockText(block)));
+  return focused.length > 0 ? focused : blocks;
+}
+
+function findWebsiteArticleStart(blocks: NarrationBlock[], source: PreparedSource): number {
+  const titleTokens = meaningfulTokens(preparedSourceCinemaTitle(source));
+  const strongTitleThreshold = Math.min(5, Math.max(3, titleTokens.size - 1));
+  const titleMatchIndex = blocks.findIndex((block) => {
+    const text = markdownBlockText(block);
+    if (isWebsiteChromeBlockText(text)) {
+      return false;
+    }
+    const tokenMatches = sharedTokenCount(titleTokens, meaningfulTokens(text));
+    return tokenMatches >= strongTitleThreshold;
+  });
+  if (titleMatchIndex !== -1) {
+    return titleMatchIndex;
+  }
+
+  const headingIndex = blocks.findIndex((block) => {
+    const text = markdownBlockText(block);
+    return (
+      (block.kind === "heading" || block.kind === "subheading") &&
+      countTextWords(text) >= 5 &&
+      !isWebsiteChromeBlockText(text)
+    );
+  });
+  if (headingIndex !== -1) {
+    return headingIndex;
+  }
+
+  const bodyIndex = blocks.findIndex((block) => {
+    const text = markdownBlockText(block);
+    return countTextWords(text) >= 18 && !isWebsiteChromeBlockText(text);
+  });
+  return Math.max(bodyIndex, 0);
+}
+
+function meaningfulTokens(value: string): Set<string> {
+  const stopWords = new Set([
+    "a",
+    "an",
+    "and",
+    "are",
+    "for",
+    "from",
+    "have",
+    "into",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "with",
+  ]);
+  return new Set(
+    value
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9]+/g, " ")
+      .split(/\s+/)
+      .filter((token) => token.length >= 3 && !stopWords.has(token)),
+  );
+}
+
+function sharedTokenCount(left: Set<string>, right: Set<string>): number {
+  let count = 0;
+  for (const token of left) {
+    if (right.has(token)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function countTextWords(value: string): number {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function isWebsiteChromeBlockText(value: string): boolean {
+  const text = value.trim();
+  if (!text) {
+    return true;
+  }
+  const normalized = text.toLowerCase().replaceAll(/\s+/g, " ");
+  if (
+    /^(features|skip to content|menu|subscribe|donate|search|open search|facebook|instagram|bluesky|categories|tags)$/i.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+  if (/^(opinion|state power|movement media alliance|explainers)$/.test(normalized)) {
+    return true;
+  }
+  if (/^(facebook|instagram|bluesky|x|twitter)\b/.test(normalized) && countTextWords(text) <= 4) {
+    return true;
+  }
+  if (/open dropdown menu|search for: search|justice requires the full story/.test(normalized)) {
+    return true;
+  }
+  return countTextWords(text) <= 2 && /^(home|news|about|contact|privacy|terms)$/.test(normalized);
 }
 
 function ensureSkippedGroup(

@@ -217,7 +217,7 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
 
   return (
     <TransportFooter>
-      <div className="hidden items-center gap-4 lg:flex">
+      <div className="hidden flex-wrap items-center gap-4 lg:flex">
         {showRestart ? (
           <Button
             aria-keyshortcuts="Home"
@@ -266,7 +266,7 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
             {model.skipForward.icon}+{READER_SEEK_SECONDS.toString()}s
           </Button>
         ) : null}
-        <div className="min-w-0 flex-1">
+        <div className="order-last min-w-[18rem] flex-1 basis-full xl:order-none xl:min-w-0 xl:basis-auto">
           {model.progress.waveform}
           <div className="mt-1 flex items-center justify-between text-xs tabular-nums vs-muted">
             <span>{model.progress.currentLabel}</span>

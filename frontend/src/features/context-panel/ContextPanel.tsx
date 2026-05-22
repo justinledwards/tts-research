@@ -89,7 +89,9 @@ export function ContextPanel({
                       </StatusChip>
                     ) : null}
                   </span>
-                  <span className="mt-1 block truncate text-xs vs-muted">{tab.detail}</span>
+                  <span className="mt-1 block line-clamp-2 text-left text-xs vs-muted">
+                    {tab.detail}
+                  </span>
                 </Button>
               );
             })}

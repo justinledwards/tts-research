@@ -596,9 +596,9 @@ export function PreparedSourceCinemaOverlay({
         />
       }
       header={
-        <header className="relative flex min-h-[4rem] items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
+        <header className="relative flex min-h-[4rem] flex-wrap items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
           <HeaderContextSummary
-            className="flex-1 lg:max-w-[min(36rem,42vw)]"
+            className="min-w-[16rem] flex-1 basis-[26rem] lg:max-w-[min(36rem,42vw)]"
             density="compact"
             icon={
               <span className="grid h-9 w-9 place-items-center rounded-md border border-orange-200 text-orange-600 sm:border-zinc-900 sm:bg-zinc-950 sm:text-white">
@@ -617,8 +617,15 @@ export function PreparedSourceCinemaOverlay({
             variant="bar"
           />
           <PlaybackStatusChip isPlaybackActive={isPlaybackActive} job={job} />
-          <div className="hidden min-w-[20rem] shrink-0 lg:block">
-            <CinemaFocusModeToolbar mode={cinemaFocus.mode} onModeChange={cinemaFocus.setMode} />
+          <div className="order-last flex min-w-0 flex-1 basis-full flex-wrap items-center gap-3 lg:flex xl:order-none xl:basis-auto xl:flex-nowrap">
+            <PreparedSourceCinemaHeaderSourceSelect
+              source={source}
+              sources={sources}
+              onSelectSource={onSelectSource}
+            />
+            <div className="hidden min-w-[17rem] shrink-0 lg:block">
+              <CinemaFocusModeToolbar mode={cinemaFocus.mode} onModeChange={cinemaFocus.setMode} />
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Button
@@ -737,7 +744,7 @@ function PreparedSourceCinemaSourceLibrary({
         >
           {sources.map((item, index) => (
             <option key={`${item.id}-${String(index)}`} value={item.id}>
-              {preparedSourceCinemaTitle(item)}
+              {preparedSourceCinemaOptionLabel(item)}
             </option>
           ))}
         </select>
@@ -774,6 +781,44 @@ function PreparedSourceCinemaSourceLibrary({
       ) : null}
     </div>
   );
+}
+
+function PreparedSourceCinemaHeaderSourceSelect({
+  source,
+  sources,
+  onSelectSource,
+}: Readonly<{
+  source: PreparedSource;
+  sources: PreparedSource[];
+  onSelectSource: (sourceId: string) => void;
+}>) {
+  return (
+    <label className="hidden min-w-[13rem] max-w-[18rem] flex-1 basis-[13rem] items-center gap-2 lg:flex">
+      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em] vs-muted">
+        Cinema
+      </span>
+      <select
+        aria-label="Select cinema source"
+        className={`${fieldControlClassName} h-11 min-w-0 flex-1 truncate py-0`}
+        data-testid="prepared-source-cinema-source-select"
+        onChange={(event) => {
+          onSelectSource(event.currentTarget.value);
+        }}
+        value={source.id}
+      >
+        {sources.map((item, index) => (
+          <option key={`${item.id}-${String(index)}`} value={item.id}>
+            {preparedSourceCinemaOptionLabel(item)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function preparedSourceCinemaOptionLabel(source: PreparedSource): string {
+  const kindLabel = preparedSourceCinemaLabel(source).replace(" Cinema", "");
+  return `${kindLabel} - ${preparedSourceCinemaTitle(source)}`;
 }
 
 function PreparedSourceCinemaReader({
@@ -1567,8 +1612,11 @@ function TransportWaveformPlaceholder({
   label = "Audio waveform appears after generation.",
 }: Readonly<{ label?: string }>) {
   return (
-    <div className="flex h-12 min-w-0 flex-1 items-center rounded-md border border-dashed px-4 text-xs font-medium vs-border vs-muted">
-      {label}
+    <div
+      className="flex h-12 min-w-0 flex-1 items-center overflow-hidden rounded-md border border-dashed px-4 text-xs font-medium vs-border vs-muted"
+      title={label}
+    >
+      <span className="min-w-0 truncate">{label}</span>
     </div>
   );
 }

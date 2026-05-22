@@ -329,3 +329,21 @@
 - [x] Add local workflow examples without enabling hosted CI
 - [x] Run local validation commands
 - [ ] Follow up low-resource reader timing budget failures
+
+## 2026-05-22 02:49 CEST - Workspace Ergonomics Pass
+- [x] Reproduce constrained 1920x1080 workspace layout
+- [x] Map Voice Command, workbench, playback, and activity footer components
+- [x] Fold low-value Saved Voices content into Voice Profile ergonomics
+- [x] Improve overflow, density, and responsive ergonomics
+- [x] Validate with browser screenshots and local checks
+
+## 2026-05-22 03:23 CEST - Cinema Website Ergonomics Follow-Up
+- [x] Reproduce cinema and preview overlap issues from supplied screenshots
+- [x] Add in-cinema source/cinema selection path
+- [x] Improve website cinema focus for article narration
+- [x] Recheck constrained desktop screenshots and local validation
+
+## 2026-05-22 08:36 CEST - Update PR Ergonomics Follow-Up
+- [x] Stage and commit latest ergonomics follow-up
+- [x] Push current PR branch
+- [x] Refresh PR body with latest validation and UX changes

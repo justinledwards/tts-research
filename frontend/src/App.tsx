@@ -285,7 +285,6 @@ import {
   useDelayedBusy,
   useInteractionTiming,
 } from "./features/performance";
-import { buildVoiceLibraryViewModel, type VoiceLibraryEntry } from "./voiceStudioViewModels";
 import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
 import {
   orderedKokoroVoicepacksForLanguage,
@@ -314,8 +313,6 @@ const DEFAULT_PROJECT_NAME = "The Future of Clean Energy";
 const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
 const RESEARCH_MODULE_PROMPT_HIDDEN_KEY = "tts-research-module-prompt-hidden";
 const DEFAULT_KOKORO_VOICE_ID = "af_heart";
-const VOICE_PROFILE_RECENT_STORAGE_KEY = "tts-recent-voice-profile-ids";
-const VOICE_PROFILE_PINNED_STORAGE_KEY = "tts-pinned-voice-profile-ids";
 const PROFILE_ARTIFACT_MODULE_ORDER = ["kokoro-embed", "supertonic-embed"] as const;
 const BundleFlowPanel = lazy(() =>
   import("./BundlePanels").then((module) => ({ default: module.BundleFlowPanel })),
@@ -1365,25 +1362,6 @@ function upsertVoiceProfileByCreatedAt(
     return [...nextProfiles, profile];
   }
   return [...nextProfiles.slice(0, insertAt), profile, ...nextProfiles.slice(insertAt)];
-}
-
-function loadStoredIdList(key: string): string[] {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) ?? "[]") as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter((item): item is string => typeof item === "string" && item.trim() !== "");
-  } catch {
-    return [];
-  }
-}
-
-function rememberRecentId(ids: string[], id: string, limit = 8): string[] {
-  if (!id) {
-    return ids;
-  }
-  return [id, ...ids.filter((item) => item !== id)].slice(0, limit);
 }
 
 function TeleprompterPanel({
@@ -2499,12 +2477,6 @@ export function App() {
   const [now, setNow] = useState(() => Date.now());
   const [voiceProfiles, setVoiceProfiles] = useState<VoiceProfile[]>([]);
   const [selectedVoiceProfileId, setSelectedVoiceProfileId] = useState("");
-  const [recentVoiceProfileIds, setRecentVoiceProfileIds] = useState<string[]>(() =>
-    loadStoredIdList(VOICE_PROFILE_RECENT_STORAGE_KEY),
-  );
-  const [pinnedVoiceProfileIds, setPinnedVoiceProfileIds] = useState<string[]>(() =>
-    loadStoredIdList(VOICE_PROFILE_PINNED_STORAGE_KEY),
-  );
   const [researchModules, setResearchModules] = useState<ResearchModuleDiagnostics[]>([]);
   const [researchModuleError, setResearchModuleError] = useState<string | null>(null);
   const [cloningResearchModuleId, setCloningResearchModuleId] = useState<string | null>(null);
@@ -3887,20 +3859,11 @@ export function App() {
   const selectVoiceProfile = useCallback((profileId: string) => {
     setSelectedVoiceProfileId(profileId);
     localStorage.setItem(VOICE_PROFILE_ID_STORAGE_KEY, profileId);
-    setRecentVoiceProfileIds((currentIds) => rememberRecentId(currentIds, profileId));
   }, []);
 
   const clearVoiceProfileSelection = useCallback(() => {
     setSelectedVoiceProfileId("");
     localStorage.removeItem(VOICE_PROFILE_ID_STORAGE_KEY);
-  }, []);
-
-  const togglePinnedVoiceProfile = useCallback((profileId: string) => {
-    setPinnedVoiceProfileIds((currentIds) =>
-      currentIds.includes(profileId)
-        ? currentIds.filter((item) => item !== profileId)
-        : [...currentIds, profileId],
-    );
   }, []);
 
   const handleSpeechPolicyProfileChange = useCallback(
@@ -5392,14 +5355,6 @@ export function App() {
   }, [runConfiguration]);
 
   useEffect(() => {
-    localStorage.setItem(VOICE_PROFILE_RECENT_STORAGE_KEY, JSON.stringify(recentVoiceProfileIds));
-  }, [recentVoiceProfileIds]);
-
-  useEffect(() => {
-    localStorage.setItem(VOICE_PROFILE_PINNED_STORAGE_KEY, JSON.stringify(pinnedVoiceProfileIds));
-  }, [pinnedVoiceProfileIds]);
-
-  useEffect(() => {
     localStorage.setItem(TELEPROMPTER_SETTINGS_STORAGE_KEY, JSON.stringify(teleprompterSettings));
   }, [teleprompterSettings]);
 
@@ -6735,7 +6690,8 @@ export function App() {
             hidden={
               contentMode === "teleprompt" ||
               isBookCinemaOpen ||
-              Boolean(preparedSourceCinemaSource)
+              Boolean(preparedSourceCinemaSource) ||
+              (activityFooterMode === "full" && contentMode !== "preview")
             }
             isPlaybackActive={isPlaybackActive}
             job={job}
@@ -6963,8 +6919,6 @@ export function App() {
                 isClearingHuggingFaceToken={isClearingHuggingFaceToken}
                 isLoading={isLoadingProfiles}
                 profiles={voiceProfiles}
-                pinnedProfileIds={pinnedVoiceProfileIds}
-                recentProfileIds={recentVoiceProfileIds}
                 researchModules={researchModules}
                 runConfiguration={runConfiguration}
                 savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
@@ -6992,7 +6946,6 @@ export function App() {
                 onSaveHuggingFaceToken={handleSaveHuggingFaceTokenAndValidate}
                 onSelectKokoroVoice={selectKokoroVoice}
                 onSelectProfile={selectVoiceProfile}
-                onTogglePinnedProfile={togglePinnedVoiceProfile}
               />
             ) : (
               <VoiceCloningRailMini
@@ -7697,24 +7650,24 @@ function NarrationSidebar({
   return (
     <section className="min-h-full min-w-0 overflow-visible">
       <div className="grid min-w-0 gap-3 p-4 xl:p-5">
-        <section className="grid gap-3 rounded-lg border p-3 vs-border vs-raised">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Active Source</h2>
+        <section className="grid min-w-0 gap-3 rounded-lg border p-3 vs-border vs-raised">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h2 className="min-w-0 text-sm font-semibold text-[var(--vs-text)]">Active Source</h2>
             <span className="vs-muted text-xs">
               {String(preparedSources.length + bookSources.length)} managed
             </span>
           </div>
-          <div className="rounded-md border p-3 vs-border vs-surface">
-            <p className="truncate text-sm font-semibold" title={activeSourceLabel}>
+          <div className="min-w-0 rounded-md border p-3 vs-border vs-surface">
+            <p className="min-w-0 truncate text-sm font-semibold" title={activeSourceLabel}>
               {activeSourceLabel}
             </p>
-            <p className="vs-muted mt-1 truncate text-xs" title={activeSourceDetail}>
+            <p className="vs-muted mt-1 min-w-0 truncate text-xs" title={activeSourceDetail}>
               {activeSourceDetail}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-2">
             <button
-              className="h-9 rounded-md border px-2 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
               data-testid="ui-action-project-dashboard-open-rail"
               data-ui-action-surface="Workspace"
               onClick={onOpenProjectDashboard}
@@ -7723,7 +7676,7 @@ function NarrationSidebar({
               Manage Sources
             </button>
             <button
-              className="h-9 rounded-md border px-2 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
               onClick={onCreateSource}
               type="button"
             >
@@ -7732,22 +7685,24 @@ function NarrationSidebar({
           </div>
         </section>
 
-        <section className="grid gap-3 rounded-lg border p-3 vs-border vs-raised">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Active Voice</h2>
-            <span className="vs-muted text-xs">{profiles.length.toString()} saved</span>
+        <section className="grid min-w-0 gap-3 rounded-lg border p-3 vs-border vs-raised">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h2 className="min-w-0 text-sm font-semibold text-[var(--vs-text)]">Voice Profile</h2>
+            <span className="shrink-0 vs-muted text-xs">
+              {profiles.length.toString()} profile{profiles.length === 1 ? "" : "s"}
+            </span>
           </div>
-          <div className="rounded-md border p-3 vs-border vs-surface">
-            <p className="truncate text-sm font-semibold" title={voiceRuntimeLabel}>
+          <div className="min-w-0 rounded-md border p-3 vs-border vs-surface">
+            <p className="min-w-0 truncate text-sm font-semibold" title={voiceRuntimeLabel}>
               {voiceRuntimeLabel}
             </p>
-            <p className="vs-muted mt-1 truncate text-xs">
+            <p className="vs-muted mt-1 min-w-0 truncate text-xs">
               {selectedProfile
                 ? `${selectedProfile.language} · ${selectedProfile.status}`
                 : `Default Kokoro voice · ${readyVoiceEngines.toString()} voice engines`}
             </p>
           </div>
-          <label className="grid gap-1 text-xs font-semibold">
+          <label className="grid min-w-0 gap-1 text-xs font-semibold">
             <span className="vs-muted">Voice profile</span>
             <select
               className="h-9 min-w-0 rounded-md border px-2 text-xs font-semibold vs-border vs-surface"
@@ -7769,9 +7724,9 @@ function NarrationSidebar({
               ))}
             </select>
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-2">
             <button
-              className="h-9 rounded-md border px-2 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
               data-testid="ui-action-voice-dashboard-open-rail"
               data-ui-action-surface="Workspace"
               onClick={onOpenVoiceDashboard}
@@ -7780,7 +7735,7 @@ function NarrationSidebar({
               Manage Voices
             </button>
             <button
-              className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-2 text-xs font-semibold text-orange-700 transition hover:bg-orange-500/15"
+              className="min-h-9 min-w-0 rounded-md border border-orange-300 bg-orange-500/10 px-2 py-1.5 text-xs font-semibold leading-tight text-orange-700 transition hover:bg-orange-500/15"
               onClick={onCloneVoice}
               type="button"
             >
@@ -7793,11 +7748,13 @@ function NarrationSidebar({
           </p>
         </section>
 
-        <section className="grid gap-3 rounded-lg border p-3 text-xs vs-border vs-raised">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Run / Policy Summary</h2>
+        <section className="grid min-w-0 gap-3 rounded-lg border p-3 text-xs vs-border vs-raised">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h2 className="min-w-0 text-sm font-semibold text-[var(--vs-text)]">
+              Run / Policy Summary
+            </h2>
             <button
-              className="rounded border px-2 py-1 font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              className="min-h-8 shrink-0 rounded border px-2 py-1 font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
               onClick={onInspectSelectedSource}
               type="button"
             >
@@ -7854,8 +7811,6 @@ function VoiceCloningVoiceRail({
   isClearingHuggingFaceToken,
   isLoading,
   profiles,
-  pinnedProfileIds,
-  recentProfileIds,
   researchModules,
   runConfiguration,
   savingHuggingFaceTokenKey,
@@ -7874,14 +7829,11 @@ function VoiceCloningVoiceRail({
   onSaveHuggingFaceToken,
   onSelectKokoroVoice,
   onSelectProfile,
-  onTogglePinnedProfile,
 }: Readonly<{
   buildingArtifactKey: string | null;
   isClearingHuggingFaceToken: boolean;
   isLoading: boolean;
   profiles: VoiceProfile[];
-  pinnedProfileIds: string[];
-  recentProfileIds: string[];
   researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
   savingHuggingFaceTokenKey: string | null;
@@ -7900,56 +7852,12 @@ function VoiceCloningVoiceRail({
   onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
   onSelectKokoroVoice: (voiceId: string) => void;
   onSelectProfile: (id: string) => void;
-  onTogglePinnedProfile: (id: string) => void;
 }>) {
-  const [profileSearch, setProfileSearch] = useState("");
-  const voiceLibrary = buildVoiceLibraryViewModel({
-    limit: profiles.length,
-    pinnedIds: pinnedProfileIds,
-    profiles,
-    recentIds: recentProfileIds,
-    selectedProfileId,
-  });
-  const profileSearchNeedle = profileSearch.trim().toLowerCase();
-  const visibleVoiceEntries = voiceLibrary.entries
-    .filter((entry) => {
-      if (!profileSearchNeedle) {
-        return true;
-      }
-      const profile = entry.profile;
-      return `${profile.name} ${profile.language} ${profile.status}`
-        .toLowerCase()
-        .includes(profileSearchNeedle);
-    })
-    .slice(0, profileSearchNeedle ? 8 : 5);
   return (
     <section className="min-h-full min-w-0 overflow-visible">
       <div className="grid min-w-0 gap-3 p-4 xl:p-5">
-        <section className="grid gap-3 rounded-lg border p-3 vs-border vs-raised">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Voice Profile Library</h2>
-            <button
-              className="h-8 rounded-md border px-2 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
-              data-testid="ui-action-voice-dashboard-open-cloning-rail"
-              data-ui-action-surface="Workspace"
-              onClick={onOpenVoiceDashboard}
-              type="button"
-            >
-              Dashboard
-            </button>
-          </div>
-          <input
-            className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-xs outline-none transition placeholder:text-[var(--vs-muted)] focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
-            onChange={(event) => {
-              setProfileSearch(event.currentTarget.value);
-            }}
-            placeholder="Search profiles..."
-            type="search"
-            value={profileSearch}
-          />
-        </section>
         <VoiceProfileDropdown
-          heading="Active Profile"
+          heading="Voice Profile"
           buildingArtifactKey={buildingArtifactKey}
           isClearingHuggingFaceToken={isClearingHuggingFaceToken}
           isLoading={isLoading}
@@ -7970,142 +7878,15 @@ function VoiceCloningVoiceRail({
           onClearHuggingFaceToken={onClearHuggingFaceToken}
           onClearSelection={onClearSelection}
           onDeleteProfile={onDeleteProfile}
+          onOpenVoiceDashboard={onOpenVoiceDashboard}
           onRunConfigurationChange={onRunConfigurationChange}
           onSaveHuggingFaceToken={onSaveHuggingFaceToken}
           onSelectKokoroVoice={onSelectKokoroVoice}
           onSelectProfile={onSelectProfile}
         />
-        <SavedVoicesRailPanel
-          emptyMessage={profileSearchNeedle ? "No saved voices match that search." : undefined}
-          entries={visibleVoiceEntries}
-          total={voiceLibrary.total}
-          onSelectProfile={onSelectProfile}
-          onTogglePinnedProfile={onTogglePinnedProfile}
-        />
       </div>
     </section>
   );
-}
-
-function SavedVoicesRailPanel({
-  emptyMessage = "Created voice profiles will appear here for quick selection.",
-  entries,
-  total,
-  onSelectProfile,
-  onTogglePinnedProfile,
-}: Readonly<{
-  emptyMessage?: string;
-  entries: VoiceLibraryEntry[];
-  total: number;
-  onSelectProfile: (id: string) => void;
-  onTogglePinnedProfile: (id: string) => void;
-}>) {
-  return (
-    <section className="grid gap-2 rounded-lg border p-3 vs-border vs-raised">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-[var(--vs-text)]">Saved Voices</h2>
-        <span className="vs-muted text-xs">{String(total)}</span>
-      </div>
-      <div className="grid gap-2 text-xs">
-        {entries.map((entry) => (
-          <SavedVoiceRailRow
-            entry={entry}
-            key={entry.profile.id}
-            onSelect={onSelectProfile}
-            onTogglePinned={onTogglePinnedProfile}
-          />
-        ))}
-        {entries.length === 0 ? (
-          <p className="vs-muted rounded-md border border-dashed p-3 leading-5 vs-border vs-surface">
-            {emptyMessage}
-          </p>
-        ) : null}
-        {entries.length > 0 && total > entries.length ? (
-          <button
-            className="h-8 rounded-md border text-xs font-semibold transition hover:border-orange-200 hover:bg-orange-50 vs-border vs-surface"
-            type="button"
-          >
-            Browse all
-          </button>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function SavedVoiceRailRow({
-  entry,
-  onSelect,
-  onTogglePinned,
-}: Readonly<{
-  entry: VoiceLibraryEntry;
-  onSelect: (id: string) => void;
-  onTogglePinned: (id: string) => void;
-}>) {
-  const { profile } = entry;
-  const status = voiceLibraryProfileStatus(profile);
-  const pinTitle = savedVoicePinTitle(entry);
-  const pinLabel = savedVoicePinLabel(entry);
-  return (
-    <div
-      className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border px-2 py-2 ${
-        entry.selected ? "border-orange-300 bg-orange-50" : "vs-border vs-surface"
-      }`}
-    >
-      <button
-        className="min-w-0 text-left"
-        onClick={() => {
-          onSelect(profile.id);
-        }}
-        type="button"
-      >
-        <span className="block truncate font-semibold text-[var(--vs-text)]" title={profile.name}>
-          {profile.name}
-        </span>
-        <span className="vs-muted mt-0.5 block truncate">
-          {profile.language} · {formatLikenessLabel(profile)}
-        </span>
-      </button>
-      <span className={`rounded px-2 py-1 text-[0.65rem] font-semibold ${status.className}`}>
-        {status.label}
-      </span>
-      <button
-        aria-label={entry.pinned ? `Unpin ${profile.name}` : `Pin ${profile.name}`}
-        className={`grid h-7 w-7 place-items-center rounded border text-xs ${
-          entry.pinned
-            ? "border-orange-300 bg-white text-orange-700"
-            : "hover:border-orange-200 vs-border vs-raised vs-muted"
-        }`}
-        onClick={() => {
-          onTogglePinned(profile.id);
-        }}
-        title={pinTitle}
-        type="button"
-      >
-        {pinLabel}
-      </button>
-    </div>
-  );
-}
-
-function savedVoicePinTitle(entry: VoiceLibraryEntry): string {
-  if (entry.pinned) {
-    return "Pinned";
-  }
-  if (entry.recent) {
-    return "Recent";
-  }
-  return "Pin voice";
-}
-
-function savedVoicePinLabel(entry: VoiceLibraryEntry): string {
-  if (entry.pinned) {
-    return "P";
-  }
-  if (entry.recent) {
-    return "R";
-  }
-  return "+";
 }
 
 function voiceLibraryProfileStatus(profile: VoiceProfile): { label: string; className: string } {
@@ -9408,7 +9189,7 @@ function PipelineStatusFooter({
   }
 
   return (
-    <footer className="z-30 max-h-[46vh] shrink-0 overflow-y-auto border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:max-h-none lg:overflow-visible lg:px-4 vs-border vs-raised">
+    <footer className="z-30 max-h-[min(34vh,24rem)] shrink-0 overflow-y-auto border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised">
       <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
           Activity Footer
@@ -10778,6 +10559,7 @@ function VoiceProfileDropdown({
   onClearHuggingFaceToken,
   onClearSelection,
   onDeleteProfile,
+  onOpenVoiceDashboard,
   onRunConfigurationChange,
   onSaveHuggingFaceToken,
   onSelectKokoroVoice,
@@ -10804,6 +10586,7 @@ function VoiceProfileDropdown({
   onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onDeleteProfile: (id: string) => void;
+  onOpenVoiceDashboard?: () => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
   onSelectKokoroVoice: (voiceId: string) => void;
@@ -10910,7 +10693,20 @@ function VoiceProfileDropdown({
     <section className="grid min-w-0 gap-2">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-[var(--vs-text)]">{heading}</h2>
-        <span className="vs-muted shrink-0 text-xs">{String(profiles.length + 1)} voices</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="vs-muted text-xs">{String(profiles.length + 1)} voices</span>
+          {onOpenVoiceDashboard ? (
+            <button
+              className="h-8 rounded-md border px-2 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              data-testid="ui-action-voice-dashboard-open-cloning-rail"
+              data-ui-action-surface="Workspace"
+              onClick={onOpenVoiceDashboard}
+              type="button"
+            >
+              Dashboard
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="min-w-0 rounded-lg border p-3 vs-border vs-raised">
         <button
@@ -12854,14 +12650,14 @@ function StreamingAudioPanel({
   const modeButtonClass = useCallback(
     (mode: AudioPlaybackMode, isAvailable: boolean) => {
       if (playMode === mode) {
-        return "inline-flex h-7 min-w-[3.9rem] items-center justify-center rounded border border-orange-500 bg-orange-500/10 px-2 text-xs font-semibold text-orange-600";
+        return "inline-flex h-7 min-w-0 items-center justify-center rounded border border-orange-500 bg-orange-500/10 px-2 text-xs font-semibold text-orange-600";
       }
 
       if (!isAvailable) {
-        return "inline-flex h-7 min-w-[3.9rem] items-center justify-center rounded border border-transparent px-2 text-xs font-semibold opacity-40";
+        return "inline-flex h-7 min-w-0 items-center justify-center rounded border border-transparent px-2 text-xs font-semibold opacity-40";
       }
 
-      return "vs-muted inline-flex h-7 min-w-[3.9rem] items-center justify-center rounded border border-transparent px-2 text-xs font-semibold transition hover:bg-[var(--vs-raised)]";
+      return "vs-muted inline-flex h-7 min-w-0 items-center justify-center rounded border border-transparent px-2 text-xs font-semibold transition hover:bg-[var(--vs-raised)]";
     },
     [playMode],
   );
@@ -12917,20 +12713,20 @@ function StreamingAudioPanel({
             {job.status}
           </span>
         </div>
-        <div className="flex min-w-0 items-center justify-between gap-3">
+        <div className="grid min-w-0 gap-2 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center">
           <p className="vs-muted min-w-0 truncate text-xs">
             {playModeLabel[playMode]} mode · {String(readySegments)} segment
             {readySegments === 1 ? "" : "s"} ready
           </p>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-[auto_minmax(0,1fr)]">
             <button
-              className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
+              className="min-h-8 min-w-0 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
               onClick={onOpenCinema}
               type="button"
             >
               Cinema
             </button>
-            <div className="inline-flex overflow-hidden rounded-md border p-0.5 vs-border">
+            <div className="grid min-w-0 grid-cols-2 overflow-hidden rounded-md border p-0.5 vs-border">
               {(["arrival", "completed"] as const).map((mode) => {
                 const isAvailable = isModeAvailable[mode];
                 return (

@@ -73,7 +73,7 @@ export function TopProductBar({
   const primaryButtonLabel = isProcessing ? "Cancel Job" : "Create & Listen";
 
   return (
-    <header className="vs-raised grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 lg:grid-cols-[minmax(205px,auto)_minmax(330px,0.9fr)_auto] lg:px-4">
+    <header className="vs-raised grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 lg:px-4 2xl:grid-cols-[minmax(205px,auto)_minmax(330px,0.9fr)_auto]">
       <div className="flex min-w-0 items-center gap-2.5">
         <Button aria-label="Open workspace" onClick={onWorkspaceOpen} size="icon" variant="ghost">
           <MenuIcon />
@@ -88,7 +88,7 @@ export function TopProductBar({
         </div>
         <Button
           align="start"
-          className="hidden grid-cols-[auto_auto] items-center gap-2 xl:grid"
+          className="hidden grid-cols-[auto_auto] items-center gap-2 2xl:grid"
           onClick={onWorkspaceOpen}
           size="md"
           variant="secondary"
@@ -99,7 +99,7 @@ export function TopProductBar({
           </StatusChip>
         </Button>
       </div>
-      <div className="hidden min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 vs-surface lg:flex">
+      <div className="hidden min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 vs-surface 2xl:flex">
         <label className="grid min-w-0 flex-1 gap-0.5">
           <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
             Project
@@ -186,7 +186,7 @@ export function TopProductBar({
           variant="secondary"
         >
           <CommandIcon />
-          <span className="hidden xl:inline">Actions</span>
+          <span className="hidden 2xl:inline">Actions</span>
         </Button>
         <Button
           aria-label="Open settings"
@@ -198,7 +198,7 @@ export function TopProductBar({
         >
           <SettingsIcon />
         </Button>
-        <div className="hidden h-10 shrink-0 overflow-hidden rounded-md border text-sm font-semibold shadow-sm vs-raised xl:inline-flex">
+        <div className="hidden h-10 shrink-0 overflow-hidden rounded-md border text-sm font-semibold shadow-sm vs-raised 2xl:inline-flex">
           <Button
             className="rounded-none border-0 shadow-none"
             onClick={onImportOpen}

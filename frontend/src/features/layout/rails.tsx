@@ -6,12 +6,12 @@ export function railColumnWidth(mode: WorkspaceRailMode, side: "left" | "right")
     return "52px";
   }
   if (mode === "compact") {
-    return "156px";
+    return "140px";
   }
   if (side === "left") {
-    return "clamp(300px, 18vw, 340px)";
+    return "clamp(256px, 18vw, 360px)";
   }
-  return "clamp(320px, 19vw, 360px)";
+  return "clamp(252px, 19vw, 360px)";
 }
 
 export function RailModeToolbar({
@@ -28,6 +28,7 @@ export function RailModeToolbar({
     compact: "Slim",
     full: "Full",
   };
+  const visibleLabel = label === "Voice Command" ? "Voice" : label;
   return (
     <div
       className={`sticky top-0 z-20 flex min-w-0 items-center justify-between gap-2 border-b backdrop-blur vs-border vs-raised ${
@@ -38,8 +39,9 @@ export function RailModeToolbar({
         className={`min-w-0 truncate text-[0.58rem] font-semibold uppercase tracking-[0.12em] vs-muted ${
           mode === "compact" ? "sr-only" : ""
         }`}
+        title={label}
       >
-        {label}
+        {visibleLabel}
       </span>
       <div className="grid shrink-0 grid-cols-3 gap-0.5 rounded-md border p-0.5 vs-border vs-surface">
         {(["full", "compact", "collapsed"] as const).map((item) => (

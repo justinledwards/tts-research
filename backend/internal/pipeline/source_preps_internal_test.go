@@ -62,6 +62,49 @@ func TestHackerNewsItemMarkdown(t *testing.T) {
 	}
 }
 
+func TestReadableHTMLPreprocessorFocusesArticleContent(t *testing.T) {
+	t.Parallel()
+
+	const title = "Amazon, Facebook, ICE, and the FBI have access to a private intelligence-sharing network operated by Seattle police"
+	result := preprocessReadableSource(
+		`<!doctype html>
+<html>
+  <head><title>Prism Justice Requires the Full Story</title></head>
+  <body>
+    <header><nav><a>Features</a><a>Opinion</a><a>Instagram</a></nav></header>
+    <main>
+      <article>
+        <h1>`+title+`</h1>
+        <p>Seattle Shield requests suspicious activity reports from local private companies.</p>
+      </article>
+    </main>
+    <aside>Subscribe Donate Search</aside>
+    <footer>Facebook Instagram</footer>
+  </body>
+</html>`,
+		"https://prismreports.org/2026/05/20/seattle-shield-private-companies-surveillance/",
+		"text/html",
+		240,
+		"legacy",
+	)
+
+	if result.PreprocessorVersion != "html-readable-v2" {
+		t.Fatalf("preprocessor version = %q, want html-readable-v2", result.PreprocessorVersion)
+	}
+	if result.Title != title {
+		t.Fatalf("title = %q, want article h1", result.Title)
+	}
+	spoken := preparedSourceSpeechText(result.Blocks)
+	if !strings.Contains(spoken, "Seattle Shield requests suspicious activity reports") {
+		t.Fatalf("spoken article text missing: %q", spoken)
+	}
+	for _, chrome := range []string{"Features", "Instagram", "Subscribe", "Donate"} {
+		if strings.Contains(spoken, chrome) {
+			t.Fatalf("spoken text contains page chrome %q: %q", chrome, spoken)
+		}
+	}
+}
+
 func TestClonePreparedSourceDetachesMutableBlockState(t *testing.T) {
 	t.Parallel()
 

@@ -702,7 +702,7 @@ function IntakeIntentStep({
   onTemplateChange: (templateId: string) => void;
 }>) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
+    <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
       <div className="grid gap-2 sm:grid-cols-2">
         {INTAKE_INTENT_OPTIONS.map((option) => (
           <Button
@@ -783,7 +783,7 @@ function IntakeSourceStep({
 }>) {
   return (
     <div className="grid gap-4">
-      <div className="grid gap-2 md:grid-cols-4">
+      <div className="grid gap-2 xl:grid-cols-2 2xl:grid-cols-4">
         {INTAKE_SOURCE_CHOICE_OPTIONS.map((option) => (
           <Button
             align="start"
@@ -912,7 +912,7 @@ function IntakeMetadataStep({
   onTitleChange: (title: string) => void;
 }>) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
+    <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
       <Panel className="grid gap-3 p-3" variant="surface">
         <label className="grid gap-1 text-xs font-semibold">
           <span className="vs-muted">Title</span>
@@ -1001,7 +1001,7 @@ function IntakeVoiceStep({
   );
   return (
     <div className="grid gap-3">
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 xl:grid-cols-3">
         <Button
           align="start"
           className="h-auto min-h-[5rem] flex-col gap-1 p-3"
@@ -1120,9 +1120,9 @@ function IntakeDestinationStep({
     detected.structureLabel,
   );
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
+    <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
       <Panel className="grid gap-3 p-3" variant="surface">
-        <dl className="grid gap-2 text-xs sm:grid-cols-2">
+        <dl className="grid gap-2 text-xs xl:grid-cols-2">
           <SummaryRow label="Title" value={effectiveTitle} />
           <SummaryRow label="Type" value={sourceTypeLabel(sourceType)} />
           <SummaryRow label="Structure" value={structureLabel} />
@@ -1286,7 +1286,10 @@ function SummaryRow({ label, value }: Readonly<{ label: string; value: string }>
   return (
     <div className="min-w-0">
       <dt className="vs-muted text-[0.68rem] font-semibold uppercase tracking-[0.14em]">{label}</dt>
-      <dd className="mt-1 truncate text-sm font-semibold text-[var(--vs-text)]" title={value}>
+      <dd
+        className="mt-1 line-clamp-2 break-words text-sm font-semibold text-[var(--vs-text)]"
+        title={value}
+      >
         {value}
       </dd>
     </div>
