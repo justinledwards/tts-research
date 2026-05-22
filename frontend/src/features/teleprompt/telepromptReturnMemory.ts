@@ -4,10 +4,16 @@ export type TelepromptReturnTarget = "preview" | "review";
 
 export interface TelepromptReturnSnapshot {
   readonly activeBlockId: string | null;
+  readonly activeBlockLabel: string | null;
+  readonly originatingStage: WorkspaceStage;
+  readonly policyProfile: string;
   readonly projectId: string;
   readonly returnTarget: TelepromptReturnTarget;
   readonly scrollTop: number;
+  readonly selectedCueIndex: number | null;
   readonly sourceKey: string;
+  readonly sourceLabel: string;
+  readonly voiceProfile: string;
   readonly updatedAt: string;
 }
 
@@ -57,9 +63,15 @@ export function rememberTelepromptReturnSnapshot(snapshot: TelepromptReturnSnaps
   snapshots[cleanKeyPart(snapshot.projectId)] = {
     ...snapshot,
     activeBlockId: cleanOptionalSnapshotId(snapshot.activeBlockId),
+    activeBlockLabel: cleanOptionalSnapshotLabel(snapshot.activeBlockLabel),
+    originatingStage: normalizeSnapshotWorkspaceStage(snapshot.originatingStage),
+    policyProfile: cleanSnapshotLabel(snapshot.policyProfile, "Default policy"),
     returnTarget: normalizeTelepromptReturnTarget(snapshot.returnTarget),
     scrollTop: Math.max(0, Math.round(snapshot.scrollTop)),
+    selectedCueIndex: normalizeSelectedCueIndex(snapshot.selectedCueIndex),
+    sourceLabel: cleanSnapshotLabel(snapshot.sourceLabel, "Unknown source"),
     updatedAt: snapshot.updatedAt.length > 0 ? snapshot.updatedAt : new Date().toISOString(),
+    voiceProfile: cleanSnapshotLabel(snapshot.voiceProfile, "Default voice"),
   };
   safeStorageSet(TELEPROMPT_RETURN_MEMORY_KEY, JSON.stringify(snapshots));
 }
@@ -101,13 +113,19 @@ function normalizeSnapshotMap(
         typeof candidate.activeBlockId === "string" && candidate.activeBlockId.trim()
           ? candidate.activeBlockId
           : null,
+      activeBlockLabel: cleanOptionalSnapshotLabel(candidate.activeBlockLabel ?? null),
+      originatingStage: normalizeSnapshotWorkspaceStage(candidate.originatingStage),
+      policyProfile: cleanSnapshotLabel(candidate.policyProfile ?? "", "Default policy"),
       projectId: candidate.projectId,
       returnTarget: normalizeTelepromptReturnTarget(candidate.returnTarget),
       scrollTop: Number.isFinite(candidate.scrollTop)
         ? Math.max(0, Number(candidate.scrollTop))
         : 0,
+      selectedCueIndex: normalizeSelectedCueIndex(candidate.selectedCueIndex),
       sourceKey: candidate.sourceKey,
+      sourceLabel: cleanSnapshotLabel(candidate.sourceLabel ?? "", "Unknown source"),
       updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : "",
+      voiceProfile: cleanSnapshotLabel(candidate.voiceProfile ?? "", "Default voice"),
     };
   }
   return snapshots;
@@ -120,6 +138,25 @@ function cleanKeyPart(value: string): string {
 function cleanOptionalSnapshotId(value: string | null): string | null {
   const cleaned = value?.trim() ?? "";
   return cleaned.length > 0 ? cleaned : null;
+}
+
+function cleanOptionalSnapshotLabel(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function cleanSnapshotLabel(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+function normalizeSelectedCueIndex(value: unknown): number | null {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return Math.max(1, Math.round(Number(value)));
+}
+
+function normalizeSnapshotWorkspaceStage(value: unknown): WorkspaceStage {
+  return value === "preview" || value === "review" || value === "teleprompt" ? value : "review";
 }
 
 function safeStorageGet(key: string): string | null {

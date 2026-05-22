@@ -641,6 +641,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await page.getByTestId("ui-action-teleprompt-preset-highContrast").click();
     await page.getByText("Default voice").first().waitFor();
     await capture("workspace-stage-05-teleprompt-after");
+    await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
     await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
     await page.getByText("Spoken Form").first().waitFor();
     await capture("workspace-stage-06-back-preview-after");

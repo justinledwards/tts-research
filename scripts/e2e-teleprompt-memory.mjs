@@ -153,6 +153,7 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
       checks.push("Next cue can be selected before returning.");
     }
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
+    await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
     await page.getByTestId("ui-action-teleprompt-back-preview").click();
     await page.getByText("Spoken Form").first().waitFor();
     checks.push("Back to Preview returns to the Preview surface.");
@@ -172,9 +173,29 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
     if (!storedPreviewMemory?.activeBlockId) {
       failures.push("Teleprompt memory did not persist an active block id.");
     }
+    if (!storedPreviewMemory?.sourceLabel) {
+      failures.push("Teleprompt memory did not persist source label context.");
+    }
+    if (!storedPreviewMemory?.selectedCueIndex) {
+      failures.push("Teleprompt memory did not persist selected cue index.");
+    }
+    if (storedPreviewMemory?.voiceProfile !== "Default voice") {
+      failures.push(
+        `Expected voice profile Default voice, got ${storedPreviewMemory?.voiceProfile ?? "none"}.`,
+      );
+    }
+    if (!storedPreviewMemory?.policyProfile) {
+      failures.push("Teleprompt memory did not persist policy profile context.");
+    }
+    if (storedPreviewMemory?.originatingStage !== "preview") {
+      failures.push(
+        `Expected originating stage preview, got ${storedPreviewMemory?.originatingStage ?? "none"}.`,
+      );
+    }
 
     await page.getByTestId("workspace-stage-action-openTeleprompt").click();
     await page.getByTestId("teleprompt-studio").waitFor();
+    await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
     await page.getByTestId("ui-action-teleprompt-back-review").click();
     await page.getByText("Revision Panel").first().waitFor();
     await capture("teleprompt-back-review");
@@ -185,6 +206,13 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
       );
     } else {
       checks.push("Review return target persisted.");
+    }
+    if (storedReviewMemory?.originatingStage !== "preview") {
+      failures.push(
+        `Expected review snapshot originating stage preview, got ${
+          storedReviewMemory?.originatingStage ?? "none"
+        }.`,
+      );
     }
 
     await page.evaluate(

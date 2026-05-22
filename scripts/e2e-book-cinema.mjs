@@ -381,12 +381,14 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
     await page.getByTestId("ui-action-teleprompt-mirror").check();
     await page.getByText("Default voice").first().waitFor();
+    await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
     await page.getByRole("button", { exact: true, name: "Back to Review" }).click();
     await page.getByText("Revision Panel").first().waitFor();
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Studio").first().waitFor();
+    await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
     await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
     await page.getByText("Spoken Form").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
@@ -395,6 +397,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.waitForLoadState("networkidle").catch(() => {});
     await page.getByText("Teleprompt Studio").first().waitFor();
     await assertWorkspaceLayoutSelected(page, "Full");
+    await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
     await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
     await page.getByText("Spoken Form").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Review" }).click();

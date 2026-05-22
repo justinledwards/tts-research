@@ -386,3 +386,12 @@
 - [x] Wire UI audit/local validation to context panel guardrails
 - [x] Run project validation checks
 - [ ] Resolve validate:local frontend bundle budget failure
+
+## 2026-05-22 17:11 CEST - Teleprompt Recording-First Ergonomics
+- [x] Inspect Teleprompt toolbar, return memory, and existing tests
+- [x] Split presenter, workflow, and presentation settings controls
+- [x] Hide secondary workflow controls behind compact menu where safe
+- [x] Expand return-state tests for precise context restoration
+- [x] Run project validation checks
+- [ ] Resolve validate:local frontend bundle CSS gzip budget failure
+- [ ] Track validate:local backend pipeline transcript reload flake

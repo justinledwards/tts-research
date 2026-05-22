@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   normalizeTelepromptPresetId,
   telepromptPresetHighlightSettings,
 } from "./telepromptPresets";
 import {
+  clearTelepromptReturnMemory,
   normalizeTelepromptReturnTarget,
+  readTelepromptReturnSnapshot,
+  rememberTelepromptReturnSnapshot,
   telepromptSourceKey,
   workspaceStageToTelepromptReturnTarget,
 } from "./telepromptReturnMemory";
@@ -65,6 +68,56 @@ describe("teleprompt presets and return memory", () => {
         sourceType: "book",
       }),
     ).toBe("book:source-1:book-title:chapter-one");
+  });
+
+  it("persists precise return context for source, cue, voice, policy, and stage", () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage.get(key) ?? null,
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+    });
+    clearTelepromptReturnMemory();
+    const sourceKey = telepromptSourceKey({
+      scopeLabel: "Chapter One",
+      sourceId: "source-1",
+      sourceLabel: "Book Title",
+      sourceType: "book",
+    });
+
+    rememberTelepromptReturnSnapshot({
+      activeBlockId: "block-2",
+      activeBlockLabel: "Second paragraph",
+      originatingStage: "preview",
+      policyProfile: "technical",
+      projectId: "Project Alpha",
+      returnTarget: "preview",
+      scrollTop: 412.8,
+      selectedCueIndex: 2,
+      sourceKey,
+      sourceLabel: "Book Title",
+      updatedAt: "2026-05-22T15:00:00.000Z",
+      voiceProfile: "Default voice",
+    });
+
+    expect(readTelepromptReturnSnapshot("Project Alpha", sourceKey)).toMatchObject({
+      activeBlockId: "block-2",
+      activeBlockLabel: "Second paragraph",
+      originatingStage: "preview",
+      policyProfile: "technical",
+      returnTarget: "preview",
+      scrollTop: 413,
+      selectedCueIndex: 2,
+      sourceKey,
+      sourceLabel: "Book Title",
+      voiceProfile: "Default voice",
+    });
+    expect(readTelepromptReturnSnapshot("Project Alpha", "text:other:source:scope")).toBeNull();
+    vi.unstubAllGlobals();
   });
 });
 

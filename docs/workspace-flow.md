@@ -5,7 +5,7 @@ Voice Studio uses a stage-based narration workspace:
 - `Intake` uses the guided wizard to collect intent, source, metadata, template defaults, voice/profile, and the next stage for draft text, books, prepared files, and URLs.
 - `Review` focuses on source blocks, spoken script, and validation transcript with one active review pane at a time.
 - `Preview` shows the selected source and spoken form before `Create & Listen`; the global preview mini-player makes selected-block, whole-source, and A/B voice/config auditioning available across Workspace, Review, Preview, and Settings.
-- `Teleprompt` opens Teleprompt Studio from Review or Preview; the full-screen cinema teleprompter remains available from that stage.
+- `Teleprompt` opens Teleprompt Studio from Review or Preview as a recording-first surface: presenter cue controls stay primary, while return, Cinema, and Create & Listen actions sit behind the Workflow menu.
 
 Workspace density is controlled by one shell mode:
 
@@ -23,7 +23,7 @@ UI memory is opt-in from Studio Settings:
 
 Context preservation rules:
 
-- Entering and leaving Teleprompt keeps the active source, active block, voice profile, speech policy profile, Teleprompt return target, and Teleprompt scroll position.
+- Entering and leaving Teleprompt keeps the active source, active block, selected cue, originating stage, voice profile, speech policy profile, Teleprompt return target, and Teleprompt scroll position.
 - Choosing a new source through Intake resets only the active block selection for the previous source.
 - `Create & Listen` is an action from Preview and global controls, not a separate workspace stage.
 - The mini-player preserves the same active source, active block, voice profile, speech policy profile, run configuration, and generated-audio state as Review and Preview. It is hidden when Cinema is open because Cinema transport wins there.

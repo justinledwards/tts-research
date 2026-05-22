@@ -6,8 +6,10 @@ speech policy profile attached to the session.
 
 ## Studio Layout
 
-- The sticky toolbar keeps recording actions visible: previous cue, play or pause, restart, next
-  cue, Back to Review, Back to Preview, Open Cinema, and Create & Listen.
+- The sticky toolbar keeps one presenter-first action cluster visible: previous cue, play or pause,
+  restart, next cue, current cue progress, and recording/preview status.
+- Secondary workflow actions, Back to Review, Back to Preview, Open Cinema, and Create & Listen,
+  live behind the compact Workflow menu so generation and navigation do not compete with recording.
 - The header repeats source, scope, policy, voice, block, word count, estimated time, and active cue
   position so the operator does not need the side rails open.
 - The script area restores the last Teleprompt scroll position for the same project and source.
@@ -24,8 +26,8 @@ Teleprompt Studio exposes four top-level presets:
 - `High contrast`: strong foreground and cue contrast for difficult lighting.
 - `Dyslexic friendly`: wider spacing and a calmer cue treatment.
 
-Mirror mode is a separate toggle for mirrored recording rigs. Low-level highlight timing remains
-available only under Advanced, not in the default Teleprompt path.
+Mirror mode is a separate toggle for mirrored recording rigs. The default Teleprompt path names the
+cue highlight style in presenter language and does not expose raw timing or intensity values.
 
 ## Keyboard Contract
 
@@ -40,9 +42,10 @@ Keyboard shortcuts are active only outside editable controls:
 
 ## Return Memory
 
-Teleprompt writes a project/source snapshot containing active block, return target, and scroll
-position. The workspace still owns source, voice, policy, and scope state; Teleprompt memory only
-restores presentation context for the same project and source.
+Teleprompt writes a project/source snapshot containing source label, active block, selected cue,
+originating stage, return target, scroll position, voice profile, and policy profile. The workspace
+still owns source, voice, policy, and scope state; Teleprompt memory only restores presentation
+context for the same project and source.
 
 ## Validation
 
