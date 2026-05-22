@@ -32,6 +32,10 @@ const expectedLazyChunkPatterns = [
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { thresholds } = await loadBenchmarkConfig(rootDir);
   const result = await runFrontendBundleBenchmark({ rootDir, thresholds });
+  await writeFrontendPerformanceSummary(
+    path.join(rootDir, "output", "performance", "latest", "bundle.json"),
+    result.metrics,
+  );
   console.log(result.output);
   const failed = result.thresholds.some((threshold) => threshold.passed === false);
   process.exitCode = failed ? 1 : 0;

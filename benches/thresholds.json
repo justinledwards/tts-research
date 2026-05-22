@@ -26,8 +26,15 @@
   },
   "readerTiming": {
     "maxAppColdUsableMs": 2200,
+    "maxSourceSwitchMs": 1200,
     "maxStudioRouteSwitchMs": 600,
     "maxBookCinemaOpenMs": 450,
+    "maxTransportInteractionLatencyMs": 850,
+    "maxTelepromptCueSwitchMs": 1100,
+    "maxSettingsOpenMs": 850,
+    "maxPreviewGenerationHandoffMs": 900,
+    "maxCommandPaletteOpenSearchMs": 2200,
+    "maxContextPanelTabSwitchMs": 950,
     "maxReaderResumeMs": 500
   }
 }

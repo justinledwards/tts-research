@@ -403,3 +403,9 @@
 - [x] Align tests and UI action coverage with dashboard ownership
 - [x] Run project validation checks
 - [ ] Resolve existing validate:local frontend CSS gzip budget failure
+## 2026-05-22 19:01 CEST - Low-Resource Performance Budget
+- [x] Inspect existing performance budgets and low-resource E2E coverage
+- [x] Add hard timing and artifact budgets for low-resource flows
+- [x] Keep heavy startup surfaces lazy and covered by bundle checks
+- [x] Generate performance artifacts under output/performance/latest
+- [x] Run project validation checks

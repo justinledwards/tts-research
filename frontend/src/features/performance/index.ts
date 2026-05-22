@@ -12,9 +12,16 @@ import type { HighlightMap } from "../../types";
 export type FrontendPerformanceMetricName =
   | "app-cold-usable"
   | "book-cinema-open"
+  | "command-palette-open-search"
+  | "context-panel-tab-switch"
   | "prepared-source-cinema-open"
+  | "preview-generation-handoff"
   | "reader-resume"
-  | "studio-route-switch";
+  | "settings-open"
+  | "source-switch"
+  | "studio-route-switch"
+  | "teleprompt-cue-switch"
+  | "transport-interaction-latency";
 
 export type FrontendDegradedStateName =
   | "audio-not-ready"

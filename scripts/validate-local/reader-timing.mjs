@@ -4,15 +4,29 @@ import process from "node:process";
 
 export const readerTimingMetricNames = [
   "app-cold-usable",
+  "source-switch",
   "studio-route-switch",
   "book-cinema-open",
+  "transport-interaction-latency",
+  "teleprompt-cue-switch",
+  "settings-open",
+  "preview-generation-handoff",
+  "command-palette-open-search",
+  "context-panel-tab-switch",
   "reader-resume",
 ];
 
 const thresholdMappings = [
   ["maxAppColdUsableMs", "app-cold-usable"],
+  ["maxSourceSwitchMs", "source-switch"],
   ["maxStudioRouteSwitchMs", "studio-route-switch"],
   ["maxBookCinemaOpenMs", "book-cinema-open"],
+  ["maxTransportInteractionLatencyMs", "transport-interaction-latency"],
+  ["maxTelepromptCueSwitchMs", "teleprompt-cue-switch"],
+  ["maxSettingsOpenMs", "settings-open"],
+  ["maxPreviewGenerationHandoffMs", "preview-generation-handoff"],
+  ["maxCommandPaletteOpenSearchMs", "command-palette-open-search"],
+  ["maxContextPanelTabSwitchMs", "context-panel-tab-switch"],
   ["maxReaderResumeMs", "reader-resume"],
 ];
 

@@ -23,8 +23,15 @@ test("summarizes reader timing metrics across Book Cinema fixtures", () => {
             ],
             metrics: [
               { durationMs: 1400.2, name: "app-cold-usable" },
+              { durationMs: 210, name: "source-switch" },
               { durationMs: 80, name: "studio-route-switch" },
               { durationMs: 230.3, name: "book-cinema-open" },
+              { durationMs: 90, name: "transport-interaction-latency" },
+              { durationMs: 170, name: "teleprompt-cue-switch" },
+              { durationMs: 420, name: "settings-open" },
+              { durationMs: 500, name: "preview-generation-handoff" },
+              { durationMs: 190, name: "command-palette-open-search" },
+              { durationMs: 130, name: "context-panel-tab-switch" },
             ],
           },
           resumed: {
@@ -41,8 +48,15 @@ test("summarizes reader timing metrics across Book Cinema fixtures", () => {
           resumed: {
             metrics: [
               { durationMs: 1500.5, name: "app-cold-usable" },
+              { durationMs: 180, name: "source-switch" },
               { durationMs: 120.4, name: "studio-route-switch" },
               { durationMs: 270.1, name: "book-cinema-open" },
+              { durationMs: 110, name: "transport-interaction-latency" },
+              { durationMs: 205, name: "teleprompt-cue-switch" },
+              { durationMs: 390, name: "settings-open" },
+              { durationMs: 530, name: "preview-generation-handoff" },
+              { durationMs: 220, name: "command-palette-open-search" },
+              { durationMs: 150, name: "context-panel-tab-switch" },
               { durationMs: 280.8, name: "reader-resume" },
             ],
           },
@@ -54,8 +68,11 @@ test("summarizes reader timing metrics across Book Cinema fixtures", () => {
   assert.equal(metrics.lowResourceMode, true);
   assert.deepEqual(metrics.fixtureKinds, ["epub", "pdf"]);
   assert.equal(metrics.metrics["app-cold-usable"].maxMs, 1500.5);
+  assert.equal(metrics.metrics["source-switch"].maxMs, 210);
   assert.equal(metrics.metrics["book-cinema-open"].byKind.pdf, 270.1);
   assert.equal(metrics.metrics["book-cinema-open"].count, 3);
+  assert.equal(metrics.metrics["command-palette-open-search"].count, 2);
+  assert.equal(metrics.metrics["teleprompt-cue-switch"].byKind.pdf, 205);
   assert.equal(metrics.metrics["studio-route-switch"].byKind.epub, 80);
   assert.equal(metrics.degradedStates.total, 1);
   assert.equal(metrics.degradedStates.byName["low-confidence-highlight"], 1);
@@ -82,6 +99,7 @@ test("fails configured reader timing budgets when metrics are slow or missing", 
   const comparisons = compareReaderTimingBudgets(metrics, {
     maxAppColdUsableMs: 2200,
     maxBookCinemaOpenMs: 450,
+    maxCommandPaletteOpenSearchMs: 500,
     maxReaderResumeMs: 500,
     maxStudioRouteSwitchMs: 600,
   });
@@ -93,6 +111,10 @@ test("fails configured reader timing budgets when metrics are slow or missing", 
     comparisons.find((item) => item.metric === "studio-route-switch.maxMs").passed,
     false,
   );
-  assert.match(report, /Missing metrics: studio-route-switch/);
+  assert.match(report, /Missing metrics: source-switch, studio-route-switch/);
+  assert.equal(
+    comparisons.find((item) => item.metric === "command-palette-open-search.maxMs").passed,
+    false,
+  );
   assert.match(report, /FAIL book-cinema-open\.maxMs/);
 });

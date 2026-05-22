@@ -18,6 +18,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const artifactDir = process.env.E2E_ARTIFACT_DIR ?? path.join(rootDir, "output", "e2e-book-cinema");
 const screenshotsDir = process.env.E2E_SCREENSHOT_DIR ?? path.join(artifactDir, "screenshots");
 const summaryPath = process.env.E2E_SUMMARY_PATH ?? path.join(artifactDir, "summary.json");
+const performanceArtifactDir = path.join(rootDir, "output", "performance", "latest");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 const lowResourceMode = process.env.E2E_LOW_RESOURCE === "1";
 const readerWayfindingOnly = process.env.E2E_READER_WAYFINDING === "1";
@@ -38,6 +39,7 @@ const cinemaOverlaySelector =
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
 let hasRunBookCinemaMemorySmoke = false;
+let hasRunLowResourceInteractionBudgetSmoke = false;
 
 main().catch(async (error) => {
   const message = error instanceof Error ? error.stack || error.message : String(error);
@@ -182,6 +184,7 @@ async function main() {
     const failedTimingThreshold = readerTiming.thresholds.some((threshold) => !threshold.passed);
     summary.status = failedTimingThreshold ? "failed" : "passed";
     await writeSummary(summary);
+    await writePerformanceArtifacts(summary);
     if (failedTimingThreshold) {
       console.error(readerTiming.output);
       console.error(
@@ -520,6 +523,61 @@ async function runSettingsIAUX(browser, projectId) {
   }
 }
 
+async function runLowResourceInteractionBudgetSmoke(page) {
+  await measureFrontendInteraction(
+    page,
+    "source-switch",
+    async () => {
+      await selectCinemaInspectorPanel(page, "History");
+      await cinemaOverlay(page)
+        .getByRole("button", { exact: true, name: "Outline" })
+        .first()
+        .click();
+      await cinemaOverlay(page)
+        .getByRole("button", { name: /Full|Chapter|Page/ })
+        .first()
+        .click();
+    },
+    { surface: "book-cinema" },
+  );
+
+  await visibleOverlayButton(page, "Exit").click();
+  await page.getByRole("button", { exact: true, name: "Review" }).waitFor();
+
+  await measureFrontendInteraction(
+    page,
+    "settings-open",
+    async () => {
+      await page.getByRole("button", { exact: true, name: "Open settings" }).click();
+      await page.getByText("Studio Settings").first().waitFor();
+    },
+    { surface: "workspace" },
+  );
+  await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
+
+  await measureFrontendInteraction(
+    page,
+    "preview-generation-handoff",
+    async () => {
+      await page.getByTestId("workspace-stage-action-previewSpeech").click();
+      await page.getByText("Spoken Form").first().waitFor();
+      await page.getByTestId("global-preview-player").waitFor({ state: "visible" });
+    },
+    { surface: "workspace-preview" },
+  );
+
+  await measureFrontendInteraction(
+    page,
+    "teleprompt-cue-switch",
+    async () => {
+      await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
+      await page.getByText("Teleprompt Studio").first().waitFor();
+      await page.getByTestId("ui-action-teleprompt-next-cue").click();
+    },
+    { surface: "teleprompt" },
+  );
+}
+
 async function setRememberLayout(page, enabled, { panelPins = false, reset = false } = {}) {
   await page.getByRole("button", { exact: true, name: "Open settings" }).click();
   await page.getByText("Studio Settings").first().waitFor();
@@ -565,14 +623,21 @@ async function assertReviewPaneSelected(page, label) {
 }
 
 async function runCommandPaletteAction(page, query, optionName) {
-  await page.keyboard.press("Control+K");
-  const palette = page.getByRole("dialog", { name: "Command palette" });
-  await palette.waitFor({ state: "visible" });
-  await page.getByPlaceholder("Search actions, settings, sources, bookmarks...").fill(query);
-  const option = palette.getByRole("option", { name: optionName }).first();
-  await option.waitFor({ state: "visible" });
-  await option.click();
-  await palette.waitFor({ state: "hidden" }).catch(() => {});
+  await measureFrontendInteraction(
+    page,
+    "command-palette-open-search",
+    async () => {
+      await page.keyboard.press("Control+K");
+      const palette = page.getByRole("dialog", { name: "Command palette" });
+      await palette.waitFor({ state: "visible" });
+      await page.getByPlaceholder("Search actions, settings, sources, bookmarks...").fill(query);
+      const option = palette.getByRole("option", { name: optionName }).first();
+      await option.waitFor({ state: "visible" });
+      await option.click();
+      await palette.waitFor({ state: "hidden" }).catch(() => {});
+    },
+    { query },
+  );
 }
 
 async function clickPreviewMiniPlayerIfReady(page) {
@@ -625,12 +690,19 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
       );
       hasRunBookCinemaMemorySmoke = true;
     }
-    const firstOpenMetrics = await readPerformanceMetrics(page);
     const playButton = visibleOverlayButton(page, "Play");
     await assertEnabled(playButton, "Play");
-    await playButton.click();
-    const pauseButton = visibleOverlayButton(page, "Pause");
-    await pauseButton.waitFor();
+    let pauseButton;
+    await measureFrontendInteraction(
+      page,
+      "transport-interaction-latency",
+      async () => {
+        await playButton.click();
+        pauseButton = visibleOverlayButton(page, "Pause");
+        await pauseButton.waitFor();
+      },
+      { action: "play" },
+    );
     await page
       .locator(".book-cinema-word-active, .book-cinema-word-phrase")
       .first()
@@ -674,6 +746,11 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await selectCinemaInspectorPanel(page, "Policy");
     await exerciseSourcePinSmoke(page, book.id);
     await waitForSavedProgress(projectId, book.id, scope, job.id);
+    if (!hasRunLowResourceInteractionBudgetSmoke) {
+      await runLowResourceInteractionBudgetSmoke(page);
+      hasRunLowResourceInteractionBudgetSmoke = true;
+    }
+    const firstOpenMetrics = await readPerformanceMetrics(page);
     await page.screenshot({ fullPage: false, path: screenshot });
     const firstOpenDegradedStates = await readDegradedStates(page);
 
@@ -1340,11 +1417,18 @@ async function selectCinemaInspectorPanel(page, label) {
   const overlay = page.locator(cinemaOverlaySelector).first();
   const name = new RegExp(label);
   const tab = overlay.getByRole("tab", { name }).first();
-  if ((await tab.count()) > 0) {
-    await tab.click();
-    return;
-  }
-  await overlay.getByRole("button", { name }).first().click();
+  await measureFrontendInteraction(
+    page,
+    "context-panel-tab-switch",
+    async () => {
+      if ((await tab.count()) > 0) {
+        await tab.click();
+        return;
+      }
+      await overlay.getByRole("button", { name }).first().click();
+    },
+    { tab: label },
+  );
 }
 
 async function exerciseSourcePinSmoke(page, bookSourceId) {
@@ -2152,6 +2236,33 @@ async function readPerformanceMetrics(page) {
   return page.evaluate(() => globalThis.__ttsResearchPerformance?.metrics ?? []);
 }
 
+async function measureFrontendInteraction(page, name, action, detail = {}) {
+  const startedAt = await page.evaluate(() => performance.now());
+  await action();
+  const endedAt = await page.evaluate(() => performance.now());
+  const durationMs = Math.max(0, endedAt - startedAt);
+  await page.evaluate(
+    ({ durationMs, endedAt, metricDetail, metricName, startedAt }) => {
+      if (!globalThis.__ttsResearchPerformance) {
+        globalThis.__ttsResearchPerformance = {
+          degradedStates: [],
+          metrics: [],
+          spans: {},
+        };
+      }
+      const store = globalThis.__ttsResearchPerformance;
+      store.metrics.push({
+        detail: metricDetail,
+        durationMs: Math.round(durationMs * 10) / 10,
+        endedAt: Math.round(endedAt * 10) / 10,
+        name: metricName,
+        startedAt: Math.round(startedAt * 10) / 10,
+      });
+    },
+    { durationMs, endedAt, metricDetail: detail, metricName: name, startedAt },
+  );
+}
+
 async function waitForReaderResumeApplied(page) {
   try {
     await page.waitForFunction(
@@ -2282,4 +2393,37 @@ function sleep(ms) {
 async function writeSummary(summary) {
   await mkdir(path.dirname(summaryPath), { recursive: true });
   await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+}
+
+async function writePerformanceArtifacts(summary) {
+  if (!summary?.readerTiming) {
+    return;
+  }
+  await mkdir(performanceArtifactDir, { recursive: true });
+  await writeFile(
+    path.join(performanceArtifactDir, "timing.json"),
+    `${JSON.stringify(summary.readerTiming.metrics, null, 2)}\n`,
+  );
+  await writeFile(
+    path.join(performanceArtifactDir, "degraded-states.md"),
+    formatPerformanceDegradedStates(summary.readerTiming.metrics.degradedStates),
+  );
+}
+
+function formatPerformanceDegradedStates(degradedStates) {
+  const lines = ["# Low-Resource Degraded States", ""];
+  if (!degradedStates?.total) {
+    lines.push("No degraded states were recorded.", "");
+    return lines.join("\n");
+  }
+  lines.push(`Recorded degraded states: ${String(degradedStates.total)}`, "");
+  for (const item of degradedStates.items ?? []) {
+    const detail = Object.entries(item.detail ?? {})
+      .filter(([, value]) => value !== null && value !== undefined)
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .join(", ");
+    lines.push(`- ${item.name} (${item.surface}, ${item.kind}): ${detail || "recorded"}`);
+  }
+  lines.push("");
+  return lines.join("\n");
 }

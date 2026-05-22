@@ -41,6 +41,12 @@ pnpm e2e:book-cinema:low-resource
 Markdown, and HTML reports. Bundle and timing thresholds both fail locally; there is no hosted CI
 dependency for these gates.
 
+The stable reviewer artifacts are written under `output/performance/latest/`:
+
+- `timing.json`: low-resource timing summary and threshold inputs.
+- `bundle.json`: production bundle graph, gzip sizes, and lazy-loading status.
+- `degraded-states.md`: explainable slow, fallback, and lazy-loading states seen during the run.
+
 ## Budgets
 
 Current local bundle gates:
@@ -56,14 +62,25 @@ Current local bundle gates:
 Current local reader timing gates:
 
 - `app-cold-usable`: `<= 2200ms`
+- `source-switch`: `<= 1200ms`
 - `studio-route-switch`: `<= 600ms`
 - `book-cinema-open`: `<= 450ms`
+- `transport-interaction-latency`: `<= 850ms`
+- `teleprompt-cue-switch`: `<= 1100ms`
+- `settings-open`: `<= 850ms`
+- `preview-generation-handoff`: `<= 900ms`
+- `command-palette-open-search`: `<= 2200ms`
+- `context-panel-tab-switch`: `<= 950ms`
 - `reader-resume`: `<= 500ms`
 
 Reader timing metrics are exposed through `window.__ttsResearchPerformance.metrics` and summarized
 from the Book Cinema E2E smoke. The gate uses the worst observed value across the EPUB, DOCX, and PDF
 fixtures. Missing metrics fail the threshold check, so new reader flows must keep emitting the same
 markers when the UX changes.
+
+The low-resource smoke records the broader interaction set once per run and keeps the reader/Cinema
+open/resume metrics across all Book fixtures. The interaction metrics use mock providers and browser
+CPU throttling to measure local UI work, not provider latency.
 
 ## Low-Resource Budget Procedure
 
