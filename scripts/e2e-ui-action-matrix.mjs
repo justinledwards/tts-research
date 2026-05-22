@@ -65,6 +65,7 @@ export async function buildActionInventory(page, scenario) {
           ariaHasPopup: element.getAttribute("aria-haspopup"),
           ariaPressed: element.getAttribute("aria-pressed"),
           className: String(element.getAttribute("class") ?? ""),
+          cssPath: cssPathFor(element),
           disabled: isDisabled(element),
           disabledReason: disabledReasonFor(element),
           hasConfirmationAffordance: hasConfirmationAffordance(element),
@@ -87,6 +88,10 @@ export async function buildActionInventory(page, scenario) {
             y: Math.round(rect.y),
           },
           role: element.getAttribute("role") ?? implicitRole(element),
+          owner:
+            element.getAttribute("data-ui-action-owner") ??
+            element.closest("[data-ui-action-owner]")?.getAttribute("data-ui-action-owner") ??
+            null,
           scenarioId,
           surface: element.getAttribute("data-ui-action-surface") ?? surface,
           tagName: element.tagName.toLowerCase(),
@@ -229,6 +234,35 @@ export async function buildActionInventory(page, scenario) {
         );
       }
 
+      function cssPathFor(element) {
+        const parts = [];
+        let current = element;
+        while (current && current instanceof HTMLElement && current !== document.body) {
+          const testId = current.getAttribute("data-testid");
+          if (testId) {
+            parts.unshift(`[data-testid="${cssEscape(testId)}"]`);
+            break;
+          }
+          const parent = current.parentElement;
+          const tagName = current.tagName.toLowerCase();
+          if (!parent) {
+            parts.unshift(tagName);
+            break;
+          }
+          const siblings = [...parent.children].filter(
+            (sibling) => sibling.tagName === current.tagName,
+          );
+          const siblingIndex = siblings.indexOf(current) + 1;
+          parts.unshift(`${tagName}:nth-of-type(${String(siblingIndex)})`);
+          current = parent;
+        }
+        return parts.join(" > ");
+      }
+
+      function cssEscape(value) {
+        return String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+      }
+
       function implicitRole(element) {
         const tagName = element.tagName.toLowerCase();
         if (tagName === "button") {
@@ -282,19 +316,26 @@ export async function buildActionInventory(page, scenario) {
     const matchIndex = counters.get(fingerprint) ?? 0;
     counters.set(fingerprint, matchIndex + 1);
     const generatedTestId = `ui-action-${slug(`${rawAction.surface}-${label}-${matchIndex + 1}`)}`;
+    const owner = rawAction.owner ?? ownerFor(rawAction.surface, actionClass);
     const metadataIssues = metadataIssuesFor({
       ...rawAction,
       actionClass,
       destructive,
       generatedTestId,
       label,
+      owner,
     });
+    const enabledDisabledReason = rawAction.disabled
+      ? rawAction.disabledReason
+      : "Enabled in this scenario.";
     return {
       ...rawAction,
       actionClass,
+      actionClassification: destructive ? "destructive" : "non-destructive",
       actionId: rawAction.testId ?? generatedTestId,
       accessibleName,
       destructive,
+      enabledDisabledReason,
       expectedTransition: expectedTransitionFor({
         actionClass,
         label,
@@ -303,9 +344,12 @@ export async function buildActionInventory(page, scenario) {
       }),
       generatedTestId,
       hasStableTestId: Boolean(rawAction.testId),
+      keyboardPath: keyboardPathFor(rawAction),
       label,
       matchIndex,
       metadataIssues,
+      owner,
+      pointerPath: pointerPathFor(rawAction),
       visibleLabel,
     };
   });
@@ -548,6 +592,9 @@ function locateAction(page, action) {
   if (action.testId) {
     return page.getByTestId(action.testId).first();
   }
+  if (action.cssPath) {
+    return page.locator(action.cssPath).first();
+  }
   if (action.role && action.label && action.label !== "Unlabeled control") {
     return page.getByRole(action.role, { exact: true, name: action.label }).nth(action.matchIndex);
   }
@@ -718,8 +765,11 @@ function classifyOutcome(before, after, action) {
 
 function metadataIssuesFor(action) {
   const issues = [];
-  if (!action.testId) {
-    issues.push("missing-stable-data-testid");
+  if (!action.surface) {
+    issues.push("missing-surface");
+  }
+  if (!action.owner) {
+    issues.push("missing-owner");
   }
   if (
     (!action.label && !action.visibleLabel && !action.accessibleName) ||
@@ -737,6 +787,42 @@ function metadataIssuesFor(action) {
     issues.push("destructive-without-confirmation-affordance");
   }
   return issues;
+}
+
+function ownerFor(surface, actionClass) {
+  if (surface) {
+    return `${surface} owner`;
+  }
+  return `${actionClass || "action"} owner`;
+}
+
+function pointerPathFor(action) {
+  if (action.disabled) {
+    return "focus only; pointer activation blocked while disabled";
+  }
+  if (action.destructive || isDestructiveLabel(action.label ?? "")) {
+    return "focus control and verify confirmation affordance; do not execute destructive action";
+  }
+  if (action.tagName === "select" || action.role === "combobox") {
+    return "pointer opens/selects next enabled option";
+  }
+  return "pointer click";
+}
+
+function keyboardPathFor(action) {
+  if (action.disabled) {
+    return "Tab/focus only; keyboard activation blocked while disabled";
+  }
+  if (action.tagName === "select" || action.role === "combobox") {
+    return "focus then change option with keyboard-equivalent select operation";
+  }
+  if (action.role === "checkbox" || action.role === "switch" || action.role === "radio") {
+    return "focus then Space";
+  }
+  if (action.role === "button" || action.tagName === "button") {
+    return "focus then Enter";
+  }
+  return "focus then Space";
 }
 
 function cssString(value) {

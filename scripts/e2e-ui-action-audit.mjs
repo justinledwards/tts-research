@@ -96,13 +96,16 @@ async function main() {
             ? scenarioInventory.actions.slice(0, maxActions)
             : scenarioInventory.actions;
         for (const [index, action] of runnableActions.entries()) {
-          const activationMode = index % 2 === 0 ? "pointer" : "keyboard";
-          console.log(
-            `[ui-actions] replay ${scenario.id} ${String(index + 1)}/${String(
-              runnableActions.length,
-            )}: ${action.label}`,
-          );
-          results.push(await exerciseScenarioAction(browser, scenario, action, activationMode));
+          const activationModes =
+            action.disabled || action.destructive ? ["keyboard"] : ["pointer", "keyboard"];
+          for (const activationMode of activationModes) {
+            console.log(
+              `[ui-actions] replay ${scenario.id} ${String(index + 1)}/${String(
+                runnableActions.length,
+              )} ${activationMode}: ${action.label}`,
+            );
+            results.push(await exerciseScenarioAction(browser, scenario, action, activationMode));
+          }
         }
       }
     } finally {
@@ -155,9 +158,23 @@ async function main() {
       path.join(outputDir, "duplicates.md"),
       renderDuplicatesReport({ duplicates, generatedAt }),
     );
+    await writeFile(
+      path.join(outputDir, "reviewer-summary.md"),
+      renderReviewerSummary({
+        actions,
+        duplicates,
+        generatedAt,
+        inventoryOnly,
+        outputDir,
+        results,
+        scenarios,
+        screenshots,
+      }),
+    );
 
     console.log(`UI action audit ${resultsDocument.status}. Reports written to ${outputDir}`);
-    if (failOnFindings && resultsDocument.summary.failed > 0) {
+    const gateFindings = summarizeGateFindings({ actions, duplicates, results, scenarios });
+    if (failOnFindings && gateFindings.total > 0) {
       process.exitCode = 1;
     }
   } finally {
@@ -193,7 +210,7 @@ function shouldRunTraversal(filter) {
 async function inventoryScenario(browser, scenario) {
   const context = await browser.newContext({
     storageState: scenario.storageState,
-    viewport: { height: 980, width: 1440 },
+    viewport: scenario.viewport ?? { height: 980, width: 1440 },
   });
   const page = await context.newPage();
   page.setDefaultTimeout(60_000);
@@ -217,7 +234,7 @@ async function inventoryScenario(browser, scenario) {
 async function exerciseScenarioAction(browser, scenario, action, activationMode) {
   const context = await browser.newContext({
     storageState: scenario.storageState,
-    viewport: { height: 980, width: 1440 },
+    viewport: scenario.viewport ?? { height: 980, width: 1440 },
   });
   const page = await context.newPage();
   page.setDefaultTimeout(60_000);
@@ -454,7 +471,7 @@ function createScenarios(seed) {
         stage: "intake",
         text: workspaceText,
       }),
-      surface: "Settings",
+      surface: "UI Memory",
     },
     {
       description: "Settings drawer opened to the source and speech-policy controls.",
@@ -466,7 +483,72 @@ function createScenarios(seed) {
         stage: "intake",
         text: workspaceText,
       }),
-      surface: "Settings",
+      surface: "Speech Policy",
+    },
+    {
+      description: "Command palette opened from the product bar.",
+      id: "command-palette",
+      label: "Command palette",
+      open: openCommandPalette,
+      storageState: projectStorageState(seed.projectId, {
+        sourceMode: "text",
+        stage: "intake",
+        text: workspaceText,
+      }),
+      surface: "Command Palette",
+    },
+    {
+      description: "Project dashboard opened from the workspace rail.",
+      id: "project-dashboard",
+      label: "Project dashboard",
+      open: openProjectDashboard,
+      storageState: projectStorageState(seed.projectId, {
+        sourceMode: "text",
+        stage: "review",
+        text: workspaceText,
+      }),
+      surface: "Project Dashboard",
+    },
+    {
+      description: "Voice dashboard opened from the workspace rail.",
+      id: "voice-dashboard",
+      label: "Voice dashboard",
+      open: openVoiceDashboard,
+      storageState: projectStorageState(seed.projectId, {
+        sourceMode: "text",
+        stage: "review",
+        text: workspaceText,
+      }),
+      surface: "Voice Dashboard",
+    },
+    {
+      description: "Preview mini-player controls after audio creation.",
+      id: "preview-mini-player",
+      label: "Preview mini-player",
+      open: openPreviewMiniPlayer,
+      storageState: projectStorageState(seed.projectId, {
+        jobId: seed.epub.job.id,
+        sourceMode: "text",
+        stage: "preview",
+        text: workspaceText,
+      }),
+      surface: "Preview mini-player",
+    },
+    {
+      description: "Mobile/narrow Book Cinema More bottom sheet.",
+      id: "mobile-more-sheet",
+      label: "Mobile More sheet",
+      open: (page) => openMobileMoreSheet(page, seed.epub.scope),
+      storageState: projectStorageState(seed.projectId, {
+        bookScope: seed.epub.scope,
+        bookSourceId: seed.epub.book.id,
+        jobId: seed.epub.job.id,
+        sourceMode: "book",
+        stage: "intake",
+        text: seed.epub.text,
+      }),
+      surface: "Mobile/narrow More sheet",
+      viewport: { height: 844, width: 390 },
     },
     workspaceScenario(seed.projectId, "workspace-intake", "Intake", "Intake", workspaceText),
     workspaceScenario(seed.projectId, "workspace-review", "Review", "Review", workspaceText),
@@ -693,6 +775,43 @@ async function openSettingsUiMemory(page) {
     .first()
     .click();
   await page.getByTestId("ui-memory-preferences").waitFor();
+}
+
+async function openCommandPalette(page) {
+  await gotoApp(page);
+  await page.getByTestId("ui-action-command-palette-open").first().click();
+  await page.getByRole("dialog", { name: "Command palette" }).waitFor();
+}
+
+async function openProjectDashboard(page) {
+  await openWorkspaceStage(page, "Review");
+  await page.getByRole("button", { name: "Full workspace layout" }).click();
+  await page.getByTestId("ui-action-project-dashboard-open-rail").click();
+  await page.getByText("Project Dashboard").first().waitFor();
+}
+
+async function openVoiceDashboard(page) {
+  await openWorkspaceStage(page, "Review");
+  await page.getByRole("button", { name: "Full workspace layout" }).click();
+  await page.getByTestId("ui-action-voice-dashboard-open-rail").click();
+  await page.getByText("Voice Profile Dashboard").first().waitFor();
+}
+
+async function openPreviewMiniPlayer(page) {
+  await openWorkspaceStage(page, "Preview");
+  await clickPreviewMiniPlayerIfReady(page);
+  await page.getByTestId("global-preview-player").waitFor({ state: "visible" });
+}
+
+async function openMobileMoreSheet(page, scope) {
+  await openBookCinemaOverlay(page, scope);
+  const overlay = cinemaOverlay(page);
+  await overlay.getByRole("button", { exact: true, name: "More" }).first().click();
+  await page
+    .locator("[data-cinema-mobile-sheet], [role='dialog']")
+    .filter({ hasText: /Focus|Settings|Source|More/i })
+    .first()
+    .waitFor();
 }
 
 async function openTeleprompt(page) {
@@ -1292,6 +1411,159 @@ function summarizeResults(results) {
     skipped: results.filter((result) => result.status === "skipped").length,
     total: results.length,
   };
+}
+
+function summarizeGateFindings({ actions, duplicates, results, scenarios }) {
+  const requiredSurfaces = [
+    "Workspace Intake",
+    "Review",
+    "Preview",
+    "Teleprompt",
+    "Book Cinema",
+    "Document Cinema",
+    "Website Cinema",
+    "Settings",
+    "UI Memory",
+    "Speech Policy",
+    "Preview mini-player",
+    "Project dashboard",
+    "Voice dashboard",
+    "Command palette",
+    "Mobile/narrow More sheet",
+  ];
+  const normalizedSurfaces = new Set(
+    [
+      ...actions.map((action) => normalizeSurface(action.surface)),
+      ...scenarios.map((scenario) => normalizeSurface(scenario.surface)),
+      ...scenarios.map((scenario) => normalizeSurface(scenario.label)),
+    ].filter(Boolean),
+  );
+  const missingSurfaces = requiredSurfaces.filter(
+    (surface) => !normalizedSurfaces.has(normalizeSurface(surface)),
+  );
+  const metadataFindings = actions.filter((action) => action.metadataIssues.length > 0);
+  const failedResults = results.filter((result) => result.passed === false);
+  const safeActions = actions.filter((action) => !action.disabled && !action.destructive);
+  const resultKey = (result) => `${result.scenarioId}|${result.actionId}|${result.activationMode}`;
+  const resultKeys = new Set(results.map(resultKey));
+  const missingSafeActivations = safeActions.flatMap((action) =>
+    ["pointer", "keyboard"]
+      .filter((mode) => !resultKeys.has(`${action.scenarioId}|${action.actionId}|${mode}`))
+      .map((mode) => ({ action, mode })),
+  );
+  const destructiveMissingConfirmation = actions.filter(
+    (action) => action.destructive && !action.hasConfirmationAffordance,
+  );
+  const disabledWithoutReason = actions.filter(
+    (action) => action.disabled && !action.disabledReason,
+  );
+  return {
+    disabledWithoutReason,
+    duplicates,
+    failedResults,
+    metadataFindings,
+    missingSafeActivations,
+    missingSurfaces,
+    destructiveMissingConfirmation,
+    total:
+      failedResults.length +
+      metadataFindings.length +
+      missingSafeActivations.length +
+      missingSurfaces.length +
+      destructiveMissingConfirmation.length +
+      disabledWithoutReason.length,
+  };
+}
+
+function renderReviewerSummary({
+  actions,
+  duplicates,
+  generatedAt,
+  inventoryOnly,
+  outputDir,
+  results,
+  scenarios,
+  screenshots,
+}) {
+  const resultSummary = summarizeResults(results);
+  const inventorySummary = summarizeInventory(actions);
+  const findings = summarizeGateFindings({ actions, duplicates, results, scenarios });
+  const status =
+    !inventoryOnly && findings.total === 0
+      ? "Review-complete: exhaustive UI action audit passed."
+      : "Not review-complete: UI action audit has findings or did not run activation replay.";
+  const lines = [
+    "# UI action audit reviewer summary",
+    "",
+    `Generated: ${generatedAt}`,
+    `Output directory: ${outputDir}`,
+    "",
+    `## Status`,
+    "",
+    status,
+    "",
+    "## Artifact checklist",
+    "",
+    "- action-inventory.json: present",
+    "- action-results.json: present",
+    "- dead-controls.md: present",
+    "- duplicates.md: present",
+    "- reviewer-summary.md: present",
+    `- screenshots/: ${String(screenshots.length)} captured`,
+    "",
+    "## Coverage",
+    "",
+    `- Scenarios: ${String(scenarios.length)}`,
+    `- Visible actions inventoried: ${String(inventorySummary.total)}`,
+    `- Safe pointer/keyboard activation results: ${String(resultSummary.total)}`,
+    `- Passed: ${String(resultSummary.passed)}`,
+    `- Skipped destructive focus checks: ${String(resultSummary.skipped)}`,
+    `- Failed/no-op/browser findings: ${String(resultSummary.failed)}`,
+    `- Disabled controls: ${String(inventorySummary.disabled)}`,
+    `- Destructive controls: ${String(inventorySummary.destructive)}`,
+    "",
+    "## Gate findings",
+    "",
+    `- Missing required surfaces: ${formatFindingCount(findings.missingSurfaces.length)}`,
+    `- Missing safe pointer/keyboard activations: ${formatFindingCount(
+      findings.missingSafeActivations.length,
+    )}`,
+    `- Failed/no-op activations: ${formatFindingCount(findings.failedResults.length)}`,
+    `- Metadata findings: ${formatFindingCount(findings.metadataFindings.length)}`,
+    `- Disabled without reason: ${formatFindingCount(findings.disabledWithoutReason.length)}`,
+    `- Destructive without confirmation: ${formatFindingCount(
+      findings.destructiveMissingConfirmation.length,
+    )}`,
+    `- Duplicate groups requiring review: ${formatFindingCount(duplicates.length)}`,
+    "",
+    "## Surface counts",
+    "",
+    ...Object.entries(inventorySummary.surfaces)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([surface, count]) => `- ${surface}: ${String(count)}`),
+    "",
+  ];
+  if (findings.missingSurfaces.length > 0) {
+    lines.push(
+      "## Missing surfaces",
+      "",
+      ...findings.missingSurfaces.map((surface) => `- ${surface}`),
+      "",
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function formatFindingCount(count) {
+  return count === 0 ? "0" : `${String(count)} (see reports before leaving draft)`;
+}
+
+function normalizeSurface(value) {
+  return String(value ?? "")
+    .replaceAll(/([a-z])([A-Z])/g, "$1 $2")
+    .replaceAll(/[\s/-]+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function wordCount(text) {

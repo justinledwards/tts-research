@@ -347,3 +347,11 @@
 - [x] Stage and commit latest ergonomics follow-up
 - [x] Push current PR branch
 - [x] Refresh PR body with latest validation and UX changes
+## 2026-05-22 10:54 CEST - Exhaustive Browser Button Verification Gate
+- [x] Inspect existing UI action audit scripts and package scripts
+- [x] Implement mandatory latest audit artifact generation
+- [x] Enforce complete action metadata and coverage across required surfaces
+- [x] Add PR-ready reviewer summary and duplicate/dead-control reports
+- [x] Run project validation checks
+- [ ] Resolve remaining UI action audit findings before PR leaves draft
+- [ ] Resolve validate:local frontend CSS bundle budget failure

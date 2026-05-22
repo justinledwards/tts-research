@@ -7,9 +7,7 @@ import process from "node:process";
 const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "g");
 
 export function renderDeadControlsReport({ actions, generatedAt, results }) {
-  const missingTestIds = actions.filter((action) =>
-    action.metadataIssues.includes("missing-stable-data-testid"),
-  );
+  const missingTestIds = actions.filter((action) => !action.hasStableTestId);
   const missingLabels = actions.filter((action) =>
     action.metadataIssues.includes("missing-human-label"),
   );
@@ -18,6 +16,10 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
   );
   const disabledWithoutReason = actions.filter((action) =>
     action.metadataIssues.includes("disabled-without-explicit-reason"),
+  );
+  const missingOwners = actions.filter((action) => action.metadataIssues.includes("missing-owner"));
+  const missingSurfaces = actions.filter((action) =>
+    action.metadataIssues.includes("missing-surface"),
   );
   const destructiveWithoutConfirmation = actions.filter((action) =>
     action.metadataIssues.includes("destructive-without-confirmation-affordance"),
@@ -38,6 +40,8 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
     `- Missing stable data-testid: ${String(missingTestIds.length)}`,
     `- Missing human label: ${String(missingLabels.length)}`,
     `- Missing accessible name: ${String(missingAccessibleNames.length)}`,
+    `- Missing owner: ${String(missingOwners.length)}`,
+    `- Missing surface: ${String(missingSurfaces.length)}`,
     `- Disabled without explicit reason: ${String(disabledWithoutReason.length)}`,
     `- Destructive without confirmation affordance: ${String(destructiveWithoutConfirmation.length)}`,
     "",
@@ -59,12 +63,15 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
           ...missingTestIds,
           ...missingLabels,
           ...missingAccessibleNames,
+          ...missingOwners,
+          ...missingSurfaces,
           ...disabledWithoutReason,
         ]),
       ],
-      ["Surface", "Scenario", "Visible label", "Accessible name", "Issues"],
+      ["Surface", "Owner", "Scenario", "Visible label", "Accessible name", "Issues"],
       (action) => [
         action.surface,
+        action.owner,
         action.scenarioId,
         action.visibleLabel ?? action.label,
         action.accessibleName ?? action.label,
