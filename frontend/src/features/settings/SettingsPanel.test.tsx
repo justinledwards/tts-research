@@ -78,14 +78,14 @@ describe("SettingsPanel", () => {
 
     expect(markup).toContain("Studio Settings");
     expect(markup).toContain("Quick settings");
-    expect(markup).toContain("Run");
-    expect(markup).toContain("Reader");
-    expect(markup).toContain("Voices");
-    expect(markup).toContain("Sources");
-    expect(markup).toContain("Runtime");
-    expect(markup).toContain("Diagnostics");
+    expect(markup).toContain("Quick");
+    expect(markup).toContain("Advanced");
+    expect(markup).toContain("Expert / Diagnostics");
+    expect(markup).toContain("Output intent");
+    expect(markup).toContain("Preview sample");
     expect(markup).toContain("Session");
     expect(markup).toContain("Project");
+    expect(markup).toContain("Source");
     expect(markup).toContain("Machine");
   });
 });

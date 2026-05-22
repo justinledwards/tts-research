@@ -60,12 +60,16 @@ import type {
 } from "../../types";
 import {
   SETTINGS_FIELD_META,
-  SETTINGS_GROUPS,
+  SETTINGS_LAYERS,
   SETTINGS_SCOPE_META,
   settingsGroupMeta,
+  settingsGroupsForLayer,
+  settingsLayerForCommandTarget,
+  settingsLayerMeta,
   settingsScopeAppliesTo,
   type SettingsCommandTarget,
   type SettingsGroupId,
+  type SettingsLayerId,
   type SettingsScope,
 } from "./model";
 import { ScopeBadge } from "./ScopeBadge";
@@ -111,6 +115,8 @@ interface SourcePolicyTarget {
   profile?: string | null;
   save: (request: SourceSpeechPolicyUpdateRequest) => Promise<void>;
 }
+
+type SettingsSourceMode = "book" | "fileUrl" | "text";
 
 export function SettingsPanel({
   canSubmit,
@@ -186,7 +192,7 @@ export function SettingsPanel({
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
   selectedProfile: VoiceProfile | null;
-  sourceMode: "book" | "fileUrl" | "text";
+  sourceMode: SettingsSourceMode;
   sourcePolicySavingKey: string | null;
   speechPolicyDefinition: SpeechPolicyDefinition;
   speechPolicyError: string | null;
@@ -240,6 +246,7 @@ export function SettingsPanel({
     baseProfile: string,
   ) => Promise<void>;
 }>) {
+  const [activeLayer, setActiveLayer] = useState<SettingsLayerId>("quick");
   const [activeGroup, setActiveGroup] = useState<SettingsGroupId>("run");
   const highlightedCommandToken = commandTarget ? settingsCommandTargetToken(commandTarget) : null;
 
@@ -247,6 +254,8 @@ export function SettingsPanel({
     if (!commandTarget) {
       return;
     }
+    const nextLayer = settingsLayerForCommandTarget(commandTarget);
+    setActiveLayer(nextLayer);
     setActiveGroup(commandTarget.groupId);
     const targetToken = settingsCommandTargetToken(commandTarget);
     const animationFrameId = globalThis.requestAnimationFrame(() => {
@@ -265,204 +274,318 @@ export function SettingsPanel({
   }
 
   const activeMeta = settingsGroupMeta(activeGroup);
+  const activeLayerMeta = settingsLayerMeta(activeLayer);
+  const visibleGroups = settingsGroupsForActiveLayer(activeLayer);
+  const selectLayer = (layerId: SettingsLayerId) => {
+    setActiveLayer(layerId);
+    setActiveGroup(nextActiveGroupForLayer(layerId, activeGroup));
+  };
   return (
     <PanelShell label="Settings" title="Studio Settings" onClose={onClose}>
-      <QuickSettings
-        customProfiles={customSpeechPolicyProfiles}
-        definition={speechPolicyDefinition}
-        readerAccessibilitySettings={readerAccessibilitySettings}
-        runConfiguration={runConfiguration}
-        speechPolicyProfile={speechPolicyProfile}
-        speechPolicyProfiles={speechPolicyProfiles}
-        themeName={themeName}
-        ttsEngines={ttsEngines}
-        onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
-        onRunConfigurationChange={onRunConfigurationChange}
-        onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
-        onThemeChange={onThemeChange}
-      />
+      <SettingsLayerSwitcher activeLayer={activeLayer} onSelectLayer={selectLayer} />
 
-      <div className="mt-5 grid min-h-0 gap-4 lg:grid-cols-[210px_minmax(0,1fr)]">
-        <Panel as="nav" className="grid content-start gap-2 p-2" variant="surface">
-          {SETTINGS_GROUPS.map((group) => (
-            <Button
-              align="start"
-              className="grid gap-1 px-3 py-2"
-              key={group.id}
-              onClick={() => {
-                setActiveGroup(group.id);
-              }}
-              selected={activeGroup === group.id}
-              size="md"
-              variant="mode"
-            >
-              <span className="text-sm font-semibold">{group.label}</span>
-              <span className="text-[0.68rem] leading-4 vs-muted">{group.detail}</span>
-            </Button>
-          ))}
-        </Panel>
-
-        <div className="min-w-0">
-          <Panel className="mb-4 grid gap-3 p-4" variant="surface">
-            <div>
-              <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
-                {activeMeta.label}
-              </p>
-              <h3 className="mt-1 text-xl font-semibold">{activeMeta.summary}</h3>
-            </div>
-            <ScopeLegend />
+      {activeLayer === "quick" ? (
+        <QuickSettings
+          canSubmit={canSubmit}
+          customProfiles={customSpeechPolicyProfiles}
+          definition={speechPolicyDefinition}
+          highlightedCommandToken={highlightedCommandToken}
+          readerAccessibilitySettings={readerAccessibilitySettings}
+          runConfiguration={runConfiguration}
+          selectedBookSource={selectedBookSource}
+          selectedPreparedSource={selectedPreparedSource}
+          selectedProfile={selectedProfile}
+          sourceMode={sourceMode}
+          speechPolicyProfile={speechPolicyProfile}
+          speechPolicyProfiles={speechPolicyProfiles}
+          themeName={themeName}
+          ttsEngines={ttsEngines}
+          onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
+          onRunConfigurationChange={onRunConfigurationChange}
+          onOpenGroup={(groupId) => {
+            setActiveLayer(settingsGroupMeta(groupId).layer);
+            setActiveGroup(groupId);
+          }}
+          onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+          onSubmit={onSubmit}
+          onThemeChange={onThemeChange}
+        />
+      ) : (
+        <div className="mt-5 grid min-h-0 gap-4 lg:grid-cols-[210px_minmax(0,1fr)]">
+          <Panel as="nav" className="grid content-start gap-2 p-2" variant="surface">
+            <p className="px-2 pb-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+              {activeLayerMeta.label}
+            </p>
+            {visibleGroups.map((group) => (
+              <Button
+                align="start"
+                className="grid gap-1 px-3 py-2"
+                key={group.id}
+                onClick={() => {
+                  setActiveGroup(group.id);
+                }}
+                selected={activeGroup === group.id}
+                size="md"
+                variant="mode"
+              >
+                <span className="text-sm font-semibold">{group.label}</span>
+                <span className="text-[0.68rem] leading-4 vs-muted">{group.detail}</span>
+              </Button>
+            ))}
           </Panel>
 
-          {activeGroup === "run" ? (
-            <RunSettingsGroup
-              canSubmit={canSubmit}
-              customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-              highlightedCommandToken={highlightedCommandToken}
-              job={job}
-              runConfiguration={runConfiguration}
-              selectedProfile={selectedProfile}
-              speechPolicyDefinition={speechPolicyDefinition}
-              speechPolicyProfile={speechPolicyProfile}
-              speechPolicyProfiles={speechPolicyProfiles}
-              ttsEngines={ttsEngines}
-              onRunConfigurationChange={onRunConfigurationChange}
-              onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
-              onSubmit={onSubmit}
-            />
-          ) : null}
-          {activeGroup === "reader" ? (
-            <ReaderSettingsGroup
-              highlightedCommandToken={highlightedCommandToken}
-              readerAccessibilitySettings={readerAccessibilitySettings}
-              runConfiguration={runConfiguration}
-              shortcutPreferences={shortcutPreferences}
-              teleprompterSettings={teleprompterSettings}
-              themeName={themeName}
-              uiMemory={uiMemory}
-              onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
-              onShortcutPreferencesChange={onShortcutPreferencesChange}
-              onShortcutPreferencesReset={onShortcutPreferencesReset}
-              onTeleprompterSettingsChange={onTeleprompterSettingsChange}
-              onThemeChange={onThemeChange}
-              onUiMemoryExportPreferences={onUiMemoryExportPreferences}
-              onUiMemoryImportPreferences={onUiMemoryImportPreferences}
-              onUiMemoryPreferenceChange={onUiMemoryPreferenceChange}
-              onUiMemoryReset={onUiMemoryReset}
-            />
-          ) : null}
-          {activeGroup === "voices" ? (
-            <VoiceSettingsGroup
-              highlightedCommandToken={highlightedCommandToken}
-              runConfiguration={runConfiguration}
-              selectedProfile={selectedProfile}
-              ttsEngineError={ttsEngineError}
-              ttsEngines={ttsEngines}
-              onPrepareProfileTarget={onPrepareProfileTarget}
-              onRunConfigurationChange={onRunConfigurationChange}
-            />
-          ) : null}
-          {activeGroup === "sources" ? (
-            <SourceSettingsGroup
-              customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-              highlightedCommandToken={highlightedCommandToken}
-              isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
-              selectedBookSource={selectedBookSource}
-              selectedPreparedSource={selectedPreparedSource}
-              sourceMode={sourceMode}
-              sourcePolicySavingKey={sourcePolicySavingKey}
-              speechPolicyDefinition={speechPolicyDefinition}
-              speechPolicyError={speechPolicyError}
-              speechPolicyOverrides={speechPolicyOverrides}
-              speechPolicyProfile={speechPolicyProfile}
-              speechPolicyProfiles={speechPolicyProfiles}
-              onClearBookSourcePolicy={onClearBookSourcePolicy}
-              onClearPreparedSourcePolicy={onClearPreparedSourcePolicy}
-              onClearSpeechPolicyOverrides={onClearSpeechPolicyOverrides}
-              onCreateCustomSpeechPolicyProfile={onCreateCustomSpeechPolicyProfile}
-              onDeleteCustomSpeechPolicyProfile={onDeleteCustomSpeechPolicyProfile}
-              onSaveBookSourcePolicy={onSaveBookSourcePolicy}
-              onSavePreparedSourcePolicy={onSavePreparedSourcePolicy}
-              onSpeechPolicyOverridesChange={onSpeechPolicyOverridesChange}
-              onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
-              onUpdateCustomSpeechPolicyProfile={onUpdateCustomSpeechPolicyProfile}
-            />
-          ) : null}
-          {activeGroup === "runtime" ? (
-            <RuntimeSettingsGroup
-              highlightedCommandToken={highlightedCommandToken}
-              metrics={metrics}
-              metricsError={metricsError}
-              profileSourceDiagnostics={profileSourceDiagnostics}
-              researchModules={researchModules}
-              runConfiguration={runConfiguration}
-              ttsEngineError={ttsEngineError}
-              ttsEngines={ttsEngines}
-              onRunConfigurationChange={onRunConfigurationChange}
-            />
-          ) : null}
-          {activeGroup === "diagnostics" ? (
-            <DiagnosticsSettingsGroup
-              highlightedCommandToken={highlightedCommandToken}
-              job={job}
-              metrics={metrics}
-              metricsError={metricsError}
-              profileSource={profileSource}
-              profileSourceDiagnostics={profileSourceDiagnostics}
-              projectStorage={projectStorage}
-              projectStorageError={projectStorageError}
-              selectedProfile={selectedProfile}
-              ttsEngineError={ttsEngineError}
-              ttsEngines={ttsEngines}
-            />
-          ) : null}
+          <div className="min-w-0">
+            <Panel className="mb-4 grid gap-3 p-4" variant="surface">
+              <div>
+                <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
+                  {activeMeta.label}
+                </p>
+                <h3 className="mt-1 text-xl font-semibold">{activeMeta.summary}</h3>
+                <p className="vs-muted mt-1 text-sm leading-6">{activeLayerMeta.summary}</p>
+              </div>
+              <ScopeLegend />
+            </Panel>
+
+            {activeGroup === "run" ? (
+              <RunSettingsGroup
+                canSubmit={canSubmit}
+                customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+                highlightedCommandToken={highlightedCommandToken}
+                job={job}
+                runConfiguration={runConfiguration}
+                selectedProfile={selectedProfile}
+                speechPolicyDefinition={speechPolicyDefinition}
+                speechPolicyProfile={speechPolicyProfile}
+                speechPolicyProfiles={speechPolicyProfiles}
+                ttsEngines={ttsEngines}
+                onRunConfigurationChange={onRunConfigurationChange}
+                onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+                onSubmit={onSubmit}
+              />
+            ) : null}
+            {activeGroup === "reader" ? (
+              <ReaderSettingsGroup
+                highlightedCommandToken={highlightedCommandToken}
+                readerAccessibilitySettings={readerAccessibilitySettings}
+                runConfiguration={runConfiguration}
+                shortcutPreferences={shortcutPreferences}
+                teleprompterSettings={teleprompterSettings}
+                themeName={themeName}
+                uiMemory={uiMemory}
+                onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
+                onShortcutPreferencesChange={onShortcutPreferencesChange}
+                onShortcutPreferencesReset={onShortcutPreferencesReset}
+                onTeleprompterSettingsChange={onTeleprompterSettingsChange}
+                onThemeChange={onThemeChange}
+                onUiMemoryExportPreferences={onUiMemoryExportPreferences}
+                onUiMemoryImportPreferences={onUiMemoryImportPreferences}
+                onUiMemoryPreferenceChange={onUiMemoryPreferenceChange}
+                onUiMemoryReset={onUiMemoryReset}
+              />
+            ) : null}
+            {activeGroup === "voices" ? (
+              <VoiceSettingsGroup
+                highlightedCommandToken={highlightedCommandToken}
+                runConfiguration={runConfiguration}
+                selectedProfile={selectedProfile}
+                ttsEngineError={ttsEngineError}
+                ttsEngines={ttsEngines}
+                onPrepareProfileTarget={onPrepareProfileTarget}
+                onRunConfigurationChange={onRunConfigurationChange}
+              />
+            ) : null}
+            {activeGroup === "sources" ? (
+              <SourceSettingsGroup
+                customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+                highlightedCommandToken={highlightedCommandToken}
+                isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
+                selectedBookSource={selectedBookSource}
+                selectedPreparedSource={selectedPreparedSource}
+                sourceMode={sourceMode}
+                sourcePolicySavingKey={sourcePolicySavingKey}
+                speechPolicyDefinition={speechPolicyDefinition}
+                speechPolicyError={speechPolicyError}
+                speechPolicyOverrides={speechPolicyOverrides}
+                speechPolicyProfile={speechPolicyProfile}
+                speechPolicyProfiles={speechPolicyProfiles}
+                onClearBookSourcePolicy={onClearBookSourcePolicy}
+                onClearPreparedSourcePolicy={onClearPreparedSourcePolicy}
+                onClearSpeechPolicyOverrides={onClearSpeechPolicyOverrides}
+                onCreateCustomSpeechPolicyProfile={onCreateCustomSpeechPolicyProfile}
+                onDeleteCustomSpeechPolicyProfile={onDeleteCustomSpeechPolicyProfile}
+                onSaveBookSourcePolicy={onSaveBookSourcePolicy}
+                onSavePreparedSourcePolicy={onSavePreparedSourcePolicy}
+                onSpeechPolicyOverridesChange={onSpeechPolicyOverridesChange}
+                onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+                onUpdateCustomSpeechPolicyProfile={onUpdateCustomSpeechPolicyProfile}
+              />
+            ) : null}
+            {activeGroup === "runtime" ? (
+              <RuntimeSettingsGroup
+                highlightedCommandToken={highlightedCommandToken}
+                metrics={metrics}
+                metricsError={metricsError}
+                profileSourceDiagnostics={profileSourceDiagnostics}
+                researchModules={researchModules}
+                runConfiguration={runConfiguration}
+                ttsEngineError={ttsEngineError}
+                ttsEngines={ttsEngines}
+                onRunConfigurationChange={onRunConfigurationChange}
+              />
+            ) : null}
+            {activeGroup === "diagnostics" ? (
+              <DiagnosticsSettingsGroup
+                highlightedCommandToken={highlightedCommandToken}
+                job={job}
+                metrics={metrics}
+                metricsError={metricsError}
+                profileSource={profileSource}
+                profileSourceDiagnostics={profileSourceDiagnostics}
+                projectStorage={projectStorage}
+                projectStorageError={projectStorageError}
+                selectedProfile={selectedProfile}
+                ttsEngineError={ttsEngineError}
+                ttsEngines={ttsEngines}
+              />
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
     </PanelShell>
   );
 }
 
+function SettingsLayerSwitcher({
+  activeLayer,
+  onSelectLayer,
+}: Readonly<{
+  activeLayer: SettingsLayerId;
+  onSelectLayer: (layerId: SettingsLayerId) => void;
+}>) {
+  return (
+    <Panel className="grid gap-3 p-4" variant="raised">
+      <div className="grid gap-2 md:grid-cols-3">
+        {SETTINGS_LAYERS.map((layer) => (
+          <Button
+            align="start"
+            className="grid gap-1 p-3"
+            data-testid={`settings-layer-${layer.id}`}
+            key={layer.id}
+            onClick={() => {
+              onSelectLayer(layer.id);
+            }}
+            selected={activeLayer === layer.id}
+            variant="mode"
+          >
+            <span className="text-sm font-semibold">{layer.label}</span>
+            <span className="vs-muted text-xs leading-5">{layer.detail}</span>
+          </Button>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 function QuickSettings({
+  canSubmit,
   customProfiles,
   definition,
+  highlightedCommandToken,
   readerAccessibilitySettings,
   runConfiguration,
+  selectedBookSource,
+  selectedPreparedSource,
+  selectedProfile,
+  sourceMode,
   speechPolicyProfile,
   speechPolicyProfiles,
   themeName,
   ttsEngines,
   onReaderAccessibilitySettingsChange,
   onRunConfigurationChange,
+  onOpenGroup,
   onSpeechPolicyProfileChange,
+  onSubmit,
   onThemeChange,
 }: Readonly<{
+  canSubmit: boolean;
   customProfiles: CustomSpeechPolicyProfile[];
   definition: SpeechPolicyDefinition;
+  highlightedCommandToken: string | null;
   readerAccessibilitySettings: ReaderAccessibilitySettings;
   runConfiguration: RunConfiguration;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  selectedProfile: VoiceProfile | null;
+  sourceMode: SettingsSourceMode;
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
   themeName: ThemeName;
   ttsEngines: TTSEngineDiagnostics[];
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
+  onOpenGroup: (groupId: SettingsGroupId) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
+  onSubmit: () => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
   const profileOptions = resolveSpeechPolicyProfileOptions(definition, speechPolicyProfiles);
+  const activeSourceLabel = quickSourceLabel(
+    sourceMode,
+    selectedBookSource,
+    selectedPreparedSource,
+  );
+  const resetRunDefaults = () => {
+    const next = createRunConfiguration("checkedMaster");
+    onRunConfigurationChange({
+      ...next,
+      engineOptions: runConfiguration.engineOptions,
+      ttsEngine: runConfiguration.ttsEngine,
+    });
+  };
   return (
-    <Panel className="grid gap-3 p-4" variant="raised">
+    <Panel
+      className="mt-5 grid gap-4 p-4"
+      data-settings-command-targets={[
+        "group-run",
+        "group-voices",
+        "group-sources",
+        "field-runMode",
+        "field-performanceMode",
+        "field-voice",
+        "field-activeSource",
+        "field-projectSpeechPolicy",
+        "field-previewSample",
+        "scope-session",
+        "scope-source",
+        "scope-project",
+      ].join(" ")}
+      highlighted={
+        highlightedCommandToken
+          ? ["field-previewSample", highlightedCommandToken].includes(highlightedCommandToken)
+          : false
+      }
+      variant="raised"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
             Quick settings
           </p>
-          <h3 className="mt-1 text-base font-semibold">Common changes without the long scroll</h3>
+          <h3 className="mt-1 text-base font-semibold">Useful audio without the long scroll</h3>
+          <p className="vs-muted mt-1 text-sm leading-6">
+            Set voice, speed, source, output intent, basic policy, then preview or create.
+          </p>
         </div>
-        <ScopeBadge scope="session" />
+        <div className="flex flex-wrap gap-2">
+          <ScopeBadge scope="session" />
+          <ScopeBadge scope="source" />
+          <ScopeBadge scope="project" />
+        </div>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <QuickSelect
-          label="Run mode"
+          label="Output intent"
           scope="session"
           value={runConfiguration.runMode}
           onChange={(value) => {
@@ -481,7 +604,7 @@ function QuickSettings({
           ))}
         </QuickSelect>
         <QuickSelect
-          label="Performance"
+          label="Speed"
           scope="session"
           value={runConfiguration.performanceMode}
           onChange={(value) => {
@@ -497,6 +620,8 @@ function QuickSettings({
             </option>
           ))}
         </QuickSelect>
+        <QuickFact label="Voice" scope="session" value={selectedProfile?.name ?? "Default voice"} />
+        <QuickFact label="Source" scope="source" value={activeSourceLabel} />
         <QuickSelect
           label="Reader scale"
           scope="machine"
@@ -529,7 +654,7 @@ function QuickSettings({
           ))}
         </QuickSelect>
         <QuickSelect
-          label="Project policy"
+          label="Basic policy"
           scope="project"
           value={speechPolicyProfile}
           onChange={onSpeechPolicyProfileChange}
@@ -564,7 +689,83 @@ function QuickSettings({
           ))}
         </QuickSelect>
       </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Button
+          data-testid="settings-quick-preview-sample"
+          data-ui-action-surface="Settings"
+          disabled={!canSubmit}
+          disabledReason={
+            canSubmit ? undefined : "Select or prepare source text before previewing."
+          }
+          onClick={onSubmit}
+          variant="primary"
+        >
+          Preview sample
+        </Button>
+        <Button
+          data-testid="settings-quick-reset-run"
+          data-ui-action-surface="Settings"
+          onClick={resetRunDefaults}
+          variant="secondary"
+        >
+          Reset run defaults
+        </Button>
+        <Button
+          data-testid="settings-quick-reset-reader"
+          data-ui-action-surface="Settings"
+          onClick={() => {
+            onReaderAccessibilitySettingsChange({
+              ...readerAccessibilitySettings,
+              textScale: "comfortable",
+            });
+            onThemeChange("light");
+          }}
+          variant="secondary"
+        >
+          Reset display
+        </Button>
+      </div>
+      <Panel className="grid gap-2 p-3" variant="surface">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+          More configuration
+        </p>
+        <div className="grid gap-2 sm:grid-cols-4">
+          {settingsGroupsForLayer("advanced").map((group) => (
+            <Button
+              align="start"
+              className="grid gap-1 px-3 py-2"
+              key={group.id}
+              onClick={() => {
+                onOpenGroup(group.id);
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              <span className="font-semibold">{group.label}</span>
+              <span className="vs-muted text-[0.65rem] leading-4">{group.summary}</span>
+            </Button>
+          ))}
+        </div>
+      </Panel>
     </Panel>
+  );
+}
+
+function QuickFact({
+  label,
+  scope,
+  value,
+}: Readonly<{ label: string; scope: SettingsScope; value: string }>) {
+  return (
+    <div className="grid gap-1 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs vs-border">
+      <span className="flex items-center gap-2 font-semibold">
+        {label}
+        <ScopeBadge scope={scope} />
+      </span>
+      <span className="truncate text-sm font-medium" title={value}>
+        {value}
+      </span>
+    </div>
   );
 }
 
@@ -750,7 +951,12 @@ function PipelineToggles({
           checked={runConfiguration.options[key]}
           detail={PIPELINE_OPTION_LABELS[key].detail}
           key={key}
-          label={PIPELINE_OPTION_LABELS[key].label}
+          label={
+            <span className="flex flex-wrap items-center gap-2">
+              {PIPELINE_OPTION_LABELS[key].label}
+              <ScopeBadge scope="session" />
+            </span>
+          }
           onChange={(checked) => {
             onRunConfigurationChange({
               ...runConfiguration,
@@ -1788,6 +1994,42 @@ function DiagnosticLine({ label, value }: Readonly<{ label: string; value: strin
 function engineFamilyOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiagnostics[] {
   const source = engines.length > 0 ? engines : fallbackTTSEngines();
   return source.filter((engine) => engine.id !== "kokoro-clone" && engine.id !== "kokoro-embed");
+}
+
+function quickSourceLabel(
+  sourceMode: SettingsSourceMode,
+  selectedBookSource: BookSource | null,
+  selectedPreparedSource: PreparedSource | null,
+): string {
+  if (sourceMode === "book") {
+    return selectedBookSource?.title ?? selectedBookSource?.sourceFile ?? "No book selected";
+  }
+  if (sourceMode === "fileUrl") {
+    return (
+      selectedPreparedSource?.title ??
+      selectedPreparedSource?.sourceName ??
+      "No prepared source selected"
+    );
+  }
+  return "Draft text";
+}
+
+function settingsGroupsForActiveLayer(activeLayer: SettingsLayerId) {
+  if (activeLayer === "quick") {
+    return [];
+  }
+  return settingsGroupsForLayer(activeLayer);
+}
+
+function nextActiveGroupForLayer(layerId: SettingsLayerId, activeGroup: SettingsGroupId) {
+  const activeGroupLayer = settingsGroupMeta(activeGroup).layer;
+  if (layerId === "expert") {
+    return activeGroupLayer === "expert" ? activeGroup : "runtime";
+  }
+  if (layerId === "advanced") {
+    return activeGroupLayer === "advanced" ? activeGroup : "run";
+  }
+  return activeGroup;
 }
 
 function fallbackTTSEngines(): TTSEngineDiagnostics[] {

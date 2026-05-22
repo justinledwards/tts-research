@@ -1,6 +1,6 @@
 # Speech Policy Wizard
 
-The Speech policy wizard is the default Settings surface for controlling how structured content becomes speech. It keeps the mature policy model intact while making the common path safer and more legible.
+The Speech policy wizard is the Advanced Settings surface for controlling how structured content becomes speech. Quick Settings only asks for the basic project policy; source pins, structured content overrides, profile import/export, and JSON-style editing stay behind Advanced or Expert disclosure.
 
 ## Sections
 

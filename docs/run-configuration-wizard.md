@@ -1,6 +1,6 @@
 # Run Configuration Wizard
 
-The Run configuration wizard is the default Settings surface for choosing how the next Studio run is created. It keeps advanced controls available, but the normal path is a single guided flow.
+The Run configuration wizard is the Advanced Settings surface for choosing how the next Studio run is created. Quick Settings exposes output intent, speed, voice, source, basic policy, and preview sample first so a new user can generate useful audio without understanding the full run model.
 
 ## Sections
 
@@ -39,7 +39,7 @@ The Run configuration wizard is the default Settings surface for choosing how th
 
 Run configuration choices are session-scoped unless noted otherwise. The speech profile selector is project-scoped because it changes the default policy used by the source workflow.
 
-The wizard preserves the existing advanced controls under **Advanced run controls**. That disclosure is for operator tuning and parity checks, not the primary user path.
+The wizard preserves the existing detailed controls under **Advanced run controls**. That disclosure is for operator tuning and parity checks, not the primary user path.
 
 ## Validation
 

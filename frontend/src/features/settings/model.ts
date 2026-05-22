@@ -1,4 +1,5 @@
 export type SettingsScope = "session" | "source" | "project" | "machine";
+export type SettingsLayerId = "quick" | "advanced" | "expert";
 
 export interface SettingsScopeMeta {
   appliesTo: string;
@@ -10,10 +11,18 @@ export interface SettingsScopeMeta {
 
 export type SettingsGroupId = "run" | "reader" | "voices" | "sources" | "runtime" | "diagnostics";
 
+export interface SettingsLayerMeta {
+  detail: string;
+  id: SettingsLayerId;
+  label: string;
+  summary: string;
+}
+
 export interface SettingsGroupMeta {
   detail: string;
   id: SettingsGroupId;
   label: string;
+  layer: Exclude<SettingsLayerId, "quick">;
   summary: string;
 }
 
@@ -22,12 +31,14 @@ export interface SettingsFieldMeta {
   group: SettingsGroupId;
   id: string;
   label: string;
+  layer: SettingsLayerId;
   scope: SettingsScope;
 }
 
 export interface SettingsCommandTarget {
   fieldId?: string;
   groupId: SettingsGroupId;
+  layerId?: SettingsLayerId;
   scope?: SettingsScope;
 }
 
@@ -63,41 +74,68 @@ export const SETTINGS_SCOPE_META: Record<SettingsScope, SettingsScopeMeta> = {
   },
 };
 
+export const SETTINGS_LAYERS: SettingsLayerMeta[] = [
+  {
+    detail: "Voice, speed, source, output intent, basic policy, and preview sample.",
+    id: "quick",
+    label: "Quick",
+    summary: "Generate useful audio without learning every setting.",
+  },
+  {
+    detail: "Run configuration, structured content, source/project scope, caching, profiles.",
+    id: "advanced",
+    label: "Advanced",
+    summary: "Tune the workflow while staying in product language.",
+  },
+  {
+    detail: "Runtime, engine internals, model paths, debug output, JSON policy editing.",
+    id: "expert",
+    label: "Expert / Diagnostics",
+    summary: "Open operational diagnostics only when you need them.",
+  },
+];
+
 export const SETTINGS_GROUPS: SettingsGroupMeta[] = [
   {
     detail: "Job shape, quality level, and next-run toggles",
     id: "run",
     label: "Run",
+    layer: "advanced",
     summary: "Choose how the next narration run behaves.",
   },
   {
     detail: "Reading comfort, display, and teleprompter focus",
     id: "reader",
     label: "Reader",
+    layer: "advanced",
     summary: "Tune the experience of reading and following generated audio.",
   },
   {
     detail: "Voice selection, render paths, and profile readiness",
     id: "voices",
     label: "Voices",
+    layer: "advanced",
     summary: "Understand which voice path will be used and whether it is ready.",
   },
   {
     detail: "Project defaults, session overrides, and source pins",
     id: "sources",
     label: "Sources",
+    layer: "advanced",
     summary: "Control how source structure becomes listener-ready narration.",
   },
   {
     detail: "Narration engines, research modules, and local setup",
     id: "runtime",
     label: "Runtime",
+    layer: "expert",
     summary: "Check local provider and model readiness.",
   },
   {
     detail: "Backend, GPU, job, storage, and extraction health",
     id: "diagnostics",
     label: "Diagnostics",
+    layer: "expert",
     summary: "Inspect operational facts without changing configuration.",
   },
 ];
@@ -108,6 +146,7 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     group: "run",
     id: "runMode",
     label: "Run mode",
+    layer: "quick",
     scope: "session",
   },
   {
@@ -115,6 +154,31 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     group: "run",
     id: "performanceMode",
     label: "Performance",
+    layer: "quick",
+    scope: "session",
+  },
+  {
+    description: "Selects the active voice path for useful default narration.",
+    group: "voices",
+    id: "voice",
+    label: "Voice",
+    layer: "quick",
+    scope: "session",
+  },
+  {
+    description: "Shows which source is active before previewing or creating audio.",
+    group: "sources",
+    id: "activeSource",
+    label: "Active source",
+    layer: "quick",
+    scope: "source",
+  },
+  {
+    description: "Starts a short audition from the current configuration before production audio.",
+    group: "run",
+    id: "previewSample",
+    label: "Preview sample",
+    layer: "quick",
     scope: "session",
   },
   {
@@ -122,6 +186,7 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     group: "reader",
     id: "readerPreferences",
     label: "Reader preferences",
+    layer: "advanced",
     scope: "machine",
   },
   {
@@ -130,6 +195,7 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     group: "reader",
     id: "uiMemory",
     label: "UI memory",
+    layer: "advanced",
     scope: "machine",
   },
   {
@@ -137,6 +203,7 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     group: "reader",
     id: "shortcuts",
     label: "Keyboard shortcuts",
+    layer: "advanced",
     scope: "machine",
   },
   {
@@ -144,6 +211,7 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     group: "sources",
     id: "projectSpeechPolicy",
     label: "Project policy",
+    layer: "advanced",
     scope: "project",
   },
   {
@@ -151,16 +219,47 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     group: "sources",
     id: "sourceSpeechPolicy",
     label: "Source pin",
+    layer: "advanced",
     scope: "source",
+  },
+  {
+    description: "Manages custom speech policy profiles and import/export.",
+    group: "sources",
+    id: "profileImportExport",
+    label: "Profile import/export",
+    layer: "advanced",
+    scope: "project",
+  },
+  {
+    description:
+      "Controls detailed structured content behavior for tables, code, math, citations, and notes.",
+    group: "sources",
+    id: "structuredContent",
+    label: "Structured content",
+    layer: "advanced",
+    scope: "session",
   },
   {
     description: "Shows local engine, model, provider, and backend readiness.",
     group: "runtime",
     id: "runtimeDiagnostics",
     label: "Runtime diagnostics",
+    layer: "expert",
+    scope: "machine",
+  },
+  {
+    description: "Exposes engine internals, model paths, and debug output for troubleshooting.",
+    group: "diagnostics",
+    id: "debugOutput",
+    label: "Debug output",
+    layer: "expert",
     scope: "machine",
   },
 ];
+
+export function settingsLayerMeta(id: SettingsLayerId): SettingsLayerMeta {
+  return SETTINGS_LAYERS.find((layer) => layer.id === id) ?? SETTINGS_LAYERS[0];
+}
 
 export function settingsGroupMeta(id: SettingsGroupId): SettingsGroupMeta {
   return SETTINGS_GROUPS.find((group) => group.id === id) ?? SETTINGS_GROUPS[0];
@@ -176,4 +275,27 @@ export function settingsScopeAppliesTo(scope: SettingsScope): string {
 
 export function settingsScopeLabel(scope: SettingsScope): string {
   return SETTINGS_SCOPE_META[scope].label;
+}
+
+export function settingsLayerForGroup(groupId: SettingsGroupId): SettingsLayerId {
+  return settingsGroupMeta(groupId).layer;
+}
+
+export function settingsLayerForCommandTarget(target: SettingsCommandTarget): SettingsLayerId {
+  if (target.layerId) {
+    return target.layerId;
+  }
+  if (target.fieldId) {
+    return settingsFieldMeta(target.fieldId)?.layer ?? settingsLayerForGroup(target.groupId);
+  }
+  if (target.scope === "machine" && target.groupId === "diagnostics") {
+    return "expert";
+  }
+  return settingsLayerForGroup(target.groupId);
+}
+
+export function settingsGroupsForLayer(
+  layer: Exclude<SettingsLayerId, "quick">,
+): SettingsGroupMeta[] {
+  return SETTINGS_GROUPS.filter((group) => group.layer === layer);
 }

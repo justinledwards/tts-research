@@ -1,5 +1,13 @@
 # Working Log
 
+## 2026-05-22 15:47 CEST - Progressive Settings and Configuration UX
+- [x] Inspect settings IA, scope metadata, and command deep links
+- [x] Add three-layer settings model and progressive Settings UI
+- [x] Ensure configurable items expose scope labels and reset/revert affordances
+- [x] Align command palette deep links with the shared settings model
+- [x] Run project validation checks
+- [ ] Resolve existing frontend bundle CSS gzip budget failure
+
 ## 2026-05-22 14:41 CEST - Source Lifecycle and Intake Mental Model
 - [x] Inspect intake, source, workspace, cinema, and policy-pin source models
 - [x] Add canonical source lifecycle model and SourceCard

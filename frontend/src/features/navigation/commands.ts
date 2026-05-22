@@ -3,7 +3,9 @@ import { CINEMA_FOCUS_MODES, cinemaFocusModeMeta, type CinemaFocusMode } from ".
 import {
   SETTINGS_FIELD_META,
   SETTINGS_GROUPS,
+  SETTINGS_LAYERS,
   SETTINGS_SCOPE_META,
+  settingsLayerForGroup,
   type SettingsGroupId,
   type SettingsCommandTarget,
   type SettingsScope,
@@ -33,22 +35,37 @@ export interface HelpCommandTarget {
 }
 
 export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandTarget>[] {
+  const layerCommands = SETTINGS_LAYERS.map((layer) => ({
+    category: "Settings" as const,
+    detail: layer.summary,
+    id: `settings:layer:${layer.id}`,
+    keywords: ["settings", "configuration", layer.detail],
+    section: "Settings" as const,
+    target: { groupId: defaultSettingsGroupForLayer(layer.id), layerId: layer.id },
+    title: `Open ${layer.label} settings`,
+  }));
   const groupCommands = SETTINGS_GROUPS.map((group) => ({
     category: "Settings" as const,
     detail: group.summary,
     id: `settings:group:${group.id}`,
-    keywords: ["settings", group.detail],
+    keywords: ["settings", group.layer, group.detail],
     section: "Settings" as const,
-    target: { groupId: group.id },
+    target: { groupId: group.id, layerId: group.layer },
     title: `Open ${group.label} settings`,
   }));
   const fieldCommands = SETTINGS_FIELD_META.map((field) => ({
     category: "Settings" as const,
     detail: `${SETTINGS_SCOPE_META[field.scope].label} scope · ${field.description}`,
     id: `settings:field:${field.id}`,
-    keywords: ["settings", field.scope, SETTINGS_SCOPE_META[field.scope].description],
+    keywords: [
+      "settings",
+      "configuration",
+      field.layer,
+      field.scope,
+      SETTINGS_SCOPE_META[field.scope].description,
+    ],
     section: "Settings" as const,
-    target: { fieldId: field.id, groupId: field.group, scope: field.scope },
+    target: { fieldId: field.id, groupId: field.group, layerId: field.layer, scope: field.scope },
     title: field.label,
   }));
   const scopeCommands = (Object.keys(SETTINGS_SCOPE_META) as SettingsScope[]).map((scope) => ({
@@ -57,10 +74,14 @@ export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandT
     id: `settings:scope:${scope}`,
     keywords: ["scope", "settings", SETTINGS_SCOPE_META[scope].description],
     section: "Settings" as const,
-    target: { groupId: defaultSettingsGroupForScope(scope), scope },
+    target: {
+      groupId: defaultSettingsGroupForScope(scope),
+      layerId: settingsLayerForGroup(defaultSettingsGroupForScope(scope)),
+      scope,
+    },
     title: `${SETTINGS_SCOPE_META[scope].label} scope`,
   }));
-  return [...groupCommands, ...fieldCommands, ...scopeCommands];
+  return [...layerCommands, ...groupCommands, ...fieldCommands, ...scopeCommands];
 }
 
 export function buildWorkspaceCommandMetadata(): CommandMetadata<WorkspaceCommandTarget>[] {
@@ -153,6 +174,13 @@ function defaultSettingsGroupForScope(scope: SettingsScope): SettingsGroupId {
   }
   if (scope === "project" || scope === "source") {
     return "sources";
+  }
+  return "run";
+}
+
+function defaultSettingsGroupForLayer(layer: "quick" | "advanced" | "expert"): SettingsGroupId {
+  if (layer === "expert") {
+    return "runtime";
   }
   return "run";
 }

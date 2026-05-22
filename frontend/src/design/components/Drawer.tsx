@@ -17,7 +17,7 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
   ref,
 ) {
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/25" role="presentation">
+    <div className="fixed inset-0 z-[60] bg-zinc-950/25" role="presentation">
       <aside
         aria-label={label}
         aria-modal="true"

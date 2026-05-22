@@ -72,7 +72,14 @@ describe("metadata command generation", () => {
   it("generates settings commands from groups, fields, and scopes", () => {
     const commands = buildSettingsCommandMetadata();
 
+    expect(commands.map((command) => command.id)).toContain("settings:layer:quick");
+    expect(commands.map((command) => command.id)).toContain("settings:layer:expert");
     expect(commands.map((command) => command.id)).toContain("settings:group:sources");
+    expect(
+      commands.find((command) => command.id === "settings:field:previewSample")?.target,
+    ).toMatchObject({
+      layerId: "quick",
+    });
     expect(commands.map((command) => command.id)).toContain("settings:field:sourceSpeechPolicy");
     expect(commands.map((command) => command.id)).toContain("settings:scope:machine");
   });
