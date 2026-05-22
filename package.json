@@ -43,6 +43,7 @@
     "e2e:settings-ia": "E2E_SETTINGS_IA=1 node scripts/e2e-book-cinema.mjs",
     "e2e:reader-wayfinding": "E2E_READER_WAYFINDING=1 node scripts/e2e-book-cinema.mjs",
     "e2e:ui-actions": "node scripts/e2e-ui-action-audit.mjs",
+    "build-accessibility-release-artifacts": "node scripts/build-accessibility-release-artifacts.mjs",
     "e2e:accessibility-audit": "node scripts/e2e-accessibility-audit.mjs",
     "e2e:responsive-snapshots": "node scripts/e2e-responsive-snapshots.mjs",
     "e2e:command-palette": "node scripts/e2e-command-palette.mjs",

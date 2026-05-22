@@ -16,9 +16,11 @@ import {
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
   process.env.E2E_ACCESSIBILITY_OUTPUT_DIR ??
-  path.join(rootDir, "output", "accessibility-audit", "latest");
+  path.join(rootDir, "output", "accessibility", "latest");
 const screenshotsDir = path.join(outputDir, "screenshots");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
+const findingsPath =
+  process.env.E2E_ACCESSIBILITY_FINDINGS_PATH ?? path.join(outputDir, "a11y-findings.json");
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
@@ -31,6 +33,12 @@ main().catch(async (error) => {
     error: message,
     generatedAt: new Date().toISOString(),
     schemaVersion: "accessibility-audit.v1",
+    status: "failed",
+  }).catch(() => {});
+  await writeJson(findingsPath, {
+    error: message,
+    generatedAt: new Date().toISOString(),
+    schemaVersion: "a11y-findings.v1",
     status: "failed",
   }).catch(() => {});
   process.exitCode = 1;
@@ -98,6 +106,7 @@ async function main() {
       scanner: "local-equivalent-dom-audit",
     };
     await writeJson(path.join(outputDir, "accessibility-results.json"), document);
+    await writeJson(findingsPath, toFindingsDocument(document));
     await writeFile(path.join(outputDir, "accessibility-report.md"), renderReport(document));
     console.log(`Accessibility audit ${document.status}. Reports written to ${outputDir}`);
     process.exitCode = document.status === "passed" ? 0 : 1;
@@ -135,12 +144,14 @@ async function runScenario(browser, scenario) {
         : null,
     );
     const scan = await scanPageAccessibility(page);
+    const landmarks = await page.evaluate(scanPageLandmarks);
     const screenshot = path.join(screenshotsDir, `${scenario.id}.png`);
     await page.screenshot({ fullPage: false, path: screenshot });
     return {
       ...scenario,
       browserIssues: blockingPageIssues(pageIssues),
       focusedAfterTab,
+      landmarks,
       scan,
       screenshot,
     };
@@ -335,6 +346,75 @@ function summarize(results) {
   };
 }
 
+function scanPageLandmarks() {
+  const countSelector = (selector) =>
+    Array.from(document.querySelectorAll(selector)).filter(
+      (element) => element instanceof HTMLElement && element.offsetParent !== null,
+    ).length;
+  const landmarks = {
+    banner: countSelector("[role='banner'], header"),
+    complementary: countSelector("[role='complementary'], aside"),
+    contentinfo: countSelector("[role='contentinfo'], footer"),
+    main: countSelector("[role='main'], main"),
+    navigation: countSelector("[role='navigation'], nav"),
+  };
+  const missingPrimaryLandmarks = ["main", "navigation", "contentinfo"].filter(
+    (key) => landmarks[key] === 0,
+  );
+  return { landmarks, missingPrimaryLandmarks };
+}
+
+function toFindingsDocument(document) {
+  const allIssues = document.results.flatMap((result) => result.scan.issues);
+  const browserIssueTotal = document.results.reduce(
+    (total, result) => total + result.browserIssues.length,
+    0,
+  );
+  const warningCounts = new Map();
+  for (const issue of allIssues.filter((candidate) => candidate.severity === "warning")) {
+    const count = warningCounts.get(issue.ruleId) ?? 0;
+    warningCounts.set(issue.ruleId, count + 1);
+  }
+
+  return {
+    generatedAt: document.generatedAt,
+    schemaVersion: "a11y-findings.v1",
+    status: document.status,
+    scanner: document.scanner,
+    appBaseUrl: document.appBaseUrl,
+    apiBaseUrl: document.apiBaseUrl,
+    summary: {
+      controls: document.summary.controls,
+      failures: document.summary.failures,
+      scenarios: document.summary.scenarios,
+      warnings: document.summary.warnings,
+      browserIssues: browserIssueTotal,
+      missingPrimaryLandmarks: document.results.reduce(
+        (total, result) => total + result.landmarks.missingPrimaryLandmarks.length,
+        0,
+      ),
+    },
+    findings: {
+      scenarioResults: document.results.map((result) => ({
+        id: result.id,
+        label: result.label,
+        status:
+          result.scan.failCount === 0 && result.browserIssues.length === 0 ? "passed" : "failed",
+        focusAfterTab: result.focusedAfterTab,
+        browserIssues: result.browserIssues.length,
+        landmarkSummary: result.landmarks.landmarks,
+        missingPrimaryLandmarks: result.landmarks.missingPrimaryLandmarks,
+      })),
+      warningCounts: [...warningCounts.entries()].map(([ruleId, count]) => ({
+        count,
+        ruleId,
+      })),
+      warnings: allIssues.filter((issue) => issue.severity === "warning"),
+      failures: allIssues.filter((issue) => issue.severity === "fail"),
+    },
+  };
+}
+
 function renderReport(document) {
   const lines = [
     "# Accessibility Audit",
@@ -358,6 +438,11 @@ function renderReport(document) {
     lines.push(`- Viewport: ${result.viewport.width} x ${result.viewport.height}`);
     lines.push(`- Focus after first Tab: ${result.focusedAfterTab ?? "none"}`);
     lines.push(`- Browser issues: ${result.browserIssues.length}`);
+    lines.push(
+      `- Primary landmarks observed: main=${String(result.landmarks.landmarks.main)} nav=${String(
+        result.landmarks.landmarks.navigation,
+      )} contentinfo=${String(result.landmarks.landmarks.contentinfo)}`,
+    );
     if (result.scan.issues.length === 0 && result.browserIssues.length === 0) {
       lines.push("- No findings.");
     } else {

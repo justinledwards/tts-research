@@ -171,6 +171,59 @@ const responsiveSnapshotsStep = await runCommandStep(context, {
 });
 await attachResponsiveSnapshotsSummary(responsiveSnapshotsStep);
 
+const accessibilityGateArtifactsStep = await runCommandStep(context, {
+  id: "accessibility-release-gate-artifacts",
+  title: "Accessibility Release Gate Artifacts",
+  command: "pnpm",
+  args: ["build-accessibility-release-artifacts"],
+  env: {
+    ACCESSIBILITY_GATE_DIR: path.join(rootDir, "output", "accessibility", "latest"),
+    ACCESSIBILITY_AUDIT_OUTPUT_DIR: path.join(context.artifactsDir, "accessibility-audit-e2e"),
+    E2E_ACCESSIBILITY_RESULTS_PATH: path.join(
+      context.artifactsDir,
+      "accessibility-audit-e2e",
+      "accessibility-results.json",
+    ),
+    E2E_ACCESSIBILITY_FINDINGS_PATH: path.join(
+      context.artifactsDir,
+      "accessibility-audit-e2e",
+      "a11y-findings.json",
+    ),
+    ACCESSIBILITY_RESPONSIVE_OUTPUT_DIR: path.join(
+      context.artifactsDir,
+      "responsive-snapshots-e2e",
+    ),
+    E2E_RESPONSIVE_RESULTS_PATH: path.join(
+      context.artifactsDir,
+      "responsive-snapshots-e2e",
+      "responsive-results.json",
+    ),
+    E2E_RESPONSIVE_SCREENSHOTS_PATH: path.join(
+      context.artifactsDir,
+      "responsive-snapshots-e2e",
+      "screenshots",
+    ),
+  },
+  artifacts: {
+    accessibilityGateFindings: path.join(
+      rootDir,
+      "output",
+      "accessibility",
+      "latest",
+      "a11y-findings.json",
+    ),
+    manualQa: path.join(rootDir, "output", "accessibility", "latest", "manual-qa.md"),
+    responsiveSnapshots: path.join(
+      rootDir,
+      "output",
+      "accessibility",
+      "latest",
+      "responsive-snapshots",
+    ),
+  },
+});
+await attachAccessibilityGateSummary(accessibilityGateArtifactsStep);
+
 const uiActionInventoryStep = await runCommandStep(context, {
   id: "ui-action-inventory-e2e",
   title: "UI Action Inventory E2E",
@@ -343,6 +396,10 @@ async function attachResponsiveCinemaSummary(step) {
   });
 }
 
+function requiredChecksCount() {
+  return 20;
+}
+
 async function attachAccessibilitySummary(step) {
   await attachJsonMetrics(step, "accessibilityResults", (document) => ({
     metrics: {
@@ -375,6 +432,34 @@ async function attachResponsiveSnapshotsSummary(step) {
         operator: "<=",
         passed: (document.summary?.failures ?? 0) <= 0,
         threshold: "maxResponsiveSnapshotFailures",
+      },
+    ],
+  }));
+}
+
+async function attachAccessibilityGateSummary(step) {
+  await attachJsonMetrics(step, "accessibilityGateFindings", (document) => ({
+    metrics: {
+      a11yFindings: document.summary,
+      gateChecks: document.gate?.requiredChecks?.length ?? 0,
+      gateWaivers: document.gate?.knownWaivers?.length ?? 0,
+    },
+    thresholds: [
+      {
+        actual: document.summary?.missingPrimaryLandmarks ?? 0,
+        expected: 0,
+        metric: "accessibilityGateMissingPrimaryLandmarks",
+        operator: "===",
+        passed: (document.summary?.missingPrimaryLandmarks ?? 0) === 0,
+        threshold: "maxMissingPrimaryLandmarks",
+      },
+      {
+        actual: document.gate?.requiredChecks?.length ?? 0,
+        expected: requiredChecksCount(),
+        metric: "accessibilityGateRequiredChecks",
+        operator: ">=",
+        passed: (document.gate?.requiredChecks?.length ?? 0) >= requiredChecksCount(),
+        threshold: "minRequiredChecks",
       },
     ],
   }));

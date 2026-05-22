@@ -16,15 +16,16 @@ import {
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
   process.env.E2E_RESPONSIVE_OUTPUT_DIR ??
-  path.join(rootDir, "output", "responsive-snapshots", "latest");
+  path.join(rootDir, "output", "accessibility", "latest", "responsive-snapshots");
 const screenshotsDir = path.join(outputDir, "screenshots");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
 
 const viewports = [
   { height: 844, id: "phone-390", width: 390 },
-  { height: 820, id: "middle-1100", width: 1100 },
+  { height: 820, id: "constrained-1100", width: 1100 },
   { height: 980, id: "desktop-1440", width: 1440 },
+  { height: 1080, id: "desktop-1920-taskbar", width: 1920 },
 ];
 
 main().catch(async (error) => {

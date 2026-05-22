@@ -1,9 +1,32 @@
-# Reader Accessibility QA
+# Reader Accessibility and Device QA
 
 Use this checklist for manual validation after `mise doctor`,
 `mise run validate:local`, `pnpm validate:local`, `pnpm e2e:book-cinema`,
 `pnpm e2e:book-cinema:low-resource`, `pnpm e2e:accessibility-audit`,
 and `pnpm e2e:responsive-snapshots` pass locally.
+
+## Required Manual Checks (UPSILON Package)
+
+- [ ] Keyboard-only path
+- [ ] Screen-reader landmarks
+- [ ] Visible focus
+- [ ] Focus restore
+- [ ] Shortcut suppression inside inputs
+- [ ] Reduced motion
+- [ ] High contrast
+- [ ] Text scale
+- [ ] Line spacing
+- [ ] Measure control
+- [ ] Touch target size
+- [ ] Mobile bottom sheet reachability
+- [ ] 1920x1080/taskbar ergonomics
+- [ ] <1024 px narrow layout
+- [ ] 1024-1180 px constrained desktop
+- [ ] >1180 px desktop
+- [ ] No control is keyboard-inaccessible
+- [ ] No hidden mobile action lacks a keyboard/touch path
+- [ ] Focus returns to invoking controls after sheets/modals close
+- [ ] High contrast and reduced motion work together
 
 ## Keyboard-Only Smoke Run
 
@@ -19,6 +42,13 @@ and `pnpm e2e:responsive-snapshots` pass locally.
 - [ ] Use Escape to close Book, Document, and Website Cinema from the reader surface.
 - [ ] Confirm focus returns to the control that opened each cinema surface.
 - [ ] Resume a saved progress point and confirm the active word/page returns to the saved location.
+- [ ] Verify end-to-end keyboard flow from Intake through Cinema launch and playback controls without pointer input.
+
+## Known Waived Issues
+
+- Issue: None identified for this gate run.
+- Owner: Accessibility QA owner
+- Reason: No known waived defects accepted in this package at this time.
 
 ## Policy And Element Behaviour
 
@@ -51,6 +81,8 @@ and `pnpm e2e:responsive-snapshots` pass locally.
 - [ ] Change scope or active outline block and confirm the live announcement reflects the new chapter, page range, document block, or website block.
 - [ ] Inspect Policy Notes and confirm explanations are readable as normal text, not only visual badges.
 - [ ] Confirm Reduced motion, High contrast, Text scale, Line spacing, and Measure controls expose state and can be changed from the keyboard.
+- [ ] In Workspace and Settings, confirm core controls announce predictable names and state.
+- [ ] In Teleprompt, confirm message composition controls, status text, and controls announce expected labels and state.
 
 ## Responsive And Language Smoke
 

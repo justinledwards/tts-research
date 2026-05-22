@@ -1,5 +1,13 @@
 # Working Log
 
+## 2026-05-23 00:00 CEST - Manual Accessibility and Device QA Package
+- [x] Update accessibility and responsive QA scripts to generate package artifacts in `output/accessibility/latest`
+- [x] Add required manual QA check checklist and known-waiver section for accessibility/package gate
+- [x] Extend responsive coverage for narrow, constrained desktop, and 1920x1080 taskbar ergonomics
+- [x] Add gate-level artifact aggregation for automated accessibility outputs and manual-qa notes
+- [ ] Regenerate working-tree accessibility artifacts for the new gate path
+- [ ] Run required local validation commands after wiring package gate artifacts
+
 ## 2026-05-22 19:59 CEST - OSS Demo Mode and First-Run Experience
 - [x] Inspect mock startup, fixtures, and current first-run surfaces
 - [x] Add demo mode data, entry UI, and thin workflow wrapper
@@ -415,3 +423,7 @@
 - [x] Keep heavy startup surfaces lazy and covered by bundle checks
 - [x] Generate performance artifacts under output/performance/latest
 - [x] Run project validation checks
+## 2026-05-23 00:04 CEST - Manual Accessibility and Device QA release artifacts
+- [ ] Fix remaining formatting issues in changed files
+- [ ] Re-run commit flow and create commit
+- [ ] Push branch and update PR #3 with latest accessibility artifact status
