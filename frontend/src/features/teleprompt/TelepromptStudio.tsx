@@ -20,6 +20,7 @@ import { Button, Panel, SegmentedControl, StatusChip, Toggle, cx } from "../../d
 import { ContextPanel, buildContextPanelTabs, type ContextPanelTabId } from "../context-panel";
 import type { RevisionBlock } from "../revision";
 import { HeaderContextSummary } from "../header";
+import { playbackActionLabel, telepromptSecondaryActionVariant } from "../playback";
 import { workspaceStageActionLabel, workspaceStageActionTestId } from "../workspace";
 import type { WorkspaceSourceType, WorkspaceStage } from "../workspace";
 import {
@@ -460,7 +461,7 @@ export function TelepromptStudio({
             size="sm"
             variant="primary"
           >
-            {playbackControls.isPlaying ? "Pause" : "Play"}
+            {playbackControls.isPlaying ? "Pause Cue" : playbackActionLabel("telepromptPlay")}
           </Button>
           <Button
             data-testid="ui-action-teleprompt-restart"
@@ -517,7 +518,7 @@ export function TelepromptStudio({
             disabledReason={canOpenCinema ? undefined : "Create audio before opening Cinema."}
             onClick={handleOpenCinema}
             size="sm"
-            variant="soft"
+            variant={telepromptSecondaryActionVariant("open-cinema")}
           >
             {workspaceStageActionLabel("openCinema")}
           </Button>
@@ -527,7 +528,7 @@ export function TelepromptStudio({
             disabledReason={canCreate ? undefined : "Select a ready source before creating audio."}
             onClick={handleCreateAndListen}
             size="sm"
-            variant="primary"
+            variant={telepromptSecondaryActionVariant("create-and-listen")}
           >
             {workspaceStageActionLabel("createAndListen")}
           </Button>

@@ -172,6 +172,11 @@ import {
 import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPreferences";
 import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
 import type { HeaderContextSummaryProps } from "./features/header";
+import {
+  previewPlayerVariantForSurface,
+  shouldShowGlobalPreviewPlayer,
+  shouldShowRailCinemaShortcut,
+} from "./features/playback";
 import { Button, Panel, SegmentedControl, StatusChip } from "./design";
 import {
   createWorkspaceContext,
@@ -6356,6 +6361,12 @@ export function App() {
     ...bookmarkCommandEntries,
     ...recentCommandEntries,
   ];
+  let globalPreviewOwner: "mini-player" | "preview" | "teleprompt" = "mini-player";
+  if (contentMode === "teleprompt") {
+    globalPreviewOwner = "teleprompt";
+  } else if (contentMode === "preview") {
+    globalPreviewOwner = "preview";
+  }
 
   return (
     <main
@@ -6688,10 +6699,14 @@ export function App() {
             currentRunMode={runConfiguration.runMode}
             currentVoiceId={selectedVoiceProfileId || "default"}
             hidden={
-              contentMode === "teleprompt" ||
-              isBookCinemaOpen ||
-              Boolean(preparedSourceCinemaSource) ||
-              (activityFooterMode === "full" && contentMode !== "preview")
+              !shouldShowGlobalPreviewPlayer({
+                activityFooterMode,
+                isCinemaOpen: isBookCinemaOpen,
+                isSettingsOpen,
+                owner: globalPreviewOwner,
+                preparedSourceCinemaOpen: Boolean(preparedSourceCinemaSource),
+                stage: contentMode,
+              })
             }
             isPlaybackActive={isPlaybackActive}
             job={job}
@@ -6713,7 +6728,7 @@ export function App() {
               activeNarrationPreparedSource,
               activeNarrationBookSource,
             )}
-            variant={contentMode === "preview" || isSettingsOpen ? "full" : "compact"}
+            variant={previewPlayerVariantForSurface({ isSettingsOpen, stage: contentMode })}
             voiceOptions={globalPreviewVoiceOptions}
             voiceProfileLabel={selectedVoiceProfile?.name ?? "Default voice"}
             onActiveBlockChange={(blockId) => {
@@ -7283,7 +7298,7 @@ export function App() {
                 mode={rightRailMode}
                 onModeChange={setRightRailMode}
                 onOpenCinema={openReadingCinema}
-                showCinemaAction={contentMode !== "preview" && contentMode !== "teleprompt"}
+                showCinemaAction={shouldShowRailCinemaShortcut(contentMode)}
               />
             )}
           </aside>

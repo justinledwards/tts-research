@@ -28,6 +28,8 @@ Pre-audio is a playback state, not a reader mode. The shared playback state voca
 
 All transport visibility derives from the shared playback state mapper. Per-format code may provide labels, scope summaries, and callbacks, but it must not independently decide whether inert playback controls are visible.
 
+Cinema owns full generated-audio playback. Preview owns audition, temporary preview playback, and A/B comparison. Teleprompt owns cue playback. Review can request Preview but must not present a second full transport. The ambient mini-player is suppressed in Cinema and Teleprompt unless a future state explicitly allows it through `playbackSurfaceRules`.
+
 The shared footer keeps playable controls in this order: restart, 10-second seek back, primary play/pause, 10-second seek forward, progress/waveform, speed, bookmark, and display controls. Bookmarks remain part of wayfinding and are also reachable from the footer transport when audio is playable.
 
 Mobile cinema surfaces use the same bottom sheet pattern below `1024px`: `Source`, `Structure`, and `Narration`. The sheet is opened from the shared footer `More` control, exposes display controls inside the sheet, and does not change the active focus mode. Navigation from bookmarks, recent positions, or outlines closes the sheet and returns focus to the reader canvas.

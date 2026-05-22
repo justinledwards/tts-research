@@ -8,6 +8,13 @@ export const UI_ACTION_SURFACES = [
   "Intake",
   "Review",
   "Preview",
+  "Preview mini-player",
+  "Project Dashboard",
+  "Voice Dashboard",
+  "Command Palette",
+  "Mobile/narrow More sheet",
+  "UI Memory",
+  "Speech Policy",
 ] as const;
 
 export type UiActionSurface = (typeof UI_ACTION_SURFACES)[number];

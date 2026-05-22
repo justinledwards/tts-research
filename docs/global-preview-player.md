@@ -6,11 +6,20 @@ recording toolbar or the full Cinema transport.
 
 ## Transport Semantics
 
+- Playback ownership is centralized in `frontend/src/features/playback`. Cinema owns full playback,
+  Preview owns audition and A/B comparison, Review may request preview but must not become a full
+  transport, Teleprompt owns cue playback, and the mini-player is ambient convenience only.
+- Canonical action meanings are distinct: `Play` plays existing generated audio, `Audition
+  Preview` generates or plays temporary preview audio, `Create & Listen` creates production/job
+  audio and queues playback, `Open Cinema` navigates to the full playback surface, and `A/B Compare`
+  compares variants without creating job audio.
 - Outside Cinema, the mini-player owns preview playback controls: previous block, play/pause,
   restart, next block, playback speed, selected segment preview, and whole-source preview.
 - Review and Intake use the compact side dock so persistent preview controls do not cover workspace
   actions. Preview and Settings use the full side dock with whole-source preview and A/B controls.
 - Inside Book, Document, or Website Cinema, the full shared Cinema transport owns playback.
+- Inside Teleprompt, cue playback is the primary transport. `Create & Listen` and `Open Cinema`
+  remain secondary actions so they do not compete with cue controls.
 - The mini-player reuses the same generated-audio playback controller as the right rail audio
   player. It does not create a separate audio engine.
 - Disabled preview actions must expose a reason, usually that `Create & Listen` has not produced

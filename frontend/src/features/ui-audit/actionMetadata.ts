@@ -1,5 +1,6 @@
-import type { UiActionClass, UiActionExpectedTransition, UiActionSurface } from "./actionScopes";
+import { playbackActionLabel, type PlaybackOwner } from "../playback";
 import { workspaceStageActionLabel } from "../workspace/stageActions";
+import type { UiActionClass, UiActionExpectedTransition, UiActionSurface } from "./actionScopes";
 
 export interface UiActionMetadata {
   readonly id: string;
@@ -12,6 +13,7 @@ export interface UiActionMetadata {
   readonly expectedTransition: UiActionExpectedTransition;
   readonly destructive: boolean;
   readonly disabledReason?: string;
+  readonly owner?: string;
   readonly aliases?: readonly string[];
 }
 
@@ -142,14 +144,30 @@ export const STATIC_UI_ACTION_METADATA = [
     "transport",
     "state-changed",
   ),
-  action("preview-mini-play", "Play preview", "Preview", "transport", "live-status-updated"),
+  action(
+    "preview-mini-play",
+    playbackActionLabel("previewAudition"),
+    "Preview",
+    "preview",
+    "live-status-updated",
+    false,
+    ["Play preview", "Audition"],
+  ),
   action("preview-mini-restart", "Restart preview", "Preview", "transport", "state-changed"),
   action("preview-mini-next", "Next preview block", "Preview", "transport", "state-changed"),
   action("preview-mini-speed", "Preview playback speed", "Preview", "transport", "state-changed"),
   action("preview-mini-skip-silence", "Skip silence", "Preview", "settings", "state-changed"),
   action("preview-mini-segment", "Selected segment", "Preview", "preview", "state-changed"),
   action("preview-mini-source", "Whole source", "Preview", "preview", "live-status-updated"),
-  action("preview-mini-open-cinema", "Cinema", "Preview", "navigation", "menu-or-panel-opened"),
+  action(
+    "preview-mini-open-cinema",
+    playbackActionLabel("openCinema"),
+    "Preview",
+    "navigation",
+    "menu-or-panel-opened",
+    false,
+    ["Cinema"],
+  ),
   action("preview-mini-audition-a", "Audition A", "Preview", "preview", "live-status-updated"),
   action("preview-mini-voice-b", "Voice B", "Preview", "settings", "state-changed"),
   action("preview-mini-policy-b", "Policy B", "Preview", "settings", "state-changed"),
@@ -188,7 +206,15 @@ export const STATIC_UI_ACTION_METADATA = [
   action("teleprompt-back-preview", "Back to Preview", "Teleprompt", "navigation", "state-changed"),
   action("teleprompt-previous-cue", "Previous cue", "Teleprompt", "navigation", "state-changed"),
   action("teleprompt-next-cue", "Next cue", "Teleprompt", "navigation", "state-changed"),
-  action("teleprompt-play-pause", "Play", "Teleprompt", "transport", "live-status-updated"),
+  action(
+    "teleprompt-play-pause",
+    playbackActionLabel("telepromptPlay"),
+    "Teleprompt",
+    "transport",
+    "live-status-updated",
+    false,
+    ["Play", "Pause Cue"],
+  ),
   action("teleprompt-restart", "Restart", "Teleprompt", "transport", "state-changed"),
   action("teleprompt-mirror", "Mirror mode", "Teleprompt", "settings", "state-changed"),
   action("teleprompt-preset-standard", "Standard", "Teleprompt", "settings", "state-changed"),
@@ -472,8 +498,35 @@ function action(
     actionClass,
     expectedTransition,
     destructive,
+    owner: playbackOwnerForAction(id, surface, actionClass, label),
     aliases,
   };
+}
+
+function playbackOwnerForAction(
+  id: string,
+  surface: UiActionSurface,
+  actionClass: UiActionClass,
+  label: string,
+): PlaybackOwner | undefined {
+  if (
+    surface === "BookCinema" ||
+    surface === "DocumentCinema" ||
+    surface === "WebsiteCinema" ||
+    id.includes("cinema")
+  ) {
+    return "cinema";
+  }
+  if (surface === "Teleprompt" && (actionClass === "transport" || /\bcue\b/i.test(label))) {
+    return "teleprompt";
+  }
+  if (surface === "Preview" || surface === "Preview mini-player" || id.startsWith("preview-mini")) {
+    return "preview";
+  }
+  if (surface === "Review" && /\bpreview\b/i.test(label)) {
+    return "preview";
+  }
+  return undefined;
 }
 
 function isDestructiveLabel(label: string): boolean {

@@ -355,3 +355,10 @@
 - [x] Run project validation checks
 - [ ] Resolve remaining UI action audit findings before PR leaves draft
 - [ ] Resolve validate:local frontend CSS bundle budget failure
+## 2026-05-22 12:35 CEST - Transport Ownership and No-Duplicate Playback
+- [x] Inspect playback surfaces, docs, and action metadata
+- [x] Add central playback ownership model and surface rules
+- [x] Wire playback-like controls to canonical owners and labels
+- [x] Suppress competing transports across Review, Preview, Cinema, and Teleprompt
+- [x] Run project validation checks
+- [ ] Resolve validate:local frontend CSS bundle budget failure

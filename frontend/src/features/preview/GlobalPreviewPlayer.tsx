@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { Button, Toggle, cx, fieldControlClassName } from "../../design";
 import type { RunMode, VoiceJob } from "../../types";
+import { playbackActionLabel } from "../playback";
 import { READER_PLAYBACK_RATES } from "../reader-accessibility";
 import type { RevisionBlock } from "../revision";
 import {
@@ -123,6 +124,10 @@ export function GlobalPreviewPlayer({
   const playbackDisabledReason = previewPlaybackDisabledReason(playbackAvailable);
   const activeWords = countPreviewWords(activeItem?.spokenText ?? "");
   const statusLabel = previewPlaybackStatusLabel(playbackControls.isPlaying, isPlaybackActive);
+  const previewPlayAriaLabel = playbackControls.isPlaying
+    ? "Pause preview audition"
+    : playbackActionLabel("previewAudition");
+  const previewPlayLabel = playbackControls.isPlaying ? "Pause" : "Audition";
   const fullVariant = variant === "full";
 
   const { auditionItem, handlePlayPause, handleRestart, handleWholeSourcePreview, moveBlock } =
@@ -197,7 +202,7 @@ export function GlobalPreviewPlayer({
               Prev
             </Button>
             <Button
-              aria-label={previewPlayAriaLabel(playbackControls.isPlaying)}
+              aria-label={previewPlayAriaLabel}
               data-testid="ui-action-preview-mini-play"
               data-ui-action-surface="Preview"
               disabled={!playbackAvailable}
@@ -206,7 +211,7 @@ export function GlobalPreviewPlayer({
               size="sm"
               variant="primary"
             >
-              {previewPlayLabel(playbackControls.isPlaying)}
+              {previewPlayLabel}
             </Button>
             <Button
               aria-label="Restart preview"
@@ -300,7 +305,7 @@ export function GlobalPreviewPlayer({
                   size="sm"
                   variant="ghost"
                 >
-                  Cinema
+                  {playbackActionLabel("openCinema")}
                 </Button>
               </>
             ) : null}
@@ -317,7 +322,7 @@ export function GlobalPreviewPlayer({
           <div className="grid min-w-0 gap-2 rounded-md border bg-[var(--vs-surface)] p-3 vs-border">
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold">A/B Voice Comparison</h3>
+                <h3 className="text-sm font-semibold">{playbackActionLabel("abCompare")}</h3>
                 <p
                   className="mt-1 truncate text-xs vs-muted"
                   title={previewComparisonSummary(comparison)}
@@ -407,19 +412,11 @@ function hasPreviewPlayback(
 }
 
 function previewPlaybackDisabledReason(playbackAvailable: boolean): string | undefined {
-  return playbackAvailable ? undefined : "Create & Listen before auditioning generated audio.";
+  return playbackAvailable ? undefined : "Create & Listen before auditioning preview audio.";
 }
 
 function previewPlaybackStatusLabel(isPlaying: boolean, isPlaybackActive: boolean): string {
   return isPlaying || isPlaybackActive ? "Playing" : "Ready";
-}
-
-function previewPlayAriaLabel(isPlaying: boolean): string {
-  return isPlaying ? "Pause preview" : "Play preview";
-}
-
-function previewPlayLabel(isPlaying: boolean): string {
-  return isPlaying ? "Pause" : "Play";
 }
 
 function previewPlayerClassName(): string {

@@ -1,3 +1,4 @@
+import { playbackActionLabel } from "../playback";
 import { transitionWorkspaceStage, type WorkspaceContext, type WorkspaceStage } from "./model";
 
 export type WorkspaceStageActionId =
@@ -26,7 +27,7 @@ export const WORKSPACE_STAGE_ACTIONS: Record<WorkspaceStageActionId, WorkspaceSt
     description: "Create narration audio from the active source, voice, policy, and scope.",
     id: "createAndListen",
     kind: "primary",
-    label: "Create & Listen",
+    label: playbackActionLabel("createAndListen"),
     targetStage: null,
   },
   exportArtifact: {
@@ -54,7 +55,7 @@ export const WORKSPACE_STAGE_ACTIONS: Record<WorkspaceStageActionId, WorkspaceSt
     description: "Open Cinema for generated audio playback and review.",
     id: "openCinema",
     kind: "secondary",
-    label: "Open Cinema",
+    label: playbackActionLabel("openCinema"),
     targetStage: null,
   },
   openTeleprompt: {
