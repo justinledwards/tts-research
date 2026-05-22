@@ -8,11 +8,16 @@ Voice Studio uses `mise` as the top-level reproducibility surface. The goal is t
 mise install
 mise setup
 mise doctor
+pnpm start:mock
 mise run doctor
 mise start -- pnpm start:local
 ```
 
 `mise setup` installs Node dependencies when missing, syncs the backend Python environment needed for Book Cinema/source extraction, and creates ignored local runtime folders.
+
+Use `pnpm start:mock` for the first run. It starts the same app with deterministic mock providers so
+contributors can open **Try the Studio** and walk through Intake, Review, Preview, Teleprompt, and
+Cinema without external services. See `docs/first-run-demo.md` and `docs/contributor-quickstart.md`.
 
 `mise doctor` is the built-in mise health check. `mise run doctor` prints the Voice Studio state of core tools, `ffmpeg`, `pdftotext`, provider environments, ignored runtime paths, and tracked model artifacts.
 

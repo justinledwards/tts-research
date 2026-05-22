@@ -203,6 +203,7 @@ import {
   type WorkspaceStageActionId,
 } from "./features/workspace/stageActions";
 import type { IntakePreparationTarget } from "./features/intake";
+import type { DemoProject } from "./features/demo";
 import type {
   BookSource,
   BookScope,
@@ -360,6 +361,9 @@ const LazyTelepromptStudio = lazy(() =>
 );
 const LazyGlobalPreviewPlayer = lazy(() =>
   import("./features/preview").then((module) => ({ default: module.GlobalPreviewPlayer })),
+);
+const LazyDemoMode = lazy(() =>
+  import("./features/demo").then((module) => ({ default: module.DemoMode })),
 );
 const LazyHeaderContextSummary = lazy(() =>
   import("./features/header").then((module) => ({ default: module.HeaderContextSummary })),
@@ -2643,6 +2647,8 @@ export function App() {
   const [isProjectDashboardOpen, setIsProjectDashboardOpen] = useState(false);
   const [isVoiceDashboardOpen, setIsVoiceDashboardOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [activeDemoProjectId, setActiveDemoProjectId] = useState<string | null>(null);
+  const [isDemoModeCollapsed, setIsDemoModeCollapsed] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteView, setCommandPaletteView] = useState<CommandPaletteView>("commands");
@@ -2767,6 +2773,42 @@ export function App() {
     },
     [runWorkspaceStageAction],
   );
+  function openDemoProject(project: DemoProject) {
+    setActiveDemoProjectId(project.id);
+    setIsDemoModeCollapsed(false);
+    setProjectStateReadyId(null);
+    setText(project.sampleText);
+    setSourceMode("text");
+    setSelectedBookSourceId(null);
+    setSelectedBookScope(null);
+    setBookScopeContent(null);
+    setSelectedPreparedSourceId(null);
+    setSourcePrepError(null);
+    setBookSourceError(null);
+    setError(null);
+    setJob(null);
+    setRequestState("idle");
+    setResumeFallbackNotice(null);
+    setActivePlaybackSession(null);
+    setPendingPlaybackResume(null);
+    setPlaybackCursorSec(0);
+    setIsPlaybackActive(false);
+    setPlaybackControls(DISABLED_PLAYBACK_CONTROLLER);
+    setSpeechPolicyProfile(project.policyProfile);
+    setSelectedVoiceProfileId(project.voiceId === "default" ? "" : project.voiceId);
+    setWorkspaceContext((currentContext) =>
+      createWorkspaceContext({
+        ...currentContext,
+        activeBlockId: null,
+        sourceId: project.id,
+        sourceType: "draft",
+        speechPolicyProfile: project.policyProfile,
+        stage: "review",
+        telepromptReturnStage: "review",
+        voiceProfileId: project.voiceId === "default" ? null : project.voiceId,
+      }),
+    );
+  }
   const setWorkspaceLayoutMode = useCallback(
     (layoutMode: WorkspaceLayoutMode) => {
       setWorkspaceContext((currentContext) => ({
@@ -4229,7 +4271,7 @@ export function App() {
       if (projectId === activeProjectId) {
         return;
       }
-      if (projectStateReadyId === activeProjectId) {
+      if (!activeDemoProjectId && projectStateReadyId === activeProjectId) {
         saveProjectWorkspaceState(activeProjectId, {
           activeBlockId: workspaceContext.activeBlockId,
           bookScope: selectedBookScope,
@@ -4246,10 +4288,12 @@ export function App() {
         });
       }
       setProjectStateReadyId(null);
+      setActiveDemoProjectId(null);
       setActiveProjectId(projectId);
       rememberActiveProjectId(projectId);
     },
     [
+      activeDemoProjectId,
       contentMode,
       activeProjectId,
       currentReadingPosition,
@@ -5377,7 +5421,7 @@ export function App() {
   }, [profileSource, refreshProfileSourceDiagnostics]);
 
   useEffect(() => {
-    if (projectStateReadyId !== activeProjectId) {
+    if (activeDemoProjectId || projectStateReadyId !== activeProjectId) {
       return;
     }
     saveProjectWorkspaceState(activeProjectId, {
@@ -5396,6 +5440,7 @@ export function App() {
     });
   }, [
     activeProjectId,
+    activeDemoProjectId,
     contentMode,
     job?.id,
     currentReadingPosition,
@@ -5836,6 +5881,7 @@ export function App() {
 
     try {
       const nextJob = await createVoiceJob(request);
+      setActiveDemoProjectId(null);
       setJob(nextJob);
       setContentMode("preview");
       void refreshProjectJobs(nextJob.projectId || activeProjectId);
@@ -5896,6 +5942,7 @@ export function App() {
 
     try {
       const nextJob = await createBookNarrationJob(book.id, request);
+      setActiveDemoProjectId(null);
       setJob(nextJob);
       setSelectedBookSourceId(nextJob.bookSourceId ?? book.id);
       setSelectedBookScope(nextJob.bookScope ?? scope);
@@ -5942,6 +5989,7 @@ export function App() {
 
     try {
       const nextJob = await createPreparedSourceJob(source.id, request);
+      setActiveDemoProjectId(null);
       setJob(nextJob);
       setContentMode("preview");
       void refreshProjectJobs(nextJob.projectId || activeProjectId);
@@ -6478,6 +6526,32 @@ export function App() {
         runConfiguration={runConfiguration}
         workspaceLayoutMode={workspaceContext.layoutMode}
       />
+      {isDemoModeCollapsed ? (
+        <div className="border-b px-3 py-2 vs-border vs-surface lg:px-4">
+          <Button
+            className="gap-2"
+            data-testid="ui-action-demo-open"
+            onClick={() => {
+              setIsDemoModeCollapsed(false);
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            Try the Studio
+            {activeDemoProjectId ? <StatusChip className="py-0.5">Demo loaded</StatusChip> : null}
+          </Button>
+        </div>
+      ) : (
+        <Suspense fallback={null}>
+          <LazyDemoMode
+            activeDemoProjectId={activeDemoProjectId}
+            currentStage={contentMode}
+            onCollapse={setIsDemoModeCollapsed}
+            onOpenDemoProject={openDemoProject}
+            onStageSelect={setContentMode}
+          />
+        </Suspense>
+      )}
       {isCommandPaletteOpen ? (
         <Suspense fallback={null}>
           <CommandPalette

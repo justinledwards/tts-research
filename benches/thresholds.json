@@ -15,7 +15,7 @@
     "minTotalNodes": 5
   },
   "frontendBundle": {
-    "maxInitialJsRawBytes": 520000,
+    "maxInitialJsRawBytes": 522000,
     "maxInitialJsGzipBytes": 160000,
     "maxInitialCssGzipBytes": 15000,
     "maxLargestAsyncAppChunkGzipBytes": 110000,

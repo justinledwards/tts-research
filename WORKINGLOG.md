@@ -1,5 +1,11 @@
 # Working Log
 
+## 2026-05-22 19:59 CEST - OSS Demo Mode and First-Run Experience
+- [x] Inspect mock startup, fixtures, and current first-run surfaces
+- [x] Add demo mode data, entry UI, and thin workflow wrapper
+- [x] Add first-run and contributor docs
+- [x] Run project validation checks
+
 ## 2026-05-22 15:47 CEST - Progressive Settings and Configuration UX
 - [x] Inspect settings IA, scope metadata, and command deep links
 - [x] Add three-layer settings model and progressive Settings UI
