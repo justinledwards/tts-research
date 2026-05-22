@@ -106,6 +106,10 @@ export function buildCinemaInspectorPanels(
       tabId: section.tabId,
       title: section.title,
     })),
+    {
+      allowedSurfaces: ["BookCinema", "DocumentCinema", "WebsiteCinema"],
+      owner: "cinema",
+    },
   ).map((tab) => ({
     ...tab,
     modeAffinity: mergeModeAffinities(

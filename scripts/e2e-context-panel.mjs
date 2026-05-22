@@ -160,11 +160,17 @@ async function runContextPanelAudit(browser, projectId, screenshots) {
             `${surface} ${tabId} duplicates section kinds/titles: ${duplicateKeys.join(", ")}.`,
           );
         }
+        failures.push(...contextPanelGuardrailFailures(snapshot));
       }
     }
     await capture("context-panel-tabs");
 
     const panels = await collectPanels(page);
+    failures.push(...panelOwnershipFailures(panels));
+    failures.push(...reviewDiagnosticsDuplicationFailures(tabVisits));
+    if (await hasDiagnosticsInNormalReadState(page)) {
+      failures.push("Diagnostics context panel appeared in a normal Cinema Read state.");
+    }
     const surfaces = new Set(panels.map((panel) => panel.surface));
     if (!surfaces.has("Review")) {
       failures.push("Review context panel was not visible in Review stage.");
@@ -220,7 +226,14 @@ async function collectPanels(page) {
         title: element.querySelector("h3")?.textContent?.trim() ?? "",
         visibleSections: Array.from(element.querySelectorAll("[data-context-section-kind]")).map(
           (section) => ({
+            allowedSurfaces:
+              section.getAttribute("data-context-section-allowed-surfaces")?.split(",") ?? [],
+            debugOnly: section.getAttribute("data-context-section-debug-only") === "true",
+            emptyState: section.getAttribute("data-context-section-empty-state") ?? "",
             kind: section.getAttribute("data-context-section-kind") ?? "",
+            owner: section.getAttribute("data-context-section-owner") ?? "",
+            panelId: section.getAttribute("data-context-section-panel-id") ?? "",
+            relevance: section.getAttribute("data-context-section-relevance") ?? "",
             title: section.querySelector("h4")?.textContent?.trim() ?? "",
           }),
         ),
@@ -237,7 +250,15 @@ async function activePanelSnapshot(page, surface, tabId) {
       return {
         sections: panel
           ? Array.from(panel.querySelectorAll("[data-context-section-kind]")).map((section) => ({
+              allowedSurfaces:
+                section.getAttribute("data-context-section-allowed-surfaces")?.split(",") ?? [],
+              debugOnly: section.getAttribute("data-context-section-debug-only") === "true",
+              emptyState: section.getAttribute("data-context-section-empty-state") ?? "",
               kind: section.getAttribute("data-context-section-kind") ?? "",
+              owner: section.getAttribute("data-context-section-owner") ?? "",
+              panelId: section.getAttribute("data-context-section-panel-id") ?? "",
+              relevance: section.getAttribute("data-context-section-relevance") ?? "",
+              text: section.textContent?.replace(/\s+/g, " ").trim() ?? "",
               title: section.querySelector("h4")?.textContent?.trim() ?? "",
             }))
           : [],
@@ -260,6 +281,96 @@ function duplicateSectionKeys(sections) {
     seen.add(key);
   }
   return [...duplicates];
+}
+
+async function hasDiagnosticsInNormalReadState(page) {
+  return page.evaluate(() =>
+    Array.from(
+      document.querySelectorAll(
+        "[data-cinema-inspector-mode='read'] [data-context-panel-active-tab='diagnostics']",
+      ),
+    ).some((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }),
+  );
+}
+
+function contextPanelGuardrailFailures(snapshot) {
+  const failures = [];
+  for (const section of snapshot.sections) {
+    const label = `${snapshot.surface} ${snapshot.tabId} ${section.title || section.kind}`;
+    if (!section.owner) {
+      failures.push(`${label} is missing context panel owner metadata.`);
+    }
+    if (!section.relevance) {
+      failures.push(`${label} is missing a relevance predicate.`);
+    }
+    if (!section.emptyState) {
+      failures.push(`${label} is missing empty-state copy.`);
+    }
+    if (section.panelId !== snapshot.tabId) {
+      failures.push(`${label} has panel id ${section.panelId} but rendered in ${snapshot.tabId}.`);
+    }
+    if (section.allowedSurfaces.length > 0 && !section.allowedSurfaces.includes(snapshot.surface)) {
+      failures.push(
+        `${label} is only allowed on ${section.allowedSurfaces.join(", ")} but rendered on ${
+          snapshot.surface
+        }.`,
+      );
+    }
+    if (snapshot.tabId !== "diagnostics" && section.debugOnly) {
+      failures.push(`${label} is debug-only but rendered outside Diagnostics.`);
+    }
+    if (snapshot.tabId === "diagnostics" && !section.debugOnly) {
+      failures.push(`${label} is in Diagnostics but is not marked debug-only.`);
+    }
+    if (section.text.length === 0 && !section.emptyState) {
+      failures.push(`${label} is empty without empty-state copy.`);
+    }
+  }
+  return failures;
+}
+
+function panelOwnershipFailures(panels) {
+  const failures = [];
+  for (const panel of panels) {
+    for (const section of panel.visibleSections) {
+      const label = `${panel.surface} ${section.title || section.kind}`;
+      if (!section.allowedSurfaces.includes(panel.surface)) {
+        failures.push(`${label} rendered outside its allowed context-panel surface.`);
+      }
+      if (!section.owner || !section.relevance || !section.emptyState) {
+        failures.push(`${label} is missing ownership, relevance, or empty-state metadata.`);
+      }
+    }
+  }
+  return failures;
+}
+
+function reviewDiagnosticsDuplicationFailures(tabVisits) {
+  const failures = [];
+  const visitsBySurface = new Map();
+  for (const visit of tabVisits) {
+    if (!visitsBySurface.has(visit.surface)) {
+      visitsBySurface.set(visit.surface, new Map());
+    }
+    visitsBySurface.get(visit.surface).set(visit.tabId, visit.sections);
+  }
+  for (const [surface, visits] of visitsBySurface) {
+    const reviewSections = visits.get("review") ?? [];
+    const diagnosticsSections = visits.get("diagnostics") ?? [];
+    const reviewKeys = new Set(reviewSections.map((section) => `${section.kind}:${section.title}`));
+    const duplicated = diagnosticsSections
+      .map((section) => `${section.kind}:${section.title}`)
+      .filter((key) => reviewKeys.has(key));
+    if (duplicated.length > 0) {
+      failures.push(
+        `${surface} duplicates Review and Diagnostics section data: ${duplicated.join(", ")}.`,
+      );
+    }
+  }
+  return failures;
 }
 
 function renderReport(document) {

@@ -11,6 +11,8 @@ Context tabs are single-panel docks. Switching focus mode changes the default co
 
 Pinned context state must not look like a second active reader mode. The active mode uses the strongest selected state. A pinned context tab uses only the pin control or a small pin badge; its tab item must not also use the selected styling reserved for the active tab.
 
+Context sections must flow through the shared context-panel ownership contract. Review sections own work state, Inspect/Overview sections own source understanding, Diagnostics sections own debug-only health data, Policy sections own speech-policy state, and History sections own wayfinding and return context. Per-format Cinema code may adapt data into those sections, but it must not create a separate inspector sidebar with overlapping Review or Diagnostics cards.
+
 Focus mode, active panel, and pinned panel state are session-only overlay state by default. Closing and reopening a cinema surface starts in `Read` mode with no pinned inspector panel unless the user has enabled `Remember my layout` in Studio Settings.
 
 When `Remember my layout` is enabled:

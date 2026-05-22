@@ -23,96 +23,101 @@ export function ReviewContextPanel({
   voiceProfileId: string;
 }>) {
   const [activeContextTab, setActiveContextTab] = useState<ContextPanelTabId>("policy");
-  const tabs = buildContextPanelTabs([
-    {
-      children: (
-        <dl className="grid gap-2 text-xs">
-          <ContextFact
-            label="Source"
-            value={
-              selectedPreparedSource?.title ??
-              selectedPreparedSource?.sourceName ??
-              "Draft or book source"
-            }
-          />
-          <ContextFact label="Project" value={projectId} />
-        </dl>
-      ),
-      detail: selectedPreparedSource ? selectedPreparedSource.kind.toUpperCase() : "Workspace text",
-      id: "review-source-overview",
-      kind: "source-provenance",
-      tabId: "overview",
-      title: "Source context",
-    },
-    {
-      children: (
-        <p className="text-xs leading-5 vs-muted">
-          Search, batch actions, inline speech edits, and revision history live in the Review
-          workflow. Supporting source, policy, and diagnostics details stay here.
-        </p>
-      ),
-      detail: "Active revision workflow",
-      id: "review-task-context",
-      kind: "narration-block-status",
-      tabId: "review",
-      title: "Review task context",
-    },
-    {
-      children: <div className="overflow-hidden rounded-md border vs-border">{rulesPanel}</div>,
-      detail: "Structured speech rules",
-      id: "review-policy-rules",
-      kind: "speech-policy",
-      tabId: "policy",
-      title: "Policy rules",
-    },
-    ...(selectedPreparedSource
-      ? [
-          {
-            children: (
-              <div className="overflow-hidden rounded-md border vs-border">
-                <Suspense
-                  fallback={
-                    <LazyPanelFallback label="Loading pronunciation..." surface="pronunciation" />
-                  }
-                >
-                  <PronunciationPanel
-                    projectId={projectId}
-                    source={selectedPreparedSource}
-                    voiceProfileId={voiceProfileId}
-                  />
-                </Suspense>
-              </div>
-            ),
-            detail: "Voice-specific pronunciation",
-            id: "review-pronunciation",
-            kind: "speech-policy" as const,
-            tabId: "policy" as const,
-            title: "Pronunciation",
-          },
-        ]
-      : []),
-    {
-      children: <div className="overflow-hidden rounded-md border vs-border">{mathPanel}</div>,
-      detail: "Math and structured speech",
-      id: "review-structured-speech",
-      kind: "policy-notes",
-      tabId: "diagnostics",
-      title: "Structured speech diagnostics",
-    },
-    {
-      children: (
-        <p className="text-xs leading-5 vs-muted">
-          Return from Preview or Teleprompt keeps this same source, selected block, policy profile,
-          and voice profile.
-        </p>
-      ),
-      detail: "Review return context",
-      id: "review-history",
-      kind: "wayfinding",
-      tabId: "history",
-      title: "Review history",
-    },
-  ]);
+  const tabs = buildContextPanelTabs(
+    [
+      {
+        children: (
+          <dl className="grid gap-2 text-xs">
+            <ContextFact
+              label="Source"
+              value={
+                selectedPreparedSource?.title ??
+                selectedPreparedSource?.sourceName ??
+                "Draft or book source"
+              }
+            />
+            <ContextFact label="Project" value={projectId} />
+          </dl>
+        ),
+        detail: selectedPreparedSource
+          ? selectedPreparedSource.kind.toUpperCase()
+          : "Workspace text",
+        id: "review-source-overview",
+        kind: "source-provenance",
+        tabId: "overview",
+        title: "Source context",
+      },
+      {
+        children: (
+          <p className="text-xs leading-5 vs-muted">
+            Search, batch actions, inline speech edits, and revision history live in the Review
+            workflow. Supporting source, policy, and diagnostics details stay here.
+          </p>
+        ),
+        detail: "Active revision workflow",
+        id: "review-task-context",
+        kind: "narration-block-status",
+        tabId: "review",
+        title: "Review task context",
+      },
+      {
+        children: <div className="overflow-hidden rounded-md border vs-border">{rulesPanel}</div>,
+        detail: "Structured speech rules",
+        id: "review-policy-rules",
+        kind: "speech-policy",
+        tabId: "policy",
+        title: "Policy rules",
+      },
+      ...(selectedPreparedSource
+        ? [
+            {
+              children: (
+                <div className="overflow-hidden rounded-md border vs-border">
+                  <Suspense
+                    fallback={
+                      <LazyPanelFallback label="Loading pronunciation..." surface="pronunciation" />
+                    }
+                  >
+                    <PronunciationPanel
+                      projectId={projectId}
+                      source={selectedPreparedSource}
+                      voiceProfileId={voiceProfileId}
+                    />
+                  </Suspense>
+                </div>
+              ),
+              detail: "Voice-specific pronunciation",
+              id: "review-pronunciation",
+              kind: "speech-policy" as const,
+              tabId: "policy" as const,
+              title: "Pronunciation",
+            },
+          ]
+        : []),
+      {
+        children: <div className="overflow-hidden rounded-md border vs-border">{mathPanel}</div>,
+        detail: "Math and structured speech",
+        id: "review-structured-speech",
+        kind: "policy-notes",
+        tabId: "diagnostics",
+        title: "Structured speech diagnostics",
+      },
+      {
+        children: (
+          <p className="text-xs leading-5 vs-muted">
+            Return from Preview or Teleprompt keeps this same source, selected block, policy
+            profile, and voice profile.
+          </p>
+        ),
+        detail: "Review return context",
+        id: "review-history",
+        kind: "wayfinding",
+        tabId: "history",
+        title: "Review history",
+      },
+    ],
+    { allowedSurfaces: ["Review"], owner: "review" },
+  );
 
   return (
     <ContextPanel

@@ -36,6 +36,7 @@ export function ContextPanel({
     <Panel
       aria-label={label}
       className={`overflow-hidden ${className}`}
+      data-context-panel-active-tab={activeTab.id}
       data-context-panel-surface={surface}
     >
       <div className="border-b p-3 vs-border">
@@ -103,7 +104,13 @@ export function ContextPanel({
           <section
             aria-label={section.title}
             className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
+            data-context-section-allowed-surfaces={(section.allowedSurfaces ?? []).join(",")}
+            data-context-section-debug-only={section.debugOnly ? "true" : "false"}
+            data-context-section-empty-state={section.emptyState ?? ""}
             data-context-section-kind={section.kind}
+            data-context-section-owner={section.owner ?? ""}
+            data-context-section-panel-id={section.panelId ?? activeTab.id}
+            data-context-section-relevance={section.relevance ?? ""}
             key={section.id}
           >
             <div className="min-w-0">

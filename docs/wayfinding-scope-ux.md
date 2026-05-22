@@ -26,6 +26,7 @@ Provenance, policy, and health information remain discoverable through context t
 - `Overview` groups source provenance, current passage context, and readiness summary.
 - `Policy` groups speech policy scope, source pins, voice-policy facts, and policy notes.
 - `Diagnostics` groups skipped content, extraction health, generated-audio health, highlight confidence, and timing diagnostics.
+- `History` owns outline, bookmarks, recent positions, and Teleprompt return context. Those items should not be repeated in Review or Diagnostics unless the repeated entry is an explicit action link back to `History`.
 - Pinned context tabs are session-only and may stay visible in `Read` without expanding all other panels.
 
 Footer transport is shared across Book, Document, and Website Cinema. Left/J and Right/L seek by 10 seconds, matching the visible `-10s` and `+10s` controls. The mobile bottom sheet uses `Source`, `Structure`, and `Narration` panels so source selection, outline/bookmark/recent navigation, and current narration context stay in predictable places.

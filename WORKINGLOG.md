@@ -362,3 +362,10 @@
 - [x] Suppress competing transports across Review, Preview, Cinema, and Teleprompt
 - [x] Run project validation checks
 - [ ] Resolve validate:local frontend CSS bundle budget failure
+## 2026-05-22 13:37 CEST - Context Panel Guardrails and Review/Diagnostics Ownership
+- [x] Inspect context panel model, adapters, docs, and side-panel surfaces
+- [x] Add context panel ownership metadata and default mapping guardrails
+- [x] Add validation for empty tabs, debug-only visibility, side-panel bypasses, and duplicate data
+- [x] Wire UI audit/local validation to context panel guardrails
+- [x] Run project validation checks
+- [ ] Resolve validate:local frontend bundle budget failure
