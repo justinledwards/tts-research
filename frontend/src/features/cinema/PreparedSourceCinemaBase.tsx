@@ -17,6 +17,7 @@ import {
   buildCinemaInspectorPanels,
   buildCinemaInspectorSection,
   buildCinemaWayfindingSection,
+  ReadAlongInvariantDebugPanel,
 } from "./CinemaInspectorPanels";
 import { deriveCinemaPlaybackState } from "./model";
 import {
@@ -63,6 +64,7 @@ import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdo
 import {
   preparedSourceCinemaActiveBlock,
   preparedSourceCinemaKind,
+  preparedSourceCinemaJobMatchesSource,
   preparedSourceCinemaLabel,
   preparedSourceCinemaMetrics,
   preparedSourceCinemaOutline,
@@ -78,6 +80,11 @@ import {
 } from "./preparedSourceModel";
 import { preparedSourceCinemaPolicyNotes } from "./preparedSourcePolicyNotes";
 import { PreparedSourcePolicyNotes } from "./policy-notes/PreparedSourcePolicyNotes";
+import { generatedAudioLifecycleFromJob } from "../playback";
+import {
+  evaluatePreparedSourceReadAlongInvariant,
+  readAlongInvariantStatusLabel,
+} from "../readalong";
 import type {
   CustomSpeechPolicyProfile,
   NarrationBlock,
@@ -127,6 +134,19 @@ function preparedSourceCinemaLabelForKind(
     return "Document Cinema";
   }
   return preparedSourceCinemaLabel(source);
+}
+
+function preparedReadAlongSurface(
+  source: PreparedSource,
+  isWebsiteCinema: boolean,
+): "document" | "prepared" | "website" {
+  if (isWebsiteCinema) {
+    return "website";
+  }
+  if (preparedSourceCinemaKind(source) === "document") {
+    return "document";
+  }
+  return "prepared";
 }
 
 function websiteExtractionReadabilityLabel(
@@ -321,6 +341,32 @@ export function PreparedSourceCinemaOverlay({
   const policyNotes = useMemo(() => preparedSourceCinemaPolicyNotes(source), [source]);
   const activeText = displayBlock ? markdownBlockText(displayBlock) : "";
   const activeSection = activeOutlineItem(outline, displayBlock);
+  const activeJobMatchesSource = !job || preparedSourceCinemaJobMatchesSource(job, source);
+  const readAlongReport = useMemo(
+    () =>
+      evaluatePreparedSourceReadAlongInvariant({
+        activeBlock: displayBlock,
+        activeText,
+        activeWordIndex: effectiveActiveWordIndex,
+        generatedAudioState: generatedAudioLifecycleFromJob({ job }),
+        highlightCue: null,
+        jobMatchesSource: activeJobMatchesSource,
+        progress,
+        source,
+        surface: preparedReadAlongSurface(source, isWebsiteCinema),
+        visibleNodeIds: preparedSourceCinemaPrimaryBlocks(source).map((block) => block.id),
+      }),
+    [
+      activeJobMatchesSource,
+      activeText,
+      displayBlock,
+      effectiveActiveWordIndex,
+      isWebsiteCinema,
+      job,
+      progress,
+      source,
+    ],
+  );
   const sourcePolicyState = {
     projectProfile: policyProfile,
     resolvedProfile: displayBlock?.speechPolicy.profile ?? source.speechPolicyProfile,
@@ -561,6 +607,15 @@ export function PreparedSourceCinemaOverlay({
       modeAffinity: "debug",
       tabId: "diagnostics",
       title: "Skipped content",
+    }),
+    buildCinemaInspectorSection({
+      children: <ReadAlongInvariantDebugPanel report={readAlongReport} />,
+      detail: readAlongInvariantStatusLabel(readAlongReport),
+      id: "read-along-fidelity",
+      kind: "timing-map",
+      modeAffinity: "debug",
+      tabId: "diagnostics",
+      title: "Read-along fidelity",
     }),
   ]);
   const cinemaFocus = useCinemaFocusController(sourceInspectorPanels, {

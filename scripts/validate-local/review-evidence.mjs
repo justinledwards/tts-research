@@ -151,6 +151,16 @@ export function buildReviewSteps(context) {
       script: "e2e:book-cinema",
       title: "Book Cinema E2E",
     }),
+    {
+      args: ["e2e:read-along-fidelity"],
+      artifacts: readAlongFidelityArtifacts(context, "read-along-fidelity-e2e"),
+      command: "pnpm",
+      env: {
+        E2E_READ_ALONG_OUTPUT_DIR: artifactDir(context, "read-along-fidelity-e2e"),
+      },
+      id: "read-along-fidelity-e2e",
+      title: "Read-along Fidelity E2E",
+    },
     bookCinemaStep(context, {
       id: "book-cinema-responsive-e2e",
       script: "e2e:book-cinema:responsive",
@@ -301,6 +311,15 @@ function commandPaletteArtifacts(context, id) {
   return {
     commandPaletteReport: path.join(dir, "command-palette-report.md"),
     commandPaletteResults: path.join(dir, "command-palette-results.json"),
+    screenshots: path.join(dir, "screenshots"),
+  };
+}
+
+function readAlongFidelityArtifacts(context, id) {
+  const dir = artifactDir(context, id);
+  return {
+    readAlongReport: path.join(dir, "read-along-fidelity-report.md"),
+    readAlongResults: path.join(dir, "read-along-fidelity-results.json"),
     screenshots: path.join(dir, "screenshots"),
   };
 }
@@ -479,6 +498,9 @@ async function readQaDocuments(artifactRecords) {
     lowResourceSummary: await readJsonIfPresent(
       byStepAndKey.get("book-cinema-low-resource-e2e:e2eSummary"),
     ),
+    readAlongFidelity: await readJsonIfPresent(
+      byStepAndKey.get("read-along-fidelity-e2e:readAlongResults"),
+    ),
     responsiveCinema: await readJsonIfPresent(
       byStepAndKey.get("book-cinema-responsive-e2e:e2eSummary"),
     ),
@@ -562,6 +584,7 @@ export function buildPassFailSummary({
     lowResourceTiming: statusSummary(
       qaDocuments.lowResourceSummary ?? qaDocuments.lowResourceTiming,
     ),
+    readAlongFidelity: statusSummary(qaDocuments.readAlongFidelity),
     responsiveCinema: statusSummary(qaDocuments.responsiveCinema),
     responsiveSnapshots: statusSummary(qaDocuments.responsiveSnapshots),
     telepromptMemory: statusSummary(qaDocuments.telepromptMemory),

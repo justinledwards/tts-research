@@ -6,6 +6,11 @@ import {
   type ReaderRecentPositionItem,
 } from "../reader-navigation";
 import { buildContextPanelTabs, type ContextPanelSectionKind } from "../context-panel";
+import {
+  readAlongInvariantDebugRows,
+  readAlongInvariantStatusLabel,
+  type ReadAlongInvariantReport,
+} from "../readalong";
 import type { CinemaFocusMode, CinemaInspectorPanelId, CinemaPanelDefinition } from "./model";
 
 export interface CinemaCurrentReading {
@@ -92,6 +97,41 @@ export function buildCinemaInspectorSection(
   section: CinemaInspectorSection,
 ): CinemaInspectorSection {
   return section;
+}
+
+export function ReadAlongInvariantDebugPanel({
+  report,
+}: Readonly<{ report: ReadAlongInvariantReport }>) {
+  const rows = readAlongInvariantDebugRows(report);
+  return (
+    <div className="mt-4 rounded-lg border p-4 text-xs vs-border">
+      <div className="flex items-center justify-between gap-3">
+        <p className="vs-muted font-semibold uppercase tracking-[0.2em]">Read-along</p>
+        <span className={`font-semibold ${readAlongStatusClassName(report)}`}>
+          {readAlongInvariantStatusLabel(report)}
+        </span>
+      </div>
+      <p className="mt-2 leading-5 vs-muted">{report.summary}</p>
+      <dl className="mt-3 grid gap-2">
+        {rows.map((row) => (
+          <div className="grid gap-1" key={`${row.label}:${row.value}`}>
+            <dt className="font-semibold text-[var(--vs-text)]">{row.label}</dt>
+            <dd className="leading-5 vs-muted">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function readAlongStatusClassName(report: ReadAlongInvariantReport): string {
+  if (report.status === "failed") {
+    return "text-orange-500";
+  }
+  if (report.status === "degraded") {
+    return "text-amber-500";
+  }
+  return "text-emerald-500";
 }
 
 export function buildCinemaInspectorPanels(

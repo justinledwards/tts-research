@@ -11,13 +11,14 @@ import {
 } from "react";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
-import { playbackActionLabel } from "../playback";
+import { generatedAudioLifecycleFromJob, playbackActionLabel } from "../playback";
 import {
   CinemaFocusModeToolbar,
   CinemaInspectorDock,
   CinemaMobileSheet,
   CinemaShell,
   CinemaTransportBar,
+  ReadAlongInvariantDebugPanel,
   buildCinemaCurrentReadingSection,
   buildCinemaInspectorPanels,
   buildCinemaInspectorSection,
@@ -87,6 +88,7 @@ import {
   recordFrontendMetric,
   resolveTimingConfidenceDisplay,
 } from "../performance";
+import { evaluateBookReadAlongInvariant, readAlongInvariantStatusLabel } from "../readalong";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import type {
   BookCinemaDiagnostics,
@@ -1024,6 +1026,41 @@ export function BookCinemaOverlay({
     () => resolveTimingConfidenceDisplay(highlightMap),
     [highlightMap],
   );
+  const readAlongReport = useMemo(
+    () =>
+      evaluateBookReadAlongInvariant({
+        activeBlock,
+        activeSpan,
+        activeText: activePassage,
+        activeWordIndex: readerActiveWordIndex,
+        bookSourceId: book.id,
+        bookmark: bookmarks.at(0) ?? null,
+        generatedAudioState: generatedAudioLifecycleFromJob({ job: activeBookJob }),
+        highlightCue,
+        highlightMap,
+        jobMatchesSource: activeJobMatchesBook,
+        progress,
+        scopeKey: normalizedScopeKey,
+        visibleWordIndexes: visibleBookSpans(scopedSpans, readerActiveWordIndex).map(
+          (span) => span.index,
+        ),
+      }),
+    [
+      activeBlock,
+      activeBookJob,
+      activeJobMatchesBook,
+      activePassage,
+      activeSpan,
+      book.id,
+      bookmarks,
+      highlightCue,
+      highlightMap,
+      normalizedScopeKey,
+      progress,
+      readerActiveWordIndex,
+      scopedSpans,
+    ],
+  );
   const audioNotice = resolveBookCinemaAudioNotice({
     activeBookJob,
     book,
@@ -1236,6 +1273,15 @@ export function BookCinemaOverlay({
       modeAffinity: "debug",
       tabId: "diagnostics",
       title: "Highlight confidence",
+    }),
+    buildCinemaInspectorSection({
+      children: <ReadAlongInvariantDebugPanel report={readAlongReport} />,
+      detail: readAlongInvariantStatusLabel(readAlongReport),
+      id: "read-along-fidelity",
+      kind: "timing-map",
+      modeAffinity: "debug",
+      tabId: "diagnostics",
+      title: "Read-along fidelity",
     }),
     buildCinemaInspectorSection({
       children: (

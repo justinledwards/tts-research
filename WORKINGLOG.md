@@ -494,3 +494,10 @@
 - [x] Review current bundle budget failure context and threshold formatting.
 - [x] Raise `maxInitialJsRawBytes` in `benches/thresholds.json` to clear a one-off 511KB startup regression.
 - [x] Update `docs/performance.md` bundle gate documentation to match.
+
+## 2026-05-24 19:35 CEST - Read-along Fidelity Harness
+- [x] Inspect reader navigation, locator, Cinema, and existing wayfinding harnesses
+- [x] Add shared read-along invariant model and unit coverage
+- [x] Add read-along fidelity E2E artifact harness and package script
+- [x] Wire drift/degraded alignment reporting into Debug context where practical
+- [x] Run required local validation commands

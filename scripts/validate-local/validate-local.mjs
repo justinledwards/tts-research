@@ -112,6 +112,29 @@ const bookCinemaStep = await runCommandStep(context, {
 });
 await attachReaderTimingBudgets(bookCinemaStep, thresholds);
 
+await runCommandStep(context, {
+  id: "read-along-fidelity-e2e",
+  title: "Read-along Fidelity E2E",
+  command: "pnpm",
+  args: ["e2e:read-along-fidelity"],
+  env: {
+    E2E_READ_ALONG_OUTPUT_DIR: path.join(context.artifactsDir, "read-along-fidelity-e2e"),
+  },
+  artifacts: {
+    readAlongReport: path.join(
+      context.artifactsDir,
+      "read-along-fidelity-e2e",
+      "read-along-fidelity-report.md",
+    ),
+    readAlongResults: path.join(
+      context.artifactsDir,
+      "read-along-fidelity-e2e",
+      "read-along-fidelity-results.json",
+    ),
+    screenshots: path.join(context.artifactsDir, "read-along-fidelity-e2e", "screenshots"),
+  },
+});
+
 const responsiveCinemaStep = await runCommandStep(context, {
   id: "book-cinema-responsive-e2e",
   title: "Book Cinema Responsive E2E Smoke",

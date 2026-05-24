@@ -9,6 +9,7 @@ export {
   buildCinemaInspectorSection,
   buildCinemaInspectorPanels,
   buildCinemaWayfindingSection,
+  ReadAlongInvariantDebugPanel,
   type CinemaCurrentReading,
   type CinemaInspectorSection,
   type CinemaWayfindingModel,
