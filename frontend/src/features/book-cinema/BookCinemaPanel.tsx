@@ -77,7 +77,11 @@ import {
   type ReaderKeyboardCommand,
   type ReaderTextScale,
 } from "../reader-accessibility";
-import { recordFrontendDegradedState, resolveTimingConfidenceDisplay } from "../performance";
+import {
+  recordFrontendDegradedState,
+  recordFrontendMetric,
+  resolveTimingConfidenceDisplay,
+} from "../performance";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import type {
   BookCinemaDiagnostics,
@@ -1802,8 +1806,31 @@ function BookCinemaWaveform({
   audioUrl,
   progress,
 }: Readonly<{ audioUrl: string; progress: number }>) {
+  const startedAtRef = useRef(performance.now());
+  const recordedRef = useRef(false);
   const bars = useAudioWaveformBars(audioUrl, 86);
   const clampedProgress = Math.max(0, Math.min(1, progress));
+
+  useEffect(() => {
+    if (!audioUrl) {
+      return;
+    }
+    startedAtRef.current = performance.now();
+    recordedRef.current = false;
+  }, [audioUrl]);
+
+  useEffect(() => {
+    if (recordedRef.current || bars === null) {
+      return;
+    }
+    recordedRef.current = true;
+    recordFrontendMetric("waveform-progress-render", performance.now() - startedAtRef.current, {
+      bars: bars.length,
+      surface: "book-cinema",
+      status: bars.length > 0 ? "ready" : "unavailable",
+    });
+  }, [bars]);
+
   if (!bars) {
     return <BookCinemaWaveformPlaceholder label="Loading audio waveform..." />;
   }

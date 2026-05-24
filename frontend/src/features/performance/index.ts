@@ -15,13 +15,15 @@ export type FrontendPerformanceMetricName =
   | "command-palette-open-search"
   | "context-panel-tab-switch"
   | "prepared-source-cinema-open"
+  | "preview-cinema-open"
   | "preview-generation-handoff"
   | "reader-resume"
   | "settings-open"
   | "source-switch"
   | "studio-route-switch"
   | "teleprompt-cue-switch"
-  | "transport-interaction-latency";
+  | "transport-interaction-latency"
+  | "waveform-progress-render";
 
 export type FrontendDegradedStateName =
   | "audio-not-ready"

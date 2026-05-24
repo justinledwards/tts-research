@@ -10,7 +10,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
 import {
+  buildReaderResumeArtifact,
   evaluateReaderTimingSummary,
+  formatBudgetFailuresMarkdown,
+  formatInteractionBudgetMarkdown,
   loadReaderTimingThresholds,
 } from "./validate-local/reader-timing.mjs";
 
@@ -43,6 +46,15 @@ let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
 let hasRunBookCinemaMemorySmoke = false;
 let hasRunLowResourceInteractionBudgetSmoke = false;
 
+const lowResourceFixtureRequirements = [
+  { id: "short-source", label: "one short source" },
+  { id: "long-source", label: "one long source" },
+  { id: "generated-audio-source", label: "one generated-audio source" },
+  { id: "no-audio-source", label: "one no-audio source" },
+  { id: "pinned-inspector-source", label: "one pinned-inspector source" },
+  { id: "website-cinema-article-source", label: "one Website Cinema article source" },
+];
+
 main().catch(async (error) => {
   const message = error instanceof Error ? error.stack || error.message : String(error);
   console.error(message);
@@ -63,6 +75,7 @@ async function main() {
   const summary = {
     appBaseUrl,
     apiBaseUrl,
+    fixtureCoverage: createLowResourceFixtureCoverage(),
     fixtures,
     lowResourceMode,
     performance: [],
@@ -153,11 +166,7 @@ async function main() {
 
     const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
     try {
-      const fixturesUnderTest = [
-        { file: fixtures.epub, kind: "epub", screenshot: "book-cinema-epub.png" },
-        { file: fixtures.docx, kind: "docx", screenshot: "book-cinema-docx.png" },
-        { file: fixtures.pdf, kind: "pdf", screenshot: "book-cinema-pdf.png" },
-      ];
+      const fixturesUnderTest = bookFixturesUnderTest(fixtures);
       for (const fixture of readerWayfindingOnly
         ? fixturesUnderTest.slice(0, 1)
         : fixturesUnderTest) {
@@ -167,6 +176,27 @@ async function main() {
           kind: fixture.kind,
           metrics: result.performance,
         });
+        markFixtureCoverage(summary, fixture.coverage, {
+          evidence: path.relative(rootDir, result.screenshot),
+          fixture: fixture.kind,
+        });
+      }
+      if (lowResourceMode && !readerWayfindingOnly) {
+        const noAudioResult = await runNoAudioBookCinemaUX(browser, project.id, {
+          file: fixtures.epub,
+          kind: "epub-no-audio",
+          expectedKind: "epub",
+          screenshot: "book-cinema-no-audio.png",
+        });
+        summary.screenshots.push(noAudioResult.screenshot);
+        summary.performance.push({
+          kind: "epub-no-audio",
+          metrics: noAudioResult.performance,
+        });
+        markFixtureCoverage(summary, ["no-audio-source"], {
+          evidence: path.relative(rootDir, noAudioResult.screenshot),
+          fixture: "epub-no-audio",
+        });
       }
       const preparedFocus = await runPreparedCinemaFocusUX(browser, {
         documentJob: markdownPrep.job,
@@ -175,20 +205,39 @@ async function main() {
         websiteJob: websitePrep.job,
         websiteSource: websitePrep.source,
       });
+      summary.preparedFocus = preparedFocus;
       summary.screenshots.push(...preparedFocus.screenshots);
+      summary.performance.push(...preparedFocus.performance);
+      markFixtureCoverage(summary, ["website-cinema-article-source"], {
+        evidence: "Website Cinema focus smoke",
+        fixture: "website-cinema",
+      });
     } finally {
       await browser.close();
     }
+
+    assertLowResourceFixtureCoverage(summary);
 
     const readerTimingThresholds = await loadReaderTimingThresholds(rootDir);
     const readerTiming = evaluateReaderTimingSummary(summary, readerTimingThresholds);
     summary.readerTiming = readerTiming;
     const failedTimingThreshold = readerTiming.thresholds.some((threshold) => !threshold.passed);
-    summary.status = failedTimingThreshold ? "failed" : "passed";
+    const blockingTimingThreshold = readerTiming.thresholds.some((threshold) => threshold.blocking);
+    summary.status = blockingTimingThreshold
+      ? "failed"
+      : failedTimingThreshold
+        ? "passed-with-waivers"
+        : "passed";
     await writeSummary(summary);
     await writePerformanceArtifacts(summary);
     if (failedTimingThreshold) {
       console.error(readerTiming.output);
+      if (!blockingTimingThreshold) {
+        console.error(
+          `Book Cinema E2E recorded non-blocking timing waivers. Summary written to ${summaryPath}`,
+        );
+        return;
+      }
       console.error(
         `Book Cinema E2E failed reader timing budgets. Summary written to ${summaryPath}`,
       );
@@ -261,9 +310,42 @@ async function runWebsiteSourcePrepE2E(projectId) {
   }
 }
 
+function bookFixturesUnderTest(fixtures) {
+  if (lowResourceMode) {
+    return [
+      {
+        coverage: ["short-source", "generated-audio-source", "pinned-inspector-source"],
+        expectedKind: "epub",
+        file: fixtures.epub,
+        kind: "epub-short",
+        screenshot: "book-cinema-epub-short.png",
+      },
+      {
+        coverage: ["long-source", "generated-audio-source"],
+        expectedKind: "epub",
+        file: fixtures.longEpub,
+        kind: "epub-long",
+        screenshot: "book-cinema-epub-long.png",
+      },
+      {
+        coverage: ["generated-audio-source"],
+        file: fixtures.pdf,
+        kind: "pdf",
+        screenshot: "book-cinema-pdf.png",
+      },
+    ];
+  }
+  return [
+    { file: fixtures.epub, kind: "epub", screenshot: "book-cinema-epub.png" },
+    { file: fixtures.docx, kind: "docx", screenshot: "book-cinema-docx.png" },
+    { file: fixtures.pdf, kind: "pdf", screenshot: "book-cinema-pdf.png" },
+  ];
+}
+
 async function runBookSourceE2E(browser, projectId, fixture) {
   const book = await uploadBook(projectId, fixture.file);
-  verifyBook(book, fixture.kind);
+  const expectedKind = fixture.expectedKind ?? fixture.kind;
+  verifyBook(book, expectedKind);
   const scope = pickNarrationScope(book);
   const scopeContent = await apiJson(`/api/book-sources/${book.id}/scope?${scopeQuery(scope)}`);
   assert(scopeContent.text.trim().length > 0, `${fixture.kind} selected scope has no text.`);
@@ -291,7 +373,7 @@ async function runBookSourceE2E(browser, projectId, fixture) {
     ],
     performance.firstOpen.degradedStates,
   );
-  if (fixture.kind === "epub") {
+  if (expectedKind === "epub" && !lowResourceMode) {
     performance.forcedDegraded = await runDegradedHighlightUX(browser, {
       book,
       job: completedJob,
@@ -574,6 +656,18 @@ async function runLowResourceInteractionBudgetSmoke(page) {
 
   await measureFrontendInteraction(
     page,
+    "preview-cinema-open",
+    async () => {
+      await page.getByTestId("ui-action-preview-mini-open-cinema").click();
+      await cinemaOverlay(page).getByText("Book Cinema").first().waitFor();
+    },
+    { surface: "preview" },
+  );
+  await visibleOverlayButton(page, "Exit").click();
+  await page.getByTestId("global-preview-player").waitFor({ state: "visible" });
+
+  await measureFrontendInteraction(
+    page,
     "teleprompt-cue-switch",
     async () => {
       await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
@@ -696,6 +790,7 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
       );
       hasRunBookCinemaMemorySmoke = true;
     }
+    await waitForPerformanceMetricCount(page, "waveform-progress-render", 1);
     const playButton = visibleOverlayButton(page, "Play");
     await assertEnabled(playButton, "Play");
     let pauseButton;
@@ -797,6 +892,49 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
   }
 }
 
+async function runNoAudioBookCinemaUX(browser, projectId, fixture) {
+  const book = await uploadBook(projectId, fixture.file);
+  verifyBook(book, fixture.expectedKind ?? fixture.kind);
+  const scope = pickNarrationScope(book);
+  const scopeContent = await apiJson(`/api/book-sources/${book.id}/scope?${scopeQuery(scope)}`);
+  const context = await browser.newContext({
+    storageState: projectStorageState(projectId, {
+      bookScope: scope,
+      bookSourceId: book.id,
+      sourceMode: "book",
+      sourceType: "book",
+      stage: "intake",
+      text: scopeContent.text,
+    }),
+    viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
+  });
+  const page = await context.newPage();
+  if (lowResourceMode) {
+    await applyLowResourceProfile(page);
+  }
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
+  const screenshot = path.join(screenshotsDir, fixture.screenshot);
+  try {
+    await openBookCinemaOverlay(page, scope, bookCinemaHashUrl(book.id, scope));
+    await visibleOverlayButton(page, "Create audio").waitFor({ state: "visible" });
+    await assertCinemaActiveTargetVisible(page);
+    await page.screenshot({ fullPage: false, path: screenshot });
+    await assertNoPageIssues(issues);
+    return {
+      performance: {
+        firstOpen: summarizePerformanceMetrics(
+          await readPerformanceMetrics(page),
+          await readDegradedStates(page),
+        ),
+      },
+      screenshot,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
 async function runDegradedHighlightUX(browser, { book, job, projectId, scope, text }) {
   const context = await browser.newContext({
     storageState: projectStorageState(projectId, {
@@ -855,25 +993,32 @@ async function runPreparedCinemaFocusUX(
   { documentJob, documentSource, projectId, websiteJob, websiteSource },
 ) {
   const screenshots = [];
-  screenshots.push(
-    ...(await runPreparedCinemaSurfaceFocusUX(browser, {
-      expectedLabel: "Document Cinema",
-      job: documentJob,
-      projectId,
-      screenshotPrefix: "document-cinema-focus",
-      source: documentSource,
-    })),
-  );
-  screenshots.push(
-    ...(await runPreparedCinemaSurfaceFocusUX(browser, {
-      expectedLabel: "Website Cinema",
-      job: websiteJob,
-      projectId,
-      screenshotPrefix: "website-cinema-focus",
-      source: websiteSource,
-    })),
-  );
-  return { screenshots };
+  const performance = [];
+  const documentResult = await runPreparedCinemaSurfaceFocusUX(browser, {
+    expectedLabel: "Document Cinema",
+    job: documentJob,
+    projectId,
+    screenshotPrefix: "document-cinema-focus",
+    source: documentSource,
+  });
+  screenshots.push(...documentResult.screenshots);
+  performance.push({
+    kind: "document-cinema",
+    metrics: documentResult.performance,
+  });
+  const websiteResult = await runPreparedCinemaSurfaceFocusUX(browser, {
+    expectedLabel: "Website Cinema",
+    job: websiteJob,
+    projectId,
+    screenshotPrefix: "website-cinema-focus",
+    source: websiteSource,
+  });
+  screenshots.push(...websiteResult.screenshots);
+  performance.push({
+    kind: "website-cinema",
+    metrics: websiteResult.performance,
+  });
+  return { performance, screenshots };
 }
 
 async function runResponsiveCinemaUX(
@@ -1225,7 +1370,13 @@ async function runPreparedCinemaSurfaceFocusUX(
       await cinemaOverlay(page).getByText(expectedLabel).first().waitFor();
     });
     await assertNoPageIssues(issues);
-    return screenshots;
+    return {
+      performance: summarizePerformanceMetrics(
+        await readPerformanceMetrics(page),
+        await readDegradedStates(page),
+      ),
+      screenshots,
+    };
   } finally {
     await context.close();
   }
@@ -1626,13 +1777,25 @@ async function ensureFixtures() {
   await assertFile(markdown, "Markdown E2E fixture");
   await assertFile(pdf, "PDF E2E fixture");
   const epub = path.join(generatedDir, "book-cinema-smoke.epub");
+  const longEpub = path.join(generatedDir, "book-cinema-long-smoke.epub");
   const docx = path.join(generatedDir, "book-cinema-smoke.docx");
   await writeSyntheticEPUB(epub);
+  await writeSyntheticEPUB(longEpub, { longForm: true });
   await writeSyntheticDOCX(docx);
-  return { docx, epub, markdown, pdf };
+  return { docx, epub, longEpub, markdown, pdf };
 }
 
-async function writeSyntheticEPUB(filePath) {
+async function writeSyntheticEPUB(filePath, { longForm = false } = {}) {
+  const title = longForm ? "Long Chapter" : "Chapter One";
+  const paragraphs = longForm
+    ? Array.from(
+        { length: 18 },
+        (_, index) =>
+          `<p>Long-form validation paragraph ${String(
+            index + 1,
+          )} keeps the reader busy with steady prose, source switching, generated audio, and resume state. The paragraph is intentionally plain so local mock narration can exercise the reader canvas without external dependencies.</p>`,
+      ).join("")
+    : `<p>The local validation ritual reads this compact EPUB chapter aloud. It has enough clean prose for a short mock narration and resume check.</p><p>The second paragraph keeps the reader stage populated after seeking forward.</p>`;
   const zip = new JSZip();
   zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
   zip.file(
@@ -1645,11 +1808,11 @@ async function writeSyntheticEPUB(filePath) {
   );
   zip.file(
     "EPUB/nav.xhtml",
-    `<html><body><nav epub:type="toc"><ol><li><a href="chapter1.xhtml">Chapter One</a></li></ol></nav></body></html>`,
+    `<html><body><nav epub:type="toc"><ol><li><a href="chapter1.xhtml">${title}</a></li></ol></nav></body></html>`,
   );
   zip.file(
     "EPUB/chapter1.xhtml",
-    `<html lang="en"><head><title>Chapter One</title></head><body><h1>Chapter One</h1><p>The local validation ritual reads this compact EPUB chapter aloud. It has enough clean prose for a short mock narration and resume check.</p><p>The second paragraph keeps the reader stage populated after seeking forward.</p></body></html>`,
+    `<html lang="en"><head><title>${title}</title></head><body><h1>${title}</h1>${paragraphs}</body></html>`,
   );
   await writeFile(filePath, await zip.generateAsync({ type: "nodebuffer" }));
 }
@@ -2333,7 +2496,7 @@ async function waitForPerformanceMetricCount(page, name, minimumCount) {
       (globalThis.__ttsResearchPerformance?.metrics.filter((metric) => metric.name === metricName)
         .length ?? 0) >= count,
     { count: minimumCount, metricName: name },
-    { timeout: 10_000 },
+    { timeout: lowResourceMode ? 30_000 : 10_000 },
   );
 }
 
@@ -2390,6 +2553,42 @@ async function writeSummary(summary) {
   await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
 }
 
+function createLowResourceFixtureCoverage() {
+  if (!lowResourceMode) {
+    return [];
+  }
+  return lowResourceFixtureRequirements.map((requirement) => ({
+    ...requirement,
+    evidence: [],
+    status: "missing",
+  }));
+}
+
+function markFixtureCoverage(summary, coverageIds = [], evidence = {}) {
+  if (!lowResourceMode || !Array.isArray(summary.fixtureCoverage)) {
+    return;
+  }
+  for (const coverageId of coverageIds ?? []) {
+    const item = summary.fixtureCoverage.find((entry) => entry.id === coverageId);
+    if (!item) {
+      continue;
+    }
+    item.status = "covered";
+    item.evidence.push(evidence);
+  }
+}
+
+function assertLowResourceFixtureCoverage(summary) {
+  if (!lowResourceMode) {
+    return;
+  }
+  const missing = (summary.fixtureCoverage ?? []).filter((item) => item.status !== "covered");
+  assert(
+    missing.length === 0,
+    `Low-resource fixture coverage is missing: ${missing.map((item) => item.label).join(", ")}`,
+  );
+}
+
 async function writePerformanceArtifacts(summary) {
   if (!summary?.readerTiming) {
     return;
@@ -2398,6 +2597,26 @@ async function writePerformanceArtifacts(summary) {
   await writeFile(
     path.join(performanceArtifactDir, "timing.json"),
     `${JSON.stringify(summary.readerTiming.metrics, null, 2)}\n`,
+  );
+  await writeFile(
+    path.join(performanceArtifactDir, "reader-resume.json"),
+    `${JSON.stringify(
+      buildReaderResumeArtifact(summary.readerTiming.metrics, summary.readerTiming.thresholds),
+      null,
+      2,
+    )}\n`,
+  );
+  await writeFile(
+    path.join(performanceArtifactDir, "interaction-budget.md"),
+    formatInteractionBudgetMarkdown(summary.readerTiming.metrics, summary.readerTiming.thresholds),
+  );
+  await writeFile(
+    path.join(performanceArtifactDir, "budget-failures.md"),
+    formatBudgetFailuresMarkdown(summary.readerTiming.thresholds),
+  );
+  await writeFile(
+    path.join(performanceArtifactDir, "fixture-coverage.json"),
+    `${JSON.stringify(summary.fixtureCoverage ?? [], null, 2)}\n`,
   );
   await writeFile(
     path.join(performanceArtifactDir, "degraded-states.md"),

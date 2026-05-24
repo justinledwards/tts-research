@@ -292,7 +292,6 @@ import {
   useDelayedBusy,
   useInteractionTiming,
 } from "./features/performance";
-import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
 import {
   orderedKokoroVoicepacksForLanguage,
   voiceProfileMatchesLanguage,
@@ -321,6 +320,23 @@ const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
 const RESEARCH_MODULE_PROMPT_HIDDEN_KEY = "tts-research-module-prompt-hidden";
 const DEFAULT_KOKORO_VOICE_ID = "af_heart";
 const PROFILE_ARTIFACT_MODULE_ORDER = ["kokoro-embed", "supertonic-embed"] as const;
+const WAVEFORM_DISPLAY_BAR_COUNT = 76;
+
+function waveformProgressIndex(progress: number, barCount: number): number {
+  if (barCount <= 0 || !Number.isFinite(progress)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(barCount, Math.round(Math.max(0, Math.min(1, progress)) * barCount)));
+}
+
+async function buildWaveformBarsFromAudioBuffersLazy(
+  buffers: readonly AudioBuffer[],
+  count = WAVEFORM_DISPLAY_BAR_COUNT,
+): Promise<number[]> {
+  const { buildWaveformBarsFromAudioBuffers } = await import("./waveform");
+  return buildWaveformBarsFromAudioBuffers(buffers, count);
+}
+
 const BundleFlowPanel = lazy(() =>
   import("./BundlePanels").then((module) => ({ default: module.BundleFlowPanel })),
 );
@@ -13087,7 +13103,8 @@ function WaveformDisplay({
   bars: number[];
   progress: number;
 }>) {
-  const displayBars = bars.length > 0 ? bars : Array.from({ length: 76 }, () => 0);
+  const displayBars =
+    bars.length > 0 ? bars : Array.from({ length: WAVEFORM_DISPLAY_BAR_COUNT }, () => 0);
   const activeIndex = waveformProgressIndex(progress, displayBars.length);
 
   return (
@@ -13267,8 +13284,12 @@ function useCompletedWaveformBars(src: string, canPlayCompleted: boolean) {
         }
         const rawAudio = await response.arrayBuffer();
         const decoded = await context.decodeAudioData(rawAudio);
+        const bars = await buildWaveformBarsFromAudioBuffersLazy(
+          [decoded],
+          WAVEFORM_DISPLAY_BAR_COUNT,
+        );
         if (!controller.signal.aborted) {
-          setWaveformBars(buildWaveformBarsFromAudioBuffers([decoded], 76));
+          setWaveformBars(bars);
         }
       } catch {
         if (!controller.signal.aborted) {
@@ -14756,12 +14777,16 @@ function ArrivalAudioPlayerQueue({
     const timeline = getSegmentTimeline();
     const duration = timeline.reduce((total, segment) => total + segment.buffer.duration, 0);
     setBufferedDurationSec(duration);
-    setWaveformBars(
-      buildWaveformBarsFromAudioBuffers(
-        timeline.map((segment) => segment.buffer),
-        76,
-      ),
-    );
+    const buffers = timeline.map((segment) => segment.buffer);
+    if (buffers.length === 0) {
+      setWaveformBars([]);
+      return;
+    }
+    void buildWaveformBarsFromAudioBuffersLazy(buffers, WAVEFORM_DISPLAY_BAR_COUNT)
+      .then(setWaveformBars)
+      .catch(() => {
+        setWaveformBars([]);
+      });
   }, [getSegmentTimeline]);
 
   const arrivalThroughput = useMemo(() => {

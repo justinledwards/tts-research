@@ -248,7 +248,11 @@ function bookCinemaStep(context, { id, includePerformanceArtifacts = false, scri
     const performanceDir = path.join(stepArtifactDir, "performance");
     env.E2E_PERFORMANCE_ARTIFACT_DIR = performanceDir;
     env.E2E_READER_TIMING_WARN_ONLY = "1";
+    artifacts.lowResourceBudgetFailures = path.join(performanceDir, "budget-failures.md");
     artifacts.lowResourceDegradedStates = path.join(performanceDir, "degraded-states.md");
+    artifacts.lowResourceFixtureCoverage = path.join(performanceDir, "fixture-coverage.json");
+    artifacts.lowResourceInteractionBudget = path.join(performanceDir, "interaction-budget.md");
+    artifacts.lowResourceReaderResume = path.join(performanceDir, "reader-resume.json");
     artifacts.lowResourceTiming = path.join(performanceDir, "timing.json");
   }
   return {
@@ -327,6 +331,7 @@ async function writeReviewBundle({ context, gitInfo, reviewSteps }) {
   const artifactRecords = await inspectStepArtifacts(commandSteps, context.outputDir);
   const qaDocuments = await readQaDocuments(artifactRecords);
   const surfaceCoverage = summarizeSurfaceCoverage(qaDocuments.actionInventory);
+  const waivers = extractLowResourceWaivers(qaDocuments.lowResourceSummary);
   const passFailSummary = buildPassFailSummary({
     artifactRecords,
     commandSteps,
@@ -359,7 +364,7 @@ async function writeReviewBundle({ context, gitInfo, reviewSteps }) {
     schemaVersion: "review-evidence.v1",
     status: passFailSummary.status,
     surfaceCoverage,
-    waivers: [],
+    waivers,
     workingTree: {
       dirty: gitInfo.dirty,
       status: gitInfo.status,
@@ -371,6 +376,20 @@ async function writeReviewBundle({ context, gitInfo, reviewSteps }) {
   await writeFile(reviewFiles.reviewerSummary, renderReviewerSummary(manifest));
   await writeFile(reviewFiles.reviewManifest, `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;
+}
+
+function extractLowResourceWaivers(summary) {
+  return (summary?.readerTiming?.thresholds ?? [])
+    .filter((threshold) => threshold?.waiver)
+    .map((threshold) => ({
+      actual: threshold.actual,
+      budget: threshold.expected,
+      classification: threshold.classification,
+      id: threshold.waiver.id,
+      metric: threshold.metric,
+      owner: threshold.waiver.owner,
+      reason: threshold.waiver.reason,
+    }));
 }
 
 async function inspectStepArtifacts(steps, outputDir) {

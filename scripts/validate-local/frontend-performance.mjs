@@ -12,7 +12,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.
 const diagramVendorPattern =
   /(architectureDiagram|blockDiagram|c4Diagram|classDiagram|cose|cytoscape|dagre|diagram-|erDiagram|flowDiagram|ganttDiagram|gitGraph|graph-|ishikawa|journeyDiagram|kanban|katex|mermaid|mindmap|quadrantDiagram|requirementDiagram|sankeyDiagram|sequenceDiagram|stateDiagram|timeline|vennDiagram|wardley|xychartDiagram)/i;
 const forbiddenInitialImportPattern =
-  /(MarkdownRenderer|mermaid|ContentIrDrawer|BundlePanels|ProductPanels|VoiceSourceAnalysisPanel|WorkspaceDrawer|PronunciationPanel|CommandPalette|TelepromptStudio|GlobalPreviewPlayer|RevisionPanel|ContextPanel|SettingsPanel|HelpPanel|ajv|schema_files|generated\/schemas)/i;
+  /(MarkdownRenderer|mermaid|ContentIrDrawer|BundlePanels|ProductPanels|VoiceSourceAnalysisPanel|WorkspaceDrawer|PronunciationPanel|CommandPalette|TelepromptStudio|GlobalPreviewPlayer|RevisionPanel|ContextPanel|SettingsPanel|HelpPanel|ProjectDashboard|VoiceProfileDashboard|audioWaveform|waveform|ajv|schema_files|generated\/schemas)/i;
 const markdownRendererPattern = /MarkdownRenderer/i;
 const expectedLazyChunkPatterns = [
   { id: "bookCinema", pattern: /src\/features\/book-cinema\/BookCinemaPanel\.tsx|BookCinemaPanel/ },
@@ -24,9 +24,12 @@ const expectedLazyChunkPatterns = [
   { id: "help", pattern: /src\/features\/help\/index\.ts|HelpPanel/ },
   { id: "markdownRenderer", pattern: /MarkdownRenderer/ },
   { id: "previewPlayer", pattern: /src\/features\/preview\/index\.ts|GlobalPreviewPlayer/ },
+  { id: "projectDashboard", pattern: /src\/features\/dashboard\/index\.ts|ProjectDashboard/ },
   { id: "revision", pattern: /src\/features\/revision\/index\.ts|RevisionPanel/ },
   { id: "settings", pattern: /src\/features\/settings\/index\.ts|SettingsPanel/ },
   { id: "teleprompt", pattern: /src\/features\/teleprompt\/index\.ts|TelepromptStudio/ },
+  { id: "voiceDashboard", pattern: /src\/features\/voices\/index\.ts|VoiceProfileDashboard/ },
+  { id: "waveformRenderer", pattern: /src\/waveform\.ts|waveform/ },
 ];
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

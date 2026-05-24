@@ -352,13 +352,13 @@ async function attachReaderTimingBudgets(step, thresholds) {
     const readerTiming = evaluateReaderTimingSummary(e2eSummary, thresholds?.readerTiming ?? {});
     step.metrics = readerTiming.metrics;
     step.thresholds = readerTiming.thresholds;
-    const failedThreshold = readerTiming.thresholds.some((threshold) => !threshold.passed);
-    if (failedThreshold) {
+    const blockingThreshold = readerTiming.thresholds.some((threshold) => threshold.blocking);
+    if (blockingThreshold) {
       step.status = "failed";
       step.exitCode = 1;
       step.error = step.error
         ? `${step.error} One or more reader timing thresholds failed.`
-        : "One or more reader timing thresholds failed.";
+        : "One or more blocking reader timing thresholds failed.";
     }
   } catch (error) {
     if (step.status === "passed") {

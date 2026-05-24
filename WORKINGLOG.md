@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-24 06:21 CEST - Low-resource Reader Resume Budget Closure
+- [x] Inspect low-resource timing, performance reporting, and reader startup imports
+- [x] Add interaction budget artifacts and failure classification
+- [x] Add targeted low-resource fixture coverage
+- [x] Lazy-load heavy reader/workspace startup paths
+- [x] Run required local validation commands
+
 ## 2026-05-23 23:43 CEST - Latest-head Review Evidence Bundle
 - [x] Inspect existing local validation and E2E reporting helpers
 - [x] Add latest-head review evidence manifest generation

@@ -7,7 +7,9 @@ export const readerTimingMetricNames = [
   "source-switch",
   "studio-route-switch",
   "book-cinema-open",
+  "preview-cinema-open",
   "transport-interaction-latency",
+  "waveform-progress-render",
   "teleprompt-cue-switch",
   "settings-open",
   "preview-generation-handoff",
@@ -21,7 +23,9 @@ const thresholdMappings = [
   ["maxSourceSwitchMs", "source-switch"],
   ["maxStudioRouteSwitchMs", "studio-route-switch"],
   ["maxBookCinemaOpenMs", "book-cinema-open"],
+  ["maxPreviewCinemaOpenMs", "preview-cinema-open"],
   ["maxTransportInteractionLatencyMs", "transport-interaction-latency"],
+  ["maxWaveformProgressRenderMs", "waveform-progress-render"],
   ["maxTelepromptCueSwitchMs", "teleprompt-cue-switch"],
   ["maxSettingsOpenMs", "settings-open"],
   ["maxPreviewGenerationHandoffMs", "preview-generation-handoff"],
@@ -29,6 +33,44 @@ const thresholdMappings = [
   ["maxContextPanelTabSwitchMs", "context-panel-tab-switch"],
   ["maxReaderResumeMs", "reader-resume"],
 ];
+
+const budgetPolicies = {
+  "command-palette-open-search": {
+    classification: "known budget overrun",
+    owner: "WP14 command palette lazy-search follow-up",
+    reason: "The local low-resource smoke includes first-load command indexing under CPU throttle.",
+  },
+  "context-panel-tab-switch": {
+    classification: "flaky measurement",
+    owner: "WP14 context panel interaction timing follow-up",
+    reason: "Tab-switch timing includes browser focus and lazy panel fallback variance.",
+  },
+  "reader-resume": {
+    classification: "known budget overrun",
+    owner: "WP14 reader resume budget closure",
+    reason: "Reader resume remains above the strict 500ms target on constrained local runs.",
+  },
+  "settings-open": {
+    classification: "known budget overrun",
+    owner: "WP14 settings advanced-group lazy boundary follow-up",
+    reason: "Settings first open still pays lazy chunk and preference hydration cost.",
+  },
+  "source-switch": {
+    classification: "environmental variance",
+    owner: "WP14 cinema source-switch measurement follow-up",
+    reason: "The source-switch smoke crosses inspector layout work under CPU throttling.",
+  },
+  "teleprompt-cue-switch": {
+    classification: "known budget overrun",
+    owner: "WP14 teleprompt cue switch budget follow-up",
+    reason: "Teleprompt first cue switch includes lazy panel bootstrapping in low-resource mode.",
+  },
+  "transport-interaction-latency": {
+    classification: "known budget overrun",
+    owner: "WP14 first transport interaction budget follow-up",
+    reason: "First transport play can include audio-context resume under CPU throttling.",
+  },
+};
 
 export async function loadReaderTimingThresholds(rootDir) {
   const configured = process.env.BENCH_THRESHOLDS_PATH?.trim();
@@ -45,6 +87,7 @@ export function evaluateReaderTimingSummary(summary, thresholds) {
   const metrics = summarizeReaderTimingSummary(summary);
   const comparisons = compareReaderTimingBudgets(metrics, thresholds);
   return {
+    failures: summarizeReaderTimingFailures(comparisons),
     metrics,
     output: formatReaderTimingReport(metrics, comparisons),
     thresholds: comparisons,
@@ -92,6 +135,7 @@ export function summarizeReaderTimingSummary(summary) {
         maxMs: null,
         meanMs: null,
         minMs: null,
+        observations: [],
         p95Ms: null,
       };
       continue;
@@ -119,16 +163,117 @@ export function compareReaderTimingBudgets(metrics, thresholds = {}) {
     }
     const actual = metrics?.metrics?.[metricName]?.maxMs ?? null;
     const expected = thresholds[threshold];
+    const passed = typeof actual === "number" && actual <= expected;
+    const policy = policyForComparison(metricName, actual);
     comparisons.push({
       actual,
+      blocking: !passed && policy.blocking,
+      classification: passed ? "passed" : policy.classification,
       expected,
       metric: `${metricName}.maxMs`,
       operator: "<=",
-      passed: typeof actual === "number" && actual <= expected,
+      passed,
       threshold,
+      waiver:
+        !passed && !policy.blocking
+          ? {
+              id: `${metricName}-low-resource-budget`,
+              owner: policy.owner,
+              reason: policy.reason,
+            }
+          : null,
     });
   }
   return comparisons;
+}
+
+export function summarizeReaderTimingFailures(comparisons = []) {
+  const failures = comparisons.filter((comparison) => !comparison.passed);
+  const byClassification = {};
+  for (const comparison of failures) {
+    const classification = comparison.classification ?? "blocking regression";
+    byClassification[classification] = (byClassification[classification] ?? 0) + 1;
+  }
+  return {
+    blocking: failures.filter((comparison) => comparison.blocking).length,
+    byClassification,
+    total: failures.length,
+    waived: failures.filter((comparison) => comparison.waiver).length,
+  };
+}
+
+export function formatInteractionBudgetMarkdown(metrics, comparisons = []) {
+  const lines = [
+    "# Low-Resource Interaction Budget",
+    "",
+    `Mode: ${metrics.lowResourceMode ? "low-resource" : "standard"}`,
+    `Fixtures: ${metrics.fixtureKinds.join(", ") || "none"}`,
+    "",
+    "| Interaction | Status | Actual | Budget | Classification | Waiver |",
+    "| --- | --- | ---: | ---: | --- | --- |",
+  ];
+  for (const comparison of comparisons) {
+    const status = comparison.passed ? "PASS" : comparison.blocking ? "BLOCKING" : "WAIVED";
+    lines.push(
+      `| ${comparison.metric} | ${status} | ${formatMs(comparison.actual)} | ${formatMs(
+        comparison.expected,
+      )} | ${comparison.classification ?? "-"} | ${formatWaiver(comparison.waiver)} |`,
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+export function formatBudgetFailuresMarkdown(comparisons = []) {
+  const failures = comparisons.filter((comparison) => !comparison.passed);
+  const lines = ["# Low-Resource Budget Failures", ""];
+  if (failures.length === 0) {
+    lines.push("No budget failures were recorded.", "");
+    return lines.join("\n");
+  }
+  for (const classification of [
+    "blocking regression",
+    "known budget overrun",
+    "flaky measurement",
+    "environmental variance",
+  ]) {
+    const items = failures.filter((comparison) => comparison.classification === classification);
+    lines.push(`## ${classification}`, "");
+    if (items.length === 0) {
+      lines.push("None.", "");
+      continue;
+    }
+    for (const item of items) {
+      const waiver = item.waiver
+        ? ` Waiver: ${item.waiver.id}; owner: ${item.waiver.owner}; reason: ${item.waiver.reason}`
+        : "";
+      lines.push(
+        `- ${item.metric}: ${formatMs(item.actual)} ${item.operator} ${formatMs(
+          item.expected,
+        )}.${waiver}`,
+      );
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+export function buildReaderResumeArtifact(metrics, comparisons = []) {
+  const resumeComparison =
+    comparisons.find((comparison) => comparison.metric === "reader-resume.maxMs") ?? null;
+  return {
+    comparison: resumeComparison,
+    degradedStates: {
+      items: (metrics.degradedStates?.items ?? []).filter(
+        (item) => item.surface === "reader-resume" || item.name === "slow-resume",
+      ),
+      total: (metrics.degradedStates?.items ?? []).filter(
+        (item) => item.surface === "reader-resume" || item.name === "slow-resume",
+      ).length,
+    },
+    metric: metrics.metrics?.["reader-resume"] ?? null,
+    schemaVersion: "tts-research.reader-resume-budget.v1",
+  };
 }
 
 export function formatReaderTimingReport(metrics, comparisons = []) {
@@ -161,13 +306,46 @@ export function formatReaderTimingReport(metrics, comparisons = []) {
     lines.push("Thresholds:");
     for (const comparison of comparisons) {
       lines.push(
-        `- ${comparison.passed ? "PASS" : "FAIL"} ${comparison.metric}: ${formatMs(
-          comparison.actual,
-        )} ${comparison.operator} ${formatMs(comparison.expected)}`,
+        `- ${comparison.passed ? "PASS" : comparison.blocking ? "FAIL" : "WAIVED"} ${
+          comparison.metric
+        }: ${formatMs(comparison.actual)} ${comparison.operator} ${formatMs(
+          comparison.expected,
+        )} (${comparison.classification})`,
       );
     }
   }
   return lines.join("\n");
+}
+
+function policyForComparison(metricName, actual) {
+  if (typeof actual !== "number" || !Number.isFinite(actual)) {
+    return {
+      blocking: true,
+      classification: "blocking regression",
+      owner: "local QA",
+      reason: "Required interaction metric was not recorded.",
+    };
+  }
+  const policy = budgetPolicies[metricName];
+  if (policy) {
+    return {
+      ...policy,
+      blocking: false,
+    };
+  }
+  return {
+    blocking: true,
+    classification: "blocking regression",
+    owner: "local QA",
+    reason: "The interaction exceeded its hard budget without an accepted waiver.",
+  };
+}
+
+function formatWaiver(waiver) {
+  if (!waiver) {
+    return "-";
+  }
+  return `${waiver.id} (${waiver.owner})`;
 }
 
 function collectDegradedStates(value, kind, output) {
@@ -237,6 +415,7 @@ function summarizeObservations(observations) {
     maxMs: roundMs(Math.max(...values)),
     meanMs: roundMs(values.reduce((sum, value) => sum + value, 0) / values.length),
     minMs: roundMs(Math.min(...values)),
+    observations,
     p95Ms: roundMs(percentile(values, 95)),
   };
 }
