@@ -186,6 +186,10 @@ import {
   shouldShowRailCinemaShortcut,
 } from "./features/playback/playbackSurfaceRules";
 import type { SourceCardModel } from "./features/sources";
+import type {
+  SourceLifecycleEnvelope,
+  SourceLifecycleSurface,
+} from "./features/source-lifecycle/sourceLifecycleCore";
 import { Button, Panel, SegmentedControl, StatusChip } from "./design";
 import {
   createWorkspaceContext,
@@ -286,7 +290,7 @@ import {
   shortcutLabelForCommand,
   shouldIgnoreGlobalShortcutTarget,
   type ShortcutPreferences,
-} from "./features/shortcuts/shortcutRegistry";
+} from "./features/shortcuts/shortcutRuntime";
 import {
   humanizeProfileTargetProblem,
   isVoiceProfileTargetReadyForEngine,
@@ -6087,7 +6091,7 @@ export function App() {
         setIsHelpOpen(true);
         return;
       }
-      if (shortcutCommand === "playback.createListen" && canCreateCurrentSource) {
+      if (canCreateCurrentSource) {
         createAndListenFromCurrentSourceRef.current();
       }
     };
@@ -7330,6 +7334,21 @@ export function App() {
                       activeNarrationPreparedSource,
                       activeNarrationBookSource,
                     )}
+                    sourceLifecycle={workbenchSourceLifecycleEnvelope({
+                      job,
+                      projectId: activeProjectId,
+                      selectedScopeLabel: workbenchScopeTitle({
+                        selectedBookScope: effectiveBookScope,
+                        selectedBookSource: activeNarrationBookSource,
+                        selectedPreparedSource: activeNarrationPreparedSource,
+                        sourceMode,
+                      }),
+                      selectedBookSource: activeNarrationBookSource,
+                      selectedPreparedSource: activeNarrationPreparedSource,
+                      sourceMode,
+                      surface: "Teleprompt",
+                      text,
+                    })}
                     sourceMeta={narrationReviewSourceMeta({
                       bookScopeContent,
                       selectedBookScope: effectiveBookScope,
@@ -9779,6 +9798,211 @@ function activePreparedSourceForWorkbench(
   return sourceMode === "fileUrl" ? selectedPreparedSource : null;
 }
 
+/* eslint-disable sonarjs/cognitive-complexity, sonarjs/no-nested-conditional, unicorn/no-nested-ternary, unicorn/prefer-switch */
+function workbenchSourceLifecycleEnvelope({
+  job,
+  projectId,
+  selectedScopeLabel,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  surface,
+  text,
+}: Readonly<{
+  job: VoiceJob | null;
+  projectId: string;
+  selectedScopeLabel: string;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  surface: SourceLifecycleSurface;
+  text: string;
+}>): SourceLifecycleEnvelope {
+  if (sourceMode === "fileUrl" && selectedPreparedSource) {
+    const sourceJob = job?.preparedSourceId === selectedPreparedSource.id ? job : null;
+    const generatedAudioState = workbenchGeneratedAudioState(
+      sourceJob,
+      selectedPreparedSource.updatedAt,
+    );
+    const extractionState = workbenchExtractionState(
+      selectedPreparedSource.status,
+      selectedPreparedSource.blockCount > 0 ||
+        selectedPreparedSource.wordCount > 0 ||
+        Boolean(selectedPreparedSource.text),
+      generatedAudioState,
+      selectedPreparedSource.summary.spokenBlockCount,
+    );
+    const { canonicalState, narrationState } = workbenchLifecycleStates({
+      extractionState,
+      generatedAudioState,
+      narratableCount: selectedPreparedSource.summary.spokenBlockCount,
+      status: selectedPreparedSource.status,
+    });
+    return {
+      adapterKind:
+        selectedPreparedSource.kind === "url"
+          ? "url"
+          : selectedPreparedSource.kind === "text" || selectedPreparedSource.kind === "book"
+            ? selectedPreparedSource.kind
+            : "unknown",
+      canonicalState,
+      extractionState,
+      generatedAudioState,
+      language: "Project default",
+      lastOpenedSurface: surface,
+      narrationState,
+      policyScope:
+        selectedPreparedSource.sourceSpeechPolicyProfile?.trim() ||
+        hasSpeechPolicyOverrides(selectedPreparedSource.sourceSpeechPolicyOverrides ?? {})
+          ? "source"
+          : "project",
+      projectId,
+      selectedScope: selectedScopeLabel,
+      sourceId: selectedPreparedSource.id,
+      sourceKind:
+        selectedPreparedSource.kind === "url"
+          ? "website"
+          : selectedPreparedSource.kind === "text"
+            ? "text"
+            : selectedPreparedSource.kind === "book"
+              ? "book"
+              : "document",
+      title: selectedPreparedSource.title ?? selectedPreparedSource.sourceName,
+    };
+  }
+  if (sourceMode === "book" && selectedBookSource) {
+    const sourceJob = job?.bookSourceId === selectedBookSource.id ? job : null;
+    const generatedAudioState = workbenchGeneratedAudioState(
+      sourceJob,
+      selectedBookSource.updatedAt,
+    );
+    const narratableCount =
+      selectedBookSource.sections?.filter((section) => section.isNarratable).length ??
+      selectedBookSource.chapters?.filter((chapter) => chapter.isNarratable !== false).length ??
+      selectedBookSource.chapterCount;
+    const extractionState = workbenchExtractionState(
+      selectedBookSource.status,
+      narratableCount > 0 ||
+        selectedBookSource.pageCount > 0 ||
+        selectedBookSource.wordCount > 0 ||
+        Boolean(selectedBookSource.text),
+      generatedAudioState,
+      narratableCount,
+    );
+    const { canonicalState, narrationState } = workbenchLifecycleStates({
+      extractionState,
+      generatedAudioState,
+      narratableCount,
+      status: selectedBookSource.status,
+    });
+    return {
+      adapterKind: selectedBookSource.kind === "image" ? "image" : selectedBookSource.kind,
+      canonicalState,
+      extractionState,
+      generatedAudioState,
+      language: "Project default",
+      lastOpenedSurface: surface,
+      narrationState,
+      policyScope:
+        selectedBookSource.sourceSpeechPolicyProfile?.trim() ||
+        hasSpeechPolicyOverrides(selectedBookSource.sourceSpeechPolicyOverrides ?? {})
+          ? "source"
+          : "project",
+      projectId,
+      selectedScope: selectedScopeLabel,
+      sourceId: selectedBookSource.id,
+      sourceKind: selectedBookSource.kind === "html" ? "website" : "book",
+      title: bookSourceName(selectedBookSource),
+    };
+  }
+  const generatedAudioState = generatedAudioLifecycleFromJob({ job });
+  const hasText = text.trim().length > 0;
+  const extractionState = hasText ? "imported" : "new";
+  const narrationState = hasText ? "previewable" : "new";
+  return {
+    adapterKind: "text",
+    canonicalState:
+      generatedAudioState === "ready"
+        ? "audioReady"
+        : generatedAudioState === "queued" || generatedAudioState === "generating"
+          ? "generating"
+          : narrationState,
+    extractionState,
+    generatedAudioState,
+    language: "Project default",
+    lastOpenedSurface: surface,
+    narrationState,
+    policyScope: "project",
+    projectId,
+    selectedScope: "Draft text",
+    sourceId: "draft",
+    sourceKind: "draft",
+    title: "Draft text",
+  };
+}
+
+function workbenchGeneratedAudioState(
+  job: VoiceJob | null,
+  sourceUpdatedAt: string,
+): SourceLifecycleEnvelope["generatedAudioState"] {
+  const audioUpdatedAt = job?.completedAt ?? job?.updatedAt;
+  return generatedAudioLifecycleFromJob({
+    job,
+    stale:
+      Boolean(audioUpdatedAt) && Date.parse(sourceUpdatedAt) > Date.parse(audioUpdatedAt ?? ""),
+  });
+}
+
+function workbenchExtractionState(
+  status: string,
+  hasContent: boolean,
+  generatedAudioState: SourceLifecycleEnvelope["generatedAudioState"],
+  narratableCount: number,
+): SourceLifecycleEnvelope["extractionState"] {
+  if (status === "failed" || generatedAudioState === "failed") return "failed";
+  if (generatedAudioState === "ready" || narratableCount > 0 || hasContent) return "extracted";
+  return status === "ready" ? "imported" : "extracting";
+}
+
+function workbenchLifecycleStates({
+  extractionState,
+  generatedAudioState,
+  narratableCount,
+  status,
+}: {
+  extractionState: SourceLifecycleEnvelope["extractionState"];
+  generatedAudioState: SourceLifecycleEnvelope["generatedAudioState"];
+  narratableCount: number;
+  status: string;
+}): Pick<SourceLifecycleEnvelope, "canonicalState" | "narrationState"> {
+  let narrationState: SourceLifecycleEnvelope["narrationState"] = "prepared";
+  if (status === "failed" || generatedAudioState === "failed") narrationState = "failed";
+  else if (generatedAudioState === "stale" || generatedAudioState === "degraded")
+    narrationState = "stale";
+  else if (generatedAudioState === "ready") narrationState = "audioReady";
+  else if (generatedAudioState === "queued" || generatedAudioState === "generating")
+    narrationState = "generating";
+  else if (status === "ready") narrationState = narratableCount > 0 ? "narratable" : "reviewable";
+  return {
+    canonicalState: narrationState === "prepared" ? extractionState : narrationState,
+    narrationState,
+  };
+}
+/* eslint-enable sonarjs/cognitive-complexity, sonarjs/no-nested-conditional, unicorn/no-nested-ternary, unicorn/prefer-switch */
+
+function workspaceSourceLifecycleSurface(stage: WorkspaceStage): SourceLifecycleSurface {
+  if (stage === "intake") {
+    return "Intake";
+  }
+  if (stage === "review") {
+    return "Review";
+  }
+  if (stage === "preview") {
+    return "Preview";
+  }
+  return "Teleprompt";
+}
+
 function createAndListenScopeForSource({
   selectedBookScope,
   selectedBookSource,
@@ -9922,6 +10146,16 @@ function SourceTextPanel({
     selectedPreparedSource: activePreparedSource,
     sourceMode,
   });
+  const sourceLifecycle = workbenchSourceLifecycleEnvelope({
+    job,
+    projectId,
+    selectedScopeLabel: scopeTitle,
+    selectedBookSource: activeBookSource,
+    selectedPreparedSource: activePreparedSource,
+    sourceMode,
+    surface: workspaceSourceLifecycleSurface(contentMode),
+    text,
+  });
   const stageLabel = workspaceStageMeta(contentMode).label;
 
   return (
@@ -9935,6 +10169,7 @@ function SourceTextPanel({
           { label: "Voice", value: voiceProfileLabel },
         ]}
         scopeTitle={scopeTitle}
+        sourceLifecycle={sourceLifecycle}
         sourceTitle={sourceIdentity.label}
         stateLabel={stageLabel}
         surfaceName="Narration Workbench"
@@ -10010,6 +10245,7 @@ function SourceTextPanel({
             selectedBookScope={selectedBookScope}
             selectedBookSource={activeBookSource}
             selectedPreparedSource={activePreparedSource}
+            sourceLifecycle={sourceLifecycle}
             text={text}
             voiceProfileLabel={voiceProfileLabel}
             voiceProfileId={voiceProfileId}
@@ -10034,6 +10270,7 @@ function SourceTextPanel({
           selectedBookScope={selectedBookScope}
           selectedBookSource={activeBookSource}
           selectedPreparedSource={activePreparedSource}
+          sourceLifecycle={sourceLifecycle}
           sourceMode={sourceMode}
           text={text}
           voiceProfileLabel={voiceProfileLabel}
@@ -10071,6 +10308,7 @@ function NarrationPreviewStage({
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
+  sourceLifecycle,
   sourceMode,
   text,
   voiceProfileLabel,
@@ -10088,6 +10326,7 @@ function NarrationPreviewStage({
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
+  sourceLifecycle: SourceLifecycleEnvelope;
   sourceMode: SourceMode;
   text: string;
   voiceProfileLabel: string;
@@ -10168,6 +10407,7 @@ function NarrationPreviewStage({
             { label: "Size", value: sourceMeta },
           ]}
           scopeTitle={scopeTitle}
+          sourceLifecycle={sourceLifecycle}
           sourceTitle={sourceLabel}
           stateLabel={job?.status ?? "Waiting"}
           surfaceName="Preview"
@@ -12125,6 +12365,7 @@ function NarrationReviewWorkbench({
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
+  sourceLifecycle,
   text,
   voiceProfileLabel,
   voiceProfileId,
@@ -12145,6 +12386,7 @@ function NarrationReviewWorkbench({
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
+  sourceLifecycle: SourceLifecycleEnvelope;
   text: string;
   voiceProfileLabel: string;
   voiceProfileId: string;
@@ -12238,6 +12480,7 @@ function NarrationReviewWorkbench({
           policyProfileLabel={policyProfileLabel}
           runConfigurationLabel={runConfigurationLabel}
           scopeLabel={scopeTitle}
+          sourceLifecycle={sourceLifecycle}
           sourceLabel={sourceLabel}
           sourceMeta={sourceMeta}
           validationReason={validationReason}

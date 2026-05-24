@@ -30,6 +30,7 @@ import {
 } from "../playback";
 import { workspaceStageActionLabel, workspaceStageActionTestId } from "../workspace";
 import type { WorkspaceSourceType, WorkspaceStage } from "../workspace";
+import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
 import {
   TELEPROMPT_PRESET_IDS,
   telepromptPreset,
@@ -80,6 +81,7 @@ export interface TelepromptStudioProps {
   readonly settings: TeleprompterHighlightSettings;
   readonly sourceId: string | null;
   readonly sourceLabel: string;
+  readonly sourceLifecycle?: SourceLifecycleEnvelope | null;
   readonly sourceMeta: string;
   readonly sourceType: WorkspaceSourceType;
   readonly voiceProfile: string;
@@ -108,6 +110,7 @@ export function TelepromptStudio({
   settings,
   sourceId,
   sourceLabel,
+  sourceLifecycle = null,
   sourceMeta,
   sourceType,
   voiceProfile,
@@ -473,6 +476,7 @@ export function TelepromptStudio({
             { label: "Size", value: sourceMeta },
           ]}
           scopeTitle={scopeLabel}
+          sourceLifecycle={sourceLifecycle}
           sourceTitle={sourceLabel}
           stateLabel="Teleprompt"
           surfaceName="Teleprompt Studio"

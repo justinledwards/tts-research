@@ -1,4 +1,11 @@
 import { useState, type ReactNode } from "react";
+import {
+  generatedAudioStateLabel,
+  sourceLifecycleDescriptor,
+  sourcePolicyScopeLabel,
+  type SourceLifecycleEnvelope,
+  type SourceLifecycleTone,
+} from "../source-lifecycle/sourceLifecycle";
 
 export interface HeaderContextMetadataItem {
   label: string;
@@ -12,6 +19,7 @@ export interface HeaderContextSummaryProps {
   icon?: ReactNode;
   metadata?: HeaderContextMetadataItem[];
   scopeTitle?: string | null;
+  sourceLifecycle?: SourceLifecycleEnvelope | null;
   sourceTitle: string;
   stateLabel?: string | null;
   surfaceName: string;
@@ -25,16 +33,32 @@ export function HeaderContextSummary({
   icon,
   metadata = [],
   scopeTitle,
+  sourceLifecycle = null,
   sourceTitle,
   stateLabel,
   surfaceName,
   variant = "panel",
 }: Readonly<HeaderContextSummaryProps>) {
-  const normalizedSourceTitle = nonEmptyLabel(sourceTitle, "No source selected");
-  const normalizedScopeTitle = cleanOptionalLabel(scopeTitle) ?? "Full source";
+  const normalizedSourceTitle = nonEmptyLabel(
+    sourceLifecycle?.title ?? sourceTitle,
+    "No source selected",
+  );
+  const normalizedScopeTitle =
+    cleanOptionalLabel(sourceLifecycle?.selectedScope ?? scopeTitle) ?? "Full source";
   const normalizedStateLabel = cleanOptionalLabel(stateLabel);
+  const lifecycleDescriptor = sourceLifecycle
+    ? sourceLifecycleDescriptor(sourceLifecycle.canonicalState)
+    : null;
+  const effectiveMetadata = sourceLifecycle
+    ? [
+        ...metadata,
+        { label: "Lifecycle", value: lifecycleDescriptor?.label ?? "Unknown" },
+        { label: "Audio", value: generatedAudioStateLabel(sourceLifecycle.generatedAudioState) },
+        { label: "Source policy", value: sourcePolicyScopeLabel(sourceLifecycle.policyScope) },
+      ]
+    : metadata;
   const ariaLabel = buildHeaderContextAriaLabel({
-    metadata,
+    metadata: effectiveMetadata,
     scopeTitle: normalizedScopeTitle,
     sourceTitle: normalizedSourceTitle,
     stateLabel: normalizedStateLabel,
@@ -67,6 +91,16 @@ export function HeaderContextSummary({
               {normalizedStateLabel}
             </span>
           ) : null}
+          {lifecycleDescriptor ? (
+            <span
+              className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${sourceLifecycleToneClassName(
+                lifecycleDescriptor.tone,
+              )}`}
+              title={lifecycleDescriptor.detail}
+            >
+              {lifecycleDescriptor.label}
+            </span>
+          ) : null}
         </div>
         <div className="mt-1 flex min-w-0 items-center gap-2">
           <h2
@@ -86,7 +120,7 @@ export function HeaderContextSummary({
             <span className="shrink-0 font-semibold">Scope</span>
             {normalizedScopeTitle}
           </span>
-          {metadata.map((item) => (
+          {effectiveMetadata.map((item) => (
             <span
               className="inline-flex min-w-0 max-w-full items-center gap-1 before:text-[var(--vs-muted)] before:content-['·'] sm:max-w-[14rem]"
               key={`${item.label}-${item.value}`}
@@ -98,7 +132,7 @@ export function HeaderContextSummary({
             </span>
           ))}
           <HeaderContextPopover
-            metadata={metadata}
+            metadata={effectiveMetadata}
             scopeTitle={normalizedScopeTitle}
             sourceTitle={normalizedSourceTitle}
             stateLabel={normalizedStateLabel}
@@ -108,6 +142,30 @@ export function HeaderContextSummary({
       </div>
     </section>
   );
+}
+
+function sourceLifecycleToneClassName(tone: SourceLifecycleTone): string {
+  switch (tone) {
+    case "accent":
+    case "pinned": {
+      return "border-orange-300 bg-orange-500/10 text-orange-700";
+    }
+    case "danger": {
+      return "border-[var(--vs-danger-border)] bg-[var(--vs-danger-soft)] text-[var(--vs-danger)]";
+    }
+    case "info": {
+      return "border-blue-300 bg-blue-500/10 text-blue-700";
+    }
+    case "success": {
+      return "border-[var(--vs-success-border)] bg-[var(--vs-success-soft)] text-[var(--vs-success)]";
+    }
+    case "warning": {
+      return "border-[var(--vs-warning-border)] bg-[var(--vs-warning-soft)] text-[var(--vs-warning)]";
+    }
+    case "neutral": {
+      return "vs-border vs-muted";
+    }
+  }
 }
 
 function HeaderContextPopover({

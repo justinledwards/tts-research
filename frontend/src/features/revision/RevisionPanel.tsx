@@ -33,6 +33,11 @@ import {
   type RevisionStatus,
   type RevisionTabId,
 } from "./revisionFilters";
+import {
+  generatedAudioStateLabel,
+  sourceLifecycleDescriptor,
+  type SourceLifecycleEnvelope,
+} from "../source-lifecycle/sourceLifecycle";
 
 export interface RevisionPanelProps {
   activeBlockId: string | null;
@@ -41,6 +46,7 @@ export interface RevisionPanelProps {
   policyProfileLabel: string;
   runConfigurationLabel: string;
   scopeLabel: string;
+  sourceLifecycle?: SourceLifecycleEnvelope | null;
   sourceLabel: string;
   sourceMeta: string;
   validationReason: string;
@@ -60,6 +66,7 @@ export function RevisionPanel({
   policyProfileLabel,
   runConfigurationLabel,
   scopeLabel,
+  sourceLifecycle = null,
   sourceLabel,
   sourceMeta,
   validationReason,
@@ -117,6 +124,9 @@ export function RevisionPanel({
     blocksWithState.find((block) => block.id === activeBlockId) ?? blocksWithState.at(0) ?? null;
   const activeBaseBlock = activeBlock
     ? (blocks.find((block) => block.id === activeBlock.id) ?? activeBlock)
+    : null;
+  const lifecycleDescriptor = sourceLifecycle
+    ? sourceLifecycleDescriptor(sourceLifecycle.canonicalState)
     : null;
   const context: RevisionHistoryContext = {
     policyProfile: policyProfileLabel,
@@ -241,6 +251,13 @@ export function RevisionPanel({
           <p className="mt-1 text-xs vs-muted">
             {scopeLabel} · {sourceMeta} · {runConfigurationLabel}
           </p>
+          {sourceLifecycle && lifecycleDescriptor ? (
+            <p className="mt-1 text-xs vs-muted">
+              {lifecycleDescriptor.label} ·{" "}
+              {generatedAudioStateLabel(sourceLifecycle.generatedAudioState)} ·{" "}
+              {sourceLifecycle.selectedScope}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {onInspectStructure ? (

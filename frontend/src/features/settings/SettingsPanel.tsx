@@ -36,6 +36,11 @@ import {
   type TeleprompterEffectStyle,
   type TeleprompterHighlightSettings,
 } from "../../teleprompter";
+import {
+  bookSourceLifecycleEnvelope,
+  preparedSourceLifecycleEnvelope,
+} from "../source-lifecycle/sourceSelectors";
+import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
 import { VOICE_STUDIO_THEMES } from "../../theme";
 import type {
   BookSource,
@@ -111,6 +116,7 @@ interface SourcePolicyTarget {
   clear: () => Promise<void>;
   isSaving: boolean;
   label: string;
+  lifecycle: SourceLifecycleEnvelope;
   overrides?: SpeechPolicyOverrides | null;
   profile?: string | null;
   save: (request: SourceSpeechPolicyUpdateRequest) => Promise<void>;
@@ -1401,6 +1407,10 @@ function SourceSettingsGroup({
       clear: () => onClearBookSourcePolicy(selectedBookSource.id),
       isSaving: sourcePolicySavingKey === `book:${selectedBookSource.id}`,
       label: selectedBookSource.title ?? selectedBookSource.sourceFile,
+      lifecycle: bookSourceLifecycleEnvelope(selectedBookSource, {
+        isActive: true,
+        lastOpenedSurface: "Settings",
+      }),
       overrides: selectedBookSource.sourceSpeechPolicyOverrides,
       profile: selectedBookSource.sourceSpeechPolicyProfile,
       save: (request: SourceSpeechPolicyUpdateRequest) =>
@@ -1411,6 +1421,10 @@ function SourceSettingsGroup({
       clear: () => onClearPreparedSourcePolicy(selectedPreparedSource.id),
       isSaving: sourcePolicySavingKey === `prepared:${selectedPreparedSource.id}`,
       label: selectedPreparedSource.title ?? selectedPreparedSource.sourceName,
+      lifecycle: preparedSourceLifecycleEnvelope(selectedPreparedSource, {
+        isActive: true,
+        lastOpenedSurface: "Settings",
+      }),
       overrides: selectedPreparedSource.sourceSpeechPolicyOverrides,
       profile: selectedPreparedSource.sourceSpeechPolicyProfile,
       save: (request: SourceSpeechPolicyUpdateRequest) =>
@@ -1484,6 +1498,7 @@ function SourceSettingsGroup({
               error={speechPolicyError}
               isSaving={sourceTarget.isSaving}
               profiles={speechPolicyProfiles}
+              sourceLifecycle={sourceTarget.lifecycle}
               sourceOverrides={sourceTarget.overrides ?? undefined}
               sourceProfile={sourceTarget.profile ?? undefined}
               onClear={sourceTarget.clear}

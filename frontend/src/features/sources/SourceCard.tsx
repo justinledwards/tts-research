@@ -1,4 +1,5 @@
-import { Button, StatusChip, type StatusChipTone } from "../../design";
+import { Button } from "../../design";
+import { SourceLifecycleCard } from "../source-lifecycle";
 import type { SourceCardModel } from "./sourceLifecycle";
 
 export interface SourceCardProps {
@@ -30,37 +31,14 @@ export function SourceCard({
     onOpenCinema,
   );
   return (
-    <article
-      aria-label={model.accessibleLabel}
-      className={`grid gap-3 rounded-md border p-3 ${
-        model.isActive ? "border-orange-300 bg-orange-500/5" : "vs-border vs-surface"
-      }`}
-      data-source-lifecycle-state={model.lifecycleState}
-      data-testid={`source-card-${model.owner}-${model.id}`}
-    >
-      <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h4 className="min-w-0 truncate text-sm font-semibold" title={model.visibleLabel}>
-              {model.visibleLabel}
-            </h4>
-            <StatusChip tone={sourceStateTone(model.lifecycleState)}>
-              {model.lifecycleLabel}
-            </StatusChip>
-            {model.isActive ? (
-              <StatusChip tone="accent">{model.activeStateLabel}</StatusChip>
-            ) : null}
-            {model.hasPolicyPin ? (
-              <StatusChip tone="pinned">{model.policyPinLabel}</StatusChip>
-            ) : null}
-          </div>
-          <p className="vs-muted mt-1 text-xs leading-5">
-            {model.typeLabel} · {model.extractionState} · {model.narratableScopeLabel}
-          </p>
-          <p className="vs-muted mt-1 text-xs leading-5">{model.lifecycleDetail}</p>
-          <p className="vs-muted mt-1 text-xs leading-5">{model.appliesToCopy}</p>
-        </div>
-        <div className="flex flex-wrap gap-2 sm:justify-end">
+    <SourceLifecycleCard
+      ariaLabel={model.accessibleLabel}
+      density="compact"
+      envelope={model.envelope}
+      selected={model.isActive}
+      testId={`source-card-${model.owner}-${model.id}`}
+      actions={
+        <>
           <Button
             data-testid={`ui-action-source-review-${model.owner}-${model.id}`}
             data-ui-action-surface="Project dashboard"
@@ -100,14 +78,16 @@ export function SourceCard({
           >
             Cinema
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
+      <p className="vs-muted text-xs leading-5">{model.appliesToCopy}</p>
       <dl className="grid gap-2 text-xs sm:grid-cols-3">
         <SourceCardFact label="Expected transition" value={model.expectedStateTransition} />
         <SourceCardFact label="Enabled state" value={model.enabledDisabledReason} />
         <SourceCardFact label="Active state" value={model.activeStateLabel} />
       </dl>
-    </article>
+    </SourceLifecycleCard>
   );
 }
 
@@ -134,17 +114,4 @@ function SourceCardFact({ label, value }: Readonly<{ label: string; value: strin
       </dd>
     </div>
   );
-}
-
-function sourceStateTone(state: SourceCardModel["lifecycleState"]): StatusChipTone {
-  if (state === "failed" || state === "stale") {
-    return "danger";
-  }
-  if (state === "imported" || state === "extracting") {
-    return "warning";
-  }
-  if (state === "generated") {
-    return "info";
-  }
-  return "success";
 }

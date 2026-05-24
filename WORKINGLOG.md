@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-24 10:32 CEST - Canonical Source Lifecycle and Cross-surface Source Selector
+- [x] Inspect existing source state and selector surfaces
+- [x] Add canonical source lifecycle model and shared selectors
+- [x] Add lifecycle card and wire shared source labels/badges into key surfaces
+- [x] Add lifecycle regression coverage
+- [x] Run required local validation commands
+
 ## 2026-05-24 08:05 CEST - Playback and Generated-audio Ownership Model
 - [x] Inspect existing playback docs, feature modules, and UI audit metadata
 - [x] Add canonical playback ownership and lifecycle modules

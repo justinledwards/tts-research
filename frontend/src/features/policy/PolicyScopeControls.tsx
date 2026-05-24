@@ -20,6 +20,11 @@ import {
 } from "./model";
 import { ScopeBadge } from "../settings/ScopeBadge";
 import { settingsScopeAppliesTo } from "../settings/model";
+import {
+  sourceLifecycleDescriptor,
+  sourcePolicyScopeLabel,
+  type SourceLifecycleEnvelope,
+} from "../source-lifecycle/sourceLifecycle";
 
 export function PolicyScopeChips({ state }: Readonly<{ state: PolicyScopeState }>) {
   return (
@@ -88,6 +93,7 @@ export interface SourcePolicyPinEditorProps {
   error?: string | null;
   isSaving?: boolean;
   profiles: SpeechPolicyProfile[];
+  sourceLifecycle?: SourceLifecycleEnvelope | null;
   sourceOverrides?: SpeechPolicyOverrides;
   sourceProfile?: string;
   onClear: () => Promise<void> | void;
@@ -101,6 +107,7 @@ export function SourcePolicyPinEditor({
   error = null,
   isSaving = false,
   profiles,
+  sourceLifecycle = null,
   sourceOverrides = {},
   sourceProfile,
   onClear,
@@ -128,6 +135,9 @@ export function SourcePolicyPinEditor({
   const savingDisabledReason =
     disabled || isSaving ? "Source policy pin is currently saving." : undefined;
   const clearPinDisabledReason = hasPin ? savingDisabledReason : "No source policy pin is set.";
+  const lifecycleDescriptor = sourceLifecycle
+    ? sourceLifecycleDescriptor(sourceLifecycle.canonicalState)
+    : null;
 
   return (
     <div className="grid gap-3 rounded-md border p-3 vs-border">
@@ -145,8 +155,15 @@ export function SourcePolicyPinEditor({
         </span>
       </div>
       <p className="vs-muted text-xs leading-5">
-        {settingsScopeAppliesTo("source")} Applies to the selected source only; project and session
-        settings still apply everywhere else.
+        {sourceLifecycle
+          ? `${settingsScopeAppliesTo("source")} Applies to ${sourceLifecycle.title} · ${
+              sourceLifecycle.selectedScope
+            }. ${sourcePolicyScopeLabel(sourceLifecycle.policyScope)} · ${
+              lifecycleDescriptor?.label ?? "Lifecycle unknown"
+            }.`
+          : `${settingsScopeAppliesTo(
+              "source",
+            )} Applies to the selected source only; project and session settings still apply everywhere else.`}
       </p>
       <label className="grid gap-1 text-xs font-semibold">
         <span className="vs-muted">Profile</span>

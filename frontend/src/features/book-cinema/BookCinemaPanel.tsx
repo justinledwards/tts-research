@@ -66,6 +66,10 @@ import { PolicyScopeSummary, SourcePolicyPinEditor, policyScopeSummary } from ".
 import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
 import { ExitIcon, SettingsIcon } from "../navigation";
 import {
+  bookSourceLifecycleEnvelope,
+  sourceSelectorOption,
+} from "../source-lifecycle/sourceSelectors";
+import {
   READER_LINE_HEIGHT_RATIO,
   READER_MEASURE_CLASS,
   READER_SEEK_SECONDS,
@@ -430,34 +434,63 @@ function BookSourceList({
   return (
     <div className="grid max-h-72 min-w-0 content-start gap-2 overflow-y-auto pr-1">
       {bookSources.map((book) => (
-        <button
-          className={`min-w-0 rounded-md border p-3 text-left transition ${
-            selectedBookId === book.id
-              ? "border-orange-300 bg-orange-500/10"
-              : "bg-[var(--vs-raised)] hover:bg-[var(--vs-surface)] vs-border"
-          }`}
+        <BookSourceListButton
+          book={book}
+          isSelected={selectedBookId === book.id}
           key={book.id}
-          onClick={() => {
-            onSelectBook(book.id);
-            onScopeChange(resolveDefaultBookScope(book));
-          }}
-          type="button"
-        >
-          <span className="block truncate text-sm font-semibold" title={bookSourceName(book)}>
-            {bookSourceName(book)}
-          </span>
-          <span className="vs-muted mt-1 block truncate text-xs" title={book.sourceFile}>
-            {book.kind.toUpperCase()} · {formatBookCount(book)} · {formatBytes(book.sourceBytes)}
-          </span>
-          {book.ingestion?.supportTierLabel ? (
-            <span className="vs-muted mt-1 block truncate text-[0.68rem]">
-              {book.ingestion.supportTierLabel}
-            </span>
-          ) : null}
-          <BookStatusBadge status={book.status} />
-        </button>
+          onScopeChange={onScopeChange}
+          onSelectBook={onSelectBook}
+        />
       ))}
     </div>
+  );
+}
+
+function BookSourceListButton({
+  book,
+  isSelected,
+  onScopeChange,
+  onSelectBook,
+}: Readonly<{
+  book: BookSource;
+  isSelected: boolean;
+  onScopeChange: (scope: BookScope) => void;
+  onSelectBook: (bookId: string) => void;
+}>) {
+  const option = sourceSelectorOption(
+    bookSourceLifecycleEnvelope(book, {
+      isActive: isSelected,
+      lastOpenedSurface: "Book Cinema",
+    }),
+    "book",
+  );
+  return (
+    <button
+      className={`min-w-0 rounded-md border p-3 text-left transition ${
+        isSelected
+          ? "border-orange-300 bg-orange-500/10"
+          : "bg-[var(--vs-raised)] hover:bg-[var(--vs-surface)] vs-border"
+      }`}
+      onClick={() => {
+        onSelectBook(book.id);
+        onScopeChange(resolveDefaultBookScope(book));
+      }}
+      title={option.optionLabel}
+      type="button"
+    >
+      <span className="block truncate text-sm font-semibold" title={bookSourceName(book)}>
+        {bookSourceName(book)}
+      </span>
+      <span className="vs-muted mt-1 block truncate text-xs" title={option.detail}>
+        {option.detail}
+      </span>
+      {book.ingestion?.supportTierLabel ? (
+        <span className="vs-muted mt-1 block truncate text-[0.68rem]">
+          {book.ingestion.supportTierLabel}
+        </span>
+      ) : null}
+      <BookStatusBadge status={book.status} />
+    </button>
   );
 }
 
@@ -910,6 +943,17 @@ export function BookCinemaOverlay({
   const activeSpan = scopedSpans.find((span) => span.index === readerActiveWordIndex) ?? null;
   const activeBlock = bookCinemaActiveBlock(scopeContent?.blocks ?? [], activeSpan);
   const activePassage = bookCinemaActivePassage(activeBlock, scopedText);
+  const sourceLifecycle = useMemo(
+    () =>
+      bookSourceLifecycleEnvelope(book, {
+        activeBlockId: activeBlock?.id ?? null,
+        isActive: true,
+        job: activeBookJob,
+        lastOpenedSurface: "Book Cinema",
+        selectedScope: normalizedScope,
+      }),
+    [activeBlock?.id, activeBookJob, book, normalizedScope],
+  );
   const bookPolicyState = {
     projectProfile: policyProfile,
     resolvedProfile: activeBlock?.speechPolicy.profile,
@@ -1090,6 +1134,7 @@ export function BookCinemaOverlay({
             error={policyError}
             isSaving={sourcePolicySaving}
             profiles={policyProfiles}
+            sourceLifecycle={sourceLifecycle}
             sourceOverrides={book.sourceSpeechPolicyOverrides}
             sourceProfile={book.sourceSpeechPolicyProfile}
             onClear={onClearSourcePolicy}
@@ -1406,6 +1451,7 @@ export function BookCinemaOverlay({
               { label: "Voice", value: activeBookJob?.voice ?? "Default narrative" },
             ]}
             scopeTitle={bookScopeLabel(normalizedScope)}
+            sourceLifecycle={sourceLifecycle}
             sourceTitle={bookSourceName(book)}
             stateLabel={bookTransportStateTitle(playbackState)}
             surfaceName={book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}
@@ -2993,22 +3039,6 @@ function bookSpanTitle(span: NonNullable<BookSource["wordSpans"]>[number]): stri
     return `Chapter ${String(span.chapter)}`;
   }
   return undefined;
-}
-
-function formatBookCount(book: BookSource): string {
-  if (book.kind === "pdf" && book.pageCount > 0) {
-    return `${book.pageCount.toLocaleString()} pages · ${book.wordCount.toLocaleString()} words`;
-  }
-  if ((book.kind === "docx" || book.kind === "html") && (book.sections ?? []).length > 0) {
-    return `${(book.sections ?? []).length.toLocaleString()} sections · ${book.wordCount.toLocaleString()} words`;
-  }
-  if (book.chapterCount > 0) {
-    return `${book.chapterCount.toLocaleString()} chapters · ${book.wordCount.toLocaleString()} words`;
-  }
-  if (book.pageCount > 0) {
-    return `${book.pageCount.toLocaleString()} pages · ${book.wordCount.toLocaleString()} words`;
-  }
-  return `${book.wordCount.toLocaleString()} words`;
 }
 
 function formatAdapterDiagnostics(diagnostics: BookCinemaDiagnostics | null): string {

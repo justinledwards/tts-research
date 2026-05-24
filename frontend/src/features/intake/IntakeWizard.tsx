@@ -42,6 +42,12 @@ import {
   type IntakeSourceMode,
   type IntakeSourceType,
 } from "./sourceTypeModel";
+import {
+  bookSourceLifecycleEnvelope,
+  preparedSourceLifecycleEnvelope,
+  sourceSelectorOption,
+} from "../source-lifecycle/sourceSelectors";
+import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
 
 export type IntakeDestinationStage = "review" | "preview";
 
@@ -115,15 +121,19 @@ const INTAKE_SOURCE_FILE_ACCEPT =
 type IntakeExistingSource =
   | {
       detail: string;
+      envelope: SourceLifecycleEnvelope;
       key: string;
       label: string;
+      optionLabel: string;
       source: BookSource;
       type: "book";
     }
   | {
       detail: string;
+      envelope: SourceLifecycleEnvelope;
       key: string;
       label: string;
+      optionLabel: string;
       source: PreparedSource;
       type: "prepared";
     };
@@ -323,22 +333,47 @@ export function IntakeWizard({
   const template = intakeTemplateById(templateId);
   const existingSources = useMemo(
     (): IntakeExistingSource[] => [
-      ...bookSources.map((source) => ({
-        detail: `${source.kind.toUpperCase()} · ${source.wordCount.toLocaleString()} words`,
-        key: `book:${source.id}`,
-        label: bookSourceName(source),
-        source,
-        type: "book" as const,
-      })),
-      ...preparedSources.map((source) => ({
-        detail: `${source.kind.toUpperCase()} · ${source.wordCount.toLocaleString()} words`,
-        key: `prepared:${source.id}`,
-        label: source.title ?? source.sourceName,
-        source,
-        type: "prepared" as const,
-      })),
+      ...bookSources.map((source) => {
+        const envelope = bookSourceLifecycleEnvelope(source, {
+          isActive: source.id === selectedBookSource?.id,
+          lastOpenedSurface: "Intake",
+          selectedScope: source.id === selectedBookSource?.id ? selectedBookScope : null,
+        });
+        const option = sourceSelectorOption(envelope, "book");
+        return {
+          detail: option.detail,
+          envelope,
+          key: option.value,
+          label: option.label,
+          optionLabel: option.optionLabel,
+          source,
+          type: "book" as const,
+        };
+      }),
+      ...preparedSources.map((source) => {
+        const envelope = preparedSourceLifecycleEnvelope(source, {
+          isActive: source.id === selectedPreparedSource?.id,
+          lastOpenedSurface: "Intake",
+        });
+        const option = sourceSelectorOption(envelope, "prepared");
+        return {
+          detail: option.detail,
+          envelope,
+          key: option.value,
+          label: option.label,
+          optionLabel: option.optionLabel,
+          source,
+          type: "prepared" as const,
+        };
+      }),
     ],
-    [bookSources, preparedSources],
+    [
+      bookSources,
+      preparedSources,
+      selectedBookScope,
+      selectedBookSource?.id,
+      selectedPreparedSource?.id,
+    ],
   );
   const selectedExistingSource = existingSources.find((source) => source.key === existingSourceKey);
   const existingBookSource =
@@ -876,7 +911,7 @@ function IntakeSourceStep({
               <option value="">Choose a project source</option>
               {existingSources.map((source) => (
                 <option key={source.key} value={source.key}>
-                  {source.label} · {source.detail}
+                  {source.optionLabel}
                 </option>
               ))}
             </select>

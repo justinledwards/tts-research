@@ -74,8 +74,16 @@ export function ProjectDashboard({
         bookSources,
         jobs: visibleJobs,
         preparedSources,
+        projectId: activeProjectId,
       }),
-    [bookSources, preparedSources, selectedBookSourceId, selectedPreparedSourceId, visibleJobs],
+    [
+      activeProjectId,
+      bookSources,
+      preparedSources,
+      selectedBookSourceId,
+      selectedPreparedSourceId,
+      visibleJobs,
+    ],
   );
   const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
 

@@ -47,6 +47,10 @@ import { LazyPanelFallback } from "../performance";
 import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
 import { ExitIcon, SettingsIcon } from "../navigation";
 import type { UiMemoryCinemaState } from "../preferences";
+import {
+  preparedSourceLifecycleEnvelope,
+  sourceSelectorOption,
+} from "../source-lifecycle/sourceSelectors";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { playbackActionLabel } from "../playback";
 import { looksLikeMermaidDiagram } from "../../markdownModel";
@@ -297,6 +301,16 @@ export function PreparedSourceCinemaOverlay({
     sourceProfile: source.sourceSpeechPolicyProfile,
   };
   const sourcePolicySummary = policyScopeSummary(sourcePolicyState);
+  const sourceLifecycle = useMemo(
+    () =>
+      preparedSourceLifecycleEnvelope(source, {
+        activeBlockId: displayBlock?.id ?? null,
+        isActive: true,
+        job: job?.preparedSourceId === source.id ? job : null,
+        lastOpenedSurface: "Cinema",
+      }),
+    [displayBlock?.id, job, source],
+  );
   const generatedHealth = (
     <div className="grid gap-2 text-sm">
       <HealthRow label="TTS engine" value={job ? "Healthy" : "Waiting"} />
@@ -421,6 +435,7 @@ export function PreparedSourceCinemaOverlay({
             error={policyError}
             isSaving={sourcePolicySaving}
             profiles={policyProfiles}
+            sourceLifecycle={sourceLifecycle}
             sourceOverrides={source.sourceSpeechPolicyOverrides}
             sourceProfile={source.sourceSpeechPolicyProfile}
             onClear={onClearSourcePolicy}
@@ -612,6 +627,7 @@ export function PreparedSourceCinemaOverlay({
               { label: "Voice", value: job?.voice ?? "Default narrative" },
             ]}
             scopeTitle="Full source"
+            sourceLifecycle={sourceLifecycle}
             sourceTitle={title}
             stateLabel={preparedSourceCinemaPlaybackStatusLabel(isPlaybackActive, job)}
             surfaceName={cinemaLabel}
@@ -818,8 +834,8 @@ function PreparedSourceCinemaHeaderSourceSelect({
 }
 
 function preparedSourceCinemaOptionLabel(source: PreparedSource): string {
-  const kindLabel = preparedSourceCinemaLabel(source).replace(" Cinema", "");
-  return `${kindLabel} - ${preparedSourceCinemaTitle(source)}`;
+  const envelope = preparedSourceLifecycleEnvelope(source, { lastOpenedSurface: "Cinema" });
+  return sourceSelectorOption(envelope, "prepared").optionLabel;
 }
 
 function PreparedSourceCinemaReader({
