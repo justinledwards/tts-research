@@ -28,6 +28,7 @@ import {
   playbackActionLabel,
   telepromptSecondaryActionVariant,
 } from "../playback";
+import { providerCapabilityDataAttributes } from "../provider-capabilities";
 import { workspaceStageActionLabel, workspaceStageActionTestId } from "../workspace";
 import type { WorkspaceSourceType, WorkspaceStage } from "../workspace";
 import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
@@ -69,6 +70,8 @@ export interface TelepromptStudioProps {
   readonly blocks: RevisionBlock[];
   readonly canCreate: boolean;
   readonly canOpenCinema: boolean;
+  readonly createAndListenCapabilityReason?: string;
+  readonly createAndListenDisabledReason?: string;
   readonly isPlaybackActive: boolean;
   readonly job: VoiceJob | null;
   readonly playbackControls: TelepromptPlaybackController;
@@ -98,6 +101,8 @@ export function TelepromptStudio({
   blocks,
   canCreate,
   canOpenCinema,
+  createAndListenCapabilityReason,
+  createAndListenDisabledReason: externalCreateAndListenDisabledReason,
   isPlaybackActive,
   job,
   playbackControls,
@@ -172,11 +177,12 @@ export function TelepromptStudio({
       });
   const createAndListenDisabledReason = canCreate
     ? undefined
-    : playbackActionDisabledReason({
+    : (externalCreateAndListenDisabledReason ??
+      playbackActionDisabledReason({
         action: "createAndListen",
         fallbackReason: "Select a ready source before creating audio.",
         lifecycle: playbackLifecycle,
-      });
+      }));
   const cueProgressPercent =
     activeBlockIndex >= 0 && blocks.length > 0
       ? Math.round(((activeBlockIndex + 1) / blocks.length) * 100)
@@ -636,6 +642,7 @@ export function TelepromptStudio({
               </Button>
               <Button
                 {...playbackActionDataAttributes("createAndListen", playbackLifecycle)}
+                {...providerCapabilityDataAttributes("tts", createAndListenCapabilityReason)}
                 aria-label={playbackActionAriaLabel("createAndListen", {
                   createScope: "current-scope",
                 })}

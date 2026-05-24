@@ -1407,6 +1407,8 @@ async function pageIssuesForReport(issues) {
 
 function summarizeInventory(actions) {
   return {
+    capabilityGatedDisabled: actions.filter((action) => action.disabled && action.capabilityGated)
+      .length,
     destructive: actions.filter((action) => action.destructive).length,
     disabled: actions.filter((action) => action.disabled).length,
     missingStableTestIds: actions.filter((action) => !action.hasStableTestId).length,
@@ -1473,7 +1475,11 @@ function summarizeGateFindings({ actions, duplicates, results, scenarios }) {
   const disabledWithoutReason = actions.filter(
     (action) => action.disabled && !action.disabledReason,
   );
+  const capabilityGatedDisabled = actions.filter(
+    (action) => action.disabled && action.capabilityGated,
+  );
   return {
+    capabilityGatedDisabled,
     disabledWithoutReason,
     duplicates,
     failedResults,
@@ -1538,6 +1544,7 @@ function renderReviewerSummary({
     `- Skipped destructive focus checks: ${String(resultSummary.skipped)}`,
     `- Failed/no-op/browser findings: ${String(resultSummary.failed)}`,
     `- Disabled controls: ${String(inventorySummary.disabled)}`,
+    `- Capability-gated disabled controls: ${String(inventorySummary.capabilityGatedDisabled)}`,
     `- Destructive controls: ${String(inventorySummary.destructive)}`,
     `- Website extraction confidence: ${websiteExtractionQuality?.extractionConfidence ?? "missing"}`,
     `- Website skipped chrome blocks: ${String(websiteExtractionQuality?.skippedBlockCount ?? 0)}`,
@@ -1551,6 +1558,7 @@ function renderReviewerSummary({
     `- Failed/no-op activations: ${formatFindingCount(findings.failedResults.length)}`,
     `- Metadata findings: ${formatFindingCount(findings.metadataFindings.length)}`,
     `- Disabled without reason: ${formatFindingCount(findings.disabledWithoutReason.length)}`,
+    `- Capability-gated disabled controls: ${String(findings.capabilityGatedDisabled.length)}`,
     `- Destructive without confirmation: ${formatFindingCount(
       findings.destructiveMissingConfirmation.length,
     )}`,

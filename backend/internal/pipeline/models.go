@@ -12,6 +12,7 @@ import (
 	speechmath "github.com/justinedwards/tts-research/backend/internal/math"
 	"github.com/justinedwards/tts-research/backend/internal/normalise"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
+	"github.com/justinedwards/tts-research/backend/internal/providers"
 )
 
 type JobStatus string
@@ -532,24 +533,25 @@ type TTSEngineVoice struct {
 }
 
 type TTSEngineDiagnostics struct {
-	ID                string            `json:"id"`
-	Label             string            `json:"label"`
-	Status            string            `json:"status"`
-	Default           bool              `json:"default"`
-	Local             bool              `json:"local"`
-	Experimental      bool              `json:"experimental"`
-	SupportsVoice     bool              `json:"supportsVoice"`
-	SupportsReference bool              `json:"supportsReference"`
-	SupportsArtifacts bool              `json:"supportsProfileArtifacts"`
-	SupportsSwedish   bool              `json:"supportsSwedish"`
-	SupportsSSML      bool              `json:"supportsSSML"`
-	Languages         []string          `json:"languages,omitempty"`
-	Voices            []TTSEngineVoice  `json:"voices,omitempty"`
-	EstimatedVRAM     string            `json:"estimatedVram,omitempty"`
-	ModelCache        string            `json:"modelCache,omitempty"`
-	Reason            string            `json:"reason,omitempty"`
-	Setup             string            `json:"setup,omitempty"`
-	Metadata          map[string]string `json:"metadata,omitempty"`
+	ID                string                  `json:"id"`
+	Label             string                  `json:"label"`
+	Status            string                  `json:"status"`
+	Default           bool                    `json:"default"`
+	Local             bool                    `json:"local"`
+	Experimental      bool                    `json:"experimental"`
+	SupportsVoice     bool                    `json:"supportsVoice"`
+	SupportsReference bool                    `json:"supportsReference"`
+	SupportsArtifacts bool                    `json:"supportsProfileArtifacts"`
+	SupportsSwedish   bool                    `json:"supportsSwedish"`
+	SupportsSSML      bool                    `json:"supportsSSML"`
+	Capabilities      providers.CapabilitySet `json:"capabilities"`
+	Languages         []string                `json:"languages,omitempty"`
+	Voices            []TTSEngineVoice        `json:"voices,omitempty"`
+	EstimatedVRAM     string                  `json:"estimatedVram,omitempty"`
+	ModelCache        string                  `json:"modelCache,omitempty"`
+	Reason            string                  `json:"reason,omitempty"`
+	Setup             string                  `json:"setup,omitempty"`
+	Metadata          map[string]string       `json:"metadata,omitempty"`
 }
 
 type ResearchModuleDiagnostics struct {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { Button, Toggle, cx, fieldControlClassName } from "../../design";
-import type { RunMode, VoiceJob } from "../../types";
+import type { RunMode, TTSEngineDiagnostics, VoiceJob } from "../../types";
 import {
   generatedAudioLifecycleFromJob,
   playbackActionAriaLabel,
@@ -9,6 +9,11 @@ import {
   playbackActionDisabledReason,
   playbackActionLabel,
 } from "../playback";
+import {
+  providerCapabilityDataAttributes,
+  providerCapabilityGateForPlaybackAction,
+  resolveProviderRuntimeCapabilities,
+} from "../provider-capabilities";
 import { READER_PLAYBACK_RATES } from "../reader-accessibility";
 import type { RevisionBlock } from "../revision";
 import {
@@ -56,6 +61,8 @@ export interface GlobalPreviewPlayerProps {
   readonly playbackControls: GlobalPreviewPlaybackController;
   readonly playbackCursorSec: number;
   readonly policyOptions: readonly PreviewComparisonOption[];
+  readonly providerEngineId?: string;
+  readonly providerEngines?: readonly TTSEngineDiagnostics[];
   readonly policyProfileLabel: string;
   readonly runConfigurationLabel: string;
   readonly scopeLabel: string;
@@ -84,6 +91,8 @@ export function GlobalPreviewPlayer({
   playbackControls,
   playbackCursorSec,
   policyOptions,
+  providerEngineId = "mock",
+  providerEngines = [],
   policyProfileLabel,
   runConfigurationLabel,
   scopeLabel,
@@ -117,6 +126,10 @@ export function GlobalPreviewPlayer({
     [policyOptions, voiceOptions],
   );
   const [choiceB, setChoiceB] = useState<PreviewComparisonChoice>(choiceA);
+  const providerRuntime = useMemo(
+    () => resolveProviderRuntimeCapabilities(providerEngineId, providerEngines),
+    [providerEngineId, providerEngines],
+  );
 
   useEffect(() => {
     setChoiceB((current) => normalizePreviewComparisonChoice(current, choiceA, comparisonOptions));
@@ -126,11 +139,14 @@ export function GlobalPreviewPlayer({
     () => buildPreviewComparisonModel(choiceA, choiceB, comparisonOptions),
     [choiceA, choiceB, comparisonOptions],
   );
-  const playbackAvailable = hasPreviewPlayback(playbackControls, queue);
+  const auditionGate = providerCapabilityGateForPlaybackAction(providerRuntime, "audition");
+  const abComparisonGate = providerCapabilityGateForPlaybackAction(providerRuntime, "abCompare");
+  const playbackAvailable = hasPreviewPlayback(playbackControls, queue) && !auditionGate.disabled;
   const playbackLifecycle = playbackAvailable ? "ready" : generatedAudioLifecycleFromJob({ job });
   const playbackDisabledReason = playbackAvailable
     ? undefined
-    : playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle });
+    : (auditionGate.reason ??
+      playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle }));
   const openCinemaDisabledReason = canOpenCinema
     ? undefined
     : playbackActionDisabledReason({
@@ -220,6 +236,7 @@ export function GlobalPreviewPlayer({
             <Button
               aria-label={previewPlayAriaLabel}
               {...playbackActionDataAttributes("audition", playbackLifecycle, { primary: true })}
+              {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
               data-testid="ui-action-preview-mini-play"
               data-ui-action-surface="Preview"
               disabled={!playbackAvailable}
@@ -232,6 +249,7 @@ export function GlobalPreviewPlayer({
             </Button>
             <Button
               {...playbackActionDataAttributes("audition", playbackLifecycle)}
+              {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
               aria-label="Restart preview"
               data-testid="ui-action-preview-mini-restart"
               data-ui-action-surface="Preview"
@@ -290,6 +308,7 @@ export function GlobalPreviewPlayer({
             />
             <Button
               {...playbackActionDataAttributes("audition", playbackLifecycle)}
+              {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
               data-testid="ui-action-preview-mini-segment"
               data-ui-action-surface="Preview"
               disabled={!playbackAvailable}
@@ -306,6 +325,7 @@ export function GlobalPreviewPlayer({
               <>
                 <Button
                   {...playbackActionDataAttributes("audition", playbackLifecycle)}
+                  {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
                   data-testid="ui-action-preview-mini-source"
                   data-ui-action-surface="Preview"
                   disabled={!playbackAvailable}
@@ -353,10 +373,11 @@ export function GlobalPreviewPlayer({
               </div>
               <Button
                 {...playbackActionDataAttributes("abCompare", playbackLifecycle)}
+                {...providerCapabilityDataAttributes("abComparison", abComparisonGate.reason)}
                 data-testid="ui-action-preview-mini-audition-a"
                 data-ui-action-surface="Preview"
-                disabled={!playbackAvailable}
-                disabledReason={playbackDisabledReason}
+                disabled={!playbackAvailable || abComparisonGate.disabled}
+                disabledReason={abComparisonGate.reason ?? playbackDisabledReason}
                 onClick={() => {
                   auditionItem(activeItem);
                 }}
@@ -368,7 +389,10 @@ export function GlobalPreviewPlayer({
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
               <ComparisonSelect
-                disabledReason={previewVoiceBDisabledReason(voiceOptions)}
+                capabilityReason={abComparisonGate.reason}
+                disabledReason={
+                  abComparisonGate.reason ?? previewVoiceBDisabledReason(voiceOptions)
+                }
                 label="Voice B"
                 options={voiceOptions}
                 testId="ui-action-preview-mini-voice-b"
@@ -378,6 +402,8 @@ export function GlobalPreviewPlayer({
                 }}
               />
               <ComparisonSelect
+                capabilityReason={abComparisonGate.reason}
+                disabledReason={abComparisonGate.reason}
                 label="Policy B"
                 options={policyOptions}
                 testId="ui-action-preview-mini-policy-b"
@@ -387,6 +413,8 @@ export function GlobalPreviewPlayer({
                 }}
               />
               <ComparisonSelect
+                capabilityReason={abComparisonGate.reason}
+                disabledReason={abComparisonGate.reason}
                 label="Run B"
                 options={PREVIEW_RUN_COMPARISON_OPTIONS}
                 testId="ui-action-preview-mini-run-b"
@@ -404,10 +432,14 @@ export function GlobalPreviewPlayer({
                 {previewComparisonSummary(comparison)}
               </p>
               <Button
+                {...providerCapabilityDataAttributes("abComparison", abComparisonGate.reason)}
                 data-testid="ui-action-preview-mini-apply-b"
                 data-ui-action-surface="Preview"
-                disabled={!comparison.hasDifference}
-                disabledReason={comparison.hasDifference ? undefined : "B already matches A."}
+                disabled={!comparison.hasDifference || abComparisonGate.disabled}
+                disabledReason={
+                  abComparisonGate.reason ??
+                  (comparison.hasDifference ? undefined : "B already matches A.")
+                }
                 onClick={handleApplyB}
                 size="sm"
                 variant="primary"
@@ -653,6 +685,7 @@ function MiniWaveform({
 }
 
 function ComparisonSelect({
+  capabilityReason,
   disabledReason,
   label,
   options,
@@ -660,6 +693,7 @@ function ComparisonSelect({
   value,
   onChange,
 }: Readonly<{
+  capabilityReason?: string;
   disabledReason?: string;
   label: string;
   options: readonly PreviewComparisonOption[];
@@ -671,6 +705,7 @@ function ComparisonSelect({
     <label className="grid min-w-0 gap-1 text-xs font-semibold">
       <span>{label}</span>
       <select
+        {...providerCapabilityDataAttributes("abComparison", capabilityReason)}
         aria-label={label}
         className={`${fieldControlClassName} h-11 min-w-0 text-xs font-semibold`}
         data-disabled-reason={disabledReason}

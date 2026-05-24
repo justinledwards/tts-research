@@ -19,6 +19,12 @@ import type {
   VoiceProfile,
 } from "../../types";
 import { resolveSpeechPolicyProfileOptions } from "../policy";
+import {
+  providerCapabilityDataAttributes,
+  providerCapabilityGate,
+  resolveProviderRuntimeCapabilities,
+  type ProviderCapabilityKey,
+} from "../provider-capabilities";
 import { ScopeBadge } from "../settings/ScopeBadge";
 import {
   RUN_CONFIGURATION_VOICE_CHOICES,
@@ -100,6 +106,7 @@ export function RunConfigurationWizard({
   const summary = runConfigurationSummary(runConfiguration, selectedProfile);
   const activeIntent = getRunModePreset(runConfiguration.runMode);
   const activeEngine = engineOptions.find((engine) => engine.id === activeEngineId);
+  const activeProviderRuntime = resolveProviderRuntimeCapabilities(activeEngineId, ttsEngines);
   const activeKokoroMode = kokoroRenderModeForConfiguration(
     runConfiguration,
     Boolean(selectedProfile),
@@ -222,16 +229,22 @@ export function RunConfigurationWizard({
         <div className="grid gap-2 sm:grid-cols-3">
           {RUN_CONFIGURATION_VOICE_CHOICES.map((choice) => {
             const requiresProfile = choice.id !== "default";
-            const disabled = requiresProfile && !selectedProfile;
+            const voiceCloneGate = providerCapabilityGate(activeProviderRuntime, "voiceCloning");
+            const disabled = requiresProfile && (!selectedProfile || voiceCloneGate.disabled);
+            const disabledReason = disabled
+              ? (voiceCloneGate.reason ?? "Select a voice profile before using profile audio.")
+              : undefined;
             return (
               <Button
                 align="start"
                 className="grid gap-1 p-3"
+                {...providerCapabilityDataAttributes(
+                  "voiceCloning",
+                  requiresProfile ? voiceCloneGate.reason : null,
+                )}
                 data-testid={`run-config-voice-${choice.id}`}
                 disabled={disabled}
-                disabledReason={
-                  disabled ? "Select a voice profile before using profile audio." : undefined
-                }
+                disabledReason={disabledReason}
                 key={choice.id}
                 onClick={() => {
                   onRunConfigurationChange(applyVoiceChoice(runConfiguration, choice.id));
@@ -304,21 +317,12 @@ export function RunConfigurationWizard({
         />
         <div className="grid gap-2 sm:grid-cols-2">
           {STRUCTURED_PIPELINE_KEYS.map((key) => (
-            <Toggle
-              checked={runConfiguration.options[key]}
-              data-testid={`run-config-pipeline-${key}`}
-              detail={STRUCTURED_PIPELINE_LABELS[key].detail}
+            <PipelineToggle
+              activeProviderRuntime={activeProviderRuntime}
               key={key}
-              label={STRUCTURED_PIPELINE_LABELS[key].label}
-              onChange={(checked) => {
-                onRunConfigurationChange({
-                  ...runConfiguration,
-                  options: {
-                    ...runConfiguration.options,
-                    [key]: checked,
-                  },
-                });
-              }}
+              optionKey={key}
+              runConfiguration={runConfiguration}
+              onRunConfigurationChange={onRunConfigurationChange}
             />
           ))}
         </div>
@@ -349,6 +353,64 @@ export function RunConfigurationWizard({
       </section>
     </Panel>
   );
+}
+
+function PipelineToggle({
+  activeProviderRuntime,
+  optionKey,
+  runConfiguration,
+  onRunConfigurationChange,
+}: Readonly<{
+  activeProviderRuntime: ReturnType<typeof resolveProviderRuntimeCapabilities>;
+  optionKey: (typeof STRUCTURED_PIPELINE_KEYS)[number];
+  runConfiguration: RunConfiguration;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+}>) {
+  const capability = capabilityForPipelineOption(optionKey);
+  const gate = capability ? providerCapabilityGate(activeProviderRuntime, capability) : null;
+  const disabled = gate?.disabled === true;
+  const reason = gate && disabled ? gate.reason : undefined;
+  return (
+    <Toggle
+      {...(capability ? providerCapabilityDataAttributes(capability, reason) : {})}
+      checked={runConfiguration.options[optionKey]}
+      data-disabled-reason={reason}
+      data-testid={`run-config-pipeline-${optionKey}`}
+      detail={reason ?? STRUCTURED_PIPELINE_LABELS[optionKey].detail}
+      disabled={disabled}
+      label={STRUCTURED_PIPELINE_LABELS[optionKey].label}
+      onChange={(checked) => {
+        onRunConfigurationChange({
+          ...runConfiguration,
+          options: {
+            ...runConfiguration.options,
+            [optionKey]: checked,
+          },
+        });
+      }}
+    />
+  );
+}
+
+function capabilityForPipelineOption(
+  optionKey: (typeof STRUCTURED_PIPELINE_KEYS)[number],
+): ProviderCapabilityKey | null {
+  switch (optionKey) {
+    case "arrivalPlayback": {
+      return "streaming";
+    }
+    case "asrCheck": {
+      return "alignment";
+    }
+    case "autoRetry": {
+      return "retryJob";
+    }
+    case "qualityReport":
+    case "textPreprocess": {
+      return null;
+    }
+  }
+  return null;
 }
 
 function WizardStepRail({

@@ -17,6 +17,9 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
   const disabledWithoutReason = actions.filter((action) =>
     action.metadataIssues.includes("disabled-without-explicit-reason"),
   );
+  const capabilityGatedDisabled = actions.filter(
+    (action) => action.disabled && action.capabilityGated,
+  );
   const missingOwners = actions.filter((action) => action.metadataIssues.includes("missing-owner"));
   const missingSurfaces = actions.filter((action) =>
     action.metadataIssues.includes("missing-surface"),
@@ -42,8 +45,23 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
     `- Missing accessible name: ${String(missingAccessibleNames.length)}`,
     `- Missing owner: ${String(missingOwners.length)}`,
     `- Missing surface: ${String(missingSurfaces.length)}`,
+    `- Capability-gated disabled controls: ${String(capabilityGatedDisabled.length)}`,
     `- Disabled without explicit reason: ${String(disabledWithoutReason.length)}`,
     `- Destructive without confirmation affordance: ${String(destructiveWithoutConfirmation.length)}`,
+    "",
+    "## Capability-gated controls",
+    "",
+    ...table(
+      capabilityGatedDisabled,
+      ["Surface", "Scenario", "Label", "Capability", "Reason"],
+      (action) => [
+        action.surface,
+        action.scenarioId,
+        action.label,
+        action.capabilityGate ?? "",
+        action.disabledReason ?? action.capabilityReason ?? "",
+      ],
+    ),
     "",
     "## Failed or no-op controls",
     "",

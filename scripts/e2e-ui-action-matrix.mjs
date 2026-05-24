@@ -66,6 +66,11 @@ export async function buildActionInventory(page, scenario) {
           element.getAttribute("data-playback-owner") ??
           element.closest("[data-playback-owner]")?.getAttribute("data-playback-owner") ??
           null;
+        const capabilityGate =
+          element.getAttribute("data-provider-capability") ??
+          element.closest("[data-provider-capability]")?.getAttribute("data-provider-capability") ??
+          element.getAttribute("data-capability-gate") ??
+          null;
         controls.push({
           accessibleName,
           ariaControls: element.getAttribute("aria-controls"),
@@ -76,6 +81,14 @@ export async function buildActionInventory(page, scenario) {
           ariaPressed: element.getAttribute("aria-pressed"),
           ariaSelected: element.getAttribute("aria-selected"),
           className: String(element.getAttribute("class") ?? ""),
+          capabilityGate,
+          capabilityGated:
+            element.getAttribute("data-capability-gated") === "true" ||
+            element.closest("[data-capability-gated='true']") !== null,
+          capabilityReason:
+            element.getAttribute("data-capability-reason") ??
+            element.closest("[data-capability-reason]")?.getAttribute("data-capability-reason") ??
+            null,
           cssPath: cssPathFor(element),
           disabled: isDisabled(element),
           disabledReason: disabledReasonFor(element),
@@ -433,8 +446,13 @@ export async function exerciseAction(page, action, { activationMode }) {
     const passed = Boolean(action.disabledReason);
     return {
       ...resultBase,
+      capabilityGate: action.capabilityGate,
       disabledReason: action.disabledReason,
-      outcome: passed ? "disabled with explicit reason" : "disabled without explicit reason",
+      outcome: passed
+        ? action.capabilityGated
+          ? "capability-gated disabled with explicit reason"
+          : "disabled with explicit reason"
+        : "disabled without explicit reason",
       passed,
       reason: passed
         ? action.disabledReason

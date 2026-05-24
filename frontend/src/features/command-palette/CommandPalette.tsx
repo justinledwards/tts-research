@@ -280,6 +280,10 @@ function CommandButton({
           ? "border-orange-300 bg-orange-500/10"
           : "border-transparent hover:border-[var(--vs-border)] hover:bg-[var(--vs-surface)]"
       } ${entry.disabled ? "opacity-55" : ""}`}
+      data-capability-gated={entry.capabilityGated ? "true" : undefined}
+      data-capability-reason={entry.capabilityGated ? entry.disabledReason : undefined}
+      data-disabled-reason={entry.disabledReason}
+      data-provider-capability={entry.capabilityGate}
       disabled={entry.disabled}
       id={`command-palette-${entry.id}`}
       onClick={onClick}

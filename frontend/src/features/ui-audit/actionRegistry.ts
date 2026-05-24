@@ -13,6 +13,7 @@ export interface UiActionRegistrySummary {
   readonly missingTestIds: number;
   readonly missingLabels: number;
   readonly missingAccessibleNames: number;
+  readonly capabilityGatedDisabled: number;
   readonly disabledWithoutReason: number;
   readonly destructiveWithoutConfirmation: number;
 }
@@ -44,6 +45,9 @@ export class UiActionRegistry {
       missingLabels: entries.filter((entry) => entry.issues.includes("missing-human-label")).length,
       missingAccessibleNames: entries.filter((entry) =>
         entry.issues.includes("missing-accessible-name"),
+      ).length,
+      capabilityGatedDisabled: entries.filter(
+        (entry) => entry.disabled && Boolean(entry.capabilityGate),
       ).length,
       disabledWithoutReason: entries.filter((entry) =>
         entry.issues.includes("disabled-without-explicit-reason"),
@@ -82,6 +86,10 @@ export function describeUiActionElement(
     role: element.getAttribute("role") ?? implicitRoleForElement(element),
     testId,
     disabled,
+    capabilityGate:
+      element instanceof HTMLElement
+        ? (element.dataset.providerCapability ?? element.dataset.capabilityGate ?? null)
+        : null,
     disabledReason: disabled ? disabledReasonForElement(element) : null,
   };
 }

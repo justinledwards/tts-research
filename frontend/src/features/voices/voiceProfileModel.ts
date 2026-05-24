@@ -6,6 +6,10 @@ import type {
   VoiceProfileSource,
   VoiceProfileTarget,
 } from "../../types";
+import {
+  providerCapabilityGate,
+  resolveProviderRuntimeCapabilities,
+} from "../provider-capabilities";
 
 export interface VoiceProfileSummary {
   artifactCount: number;
@@ -22,6 +26,8 @@ export interface VoiceProfileSummary {
 
 export interface VoiceTargetSummary {
   engineLabel: string;
+  buildCapabilityReason?: string;
+  cancelCapabilityReason?: string;
   id: string;
   moduleId: string | null;
   moduleLabel: string;
@@ -181,7 +187,12 @@ function mapTargetSummary(
     modules.find((module) => module.id === target.moduleId)?.label ?? target.moduleId ?? "Runtime";
   const engineLabel =
     engines.find((engine) => engine.id === target.engineId)?.label ?? target.engineId ?? "Engine";
+  const runtime = resolveProviderRuntimeCapabilities(target.engineId ?? "", engines);
+  const buildCapabilityGate = providerCapabilityGate(runtime, "voiceCloning");
+  const cancelCapabilityGate = providerCapabilityGate(runtime, "cancelJob");
   return {
+    buildCapabilityReason: buildCapabilityGate.reason,
+    cancelCapabilityReason: cancelCapabilityGate.reason,
     engineLabel,
     id: target.id,
     moduleId: target.moduleId ?? null,

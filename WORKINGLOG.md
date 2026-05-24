@@ -6,7 +6,7 @@
 - [x] Add frontend capability matrix, badges, and shared disabled reasons
 - [x] Wire capability gates into settings, preview, voice, run config, command palette, and UI audit
 - [x] Trim repeated Kokoro voice metadata to keep startup bundle under budget
-- [ ] Run required local validation commands
+- [x] Run required local validation commands
 
 ## 2026-05-24 13:19 CEST - Website Cinema Extraction Quality
 - [x] Inspect existing HTML source prep and Website Cinema rendering

@@ -2758,6 +2758,10 @@ export function App() {
   const [systemMetricsUnavailable, setSystemMetricsUnavailable] = useState(false);
   const [ttsEngines, setTTSEngines] = useState<TTSEngineDiagnostics[]>([]);
   const [ttsEngineError, setTTSEngineError] = useState<string | null>(null);
+  const createAndListenCapabilityReason = useMemo(
+    () => resolveCreateAndListenCapabilityReason(runConfiguration.ttsEngine, ttsEngines),
+    [runConfiguration.ttsEngine, ttsEngines],
+  );
   const [voiceProfileCredentials, setVoiceProfileCredentials] =
     useState<VoiceProfileCredentialStatus | null>(null);
   const [voiceProfileCredentialError, setVoiceProfileCredentialError] = useState<string | null>(
@@ -3373,16 +3377,21 @@ export function App() {
   );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
   const canOpenCurrentCinema = Boolean(job) || canOpenBookCinema;
-  let canCreateCurrentSource = false;
+  let hasCreatableCurrentSource = false;
   if (!isProcessing && sourceMode === "book") {
-    canCreateCurrentSource = selectedBookSource?.status === "ready" && Boolean(effectiveBookScope);
+    hasCreatableCurrentSource =
+      selectedBookSource?.status === "ready" && Boolean(effectiveBookScope);
   } else if (!isProcessing && sourceMode === "fileUrl") {
-    canCreateCurrentSource =
+    hasCreatableCurrentSource =
       selectedPreparedSource?.status === "ready" &&
       Boolean((selectedPreparedSource.speechText ?? selectedPreparedSource.text ?? "").trim());
   } else if (!isProcessing) {
-    canCreateCurrentSource = text.trim().length > 0;
+    hasCreatableCurrentSource = text.trim().length > 0;
   }
+  const canCreateCurrentSource = hasCreatableCurrentSource && !createAndListenCapabilityReason;
+  const createAndListenDisabledReason = canCreateCurrentSource
+    ? undefined
+    : (createAndListenCapabilityReason ?? "Select a ready source or wait for the current run.");
   const createAndListenScope = createAndListenScopeForSource({
     selectedBookScope: effectiveBookScope,
     selectedBookSource: activeNarrationBookSource,
@@ -6263,12 +6272,12 @@ export function App() {
       title: "Open help",
     },
     {
+      capabilityGate: "tts",
+      capabilityGated: Boolean(createAndListenCapabilityReason),
       category: "Playback",
       detail: `Generate ${createAndListenScopeLabel(createAndListenScope)} audio from the current draft, book, or prepared source.`,
       disabled: !canCreateCurrentSource,
-      disabledReason: canCreateCurrentSource
-        ? undefined
-        : "Select a ready source or wait for the current run.",
+      disabledReason: createAndListenDisabledReason,
       id: "playback:create-listen",
       keywords: ["run", "generate", "listen", "audio"],
       perform: () => {
@@ -6895,6 +6904,8 @@ export function App() {
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
             policyOptions={globalPreviewPolicyOptions}
+            providerEngineId={runConfiguration.ttsEngine}
+            providerEngines={ttsEngines}
             policyProfileLabel={speechPolicyProfileDisplayName(
               speechPolicyProfile,
               customSpeechPolicyProfiles,
@@ -7331,6 +7342,8 @@ export function App() {
                     blocks={narrationPreviewBlocks}
                     canCreate={canCreateCurrentSource}
                     canOpenCinema={canOpenCurrentCinema}
+                    createAndListenCapabilityReason={createAndListenCapabilityReason}
+                    createAndListenDisabledReason={createAndListenDisabledReason}
                     isPlaybackActive={isPlaybackActive}
                     job={job}
                     playbackControls={playbackControls}
@@ -7401,6 +7414,8 @@ export function App() {
               voiceProfileLabel={selectedVoiceProfile?.name ?? "Default voice"}
               voiceProfiles={voiceProfiles}
               onCreateAndListen={createAndListenFromCurrentSource}
+              createAndListenCapabilityReason={createAndListenCapabilityReason}
+              createAndListenDisabledReason={createAndListenDisabledReason}
               createAndListenScope={createAndListenScope}
               onInspectBookSource={(book) => {
                 void handleInspectContentIR(book.id, bookSourceName(book));
@@ -10067,6 +10082,8 @@ function SourceTextPanel({
   voiceProfileId,
   voiceProfileLabel,
   voiceProfiles,
+  createAndListenCapabilityReason,
+  createAndListenDisabledReason,
   createAndListenScope,
   onCreateAndListen,
   onInspectBookSource,
@@ -10116,6 +10133,8 @@ function SourceTextPanel({
   voiceProfileId: string;
   voiceProfileLabel: string;
   voiceProfiles: VoiceProfile[];
+  createAndListenCapabilityReason?: string;
+  createAndListenDisabledReason?: string;
   createAndListenScope: CreateAndListenScope;
   onCreateAndListen: () => void;
   onInspectBookSource: (source: BookSource) => void;
@@ -10292,6 +10311,8 @@ function SourceTextPanel({
           sourceMode={sourceMode}
           text={text}
           voiceProfileLabel={voiceProfileLabel}
+          createAndListenCapabilityReason={createAndListenCapabilityReason}
+          createAndListenDisabledReason={createAndListenDisabledReason}
           createAndListenScope={createAndListenScope}
           onCreateAndListen={onCreateAndListen}
           onOpenCinema={onOpenCinema}
@@ -10330,6 +10351,8 @@ function NarrationPreviewStage({
   sourceMode,
   text,
   voiceProfileLabel,
+  createAndListenCapabilityReason,
+  createAndListenDisabledReason: externalCreateAndListenDisabledReason,
   createAndListenScope,
   onCreateAndListen,
   onOpenCinema,
@@ -10348,6 +10371,8 @@ function NarrationPreviewStage({
   sourceMode: SourceMode;
   text: string;
   voiceProfileLabel: string;
+  createAndListenCapabilityReason?: string;
+  createAndListenDisabledReason?: string;
   createAndListenScope: CreateAndListenScope;
   onCreateAndListen: () => void;
   onOpenCinema: () => void;
@@ -10387,12 +10412,13 @@ function NarrationPreviewStage({
   const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
   const createAndListenDisabledReason = canCreate
     ? undefined
-    : workspacePlaybackActionDisabledReason({
+    : (externalCreateAndListenDisabledReason ??
+      workspacePlaybackActionDisabledReason({
         action: "createAndListen",
         fallbackReason: "Select a ready source before creating audio.",
         lifecycle: generatedAudioLifecycle,
         scope: createAndListenScope,
-      });
+      }));
   const openCinemaDisabledReason = canOpenCinema
     ? undefined
     : workspacePlaybackActionDisabledReason({
@@ -10452,6 +10478,7 @@ function NarrationPreviewStage({
           </Button>
           <Button
             {...workspacePlaybackActionDataAttributes("createAndListen", generatedAudioLifecycle)}
+            {...createAndListenCapabilityAttributes(createAndListenCapabilityReason)}
             aria-label={createAndListenAriaLabel(createAndListenScope)}
             data-create-listen-scope={createAndListenScope}
             disabledReason={createAndListenDisabledReason}
@@ -12240,6 +12267,34 @@ function voicePanelEngineOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiag
       supportsVoice: true,
     },
   ];
+}
+
+function resolveCreateAndListenCapabilityReason(
+  engineId: string,
+  engines: readonly TTSEngineDiagnostics[],
+): string | undefined {
+  if (engines.length === 0) {
+    return undefined;
+  }
+  const cleanId = engineId.trim().toLowerCase();
+  const engine =
+    engines.find(
+      (item) => item.id === cleanId || (cleanId === "supertonic" && item.id === "supertonic-3"),
+    ) ??
+    engines.find((item) => item.default || item.id === "auto") ??
+    engines[0];
+  if (engine.capabilities ? engine.capabilities.tts : engine.status === "ready") {
+    return undefined;
+  }
+  return `${engine.label || engineId || "Provider"} lacks TTS. Select a ready provider in Settings > Runtime.`;
+}
+
+function createAndListenCapabilityAttributes(reason?: string | null) {
+  return {
+    "data-capability-gated": reason ? "true" : undefined,
+    "data-capability-reason": reason ?? undefined,
+    "data-provider-capability": "tts",
+  } as const;
 }
 
 function findVoicePanelEngine(

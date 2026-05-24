@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Panel, StatusChip } from "../../design";
 import { formatLocaleNumber, languageDisplayName } from "../i18n";
+import { providerCapabilityDataAttributes } from "../provider-capabilities";
 import { useReaderModalLifecycle } from "../reader-accessibility";
 import type {
   ResearchModuleDiagnostics,
@@ -466,8 +467,10 @@ function TargetRow({
   const isCanceling = cancelingTargetKey === targetKey;
   const isActive = ["queued", "building", "validating"].includes(target.status);
   const missingModuleId = !target.moduleId;
-  const buildDisabled = missingModuleId || isBuilding;
-  const cancelDisabled = !isActive || isCanceling;
+  const buildCapabilityReason = target.buildCapabilityReason;
+  const cancelCapabilityReason = isActive ? target.cancelCapabilityReason : undefined;
+  const buildDisabled = missingModuleId || isBuilding || Boolean(buildCapabilityReason);
+  const cancelDisabled = !isActive || isCanceling || Boolean(cancelCapabilityReason);
   return (
     <div className="grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start vs-border vs-surface">
       <div className="min-w-0">
@@ -486,10 +489,13 @@ function TargetRow({
       </div>
       <div className="flex flex-wrap gap-2 md:justify-end">
         <Button
+          {...providerCapabilityDataAttributes("voiceCloning", buildCapabilityReason)}
           data-testid={`ui-action-voice-dashboard-build-${target.profileId}-${target.id}`}
           data-ui-action-surface="Workspace"
           disabled={buildDisabled}
-          disabledReason={targetBuildDisabledReason({ isBuilding, missingModuleId })}
+          disabledReason={
+            buildCapabilityReason ?? targetBuildDisabledReason({ isBuilding, missingModuleId })
+          }
           onClick={() => {
             if (target.moduleId) {
               void onBuildArtifact(target.profileId, target.moduleId);
@@ -501,10 +507,13 @@ function TargetRow({
           {isBuilding ? "Building..." : "Build"}
         </Button>
         <Button
+          {...providerCapabilityDataAttributes("cancelJob", cancelCapabilityReason)}
           data-testid={`ui-action-voice-dashboard-cancel-target-${target.profileId}-${target.id}`}
           data-ui-action-surface="Workspace"
           disabled={cancelDisabled}
-          disabledReason={targetCancelDisabledReason({ isActive, isCanceling })}
+          disabledReason={
+            cancelCapabilityReason ?? targetCancelDisabledReason({ isActive, isCanceling })
+          }
           onClick={() => {
             void onCancelTarget(target.profileId, target.id);
           }}

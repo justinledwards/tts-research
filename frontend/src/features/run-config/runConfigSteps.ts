@@ -11,6 +11,7 @@ import {
   type RunModePreset,
 } from "../../runConfig";
 import type { RunMode, TTSEngineDiagnostics, VoiceProfile } from "../../types";
+import { capabilityLabel, resolveProviderRuntimeCapabilities } from "../provider-capabilities";
 
 export type RunConfigurationWizardStepId =
   | "outputIntent"
@@ -285,9 +286,12 @@ function engineCategoryLabel(
 }
 
 function engineDetail(engine: TTSEngineDiagnostics, category: RunEngineOption["category"]): string {
+  const runtime = resolveProviderRuntimeCapabilities(engine.id, [engine]);
   const capabilities = [
-    engine.supportsReference ? "voice profile" : "default voice",
-    engine.supportsSSML ? "SSML" : "plain text",
+    runtime.capabilities.voiceCloning ? capabilityLabel("voiceCloning") : "default voice",
+    runtime.capabilities.voicePreview ? capabilityLabel("voicePreview") : null,
+    runtime.capabilities.ssml ? capabilityLabel("ssml") : "plain text",
+    runtime.capabilities.wordTiming ? capabilityLabel("wordTiming") : null,
     engine.supportsSwedish ? "Swedish ready" : null,
   ].filter(Boolean);
   if (category === "mockLocal") {

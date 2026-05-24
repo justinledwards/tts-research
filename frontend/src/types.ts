@@ -671,6 +671,24 @@ export interface TTSEngineVoice {
   description?: string;
 }
 
+export interface ProviderCapabilitySet {
+  tts: boolean;
+  mockTts: boolean;
+  streaming: boolean;
+  wordTiming: boolean;
+  phraseTiming: boolean;
+  ssml: boolean;
+  ssmlMarks: boolean;
+  phonemeOverrides: boolean;
+  voiceCloning: boolean;
+  voicePreview: boolean;
+  cancelJob: boolean;
+  retryJob: boolean;
+  alignment: boolean;
+  abComparison: boolean;
+  localOnly: boolean;
+}
+
 export interface TTSEngineDiagnostics {
   id: string;
   label: string;
@@ -689,6 +707,7 @@ export interface TTSEngineDiagnostics {
   modelCache?: string;
   reason?: string;
   setup?: string;
+  capabilities?: ProviderCapabilitySet;
   metadata?: Record<string, string>;
 }
 

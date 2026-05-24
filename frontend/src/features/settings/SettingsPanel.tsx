@@ -25,6 +25,15 @@ import {
   SourcePolicyPinEditor,
   resolveSpeechPolicyProfileOptions,
 } from "../policy";
+import {
+  CapabilityBadge,
+  PROVIDER_CAPABILITY_KEYS,
+  capabilityLabel,
+  capabilityRecommendedFallback,
+  missingProviderCapabilities,
+  resolveProviderRuntimeCapabilities,
+  type ProviderCapabilityKey,
+} from "../provider-capabilities";
 import type { UiMemoryPreferenceId, UiMemoryState } from "../preferences";
 import {
   UiMemoryPreferences,
@@ -1567,6 +1576,7 @@ function RuntimeSettingsGroup({
           onRunConfigurationChange(applyRunEngineSelection(runConfiguration, engineId, ttsEngines));
         }}
       />
+      <RuntimeCapabilityPanel engines={ttsEngines} selectedEngine={runConfiguration.ttsEngine} />
       <ResearchModuleDiagnosticsList modules={researchModules} />
     </PanelSection>
   );
@@ -1826,6 +1836,75 @@ function TTSEngineHealthFacts({ engines }: Readonly<{ engines: TTSEngineDiagnost
           value={`${engine.status} · ${engine.reason ?? engine.setup ?? formatProviderLanguageSummary(engine)}`}
         />
       ))}
+    </Panel>
+  );
+}
+
+function RuntimeCapabilityPanel({
+  engines,
+  selectedEngine,
+}: Readonly<{
+  engines: TTSEngineDiagnostics[];
+  selectedEngine: string;
+}>) {
+  const runtime = resolveProviderRuntimeCapabilities(selectedEngine, engines);
+  const visibleCapabilities: ProviderCapabilityKey[] = [
+    "tts",
+    "voicePreview",
+    "voiceCloning",
+    "streaming",
+    "wordTiming",
+    "ssml",
+    "cancelJob",
+    "retryJob",
+    "abComparison",
+    "mockTts",
+  ];
+  const missing = missingProviderCapabilities(runtime.capabilities).filter(
+    (capability) => capability !== "mockTts" && capability !== "localOnly",
+  );
+  const fallback = missing[0]
+    ? capabilityRecommendedFallback(missing[0])
+    : "Current provider supports the reviewed local workflow.";
+  return (
+    <Panel
+      className="grid gap-3 p-3 text-xs"
+      data-testid="settings-runtime-capability-panel"
+      variant="surface"
+    >
+      <div>
+        <h4 className="flex items-center gap-2 text-sm font-semibold">
+          Runtime capabilities
+          <ScopeBadge scope="machine" />
+        </h4>
+        <p className="vs-muted mt-1 text-xs leading-5">
+          {runtime.providerLabel} is the active provider for provider-gated controls.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {visibleCapabilities.map((capability) => (
+          <CapabilityBadge
+            available={runtime.capabilities[capability]}
+            capability={capability}
+            key={capability}
+          />
+        ))}
+      </div>
+      <DiagnosticLine
+        label="Available features"
+        value={PROVIDER_CAPABILITY_KEYS.filter((capability) => runtime.capabilities[capability])
+          .map((capability) => capabilityLabel(capability))
+          .join(", ")}
+      />
+      <DiagnosticLine
+        label="Missing features"
+        value={
+          missing.length > 0
+            ? missing.map((capability) => capabilityLabel(capability)).join(", ")
+            : "None for current review path"
+        }
+      />
+      <DiagnosticLine label="Recommended fallback" value={fallback} />
     </Panel>
   );
 }

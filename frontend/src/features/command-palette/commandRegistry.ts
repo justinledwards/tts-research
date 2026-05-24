@@ -38,6 +38,8 @@ export interface CommandActionContext {
 }
 
 export interface CommandEntry {
+  capabilityGate?: string;
+  capabilityGated?: boolean;
   category?: CommandCategory;
   detail?: string;
   disabled?: boolean;

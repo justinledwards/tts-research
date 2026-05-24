@@ -513,6 +513,9 @@ func ttsEngineRegistrationsFromEnv(defaultAgent pipeline.TTSAgent) []pipeline.TT
 				Languages:     []string{"en", "ja", "zh", "es", "fr", "hi", "it", "pt"},
 				ModelCache:    envWithDefault("KOKORO_DATA_DIR", "./data/kokoro"),
 				Setup:         setup,
+				Metadata: map[string]string{
+					"runtimeProvider": provider,
+				},
 			},
 		})
 	}

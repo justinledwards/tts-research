@@ -908,6 +908,44 @@ func TestListTTSEnginesIncludesAutoAndDiagnostics(t *testing.T) {
 	}
 }
 
+func TestListTTSEnginesAutoInheritsMockRuntimeCapabilities(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			DefaultTTSEngine: pipeline.TTSEngineKokoro,
+			MaxRetries:       3,
+			JobDataDir:       t.TempDir(),
+			ProjectDataDir:   t.TempDir(),
+			TTSEngines: []pipeline.TTSEngineRegistration{
+				{
+					ID:    pipeline.TTSEngineKokoro,
+					Agent: agents.NewMockTTSAgent(),
+					Diagnostics: pipeline.TTSEngineDiagnostics{
+						ID:            pipeline.TTSEngineKokoro,
+						Label:         "Kokoro",
+						Status:        "ready",
+						Local:         true,
+						SupportsVoice: true,
+						Metadata:      map[string]string{"runtimeProvider": "mock"},
+					},
+				},
+			},
+		},
+	)
+
+	engines := service.ListTTSEngines()
+	if len(engines) == 0 || engines[0].ID != pipeline.TTSEngineAuto {
+		t.Fatalf("engines = %#v, want Auto first", engines)
+	}
+	if !engines[0].Capabilities.MockTTS || !engines[0].Capabilities.WordTiming || !engines[0].Capabilities.ABComparison {
+		t.Fatalf("Auto should expose mock runtime review capabilities, got %+v", engines[0].Capabilities)
+	}
+}
+
 func TestCreateJobCanSkipTextPreprocessing(t *testing.T) {
 	t.Parallel()
 

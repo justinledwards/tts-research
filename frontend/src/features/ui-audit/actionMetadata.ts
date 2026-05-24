@@ -13,6 +13,7 @@ export interface UiActionMetadata {
   readonly expectedTransition: UiActionExpectedTransition;
   readonly destructive: boolean;
   readonly disabledReason?: string;
+  readonly capabilityGate?: string;
   readonly owner?: string;
   readonly aliases?: readonly string[];
 }
@@ -26,6 +27,7 @@ export interface UiActionMetadataInput {
   readonly testId?: string | null;
   readonly disabled?: boolean;
   readonly disabledReason?: string | null;
+  readonly capabilityGate?: string | null;
 }
 
 const transportPattern = /(?:\b(play|pause|resume|restart|seek|speed)\b|[+-]10s)/i;
@@ -360,6 +362,7 @@ export function inferUiActionMetadata(input: UiActionMetadataInput): UiActionMet
     return {
       ...staticMatch,
       accessibleName: accessibleName || staticMatch.accessibleName,
+      capabilityGate: input.capabilityGate ?? staticMatch.capabilityGate,
       disabledReason: input.disabledReason ?? staticMatch.disabledReason,
       visibleLabel: visibleLabel || staticMatch.visibleLabel,
       surface: input.surface,
@@ -381,6 +384,7 @@ export function inferUiActionMetadata(input: UiActionMetadataInput): UiActionMet
     actionClass,
     expectedTransition: inferExpectedTransition(label, actionClass, input.role ?? undefined),
     destructive,
+    capabilityGate: input.capabilityGate ?? undefined,
     disabledReason: input.disabledReason ?? undefined,
   };
 }
