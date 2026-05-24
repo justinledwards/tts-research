@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-24 08:05 CEST - Playback and Generated-audio Ownership Model
+- [x] Inspect existing playback docs, feature modules, and UI audit metadata
+- [x] Add canonical playback ownership and lifecycle modules
+- [x] Refactor playback-like labels and disabled reasons through shared rules
+- [x] Add duplicate-owner and lifecycle validation coverage
+- [x] Run required local validation commands
+
 ## 2026-05-24 06:21 CEST - Low-resource Reader Resume Budget Closure
 - [x] Inspect low-resource timing, performance reporting, and reader startup imports
 - [x] Add interaction budget artifacts and failure classification
@@ -449,3 +456,12 @@
 - [ ] Fix remaining formatting issues in changed files
 - [ ] Re-run commit flow and create commit
 - [ ] Push branch and update PR #3 with latest accessibility artifact status
+## 2026-05-23 01:06 CEST - Work Package 14 Low-resource Reader Resume Budget Closure
+- [ ] Append low-resource budget closure section and tasks to WORKINGLOG.md
+- [ ] Add and wire new interaction timing budgets and splits
+- [ ] Add lazy boundaries for heavy read-mode startup panels
+- [ ] Expand low-resource fixture coverage and thresholds
+- [ ] Emit interaction and failure artifact files
+- [ ] Add targeted degraded-state checks for low-resource reader resume paths
+- [ ] Run required local validation commands
+- [ ] Commit WP14 changes

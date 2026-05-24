@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { Button, Toggle, cx, fieldControlClassName } from "../../design";
 import type { RunMode, VoiceJob } from "../../types";
-import { playbackActionLabel } from "../playback";
+import {
+  generatedAudioLifecycleFromJob,
+  playbackActionAriaLabel,
+  playbackActionDataAttributes,
+  playbackActionDisabledReason,
+  playbackActionLabel,
+} from "../playback";
 import { READER_PLAYBACK_RATES } from "../reader-accessibility";
 import type { RevisionBlock } from "../revision";
 import {
@@ -121,12 +127,22 @@ export function GlobalPreviewPlayer({
     [choiceA, choiceB, comparisonOptions],
   );
   const playbackAvailable = hasPreviewPlayback(playbackControls, queue);
-  const playbackDisabledReason = previewPlaybackDisabledReason(playbackAvailable);
+  const playbackLifecycle = playbackAvailable ? "ready" : generatedAudioLifecycleFromJob({ job });
+  const playbackDisabledReason = playbackAvailable
+    ? undefined
+    : playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle });
+  const openCinemaDisabledReason = canOpenCinema
+    ? undefined
+    : playbackActionDisabledReason({
+        action: "openCinema",
+        fallbackReason: "Create audio before opening Cinema.",
+        lifecycle: playbackLifecycle,
+      });
   const activeWords = countPreviewWords(activeItem?.spokenText ?? "");
   const statusLabel = previewPlaybackStatusLabel(playbackControls.isPlaying, isPlaybackActive);
   const previewPlayAriaLabel = playbackControls.isPlaying
     ? "Pause preview audition"
-    : playbackActionLabel("previewAudition");
+    : playbackActionAriaLabel("audition", { lifecycle: playbackLifecycle });
   const previewPlayLabel = playbackControls.isPlaying ? "Pause" : "Audition";
   const fullVariant = variant === "full";
 
@@ -203,6 +219,7 @@ export function GlobalPreviewPlayer({
             </Button>
             <Button
               aria-label={previewPlayAriaLabel}
+              {...playbackActionDataAttributes("audition", playbackLifecycle, { primary: true })}
               data-testid="ui-action-preview-mini-play"
               data-ui-action-surface="Preview"
               disabled={!playbackAvailable}
@@ -214,6 +231,7 @@ export function GlobalPreviewPlayer({
               {previewPlayLabel}
             </Button>
             <Button
+              {...playbackActionDataAttributes("audition", playbackLifecycle)}
               aria-label="Restart preview"
               data-testid="ui-action-preview-mini-restart"
               data-ui-action-surface="Preview"
@@ -271,6 +289,7 @@ export function GlobalPreviewPlayer({
               onChange={setSkipSilence}
             />
             <Button
+              {...playbackActionDataAttributes("audition", playbackLifecycle)}
               data-testid="ui-action-preview-mini-segment"
               data-ui-action-surface="Preview"
               disabled={!playbackAvailable}
@@ -286,6 +305,7 @@ export function GlobalPreviewPlayer({
             {fullVariant ? (
               <>
                 <Button
+                  {...playbackActionDataAttributes("audition", playbackLifecycle)}
                   data-testid="ui-action-preview-mini-source"
                   data-ui-action-surface="Preview"
                   disabled={!playbackAvailable}
@@ -297,10 +317,11 @@ export function GlobalPreviewPlayer({
                   Whole source
                 </Button>
                 <Button
+                  {...playbackActionDataAttributes("openCinema", playbackLifecycle)}
                   data-testid="ui-action-preview-mini-open-cinema"
                   data-ui-action-surface="Preview"
                   disabled={!canOpenCinema}
-                  disabledReason={canOpenCinema ? undefined : "Create audio before opening Cinema."}
+                  disabledReason={openCinemaDisabledReason}
                   onClick={onOpenCinema}
                   size="sm"
                   variant="ghost"
@@ -331,6 +352,7 @@ export function GlobalPreviewPlayer({
                 </p>
               </div>
               <Button
+                {...playbackActionDataAttributes("abCompare", playbackLifecycle)}
                 data-testid="ui-action-preview-mini-audition-a"
                 data-ui-action-surface="Preview"
                 disabled={!playbackAvailable}
@@ -409,10 +431,6 @@ function hasPreviewPlayback(
   queue: PreviewQueue,
 ): boolean {
   return playbackControls.isAvailable && queue.hasGeneratedAudio;
-}
-
-function previewPlaybackDisabledReason(playbackAvailable: boolean): string | undefined {
-  return playbackAvailable ? undefined : "Create & Listen before auditioning preview audio.";
 }
 
 function previewPlaybackStatusLabel(isPlaying: boolean, isPlaybackActive: boolean): string {

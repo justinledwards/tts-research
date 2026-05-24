@@ -1,4 +1,5 @@
 import type { VoiceJob } from "../../types";
+import { generatedAudioLifecycleFromJob, playbackActionDisabledReason } from "../playback";
 import type { RevisionBlock } from "../revision";
 
 export type PreviewQueueItemStatus = "failed" | "generating" | "ready" | "skipped" | "waiting";
@@ -60,7 +61,7 @@ export function buildPreviewQueue(
     const canPreview = audioReady && block.spokenText.trim().length > 0;
     const disabledReason = canPreview
       ? null
-      : previewDisabledReason({ block, hasGeneratedAudio, status });
+      : previewDisabledReason({ block, hasGeneratedAudio, job, status });
 
     const item: PreviewQueueItem = {
       audioReady,
@@ -241,14 +242,21 @@ function previewQueueItemStatus(
 function previewDisabledReason({
   block,
   hasGeneratedAudio,
+  job,
   status,
 }: Readonly<{
   block: RevisionBlock;
   hasGeneratedAudio: boolean;
+  job: VoiceJob | null;
   status: PreviewQueueItemStatus;
 }>): string {
   if (!hasGeneratedAudio) {
-    return "Create & Listen before auditioning generated audio.";
+    return (
+      playbackActionDisabledReason({
+        action: "audition",
+        lifecycle: generatedAudioLifecycleFromJob({ job }),
+      }) ?? "Create & Listen before auditioning generated audio."
+    );
   }
   if (status === "skipped") {
     return "This block is skipped by the current speech policy.";

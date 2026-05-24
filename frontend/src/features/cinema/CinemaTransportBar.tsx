@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 import { Button, fieldControlClassName } from "../../design";
 import { READER_PLAYBACK_RATES, READER_SEEK_SECONDS } from "../reader-accessibility";
+import {
+  generatedAudioLifecycleFromPlaybackState,
+  playbackActionDataAttributes,
+  playbackActionDisabledReason,
+  type PlaybackActionKey,
+} from "../playback";
 import type { CinemaPlaybackState } from "./model";
 
 interface CinemaTransportButtonModel {
@@ -77,12 +83,16 @@ export function CinemaTransportBar({ model }: Readonly<{ model: CinemaTransportM
 }
 
 function PreAudioTransport({ model }: Readonly<{ model: CinemaTransportModel }>) {
+  const primaryAction = cinemaPrimaryActionForState(model.playbackState);
+  const lifecycle = generatedAudioLifecycleFromPlaybackState(model.playbackState);
   return (
     <TransportFooter>
       <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
         <Button
+          {...playbackActionDataAttributes(primaryAction, lifecycle, { primary: true })}
           className={`h-14 min-w-44 gap-2 px-5 shadow-lg ${model.primary.className}`}
           disabled={model.primary.disabled}
+          disabledReason={cinemaPrimaryDisabledReason(model, primaryAction, lifecycle)}
           onClick={model.primary.onClick}
           size="lg"
           variant="primary"
@@ -117,13 +127,17 @@ function GeneratingTransport({ model }: Readonly<{ model: CinemaTransportModel }
   const progressRatio = clampProgress(model.progress.ratio);
   const progressWidth =
     progressRatio > 0 ? `${Math.round(progressRatio * 100).toString()}%` : "35%";
+  const primaryAction = cinemaPrimaryActionForState(model.playbackState);
+  const lifecycle = generatedAudioLifecycleFromPlaybackState(model.playbackState);
 
   return (
     <TransportFooter>
       <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
         <Button
+          {...playbackActionDataAttributes(primaryAction, lifecycle, { primary: true })}
           className={`h-14 min-w-44 gap-2 px-5 shadow-lg ${model.primary.className}`}
           disabled={model.primary.disabled}
+          disabledReason={cinemaPrimaryDisabledReason(model, primaryAction, lifecycle)}
           onClick={model.primary.onClick}
           size="lg"
           variant="primary"
@@ -169,6 +183,8 @@ function GeneratingTransport({ model }: Readonly<{ model: CinemaTransportModel }
 }
 
 function DegradedTransport({ model }: Readonly<{ model: CinemaTransportModel }>) {
+  const primaryAction = cinemaPrimaryActionForState(model.playbackState);
+  const lifecycle = generatedAudioLifecycleFromPlaybackState(model.playbackState);
   return (
     <TransportFooter>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
@@ -180,8 +196,10 @@ function DegradedTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
         />
         <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
           <Button
+            {...playbackActionDataAttributes(primaryAction, lifecycle, { primary: true })}
             className={`h-12 min-w-36 gap-2 shadow ${model.primary.className}`}
             disabled={model.primary.disabled}
+            disabledReason={cinemaPrimaryDisabledReason(model, primaryAction, lifecycle)}
             onClick={model.primary.onClick}
             size="lg"
             variant="primary"
@@ -208,6 +226,7 @@ function DegradedTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
 
 function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>) {
   const progressRatio = clampProgress(model.progress.ratio);
+  const lifecycle = generatedAudioLifecycleFromPlaybackState(model.playbackState);
   const primaryMobileLabel = model.primary.mobileLabel ?? model.primary.label;
   const showBookmark = Boolean(model.bookmark && shouldShowControl(model.bookmark));
   const showPlaybackRate = model.playbackRate.visible ?? !model.playbackRate.disabled;
@@ -220,6 +239,7 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
       <div className="hidden flex-wrap items-center gap-4 lg:flex">
         {showRestart ? (
           <Button
+            data-ui-action-owner="cinema"
             aria-keyshortcuts="Home"
             className="h-12 gap-2"
             disabled={model.restart.disabled}
@@ -233,6 +253,7 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
         ) : null}
         {showSkipBackward ? (
           <Button
+            data-ui-action-owner="cinema"
             aria-keyshortcuts="ArrowLeft J"
             className="h-12 min-w-16 gap-1 px-3"
             disabled={model.skipBackward.disabled}
@@ -244,9 +265,11 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
           </Button>
         ) : null}
         <Button
+          {...playbackActionDataAttributes("play", lifecycle, { primary: true })}
           aria-keyshortcuts="Space K"
           className={`h-16 min-w-36 gap-3 rounded-full px-6 text-base shadow-lg ${model.primary.className}`}
           disabled={model.primary.disabled}
+          disabledReason={cinemaPrimaryDisabledReason(model, "play", lifecycle)}
           onClick={model.primary.onClick}
           size="lg"
           variant="primary"
@@ -256,6 +279,7 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
         </Button>
         {showSkipForward ? (
           <Button
+            data-ui-action-owner="cinema"
             aria-keyshortcuts="ArrowRight L"
             className="h-12 min-w-16 gap-1 px-3"
             disabled={model.skipForward.disabled}
@@ -276,6 +300,7 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
         {showPlaybackRate ? <PlaybackRateSelect model={model} /> : null}
         {showBookmark && model.bookmark ? (
           <Button
+            data-ui-action-owner="cinema"
             aria-keyshortcuts="B"
             className="h-12"
             disabled={model.bookmark.disabled}
@@ -306,6 +331,7 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
               disabled={model.skipBackward.disabled}
               label={`-${READER_SEEK_SECONDS.toString()}s`}
               onClick={model.skipBackward.onClick}
+              uiActionOwner="cinema"
             >
               {model.skipBackward.icon}
             </IconTransportButton>
@@ -313,9 +339,11 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
             <span aria-hidden="true" />
           )}
           <Button
+            {...playbackActionDataAttributes("play", lifecycle, { primary: true })}
             aria-keyshortcuts="Space K"
             className={`col-span-2 h-16 gap-3 px-4 text-base shadow-lg ${model.primary.className}`}
             disabled={model.primary.disabled}
+            disabledReason={cinemaPrimaryDisabledReason(model, "play", lifecycle)}
             onClick={model.primary.onClick}
             size="lg"
             variant="primary"
@@ -328,6 +356,7 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
               disabled={model.skipForward.disabled}
               label={`+${READER_SEEK_SECONDS.toString()}s`}
               onClick={model.skipForward.onClick}
+              uiActionOwner="cinema"
             >
               {model.skipForward.icon}
             </IconTransportButton>
@@ -349,6 +378,7 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
           {showPlaybackRate ? <PlaybackRateSelect model={model} mobile /> : null}
           {showBookmark && model.bookmark ? (
             <Button
+              data-ui-action-owner="cinema"
               aria-keyshortcuts="B"
               className="h-11"
               disabled={model.bookmark.disabled}
@@ -420,6 +450,7 @@ function PlaybackRateSelect({
 }: Readonly<{ mobile?: boolean; model: CinemaTransportModel }>) {
   return (
     <select
+      data-ui-action-owner="cinema"
       aria-label="Playback speed"
       className={`${fieldControlClassName} ${mobile ? "h-11 font-medium" : "h-12 font-semibold"}`}
       disabled={model.playbackRate.disabled}
@@ -444,6 +475,7 @@ function IconTransportButton({
   disabled = false,
   label,
   onClick,
+  uiActionOwner,
 }: Readonly<{
   ariaControls?: string;
   ariaExpanded?: boolean;
@@ -451,12 +483,14 @@ function IconTransportButton({
   disabled?: boolean;
   label: string;
   onClick: () => void;
+  uiActionOwner?: string;
 }>) {
   return (
     <Button
       aria-controls={ariaControls}
       aria-expanded={ariaExpanded}
       className="grid h-12 place-items-center"
+      data-ui-action-owner={uiActionOwner}
       disabled={disabled}
       onClick={onClick}
       size="icon"
@@ -477,4 +511,25 @@ function clampProgress(value: number): number {
     return 0;
   }
   return Math.min(1, Math.max(0, value));
+}
+
+function cinemaPrimaryActionForState(playbackState: CinemaPlaybackState): PlaybackActionKey {
+  if (playbackState === "degraded") {
+    return "rebuildAudio";
+  }
+  if (playbackState === "preAudio" || playbackState === "generating") {
+    return "createAndListen";
+  }
+  return "play";
+}
+
+function cinemaPrimaryDisabledReason(
+  model: CinemaTransportModel,
+  action: PlaybackActionKey,
+  lifecycle: ReturnType<typeof generatedAudioLifecycleFromPlaybackState>,
+): string | undefined {
+  if (!model.primary.disabled) {
+    return undefined;
+  }
+  return playbackActionDisabledReason({ action, lifecycle });
 }

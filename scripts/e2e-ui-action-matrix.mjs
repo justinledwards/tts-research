@@ -58,6 +58,14 @@ export async function buildActionInventory(page, scenario) {
         const visibleLabel = visibleLabelFor(element);
         const accessibleName = accessibleNameFor(element);
         const label = accessibleName || visibleLabel || "Unlabeled control";
+        const playbackAction =
+          element.getAttribute("data-playback-action") ??
+          element.closest("[data-playback-action]")?.getAttribute("data-playback-action") ??
+          null;
+        const playbackOwner =
+          element.getAttribute("data-playback-owner") ??
+          element.closest("[data-playback-owner]")?.getAttribute("data-playback-owner") ??
+          null;
         controls.push({
           accessibleName,
           ariaControls: element.getAttribute("aria-controls"),
@@ -94,7 +102,13 @@ export async function buildActionInventory(page, scenario) {
           owner:
             element.getAttribute("data-ui-action-owner") ??
             element.closest("[data-ui-action-owner]")?.getAttribute("data-ui-action-owner") ??
+            playbackOwner ??
             null,
+          playbackAction,
+          playbackOwner,
+          playbackPrimary:
+            element.getAttribute("data-playback-primary") === "true" ||
+            element.closest("[data-playback-primary='true']") !== null,
           scenarioId,
           surface: element.getAttribute("data-ui-action-surface") ?? surface,
           tagName: element.tagName.toLowerCase(),
@@ -109,6 +123,12 @@ export async function buildActionInventory(page, scenario) {
               ? element.value
               : null,
           visibleLabel,
+          generatedAudioLifecycle:
+            element.getAttribute("data-generated-audio-lifecycle") ??
+            element
+              .closest("[data-generated-audio-lifecycle]")
+              ?.getAttribute("data-generated-audio-lifecycle") ??
+            null,
         });
       }
       return controls;
@@ -518,8 +538,33 @@ export function summarizeDuplicates(actions) {
     (group) => group.length > 3 || new Set(group.map((action) => action.surface)).size > 2,
     "identical-action-overexposed",
   );
+  const duplicatePlaybackActionOwners = groupedActions(
+    actions.filter(
+      (action) => action.playbackPrimary && action.playbackOwner && action.playbackAction,
+    ),
+    (action) => [action.surface, action.playbackOwner, action.playbackAction].join("|"),
+    (group) => group.length > 1,
+    "duplicate-playback-action-owner",
+  );
+  const multiplePrimaryPlaybackOwners = groupedActions(
+    actions.filter(
+      (action) =>
+        action.playbackPrimary &&
+        action.playbackOwner &&
+        isPrimaryPlaybackControlOwner(action.playbackOwner),
+    ),
+    (action) => action.surface,
+    (group) => new Set(group.map((action) => action.playbackOwner)).size > 1,
+    "multiple-primary-playback-owners",
+  );
 
-  return [...exactDuplicates, ...labelConflicts, ...overexposedActions].sort((left, right) =>
+  return [
+    ...exactDuplicates,
+    ...labelConflicts,
+    ...overexposedActions,
+    ...duplicatePlaybackActionOwners,
+    ...multiplePrimaryPlaybackOwners,
+  ].sort((left, right) =>
     `${left.kind}:${left.label}`.localeCompare(`${right.kind}:${right.label}`),
   );
 }
@@ -546,6 +591,8 @@ function groupedActions(actions, keyFor, shouldReport, kind) {
         count: group.length,
         kind,
         label: group[0].label,
+        playbackActions: [...new Set(group.map((action) => action.playbackAction).filter(Boolean))],
+        playbackOwners: [...new Set(group.map((action) => action.playbackOwner).filter(Boolean))],
         scenarios: [...new Set(group.map((action) => action.scenarioId))],
         surface: surfaces.join(", "),
         surfaces,
@@ -917,10 +964,20 @@ function metadataIssuesFor(action) {
   if (action.disabled && !action.disabledReason) {
     issues.push("disabled-without-explicit-reason");
   }
+  if (action.playbackAction && !action.playbackOwner) {
+    issues.push("playback-action-without-owner");
+  }
+  if (action.playbackAction && action.disabled && !action.generatedAudioLifecycle) {
+    issues.push("disabled-playback-action-without-lifecycle");
+  }
   if (action.destructive && !action.hasConfirmationAffordance) {
     issues.push("destructive-without-confirmation-affordance");
   }
   return issues;
+}
+
+function isPrimaryPlaybackControlOwner(owner) {
+  return owner === "cinema" || owner === "preview" || owner === "teleprompt";
 }
 
 function ownerFor(surface, actionClass) {

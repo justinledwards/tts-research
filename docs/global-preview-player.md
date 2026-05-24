@@ -9,10 +9,12 @@ recording toolbar or the full Cinema transport.
 - Playback ownership is centralized in `frontend/src/features/playback`. Cinema owns full playback,
   Preview owns audition and A/B comparison, Review may request preview but must not become a full
   transport, Teleprompt owns cue playback, and the mini-player is ambient convenience only.
-- Canonical action meanings are distinct: `Play` plays existing generated audio, `Audition
-  Preview` generates or plays temporary preview audio, `Create & Listen` creates production/job
-  audio and queues playback, `Open Cinema` navigates to the full playback surface, and `A/B Compare`
-  compares variants without creating job audio.
+- Canonical owners live in `playbackOwner.ts`: Preview, Cinema, Teleprompt, Workspace, and
+  Dashboard. Workspace may request generation; Dashboard shows status and navigation only.
+- Generated-audio lifecycle states live in `generatedAudioLifecycle.ts`: `missing`, `queued`,
+  `generating`, `ready`, `stale`, `degraded`, `failed`, and `archived`.
+- Canonical action meanings live in `playbackActionRules.ts`: `Preview`, `Audition`, `Play`,
+  `Create & Listen`, `Open Cinema`, `A/B Compare`, `Retry generation`, and `Rebuild audio`.
 - Outside Cinema, the mini-player owns preview playback controls: previous block, play/pause,
   restart, next block, playback speed, selected segment preview, and whole-source preview.
 - Review and Intake use the compact side dock so persistent preview controls do not cover workspace

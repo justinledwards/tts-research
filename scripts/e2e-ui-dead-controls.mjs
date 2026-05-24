@@ -118,6 +118,12 @@ export function renderDuplicatesReport({ duplicates, generatedAt }) {
     if (duplicate.behaviorKeys?.length > 1) {
       lines.push(`- Behaviour keys: ${duplicate.behaviorKeys.join("; ")}`);
     }
+    if (duplicate.playbackOwners?.length > 0) {
+      lines.push(`- Playback owners: ${duplicate.playbackOwners.join(", ")}`);
+    }
+    if (duplicate.playbackActions?.length > 0) {
+      lines.push(`- Playback actions: ${duplicate.playbackActions.join(", ")}`);
+    }
     lines.push(`- Action IDs: ${duplicate.actionIds.join(", ")}`);
     lines.push("");
   }

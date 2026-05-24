@@ -1,69 +1,87 @@
 export const PLAYBACK_OWNERS = [
-  "cinema",
   "preview",
-  "review",
+  "cinema",
   "teleprompt",
-  "mini-player",
+  "workspace",
+  "dashboard",
 ] as const;
 
 export type PlaybackOwner = (typeof PLAYBACK_OWNERS)[number];
 
-export const PLAYBACK_ACTION_MEANINGS = [
-  "play",
-  "preview-audition",
-  "create-and-listen",
-  "open-cinema",
-  "ab-compare",
-] as const;
+export type PlaybackOwnerRole = "primary-playback" | "generation-request" | "status-only";
 
-export type PlaybackActionMeaning = (typeof PLAYBACK_ACTION_MEANINGS)[number];
-
-export interface PlaybackActionDefinition {
+export interface PlaybackOwnerDefinition {
+  readonly canRequestGeneration: boolean;
+  readonly canShowStatus: boolean;
   readonly description: string;
+  readonly id: PlaybackOwner;
   readonly label: string;
-  readonly meaning: PlaybackActionMeaning;
-  readonly owner: PlaybackOwner;
+  readonly ownsPlaybackControls: boolean;
+  readonly role: PlaybackOwnerRole;
 }
 
-export const PLAYBACK_ACTIONS = {
-  abCompare: {
-    description: "Compare two voice, run, or speech-policy variants without creating job audio.",
-    label: "A/B Compare",
-    meaning: "ab-compare",
-    owner: "preview",
+export const PLAYBACK_OWNER_DEFINITIONS = {
+  cinema: {
+    canRequestGeneration: true,
+    canShowStatus: true,
+    description: "Owns full generated-audio playback, transport, resume, and rebuild actions.",
+    id: "cinema",
+    label: "Cinema",
+    ownsPlaybackControls: true,
+    role: "primary-playback",
   },
-  createAndListen: {
-    description: "Create production/job audio, then queue playback or open the playback surface.",
-    label: "Create & Listen",
-    meaning: "create-and-listen",
-    owner: "preview",
+  dashboard: {
+    canRequestGeneration: false,
+    canShowStatus: true,
+    description: "Shows generated-audio asset status and navigation without playback controls.",
+    id: "dashboard",
+    label: "Dashboard",
+    ownsPlaybackControls: false,
+    role: "status-only",
   },
-  openCinema: {
-    description: "Navigate to the full playback and review surface.",
-    label: "Open Cinema",
-    meaning: "open-cinema",
-    owner: "cinema",
+  preview: {
+    canRequestGeneration: false,
+    canShowStatus: true,
+    description:
+      "Owns audition playback, selected-block preview, whole-source preview, and A/B comparison.",
+    id: "preview",
+    label: "Preview",
+    ownsPlaybackControls: true,
+    role: "primary-playback",
   },
-  play: {
-    description: "Play existing generated audio.",
-    label: "Play",
-    meaning: "play",
-    owner: "cinema",
+  teleprompt: {
+    canRequestGeneration: false,
+    canShowStatus: true,
+    description: "Owns cue playback for presenter rehearsal and recording workflows.",
+    id: "teleprompt",
+    label: "Teleprompt",
+    ownsPlaybackControls: true,
+    role: "primary-playback",
   },
-  previewAudition: {
-    description: "Generate or play a temporary preview/audition.",
-    label: "Audition Preview",
-    meaning: "preview-audition",
-    owner: "preview",
+  workspace: {
+    canRequestGeneration: true,
+    canShowStatus: true,
+    description:
+      "Requests generated audio for the active source but does not own long-form playback.",
+    id: "workspace",
+    label: "Workspace",
+    ownsPlaybackControls: false,
+    role: "generation-request",
   },
-  telepromptPlay: {
-    description: "Play the active Teleprompt cue.",
-    label: "Play Cue",
-    meaning: "play",
-    owner: "teleprompt",
-  },
-} as const satisfies Record<string, PlaybackActionDefinition>;
+} as const satisfies Record<PlaybackOwner, PlaybackOwnerDefinition>;
 
-export function playbackActionLabel(action: keyof typeof PLAYBACK_ACTIONS): string {
-  return PLAYBACK_ACTIONS[action].label;
+export function playbackOwnerDefinition(owner: PlaybackOwner): PlaybackOwnerDefinition {
+  return PLAYBACK_OWNER_DEFINITIONS[owner];
+}
+
+export function playbackOwnerLabel(owner: PlaybackOwner): string {
+  return playbackOwnerDefinition(owner).label;
+}
+
+export function playbackOwnerCanOwnPlaybackControls(owner: PlaybackOwner): boolean {
+  return playbackOwnerDefinition(owner).ownsPlaybackControls;
+}
+
+export function playbackOwnerCanRequestGeneration(owner: PlaybackOwner): boolean {
+  return playbackOwnerDefinition(owner).canRequestGeneration;
 }

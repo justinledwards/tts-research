@@ -48,6 +48,7 @@ import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
 import { ExitIcon, SettingsIcon } from "../navigation";
 import type { UiMemoryCinemaState } from "../preferences";
 import { useAudioWaveformBars } from "../../audioWaveform";
+import { playbackActionLabel } from "../playback";
 import { looksLikeMermaidDiagram } from "../../markdownModel";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdownCinema";
 import {
@@ -1398,12 +1399,12 @@ function playbackPrimaryLabel(
     return "Creating audio";
   }
   if (playbackState === "degraded") {
-    return "Rebuild audio";
+    return playbackActionLabel("rebuildAudio");
   }
   if (playbackState === "preAudio") {
     return "Create audio";
   }
-  return isPlaying ? "Pause" : "Play";
+  return isPlaying ? "Pause" : playbackActionLabel("play");
 }
 
 function preparedSourceTransportTitle(

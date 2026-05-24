@@ -11,6 +11,7 @@ import {
 } from "react";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
+import { playbackActionLabel } from "../playback";
 import {
   CinemaFocusModeToolbar,
   CinemaInspectorDock,
@@ -1560,9 +1561,9 @@ function bookPrimaryTransportLabel(
     return "Creating audio";
   }
   if (playbackState === "degraded") {
-    return "Rebuild audio";
+    return playbackActionLabel("rebuildAudio");
   }
-  return playbackLabel;
+  return playbackLabel === "Play" ? playbackActionLabel("play") : playbackLabel;
 }
 
 function bookTransportStateTitle(

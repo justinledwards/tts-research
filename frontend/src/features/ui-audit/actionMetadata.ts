@@ -1,4 +1,4 @@
-import { playbackActionLabel, type PlaybackOwner } from "../playback";
+import type { PlaybackOwner } from "../playback/playbackOwner";
 import { workspaceStageActionLabel } from "../workspace/stageActions";
 import type { UiActionClass, UiActionExpectedTransition, UiActionSurface } from "./actionScopes";
 
@@ -144,15 +144,10 @@ export const STATIC_UI_ACTION_METADATA = [
     "transport",
     "state-changed",
   ),
-  action(
-    "preview-mini-play",
-    playbackActionLabel("previewAudition"),
-    "Preview",
-    "preview",
-    "live-status-updated",
-    false,
-    ["Play preview", "Audition"],
-  ),
+  action("preview-mini-play", "Audition", "Preview", "preview", "live-status-updated", false, [
+    "Play preview",
+    "Audition",
+  ]),
   action("preview-mini-restart", "Restart preview", "Preview", "transport", "state-changed"),
   action("preview-mini-next", "Next preview block", "Preview", "transport", "state-changed"),
   action("preview-mini-speed", "Preview playback speed", "Preview", "transport", "state-changed"),
@@ -161,7 +156,7 @@ export const STATIC_UI_ACTION_METADATA = [
   action("preview-mini-source", "Whole source", "Preview", "preview", "live-status-updated"),
   action(
     "preview-mini-open-cinema",
-    playbackActionLabel("openCinema"),
+    "Open Cinema",
     "Preview",
     "navigation",
     "menu-or-panel-opened",
@@ -208,7 +203,7 @@ export const STATIC_UI_ACTION_METADATA = [
   action("teleprompt-next-cue", "Next cue", "Teleprompt", "navigation", "state-changed"),
   action(
     "teleprompt-play-pause",
-    playbackActionLabel("telepromptPlay"),
+    "Play Cue",
     "Teleprompt",
     "transport",
     "live-status-updated",
@@ -509,6 +504,16 @@ function playbackOwnerForAction(
   actionClass: UiActionClass,
   label: string,
 ): PlaybackOwner | undefined {
+  if (id === "create-listen" || id.includes("createAndListen")) {
+    return "workspace";
+  }
+  if (
+    surface === "Project Dashboard" ||
+    surface === "Voice Dashboard" ||
+    id.includes("dashboard")
+  ) {
+    return "dashboard";
+  }
   if (
     surface === "BookCinema" ||
     surface === "DocumentCinema" ||

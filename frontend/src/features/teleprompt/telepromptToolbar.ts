@@ -1,4 +1,5 @@
 import type { RevisionBlock } from "../revision";
+import { playbackActionLabel } from "../playback";
 
 export type TelepromptShortcutAction =
   | "createListen"
@@ -50,7 +51,7 @@ export const TELEPROMPT_SHORTCUTS: readonly TelepromptShortcutDefinition[] = [
     action: "createListen",
     description: "Create audio and listen",
     key: "C",
-    label: "Create & Listen",
+    label: playbackActionLabel("createAndListen"),
   },
 ];
 

@@ -20,7 +20,14 @@ import { Button, Panel, SegmentedControl, StatusChip, Toggle, cx } from "../../d
 import { ContextPanel, buildContextPanelTabs, type ContextPanelTabId } from "../context-panel";
 import type { RevisionBlock } from "../revision";
 import { HeaderContextSummary } from "../header";
-import { playbackActionLabel, telepromptSecondaryActionVariant } from "../playback";
+import {
+  generatedAudioLifecycleFromJob,
+  playbackActionAriaLabel,
+  playbackActionDataAttributes,
+  playbackActionDisabledReason,
+  playbackActionLabel,
+  telepromptSecondaryActionVariant,
+} from "../playback";
 import { workspaceStageActionLabel, workspaceStageActionTestId } from "../workspace";
 import type { WorkspaceSourceType, WorkspaceStage } from "../workspace";
 import {
@@ -147,6 +154,26 @@ export function TelepromptStudio({
   const preset = telepromptPreset(presetId);
   const playbackStatusLabel =
     playbackControls.isPlaying || isPlaybackActive ? "Recording playback" : "Ready to record";
+  const playbackLifecycle = playbackControls.isAvailable
+    ? "ready"
+    : generatedAudioLifecycleFromJob({ job });
+  const cuePlaybackDisabledReason = playbackControls.isAvailable
+    ? undefined
+    : playbackActionDisabledReason({ action: "telepromptPlay", lifecycle: playbackLifecycle });
+  const openCinemaDisabledReason = canOpenCinema
+    ? undefined
+    : playbackActionDisabledReason({
+        action: "openCinema",
+        fallbackReason: "Create audio before opening Cinema.",
+        lifecycle: playbackLifecycle,
+      });
+  const createAndListenDisabledReason = canCreate
+    ? undefined
+    : playbackActionDisabledReason({
+        action: "createAndListen",
+        fallbackReason: "Select a ready source before creating audio.",
+        lifecycle: playbackLifecycle,
+      });
   const cueProgressPercent =
     activeBlockIndex >= 0 && blocks.length > 0
       ? Math.round(((activeBlockIndex + 1) / blocks.length) * 100)
@@ -513,11 +540,17 @@ export function TelepromptStudio({
               Previous cue
             </Button>
             <Button
+              {...playbackActionDataAttributes("telepromptPlay", playbackLifecycle, {
+                primary: true,
+              })}
+              aria-label={
+                playbackControls.isPlaying
+                  ? "Pause Cue"
+                  : playbackActionAriaLabel("telepromptPlay", { lifecycle: playbackLifecycle })
+              }
               data-testid="ui-action-teleprompt-play-pause"
               disabled={!playbackControls.isAvailable}
-              disabledReason={
-                playbackControls.isAvailable ? undefined : "Create audio before playback."
-              }
+              disabledReason={cuePlaybackDisabledReason}
               onClick={handlePlayPause}
               size="sm"
               variant="primary"
@@ -525,11 +558,10 @@ export function TelepromptStudio({
               {playbackControls.isPlaying ? "Pause Cue" : playbackActionLabel("telepromptPlay")}
             </Button>
             <Button
+              {...playbackActionDataAttributes("telepromptPlay", playbackLifecycle)}
               data-testid="ui-action-teleprompt-restart"
               disabled={!playbackControls.isAvailable}
-              disabledReason={
-                playbackControls.isAvailable ? undefined : "Create audio before playback."
-              }
+              disabledReason={cuePlaybackDisabledReason}
               onClick={handleRestart}
               size="sm"
               variant="secondary"
@@ -588,9 +620,10 @@ export function TelepromptStudio({
                 Back to Preview
               </Button>
               <Button
+                {...playbackActionDataAttributes("openCinema", playbackLifecycle)}
                 data-testid={workspaceStageActionTestId("openCinema")}
                 disabled={!canOpenCinema}
-                disabledReason={canOpenCinema ? undefined : "Create audio before opening Cinema."}
+                disabledReason={openCinemaDisabledReason}
                 onClick={handleOpenCinema}
                 size="sm"
                 variant={telepromptSecondaryActionVariant("open-cinema")}
@@ -598,11 +631,13 @@ export function TelepromptStudio({
                 {workspaceStageActionLabel("openCinema")}
               </Button>
               <Button
+                {...playbackActionDataAttributes("createAndListen", playbackLifecycle)}
+                aria-label={playbackActionAriaLabel("createAndListen", {
+                  createScope: "current-scope",
+                })}
                 data-testid={workspaceStageActionTestId("createAndListen")}
                 disabled={!canCreate}
-                disabledReason={
-                  canCreate ? undefined : "Select a ready source before creating audio."
-                }
+                disabledReason={createAndListenDisabledReason}
                 onClick={handleCreateAndListen}
                 size="sm"
                 variant={telepromptSecondaryActionVariant("create-and-listen")}

@@ -172,11 +172,19 @@ import {
 import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPreferences";
 import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
 import type { HeaderContextSummaryProps } from "./features/header";
+import { generatedAudioLifecycleFromJob } from "./features/playback/generatedAudioLifecycle";
+import {
+  createAndListenAriaLabel,
+  createAndListenScopeLabel,
+  workspacePlaybackActionDataAttributes,
+  workspacePlaybackActionDisabledReason,
+  type CreateAndListenScope,
+} from "./features/playback/workspacePlaybackActions";
 import {
   previewPlayerVariantForSurface,
   shouldShowGlobalPreviewPlayer,
   shouldShowRailCinemaShortcut,
-} from "./features/playback";
+} from "./features/playback/playbackSurfaceRules";
 import type { SourceCardModel } from "./features/sources";
 import { Button, Panel, SegmentedControl, StatusChip } from "./design";
 import {
@@ -3371,6 +3379,12 @@ export function App() {
   } else if (!isProcessing) {
     canCreateCurrentSource = text.trim().length > 0;
   }
+  const createAndListenScope = createAndListenScopeForSource({
+    selectedBookScope: effectiveBookScope,
+    selectedBookSource: activeNarrationBookSource,
+    selectedPreparedSource: activeNarrationPreparedSource,
+    sourceMode,
+  });
   const isResumeRestoring = useDelayedBusy(resumeRestoreStartedAt !== null, 250);
   const openReadingCinema = useCallback(
     (target?: "book") => {
@@ -6229,7 +6243,7 @@ export function App() {
     },
     {
       category: "Playback",
-      detail: "Create audio from the current draft, book, or prepared source.",
+      detail: `Generate ${createAndListenScopeLabel(createAndListenScope)} audio from the current draft, book, or prepared source.`,
       disabled: !canCreateCurrentSource,
       disabledReason: canCreateCurrentSource
         ? undefined
@@ -6480,11 +6494,9 @@ export function App() {
     ...bookmarkCommandEntries,
     ...recentCommandEntries,
   ];
-  let globalPreviewOwner: "mini-player" | "preview" | "teleprompt" = "mini-player";
+  let globalPreviewOwner: "preview" | "teleprompt" = "preview";
   if (contentMode === "teleprompt") {
     globalPreviewOwner = "teleprompt";
-  } else if (contentMode === "preview") {
-    globalPreviewOwner = "preview";
   }
 
   return (
@@ -7352,6 +7364,7 @@ export function App() {
               voiceProfileLabel={selectedVoiceProfile?.name ?? "Default voice"}
               voiceProfiles={voiceProfiles}
               onCreateAndListen={createAndListenFromCurrentSource}
+              createAndListenScope={createAndListenScope}
               onInspectBookSource={(book) => {
                 void handleInspectContentIR(book.id, bookSourceName(book));
               }}
@@ -9766,6 +9779,26 @@ function activePreparedSourceForWorkbench(
   return sourceMode === "fileUrl" ? selectedPreparedSource : null;
 }
 
+function createAndListenScopeForSource({
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+}: Readonly<{
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+}>): CreateAndListenScope {
+  if (sourceMode === "book" && selectedBookSource && selectedBookScope?.type !== "book") {
+    return "current-scope";
+  }
+  if (sourceMode === "fileUrl" && selectedPreparedSource?.blocks?.length === 1) {
+    return "selected-block";
+  }
+  return "whole-source";
+}
+
 function SourceTextPanel({
   activeReviewPane,
   activeReviewBlockId,
@@ -9792,6 +9825,7 @@ function SourceTextPanel({
   voiceProfileId,
   voiceProfileLabel,
   voiceProfiles,
+  createAndListenScope,
   onCreateAndListen,
   onInspectBookSource,
   onInspectPreparedSource,
@@ -9840,6 +9874,7 @@ function SourceTextPanel({
   voiceProfileId: string;
   voiceProfileLabel: string;
   voiceProfiles: VoiceProfile[];
+  createAndListenScope: CreateAndListenScope;
   onCreateAndListen: () => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
@@ -10002,6 +10037,7 @@ function SourceTextPanel({
           sourceMode={sourceMode}
           text={text}
           voiceProfileLabel={voiceProfileLabel}
+          createAndListenScope={createAndListenScope}
           onCreateAndListen={onCreateAndListen}
           onOpenCinema={onOpenCinema}
           onOpenTeleprompt={() => {
@@ -10038,6 +10074,7 @@ function NarrationPreviewStage({
   sourceMode,
   text,
   voiceProfileLabel,
+  createAndListenScope,
   onCreateAndListen,
   onOpenCinema,
   onOpenTeleprompt,
@@ -10054,6 +10091,7 @@ function NarrationPreviewStage({
   sourceMode: SourceMode;
   text: string;
   voiceProfileLabel: string;
+  createAndListenScope: CreateAndListenScope;
   onCreateAndListen: () => void;
   onOpenCinema: () => void;
   onOpenTeleprompt: () => void;
@@ -10089,6 +10127,23 @@ function NarrationPreviewStage({
     selectedPreparedSource,
   });
   const createDisabled = !canCreate;
+  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
+  const createAndListenDisabledReason = canCreate
+    ? undefined
+    : workspacePlaybackActionDisabledReason({
+        action: "createAndListen",
+        fallbackReason: "Select a ready source before creating audio.",
+        lifecycle: generatedAudioLifecycle,
+        scope: createAndListenScope,
+      });
+  const openCinemaDisabledReason = canOpenCinema
+    ? undefined
+    : workspacePlaybackActionDisabledReason({
+        action: "openCinema",
+        fallbackReason: "Create audio before opening Cinema.",
+        lifecycle: generatedAudioLifecycle,
+        scope: createAndListenScope,
+      });
   const createDetail = job
     ? `${job.status} · ${estimateFirstAudioETA(job)}`
     : "Ready to create checked narration";
@@ -10127,7 +10182,8 @@ function NarrationPreviewStage({
             {workspaceStageActionLabel("openTeleprompt")}
           </Button>
           <Button
-            disabledReason={canOpenCinema ? undefined : "Create audio before opening Cinema."}
+            {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
+            disabledReason={openCinemaDisabledReason}
             data-testid={workspaceStageActionTestId("openCinema")}
             disabled={!canOpenCinema}
             onClick={onOpenCinema}
@@ -10137,7 +10193,10 @@ function NarrationPreviewStage({
             {workspaceStageActionLabel("openCinema")}
           </Button>
           <Button
-            disabledReason={canCreate ? undefined : "Select a ready source before creating audio."}
+            {...workspacePlaybackActionDataAttributes("createAndListen", generatedAudioLifecycle)}
+            aria-label={createAndListenAriaLabel(createAndListenScope)}
+            data-create-listen-scope={createAndListenScope}
+            disabledReason={createAndListenDisabledReason}
             data-testid={workspaceStageActionTestId("createAndListen")}
             disabled={createDisabled}
             onClick={onCreateAndListen}

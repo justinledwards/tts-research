@@ -1,4 +1,4 @@
-import { playbackActionLabel } from "../playback";
+import { workspacePlaybackActionLabel } from "../playback/workspacePlaybackActions";
 import { transitionWorkspaceStage, type WorkspaceContext, type WorkspaceStage } from "./model";
 
 export type WorkspaceStageActionId =
@@ -27,7 +27,7 @@ export const WORKSPACE_STAGE_ACTIONS: Record<WorkspaceStageActionId, WorkspaceSt
     description: "Create narration audio from the active source, voice, policy, and scope.",
     id: "createAndListen",
     kind: "primary",
-    label: playbackActionLabel("createAndListen"),
+    label: workspacePlaybackActionLabel("createAndListen"),
     targetStage: null,
   },
   exportArtifact: {
@@ -55,7 +55,7 @@ export const WORKSPACE_STAGE_ACTIONS: Record<WorkspaceStageActionId, WorkspaceSt
     description: "Open Cinema for generated audio playback and review.",
     id: "openCinema",
     kind: "secondary",
-    label: playbackActionLabel("openCinema"),
+    label: workspacePlaybackActionLabel("openCinema"),
     targetStage: null,
   },
   openTeleprompt: {
@@ -76,7 +76,7 @@ export const WORKSPACE_STAGE_ACTIONS: Record<WorkspaceStageActionId, WorkspaceSt
     description: "Retry a failed narration generation with the current settings.",
     id: "retryGeneration",
     kind: "primary",
-    label: "Retry Generation",
+    label: workspacePlaybackActionLabel("retryGeneration"),
     targetStage: null,
   },
   reviewBlocks: {
