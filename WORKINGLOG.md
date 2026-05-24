@@ -501,3 +501,11 @@
 - [x] Add read-along fidelity E2E artifact harness and package script
 - [x] Wire drift/degraded alignment reporting into Debug context where practical
 - [x] Run required local validation commands
+
+## 2026-05-24 22:01 CEST - First-run Demo Mode
+- [x] Inspect mock startup, intake, dashboard, voices, preview, and Cinema demo paths
+- [x] Add local disposable demo data and Demo Mode entry surface
+- [x] Add contributor/demo documentation
+- [x] Wire demo coverage into existing E2E/review flows where practical
+- [x] Harden UI action audit runner for long exhaustive local replay
+- [x] Run required local validation commands

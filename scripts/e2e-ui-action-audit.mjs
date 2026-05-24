@@ -71,19 +71,25 @@ async function main() {
     const { chromium } = await loadPlaywright();
     const seed = await seedAuditData(fixtures);
     const scenarios = filterScenarios(createScenarios(seed), scenarioFilter);
-    const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
     const actions = [];
     const results = [];
     const screenshots = [];
+    const launchBrowser = () => chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
 
-    try {
-      if (!inventoryOnly && shouldRunTraversal(scenarioFilter)) {
+    if (!inventoryOnly && shouldRunTraversal(scenarioFilter)) {
+      const browser = await launchBrowser();
+      try {
         const traversal = await runWorkspaceStageTraversal(browser, seed);
         results.push(traversal.result);
         screenshots.push(...traversal.screenshots);
+      } finally {
+        await browser.close();
       }
+    }
 
-      for (const scenario of scenarios) {
+    for (const scenario of scenarios) {
+      const browser = await launchBrowser();
+      try {
         console.log(`[ui-actions] inventory ${scenario.id}`);
         const scenarioInventory = await inventoryScenario(browser, scenario);
         actions.push(...scenarioInventory.actions);
@@ -107,9 +113,9 @@ async function main() {
             results.push(await exerciseScenarioAction(browser, scenario, action, activationMode));
           }
         }
+      } finally {
+        await browser.close();
       }
-    } finally {
-      await browser.close();
     }
 
     const generatedAt = new Date().toISOString();
@@ -632,7 +638,10 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
     await page.getByText("Policy Notes").first().waitFor();
-    await page.getByText("Default voice").first().waitFor();
+    await page
+      .getByText(/Default voice|Default mock narrator/)
+      .first()
+      .waitFor();
     await page.getByTestId("global-preview-player").waitFor();
     await page.getByTestId("ui-action-preview-mini-next").click();
     await page.getByTestId("ui-action-preview-mini-previous").click();
@@ -649,7 +658,10 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
     await page.getByTestId("ui-action-teleprompt-mirror").check();
     await page.getByTestId("ui-action-teleprompt-preset-highContrast").click();
-    await page.getByText("Default voice").first().waitFor();
+    await page
+      .getByText(/Default voice|Default mock narrator/)
+      .first()
+      .waitFor();
     await capture("workspace-stage-05-teleprompt-after");
     await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
     await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();

@@ -28,12 +28,13 @@ Use the frontend URL printed by the start script, then choose **Try the Studio**
 
 Recommended first path:
 
-1. Select **Short Book Walkthrough**.
+1. Select **Short Education Reading**.
 2. Open **Review** and inspect the sample blocks.
 3. Open **Preview** and confirm the spoken form.
-4. Open **Teleprompt** and step through cues.
-5. Click **Create & Listen** to generate mock audio.
-6. Open **Cinema** for full playback.
+4. Try the Preview A/B controls.
+5. Open **Teleprompt** and step through cues.
+6. Click **Create & Listen** to generate mock audio.
+7. Open **Cinema** for full playback, then add a bookmark and resume.
 
 The demo does not write project data until a contributor explicitly creates audio, imports a source,
 or saves a project artifact.
@@ -44,6 +45,7 @@ or saves a project artifact.
 pnpm check
 pnpm e2e:workspace-flow
 pnpm e2e:ui-actions
+pnpm review:local
 pnpm validate:local
 ```
 

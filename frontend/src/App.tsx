@@ -216,6 +216,7 @@ import {
 } from "./features/workspace/stageActions";
 import type { IntakePreparationTarget } from "./features/intake";
 import type { DemoProject } from "./features/demo";
+import { demoVoiceLabel, demoVoices } from "./features/demo/demoVoices";
 import type {
   BookSource,
   BookScope,
@@ -2986,6 +2987,8 @@ export function App() {
     () => voiceProfiles.find((profile) => profile.id === selectedVoiceProfileId) ?? null,
     [selectedVoiceProfileId, voiceProfiles],
   );
+  const selectedVoiceProfileLabel =
+    selectedVoiceProfile?.name ?? demoVoiceLabel(selectedVoiceProfileId || "default");
   const hasActiveVoiceProfileTargets = useMemo(
     () =>
       voiceProfiles.some((profile) =>
@@ -3087,6 +3090,13 @@ export function App() {
         id: "default",
         label: "Default voice",
       },
+      ...demoVoices
+        .filter((voice) => voice.id !== "default")
+        .map((voice) => ({
+          detail: voice.description,
+          id: voice.id,
+          label: voice.label,
+        })),
       ...voiceProfiles.map((profile) => ({
         detail: `${profile.language || "language"} · ${profile.status}`,
         id: profile.id,
@@ -5919,10 +5929,15 @@ export function App() {
     const selectedProviderLanguage = isSupertonicRun
       ? resolveSupertonicLanguage(runConfiguration.engineOptions.lang, preparedSource)
       : selectedKokoroVoice?.langCode;
+    const voiceProfileIdForRequest = voiceProfiles.some(
+      (profile) => profile.id === selectedVoiceProfileId,
+    )
+      ? selectedVoiceProfileId
+      : "";
     const request: CreateVoiceJobRequest = buildCreateVoiceJobRequest(
       sourceText,
       runConfiguration,
-      selectedVoiceProfileId,
+      voiceProfileIdForRequest,
       activeProjectId,
       selectedProviderVoice,
       selectedProviderLanguage,
@@ -6589,6 +6604,7 @@ export function App() {
           <Button
             className="gap-2"
             data-testid="ui-action-demo-open"
+            data-ui-action-surface="Workspace"
             onClick={() => {
               setIsDemoModeCollapsed(false);
             }}
@@ -6603,10 +6619,17 @@ export function App() {
         <Suspense fallback={null}>
           <LazyDemoMode
             activeDemoProjectId={activeDemoProjectId}
+            canCreateAudio={canCreateCurrentSource}
+            canOpenCinema={canOpenCurrentCinema}
             currentStage={contentMode}
+            hasGeneratedAudio={Boolean(job)}
             onCollapse={setIsDemoModeCollapsed}
+            onCreateAndListen={createAndListenFromCurrentSource}
+            onOpenCinema={openReadingCinema}
             onOpenDemoProject={openDemoProject}
             onStageSelect={setContentMode}
+            providerEngineId={runConfiguration.ttsEngine}
+            providerEngines={ttsEngines}
           />
         </Suspense>
       )}
@@ -6923,7 +6946,7 @@ export function App() {
             )}
             variant={previewPlayerVariantForSurface({ isSettingsOpen, stage: contentMode })}
             voiceOptions={globalPreviewVoiceOptions}
-            voiceProfileLabel={selectedVoiceProfile?.name ?? "Default voice"}
+            voiceProfileLabel={selectedVoiceProfileLabel}
             onActiveBlockChange={(blockId) => {
               setWorkspaceContext((currentContext) =>
                 withWorkspaceActiveBlock(currentContext, blockId),
@@ -7391,7 +7414,7 @@ export function App() {
                     sourceId={
                       activeNarrationPreparedSource?.id ?? activeNarrationBookSource?.id ?? null
                     }
-                    voiceProfile={selectedVoiceProfile?.name ?? "Default voice"}
+                    voiceProfile={selectedVoiceProfileLabel}
                     sourceType={activeNarrationSourceType}
                     onActiveBlockChange={(blockId) => {
                       setWorkspaceContext((currentContext) =>
@@ -7411,7 +7434,7 @@ export function App() {
               }
               text={text}
               voiceProfileId={selectedVoiceProfileId}
-              voiceProfileLabel={selectedVoiceProfile?.name ?? "Default voice"}
+              voiceProfileLabel={selectedVoiceProfileLabel}
               voiceProfiles={voiceProfiles}
               onCreateAndListen={createAndListenFromCurrentSource}
               createAndListenCapabilityReason={createAndListenCapabilityReason}

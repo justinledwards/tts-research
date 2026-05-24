@@ -140,7 +140,10 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
     await page.getByTestId("workspace-stage-action-openTeleprompt").click();
     await page.getByTestId("teleprompt-studio").waitFor();
     await capture("teleprompt-from-preview");
-    await page.getByText("Default voice").first().waitFor();
+    await page
+      .getByText(/Default voice|Default mock narrator/)
+      .first()
+      .waitFor();
     await page
       .getByText(/Policy/i)
       .first()
@@ -179,9 +182,11 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
     if (!storedPreviewMemory?.selectedCueIndex) {
       failures.push("Teleprompt memory did not persist selected cue index.");
     }
-    if (storedPreviewMemory?.voiceProfile !== "Default voice") {
+    if (!["Default voice", "Default mock narrator"].includes(storedPreviewMemory?.voiceProfile)) {
       failures.push(
-        `Expected voice profile Default voice, got ${storedPreviewMemory?.voiceProfile ?? "none"}.`,
+        `Expected voice profile Default voice or Default mock narrator, got ${
+          storedPreviewMemory?.voiceProfile ?? "none"
+        }.`,
       );
     }
     if (!storedPreviewMemory?.policyProfile) {

@@ -16,14 +16,15 @@ required.
 
 ## Try The Studio
 
-Open the app and use **Try the Studio** in the first viewport. The demo panel includes five sample
+Open the app and use **Try the Studio** in the first viewport. The demo panel includes six sample
 projects:
 
-- Short book
-- Website article
-- Technical document
-- Teleprompt cue set
-- Voice comparison sample
+- Short Education Reading
+- Technical Markdown Document
+- Website Article
+- EPUB Chapter
+- Teleprompt Script
+- Voice Comparison Sample
 
 Selecting a sample loads draft text, voice intent, policy intent, and workspace context in memory.
 It does not create a project, source, job, or generated audio record by itself.
@@ -35,8 +36,11 @@ Use the tour buttons to move through:
 - Intake
 - Review
 - Preview
+- A/B comparison in Preview
 - Teleprompt
+- Create mock audio
 - Cinema
+- Bookmark and resume from Cinema
 
 Cinema is intentionally gated behind the real production path. When the contributor clicks
 **Create & Listen**, the mock provider creates local generated audio, then the normal Preview and
@@ -51,6 +55,8 @@ Demo mode is a thin wrapper over real workspace state:
 - Project autosave is paused while an unsaved demo sample is active.
 - Creating audio through **Create & Listen** exits unsaved demo mode and stores the job in the active
   local project.
+- Demo fixtures are inline local content; they do not fetch websites, provider voices, or private
+  project data.
 - Imported files, prepared sources, generated audio, and progress still live under ignored runtime
   paths such as `backend/data/` and `output/`.
 

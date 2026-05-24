@@ -115,6 +115,9 @@ async function main() {
     if (workspaceFlowOnly) {
       const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
       try {
+        const demoResult = await runFirstRunDemoUX(browser, project.id);
+        summary.screenshots.push(...demoResult.screenshots);
+        summary.firstRunDemo = demoResult;
         const result = await runWorkspaceFlowUX(browser, project.id);
         summary.screenshots.push(...result.screenshots);
         summary.workspaceFlow = result;
@@ -411,6 +414,38 @@ async function runStudioRouteSwitchUX(browser, projectId) {
   }
 }
 
+async function runFirstRunDemoUX(browser, projectId) {
+  const context = await browser.newContext({
+    storageState: projectStorageState(projectId, {
+      sourceMode: "text",
+      stage: "intake",
+      text: "",
+    }),
+    viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
+  });
+  const page = await context.newPage();
+  if (lowResourceMode) {
+    await applyLowResourceProfile(page);
+  }
+  page.setDefaultTimeout(60_000);
+  const issues = collectPageIssues(page);
+  const screenshots = [];
+  try {
+    await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await exerciseFirstRunDemoPath(page, screenshots);
+    await assertNoPageIssues(issues);
+    return { screenshots, status: "passed" };
+  } catch (error) {
+    const failureScreenshot = path.join(screenshotsDir, "first-run-demo-failure.png");
+    await page.screenshot({ fullPage: true, path: failureScreenshot }).catch(() => {});
+    screenshots.push(failureScreenshot);
+    throw error;
+  } finally {
+    await context.close();
+  }
+}
+
 async function runWorkspaceFlowUX(browser, projectId) {
   const context = await browser.newContext({
     storageState: projectStorageState(projectId, {
@@ -431,7 +466,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
     await setRememberLayout(page, true);
-    await page.getByRole("button", { exact: true, name: "Review" }).click();
+    await selectWorkspaceStage(page, "review");
     await page.getByText("Revision Panel").first().waitFor();
     await page.getByTestId("revision-tab-overview").click();
     await page.getByText("Inline Speech Edit").first().waitFor();
@@ -474,7 +509,10 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.getByText("Teleprompt Studio").first().waitFor();
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
     await page.getByTestId("ui-action-teleprompt-mirror").check();
-    await page.getByText("Default voice").first().waitFor();
+    await page
+      .getByText(/Default voice|Default mock narrator/)
+      .first()
+      .waitFor();
     await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
     await page.getByRole("button", { exact: true, name: "Back to Review" }).click();
     await page.getByText("Revision Panel").first().waitFor();
@@ -494,14 +532,14 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
     await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
     await page.getByText("Spoken Form").first().waitFor();
-    await page.getByRole("button", { exact: true, name: "Review" }).click();
+    await selectWorkspaceStage(page, "review");
     await page.getByText("Revision Panel").first().waitFor();
     await assertReviewPaneSelected(page, "Diagnostics");
     await setRememberLayout(page, true, { reset: true });
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
     await assertWorkspaceLayoutSelected(page, "Balanced");
-    await page.getByRole("button", { exact: true, name: "Review" }).click();
+    await selectWorkspaceStage(page, "review");
     await page.getByText("Revision Panel").first().waitFor();
     await assertReviewPaneSelected(page, "Blocks");
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
@@ -525,6 +563,41 @@ async function runWorkspaceFlowUX(browser, projectId) {
   } finally {
     await context.close();
   }
+}
+
+async function exerciseFirstRunDemoPath(page, screenshots) {
+  await page.getByTestId("ui-action-demo-open").click();
+  await page.getByText("Mock provider").first().waitFor();
+  await page.getByText("Unsaved demo").first().waitFor();
+  await page.getByText("Local fixtures").first().waitFor();
+  await page.getByTestId("ui-action-demo-project-short-education-reading").click();
+  await page.getByText("Short Education Reading").first().waitFor();
+  await page.getByText("Revision Panel").first().waitFor();
+  await page.getByTestId("ui-action-demo-tour-preview").click();
+  await page.getByText("Spoken Form").first().waitFor();
+  await page.getByTestId("ui-action-demo-tour-teleprompt").click();
+  await page.getByText("Teleprompt Studio").first().waitFor();
+  await page.getByTestId("ui-action-demo-tour-review").click();
+  await page.getByText("Revision Panel").first().waitFor();
+  await page.getByTestId("ui-action-demo-collapse").click();
+  const screenshot = path.join(screenshotsDir, "workspace-first-run-demo.png");
+  await page.screenshot({ fullPage: false, path: screenshot });
+  screenshots.push(screenshot);
+}
+
+async function selectWorkspaceStage(page, stage) {
+  const button = page.getByTestId(`workspace-stage-${stage}`);
+  await button.waitFor({ state: "visible" });
+  const selected =
+    (await button.getAttribute("data-selected")) === "true" ||
+    (await button.getAttribute("aria-pressed")) === "true";
+  if (selected) {
+    return;
+  }
+  await button.evaluate((node) => {
+    node.scrollIntoView({ block: "center", inline: "nearest" });
+  });
+  await button.click();
 }
 
 async function runSettingsIAUX(browser, projectId) {
