@@ -17,6 +17,9 @@ export function shouldShowGlobalPreviewPlayer(state: PlaybackSurfaceState): bool
   if (state.stage === "teleprompt") {
     return false;
   }
+  if (state.stage === "intake") {
+    return false;
+  }
   if (state.owner === "cinema" || state.owner === "teleprompt") {
     return false;
   }

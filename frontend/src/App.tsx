@@ -9478,6 +9478,7 @@ function ActivityFooterModeControls({
       {(["full", "compact", "collapsed"] as const).map((item) => (
         <button
           aria-label={`Show ${item} activity footer`}
+          aria-pressed={mode === item}
           className={`h-7 min-w-[3.8rem] flex-1 rounded px-2 text-[0.68rem] font-semibold transition sm:flex-none ${
             mode === item
               ? "bg-orange-500 text-white"

@@ -1,5 +1,6 @@
 import { Button, Panel, fieldControlClassName } from "../../design";
 import {
+  DEFAULT_SHORTCUT_PREFERENCES,
   configurableShortcutCommands,
   shortcutBindingForCommand,
   updateShortcutPreference,
@@ -16,6 +17,9 @@ export function ShortcutSettings({
   onChange: (preferences: ShortcutPreferences) => void;
   onReset: () => void;
 }>) {
+  const defaultsAlreadyActive = configurableShortcutCommands().every(
+    (command) => preferences[command.id] === DEFAULT_SHORTCUT_PREFERENCES[command.id],
+  );
   return (
     <Panel className="grid gap-3 p-3" data-testid="shortcut-settings" variant="surface">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -29,7 +33,13 @@ export function ShortcutSettings({
             machine.
           </p>
         </div>
-        <Button onClick={onReset} size="sm" variant="secondary">
+        <Button
+          disabled={defaultsAlreadyActive}
+          disabledReason="Shortcuts already match the default bindings."
+          onClick={onReset}
+          size="sm"
+          variant="secondary"
+        >
           Restore defaults
         </Button>
       </div>

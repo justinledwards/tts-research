@@ -4,10 +4,11 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-export async function createRunContext({ kind, rootDir }) {
+export async function createRunContext({ kind, outputDir: configuredOutputDir, rootDir }) {
   const startedAt = new Date();
   const runId = startedAt.toISOString().replaceAll(/[:.]/g, "-");
   const outputDir =
+    configuredOutputDir ??
     process.env.VALIDATE_LOCAL_OUTPUT_DIR ??
     path.join(rootDir, "output", "validate-local", "latest");
   const logsDir = path.join(outputDir, "logs");
@@ -489,7 +490,7 @@ function shellQuote(value) {
   return /^[A-Za-z0-9_./:=@+-]+$/.test(text) ? text : JSON.stringify(text);
 }
 
-function formatDuration(durationMs) {
+export function formatDuration(durationMs) {
   if (!Number.isFinite(durationMs)) {
     return "0ms";
   }

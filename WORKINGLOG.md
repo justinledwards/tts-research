@@ -1,5 +1,20 @@
 # Working Log
 
+## 2026-05-23 23:43 CEST - Latest-head Review Evidence Bundle
+- [x] Inspect existing local validation and E2E reporting helpers
+- [x] Add latest-head review evidence manifest generation
+- [x] Wire `pnpm review:local`
+- [x] Exclude generated local agent state from Biome project checks
+- [x] Ignore generated backend audit output
+- [x] Count scenario-level surfaces in review summaries
+- [x] Add primary navigation landmark to the top product bar
+- [x] Stabilize source policy pin E2E wait
+- [x] Fix reviewer summary label rendering crash
+- [x] Run required local validation commands
+  - [x] `pnpm validate:local`
+  - [x] `pnpm validate:local:ui`
+  - [x] `pnpm review:local`
+
 ## 2026-05-23 00:00 CEST - Manual Accessibility and Device QA Package
 - [x] Update accessibility and responsive QA scripts to generate package artifacts in `output/accessibility/latest`
 - [x] Add required manual QA check checklist and known-waiver section for accessibility/package gate

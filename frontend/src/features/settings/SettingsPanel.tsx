@@ -699,6 +699,7 @@ function QuickSettings({
           Preview sample
         </Button>
         <Button
+          data-confirm="Reset run defaults"
           data-testid="settings-quick-reset-run"
           data-ui-action-surface="Settings"
           onClick={resetRunDefaults}
@@ -707,6 +708,7 @@ function QuickSettings({
           Reset run defaults
         </Button>
         <Button
+          data-confirm="Reset display"
           data-testid="settings-quick-reset-reader"
           data-ui-action-surface="Settings"
           onClick={() => {

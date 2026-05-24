@@ -47,6 +47,7 @@ export function RailModeToolbar({
         {(["full", "compact", "collapsed"] as const).map((item) => (
           <button
             aria-label={`${label} ${item}`}
+            aria-pressed={mode === item}
             className={`h-6 rounded px-1.5 text-[0.58rem] font-semibold capitalize transition ${
               mode === item
                 ? "bg-orange-500 text-white"

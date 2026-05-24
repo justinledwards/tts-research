@@ -153,7 +153,10 @@ export function TopProductBar({
           </select>
         </label>
       </div>
-      <div className="hidden min-w-0 items-center justify-end gap-1.5 md:flex">
+      <nav
+        aria-label="Primary workspace actions"
+        className="hidden min-w-0 items-center justify-end gap-1.5 md:flex"
+      >
         <SegmentedControl
           ariaLabel="Studio mode"
           className="min-w-[230px]"
@@ -225,8 +228,8 @@ export function TopProductBar({
           onCancel={onCancel}
           onSubmit={onSubmit}
         />
-      </div>
-      <div className="flex items-center gap-1.5 md:hidden">
+      </nav>
+      <nav aria-label="Primary workspace actions" className="flex items-center gap-1.5 md:hidden">
         <Button
           className="px-2 text-orange-600"
           onClick={() => {
@@ -269,7 +272,7 @@ export function TopProductBar({
             Run
           </Button>
         ) : null}
-      </div>
+      </nav>
     </header>
   );
 }

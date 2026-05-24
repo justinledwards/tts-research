@@ -17,6 +17,7 @@
     "start:mock": "VOICE_OPTIMIZER_PROVIDER=rules TTS_PROVIDER=mock VOICE_CHECKER_PROVIDER=mock bash ./scripts/start.sh",
     "setup:alignment": "bash ./scripts/runtime-setup.sh setup-alignment",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "review:local": "node scripts/validate-local/review-evidence.mjs",
     "validate:local": "node scripts/validate-local/validate-local.mjs",
     "bench:local": "node scripts/validate-local/bench-local.mjs",
     "bundle:local": "node scripts/validate-local/frontend-performance.mjs",

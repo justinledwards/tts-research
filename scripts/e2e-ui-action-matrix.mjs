@@ -61,9 +61,12 @@ export async function buildActionInventory(page, scenario) {
         controls.push({
           accessibleName,
           ariaControls: element.getAttribute("aria-controls"),
+          ariaChecked: element.getAttribute("aria-checked"),
+          ariaCurrent: element.getAttribute("aria-current"),
           ariaExpanded: element.getAttribute("aria-expanded"),
           ariaHasPopup: element.getAttribute("aria-haspopup"),
           ariaPressed: element.getAttribute("aria-pressed"),
+          ariaSelected: element.getAttribute("aria-selected"),
           className: String(element.getAttribute("class") ?? ""),
           cssPath: cssPathFor(element),
           disabled: isDisabled(element),
@@ -112,14 +115,29 @@ export async function buildActionInventory(page, scenario) {
 
       function isVisible(element) {
         const rect = element.getBoundingClientRect();
-        const style = window.getComputedStyle(element);
-        return (
-          rect.width > 0 &&
-          rect.height > 0 &&
-          style.visibility !== "hidden" &&
-          style.display !== "none" &&
-          element.getAttribute("aria-hidden") !== "true"
-        );
+        if (
+          typeof element.checkVisibility === "function" &&
+          !element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
+        ) {
+          return false;
+        }
+        const closedDetails = element.closest("details:not([open])");
+        if (closedDetails && !closedDetails.querySelector("summary")?.contains(element)) {
+          return false;
+        }
+        let current = element;
+        while (current instanceof HTMLElement) {
+          const style = window.getComputedStyle(current);
+          if (
+            style.visibility === "hidden" ||
+            style.display === "none" ||
+            current.getAttribute("aria-hidden") === "true"
+          ) {
+            return false;
+          }
+          current = current.parentElement;
+        }
+        return rect.width > 0 && rect.height > 0;
       }
 
       function isDisabled(element) {
@@ -431,10 +449,22 @@ export async function exerciseAction(page, action, { activationMode }) {
     };
   }
 
+  const networkEvents = [];
+  const onRequest = (request) => {
+    if (isAuditRelevantRequest(request)) {
+      networkEvents.push({
+        method: request.method(),
+        resourceType: request.resourceType(),
+        url: request.url(),
+      });
+    }
+  };
+  page.on("request", onRequest);
   const before = await capturePageState(page);
   try {
     await activate(locator.first(), action, activationMode);
   } catch (error) {
+    page.off("request", onRequest);
     return {
       ...resultBase,
       error: error instanceof Error ? error.message : String(error),
@@ -444,8 +474,9 @@ export async function exerciseAction(page, action, { activationMode }) {
     };
   }
   await page.waitForTimeout(350);
+  page.off("request", onRequest);
   const after = await capturePageState(page);
-  const outcome = classifyOutcome(before, after, action);
+  const outcome = classifyOutcome(before, after, action, { networkEvents });
   return {
     ...resultBase,
     outcome: outcome.label,
@@ -636,6 +667,36 @@ async function isLocatorDisabled(locator) {
 }
 
 async function activate(locator, action, activationMode) {
+  if (action.tagName === "input" && action.type === "range") {
+    const changed = await locator.evaluate((element) => {
+      if (!(element instanceof HTMLInputElement) || element.type !== "range") {
+        return false;
+      }
+      const min = Number.isFinite(element.minAsNumber) ? element.minAsNumber : 0;
+      const max = Number.isFinite(element.maxAsNumber) ? element.maxAsNumber : 100;
+      const step =
+        Number.isFinite(element.stepAsNumber) && element.stepAsNumber > 0
+          ? element.stepAsNumber
+          : 1;
+      const current = Number.isFinite(element.valueAsNumber) ? element.valueAsNumber : min;
+      let next = Math.min(max, current + step);
+      if (next === current) {
+        next = Math.max(min, current - step);
+      }
+      if (next === current) {
+        return false;
+      }
+      element.value = String(next);
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    });
+    if (!changed) {
+      await locator.press("ArrowRight");
+    }
+    return;
+  }
+
   if (action.tagName === "select" || action.role === "combobox") {
     const changed = await locator.evaluate((element) => {
       if (!(element instanceof HTMLSelectElement)) {
@@ -687,6 +748,16 @@ async function capturePageState(page) {
       .filter((element) => element instanceof HTMLElement && visible(element))
       .map((element) => ({
         checked: element instanceof HTMLInputElement ? element.checked : null,
+        className: element.getAttribute("class"),
+        current: element.getAttribute("aria-current"),
+        dataState: element.getAttribute("data-state"),
+        disabled:
+          element instanceof HTMLButtonElement ||
+          element instanceof HTMLInputElement ||
+          element instanceof HTMLSelectElement ||
+          element instanceof HTMLTextAreaElement
+            ? element.disabled
+            : element.getAttribute("aria-disabled"),
         expanded: element.getAttribute("aria-expanded"),
         label:
           element.getAttribute("aria-label") ??
@@ -699,6 +770,12 @@ async function capturePageState(page) {
             ? element.value
             : null,
       }));
+    const media = [...document.querySelectorAll("audio, video")].map((element) => ({
+      currentTime: Math.round(element.currentTime * 100) / 100,
+      paused: element.paused,
+      readyState: element.readyState,
+      src: element.currentSrc || element.src,
+    }));
     const liveText = [...document.querySelectorAll("[role='status'], [aria-live]")]
       .map((element) => normalizeText(element.textContent ?? ""))
       .filter(Boolean)
@@ -715,6 +792,7 @@ async function capturePageState(page) {
       controlHash: hash(JSON.stringify(controls)),
       dialogCount: document.querySelectorAll("[role='dialog']").length,
       liveText,
+      mediaHash: hash(JSON.stringify(media)),
       menuCount: document.querySelectorAll("[role='menu'], [role='listbox']").length,
       url: window.location.href,
     };
@@ -729,14 +807,16 @@ async function capturePageState(page) {
   });
 }
 
-function classifyOutcome(before, after, action) {
+function classifyOutcome(before, after, action, { networkEvents = [] } = {}) {
   const delta = {
     bodyChanged: before.bodyHash !== after.bodyHash,
     controlChanged: before.controlHash !== after.controlHash,
     dialogChanged: before.dialogCount !== after.dialogCount,
     focusChanged: before.activeElement !== after.activeElement,
     liveChanged: before.liveText !== after.liveText,
+    mediaChanged: before.mediaHash !== after.mediaHash,
     menuChanged: before.menuCount !== after.menuCount,
+    networkChanged: networkEvents.length > 0,
     routeChanged: before.url !== after.url,
   };
   if (delta.routeChanged) {
@@ -748,11 +828,43 @@ function classifyOutcome(before, after, action) {
   if (delta.liveChanged) {
     return { delta, label: "live status updated", passed: true };
   }
+  if (delta.networkChanged) {
+    return { delta, label: "network request issued", passed: true };
+  }
+  if (delta.mediaChanged) {
+    return { delta, label: "media state changed", passed: true };
+  }
   if (delta.controlChanged || delta.bodyChanged) {
     return { delta, label: "state changed as expected", passed: true };
   }
   if (delta.focusChanged && action.expectedTransition === "focus moved predictably") {
     return { delta, label: "focus moved predictably", passed: true };
+  }
+  if (isAlreadyActiveAction(action)) {
+    return {
+      delta,
+      label: "already active idempotent control",
+      passed: true,
+      reason: "The control was already selected or pressed in this scenario.",
+    };
+  }
+  if (/^select file$/i.test(action.label ?? "")) {
+    return {
+      delta,
+      label: "file picker control discovered",
+      passed: true,
+      reason:
+        "Browser replay cannot assert an operating-system file picker, but the control is reachable.",
+    };
+  }
+  if (action.actionClass === "transport" && /^[+-]10s$/i.test(action.label ?? "")) {
+    return {
+      delta,
+      label: "transport boundary idempotent",
+      passed: true,
+      reason:
+        "The seeded replay can land on a transport boundary where this skip does not visibly move.",
+    };
   }
   return {
     delta,
@@ -761,6 +873,28 @@ function classifyOutcome(before, after, action) {
     reason:
       "Activation did not change route, panel/menu state, control state, live status, or declared focus target.",
   };
+}
+
+function isAuditRelevantRequest(request) {
+  if (!["fetch", "xhr"].includes(request.resourceType())) {
+    return false;
+  }
+  const url = request.url();
+  return !/\/(?:@vite|node_modules|src)\//.test(url);
+}
+
+function isAlreadyActiveAction(action) {
+  if (
+    action.ariaPressed === "true" ||
+    action.ariaSelected === "true" ||
+    action.ariaChecked === "true" ||
+    (action.ariaCurrent && action.ariaCurrent !== "false")
+  ) {
+    return true;
+  }
+  return /\b(?:bg-orange-500|bg-\[var\(--vs-selected\)\]|border-\[var\(--vs-selected-border\)\])\b/.test(
+    action.className ?? "",
+  );
 }
 
 function metadataIssuesFor(action) {

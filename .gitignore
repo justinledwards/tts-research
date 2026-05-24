@@ -58,6 +58,7 @@ backend/data/**
 backend/model/
 backend/voice/
 backend/model-cache/
+backend/output/
 backend/tmp/
 demo/
 model/
