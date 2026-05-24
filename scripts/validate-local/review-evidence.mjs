@@ -274,6 +274,7 @@ function uiActionArtifacts(context, id) {
     duplicates: path.join(dir, "duplicates.md"),
     reviewerSummary: path.join(dir, "reviewer-summary.md"),
     screenshots: path.join(dir, "screenshots"),
+    websiteExtractionQuality: path.join(dir, "website-extraction-quality.json"),
   };
 }
 
@@ -462,6 +463,9 @@ async function readQaDocuments(artifactRecords) {
     ),
     actionInventory: await readJsonIfPresent(byStepAndKey.get("ui-actions-e2e:actionInventory")),
     actionResults: await readJsonIfPresent(byStepAndKey.get("ui-actions-e2e:actionResults")),
+    websiteExtractionQuality: await readJsonIfPresent(
+      byStepAndKey.get("ui-actions-e2e:websiteExtractionQuality"),
+    ),
     bookCinema: await readJsonIfPresent(byStepAndKey.get("book-cinema-e2e:e2eSummary")),
     commandPalette: await readJsonIfPresent(
       byStepAndKey.get("command-palette-e2e:commandPaletteResults"),
@@ -562,6 +566,7 @@ export function buildPassFailSummary({
     responsiveSnapshots: statusSummary(qaDocuments.responsiveSnapshots),
     telepromptMemory: statusSummary(qaDocuments.telepromptMemory),
     validateLocal: statusSummary(qaDocuments.validateLocal),
+    websiteExtractionQuality: statusSummary(qaDocuments.websiteExtractionQuality),
   };
   const status =
     failedCommands.length === 0 && missingArtifacts.length === 0 && missingSurfaces.length === 0
@@ -595,7 +600,7 @@ function statusSummary(document) {
   }
   return {
     status: document.status ?? "recorded",
-    summary: document.summary ?? document.readerTiming?.metrics ?? null,
+    summary: document.summary ?? document.quality ?? document.readerTiming?.metrics ?? null,
   };
 }
 

@@ -114,6 +114,10 @@ async function main() {
 
     const generatedAt = new Date().toISOString();
     const duplicates = summarizeDuplicates(actions);
+    const websiteExtractionQualityDocument = websiteExtractionQualityDocumentFromSeed(
+      seed,
+      generatedAt,
+    );
     const inventoryDocument = {
       actions,
       appBaseUrl,
@@ -159,6 +163,10 @@ async function main() {
       renderDuplicatesReport({ duplicates, generatedAt }),
     );
     await writeFile(
+      path.join(outputDir, "website-extraction-quality.json"),
+      `${JSON.stringify(websiteExtractionQualityDocument, null, 2)}\n`,
+    );
+    await writeFile(
       path.join(outputDir, "reviewer-summary.md"),
       renderReviewerSummary({
         actions,
@@ -169,6 +177,7 @@ async function main() {
         results,
         scenarios,
         screenshots,
+        websiteExtractionQuality: websiteExtractionQualityDocument.quality,
       }),
     );
 
@@ -323,6 +332,7 @@ async function seedAuditData(fixtures) {
       headers: { "Content-Type": "application/json" },
       method: "POST",
     });
+    assertWebsiteExtractionQuality(websiteSource);
     websiteJob = await waitForJob(
       (
         await createPreparedNarrationJob(
@@ -1092,13 +1102,18 @@ async function startWebsiteFixtureServer() {
 <html lang="en">
   <head><title>Website Cinema UI Action Fixture</title></head>
   <body>
+    <header><nav>Home Features Search Instagram Subscribe</nav></header>
     <main>
-      <h1>Website Cinema UI Action Fixture</h1>
-      <p>This local website article gives the action audit a stable source.</p>
-      <h2>Readable Section</h2>
-      <p>Bookmarks, review panels, generated audio diagnostics, and source provenance should remain discoverable.</p>
-      <aside>Navigation, adverts, and boilerplate should be easy to inspect but quiet in read mode.</aside>
+      <article class="article-body">
+        <h1>Website Cinema UI Action Fixture</h1>
+        <p>This local website article gives the action audit a stable source.</p>
+        <h2>Readable Section</h2>
+        <p>Bookmarks, review panels, generated audio diagnostics, and source provenance should remain discoverable.</p>
+        <aside class="newsletter">Navigation, adverts, and boilerplate should be easy to inspect but quiet in read mode.</aside>
+        <p>The final article paragraph confirms Website Cinema starts with article body text.</p>
+      </article>
     </main>
+    <footer>Facebook Instagram Privacy Terms</footer>
   </body>
 </html>`;
   const server = createHttpServer((_request, response) => {
@@ -1485,6 +1500,7 @@ function renderReviewerSummary({
   results,
   scenarios,
   screenshots,
+  websiteExtractionQuality,
 }) {
   const resultSummary = summarizeResults(results);
   const inventorySummary = summarizeInventory(actions);
@@ -1509,6 +1525,7 @@ function renderReviewerSummary({
     "- action-results.json: present",
     "- dead-controls.md: present",
     "- duplicates.md: present",
+    "- website-extraction-quality.json: present",
     "- reviewer-summary.md: present",
     `- screenshots/: ${String(screenshots.length)} captured`,
     "",
@@ -1522,6 +1539,8 @@ function renderReviewerSummary({
     `- Failed/no-op/browser findings: ${String(resultSummary.failed)}`,
     `- Disabled controls: ${String(inventorySummary.disabled)}`,
     `- Destructive controls: ${String(inventorySummary.destructive)}`,
+    `- Website extraction confidence: ${websiteExtractionQuality?.extractionConfidence ?? "missing"}`,
+    `- Website skipped chrome blocks: ${String(websiteExtractionQuality?.skippedBlockCount ?? 0)}`,
     "",
     "## Gate findings",
     "",
@@ -1553,6 +1572,37 @@ function renderReviewerSummary({
     );
   }
   return `${lines.join("\n")}\n`;
+}
+
+function websiteExtractionQualityDocumentFromSeed(seed, generatedAt) {
+  const quality = seed.website.source.metadata?.websiteExtractionQuality ?? null;
+  return {
+    generatedAt,
+    quality,
+    schemaVersion: "website-extraction-quality.v1",
+    skippedItems: seed.website.source.skippedItems ?? [],
+    sourceId: seed.website.source.id,
+    sourceUrl: seed.website.source.sourceUrl ?? seed.website.source.sourceName,
+    status: quality ? "recorded" : "missing",
+  };
+}
+
+function assertWebsiteExtractionQuality(source) {
+  const quality = source.metadata?.websiteExtractionQuality;
+  assert(quality, "Website source prep did not include extraction quality metadata.");
+  assert(
+    quality.extractionConfidence === "high" ||
+      quality.extractionConfidence === "medium" ||
+      quality.extractionConfidence === "low",
+    "Website extraction confidence is missing.",
+  );
+  assert(quality.skippedBlockCount > 0, "Website fixture did not report skipped chrome blocks.");
+  const openingBlockText =
+    source.blocks?.find((block) => block.speakMode !== "skip")?.spokenText ?? "";
+  assert(
+    !/home features search|instagram subscribe/i.test(openingBlockText),
+    `Website Cinema opening block contains page chrome: ${openingBlockText}`,
+  );
 }
 
 function formatFindingCount(count) {

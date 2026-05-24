@@ -53,10 +53,16 @@ import {
 } from "../source-lifecycle/sourceSelectors";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { playbackActionLabel } from "../playback";
+import { WebsiteExtractionReview } from "../website-cinema/WebsiteExtractionReview";
+import {
+  WebsiteExtractionSummary,
+  websiteExtractionQuality,
+} from "../website-cinema/WebsiteExtractionSummary";
 import { looksLikeMermaidDiagram } from "../../markdownModel";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdownCinema";
 import {
   preparedSourceCinemaActiveBlock,
+  preparedSourceCinemaKind,
   preparedSourceCinemaLabel,
   preparedSourceCinemaMetrics,
   preparedSourceCinemaOutline,
@@ -123,6 +129,16 @@ function preparedSourceCinemaLabelForKind(
   return preparedSourceCinemaLabel(source);
 }
 
+function websiteExtractionReadabilityLabel(
+  articleUncertain: boolean | undefined,
+  extractionConfidence: string,
+): string {
+  if (articleUncertain) {
+    return "Article uncertain";
+  }
+  return `${extractionConfidence} confidence`;
+}
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function PreparedSourceCinemaOverlay({
   accessibilitySettings,
@@ -158,6 +174,7 @@ export function PreparedSourceCinemaOverlay({
   onInspectStructure,
   onPrepareFile,
   onPlayPause,
+  onRerunWebsiteExtraction,
   onRestart,
   onResumeProgress,
   onSaveSourcePolicy,
@@ -199,6 +216,7 @@ export function PreparedSourceCinemaOverlay({
   onInspectStructure: (source: PreparedSource) => void;
   onPrepareFile: (file: File) => Promise<void>;
   onPlayPause: () => void;
+  onRerunWebsiteExtraction?: (source: PreparedSource, containerSelector: string) => void;
   onRestart: () => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
   onSaveSourcePolicy: (request: SourceSpeechPolicyUpdateRequest) => Promise<void> | void;
@@ -216,6 +234,8 @@ export function PreparedSourceCinemaOverlay({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const title = preparedSourceCinemaTitle(source);
   const cinemaLabel = preparedSourceCinemaLabelForKind(source, surfaceKind);
+  const isWebsiteCinema =
+    surfaceKind === "website" || preparedSourceCinemaKind(source) === "website";
   const effectivePlaybackCursorSec =
     playbackCursorSec > 0 ? playbackCursorSec : (progress?.currentTimeSec ?? playbackCursorSec);
   const effectiveActiveWordIndex =
@@ -289,6 +309,14 @@ export function PreparedSourceCinemaOverlay({
   });
   const metrics = preparedSourceCinemaMetrics(source);
   const href = preparedSourceCinemaSourceHref(source);
+  const websiteQuality = isWebsiteCinema ? websiteExtractionQuality(source) : null;
+  let readabilityHealthLabel = source.warnings && source.warnings.length > 0 ? "Warnings" : "Good";
+  if (websiteQuality) {
+    readabilityHealthLabel = websiteExtractionReadabilityLabel(
+      websiteQuality.articleUncertain,
+      websiteQuality.extractionConfidence,
+    );
+  }
   const skippedGroups = preparedSourceCinemaSkippedGroups(source);
   const policyNotes = useMemo(() => preparedSourceCinemaPolicyNotes(source), [source]);
   const activeText = displayBlock ? markdownBlockText(displayBlock) : "";
@@ -371,6 +399,26 @@ export function PreparedSourceCinemaOverlay({
       tabId: "overview",
       title: "Source provenance",
     }),
+    ...(isWebsiteCinema
+      ? [
+          buildCinemaInspectorSection({
+            children: (
+              <WebsiteExtractionReview
+                source={source}
+                onRerunExtraction={onRerunWebsiteExtraction}
+              />
+            ),
+            detail: websiteQuality
+              ? `${websiteQuality.extractionConfidence} confidence · ${websiteQuality.articleCandidateCount.toLocaleString()} candidates`
+              : "No extraction metadata",
+            id: "website-extraction-review",
+            kind: "source-provenance",
+            modeAffinity: ["inspect", "debug"],
+            tabId: "overview",
+            title: "Website extraction",
+          }),
+        ]
+      : []),
     buildCinemaCurrentReadingSection({
       detail: displayBlock
         ? `${blockKindLabel(displayBlock)} ${(displayBlock.index + 1).toString()}`
@@ -420,7 +468,7 @@ export function PreparedSourceCinemaOverlay({
       children: (
         <div className="grid gap-3 text-sm">
           <PolicyScopeSummary display="expanded" state={sourcePolicyState} />
-          <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2 text-center text-[11px]">
+          <div className="grid grid-cols-2 gap-2 text-center text-[11px]">
             <PolicyMetric icon={<MicrophoneIcon />} label="Voice" value={job?.voice ?? "Alloy"} />
             <PolicyMetric
               icon={<DialIcon />}
@@ -469,10 +517,7 @@ export function PreparedSourceCinemaOverlay({
       children: (
         <div className="grid gap-3 text-sm">
           <HealthRow label="Main content" value="Detected" />
-          <HealthRow
-            label="Readability"
-            value={source.warnings && source.warnings.length > 0 ? "Warnings" : "Good"}
-          />
+          <HealthRow label="Readability" value={readabilityHealthLabel} />
           <HealthRow label="Content length" value={`${metrics.wordCount.toLocaleString()} words`} />
           <HealthRow
             label="You're ready"
@@ -523,6 +568,10 @@ export function PreparedSourceCinemaOverlay({
     onStateChange: onUiMemoryFocusStateChange,
     resetSignal: uiMemoryResetSignal,
   });
+  const handleReviewWebsiteExtraction = () => {
+    cinemaFocus.setMode("inspect");
+    cinemaFocus.setActivePanelId("overview");
+  };
 
   useReaderKeyboardControls({
     canBookmark,
@@ -634,6 +683,7 @@ export function PreparedSourceCinemaOverlay({
             variant="bar"
           />
           <PlaybackStatusChip isPlaybackActive={isPlaybackActive} job={job} />
+          {isWebsiteCinema ? <WebsiteExtractionSummary source={source} /> : null}
           <div className="order-last flex min-w-0 flex-1 basis-full flex-wrap items-center gap-3 lg:flex xl:order-none xl:basis-auto xl:flex-nowrap">
             <PreparedSourceCinemaHeaderSourceSelect
               source={source}
@@ -645,6 +695,16 @@ export function PreparedSourceCinemaOverlay({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {isWebsiteCinema && websiteQuality ? (
+              <Button
+                className="hidden gap-2 sm:inline-flex"
+                onClick={handleReviewWebsiteExtraction}
+                size="md"
+                variant="secondary"
+              >
+                Review article
+              </Button>
+            ) : null}
             <Button
               className="hidden gap-2 sm:inline-flex"
               onClick={() => {
@@ -685,7 +745,7 @@ export function PreparedSourceCinemaOverlay({
             mode={cinemaFocus.mode}
             panels={sourceInspectorPanels}
             pinnedPanelId={cinemaFocus.pinnedPanelId}
-            surface={surfaceKind === "website" ? "website" : "document"}
+            surface={isWebsiteCinema ? "website" : "document"}
             onActivePanelChange={cinemaFocus.setActivePanelId}
             onPinnedPanelChange={cinemaFocus.setPinnedPanelId}
           />

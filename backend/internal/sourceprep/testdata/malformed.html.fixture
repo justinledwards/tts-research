@@ -1,0 +1,1 @@
+<html><body><main><h1>Malformed Fixture<p>The parser should still recover the readable article body.<p>Navigation text should not become the opening block.<nav>Menu Search Subscribe

@@ -299,6 +299,8 @@ describe("prepared source cinema helpers", () => {
 
     expect(markup).toContain("Website Cinema");
     expect(markup).toContain("Example article");
+    expect(markup).toContain("Article high");
+    expect(markup).toContain("Review article");
     expect(markup).toContain("Select cinema source");
     expect(markup).toContain("Read");
     expect(markup).toContain("Inspect");
@@ -349,7 +351,29 @@ function makePreparedSource(overrides: Partial<PreparedSource> = {}): PreparedSo
     id: "source-1",
     kind: "url",
     markdownParseMode: "strict",
-    metadata: {},
+    metadata: {
+      websiteExtractionQuality: {
+        articleCandidateCount: 2,
+        chosenContainer: "body > main > article#example",
+        chromeTextRatio: 0.12,
+        extractionConfidence: "high",
+        extractionConfidenceScore: 0.82,
+        headingDepth: 1,
+        linkDensity: 0.04,
+        narrationBlockCount: 2,
+        readableTextRatio: 0.76,
+        skippedBlockCount: 2,
+        skippedBlocks: [
+          {
+            kind: "navigation",
+            reason: "skipped page chrome: navigation",
+            selector: "body > header > nav",
+            text: "Home Search",
+            wordCount: 2,
+          },
+        ],
+      },
+    },
     projectId: "default",
     renderMode: "markdown",
     segmentCount: 3,

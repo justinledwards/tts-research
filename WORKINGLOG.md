@@ -1,5 +1,14 @@
 # Working Log
 
+## 2026-05-24 13:19 CEST - Website Cinema Extraction Quality
+- [x] Inspect existing HTML source prep and Website Cinema rendering
+- [x] Add backend extraction quality metadata and fixtures
+- [x] Add Website Cinema quality summary/review UI
+- [x] Wire quality metadata into local review artifacts
+- [x] Run required local validation commands
+- [x] Regenerate latest local review bundle
+- [ ] Resolve upstream live-ingestion 429 from Hacker News target
+
 ## 2026-05-24 10:32 CEST - Canonical Source Lifecycle and Cross-surface Source Selector
 - [x] Inspect existing source state and selector surfaces
 - [x] Add canonical source lifecycle model and shared selectors

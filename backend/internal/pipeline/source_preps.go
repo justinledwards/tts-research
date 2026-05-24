@@ -22,6 +22,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/justinedwards/tts-research/backend/internal/sourceprep"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -166,6 +167,7 @@ func (service *Service) CreatePreparedSource(
 		contentType,
 		service.options.SourcePrepSentenceMaxRunes,
 		markdownParseMode,
+		request.HTMLContainerSelector,
 	)
 	prepared.PreprocessorID = preprocessed.PreprocessorID
 	prepared.PreprocessorVersion = preprocessed.PreprocessorVersion
@@ -896,7 +898,7 @@ func hackerNewsReadableText(input string) string {
 }
 
 func prepareNarrationBlocks(input string, maxSentenceRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
-	result := preprocessReadableSource(input, "book-scope.md", "text/markdown", maxSentenceRunes, "legacy")
+	result := preprocessReadableSource(input, "book-scope.md", "text/markdown", maxSentenceRunes, "legacy", "")
 	return result.Blocks, result.SkippedItems, result.Warnings
 }
 
@@ -906,22 +908,38 @@ func preprocessReadableSource(
 	contentType string,
 	maxSentenceRunes int,
 	markdownParseMode string,
+	htmlContainerSelector string,
 ) sourcePreprocessResult {
 	sourceFormat := detectPreparedSourceFormat(sourceName, contentType, input)
 	switch sourceFormat {
 	case "html":
-		readableHTML := readableHTMLFragment(input)
-		readableText := normalizeReadableSourceText(readableHTML)
+		analysis := sourceprep.AnalyzeHTMLQuality(input, sourceprep.HTMLQualityOptions{
+			PreferredContainer: strings.TrimSpace(htmlContainerSelector),
+		})
+		readableText := normalizeReadableSourceText(analysis.ReadableText)
 		blocks, skipped, warnings := preparePlainNarrationBlocks(readableText, maxSentenceRunes)
+		quality := analysis.Quality
+		quality.NarrationBlockCount = len(blocks)
+		chromeSkipped := skippedItemsFromHTMLChrome(quality.SkippedBlocks)
+		if len(chromeSkipped) > 0 {
+			skipped = append(chromeSkipped, skipped...)
+			quality.SkippedBlockCount = len(skipped)
+		}
+		if quality.ExtractionConfidence == "low" {
+			warnings = uniqueStrings(append(warnings, "website_extraction_low_confidence"))
+		}
 		return sourcePreprocessResult{
 			Blocks:              blocks,
 			SkippedItems:        skipped,
 			Warnings:            warnings,
 			PreprocessorID:      "html-readable",
-			PreprocessorVersion: "html-readable-v2",
+			PreprocessorVersion: "html-readable-v3",
 			SourceFormat:        sourceFormat,
 			RenderMode:          "blocks",
 			Title:               inferReadableHTMLTitle(input, readableText, sourceName),
+			Metadata: map[string]any{
+				"websiteExtractionQuality": quality,
+			},
 		}
 	case "structured":
 		blocks, skipped, warnings := preparePlainNarrationBlocks(input, maxSentenceRunes)
@@ -1008,6 +1026,22 @@ func preparePlainNarrationBlocks(input string, maxSentenceRunes int) ([]Narratio
 		offsetCursor = end
 	}
 	return blocks, skipped, uniqueStrings(warnings)
+}
+
+func skippedItemsFromHTMLChrome(blocks []sourceprep.HTMLSkippedBlock) []SkippedSourceItem {
+	if len(blocks) == 0 {
+		return nil
+	}
+	items := make([]SkippedSourceItem, 0, len(blocks))
+	for index, block := range blocks {
+		items = append(items, SkippedSourceItem{
+			ID:     fmt.Sprintf("html-chrome-%d", index),
+			Kind:   NarrationBlockKindEmbedded,
+			Text:   truncateString(block.Text, 240),
+			Reason: block.Reason,
+		})
+	}
+	return items
 }
 
 type markdownAdapterResponse struct {

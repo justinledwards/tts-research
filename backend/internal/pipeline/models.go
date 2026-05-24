@@ -253,13 +253,14 @@ type PreparedSource struct {
 }
 
 type CreatePreparedSourceRequest struct {
-	Kind              PreparedSourceKind `json:"kind"`
-	Text              string             `json:"text,omitempty"`
-	URL               string             `json:"url,omitempty"`
-	SourceName        string             `json:"sourceName,omitempty"`
-	SourceContentType string             `json:"sourceContentType,omitempty"`
-	SourceBytes       int64              `json:"sourceBytes,omitempty"`
-	MarkdownParseMode string             `json:"markdownParseMode,omitempty"`
+	Kind                  PreparedSourceKind `json:"kind"`
+	Text                  string             `json:"text,omitempty"`
+	URL                   string             `json:"url,omitempty"`
+	SourceName            string             `json:"sourceName,omitempty"`
+	SourceContentType     string             `json:"sourceContentType,omitempty"`
+	SourceBytes           int64              `json:"sourceBytes,omitempty"`
+	MarkdownParseMode     string             `json:"markdownParseMode,omitempty"`
+	HTMLContainerSelector string             `json:"htmlContainerSelector,omitempty"`
 }
 
 type SpeechPolicyPreviewRequest struct {

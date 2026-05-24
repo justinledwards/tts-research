@@ -545,6 +545,41 @@ export interface PreparedSource {
   updatedAt: string;
 }
 
+export interface WebsiteExtractionContainerCandidate {
+  selector: string;
+  label: string;
+  reason: string;
+  wordCount: number;
+  linkDensity: number;
+  score: number;
+}
+
+export interface WebsiteExtractionSkippedBlock {
+  kind: string;
+  selector: string;
+  reason: string;
+  text: string;
+  wordCount: number;
+}
+
+export type WebsiteExtractionConfidence = "high" | "medium" | "low";
+
+export interface WebsiteExtractionQuality {
+  articleCandidateCount: number;
+  chosenContainer: string;
+  readableTextRatio: number;
+  chromeTextRatio: number;
+  linkDensity: number;
+  headingDepth: number;
+  skippedBlockCount: number;
+  narrationBlockCount: number;
+  extractionConfidence: WebsiteExtractionConfidence;
+  extractionConfidenceScore?: number;
+  articleUncertain?: boolean;
+  alternateContainers?: WebsiteExtractionContainerCandidate[];
+  skippedBlocks?: WebsiteExtractionSkippedBlock[];
+}
+
 export interface CreatePreparedSourceRequest {
   kind: PreparedSourceKind;
   text?: string;
@@ -553,6 +588,7 @@ export interface CreatePreparedSourceRequest {
   sourceContentType?: string;
   sourceBytes?: number;
   markdownParseMode?: MarkdownParseMode;
+  htmlContainerSelector?: string;
 }
 
 export interface ProgressBookmark {

@@ -4,6 +4,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/justinedwards/tts-research/backend/internal/sourceprep"
 )
 
 func TestHackerNewsItemID(t *testing.T) {
@@ -86,10 +88,11 @@ func TestReadableHTMLPreprocessorFocusesArticleContent(t *testing.T) {
 		"text/html",
 		240,
 		"legacy",
+		"",
 	)
 
-	if result.PreprocessorVersion != "html-readable-v2" {
-		t.Fatalf("preprocessor version = %q, want html-readable-v2", result.PreprocessorVersion)
+	if result.PreprocessorVersion != "html-readable-v3" {
+		t.Fatalf("preprocessor version = %q, want html-readable-v3", result.PreprocessorVersion)
 	}
 	if result.Title != title {
 		t.Fatalf("title = %q, want article h1", result.Title)
@@ -102,6 +105,13 @@ func TestReadableHTMLPreprocessorFocusesArticleContent(t *testing.T) {
 		if strings.Contains(spoken, chrome) {
 			t.Fatalf("spoken text contains page chrome %q: %q", chrome, spoken)
 		}
+	}
+	quality, ok := result.Metadata["websiteExtractionQuality"].(sourceprep.HTMLExtractionQuality)
+	if !ok {
+		t.Fatalf("website extraction quality metadata missing: %#v", result.Metadata)
+	}
+	if quality.ArticleCandidateCount == 0 || quality.ExtractionConfidence == "" {
+		t.Fatalf("quality metadata incomplete: %#v", quality)
 	}
 }
 

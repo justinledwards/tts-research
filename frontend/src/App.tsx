@@ -4779,6 +4779,7 @@ export function App() {
       url: string,
       markdownParseMode: MarkdownParseMode = "strict",
       preparationTarget: IntakePreparationTarget = "auto",
+      htmlContainerSelector?: string,
     ) => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
@@ -4800,6 +4801,7 @@ export function App() {
           return;
         }
         const source = await createPreparedSource(activeProjectId, {
+          htmlContainerSelector,
           kind: "url",
           markdownParseMode,
           url,
@@ -4831,6 +4833,21 @@ export function App() {
       }
     },
     [activeProjectId, refreshProjects, setContentMode],
+  );
+
+  const handleRerunWebsiteExtraction = useCallback(
+    (source: PreparedSource, containerSelector: string) => {
+      if (!source.sourceUrl) {
+        return;
+      }
+      void handlePrepareSourceUrl(
+        source.sourceUrl,
+        source.markdownParseMode ?? "strict",
+        "prepared",
+        containerSelector,
+      );
+    },
+    [handlePrepareSourceUrl],
   );
 
   const handleUsePreparedSource = useCallback(
@@ -7054,6 +7071,7 @@ export function App() {
             }}
             onPrepareFile={handlePrepareCinemaSourceFile}
             onPlayPause={handleBookCinemaPlayPause}
+            onRerunWebsiteExtraction={handleRerunWebsiteExtraction}
             onRestart={handleBookCinemaRestart}
             onResumeProgress={(progress) => {
               void handleResumeProgress(progress);

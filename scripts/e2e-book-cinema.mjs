@@ -131,6 +131,8 @@ async function main() {
     summary.markdownJobId = markdownPrep.job.id;
     const websitePrep = await runWebsiteSourcePrepE2E(project.id);
     summary.websiteJobId = websitePrep.job.id;
+    summary.websiteExtractionQuality =
+      websitePrep.source.metadata?.websiteExtractionQuality ?? null;
 
     if (responsiveCinemaOnly) {
       const book = await uploadBook(project.id, fixtures.epub);
@@ -293,6 +295,7 @@ async function runWebsiteSourcePrepE2E(projectId) {
     });
     assert(source.status === "ready", `Website source prep is not ready: ${source.status}`);
     assert((source.blocks?.length ?? 0) > 0, "Website source prep has no blocks.");
+    assertWebsiteExtractionQuality(source);
     const selectedBlockIds = (source.blocks ?? [])
       .filter((block) => block.speakMode !== "skip")
       .slice(0, 3)
@@ -1982,13 +1985,18 @@ async function startWebsiteFixtureServer() {
 <html lang="en">
   <head><title>Website Cinema Focus Fixture</title></head>
   <body>
+    <header><nav>Home Features Search Instagram Subscribe</nav></header>
     <main>
-      <h1>Website Cinema Focus Fixture</h1>
-      <p>This local website article gives the cinema focus-mode smoke test a stable source.</p>
-      <h2>Readable Section</h2>
-      <p>Bookmarks, review panels, generated audio diagnostics, and source provenance should remain discoverable without competing with the reading canvas.</p>
-      <aside>Navigation, adverts, and boilerplate should be easy to inspect but quiet in read mode.</aside>
+      <article class="article-body">
+        <h1>Website Cinema Focus Fixture</h1>
+        <p>This local website article gives the cinema focus-mode smoke test a stable source.</p>
+        <h2>Readable Section</h2>
+        <p>Bookmarks, review panels, generated audio diagnostics, and source provenance should remain discoverable without competing with the reading canvas.</p>
+        <aside class="newsletter">Navigation, adverts, and boilerplate should be easy to inspect but quiet in read mode.</aside>
+        <p>The final article paragraph confirms Website Cinema starts with article body text.</p>
+      </article>
     </main>
+    <footer>Facebook Instagram Privacy Terms</footer>
   </body>
 </html>`;
   const server = createHttpServer((_request, response) => {
@@ -2008,6 +2016,24 @@ async function startWebsiteFixtureServer() {
         server.close(resolve);
       }),
   };
+}
+
+function assertWebsiteExtractionQuality(source) {
+  const quality = source.metadata?.websiteExtractionQuality;
+  assert(quality, "Website source prep did not include extraction quality metadata.");
+  assert(quality.skippedBlockCount > 0, "Website fixture did not report skipped chrome blocks.");
+  assert(
+    quality.extractionConfidence === "high" ||
+      quality.extractionConfidence === "medium" ||
+      quality.extractionConfidence === "low",
+    "Website extraction confidence is missing.",
+  );
+  const openingBlockText =
+    source.blocks?.find((block) => block.speakMode !== "skip")?.spokenText ?? "";
+  assert(
+    !/home features search|instagram subscribe/i.test(openingBlockText),
+    `Website Cinema opening block contains page chrome: ${openingBlockText}`,
+  );
 }
 
 async function uploadBook(projectId, filePath) {

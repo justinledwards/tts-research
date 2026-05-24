@@ -85,6 +85,7 @@ func (service *Service) markdownBookSourceIR(
 		"text/markdown",
 		service.options.SourcePrepSentenceMaxRunes,
 		"strict",
+		"",
 	)
 	blocks, sections := markdownBookSectionsFromBlocks(preprocessed.Blocks)
 	metadata := cloneAnyMap(preprocessed.Metadata)
