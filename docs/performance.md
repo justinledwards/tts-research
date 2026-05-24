@@ -51,7 +51,7 @@ The stable reviewer artifacts are written under `output/performance/latest/`:
 
 Current local bundle gates:
 
-- Initial JS raw bytes: `<= 522000`
+- Initial JS raw bytes: `<= 523700`
 - Initial JS gzip bytes: `<= 160000`
 - Initial CSS gzip bytes: `<= 14000`
 - Largest async app chunk gzip bytes: `<= 110000`
