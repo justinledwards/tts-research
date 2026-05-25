@@ -9,6 +9,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
+import { instrumentScreenshotState, writeScreenshotStateArtifacts } from "./screenshot-state.mjs";
 import {
   buildReaderResumeArtifact,
   evaluateReaderTimingSummary,
@@ -16,7 +17,6 @@ import {
   formatInteractionBudgetMarkdown,
   loadReaderTimingThresholds,
 } from "./validate-local/reader-timing.mjs";
-import { instrumentScreenshotState, writeScreenshotStateArtifacts } from "./screenshot-state.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = process.env.E2E_ARTIFACT_DIR ?? path.join(rootDir, "output", "e2e-book-cinema");
@@ -1124,6 +1124,15 @@ async function runPreparedCinemaFocusUX(
     kind: "document-cinema",
     metrics: documentResult.performance,
   });
+  screenshots.push(
+    ...(await capturePreparedCinemaLoadingScenario(browser, {
+      expectedLabel: "Document Cinema",
+      job: documentJob,
+      projectId,
+      screenshotPrefix: "document-cinema-focus",
+      source: documentSource,
+    })),
+  );
   const websiteResult = await runPreparedCinemaSurfaceFocusUX(browser, {
     expectedLabel: "Website Cinema",
     job: websiteJob,
@@ -1137,6 +1146,50 @@ async function runPreparedCinemaFocusUX(
     metrics: websiteResult.performance,
   });
   return { performance, screenshots };
+}
+
+async function capturePreparedCinemaLoadingScenario(
+  browser,
+  { expectedLabel, job, projectId, screenshotPrefix, source },
+) {
+  const context = await browser.newContext({
+    storageState: projectStorageState(projectId, {
+      jobId: job.id,
+      preparedSourceId: source.id,
+      sourceMode: "fileUrl",
+      sourceType: "prepared",
+      stage: "intake",
+      text: source.speechText ?? source.text ?? "",
+    }),
+    viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
+  });
+  await context.addInitScript(() => {
+    globalThis.__ttsCinemaRendererDelayMs = 5_000;
+  });
+  const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
+  page.setDefaultTimeout(60_000);
+  try {
+    await openPreparedCinemaOverlay(page, expectedLabel);
+    await page.waitForFunction(
+      (selector) => {
+        const overlay = document.querySelector(selector);
+        const lifecycle = overlay?.getAttribute("data-cinema-renderer-lifecycle");
+        const text = overlay?.textContent?.replace(/\s+/g, " ") ?? "";
+        return (
+          (lifecycle === "loading" || lifecycle === "degraded") &&
+          /Preparing this view locally|Taking longer than expected/i.test(text)
+        );
+      },
+      cinemaOverlaySelector,
+      { timeout: 5_000 },
+    );
+    const screenshot = path.join(screenshotsDir, `${screenshotPrefix}-loading.png`);
+    await page.screenshot({ fullPage: false, path: screenshot });
+    return [screenshot];
+  } finally {
+    await context.close();
+  }
 }
 
 async function runResponsiveCinemaUX(
@@ -1687,8 +1740,12 @@ async function assertCinemaReadyForScreenshot(page, label) {
           return false;
         }
         const text = overlay.innerText?.replace(/\s+/g, " ") ?? "";
-        return !/Loading source renderer|Loading selected chapter|Loading Book Cinema|Preparing this view locally|Taking longer than expected/i.test(
-          text,
+        const rendererLifecycle = overlay.getAttribute("data-cinema-renderer-lifecycle");
+        return (
+          rendererLifecycle === "ready" &&
+          !/Loading source renderer|Loading selected chapter|Loading Book Cinema|Preparing this view locally|Taking longer than expected|Renderer failed, retry/i.test(
+            text,
+          )
         );
       },
       cinemaOverlaySelector,

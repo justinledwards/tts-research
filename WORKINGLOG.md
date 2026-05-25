@@ -574,3 +574,9 @@
 - [x] Write timing summary metadata for e2e action audit phases.
 - [x] Add local regression guard script for UI action audit runtime.
 - [x] Evaluate quick workflow defaults and document assumptions in code.
+
+## 2026-05-25 20:13 CEST - Renderer Readiness and Loading Skeleton Validation
+- [x] Inspect Cinema renderer/header readiness and screenshot-state checks
+- [x] Add centralized renderer lifecycle and bounded loading states
+- [x] Wire screenshot validation for ready/loading renderer scenarios
+- [x] Run WP25 local validation commands

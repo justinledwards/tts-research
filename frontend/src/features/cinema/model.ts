@@ -1,8 +1,9 @@
 import {
-  contextPanelDefaultTabForFocusMode,
   type ContextPanelTabDefinition,
+  contextPanelDefaultTabForFocusMode,
 } from "../context-panel/contextPanelModel";
 import type { ContextPanelTabId } from "../context-panel/contextPanelTabs";
+
 export {
   NARROW_VIEWPORT_QUERY as CINEMA_NARROW_VIEWPORT_QUERY,
   RESPONSIVE_QA_VIEWPORTS as CINEMA_RESPONSIVE_QA_VIEWPORTS,
@@ -28,11 +29,28 @@ export const CINEMA_PLAYBACK_STATES = [
   "completed",
   "degraded",
 ] as const;
+export const CINEMA_RENDERER_LIFECYCLE_STATES = [
+  "notStarted",
+  "loading",
+  "ready",
+  "degraded",
+  "failed",
+] as const;
 
 export type CinemaFocusMode = (typeof CINEMA_FOCUS_MODES)[number];
 export type CinemaSurfaceKind = "book" | "document" | "website";
 export type CinemaInspectorPanelId = ContextPanelTabId;
 export type CinemaPlaybackState = (typeof CINEMA_PLAYBACK_STATES)[number];
+export type CinemaRendererLifecycleState = (typeof CINEMA_RENDERER_LIFECYCLE_STATES)[number];
+
+export interface CinemaReadinessDisplay {
+  audioLabel: string;
+  detail: string;
+  label: string;
+  readerLabel: string;
+  rendererLifecycle: CinemaRendererLifecycleState;
+  tone: "danger" | "info" | "neutral" | "success" | "warning";
+}
 
 export interface CinemaPlaybackStateInput {
   degraded?: boolean;
@@ -146,6 +164,123 @@ export function deriveCinemaPlaybackState(input: CinemaPlaybackStateInput): Cine
   return "playable";
 }
 
+export function normalizeCinemaRendererLifecycleState(
+  value: unknown,
+): CinemaRendererLifecycleState {
+  return CINEMA_RENDERER_LIFECYCLE_STATES.includes(value as CinemaRendererLifecycleState)
+    ? (value as CinemaRendererLifecycleState)
+    : "notStarted";
+}
+
+export function cinemaRendererLifecycleLabel(state: CinemaRendererLifecycleState): string {
+  switch (state) {
+    case "notStarted": {
+      return "Renderer pending";
+    }
+    case "loading": {
+      return "Preparing reader";
+    }
+    case "ready": {
+      return "Reader ready";
+    }
+    case "degraded": {
+      return "Reader delayed";
+    }
+    case "failed": {
+      return "Renderer failed";
+    }
+  }
+}
+
+export function cinemaRendererLifecycleDetail(state: CinemaRendererLifecycleState): string {
+  switch (state) {
+    case "notStarted": {
+      return "The reader canvas has not started rendering this source yet.";
+    }
+    case "loading": {
+      return "Preparing this view locally.";
+    }
+    case "ready": {
+      return "The reader canvas is ready for reading and read-along.";
+    }
+    case "degraded": {
+      return "Taking longer than expected. The reader remains in a bounded loading state.";
+    }
+    case "failed": {
+      return "Renderer failed. Retry the reader view before trusting playback or highlights.";
+    }
+  }
+}
+
+export function isCinemaRendererReady(state: CinemaRendererLifecycleState): boolean {
+  return state === "ready";
+}
+
+export function deriveCinemaReadinessDisplay({
+  isPlaybackActive,
+  playbackState,
+  rendererLifecycle,
+}: Readonly<{
+  isPlaybackActive?: boolean;
+  playbackState: CinemaPlaybackState;
+  rendererLifecycle: CinemaRendererLifecycleState;
+}>): CinemaReadinessDisplay {
+  if (rendererLifecycle !== "ready") {
+    const label = cinemaRendererLifecycleLabel(rendererLifecycle);
+    let tone: CinemaReadinessDisplay["tone"] = "info";
+    if (rendererLifecycle === "failed") {
+      tone = "danger";
+    } else if (rendererLifecycle === "degraded") {
+      tone = "warning";
+    }
+    return {
+      audioLabel: rendererLifecycle === "failed" ? "Audio held" : "Waiting for reader",
+      detail: cinemaRendererLifecycleDetail(rendererLifecycle),
+      label,
+      readerLabel: label,
+      rendererLifecycle,
+      tone,
+    };
+  }
+
+  if (isPlaybackActive || playbackState === "playing") {
+    return readinessDisplay(
+      "Playing",
+      "Audio is playing against the ready reader canvas.",
+      "Playing",
+    );
+  }
+  if (playbackState === "generating") {
+    return readinessDisplay(
+      "Generating",
+      "Generated audio is being created while the reader remains available.",
+      "Generating audio",
+    );
+  }
+  if (playbackState === "degraded") {
+    return {
+      audioLabel: "Degraded audio",
+      detail: "Generated audio needs attention, but the reader canvas is ready.",
+      label: "Degraded",
+      readerLabel: "Reader ready",
+      rendererLifecycle,
+      tone: "warning",
+    };
+  }
+  if (playbackState === "preAudio") {
+    return readinessDisplay(
+      "Source ready",
+      "The source is readable. Create audio when you want synchronized playback.",
+      "No generated audio",
+    );
+  }
+  return readinessDisplay(
+    "Audio ready",
+    "The reader canvas and generated audio are ready.",
+    "Audio ready",
+  );
+}
+
 export function buildCinemaLayoutState({
   activePanelId,
   mode,
@@ -247,4 +382,19 @@ function normalizePlaybackProgressRatio(value: number | null | undefined): numbe
     return 0;
   }
   return Math.min(1, Math.max(0, value));
+}
+
+function readinessDisplay(
+  label: string,
+  detail: string,
+  audioLabel: string,
+): CinemaReadinessDisplay {
+  return {
+    audioLabel,
+    detail,
+    label,
+    readerLabel: "Reader ready",
+    rendererLifecycle: "ready",
+    tone: "success",
+  };
 }

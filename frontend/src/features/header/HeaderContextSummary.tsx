@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import {
   generatedAudioStateLabel,
-  sourceLifecycleDescriptor,
-  sourcePolicyScopeLabel,
+  type SourceLifecycleDescriptor,
   type SourceLifecycleEnvelope,
   type SourceLifecycleTone,
+  sourceLifecycleDescriptor,
+  sourcePolicyScopeLabel,
 } from "../source-lifecycle/sourceLifecycle";
 
 export interface HeaderContextMetadataItem {
@@ -19,7 +20,9 @@ export interface HeaderContextSummaryProps {
   icon?: ReactNode;
   metadata?: HeaderContextMetadataItem[];
   scopeTitle?: string | null;
+  sourceLifecycleDescriptorOverride?: SourceLifecycleDescriptor | null;
   sourceLifecycle?: SourceLifecycleEnvelope | null;
+  sourceLifecycleGeneratedAudioLabel?: string | null;
   sourceTitle: string;
   stateLabel?: string | null;
   surfaceName: string;
@@ -33,7 +36,9 @@ export function HeaderContextSummary({
   icon,
   metadata = [],
   scopeTitle,
+  sourceLifecycleDescriptorOverride = null,
   sourceLifecycle = null,
+  sourceLifecycleGeneratedAudioLabel = null,
   sourceTitle,
   stateLabel,
   surfaceName,
@@ -47,13 +52,19 @@ export function HeaderContextSummary({
     cleanOptionalLabel(sourceLifecycle?.selectedScope ?? scopeTitle) ?? "Full source";
   const normalizedStateLabel = cleanOptionalLabel(stateLabel);
   const lifecycleDescriptor = sourceLifecycle
-    ? sourceLifecycleDescriptor(sourceLifecycle.canonicalState)
+    ? (sourceLifecycleDescriptorOverride ??
+      sourceLifecycleDescriptor(sourceLifecycle.canonicalState))
     : null;
   const effectiveMetadata = sourceLifecycle
     ? [
         ...metadata,
         { label: "Lifecycle", value: lifecycleDescriptor?.label ?? "Unknown" },
-        { label: "Audio", value: generatedAudioStateLabel(sourceLifecycle.generatedAudioState) },
+        {
+          label: "Audio",
+          value:
+            cleanOptionalLabel(sourceLifecycleGeneratedAudioLabel) ??
+            generatedAudioStateLabel(sourceLifecycle.generatedAudioState),
+        },
         { label: "Source policy", value: sourcePolicyScopeLabel(sourceLifecycle.policyScope) },
       ]
     : metadata;

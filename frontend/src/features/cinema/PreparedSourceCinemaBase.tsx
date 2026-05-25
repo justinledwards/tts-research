@@ -1,91 +1,20 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Component,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useAudioWaveformBars } from "../../audioWaveform";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
-import { Button, Toggle, fieldControlClassName } from "../../design";
-import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
-import { CinemaInspectorDock } from "./CinemaInspectorDock";
-import {
-  CinemaMobileSheet,
-  returnFocusToCinemaReaderCanvas,
-  type CinemaMobilePanelSpec,
-} from "./CinemaMobileSheet";
-import { CinemaShell } from "./CinemaShell";
-import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
-import { useCinemaFocusController } from "./CinemaFocusController";
-import {
-  buildCinemaCurrentReadingSection,
-  buildCinemaInspectorPanels,
-  buildCinemaInspectorSection,
-  buildCinemaWayfindingSection,
-  ReadAlongInvariantDebugPanel,
-} from "./CinemaInspectorPanels";
-import { deriveCinemaPlaybackState } from "./model";
-import {
-  READER_LINE_SPACING_CLASS,
-  READER_MEASURE_CLASS,
-  READER_SEEK_SECONDS,
-  READER_TEXT_SCALE_CLASS,
-  normalizeReaderAccessibilitySettings,
-  readerDataAttributes,
-  readerLiveAnnouncement,
-  readerScrollBehavior,
-  useReaderKeyboardControls,
-  useReaderModalLifecycle,
-  type ReaderAccessibilitySettings,
-} from "../reader-accessibility";
-import {
-  ReaderWayfindingPanel,
-  playbackProgressForBookmark,
-  readerBookmarksFromProgress,
-  readerRecentPositionsFromProgress,
-  type ReaderBookmarkItem,
-  type ReaderOutlineItem,
-  type ReaderRecentPositionItem,
-} from "../reader-navigation";
-import { HeaderContextSummary } from "../header";
-import { PolicyScopeSummary, SourcePolicyPinEditor, policyScopeSummary } from "../policy";
-import { LazyPanelFallback } from "../performance";
-import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
-import { ExitIcon, SettingsIcon } from "../navigation";
-import type { UiMemoryCinemaState } from "../preferences";
-import {
-  preparedSourceLifecycleEnvelope,
-  sourceSelectorOption,
-} from "../source-lifecycle/sourceSelectors";
-import { useAudioWaveformBars } from "../../audioWaveform";
-import { playbackActionLabel } from "../playback";
-import { WebsiteExtractionReview } from "../website-cinema/WebsiteExtractionReview";
-import {
-  WebsiteExtractionSummary,
-  websiteExtractionQuality,
-} from "../website-cinema/WebsiteExtractionSummary";
-import { looksLikeMermaidDiagram } from "../../markdownModel";
+import { Button, fieldControlClassName, Toggle } from "../../design";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdownCinema";
-import {
-  preparedSourceCinemaActiveBlock,
-  preparedSourceCinemaKind,
-  preparedSourceCinemaJobMatchesSource,
-  preparedSourceCinemaLabel,
-  preparedSourceCinemaMetrics,
-  preparedSourceCinemaOutline,
-  preparedSourceCinemaPlaybackStatusLabel,
-  preparedSourceCinemaPrimaryBlocks,
-  preparedSourceCinemaSkippedGroups,
-  preparedSourceCinemaSourceHref,
-  preparedSourceCinemaTitle,
-  isPreparedSourceMarkdownDocument,
-  type PreparedSourceCinemaOutlineItem,
-  type PreparedSourceCinemaKind,
-  type PreparedSourceCinemaTextSize,
-} from "./preparedSourceModel";
-import { preparedSourceCinemaPolicyNotes } from "./preparedSourcePolicyNotes";
-import { PreparedSourcePolicyNotes } from "./policy-notes/PreparedSourcePolicyNotes";
-import { generatedAudioLifecycleFromJob } from "../playback";
-import {
-  evaluatePreparedSourceReadAlongInvariant,
-  readAlongInvariantStatusLabel,
-  resolveReadAlongRuntimeSnapshot,
-} from "../readalong";
+import { looksLikeMermaidDiagram } from "../../markdownModel";
 import type {
   CustomSpeechPolicyProfile,
   NarrationBlock,
@@ -98,6 +27,92 @@ import type {
   ThemeName,
   VoiceJob,
 } from "../../types";
+import { HeaderContextSummary } from "../header";
+import { ExitIcon, SettingsIcon } from "../navigation";
+import { LazyPanelFallback } from "../performance";
+import { generatedAudioLifecycleFromJob, playbackActionLabel } from "../playback";
+import { PolicyScopeSummary, policyScopeSummary, SourcePolicyPinEditor } from "../policy";
+import type { UiMemoryCinemaState } from "../preferences";
+import {
+  evaluatePreparedSourceReadAlongInvariant,
+  readAlongInvariantStatusLabel,
+  resolveReadAlongRuntimeSnapshot,
+} from "../readalong";
+import {
+  normalizeReaderAccessibilitySettings,
+  READER_LINE_SPACING_CLASS,
+  READER_MEASURE_CLASS,
+  READER_SEEK_SECONDS,
+  READER_TEXT_SCALE_CLASS,
+  type ReaderAccessibilitySettings,
+  readerDataAttributes,
+  readerLiveAnnouncement,
+  readerScrollBehavior,
+  useReaderKeyboardControls,
+  useReaderModalLifecycle,
+} from "../reader-accessibility";
+import {
+  playbackProgressForBookmark,
+  type ReaderBookmarkItem,
+  type ReaderOutlineItem,
+  type ReaderRecentPositionItem,
+  ReaderWayfindingPanel,
+  readerBookmarksFromProgress,
+  readerRecentPositionsFromProgress,
+} from "../reader-navigation";
+import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
+import {
+  preparedSourceLifecycleEnvelope,
+  sourceSelectorOption,
+} from "../source-lifecycle/sourceSelectors";
+import { WebsiteExtractionReview } from "../website-cinema/WebsiteExtractionReview";
+import {
+  WebsiteExtractionSummary,
+  websiteExtractionQuality,
+} from "../website-cinema/WebsiteExtractionSummary";
+import { useCinemaFocusController } from "./CinemaFocusController";
+import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
+import { CinemaInspectorDock } from "./CinemaInspectorDock";
+import {
+  buildCinemaCurrentReadingSection,
+  buildCinemaInspectorPanels,
+  buildCinemaInspectorSection,
+  buildCinemaWayfindingSection,
+  ReadAlongInvariantDebugPanel,
+} from "./CinemaInspectorPanels";
+import {
+  type CinemaMobilePanelSpec,
+  CinemaMobileSheet,
+  returnFocusToCinemaReaderCanvas,
+} from "./CinemaMobileSheet";
+import { CinemaShell } from "./CinemaShell";
+import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
+import {
+  type CinemaRendererLifecycleState,
+  cinemaRendererLifecycleDetail,
+  cinemaRendererLifecycleLabel,
+  deriveCinemaPlaybackState,
+  deriveCinemaReadinessDisplay,
+  isCinemaRendererReady,
+} from "./model";
+import { PreparedSourcePolicyNotes } from "./policy-notes/PreparedSourcePolicyNotes";
+import {
+  isPreparedSourceMarkdownDocument,
+  type PreparedSourceCinemaKind,
+  type PreparedSourceCinemaOutlineItem,
+  type PreparedSourceCinemaTextSize,
+  preparedSourceCinemaActiveBlock,
+  preparedSourceCinemaJobMatchesSource,
+  preparedSourceCinemaKind,
+  preparedSourceCinemaLabel,
+  preparedSourceCinemaMetrics,
+  preparedSourceCinemaOutline,
+  preparedSourceCinemaPrimaryBlocks,
+  preparedSourceCinemaSkippedGroups,
+  preparedSourceCinemaSourceHref,
+  preparedSourceCinemaTitle,
+} from "./preparedSourceModel";
+import { preparedSourceCinemaPolicyNotes } from "./preparedSourcePolicyNotes";
 
 const PREPARED_SOURCE_CINEMA_ACCEPT =
   ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/html,text/csv,application/json";
@@ -108,6 +123,7 @@ const PreparedMarkdownRenderer = lazy(() =>
 const PreparedMermaidDiagram = lazy(() =>
   import("../../MarkdownRenderer").then((module) => ({ default: module.MermaidDiagram })),
 );
+const PREPARED_SOURCE_RENDERER_DEGRADED_AFTER_MS = 2500;
 
 export interface PreparedSourceCinemaPlaybackControls {
   isAvailable: boolean;
@@ -247,11 +263,15 @@ export function PreparedSourceCinemaOverlay({
   onUiMemoryFocusStateChange: (state: UiMemoryCinemaState) => void;
 }>) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const previousSourceIdRef = useRef(source.id);
   const normalizedAccessibility = normalizeReaderAccessibilitySettings(accessibilitySettings);
   const [autoFollow, setAutoFollow] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<PreparedSourceCinemaMobilePanel | null>(null);
   const [pointedBlockId, setPointedBlockId] = useState<string | null>(null);
+  const [rendererLifecycle, setRendererLifecycle] =
+    useState<CinemaRendererLifecycleState>("notStarted");
+  const [rendererRetryKey, setRendererRetryKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const title = preparedSourceCinemaTitle(source);
   const cinemaLabel = preparedSourceCinemaLabelForKind(source, surfaceKind);
@@ -261,6 +281,18 @@ export function PreparedSourceCinemaOverlay({
     playbackCursorSec > 0 ? playbackCursorSec : (progress?.currentTimeSec ?? playbackCursorSec);
   const effectiveActiveWordIndex =
     activeWordIndex > 0 ? activeWordIndex : (progress?.activeWordIndex ?? activeWordIndex);
+  const handleRendererLifecycleChange = useCallback((next: CinemaRendererLifecycleState) => {
+    setRendererLifecycle((current) => {
+      if (current === "ready" && next === "loading") {
+        return current;
+      }
+      return next;
+    });
+  }, []);
+  const handleRendererRetry = useCallback(() => {
+    setRendererLifecycle("loading");
+    setRendererRetryKey((current) => current + 1);
+  }, []);
   const activeBlock = preparedSourceCinemaActiveBlock(source, effectiveActiveWordIndex);
   const pointedBlock = useMemo(
     () => source.blocks?.find((block) => block.id === pointedBlockId) ?? null,
@@ -327,6 +359,11 @@ export function PreparedSourceCinemaOverlay({
     isPlaying: playbackControls.isPlaying,
     progressRatio: progress?.progress,
     status: job?.status,
+  });
+  const headerReadiness = deriveCinemaReadinessDisplay({
+    isPlaybackActive,
+    playbackState,
+    rendererLifecycle,
   });
   const metrics = preparedSourceCinemaMetrics(source);
   const href = preparedSourceCinemaSourceHref(source);
@@ -672,8 +709,11 @@ export function PreparedSourceCinemaOverlay({
   }, []);
 
   useEffect(() => {
-    if (source.id) {
+    if (source.id && previousSourceIdRef.current !== source.id) {
+      previousSourceIdRef.current = source.id;
       setPointedBlockId(null);
+      setRendererLifecycle("notStarted");
+      setRendererRetryKey(0);
     }
   }, [source.id]);
 
@@ -698,11 +738,15 @@ export function PreparedSourceCinemaOverlay({
           accessibilitySettings={normalizedAccessibility}
           canvasFirst={cinemaFocus.layoutState.canvasFirst}
           isFullscreen={isFullscreen}
+          rendererLifecycle={rendererLifecycle}
+          rendererRetryKey={rendererRetryKey}
           source={source}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           onAutoFollowChange={setAutoFollow}
           onFullscreenToggle={handleFullscreenToggle}
           onInspectStructure={onInspectStructure}
+          onRendererLifecycleChange={handleRendererLifecycleChange}
+          onRendererRetry={handleRendererRetry}
         />
       }
       canvasFirst={cinemaFocus.layoutState.canvasFirst}
@@ -718,6 +762,7 @@ export function PreparedSourceCinemaOverlay({
           playbackControls={playbackControls}
           playbackCursorSec={effectivePlaybackCursorSec}
           progress={progress}
+          rendererLifecycle={rendererLifecycle}
           source={source}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           onBookmark={onBookmark}
@@ -743,17 +788,25 @@ export function PreparedSourceCinemaOverlay({
             }
             id="prepared-source-cinema-title"
             metadata={[
+              { label: "Reader", value: headerReadiness.readerLabel },
               { label: "Policy", value: sourcePolicySummary.compactLabel },
               { label: "Voice", value: job?.voice ?? "Default narrative" },
             ]}
             scopeTitle="Full source"
             sourceLifecycle={sourceLifecycle}
+            sourceLifecycleDescriptorOverride={{
+              detail: headerReadiness.detail,
+              label: headerReadiness.label,
+              state: sourceLifecycle.canonicalState,
+              tone: headerReadiness.tone,
+            }}
+            sourceLifecycleGeneratedAudioLabel={headerReadiness.audioLabel}
             sourceTitle={title}
-            stateLabel={preparedSourceCinemaPlaybackStatusLabel(isPlaybackActive, job)}
+            stateLabel={headerReadiness.label}
             surfaceName={cinemaLabel}
             variant="bar"
           />
-          <PlaybackStatusChip isPlaybackActive={isPlaybackActive} job={job} />
+          <PlaybackStatusChip label={headerReadiness.label} rendererLifecycle={rendererLifecycle} />
           {isWebsiteCinema ? <WebsiteExtractionSummary source={source} /> : null}
           <div className="order-last flex min-w-0 flex-1 basis-full flex-wrap items-center gap-3 lg:flex xl:order-none xl:basis-auto xl:flex-nowrap">
             <PreparedSourceCinemaHeaderSourceSelect
@@ -865,6 +918,7 @@ export function PreparedSourceCinemaOverlay({
       }
       readerAttributes={readerDataAttributes(normalizedAccessibility)}
       rootRef={dialogRef}
+      rendererLifecycle={rendererLifecycle}
       surfaceKind={isWebsiteCinema ? "website" : "document"}
       themeName={themeName}
     />
@@ -978,6 +1032,139 @@ function preparedSourceCinemaOptionLabel(source: PreparedSource): string {
   return sourceSelectorOption(envelope, "prepared").optionLabel;
 }
 
+class PreparedSourceRendererErrorBoundary extends Component<
+  Readonly<{
+    children: ReactNode;
+    onLifecycleChange: (state: CinemaRendererLifecycleState) => void;
+    onRetry: () => void;
+    resetKey: string;
+  }>,
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(): void {
+    this.props.onLifecycleChange("failed");
+  }
+
+  componentDidUpdate(previousProps: Readonly<{ resetKey: string }>): void {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  render(): ReactNode {
+    if (this.state.hasError) {
+      return (
+        <PreparedSourceRendererFailedFallback
+          detail={cinemaRendererLifecycleDetail("failed")}
+          onRetry={this.props.onRetry}
+        />
+      );
+    }
+    return <>{this.props.children}</>;
+  }
+}
+
+function PreparedSourceRendererLoadingFallback({
+  onLifecycleChange,
+}: Readonly<{
+  onLifecycleChange: (state: CinemaRendererLifecycleState) => void;
+}>) {
+  const [isSlow, setIsSlow] = useState(false);
+
+  useEffect(() => {
+    onLifecycleChange("loading");
+    const timer = globalThis.setTimeout(() => {
+      setIsSlow(true);
+      onLifecycleChange("degraded");
+    }, PREPARED_SOURCE_RENDERER_DEGRADED_AFTER_MS);
+    return () => {
+      globalThis.clearTimeout(timer);
+    };
+  }, [onLifecycleChange]);
+
+  return (
+    <LazyPanelFallback
+      detail={
+        isSlow
+          ? "Taking longer than expected. The reader will recover automatically or show a retry action if rendering fails."
+          : "Preparing this view locally."
+      }
+      label={isSlow ? "Taking longer than expected" : "Preparing this view locally"}
+      minHeightClassName="min-h-64"
+      surface="prepared-source-markdown-renderer"
+    />
+  );
+}
+
+function PreparedSourceRendererReady({
+  children,
+  fallback,
+  onLifecycleChange,
+}: Readonly<{
+  children: ReactNode;
+  fallback: ReactNode;
+  onLifecycleChange: (state: CinemaRendererLifecycleState) => void;
+}>) {
+  const delayMs = useMemo(() => rendererDelayMsForLocalQa(), []);
+  const [isDelayed, setIsDelayed] = useState(delayMs > 0);
+
+  useEffect(() => {
+    setIsDelayed(delayMs > 0);
+    if (delayMs <= 0) {
+      onLifecycleChange("ready");
+      return;
+    }
+    onLifecycleChange("loading");
+    const timer = globalThis.setTimeout(() => {
+      setIsDelayed(false);
+      onLifecycleChange("ready");
+    }, delayMs);
+    return () => {
+      globalThis.clearTimeout(timer);
+    };
+  }, [delayMs, onLifecycleChange]);
+
+  return isDelayed ? fallback : children;
+}
+
+function PreparedSourceRendererFailedFallback({
+  detail,
+  onRetry,
+}: Readonly<{ detail: string; onRetry: () => void }>) {
+  return (
+    <div
+      aria-busy="false"
+      className="grid min-h-64 content-start gap-3 rounded-md border border-[var(--vs-danger-border)] bg-[var(--vs-danger-soft)] p-4 text-sm"
+      data-cinema-renderer-error="true"
+      role="alert"
+    >
+      <div className="min-w-0">
+        <p className="font-semibold text-[var(--vs-danger)]">Renderer failed, retry</p>
+        <p className="mt-1 text-xs leading-5 text-[var(--vs-danger)]">{detail}</p>
+      </div>
+      <Button onClick={onRetry} size="sm" variant="secondary">
+        Retry renderer
+      </Button>
+    </div>
+  );
+}
+
+function rendererDelayMsForLocalQa(): number {
+  if (!import.meta.env.DEV) {
+    return 0;
+  }
+  const raw = (globalThis as { __ttsCinemaRendererDelayMs?: number | string })
+    .__ttsCinemaRendererDelayMs;
+  const value = typeof raw === "string" ? Number.parseInt(raw, 10) : raw;
+  return Number.isFinite(value) && value && value > 0 ? Math.min(value, 15_000) : 0;
+}
+
 function PreparedSourceCinemaReader({
   activeBlockId,
   activeWordIndex,
@@ -985,11 +1172,15 @@ function PreparedSourceCinemaReader({
   autoFollow,
   canvasFirst,
   isFullscreen,
+  rendererLifecycle,
+  rendererRetryKey,
   source,
   onAccessibilitySettingsChange,
   onAutoFollowChange,
   onFullscreenToggle,
   onInspectStructure,
+  onRendererLifecycleChange,
+  onRendererRetry,
 }: Readonly<{
   activeBlockId: string | null;
   activeWordIndex: number;
@@ -997,11 +1188,15 @@ function PreparedSourceCinemaReader({
   autoFollow: boolean;
   canvasFirst: boolean;
   isFullscreen: boolean;
+  rendererLifecycle: CinemaRendererLifecycleState;
+  rendererRetryKey: number;
   source: PreparedSource;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onAutoFollowChange: (enabled: boolean) => void;
   onFullscreenToggle: () => void;
   onInspectStructure: (source: PreparedSource) => void;
+  onRendererLifecycleChange: (state: CinemaRendererLifecycleState) => void;
+  onRendererRetry: () => void;
 }>) {
   const activeWord = useMemo(
     () => resolvePreparedSourceActiveWord(source, activeWordIndex),
@@ -1035,63 +1230,91 @@ function PreparedSourceCinemaReader({
         }
       : undefined;
   let readerContent: ReactNode;
+  const rendererFallback = (
+    <PreparedSourceRendererLoadingFallback onLifecycleChange={onRendererLifecycleChange} />
+  );
 
   if (isMarkdownDocument && source.text) {
     readerContent = (
-      <Suspense
-        fallback={
-          <LazyPanelFallback
-            label="Loading source renderer..."
-            minHeightClassName="min-h-64"
-            surface="prepared-source-markdown-renderer"
-          />
-        }
+      <PreparedSourceRendererErrorBoundary
+        onLifecycleChange={onRendererLifecycleChange}
+        onRetry={onRendererRetry}
+        resetKey={`${source.id}:${String(rendererRetryKey)}:document`}
       >
-        <PreparedMarkdownRenderer
-          artifactRendering="document-cinema"
-          blockHighlight={blockHighlight}
-          className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
-          wordHighlight={wordHighlight}
-        >
-          {source.text}
-        </PreparedMarkdownRenderer>
-      </Suspense>
+        <Suspense fallback={rendererFallback}>
+          <PreparedSourceRendererReady
+            fallback={rendererFallback}
+            key={`${source.id}:${String(rendererRetryKey)}:document`}
+            onLifecycleChange={onRendererLifecycleChange}
+          >
+            <PreparedMarkdownRenderer
+              artifactRendering="document-cinema"
+              blockHighlight={blockHighlight}
+              className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
+              wordHighlight={wordHighlight}
+            >
+              {source.text}
+            </PreparedMarkdownRenderer>
+          </PreparedSourceRendererReady>
+        </Suspense>
+      </PreparedSourceRendererErrorBoundary>
     );
   } else if (blocks.length > 0) {
     readerContent = (
-      <div className={`website-cinema-article ${textClass} text-[var(--vs-text)]`}>
-        {blocks.map((block) => (
-          <PreparedSourceCinemaBlock
-            activeWordOffset={
-              activeWord?.blockId === block.id && shouldHighlightWord ? activeWord.wordOffset : null
-            }
-            block={block}
-            isActive={block.id === activeBlockId}
-            key={block.id}
-          />
-        ))}
-      </div>
+      <PreparedSourceRendererReady
+        fallback={rendererFallback}
+        key={`${source.id}:${String(rendererRetryKey)}:blocks`}
+        onLifecycleChange={onRendererLifecycleChange}
+      >
+        <div className={`website-cinema-article ${textClass} text-[var(--vs-text)]`}>
+          {blocks.map((block) => (
+            <PreparedSourceCinemaBlock
+              activeWordOffset={
+                activeWord?.blockId === block.id && shouldHighlightWord
+                  ? activeWord.wordOffset
+                  : null
+              }
+              block={block}
+              isActive={block.id === activeBlockId}
+              key={block.id}
+            />
+          ))}
+        </div>
+      </PreparedSourceRendererReady>
     );
   } else {
     readerContent = (
-      <Suspense
-        fallback={
-          <LazyPanelFallback
-            label="Loading source renderer..."
-            minHeightClassName="min-h-64"
-            surface="prepared-source-markdown-renderer"
-          />
-        }
+      <PreparedSourceRendererErrorBoundary
+        onLifecycleChange={onRendererLifecycleChange}
+        onRetry={onRendererRetry}
+        resetKey={`${source.id}:${String(rendererRetryKey)}:fallback`}
       >
-        <PreparedMarkdownRenderer
-          artifactRendering="document-cinema"
-          blockHighlight={blockHighlight}
-          className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
-          wordHighlight={wordHighlight}
-        >
-          {source.text ?? source.speechText ?? ""}
-        </PreparedMarkdownRenderer>
-      </Suspense>
+        <Suspense fallback={rendererFallback}>
+          <PreparedSourceRendererReady
+            fallback={rendererFallback}
+            key={`${source.id}:${String(rendererRetryKey)}:fallback`}
+            onLifecycleChange={onRendererLifecycleChange}
+          >
+            <PreparedMarkdownRenderer
+              artifactRendering="document-cinema"
+              blockHighlight={blockHighlight}
+              className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
+              wordHighlight={wordHighlight}
+            >
+              {source.text ?? source.speechText ?? ""}
+            </PreparedMarkdownRenderer>
+          </PreparedSourceRendererReady>
+        </Suspense>
+      </PreparedSourceRendererErrorBoundary>
+    );
+  }
+
+  if (rendererLifecycle === "failed") {
+    readerContent = (
+      <PreparedSourceRendererFailedFallback
+        detail={cinemaRendererLifecycleDetail(rendererLifecycle)}
+        onRetry={onRendererRetry}
+      />
     );
   }
 
@@ -1408,6 +1631,7 @@ function PreparedSourceCinemaTransport({
   playbackControls,
   playbackCursorSec,
   progress,
+  rendererLifecycle,
   source,
   onAccessibilitySettingsChange,
   onBookmark,
@@ -1427,6 +1651,7 @@ function PreparedSourceCinemaTransport({
   playbackControls: PreparedSourceCinemaPlaybackControls;
   playbackCursorSec: number;
   progress: PlaybackProgress | null;
+  rendererLifecycle: CinemaRendererLifecycleState;
   source: PreparedSource;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onBookmark: () => void;
@@ -1450,10 +1675,11 @@ function PreparedSourceCinemaTransport({
     playbackState === "playing" ||
     playbackState === "paused" ||
     playbackState === "completed";
+  const rendererReady = isCinemaRendererReady(rendererLifecycle);
   const primaryLabel = playbackPrimaryLabel(playbackState, playbackControls.isPlaying);
   let primaryDisabled = !canStart;
   if (isPlaybackTransport) {
-    primaryDisabled = !playbackControls.isAvailable;
+    primaryDisabled = !playbackControls.isAvailable || !rendererReady;
   } else if (playbackState === "generating") {
     primaryDisabled = true;
   }
@@ -1520,27 +1746,27 @@ function PreparedSourceCinemaTransport({
       ),
     },
     restart: {
-      disabled: !playbackControls.isAvailable,
+      disabled: !playbackControls.isAvailable || !rendererReady,
       icon: <RestartIcon />,
       onClick: onRestart,
     },
     skipBackward: {
-      disabled: !playbackControls.skipBy,
+      disabled: !playbackControls.skipBy || !rendererReady,
       icon: <SkipBackIcon />,
       onClick: () => {
         onSkip(-READER_SEEK_SECONDS);
       },
     },
     skipForward: {
-      disabled: !playbackControls.skipBy,
+      disabled: !playbackControls.skipBy || !rendererReady,
       icon: <SkipForwardIcon />,
       onClick: () => {
         onSkip(READER_SEEK_SECONDS);
       },
     },
     stateSummary: {
-      detail: preparedSourceTransportDetail(source, job, playbackState),
-      title: preparedSourceTransportTitle(playbackState),
+      detail: preparedSourceTransportDetail(source, job, playbackState, rendererLifecycle),
+      title: preparedSourceTransportTitle(playbackState, rendererLifecycle),
     },
   };
 
@@ -1565,7 +1791,11 @@ function playbackPrimaryLabel(
 
 function preparedSourceTransportTitle(
   playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
+  rendererLifecycle: CinemaRendererLifecycleState,
 ): string {
+  if (!isCinemaRendererReady(rendererLifecycle)) {
+    return cinemaRendererLifecycleLabel(rendererLifecycle);
+  }
   if (playbackState === "generating") {
     return "Creating audio";
   }
@@ -1582,8 +1812,12 @@ function preparedSourceTransportDetail(
   source: PreparedSource,
   job: VoiceJob | null,
   playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
+  rendererLifecycle: CinemaRendererLifecycleState,
 ): string {
   const title = preparedSourceCinemaTitle(source);
+  if (!isCinemaRendererReady(rendererLifecycle)) {
+    return cinemaRendererLifecycleDetail(rendererLifecycle);
+  }
   if (playbackState === "generating") {
     return `${title} is being narrated. You can keep reading while audio is prepared.`;
   }
@@ -1779,21 +2013,25 @@ function TransportWaveformPlaceholder({
 }
 
 function PlaybackStatusChip({
-  isPlaybackActive,
-  job,
-}: Readonly<{ isPlaybackActive: boolean; job: VoiceJob | null }>) {
+  label,
+  rendererLifecycle,
+}: Readonly<{ label: string; rendererLifecycle: CinemaRendererLifecycleState }>) {
+  const isReady = isCinemaRendererReady(rendererLifecycle);
+  let className = "border-orange-200 bg-orange-50 text-orange-700";
+  if (isReady) {
+    className = "border-emerald-200 bg-emerald-50 text-emerald-700";
+  } else if (rendererLifecycle === "failed") {
+    className =
+      "border-[var(--vs-danger-border)] bg-[var(--vs-danger-soft)] text-[var(--vs-danger)]";
+  }
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium sm:gap-2 sm:px-3 sm:py-1.5 sm:text-sm ${
-        isPlaybackActive
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-          : "border-orange-200 bg-orange-50 text-orange-700"
-      }`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium sm:gap-2 sm:px-3 sm:py-1.5 sm:text-sm ${className}`}
     >
       <span className="hidden sm:inline-flex">
         <AudioBarsIcon />
       </span>
-      {preparedSourceCinemaPlaybackStatusLabel(isPlaybackActive, job)}
+      {label}
     </span>
   );
 }

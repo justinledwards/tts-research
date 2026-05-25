@@ -12,6 +12,7 @@ export function CinemaShell({
   mobileSheet,
   readerAttributes,
   rootRef,
+  rendererLifecycle,
   surfaceKind,
   themeName,
 }: Readonly<{
@@ -26,6 +27,7 @@ export function CinemaShell({
   mobileSheet?: ReactNode;
   readerAttributes: Record<string, string>;
   rootRef: Ref<HTMLDivElement>;
+  rendererLifecycle?: string;
   surfaceKind: string;
   themeName: string;
 }>) {
@@ -39,6 +41,7 @@ export function CinemaShell({
       {...readerAttributes}
       data-cinema-canvas-first={canvasFirst ? "true" : "false"}
       data-cinema-focus-mode={focusMode}
+      data-cinema-renderer-lifecycle={rendererLifecycle ?? "ready"}
       data-cinema-surface={surfaceKind}
       data-theme={themeName}
       ref={rootRef}

@@ -2,21 +2,24 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
 import { CinemaInspectorDock } from "./CinemaInspectorDock";
-import { CinemaMobileSheet } from "./CinemaMobileSheet";
 import {
   buildCinemaCurrentReadingSection,
   buildCinemaInspectorPanels,
   buildCinemaInspectorSection,
   buildCinemaWayfindingSection,
 } from "./CinemaInspectorPanels";
+import { CinemaMobileSheet } from "./CinemaMobileSheet";
 import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 import {
   buildCinemaLayoutState,
+  type CinemaPanelDefinition,
   cinemaFocusModeMeta,
+  cinemaRendererLifecycleDetail,
   defaultCinemaPanelForMode,
   deriveCinemaPlaybackState,
+  deriveCinemaReadinessDisplay,
+  isCinemaRendererReady,
   normalizeCinemaInspectorPanelId,
-  type CinemaPanelDefinition,
 } from "./model";
 
 describe("cinema focus layout model", () => {
@@ -89,6 +92,32 @@ describe("cinema focus layout model", () => {
       "completed",
     );
     expect(deriveCinemaPlaybackState({ status: "failed" })).toBe("degraded");
+  });
+
+  it("derives header readiness from renderer and audio state together", () => {
+    expect(
+      deriveCinemaReadinessDisplay({
+        playbackState: "playable",
+        rendererLifecycle: "loading",
+      }),
+    ).toMatchObject({
+      audioLabel: "Waiting for reader",
+      label: "Preparing reader",
+      readerLabel: "Preparing reader",
+    });
+    expect(
+      deriveCinemaReadinessDisplay({
+        isPlaybackActive: true,
+        playbackState: "playing",
+        rendererLifecycle: "ready",
+      }),
+    ).toMatchObject({
+      audioLabel: "Playing",
+      label: "Playing",
+      readerLabel: "Reader ready",
+    });
+    expect(isCinemaRendererReady("ready")).toBe(true);
+    expect(cinemaRendererLifecycleDetail("failed")).toContain("Renderer failed");
   });
 });
 

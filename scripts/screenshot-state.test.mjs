@@ -11,6 +11,7 @@ test("infers focus screenshot mode expectations from filenames", () => {
     expectedContextPanelDefault: "review",
     expectedLoadingState: "ready",
     expectedMode: "Review",
+    expectedRendererLifecycleState: "ready",
     expectedSelectedModeControl: "Review",
     expectedSurface: "Website Cinema",
   });
@@ -62,6 +63,7 @@ test("flags ready screenshots that still show renderer loading copy", () => {
       activeMode: "Read",
       contextPanel: null,
       loadingTexts: ["Loading source renderer"],
+      rendererLifecycle: "loading",
       selectedModeControls: [{ label: "Read" }],
       surface: "Document Cinema",
     },
@@ -69,6 +71,44 @@ test("flags ready screenshots that still show renderer loading copy", () => {
 
   assert.equal(
     mismatches.some((mismatch) => mismatch.kind === "loading-state"),
+    true,
+  );
+});
+
+test("allows explicitly named loading screenshots to show bounded renderer loading", () => {
+  const mismatches = assertScreenshotState({
+    expectations: deriveScreenshotStateExpectations("document-cinema-focus-loading.png"),
+    screenshotPath: "document-cinema-focus-loading.png",
+    state: {
+      activeMode: "Read",
+      contextPanel: null,
+      loadingTexts: ["Preparing this view locally"],
+      rendererLifecycle: "loading",
+      selectedModeControls: [{ label: "Read" }],
+      surface: "Document Cinema",
+    },
+  });
+
+  assert.equal(mismatches.length, 0);
+});
+
+test("flags audio-ready chrome while the renderer is still loading", () => {
+  const mismatches = assertScreenshotState({
+    expectations: deriveScreenshotStateExpectations("document-cinema-focus-loading.png"),
+    screenshotPath: "document-cinema-focus-loading.png",
+    state: {
+      activeMode: "Read",
+      audioLifecycleState: "audio-ready",
+      contextPanel: null,
+      loadingTexts: ["Preparing this view locally"],
+      rendererLifecycle: "loading",
+      selectedModeControls: [{ label: "Read" }],
+      surface: "Document Cinema",
+    },
+  });
+
+  assert.equal(
+    mismatches.some((mismatch) => mismatch.kind === "renderer-audio-contradiction"),
     true,
   );
 });

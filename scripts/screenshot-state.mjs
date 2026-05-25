@@ -8,6 +8,7 @@ const loadingPatterns = [
   /Preparing this view locally/i,
   /Taking longer than expected/i,
 ];
+const rendererLifecycleStates = new Set(["notStarted", "loading", "ready", "degraded", "failed"]);
 
 const audioStatePatterns = [
   { id: "audio-ready", pattern: /\bAudio ready\b/i },
@@ -71,8 +72,19 @@ export function deriveScreenshotStateExpectations(screenshotPath) {
     expectations.expectedContextPanelDefault = "diagnostics";
   }
 
-  if (expectations.expectedMode && !basename.includes("loading") && !basename.includes("failure")) {
+  if (cinemaStatefulScreenshot && basename.includes("loading")) {
+    expectations.expectedLoadingState = "loading";
+    expectations.expectedRendererLifecycleState = "loading";
+  } else if (cinemaStatefulScreenshot && /failure|failed/.test(basename)) {
+    expectations.expectedLoadingState = "failed";
+    expectations.expectedRendererLifecycleState = "failed";
+  } else if (
+    expectations.expectedMode &&
+    !basename.includes("loading") &&
+    !basename.includes("failure")
+  ) {
     expectations.expectedLoadingState = "ready";
+    expectations.expectedRendererLifecycleState = "ready";
   }
 
   return expectations;
@@ -133,7 +145,7 @@ export async function recordScreenshotState(page, { expectations = {}, rootDir, 
 
 export async function collectScreenshotState(page) {
   return page.evaluate(
-    ({ audioSources, loadingSources }) => {
+    ({ audioSources, loadingSources, rendererLifecycleStates }) => {
       const visible = (element) => {
         if (!(element instanceof HTMLElement)) {
           return false;
@@ -155,10 +167,11 @@ export async function collectScreenshotState(page) {
           ),
         ).find(visible) ?? null;
       const root = overlay ?? document.body;
+      const rootText = root.innerText?.replace(/\s+/g, " ").trim() ?? "";
       const labelledBy = overlay?.getAttribute("aria-labelledby") ?? "";
       const heading = labelledBy ? document.getElementById(labelledBy) : null;
       const sourceTitle = heading?.textContent?.replace(/\s+/g, " ").trim() ?? null;
-      const surface = deriveSurface(root, sourceTitle, visibleText);
+      const surface = deriveSurface(root, sourceTitle, rootText || visibleText);
       const contextPanel = Array.from(
         root.querySelectorAll("[data-context-panel-active-tab]"),
       ).find(visible);
@@ -187,6 +200,9 @@ export async function collectScreenshotState(page) {
         ["Read", "Inspect", "Review", "Debug", "Diagnostics", "More"].includes(control.label),
       );
       const explicitMode = root.getAttribute("data-cinema-focus-mode");
+      const rendererLifecycle = normalizeRendererLifecycle(
+        root.getAttribute("data-cinema-renderer-lifecycle"),
+      );
       const inspectorMode = root
         .querySelector("[data-cinema-inspector-mode]")
         ?.getAttribute("data-cinema-inspector-mode");
@@ -198,17 +214,16 @@ export async function collectScreenshotState(page) {
         activeContextTab,
       );
       const loadingTexts = loadingSources
-        .filter((pattern) => new RegExp(pattern.source, pattern.flags).test(visibleText))
+        .filter((pattern) => new RegExp(pattern.source, pattern.flags).test(rootText))
         .map((pattern) => pattern.label);
       const audioLifecycleState =
-        audioSources.find((item) => new RegExp(item.source, item.flags).test(visibleText))?.id ??
-        null;
+        audioSources.find((item) => new RegExp(item.source, item.flags).test(rootText))?.id ?? null;
 
       return {
         activeContextTab,
         activeMode,
         audioLifecycleState,
-        bodyTextSample: visibleText.slice(0, 800),
+        bodyTextSample: rootText.slice(0, 800),
         contextPanel: contextPanel
           ? {
               activeTab: activeContextTab,
@@ -218,6 +233,7 @@ export async function collectScreenshotState(page) {
             }
           : null,
         loadingTexts,
+        rendererLifecycle,
         selectedControls,
         selectedModeControls,
         sourceTitle,
@@ -298,6 +314,13 @@ export async function collectScreenshotState(page) {
         }
         return null;
       }
+
+      function normalizeRendererLifecycle(value) {
+        if (!value) {
+          return null;
+        }
+        return rendererLifecycleStates.includes(value) ? value : null;
+      }
     },
     {
       audioSources: audioStatePatterns.map((item) => ({
@@ -310,6 +333,7 @@ export async function collectScreenshotState(page) {
         label: pattern.source,
         source: pattern.source,
       })),
+      rendererLifecycleStates: [...rendererLifecycleStates],
     },
   );
 }
@@ -407,6 +431,31 @@ export function assertScreenshotState({ expectations = {}, screenshotPath = "", 
       expected: "no loading copy",
       issue: `${label} is a ready-state screenshot but still shows loading copy.`,
       kind: "loading-state",
+    });
+  }
+
+  if (
+    expectations.expectedRendererLifecycleState &&
+    state.rendererLifecycle !== expectations.expectedRendererLifecycleState
+  ) {
+    mismatches.push({
+      actual: state.rendererLifecycle ?? "unknown",
+      expected: expectations.expectedRendererLifecycleState,
+      issue: `${label} expected renderer lifecycle ${expectations.expectedRendererLifecycleState}.`,
+      kind: "renderer-lifecycle",
+    });
+  }
+
+  if (
+    state.rendererLifecycle &&
+    state.rendererLifecycle !== "ready" &&
+    state.audioLifecycleState === "audio-ready"
+  ) {
+    mismatches.push({
+      actual: `${state.rendererLifecycle} + audio-ready`,
+      expected: "ready renderer before audio-ready chrome",
+      issue: `${label} shows audio-ready chrome before the reader renderer is ready.`,
+      kind: "renderer-audio-contradiction",
     });
   }
 
