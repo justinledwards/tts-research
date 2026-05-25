@@ -129,7 +129,6 @@ import {
   readingPositionForHighlightCue,
   resolveHighlightCue,
   secondsForReadingPosition,
-  type HighlightCue,
 } from "./highlightMap";
 import {
   DEFAULT_THEME_NAME,
@@ -5074,13 +5073,6 @@ export function App() {
     [playbackControls],
   );
 
-  const activeHighlightCue = useMemo<HighlightCue | null>(() => {
-    if (!job || highlightMap?.jobId !== job.id) {
-      return null;
-    }
-    return resolveHighlightCue(highlightMap, playbackCursorSec);
-  }, [highlightMap, job, playbackCursorSec]);
-
   const activeWordIndexForPlaybackProgress = useCallback(
     (currentJob: VoiceJob, currentTimeSec: number) => {
       if (highlightMap?.jobId === currentJob.id) {
@@ -7026,7 +7018,6 @@ export function App() {
             accessibilitySettings={readerAccessibilitySettings}
             scope={effectiveBookScope}
             scopeContent={bookScopeContent}
-            highlightCue={activeHighlightCue}
             highlightMap={highlightMap}
             themeName={bookCinemaThemeName}
             onClose={() => {
@@ -14264,6 +14255,22 @@ function CompletedAudioPlayer({
       setError,
       setIsPlaying,
     });
+
+  useEffect(() => {
+    if (!canPlayCompleted || !isPlaying) {
+      return;
+    }
+    void import("./features/readalong/ReadAlongClock").then(({ startReadAlongPlaybackClock }) => {
+      startReadAlongPlaybackClock({
+        audioElement: () => audioRef.current,
+        onCursor: (cursorSec) => {
+          currentTimeRef.current = cursorSec;
+          setCurrentTimeSec(cursorSec);
+          onPlaybackCursorChange?.(cursorSec);
+        },
+      });
+    });
+  }, [canPlayCompleted, isPlaying, onPlaybackCursorChange]);
 
   const { handlePlayToggle, playCompletedAudio, restartCompletedAudio } = useCompletedAudioCommands(
     {

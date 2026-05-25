@@ -519,6 +519,13 @@
 - [x] Run required local validation commands that do not depend on the external HN target
 - [ ] Resolve upstream live-ingestion 429 from Hacker News target
 
+## 2026-05-25 13:01 CEST - Runtime Drift Detection and Resync Controller
+- [x] Inspect current read-along, Cinema playback, and debug panel integration points
+- [x] Add audio-clock based drift detection and resync controller modules
+- [x] Surface sync status and debug drift report in Cinema diagnostics
+- [x] Run WP36 local validation commands
+- [x] Commit WP36 changes
+
 ## 2026-05-25 02:26 CEST - Surface Complexity Budget
 - [x] Inspect UI action inventory and existing local review reporting
 - [x] Add shared surface complexity budget model and report script

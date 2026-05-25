@@ -88,7 +88,13 @@ import {
   recordFrontendMetric,
   resolveTimingConfidenceDisplay,
 } from "../performance";
-import { evaluateBookReadAlongInvariant, readAlongInvariantStatusLabel } from "../readalong";
+import {
+  evaluateBookReadAlongInvariant,
+  ReadAlongResyncController,
+  readAlongInvariantStatusLabel,
+  readAlongRuntimeStateLabel,
+  type ReadAlongRuntimeSnapshot,
+} from "../readalong";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import type {
   BookCinemaDiagnostics,
@@ -110,7 +116,7 @@ import type {
   ThemeName,
   VoiceJob,
 } from "../../types";
-import type { HighlightCue } from "../../highlightMap";
+import { resolveHighlightCue, type HighlightCue } from "../../highlightMap";
 
 const BOOK_PAGE_VERTICAL_PADDING = 108;
 const BOOK_PAGE_HORIZONTAL_PADDING = 76;
@@ -818,7 +824,6 @@ export function BookCinemaOverlay({
   sourcePolicySaving,
   uiMemoryFocusState,
   uiMemoryResetSignal,
-  highlightCue,
   highlightMap,
   themeName,
   onClose,
@@ -872,7 +877,6 @@ export function BookCinemaOverlay({
   };
   scope: BookScope;
   scopeContent: BookSourceScopeContent | null;
-  highlightCue: HighlightCue | null;
   highlightMap: HighlightMap | null;
   themeName: ThemeName;
   onClose: () => void;
@@ -916,7 +920,54 @@ export function BookCinemaOverlay({
     normalizedScope,
     scopeContent,
   );
-  const timingActiveWordIndex = highlightCue?.activeWordIndex ?? activeWordIndex;
+  const activeJobMatchesBook = bookCinemaJobMatchesScope(job, book, normalizedScope);
+  const activeBookJob = activeJobMatchesBook ? job : null;
+  const activeReadAlongTimingMap =
+    activeBookJob && highlightMap?.jobId === activeBookJob.id ? highlightMap : null;
+  const highlightCue = useMemo(
+    () =>
+      activeReadAlongTimingMap
+        ? resolveHighlightCue(activeReadAlongTimingMap, playbackCursorSec)
+        : null,
+    [activeReadAlongTimingMap, playbackCursorSec],
+  );
+  const readAlongRuntimeKey = `${activeBookJob?.id ?? "none"}:${
+    activeReadAlongTimingMap?.jobId ?? "none"
+  }`;
+  const readAlongResyncControllerRef = useRef({
+    controller: new ReadAlongResyncController(),
+    key: readAlongRuntimeKey,
+  });
+  if (readAlongResyncControllerRef.current.key !== readAlongRuntimeKey) {
+    readAlongResyncControllerRef.current = {
+      controller: new ReadAlongResyncController(),
+      key: readAlongRuntimeKey,
+    };
+  }
+  const readAlongResyncController = readAlongResyncControllerRef.current.controller;
+  const readAlongRuntime = useMemo<ReadAlongRuntimeSnapshot>(
+    () =>
+      readAlongResyncController.resolve({
+        audioTimeSec: playbackCursorSec,
+        generatedAudioState:
+          activeBookJob && highlightMap && highlightMap.jobId !== activeBookJob.id
+            ? "stale"
+            : generatedAudioLifecycleFromJob({ job: activeBookJob }),
+        highlightMap: activeReadAlongTimingMap,
+        isPaused: !playbackControls.isPlaying,
+        isPlaying: playbackControls.isPlaying,
+      }),
+    [
+      activeBookJob,
+      activeReadAlongTimingMap,
+      highlightMap,
+      playbackControls.isPlaying,
+      playbackCursorSec,
+      readAlongResyncController,
+    ],
+  );
+  const runtimeHighlightCue = readAlongRuntime.activeCue ?? highlightCue;
+  const timingActiveWordIndex = runtimeHighlightCue?.activeWordIndex ?? activeWordIndex;
   const displayedActiveWordIndex = resolveDisplayedBookActiveWordIndex(
     timingActiveWordIndex,
     progress,
@@ -928,15 +979,13 @@ export function BookCinemaOverlay({
     return bookScopeSpans(book, pointerOption.scope)[0]?.index ?? -1;
   }, [book, pointerOption]);
   const readerActiveWordIndex = pointerWordIndex >= 0 ? pointerWordIndex : displayedActiveWordIndex;
-  const phraseRange = resolveHighlightPhraseRange(highlightCue);
+  const phraseRange = resolveHighlightPhraseRange(runtimeHighlightCue);
   const queueOptions = useMemo(() => {
     const narratable = scopeOptions.filter(
       (option) => option.isNarratable && (option.wordCount ?? 0) > 0,
     );
     return narratable.length > 0 ? narratable : scopeOptions;
   }, [scopeOptions]);
-  const activeJobMatchesBook = bookCinemaJobMatchesScope(job, book, normalizedScope);
-  const activeBookJob = activeJobMatchesBook ? job : null;
   const isCancelledBookJob = activeJobMatchesBook && job?.status === "cancelled";
   const bookmarks = progress?.bookmarks ?? [];
   const bookmarkItems = useMemo(() => readerBookmarksFromProgress(progress), [progress]);
@@ -1011,16 +1060,19 @@ export function BookCinemaOverlay({
   const canUseSkipControls = hasPlayableAudio && Boolean(playbackControls.skipBy);
   const canChangePlaybackRate = hasPlayableAudio && Boolean(playbackControls.setPlaybackRate);
   const displayedPlaybackRate = hasPlayableAudio ? playbackControls.playbackRate : 1;
-  const liveAnnouncementWordIndex = bookCinemaLiveWordIndex(highlightCue, displayedActiveWordIndex);
+  const liveAnnouncementWordIndex = bookCinemaLiveWordIndex(
+    runtimeHighlightCue,
+    displayedActiveWordIndex,
+  );
   const liveAnnouncement = useMemo(
     () =>
       bookCinemaLiveAnnouncement({
         activeWordIndex: liveAnnouncementWordIndex,
         book,
-        fragmentIndex: highlightCue?.fragmentIndex,
+        fragmentIndex: runtimeHighlightCue?.fragmentIndex,
         scope: normalizedScope,
       }),
-    [book, highlightCue?.fragmentIndex, liveAnnouncementWordIndex, normalizedScope],
+    [book, runtimeHighlightCue?.fragmentIndex, liveAnnouncementWordIndex, normalizedScope],
   );
   const timingConfidence = useMemo(
     () => resolveTimingConfidenceDisplay(highlightMap),
@@ -1036,7 +1088,7 @@ export function BookCinemaOverlay({
         bookSourceId: book.id,
         bookmark: bookmarks.at(0) ?? null,
         generatedAudioState: generatedAudioLifecycleFromJob({ job: activeBookJob }),
-        highlightCue,
+        highlightCue: runtimeHighlightCue,
         highlightMap,
         jobMatchesSource: activeJobMatchesBook,
         progress,
@@ -1053,11 +1105,11 @@ export function BookCinemaOverlay({
       activeSpan,
       book.id,
       bookmarks,
-      highlightCue,
       highlightMap,
       normalizedScopeKey,
       progress,
       readerActiveWordIndex,
+      runtimeHighlightCue,
       scopedSpans,
     ],
   );
@@ -1275,7 +1327,9 @@ export function BookCinemaOverlay({
       title: "Highlight confidence",
     }),
     buildCinemaInspectorSection({
-      children: <ReadAlongInvariantDebugPanel report={readAlongReport} />,
+      children: (
+        <ReadAlongInvariantDebugPanel report={readAlongReport} runtime={readAlongRuntime} />
+      ),
       detail: readAlongInvariantStatusLabel(readAlongReport),
       id: "read-along-fidelity",
       kind: "timing-map",
@@ -1287,8 +1341,9 @@ export function BookCinemaOverlay({
       children: (
         <BookCinemaTimingDebug
           cursorSec={playbackCursorSec}
-          highlightCue={highlightCue}
+          highlightCue={runtimeHighlightCue}
           highlightMap={highlightMap}
+          readAlongRuntime={readAlongRuntime}
         />
       ),
       detail: timingConfidence.isDegraded ? timingConfidence.label : "Timing map",
@@ -2314,10 +2369,12 @@ function BookCinemaTimingDebug({
   cursorSec,
   highlightCue,
   highlightMap,
+  readAlongRuntime,
 }: Readonly<{
   cursorSec: number;
   highlightCue: HighlightCue | null;
   highlightMap: HighlightMap | null;
+  readAlongRuntime?: ReadAlongRuntimeSnapshot | null;
 }>) {
   if (!highlightMap) {
     return null;
@@ -2344,6 +2401,20 @@ function BookCinemaTimingDebug({
         <dd className="truncate text-right">{Math.round(summary.confidence.overall * 100)}%</dd>
         <dt className="vs-muted">Drift</dt>
         <dd className="truncate text-right">{summary.drift.maxAbsoluteMs}ms</dd>
+        {readAlongRuntime ? (
+          <>
+            <dt className="vs-muted">Runtime state</dt>
+            <dd className="truncate text-right">{readAlongRuntimeStateLabel(readAlongRuntime)}</dd>
+            <dt className="vs-muted">Expected token</dt>
+            <dd className="truncate text-right">{readAlongRuntime.expectedTokenIndex ?? "-"}</dd>
+            <dt className="vs-muted">Runtime drift</dt>
+            <dd className="truncate text-right">
+              {readAlongRuntime.driftMs === null
+                ? "-"
+                : `${Math.round(readAlongRuntime.driftMs).toString()}ms`}
+            </dd>
+          </>
+        ) : null}
       </dl>
     </div>
   );

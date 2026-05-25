@@ -84,6 +84,7 @@ import { generatedAudioLifecycleFromJob } from "../playback";
 import {
   evaluatePreparedSourceReadAlongInvariant,
   readAlongInvariantStatusLabel,
+  resolveReadAlongRuntimeSnapshot,
 } from "../readalong";
 import type {
   CustomSpeechPolicyProfile,
@@ -342,13 +343,25 @@ export function PreparedSourceCinemaOverlay({
   const activeText = displayBlock ? markdownBlockText(displayBlock) : "";
   const activeSection = activeOutlineItem(outline, displayBlock);
   const activeJobMatchesSource = !job || preparedSourceCinemaJobMatchesSource(job, source);
+  const generatedAudioState = generatedAudioLifecycleFromJob({ job });
+  const readAlongRuntime = useMemo(
+    () =>
+      resolveReadAlongRuntimeSnapshot({
+        audioTimeSec: effectivePlaybackCursorSec,
+        generatedAudioState,
+        highlightMap: null,
+        isPaused: !playbackControls.isPlaying,
+        isPlaying: playbackControls.isPlaying,
+      }),
+    [effectivePlaybackCursorSec, generatedAudioState, playbackControls.isPlaying],
+  );
   const readAlongReport = useMemo(
     () =>
       evaluatePreparedSourceReadAlongInvariant({
         activeBlock: displayBlock,
         activeText,
         activeWordIndex: effectiveActiveWordIndex,
-        generatedAudioState: generatedAudioLifecycleFromJob({ job }),
+        generatedAudioState,
         highlightCue: null,
         jobMatchesSource: activeJobMatchesSource,
         progress,
@@ -361,8 +374,8 @@ export function PreparedSourceCinemaOverlay({
       activeText,
       displayBlock,
       effectiveActiveWordIndex,
+      generatedAudioState,
       isWebsiteCinema,
-      job,
       progress,
       source,
     ],
@@ -609,7 +622,9 @@ export function PreparedSourceCinemaOverlay({
       title: "Skipped content",
     }),
     buildCinemaInspectorSection({
-      children: <ReadAlongInvariantDebugPanel report={readAlongReport} />,
+      children: (
+        <ReadAlongInvariantDebugPanel report={readAlongReport} runtime={readAlongRuntime} />
+      ),
       detail: readAlongInvariantStatusLabel(readAlongReport),
       id: "read-along-fidelity",
       kind: "timing-map",

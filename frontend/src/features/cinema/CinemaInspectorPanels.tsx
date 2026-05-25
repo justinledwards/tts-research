@@ -7,8 +7,12 @@ import {
 } from "../reader-navigation";
 import { buildContextPanelTabs, type ContextPanelSectionKind } from "../context-panel";
 import {
+  readAlongRuntimeDebugRows,
+  readAlongRuntimeStateLabel,
+  readAlongRuntimeStatusClassName,
   readAlongInvariantDebugRows,
   readAlongInvariantStatusLabel,
+  type ReadAlongRuntimeSnapshot,
   type ReadAlongInvariantReport,
 } from "../readalong";
 import type { CinemaFocusMode, CinemaInspectorPanelId, CinemaPanelDefinition } from "./model";
@@ -101,8 +105,10 @@ export function buildCinemaInspectorSection(
 
 export function ReadAlongInvariantDebugPanel({
   report,
-}: Readonly<{ report: ReadAlongInvariantReport }>) {
+  runtime,
+}: Readonly<{ report: ReadAlongInvariantReport; runtime?: ReadAlongRuntimeSnapshot | null }>) {
   const rows = readAlongInvariantDebugRows(report);
+  const runtimeRows = readAlongRuntimeDebugRows(runtime);
   return (
     <div className="mt-4 rounded-lg border p-4 text-xs vs-border">
       <div className="flex items-center justify-between gap-3">
@@ -120,6 +126,25 @@ export function ReadAlongInvariantDebugPanel({
           </div>
         ))}
       </dl>
+      {runtime ? (
+        <div className="mt-4 border-t pt-3 vs-border">
+          <div className="flex items-center justify-between gap-3">
+            <p className="vs-muted font-semibold uppercase tracking-[0.2em]">Runtime sync</p>
+            <span className={`font-semibold ${readAlongRuntimeStatusClassName(runtime)}`}>
+              {readAlongRuntimeStateLabel(runtime)}
+            </span>
+          </div>
+          <p className="mt-2 leading-5 vs-muted">{runtime.reason}</p>
+          <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
+            {runtimeRows.map((row) => (
+              <div className="contents" key={`${row.label}:${row.value}`}>
+                <dt className="vs-muted">{row.label}</dt>
+                <dd className="truncate text-right">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
     </div>
   );
 }
