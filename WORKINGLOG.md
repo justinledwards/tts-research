@@ -557,13 +557,20 @@
 - [ ] enable deterministic lint cache and add explicit validate aliases
 
 ## 2026-05-25 18:33 CEST - Advanced and Debug Mode Containment
-- [ ] Inspect Cinema advanced mode, context panel, command palette, and UI audit metadata
-- [ ] Add shared advanced/debug mode metadata and containment affordances
-- [ ] Wire Advanced/Debug controls into command/audit surfaces
-- [ ] Run WP24 local validation commands
+- [x] Inspect Cinema advanced mode, context panel, command palette, and UI audit metadata
+- [x] Add shared advanced/debug mode metadata and containment affordances
+- [x] Wire Advanced/Debug controls into command/audit surfaces
+- [x] Run WP24 local validation commands
 
 ## 2026-05-25 18:34 CEST - Test-first runtime reduction execution
 - [x] Add bounded parallel batches to the `validate-local` fast lane and quick-mode concurrency controls.
 - [x] Split package-level test commands into `build` + `test:core` and keep `test` as compatibility wrapper.
 - [x] Update root package orchestration to avoid redundant package rebuilds during fast local validation.
 - [x] Enable ESLint cache and add explicit fast/quick local validation aliases.
+
+## 2026-05-25 20:08 CEST - `e2e:ui-actions` speed optimization
+- [ ] Add `e2e:ui-actions` quick and smoke command profiles.
+- [ ] Introduce bounded parallel scenario execution in `scripts/e2e-ui-action-audit.mjs`.
+- [ ] Write timing summary metadata for e2e action audit phases.
+- [ ] Add local regression guard script for UI action audit runtime.
+- [ ] Evaluate quick workflow defaults and document assumptions in code.

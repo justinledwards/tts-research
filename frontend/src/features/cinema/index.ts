@@ -1,5 +1,13 @@
 export { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
 export {
+  CINEMA_ADVANCED_MODE_ACTIONS,
+  CINEMA_ADVANCED_MODE_IDS,
+  activeCinemaAdvancedModeAction,
+  cinemaAdvancedModeAction,
+  type CinemaAdvancedModeAction,
+  type CinemaAdvancedModeId,
+} from "./cinemaAdvancedMode";
+export {
   useCinemaFocusController,
   type CinemaFocusController,
   type CinemaFocusControllerOptions,

@@ -276,6 +276,7 @@ import {
 } from "./features/cinema/preparedSourceModel";
 import type { CinemaFocusMode, CinemaSurfaceKind } from "./features/cinema";
 import type {
+  CinemaAdvancedCommandTarget,
   CinemaFocusCommandTarget,
   HelpCommandTarget,
   SettingsCommandTarget,
@@ -438,6 +439,7 @@ function clearStoredTelepromptReturnMemory(): void {
 }
 
 interface CommandMetadataState {
+  cinemaAdvanced: CommandMetadata<CinemaAdvancedCommandTarget>[];
   cinemaFocus: CommandMetadata<CinemaFocusCommandTarget>[];
   help: CommandMetadata<HelpCommandTarget>[];
   settings: CommandMetadata<SettingsCommandTarget>[];
@@ -2731,6 +2733,7 @@ export function App() {
         return;
       }
       setCommandMetadata({
+        cinemaAdvanced: module.buildCinemaAdvancedCommandMetadata(),
         cinemaFocus: module.buildCinemaFocusCommandMetadata(),
         help: module.buildHelpCommandMetadata(),
         settings: module.buildSettingsCommandMetadata(),
@@ -2978,6 +2981,17 @@ export function App() {
         ...currentState,
         activePanelId: null,
         mode,
+      });
+    },
+    [handleCinemaFocusStateChange, resolveLiveCinemaFocusState],
+  );
+  const setCinemaAdvancedActionFromCommand = useCallback(
+    (surfaceKind: CinemaSurfaceKind, target: CinemaAdvancedCommandTarget) => {
+      const currentState = resolveLiveCinemaFocusState(surfaceKind);
+      handleCinemaFocusStateChange(surfaceKind, {
+        ...currentState,
+        activePanelId: target.panelId,
+        mode: target.mode,
       });
     },
     [handleCinemaFocusStateChange, resolveLiveCinemaFocusState],
@@ -6386,6 +6400,25 @@ export function App() {
       title: metadata.title,
     }),
   );
+  const cinemaAdvancedCommandEntries = (commandMetadata?.cinemaAdvanced ?? []).map<CommandEntry>(
+    (metadata) => ({
+      detail: metadata.detail,
+      disabled: !activeCinemaSurfaceKind,
+      disabledReason: activeCinemaSurfaceKind
+        ? undefined
+        : "Open Book, Document, or Website Cinema before using operator diagnostics.",
+      id: metadata.id,
+      keywords: metadata.keywords,
+      perform: () => {
+        if (activeCinemaSurfaceKind) {
+          setCinemaAdvancedActionFromCommand(activeCinemaSurfaceKind, metadata.target);
+        }
+      },
+      category: metadata.category,
+      section: metadata.section,
+      title: metadata.title,
+    }),
+  );
   const projectCommandEntries = projects.map<CommandEntry>((project) => ({
     category: "Project",
     detail: project.id === activeProjectId ? "Current project" : "Switch active project.",
@@ -6527,6 +6560,7 @@ export function App() {
     ...settingsCommandEntries,
     ...helpCommandEntries,
     ...cinemaFocusCommandEntries,
+    ...cinemaAdvancedCommandEntries,
     ...projectCommandEntries,
     draftSourceCommand,
     ...bookSourceCommandEntries,

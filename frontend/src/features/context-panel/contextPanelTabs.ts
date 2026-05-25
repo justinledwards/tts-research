@@ -20,7 +20,7 @@ export interface ContextPanelTabMeta {
 export const CONTEXT_PANEL_TAB_META: Record<ContextPanelTabId, ContextPanelTabMeta> = {
   diagnostics: {
     advanced: true,
-    detail: "Health, timing, skipped content, and generated-audio checks.",
+    detail: "Operator diagnostics for health, timing, skipped content, and generated-audio checks.",
     emptyState:
       "Diagnostics are available when generated audio, extraction health, or timing data exists.",
     id: "diagnostics",

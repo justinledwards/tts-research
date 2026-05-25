@@ -1565,7 +1565,15 @@ export function BookCinemaOverlay({
             job={activeBookJob}
           />
           <div className="hidden min-w-[20rem] shrink-0 lg:block">
-            <CinemaFocusModeToolbar mode={cinemaFocus.mode} onModeChange={cinemaFocus.setMode} />
+            <CinemaFocusModeToolbar
+              activePanelId={cinemaFocus.activePanelId}
+              mode={cinemaFocus.mode}
+              onAdvancedAction={(action) => {
+                cinemaFocus.setMode(action.mode);
+                cinemaFocus.setActivePanelId(action.panelId);
+              }}
+              onModeChange={cinemaFocus.setMode}
+            />
           </div>
           {timingConfidence.isDegraded ? (
             <BookCinemaTimingStatusChip display={timingConfidence} />

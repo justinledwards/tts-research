@@ -67,7 +67,7 @@ export function deriveScreenshotStateExpectations(screenshotPath) {
     expectations.expectedContextPanelDefault = "review";
   } else if (cinemaStatefulScreenshot && /-debug\.png$|-advanced\.png$/.test(basename)) {
     expectations.expectedMode = "Debug";
-    expectations.expectedSelectedModeControl = "Debug";
+    expectations.expectedSelectedModeControl = "Diagnostics";
     expectations.expectedContextPanelDefault = "diagnostics";
   }
 

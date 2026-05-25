@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
 import { CinemaInspectorDock } from "./CinemaInspectorDock";
 import { CinemaMobileSheet } from "./CinemaMobileSheet";
 import {
@@ -238,6 +239,33 @@ describe("CinemaTransportBar", () => {
     expect(markup).not.toContain("Playback speed");
     expect(markup).not.toContain("Bookmark");
     expect(markup).not.toContain("Waveform");
+  });
+});
+
+describe("CinemaFocusModeToolbar", () => {
+  it("labels active debug state as Diagnostics instead of selected More", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaFocusModeToolbar
+        activePanelId="diagnostics"
+        mode="debug"
+        onAdvancedAction={() => null}
+        onModeChange={() => null}
+      />,
+    );
+
+    expect(markup).toContain("Diagnostics");
+    expect(markup).toContain("Active operator mode: Diagnostics");
+    expect(markup).not.toContain(">More<");
+  });
+
+  it("keeps More as an unselected menu button in normal read state", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaFocusModeToolbar mode="read" onModeChange={() => null} />,
+    );
+
+    expect(markup).toContain("More advanced modes");
+    expect(markup).toContain(">More<");
+    expect(markup).not.toContain("Active operator mode");
   });
 });
 

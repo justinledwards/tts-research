@@ -1602,8 +1602,10 @@ async function assertCinemaFocusModeLayout(page, mode, { pinned = false } = {}) 
 
 async function assertCinemaFocusModeSelected(page, mode) {
   const overlay = cinemaOverlay(page);
+  const buttonName =
+    mode === "Debug" ? /^(Advanced menu\. Active operator mode: Diagnostics|Diagnostics)$/ : mode;
   const pressed = await overlay
-    .getByRole("button", { exact: true, includeHidden: true, name: mode })
+    .getByRole("button", { exact: true, includeHidden: true, name: buttonName })
     .getAttribute("aria-pressed");
   if (pressed === "true") {
     return;
@@ -1702,7 +1704,9 @@ async function assertCinemaReadyForScreenshot(page, label) {
 async function switchCinemaFocusMode(page, mode) {
   if (mode === "Debug") {
     await openCinemaAdvancedMenu(page);
-    await cinemaOverlay(page).getByRole("menuitemradio", { exact: true, name: "Debug" }).click();
+    await cinemaOverlay(page)
+      .getByRole("menuitemradio", { exact: true, name: /Diagnostics/ })
+      .click();
     return;
   }
   await page
@@ -1714,12 +1718,16 @@ async function switchCinemaFocusMode(page, mode) {
 
 async function openCinemaAdvancedMenu(page) {
   await cinemaAdvancedModeButton(page).click();
-  await cinemaOverlay(page).getByRole("menuitemradio", { exact: true, name: "Debug" }).waitFor();
+  await cinemaOverlay(page)
+    .getByRole("menuitemradio", { exact: true, name: /Diagnostics/ })
+    .waitFor();
 }
 
 function cinemaAdvancedModeButton(page) {
   return visibleOverlayControl(page, (overlay) =>
-    overlay.getByRole("button", { name: /^(More|Advanced mode: Debug|Debug)$/ }),
+    overlay.getByRole("button", {
+      name: /^(More advanced modes|Advanced menu\. Active operator mode: Diagnostics|Diagnostics)$/,
+    }),
   );
 }
 

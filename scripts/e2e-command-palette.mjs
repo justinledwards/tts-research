@@ -40,7 +40,7 @@ const requiredCategories = [
 ];
 
 const categoryQueries = {
-  Diagnostics: "help",
+  Diagnostics: "diagnostics",
   Navigation: "workspace",
   Playback: "create",
   Project: "project",
@@ -159,6 +159,16 @@ async function runCommandPaletteAudit(browser, projectId, screenshots) {
       }
     }
     await capture("command-palette-search");
+    const diagnosticsInventory = await searchPalette(page, dialog, "advanced diagnostics");
+    commandsObserved.push(...diagnosticsInventory.commands);
+    disabledCommands.push(...diagnosticsInventory.commands.filter((command) => command.disabled));
+    if (
+      !diagnosticsInventory.commands.some((command) =>
+        /Advanced: Diagnostics|Advanced: Timing map/i.test(command.title),
+      )
+    ) {
+      failures.push("Command palette did not expose Cinema Advanced/Diagnostics commands.");
+    }
 
     const disabledWithoutReason = disabledCommands.filter((command) => !command.reason);
     if (disabledWithoutReason.length > 0) {

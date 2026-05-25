@@ -1,5 +1,10 @@
 import { HELP_ANCHORS, type HelpAnchorId } from "../help/model";
+import {
+  CINEMA_ADVANCED_MODE_ACTIONS,
+  type CinemaAdvancedModeId,
+} from "../cinema/cinemaAdvancedMode";
 import { CINEMA_FOCUS_MODES, cinemaFocusModeMeta, type CinemaFocusMode } from "../cinema/model";
+import type { ContextPanelTabId } from "../context-panel/contextPanelTabs";
 import {
   SETTINGS_FIELD_META,
   SETTINGS_GROUPS,
@@ -28,6 +33,12 @@ export type WorkspaceCommandTarget =
 
 export interface CinemaFocusCommandTarget {
   mode: CinemaFocusMode;
+}
+
+export interface CinemaAdvancedCommandTarget {
+  actionId: CinemaAdvancedModeId;
+  mode: CinemaFocusMode;
+  panelId: ContextPanelTabId;
 }
 
 export interface HelpCommandTarget {
@@ -131,6 +142,22 @@ export function buildCinemaFocusCommandMetadata(): CommandMetadata<CinemaFocusCo
       title: advanced ? "Advanced: Debug cinema focus" : `${meta.label} cinema focus`,
     };
   });
+}
+
+export function buildCinemaAdvancedCommandMetadata(): CommandMetadata<CinemaAdvancedCommandTarget>[] {
+  return CINEMA_ADVANCED_MODE_ACTIONS.map((action) => ({
+    category: "Diagnostics" as const,
+    detail: `${action.detail} ${action.reason}`,
+    id: action.commandId,
+    keywords: ["cinema", "more", ...action.keywords],
+    section: "Cinema" as const,
+    target: {
+      actionId: action.id,
+      mode: action.mode,
+      panelId: action.panelId,
+    },
+    title: `Advanced: ${action.label}`,
+  }));
 }
 
 export function buildHelpCommandMetadata(): CommandMetadata<HelpCommandTarget>[] {

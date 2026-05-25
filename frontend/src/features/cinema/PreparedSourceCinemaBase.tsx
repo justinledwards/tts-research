@@ -762,7 +762,15 @@ export function PreparedSourceCinemaOverlay({
               onSelectSource={onSelectSource}
             />
             <div className="hidden min-w-[17rem] shrink-0 lg:block">
-              <CinemaFocusModeToolbar mode={cinemaFocus.mode} onModeChange={cinemaFocus.setMode} />
+              <CinemaFocusModeToolbar
+                activePanelId={cinemaFocus.activePanelId}
+                mode={cinemaFocus.mode}
+                onAdvancedAction={(action) => {
+                  cinemaFocus.setMode(action.mode);
+                  cinemaFocus.setActivePanelId(action.panelId);
+                }}
+                onModeChange={cinemaFocus.setMode}
+              />
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">

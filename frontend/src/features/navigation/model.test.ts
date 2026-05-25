@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCinemaAdvancedCommandMetadata,
   buildCinemaFocusCommandMetadata,
   buildSettingsCommandMetadata,
   buildWorkspaceCommandMetadata,
@@ -97,5 +98,16 @@ describe("metadata command generation", () => {
       "cinema:focus:review",
       "cinema:focus:debug",
     ]);
+    expect(buildCinemaAdvancedCommandMetadata().map((command) => command.id)).toEqual([
+      "cinema:advanced:diagnostics",
+      "cinema:advanced:timing-map",
+      "cinema:advanced:policy-internals",
+      "cinema:advanced:source-internals",
+    ]);
+    expect(
+      buildCinemaAdvancedCommandMetadata().find(
+        (command) => command.id === "cinema:advanced:diagnostics",
+      )?.title,
+    ).toBe("Advanced: Diagnostics");
   });
 });

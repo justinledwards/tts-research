@@ -21,10 +21,16 @@ const outputDir =
   process.env.UI_ACTION_AUDIT_OUTPUT_DIR ??
   path.join(rootDir, "output", "ui-action-audit", "latest");
 const screenshotsDir = path.join(outputDir, "screenshots");
+const summaryPath =
+  process.env.UI_ACTION_AUDIT_SUMMARY_PATH ?? path.join(outputDir, "summary.json");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 const jobTimeoutMs = Number.parseInt(process.env.E2E_JOB_TIMEOUT_MS ?? "180000", 10);
 const activeProjectKey = "tts-active-project-id";
+const quickMode = process.env.UI_ACTION_AUDIT_QUICK === "1";
 const maxActions = Number.parseInt(process.env.UI_ACTION_AUDIT_MAX_ACTIONS ?? "0", 10);
+const workerLimit = Number.parseInt(process.env.UI_ACTION_AUDIT_WORKER_LIMIT ?? "0", 10);
+const resolvedWorkerLimit =
+  Number.isFinite(workerLimit) && workerLimit > 0 ? workerLimit : quickMode ? 2 : 3;
 const actionTimeoutMs = Number.parseInt(
   process.env.UI_ACTION_AUDIT_ACTION_TIMEOUT_MS ?? "8000",
   10,
@@ -35,52 +41,114 @@ const scenarioFilter = parseScenarioFilter(process.env.UI_ACTION_AUDIT_SCENARIOS
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
+let runSummary = null;
 
 main().catch(async (error) => {
   const message = error instanceof Error ? error.stack || error.message : String(error);
   console.error(message);
-  await mkdir(outputDir, { recursive: true }).catch(() => {});
-  await writeFile(
-    path.join(outputDir, "action-results.json"),
-    `${JSON.stringify(
-      {
-        error: message,
-        generatedAt: new Date().toISOString(),
-        schemaVersion: "ui-action-results.v1",
-        status: "failed",
-      },
-      null,
-      2,
-    )}\n`,
-  ).catch(() => {});
+  if (runSummary) {
+    runSummary.generatedAt = new Date().toISOString();
+    runSummary.status = "failed";
+    runSummary.error = message;
+    runSummary.durationMs = Math.max(0, Date.now() - Date.parse(runSummary.startedAt));
+    runSummary.phaseTimings = runSummary.phaseTimings ?? {};
+    runSummary.phaseTimings.totalMs = runSummary.durationMs;
+    await writeSummary(runSummary).catch(() => {});
+    await writeFile(
+      path.join(outputDir, "action-results.json"),
+      `${JSON.stringify(
+        {
+          error: message,
+          generatedAt: new Date().toISOString(),
+          schemaVersion: "ui-action-results.v1",
+          status: "failed",
+        },
+        null,
+        2,
+      )}\n`,
+    ).catch(() => {});
+  }
   process.exitCode = 1;
 });
 
 async function main() {
+  const startAt = Date.now();
   await rm(outputDir, { force: true, recursive: true });
   await mkdir(screenshotsDir, { recursive: true });
+  runSummary = {
+    appBaseUrl,
+    apiBaseUrl,
+    generatedAt: new Date(startAt).toISOString(),
+    completedAt: null,
+    durationMs: null,
+    profile: {
+      actionTimeoutMs,
+      inventoryOnly,
+      jobTimeoutMs,
+      maxActions,
+      quickMode,
+      scenarioCount: null,
+      workerLimit: resolvedWorkerLimit,
+    },
+    outputDir,
+    scenarioFilter: scenarioFilter ? [...scenarioFilter] : [],
+    schemaVersion: "ui-action-audit-summary.v1",
+    startedAt: new Date(startAt).toISOString(),
+    status: "running",
+    summaryPath,
+  };
   const fixtures = await ensureFixtures();
-  const services = useExistingServers ? null : await startLocalServices();
+  const services = useExistingServers
+    ? null
+    : await measurePhase(runSummary, "serviceStartup", () => startLocalServices());
   if (services) {
     apiBaseUrl = services.apiBaseUrl;
     appBaseUrl = services.appBaseUrl;
   }
+  const serviceRuntime = services
+    ? (() => {
+        const { stop: _stop, ...rest } = services;
+        return rest;
+      })()
+    : null;
+  runSummary = {
+    ...runSummary,
+    appBaseUrl,
+    apiBaseUrl,
+    services: services
+      ? {
+          mode: "managed",
+          ...serviceRuntime,
+        }
+      : {
+          apiBaseUrl,
+          appBaseUrl,
+          mode: "existing",
+        },
+  };
 
   try {
     await assertServerReady();
     const { chromium } = await loadPlaywright();
-    const seed = await seedAuditData(fixtures);
-    const scenarios = filterScenarios(createScenarios(seed), scenarioFilter);
+
+    const seed = await measurePhase(runSummary, "seed", () => seedAuditData(fixtures));
+    const scenarios = await measurePhase(runSummary, "scenarios", () =>
+      filterScenarios(createScenarios(seed), scenarioFilter),
+    );
+    runSummary.profile.scenarioCount = scenarios.length;
+    runSummary.scenarioTimings = [];
+
     const actions = [];
     const results = [];
     const screenshots = [];
     const surfaceComplexity = [];
-    const launchBrowser = () => chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
 
     if (!inventoryOnly && shouldRunTraversal(scenarioFilter)) {
-      const browser = await launchBrowser();
+      const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
       try {
-        const traversal = await runWorkspaceStageTraversal(browser, seed);
+        const traversal = await measurePhase(runSummary, "workspaceTraversal", async () => {
+          return runWorkspaceStageTraversal(browser, seed);
+        });
         results.push(traversal.result);
         screenshots.push(...traversal.screenshots);
       } finally {
@@ -88,35 +156,26 @@ async function main() {
       }
     }
 
-    for (const scenario of scenarios) {
-      const browser = await launchBrowser();
-      try {
-        console.log(`[ui-actions] inventory ${scenario.id}`);
-        const scenarioInventory = await inventoryScenario(browser, scenario);
-        actions.push(...scenarioInventory.actions);
-        screenshots.push(scenarioInventory.screenshot);
-        surfaceComplexity.push(scenarioInventory.surfaceComplexity);
-        if (inventoryOnly) {
-          continue;
-        }
-        const runnableActions =
-          maxActions > 0
-            ? scenarioInventory.actions.slice(0, maxActions)
-            : scenarioInventory.actions;
-        for (const [index, action] of runnableActions.entries()) {
-          const activationModes =
-            action.disabled || action.destructive ? ["keyboard"] : ["pointer", "keyboard"];
-          for (const activationMode of activationModes) {
-            console.log(
-              `[ui-actions] replay ${scenario.id} ${String(index + 1)}/${String(
-                runnableActions.length,
-              )} ${activationMode}: ${action.label}`,
-            );
-            results.push(await exerciseScenarioAction(browser, scenario, action, activationMode));
-          }
-        }
-      } finally {
-        await browser.close();
+    const scenarioPlan = scenarios.map((scenario, index) => ({ index, scenario }));
+    const scenarioResults = await runScenarioBatches({
+      chromium,
+      maxActions,
+      runSummary,
+      scenarioPlan,
+      workerLimit: resolvedWorkerLimit,
+      inventoryOnly,
+    });
+    for (const scenarioResult of scenarioResults) {
+      const {
+        actions: scenarioActions,
+        screenshots: scenarioScreenshots,
+        results: scenarioReplayResults,
+      } = scenarioResult;
+      actions.push(...scenarioActions);
+      results.push(...scenarioReplayResults);
+      screenshots.push(...scenarioScreenshots);
+      if (scenarioResult.surfaceComplexity) {
+        surfaceComplexity.push(scenarioResult.surfaceComplexity);
       }
     }
 
@@ -154,6 +213,11 @@ async function main() {
           : "completed-with-findings",
       summary: summarizeResults(results),
     };
+    const gateFindings = summarizeGateFindings({ actions, duplicates, results, scenarios });
+    const status =
+      !inventoryOnly && gateFindings.total > 0 && failOnFindings
+        ? "failed"
+        : resultsDocument.status;
 
     await writeFile(
       path.join(outputDir, "action-inventory.json"),
@@ -189,9 +253,37 @@ async function main() {
         websiteExtractionQuality: websiteExtractionQualityDocument.quality,
       }),
     );
+    runSummary = {
+      ...runSummary,
+      appBaseUrl,
+      apiBaseUrl,
+      completedAt: new Date().toISOString(),
+      durationMs: Math.max(0, Date.now() - startAt),
+      failed: summarizeResults(results).failed,
+      phaseTimings: {
+        ...(runSummary.phaseTimings ?? {}),
+        totalMs: Math.max(0, Date.now() - startAt),
+      },
+      resultSummary: summarizeResults(results),
+      scenarioSummary: summarizeInventory(actions),
+      status,
+      summaries: {
+        gateFindings,
+        inventory: {
+          actionCount: actions.length,
+          scenarioCount: scenarios.length,
+          screenshotCount: screenshots.length,
+        },
+        results: {
+          scenarioResults: scenarioResults.length,
+          total: summarizeResults(results).total,
+        },
+      },
+      websiteExtractionQuality: websiteExtractionQualityDocument.quality,
+    };
+    await writeSummary(runSummary);
 
-    console.log(`UI action audit ${resultsDocument.status}. Reports written to ${outputDir}`);
-    const gateFindings = summarizeGateFindings({ actions, duplicates, results, scenarios });
+    console.log(`UI action audit ${runSummary.status}. Reports written to ${outputDir}`);
     if (failOnFindings && gateFindings.total > 0) {
       process.exitCode = 1;
     }
@@ -200,6 +292,142 @@ async function main() {
       await services.stop();
     }
   }
+}
+
+function clampWorkerCount(value) {
+  if (!Number.isFinite(value) || value < 1) {
+    return 1;
+  }
+  return Math.floor(Math.min(value, 10));
+}
+
+async function measurePhase(summary, name, fn) {
+  const startedAt = Date.now();
+  try {
+    return await fn();
+  } finally {
+    const durationMs = Math.max(0, Date.now() - startedAt);
+    summary.phaseTimings = {
+      ...(summary.phaseTimings ?? {}),
+      [name]: durationMs,
+    };
+  }
+}
+
+async function runScenarioBatches({
+  chromium,
+  inventoryOnly: inventoryMode,
+  maxActions: actionLimit,
+  runSummary: scenarioRunSummary,
+  scenarioPlan,
+  workerLimit: rawWorkerLimit,
+}) {
+  if (scenarioPlan.length === 0) {
+    return [];
+  }
+  const workersToStart = clampWorkerCount(Math.min(rawWorkerLimit, scenarioPlan.length));
+  const results = Array(scenarioPlan.length);
+  let nextIndex = 0;
+  let failure;
+  const runWorker = async () => {
+    const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
+    try {
+      while (!failure && nextIndex < scenarioPlan.length) {
+        const planIndex = nextIndex++;
+        const plan = scenarioPlan[planIndex];
+        if (!plan) {
+          continue;
+        }
+        const scenarioStartedAt = Date.now();
+        const scenarioResult = await runScenarioTask(browser, plan.scenario, {
+          inventoryOnly: inventoryMode,
+          maxActions: actionLimit,
+        });
+        const durationMs = Math.max(0, Date.now() - scenarioStartedAt);
+        scenarioRunSummary.scenarioTimings[plan.index] = {
+          actionCount: scenarioResult.actions.length,
+          durationMs,
+          index: plan.index,
+          replayResults: scenarioResult.results.length,
+          scenarioId: plan.scenario.id,
+          status: "completed",
+        };
+        results[plan.index] = {
+          ...scenarioResult,
+          durationMs,
+        };
+      }
+    } catch (error) {
+      if (!failure) {
+        failure = error;
+      }
+      throw error;
+    } finally {
+      await browser.close();
+    }
+  };
+  await Promise.all(Array.from({ length: workersToStart }, runWorker));
+  if (failure) {
+    throw failure;
+  }
+  return results;
+}
+
+async function runScenarioTask(browser, scenario, options) {
+  console.log(`[ui-actions] inventory ${scenario.id}`);
+  const scenarioInventory = await inventoryScenario(browser, scenario);
+  const screenshots = [scenarioInventory.screenshot];
+  if (options.inventoryOnly) {
+    return {
+      actions: scenarioInventory.actions,
+      results: [],
+      screenshots,
+      scenarioId: scenario.id,
+      surfaceComplexity: scenarioInventory.surfaceComplexity,
+    };
+  }
+  const runnableActions =
+    options.maxActions > 0
+      ? scenarioInventory.actions.slice(0, options.maxActions)
+      : scenarioInventory.actions;
+  const actionResults = [];
+  for (const [index, action] of runnableActions.entries()) {
+    const activationModes =
+      action.disabled || action.destructive ? ["keyboard"] : ["pointer", "keyboard"];
+    for (const activationMode of activationModes) {
+      console.log(
+        `[ui-actions] replay ${scenario.id} ${String(index + 1)}/${String(
+          runnableActions.length,
+        )} ${activationMode}: ${action.label}`,
+      );
+      actionResults.push(await exerciseScenarioAction(browser, scenario, action, activationMode));
+    }
+  }
+  return {
+    actions: scenarioInventory.actions,
+    results: actionResults,
+    screenshots,
+    scenarioId: scenario.id,
+    surfaceComplexity: scenarioInventory.surfaceComplexity,
+  };
+}
+
+async function writeSummary(summary) {
+  await mkdir(path.dirname(summaryPath), { recursive: true });
+  await writeFile(
+    summaryPath,
+    `${JSON.stringify(
+      {
+        ...summary,
+        phaseTimings: {
+          ...(summary.phaseTimings ?? {}),
+          totalMs: Math.max(0, Date.now() - Date.parse(summary.startedAt)),
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 function parseScenarioFilter(value) {
@@ -486,6 +714,21 @@ function createScenarios(seed) {
       id: "book-docx-audio-ready",
       label: "DOCX book source, audio ready",
       open: (page) => openBookCinemaOverlay(page, seed.docx.scope),
+      storageState: projectStorageState(seed.projectId, {
+        bookScope: seed.docx.scope,
+        bookSourceId: seed.docx.book.id,
+        jobId: seed.docx.job.id,
+        sourceMode: "book",
+        stage: "intake",
+        text: seed.docx.text,
+      }),
+      surface: "BookCinema",
+    },
+    {
+      description: "Book Cinema advanced menu opened from the focus mode toolbar.",
+      id: "book-advanced-menu",
+      label: "Book Cinema advanced menu",
+      open: (page) => openBookCinemaAdvancedMenu(page, seed.docx.scope),
       storageState: projectStorageState(seed.projectId, {
         bookScope: seed.docx.scope,
         bookSourceId: seed.docx.book.id,
@@ -958,6 +1201,13 @@ async function openBookCinemaOverlay(page, scope) {
   await cinemaOverlay(page).waitFor({ state: "visible" });
 }
 
+async function openBookCinemaAdvancedMenu(page, scope) {
+  await openBookCinemaOverlay(page, scope);
+  const overlay = cinemaOverlay(page);
+  await overlay.getByRole("button", { name: "More advanced modes" }).click();
+  await overlay.locator("#cinema-advanced-mode-menu").waitFor();
+}
+
 async function openPinnedInspector(page, scope) {
   await openBookCinemaOverlay(page, scope);
   const overlay = cinemaOverlay(page);
@@ -1118,6 +1368,8 @@ async function startLocalServices() {
   );
 
   const service = {
+    backendLog,
+    frontendLog,
     apiBaseUrl: `http://127.0.0.1:${String(backendPort)}`,
     appBaseUrl: `http://127.0.0.1:${String(frontendPort)}`,
     stop: async () => {
@@ -1520,8 +1772,12 @@ async function pageIssuesForReport(issues) {
 
 function summarizeInventory(actions) {
   return {
+    advancedOperatorControls: actions.filter((action) => action.operatorAdvanced).length,
     capabilityGatedDisabled: actions.filter((action) => action.disabled && action.capabilityGated)
       .length,
+    debugOperatorControls: actions.filter(
+      (action) => action.operatorAdvanced && action.advancedModeId,
+    ).length,
     destructive: actions.filter((action) => action.destructive).length,
     disabled: actions.filter((action) => action.disabled).length,
     missingStableTestIds: actions.filter((action) => !action.hasStableTestId).length,
@@ -1658,6 +1914,10 @@ function renderReviewerSummary({
     `- Failed/no-op/browser findings: ${String(resultSummary.failed)}`,
     `- Disabled controls: ${String(inventorySummary.disabled)}`,
     `- Capability-gated disabled controls: ${String(inventorySummary.capabilityGatedDisabled)}`,
+    `- Advanced/operator controls: ${String(inventorySummary.advancedOperatorControls)}`,
+    `- Advanced/debug controls with mode metadata: ${String(
+      inventorySummary.debugOperatorControls,
+    )}`,
     `- Destructive controls: ${String(inventorySummary.destructive)}`,
     `- Website extraction confidence: ${websiteExtractionQuality?.extractionConfidence ?? "missing"}`,
     `- Website skipped chrome blocks: ${String(websiteExtractionQuality?.skippedBlockCount ?? 0)}`,

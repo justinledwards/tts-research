@@ -245,6 +245,7 @@ async function collectPanels(page) {
         title: element.querySelector("h3")?.textContent?.trim() ?? "",
         visibleSections: Array.from(element.querySelectorAll("[data-context-section-kind]")).map(
           (section) => ({
+            advancedReason: section.getAttribute("data-context-section-advanced-reason") ?? "",
             allowedSurfaces:
               section.getAttribute("data-context-section-allowed-surfaces")?.split(",") ?? [],
             debugOnly: section.getAttribute("data-context-section-debug-only") === "true",
@@ -269,6 +270,7 @@ async function activePanelSnapshot(page, surface, tabId) {
       return {
         sections: panel
           ? Array.from(panel.querySelectorAll("[data-context-section-kind]")).map((section) => ({
+              advancedReason: section.getAttribute("data-context-section-advanced-reason") ?? "",
               allowedSurfaces:
                 section.getAttribute("data-context-section-allowed-surfaces")?.split(",") ?? [],
               debugOnly: section.getAttribute("data-context-section-debug-only") === "true",
@@ -343,6 +345,12 @@ function contextPanelGuardrailFailures(snapshot) {
     }
     if (snapshot.tabId === "diagnostics" && !section.debugOnly) {
       failures.push(`${label} is in Diagnostics but is not marked debug-only.`);
+    }
+    if (section.debugOnly && !section.advancedReason) {
+      failures.push(`${label} is debug-only but lacks a visible advanced reason.`);
+    }
+    if (section.debugOnly && !section.text.includes(section.advancedReason)) {
+      failures.push(`${label} advanced reason is not visible in the rendered panel.`);
     }
     if (section.text.length === 0 && !section.emptyState) {
       failures.push(`${label} is empty without empty-state copy.`);

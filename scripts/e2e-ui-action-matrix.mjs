@@ -80,6 +80,16 @@ export async function buildActionInventory(page, scenario) {
           ariaHasPopup: element.getAttribute("aria-haspopup"),
           ariaPressed: element.getAttribute("aria-pressed"),
           ariaSelected: element.getAttribute("aria-selected"),
+          advancedModeId:
+            element.getAttribute("data-advanced-mode-id") ??
+            element.closest("[data-advanced-mode-id]")?.getAttribute("data-advanced-mode-id") ??
+            null,
+          advancedReason:
+            element.getAttribute("data-advanced-mode-reason") ??
+            element
+              .closest("[data-advanced-mode-reason]")
+              ?.getAttribute("data-advanced-mode-reason") ??
+            null,
           className: String(element.getAttribute("class") ?? ""),
           capabilityGate,
           capabilityGated:
@@ -98,6 +108,13 @@ export async function buildActionInventory(page, scenario) {
           intentionallyNoOpReason:
             element.getAttribute("data-ui-noop-reason") ??
             element.getAttribute("data-noop-reason") ??
+            null,
+          operatorAdvanced:
+            element.getAttribute("data-ui-action-advanced") === "true" ||
+            element.closest("[data-ui-action-advanced='true']") !== null,
+          operatorScope:
+            element.getAttribute("data-ui-action-scope") ??
+            element.closest("[data-ui-action-scope]")?.getAttribute("data-ui-action-scope") ??
             null,
           label,
           name: element.getAttribute("name"),
@@ -987,6 +1004,12 @@ function metadataIssuesFor(action) {
   }
   if (action.playbackAction && action.disabled && !action.generatedAudioLifecycle) {
     issues.push("disabled-playback-action-without-lifecycle");
+  }
+  if (action.operatorAdvanced && !action.advancedModeId) {
+    issues.push("advanced-action-without-mode-id");
+  }
+  if (action.operatorAdvanced && !action.advancedReason && !action.title) {
+    issues.push("advanced-action-without-reason");
   }
   if (action.destructive && !action.hasConfirmationAffordance) {
     issues.push("destructive-without-confirmation-affordance");

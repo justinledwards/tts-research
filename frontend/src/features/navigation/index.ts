@@ -1,9 +1,11 @@
 export { CommandPalette } from "./CommandPalette";
 export {
+  buildCinemaAdvancedCommandMetadata,
   buildCinemaFocusCommandMetadata,
   buildHelpCommandMetadata,
   buildSettingsCommandMetadata,
   buildWorkspaceCommandMetadata,
+  type CinemaAdvancedCommandTarget,
   type CinemaFocusCommandTarget,
   type HelpCommandTarget,
   type SettingsCommandTarget,

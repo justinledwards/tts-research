@@ -31,12 +31,19 @@ export function ContextPanel({
   }
 
   const tabPanelId = `context-panel-${surface}-${activeTab.id}`;
+  const activeTabOwners = uniquePanelOwners(activeTab);
+  const activeAdvancedReason = activeTab.advanced
+    ? `${activeTab.title} is an operator-facing panel for diagnostics and internals. It stays hidden from Read mode unless selected or pinned intentionally.`
+    : null;
 
   return (
     <Panel
       aria-label={label}
       className={`overflow-hidden ${className}`}
+      data-context-panel-advanced={activeTab.advanced ? "true" : "false"}
       data-context-panel-active-tab={activeTab.id}
+      data-context-panel-owner={activeTabOwners.join(",")}
+      data-context-panel-reason={activeAdvancedReason ?? ""}
       data-context-panel-surface={surface}
     >
       <div className="border-b p-3 vs-border">
@@ -98,29 +105,60 @@ export function ContextPanel({
             })}
           </div>
         ) : null}
+        {activeAdvancedReason ? (
+          <div
+            className="mt-3 rounded-md border border-amber-400/40 bg-amber-400/10 p-2 text-xs leading-5 text-amber-900 dark:text-amber-200"
+            data-context-panel-advanced-reason={activeAdvancedReason}
+          >
+            <span className="font-semibold">Advanced: </span>
+            {activeAdvancedReason}
+          </div>
+        ) : null}
       </div>
       <div className="grid gap-3 p-3" id={tabPanelId} role="tabpanel">
-        {activeTab.sections.map((section) => (
-          <section
-            aria-label={section.title}
-            className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
-            data-context-section-allowed-surfaces={(section.allowedSurfaces ?? []).join(",")}
-            data-context-section-debug-only={section.debugOnly ? "true" : "false"}
-            data-context-section-empty-state={section.emptyState ?? ""}
-            data-context-section-kind={section.kind}
-            data-context-section-owner={section.owner ?? ""}
-            data-context-section-panel-id={section.panelId ?? activeTab.id}
-            data-context-section-relevance={section.relevance ?? ""}
-            key={section.id}
-          >
-            <div className="min-w-0">
-              <h4 className="truncate text-sm font-semibold">{section.title}</h4>
-              <p className="mt-1 text-xs vs-muted">{section.detail}</p>
-            </div>
-            {section.children}
-          </section>
-        ))}
+        {activeTab.sections.map((section) => {
+          const sectionAdvancedReason = section.debugOnly
+            ? debugSectionReason(section.title, section.detail)
+            : "";
+          return (
+            <section
+              aria-label={section.title}
+              className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
+              data-context-section-advanced-reason={sectionAdvancedReason}
+              data-context-section-allowed-surfaces={(section.allowedSurfaces ?? []).join(",")}
+              data-context-section-debug-only={section.debugOnly ? "true" : "false"}
+              data-context-section-empty-state={section.emptyState ?? ""}
+              data-context-section-kind={section.kind}
+              data-context-section-owner={section.owner ?? ""}
+              data-context-section-panel-id={section.panelId ?? activeTab.id}
+              data-context-section-relevance={section.relevance ?? ""}
+              key={section.id}
+            >
+              <div className="min-w-0">
+                <h4 className="truncate text-sm font-semibold">{section.title}</h4>
+                <p className="mt-1 text-xs vs-muted">{section.detail}</p>
+              </div>
+              {sectionAdvancedReason ? (
+                <p
+                  className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-xs leading-5 text-amber-900 dark:text-amber-200"
+                  data-context-section-advanced-reason-visible="true"
+                >
+                  Advanced: {sectionAdvancedReason}
+                </p>
+              ) : null}
+              {section.children}
+            </section>
+          );
+        })}
       </div>
     </Panel>
   );
+}
+
+function uniquePanelOwners(tab: ContextPanelTabDefinition): string[] {
+  return [...new Set(tab.sections.map((section) => section.owner).filter(Boolean))] as string[];
+}
+
+function debugSectionReason(title: string, detail: string): string {
+  return `${title} is visible only in Diagnostics for operator review: ${detail}`;
 }
