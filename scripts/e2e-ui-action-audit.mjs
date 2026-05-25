@@ -132,7 +132,7 @@ async function main() {
     const { chromium } = await loadPlaywright();
 
     const seed = await measurePhase(runSummary, "seed", () => seedAuditData(fixtures));
-    const scenarios = await measurePhase(runSummary, "scenarios", () =>
+    const scenarios = await measurePhase(runSummary, "scenarioGeneration", () =>
       filterScenarios(createScenarios(seed), scenarioFilter),
     );
     runSummary.profile.scenarioCount = scenarios.length;
@@ -157,15 +157,20 @@ async function main() {
     }
 
     const scenarioPlan = scenarios.map((scenario, index) => ({ index, scenario }));
-    const scenarioResults = await runScenarioBatches({
-      chromium,
-      maxActions,
-      runSummary,
-      scenarioPlan,
-      workerLimit: resolvedWorkerLimit,
-      inventoryOnly,
-    });
+    const scenarioResults = await measurePhase(runSummary, "actionReplay", () =>
+      runScenarioBatches({
+        chromium,
+        maxActions,
+        runSummary,
+        scenarioPlan,
+        workerLimit: resolvedWorkerLimit,
+        inventoryOnly,
+      }),
+    );
     for (const scenarioResult of scenarioResults) {
+      if (!scenarioResult) {
+        continue;
+      }
       const {
         actions: scenarioActions,
         screenshots: scenarioScreenshots,
@@ -347,6 +352,7 @@ async function runScenarioBatches({
         scenarioRunSummary.scenarioTimings[plan.index] = {
           actionCount: scenarioResult.actions.length,
           durationMs,
+          scenarioExecutionMs: durationMs,
           index: plan.index,
           replayResults: scenarioResult.results.length,
           scenarioId: plan.scenario.id,
@@ -1579,17 +1585,28 @@ async function createPreparedNarrationJob(
 
 async function waitForJob(jobId) {
   const startedAt = Date.now();
-  while (Date.now() - startedAt < jobTimeoutMs) {
-    const job = await apiJson(`/api/voice-jobs/${jobId}`);
-    if (job.status === "completed") {
-      return job;
+  try {
+    while (Date.now() - startedAt < jobTimeoutMs) {
+      const job = await apiJson(`/api/voice-jobs/${jobId}`);
+      if (job.status === "completed") {
+        return job;
+      }
+      if (job.status === "failed" || job.status === "cancelled") {
+        throw new Error(`Job ${jobId} ended as ${job.status}: ${job.error ?? "no error"}`);
+      }
+      await sleep(500);
     }
-    if (job.status === "failed" || job.status === "cancelled") {
-      throw new Error(`Job ${jobId} ended as ${job.status}: ${job.error ?? "no error"}`);
+    throw new Error(`Timed out waiting for job ${jobId}`);
+  } finally {
+    if (runSummary) {
+      const waitMs = Math.max(0, Date.now() - startedAt);
+      const phaseTimings = runSummary.phaseTimings ?? {};
+      runSummary.phaseTimings = {
+        ...phaseTimings,
+        jobWaitMs: (phaseTimings.jobWaitMs ?? 0) + waitMs,
+      };
     }
-    await sleep(500);
   }
-  throw new Error(`Timed out waiting for job ${jobId}`);
 }
 
 async function scopeText(bookSourceId, scope) {

@@ -569,8 +569,8 @@
 - [x] Enable ESLint cache and add explicit fast/quick local validation aliases.
 
 ## 2026-05-25 20:08 CEST - `e2e:ui-actions` speed optimization
-- [ ] Add `e2e:ui-actions` quick and smoke command profiles.
-- [ ] Introduce bounded parallel scenario execution in `scripts/e2e-ui-action-audit.mjs`.
-- [ ] Write timing summary metadata for e2e action audit phases.
-- [ ] Add local regression guard script for UI action audit runtime.
-- [ ] Evaluate quick workflow defaults and document assumptions in code.
+- [x] Add `e2e:ui-actions` quick and smoke command profiles.
+- [x] Introduce bounded parallel scenario execution in `scripts/e2e-ui-action-audit.mjs`.
+- [x] Write timing summary metadata for e2e action audit phases.
+- [x] Add local regression guard script for UI action audit runtime.
+- [x] Evaluate quick workflow defaults and document assumptions in code.
