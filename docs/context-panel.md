@@ -11,6 +11,7 @@ The context panel is the shared right-side model for Review, Cinema inspector de
 - `History`: outline, bookmarks, recent positions, and return context.
 
 `Diagnostics` is advanced by default. It remains discoverable through Debug mode, command/operator paths, and the context tab list, but normal Read mode stays canvas-first.
+The surface complexity budget treats Diagnostics and pinned inspector states as advanced-only density; see `docs/surface-complexity-budget.md`.
 
 ## Focus Mode Defaults
 

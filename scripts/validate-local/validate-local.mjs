@@ -273,6 +273,21 @@ const uiActionInventoryStep = await runCommandStep(context, {
 });
 await attachUiActionInventorySummary(uiActionInventoryStep);
 
+const surfaceComplexityStep = await runCommandStep(context, {
+  id: "surface-complexity-budget-e2e",
+  title: "Surface Complexity Budget",
+  command: "pnpm",
+  args: ["e2e:surface-complexity"],
+  env: {
+    UI_COMPLEXITY_OUTPUT_DIR: path.join(context.artifactsDir, "surface-complexity-budget-e2e"),
+  },
+  artifacts: {
+    budgetJson: path.join(context.artifactsDir, "surface-complexity-budget-e2e", "budget.json"),
+    budgetReport: path.join(context.artifactsDir, "surface-complexity-budget-e2e", "budget.md"),
+  },
+});
+await attachSurfaceComplexitySummary(surfaceComplexityStep);
+
 const commandPaletteStep = await runCommandStep(context, {
   id: "command-palette-e2e",
   title: "Command Palette E2E",
@@ -518,6 +533,24 @@ async function attachUiActionInventorySummary(step) {
       ],
     };
   });
+}
+
+async function attachSurfaceComplexitySummary(step) {
+  await attachJsonMetrics(step, "budgetJson", (document) => ({
+    metrics: {
+      surfaceComplexity: document.summary,
+    },
+    thresholds: [
+      {
+        actual: document.summary?.failures ?? 0,
+        expected: 0,
+        metric: "surfaceComplexityBudgetFailures",
+        operator: "===",
+        passed: (document.summary?.failures ?? 0) === 0,
+        threshold: "maxSurfaceComplexityBudgetFailures",
+      },
+    ],
+  }));
 }
 
 async function attachCommandPaletteSummary(step) {

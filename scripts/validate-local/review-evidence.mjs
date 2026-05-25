@@ -131,6 +131,16 @@ export function buildReviewSteps(context) {
       id: "ui-actions-e2e",
       title: "UI Action Audit E2E",
     },
+    {
+      args: ["e2e:surface-complexity"],
+      artifacts: surfaceComplexityArtifacts(context, "surface-complexity-budget-e2e"),
+      command: "pnpm",
+      env: {
+        UI_COMPLEXITY_OUTPUT_DIR: artifactDir(context, "surface-complexity-budget-e2e"),
+      },
+      id: "surface-complexity-budget-e2e",
+      title: "Surface Complexity Budget",
+    },
     bookCinemaStep(context, {
       id: "workspace-flow-e2e",
       script: "e2e:workspace-flow",
@@ -285,6 +295,14 @@ function uiActionArtifacts(context, id) {
     reviewerSummary: path.join(dir, "reviewer-summary.md"),
     screenshots: path.join(dir, "screenshots"),
     websiteExtractionQuality: path.join(dir, "website-extraction-quality.json"),
+  };
+}
+
+function surfaceComplexityArtifacts(context, id) {
+  const dir = artifactDir(context, id);
+  return {
+    budgetJson: path.join(dir, "budget.json"),
+    budgetReport: path.join(dir, "budget.md"),
   };
 }
 
@@ -482,6 +500,9 @@ async function readQaDocuments(artifactRecords) {
     ),
     actionInventory: await readJsonIfPresent(byStepAndKey.get("ui-actions-e2e:actionInventory")),
     actionResults: await readJsonIfPresent(byStepAndKey.get("ui-actions-e2e:actionResults")),
+    surfaceComplexity: await readJsonIfPresent(
+      byStepAndKey.get("surface-complexity-budget-e2e:budgetJson"),
+    ),
     websiteExtractionQuality: await readJsonIfPresent(
       byStepAndKey.get("ui-actions-e2e:websiteExtractionQuality"),
     ),
@@ -587,6 +608,7 @@ export function buildPassFailSummary({
     readAlongFidelity: statusSummary(qaDocuments.readAlongFidelity),
     responsiveCinema: statusSummary(qaDocuments.responsiveCinema),
     responsiveSnapshots: statusSummary(qaDocuments.responsiveSnapshots),
+    surfaceComplexity: statusSummary(qaDocuments.surfaceComplexity),
     telepromptMemory: statusSummary(qaDocuments.telepromptMemory),
     validateLocal: statusSummary(qaDocuments.validateLocal),
     websiteExtractionQuality: statusSummary(qaDocuments.websiteExtractionQuality),
@@ -733,6 +755,7 @@ export function renderReviewerSummary(manifest) {
 
   lines.push("", "## Required Artifacts", "");
   lines.push(...artifactSection("Action Audit", manifest, ["ui-actions-e2e"]));
+  lines.push(...artifactSection("Surface Complexity", manifest, ["surface-complexity-budget-e2e"]));
   lines.push(
     ...artifactSection("Responsive Screenshots", manifest, [
       "book-cinema-responsive-e2e",

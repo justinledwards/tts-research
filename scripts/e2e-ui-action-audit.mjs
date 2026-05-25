@@ -74,6 +74,7 @@ async function main() {
     const actions = [];
     const results = [];
     const screenshots = [];
+    const surfaceComplexity = [];
     const launchBrowser = () => chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
 
     if (!inventoryOnly && shouldRunTraversal(scenarioFilter)) {
@@ -94,6 +95,7 @@ async function main() {
         const scenarioInventory = await inventoryScenario(browser, scenario);
         actions.push(...scenarioInventory.actions);
         screenshots.push(scenarioInventory.screenshot);
+        surfaceComplexity.push(scenarioInventory.surfaceComplexity);
         if (inventoryOnly) {
           continue;
         }
@@ -138,6 +140,7 @@ async function main() {
         surface: scenario.surface,
       })),
       screenshots,
+      surfaceComplexity,
       summary: summarizeInventory(actions),
     };
     const resultsDocument = {
@@ -234,9 +237,10 @@ async function inventoryScenario(browser, scenario) {
     await scenario.open(page);
     await assertNoPageIssues(issues);
     const actions = await buildActionInventory(page, scenario);
+    const surfaceComplexity = await collectSurfaceComplexity(page, scenario, actions);
     const screenshot = path.join(screenshotsDir, `${scenario.id}.png`);
     await page.screenshot({ fullPage: false, path: screenshot });
-    return { actions, screenshot };
+    return { actions, screenshot, surfaceComplexity };
   } catch (error) {
     const screenshot = path.join(screenshotsDir, `${scenario.id}-inventory-failure.png`);
     await page.screenshot({ fullPage: true, path: screenshot }).catch(() => {});
@@ -244,6 +248,103 @@ async function inventoryScenario(browser, scenario) {
   } finally {
     await context.close();
   }
+}
+
+async function collectSurfaceComplexity(page, scenario, actions) {
+  const domMetrics = await page.evaluate(() => {
+    const visible = (element) => {
+      if (!(element instanceof HTMLElement)) {
+        return false;
+      }
+      if (
+        typeof element.checkVisibility === "function" &&
+        !element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
+      ) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
+        return false;
+      }
+      let current = element;
+      while (current instanceof HTMLElement) {
+        const style = window.getComputedStyle(current);
+        if (
+          style.display === "none" ||
+          style.visibility === "hidden" ||
+          current.getAttribute("aria-hidden") === "true"
+        ) {
+          return false;
+        }
+        current = current.parentElement;
+      }
+      return true;
+    };
+    const visibleDialogs = [
+      ...document.querySelectorAll("[role='dialog'][aria-modal='true']"),
+    ].filter(visible);
+    const activeRoot = visibleDialogs[visibleDialogs.length - 1] ?? document;
+    const queryVisible = (selector) => {
+      const matches =
+        activeRoot instanceof Element && activeRoot.matches(selector) ? [activeRoot] : [];
+      return [...matches, ...activeRoot.querySelectorAll(selector)].filter(visible);
+    };
+    const countVisible = (selector) => queryVisible(selector).length;
+    return {
+      activeModesTabs: countVisible(
+        "[aria-selected='true'], [aria-pressed='true'], [data-state='active']",
+      ),
+      chipsBadges: countVisible(
+        "[data-testid*='chip' i], [data-testid*='badge' i], [class*='chip' i], [class*='badge' i]",
+      ),
+      panelsOpenByDefault: countVisible(
+        "[role='dialog'], [data-testid*='panel' i], [data-testid*='drawer' i], [data-testid*='sheet' i], details[open]",
+      ),
+    };
+  });
+  const labels = new Map();
+  let labelLength = 0;
+  let reachableDrawersSheets = 0;
+  for (const action of actions) {
+    const label = action.visibleLabel || action.label || "";
+    if (label) {
+      labels.set(label, (labels.get(label) ?? 0) + 1);
+    }
+    labelLength += String(action.accessibleName || action.label || "").length;
+    if (
+      action.ariaHasPopup ||
+      action.ariaControls ||
+      /\b(more|settings|drawer|sheet|palette|help|guide|shortcuts|open)\b/i.test(action.label)
+    ) {
+      reachableDrawersSheets += 1;
+    }
+  }
+  const visibleActions = actions.length;
+  return {
+    budgetKey: scenario.id,
+    description: scenario.description,
+    id: scenario.id,
+    label: scenario.label,
+    metrics: {
+      activeModesTabs: domMetrics.activeModesTabs,
+      averageAccessibleLabelLength:
+        visibleActions > 0 ? Math.round(labelLength / visibleActions) : 0,
+      chipsBadges: domMetrics.chipsBadges,
+      destructiveActions: actions.filter((action) => action.destructive).length,
+      disabledActions: actions.filter((action) => action.disabled).length,
+      duplicatedVisibleLabels: [...labels.values()].filter((count) => count > 1).length,
+      panelsOpenByDefault: domMetrics.panelsOpenByDefault,
+      primaryActions: actions.filter(
+        (action) =>
+          action.playbackPrimary ||
+          action.actionClass === "generation" ||
+          action.actionClass === "preview",
+      ).length,
+      reachableDrawersSheets,
+      visibleActions,
+    },
+    surface: scenario.surface,
+  };
 }
 
 async function exerciseScenarioAction(browser, scenario, action, activationMode) {

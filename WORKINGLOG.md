@@ -518,3 +518,11 @@
 - [x] Keep privacy boundary copy out of the startup bundle budget path
 - [x] Run required local validation commands that do not depend on the external HN target
 - [ ] Resolve upstream live-ingestion 429 from Hacker News target
+
+## 2026-05-25 02:26 CEST - Surface Complexity Budget
+- [x] Inspect UI action inventory and existing local review reporting
+- [x] Add shared surface complexity budget model and report script
+- [x] Wire complexity budget artifacts into local validation and review evidence
+- [x] Document the budget and operator/debug waivers
+- [x] Run required local validation commands
+- [x] Commit WP22 changes

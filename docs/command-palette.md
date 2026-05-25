@@ -40,6 +40,7 @@ Commands use one category list:
 - Opening settings from a command lands on the matching task group and highlights the relevant setting scope or field.
 - Settings has one visible primary entry in the top bar: the gear button. The command palette and contextual deep links may open the same Settings drawer, but separate settings UIs should not be introduced.
 - Help is available through the command palette, configurable shortcut, and Help content deep links. Do not add more persistent Help buttons unless the surface has a specific recovery need.
+- Surface complexity budgets keep the command palette secondary. Required tasks must remain available in the owning surface; see `docs/surface-complexity-budget.md`.
 
 ## Local Smoke
 
@@ -50,6 +51,7 @@ pnpm check
 pnpm e2e:settings-ia
 pnpm e2e:workspace-flow
 pnpm e2e:ui-actions
+pnpm e2e:surface-complexity
 pnpm e2e:reader-wayfinding
 ```
 
