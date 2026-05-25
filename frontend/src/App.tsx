@@ -141,7 +141,9 @@ import {
   CollapsedRailButton,
   RailMiniStack,
   RailModeToolbar,
+  overlayDataAttributes,
   railColumnWidth,
+  workspaceOverlayState,
 } from "./features/layout";
 import { normalizeReviewPane, selectReviewBlockId, type ReviewPane } from "./features/review/model";
 import {
@@ -6574,11 +6576,43 @@ export function App() {
   if (contentMode === "teleprompt") {
     globalPreviewOwner = "teleprompt";
   }
+  const globalPreviewVisible =
+    studioMode === "narration" &&
+    shouldShowGlobalPreviewPlayer({
+      activityFooterMode,
+      isCinemaOpen: isBookCinemaOpen,
+      isSettingsOpen,
+      owner: globalPreviewOwner,
+      preparedSourceCinemaOpen: Boolean(preparedSourceCinemaSource),
+      stage: contentMode,
+    });
+  const workspaceOverlay = workspaceOverlayState({
+    activityFooterMode,
+    previewPlayerVisible: globalPreviewVisible,
+    rightRailMode,
+    stage: contentMode,
+  });
+  let activityFooterReserve = "5rem";
+  if (activityFooterMode === "compact") {
+    activityFooterReserve = "9rem";
+  }
+  if (activityFooterMode === "full") {
+    activityFooterReserve = "min(34vh,24rem)";
+  }
+  const workspaceOverlayStyle = {
+    ...studioGridStyle,
+    "--overlay-activity-footer-reserved": activityFooterReserve,
+    "--overlay-preview-bottom": `calc(${activityFooterReserve} + 0.75rem)`,
+    "--overlay-preview-right": "0.75rem",
+    scrollPaddingBottom: `calc(${activityFooterReserve} + 1rem)`,
+  } as CSSProperties;
 
   return (
     <main
-      className="vs-app flex h-screen min-h-0 flex-col overflow-y-auto lg:overflow-hidden"
+      className="vs-app flex h-screen min-h-0 flex-col overflow-hidden"
       data-theme={themeName}
+      data-overlay-reserved-zones={workspaceOverlay.reservedZones.join(" ")}
+      style={workspaceOverlayStyle}
     >
       <TopProductBar
         activeJobId={activeJobId}
@@ -6943,20 +6977,12 @@ export function App() {
             currentPolicyId={speechPolicyProfile}
             currentRunMode={runConfiguration.runMode}
             currentVoiceId={selectedVoiceProfileId || "default"}
-            hidden={
-              !shouldShowGlobalPreviewPlayer({
-                activityFooterMode,
-                isCinemaOpen: isBookCinemaOpen,
-                isSettingsOpen,
-                owner: globalPreviewOwner,
-                preparedSourceCinemaOpen: Boolean(preparedSourceCinemaSource),
-                stage: contentMode,
-              })
-            }
+            hidden={!globalPreviewVisible || workspaceOverlay.previewPlacement === "hidden"}
             isPlaybackActive={isPlaybackActive}
             job={job}
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
+            placement={workspaceOverlay.previewPlacement}
             policyOptions={globalPreviewPolicyOptions}
             providerEngineId={runConfiguration.ttsEngine}
             providerEngines={ttsEngines}
@@ -6975,7 +7001,11 @@ export function App() {
               activeNarrationPreparedSource,
               activeNarrationBookSource,
             )}
-            variant={previewPlayerVariantForSurface({ isSettingsOpen, stage: contentMode })}
+            variant={
+              workspaceOverlay.previewPlacement === "floating"
+                ? previewPlayerVariantForSurface({ isSettingsOpen, stage: contentMode })
+                : workspaceOverlay.previewVariant
+            }
             voiceOptions={globalPreviewVoiceOptions}
             voiceProfileLabel={selectedVoiceProfileLabel}
             onActiveBlockChange={(blockId) => {
@@ -7164,10 +7194,13 @@ export function App() {
 
       {studioMode === "voiceCloning" ? (
         <section
-          className="grid min-h-0 grid-cols-1 border-t lg:flex-1 lg:grid-cols-[var(--studio-left-column)_minmax(0,1fr)_var(--studio-right-column)] lg:overflow-hidden vs-border"
+          className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto border-t lg:grid-cols-[var(--studio-left-column)_minmax(0,1fr)_var(--studio-right-column)] lg:overflow-hidden vs-border"
           style={studioGridStyle}
         >
-          <aside className="vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-r">
+          <aside
+            className="vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-r"
+            {...overlayDataAttributes("left-rail", "left-rail")}
+          >
             {leftRailMode === "collapsed" ? null : (
               <RailModeToolbar
                 label="Voice Command"
@@ -7219,7 +7252,7 @@ export function App() {
               />
             )}
           </aside>
-          <section className="order-1 min-w-0 p-5 lg:order-none lg:min-h-0 lg:overflow-y-auto xl:p-6">
+          <section className="order-1 min-w-0 px-5 pt-5 pb-24 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:pb-5 xl:px-6 xl:pt-6 xl:pb-6">
             <VoiceCloningWorkspace
               activity={voiceCloningActivity}
               buildingArtifactKey={buildingArtifactKey}
@@ -7246,7 +7279,10 @@ export function App() {
               onRunConfigurationChange={setRunConfiguration}
             />
           </section>
-          <aside className="vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-l">
+          <aside
+            className="vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-l"
+            {...overlayDataAttributes("right-rail", "right-rail")}
+          >
             {rightRailMode === "collapsed" ? null : (
               <RailModeToolbar
                 label="Readiness"
@@ -7282,10 +7318,13 @@ export function App() {
         </section>
       ) : (
         <section
-          className="grid min-h-0 grid-cols-1 border-t lg:flex-1 lg:grid-cols-[var(--studio-left-column)_minmax(0,1fr)_var(--studio-right-column)] lg:overflow-hidden vs-border"
+          className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto border-t lg:grid-cols-[var(--studio-left-column)_minmax(0,1fr)_var(--studio-right-column)] lg:overflow-hidden vs-border"
           style={studioGridStyle}
         >
-          <aside className="vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-r">
+          <aside
+            className="vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-r"
+            {...overlayDataAttributes("left-rail", "left-rail")}
+          >
             {leftRailMode === "collapsed" ? null : (
               <RailModeToolbar
                 label="Voice Command"
@@ -7363,7 +7402,7 @@ export function App() {
             )}
           </aside>
 
-          <section className="order-1 flex min-w-0 flex-col gap-3 p-4 lg:order-none lg:min-h-0 lg:overflow-y-auto xl:p-5">
+          <section className="order-1 flex min-w-0 flex-col gap-3 px-4 pt-4 pb-24 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:pb-4 xl:px-5 xl:pt-5 xl:pb-5">
             <SourceTextPanel
               activeReviewPane={activeReviewPane}
               activeReviewBlockId={workspaceContext.activeBlockId}
@@ -7512,7 +7551,10 @@ export function App() {
             ) : null}
           </section>
 
-          <aside className="vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-l">
+          <aside
+            className="vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-l"
+            {...overlayDataAttributes("right-rail", "right-rail")}
+          >
             {rightRailMode === "collapsed" ? null : (
               <RailModeToolbar
                 label="Playback"
@@ -9417,7 +9459,10 @@ function PipelineStatusFooter({
 
   if (mode === "collapsed") {
     return (
-      <footer className="z-30 shrink-0 border-t px-3 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised">
+      <footer
+        className="z-30 shrink-0 border-t px-3 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised"
+        {...overlayDataAttributes("activity-footer", "bottom-activity-footer")}
+      >
         <button
           className="flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-md border px-3 text-left transition hover:bg-[var(--vs-surface)] vs-border"
           onClick={() => {
@@ -9445,7 +9490,10 @@ function PipelineStatusFooter({
 
   if (mode === "compact") {
     return (
-      <footer className="z-30 shrink-0 border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised">
+      <footer
+        className="z-30 shrink-0 border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised"
+        {...overlayDataAttributes("activity-footer", "bottom-activity-footer")}
+      >
         <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-center">
           <CompactActivityLane
             action={narrationAction}
@@ -9472,7 +9520,10 @@ function PipelineStatusFooter({
   }
 
   return (
-    <footer className="z-30 max-h-[min(34vh,24rem)] shrink-0 overflow-y-auto border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised">
+    <footer
+      className="z-30 max-h-[min(34vh,24rem)] shrink-0 overflow-y-auto border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised"
+      {...overlayDataAttributes("activity-footer", "bottom-activity-footer")}
+    >
       <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
           Activity Footer

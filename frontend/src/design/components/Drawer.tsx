@@ -8,16 +8,33 @@ export interface DrawerProps {
   label: string;
   metadata?: { label: string; value: string }[];
   onClose: () => void;
+  overlayOwner?: string;
+  overlayZone?: string;
   scopeTitle?: string;
   title: string;
 }
 
 export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
-  { children, className, label, metadata = [], onClose, scopeTitle, title },
+  {
+    children,
+    className,
+    label,
+    metadata = [],
+    onClose,
+    overlayOwner,
+    overlayZone,
+    scopeTitle,
+    title,
+  },
   ref,
 ) {
   return (
-    <div className="fixed inset-0 z-[60] bg-zinc-950/25" role="presentation">
+    <div
+      className="fixed inset-0 z-[60] bg-zinc-950/25"
+      data-overlay-owner={overlayOwner}
+      data-overlay-zone={overlayZone}
+      role="presentation"
+    >
       <aside
         aria-label={label}
         aria-modal="true"

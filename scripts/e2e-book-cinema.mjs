@@ -1448,6 +1448,22 @@ async function assertNoHorizontalOverflow(page, label) {
         {
           className: element.className,
           clientWidth: element.clientWidth,
+          widestDescendant: [...element.querySelectorAll("*")]
+            .filter((descendant) => descendant instanceof HTMLElement)
+            .map((descendant) => {
+              const rect = descendant.getBoundingClientRect();
+              const parentRect = element.getBoundingClientRect();
+              return {
+                className: descendant.className,
+                overflowRight: Math.round(rect.right - parentRect.right),
+                tagName: descendant.tagName,
+                text: descendant.textContent?.replace(/\s+/g, " ").trim().slice(0, 80) ?? "",
+                width: Math.round(rect.width),
+              };
+            })
+            .filter((descendant) => descendant.overflowRight > 1)
+            .sort((a, b) => b.overflowRight - a.overflowRight)
+            .slice(0, 5),
           overflow,
           scrollWidth: element.scrollWidth,
           tagName: element.tagName,

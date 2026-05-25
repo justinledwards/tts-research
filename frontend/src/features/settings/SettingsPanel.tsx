@@ -3,6 +3,7 @@ import { backendAssetUrl } from "../../api";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { Button, Panel, StatusChip, Toggle, fieldControlClassName } from "../../design";
 import { Drawer } from "../../design/components/Drawer";
+import { overlayDataAttributes } from "../layout";
 import { useReaderModalLifecycle, type ReaderAccessibilitySettings } from "../reader-accessibility";
 import {
   KOKORO_RENDER_MODE_OPTIONS,
@@ -1975,12 +1976,15 @@ function PanelShell({
 }>) {
   const panelRef = useRef<HTMLElement | null>(null);
   useReaderModalLifecycle(panelRef, { closeOnEscape: true, onClose });
+  const overlayAttributes = overlayDataAttributes("settings-drawer", "settings-drawer");
 
   return (
     <Drawer
       label={label}
       metadata={[{ label: "Groups", value: "Run, Reader, Voices, Sources, Runtime, Diagnostics" }]}
       onClose={onClose}
+      overlayOwner={overlayAttributes["data-overlay-owner"]}
+      overlayZone={overlayAttributes["data-overlay-zone"]}
       ref={panelRef}
       scopeTitle="Session, Source, Project, Machine"
       title={title}

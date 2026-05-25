@@ -15,6 +15,11 @@ import {
   summarizeDuplicates,
 } from "./e2e-ui-action-matrix.mjs";
 import { renderDeadControlsReport, renderDuplicatesReport } from "./e2e-ui-dead-controls.mjs";
+import {
+  collectOverlayCollisionReport,
+  renderOverlayCollisionReport,
+  summarizeOverlayCollisionReports,
+} from "./overlay-collision-audit.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
@@ -186,6 +191,10 @@ async function main() {
 
     const generatedAt = new Date().toISOString();
     const duplicates = summarizeDuplicates(actions);
+    const overlayCollisionReports = surfaceComplexity
+      .map((complexity) => complexity.overlayCollision)
+      .filter(Boolean);
+    const overlayCollisionSummary = summarizeOverlayCollisionReports(overlayCollisionReports);
     const websiteExtractionQualityDocument = websiteExtractionQualityDocumentFromSeed(
       seed,
       generatedAt,
@@ -218,7 +227,19 @@ async function main() {
           : "completed-with-findings",
       summary: summarizeResults(results),
     };
-    const gateFindings = summarizeGateFindings({ actions, duplicates, results, scenarios });
+    const overlayCollisionDocument = {
+      generatedAt,
+      reports: overlayCollisionReports,
+      schemaVersion: "overlay-collisions.v1",
+      summary: overlayCollisionSummary,
+    };
+    const gateFindings = summarizeGateFindings({
+      actions,
+      duplicates,
+      results,
+      scenarios,
+      surfaceComplexity,
+    });
     const status =
       !inventoryOnly && gateFindings.total > 0 && failOnFindings
         ? "failed"
@@ -245,6 +266,14 @@ async function main() {
       `${JSON.stringify(websiteExtractionQualityDocument, null, 2)}\n`,
     );
     await writeFile(
+      path.join(outputDir, "overlay-collisions.json"),
+      `${JSON.stringify(overlayCollisionDocument, null, 2)}\n`,
+    );
+    await writeFile(
+      path.join(outputDir, "overlay-collisions.md"),
+      renderOverlayCollisionReport({ generatedAt, reports: overlayCollisionReports }),
+    );
+    await writeFile(
       path.join(outputDir, "reviewer-summary.md"),
       renderReviewerSummary({
         actions,
@@ -255,6 +284,7 @@ async function main() {
         results,
         scenarios,
         screenshots,
+        surfaceComplexity,
         websiteExtractionQuality: websiteExtractionQualityDocument.quality,
       }),
     );
@@ -283,6 +313,7 @@ async function main() {
           scenarioResults: scenarioResults.length,
           total: summarizeResults(results).total,
         },
+        overlayCollisions: overlayCollisionSummary,
       },
       websiteExtractionQuality: websiteExtractionQualityDocument.quality,
     };
@@ -536,6 +567,7 @@ async function collectSurfaceComplexity(page, scenario, actions) {
       ),
     };
   });
+  const overlayCollision = await collectOverlayCollisionReport(page);
   const labels = new Map();
   let labelLength = 0;
   let reachableDrawersSheets = 0;
@@ -567,6 +599,8 @@ async function collectSurfaceComplexity(page, scenario, actions) {
       destructiveActions: actions.filter((action) => action.destructive).length,
       disabledActions: actions.filter((action) => action.disabled).length,
       duplicatedVisibleLabels: [...labels.values()].filter((count) => count > 1).length,
+      overlayCollisions: overlayCollision.summary.failures,
+      overlayProtectedTargets: overlayCollision.summary.protectedTargets,
       panelsOpenByDefault: domMetrics.panelsOpenByDefault,
       primaryActions: actions.filter(
         (action) =>
@@ -577,6 +611,7 @@ async function collectSurfaceComplexity(page, scenario, actions) {
       reachableDrawersSheets,
       visibleActions,
     },
+    overlayCollision,
     surface: scenario.surface,
   };
 }
@@ -1817,7 +1852,13 @@ function summarizeResults(results) {
   };
 }
 
-function summarizeGateFindings({ actions, duplicates, results, scenarios }) {
+function summarizeGateFindings({
+  actions,
+  duplicates,
+  results,
+  scenarios,
+  surfaceComplexity = [],
+}) {
   const requiredSurfaces = [
     "Workspace Intake",
     "Review",
@@ -1864,6 +1905,9 @@ function summarizeGateFindings({ actions, duplicates, results, scenarios }) {
   const capabilityGatedDisabled = actions.filter(
     (action) => action.disabled && action.capabilityGated,
   );
+  const overlayCollisionFindings = surfaceComplexity.flatMap(
+    (complexity) => complexity.overlayCollision?.findings ?? [],
+  );
   return {
     capabilityGatedDisabled,
     disabledWithoutReason,
@@ -1872,12 +1916,14 @@ function summarizeGateFindings({ actions, duplicates, results, scenarios }) {
     metadataFindings,
     missingSafeActivations,
     missingSurfaces,
+    overlayCollisionFindings,
     destructiveMissingConfirmation,
     total:
       failedResults.length +
       metadataFindings.length +
       missingSafeActivations.length +
       missingSurfaces.length +
+      overlayCollisionFindings.length +
       destructiveMissingConfirmation.length +
       disabledWithoutReason.length,
   };
@@ -1892,11 +1938,18 @@ function renderReviewerSummary({
   results,
   scenarios,
   screenshots,
+  surfaceComplexity = [],
   websiteExtractionQuality,
 }) {
   const resultSummary = summarizeResults(results);
   const inventorySummary = summarizeInventory(actions);
-  const findings = summarizeGateFindings({ actions, duplicates, results, scenarios });
+  const findings = summarizeGateFindings({
+    actions,
+    duplicates,
+    results,
+    scenarios,
+    surfaceComplexity,
+  });
   const status =
     !inventoryOnly && findings.total === 0
       ? "Review-complete: exhaustive UI action audit passed."
@@ -1917,6 +1970,8 @@ function renderReviewerSummary({
     "- action-results.json: present",
     "- dead-controls.md: present",
     "- duplicates.md: present",
+    "- overlay-collisions.json: present",
+    "- overlay-collisions.md: present",
     "- website-extraction-quality.json: present",
     "- reviewer-summary.md: present",
     `- screenshots/: ${String(screenshots.length)} captured`,
@@ -1953,6 +2008,7 @@ function renderReviewerSummary({
       findings.destructiveMissingConfirmation.length,
     )}`,
     `- Duplicate groups requiring review: ${formatFindingCount(duplicates.length)}`,
+    `- Overlay collisions: ${formatFindingCount(findings.overlayCollisionFindings.length)}`,
     "",
     "## Surface counts",
     "",

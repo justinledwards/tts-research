@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,11 @@ import {
   writeJson,
 } from "./e2e-browser-qa-helpers.mjs";
 import { instrumentScreenshotState, writeScreenshotStateArtifacts } from "./screenshot-state.mjs";
+import {
+  collectOverlayCollisionReport,
+  renderOverlayCollisionReport,
+  summarizeOverlayCollisionReports,
+} from "./overlay-collision-audit.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
@@ -67,6 +72,8 @@ async function main() {
       await browser.close();
     }
     const failures = results.filter((result) => !result.passed).length;
+    const overlayCollisionReports = results.map((result) => result.overlayCollision);
+    const overlayCollisionSummary = summarizeOverlayCollisionReports(overlayCollisionReports);
     const screenshotState = await writeScreenshotStateArtifacts({
       outputDir: screenshotStateDir,
       records: screenshotStateRecords,
@@ -82,6 +89,7 @@ async function main() {
       summary: {
         failures: failures + stateMismatches,
         layoutFailures: failures,
+        overlayCollisionFailures: overlayCollisionSummary.failures,
         screenshotStateMismatches: stateMismatches,
         screenshots: results.length * 2,
         viewports: results.length,
@@ -92,7 +100,25 @@ async function main() {
       mismatches: path.join(screenshotStateDir, "state-mismatches.md"),
       summary: screenshotState.summary,
     };
+    document.overlayCollisions = {
+      report: path.join(outputDir, "overlay-collisions.md"),
+      results: path.join(outputDir, "overlay-collisions.json"),
+      summary: overlayCollisionSummary,
+    };
     document.status = document.summary.failures === 0 ? "passed" : "failed";
+    await writeJson(path.join(outputDir, "overlay-collisions.json"), {
+      generatedAt: document.generatedAt,
+      reports: overlayCollisionReports,
+      schemaVersion: "overlay-collisions.v1",
+      summary: overlayCollisionSummary,
+    });
+    await writeFile(
+      path.join(outputDir, "overlay-collisions.md"),
+      renderOverlayCollisionReport({
+        generatedAt: document.generatedAt,
+        reports: overlayCollisionReports,
+      }),
+    );
     await writeJson(path.join(outputDir, "responsive-results.json"), document);
     console.log(`Responsive snapshots ${document.status}. Reports written to ${outputDir}`);
     process.exitCode = document.status === "passed" ? 0 : 1;
@@ -135,12 +161,18 @@ async function captureViewport(browser, viewport) {
           element.getClientRects().length > 0,
       ).length,
     }));
+    const overlayCollision = await collectOverlayCollisionReport(page);
     const issues = blockingPageIssues(pageIssues);
     return {
       id: viewport.id,
       issues,
       layout,
-      passed: !layout.horizontalOverflow && issues.length === 0 && layout.bodyText.length > 0,
+      overlayCollision,
+      passed:
+        !layout.horizontalOverflow &&
+        issues.length === 0 &&
+        layout.bodyText.length > 0 &&
+        overlayCollision.summary.failures === 0,
       screenshots,
       viewport,
     };

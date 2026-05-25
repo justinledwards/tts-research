@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Button, Panel } from "../../design";
+import { overlayDataAttributes } from "../layout";
 
 export interface CinemaMobilePanelSpec<TPanelId extends string = string> {
   children: ReactNode;
@@ -36,6 +37,7 @@ export function CinemaMobileSheet<TPanelId extends string>({
       aria-label={label}
       className="z-[55] max-h-[min(44vh,24rem)] overflow-y-auto rounded-t-2xl border-t bg-[var(--vs-raised)] px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl vs-border lg:hidden"
       data-cinema-mobile-sheet=""
+      {...overlayDataAttributes("bottom-sheet", "mobile-bottom-sheet")}
       id={id}
     >
       <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-zinc-500/50" />

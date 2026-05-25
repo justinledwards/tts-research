@@ -1,4 +1,5 @@
 import { Button, Panel, StatusChip } from "../../design";
+import { overlayDataAttributes } from "../layout";
 import {
   selectContextPanelTab,
   type ContextPanelSurface,
@@ -45,6 +46,7 @@ export function ContextPanel({
       data-context-panel-owner={activeTabOwners.join(",")}
       data-context-panel-reason={activeAdvancedReason ?? ""}
       data-context-panel-surface={surface}
+      {...overlayDataAttributes("context-panel", "context-panel")}
     >
       <div className="border-b p-3 vs-border">
         <div className="flex items-start justify-between gap-3">

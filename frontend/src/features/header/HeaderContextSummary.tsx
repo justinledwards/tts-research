@@ -90,7 +90,7 @@ export function HeaderContextSummary({
     >
       {icon ? <div className="shrink-0">{icon}</div> : null}
       <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <p className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
             {surfaceName}
           </p>

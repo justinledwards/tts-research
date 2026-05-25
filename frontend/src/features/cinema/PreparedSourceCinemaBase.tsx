@@ -779,7 +779,7 @@ export function PreparedSourceCinemaOverlay({
       header={
         <header className="relative flex min-h-[4rem] flex-wrap items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
           <HeaderContextSummary
-            className="min-w-[16rem] flex-1 basis-[26rem] lg:max-w-[min(36rem,42vw)]"
+            className="min-w-0 flex-1 basis-[18rem] sm:min-w-[16rem] sm:basis-[26rem] lg:max-w-[min(36rem,42vw)]"
             density="compact"
             icon={
               <span className="grid h-9 w-9 place-items-center rounded-md border border-orange-200 text-orange-600 sm:border-zinc-900 sm:bg-zinc-950 sm:text-white">

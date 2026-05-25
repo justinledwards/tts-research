@@ -580,3 +580,9 @@
 - [x] Add centralized renderer lifecycle and bounded loading states
 - [x] Wire screenshot validation for ready/loading renderer scenarios
 - [x] Run WP25 local validation commands
+
+## 2026-05-25 20:48 CEST - Floating Surface Collision and Overlay Ownership
+- [x] Inspect current preview player, workspace rails, footer, and visual audit geometry
+- [x] Add shared overlay ownership metadata and placement rules
+- [x] Add local overlay collision detector and screenshot report findings
+- [x] Run WP26 local validation commands

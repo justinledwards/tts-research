@@ -14,6 +14,7 @@ import {
   providerCapabilityGateForPlaybackAction,
   resolveProviderRuntimeCapabilities,
 } from "../provider-capabilities";
+import { overlayDataAttributes, type PreviewPlayerPlacement } from "../layout";
 import { READER_PLAYBACK_RATES } from "../reader-accessibility";
 import type { RevisionBlock } from "../revision";
 import {
@@ -60,6 +61,7 @@ export interface GlobalPreviewPlayerProps {
   readonly job: VoiceJob | null;
   readonly playbackControls: GlobalPreviewPlaybackController;
   readonly playbackCursorSec: number;
+  readonly placement?: PreviewPlayerPlacement;
   readonly policyOptions: readonly PreviewComparisonOption[];
   readonly providerEngineId?: string;
   readonly providerEngines?: readonly TTSEngineDiagnostics[];
@@ -90,6 +92,7 @@ export function GlobalPreviewPlayer({
   job,
   playbackControls,
   playbackCursorSec,
+  placement = "floating",
   policyOptions,
   providerEngineId = "mock",
   providerEngines = [],
@@ -190,10 +193,14 @@ export function GlobalPreviewPlayer({
   return (
     <aside
       aria-label="Global preview mini-player"
-      className={previewPlayerClassName()}
-      style={previewPlayerStyle(fullVariant, dock)}
+      className={previewPlayerClassName(placement)}
+      style={previewPlayerStyle(fullVariant, dock, placement)}
       data-testid="global-preview-player"
       data-ui-action-surface="Preview"
+      {...overlayDataAttributes(
+        "preview-player",
+        placement === "inline" ? "stage-inline-preview" : "floating-preview",
+      )}
     >
       <div className={cx("grid gap-3", fullVariant && "lg:grid-cols-1 lg:items-stretch")}>
         <div className="min-w-0">
@@ -469,16 +476,31 @@ function previewPlaybackStatusLabel(isPlaying: boolean, isPlaybackActive: boolea
   return isPlaying || isPlaybackActive ? "Playing" : "Ready";
 }
 
-function previewPlayerClassName(): string {
-  return "fixed right-3 z-50 overflow-auto rounded-lg border bg-[var(--vs-raised)] p-3 shadow-2xl vs-border";
+function previewPlayerClassName(placement: PreviewPlayerPlacement): string {
+  if (placement === "inline") {
+    return "relative z-10 mx-3 my-2 max-h-[14rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-3 shadow-sm vs-border lg:mx-4";
+  }
+  return "fixed z-40 overflow-auto rounded-lg border bg-[var(--vs-raised)] p-3 shadow-2xl vs-border";
 }
 
-function previewPlayerStyle(fullVariant: boolean, dock: "bottom" | "top"): CSSProperties {
+function previewPlayerStyle(
+  fullVariant: boolean,
+  dock: "bottom" | "top",
+  placement: PreviewPlayerPlacement,
+): CSSProperties {
   const size = {
     maxHeight: fullVariant ? "18rem" : "14rem",
-    width: fullVariant ? "min(calc(100vw - 1.5rem), 34rem)" : "min(calc(100vw - 1.5rem), 28rem)",
+    width: fullVariant
+      ? "min(calc(100vw - var(--overlay-preview-right, 0.75rem) - 1.5rem), 34rem)"
+      : "min(calc(100vw - var(--overlay-preview-right, 0.75rem) - 1.5rem), 28rem)",
   };
-  return dock === "top" ? { ...size, top: "7rem" } : { ...size, bottom: "7rem" };
+  if (placement === "inline") {
+    return { maxHeight: size.maxHeight, width: "min(100%, 44rem)" };
+  }
+  const sideOffset = { right: "var(--overlay-preview-right, 0.75rem)" };
+  return dock === "top"
+    ? { ...size, ...sideOffset, top: "var(--overlay-preview-top, 7rem)" }
+    : { ...size, ...sideOffset, bottom: "var(--overlay-preview-bottom, 4.75rem)" };
 }
 
 function previewActiveDetail(

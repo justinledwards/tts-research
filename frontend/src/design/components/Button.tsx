@@ -51,6 +51,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     icon,
     selected = false,
     size = "md",
+    style,
     type = "button",
     variant = "secondary",
     ...buttonProps
@@ -58,6 +59,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ref,
 ) {
   const shouldApplySelected = selected && variant !== "primary" && variant !== "destructive";
+  const scrollSafeStyle = {
+    scrollMarginBottom: "calc(var(--overlay-activity-footer-reserved, 5rem) + 1rem)",
+    ...style,
+  };
   return (
     <button
       {...buttonProps}
@@ -78,6 +83,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       data-selected={selected ? "true" : undefined}
       data-ui-noop-reason={selected ? "Already selected." : undefined}
       ref={ref}
+      style={scrollSafeStyle}
       type={type}
     >
       {icon}

@@ -143,8 +143,8 @@ async function runBrowserFidelitySmoke(browser, projectId) {
       failures.push(`Expected active word 4, saw ${String(activeRegion.wordIndex)}.`);
     }
 
-    await overlay.getByRole("button", { exact: true, name: "More" }).click();
-    await overlay.getByRole("menuitemradio", { exact: true, name: "Debug" }).click();
+    await overlay.getByTestId("ui-action-cinema-advanced-menu").click();
+    await overlay.getByTestId("ui-action-cinema-advanced-diagnostics").click();
     await overlay.getByText("Read-along fidelity").first().waitFor();
     await overlay
       .getByText(/Read-along aligned|Read-along source/)

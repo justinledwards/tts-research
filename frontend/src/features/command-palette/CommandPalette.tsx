@@ -11,6 +11,7 @@ import {
   shortcutLabelForCommand,
   type ShortcutPreferences,
 } from "../shortcuts/shortcutRegistry";
+import { overlayDataAttributes } from "../layout";
 
 export type CommandPaletteView = "commands" | "shortcuts";
 
@@ -78,7 +79,11 @@ export function CommandPalette({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-zinc-950/35 px-3 py-6 sm:px-6" role="presentation">
+    <div
+      className="fixed inset-0 z-[70] bg-zinc-950/35 px-3 py-6 sm:px-6"
+      role="presentation"
+      {...overlayDataAttributes("command-palette", "command-palette")}
+    >
       <div
         aria-label="Command palette"
         aria-modal="true"
