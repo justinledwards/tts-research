@@ -117,14 +117,26 @@ export HF_HOME=/dev/shm/tts-research/hf
 
 ```sh
 pnpm check
+pnpm validate:local
 ```
 
-`pnpm check` stays the fast commit-time guard used by Husky. Before merging, run the local
-validation authority:
+`pnpm check` stays the commit-time guard used by Husky. `pnpm validate:local` is now the
+fast local validation lane: format, lint, typecheck, package checks, adapter tests,
+backend tests, frontend tests, Content IR validation, package smoke, and CLI parity.
+
+Run browser QA separately when you are working on UI flows:
+
+```sh
+pnpm validate:local:e2e
+```
+
+That lane starts one mock backend and one Vite server, then reuses them across the browser suites.
+
+Before merging or producing release evidence, run the release lane:
 
 ```sh
 mise doctor
-mise run validate:local
+mise run validate:local:release
 mise run bench:local
 ```
 
@@ -132,12 +144,18 @@ Equivalent pnpm entrypoints are available:
 
 ```sh
 pnpm validate:local
+pnpm validate:local:e2e
+pnpm validate:local:release
 pnpm bench:local
 pnpm e2e:book-cinema
 ```
 
 Validation writes `output/validate-local/latest/summary.json`, `report.md`, `report.html`, and
 per-step logs. Benchmark fixtures and thresholds are checked in under `benches/`.
+
+Use `pnpm local:bloat` to report large ignored runtime, model, and QA artifact directories. Use
+`pnpm local:clean` only when you intentionally want to delete safe generated outputs such as
+`output/`, `backend/output/`, and old generated job audio under `backend/data/jobs/`.
 
 ## Agent Pipeline
 

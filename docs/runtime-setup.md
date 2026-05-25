@@ -23,13 +23,32 @@ Cinema without external services. See `docs/first-run-demo.md` and `docs/contrib
 
 ## Local Validation Authority
 
-Use the local validation command as the pre-merge ritual. It runs format, lint, typecheck, adapter
-tests, backend/frontend tests, Content IR validation, the threshold-gated alignment bench, and the
-self-contained Book Cinema smoke.
+Use the fast local validation lane during normal development. It runs format, lint, typecheck,
+package checks, adapter tests, backend/frontend tests, Content IR validation, package smoke, and
+CLI parity without launching browser QA:
 
 ```sh
 mise doctor
 mise run validate:local
+```
+
+Run browser QA as its own lane when UI flows, reader behavior, responsive layouts, accessibility,
+or action inventory coverage are in scope:
+
+```sh
+mise run validate:local:e2e
+```
+
+The E2E lane starts one mock backend and one Vite server, then passes
+`E2E_USE_EXISTING_SERVERS=1`, `E2E_API_BASE_URL`, and `E2E_APP_BASE_URL` into the browser scripts so
+each suite reuses the same service pair.
+
+Before merging, use the release lane. It preserves the former local validation authority:
+fast checks, frontend bundle budget, alignment benchmark, browser QA, accessibility gate artifacts,
+and generated reports.
+
+```sh
+mise run validate:local:release
 mise run bench:local
 ```
 
@@ -37,6 +56,8 @@ The same entrypoints are available through pnpm:
 
 ```sh
 pnpm validate:local
+pnpm validate:local:e2e
+pnpm validate:local:release
 pnpm bench:local
 pnpm e2e:book-cinema
 ```
@@ -56,10 +77,14 @@ disabled under `.github/workflows.examples/` and `.github/workflows.disabled/`; 
 - `backend/data/` stores generated jobs, profiles, projects, books, source preps, and progress.
 - `backend/model-cache/` stores provider model caches such as Supertonic.
 - `backend/.venv-*` stores provider-specific Python environments.
+- `.venv-kokoclone` stores the isolated KokoClone runtime and can be several GiB.
 - `.upstreams/` stores cloned upstream projects used for evaluation.
 - `output/` stores local smoke-test audio and QA screenshots.
 
 These paths are intentionally ignored. They should be recreated through `mise` tasks, not committed.
+Use `pnpm local:bloat` to inspect their current sizes. Use `pnpm local:clean` only for safe
+generated output cleanup; it reports but does not remove Python runtimes, model caches, upstream
+clones, dependencies, or demo media.
 
 ## Supertonic 3
 

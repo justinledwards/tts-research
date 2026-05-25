@@ -20,14 +20,45 @@ mise audit:artifacts
 Hosted GitHub Actions are intentionally disabled for now. Keep workflow examples under
 `.github/workflows.examples/` or `.github/workflows.disabled/`, not `.github/workflows/`.
 
-Before merging, use the local authority:
+Use the fast lane while iterating:
 
 ```sh
 mise run validate:local
+```
+
+Run browser QA separately when a change touches UI flows or reader behavior:
+
+```sh
+mise run validate:local:e2e
+```
+
+Before merging, use the release authority:
+
+```sh
+mise run validate:local:release
 mise run bench:local
 ```
 
 The generated report lives under ignored `output/validate-local/latest/`.
+
+## Local Bloat Reports
+
+Ignored runtime directories are allowed to be large, but their purpose should stay legible:
+
+```sh
+pnpm local:bloat
+```
+
+The report is written to `output/local-bloat/latest/` and separates safe generated outputs from
+heavy runtime/model/dependency directories. To intentionally remove safe generated outputs:
+
+```sh
+pnpm local:clean
+```
+
+Cleanup removes `output/`, `backend/output/`, and generated job children under `backend/data/jobs`
+older than 14 days by default. It does not remove provider runtimes, model caches, upstream clones,
+dependencies, or demo media.
 
 ## Known Paths To Keep Out Of Git
 

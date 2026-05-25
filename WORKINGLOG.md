@@ -1,5 +1,11 @@
 # Working Log
 
+## 2026-05-25 14:23 CEST - Visual State Integrity Gate
+- [x] Inspect current screenshot, context-panel, and review-evidence reporting
+- [x] Add screenshot state manifest and mismatch assertions
+- [x] Wire screenshot state artifacts into local review validation
+- [x] Run WP23 local validation commands
+
 ## 2026-05-24 16:21 CEST - Provider Capability Matrix
 - [x] Inspect provider/runtime capability touchpoints
 - [x] Add backend provider capability model and tests
@@ -533,3 +539,14 @@
 - [x] Document the budget and operator/debug waivers
 - [x] Run required local validation commands
 - [x] Commit WP22 changes
+
+## 2026-05-25 17:32 CEST - Test Speed and Bloat Reduction
+- [x] Split validation lanes
+- [x] Reuse E2E services across local E2E validation
+- [x] Add local bloat report and cleanup tooling
+- [x] Document heavy local runtime directories
+- [x] Run project checks
+
+## 2026-05-25 17:45 CEST - Commit Test Speed Workpackage
+- [x] Stage validation speed and bloat tooling files
+- [x] Commit validation speed and bloat tooling workpackage
