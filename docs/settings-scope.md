@@ -33,6 +33,7 @@ Speech policy still resolves in the same order:
 - Command palette settings actions target the same layer, group, field, and scope metadata used by the Settings drawer.
 - Voice settings configure selected run behavior and render path only. Voice creation, cloning, artifact preparation, readiness, import/export, and deletion stay in the Voice Profile Dashboard.
 - A/B comparison and temporary auditioning stay in Preview; full generated playback stays in Cinema; engine readiness and failures stay in Runtime/Diagnostics.
+- Privacy and data-boundary copy must come from the shared privacy model so Intake, Settings, Dashboard, voice assets, UI memory, and bundle import/export describe local, mock, provider-backed, URL-fetch, and export boundaries consistently. See `docs/privacy-local-first.md`.
 
 ## Compact and Expanded Display
 

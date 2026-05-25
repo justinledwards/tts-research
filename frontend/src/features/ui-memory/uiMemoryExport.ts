@@ -9,6 +9,7 @@ import {
   persistableUiMemoryState,
   type UiMemoryState,
 } from "../preferences";
+import { UI_MEMORY_EXPORT_OMITTED_ITEMS } from "../privacy";
 import { DEFAULT_THEME_NAME, normalizeThemeName } from "../../theme";
 import type { ThemeName } from "../../types";
 
@@ -44,17 +45,10 @@ export interface UiMemoryImportResult {
 
 export function buildUiMemoryExportPayload(input: UiMemoryExportInput): UiMemoryExportPayload {
   const uiMemory = persistableUiMemoryState(input.uiMemory);
-  const omitted = [
-    "generated audio",
-    "model paths",
-    "provider secrets",
-    "private project content",
-    "raw Teleprompt script snapshots",
-  ];
   return {
     exportedAt: new Date().toISOString(),
     kind: UI_MEMORY_EXPORT_KIND,
-    omitted,
+    omitted: UI_MEMORY_EXPORT_OMITTED_ITEMS,
     preferences: {
       lastProjectId: uiMemory.rememberLastProject ? cleanProjectId(input.lastProjectId) : undefined,
       readerAccessibilitySettings: uiMemory.rememberReaderPreferences

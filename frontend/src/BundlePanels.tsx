@@ -5,6 +5,12 @@ import {
   previewProjectBundle,
   projectBundleDownloadUrl,
 } from "./api";
+import {
+  PRIVACY_NOTICES,
+  PrivacyBoundaryPanel,
+  projectExportPrivacyBoundary,
+  projectImportPrivacyBoundary,
+} from "./features/privacy";
 import { useReaderModalLifecycle } from "./features/reader-accessibility";
 import { formatDuration } from "./format";
 import type {
@@ -176,6 +182,11 @@ function ExportStepContent({
     return (
       <div className="grid gap-5">
         <ExportReviewSummary summary={summary} />
+        <PrivacyBoundaryPanel
+          boundaries={projectExportPrivacyBoundary()}
+          compact
+          title="Bundle data boundary"
+        />
         <section className="grid gap-3">
           <SectionHeading
             subtitle="Default bundles are portable: script, normalized text, generated audio, references, waveform peaks, telemetry, reports, run config, and reading settings."
@@ -520,55 +531,68 @@ function ImportChooseStep({
   onDragActiveChange: (isActive: boolean) => void;
 }>) {
   return (
-    <section
-      aria-label="Drop or choose a Voice Studio bundle"
-      className={`grid min-h-48 place-items-center rounded-xl border border-dashed p-6 text-center transition ${
-        isDragActive ? "border-orange-400 bg-orange-500/10" : "vs-border vs-surface"
-      }`}
-      onDragLeave={() => {
-        onDragActiveChange(false);
-      }}
-      onDragOver={(event) => {
-        event.preventDefault();
-        onDragActiveChange(true);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        onDragActiveChange(false);
-        acceptFile(event.dataTransfer.files.item(0));
-      }}
-    >
-      <div className="max-w-md">
-        <p className="text-lg font-semibold">Drop a `.voice-studio.zip` bundle</p>
-        <p className="vs-muted mt-2 text-sm">
-          Preview validates the manifest before it touches your projects.
-        </p>
-        <button
-          className="mt-4 h-10 rounded-md border px-4 text-sm font-semibold transition hover:bg-[var(--vs-raised)] vs-border"
-          onClick={() => {
-            inputRef.current?.click();
-          }}
-          type="button"
-        >
-          Browse Bundle
-        </button>
-        <input
-          ref={inputRef}
-          accept=".voice-studio.zip,.zip"
-          className="sr-only"
-          type="file"
-          onChange={(event) => {
-            acceptFile(event.currentTarget.files?.item(0));
-            event.currentTarget.value = "";
-          }}
-        />
-        {file ? (
-          <p className="vs-muted mt-3 truncate text-xs" title={file.name}>
-            {file.name} · {formatBytes(file.size)}
+    <div className="grid gap-4">
+      <section
+        aria-label="Drop or choose a Voice Studio bundle"
+        className={`grid min-h-48 place-items-center rounded-xl border border-dashed p-6 text-center transition ${
+          isDragActive ? "border-orange-400 bg-orange-500/10" : "vs-border vs-surface"
+        }`}
+        onDragLeave={() => {
+          onDragActiveChange(false);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          onDragActiveChange(true);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          onDragActiveChange(false);
+          acceptFile(event.dataTransfer.files.item(0));
+        }}
+      >
+        <div className="max-w-md">
+          <p className="text-lg font-semibold">Drop a `.voice-studio.zip` bundle</p>
+          <p className="vs-muted mt-2 text-sm">
+            Preview validates the manifest before it touches your projects.
           </p>
-        ) : null}
-      </div>
-    </section>
+          <button
+            className="mt-4 h-10 rounded-md border px-4 text-sm font-semibold transition hover:bg-[var(--vs-raised)] vs-border"
+            onClick={() => {
+              inputRef.current?.click();
+            }}
+            type="button"
+          >
+            Browse Bundle
+          </button>
+          <input
+            ref={inputRef}
+            accept=".voice-studio.zip,.zip"
+            className="sr-only"
+            type="file"
+            onChange={(event) => {
+              acceptFile(event.currentTarget.files?.item(0));
+              event.currentTarget.value = "";
+            }}
+          />
+          {file ? (
+            <p className="vs-muted mt-3 truncate text-xs" title={file.name}>
+              {file.name} · {formatBytes(file.size)}
+            </p>
+          ) : null}
+        </div>
+      </section>
+      <PrivacyBoundaryPanel
+        boundaries={projectImportPrivacyBoundary()}
+        compact
+        title="Import data boundary"
+      />
+      <p
+        className="vs-muted rounded-md border p-3 text-xs leading-5 vs-border vs-surface"
+        data-privacy-notice={PRIVACY_NOTICES.projectBundleImport.id}
+      >
+        {PRIVACY_NOTICES.projectBundleImport.message}
+      </p>
+    </div>
   );
 }
 

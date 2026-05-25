@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Panel, StatusChip } from "../../design";
 import { formatLocaleDate, formatLocaleNumber } from "../i18n";
+import {
+  PrivacyBoundaryPanel,
+  privacyBoundaryCatalog,
+  projectExportPrivacyBoundary,
+} from "../privacy";
 import { useReaderModalLifecycle } from "../reader-accessibility";
 import { SourceCard, sourceLifecycleModelsFromSources, type SourceCardModel } from "../sources";
 import type {
@@ -238,6 +243,15 @@ export function ProjectDashboard({
             </div>
 
             <div className="grid content-start gap-4">
+              <PrivacyBoundaryPanel
+                boundaries={[
+                  privacyBoundaryCatalog.projectStorage,
+                  privacyBoundaryCatalog.generatedAudio,
+                  projectExportPrivacyBoundary(),
+                ]}
+                title="Storage and export boundary"
+              />
+
               <Panel title="Protected and Deletable State">
                 <div className="grid gap-3 p-3 text-sm">
                   <ProjectStateFact

@@ -45,9 +45,10 @@ Exports intentionally omit:
 Imports accept only known preference fields. Unknown fields are ignored, and imported last-project
 memory is applied only when the project already exists locally.
 
+The broader local-first data boundary is documented in `docs/privacy-local-first.md`.
+
 ## Validation
 
 Local validation should confirm that disabling a memory category removes its local storage entry,
 reset controls show confirmation, exported JSON does not include project content or runtime paths,
 and Teleprompt return memory does not persist when that preference is disabled.
-

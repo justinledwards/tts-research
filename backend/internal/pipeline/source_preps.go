@@ -48,6 +48,7 @@ type fetchedReadableSource struct {
 	Filename    string
 	ContentType string
 	Bytes       []byte
+	Safety      sourceprep.URLSafetyReport
 }
 
 type hackerNewsAlgoliaItem struct {
@@ -126,6 +127,7 @@ func (service *Service) CreatePreparedSource(
 	sourceURL := strings.TrimSpace(request.URL)
 	contentType := strings.TrimSpace(request.SourceContentType)
 	sourceBytes := request.SourceBytes
+	var urlSafety *sourceprep.URLSafetyReport
 
 	if kind == PreparedSourceKindURL {
 		fetched, err := service.fetchReadableSourceURL(ctx, sourceURL)
@@ -137,6 +139,8 @@ func (service *Service) CreatePreparedSource(
 		sourceURL = fetched.URL
 		contentType = fetched.ContentType
 		sourceBytes = int64(len(fetched.Bytes))
+		safety := fetched.Safety
+		urlSafety = &safety
 	}
 	if sourceName == "" {
 		sourceName = "Untitled source"
@@ -178,6 +182,12 @@ func (service *Service) CreatePreparedSource(
 	prepared.Blocks = preprocessed.Blocks
 	prepared.Warnings = preprocessed.Warnings
 	prepared.Metadata = preprocessed.Metadata
+	if urlSafety != nil {
+		if prepared.Metadata == nil {
+			prepared.Metadata = map[string]any{}
+		}
+		prepared.Metadata["urlSafety"] = *urlSafety
+	}
 	prepared.SpeechPolicyProfile = project.SpeechPolicyProfile
 	prepared = applySpeechPolicyToPreparedSourceWithEvaluator(
 		prepared,
@@ -661,12 +671,13 @@ func (service *Service) reloadSourcePreps() {
 }
 
 func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL string) (fetchedReadableSource, error) {
-	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return fetchedReadableSource{}, fmt.Errorf("enter a valid http or https URL")
+	safety := sourceprep.AnalyzeURLSafety(rawURL, service.options.SourceURLAllowPrivate)
+	if err := sourceprep.ValidateURLSafety(safety); err != nil {
+		return fetchedReadableSource{}, err
 	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fetchedReadableSource{}, fmt.Errorf("only http and https URLs are supported")
+	parsed, err := url.Parse(safety.NormalizedURL)
+	if err != nil {
+		return fetchedReadableSource{}, fmt.Errorf("enter a valid http or https URL")
 	}
 
 	client := &http.Client{
@@ -683,7 +694,7 @@ func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL strin
 					return nil, err
 				}
 				for _, ip := range ips {
-					if !service.options.SourceURLAllowPrivate && isPrivateOrLocalIP(ip) {
+					if !service.options.SourceURLAllowPrivate && sourceprep.IsPrivateOrLocalIP(ip) {
 						return nil, fmt.Errorf("URL resolves to a private or local address")
 					}
 				}
@@ -738,12 +749,14 @@ func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL strin
 	if len(body) > maxReadableURLBytes {
 		return fetchedReadableSource{}, fmt.Errorf("URL content is too large")
 	}
+	safety.NormalizedURL = resp.Request.URL.String()
 	filename := filenameFromURL(resp.Request.URL, contentType)
 	return fetchedReadableSource{
 		URL:         resp.Request.URL.String(),
 		Filename:    filename,
 		ContentType: contentType,
 		Bytes:       body,
+		Safety:      safety,
 	}, nil
 }
 
@@ -1976,10 +1989,6 @@ func ensureFilenameExtension(name string, extension string) string {
 		return name
 	}
 	return strings.TrimSuffix(name, filepath.Ext(name)) + extension
-}
-
-func isPrivateOrLocalIP(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
 }
 
 func progressTargetForPreparedSource(sourceID string) string {

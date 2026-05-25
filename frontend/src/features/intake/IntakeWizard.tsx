@@ -48,6 +48,12 @@ import {
   sourceSelectorOption,
 } from "../source-lifecycle/sourceSelectors";
 import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
+import {
+  PRIVACY_NOTICES,
+  sourcePrepFailureNotice,
+  urlIntakeNotice,
+  type PrivacyNotice,
+} from "../privacy";
 
 export type IntakeDestinationStage = "review" | "preview";
 
@@ -58,6 +64,7 @@ export interface IntakeWizardProps {
   isImportingBookSource: boolean;
   isPreparingSource: boolean;
   preparedSources: PreparedSource[];
+  providerBackedGenerationBoundary?: boolean;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
@@ -270,6 +277,7 @@ export function IntakeWizard({
   isImportingBookSource,
   isPreparingSource,
   preparedSources,
+  providerBackedGenerationBoundary = false,
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
@@ -590,6 +598,7 @@ export function IntakeWizard({
           markdownParseMode={markdownParseMode}
           selectedFile={selectedFile}
           sourceChoice={sourceChoice}
+          sourcePrepError={sourcePrepError}
           sourceUrl={sourceUrl}
           onBrowse={() => {
             fileInputRef.current?.click();
@@ -641,6 +650,7 @@ export function IntakeWizard({
           intakeError={intakeError}
           isWorking={isWorking}
           policyProfile={template.speechPolicyProfile}
+          providerBackedGenerationBoundary={providerBackedGenerationBoundary}
           scopeOptions={scopeOptions}
           selectedBookSource={scopeBookSource}
           selectedPreparedSource={selectedPreparedSource}
@@ -793,6 +803,7 @@ function IntakeSourceStep({
   markdownParseMode,
   selectedFile,
   sourceChoice,
+  sourcePrepError,
   sourceUrl,
   onBrowse,
   onDraftTextChange,
@@ -808,6 +819,7 @@ function IntakeSourceStep({
   markdownParseMode: MarkdownParseMode;
   selectedFile: File | null;
   sourceChoice: IntakeSourceChoice;
+  sourcePrepError: string | null;
   sourceUrl: string;
   onBrowse: () => void;
   onDraftTextChange: (text: string) => void;
@@ -858,6 +870,7 @@ function IntakeSourceStep({
               Browse File
             </Button>
           </div>
+          <PrivacyNoticeCallout notice={PRIVACY_NOTICES.fileIntake} />
           <MarkdownModeSelect mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
         </Panel>
       ) : null}
@@ -877,6 +890,10 @@ function IntakeSourceStep({
               value={sourceUrl}
             />
           </label>
+          <PrivacyNoticeCallout notice={urlIntakeNotice(sourceUrl)} />
+          {sourcePrepError ? (
+            <PrivacyNoticeCallout notice={sourcePrepFailureNotice(sourcePrepError)} />
+          ) : null}
           <MarkdownModeSelect mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
         </Panel>
       ) : null}
@@ -923,6 +940,21 @@ function IntakeSourceStep({
           ) : null}
         </Panel>
       ) : null}
+    </div>
+  );
+}
+
+function PrivacyNoticeCallout({ notice }: Readonly<{ notice: PrivacyNotice }>) {
+  return (
+    <div
+      className="grid gap-2 rounded-md border p-3 text-xs leading-5 vs-border vs-surface"
+      data-privacy-notice={notice.id}
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold">{notice.title}</p>
+        <StatusChip tone={notice.tone}>{notice.tone === "success" ? "Local" : "Review"}</StatusChip>
+      </div>
+      <p className="vs-muted">{notice.message}</p>
     </div>
   );
 }
@@ -1113,6 +1145,7 @@ function IntakeDestinationStep({
   intakeError,
   isWorking,
   policyProfile,
+  providerBackedGenerationBoundary,
   scopeOptions,
   selectedBookSource,
   selectedPreparedSource,
@@ -1134,6 +1167,7 @@ function IntakeDestinationStep({
   intakeError: string | null;
   isWorking: boolean;
   policyProfile: string;
+  providerBackedGenerationBoundary: boolean;
   scopeOptions: ReturnType<typeof bookScopeOptions>;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
@@ -1193,6 +1227,9 @@ function IntakeDestinationStep({
           <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
             {intakeError}
           </p>
+        ) : null}
+        {providerBackedGenerationBoundary ? (
+          <PrivacyNoticeCallout notice={PRIVACY_NOTICES.providerBackedGeneration} />
         ) : null}
         <div className="flex flex-wrap gap-2">
           <Button

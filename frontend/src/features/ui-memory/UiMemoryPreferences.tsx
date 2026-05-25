@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button, Panel, StatusChip, Toggle, fieldControlClassName } from "../../design";
+import { PRIVACY_NOTICES } from "../privacy";
 import type { UiMemoryPreferenceId, UiMemoryState } from "../preferences";
 import {
   UI_MEMORY_PREFERENCE_META,
@@ -31,15 +32,13 @@ export function UiMemoryPreferences({
   onResetMemory,
 }: Readonly<UiMemoryPreferencesProps>) {
   const [jsonText, setJsonText] = useState("");
-  const [statusMessage, setStatusMessage] = useState(
-    "Generated audio, model paths, secrets, and project content are never exported.",
-  );
+  const [statusMessage, setStatusMessage] = useState(PRIVACY_NOTICES.uiMemoryExport.message);
 
   const exportPreferences = async () => {
     try {
       const exported = await onExportPreferences();
       setJsonText(exported);
-      setStatusMessage("Preferences JSON is ready. Sensitive project data was omitted.");
+      setStatusMessage(PRIVACY_NOTICES.uiMemoryExport.message);
     } catch (caughtError) {
       setStatusMessage(
         caughtError instanceof Error ? caughtError.message : "Unable to export UI preferences.",
@@ -126,7 +125,11 @@ export function UiMemoryPreferences({
           spellCheck={false}
           value={jsonText}
         />
-        <p aria-live="polite" className="text-xs leading-5 vs-muted">
+        <p
+          aria-live="polite"
+          className="text-xs leading-5 vs-muted"
+          data-privacy-notice={PRIVACY_NOTICES.uiMemoryExport.id}
+        >
           {statusMessage}
         </p>
       </div>

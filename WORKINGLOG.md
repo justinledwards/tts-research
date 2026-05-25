@@ -509,3 +509,12 @@
 - [x] Wire demo coverage into existing E2E/review flows where practical
 - [x] Harden UI action audit runner for long exhaustive local replay
 - [x] Run required local validation commands
+## 2026-05-25 00:23 CEST - Local Privacy Boundaries
+- [x] Inspect privacy, intake, export, UI memory, provider, and URL source-prep paths
+- [x] Add centralized privacy model, notices, and boundary panel
+- [x] Add backend URL safety model and tests
+- [x] Wire privacy notices into Intake, Settings, Dashboard, Voice, export/import, and E2E surfaces
+- [x] Add local-first privacy documentation
+- [x] Keep privacy boundary copy out of the startup bundle budget path
+- [x] Run required local validation commands that do not depend on the external HN target
+- [ ] Resolve upstream live-ingestion 429 from Hacker News target

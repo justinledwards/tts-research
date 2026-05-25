@@ -13,6 +13,20 @@ export function resolveProviderTtsGate(
   return `${engine.label || engineId || "Configured provider"} does not support text-to-speech. Select a ready provider in Settings > Runtime.`;
 }
 
+export function providerRuntimeLeavesLocalBoundary(
+  engineId: string,
+  engines: readonly TTSEngineDiagnostics[],
+): boolean {
+  const engine = resolveLiteEngine(engineId, engines);
+  if (!engine || isMockRuntime(engine)) {
+    return false;
+  }
+  if (engine.local || engine.capabilities?.localOnly || engine.capabilities?.mockTts) {
+    return false;
+  }
+  return engine.capabilities?.tts ?? engine.status === "ready";
+}
+
 export function providerCapabilityDataAttributes(
   capability: ProviderCapabilityKey,
   reason?: string | null,
@@ -44,6 +58,16 @@ function engineSupportsTts(engine: TTSEngineDiagnostics): boolean {
     return engine.capabilities.tts;
   }
   return engine.status === "ready";
+}
+
+function isMockRuntime(engine: TTSEngineDiagnostics): boolean {
+  const runtimeProvider = engine.metadata?.runtimeProvider ?? engine.metadata?.provider ?? "";
+  return (
+    runtimeProvider.toLowerCase() === "mock" ||
+    engine.id === "mock" ||
+    /mock/i.test(engine.label) ||
+    /silent runtime/i.test(engine.setup ?? "")
+  );
 }
 
 function normalizeEngineId(value: string): string {

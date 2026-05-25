@@ -34,6 +34,7 @@ import {
   resolveProviderRuntimeCapabilities,
   type ProviderCapabilityKey,
 } from "../provider-capabilities";
+import { PrivacyBoundaryPanel, providerRuntimePrivacyBoundary } from "../privacy";
 import type { UiMemoryPreferenceId, UiMemoryState } from "../preferences";
 import {
   UiMemoryPreferences,
@@ -1545,6 +1546,9 @@ function RuntimeSettingsGroup({
   ttsEngines: TTSEngineDiagnostics[];
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
+  const runtimePrivacy = providerRuntimePrivacyBoundary(
+    resolveProviderRuntimeCapabilities(runConfiguration.ttsEngine, ttsEngines),
+  );
   return (
     <PanelSection
       commandTargetTokens={["group-runtime", "field-runtimeDiagnostics", "scope-machine"]}
@@ -1577,6 +1581,7 @@ function RuntimeSettingsGroup({
         }}
       />
       <RuntimeCapabilityPanel engines={ttsEngines} selectedEngine={runConfiguration.ttsEngine} />
+      <PrivacyBoundaryPanel boundaries={runtimePrivacy} compact title="Runtime data boundary" />
       <ResearchModuleDiagnosticsList modules={researchModules} />
     </PanelSection>
   );

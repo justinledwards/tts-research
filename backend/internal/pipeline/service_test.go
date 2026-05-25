@@ -21,6 +21,7 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
+	"github.com/justinedwards/tts-research/backend/internal/sourceprep"
 )
 
 func TestCreateJobCompletesWithMockAgents(t *testing.T) {
@@ -608,6 +609,13 @@ func TestPreparedSourceURLIngestHonorsPrivateNetworkDefault(t *testing.T) {
 	}
 	if source.Kind != pipeline.PreparedSourceKindURL || !strings.Contains(source.SpeechText, "U R L Source") {
 		t.Fatalf("source = %#v, want prepared URL source", source)
+	}
+	safety, ok := source.Metadata["urlSafety"].(sourceprep.URLSafetyReport)
+	if !ok {
+		t.Fatalf("url safety metadata missing: %#v", source.Metadata)
+	}
+	if !safety.Allowed || safety.Class != sourceprep.URLSafetyLocalMachine {
+		t.Fatalf("url safety metadata = %#v, want allowed local-machine fixture", safety)
 	}
 }
 

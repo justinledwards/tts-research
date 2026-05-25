@@ -173,6 +173,7 @@ import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPre
 import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
 import type { HeaderContextSummaryProps } from "./features/header";
 import { generatedAudioLifecycleFromJob } from "./features/playback/generatedAudioLifecycle";
+import { providerRuntimeLeavesLocalBoundary } from "./features/provider-capabilities/providerCapabilityLite";
 import {
   createAndListenAriaLabel,
   createAndListenScopeLabel,
@@ -2761,6 +2762,10 @@ export function App() {
   const [ttsEngineError, setTTSEngineError] = useState<string | null>(null);
   const createAndListenCapabilityReason = useMemo(
     () => resolveCreateAndListenCapabilityReason(runConfiguration.ttsEngine, ttsEngines),
+    [runConfiguration.ttsEngine, ttsEngines],
+  );
+  const providerBackedGenerationBoundary = useMemo(
+    () => providerRuntimeLeavesLocalBoundary(runConfiguration.ttsEngine, ttsEngines),
     [runConfiguration.ttsEngine, ttsEngines],
   );
   const [voiceProfileCredentials, setVoiceProfileCredentials] =
@@ -7456,6 +7461,7 @@ export function App() {
               onBookScopeChange={setSelectedBookScope}
               onPrepareFile={handlePrepareSourceFile}
               onPrepareUrl={handlePrepareSourceUrl}
+              providerBackedGenerationBoundary={providerBackedGenerationBoundary}
               onSelectVoiceProfile={selectVoiceProfile}
               onSourceModeChange={setSourceMode}
               onStageAction={runWorkspaceStageAction}
@@ -10119,6 +10125,7 @@ function SourceTextPanel({
   onBookScopeChange,
   onPrepareFile,
   onPrepareUrl,
+  providerBackedGenerationBoundary,
   onSelectVoiceProfile,
   onSourceModeChange,
   onStageAction,
@@ -10178,6 +10185,7 @@ function SourceTextPanel({
     markdownParseMode: MarkdownParseMode,
     preparationTarget?: IntakePreparationTarget,
   ) => Promise<void>;
+  providerBackedGenerationBoundary?: boolean;
   onSelectVoiceProfile: (profileId: string) => void;
   onSourceModeChange: (mode: SourceMode) => void;
   onStageAction: (actionId: WorkspaceStageActionId) => void;
@@ -10276,6 +10284,7 @@ function SourceTextPanel({
             onOpenVoiceCloning={onOpenVoiceCloning}
             onPrepareFile={onPrepareFile}
             onPrepareUrl={onPrepareUrl}
+            providerBackedGenerationBoundary={providerBackedGenerationBoundary}
             onScopeChange={onBookScopeChange}
             onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
             onStageChange={(stage) => {

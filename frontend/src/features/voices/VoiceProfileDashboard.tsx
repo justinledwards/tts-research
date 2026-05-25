@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Panel, StatusChip } from "../../design";
 import { formatLocaleNumber, languageDisplayName } from "../i18n";
+import { PrivacyBoundaryPanel, PRIVACY_NOTICES, privacyBoundaryCatalog } from "../privacy";
 import { providerCapabilityDataAttributes } from "../provider-capabilities";
 import { useReaderModalLifecycle } from "../reader-accessibility";
 import type {
@@ -214,6 +215,12 @@ export function VoiceProfileDashboard({
             </div>
 
             <div className="grid content-start gap-4">
+              <PrivacyBoundaryPanel
+                boundaries={privacyBoundaryCatalog.voiceProfile}
+                compact
+                title="Voice data boundary"
+              />
+
               <Panel title="Selected Voice">
                 <div className="grid gap-3 p-3">
                   {selectedProfile ? (
@@ -265,6 +272,12 @@ export function VoiceProfileDashboard({
                       />
                       <p className="vs-muted rounded-md border p-3 text-xs leading-5 vs-border vs-surface">
                         {model.source.progress}
+                      </p>
+                      <p
+                        className="vs-muted rounded-md border p-3 text-xs leading-5 vs-border vs-surface"
+                        data-privacy-notice={PRIVACY_NOTICES.voiceProfileLocal.id}
+                      >
+                        {PRIVACY_NOTICES.voiceProfileLocal.message}
                       </p>
                       <Button
                         data-testid="ui-action-voice-dashboard-cancel-source"
