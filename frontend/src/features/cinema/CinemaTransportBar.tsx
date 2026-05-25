@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button, fieldControlClassName } from "../../design";
 import { READER_PLAYBACK_RATES, READER_SEEK_SECONDS } from "../reader-accessibility";
 import {
@@ -227,35 +227,70 @@ function DegradedTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
 function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>) {
   const progressRatio = clampProgress(model.progress.ratio);
   const lifecycle = generatedAudioLifecycleFromPlaybackState(model.playbackState);
-  const primaryMobileLabel = model.primary.mobileLabel ?? model.primary.label;
-  const showBookmark = Boolean(model.bookmark && shouldShowControl(model.bookmark));
-  const showPlaybackRate = model.playbackRate.visible ?? !model.playbackRate.disabled;
-  const showRestart = shouldShowControl(model.restart);
-  const showSkipBackward = shouldShowControl(model.skipBackward);
-  const showSkipForward = shouldShowControl(model.skipForward);
+  const visibility: PlaybackTransportVisibility = {
+    bookmark: Boolean(model.bookmark && shouldShowControl(model.bookmark)),
+    displayControls: Boolean(model.displayControls),
+    playbackRate: model.playbackRate.visible ?? !model.playbackRate.disabled,
+    restart: shouldShowControl(model.restart),
+    skipBackward: shouldShowControl(model.skipBackward),
+    skipForward: shouldShowControl(model.skipForward),
+  };
 
   return (
     <TransportFooter>
-      <div className="hidden flex-wrap items-center gap-4 lg:flex">
-        {showRestart ? (
+      <DesktopPlaybackTransport lifecycle={lifecycle} model={model} visibility={visibility} />
+      <MobilePlaybackTransport
+        lifecycle={lifecycle}
+        model={model}
+        progressRatio={progressRatio}
+        visibility={visibility}
+      />
+    </TransportFooter>
+  );
+}
+
+interface PlaybackTransportVisibility {
+  bookmark: boolean;
+  displayControls: boolean;
+  playbackRate: boolean;
+  restart: boolean;
+  skipBackward: boolean;
+  skipForward: boolean;
+}
+
+function DesktopPlaybackTransport({
+  lifecycle,
+  model,
+  visibility,
+}: Readonly<{
+  lifecycle: ReturnType<typeof generatedAudioLifecycleFromPlaybackState>;
+  model: CinemaTransportModel;
+  visibility: PlaybackTransportVisibility;
+}>) {
+  const displayPopover = useCinemaDisplayPopover(visibility.displayControls);
+
+  return (
+    <div className="hidden min-w-0 grid-cols-[auto_minmax(14rem,1fr)_auto] items-center gap-3 lg:grid">
+      <div className="flex min-w-0 items-center gap-2">
+        {visibility.restart ? (
           <Button
             data-ui-action-owner="cinema"
             aria-keyshortcuts="Home"
-            className="h-12 gap-2"
+            className="h-11 gap-2"
             disabled={model.restart.disabled}
             onClick={model.restart.onClick}
-            size="lg"
+            size="md"
             variant="secondary"
           >
             {model.restart.icon}
             {model.restart.label ?? "Restart"}
           </Button>
         ) : null}
-        {showSkipBackward ? (
+        {visibility.skipBackward ? (
           <Button
             data-ui-action-owner="cinema"
             aria-keyshortcuts="ArrowLeft J"
-            className="h-12 min-w-16 gap-1 px-3"
+            className="h-11 min-w-14 gap-1 px-3"
             disabled={model.skipBackward.disabled}
             onClick={model.skipBackward.onClick}
             size="md"
@@ -267,7 +302,7 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
         <Button
           {...playbackActionDataAttributes("play", lifecycle, { primary: true })}
           aria-keyshortcuts="Space K"
-          className={`h-16 min-w-36 gap-3 rounded-full px-6 text-base shadow-lg ${model.primary.className}`}
+          className={`h-12 min-w-32 gap-2 rounded-full px-5 text-sm shadow-md ${model.primary.className}`}
           disabled={model.primary.disabled}
           disabledReason={cinemaPrimaryDisabledReason(model, "play", lifecycle)}
           onClick={model.primary.onClick}
@@ -277,11 +312,11 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
           {model.primary.icon}
           {model.primary.label}
         </Button>
-        {showSkipForward ? (
+        {visibility.skipForward ? (
           <Button
             data-ui-action-owner="cinema"
             aria-keyshortcuts="ArrowRight L"
-            className="h-12 min-w-16 gap-1 px-3"
+            className="h-11 min-w-14 gap-1 px-3"
             disabled={model.skipForward.disabled}
             onClick={model.skipForward.onClick}
             size="md"
@@ -290,115 +325,234 @@ function PlaybackTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
             {model.skipForward.icon}+{READER_SEEK_SECONDS.toString()}s
           </Button>
         ) : null}
-        <div className="order-last min-w-[18rem] flex-1 basis-full xl:order-none xl:min-w-0 xl:basis-auto">
-          {model.progress.waveform}
-          <div className="mt-1 flex items-center justify-between text-xs tabular-nums vs-muted">
-            <span>{model.progress.currentLabel}</span>
-            <span>{model.progress.durationLabel}</span>
-          </div>
+      </div>
+      <div className="min-w-0">
+        {model.progress.waveform}
+        <div className="mt-0.5 flex items-center justify-between text-xs tabular-nums vs-muted">
+          <span>{model.progress.currentLabel}</span>
+          <span>{model.progress.durationLabel}</span>
         </div>
-        {showPlaybackRate ? <PlaybackRateSelect model={model} /> : null}
-        {showBookmark && model.bookmark ? (
+      </div>
+      <div className="flex min-w-0 items-center justify-end gap-2">
+        {visibility.playbackRate ? <PlaybackRateSelect model={model} /> : null}
+        {visibility.bookmark && model.bookmark ? (
           <Button
             data-ui-action-owner="cinema"
             aria-keyshortcuts="B"
-            className="h-12"
+            className="h-11"
             disabled={model.bookmark.disabled}
             onClick={model.bookmark.onClick}
-            size="lg"
+            size="md"
             variant="secondary"
           >
             {model.bookmark.label ?? "Bookmark"}
           </Button>
         ) : null}
-        {model.displayControls}
+        {visibility.displayControls ? (
+          <ReaderDisplayPopoverButton model={model} popover={displayPopover} />
+        ) : null}
       </div>
-
-      <div className="grid gap-3 lg:hidden">
-        <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-3 text-sm tabular-nums vs-muted">
-          <span>{model.progress.currentLabel}</span>
-          <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-surface)]">
-            <div
-              className="h-full rounded-full vs-accent-bg"
-              style={{ width: `${Math.round(progressRatio * 100).toString()}%` }}
-            />
-          </div>
-          <span className="text-right">{model.progress.durationLabel}</span>
-        </div>
-        <div className="grid grid-cols-5 items-center gap-2">
-          {showSkipBackward ? (
-            <IconTransportButton
-              disabled={model.skipBackward.disabled}
-              label={`-${READER_SEEK_SECONDS.toString()}s`}
-              onClick={model.skipBackward.onClick}
-              uiActionOwner="cinema"
-            >
-              {model.skipBackward.icon}
-            </IconTransportButton>
-          ) : (
-            <span aria-hidden="true" />
-          )}
-          <Button
-            {...playbackActionDataAttributes("play", lifecycle, { primary: true })}
-            aria-keyshortcuts="Space K"
-            className={`col-span-2 h-16 gap-3 px-4 text-base shadow-lg ${model.primary.className}`}
-            disabled={model.primary.disabled}
-            disabledReason={cinemaPrimaryDisabledReason(model, "play", lifecycle)}
-            onClick={model.primary.onClick}
-            size="lg"
-            variant="primary"
-          >
-            {model.primary.icon}
-            <span>{primaryMobileLabel}</span>
-          </Button>
-          {showSkipForward ? (
-            <IconTransportButton
-              disabled={model.skipForward.disabled}
-              label={`+${READER_SEEK_SECONDS.toString()}s`}
-              onClick={model.skipForward.onClick}
-              uiActionOwner="cinema"
-            >
-              {model.skipForward.icon}
-            </IconTransportButton>
-          ) : (
-            <span aria-hidden="true" />
-          )}
-          {model.mobileMore ? (
-            <IconTransportButton
-              ariaControls={model.mobileMore.controlsId}
-              ariaExpanded={model.mobileMore.active}
-              label={model.mobileMore.label ?? "More"}
-              onClick={model.mobileMore.onClick}
-            >
-              {model.mobileMore.icon}
-            </IconTransportButton>
-          ) : null}
-        </div>
-        <div className="flex items-center justify-center gap-2">
-          {showPlaybackRate ? <PlaybackRateSelect model={model} mobile /> : null}
-          {showBookmark && model.bookmark ? (
-            <Button
-              data-ui-action-owner="cinema"
-              aria-keyshortcuts="B"
-              className="h-11"
-              disabled={model.bookmark.disabled}
-              onClick={model.bookmark.onClick}
-              size="md"
-              variant="secondary"
-            >
-              {model.bookmark.label ?? "Bookmark"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </TransportFooter>
+    </div>
   );
+}
+
+function ReaderDisplayPopoverButton({
+  model,
+  popover,
+}: Readonly<{
+  model: CinemaTransportModel;
+  popover: ReturnType<typeof useCinemaDisplayPopover>;
+}>) {
+  return (
+    <div className="relative">
+      <Button
+        data-ui-action-owner="cinema-display"
+        aria-controls={popover.id}
+        aria-expanded={popover.open}
+        aria-haspopup="dialog"
+        aria-label="Open reader display settings"
+        className="h-11"
+        onClick={popover.toggle}
+        ref={popover.buttonRef}
+        selected={popover.open}
+        size="md"
+        variant="secondary"
+      >
+        Display
+      </Button>
+      {popover.open ? (
+        <div
+          aria-label="Reader display settings"
+          className="absolute right-0 bottom-[calc(100%+0.5rem)] z-30 w-[min(26rem,calc(100vw-2rem))] rounded-md border bg-[var(--vs-raised)] p-4 shadow-xl vs-border"
+          data-cinema-display-popover=""
+          id={popover.id}
+          onKeyDown={popover.onKeyDown}
+          ref={popover.popoverRef}
+          role="dialog"
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-[var(--vs-text)]">Reader display</p>
+            <p className="text-xs vs-muted">Applies to this reader</p>
+          </div>
+          {model.displayControls}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MobilePlaybackTransport({
+  lifecycle,
+  model,
+  progressRatio,
+  visibility,
+}: Readonly<{
+  lifecycle: ReturnType<typeof generatedAudioLifecycleFromPlaybackState>;
+  model: CinemaTransportModel;
+  progressRatio: number;
+  visibility: PlaybackTransportVisibility;
+}>) {
+  const primaryMobileLabel = model.primary.mobileLabel ?? model.primary.label;
+
+  return (
+    <div className="grid gap-3 lg:hidden">
+      <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-3 text-sm tabular-nums vs-muted">
+        <span>{model.progress.currentLabel}</span>
+        <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-surface)]">
+          <div
+            className="h-full rounded-full vs-accent-bg"
+            style={{ width: `${Math.round(progressRatio * 100).toString()}%` }}
+          />
+        </div>
+        <span className="text-right">{model.progress.durationLabel}</span>
+      </div>
+      <div className="grid grid-cols-5 items-center gap-2">
+        {visibility.skipBackward ? (
+          <IconTransportButton
+            disabled={model.skipBackward.disabled}
+            label={`-${READER_SEEK_SECONDS.toString()}s`}
+            onClick={model.skipBackward.onClick}
+            uiActionOwner="cinema"
+          >
+            {model.skipBackward.icon}
+          </IconTransportButton>
+        ) : (
+          <span aria-hidden="true" />
+        )}
+        <Button
+          {...playbackActionDataAttributes("play", lifecycle, { primary: true })}
+          aria-keyshortcuts="Space K"
+          className={`col-span-2 h-16 gap-3 px-4 text-base shadow-lg ${model.primary.className}`}
+          disabled={model.primary.disabled}
+          disabledReason={cinemaPrimaryDisabledReason(model, "play", lifecycle)}
+          onClick={model.primary.onClick}
+          size="lg"
+          variant="primary"
+        >
+          {model.primary.icon}
+          <span>{primaryMobileLabel}</span>
+        </Button>
+        {visibility.skipForward ? (
+          <IconTransportButton
+            disabled={model.skipForward.disabled}
+            label={`+${READER_SEEK_SECONDS.toString()}s`}
+            onClick={model.skipForward.onClick}
+            uiActionOwner="cinema"
+          >
+            {model.skipForward.icon}
+          </IconTransportButton>
+        ) : (
+          <span aria-hidden="true" />
+        )}
+        {model.mobileMore ? (
+          <IconTransportButton
+            ariaControls={model.mobileMore.controlsId}
+            ariaExpanded={model.mobileMore.active}
+            label={model.mobileMore.label ?? "More"}
+            onClick={model.mobileMore.onClick}
+          >
+            {model.mobileMore.icon}
+          </IconTransportButton>
+        ) : null}
+      </div>
+      <div className="flex items-center justify-center gap-2">
+        {visibility.playbackRate ? <PlaybackRateSelect model={model} mobile /> : null}
+        {visibility.bookmark && model.bookmark ? (
+          <Button
+            data-ui-action-owner="cinema"
+            aria-keyshortcuts="B"
+            className="h-11"
+            disabled={model.bookmark.disabled}
+            onClick={model.bookmark.onClick}
+            size="md"
+            variant="secondary"
+          >
+            {model.bookmark.label ?? "Bookmark"}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function useCinemaDisplayPopover(available: boolean) {
+  const id = useId();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!available) {
+      setOpen(false);
+    }
+  }, [available]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (buttonRef.current?.contains(target) || popoverRef.current?.contains(target)) {
+        return;
+      }
+      setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [open]);
+
+  return {
+    buttonRef,
+    id,
+    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.stopPropagation();
+      setOpen(false);
+      buttonRef.current?.focus();
+    },
+    open,
+    popoverRef,
+    toggle: () => {
+      setOpen((current) => !current);
+    },
+  };
 }
 
 function TransportFooter({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <footer
-      className="border-t bg-[var(--vs-raised)] px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgba(15,23,42,0.08)] vs-border lg:px-7"
+      className="relative shrink-0 border-t bg-[var(--vs-raised)] px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgba(15,23,42,0.08)] vs-border lg:max-h-[var(--cinema-footer-desktop-max-height)] lg:px-7"
+      data-cinema-footer-budgeted=""
       data-cinema-transport-footer=""
     >
       {children}
@@ -452,7 +606,7 @@ function PlaybackRateSelect({
     <select
       data-ui-action-owner="cinema"
       aria-label="Playback speed"
-      className={`${fieldControlClassName} ${mobile ? "h-11 font-medium" : "h-12 font-semibold"}`}
+      className={`${fieldControlClassName} ${mobile ? "h-11 font-medium" : "h-11 font-semibold"}`}
       disabled={model.playbackRate.disabled}
       onChange={(event) => {
         model.playbackRate.onChange?.(Number(event.currentTarget.value));

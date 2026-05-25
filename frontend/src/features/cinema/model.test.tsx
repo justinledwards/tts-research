@@ -10,6 +10,7 @@ import {
 } from "./CinemaInspectorPanels";
 import { CinemaMobileSheet } from "./CinemaMobileSheet";
 import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
+import { cinemaCanvasBudgetFor } from "./canvasBudget";
 import {
   buildCinemaLayoutState,
   type CinemaPanelDefinition,
@@ -119,6 +120,22 @@ describe("cinema focus layout model", () => {
     expect(isCinemaRendererReady("ready")).toBe(true);
     expect(cinemaRendererLifecycleDetail("failed")).toContain("Renderer failed");
   });
+
+  it("publishes reader canvas budgets for read and pinned modes", () => {
+    expect(
+      cinemaCanvasBudgetFor({ canvasFirst: true, focusMode: "read", hasInspector: false }),
+    ).toMatchObject({
+      kind: "read",
+      minCanvasHeightRatio: 0.58,
+      minCanvasWidthRatio: 0.9,
+    });
+    expect(
+      cinemaCanvasBudgetFor({ canvasFirst: true, focusMode: "read", hasInspector: true }),
+    ).toMatchObject({
+      kind: "read-pinned",
+      minCanvasHeightRatio: 0.54,
+    });
+  });
 });
 
 describe("CinemaInspectorDock", () => {
@@ -212,14 +229,17 @@ describe("CinemaInspectorDock", () => {
 });
 
 describe("CinemaTransportBar", () => {
-  it("renders shared seek, speed, bookmark, and display controls", () => {
+  it("renders compact shared seek, speed, bookmark, and display entry point", () => {
     const markup = renderToStaticMarkup(<CinemaTransportBar model={makeTransportModel()} />);
 
     expect(markup).toContain("-10s");
     expect(markup).toContain("+10s");
     expect(markup).toContain("Bookmark");
     expect(markup).toContain("Playback speed");
+    expect(markup).toContain("Open reader display settings");
     expect(markup).toContain("Display");
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).not.toContain("Display panel");
   });
 
   it("links the mobile More control to the active bottom sheet", () => {
@@ -390,7 +410,7 @@ function makeTransportModel(): CinemaTransportModel {
       disabled: false,
       onClick: () => null,
     },
-    displayControls: <span>Display</span>,
+    displayControls: <span>Display panel</span>,
     mobileMore: {
       active: false,
       controlsId: "cinema-more-sheet",

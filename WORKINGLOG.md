@@ -586,3 +586,9 @@
 - [x] Add shared overlay ownership metadata and placement rules
 - [x] Add local overlay collision detector and screenshot report findings
 - [x] Run WP26 local validation commands
+
+## 2026-05-26 00:25 CEST - Reader Canvas Budget and Compact Transport Bar
+- [x] Inspect Cinema transport, shell, display controls, and responsive evidence
+- [x] Add shared canvas/transport budget semantics
+- [x] Compact Read-mode display and waveform affordances
+- [x] Run WP27 local validation commands

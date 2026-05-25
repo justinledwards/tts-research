@@ -1702,6 +1702,7 @@ function PreparedSourceCinemaTransport({
     displayControls: (
       <ReaderAccessibilityControls
         settings={accessibilitySettings}
+        variant="panel"
         onChange={onAccessibilitySettingsChange}
       />
     ),
@@ -1984,14 +1985,14 @@ function Waveform({
     return <TransportWaveformPlaceholder label="Waveform unavailable for this audio." />;
   }
   return (
-    <div aria-hidden="true" className="flex h-12 min-w-0 flex-1 items-center gap-[2px]">
+    <div aria-hidden="true" className="flex h-7 min-w-0 flex-1 items-center gap-[2px]">
       {bars.map((amplitude, index) => {
         const active = index / bars.length <= progressRatio;
         return (
           <span
             className={`w-[2px] rounded-full ${active ? "bg-orange-600" : "bg-zinc-300"}`}
             key={`${audioUrl}-${index.toString()}`}
-            style={{ height: `${String(8 + Math.round(amplitude * 38))}px` }}
+            style={{ height: `${String(5 + Math.round(amplitude * 20))}px` }}
           />
         );
       })}
@@ -2004,7 +2005,7 @@ function TransportWaveformPlaceholder({
 }: Readonly<{ label?: string }>) {
   return (
     <div
-      className="flex h-12 min-w-0 flex-1 items-center overflow-hidden rounded-md border border-dashed px-4 text-xs font-medium vs-border vs-muted"
+      className="flex h-7 min-w-0 flex-1 items-center overflow-hidden rounded-md border border-dashed px-2 text-xs font-medium vs-border vs-muted"
       title={label}
     >
       <span className="min-w-0 truncate">{label}</span>

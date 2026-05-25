@@ -1,5 +1,11 @@
 export { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
 export {
+  cinemaCanvasBudgetDataAttributes,
+  cinemaCanvasBudgetFor,
+  type CinemaCanvasBudget,
+  type CinemaCanvasBudgetKind,
+} from "./canvasBudget";
+export {
   CINEMA_ADVANCED_MODE_ACTIONS,
   CINEMA_ADVANCED_MODE_IDS,
   activeCinemaAdvancedModeAction,

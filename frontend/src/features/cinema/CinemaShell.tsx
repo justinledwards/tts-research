@@ -1,4 +1,5 @@
-import type { ReactNode, Ref } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
+import { cinemaCanvasBudgetDataAttributes, cinemaCanvasBudgetFor } from "./canvasBudget";
 
 export function CinemaShell({
   ariaLabelledBy,
@@ -32,6 +33,11 @@ export function CinemaShell({
   themeName: string;
 }>) {
   const hasInspector = Boolean(inspector);
+  const canvasBudget = cinemaCanvasBudgetFor({ canvasFirst, focusMode, hasInspector });
+  const canvasBudgetStyle = {
+    "--cinema-footer-desktop-max-height": `${canvasBudget.desktopFooterMaxHeightPx.toString()}px`,
+    "--cinema-footer-max-height": `${canvasBudget.footerMaxHeightPx.toString()}px`,
+  } as CSSProperties;
 
   return (
     <div
@@ -39,6 +45,7 @@ export function CinemaShell({
       aria-modal="true"
       className="vs-app fixed inset-0 z-50 flex flex-col bg-[var(--vs-bg)] pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] text-[var(--vs-text)]"
       {...readerAttributes}
+      {...cinemaCanvasBudgetDataAttributes(canvasBudget)}
       data-cinema-canvas-first={canvasFirst ? "true" : "false"}
       data-cinema-focus-mode={focusMode}
       data-cinema-renderer-lifecycle={rendererLifecycle ?? "ready"}
@@ -46,6 +53,7 @@ export function CinemaShell({
       data-theme={themeName}
       ref={rootRef}
       role="dialog"
+      style={canvasBudgetStyle}
       tabIndex={-1}
     >
       <div aria-atomic="true" aria-live="polite" className="sr-only">

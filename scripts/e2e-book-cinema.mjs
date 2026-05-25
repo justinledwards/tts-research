@@ -1406,6 +1406,85 @@ async function assertCinemaResponsiveContract(page, label) {
   await assertCinemaActiveTargetVisible(page);
   await assertNoHorizontalOverflow(page, label);
   await assertCinemaTouchTargets(page, label);
+  await assertCinemaCanvasBudget(page, label);
+}
+
+async function assertCinemaCanvasBudget(page, label) {
+  const result = await page.evaluate((selector) => {
+    const overlay = document.querySelector(selector);
+    const main = overlay?.querySelector("main");
+    const canvas = main?.firstElementChild;
+    const footer = overlay?.querySelector("[data-cinema-transport-footer]");
+    if (
+      !(overlay instanceof HTMLElement) ||
+      !(main instanceof HTMLElement) ||
+      !(canvas instanceof HTMLElement) ||
+      !(footer instanceof HTMLElement)
+    ) {
+      return { ok: false, reason: "missing Cinema shell, canvas, or transport footer" };
+    }
+
+    const sheet = overlay.querySelector("[data-cinema-mobile-sheet]");
+    if (sheet instanceof HTMLElement && sheet.getBoundingClientRect().height > 1) {
+      return { ok: true, reason: "mobile-sheet-open", skipped: true };
+    }
+
+    const compactViewport = window.innerWidth < 1180;
+    const footerMaxHeightPx = Number(
+      overlay.getAttribute(
+        compactViewport
+          ? "data-cinema-footer-max-height-px"
+          : "data-cinema-desktop-footer-max-height-px",
+      ) ?? "0",
+    );
+    const footerMaxHeightRatio = Number(
+      overlay.getAttribute(
+        compactViewport
+          ? "data-cinema-footer-max-height-ratio"
+          : "data-cinema-desktop-footer-max-height-ratio",
+      ) ?? "0",
+    );
+    const minCanvasHeightRatio = Number(
+      overlay.getAttribute(
+        compactViewport
+          ? "data-cinema-compact-min-canvas-height-ratio"
+          : "data-cinema-min-canvas-height-ratio",
+      ) ?? "0",
+    );
+    const minCanvasWidthRatio = Number(
+      overlay.getAttribute("data-cinema-min-canvas-width-ratio") ?? "0",
+    );
+    const mainRect = main.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    const footerHeightRatio = footerRect.height / window.innerHeight;
+    const canvasHeightRatio = canvasRect.height / window.innerHeight;
+    const canvasWidthRatio = canvasRect.width / mainRect.width;
+    const footerOk =
+      footerMaxHeightPx > 0 &&
+      footerRect.height <= footerMaxHeightPx + 1 &&
+      footerHeightRatio <= footerMaxHeightRatio + 0.01;
+    const canvasOk =
+      canvasHeightRatio >= minCanvasHeightRatio - 0.01 &&
+      canvasWidthRatio >= minCanvasWidthRatio - 0.01;
+
+    return {
+      budget: overlay.getAttribute("data-cinema-canvas-budget"),
+      canvasHeightRatio,
+      canvasOk,
+      canvasWidthRatio,
+      compactViewport,
+      footerHeightPx: footerRect.height,
+      footerHeightRatio,
+      footerMaxHeightPx,
+      footerMaxHeightRatio,
+      footerOk,
+      minCanvasHeightRatio,
+      minCanvasWidthRatio,
+      ok: footerOk && canvasOk,
+    };
+  }, cinemaOverlaySelector);
+  assert(result.ok, `${label} violates Cinema canvas budget: ${JSON.stringify(result)}`);
 }
 
 async function assertCinemaMobileSheetInFlow(page) {
@@ -1711,6 +1790,7 @@ async function assertCinemaCanvasDominant(page) {
     undefined,
     { timeout: 5_000 },
   );
+  await assertCinemaCanvasBudget(page, "read canvas dominance");
 }
 
 async function assertCinemaActiveTargetVisible(page) {

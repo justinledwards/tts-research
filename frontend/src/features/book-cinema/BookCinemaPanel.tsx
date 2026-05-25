@@ -1425,6 +1425,7 @@ export function BookCinemaOverlay({
     displayControls: (
       <ReaderAccessibilityControls
         settings={normalizedAccessibility}
+        variant="panel"
         onChange={onAccessibilitySettingsChange}
       />
     ),
@@ -1996,14 +1997,14 @@ function BookCinemaWaveform({
     return <BookCinemaWaveformPlaceholder label="Waveform unavailable for this audio." />;
   }
   return (
-    <div aria-hidden="true" className="flex h-12 min-w-0 items-center gap-[2px]">
+    <div aria-hidden="true" className="flex h-7 min-w-0 items-center gap-[2px]">
       {bars.map((amplitude, index) => (
         <span
           className={`w-[2px] rounded-full ${
             index / bars.length <= clampedProgress ? "bg-orange-500" : "bg-zinc-500/35"
           }`}
           key={`${audioUrl}-${index.toString()}`}
-          style={{ height: `${String(8 + Math.round(amplitude * 34))}px` }}
+          style={{ height: `${String(5 + Math.round(amplitude * 20))}px` }}
         />
       ))}
     </div>
@@ -2014,8 +2015,11 @@ function BookCinemaWaveformPlaceholder({
   label = "Audio waveform appears after generation.",
 }: Readonly<{ label?: string }>) {
   return (
-    <div className="flex h-12 min-w-0 items-center rounded-md border border-dashed px-4 text-xs font-medium vs-border vs-muted">
-      {label}
+    <div
+      className="flex h-7 min-w-0 items-center overflow-hidden rounded-md border border-dashed px-2 text-xs font-medium vs-border vs-muted"
+      title={label}
+    >
+      <span className="min-w-0 truncate">{label}</span>
     </div>
   );
 }
