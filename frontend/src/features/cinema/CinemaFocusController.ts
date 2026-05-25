@@ -48,7 +48,7 @@ export function useCinemaFocusController(
 
   const setMode = (nextMode: CinemaFocusMode) => {
     const nextState = buildCinemaLayoutState({
-      activePanelId,
+      activePanelId: null,
       mode: nextMode,
       panels,
       pinnedPanelId,

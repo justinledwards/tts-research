@@ -5,24 +5,28 @@ export function CinemaShell({
   canvas,
   canvasFirst,
   footer,
+  focusMode,
   header,
   inspector,
   liveAnnouncement,
   mobileSheet,
   readerAttributes,
   rootRef,
+  surfaceKind,
   themeName,
 }: Readonly<{
   ariaLabelledBy: string;
   canvas: ReactNode;
   canvasFirst: boolean;
   footer: ReactNode;
+  focusMode: string;
   header: ReactNode;
   inspector?: ReactNode;
   liveAnnouncement: string;
   mobileSheet?: ReactNode;
   readerAttributes: Record<string, string>;
   rootRef: Ref<HTMLDivElement>;
+  surfaceKind: string;
   themeName: string;
 }>) {
   const hasInspector = Boolean(inspector);
@@ -34,6 +38,8 @@ export function CinemaShell({
       className="vs-app fixed inset-0 z-50 flex flex-col bg-[var(--vs-bg)] pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] text-[var(--vs-text)]"
       {...readerAttributes}
       data-cinema-canvas-first={canvasFirst ? "true" : "false"}
+      data-cinema-focus-mode={focusMode}
+      data-cinema-surface={surfaceKind}
       data-theme={themeName}
       ref={rootRef}
       role="dialog"

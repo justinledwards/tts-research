@@ -12,14 +12,19 @@ import {
   startLocalServices,
   writeJson,
 } from "./e2e-browser-qa-helpers.mjs";
+import { instrumentScreenshotState, writeScreenshotStateArtifacts } from "./screenshot-state.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
   process.env.E2E_RESPONSIVE_OUTPUT_DIR ??
   path.join(rootDir, "output", "accessibility", "latest", "responsive-snapshots");
+const screenshotStateDir =
+  process.env.E2E_SCREENSHOT_STATE_OUTPUT_DIR ??
+  path.join(rootDir, "output", "screenshots", "latest");
 const screenshotsDir = path.join(outputDir, "screenshots");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
+const screenshotStateRecords = [];
 
 const viewports = [
   { height: 844, id: "phone-390", width: 390 },
@@ -62,6 +67,12 @@ async function main() {
       await browser.close();
     }
     const failures = results.filter((result) => !result.passed).length;
+    const screenshotState = await writeScreenshotStateArtifacts({
+      outputDir: screenshotStateDir,
+      records: screenshotStateRecords,
+      rootDir,
+    });
+    const stateMismatches = screenshotState.summary.mismatches;
     const document = {
       appBaseUrl,
       generatedAt: new Date().toISOString(),
@@ -69,11 +80,19 @@ async function main() {
       schemaVersion: "responsive-snapshots.v1",
       status: failures === 0 ? "passed" : "failed",
       summary: {
-        failures,
+        failures: failures + stateMismatches,
+        layoutFailures: failures,
+        screenshotStateMismatches: stateMismatches,
         screenshots: results.length * 2,
         viewports: results.length,
       },
     };
+    document.screenshotState = {
+      manifest: path.join(screenshotStateDir, "manifest.json"),
+      mismatches: path.join(screenshotStateDir, "state-mismatches.md"),
+      summary: screenshotState.summary,
+    };
+    document.status = document.summary.failures === 0 ? "passed" : "failed";
     await writeJson(path.join(outputDir, "responsive-results.json"), document);
     console.log(`Responsive snapshots ${document.status}. Reports written to ${outputDir}`);
     process.exitCode = document.status === "passed" ? 0 : 1;
@@ -87,6 +106,7 @@ async function main() {
 async function captureViewport(browser, viewport) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   page.setDefaultTimeout(60_000);
   const pageIssues = collectPageIssues(page);
   const screenshots = [];
@@ -136,15 +156,23 @@ async function openSettingsIfAvailable(page) {
     "button[aria-label*='Settings']",
   ];
   for (const selector of candidates) {
-    const locator = page.locator(selector).first();
+    const locator = page.locator(selector).filter({ visible: true }).first();
     if ((await locator.count()) === 0) {
       continue;
     }
-    if (!(await locator.isVisible().catch(() => false))) {
-      continue;
-    }
     await locator.click();
-    await page.waitForTimeout(250);
+    await page.getByText("Studio Settings").first().waitFor({ state: "visible" });
+    await page.waitForFunction(
+      () => {
+        const text = document.body.innerText?.replace(/\s+/g, " ") ?? "";
+        return (
+          /Studio Settings/.test(text) &&
+          !/Loading settings|Preparing this view locally/i.test(text)
+        );
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
     return;
   }
 }

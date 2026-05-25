@@ -16,17 +16,22 @@ import {
   workspaceQaText,
   writeJson,
 } from "./e2e-browser-qa-helpers.mjs";
+import { instrumentScreenshotState, writeScreenshotStateArtifacts } from "./screenshot-state.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
   process.env.E2E_CONTEXT_PANEL_OUTPUT_DIR ??
   path.join(rootDir, "output", "context-panel", "latest");
+const screenshotStateDir =
+  process.env.E2E_SCREENSHOT_STATE_OUTPUT_DIR ??
+  path.join(rootDir, "output", "screenshots", "latest");
 const screenshotsDir = path.join(outputDir, "screenshots");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 const contextTabIds = ["overview", "review", "diagnostics", "policy", "history"];
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
+const screenshotStateRecords = [];
 
 main().catch(async (error) => {
   const message = error instanceof Error ? error.stack || error.message : String(error);
@@ -65,15 +70,28 @@ async function main() {
     } finally {
       await browser.close();
     }
+    const screenshotState = await writeScreenshotStateArtifacts({
+      outputDir: screenshotStateDir,
+      records: screenshotStateRecords,
+      rootDir,
+    });
+    const screenshotStateMismatches = screenshotState.summary.mismatches;
     const document = {
       appBaseUrl,
       generatedAt: new Date().toISOString(),
       result,
       schemaVersion: "context-panel-e2e.v1",
-      status: result.passed ? "passed" : "failed",
+      screenshotState: {
+        manifest: path.join(screenshotStateDir, "manifest.json"),
+        mismatches: path.join(screenshotStateDir, "state-mismatches.md"),
+        summary: screenshotState.summary,
+      },
+      status: result.passed && screenshotStateMismatches === 0 ? "passed" : "failed",
       summary: {
-        failures: result.failures.length,
+        failures: result.failures.length + screenshotStateMismatches,
+        contextPanelFailures: result.failures.length,
         panels: result.panels.length,
+        screenshotStateMismatches,
         screenshots: screenshots.length,
         tabVisits: result.tabVisits.length,
       },
@@ -124,6 +142,7 @@ async function runContextPanelAudit(browser, projectId, screenshots) {
     viewport: { height: 980, width: 1440 },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   page.setDefaultTimeout(60_000);
   const pageIssues = collectPageIssues(page);
   const failures = [];

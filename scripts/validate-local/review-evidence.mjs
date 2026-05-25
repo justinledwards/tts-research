@@ -202,6 +202,7 @@ export function buildReviewSteps(context) {
       command: "pnpm",
       env: {
         E2E_RESPONSIVE_OUTPUT_DIR: artifactDir(context, "responsive-snapshots-e2e"),
+        E2E_SCREENSHOT_STATE_OUTPUT_DIR: artifactDir(context, "responsive-snapshots-e2e"),
       },
       id: "responsive-snapshots-e2e",
       title: "Responsive Snapshot E2E",
@@ -232,6 +233,7 @@ export function buildReviewSteps(context) {
       command: "pnpm",
       env: {
         E2E_CONTEXT_PANEL_OUTPUT_DIR: artifactDir(context, "context-panel-e2e"),
+        E2E_SCREENSHOT_STATE_OUTPUT_DIR: artifactDir(context, "context-panel-e2e"),
       },
       id: "context-panel-e2e",
       title: "Context Panel E2E",
@@ -258,10 +260,13 @@ function bookCinemaStep(context, { id, includePerformanceArtifacts = false, scri
   const artifacts = {
     e2eSummary: path.join(stepArtifactDir, "summary.json"),
     screenshots: path.join(stepArtifactDir, "screenshots"),
+    screenshotStateManifest: path.join(stepArtifactDir, "manifest.json"),
+    screenshotStateMismatches: path.join(stepArtifactDir, "state-mismatches.md"),
   };
   const env = {
     E2E_ARTIFACT_DIR: stepArtifactDir,
     E2E_SCREENSHOT_DIR: path.join(stepArtifactDir, "screenshots"),
+    E2E_SCREENSHOT_STATE_OUTPUT_DIR: stepArtifactDir,
     E2E_SUMMARY_PATH: path.join(stepArtifactDir, "summary.json"),
   };
   if (includePerformanceArtifacts) {
@@ -320,6 +325,8 @@ function responsiveSnapshotArtifacts(context, id) {
   const dir = artifactDir(context, id);
   return {
     responsiveResults: path.join(dir, "responsive-results.json"),
+    screenshotStateManifest: path.join(dir, "manifest.json"),
+    screenshotStateMismatches: path.join(dir, "state-mismatches.md"),
     screenshots: path.join(dir, "screenshots"),
   };
 }
@@ -356,6 +363,8 @@ function contextPanelArtifacts(context, id) {
   return {
     contextPanelReport: path.join(dir, "context-panel-report.md"),
     contextPanelResults: path.join(dir, "context-panel-results.json"),
+    screenshotStateManifest: path.join(dir, "manifest.json"),
+    screenshotStateMismatches: path.join(dir, "state-mismatches.md"),
     screenshots: path.join(dir, "screenshots"),
   };
 }

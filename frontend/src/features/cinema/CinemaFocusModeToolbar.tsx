@@ -16,6 +16,14 @@ export function CinemaFocusModeToolbar({
 }>) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const advancedRef = useRef<HTMLDivElement | null>(null);
+  const activeAdvancedMode = (CINEMA_ADVANCED_FOCUS_MODES as readonly CinemaFocusMode[]).includes(
+    mode,
+  )
+    ? mode
+    : null;
+  const activeAdvancedLabel = activeAdvancedMode
+    ? cinemaFocusModeLabel(activeAdvancedMode)
+    : "More";
 
   useEffect(() => {
     if (!advancedOpen) {
@@ -53,15 +61,16 @@ export function CinemaFocusModeToolbar({
         <Button
           aria-expanded={advancedOpen}
           aria-haspopup="menu"
+          aria-label={activeAdvancedMode ? `Advanced mode: ${activeAdvancedLabel}` : "More"}
           className="rounded px-2"
           onClick={() => {
             setAdvancedOpen((current) => !current);
           }}
-          selected={mode === "debug"}
+          selected={activeAdvancedMode !== null}
           size="sm"
           variant="mode"
         >
-          More
+          {activeAdvancedLabel}
         </Button>
         {advancedOpen ? (
           <Panel

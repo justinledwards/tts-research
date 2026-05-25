@@ -730,6 +730,7 @@ export function PreparedSourceCinemaOverlay({
           }}
         />
       }
+      focusMode={cinemaFocus.mode}
       header={
         <header className="relative flex min-h-[4rem] flex-wrap items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
           <HeaderContextSummary
@@ -856,6 +857,7 @@ export function PreparedSourceCinemaOverlay({
       }
       readerAttributes={readerDataAttributes(normalizedAccessibility)}
       rootRef={dialogRef}
+      surfaceKind={isWebsiteCinema ? "website" : "document"}
       themeName={themeName}
     />
   );

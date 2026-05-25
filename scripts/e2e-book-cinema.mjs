@@ -16,11 +16,15 @@ import {
   formatInteractionBudgetMarkdown,
   loadReaderTimingThresholds,
 } from "./validate-local/reader-timing.mjs";
+import { instrumentScreenshotState, writeScreenshotStateArtifacts } from "./screenshot-state.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = process.env.E2E_ARTIFACT_DIR ?? path.join(rootDir, "output", "e2e-book-cinema");
 const screenshotsDir = process.env.E2E_SCREENSHOT_DIR ?? path.join(artifactDir, "screenshots");
 const summaryPath = process.env.E2E_SUMMARY_PATH ?? path.join(artifactDir, "summary.json");
+const screenshotStateDir =
+  process.env.E2E_SCREENSHOT_STATE_OUTPUT_DIR ??
+  path.join(rootDir, "output", "screenshots", "latest");
 const performanceArtifactDir =
   process.env.E2E_PERFORMANCE_ARTIFACT_DIR ?? path.join(rootDir, "output", "performance", "latest");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
@@ -45,6 +49,7 @@ let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
 let hasRunBookCinemaMemorySmoke = false;
 let hasRunLowResourceInteractionBudgetSmoke = false;
+const screenshotStateRecords = [];
 
 const lowResourceFixtureRequirements = [
   { id: "short-source", label: "one short source" },
@@ -107,8 +112,13 @@ async function main() {
         await browser.close();
       }
       summary.status = "passed";
+      const screenshotState = await attachScreenshotStateSummary(summary);
+      if (screenshotState.summary.mismatches > 0) {
+        summary.status = "failed";
+      }
       await writeSummary(summary);
-      console.log(`Settings IA E2E passed. Summary written to ${summaryPath}`);
+      console.log(`Settings IA E2E ${summary.status}. Summary written to ${summaryPath}`);
+      process.exitCode = summary.status === "passed" ? 0 : 1;
       return;
     }
 
@@ -125,8 +135,13 @@ async function main() {
         await browser.close();
       }
       summary.status = "passed";
+      const screenshotState = await attachScreenshotStateSummary(summary);
+      if (screenshotState.summary.mismatches > 0) {
+        summary.status = "failed";
+      }
       await writeSummary(summary);
-      console.log(`Workspace Flow E2E passed. Summary written to ${summaryPath}`);
+      console.log(`Workspace Flow E2E ${summary.status}. Summary written to ${summaryPath}`);
+      process.exitCode = summary.status === "passed" ? 0 : 1;
       return;
     }
 
@@ -164,8 +179,13 @@ async function main() {
         await browser.close();
       }
       summary.status = "passed";
+      const screenshotState = await attachScreenshotStateSummary(summary);
+      if (screenshotState.summary.mismatches > 0) {
+        summary.status = "failed";
+      }
       await writeSummary(summary);
-      console.log(`Responsive Cinema E2E passed. Summary written to ${summaryPath}`);
+      console.log(`Responsive Cinema E2E ${summary.status}. Summary written to ${summaryPath}`);
+      process.exitCode = summary.status === "passed" ? 0 : 1;
       return;
     }
 
@@ -228,13 +248,27 @@ async function main() {
     summary.readerTiming = readerTiming;
     const failedTimingThreshold = readerTiming.thresholds.some((threshold) => !threshold.passed);
     const blockingTimingThreshold = readerTiming.thresholds.some((threshold) => threshold.blocking);
+    const screenshotState = await attachScreenshotStateSummary(summary);
+    const screenshotStateFailed = screenshotState.summary.mismatches > 0;
     summary.status = blockingTimingThreshold
       ? "failed"
-      : failedTimingThreshold
-        ? "passed-with-waivers"
-        : "passed";
+      : screenshotStateFailed
+        ? "failed"
+        : failedTimingThreshold
+          ? "passed-with-waivers"
+          : "passed";
     await writeSummary(summary);
     await writePerformanceArtifacts(summary);
+    if (screenshotStateFailed) {
+      console.error(
+        `Book Cinema E2E failed screenshot state assertions. See ${path.join(
+          screenshotStateDir,
+          "state-mismatches.md",
+        )}`,
+      );
+      process.exitCode = 1;
+      return;
+    }
     if (failedTimingThreshold) {
       console.error(readerTiming.output);
       if (!blockingTimingThreshold) {
@@ -398,6 +432,7 @@ async function runStudioRouteSwitchUX(browser, projectId) {
     viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   if (lowResourceMode) {
     await applyLowResourceProfile(page);
   }
@@ -424,6 +459,7 @@ async function runFirstRunDemoUX(browser, projectId) {
     viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   if (lowResourceMode) {
     await applyLowResourceProfile(page);
   }
@@ -456,6 +492,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
     viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   if (lowResourceMode) {
     await applyLowResourceProfile(page);
   }
@@ -610,6 +647,7 @@ async function runSettingsIAUX(browser, projectId) {
     viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   if (lowResourceMode) {
     await applyLowResourceProfile(page);
   }
@@ -659,7 +697,7 @@ async function runSettingsIAUX(browser, projectId) {
     await page.getByText("Context Guide").first().waitFor();
     await page.getByText("Fast access").first().waitFor();
     await page.getByText("Workflow anchors").first().waitFor();
-    const helpScreenshot = path.join(screenshotsDir, "settings-ia-context-guide.png");
+    const helpScreenshot = path.join(screenshotsDir, "workspace-context-guide.png");
     await page.screenshot({ fullPage: false, path: helpScreenshot });
     screenshots.push(helpScreenshot);
     await page.getByRole("button", { exact: true, name: "Close Help" }).click();
@@ -671,7 +709,7 @@ async function runSettingsIAUX(browser, projectId) {
 
     await page.getByRole("button", { exact: true, name: "Open workspace" }).click();
     await page.getByText("Project library and current chapter context").first().waitFor();
-    const workspaceScreenshot = path.join(screenshotsDir, "settings-ia-project-library.png");
+    const workspaceScreenshot = path.join(screenshotsDir, "workspace-project-library.png");
     await page.screenshot({ fullPage: false, path: workspaceScreenshot });
     screenshots.push(workspaceScreenshot);
 
@@ -847,6 +885,7 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   if (lowResourceMode) {
     await applyLowResourceProfile(page);
   }
@@ -923,15 +962,16 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
     await selectCinemaInspectorPanel(page, "Policy");
     await exerciseSourcePinSmoke(page);
     await waitForSavedProgress(projectId, book.id, scope, job.id);
+    await page.screenshot({ fullPage: false, path: screenshot });
+    const firstOpenDegradedStates = await readDegradedStates(page);
     if (!hasRunLowResourceInteractionBudgetSmoke) {
       await runLowResourceInteractionBudgetSmoke(page);
       hasRunLowResourceInteractionBudgetSmoke = true;
     }
     const firstOpenMetrics = await readPerformanceMetrics(page);
-    await page.screenshot({ fullPage: false, path: screenshot });
-    const firstOpenDegradedStates = await readDegradedStates(page);
 
     const resumePage = await context.newPage();
+    instrumentScreenshotState(resumePage, { records: screenshotStateRecords, rootDir });
     resumePage.setDefaultTimeout(60_000);
     if (lowResourceMode) {
       await applyLowResourceProfile(resumePage);
@@ -985,6 +1025,7 @@ async function runNoAudioBookCinemaUX(browser, projectId, fixture) {
     viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   if (lowResourceMode) {
     await applyLowResourceProfile(page);
   }
@@ -1025,6 +1066,7 @@ async function runDegradedHighlightUX(browser, { book, job, projectId, scope, te
     viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   if (lowResourceMode) {
     await applyLowResourceProfile(page);
   }
@@ -1176,6 +1218,7 @@ async function runResponsiveBookCinemaSurface(
     viewport: { height: viewport.height, width: viewport.width },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   page.setDefaultTimeout(60_000);
   const issues = collectPageIssues(page);
   const surface = "book";
@@ -1221,6 +1264,7 @@ async function runResponsivePreparedCinemaSurface(
     viewport: { height: viewport.height, width: viewport.width },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   page.setDefaultTimeout(60_000);
   const issues = collectPageIssues(page);
   const screenshots = [];
@@ -1261,6 +1305,7 @@ async function openPreparedCinemaOverlay(page, expectedLabel) {
 
 async function captureResponsiveCinemaSurface(page, { surface, viewport }) {
   await assertCinemaFocusModeSelected(page, "Read");
+  await assertCinemaReadyForScreenshot(page, `${surface}:${viewport.name}`);
   await assertCinemaResponsiveContract(page, `${surface}:${viewport.name}`);
   const screenshot = path.join(screenshotsDir, `responsive-${surface}-${viewport.name}.png`);
   await page.screenshot({ fullPage: false, path: screenshot });
@@ -1412,6 +1457,7 @@ async function runPreparedCinemaSurfaceFocusUX(
     viewport: lowResourceMode ? { width: 1180, height: 820 } : { width: 1440, height: 980 },
   });
   const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
   if (lowResourceMode) {
     await applyLowResourceProfile(page);
   }
@@ -1463,6 +1509,7 @@ async function captureCinemaFocusModeScreenshots(page, screenshotPrefix) {
   for (const mode of ["Read", "Inspect", "Review", "Debug"]) {
     await switchCinemaFocusMode(page, mode);
     await assertCinemaFocusModeLayout(page, mode);
+    await assertCinemaReadyForScreenshot(page, mode);
     await assertCinemaActiveTargetVisible(page);
     const screenshot = `${screenshotPrefix}-${mode.toLowerCase()}.png`;
     await page.screenshot({ fullPage: false, path: screenshot });
@@ -1472,13 +1519,14 @@ async function captureCinemaFocusModeScreenshots(page, screenshotPrefix) {
   const advancedScreenshot = `${screenshotPrefix}-advanced.png`;
   await page.screenshot({ fullPage: false, path: advancedScreenshot });
   screenshots.push(advancedScreenshot);
-  await visibleOverlayButton(page, "More").click();
+  await cinemaAdvancedModeButton(page).click();
 
   await switchCinemaFocusMode(page, "Inspect");
   await selectCinemaInspectorPanel(page, "Overview");
   await visibleOverlayButton(page, "Pin").click();
   await switchCinemaFocusMode(page, "Read");
   await assertCinemaFocusModeLayout(page, "Read", { pinned: true });
+  await assertCinemaReadyForScreenshot(page, "Read pinned");
   const pinnedScreenshot = `${screenshotPrefix}-read-pinned.png`;
   await page.screenshot({ fullPage: false, path: pinnedScreenshot });
   screenshots.push(pinnedScreenshot);
@@ -1628,6 +1676,29 @@ async function assertCinemaActiveTargetVisible(page) {
   );
 }
 
+async function assertCinemaReadyForScreenshot(page, label) {
+  await page
+    .waitForFunction(
+      (selector) => {
+        const overlay = document.querySelector(selector);
+        if (!(overlay instanceof HTMLElement)) {
+          return false;
+        }
+        const text = overlay.innerText?.replace(/\s+/g, " ") ?? "";
+        return !/Loading source renderer|Loading selected chapter|Loading Book Cinema|Preparing this view locally|Taking longer than expected/i.test(
+          text,
+        );
+      },
+      cinemaOverlaySelector,
+      { timeout: 15_000 },
+    )
+    .catch((error) => {
+      throw new Error(`Cinema ${label} did not reach a ready renderer state before screenshot.`, {
+        cause: error,
+      });
+    });
+}
+
 async function switchCinemaFocusMode(page, mode) {
   if (mode === "Debug") {
     await openCinemaAdvancedMenu(page);
@@ -1642,8 +1713,14 @@ async function switchCinemaFocusMode(page, mode) {
 }
 
 async function openCinemaAdvancedMenu(page) {
-  await visibleOverlayButton(page, "More").click();
+  await cinemaAdvancedModeButton(page).click();
   await cinemaOverlay(page).getByRole("menuitemradio", { exact: true, name: "Debug" }).waitFor();
+}
+
+function cinemaAdvancedModeButton(page) {
+  return visibleOverlayControl(page, (overlay) =>
+    overlay.getByRole("button", { name: /^(More|Advanced mode: Debug|Debug)$/ }),
+  );
 }
 
 async function selectCinemaInspectorPanel(page, label) {
@@ -2650,6 +2727,20 @@ function sleep(ms) {
 async function writeSummary(summary) {
   await mkdir(path.dirname(summaryPath), { recursive: true });
   await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+}
+
+async function attachScreenshotStateSummary(summary) {
+  const screenshotState = await writeScreenshotStateArtifacts({
+    outputDir: screenshotStateDir,
+    records: screenshotStateRecords,
+    rootDir,
+  });
+  summary.screenshotState = {
+    manifest: path.join(screenshotStateDir, "manifest.json"),
+    mismatches: path.join(screenshotStateDir, "state-mismatches.md"),
+    summary: screenshotState.summary,
+  };
+  return screenshotState;
 }
 
 function createLowResourceFixtureCoverage() {
