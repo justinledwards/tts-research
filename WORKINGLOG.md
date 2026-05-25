@@ -550,3 +550,20 @@
 ## 2026-05-25 17:45 CEST - Commit Test Speed Workpackage
 - [x] Stage validation speed and bloat tooling files
 - [x] Commit validation speed and bloat tooling workpackage
+
+## 2026-05-25 18:33 CEST - testing-speed optimization
+- [ ] parallelize fast validation batches
+- [ ] remove redundant package builds in package test script graph
+- [ ] enable deterministic lint cache and add explicit validate aliases
+
+## 2026-05-25 18:33 CEST - Advanced and Debug Mode Containment
+- [ ] Inspect Cinema advanced mode, context panel, command palette, and UI audit metadata
+- [ ] Add shared advanced/debug mode metadata and containment affordances
+- [ ] Wire Advanced/Debug controls into command/audit surfaces
+- [ ] Run WP24 local validation commands
+
+## 2026-05-25 18:34 CEST - Test-first runtime reduction execution
+- [x] Add bounded parallel batches to the `validate-local` fast lane and quick-mode concurrency controls.
+- [x] Split package-level test commands into `build` + `test:core` and keep `test` as compatibility wrapper.
+- [x] Update root package orchestration to avoid redundant package rebuilds during fast local validation.
+- [x] Enable ESLint cache and add explicit fast/quick local validation aliases.

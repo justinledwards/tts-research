@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { startLocalServices } from "../e2e-browser-qa-helpers.mjs";
 import { loadBenchmarkConfig, runAlignmentBenchmark } from "./benchmarks.mjs";
@@ -11,15 +12,31 @@ import { evaluateReaderTimingSummary } from "./reader-timing.mjs";
 import { createRunContext, finalizeRun, runCallbackStep, runCommandStep } from "./reporting.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const lane = parseLane(process.argv.slice(2), process.env.VALIDATE_LOCAL_LANE);
+const args = process.argv.slice(2);
+const lane = parseLane(args, process.env.VALIDATE_LOCAL_LANE);
 const runFastLane = lane === "fast" || lane === "release";
 const runE2ELane = lane === "e2e" || lane === "release";
 const runReleaseLane = lane === "release";
+const runQuickLane = parseBoolean(args, "quick", process.env.VALIDATE_LOCAL_QUICK);
+const packageBuildInParallel = process.env.VALIDATE_LOCAL_SKIP_PACKAGE_BUILD !== "1";
+const enforceRuntimeRegressionGuard = parseBoolean(
+  args,
+  "guard-regressions",
+  process.env.VALIDATE_LOCAL_GUARD_REGRESSIONS,
+);
+const runtimeRegressionWindow =
+  parsePositiveInteger(process.env.VALIDATE_LOCAL_REGRESSION_WINDOW) ?? 12;
+const runtimeHistoryPath = path.join(rootDir, "output", "validate-local", "summary-history.json");
+const fastCommandConcurrency = resolveParallelism(
+  args,
+  process.env.VALIDATE_LOCAL_PARALLELISM,
+  runQuickLane ? 2 : Math.max(2, Math.min(6, getAvailableWorkers())),
+);
 
 const context = await createRunContext({ kind: `validate-local:${lane}`, rootDir });
 const { manifest, thresholds } = await loadBenchmarkConfig(rootDir);
 
-const fastCommandSteps = [
+const fastCommandBatchA = [
   {
     id: "format-check",
     title: "Format Check",
@@ -32,6 +49,9 @@ const fastCommandSteps = [
     command: "pnpm",
     args: ["lint"],
   },
+];
+
+const fastCommandBatchB = [
   {
     id: "typecheck",
     title: "Typecheck",
@@ -42,7 +62,7 @@ const fastCommandSteps = [
     id: "package-tests",
     title: "Package Tests",
     command: "pnpm",
-    args: ["package:test"],
+    args: ["package:test:core"],
   },
   {
     id: "script-tests",
@@ -76,6 +96,13 @@ const fastCommandSteps = [
   },
 ];
 
+const packageBuildStep = {
+  id: "package-build",
+  title: "Package Build",
+  command: "pnpm",
+  args: ["package:build"],
+};
+
 const releaseCommandSteps = [
   {
     id: "package-smoke",
@@ -91,8 +118,18 @@ const releaseCommandSteps = [
   },
 ];
 
-for (const step of runFastLane ? fastCommandSteps : []) {
-  await runCommandStep(context, step);
+if (runFastLane) {
+  await runCommandBatch(context, fastCommandBatchA, {
+    concurrency: Math.min(2, fastCommandConcurrency),
+  });
+
+  if (packageBuildInParallel) {
+    await runCommandStep(context, packageBuildStep);
+  }
+
+  await runCommandBatch(context, fastCommandBatchB, {
+    concurrency: fastCommandConcurrency,
+  });
 }
 
 for (const step of runReleaseLane ? releaseCommandSteps : []) {
@@ -527,7 +564,16 @@ if (sharedE2EServices) {
   await sharedE2EServices.stop();
 }
 
+if (enforceRuntimeRegressionGuard) {
+  const totalDurationMs = Date.now() - Date.parse(context.summary.startedAt);
+  await runRuntimeRegressionGuard(context, {
+    currentDurationMs: totalDurationMs,
+    window: runtimeRegressionWindow,
+  });
+}
+
 const summary = await finalizeRun(context);
+await persistValidationRuntimeHistory(summary, runtimeHistoryPath);
 console.log(`validate:local:${lane} ${summary.status}; report: ${summary.reports.markdown}`);
 process.exitCode = summary.status === "passed" ? 0 : 1;
 
@@ -542,6 +588,168 @@ function parseLane(args, configuredLane) {
     throw new Error(`Unknown validation lane "${value}". Use fast, e2e, or release.`);
   }
   return value;
+}
+
+function resolveParallelism(args, configuredValue, fallback) {
+  const argsAsValues = new Set(args);
+  const explicit = args.find((arg) => arg.startsWith("--parallelism="));
+  const cliValue = explicit
+    ? explicit.slice("--parallelism=".length)
+    : argsAsValues.has("--parallelism")
+      ? args[args.indexOf("--parallelism") + 1]
+      : null;
+  const parsed = parsePositiveInteger(cliValue ?? configuredValue);
+  if (parsed !== null) {
+    return parsed;
+  }
+  return Math.max(1, fallback);
+}
+
+async function runRuntimeRegressionGuard(context, { currentDurationMs, window } = {}) {
+  const history = await readValidationRuntimeHistory(runtimeHistoryPath);
+  const durations = history
+    .map((entry) => Number(entry.durationMs))
+    .filter((value) => Number.isFinite(value));
+  if (durations.length < 1 || !Number.isFinite(currentDurationMs)) {
+    return;
+  }
+  const limit = Math.max(1, Number.isInteger(window) ? window : 12);
+  const sample = durations.slice(-1 * limit);
+  const medianDurationMs = calculateMedian(sample);
+  if (!Number.isFinite(medianDurationMs) || medianDurationMs <= 0) {
+    return;
+  }
+  const regressionThreshold = medianDurationMs * 1.25;
+
+  await runCallbackStep(
+    context,
+    {
+      id: "runtime-regression-guard",
+      title: "Runtime Regression Guard",
+      command: "runtime regression guard",
+    },
+    () => {
+      const pass = currentDurationMs <= regressionThreshold;
+      if (!pass) {
+        throw new Error(
+          `Total validation runtime ${String(currentDurationMs)}ms exceeds 1.25x median baseline ${String(
+            medianDurationMs,
+          )}ms.`,
+        );
+      }
+      return {
+        metrics: {
+          totalDurationMs: currentDurationMs,
+          medianBaselineMs: medianDurationMs,
+          thresholdMs: regressionThreshold,
+        },
+        thresholds: [
+          {
+            actual: currentDurationMs,
+            expected: regressionThreshold,
+            metric: "totalDurationMs",
+            operator: "<=",
+            passed: true,
+            threshold: "maxTotalDurationMs",
+          },
+        ],
+      };
+    },
+  );
+}
+
+async function persistValidationRuntimeHistory(summary, historyPath) {
+  const history = await readValidationRuntimeHistory(historyPath);
+  const maxEntries = 100;
+  history.push({
+    startedAt: summary.startedAt,
+    durationMs: summary.durationMs,
+    kind: summary.kind,
+    status: summary.status,
+  });
+  if (history.length > maxEntries) {
+    history.splice(0, history.length - maxEntries);
+  }
+  await writeFile(historyPath, `${JSON.stringify(history, null, 2)}\n`);
+}
+
+async function readValidationRuntimeHistory(historyPath) {
+  if (!historyPath) {
+    return [];
+  }
+  try {
+    const raw = await readFile(historyPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function calculateMedian(values) {
+  if (values.length === 0) {
+    return NaN;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function parseBoolean(args, name, value = null) {
+  const longFlag = `--${name}`;
+  const negated = `--no-${name}`;
+  const valueWithEquals = args.find((arg) => arg.startsWith(`${longFlag}=`));
+  if (args.includes(longFlag)) {
+    return true;
+  }
+  if (args.includes(negated)) {
+    return false;
+  }
+  if (valueWithEquals) {
+    return parseBooleanValue(valueWithEquals.slice(longFlag.length + 1));
+  }
+  if (value === null || value === undefined || value === "") {
+    return false;
+  }
+  return parseBooleanValue(String(value));
+}
+
+function parseBooleanValue(value) {
+  const normalized = String(value).toLowerCase();
+  return ["1", "true", "yes", "on", "y"].includes(normalized);
+}
+
+function parsePositiveInteger(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function getAvailableWorkers() {
+  if (typeof os.availableParallelism === "function") {
+    return os.availableParallelism();
+  }
+  if (typeof os.cpus === "function") {
+    return os.cpus().length || 2;
+  }
+  return 2;
+}
+
+async function runCommandBatch(context, steps, { concurrency = 4 } = {}) {
+  const limit = Math.max(1, parsePositiveInteger(concurrency) ?? 4);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, steps.length) }, async () => {
+    while (next < steps.length) {
+      const current = next++;
+      await runCommandStep(context, steps[current]);
+    }
+  });
+  await Promise.allSettled(workers);
 }
 
 async function attachReaderTimingBudgets(step, thresholds) {
