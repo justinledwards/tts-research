@@ -12,6 +12,12 @@ import { CinemaMobileSheet } from "./CinemaMobileSheet";
 import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 import { cinemaCanvasBudgetFor } from "./canvasBudget";
 import {
+  CINEMA_MORE_ACTIONS,
+  CINEMA_MORE_SECTIONS,
+  activeCinemaMoreAction,
+  cinemaMoreActionsBySection,
+} from "./cinemaMoreActions";
+import {
   buildCinemaLayoutState,
   type CinemaPanelDefinition,
   cinemaFocusModeMeta,
@@ -332,9 +338,23 @@ describe("CinemaFocusModeToolbar", () => {
       <CinemaFocusModeToolbar mode="read" onModeChange={() => null} />,
     );
 
-    expect(markup).toContain("More advanced modes");
+    expect(markup).toContain("Open Cinema More menu");
     expect(markup).toContain(">More<");
     expect(markup).not.toContain("Active operator mode");
+  });
+
+  it("groups Cinema More actions by display, advanced, and navigation ownership", () => {
+    const grouped = cinemaMoreActionsBySection(CINEMA_MORE_ACTIONS);
+
+    for (const section of CINEMA_MORE_SECTIONS) {
+      expect(grouped[section.id].length).toBeGreaterThan(0);
+    }
+    expect(grouped.display.every((action) => action.owner === "cinema-display")).toBe(true);
+    expect(grouped.advanced.every((action) => action.owner === "cinema-advanced")).toBe(true);
+    expect(grouped.navigation.every((action) => action.owner === "cinema-navigation")).toBe(true);
+    expect(activeCinemaMoreAction({ activePanelId: "diagnostics", mode: "debug" })?.label).toBe(
+      "Diagnostics",
+    );
   });
 });
 

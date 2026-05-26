@@ -829,9 +829,12 @@ export function BookCinemaOverlay({
   onClose,
   onAccessibilitySettingsChange,
   onBookmark,
+  onCommandPaletteOpen,
   onCreateAudio,
+  onHelpOpen,
   onImport,
   onInspectStructure,
+  onShortcutCheatSheetOpen,
   onPlayPause,
   onRestart,
   onScopeChange,
@@ -882,9 +885,12 @@ export function BookCinemaOverlay({
   onClose: () => void;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onBookmark: () => void;
+  onCommandPaletteOpen?: () => void;
   onCreateAudio: (book: BookSource, scope: BookScope) => void;
+  onHelpOpen?: () => void;
   onImport: (files: File[], options: BookSourceImportOptions) => Promise<void>;
   onInspectStructure: (book: BookSource) => void;
+  onShortcutCheatSheetOpen?: () => void;
   onPlayPause: () => void;
   onRestart: () => void;
   onScopeChange: (scope: BookScope) => void;
@@ -1372,6 +1378,19 @@ export function BookCinemaOverlay({
 
   useReaderModalLifecycle(dialogRef, { closeOnEscape: false });
 
+  const handleCompactTransport = () => {
+    cinemaFocus.setMode("read");
+    cinemaFocus.setPinnedPanelId(null);
+    setMobilePanel(null);
+  };
+
+  const handleTheatreMode = () => {
+    handleCompactTransport();
+    if (!document.fullscreenElement && dialogRef.current?.requestFullscreen) {
+      void dialogRef.current.requestFullscreen().catch(() => null);
+    }
+  };
+
   useEffect(() => {
     if (book.id || normalizedScopeKey) {
       setPointerScopeKey(null);
@@ -1568,7 +1587,15 @@ export function BookCinemaOverlay({
                 cinemaFocus.setMode(action.mode);
                 cinemaFocus.setActivePanelId(action.panelId);
               }}
+              onCommandPalette={onCommandPaletteOpen}
+              onCompactTransport={handleCompactTransport}
+              onHelpGuide={onHelpOpen}
+              onKeyboardShortcuts={onShortcutCheatSheetOpen}
               onModeChange={cinemaFocus.setMode}
+              onReaderSettings={() => {
+                setSettingsOpen(true);
+              }}
+              onTheatreMode={handleTheatreMode}
             />
           </div>
           {timingConfidence.isDegraded ? (

@@ -618,3 +618,13 @@
 - [x] Add shared compact rail control metadata and affordance rendering
 - [x] Add clipped/cryptic compact-control validation coverage
 - [x] Run WP30 local validation commands
+
+## 2026-05-26 04:05 CEST - Cinema More Menu Functionality and Dead-Control Closure
+- [x] Inspect current Cinema More, advanced modes, command palette, and UI audit coverage
+- [x] Add shared Cinema More action model and menu component
+- [x] Wire Book, Document, and Website Cinema More behavior through the shared model
+- [x] Add dead-control and command parity coverage for Cinema More
+- [x] Run WP32 local validation commands
+- [x] Scope filtered UI action audit gates to focused scenarios
+- [x] Record full UI gate residual Project Dashboard findings outside the More menu path
+- [x] Commit WP32 changes

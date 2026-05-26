@@ -1,4 +1,5 @@
 export { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
+export { CinemaMoreMenu, navigationActionMatchesCommand } from "./CinemaMoreMenu";
 export {
   cinemaCanvasBudgetDataAttributes,
   cinemaCanvasBudgetFor,
@@ -13,6 +14,24 @@ export {
   type CinemaAdvancedModeAction,
   type CinemaAdvancedModeId,
 } from "./cinemaAdvancedMode";
+export {
+  CINEMA_MORE_ACTIONS,
+  CINEMA_MORE_MENU_ID,
+  CINEMA_MORE_SECTIONS,
+  activeCinemaMoreAction,
+  cinemaMoreAction,
+  cinemaMoreActionsBySection,
+  type CinemaMoreAction,
+  type CinemaMoreActionId,
+  type CinemaMoreActionKind,
+  type CinemaMoreActionOwner,
+  type CinemaMoreAdvancedAction,
+  type CinemaMoreDisplayAction,
+  type CinemaMoreNavigationAction,
+  type CinemaMoreNavigationActionId,
+  type CinemaMoreSection,
+  type CinemaMoreSectionId,
+} from "./cinemaMoreActions";
 export {
   useCinemaFocusController,
   type CinemaFocusController,

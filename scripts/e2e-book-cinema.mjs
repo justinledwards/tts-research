@@ -1662,12 +1662,12 @@ async function captureCinemaFocusModeScreenshots(page, screenshotPrefix) {
     const screenshot = `${screenshotPrefix}-${mode.toLowerCase()}.png`;
     await page.screenshot({ fullPage: false, path: screenshot });
     screenshots.push(screenshot);
+    await openCinemaAdvancedMenu(page);
+    const moreScreenshot = `${screenshotPrefix}-${mode.toLowerCase()}-more-menu.png`;
+    await page.screenshot({ fullPage: false, path: moreScreenshot });
+    screenshots.push(moreScreenshot);
+    await page.keyboard.press("Escape");
   }
-  await openCinemaAdvancedMenu(page);
-  const advancedScreenshot = `${screenshotPrefix}-advanced.png`;
-  await page.screenshot({ fullPage: false, path: advancedScreenshot });
-  screenshots.push(advancedScreenshot);
-  await cinemaAdvancedModeButton(page).click();
 
   await switchCinemaFocusMode(page, "Inspect");
   await selectCinemaInspectorPanel(page, "Overview");
@@ -1879,7 +1879,7 @@ async function openCinemaAdvancedMenu(page) {
 function cinemaAdvancedModeButton(page) {
   return visibleOverlayControl(page, (overlay) =>
     overlay.getByRole("button", {
-      name: /^(More advanced modes|Advanced menu\. Active operator mode: Diagnostics|Diagnostics)$/,
+      name: /^(Open Cinema More menu|Cinema More menu\. Active operator mode: Diagnostics|Diagnostics)$/,
     }),
   );
 }

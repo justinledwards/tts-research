@@ -236,6 +236,7 @@ async function main() {
     const gateFindings = summarizeGateFindings({
       actions,
       duplicates,
+      requireAllSurfaces: !scenarioFilter,
       results,
       scenarios,
       surfaceComplexity,
@@ -282,6 +283,7 @@ async function main() {
         inventoryOnly,
         outputDir,
         results,
+        scenarioFilterActive: Boolean(scenarioFilter),
         scenarios,
         screenshots,
         surfaceComplexity,
@@ -784,10 +786,10 @@ function createScenarios(seed) {
       surface: "BookCinema",
     },
     {
-      description: "Book Cinema advanced menu opened from the focus mode toolbar.",
-      id: "book-advanced-menu",
-      label: "Book Cinema advanced menu",
-      open: (page) => openBookCinemaAdvancedMenu(page, seed.docx.scope),
+      description: "Book Cinema More menu opened from the focus mode toolbar.",
+      id: "book-more-menu",
+      label: "Book Cinema More menu",
+      open: (page) => openBookCinemaMoreMenu(page, seed.docx.scope),
       storageState: projectStorageState(seed.projectId, {
         bookScope: seed.docx.scope,
         bookSourceId: seed.docx.book.id,
@@ -1213,7 +1215,7 @@ async function openProjectDashboard(page) {
   await openWorkspaceStage(page, "Review");
   await page.getByRole("button", { name: "Full workspace layout" }).click();
   await page.getByTestId("ui-action-project-dashboard-open-rail").click();
-  await page.getByText("Project Dashboard").first().waitFor();
+  await page.getByRole("dialog", { name: "Project Dashboard" }).waitFor();
 }
 
 async function openVoiceDashboard(page) {
@@ -1260,11 +1262,117 @@ async function openBookCinemaOverlay(page, scope) {
   await cinemaOverlay(page).waitFor({ state: "visible" });
 }
 
-async function openBookCinemaAdvancedMenu(page, scope) {
+async function openBookCinemaMoreMenu(page, scope) {
   await openBookCinemaOverlay(page, scope);
   const overlay = cinemaOverlay(page);
-  await overlay.getByRole("button", { name: "More advanced modes" }).click();
-  await overlay.locator("#cinema-advanced-mode-menu").waitFor();
+  await openCinemaMoreMenu(page, overlay);
+  await assertCinemaMoreMenu(page, overlay);
+}
+
+async function openCinemaMoreMenu(page, overlay) {
+  await overlay
+    .getByRole("button", {
+      name: /^(Open Cinema More menu|Cinema More menu\. Active operator mode: Diagnostics|Diagnostics)$/,
+    })
+    .click();
+  await overlay.locator("#cinema-more-menu").waitFor();
+  await page.waitForTimeout(100);
+}
+
+async function assertCinemaMoreMenu(page, overlay) {
+  const report = await overlay.locator("#cinema-more-menu").evaluate((menu) => {
+    const actions = [...menu.querySelectorAll("[data-cinema-more-action-id]")].map((action) => ({
+      commandId: action.getAttribute("data-command-id") ?? "",
+      id: action.getAttribute("data-cinema-more-action-id") ?? "",
+      kind: action.getAttribute("data-cinema-more-action-kind") ?? "",
+      owner: action.getAttribute("data-ui-action-owner") ?? "",
+      role: action.getAttribute("role") ?? "",
+      section: action.getAttribute("data-cinema-more-section-id") ?? "",
+    }));
+    const sections = [...menu.querySelectorAll("[data-cinema-more-section]")].map(
+      (section) => section.getAttribute("data-cinema-more-section") ?? "",
+    );
+    const expectedCommandIds = new Map([
+      ["command-palette", "command.palette"],
+      ["keyboard-shortcuts", "shortcuts:open"],
+      ["help-guide", "help:open"],
+    ]);
+    return {
+      actionCount: actions.length,
+      commandMismatches: actions.filter((action) => {
+        const expected = expectedCommandIds.get(action.id);
+        if (!expected) {
+          return false;
+        }
+        return action.commandId !== expected;
+      }),
+      emptySections: sections.filter(
+        (section) => !actions.some((action) => action.section === section),
+      ),
+      missingAdvancedModeIds: actions.filter((action) => action.kind === "advanced" && !action.id),
+      missingOwners: actions.filter((action) => !action.owner),
+      sections,
+    };
+  });
+  const failures = [];
+  if (report.actionCount === 0) {
+    failures.push("Cinema More opened an empty menu.");
+  }
+  for (const section of ["display", "advanced", "navigation"]) {
+    if (!report.sections.includes(section)) {
+      failures.push(`Cinema More menu did not expose the ${section} section.`);
+    }
+  }
+  if (report.emptySections.length > 0) {
+    failures.push(`Cinema More empty sections: ${report.emptySections.join(", ")}.`);
+  }
+  if (report.missingOwners.length > 0) {
+    failures.push(
+      `Cinema More actions missing owners: ${report.missingOwners
+        .map((action) => action.id || action.role)
+        .join(", ")}.`,
+    );
+  }
+  if (report.commandMismatches.length > 0) {
+    failures.push(
+      `Cinema More command mismatches: ${report.commandMismatches
+        .map((action) => `${action.id}:${action.commandId}`)
+        .join(", ")}.`,
+    );
+  }
+  if (report.missingAdvancedModeIds.length > 0) {
+    failures.push("Cinema More advanced action exists without an advanced mode id.");
+  }
+  await overlay.locator("#cinema-more-menu [role^='menuitem']").first().focus();
+  await page.keyboard.press("Escape");
+  await overlay.locator("#cinema-more-menu").waitFor({ state: "hidden" });
+  await page.waitForFunction(
+    () => document.activeElement?.getAttribute("data-testid") === "ui-action-cinema-more-menu",
+    null,
+    { timeout: 5000 },
+  );
+  const activeTestId = await page.evaluate(
+    () => document.activeElement?.getAttribute("data-testid") ?? "",
+  );
+  if (activeTestId !== "ui-action-cinema-more-menu") {
+    failures.push("Cinema More did not return focus to the trigger after Escape.");
+  }
+  await overlay.getByTestId("ui-action-cinema-more-menu").press("ArrowDown");
+  await overlay.locator("#cinema-more-menu").waitFor();
+  await page.waitForFunction(
+    () => Boolean(document.activeElement?.getAttribute("data-cinema-more-action-id")),
+    null,
+    { timeout: 5000 },
+  );
+  const focusedAction = await page.evaluate(
+    () => document.activeElement?.getAttribute("data-cinema-more-action-id") ?? "",
+  );
+  if (!focusedAction) {
+    failures.push("Cinema More keyboard activation did not move focus into the menu.");
+  }
+  if (failures.length > 0) {
+    throw new Error(failures.join(" "));
+  }
 }
 
 async function openPinnedInspector(page, scope) {
@@ -1873,6 +1981,7 @@ function summarizeResults(results) {
 function summarizeGateFindings({
   actions,
   duplicates,
+  requireAllSurfaces = true,
   results,
   scenarios,
   surfaceComplexity = [],
@@ -1901,9 +2010,9 @@ function summarizeGateFindings({
       ...scenarios.map((scenario) => normalizeSurface(scenario.label)),
     ].filter(Boolean),
   );
-  const missingSurfaces = requiredSurfaces.filter(
-    (surface) => !normalizedSurfaces.has(normalizeSurface(surface)),
-  );
+  const missingSurfaces = requireAllSurfaces
+    ? requiredSurfaces.filter((surface) => !normalizedSurfaces.has(normalizeSurface(surface)))
+    : [];
   const metadataFindings = actions.filter((action) => action.metadataIssues.length > 0);
   const failedResults = results.filter((result) => result.passed === false);
   const safeActions = actions.filter((action) => !action.disabled && !action.destructive);
@@ -1954,6 +2063,7 @@ function renderReviewerSummary({
   inventoryOnly,
   outputDir,
   results,
+  scenarioFilterActive = false,
   scenarios,
   screenshots,
   surfaceComplexity = [],
@@ -1964,14 +2074,17 @@ function renderReviewerSummary({
   const findings = summarizeGateFindings({
     actions,
     duplicates,
+    requireAllSurfaces: !scenarioFilterActive,
     results,
     scenarios,
     surfaceComplexity,
   });
   const status =
-    !inventoryOnly && findings.total === 0
-      ? "Review-complete: exhaustive UI action audit passed."
-      : "Not review-complete: UI action audit has findings or did not run activation replay.";
+    inventoryOnly || findings.total > 0
+      ? "Not review-complete: UI action audit has findings or did not run activation replay."
+      : scenarioFilterActive
+        ? "Focused UI action audit passed for filtered scenarios."
+        : "Review-complete: exhaustive UI action audit passed.";
   const lines = [
     "# UI action audit reviewer summary",
     "",
@@ -2014,7 +2127,11 @@ function renderReviewerSummary({
     "",
     "## Gate findings",
     "",
-    `- Missing required surfaces: ${formatFindingCount(findings.missingSurfaces.length)}`,
+    `- Missing required surfaces: ${
+      scenarioFilterActive
+        ? "not evaluated for filtered scenario run"
+        : formatFindingCount(findings.missingSurfaces.length)
+    }`,
     `- Missing safe pointer/keyboard activations: ${formatFindingCount(
       findings.missingSafeActivations.length,
     )}`,

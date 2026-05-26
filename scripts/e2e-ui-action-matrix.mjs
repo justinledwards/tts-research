@@ -43,7 +43,7 @@ export async function buildActionInventory(page, scenario) {
       const seen = new Set();
       const visibleModalDialogs = [
         ...document.querySelectorAll("[role='dialog'][aria-modal='true']"),
-      ].filter(isVisible);
+      ].filter(isVisibleModalDialog);
       const activeModalDialog = visibleModalDialogs[visibleModalDialogs.length - 1] ?? null;
       for (const element of document.querySelectorAll(selector)) {
         if (
@@ -188,6 +188,26 @@ export async function buildActionInventory(page, scenario) {
           current = current.parentElement;
         }
         return rect.width > 0 && rect.height > 0;
+      }
+
+      function isVisibleModalDialog(element) {
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+          return false;
+        }
+        let current = element;
+        while (current instanceof HTMLElement) {
+          const style = window.getComputedStyle(current);
+          if (
+            style.visibility === "hidden" ||
+            style.display === "none" ||
+            current.getAttribute("aria-hidden") === "true"
+          ) {
+            return false;
+          }
+          current = current.parentElement;
+        }
+        return true;
       }
 
       function isDisabled(element) {

@@ -206,8 +206,10 @@ export function PreparedSourceCinemaOverlay({
   onClose,
   onAccessibilitySettingsChange,
   onBookmark,
+  onCommandPaletteOpen,
   onClearSourcePolicy,
   onCreateAudio,
+  onHelpOpen,
   onInspectStructure,
   onPrepareFile,
   onPlayPause,
@@ -216,6 +218,7 @@ export function PreparedSourceCinemaOverlay({
   onResumeProgress,
   onSaveSourcePolicy,
   onSelectSource,
+  onShortcutCheatSheetOpen,
   onSkip,
   onThemeChange,
   onUiMemoryFocusStateChange,
@@ -248,8 +251,10 @@ export function PreparedSourceCinemaOverlay({
   onClose: () => void;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onBookmark: () => void;
+  onCommandPaletteOpen?: () => void;
   onClearSourcePolicy: () => Promise<void> | void;
   onCreateAudio: (source: PreparedSource) => void;
+  onHelpOpen?: () => void;
   onInspectStructure: (source: PreparedSource) => void;
   onPrepareFile: (file: File) => Promise<void>;
   onPlayPause: () => void;
@@ -258,6 +263,7 @@ export function PreparedSourceCinemaOverlay({
   onResumeProgress: (progress: PlaybackProgress) => void;
   onSaveSourcePolicy: (request: SourceSpeechPolicyUpdateRequest) => Promise<void> | void;
   onSelectSource: (sourceId: string) => void;
+  onShortcutCheatSheetOpen?: () => void;
   onSkip: (seconds: number) => void;
   onThemeChange: (theme: ThemeName) => void;
   onUiMemoryFocusStateChange: (state: UiMemoryCinemaState) => void;
@@ -748,6 +754,19 @@ export function PreparedSourceCinemaOverlay({
     }
   };
 
+  const handleCompactTransport = () => {
+    cinemaFocus.setMode("read");
+    cinemaFocus.setPinnedPanelId(null);
+    setMobilePanel(null);
+  };
+
+  const handleTheatreMode = () => {
+    handleCompactTransport();
+    if (!document.fullscreenElement && dialogRef.current?.requestFullscreen) {
+      void dialogRef.current.requestFullscreen().catch(() => null);
+    }
+  };
+
   return (
     <CinemaShell
       ariaLabelledBy="prepared-source-cinema-title"
@@ -849,7 +868,15 @@ export function PreparedSourceCinemaOverlay({
                   cinemaFocus.setMode(action.mode);
                   cinemaFocus.setActivePanelId(action.panelId);
                 }}
+                onCommandPalette={onCommandPaletteOpen}
+                onCompactTransport={handleCompactTransport}
+                onHelpGuide={onHelpOpen}
+                onKeyboardShortcuts={onShortcutCheatSheetOpen}
                 onModeChange={cinemaFocus.setMode}
+                onReaderSettings={() => {
+                  setSettingsOpen(true);
+                }}
+                onTheatreMode={handleTheatreMode}
               />
             </div>
           </div>

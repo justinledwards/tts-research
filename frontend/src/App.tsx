@@ -2714,6 +2714,10 @@ export function App() {
   const openShortcutCheatSheet = useCallback(() => {
     openCommandPalette("shortcuts");
   }, [openCommandPalette]);
+  const openContextualHelp = useCallback(() => {
+    setHelpCommandTarget(null);
+    setIsHelpOpen(true);
+  }, []);
   const openShortcutSettings = useCallback(() => {
     closeCommandPalette();
     setSettingsCommandTarget({ fieldId: "shortcuts", groupId: "reader", scope: "machine" });
@@ -7097,10 +7101,15 @@ export function App() {
             onBookmark={() => {
               void handleAddPlaybackBookmark();
             }}
+            onCommandPaletteOpen={() => {
+              openCommandPalette("commands");
+            }}
             onPlayPause={handleBookCinemaPlayPause}
+            onHelpOpen={openContextualHelp}
             onRestart={handleBookCinemaRestart}
             onScopeChange={setSelectedBookScope}
             onSelectBook={handleSelectBookCinemaSource}
+            onShortcutCheatSheetOpen={openShortcutCheatSheet}
             onSkip={handleBookCinemaSkip}
             onClearSourcePolicy={() => handleClearBookSourcePolicy(selectedBookSource.id)}
             onResumeProgress={(progress, seconds) => {
@@ -7151,6 +7160,9 @@ export function App() {
             onBookmark={() => {
               void handleAddPlaybackBookmark();
             }}
+            onCommandPaletteOpen={() => {
+              openCommandPalette("commands");
+            }}
             onClearSourcePolicy={() =>
               handleClearPreparedSourcePolicy(preparedSourceCinemaSource.id)
             }
@@ -7165,6 +7177,7 @@ export function App() {
             }}
             onPrepareFile={handlePrepareCinemaSourceFile}
             onPlayPause={handleBookCinemaPlayPause}
+            onHelpOpen={openContextualHelp}
             onRerunWebsiteExtraction={handleRerunWebsiteExtraction}
             onRestart={handleBookCinemaRestart}
             onResumeProgress={(progress) => {
@@ -7174,6 +7187,7 @@ export function App() {
               handleSavePreparedSourcePolicy(preparedSourceCinemaSource.id, request)
             }
             onSelectSource={handleSelectPreparedCinemaSource}
+            onShortcutCheatSheetOpen={openShortcutCheatSheet}
             onSkip={handleBookCinemaSkip}
             onThemeChange={setPreparedSourceCinemaThemeName}
             onUiMemoryFocusStateChange={handlePreparedCinemaFocusStateChange}
