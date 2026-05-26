@@ -89,10 +89,12 @@ import {
   resolveTimingConfidenceDisplay,
 } from "../performance";
 import {
+  alignmentStatusFromReport,
   evaluateBookReadAlongInvariant,
   ReadAlongResyncController,
   readAlongInvariantStatusLabel,
   readAlongRuntimeStateLabel,
+  type AlignmentStatus,
   type ReadAlongRuntimeSnapshot,
 } from "../readalong";
 import { useAudioWaveformBars } from "../../audioWaveform";
@@ -1084,6 +1086,10 @@ export function BookCinemaOverlay({
     () => resolveTimingConfidenceDisplay(highlightMap),
     [highlightMap],
   );
+  const alignmentStatus = useMemo(
+    () => alignmentStatusFromReport(activeBookJob?.timing?.alignmentQuality, highlightMap),
+    [activeBookJob?.timing?.alignmentQuality, highlightMap],
+  );
   const readAlongReport = useMemo(
     () =>
       evaluateBookReadAlongInvariant({
@@ -1267,7 +1273,7 @@ export function BookCinemaOverlay({
             value={hasPlayableAudio ? "Generated" : "Not generated"}
           />
           <BookCinemaHealthRow label="Job status" value={activeBookJob?.status ?? "Pre-audio"} />
-          <BookCinemaHealthRow label="Alignment" value={highlightMap ? "Mapped" : "Pending"} />
+          <BookCinemaHealthRow label="Alignment" value={alignmentStatus.label} />
           <BookCinemaHealthRow label="Bookmarks" value={bookmarks.length.toLocaleString()} />
           {structuralWarnings.length > 0 ? (
             <div className="grid gap-2">
@@ -1349,10 +1355,11 @@ export function BookCinemaOverlay({
           cursorSec={playbackCursorSec}
           highlightCue={runtimeHighlightCue}
           highlightMap={highlightMap}
+          alignmentStatus={alignmentStatus}
           readAlongRuntime={readAlongRuntime}
         />
       ),
-      detail: timingConfidence.isDegraded ? timingConfidence.label : "Timing map",
+      detail: alignmentStatus.detail,
       id: "timing-map",
       kind: "timing-map",
       modeAffinity: "debug",
@@ -2403,11 +2410,13 @@ function BookCinemaResumeChip() {
 }
 
 function BookCinemaTimingDebug({
+  alignmentStatus,
   cursorSec,
   highlightCue,
   highlightMap,
   readAlongRuntime,
 }: Readonly<{
+  alignmentStatus: AlignmentStatus;
   cursorSec: number;
   highlightCue: HighlightCue | null;
   highlightMap: HighlightMap | null;
@@ -2438,6 +2447,10 @@ function BookCinemaTimingDebug({
         <dd className="truncate text-right">{Math.round(summary.confidence.overall * 100)}%</dd>
         <dt className="vs-muted">Drift</dt>
         <dd className="truncate text-right">{summary.drift.maxAbsoluteMs}ms</dd>
+        <dt className="vs-muted">Alignment status</dt>
+        <dd className="truncate text-right">{alignmentStatus.label}</dd>
+        <dt className="vs-muted">Primary level</dt>
+        <dd className="truncate text-right">{alignmentStatus.primaryLevel}</dd>
         {readAlongRuntime ? (
           <>
             <dt className="vs-muted">Runtime state</dt>

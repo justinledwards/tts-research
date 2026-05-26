@@ -56,6 +56,40 @@ func TestPersistArtifactsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestBuildV2SuppressesWordEntriesForHeuristicFallback(t *testing.T) {
+	request := fixtureRequest(alignment.TimingConfidence{
+		Overall: 0.6,
+		Segment: 0.7,
+		Token:   0.55,
+	}, alignment.DriftStats{})
+	report := alignment.AlignmentReportForTiming(
+		alignment.NormalizedTiming{Fragments: request.Fragments, Tokens: request.Tokens},
+		alignment.AlignmentModeHeuristicFallback,
+		[]string{"heuristic fallback"},
+		nil,
+	)
+	highlight := BuildV2(BuildV2Request{
+		JobID:        request.JobID,
+		BookSourceID: request.BookSourceID,
+		ScopeKey:     request.ScopeKey,
+		SpeechPlanID: request.JobID,
+		WordSpans:    request.WordSpans,
+		Fragments:    request.Fragments,
+		Tokens:       request.Tokens,
+		GeneratedAt:  request.GeneratedAt,
+		Quality:      report,
+	})
+	if highlight.SchemaVersion != SchemaVersionV2 {
+		t.Fatalf("schemaVersion = %q, want %q", highlight.SchemaVersion, SchemaVersionV2)
+	}
+	if highlight.Summary.WordCount != 0 || highlight.Summary.PrimaryLevel != "phrase" {
+		t.Fatalf("v2 summary = %+v, want phrase-only heuristic output", highlight.Summary)
+	}
+	if highlight.Summary.FallbackMode != "block-only" && highlight.Summary.FallbackMode != "word-to-phrase" {
+		t.Fatalf("fallback mode = %q, want explicit degraded fallback", highlight.Summary.FallbackMode)
+	}
+}
+
 func fixtureRequest(confidence alignment.TimingConfidence, drift alignment.DriftStats) BuildRequest {
 	generatedAt := time.Unix(0, 0).UTC()
 	fragments := []alignment.FragmentTiming{{

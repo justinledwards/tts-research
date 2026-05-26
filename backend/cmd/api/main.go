@@ -265,14 +265,16 @@ func main() {
 			ResearchModulePromptDisabled:         envBoolWithFallback("RESEARCH_MODULE_PROMPT_DISABLED", false),
 			ResearchModuleCloneTimeoutSeconds:    envIntWithFallback("RESEARCH_MODULE_CLONE_TIMEOUT_SECONDS", 180),
 			Alignment: pipeline.AlignmentOptions{
-				Enabled:          alignmentEnabled,
-				Preferred:        alignmentPreferredFromEnv(),
-				MFABin:           envWithDefault("ALIGNMENT_MFA_BIN", "mfa"),
-				MFADictionary:    strings.TrimSpace(os.Getenv("ALIGNMENT_MFA_DICTIONARY")),
-				MFAAcousticModel: strings.TrimSpace(os.Getenv("ALIGNMENT_MFA_ACOUSTIC_MODEL")),
-				AeneasPython:     envWithDefault("ALIGNMENT_AENEAS_PYTHON", "python3"),
-				GentleURL:        strings.TrimSpace(os.Getenv("ALIGNMENT_GENTLE_URL")),
-				TimeoutSeconds:   alignmentTimeoutSeconds,
+				Enabled:                  alignmentEnabled,
+				Mode:                     alignmentModeFromEnv(alignmentEnabled),
+				Preferred:                alignmentPreferredFromEnv(),
+				MFABin:                   envWithDefault("ALIGNMENT_MFA_BIN", "mfa"),
+				MFADictionary:            strings.TrimSpace(os.Getenv("ALIGNMENT_MFA_DICTIONARY")),
+				MFAAcousticModel:         strings.TrimSpace(os.Getenv("ALIGNMENT_MFA_ACOUSTIC_MODEL")),
+				AeneasPython:             envWithDefault("ALIGNMENT_AENEAS_PYTHON", "python3"),
+				GentleURL:                strings.TrimSpace(os.Getenv("ALIGNMENT_GENTLE_URL")),
+				TimeoutSeconds:           alignmentTimeoutSeconds,
+				RequiredForWordHighlight: envBoolWithFallback("ALIGNMENT_REQUIRED_FOR_WORD_HIGHLIGHT", false),
 			},
 			DefaultTTSEngine: defaultTTSEngineFromEnv(),
 			TTSEngines:       ttsEngineRegistrationsFromEnv(ttsAgent),
@@ -902,6 +904,29 @@ func alignmentPreferredFromEnv() []alignment.TimingSource {
 		return []alignment.TimingSource{alignment.TimingSourceMFA, alignment.TimingSourceAeneas, alignment.TimingSourceGentle}
 	}
 	return preferred
+}
+
+func alignmentModeFromEnv(alignmentEnabled bool) alignment.AlignmentMode {
+	raw := strings.ToLower(strings.TrimSpace(os.Getenv("ALIGNMENT_MODE")))
+	switch raw {
+	case "off":
+		return alignment.AlignmentModeOff
+	case "provider-only":
+		return alignment.AlignmentModeProviderOnly
+	case "provider-plus-validation":
+		return alignment.AlignmentModeProviderPlusValidation
+	case "local-forced-alignment":
+		return alignment.AlignmentModeLocalForcedAlignment
+	case "local-forced-alignment-required":
+		return alignment.AlignmentModeLocalForcedRequired
+	case "heuristic-fallback":
+		return alignment.AlignmentModeHeuristicFallback
+	default:
+		if alignmentEnabled {
+			return alignment.AlignmentModeProviderPlusValidation
+		}
+		return alignment.AlignmentModeProviderOnly
+	}
 }
 
 func clampWorkerCount(name string, requested, max int, logger *slog.Logger) int {

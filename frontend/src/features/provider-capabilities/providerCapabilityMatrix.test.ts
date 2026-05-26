@@ -35,6 +35,8 @@ describe("providerCapabilityMatrix", () => {
         capabilities: {
           abComparison: false,
           alignment: false,
+          alignmentRequiredForWordHighlight: false,
+          alignmentSupported: false,
           cancelJob: true,
           localOnly: true,
           mockTts: false,

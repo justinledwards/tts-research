@@ -1,5 +1,13 @@
 # Working Log
 
+## 2026-05-26 06:41 CEST - Audio/Text Alignment Pipeline
+- [x] Inspect existing alignment, provider timing, and HighlightMap output paths
+- [x] Add backend alignment service, provider timing normalization, fallback alignment, and quality report
+- [x] Add frontend alignment status model for Debug/read-along surfaces
+- [x] Wire deterministic alignment evidence into benchmarks and validation
+- [x] Fix Aeneas setup prerequisite installation for local alignment setup
+- [x] Run WP35 local validation commands
+
 ## 2026-05-26 06:14 CEST - Timing Artifact Contract and Highlight Map v2
 - [x] Inspect existing timing, locator, and IR validation paths
 - [x] Add HighlightMap v2 schema, fixtures, and TypeScript runtime types

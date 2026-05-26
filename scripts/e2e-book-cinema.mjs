@@ -2543,12 +2543,27 @@ async function waitForPreparedSavedBookmark(projectId, preparedSourceId, jobId) 
 
 async function assertTimingArtifacts(jobId, label) {
   const highlightMap = await apiJson(`/api/voice-jobs/${jobId}/highlight-map`);
+  const highlightMapV2 = await apiJson(`/api/voice-jobs/${jobId}/highlight-map-v2`);
+  const alignmentQuality = await apiJson(`/api/voice-jobs/${jobId}/timing/alignment`);
   assert(
     highlightMap.schemaVersion === "highlight-map.v1",
     `${label} highlight map schema = ${highlightMap.schemaVersion}`,
   );
+  assert(
+    highlightMapV2.schemaVersion === "highlight-map.v2",
+    `${label} highlight map v2 schema = ${highlightMapV2.schemaVersion}`,
+  );
+  assert(
+    alignmentQuality.schemaVersion === "alignment-quality.v1",
+    `${label} alignment quality schema = ${alignmentQuality.schemaVersion}`,
+  );
   assert((highlightMap.fragments?.length ?? 0) > 0, `${label} highlight map has no fragments.`);
   assert((highlightMap.tokens?.length ?? 0) > 0, `${label} highlight map has no tokens.`);
+  assert((highlightMapV2.entries?.length ?? 0) > 0, `${label} highlight map v2 has no entries.`);
+  assert(
+    typeof alignmentQuality.wordTimingReliable === "boolean",
+    `${label} alignment quality is missing word timing reliability.`,
+  );
 }
 
 function verifyBook(book, expectedKind) {

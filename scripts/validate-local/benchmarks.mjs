@@ -92,7 +92,7 @@ export function formatAlignmentBenchmark(fixtures, metrics, comparisons = []) {
         1,
       )}ms drift=${fixture.driftMs.toFixed(1)}ms coverage=${Math.round(
         fixture.coverage * 100,
-      )}% tokens=${fixture.tokenCount}`,
+      )}% tokens=${fixture.tokenCount} quality=${fixture.quality}`,
     );
   }
   lines.push(
@@ -101,6 +101,11 @@ export function formatAlignmentBenchmark(fixtures, metrics, comparisons = []) {
     )}ms drift=${metrics.meanDriftMs.toFixed(1)}ms coverage=${Math.round(
       metrics.meanCoverage * 100,
     )}% tokens=${metrics.tokenCount}`,
+  );
+  lines.push(
+    `Quality: ${Object.entries(metrics.qualityCounts ?? {})
+      .map(([quality, count]) => `${quality}=${count}`)
+      .join(" ")}`,
   );
   appendComparisons(lines, comparisons);
   return lines.join("\n");
@@ -142,6 +147,11 @@ function scoreAlignmentFixture(fixture) {
     maeMs: mae,
     name: fixture.name ?? "fixture",
     p95Ms: percentile(errors, 95),
+    quality: alignmentQualityForScore({
+      coverage: expected.length > 0 ? count / expected.length : 0,
+      driftMs: Math.abs(actualEnd - expectedEnd),
+      p95Ms: percentile(errors, 95),
+    }),
     tokenCount: count,
   };
 }
@@ -182,8 +192,25 @@ function summarizeAlignment(fixtures) {
     meanCoverage: totals.coverage / fixtures.length,
     meanDriftMs: totals.driftMs / fixtures.length,
     meanMaeMs: totals.maeMs / fixtures.length,
+    qualityCounts: fixtures.reduce((counts, fixture) => {
+      counts[fixture.quality] = (counts[fixture.quality] ?? 0) + 1;
+      return counts;
+    }, {}),
     tokenCount: totals.tokenCount,
   };
+}
+
+function alignmentQualityForScore({ coverage, driftMs, p95Ms }) {
+  if (coverage >= 0.99 && p95Ms <= 50 && driftMs <= 50) {
+    return "exact";
+  }
+  if (coverage >= 0.95 && p95Ms <= 150 && driftMs <= 150) {
+    return "good";
+  }
+  if (coverage >= 0.75 && p95Ms <= 350) {
+    return "phrase-only";
+  }
+  return "degraded";
 }
 
 async function benchMarkdownFixture(rootDir, file) {

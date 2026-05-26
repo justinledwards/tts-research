@@ -1071,24 +1071,29 @@ type JobProgress struct {
 }
 
 type AlignmentOptions struct {
-	Enabled          bool                     `json:"enabled"`
-	Preferred        []alignment.TimingSource `json:"preferred,omitempty"`
-	MFABin           string                   `json:"mfaBin,omitempty"`
-	MFADictionary    string                   `json:"mfaDictionary,omitempty"`
-	MFAAcousticModel string                   `json:"mfaAcousticModel,omitempty"`
-	AeneasPython     string                   `json:"aeneasPython,omitempty"`
-	GentleURL        string                   `json:"gentleUrl,omitempty"`
-	TimeoutSeconds   int                      `json:"timeoutSeconds,omitempty"`
+	Enabled                  bool                     `json:"enabled"`
+	Mode                     alignment.AlignmentMode  `json:"mode,omitempty"`
+	Preferred                []alignment.TimingSource `json:"preferred,omitempty"`
+	MFABin                   string                   `json:"mfaBin,omitempty"`
+	MFADictionary            string                   `json:"mfaDictionary,omitempty"`
+	MFAAcousticModel         string                   `json:"mfaAcousticModel,omitempty"`
+	AeneasPython             string                   `json:"aeneasPython,omitempty"`
+	GentleURL                string                   `json:"gentleUrl,omitempty"`
+	TimeoutSeconds           int                      `json:"timeoutSeconds,omitempty"`
+	RequiredForWordHighlight bool                     `json:"requiredForWordHighlight,omitempty"`
 }
 
 type TimingArtifacts struct {
-	Status            string                            `json:"status"`
-	Summary           highlightmap.Summary              `json:"summary"`
-	HighlightMapURL   string                            `json:"highlightMapUrl,omitempty"`
-	FragmentTimingURL string                            `json:"fragmentTimingUrl,omitempty"`
-	TokenTimingURL    string                            `json:"tokenTimingUrl,omitempty"`
-	FragmentTiming    *alignment.FragmentTimingArtifact `json:"fragmentTiming,omitempty"`
-	TokenTiming       *alignment.TokenTimingArtifact    `json:"tokenTiming,omitempty"`
+	Status              string                            `json:"status"`
+	Summary             highlightmap.Summary              `json:"summary"`
+	HighlightMapURL     string                            `json:"highlightMapUrl,omitempty"`
+	HighlightMapV2URL   string                            `json:"highlightMapV2Url,omitempty"`
+	FragmentTimingURL   string                            `json:"fragmentTimingUrl,omitempty"`
+	TokenTimingURL      string                            `json:"tokenTimingUrl,omitempty"`
+	AlignmentQualityURL string                            `json:"alignmentQualityUrl,omitempty"`
+	FragmentTiming      *alignment.FragmentTimingArtifact `json:"fragmentTiming,omitempty"`
+	TokenTiming         *alignment.TokenTimingArtifact    `json:"tokenTiming,omitempty"`
+	AlignmentQuality    *alignment.AlignmentQualityReport `json:"alignmentQuality,omitempty"`
 }
 
 type VoiceJob struct {

@@ -14,6 +14,7 @@ import type {
   CreateVoiceProfileRequest,
   CreateVoiceProfileSourceRequest,
   FragmentTimingArtifact,
+  AlignmentQualityReport,
   HighlightMap,
   MarkdownParseMode,
   MathPreviewResult,
@@ -47,6 +48,7 @@ import type {
   VoiceProject,
 } from "./types";
 import type { ContentIRDocument, ContentIRSchemaVersion, SpeechPlanDocument } from "./content-ir";
+import type { HighlightMapV2 } from "./features/readalong";
 
 // Vite rewrites direct import.meta.env access during dev and build.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -874,6 +876,14 @@ export async function getHighlightMap(id: string): Promise<HighlightMap> {
   return response.json() as Promise<HighlightMap>;
 }
 
+export async function getHighlightMapV2(id: string): Promise<HighlightMapV2> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/highlight-map-v2`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<HighlightMapV2>;
+}
+
 export async function getJobSpeechPlan(id: string): Promise<SpeechPlanDocument> {
   const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/speech-plan`);
   if (!response.ok) {
@@ -896,6 +906,14 @@ export async function getTokenTiming(id: string): Promise<TokenTimingArtifact> {
     throw await apiError(response);
   }
   return response.json() as Promise<TokenTimingArtifact>;
+}
+
+export async function getAlignmentQuality(id: string): Promise<AlignmentQualityReport> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/timing/alignment`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<AlignmentQualityReport>;
 }
 
 export async function listVoiceProfiles(): Promise<VoiceProfile[]> {

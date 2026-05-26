@@ -52,6 +52,30 @@ func TestCapabilitiesForCloneRuntime(t *testing.T) {
 	}
 }
 
+func TestCapabilitiesExposeAlignmentSupportSeparatelyFromWordTiming(t *testing.T) {
+	capabilities := CapabilitiesForDiagnostics(DiagnosticInput{
+		ID:            "remote",
+		Label:         "Remote timing provider",
+		Status:        "ready",
+		SupportsVoice: true,
+		Metadata: map[string]string{
+			"alignmentSupported":                "true",
+			"alignmentRequiredForWordHighlight": "true",
+			"phraseTiming":                      "true",
+		},
+	})
+
+	if !capabilities.AlignmentSupported || !capabilities.Alignment {
+		t.Fatalf("alignment-capable provider should expose alignment support, got %+v", capabilities)
+	}
+	if !capabilities.AlignmentRequiredForWordHighlight || !capabilities.PhraseTiming {
+		t.Fatalf("provider should expose alignment requirement and phrase timing, got %+v", capabilities)
+	}
+	if capabilities.WordTiming {
+		t.Fatalf("provider should not claim word timing without explicit metadata, got %+v", capabilities)
+	}
+}
+
 func TestCapabilitiesForUnavailableRuntime(t *testing.T) {
 	capabilities := CapabilitiesForDiagnostics(DiagnosticInput{
 		ID:            "supertonic-3",

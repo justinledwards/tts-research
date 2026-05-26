@@ -5,6 +5,12 @@ export {
   type ReadAlongClockTick,
 } from "./ReadAlongClock";
 export {
+  alignmentQualityLabel,
+  alignmentStatusFromReport,
+  type AlignmentStatus,
+  type AlignmentStatusTone,
+} from "./alignmentStatus";
+export {
   ReadAlongResyncController,
   resolveReadAlongRuntimeSnapshot,
   type ReadAlongResyncInput,

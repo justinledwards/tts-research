@@ -685,6 +685,8 @@ export interface ProviderCapabilitySet {
   cancelJob: boolean;
   retryJob: boolean;
   alignment: boolean;
+  alignmentSupported: boolean;
+  alignmentRequiredForWordHighlight: boolean;
   abComparison: boolean;
   localOnly: boolean;
 }
@@ -1332,10 +1334,56 @@ export interface TimingArtifacts {
   status: string;
   summary: HighlightMapSummary;
   highlightMapUrl?: string;
+  highlightMapV2Url?: string;
   fragmentTimingUrl?: string;
   tokenTimingUrl?: string;
+  alignmentQualityUrl?: string;
   fragmentTiming?: FragmentTimingArtifact;
   tokenTiming?: TokenTimingArtifact;
+  alignmentQuality?: AlignmentQualityReport;
+}
+
+export type AlignmentMode =
+  | "off"
+  | "provider-only"
+  | "provider-plus-validation"
+  | "local-forced-alignment"
+  | "local-forced-alignment-required"
+  | "heuristic-fallback";
+
+export type AlignmentQuality = "exact" | "good" | "phrase-only" | "degraded" | "unavailable";
+
+export interface AlignmentStageReport {
+  id: string;
+  status: string;
+  detail?: string;
+}
+
+export interface AlignmentQualityReport {
+  schemaVersion: "alignment-quality.v1";
+  mode: AlignmentMode;
+  quality: AlignmentQuality;
+  primaryLevel: "word" | "phrase" | "sentence" | "block";
+  timingSource: TimingSource;
+  timingSourceV2:
+    | "provider-word"
+    | "provider-mark"
+    | "forced-alignment"
+    | "phrase-estimate"
+    | "heuristic";
+  wordTimingReliable: boolean;
+  providerTimingAvailable: boolean;
+  forcedAlignmentAvailable: boolean;
+  usedProviderTiming: boolean;
+  usedForcedAlignment: boolean;
+  fallbackReason?: string;
+  confidence: TimingConfidence;
+  drift: DriftStats;
+  fragmentCount: number;
+  tokenCount: number;
+  durationMs: number;
+  alignmentWarnings?: string[];
+  stages?: AlignmentStageReport[];
 }
 
 export interface VoiceJob {

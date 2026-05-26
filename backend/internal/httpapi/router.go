@@ -832,6 +832,17 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(payload)
 	})
 
+	app.Get("/api/voice-jobs/:id/highlight-map-v2", func(ctx fiber.Ctx) error {
+		payload, err := service.GetHighlightMapV2(ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrAudioNotReady) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(payload)
+	})
+
 	app.Get("/api/voice-jobs/:id/speech-plan", func(ctx fiber.Ctx) error {
 		payload, err := service.GetJobSpeechPlan(ctx.Params("id"))
 		if err != nil {
@@ -853,6 +864,17 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 
 	app.Get("/api/voice-jobs/:id/timing/tokens", func(ctx fiber.Ctx) error {
 		payload, err := service.GetTokenTiming(ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrAudioNotReady) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return notFound(ctx, err)
+		}
+		return ctx.JSON(payload)
+	})
+
+	app.Get("/api/voice-jobs/:id/timing/alignment", func(ctx fiber.Ctx) error {
+		payload, err := service.GetAlignmentQuality(ctx.Params("id"))
 		if err != nil {
 			if errors.Is(err, pipeline.ErrAudioNotReady) {
 				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))

@@ -3,21 +3,23 @@ package providers
 import "strings"
 
 type CapabilitySet struct {
-	TTS              bool `json:"tts"`
-	MockTTS          bool `json:"mockTts"`
-	Streaming        bool `json:"streaming"`
-	WordTiming       bool `json:"wordTiming"`
-	PhraseTiming     bool `json:"phraseTiming"`
-	SSML             bool `json:"ssml"`
-	SSMLMarks        bool `json:"ssmlMarks"`
-	PhonemeOverrides bool `json:"phonemeOverrides"`
-	VoiceCloning     bool `json:"voiceCloning"`
-	VoicePreview     bool `json:"voicePreview"`
-	CancelJob        bool `json:"cancelJob"`
-	RetryJob         bool `json:"retryJob"`
-	Alignment        bool `json:"alignment"`
-	ABComparison     bool `json:"abComparison"`
-	LocalOnly        bool `json:"localOnly"`
+	TTS                               bool `json:"tts"`
+	MockTTS                           bool `json:"mockTts"`
+	Streaming                         bool `json:"streaming"`
+	WordTiming                        bool `json:"wordTiming"`
+	PhraseTiming                      bool `json:"phraseTiming"`
+	SSML                              bool `json:"ssml"`
+	SSMLMarks                         bool `json:"ssmlMarks"`
+	PhonemeOverrides                  bool `json:"phonemeOverrides"`
+	VoiceCloning                      bool `json:"voiceCloning"`
+	VoicePreview                      bool `json:"voicePreview"`
+	CancelJob                         bool `json:"cancelJob"`
+	RetryJob                          bool `json:"retryJob"`
+	Alignment                         bool `json:"alignment"`
+	AlignmentSupported                bool `json:"alignmentSupported"`
+	AlignmentRequiredForWordHighlight bool `json:"alignmentRequiredForWordHighlight"`
+	ABComparison                      bool `json:"abComparison"`
+	LocalOnly                         bool `json:"localOnly"`
 }
 
 type DiagnosticInput struct {
@@ -56,6 +58,12 @@ func CapabilitiesForDiagnostics(input DiagnosticInput) CapabilitySet {
 		WordTiming:   ready && boolMetadata(metadata, "wordtiming"),
 		PhraseTiming: ready && boolMetadata(metadata, "phrasetiming"),
 		Alignment:    ready && boolMetadata(metadata, "alignment"),
+		AlignmentSupported: ready &&
+			(boolMetadata(metadata, "alignment") || boolMetadata(metadata, "alignmentsupported")),
+		AlignmentRequiredForWordHighlight: ready && boolMetadata(metadata, "alignmentrequiredforwordhighlight"),
+	}
+	if capabilities.AlignmentSupported {
+		capabilities.Alignment = true
 	}
 	capabilities.ABComparison = capabilities.TTS && capabilities.VoicePreview
 	return capabilities
@@ -63,21 +71,23 @@ func CapabilitiesForDiagnostics(input DiagnosticInput) CapabilitySet {
 
 func MockCapabilities() CapabilitySet {
 	return CapabilitySet{
-		TTS:              true,
-		MockTTS:          true,
-		Streaming:        true,
-		WordTiming:       true,
-		PhraseTiming:     true,
-		SSML:             true,
-		SSMLMarks:        true,
-		PhonemeOverrides: true,
-		VoiceCloning:     true,
-		VoicePreview:     true,
-		CancelJob:        true,
-		RetryJob:         true,
-		Alignment:        true,
-		ABComparison:     true,
-		LocalOnly:        true,
+		TTS:                               true,
+		MockTTS:                           true,
+		Streaming:                         true,
+		WordTiming:                        true,
+		PhraseTiming:                      true,
+		SSML:                              true,
+		SSMLMarks:                         true,
+		PhonemeOverrides:                  true,
+		VoiceCloning:                      true,
+		VoicePreview:                      true,
+		CancelJob:                         true,
+		RetryJob:                          true,
+		Alignment:                         true,
+		AlignmentSupported:                true,
+		AlignmentRequiredForWordHighlight: false,
+		ABComparison:                      true,
+		LocalOnly:                         true,
 	}
 }
 

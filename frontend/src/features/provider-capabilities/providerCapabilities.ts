@@ -16,6 +16,7 @@ export const PROVIDER_CAPABILITY_KEYS = [
   "cancelJob",
   "retryJob",
   "alignment",
+  "alignmentSupported",
   "abComparison",
   "localOnly",
 ] as const satisfies readonly ProviderCapabilityKey[];
@@ -39,6 +40,18 @@ export const PROVIDER_CAPABILITY_DESCRIPTORS = {
     "alignment",
     "Align generated audio back to source text for review and timing checks.",
     "Use a provider with alignment metadata or run a local alignment pass after synthesis.",
+  ),
+  alignmentRequiredForWordHighlight: descriptor(
+    "alignmentRequiredForWordHighlight",
+    "required alignment for word highlight",
+    "Require a trusted provider or local forced-alignment pass before word-level highlighting is shown.",
+    "Use phrase-level highlighting or configure a local alignment runtime.",
+  ),
+  alignmentSupported: descriptor(
+    "alignmentSupported",
+    "alignment support",
+    "Supply provider timing or local alignment evidence for generated audio.",
+    "Use mock review mode or configure MFA, Aeneas, or Gentle for local alignment.",
   ),
   cancelJob: descriptor(
     "cancelJob",
@@ -123,6 +136,8 @@ export const PROVIDER_CAPABILITY_DESCRIPTORS = {
 export const EMPTY_PROVIDER_CAPABILITIES: ProviderCapabilitySet = {
   abComparison: false,
   alignment: false,
+  alignmentRequiredForWordHighlight: false,
+  alignmentSupported: false,
   cancelJob: false,
   localOnly: false,
   mockTts: false,
@@ -141,6 +156,8 @@ export const EMPTY_PROVIDER_CAPABILITIES: ProviderCapabilitySet = {
 export const MOCK_PROVIDER_CAPABILITIES: ProviderCapabilitySet = {
   abComparison: true,
   alignment: true,
+  alignmentRequiredForWordHighlight: false,
+  alignmentSupported: true,
   cancelJob: true,
   localOnly: true,
   mockTts: true,
