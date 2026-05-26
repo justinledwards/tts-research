@@ -352,6 +352,7 @@ describe("CinemaFocusModeToolbar", () => {
     expect(grouped.display.every((action) => action.owner === "cinema-display")).toBe(true);
     expect(grouped.advanced.every((action) => action.owner === "cinema-advanced")).toBe(true);
     expect(grouped.navigation.every((action) => action.owner === "cinema-navigation")).toBe(true);
+    expect(grouped.advanced.map((action) => action.id)).toContain("alignment-repair");
     expect(activeCinemaMoreAction({ activePanelId: "diagnostics", mode: "debug" })?.label).toBe(
       "Diagnostics",
     );

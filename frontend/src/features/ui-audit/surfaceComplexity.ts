@@ -109,7 +109,7 @@ export const SURFACE_COMPLEXITY_BUDGETS = {
     maxDuplicatedVisibleLabels: 2,
     maxPanelsOpenByDefault: 6,
     maxPrimaryActions: 10,
-    maxReachableDrawersSheets: 7,
+    maxReachableDrawersSheets: 8,
     maxVisibleActions: 25,
     notes: ["Cinema More may expose display, advanced, and navigation entry points on demand."],
     tier: "calm",

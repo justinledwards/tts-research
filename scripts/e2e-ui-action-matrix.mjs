@@ -25,7 +25,7 @@ const modePattern =
 const settingsPattern =
   /\b(settings|reader|policy|profile|scope|motion|contrast|typography|font|spacing|voice|preset|standard|large text|dyslexic friendly|mirror mode|rail|activity footer)\b/i;
 const diagnosticPattern =
-  /\b(help|diagnostic|debug|pipeline|validation|source|inspect|context guide|details)\b/i;
+  /\b(help|diagnostic|debug|pipeline|validation|source|inspect|context guide|details|alignment|repair|timing)\b/i;
 const navigationPattern =
   /\b(open|close|back|exit|workspace|actions|import|export|book|file \/ url|website|cinema|more|outline|recent|bookmarks|structure)\b/i;
 const previewPattern = /\b(preview speech|spoken form|preview spoken|speech preview)\b/i;

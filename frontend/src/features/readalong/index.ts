@@ -1,4 +1,25 @@
 export {
+  AlignmentDiagnosticsPanel,
+  type AlignmentDiagnosticsSkippedItem,
+} from "./AlignmentDiagnosticsPanel";
+export { AlignmentRepairEditor } from "./AlignmentRepairEditor";
+export {
+  ALIGNMENT_REPAIR_SCHEMA_VERSION,
+  addAlignmentRepairOperation,
+  alignmentRepairMapStaleness,
+  alignmentRepairOperationLabel,
+  alignmentRepairSummary,
+  createAlignmentRepairMap,
+  parseAlignmentRepairMap,
+  serializeAlignmentRepairMap,
+  type AlignmentRepairBoundary,
+  type AlignmentRepairContext,
+  type AlignmentRepairMap,
+  type AlignmentRepairOperation,
+  type AlignmentRepairOperationKind,
+  type AlignmentRepairStaleReport,
+} from "./alignmentRepairModel";
+export {
   ReadAlongClock,
   startReadAlongPlaybackClock,
   type ReadAlongClockReason,

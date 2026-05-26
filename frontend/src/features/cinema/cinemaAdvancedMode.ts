@@ -4,6 +4,7 @@ import type { CinemaFocusMode } from "./model";
 export const CINEMA_ADVANCED_MODE_IDS = [
   "diagnostics",
   "timing-map",
+  "alignment-repair",
   "policy-internals",
   "source-internals",
 ] as const;
@@ -48,6 +49,18 @@ export const CINEMA_ADVANCED_MODE_ACTIONS: readonly CinemaAdvancedModeAction[] =
     panelId: "diagnostics",
     reason: "Timing internals are operator diagnostics and stay out of normal reading.",
     testId: "ui-action-cinema-advanced-timing-map",
+  },
+  {
+    commandId: "cinema:advanced:alignment-repair",
+    detail: "Open manual alignment diagnostics and project-local repair tools.",
+    id: "alignment-repair",
+    keywords: ["advanced", "debug", "alignment", "repair", "drift", "manual"],
+    label: "Alignment repair",
+    mode: "debug",
+    owner: "cinema-advanced",
+    panelId: "diagnostics",
+    reason: "Manual repairs are debug-only and versioned against generated audio and speech plan.",
+    testId: "ui-action-cinema-advanced-alignment-repair",
   },
   {
     commandId: "cinema:advanced:policy-internals",

@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-26 10:47 CEST - Alignment Diagnostics and Manual Repair Tools
+- [x] Inspect current alignment, read-along debug, context panel, and command surfaces
+- [x] Add project-local alignment repair model and backend repair application
+- [x] Add Advanced/Debug diagnostics and repair UI
+- [x] Wire diagnostics/repair access into More, command palette, and local audits
+- [x] Run WP40 local validation commands
+
 ## 2026-05-26 09:21 CEST - Sync Benchmark Fixtures and Local Evidence Gate
 - [x] Inspect existing alignment, reader-wayfinding, and Book Cinema evidence scripts
 - [x] Add deterministic sync fixtures and shared benchmark/e2e reporting

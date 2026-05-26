@@ -39,7 +39,7 @@ const destructivePattern =
   /\b(delete|remove|reset|clear|cancel job|discard|overwrite|revoke|disconnect)\b/i;
 const nonDestructiveClearPattern = /\bclear selection\b/i;
 const diagnosticPattern =
-  /\b(help|diagnostic|debug|pipeline|validation|source|inspect|context guide|details)\b/i;
+  /\b(help|diagnostic|debug|pipeline|validation|source|inspect|context guide|details|alignment|repair|timing)\b/i;
 const navigationPattern =
   /\b(open|close|back|exit|workspace|actions|import|export|book|file \/ url|website|cinema|more|outline|recent|bookmarks|structure)\b/i;
 const previewPattern = /\b(preview speech|spoken form|preview spoken|speech preview)\b/i;

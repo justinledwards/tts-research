@@ -34,8 +34,12 @@ import { generatedAudioLifecycleFromJob, playbackActionLabel } from "../playback
 import { PolicyScopeSummary, policyScopeSummary, SourcePolicyPinEditor } from "../policy";
 import type { UiMemoryCinemaState } from "../preferences";
 import {
+  AlignmentDiagnosticsPanel,
+  AlignmentRepairEditor,
+  alignmentRepairMapStaleness,
   evaluatePreparedSourceReadAlongInvariant,
   HighlightRenderer,
+  parseAlignmentRepairMap,
   readAlongInvariantStatusLabel,
   readAlongAnchorForBlock,
   readAlongAnchorForWord,
@@ -44,6 +48,9 @@ import {
   readAlongVisualModeFromRuntime,
   resolveReadAlongRuntimeSnapshot,
   scrollReadAlongAnchor,
+  serializeAlignmentRepairMap,
+  type AlignmentRepairContext,
+  type AlignmentRepairMap,
   type ReadAlongHighlightVisualMode,
 } from "../readalong";
 import {
@@ -288,6 +295,9 @@ export function PreparedSourceCinemaOverlay({
     useState<CinemaRendererLifecycleState>("notStarted");
   const [rendererRetryKey, setRendererRetryKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [alignmentRepairMap, setAlignmentRepairMap] = useState<AlignmentRepairMap | null>(() =>
+    loadAlignmentRepairMap(source.projectId, source.id),
+  );
   const title = preparedSourceCinemaTitle(source);
   const cinemaLabel = preparedSourceCinemaLabelForKind(source, surfaceKind);
   const isWebsiteCinema =
@@ -296,6 +306,27 @@ export function PreparedSourceCinemaOverlay({
     playbackCursorSec > 0 ? playbackCursorSec : (progress?.currentTimeSec ?? playbackCursorSec);
   const effectiveActiveWordIndex =
     activeWordIndex > 0 ? activeWordIndex : (progress?.activeWordIndex ?? activeWordIndex);
+  const alignmentRepairContext = useMemo(
+    (): AlignmentRepairContext => ({
+      contentFingerprint: preparedSourceAlignmentRepairFingerprint(source, job),
+      generatedAudioId: job?.id ?? "missing-generated-audio",
+      projectId: source.projectId,
+      sourceId: source.id,
+      speechPlanId: preparedSourceSpeechPlanRepairId(source, job),
+    }),
+    [job, source],
+  );
+  const alignmentRepairStaleness = useMemo(
+    () => alignmentRepairMapStaleness(alignmentRepairMap, alignmentRepairContext),
+    [alignmentRepairContext, alignmentRepairMap],
+  );
+  const handleAlignmentRepairMapChange = useCallback(
+    (map: AlignmentRepairMap | null) => {
+      setAlignmentRepairMap(map);
+      saveAlignmentRepairMap(source.projectId, source.id, map);
+    },
+    [source.id, source.projectId],
+  );
   const handleRendererLifecycleChange = useCallback((next: CinemaRendererLifecycleState) => {
     setRendererLifecycle((current) => {
       if (current === "ready" && next === "loading") {
@@ -691,6 +722,44 @@ export function PreparedSourceCinemaOverlay({
       tabId: "diagnostics",
       title: "Read-along fidelity",
     }),
+    buildCinemaInspectorSection({
+      children: (
+        <AlignmentDiagnosticsPanel
+          job={job}
+          repairMap={alignmentRepairMap}
+          repairStaleness={alignmentRepairStaleness}
+          runtime={readAlongRuntime}
+          skippedPolicyContent={skippedGroups.map((group) => ({
+            count: group.count,
+            label: group.label,
+          }))}
+        />
+      ),
+      detail: job?.timing?.alignmentQuality?.fallbackReason ?? "Audio/text timing diagnostics",
+      id: "alignment-diagnostics",
+      kind: "timing-map",
+      modeAffinity: "debug",
+      tabId: "diagnostics",
+      title: "Alignment diagnostics",
+    }),
+    buildCinemaInspectorSection({
+      children: (
+        <AlignmentRepairEditor
+          context={alignmentRepairContext}
+          job={job}
+          repairMap={alignmentRepairMap}
+          onRepairMapChange={handleAlignmentRepairMapChange}
+        />
+      ),
+      detail: alignmentRepairStaleness.stale
+        ? (alignmentRepairStaleness.reason ?? "Stale repair map")
+        : "Versioned project-local repair map",
+      id: "alignment-repair",
+      kind: "alignment-repair",
+      modeAffinity: "debug",
+      tabId: "diagnostics",
+      title: "Alignment repair",
+    }),
   ]);
   const cinemaFocus = useCinemaFocusController(sourceInspectorPanels, {
     initialState: uiMemoryFocusState,
@@ -757,8 +826,9 @@ export function PreparedSourceCinemaOverlay({
       setPointedBlockId(null);
       setRendererLifecycle("notStarted");
       setRendererRetryKey(0);
+      setAlignmentRepairMap(loadAlignmentRepairMap(source.projectId, source.id));
     }
-  }, [source.id]);
+  }, [source.id, source.projectId]);
 
   const handleFullscreenToggle = () => {
     if (document.fullscreenElement) {
@@ -2359,6 +2429,68 @@ function scrollToCinemaBlock(blockId: string, behavior: ScrollBehavior) {
   document
     .querySelector<HTMLElement>(`#${CSS.escape(elementId)}`)
     ?.scrollIntoView({ block: "center", inline: "nearest", behavior });
+}
+
+function preparedSourceAlignmentRepairFingerprint(
+  source: PreparedSource,
+  job: VoiceJob | null,
+): string {
+  return JSON.stringify({
+    pipelineOptions: job?.pipelineOptions ?? null,
+    preparedSourceId: source.id,
+    runMode: job?.runMode ?? null,
+    sourcePolicyOverrides: source.sourceSpeechPolicyOverrides ?? null,
+    sourcePolicyProfile: source.sourceSpeechPolicyProfile ?? null,
+    sourcePolicyUpdatedAt: source.updatedAt,
+    speechPolicyProfile: source.speechPolicyProfile,
+  });
+}
+
+function preparedSourceSpeechPlanRepairId(source: PreparedSource, job: VoiceJob | null): string {
+  if (!job) {
+    return "missing-speech-plan";
+  }
+  return [
+    job.id,
+    job.speechPolicyProfile ?? source.speechPolicyProfile,
+    job.runMode ?? "run-mode",
+    job.performanceMode ?? "performance-mode",
+  ].join(":");
+}
+
+function alignmentRepairStorageKey(projectId: string, sourceId: string): string {
+  return `tts-alignment-repair:${projectId}:${sourceId}`;
+}
+
+function loadAlignmentRepairMap(projectId: string, sourceId: string): AlignmentRepairMap | null {
+  if (!("localStorage" in globalThis)) {
+    return null;
+  }
+  const raw = globalThis.localStorage.getItem(alignmentRepairStorageKey(projectId, sourceId));
+  if (!raw) {
+    return null;
+  }
+  try {
+    return parseAlignmentRepairMap(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveAlignmentRepairMap(
+  projectId: string,
+  sourceId: string,
+  repairMap: AlignmentRepairMap | null,
+) {
+  if (!("localStorage" in globalThis)) {
+    return;
+  }
+  const key = alignmentRepairStorageKey(projectId, sourceId);
+  if (!repairMap) {
+    globalThis.localStorage.removeItem(key);
+    return;
+  }
+  globalThis.localStorage.setItem(key, serializeAlignmentRepairMap(repairMap));
 }
 
 function CinemaFilmIcon() {

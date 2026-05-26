@@ -101,6 +101,7 @@ describe("metadata command generation", () => {
     expect(buildCinemaAdvancedCommandMetadata().map((command) => command.id)).toEqual([
       "cinema:advanced:diagnostics",
       "cinema:advanced:timing-map",
+      "cinema:advanced:alignment-repair",
       "cinema:advanced:policy-internals",
       "cinema:advanced:source-internals",
     ]);

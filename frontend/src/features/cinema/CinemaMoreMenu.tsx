@@ -289,10 +289,13 @@ export function CinemaMoreMenu({
                   const disabledReason = disabledReasonFor(action);
                   const selected = activeAction?.id === action.id;
                   const commandId = commandIdForAction(action);
+                  const detailId = `${CINEMA_MORE_MENU_ID}-${action.id}-detail`;
                   return (
                     <Button
                       align="start"
                       aria-checked={action.kind === "advanced" ? selected : undefined}
+                      aria-describedby={detailId}
+                      aria-label={action.label}
                       className="w-full justify-start rounded px-2"
                       data-advanced-mode-id={action.kind === "advanced" ? action.id : undefined}
                       data-advanced-mode-reason={
@@ -320,7 +323,10 @@ export function CinemaMoreMenu({
                     >
                       <span className="grid gap-0.5">
                         <span>{action.label}</span>
-                        <span className="text-[0.65rem] font-medium leading-4 vs-muted">
+                        <span
+                          className="text-[0.65rem] font-medium leading-4 vs-muted"
+                          id={detailId}
+                        >
                           {disabledReason ?? action.detail}
                         </span>
                       </span>

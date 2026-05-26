@@ -25,6 +25,7 @@ export type ContextPanelRelevancePredicate =
   | "requires-wayfinding";
 
 export type ContextPanelSectionKind =
+  | "alignment-repair"
   | "current-passage"
   | "extraction-health"
   | "generated-audio-health"
@@ -204,6 +205,7 @@ function relevanceForSectionKind(kind: ContextPanelSectionKind): ContextPanelRel
     case "narration-block-status": {
       return "requires-active-block";
     }
+    case "alignment-repair":
     case "extraction-health":
     case "highlight-confidence":
     case "timing-map": {

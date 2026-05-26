@@ -16,14 +16,16 @@ type AlignmentServiceOptions struct {
 }
 
 type AlignmentServiceRequest struct {
-	JobID        string
-	AudioPath    string
-	DurationMS   int
-	GeneratedAt  time.Time
-	Language     string
-	Segments     []SegmentInput
-	NativeEvents []NativeTimingEvent
-	Final        bool
+	JobID         string
+	AudioPath     string
+	DurationMS    int
+	GeneratedAt   time.Time
+	Language      string
+	RepairContext AlignmentRepairContext
+	Repairs       *AlignmentRepairMap
+	Segments      []SegmentInput
+	NativeEvents  []NativeTimingEvent
+	Final         bool
 }
 
 type AlignmentServiceResult struct {
@@ -66,7 +68,7 @@ func (service AlignmentService) Generate(
 	switch service.options.Mode {
 	case AlignmentModeProviderOnly:
 		if providerOK {
-			return service.result(providerTiming, stages, warnings), nil
+			return service.result(providerTiming, stages, warnings, request), nil
 		}
 		return service.heuristic(request, stages, "provider timing unavailable")
 	case AlignmentModeHeuristicFallback:
@@ -77,11 +79,11 @@ func (service AlignmentService) Generate(
 	if forcedOK {
 		stages = append(stages, ForcedAlignmentStage(true, "local forced alignment completed"))
 		if !providerOK || shouldUseForcedTiming(providerTiming, forcedTiming, service.options.AlignmentRequiredForWordTiming) {
-			return service.result(forcedTiming, stages, warnings), nil
+			return service.result(forcedTiming, stages, warnings, request), nil
 		}
 		stages[len(stages)-1].Status = "validation"
 		stages[len(stages)-1].Detail = "local forced alignment was available; provider word timing remained the selected source"
-		return service.result(providerTiming, stages, warnings), nil
+		return service.result(providerTiming, stages, warnings, request), nil
 	}
 	if forcedErr != nil && !errors.Is(forcedErr, ErrAlignerUnavailable) {
 		warnings = append(warnings, "forced alignment failed: "+forcedErr.Error())
@@ -96,7 +98,7 @@ func (service AlignmentService) Generate(
 		return AlignmentServiceResult{}, fmt.Errorf("%w: local forced alignment is required", ErrAlignerUnavailable)
 	}
 	if providerOK {
-		return service.result(providerTiming, stages, warnings), nil
+		return service.result(providerTiming, stages, warnings, request), nil
 	}
 	return service.heuristic(request, stages, "provider timing and local forced alignment unavailable")
 }
@@ -141,14 +143,34 @@ func (service AlignmentService) heuristic(
 		return AlignmentServiceResult{}, err
 	}
 	stages = append(stages, HeuristicFallbackStage(reason))
-	return service.result(timing, stages, []string{reason}), nil
+	return service.result(timing, stages, []string{reason}, request), nil
 }
 
 func (service AlignmentService) result(
 	timing NormalizedTiming,
 	stages []AlignmentStageReport,
 	warnings []string,
+	request AlignmentServiceRequest,
 ) AlignmentServiceResult {
+	if request.Repairs != nil {
+		repaired, repairReport := ApplyAlignmentRepairMap(timing, request.Repairs, request.RepairContext)
+		timing = repaired
+		if repairReport.Applied > 0 {
+			stages = append(stages, AlignmentStageReport{
+				ID:     "alignment-repair",
+				Status: "applied",
+				Detail: fmt.Sprintf("%d local repair operation(s) applied", repairReport.Applied),
+			})
+		}
+		if repairReport.Stale {
+			stages = append(stages, AlignmentStageReport{
+				ID:     "alignment-repair",
+				Status: "stale",
+				Detail: repairReport.StaleReason,
+			})
+		}
+		warnings = append(warnings, repairReport.Warnings...)
+	}
 	report := AlignmentReportForTiming(timing, service.options.Mode, warnings, stages)
 	return AlignmentServiceResult{
 		Timing:   timing,
