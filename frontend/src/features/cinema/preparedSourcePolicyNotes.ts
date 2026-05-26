@@ -62,7 +62,10 @@ export function preparedSourceCinemaPolicyNotes(
     }
     for (const artifact of inlineArtifactsFromBlock(block)) {
       addNote({
-        explanation: inlineArtifactPolicyExplanation(artifact.kind),
+        explanation: inlineArtifactPolicyExplanation(
+          artifact.kind,
+          block.speechPolicy.profile || source.speechPolicyProfile,
+        ),
         id: `artifact:${block.id}:${artifact.startOffset.toString()}`,
         kind: artifact.kind,
         mode: "skip",
@@ -116,10 +119,10 @@ function inlineArtifactsFromBlock(block: NarrationBlock): InlineArtifactMetadata
   });
 }
 
-function inlineArtifactPolicyExplanation(kind: string): string {
+function inlineArtifactPolicyExplanation(kind: string, profile: string): string {
   switch (kind) {
     case "citation": {
-      return "Raw citation markup is converted to a citation chip and omitted from generated speech.";
+      return citationPolicyExplanation(profile);
     }
     case "footnote": {
       return "Footnote markers are separated from prose so the active speech profile can inline, defer, or skip them.";
@@ -137,6 +140,24 @@ function inlineArtifactPolicyExplanation(kind: string): string {
       return "Inline document markup is separated from prose for visual and speech rendering.";
     }
   }
+}
+
+function citationPolicyExplanation(profile: string): string {
+  const normalized = profile.trim().toLowerCase();
+  if (normalized === "accessibility" || normalized === "education") {
+    return `Citations are spoken inline in ${profile} profile and remain available as citation chips for keyboard review.`;
+  }
+  if (normalized === "technicaldocs" || normalized === "technical docs") {
+    return `Citations are available as endnotes in ${profile} profile and are shown as citation chips in Read mode.`;
+  }
+  if (
+    normalized === "enterprise" ||
+    normalized === "languagelearning" ||
+    normalized === "language learning"
+  ) {
+    return `Citations are available on demand in ${profile} profile and are shown as citation chips instead of raw tokens.`;
+  }
+  return "Citations are available on demand under the active speech profile and are shown as citation chips instead of raw tokens.";
 }
 
 function compactPolicyText(value: string | undefined): string | undefined {

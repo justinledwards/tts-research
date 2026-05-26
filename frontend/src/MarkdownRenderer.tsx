@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentPropsWithoutRef,
   type ReactNode,
 } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -169,7 +170,137 @@ const markdownComponents: Components = {
   pre({ children }: { children?: ReactNode }) {
     return <>{children}</>;
   },
+  span({ children, ...props }) {
+    const spanProps = props as DocumentInlineArtifactChipProps;
+    if (typeof spanProps["data-artifact-kind"] === "string") {
+      return <DocumentInlineArtifactChip {...spanProps}>{children}</DocumentInlineArtifactChip>;
+    }
+    return <span {...props}>{children}</span>;
+  },
 };
+
+type DocumentInlineArtifactChipProps = ComponentPropsWithoutRef<"span"> & {
+  "data-artifact-kind"?: string;
+  "data-artifact-marker-type"?: string;
+  "data-artifact-reference-label"?: string;
+  "data-speech-behavior"?: string;
+  "data-speech-behavior-label"?: string;
+};
+
+function DocumentInlineArtifactChip({
+  children,
+  className,
+  "data-artifact-kind": artifactKind = "citation",
+  "data-artifact-marker-type": markerType = "",
+  "data-artifact-reference-label": referenceLabel = "",
+  "data-speech-behavior": speechBehavior = "skipped",
+  "data-speech-behavior-label": speechBehaviorLabel = "Skipped in generated speech",
+  ...props
+}: Readonly<DocumentInlineArtifactChipProps>) {
+  const rawId = useId();
+  const detailsId = `citation-chip-${rawId.replaceAll(/[^A-Za-z0-9_-]/g, "-")}`;
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const kindLabel = formatInlineArtifactKindLabel(artifactKind);
+  const shortReference = compactInlineArtifactReference(referenceLabel);
+  const copyValue = [
+    kindLabel,
+    referenceLabel ? `reference ${referenceLabel}` : "",
+    speechBehaviorLabel.toLowerCase(),
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+  function copyCitation() {
+    setCopied(false);
+    void navigator.clipboard
+      .writeText(copyValue)
+      .then(() => {
+        setCopied(true);
+      })
+      .catch(() => {
+        setCopied(false);
+      });
+  }
+
+  return (
+    <span className="document-inline-artifact-shell">
+      <button
+        aria-controls={detailsId}
+        aria-expanded={open}
+        aria-label={[kindLabel, referenceLabel || "", speechBehaviorLabel, "Show citation details"]
+          .filter(Boolean)
+          .join(". ")}
+        className={className}
+        data-artifact-kind={artifactKind}
+        data-artifact-marker-type={markerType}
+        data-artifact-reference-label={referenceLabel}
+        data-speech-behavior={speechBehavior}
+        data-speech-behavior-label={speechBehaviorLabel}
+        data-speech-mode="skip"
+        onClick={() => {
+          setOpen((current) => !current);
+        }}
+        type="button"
+        {...props}
+      >
+        <span>{children}</span>
+        {shortReference ? (
+          <span className="document-inline-artifact-ref">{shortReference}</span>
+        ) : null}
+      </button>
+      <span
+        className="document-inline-artifact-popover"
+        hidden={!open}
+        id={detailsId}
+        role="status"
+      >
+        <span className="font-semibold">{kindLabel}</span>
+        {referenceLabel ? <span>Reference: {referenceLabel}</span> : null}
+        <span>Speech: {speechBehaviorLabel}.</span>
+        <span>Raw marker is only shown in Debug.</span>
+        <span className="document-inline-artifact-actions">
+          <button onClick={copyCitation} type="button">
+            Copy citation
+          </button>
+          <a href="#prepared-source-policy-notes">Show in policy notes</a>
+        </span>
+        {copied ? <span className="text-[0.68rem] font-semibold">Copied</span> : null}
+      </span>
+    </span>
+  );
+}
+
+function formatInlineArtifactKindLabel(kind: string): string {
+  switch (kind) {
+    case "artifact_token": {
+      return "Artifact token";
+    }
+    case "footnote": {
+      return "Footnote marker";
+    }
+    case "reference": {
+      return "Reference marker";
+    }
+    case "unknown_inline_marker": {
+      return "Inline metadata marker";
+    }
+    default: {
+      return "Citation marker";
+    }
+  }
+}
+
+function compactInlineArtifactReference(reference: string): string {
+  const clean = reference.trim();
+  if (!clean || clean === "unresolved citation") {
+    return "";
+  }
+  if (clean.length <= 12) {
+    return clean;
+  }
+  return `${clean.slice(0, 6)}...${clean.slice(-4)}`;
+}
 
 function reactNodeToText(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") {

@@ -534,18 +534,78 @@ select {
 .document-inline-artifact {
   display: inline-flex;
   align-items: center;
+  gap: 0.22rem;
   max-width: 7rem;
   margin: 0 0.12rem;
   border: 1px solid color-mix(in srgb, var(--vs-accent) 38%, var(--vs-border));
   border-radius: 0.35rem;
   background: color-mix(in srgb, var(--vs-accent) 12%, var(--vs-surface));
   color: var(--vs-text);
+  cursor: pointer;
+  font-family: inherit;
   font-size: 0.68em;
   font-weight: 700;
   line-height: 1.35;
   padding: 0.02rem 0.3rem;
   text-transform: uppercase;
   vertical-align: 0.08em;
+}
+
+.document-inline-artifact:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--vs-accent) 70%, white);
+  outline-offset: 2px;
+}
+
+.document-inline-artifact-shell {
+  position: relative;
+  display: inline-flex;
+  vertical-align: 0.08em;
+}
+
+.document-inline-artifact-ref {
+  max-width: 4.6rem;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--vs-text) 72%, var(--vs-muted));
+  font-weight: 600;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.document-inline-artifact-popover {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  display: grid;
+  width: min(18rem, 82vw);
+  gap: 0.35rem;
+  border: 1px solid var(--vs-border);
+  border-radius: 0.5rem;
+  background: var(--vs-surface);
+  box-shadow: 0 1rem 2.4rem color-mix(in srgb, #020617 18%, transparent);
+  color: var(--vs-text);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  padding: 0.65rem;
+  text-transform: none;
+}
+
+.document-inline-artifact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.document-inline-artifact-actions :where(a, button) {
+  border: 1px solid var(--vs-border);
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--vs-surface) 82%, white);
+  color: var(--vs-text);
+  font: inherit;
+  font-weight: 700;
+  padding: 0.18rem 0.42rem;
+  text-decoration: none;
 }
 
 .document-inline-artifact--artifact_token,

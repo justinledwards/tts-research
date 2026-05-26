@@ -4,6 +4,7 @@ const CHATGPT_BRACKET_CITATION_PATTERN =
 const CONTENT_REFERENCE_PATTERN = /:contentReference\[[^\]\n]+\]\{[^}\n]*\}/g;
 const MALFORMED_CITATION_PATTERN = /\[(?:cite|citation|source|reference)(?::[^\]\n]*)?\]/gi;
 const TURN_CITATION_PATTERN = /\bturn\d+(?:search|view|news|fetch)\d+\b/g;
+const TURN_LOCATOR_ID_PATTERN = /\bturn\d+(?:search|view|news|fetch)\d+\b/i;
 const FOOTNOTE_REFERENCE_PATTERN = /\[\^[^\]\s]+\]/g;
 const NUMERIC_REFERENCE_MARKER_PATTERN = /\[\d[\d\s,–-]*(?:p\.?\s*\d+)?\]/g;
 const NAMED_REFERENCE_MARKER_PATTERN = /\[[A-Z][^\]\n]{0,40}(?:19|20)\d{2}[^\]\n]{0,20}\]/g;
@@ -17,10 +18,19 @@ export type DocumentInlineArtifactKind =
   | "reference"
   | "unknown_inline_marker";
 
+export type DocumentInlineArtifactSpeechBehavior =
+  | "on-demand"
+  | "skipped"
+  | "spoken"
+  | "summarized";
+
 export interface DocumentInlineArtifact {
   end: number;
   kind: DocumentInlineArtifactKind;
   markerType: string;
+  referenceLabel?: string;
+  speechBehavior: DocumentInlineArtifactSpeechBehavior;
+  speechBehaviorLabel: string;
   start: number;
   visualLabel: string;
 }
@@ -100,13 +110,9 @@ const ARTIFACT_PATTERNS: ArtifactPattern[] = [
 export function findDocumentInlineArtifacts(value: string): DocumentInlineArtifact[] {
   const artifacts = ARTIFACT_PATTERNS.flatMap((definition) => {
     definition.pattern.lastIndex = 0;
-    return [...value.matchAll(definition.pattern)].map((match) => ({
-      end: match.index + match[0].length,
-      kind: definition.kind,
-      markerType: definition.markerType,
-      start: match.index,
-      visualLabel: definition.visualLabel,
-    }));
+    return [...value.matchAll(definition.pattern)].map((match) =>
+      artifactFromMatch(definition, match),
+    );
   });
   return sortArtifacts(removeOverlappingArtifacts(artifacts), compareArtifactsByStart);
 }
@@ -160,13 +166,16 @@ function splitTextArtifacts(value: string): HastNode[] {
 
 function chipNode(artifact: DocumentInlineArtifact): HastNode {
   return {
-    children: [{ type: "text", value: artifact.visualLabel }],
+    children: [{ type: "text", value: artifact.visualLabel.toUpperCase() }],
     properties: {
-      "aria-label": `${artifactLabel(artifact.kind)} converted for visual reading and omitted from generated speech`,
+      "aria-label": artifactAccessibleLabel(artifact),
       className: ["document-inline-artifact", `document-inline-artifact--${artifact.kind}`],
       "data-artifact-kind": artifact.kind,
       "data-artifact-marker-type": artifact.markerType,
+      "data-artifact-reference-label": artifact.referenceLabel ?? "",
       "data-speech-mode": "skip",
+      "data-speech-behavior": artifact.speechBehavior,
+      "data-speech-behavior-label": artifact.speechBehaviorLabel,
     },
     tagName: "span",
     type: "element",
@@ -215,6 +224,25 @@ function hasLanguageClass(node: HastNode): boolean {
   return classes.some((item) => item.startsWith("language-"));
 }
 
+function artifactFromMatch(
+  definition: ArtifactPattern,
+  match: RegExpMatchArray,
+): DocumentInlineArtifact {
+  const raw = match[0];
+  const index = match.index ?? 0;
+  const speechBehavior = artifactSpeechBehavior(definition.kind);
+  return {
+    end: index + raw.length,
+    kind: definition.kind,
+    markerType: definition.markerType,
+    referenceLabel: artifactReferenceLabel(definition.kind, definition.markerType, raw),
+    speechBehavior,
+    speechBehaviorLabel: artifactSpeechBehaviorLabel(speechBehavior),
+    start: index,
+    visualLabel: definition.visualLabel,
+  };
+}
+
 function artifactLabel(kind: DocumentInlineArtifactKind): string {
   switch (kind) {
     case "artifact_token": {
@@ -233,6 +261,96 @@ function artifactLabel(kind: DocumentInlineArtifactKind): string {
       return "Citation marker";
     }
   }
+}
+
+function artifactAccessibleLabel(artifact: DocumentInlineArtifact): string {
+  const reference = artifact.referenceLabel ? ` ${artifact.referenceLabel}` : "";
+  return `${artifactLabel(artifact.kind)}${reference}, ${artifact.speechBehaviorLabel.toLowerCase()}. Show citation details.`;
+}
+
+function artifactSpeechBehavior(
+  kind: DocumentInlineArtifactKind,
+): DocumentInlineArtifactSpeechBehavior {
+  switch (kind) {
+    case "citation":
+    case "footnote":
+    case "reference": {
+      return "on-demand";
+    }
+    case "artifact_token":
+    case "unknown_inline_marker": {
+      return "skipped";
+    }
+    default: {
+      return "skipped";
+    }
+  }
+}
+
+function artifactSpeechBehaviorLabel(behavior: DocumentInlineArtifactSpeechBehavior): string {
+  switch (behavior) {
+    case "on-demand": {
+      return "Available on demand";
+    }
+    case "spoken": {
+      return "Spoken by the active speech profile";
+    }
+    case "summarized": {
+      return "Summarized by the active speech profile";
+    }
+    default: {
+      return "Skipped in generated speech";
+    }
+  }
+}
+
+function artifactReferenceLabel(
+  kind: DocumentInlineArtifactKind,
+  markerType: string,
+  raw: string,
+): string | undefined {
+  const locator = TURN_LOCATOR_ID_PATTERN.exec(raw)?.[0];
+  if (locator) {
+    return locator;
+  }
+  if (markerType === "content_reference") {
+    return contentReferenceLabel(raw);
+  }
+  if (kind === "footnote") {
+    const footnote = stripWrappingBrackets(raw).replace(/^\^/, "").trim();
+    return footnote ? `footnote ${footnote}` : "footnote";
+  }
+  if (kind === "reference") {
+    return stripWrappingBrackets(raw) || "reference";
+  }
+  if (markerType === "malformed_citation_placeholder") {
+    return "unresolved citation";
+  }
+  if (kind === "unknown_inline_marker") {
+    return stripWrappingBrackets(raw) || "inline marker";
+  }
+  return undefined;
+}
+
+function contentReferenceLabel(raw: string): string {
+  const start = raw.indexOf("[");
+  if (start === -1) {
+    return "content reference";
+  }
+  const end = raw.indexOf("]", start + 1);
+  if (end === -1) {
+    return "content reference";
+  }
+  const label = raw.slice(start + 1, end).trim();
+  return label || "content reference";
+}
+
+function stripWrappingBrackets(raw: string): string {
+  const clean = raw.trim();
+  if (clean.startsWith("[") && clean.endsWith("]")) {
+    return clean.slice(1, -1).trim();
+  }
+  return clean;
 }
 
 function removeOverlappingArtifacts(artifacts: DocumentInlineArtifact[]): DocumentInlineArtifact[] {

@@ -599,3 +599,10 @@
 - [x] Normalize Cinema, Workspace, and Preview header copy/disclosure
 - [x] Add shared disabled playback reason for ready-audio transport edge case
 - [x] Run WP28 local validation commands
+
+## 2026-05-26 02:06 CEST - Citation Chip Explainability and Speech Policy Validation
+- [x] Inspect citation IR, speech policy, and Document Cinema rendering paths
+- [x] Add shared citation behavior metadata and explainable chip UI
+- [x] Add policy-note and speech-plan citation fixture coverage
+- [x] Run WP29 local validation commands
+- [x] Commit WP29 changes

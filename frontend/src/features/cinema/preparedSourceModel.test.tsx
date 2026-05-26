@@ -235,12 +235,17 @@ describe("prepared source cinema helpers", () => {
       ],
     });
 
-    expect(preparedSourceCinemaPolicyNotes(source).map((note) => [note.kind, note.mode])).toEqual([
+    const notes = preparedSourceCinemaPolicyNotes(source);
+
+    expect(notes.map((note) => [note.kind, note.mode])).toEqual([
       ["body", "speak"],
       ["citation", "skip"],
       ["artifact_token", "onDemand"],
       ["artifact_token", "skip"],
     ]);
+    expect(notes.find((note) => note.kind === "citation")?.explanation).toContain(
+      "Citations are available on demand in Enterprise profile",
+    );
   });
 
   it("renders a code-native Website Cinema shell for a prepared URL source", () => {

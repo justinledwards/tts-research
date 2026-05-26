@@ -87,8 +87,12 @@ describe("Markdown rendering helpers", () => {
     expect(markup).toContain("document-inline-artifact--citation");
     expect(markup).toContain("document-inline-artifact--artifact_token");
     expect(markup).toContain('data-speech-mode="skip"');
-    expect(markup).not.toContain("turn40search10");
-    expect(markup).not.toContain("oaicite");
+    expect(markup).toContain('data-speech-behavior="on-demand"');
+    expect(markup).toContain("Available on demand");
+    expect(markup).toContain("Copy citation");
+    expect(markup).toContain('href="#prepared-source-policy-notes"');
+    expect(markup).not.toContain("[cite]");
+    expect(markup).not.toContain(":contentReference");
   });
 
   it("keeps document links and code spans visually classified", () => {

@@ -10,7 +10,11 @@ export function PreparedSourcePolicyNotes({
     return <p className="vs-muted text-sm">No policy notes for this source.</p>;
   }
   return (
-    <section aria-labelledby={headingId} className="grid gap-3 text-sm">
+    <section
+      aria-labelledby={headingId}
+      className="grid gap-3 text-sm"
+      id="prepared-source-policy-notes"
+    >
       <div className="flex items-center justify-between gap-3">
         <p className="vs-muted text-xs font-semibold uppercase tracking-[0.2em]" id={headingId}>
           Policy Notes

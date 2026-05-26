@@ -69,6 +69,58 @@ func TestBuildFromContentIROrdersSpeakableSegmentsAndTargets(t *testing.T) {
 	}
 }
 
+func TestBuildFromContentIRKeepsCitationFixturesSpeechSafe(t *testing.T) {
+	t.Parallel()
+
+	document := contentir.NewDocument(
+		"citation-fixtures",
+		"preparedSource",
+		"citation-fixtures",
+		"default",
+		"citations.md",
+		"test-adapter",
+		time.Unix(0, 0).UTC(),
+		[]contentir.Node{
+			node("body-inline", "Claim remains after inline citation cleanup.", policy.ModeSpeak),
+			citationFixtureNode("raw-chatgpt-token", "artifact_token", "[cite][turn40search10]", "", policy.ModeOnDemand),
+			citationFixtureNode("malformed-citation", "citation", "[citation: needed]", "", policy.ModeOnDemand),
+			citationFixtureNode("footnote-marker", "footnote", "[^study-note]", "", policy.ModeOnDemand),
+			citationFixtureNode("reference-marker", "reference", "[Research 2024]", "", policy.ModeOnDemand),
+			citationFixtureNode("citation-only-paragraph", "citation", "citeturn40search11", "", policy.ModeOnDemand),
+			citationFixtureNode("spoken-citation", "citation", "[cite][turn40search12]", "Citation marker.", policy.ModeSpeak),
+		},
+	)
+
+	plan, err := BuildFromContentIR(document, BuildOptions{
+		ID:          "citation-plan",
+		GeneratedAt: time.Unix(20, 0).UTC(),
+	})
+	if err != nil {
+		t.Fatalf("BuildFromContentIR returned error: %v", err)
+	}
+	if len(plan.Segments) != 2 {
+		t.Fatalf("segments = %#v, want body plus safe spoken citation fixture", plan.Segments)
+	}
+
+	joined := plan.Segments[0].Text + " " + plan.Segments[1].Text
+	for _, forbidden := range []string{
+		"[cite]",
+		"turn40search",
+		"cite",
+		"[citation:",
+		"[^study-note]",
+		"[Research 2024]",
+		"CITE",
+	} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("speech plan leaked raw citation fixture %q in %q", forbidden, joined)
+		}
+	}
+	if plan.Segments[1].Text != "Citation marker." {
+		t.Fatalf("spoken citation segment = %q, want safe citation label", plan.Segments[1].Text)
+	}
+}
+
 func node(id string, text string, mode policy.Mode) contentir.Node {
 	return contentir.Node{
 		NodeID:         id,
@@ -99,4 +151,21 @@ func node(id string, text string, mode policy.Mode) contentir.Node {
 		Rights:         contentir.UnknownRights(),
 		AdapterVersion: "test-adapter",
 	}
+}
+
+func citationFixtureNode(id string, kind string, displayText string, speechText string, mode policy.Mode) contentir.Node {
+	item := node(id, displayText, mode)
+	item.Kind = kind
+	item.Role = kind
+	item.SpeechText = speechText
+	item.Speech.PolicyHint = contentir.NewSpeechPolicyHint(string(mode), "", 0, 0)
+	item.Speech.SpeechPolicy = policy.SpeechPolicy{
+		Profile:     "Enterprise",
+		Element:     kind,
+		ElementMode: string(mode),
+		Mode:        string(mode),
+		Explanation: "citation fixture policy",
+	}
+	item.Warnings = []string{"citation_removed"}
+	return item
 }
