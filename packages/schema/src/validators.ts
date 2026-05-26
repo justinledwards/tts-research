@@ -3,6 +3,7 @@ import {
   contentIrV1Schema,
   fragmentTimingV1Schema,
   highlightMapV1Schema,
+  highlightMapV2Schema,
   locatorEnvelopeV1Schema,
   schemaByKind,
   speechPlanV1Schema,
@@ -14,6 +15,7 @@ export type SchemaKind =
   | "locator-envelope.v1"
   | "speech-plan.v1"
   | "highlight-map.v1"
+  | "highlight-map.v2"
   | "fragment-timing.v1"
   | "token-timing.v1";
 
@@ -27,6 +29,7 @@ const schemaIdByKind: Record<SchemaKind, string> = {
   "content-ir.v1": "content-ir.v1.schema.json",
   "fragment-timing.v1": "fragment-timing.v1.schema.json",
   "highlight-map.v1": "highlight-map.v1.schema.json",
+  "highlight-map.v2": "highlight-map.v2.schema.json",
   "locator-envelope.v1": "locator-envelope.v1.schema.json",
   "speech-plan.v1": "speech-plan.v1.schema.json",
   "token-timing.v1": "token-timing.v1.schema.json",
@@ -56,6 +59,8 @@ export function detectSchemaKind(payload: unknown): SchemaKind | undefined {
       return "speech-plan.v1";
     case "highlight-map.v1":
       return "highlight-map.v1";
+    case "highlight-map.v2":
+      return "highlight-map.v2";
     case "timing.v1":
       if (Array.isArray(payload.fragments)) {
         return "fragment-timing.v1";
@@ -117,6 +122,10 @@ export function validateHighlightMap<T>(payload: unknown): ValidationResult<T> {
   return validateSchema<T>("highlight-map.v1", payload);
 }
 
+export function validateHighlightMapV2<T>(payload: unknown): ValidationResult<T> {
+  return validateSchema<T>("highlight-map.v2", payload);
+}
+
 export function validateFragmentTiming<T>(payload: unknown): ValidationResult<T> {
   return validateSchema<T>("fragment-timing.v1", payload);
 }
@@ -150,6 +159,8 @@ function schemaForKind(kind: SchemaKind): unknown {
       return speechPlanV1Schema;
     case "highlight-map.v1":
       return highlightMapV1Schema;
+    case "highlight-map.v2":
+      return highlightMapV2Schema;
     case "fragment-timing.v1":
       return fragmentTimingV1Schema;
     case "token-timing.v1":

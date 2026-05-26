@@ -1217,6 +1217,348 @@ export const highlightMapV1Schema = {
   },
 } as const;
 
+export const highlightMapV2Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/highlight-map.v2.schema.json",
+  title: "Highlight Map v2",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "sourceId",
+    "scopeKey",
+    "generatedAudioId",
+    "speechPlanId",
+    "contentIrVersion",
+    "generatedAt",
+    "durationMs",
+    "timingLevels",
+    "summary",
+    "entries",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "highlight-map.v2",
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    scopeKey: {
+      type: "string",
+      minLength: 1,
+    },
+    generatedAudioId: {
+      type: "string",
+      minLength: 1,
+    },
+    speechPlanId: {
+      type: "string",
+      minLength: 1,
+    },
+    contentIrVersion: {
+      const: "content-ir.v1",
+    },
+    generatedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    durationMs: {
+      type: "integer",
+      minimum: 0,
+    },
+    timingLevels: {
+      type: "array",
+      minItems: 1,
+      uniqueItems: true,
+      items: {
+        $ref: "#/$defs/timingLevel",
+      },
+    },
+    summary: {
+      $ref: "#/$defs/highlightMapV2Summary",
+    },
+    entries: {
+      type: "array",
+      minItems: 1,
+      items: {
+        $ref: "#/$defs/timingEntry",
+      },
+    },
+    warnings: {
+      $ref: "#/$defs/alignmentWarnings",
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+  $defs: {
+    timingLevel: {
+      type: "string",
+      enum: ["word", "phrase", "sentence", "block"],
+    },
+    timingSource: {
+      type: "string",
+      enum: ["provider-word", "provider-mark", "forced-alignment", "phrase-estimate", "heuristic"],
+    },
+    fallbackMode: {
+      type: "string",
+      enum: [
+        "none",
+        "word-to-phrase",
+        "phrase-to-sentence",
+        "sentence-to-block",
+        "block-only",
+        "stale-audio",
+        "unavailable",
+      ],
+    },
+    alignmentWarnings: {
+      type: "array",
+      items: {
+        type: "string",
+      },
+    },
+    nullableIndex: {
+      type: ["integer", "null"],
+      minimum: 0,
+    },
+    nullableTimeMs: {
+      type: ["integer", "null"],
+      minimum: 0,
+    },
+    highlightMapV2Summary: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "status",
+        "primaryLevel",
+        "entryCount",
+        "wordCount",
+        "phraseCount",
+        "sentenceCount",
+        "blockCount",
+        "timingSources",
+        "confidence",
+        "driftBudgetMs",
+        "fallbackMode",
+        "degraded",
+      ],
+      properties: {
+        status: {
+          type: "string",
+          minLength: 1,
+        },
+        primaryLevel: {
+          $ref: "#/$defs/timingLevel",
+        },
+        entryCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        wordCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        phraseCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        sentenceCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        blockCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        timingSources: {
+          type: "array",
+          minItems: 1,
+          uniqueItems: true,
+          items: {
+            $ref: "#/$defs/timingSource",
+          },
+        },
+        confidence: {
+          type: "number",
+          minimum: 0,
+          maximum: 1,
+        },
+        driftBudgetMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        fallbackMode: {
+          $ref: "#/$defs/fallbackMode",
+        },
+        degraded: {
+          type: "boolean",
+        },
+        reason: {
+          type: "string",
+        },
+        alignmentWarnings: {
+          $ref: "#/$defs/alignmentWarnings",
+        },
+      },
+    },
+    timingEntry: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "level",
+        "sourceId",
+        "scopeKey",
+        "generatedAudioId",
+        "speechPlanId",
+        "contentIrVersion",
+        "sourceLocator",
+        "nodeId",
+        "textQuote",
+        "rawText",
+        "normalizedText",
+        "spokenText",
+        "tokenIndex",
+        "fragmentIndex",
+        "sentenceIndex",
+        "audioStartMs",
+        "audioEndMs",
+        "providerTimingStartMs",
+        "providerTimingEndMs",
+        "alignedStartMs",
+        "alignedEndMs",
+        "timingSource",
+        "confidence",
+        "driftBudgetMs",
+        "alignmentWarnings",
+        "fallbackMode",
+      ],
+      properties: {
+        entryId: {
+          type: "string",
+        },
+        level: {
+          $ref: "#/$defs/timingLevel",
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        scopeKey: {
+          type: "string",
+          minLength: 1,
+        },
+        generatedAudioId: {
+          type: "string",
+          minLength: 1,
+        },
+        speechPlanId: {
+          type: "string",
+          minLength: 1,
+        },
+        contentIrVersion: {
+          const: "content-ir.v1",
+        },
+        sourceLocator: {
+          $ref: "content-ir.v1.schema.json#/$defs/locator",
+        },
+        nodeId: {
+          type: "string",
+          minLength: 1,
+        },
+        segmentId: {
+          type: "string",
+        },
+        textQuote: {
+          type: "string",
+        },
+        rawText: {
+          type: "string",
+        },
+        normalizedText: {
+          type: "string",
+        },
+        spokenText: {
+          type: "string",
+        },
+        tokenIndex: {
+          $ref: "#/$defs/nullableIndex",
+        },
+        fragmentIndex: {
+          $ref: "#/$defs/nullableIndex",
+        },
+        sentenceIndex: {
+          $ref: "#/$defs/nullableIndex",
+        },
+        audioStartMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        audioEndMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        providerTimingStartMs: {
+          $ref: "#/$defs/nullableTimeMs",
+        },
+        providerTimingEndMs: {
+          $ref: "#/$defs/nullableTimeMs",
+        },
+        alignedStartMs: {
+          $ref: "#/$defs/nullableTimeMs",
+        },
+        alignedEndMs: {
+          $ref: "#/$defs/nullableTimeMs",
+        },
+        timingSource: {
+          $ref: "#/$defs/timingSource",
+        },
+        confidence: {
+          type: "number",
+          minimum: 0,
+          maximum: 1,
+        },
+        driftBudgetMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        alignmentWarnings: {
+          $ref: "#/$defs/alignmentWarnings",
+        },
+        fallbackMode: {
+          $ref: "#/$defs/fallbackMode",
+        },
+        allowsOverlap: {
+          type: "boolean",
+        },
+        traceability: {
+          $ref: "#/$defs/textTraceability",
+        },
+      },
+    },
+    textTraceability: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        sourceTextMatch: {
+          type: "string",
+        },
+        normalizedTextMatch: {
+          type: "string",
+        },
+        spokenTextMatch: {
+          type: "string",
+        },
+        policyTransform: {
+          type: "string",
+        },
+      },
+    },
+  },
+} as const;
+
 export const fragmentTimingV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://tts-research.local/schemas/fragment-timing.v1.schema.json",
@@ -1488,6 +1830,7 @@ export const schemaByKind = {
   "locator-envelope.v1": locatorEnvelopeV1Schema,
   "speech-plan.v1": speechPlanV1Schema,
   "highlight-map.v1": highlightMapV1Schema,
+  "highlight-map.v2": highlightMapV2Schema,
   "fragment-timing.v1": fragmentTimingV1Schema,
   "token-timing.v1": tokenTimingV1Schema,
 } as const;
@@ -2708,6 +3051,353 @@ export const schemaBundle = {
             },
             readingPosition: {
               $ref: "#/$defs/readingPosition",
+            },
+          },
+        },
+      },
+    },
+    "highlight-map.v2": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/highlight-map.v2.schema.json",
+      title: "Highlight Map v2",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "sourceId",
+        "scopeKey",
+        "generatedAudioId",
+        "speechPlanId",
+        "contentIrVersion",
+        "generatedAt",
+        "durationMs",
+        "timingLevels",
+        "summary",
+        "entries",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "highlight-map.v2",
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        scopeKey: {
+          type: "string",
+          minLength: 1,
+        },
+        generatedAudioId: {
+          type: "string",
+          minLength: 1,
+        },
+        speechPlanId: {
+          type: "string",
+          minLength: 1,
+        },
+        contentIrVersion: {
+          const: "content-ir.v1",
+        },
+        generatedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        durationMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        timingLevels: {
+          type: "array",
+          minItems: 1,
+          uniqueItems: true,
+          items: {
+            $ref: "#/$defs/timingLevel",
+          },
+        },
+        summary: {
+          $ref: "#/$defs/highlightMapV2Summary",
+        },
+        entries: {
+          type: "array",
+          minItems: 1,
+          items: {
+            $ref: "#/$defs/timingEntry",
+          },
+        },
+        warnings: {
+          $ref: "#/$defs/alignmentWarnings",
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+      $defs: {
+        timingLevel: {
+          type: "string",
+          enum: ["word", "phrase", "sentence", "block"],
+        },
+        timingSource: {
+          type: "string",
+          enum: [
+            "provider-word",
+            "provider-mark",
+            "forced-alignment",
+            "phrase-estimate",
+            "heuristic",
+          ],
+        },
+        fallbackMode: {
+          type: "string",
+          enum: [
+            "none",
+            "word-to-phrase",
+            "phrase-to-sentence",
+            "sentence-to-block",
+            "block-only",
+            "stale-audio",
+            "unavailable",
+          ],
+        },
+        alignmentWarnings: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        nullableIndex: {
+          type: ["integer", "null"],
+          minimum: 0,
+        },
+        nullableTimeMs: {
+          type: ["integer", "null"],
+          minimum: 0,
+        },
+        highlightMapV2Summary: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "status",
+            "primaryLevel",
+            "entryCount",
+            "wordCount",
+            "phraseCount",
+            "sentenceCount",
+            "blockCount",
+            "timingSources",
+            "confidence",
+            "driftBudgetMs",
+            "fallbackMode",
+            "degraded",
+          ],
+          properties: {
+            status: {
+              type: "string",
+              minLength: 1,
+            },
+            primaryLevel: {
+              $ref: "#/$defs/timingLevel",
+            },
+            entryCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            wordCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            phraseCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            sentenceCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            blockCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            timingSources: {
+              type: "array",
+              minItems: 1,
+              uniqueItems: true,
+              items: {
+                $ref: "#/$defs/timingSource",
+              },
+            },
+            confidence: {
+              type: "number",
+              minimum: 0,
+              maximum: 1,
+            },
+            driftBudgetMs: {
+              type: "integer",
+              minimum: 0,
+            },
+            fallbackMode: {
+              $ref: "#/$defs/fallbackMode",
+            },
+            degraded: {
+              type: "boolean",
+            },
+            reason: {
+              type: "string",
+            },
+            alignmentWarnings: {
+              $ref: "#/$defs/alignmentWarnings",
+            },
+          },
+        },
+        timingEntry: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "level",
+            "sourceId",
+            "scopeKey",
+            "generatedAudioId",
+            "speechPlanId",
+            "contentIrVersion",
+            "sourceLocator",
+            "nodeId",
+            "textQuote",
+            "rawText",
+            "normalizedText",
+            "spokenText",
+            "tokenIndex",
+            "fragmentIndex",
+            "sentenceIndex",
+            "audioStartMs",
+            "audioEndMs",
+            "providerTimingStartMs",
+            "providerTimingEndMs",
+            "alignedStartMs",
+            "alignedEndMs",
+            "timingSource",
+            "confidence",
+            "driftBudgetMs",
+            "alignmentWarnings",
+            "fallbackMode",
+          ],
+          properties: {
+            entryId: {
+              type: "string",
+            },
+            level: {
+              $ref: "#/$defs/timingLevel",
+            },
+            sourceId: {
+              type: "string",
+              minLength: 1,
+            },
+            scopeKey: {
+              type: "string",
+              minLength: 1,
+            },
+            generatedAudioId: {
+              type: "string",
+              minLength: 1,
+            },
+            speechPlanId: {
+              type: "string",
+              minLength: 1,
+            },
+            contentIrVersion: {
+              const: "content-ir.v1",
+            },
+            sourceLocator: {
+              $ref: "content-ir.v1.schema.json#/$defs/locator",
+            },
+            nodeId: {
+              type: "string",
+              minLength: 1,
+            },
+            segmentId: {
+              type: "string",
+            },
+            textQuote: {
+              type: "string",
+            },
+            rawText: {
+              type: "string",
+            },
+            normalizedText: {
+              type: "string",
+            },
+            spokenText: {
+              type: "string",
+            },
+            tokenIndex: {
+              $ref: "#/$defs/nullableIndex",
+            },
+            fragmentIndex: {
+              $ref: "#/$defs/nullableIndex",
+            },
+            sentenceIndex: {
+              $ref: "#/$defs/nullableIndex",
+            },
+            audioStartMs: {
+              type: "integer",
+              minimum: 0,
+            },
+            audioEndMs: {
+              type: "integer",
+              minimum: 0,
+            },
+            providerTimingStartMs: {
+              $ref: "#/$defs/nullableTimeMs",
+            },
+            providerTimingEndMs: {
+              $ref: "#/$defs/nullableTimeMs",
+            },
+            alignedStartMs: {
+              $ref: "#/$defs/nullableTimeMs",
+            },
+            alignedEndMs: {
+              $ref: "#/$defs/nullableTimeMs",
+            },
+            timingSource: {
+              $ref: "#/$defs/timingSource",
+            },
+            confidence: {
+              type: "number",
+              minimum: 0,
+              maximum: 1,
+            },
+            driftBudgetMs: {
+              type: "integer",
+              minimum: 0,
+            },
+            alignmentWarnings: {
+              $ref: "#/$defs/alignmentWarnings",
+            },
+            fallbackMode: {
+              $ref: "#/$defs/fallbackMode",
+            },
+            allowsOverlap: {
+              type: "boolean",
+            },
+            traceability: {
+              $ref: "#/$defs/textTraceability",
+            },
+          },
+        },
+        textTraceability: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            sourceTextMatch: {
+              type: "string",
+            },
+            normalizedTextMatch: {
+              type: "string",
+            },
+            spokenTextMatch: {
+              type: "string",
+            },
+            policyTransform: {
+              type: "string",
             },
           },
         },

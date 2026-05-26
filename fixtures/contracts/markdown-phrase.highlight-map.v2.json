@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "highlight-map.v2",
+  "sourceId": "contract-markdown",
+  "scopeKey": "document",
+  "generatedAudioId": "contract-audio-phrase",
+  "speechPlanId": "contract-markdown",
+  "contentIrVersion": "content-ir.v1",
+  "generatedAt": "2026-05-26T06:14:00Z",
+  "durationMs": 1700,
+  "timingLevels": ["phrase", "sentence", "block"],
+  "summary": {
+    "status": "complete",
+    "primaryLevel": "phrase",
+    "entryCount": 1,
+    "wordCount": 0,
+    "phraseCount": 1,
+    "sentenceCount": 0,
+    "blockCount": 0,
+    "timingSources": ["provider-mark"],
+    "confidence": 0.9,
+    "driftBudgetMs": 350,
+    "fallbackMode": "none",
+    "degraded": false,
+    "reason": "provider mark binds the phrase to the source node"
+  },
+  "entries": [
+    {
+      "entryId": "phrase-0001",
+      "level": "phrase",
+      "sourceId": "contract-markdown",
+      "scopeKey": "document",
+      "generatedAudioId": "contract-audio-phrase",
+      "speechPlanId": "contract-markdown",
+      "contentIrVersion": "content-ir.v1",
+      "sourceLocator": {
+        "type": "markdown",
+        "markdown": {
+          "path": "contract.md",
+          "lineStart": 3,
+          "lineEnd": 3,
+          "columnStart": 1,
+          "columnEnd": 22,
+          "astPath": "/children/1"
+        }
+      },
+      "nodeId": "md-0001",
+      "segmentId": "seg-0001",
+      "textQuote": "Dr Nguyen shipped v1.",
+      "rawText": "Dr Nguyen shipped v1.",
+      "normalizedText": "Dr Nguyen shipped v1.",
+      "spokenText": "Doctor Nguyen shipped version one.",
+      "tokenIndex": null,
+      "fragmentIndex": 0,
+      "sentenceIndex": 0,
+      "audioStartMs": 0,
+      "audioEndMs": 1700,
+      "providerTimingStartMs": 0,
+      "providerTimingEndMs": 1700,
+      "alignedStartMs": null,
+      "alignedEndMs": null,
+      "timingSource": "provider-mark",
+      "confidence": 0.9,
+      "driftBudgetMs": 350,
+      "alignmentWarnings": [],
+      "fallbackMode": "none"
+    }
+  ]
+}

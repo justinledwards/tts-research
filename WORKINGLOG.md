@@ -1,5 +1,13 @@
 # Working Log
 
+## 2026-05-26 06:14 CEST - Timing Artifact Contract and Highlight Map v2
+- [x] Inspect existing timing, locator, and IR validation paths
+- [x] Add HighlightMap v2 schema, fixtures, and TypeScript runtime types
+- [x] Add timing artifact validation and regression coverage
+- [x] Wire HighlightMap v2 into validation/alignment evidence paths
+- [x] Keep Cinema More Escape handling scoped to the menu during screenshot validation
+- [x] Run WP34 local validation commands
+
 ## 2026-05-25 14:23 CEST - Visual State Integrity Gate
 - [x] Inspect current screenshot, context-panel, and review-evidence reporting
 - [x] Add screenshot state manifest and mismatch assertions

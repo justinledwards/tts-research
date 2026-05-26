@@ -18,6 +18,7 @@
     "./schemas/locator-envelope.v1.schema.json": "./schemas/locator-envelope.v1.schema.json",
     "./schemas/speech-plan.v1.schema.json": "./schemas/speech-plan.v1.schema.json",
     "./schemas/highlight-map.v1.schema.json": "./schemas/highlight-map.v1.schema.json",
+    "./schemas/highlight-map.v2.schema.json": "./schemas/highlight-map.v2.schema.json",
     "./schemas/fragment-timing.v1.schema.json": "./schemas/fragment-timing.v1.schema.json",
     "./schemas/token-timing.v1.schema.json": "./schemas/token-timing.v1.schema.json"
   },

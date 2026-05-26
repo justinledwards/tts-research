@@ -9,6 +9,7 @@ import {
   isTrustedWordTiming,
   timingRangeForCue,
 } from "./driftDetection";
+import { legacyHighlightMapFromTimingArtifact, type TimingArtifact } from "./highlightMapV2";
 import type { ReadAlongRuntimeSnapshot, ReadAlongRuntimeState } from "./readAlongState";
 
 export interface ReadAlongResyncInput {
@@ -19,6 +20,7 @@ export interface ReadAlongResyncInput {
   isPaused?: boolean;
   isPlaying?: boolean;
   isSeeking?: boolean;
+  timingArtifact?: TimingArtifact | null;
 }
 
 export interface ReadAlongResyncOptions {
@@ -65,6 +67,7 @@ export function resolveReadAlongRuntimeSnapshot({
   isSeeking = false,
   phraseDriftTargetMs = READ_ALONG_PHRASE_DRIFT_TARGET_MS,
   resyncCount = 0,
+  timingArtifact,
   wordDriftTargetMs = READ_ALONG_WORD_DRIFT_TARGET_MS,
 }: ReadAlongResyncInput &
   Readonly<{
@@ -72,8 +75,14 @@ export function resolveReadAlongRuntimeSnapshot({
     resyncCount?: number;
     wordDriftTargetMs?: number;
   }>): ReadAlongRuntimeSnapshot {
-  const timingSource = highlightTimingSourceLabel(highlightMap);
-  const drift = detectReadAlongDrift({ activeCue, audioTimeSec, highlightMap });
+  const effectiveHighlightMap =
+    highlightMap ?? legacyHighlightMapFromTimingArtifact(timingArtifact);
+  const timingSource = highlightTimingSourceLabel(effectiveHighlightMap);
+  const drift = detectReadAlongDrift({
+    activeCue,
+    audioTimeSec,
+    highlightMap: effectiveHighlightMap,
+  });
   const expectedCue = drift.expectedCue;
 
   if (generatedAudioState === "stale") {
@@ -82,7 +91,7 @@ export function resolveReadAlongRuntimeSnapshot({
       audioTimeSec,
       driftMs: null,
       expectedCue,
-      highlightMap,
+      highlightMap: effectiveHighlightMap,
       mode: "none",
       reason: "Generated audio is stale, so word highlight is stopped until audio is rebuilt.",
       resyncCount,
@@ -91,13 +100,13 @@ export function resolveReadAlongRuntimeSnapshot({
     });
   }
 
-  if (!highlightMap || !expectedCue) {
+  if (!effectiveHighlightMap || !expectedCue) {
     return buildSnapshot({
       activeCue: null,
       audioTimeSec,
       driftMs: null,
       expectedCue,
-      highlightMap,
+      highlightMap: effectiveHighlightMap,
       mode: "block",
       reason: "No timing map is available; reader can only show block or phrase-level position.",
       resyncCount,
@@ -112,7 +121,7 @@ export function resolveReadAlongRuntimeSnapshot({
       audioTimeSec,
       driftMs: 0,
       expectedCue,
-      highlightMap,
+      highlightMap: effectiveHighlightMap,
       mode: expectedCue.mode,
       reason: "User is seeking; active fragment is recomputed from the audio clock.",
       resyncCount,
@@ -127,7 +136,7 @@ export function resolveReadAlongRuntimeSnapshot({
       audioTimeSec,
       driftMs: drift.driftMs,
       expectedCue,
-      highlightMap,
+      highlightMap: effectiveHighlightMap,
       mode: expectedCue.mode,
       reason: "Playback is paused; highlight is held at the current audio clock.",
       resyncCount,
@@ -136,7 +145,7 @@ export function resolveReadAlongRuntimeSnapshot({
     });
   }
 
-  const trustedWord = isTrustedWordTiming(highlightMap) && expectedCue.mode === "word";
+  const trustedWord = isTrustedWordTiming(effectiveHighlightMap) && expectedCue.mode === "word";
   const wordDriftMs = drift.wordDriftMs ?? 0;
   const phraseDriftMs = drift.phraseDriftMs ?? wordDriftMs;
 
@@ -146,7 +155,7 @@ export function resolveReadAlongRuntimeSnapshot({
       audioTimeSec,
       driftMs: wordDriftMs,
       expectedCue,
-      highlightMap,
+      highlightMap: effectiveHighlightMap,
       mode: "word",
       reason: "Trusted word timing is within the runtime drift budget.",
       resyncCount,
@@ -162,7 +171,7 @@ export function resolveReadAlongRuntimeSnapshot({
       audioTimeSec,
       driftMs: phraseDriftMs,
       expectedCue,
-      highlightMap,
+      highlightMap: effectiveHighlightMap,
       mode: "phrase",
       reason: trustedWord
         ? "Word drift exceeded budget; snapped to the nearest phrase boundary."
@@ -178,7 +187,7 @@ export function resolveReadAlongRuntimeSnapshot({
     audioTimeSec,
     driftMs: phraseDriftMs,
     expectedCue,
-    highlightMap,
+    highlightMap: effectiveHighlightMap,
     mode: "block",
     reason:
       "Phrase drift exceeded budget; highlight is degraded rather than pretending exact sync.",

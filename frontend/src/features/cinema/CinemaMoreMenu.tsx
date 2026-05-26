@@ -218,6 +218,13 @@ export function CinemaMoreMenu({
           setOpen((current) => !current);
         }}
         onKeyDown={(event) => {
+          if (event.key === "Escape" && open) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.nativeEvent.stopImmediatePropagation();
+            closeAndReturnFocus();
+            return;
+          }
           if (event.key === "ArrowDown" && !open) {
             event.preventDefault();
             focusFirstOnOpenRef.current = true;

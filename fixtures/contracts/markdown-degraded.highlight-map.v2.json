@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "highlight-map.v2",
+  "sourceId": "contract-markdown",
+  "scopeKey": "document",
+  "generatedAudioId": "contract-audio-degraded",
+  "speechPlanId": "contract-markdown",
+  "contentIrVersion": "content-ir.v1",
+  "generatedAt": "2026-05-26T06:14:00Z",
+  "durationMs": 1700,
+  "timingLevels": ["block"],
+  "summary": {
+    "status": "degraded",
+    "primaryLevel": "block",
+    "entryCount": 1,
+    "wordCount": 0,
+    "phraseCount": 0,
+    "sentenceCount": 0,
+    "blockCount": 1,
+    "timingSources": ["heuristic"],
+    "confidence": 0.42,
+    "driftBudgetMs": 350,
+    "fallbackMode": "block-only",
+    "degraded": true,
+    "reason": "provider timing was unavailable; block-level sync is explicit",
+    "alignmentWarnings": ["word timings unavailable", "phrase alignment below confidence floor"]
+  },
+  "entries": [
+    {
+      "entryId": "block-0001",
+      "level": "block",
+      "sourceId": "contract-markdown",
+      "scopeKey": "document",
+      "generatedAudioId": "contract-audio-degraded",
+      "speechPlanId": "contract-markdown",
+      "contentIrVersion": "content-ir.v1",
+      "sourceLocator": {
+        "type": "markdown",
+        "markdown": {
+          "path": "contract.md",
+          "lineStart": 3,
+          "lineEnd": 3,
+          "columnStart": 1,
+          "columnEnd": 22,
+          "astPath": "/children/1"
+        }
+      },
+      "nodeId": "md-0001",
+      "segmentId": "seg-0001",
+      "textQuote": "Dr Nguyen shipped v1.",
+      "rawText": "Dr Nguyen shipped v1.",
+      "normalizedText": "Dr Nguyen shipped v1.",
+      "spokenText": "Doctor Nguyen shipped version one.",
+      "tokenIndex": null,
+      "fragmentIndex": 0,
+      "sentenceIndex": 0,
+      "audioStartMs": 0,
+      "audioEndMs": 1700,
+      "providerTimingStartMs": null,
+      "providerTimingEndMs": null,
+      "alignedStartMs": null,
+      "alignedEndMs": null,
+      "timingSource": "heuristic",
+      "confidence": 0.42,
+      "driftBudgetMs": 350,
+      "alignmentWarnings": ["word timings unavailable", "phrase alignment below confidence floor"],
+      "fallbackMode": "block-only"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "highlight-map.v2",
+  "sourceId": "contract-markdown",
+  "scopeKey": "document",
+  "generatedAudioId": "contract-audio-sentence",
+  "speechPlanId": "contract-markdown",
+  "contentIrVersion": "content-ir.v1",
+  "generatedAt": "2026-05-26T06:14:00Z",
+  "durationMs": 1700,
+  "timingLevels": ["sentence", "block"],
+  "summary": {
+    "status": "complete",
+    "primaryLevel": "sentence",
+    "entryCount": 1,
+    "wordCount": 0,
+    "phraseCount": 0,
+    "sentenceCount": 1,
+    "blockCount": 0,
+    "timingSources": ["forced-alignment"],
+    "confidence": 0.86,
+    "driftBudgetMs": 350,
+    "fallbackMode": "none",
+    "degraded": false,
+    "reason": "local alignment resolved the sentence to the source locator"
+  },
+  "entries": [
+    {
+      "entryId": "sentence-0001",
+      "level": "sentence",
+      "sourceId": "contract-markdown",
+      "scopeKey": "document",
+      "generatedAudioId": "contract-audio-sentence",
+      "speechPlanId": "contract-markdown",
+      "contentIrVersion": "content-ir.v1",
+      "sourceLocator": {
+        "type": "markdown",
+        "markdown": {
+          "path": "contract.md",
+          "lineStart": 3,
+          "lineEnd": 3,
+          "columnStart": 1,
+          "columnEnd": 22,
+          "astPath": "/children/1"
+        }
+      },
+      "nodeId": "md-0001",
+      "segmentId": "seg-0001",
+      "textQuote": "Dr Nguyen shipped v1.",
+      "rawText": "Dr Nguyen shipped v1.",
+      "normalizedText": "Dr Nguyen shipped v1.",
+      "spokenText": "Doctor Nguyen shipped version one.",
+      "tokenIndex": null,
+      "fragmentIndex": 0,
+      "sentenceIndex": 0,
+      "audioStartMs": 0,
+      "audioEndMs": 1700,
+      "providerTimingStartMs": null,
+      "providerTimingEndMs": null,
+      "alignedStartMs": 0,
+      "alignedEndMs": 1700,
+      "timingSource": "forced-alignment",
+      "confidence": 0.86,
+      "driftBudgetMs": 350,
+      "alignmentWarnings": [],
+      "fallbackMode": "none"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ CONTENT_IR_SCHEMA_VERSION = "content-ir.v1"
 LOCATOR_ENVELOPE_SCHEMA_VERSION = "locator-envelope.v1"
 SPEECH_PLAN_SCHEMA_VERSION = "speech-plan.v1"
 HIGHLIGHT_MAP_SCHEMA_VERSION = "highlight-map.v1"
+HIGHLIGHT_MAP_V2_SCHEMA_VERSION = "highlight-map.v2"
 TIMING_SCHEMA_VERSION = "timing.v1"
 
 _SCHEMA_FILES = {
@@ -15,6 +16,7 @@ _SCHEMA_FILES = {
     "locator-envelope.v1": "locator-envelope.v1.schema.json",
     "speech-plan.v1": "speech-plan.v1.schema.json",
     "highlight-map.v1": "highlight-map.v1.schema.json",
+    "highlight-map.v2": "highlight-map.v2.schema.json",
     "fragment-timing.v1": "fragment-timing.v1.schema.json",
     "token-timing.v1": "token-timing.v1.schema.json",
 }
@@ -41,6 +43,7 @@ def detect_schema_kind(payload: Any) -> str | None:
         LOCATOR_ENVELOPE_SCHEMA_VERSION,
         SPEECH_PLAN_SCHEMA_VERSION,
         HIGHLIGHT_MAP_SCHEMA_VERSION,
+        HIGHLIGHT_MAP_V2_SCHEMA_VERSION,
     }:
         return str(schema_version)
     if schema_version == TIMING_SCHEMA_VERSION:
@@ -76,6 +79,18 @@ def _required_top_level_fields(kind: str) -> list[str]:
         return ["schemaVersion", "id", "sourceId", "projectId", "generatedAt", "segments"]
     if kind == "highlight-map.v1":
         return ["schemaVersion", "status", "source", "mode", "durationMs", "fragments", "tokens"]
+    if kind == "highlight-map.v2":
+        return [
+            "schemaVersion",
+            "sourceId",
+            "scopeKey",
+            "generatedAudioId",
+            "speechPlanId",
+            "contentIrVersion",
+            "durationMs",
+            "timingLevels",
+            "entries",
+        ]
     if kind == "fragment-timing.v1":
         return ["schemaVersion", "source", "status", "durationMs", "fragments"]
     if kind == "token-timing.v1":

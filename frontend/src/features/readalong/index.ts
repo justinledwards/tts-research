@@ -24,6 +24,22 @@ export {
   type TimingRange,
 } from "./driftDetection";
 export {
+  HIGHLIGHT_MAP_V2_SCHEMA_VERSION,
+  highlightMapV2TimingSourceLabel,
+  highlightMapV2ToLegacyHighlightMap,
+  isHighlightMapV2,
+  legacyHighlightMapFromTimingArtifact,
+  legacyTimingSourceFromV2,
+  type HighlightMapV2,
+  type HighlightMapV2Entry,
+  type HighlightMapV2FallbackMode,
+  type HighlightMapV2Summary,
+  type HighlightMapV2TimingLevel,
+  type HighlightMapV2TimingSource,
+  type HighlightMapV2Traceability,
+  type TimingArtifact,
+} from "./highlightMapV2";
+export {
   readAlongRuntimeDebugRows,
   readAlongRuntimeStateLabel,
   readAlongRuntimeStatusClassName,
@@ -32,6 +48,15 @@ export {
   type ReadAlongRuntimeState,
   type ReadAlongVisualMode,
 } from "./readAlongState";
+export {
+  timingArtifactDebugRows,
+  validateTimingArtifact,
+  type TimingArtifactValidationInput,
+  type TimingArtifactValidationIssue,
+  type TimingArtifactValidationReport,
+  type TimingArtifactValidationSeverity,
+  type TimingArtifactValidationStatus,
+} from "./timingArtifact";
 export {
   evaluateBookReadAlongInvariant,
   evaluatePreparedSourceReadAlongInvariant,
