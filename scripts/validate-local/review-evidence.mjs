@@ -16,6 +16,7 @@ import {
 
 const execFile = promisify(execFileCallback);
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const DIRTY_TREE_WAIVER_ENV = "REVIEW_ALLOW_DIRTY";
 
 export const REQUIRED_REVIEW_SURFACES = [
   "Workspace",
@@ -56,7 +57,43 @@ export async function runReviewEvidence({
 } = {}) {
   const context = await createRunContext({ kind: "review-local", outputDir, rootDir: root });
   const gitInfo = await readGitInfo(root);
+  const dirtyTree = buildDirtyTreeReviewState({
+    allowDirty: isDirtyTreeWaiverEnabled(process.env),
+    gitInfo,
+  });
   const reviewSteps = buildReviewSteps(context);
+
+  if (dirtyTree.gateStatus === "failed") {
+    await runCallbackStep(
+      context,
+      {
+        command: "verify clean working tree",
+        id: "dirty-tree-review-gate",
+        title: "Dirty Tree Review Gate",
+      },
+      async ({ log }) => {
+        const bundle = await writeReviewBundle({ context, dirtyTree, gitInfo, reviewSteps });
+        log("Working tree was dirty at review start.");
+        log(`${DIRTY_TREE_WAIVER_ENV}=1 was not set, so review commands were not executed.`);
+        log(`Review manifest: ${bundle.reviewFiles.reviewManifest}`);
+        log(`Reviewer summary: ${bundle.reviewFiles.reviewerSummary}`);
+        return {
+          artifacts: bundle.reviewFiles,
+          metrics: {
+            dirtyTreeFiles: gitInfo.status.length,
+            untrackedFiles: gitInfo.untrackedFiles.length,
+          },
+          thresholds: reviewBundleThresholds(bundle),
+        };
+      },
+    );
+
+    const summary = await finalizeRun(context);
+    console.log(
+      `review:local ${summary.status}; manifest: ${path.join(outputDir, "review-manifest.json")}`,
+    );
+    return summary;
+  }
 
   for (const step of reviewSteps) {
     await runCommandStep(context, step);
@@ -70,7 +107,7 @@ export async function runReviewEvidence({
       title: "Review Evidence Bundle",
     },
     async ({ log }) => {
-      const bundle = await writeReviewBundle({ context, gitInfo, reviewSteps });
+      const bundle = await writeReviewBundle({ context, dirtyTree, gitInfo, reviewSteps });
       log(`Review manifest: ${bundle.reviewFiles.reviewManifest}`);
       log(`Reviewer summary: ${bundle.reviewFiles.reviewerSummary}`);
       log(`Missing required artifacts: ${String(bundle.passFailSummary.artifacts.missing)}`);
@@ -84,24 +121,7 @@ export async function runReviewEvidence({
             .length,
           waivers: bundle.waivers.length,
         },
-        thresholds: [
-          {
-            actual: bundle.passFailSummary.artifacts.missing,
-            expected: 0,
-            metric: "requiredReviewArtifactsMissing",
-            operator: "===",
-            passed: bundle.passFailSummary.artifacts.missing === 0,
-            threshold: "allRequiredReviewArtifactsPresent",
-          },
-          {
-            actual: bundle.passFailSummary.surfaces.missing.length,
-            expected: 0,
-            metric: "requiredReviewSurfacesMissing",
-            operator: "===",
-            passed: bundle.passFailSummary.surfaces.missing.length === 0,
-            threshold: "allRequiredReviewSurfacesCovered",
-          },
-        ],
+        thresholds: reviewBundleThresholds(bundle),
       };
     },
   );
@@ -411,7 +431,7 @@ function artifactDir(context, id) {
   return path.join(context.artifactsDir, id);
 }
 
-async function writeReviewBundle({ context, gitInfo, reviewSteps }) {
+async function writeReviewBundle({ context, dirtyTree, gitInfo, reviewSteps }) {
   const commandSteps = context.summary.steps.filter((step) => step.type === "command");
   const artifactRecords = await inspectStepArtifacts(commandSteps, context.outputDir);
   const qaDocuments = await readQaDocuments(artifactRecords);
@@ -420,6 +440,7 @@ async function writeReviewBundle({ context, gitInfo, reviewSteps }) {
   const passFailSummary = buildPassFailSummary({
     artifactRecords,
     commandSteps,
+    dirtyTree,
     qaDocuments,
     surfaceCoverage,
   });
@@ -433,8 +454,10 @@ async function writeReviewBundle({ context, gitInfo, reviewSteps }) {
     artifactRecords,
     branch: gitInfo.branch,
     commandRunList: commandSteps.map(commandRunEntry),
+    dirtyTree,
     expectedCommands: reviewSteps.map((step) => [step.command, ...(step.args ?? [])].join(" ")),
     generatedAt: new Date().toISOString(),
+    gitStatusSnapshot: gitInfo.statusSnapshot,
     head: gitInfo.head,
     hostedCiRequired: false,
     outputDir: context.outputDir,
@@ -452,7 +475,9 @@ async function writeReviewBundle({ context, gitInfo, reviewSteps }) {
     waivers,
     workingTree: {
       dirty: gitInfo.dirty,
+      diffStat: gitInfo.diffStat,
       status: gitInfo.status,
+      untrackedFiles: gitInfo.untrackedFiles,
     },
   };
 
@@ -638,12 +663,14 @@ function normalizeSurfaceName(value) {
 export function buildPassFailSummary({
   artifactRecords,
   commandSteps,
+  dirtyTree = { dirty: false, gateStatus: "passed", waived: false },
   qaDocuments,
   surfaceCoverage,
 }) {
   const failedCommands = commandSteps.filter((step) => step.status !== "passed");
   const missingArtifacts = artifactRecords.filter((record) => !record.ok);
   const missingSurfaces = surfaceCoverage.filter((item) => item.status !== "covered");
+  const dirtyTreeFailed = dirtyTree.gateStatus === "failed";
   const qa = {
     accessibility: statusSummary(qaDocuments.accessibilityResults),
     actionAudit: statusSummary(qaDocuments.actionResults),
@@ -663,7 +690,10 @@ export function buildPassFailSummary({
     websiteExtractionQuality: statusSummary(qaDocuments.websiteExtractionQuality),
   };
   const status =
-    failedCommands.length === 0 && missingArtifacts.length === 0 && missingSurfaces.length === 0
+    !dirtyTreeFailed &&
+    failedCommands.length === 0 &&
+    missingArtifacts.length === 0 &&
+    missingSurfaces.length === 0
       ? "passed"
       : "failed";
   return {
@@ -677,6 +707,11 @@ export function buildPassFailSummary({
       failed: failedCommands.length,
       passed: commandSteps.length - failedCommands.length,
       total: commandSteps.length,
+    },
+    dirtyTree: {
+      dirty: dirtyTree.dirty,
+      status: dirtyTree.gateStatus,
+      waived: dirtyTree.waived,
     },
     qa,
     status,
@@ -719,6 +754,20 @@ function renderHeadText(manifest) {
     `generatedAt: ${manifest.generatedAt}`,
     `workingTreeDirtyAtStart: ${String(manifest.workingTree.dirty)}`,
   ];
+  const diffStat = manifest.workingTree.diffStat ?? [];
+  const untrackedFiles = manifest.workingTree.untrackedFiles ?? [];
+  if (diffStat.length > 0) {
+    lines.push("", "workingTreeDiffStat:");
+    for (const item of diffStat) {
+      lines.push(item);
+    }
+  }
+  if (untrackedFiles.length > 0) {
+    lines.push("", "untrackedFiles:");
+    for (const item of untrackedFiles) {
+      lines.push(item);
+    }
+  }
   if (manifest.workingTree.status.length > 0) {
     lines.push("", "workingTreeStatus:");
     for (const item of manifest.workingTree.status) {
@@ -766,12 +815,17 @@ export function renderReviewerSummary(manifest) {
     `- Surfaces: ${String(manifest.passFailSummary.surfaces.covered)}/${String(
       manifest.passFailSummary.surfaces.total,
     )} covered by the action inventory`,
+  ];
+
+  lines.push(...dirtyTreeSummarySection(manifest));
+
+  lines.push(
     "",
     "## Commands",
     "",
     "| Command | Status | Duration | Log |",
     "| --- | --- | ---: | --- |",
-  ];
+  );
 
   for (const step of manifest.commandRunList) {
     const log = path.relative(manifest.outputDir, step.logPath);
@@ -898,22 +952,138 @@ function artifactLink(record) {
   return `[${escapeMarkdown(record.relativePath)}](${encodeURI(record.relativePath)})`;
 }
 
+function dirtyTreeSummarySection(manifest) {
+  if (manifest.dirtyTree?.gateStatus === "passed") {
+    return [];
+  }
+  const statusLines = manifest.workingTree.status ?? [];
+  const untrackedFiles = manifest.workingTree.untrackedFiles ?? [];
+  const diffStat = manifest.workingTree.diffStat ?? [];
+  const lines = [
+    "",
+    manifest.dirtyTree?.waived
+      ? '## <span style="color: #b91c1c">Dirty Tree Waiver</span>'
+      : '## <span style="color: #b91c1c">Dirty Tree Gate Failed</span>',
+    "",
+  ];
+
+  if (manifest.dirtyTree?.waived) {
+    lines.push(
+      `<p style="border-left: 4px solid #dc2626; color: #991b1b; padding-left: 12px;"><strong>${manifest.dirtyTree.environmentVariable}=1</strong> was set, so this review evidence is explicitly waived despite a dirty tree at start.</p>`,
+    );
+  } else {
+    lines.push(
+      `<p style="border-left: 4px solid #dc2626; color: #991b1b; padding-left: 12px;">The working tree was dirty at start and <strong>${DIRTY_TREE_WAIVER_ENV}=1</strong> was not set, so review commands were not executed.</p>`,
+    );
+  }
+
+  lines.push("", `Commit hash: \`${manifest.gitStatusSnapshot?.commitHash ?? manifest.head}\``);
+  if (diffStat.length > 0) {
+    lines.push("", "Diff stat:", "", "```text", ...diffStat, "```");
+  }
+  if (untrackedFiles.length > 0) {
+    lines.push("", "Untracked files:");
+    for (const filePath of untrackedFiles) {
+      lines.push(`- ${escapeMarkdown(filePath)}`);
+    }
+  }
+  if (statusLines.length > 0) {
+    lines.push("", "Git status:");
+    for (const item of statusLines) {
+      lines.push(`- \`${escapeMarkdown(item)}\``);
+    }
+  }
+
+  return lines;
+}
+
 async function readGitInfo(cwd) {
-  const [branch, head, status] = await Promise.all([
+  const [branch, head, status, diffStat, untracked] = await Promise.all([
     execGit(["rev-parse", "--abbrev-ref", "HEAD"], cwd),
     execGit(["rev-parse", "HEAD"], cwd),
     execGit(["status", "--short"], cwd),
+    execGit(["diff", "--stat", "HEAD", "--"], cwd),
+    execGit(["ls-files", "--others", "--exclude-standard"], cwd),
   ]);
   const statusLines = status
     .split("\n")
     .map((line) => line.trimEnd())
     .filter(Boolean);
+  const diffStatLines = diffStat
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+  const untrackedFiles = untracked
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+  const cleanBranch = branch.trim();
+  const cleanHead = head.trim();
   return {
-    branch: branch.trim(),
+    branch: cleanBranch,
+    diffStat: diffStatLines,
     dirty: statusLines.length > 0,
-    head: head.trim(),
+    head: cleanHead,
     status: statusLines,
+    statusSnapshot: {
+      branch: cleanBranch,
+      commitHash: cleanHead,
+      diffStat: diffStatLines,
+      dirty: statusLines.length > 0,
+      statusShort: statusLines,
+      untrackedFiles,
+    },
+    untrackedFiles,
   };
+}
+
+export function isDirtyTreeWaiverEnabled(env = process.env) {
+  return env[DIRTY_TREE_WAIVER_ENV] === "1";
+}
+
+export function buildDirtyTreeReviewState({ allowDirty, gitInfo }) {
+  const dirty = Boolean(gitInfo.dirty);
+  const waived = dirty && allowDirty;
+  return {
+    allowDirty,
+    dirty,
+    environmentVariable: DIRTY_TREE_WAIVER_ENV,
+    gateStatus: dirty ? (waived ? "waived" : "failed") : "passed",
+    waived,
+  };
+}
+
+function reviewBundleThresholds(bundle) {
+  const dirtyTreeThreshold = {
+    actual: bundle.dirtyTree.gateStatus,
+    expected: "passed-or-waived",
+    metric: "dirtyTreeGate",
+    operator: "in",
+    passed: bundle.dirtyTree.gateStatus !== "failed",
+    threshold: "cleanWorkingTreeOrExplicitDirtyWaiver",
+  };
+  if (bundle.dirtyTree.gateStatus === "failed") {
+    return [dirtyTreeThreshold];
+  }
+  return [
+    dirtyTreeThreshold,
+    {
+      actual: bundle.passFailSummary.artifacts.missing,
+      expected: 0,
+      metric: "requiredReviewArtifactsMissing",
+      operator: "===",
+      passed: bundle.passFailSummary.artifacts.missing === 0,
+      threshold: "allRequiredReviewArtifactsPresent",
+    },
+    {
+      actual: bundle.passFailSummary.surfaces.missing.length,
+      expected: 0,
+      metric: "requiredReviewSurfacesMissing",
+      operator: "===",
+      passed: bundle.passFailSummary.surfaces.missing.length === 0,
+      threshold: "allRequiredReviewSurfacesCovered",
+    },
+  ];
 }
 
 async function execGit(args, cwd) {

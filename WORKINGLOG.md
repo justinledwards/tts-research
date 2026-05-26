@@ -693,3 +693,10 @@
 - [x] Scope filtered UI action audit gates to focused scenarios
 - [x] Record full UI gate residual Project Dashboard findings outside the More menu path
 - [x] Commit WP32 changes
+
+## 2026-05-26 13:55 CEST - WP42 Clean Review Evidence Gate
+- [x] Inspect review evidence scripts and local review wiring
+- [x] Add dirty-tree failure gate and explicit waiver summary
+- [x] Add git status metadata to review manifest
+- [x] Run local review and validation commands
+- [x] Commit WP42 changes

@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   REQUIRED_REVIEW_SURFACES,
+  buildDirtyTreeReviewState,
+  buildPassFailSummary,
+  isDirtyTreeWaiverEnabled,
   renderReviewerSummary,
   summarizeSurfaceCoverage,
 } from "./review-evidence.mjs";
@@ -113,7 +116,7 @@ test("renders reviewer summary with local-only evidence, surfaces, artifacts, an
       surface,
     })),
     waivers: [],
-    workingTree: { dirty: false },
+    workingTree: { diffStat: [], dirty: false, status: [], untrackedFiles: [] },
   };
 
   const markdown = renderReviewerSummary(manifest);
@@ -128,4 +131,110 @@ test("renders reviewer summary with local-only evidence, surfaces, artifacts, an
   for (const surface of REQUIRED_REVIEW_SURFACES) {
     assert.match(markdown, new RegExp(surface.replaceAll(" ", "\\s+")));
   }
+});
+
+test("dirty tree state requires explicit REVIEW_ALLOW_DIRTY waiver", () => {
+  assert.equal(isDirtyTreeWaiverEnabled({ REVIEW_ALLOW_DIRTY: "1" }), true);
+  assert.equal(isDirtyTreeWaiverEnabled({ REVIEW_ALLOW_DIRTY: "true" }), false);
+
+  const clean = buildDirtyTreeReviewState({
+    allowDirty: false,
+    gitInfo: { dirty: false },
+  });
+  assert.equal(clean.gateStatus, "passed");
+  assert.equal(clean.waived, false);
+
+  const dirty = buildDirtyTreeReviewState({
+    allowDirty: false,
+    gitInfo: { dirty: true },
+  });
+  assert.equal(dirty.gateStatus, "failed");
+  assert.equal(dirty.waived, false);
+
+  const waived = buildDirtyTreeReviewState({
+    allowDirty: true,
+    gitInfo: { dirty: true },
+  });
+  assert.equal(waived.gateStatus, "waived");
+  assert.equal(waived.waived, true);
+});
+
+test("pass/fail summary fails an unwaived dirty tree", () => {
+  const failed = buildPassFailSummary({
+    artifactRecords: [],
+    commandSteps: [],
+    dirtyTree: { dirty: true, gateStatus: "failed", waived: false },
+    qaDocuments: {},
+    surfaceCoverage: [],
+  });
+
+  assert.equal(failed.status, "failed");
+  assert.deepEqual(failed.dirtyTree, {
+    dirty: true,
+    status: "failed",
+    waived: false,
+  });
+
+  const waived = buildPassFailSummary({
+    artifactRecords: [],
+    commandSteps: [],
+    dirtyTree: { dirty: true, gateStatus: "waived", waived: true },
+    qaDocuments: {},
+    surfaceCoverage: [],
+  });
+
+  assert.equal(waived.status, "passed");
+  assert.deepEqual(waived.dirtyTree, {
+    dirty: true,
+    status: "waived",
+    waived: true,
+  });
+});
+
+test("renders red dirty tree waiver section with git status snapshot details", () => {
+  const outputDir = "/tmp/review";
+  const manifest = {
+    artifactRecords: [],
+    branch: "feature/review",
+    commandRunList: [],
+    dirtyTree: {
+      allowDirty: true,
+      dirty: true,
+      environmentVariable: "REVIEW_ALLOW_DIRTY",
+      gateStatus: "waived",
+      waived: true,
+    },
+    generatedAt: "2026-05-23T20:00:00.000Z",
+    gitStatusSnapshot: {
+      commitHash: "abc123",
+    },
+    head: "abc123",
+    outputDir,
+    passFailSummary: {
+      artifacts: { missingPaths: [], present: 0, total: 0 },
+      commands: { passed: 0, total: 0 },
+      qa: {},
+      surfaces: {
+        covered: 0,
+        total: 0,
+      },
+    },
+    status: "passed",
+    surfaceCoverage: [],
+    waivers: [],
+    workingTree: {
+      diffStat: [" scripts/validate-local/review-evidence.mjs | 42 +++++++++"],
+      dirty: true,
+      status: [" M scripts/validate-local/review-evidence.mjs", "?? scripts/new-gate.mjs"],
+      untrackedFiles: ["scripts/new-gate.mjs"],
+    },
+  };
+
+  const markdown = renderReviewerSummary(manifest);
+
+  assert.match(markdown, /color: #b91c1c/);
+  assert.match(markdown, /Dirty Tree Waiver/);
+  assert.match(markdown, /REVIEW_ALLOW_DIRTY=1/);
+  assert.match(markdown, /Commit hash: `abc123`/);
+  assert.match(markdown, /scripts\/new-gate\.mjs/);
 });
