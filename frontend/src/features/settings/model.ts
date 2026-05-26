@@ -191,6 +191,15 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
   },
   {
     description:
+      "Controls highlight granularity, style, follow motion, sync fallback, calibration, and degraded read-along display.",
+    group: "reader",
+    id: "readAlongPreferences",
+    label: "Read-along preferences",
+    layer: "advanced",
+    scope: "machine",
+  },
+  {
+    description:
       "Controls local memory for layout, theme, last project, reader preferences, Teleprompt returns, and panel pins.",
     group: "reader",
     id: "uiMemory",

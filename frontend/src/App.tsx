@@ -174,7 +174,14 @@ import {
 import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPreferences";
 import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
 import type { HeaderContextSummaryProps } from "./features/header";
-import type { HighlightMapV2 } from "./features/readalong";
+import {
+  DEFAULT_READ_ALONG_PREFERENCES,
+  clearStoredReadAlongPreferences,
+  loadReadAlongPreferences,
+  saveReadAlongPreferences,
+  type HighlightMapV2,
+  type ReadAlongPreferences,
+} from "./features/readalong";
 import { generatedAudioLifecycleFromJob } from "./features/playback/generatedAudioLifecycle";
 import { providerRuntimeLeavesLocalBoundary } from "./features/provider-capabilities/providerCapabilityLite";
 import {
@@ -2628,6 +2635,10 @@ export function App() {
         return DEFAULT_READER_ACCESSIBILITY_SETTINGS;
       }
     });
+  const [readAlongPreferences, setReadAlongPreferences] = useState<ReadAlongPreferences>(() =>
+    loadReadAlongPreferences(activeProjectId, uiMemory.rememberReaderPreferences),
+  );
+  const readAlongPreferencesProjectRef = useRef(activeProjectId);
   const [isImportingBookSource, setIsImportingBookSource] = useState(false);
   const [bookSourceError, setBookSourceError] = useState<string | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
@@ -2913,6 +2924,7 @@ export function App() {
       }
       if (preferenceId === "rememberReaderPreferences") {
         localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+        clearStoredReadAlongPreferences(activeProjectId);
       }
       if (preferenceId === "rememberTelepromptReturnTarget") {
         clearStoredTelepromptReturnMemory();
@@ -2921,51 +2933,58 @@ export function App() {
         localStorage.removeItem(THEME_STORAGE_KEY);
       }
     },
-    [],
+    [activeProjectId],
   );
-  const handleUiMemoryReset = useCallback((scope: UiMemoryResetScope) => {
-    if (scope === "reader") {
-      setReaderAccessibilitySettings(DEFAULT_READER_ACCESSIBILITY_SETTINGS);
-      localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
-      return;
-    }
-    if (scope === "workspace") {
+  const handleUiMemoryReset = useCallback(
+    (scope: UiMemoryResetScope) => {
+      if (scope === "reader") {
+        setReaderAccessibilitySettings(DEFAULT_READER_ACCESSIBILITY_SETTINGS);
+        setReadAlongPreferences(DEFAULT_READ_ALONG_PREFERENCES);
+        localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+        clearStoredReadAlongPreferences(activeProjectId);
+        return;
+      }
+      if (scope === "workspace") {
+        setUiMemory((currentMemory) => {
+          const nextMemory = resetWorkspaceUiMemory(currentMemory);
+          uiMemoryRef.current = nextMemory;
+          return nextMemory;
+        });
+        setWorkspaceContext((currentContext) => ({
+          ...currentContext,
+          layoutMode: defaultWorkspaceLayoutMode(),
+        }));
+        setActiveReviewPane("blocks");
+        return;
+      }
       setUiMemory((currentMemory) => {
-        const nextMemory = resetWorkspaceUiMemory(currentMemory);
+        const nextMemory = resetUiMemory(currentMemory, { preservePreferences: false });
         uiMemoryRef.current = nextMemory;
         return nextMemory;
+      });
+      clearStoredTelepromptReturnMemory();
+      localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+      localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+      clearStoredReadAlongPreferences(activeProjectId);
+      localStorage.removeItem(THEME_STORAGE_KEY);
+      setReaderAccessibilitySettings(DEFAULT_READER_ACCESSIBILITY_SETTINGS);
+      setReadAlongPreferences(DEFAULT_READ_ALONG_PREFERENCES);
+      setThemeName(DEFAULT_THEME_NAME);
+      setCinemaFocusOverrides({
+        book: null,
+        document: null,
+        website: null,
       });
       setWorkspaceContext((currentContext) => ({
         ...currentContext,
         layoutMode: defaultWorkspaceLayoutMode(),
+        telepromptReturnStage: "review",
       }));
       setActiveReviewPane("blocks");
-      return;
-    }
-    setUiMemory((currentMemory) => {
-      const nextMemory = resetUiMemory(currentMemory, { preservePreferences: false });
-      uiMemoryRef.current = nextMemory;
-      return nextMemory;
-    });
-    clearStoredTelepromptReturnMemory();
-    localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
-    localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
-    localStorage.removeItem(THEME_STORAGE_KEY);
-    setReaderAccessibilitySettings(DEFAULT_READER_ACCESSIBILITY_SETTINGS);
-    setThemeName(DEFAULT_THEME_NAME);
-    setCinemaFocusOverrides({
-      book: null,
-      document: null,
-      website: null,
-    });
-    setWorkspaceContext((currentContext) => ({
-      ...currentContext,
-      layoutMode: defaultWorkspaceLayoutMode(),
-      telepromptReturnStage: "review",
-    }));
-    setActiveReviewPane("blocks");
-    setUiMemoryResetSignal((currentSignal) => currentSignal + 1);
-  }, []);
+      setUiMemoryResetSignal((currentSignal) => currentSignal + 1);
+    },
+    [activeProjectId],
+  );
   const handleCinemaFocusStateChange = useCallback(
     (surfaceKind: "book" | "document" | "website", state: UiMemoryCinemaState) => {
       setCinemaFocusOverrides((currentOverrides) => {
@@ -4425,10 +4444,11 @@ export function App() {
     return buildUiMemoryExportJson({
       lastProjectId: activeProjectId,
       readerAccessibilitySettings,
+      readAlongPreferences,
       themeName,
       uiMemory,
     });
-  }, [activeProjectId, readerAccessibilitySettings, themeName, uiMemory]);
+  }, [activeProjectId, readAlongPreferences, readerAccessibilitySettings, themeName, uiMemory]);
 
   const handleUiMemoryImportPreferences = useCallback(
     async (json: string): Promise<UiMemoryImportApplyResult> => {
@@ -4439,6 +4459,9 @@ export function App() {
         setUiMemory(imported.uiMemory);
         if (imported.readerAccessibilitySettings) {
           setReaderAccessibilitySettings(imported.readerAccessibilitySettings);
+        }
+        if (imported.readAlongPreferences) {
+          setReadAlongPreferences(imported.readAlongPreferences);
         }
         if (imported.themeName) {
           setThemeName(imported.themeName);
@@ -5564,13 +5587,31 @@ export function App() {
   useEffect(() => {
     if (!uiMemory.rememberReaderPreferences) {
       localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+      clearStoredReadAlongPreferences(activeProjectId);
       return;
     }
     localStorage.setItem(
       READER_ACCESSIBILITY_STORAGE_KEY,
       JSON.stringify(readerAccessibilitySettings),
     );
-  }, [readerAccessibilitySettings, uiMemory.rememberReaderPreferences]);
+  }, [activeProjectId, readerAccessibilitySettings, uiMemory.rememberReaderPreferences]);
+
+  useEffect(() => {
+    const previousProjectId = readAlongPreferencesProjectRef.current;
+    if (previousProjectId !== activeProjectId && readAlongPreferences.scope === "project") {
+      readAlongPreferencesProjectRef.current = activeProjectId;
+      setReadAlongPreferences(
+        loadReadAlongPreferences(activeProjectId, uiMemory.rememberReaderPreferences),
+      );
+      return;
+    }
+    readAlongPreferencesProjectRef.current = activeProjectId;
+    saveReadAlongPreferences(
+      readAlongPreferences,
+      activeProjectId,
+      uiMemory.rememberReaderPreferences,
+    );
+  }, [activeProjectId, readAlongPreferences, uiMemory.rememberReaderPreferences]);
 
   useEffect(() => {
     if (!uiMemory.rememberTheme) {
@@ -6933,6 +6974,7 @@ export function App() {
             projectStorage={projectStorage}
             projectStorageError={projectStorageError}
             readerAccessibilitySettings={readerAccessibilitySettings}
+            readAlongPreferences={readAlongPreferences}
             researchModules={researchModules}
             runConfiguration={runConfiguration}
             selectedBookSource={selectedBookSource}
@@ -6957,6 +6999,7 @@ export function App() {
             onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
             onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
             onReaderAccessibilitySettingsChange={setReaderAccessibilitySettings}
+            onReadAlongPreferencesChange={setReadAlongPreferences}
             onRunConfigurationChange={setRunConfiguration}
             onSaveBookSourcePolicy={handleSaveBookSourcePolicy}
             onSavePreparedSourcePolicy={handleSavePreparedSourcePolicy}
@@ -7124,6 +7167,7 @@ export function App() {
             progress={selectedBookProgress ?? hashProgress}
             progressItems={projectProgress}
             resumeFallbackNotice={resumeFallbackNotice}
+            readAlongPreferences={readAlongPreferences}
             sourcePolicySaving={sourcePolicySavingKey === `book:${selectedBookSource.id}`}
             uiMemoryFocusState={resolveLiveCinemaFocusState("book")}
             uiMemoryResetSignal={uiMemoryResetSignal}
@@ -7192,6 +7236,7 @@ export function App() {
             policyProfiles={speechPolicyProfiles}
             progress={preparedSourceCinemaProgress}
             progressItems={projectProgress}
+            readAlongPreferences={readAlongPreferences}
             source={preparedSourceCinemaSource}
             sourcePolicySaving={
               sourcePolicySavingKey === `prepared:${preparedSourceCinemaSource.id}`

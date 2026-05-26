@@ -9,6 +9,7 @@ import {
   type ReadAlongHighlightSurface,
   type ReadAlongHighlightVisualMode,
 } from "./highlightVisualModes";
+import type { ReadAlongHighlightStyle } from "./readAlongPreferences";
 
 export interface HighlightRendererToken {
   key?: string;
@@ -33,6 +34,7 @@ export interface HighlightRendererProps {
   activeWordIndex?: number | null;
   classNameForWord?: (state: HighlightRendererWordState) => string | undefined;
   dataEffect?: string;
+  highlightStyle?: ReadAlongHighlightStyle;
   mode: ReadAlongHighlightVisualMode;
   nodeId?: string;
   phraseWordEnd?: number | null;
@@ -48,6 +50,7 @@ export function HighlightRenderer({
   activeWordIndex,
   classNameForWord,
   dataEffect,
+  highlightStyle,
   mode,
   nodeId,
   phraseWordEnd,
@@ -64,7 +67,10 @@ export function HighlightRenderer({
   const canHighlightPhrase = readAlongShouldHighlightPhrase(visualMode);
 
   return (
-    <span {...readAlongHighlightDataAttributes(visualMode, surface)}>
+    <span
+      {...readAlongHighlightDataAttributes(visualMode, surface)}
+      data-readalong-highlight-style={highlightStyle}
+    >
       {resolvedTokens.map((token, index) => {
         const phrase =
           canHighlightPhrase &&
@@ -90,7 +96,13 @@ export function HighlightRenderer({
           wordIndex: token.wordIndex,
         });
         const className = joinClasses(
-          readAlongHighlightClassName({ active, mode: visualMode, phrase, surface }),
+          readAlongHighlightClassName({
+            active,
+            highlightStyle,
+            mode: visualMode,
+            phrase,
+            surface,
+          }),
           classNameForWord?.(state),
         );
         return (

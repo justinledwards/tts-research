@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
+import { DEFAULT_READ_ALONG_PREFERENCES } from "../readalong";
 import { defaultUiMemoryState } from "../preferences";
 import { buildUiMemoryExportPayload, parseUiMemoryImportJson } from "./uiMemoryExport";
 
@@ -8,6 +9,7 @@ describe("UI memory export", () => {
     const payload = buildUiMemoryExportPayload({
       lastProjectId: "alpha",
       readerAccessibilitySettings: DEFAULT_READER_ACCESSIBILITY_SETTINGS,
+      readAlongPreferences: DEFAULT_READ_ALONG_PREFERENCES,
       themeName: "dark",
       uiMemory: defaultUiMemoryState({
         rememberLastProject: true,
@@ -22,6 +24,7 @@ describe("UI memory export", () => {
     expect(payload.preferences.readerAccessibilitySettings).toEqual(
       DEFAULT_READER_ACCESSIBILITY_SETTINGS,
     );
+    expect(payload.preferences.readAlongPreferences).toEqual(DEFAULT_READ_ALONG_PREFERENCES);
     expect(payload.omitted).toContain("generated audio");
     expect(payload.omitted).toContain("model paths");
     expect(payload.omitted).toContain("provider secrets");
@@ -32,6 +35,7 @@ describe("UI memory export", () => {
     const payload = buildUiMemoryExportPayload({
       lastProjectId: "alpha",
       readerAccessibilitySettings: DEFAULT_READER_ACCESSIBILITY_SETTINGS,
+      readAlongPreferences: DEFAULT_READ_ALONG_PREFERENCES,
       themeName: "dark",
       uiMemory: defaultUiMemoryState({
         rememberLastProject: false,
@@ -42,6 +46,7 @@ describe("UI memory export", () => {
 
     expect(payload.preferences.lastProjectId).toBeUndefined();
     expect(payload.preferences.readerAccessibilitySettings).toBeUndefined();
+    expect(payload.preferences.readAlongPreferences).toBeUndefined();
     expect(payload.preferences.themeName).toBeUndefined();
   });
 
@@ -51,6 +56,10 @@ describe("UI memory export", () => {
       readerAccessibilitySettings: {
         ...DEFAULT_READER_ACCESSIBILITY_SETTINGS,
         highContrast: true,
+      },
+      readAlongPreferences: {
+        ...DEFAULT_READ_ALONG_PREFERENCES,
+        highlightGranularity: "phrase",
       },
       themeName: "night",
       uiMemory: defaultUiMemoryState({
@@ -64,6 +73,7 @@ describe("UI memory export", () => {
 
     expect(imported.lastProjectId).toBe("alpha");
     expect(imported.readerAccessibilitySettings?.highContrast).toBe(true);
+    expect(imported.readAlongPreferences?.highlightGranularity).toBe("phrase");
     expect(imported.themeName).toBe("night");
     expect(() => parseUiMemoryImportJson("{}")).toThrow(/not a Voice Studio/i);
   });

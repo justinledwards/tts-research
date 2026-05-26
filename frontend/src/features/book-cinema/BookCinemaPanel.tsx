@@ -94,12 +94,18 @@ import {
   HighlightRenderer,
   ReadAlongResyncController,
   readAlongInvariantStatusLabel,
+  effectiveReadAlongPreferences,
+  readAlongCalibrationOffsetMs,
+  readAlongPreferenceDataAttributes,
   readAlongRuntimeStateLabel,
   readAlongVisualModeFromRuntime,
   type AlignmentStatus,
   type HighlightRendererToken,
+  type ReadAlongHighlightStyle,
   type ReadAlongHighlightVisualMode,
+  type ReadAlongPreferences,
   type ReadAlongRuntimeSnapshot,
+  type ReadAlongScrollFollow,
 } from "../readalong";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import type {
@@ -824,6 +830,7 @@ export function BookCinemaOverlay({
   policyProfiles,
   progress,
   progressItems,
+  readAlongPreferences,
   resumeFallbackNotice,
   scope,
   scopeContent,
@@ -870,6 +877,7 @@ export function BookCinemaOverlay({
   policyProfiles: SpeechPolicyProfile[];
   progress: PlaybackProgress | null;
   progressItems: PlaybackProgress[];
+  readAlongPreferences: ReadAlongPreferences;
   resumeFallbackNotice: string | null;
   sourcePolicySaving: boolean;
   uiMemoryFocusState: UiMemoryCinemaState;
@@ -911,6 +919,10 @@ export function BookCinemaOverlay({
 }>) {
   const normalizedScope = normalizeBookScopeForBook(book, scope);
   const normalizedAccessibility = normalizeReaderAccessibilitySettings(accessibilitySettings);
+  const effectiveReadAlong = effectiveReadAlongPreferences(
+    readAlongPreferences,
+    normalizedAccessibility,
+  );
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const [mobilePanel, setMobilePanel] = useState<BookCinemaMobilePanel | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -926,10 +938,13 @@ export function BookCinemaOverlay({
     [book, normalizedScope, scopeContent],
   );
   const scopedText = scopeContent?.text ?? bookScopeText(book, normalizedScope);
+  const calibratedPlaybackCursorSec =
+    playbackCursorSec +
+    readAlongCalibrationOffsetMs(effectiveReadAlong, job?.ttsEngine ?? job?.provider) / 1000;
   const activeWordIndex = resolveBookActiveWordIndex(
     book,
     job,
-    playbackCursorSec,
+    calibratedPlaybackCursorSec,
     normalizedScope,
     scopeContent,
   );
@@ -940,9 +955,9 @@ export function BookCinemaOverlay({
   const highlightCue = useMemo(
     () =>
       activeReadAlongTimingMap
-        ? resolveHighlightCue(activeReadAlongTimingMap, playbackCursorSec)
+        ? resolveHighlightCue(activeReadAlongTimingMap, calibratedPlaybackCursorSec)
         : null,
-    [activeReadAlongTimingMap, playbackCursorSec],
+    [activeReadAlongTimingMap, calibratedPlaybackCursorSec],
   );
   const readAlongRuntimeKey = `${activeBookJob?.id ?? "none"}:${
     activeReadAlongTimingMap?.jobId ?? "none"
@@ -961,7 +976,7 @@ export function BookCinemaOverlay({
   const readAlongRuntime = useMemo<ReadAlongRuntimeSnapshot>(
     () =>
       readAlongResyncController.resolve({
-        audioTimeSec: playbackCursorSec,
+        audioTimeSec: calibratedPlaybackCursorSec,
         generatedAudioState:
           activeBookJob && highlightMap && highlightMap.jobId !== activeBookJob.id
             ? "stale"
@@ -977,12 +992,12 @@ export function BookCinemaOverlay({
       highlightMap,
       playbackControls.isPlaying,
       playbackControls.isSeeking,
-      playbackCursorSec,
+      calibratedPlaybackCursorSec,
       readAlongResyncController,
     ],
   );
   const runtimeHighlightCue = readAlongRuntime.activeCue ?? highlightCue;
-  const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime);
+  const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime, effectiveReadAlong);
   const timingActiveWordIndex = runtimeHighlightCue?.activeWordIndex ?? activeWordIndex;
   const displayedActiveWordIndex = resolveDisplayedBookActiveWordIndex(
     timingActiveWordIndex,
@@ -1556,6 +1571,8 @@ export function BookCinemaOverlay({
           pointerLabel={pointerOption?.label ?? null}
           phraseWordEnd={phraseRange.end}
           phraseWordStart={phraseRange.start}
+          highlightStyle={effectiveReadAlong.highlightStyle}
+          scrollFollow={effectiveReadAlong.scrollFollow}
           readAlongVisualMode={readAlongVisualMode}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
         />
@@ -1742,7 +1759,10 @@ export function BookCinemaOverlay({
           onOutlineNavigate={handleWayfindingOutlineNavigate}
         />
       }
-      readerAttributes={readerDataAttributes(normalizedAccessibility)}
+      readerAttributes={{
+        ...readerDataAttributes(normalizedAccessibility),
+        ...readAlongPreferenceDataAttributes(effectiveReadAlong),
+      }}
       rootRef={dialogRef}
       surfaceKind={book.kind === "markdown" ? "document" : "book"}
       themeName={themeName}
@@ -2661,10 +2681,12 @@ function BookCinemaReaderStage({
   scopedText,
   scopeContent,
   accessibilitySettings,
+  highlightStyle,
   pointerLabel,
   phraseWordEnd,
   phraseWordStart,
   readAlongVisualMode,
+  scrollFollow,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -2675,10 +2697,12 @@ function BookCinemaReaderStage({
   scopedText: string;
   scopeContent: BookSourceScopeContent | null;
   accessibilitySettings: ReaderAccessibilitySettings;
+  highlightStyle: ReadAlongHighlightStyle;
   pointerLabel: string | null;
   phraseWordEnd?: number;
   phraseWordStart?: number;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
+  scrollFollow: ReadAlongScrollFollow;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   if (book.kind === "markdown") {
@@ -2693,11 +2717,13 @@ function BookCinemaReaderStage({
           scopedText={scopedText}
           scopeContent={scopeContent}
           accessibilitySettings={accessibilitySettings}
+          highlightStyle={highlightStyle}
           pointerLabel={pointerLabel}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           phraseWordEnd={phraseWordEnd}
           phraseWordStart={phraseWordStart}
           readAlongVisualMode={readAlongVisualMode}
+          scrollFollow={scrollFollow}
         />
       </Suspense>
     );
@@ -2711,9 +2737,11 @@ function BookCinemaReaderStage({
       scopedSpans={scopedSpans}
       scopedText={scopedText}
       accessibilitySettings={accessibilitySettings}
+      highlightStyle={highlightStyle}
       phraseWordEnd={phraseWordEnd}
       phraseWordStart={phraseWordStart}
       readAlongVisualMode={readAlongVisualMode}
+      scrollFollow={scrollFollow}
       onAccessibilitySettingsChange={onAccessibilitySettingsChange}
     />
   );
@@ -2727,9 +2755,11 @@ function BookPagedReaderStage({
   scopedSpans,
   scopedText,
   accessibilitySettings,
+  highlightStyle,
   phraseWordEnd,
   phraseWordStart,
   readAlongVisualMode,
+  scrollFollow,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -2739,9 +2769,11 @@ function BookPagedReaderStage({
   scopedSpans: NonNullable<BookSource["wordSpans"]>;
   scopedText: string;
   accessibilitySettings: ReaderAccessibilitySettings;
+  highlightStyle: ReadAlongHighlightStyle;
   phraseWordEnd?: number;
   phraseWordStart?: number;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
+  scrollFollow: ReadAlongScrollFollow;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const pageMetrics = useBookPageMetrics(accessibilitySettings);
@@ -2783,6 +2815,7 @@ function BookPagedReaderStage({
           book={book}
           fallbackText={index === 0 ? scopedText : ""}
           fontSizePx={pageMetrics.fontSizePx}
+          highlightStyle={highlightStyle}
           isActivePage={isReaderPageActive(page, activeWordIndex)}
           isRightPage={index === 1}
           lineHeightRatio={pageMetrics.lineHeightRatio}
@@ -2791,6 +2824,7 @@ function BookPagedReaderStage({
           phraseWordEnd={phraseWordEnd}
           phraseWordStart={phraseWordStart}
           readAlongVisualMode={readAlongVisualMode}
+          scrollFollow={scrollFollow}
           scope={scope}
           totalPages={pagination.totalPages}
         />
@@ -2801,6 +2835,7 @@ function BookPagedReaderStage({
           book={book}
           fallbackText=""
           fontSizePx={pageMetrics.fontSizePx}
+          highlightStyle={highlightStyle}
           isActivePage={false}
           isRightPage
           lineHeightRatio={pageMetrics.lineHeightRatio}
@@ -2808,6 +2843,7 @@ function BookPagedReaderStage({
           phraseWordEnd={phraseWordEnd}
           phraseWordStart={phraseWordStart}
           readAlongVisualMode={readAlongVisualMode}
+          scrollFollow={scrollFollow}
           scope={scope}
           totalPages={pagination.totalPages}
         />
@@ -2894,6 +2930,7 @@ function BookReaderPage({
   book,
   fallbackText,
   fontSizePx,
+  highlightStyle,
   isActivePage,
   isRightPage = false,
   lineHeightRatio,
@@ -2901,6 +2938,7 @@ function BookReaderPage({
   phraseWordEnd,
   phraseWordStart,
   readAlongVisualMode,
+  scrollFollow,
   scope,
   totalPages,
 }: Readonly<{
@@ -2908,6 +2946,7 @@ function BookReaderPage({
   book: BookSource;
   fallbackText: string;
   fontSizePx: number;
+  highlightStyle: ReadAlongHighlightStyle;
   isActivePage: boolean;
   isRightPage?: boolean;
   lineHeightRatio: number;
@@ -2915,6 +2954,7 @@ function BookReaderPage({
   phraseWordEnd?: number;
   phraseWordStart?: number;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
+  scrollFollow: ReadAlongScrollFollow;
   scope: BookScope;
   totalPages: number;
 }>) {
@@ -2946,6 +2986,7 @@ function BookReaderPage({
         isActivePage ? "book-cinema-page-shell--active" : ""
       }`}
       data-book-reader-page={page?.index ?? "blank"}
+      data-readalong-scroll-follow={scrollFollow}
     >
       <header className="book-cinema-page-header">
         <span className="truncate">{bookScopeLabel(scope)}</span>
@@ -2963,6 +3004,7 @@ function BookReaderPage({
         {page && pageTokens.length > 0 ? (
           <HighlightRenderer
             activeWordIndex={activeWordIndex}
+            highlightStyle={highlightStyle}
             mode={readAlongVisualMode}
             phraseWordEnd={phraseWordEnd}
             phraseWordStart={phraseWordStart}

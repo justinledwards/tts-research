@@ -37,12 +37,15 @@ import {
   AlignmentDiagnosticsPanel,
   AlignmentRepairEditor,
   alignmentRepairMapStaleness,
+  effectiveReadAlongPreferences,
   evaluatePreparedSourceReadAlongInvariant,
   HighlightRenderer,
   parseAlignmentRepairMap,
+  readAlongCalibrationOffsetMs,
   readAlongInvariantStatusLabel,
   readAlongAnchorForBlock,
   readAlongAnchorForWord,
+  readAlongPreferenceDataAttributes,
   readAlongShouldHighlightBlock,
   readAlongShouldHighlightWord,
   readAlongVisualModeFromRuntime,
@@ -51,7 +54,10 @@ import {
   serializeAlignmentRepairMap,
   type AlignmentRepairContext,
   type AlignmentRepairMap,
+  type ReadAlongHighlightStyle,
   type ReadAlongHighlightVisualMode,
+  type ReadAlongPreferences,
+  type ReadAlongScrollFollow,
 } from "../readalong";
 import {
   normalizeReaderAccessibilitySettings,
@@ -212,6 +218,7 @@ export function PreparedSourceCinemaOverlay({
   policyProfiles,
   progress,
   progressItems,
+  readAlongPreferences,
   source,
   surfaceKind,
   sourcePolicySaving,
@@ -257,6 +264,7 @@ export function PreparedSourceCinemaOverlay({
   policyProfiles: SpeechPolicyProfile[];
   progress: PlaybackProgress | null;
   progressItems: PlaybackProgress[];
+  readAlongPreferences: ReadAlongPreferences;
   source: PreparedSource;
   surfaceKind?: PreparedSourceCinemaKind;
   sourcePolicySaving: boolean;
@@ -287,6 +295,10 @@ export function PreparedSourceCinemaOverlay({
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const previousSourceIdRef = useRef(source.id);
   const normalizedAccessibility = normalizeReaderAccessibilitySettings(accessibilitySettings);
+  const effectiveReadAlong = effectiveReadAlongPreferences(
+    readAlongPreferences,
+    normalizedAccessibility,
+  );
   const [autoFollow, setAutoFollow] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<PreparedSourceCinemaMobilePanel | null>(null);
@@ -304,6 +316,9 @@ export function PreparedSourceCinemaOverlay({
     surfaceKind === "website" || preparedSourceCinemaKind(source) === "website";
   const effectivePlaybackCursorSec =
     playbackCursorSec > 0 ? playbackCursorSec : (progress?.currentTimeSec ?? playbackCursorSec);
+  const calibratedPlaybackCursorSec =
+    effectivePlaybackCursorSec +
+    readAlongCalibrationOffsetMs(effectiveReadAlong, job?.ttsEngine ?? job?.provider) / 1000;
   const effectiveActiveWordIndex =
     activeWordIndex > 0 ? activeWordIndex : (progress?.activeWordIndex ?? activeWordIndex);
   const alignmentRepairContext = useMemo(
@@ -430,7 +445,7 @@ export function PreparedSourceCinemaOverlay({
   const readAlongRuntime = useMemo(
     () =>
       resolveReadAlongRuntimeSnapshot({
-        audioTimeSec: effectivePlaybackCursorSec,
+        audioTimeSec: calibratedPlaybackCursorSec,
         generatedAudioState,
         highlightMap: null,
         isPaused: !playbackControls.isPlaying,
@@ -438,13 +453,13 @@ export function PreparedSourceCinemaOverlay({
         isSeeking: playbackControls.isSeeking,
       }),
     [
-      effectivePlaybackCursorSec,
+      calibratedPlaybackCursorSec,
       generatedAudioState,
       playbackControls.isPlaying,
       playbackControls.isSeeking,
     ],
   );
-  const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime);
+  const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime, effectiveReadAlong);
   const readAlongReport = useMemo(
     () =>
       evaluatePreparedSourceReadAlongInvariant({
@@ -863,10 +878,12 @@ export function PreparedSourceCinemaOverlay({
           autoFollow={autoFollow}
           accessibilitySettings={normalizedAccessibility}
           canvasFirst={cinemaFocus.layoutState.canvasFirst}
+          highlightStyle={effectiveReadAlong.highlightStyle}
           isFullscreen={isFullscreen}
           readAlongVisualMode={readAlongVisualMode}
           rendererLifecycle={rendererLifecycle}
           rendererRetryKey={rendererRetryKey}
+          scrollFollow={effectiveReadAlong.scrollFollow}
           source={source}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           onAutoFollowChange={setAutoFollow}
@@ -1059,7 +1076,10 @@ export function PreparedSourceCinemaOverlay({
           onResumeProgress={onResumeProgress}
         />
       }
-      readerAttributes={readerDataAttributes(normalizedAccessibility)}
+      readerAttributes={{
+        ...readerDataAttributes(normalizedAccessibility),
+        ...readAlongPreferenceDataAttributes(effectiveReadAlong),
+      }}
       rootRef={dialogRef}
       rendererLifecycle={rendererLifecycle}
       surfaceKind={isWebsiteCinema ? "website" : "document"}
@@ -1323,10 +1343,12 @@ function PreparedSourceCinemaReader({
   accessibilitySettings,
   autoFollow,
   canvasFirst,
+  highlightStyle,
   isFullscreen,
   readAlongVisualMode,
   rendererLifecycle,
   rendererRetryKey,
+  scrollFollow,
   source,
   onAccessibilitySettingsChange,
   onAutoFollowChange,
@@ -1340,10 +1362,12 @@ function PreparedSourceCinemaReader({
   accessibilitySettings: ReaderAccessibilitySettings;
   autoFollow: boolean;
   canvasFirst: boolean;
+  highlightStyle: ReadAlongHighlightStyle;
   isFullscreen: boolean;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   rendererLifecycle: CinemaRendererLifecycleState;
   rendererRetryKey: number;
+  scrollFollow: ReadAlongScrollFollow;
   source: PreparedSource;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onAutoFollowChange: (enabled: boolean) => void;
@@ -1438,9 +1462,11 @@ function PreparedSourceCinemaReader({
                   : null
               }
               block={block}
+              highlightStyle={highlightStyle}
               isActive={block.id === activeBlockId}
               key={block.id}
               readAlongVisualMode={readAlongVisualMode}
+              scrollFollow={scrollFollow}
               sourceId={source.id}
               surface={preparedSourceCinemaKind(source) === "website" ? "website" : "document"}
             />
@@ -1509,6 +1535,7 @@ function PreparedSourceCinemaReader({
         ".markdown-cinema-block-active",
       ],
       mode: readAlongVisualMode,
+      scrollFollow,
       settings: accessibilitySettings,
       surface: preparedSourceCinemaKind(source) === "website" ? "website" : "document",
     });
@@ -1520,6 +1547,7 @@ function PreparedSourceCinemaReader({
     activeWordIndex,
     autoFollow,
     readAlongVisualMode,
+    scrollFollow,
     shouldHighlightWord,
     source,
   ]);
@@ -2132,15 +2160,19 @@ function TransportSettingPills({ items }: Readonly<{ items: string[] }>) {
 function PreparedSourceCinemaBlock({
   activeWordOffset,
   block,
+  highlightStyle,
   isActive,
   readAlongVisualMode,
+  scrollFollow,
   sourceId,
   surface,
 }: Readonly<{
   activeWordOffset: number | null;
   block: NarrationBlock;
+  highlightStyle: ReadAlongHighlightStyle;
   isActive: boolean;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
+  scrollFollow: ReadAlongScrollFollow;
   sourceId: string;
   surface: "document" | "website";
 }>) {
@@ -2156,6 +2188,7 @@ function PreparedSourceCinemaBlock({
   const content = renderPreparedSourceCinemaBlockContent({
     activeWordOffset,
     block,
+    highlightStyle,
     isActive,
     readAlongVisualMode,
     sourceId,
@@ -2169,6 +2202,7 @@ function PreparedSourceCinemaBlock({
           highlightActiveBlock ? "prepared-source-cinema-active" : ""
         }`}
         data-readalong-node-id={block.id}
+        data-readalong-scroll-follow={scrollFollow}
         data-readalong-source-id={sourceId}
         id={id}
         ref={ref as React.RefObject<HTMLHeadingElement>}
@@ -2184,6 +2218,7 @@ function PreparedSourceCinemaBlock({
           highlightActiveBlock ? "prepared-source-cinema-active" : ""
         }`}
         data-readalong-node-id={block.id}
+        data-readalong-scroll-follow={scrollFollow}
         data-readalong-source-id={sourceId}
         id={id}
         ref={ref as React.RefObject<HTMLHeadingElement>}
@@ -2198,6 +2233,7 @@ function PreparedSourceCinemaBlock({
         highlightActiveBlock ? "text-[var(--vs-text)]" : ""
       } ${highlightActiveBlock ? "prepared-source-cinema-active" : ""}`}
       data-readalong-node-id={block.id}
+      data-readalong-scroll-follow={scrollFollow}
       data-readalong-source-id={sourceId}
       id={id}
       ref={ref}
@@ -2210,6 +2246,7 @@ function PreparedSourceCinemaBlock({
 function renderPreparedSourceCinemaBlockContent({
   activeWordOffset,
   block,
+  highlightStyle,
   isActive,
   readAlongVisualMode,
   sourceId,
@@ -2218,6 +2255,7 @@ function renderPreparedSourceCinemaBlockContent({
 }: Readonly<{
   activeWordOffset: number | null;
   block: NarrationBlock;
+  highlightStyle: ReadAlongHighlightStyle;
   isActive: boolean;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   sourceId: string;
@@ -2249,6 +2287,7 @@ function renderPreparedSourceCinemaBlockContent({
   const words = (
     <HighlightRenderer
       activeWordIndex={activeWordOffset}
+      highlightStyle={highlightStyle}
       mode={readAlongVisualMode}
       nodeId={block.id}
       sourceId={sourceId}

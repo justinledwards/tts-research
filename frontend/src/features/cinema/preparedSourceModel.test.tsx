@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PreparedSourceCinemaOverlay } from "./PreparedSourceCinemaBase";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
+import { DEFAULT_READ_ALONG_PREFERENCES } from "../readalong";
 import { DEFAULT_SPEECH_POLICY_DEFINITION } from "../../speechPolicy";
 import { defaultUiMemoryState } from "../preferences";
 import {
@@ -278,6 +279,7 @@ describe("prepared source cinema helpers", () => {
         policyProfiles={DEFAULT_SPEECH_POLICY_DEFINITION.profiles}
         progress={null}
         progressItems={[]}
+        readAlongPreferences={DEFAULT_READ_ALONG_PREFERENCES}
         source={source}
         sourcePolicySaving={false}
         sources={[source]}

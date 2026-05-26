@@ -4,6 +4,11 @@ import {
   type ReaderAccessibilitySettings,
 } from "../reader-accessibility";
 import {
+  DEFAULT_READ_ALONG_PREFERENCES,
+  normalizeReadAlongPreferences,
+  type ReadAlongPreferences,
+} from "../readalong";
+import {
   DEFAULT_UI_MEMORY_PREFERENCES,
   normalizeUiMemoryState,
   persistableUiMemoryState,
@@ -19,6 +24,7 @@ export const UI_MEMORY_EXPORT_VERSION = 1;
 export interface UiMemoryExportInput {
   readonly lastProjectId: string;
   readonly readerAccessibilitySettings: ReaderAccessibilitySettings;
+  readonly readAlongPreferences: ReadAlongPreferences;
   readonly themeName: ThemeName;
   readonly uiMemory: UiMemoryState;
 }
@@ -30,6 +36,7 @@ export interface UiMemoryExportPayload {
   readonly preferences: {
     readonly lastProjectId?: string;
     readonly readerAccessibilitySettings?: ReaderAccessibilitySettings;
+    readonly readAlongPreferences?: ReadAlongPreferences;
     readonly themeName?: ThemeName;
     readonly uiMemory: UiMemoryState;
   };
@@ -39,6 +46,7 @@ export interface UiMemoryExportPayload {
 export interface UiMemoryImportResult {
   readonly lastProjectId?: string;
   readonly readerAccessibilitySettings?: ReaderAccessibilitySettings;
+  readonly readAlongPreferences?: ReadAlongPreferences;
   readonly themeName?: ThemeName;
   readonly uiMemory: UiMemoryState;
 }
@@ -53,6 +61,9 @@ export function buildUiMemoryExportPayload(input: UiMemoryExportInput): UiMemory
       lastProjectId: uiMemory.rememberLastProject ? cleanProjectId(input.lastProjectId) : undefined,
       readerAccessibilitySettings: uiMemory.rememberReaderPreferences
         ? normalizeReaderAccessibilitySettings(input.readerAccessibilitySettings)
+        : undefined,
+      readAlongPreferences: uiMemory.rememberReaderPreferences
+        ? normalizeReadAlongPreferences(input.readAlongPreferences)
         : undefined,
       themeName: uiMemory.rememberTheme ? normalizeThemeName(input.themeName) : undefined,
       uiMemory,
@@ -86,6 +97,7 @@ export function parseUiMemoryImportJson(json: string): UiMemoryImportResult {
   const result: {
     lastProjectId?: string;
     readerAccessibilitySettings?: ReaderAccessibilitySettings;
+    readAlongPreferences?: ReadAlongPreferences;
     themeName?: ThemeName;
     uiMemory: UiMemoryState;
   } = {
@@ -99,6 +111,9 @@ export function parseUiMemoryImportJson(json: string): UiMemoryImportResult {
       preferences.readerAccessibilitySettings,
     );
   }
+  if (importedUiMemory.rememberReaderPreferences && preferences.readAlongPreferences) {
+    result.readAlongPreferences = normalizeReadAlongPreferences(preferences.readAlongPreferences);
+  }
   if (importedUiMemory.rememberLastProject && preferences.lastProjectId) {
     result.lastProjectId = cleanProjectId(preferences.lastProjectId);
   }
@@ -108,6 +123,7 @@ export function parseUiMemoryImportJson(json: string): UiMemoryImportResult {
 export function defaultUiMemoryImportResult(): UiMemoryImportResult {
   return {
     readerAccessibilitySettings: DEFAULT_READER_ACCESSIBILITY_SETTINGS,
+    readAlongPreferences: DEFAULT_READ_ALONG_PREFERENCES,
     themeName: DEFAULT_THEME_NAME,
     uiMemory: normalizeUiMemoryState(DEFAULT_UI_MEMORY_PREFERENCES),
   };

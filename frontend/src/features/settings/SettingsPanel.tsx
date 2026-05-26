@@ -47,6 +47,7 @@ import {
   type TeleprompterEffectStyle,
   type TeleprompterHighlightSettings,
 } from "../../teleprompter";
+import type { ReadAlongPreferences } from "../readalong";
 import {
   bookSourceLifecycleEnvelope,
   preparedSourceLifecycleEnvelope,
@@ -89,6 +90,7 @@ import {
   type SettingsScope,
 } from "./model";
 import { ScopeBadge } from "./ScopeBadge";
+import { ReadAlongSettingsControls } from "./ReadAlongSettingsControls";
 
 const COMMON_PIPELINE_OPTIONS: (keyof PipelineOptions)[] = [
   "textPreprocess",
@@ -149,6 +151,7 @@ export function SettingsPanel({
   projectStorage,
   projectStorageError,
   readerAccessibilitySettings,
+  readAlongPreferences,
   researchModules,
   runConfiguration,
   selectedBookSource,
@@ -174,6 +177,7 @@ export function SettingsPanel({
   onCreateCustomSpeechPolicyProfile,
   onDeleteCustomSpeechPolicyProfile,
   onReaderAccessibilitySettingsChange,
+  onReadAlongPreferencesChange,
   onRunConfigurationChange,
   onSaveBookSourcePolicy,
   onSavePreparedSourcePolicy,
@@ -203,6 +207,7 @@ export function SettingsPanel({
   projectStorage: ProjectStorageSummary | null;
   projectStorageError: string | null;
   readerAccessibilitySettings: ReaderAccessibilitySettings;
+  readAlongPreferences: ReadAlongPreferences;
   researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
   selectedBookSource: BookSource | null;
@@ -232,6 +237,7 @@ export function SettingsPanel({
   ) => Promise<void>;
   onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
+  onReadAlongPreferencesChange: (settings: ReadAlongPreferences) => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onSaveBookSourcePolicy: (
     sourceId: string,
@@ -383,12 +389,14 @@ export function SettingsPanel({
               <ReaderSettingsGroup
                 highlightedCommandToken={highlightedCommandToken}
                 readerAccessibilitySettings={readerAccessibilitySettings}
+                readAlongPreferences={readAlongPreferences}
                 runConfiguration={runConfiguration}
                 shortcutPreferences={shortcutPreferences}
                 teleprompterSettings={teleprompterSettings}
                 themeName={themeName}
                 uiMemory={uiMemory}
                 onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
+                onReadAlongPreferencesChange={onReadAlongPreferencesChange}
                 onShortcutPreferencesChange={onShortcutPreferencesChange}
                 onShortcutPreferencesReset={onShortcutPreferencesReset}
                 onTeleprompterSettingsChange={onTeleprompterSettingsChange}
@@ -1001,12 +1009,14 @@ function PipelineToggles({
 function ReaderSettingsGroup({
   highlightedCommandToken,
   readerAccessibilitySettings,
+  readAlongPreferences,
   runConfiguration,
   shortcutPreferences,
   teleprompterSettings,
   themeName,
   uiMemory,
   onReaderAccessibilitySettingsChange,
+  onReadAlongPreferencesChange,
   onShortcutPreferencesChange,
   onShortcutPreferencesReset,
   onTeleprompterSettingsChange,
@@ -1018,12 +1028,14 @@ function ReaderSettingsGroup({
 }: Readonly<{
   highlightedCommandToken: string | null;
   readerAccessibilitySettings: ReaderAccessibilitySettings;
+  readAlongPreferences: ReadAlongPreferences;
   runConfiguration: RunConfiguration;
   shortcutPreferences: ShortcutPreferences;
   teleprompterSettings: TeleprompterHighlightSettings;
   themeName: ThemeName;
   uiMemory: UiMemoryState;
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
+  onReadAlongPreferencesChange: (settings: ReadAlongPreferences) => void;
   onShortcutPreferencesChange: (preferences: ShortcutPreferences) => void;
   onShortcutPreferencesReset: () => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
@@ -1040,6 +1052,7 @@ function ReaderSettingsGroup({
       commandTargetTokens={[
         "group-reader",
         "field-readerPreferences",
+        "field-readAlongPreferences",
         "field-uiMemory",
         "field-shortcuts",
         "scope-machine",
@@ -1059,6 +1072,12 @@ function ReaderSettingsGroup({
         settings={readerAccessibilitySettings}
         variant="panel"
         onChange={onReaderAccessibilitySettingsChange}
+      />
+      <ReadAlongSettingsControls
+        accessibilitySettings={readerAccessibilitySettings}
+        preferences={readAlongPreferences}
+        providerId={runConfiguration.ttsEngine}
+        onChange={onReadAlongPreferencesChange}
       />
       <ThemeSettingsControls themeName={themeName} onThemeChange={onThemeChange} />
       <UiMemoryPreferences

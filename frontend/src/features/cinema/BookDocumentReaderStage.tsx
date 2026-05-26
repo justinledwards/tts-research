@@ -16,7 +16,9 @@ import {
   readAlongShouldHighlightBlock,
   readAlongShouldHighlightWord,
   scrollReadAlongAnchor,
+  type ReadAlongHighlightStyle,
   type ReadAlongHighlightVisualMode,
+  type ReadAlongScrollFollow,
 } from "../readalong";
 import type {
   BookScope,
@@ -35,10 +37,12 @@ export function BookDocumentReaderStage({
   scopeContent,
   accessibilitySettings,
   canvasFirst = false,
+  highlightStyle,
   pointerLabel,
   phraseWordEnd,
   phraseWordStart,
   readAlongVisualMode = "word",
+  scrollFollow,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -49,10 +53,12 @@ export function BookDocumentReaderStage({
   scopeContent: BookSourceScopeContent | null;
   accessibilitySettings: ReaderAccessibilitySettings;
   canvasFirst?: boolean;
+  highlightStyle: ReadAlongHighlightStyle;
   pointerLabel: string | null;
   phraseWordEnd?: number;
   phraseWordStart?: number;
   readAlongVisualMode?: ReadAlongHighlightVisualMode;
+  scrollFollow: ReadAlongScrollFollow;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const readerRef = useRef<HTMLDivElement | null>(null);
@@ -92,6 +98,7 @@ export function BookDocumentReaderStage({
       autoFollow: true,
       fallbackSelectors: [".markdown-cinema-word-active", ".markdown-cinema-block-active"],
       mode: readAlongVisualMode,
+      scrollFollow,
       settings: accessibilitySettings,
       surface: "document",
     });
@@ -104,6 +111,7 @@ export function BookDocumentReaderStage({
     canHighlightWord,
     highlight.wordOffset,
     readAlongVisualMode,
+    scrollFollow,
   ]);
 
   useEffect(() => {
@@ -121,6 +129,10 @@ export function BookDocumentReaderStage({
     <ReaderCanvasFrame
       canvasFirst={canvasFirst}
       contentClassName="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
+      contentDataAttributes={{
+        "data-readalong-highlight-style": highlightStyle,
+        "data-readalong-scroll-follow": scrollFollow,
+      }}
       contentRef={readerRef}
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={

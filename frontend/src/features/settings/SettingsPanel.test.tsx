@@ -4,6 +4,7 @@ import { DEFAULT_SPEECH_POLICY_DEFINITION } from "../../speechPolicy";
 import { createRunConfiguration } from "../../runConfig";
 import { DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS } from "../../teleprompter";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
+import { DEFAULT_READ_ALONG_PREFERENCES } from "../readalong";
 import { defaultUiMemoryState } from "../preferences";
 import { DEFAULT_SHORTCUT_PREFERENCES } from "../shortcuts/shortcutRegistry";
 import { SettingsPanel } from "./SettingsPanel";
@@ -32,6 +33,7 @@ describe("SettingsPanel", () => {
         projectStorage={null}
         projectStorageError={null}
         readerAccessibilitySettings={DEFAULT_READER_ACCESSIBILITY_SETTINGS}
+        readAlongPreferences={DEFAULT_READ_ALONG_PREFERENCES}
         researchModules={[]}
         runConfiguration={createRunConfiguration("checkedMaster")}
         selectedBookSource={null}
@@ -57,6 +59,7 @@ describe("SettingsPanel", () => {
         onCreateCustomSpeechPolicyProfile={asyncNoop}
         onDeleteCustomSpeechPolicyProfile={asyncNoop}
         onReaderAccessibilitySettingsChange={noop}
+        onReadAlongPreferencesChange={noop}
         onRunConfigurationChange={noop}
         onSaveBookSourcePolicy={asyncNoop}
         onSavePreparedSourcePolicy={asyncNoop}

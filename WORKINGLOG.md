@@ -766,3 +766,11 @@
 - [x] Surface seam quality in Debug/Diagnostics
 - [x] Run WP48 validation commands
 - [x] Commit WP48 changes
+
+## 2026-05-26 23:23 CEST - WP49 Read-along Preferences
+- [x] Inspect settings, UI memory, accessibility, and read-along surfaces
+- [x] Add persisted read-along preference model and controls
+- [x] Add golden-minute preview sample and fallback behavior
+- [x] Apply high-contrast/reduced-motion highlight behavior
+- [x] Run WP49 validation commands
+- [x] Commit WP49 changes

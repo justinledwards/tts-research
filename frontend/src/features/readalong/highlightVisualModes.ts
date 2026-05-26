@@ -1,4 +1,10 @@
 import type { ReadAlongRuntimeSnapshot, ReadAlongVisualMode } from "./readAlongState";
+import {
+  normalizeReadAlongPreferences,
+  readAlongVisualModeFromPreferences,
+  type ReadAlongHighlightStyle,
+  type ReadAlongPreferences,
+} from "./readAlongPreferences";
 
 export type ReadAlongHighlightVisualMode =
   | "word"
@@ -12,6 +18,7 @@ export type ReadAlongHighlightSurface = "book" | "document" | "teleprompt" | "we
 
 export interface ReadAlongHighlightClassInput {
   active: boolean;
+  highlightStyle?: ReadAlongHighlightStyle;
   mode: ReadAlongHighlightVisualMode;
   phrase?: boolean;
   surface: ReadAlongHighlightSurface;
@@ -19,7 +26,11 @@ export interface ReadAlongHighlightClassInput {
 
 export function readAlongVisualModeFromRuntime(
   snapshot: Pick<ReadAlongRuntimeSnapshot, "mode" | "state"> | null | undefined,
+  preferences?: ReadAlongPreferences | null,
 ): ReadAlongHighlightVisualMode {
+  if (preferences) {
+    return normalizeReadAlongVisualMode(readAlongVisualModeFromPreferences(snapshot, preferences));
+  }
   if (!snapshot) {
     return "block";
   }
@@ -62,11 +73,18 @@ export function readAlongShouldHighlightBlock(mode: ReadAlongHighlightVisualMode
 
 export function readAlongHighlightClassName({
   active,
+  highlightStyle,
   mode,
   phrase = false,
   surface,
 }: ReadAlongHighlightClassInput): string {
   const classes = ["readalong-highlight", `readalong-highlight--${surface}`];
+  const normalizedStyle = highlightStyle
+    ? normalizeReadAlongPreferences({ highlightStyle }).highlightStyle
+    : null;
+  if (normalizedStyle) {
+    classes.push(`readalong-highlight-style--${normalizedStyle}`);
+  }
   if (phrase) {
     classes.push("readalong-highlight--phrase");
     if (surface === "book") {
