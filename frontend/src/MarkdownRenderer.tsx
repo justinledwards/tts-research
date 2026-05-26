@@ -12,6 +12,7 @@ import {
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { documentCinemaInlineArtifactPlugin } from "./features/document-cinema/rendering/inlineArtifacts";
+import { buildUiActionId } from "./features/ui-audit/actionIds";
 export { looksLikeMermaidDiagram } from "./markdownModel";
 
 export function MarkdownRenderer({
@@ -203,6 +204,12 @@ function DocumentInlineArtifactChip({
   const [copied, setCopied] = useState(false);
   const kindLabel = formatInlineArtifactKindLabel(artifactKind);
   const shortReference = compactInlineArtifactReference(referenceLabel);
+  const artifactActionId = buildUiActionId({
+    actionSlug: `${markerType || "marker"}-${referenceLabel || artifactKind}`,
+    contextId: artifactKind,
+    ownerId: "document-artifact",
+    surfaceId: "documentcinema",
+  });
   const copyValue = [
     kindLabel,
     referenceLabel ? `reference ${referenceLabel}` : "",
@@ -238,6 +245,8 @@ function DocumentInlineArtifactChip({
         data-speech-behavior={speechBehavior}
         data-speech-behavior-label={speechBehaviorLabel}
         data-speech-mode="skip"
+        data-testid={artifactActionId}
+        data-ui-action-id={artifactActionId}
         onClick={() => {
           setOpen((current) => !current);
         }}

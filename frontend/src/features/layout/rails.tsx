@@ -61,6 +61,7 @@ export function RailModeToolbar({
               data-command-id={meta.commandId}
               data-rail-mode-option={item}
               data-segmented-option={item}
+              data-testid={`ui-action-rail-${railLabelId(label)}-${item}`}
               key={item}
               onClick={() => {
                 onModeChange(item);
@@ -128,6 +129,7 @@ export function CompactRailToggle({
       data-compact-control="rail-toggle"
       data-compact-control-id={meta.id}
       data-expanded-state={meta.expandedState}
+      data-testid={`ui-action-compact-rail-${meta.id}-expand`}
       onClick={onExpand}
       title={meta.tooltip}
       type="button"
@@ -136,4 +138,12 @@ export function CompactRailToggle({
       <span className="compact-rail-toggle-label">{meta.visibleLabel}</span>
     </button>
   );
+}
+
+function railLabelId(label: string): string {
+  return label
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-|-$/g, "");
 }

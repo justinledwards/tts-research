@@ -1624,6 +1624,8 @@ export function BookCinemaOverlay({
               <select
                 aria-label={`Book scope: ${bookScopeLabel(normalizedScope)}`}
                 className="cinema-touch-target max-w-64 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold text-[var(--vs-text)] outline-none vs-border"
+                data-book-source-id={book.id}
+                data-testid="ui-action-book-cinema-scope"
                 onChange={(event) => {
                   const nextScope = scopeOptions.find(
                     (option) => option.key === event.currentTarget.value,
@@ -1645,6 +1647,8 @@ export function BookCinemaOverlay({
             <select
               aria-label="Book scope"
               className="cinema-touch-target hidden max-w-[9rem] rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-semibold outline-none vs-border"
+              data-book-source-id={book.id}
+              data-testid="ui-action-book-cinema-scope"
               onChange={(event) => {
                 const nextScope = scopeOptions.find(
                   (option) => option.key === event.currentTarget.value,
@@ -1883,6 +1887,8 @@ function BookCinemaSourceLibrary({
         <select
           aria-label={`Cinema source: ${bookSourceName(book)}`}
           className="cinema-touch-target min-w-0 rounded-md border bg-[var(--vs-raised)] px-2 text-sm font-medium outline-none vs-border"
+          data-book-source-id={book.id}
+          data-testid="ui-action-book-cinema-source"
           onChange={(event) => {
             onSelectBook(event.currentTarget.value);
           }}
@@ -1899,6 +1905,8 @@ function BookCinemaSourceLibrary({
       <div className="flex min-w-0 items-center gap-2">
         <button
           className="cinema-touch-target min-w-0 flex-1 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+          data-book-source-id={book.id}
+          data-testid="ui-action-book-cinema-select-file"
           disabled={isImporting}
           onClick={() => {
             inputRef.current?.click();
@@ -2190,6 +2198,8 @@ function BookCinemaMobileSheet({
           />
           <button
             className="cinema-touch-target rounded-md border px-3 text-sm font-semibold vs-border"
+            data-book-source-id={book.id}
+            data-testid="ui-action-book-cinema-inspect-structure"
             onClick={() => {
               onInspectStructure(book);
             }}

@@ -715,3 +715,10 @@
 - [x] Add focus target declarations where focus movement is expected
 - [x] Run WP44 validation commands
 - [x] Commit WP44 changes
+
+## 2026-05-26 15:57 CEST - WP45 Stable Test ID Completion
+- [x] Inspect missing stable ID evidence by surface
+- [x] Add shared deterministic action ID helpers
+- [x] Mark core and generated controls with stable IDs
+- [x] Update inventory stability reporting and thresholds
+- [x] Run WP45 validation commands

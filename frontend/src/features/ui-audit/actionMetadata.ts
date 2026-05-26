@@ -1,5 +1,6 @@
 import type { PlaybackOwner } from "../playback/playbackOwner";
 import { workspaceStageActionLabel } from "../workspace/stageActions";
+import { buildUiActionId, slugUiActionPart, uiActionSurfaceId } from "./actionIds";
 import type { UiActionClass, UiActionExpectedTransition, UiActionSurface } from "./actionScopes";
 
 export interface UiActionMetadata {
@@ -620,7 +621,10 @@ export function inferUiActionMetadata(input: UiActionMetadataInput): UiActionMet
     ? "disabled"
     : inferUiActionClass(label, input.role ?? undefined);
   const destructive = actionClass === "destructive" || isDestructiveLabel(label);
-  const generatedId = slugUiActionLabel(`${input.surface}-${label}`);
+  const generatedId = buildUiActionId({
+    actionSlug: slugUiActionPart(label),
+    surfaceId: uiActionSurfaceId(input.surface),
+  }).replace(/^ui-action-/, "");
   return {
     id: generatedId,
     testId: input.testId ?? `ui-action-${generatedId}`,
@@ -718,11 +722,7 @@ export function normalizeUiActionLabel(value: string): string {
 }
 
 export function slugUiActionLabel(value: string): string {
-  const slug = normalizeUiActionLabel(value)
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, "-")
-    .replaceAll(/^-|-$/g, "");
-  return slug || "control";
+  return slugUiActionPart(value);
 }
 
 function action(

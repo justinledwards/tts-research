@@ -1,3 +1,5 @@
+import { generatedUiActionId, slugUiActionPart } from "./ui-action-stable-ids.mjs";
+
 const interactiveSelector = [
   "button",
   "select",
@@ -66,6 +68,18 @@ export async function buildActionInventory(page, scenario) {
           element.getAttribute("data-playback-owner") ??
           element.closest("[data-playback-owner]")?.getAttribute("data-playback-owner") ??
           null;
+        const commandId =
+          element.getAttribute("data-command-id") ??
+          element.closest("[data-command-id]")?.getAttribute("data-command-id") ??
+          null;
+        const railModeToolbar =
+          element.closest("[data-rail-mode-toolbar]")?.getAttribute("data-rail-mode-toolbar") ??
+          null;
+        const railModeOption = element.getAttribute("data-rail-mode-option");
+        const segmentedControl =
+          element.closest("[data-segmented-control]")?.getAttribute("data-segmented-control") ??
+          null;
+        const segmentedOption = element.getAttribute("data-segmented-option");
         const capabilityGate =
           element.getAttribute("data-provider-capability") ??
           element.closest("[data-provider-capability]")?.getAttribute("data-provider-capability") ??
@@ -99,9 +113,22 @@ export async function buildActionInventory(page, scenario) {
             element.getAttribute("data-capability-reason") ??
             element.closest("[data-capability-reason]")?.getAttribute("data-capability-reason") ??
             null,
+          commandId,
+          compactControlId:
+            element.getAttribute("data-compact-control-id") ??
+            element.closest("[data-compact-control-id]")?.getAttribute("data-compact-control-id") ??
+            null,
           cssPath: cssPathFor(element),
           disabled: isDisabled(element),
           disabledReason: disabledReasonFor(element),
+          explicitActionId:
+            element.getAttribute("data-ui-action-id") ??
+            element.getAttribute("data-action-id") ??
+            null,
+          actionSlug:
+            element.getAttribute("data-ui-action-slug") ??
+            element.getAttribute("data-action-slug") ??
+            null,
           focusTarget:
             element.getAttribute("data-ui-focus-target") ??
             element.getAttribute("data-ui-action-focus-target") ??
@@ -126,6 +153,12 @@ export async function buildActionInventory(page, scenario) {
             element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
               ? element.placeholder
               : null,
+          projectId:
+            element.getAttribute("data-ui-project-id") ??
+            element.closest("[data-ui-project-id]")?.getAttribute("data-ui-project-id") ??
+            element.getAttribute("data-project-id") ??
+            element.closest("[data-project-id]")?.getAttribute("data-project-id") ??
+            null,
           rect: {
             height: Math.round(rect.height),
             width: Math.round(rect.width),
@@ -143,11 +176,37 @@ export async function buildActionInventory(page, scenario) {
           playbackPrimary:
             element.getAttribute("data-playback-primary") === "true" ||
             element.closest("[data-playback-primary='true']") !== null,
+          railModeIdentity:
+            railModeToolbar && railModeOption ? `${railModeToolbar}:${railModeOption}` : null,
           scenarioId,
+          segmentedIdentity:
+            segmentedControl && segmentedOption ? `${segmentedControl}:${segmentedOption}` : null,
+          sourceId:
+            element.getAttribute("data-ui-source-id") ??
+            element.closest("[data-ui-source-id]")?.getAttribute("data-ui-source-id") ??
+            element.getAttribute("data-source-id") ??
+            element.closest("[data-source-id]")?.getAttribute("data-source-id") ??
+            null,
+          bookSourceId:
+            element.getAttribute("data-book-source-id") ??
+            element.closest("[data-book-source-id]")?.getAttribute("data-book-source-id") ??
+            null,
+          preparedSourceId:
+            element.getAttribute("data-prepared-source-id") ??
+            element.closest("[data-prepared-source-id]")?.getAttribute("data-prepared-source-id") ??
+            null,
+          stageId:
+            element.getAttribute("data-ui-stage-id") ??
+            element.closest("[data-ui-stage-id]")?.getAttribute("data-ui-stage-id") ??
+            null,
           surface:
             element.getAttribute("data-ui-action-surface") ??
             element.closest("[data-ui-action-surface]")?.getAttribute("data-ui-action-surface") ??
             surface,
+          surfaceId:
+            element.getAttribute("data-ui-surface-id") ??
+            element.closest("[data-ui-surface-id]")?.getAttribute("data-ui-surface-id") ??
+            null,
           tagName: element.tagName.toLowerCase(),
           testId: element.getAttribute("data-testid"),
           text: normalizeText(element.textContent ?? ""),
@@ -391,6 +450,20 @@ export async function buildActionInventory(page, scenario) {
   );
 
   const counters = new Map();
+  const stableFingerprints = rawActions.map((rawAction) => {
+    const label =
+      rawAction.accessibleName ||
+      rawAction.label ||
+      rawAction.visibleLabel ||
+      rawAction.text ||
+      rawAction.title ||
+      "Unlabeled control";
+    return stableActionFingerprint(rawAction, label);
+  });
+  const stableFingerprintCounts = stableFingerprints.reduce((counts, fingerprint) => {
+    counts.set(fingerprint, (counts.get(fingerprint) ?? 0) + 1);
+    return counts;
+  }, new Map());
   return rawActions.map((rawAction) => {
     const visibleLabel =
       rawAction.visibleLabel || rawAction.text || rawAction.title || rawAction.label || "";
@@ -410,13 +483,32 @@ export async function buildActionInventory(page, scenario) {
     ].join("|");
     const matchIndex = counters.get(fingerprint) ?? 0;
     counters.set(fingerprint, matchIndex + 1);
-    const generatedTestId = `ui-action-${slug(`${rawAction.surface}-${label}-${matchIndex + 1}`)}`;
+    const stableFingerprint = stableActionFingerprint(rawAction, label);
+    const stableGenerated =
+      stableFingerprintCounts.get(stableFingerprint) === 1 &&
+      rawAction.surface &&
+      label !== "Unlabeled control";
+    const generatedAction = generatedUiActionId(rawAction, {
+      label,
+      matchIndex,
+      stable: stableGenerated,
+    });
+    const explicitActionId = rawAction.explicitActionId ?? rawAction.testId ?? null;
+    const actionId = explicitActionId ?? generatedAction.id;
+    const stableIdKind = rawAction.testId
+      ? "explicit-testid"
+      : rawAction.explicitActionId
+        ? "explicit-action-id"
+        : stableGenerated
+          ? "generated-stable"
+          : "generated-unstable";
     const owner = rawAction.owner ?? ownerFor(rawAction.surface, actionClass);
     const metadataIssues = metadataIssuesFor({
       ...rawAction,
       actionClass,
       destructive,
-      generatedTestId,
+      generatedTestId: generatedAction.id,
+      hasStableActionId: stableIdKind !== "generated-unstable",
       label,
       owner,
     });
@@ -427,7 +519,7 @@ export async function buildActionInventory(page, scenario) {
       ...rawAction,
       actionClass,
       actionClassification: destructive ? "destructive" : "non-destructive",
-      actionId: rawAction.testId ?? generatedTestId,
+      actionId,
       accessibleName,
       destructive,
       enabledDisabledReason,
@@ -439,7 +531,10 @@ export async function buildActionInventory(page, scenario) {
             role: rawAction.role,
             tagName: rawAction.tagName,
           }),
-      generatedTestId,
+      generatedTestId: generatedAction.id,
+      hasStableActionId: stableIdKind !== "generated-unstable",
+      stableIdContext: generatedAction.context,
+      stableIdKind,
       hasStableTestId: Boolean(rawAction.testId),
       keyboardPath: keyboardPathFor(rawAction),
       label,
@@ -461,8 +556,10 @@ export async function exerciseAction(page, action, { activationMode }) {
     destructive: action.destructive,
     expectedTransition: action.expectedTransition,
     focusTarget: action.focusTarget,
+    hasStableActionId: action.hasStableActionId,
     label: action.label,
     scenarioId: action.scenarioId,
+    stableIdKind: action.stableIdKind,
     surface: action.surface,
     visibleLabel: action.visibleLabel,
   };
@@ -733,7 +830,13 @@ function expectedTransitionFor({ actionClass, label, role, tagName }) {
 
 function locateAction(page, action) {
   if (action.testId) {
-    return page.getByTestId(action.testId).first();
+    return page.getByTestId(action.testId).filter({ visible: true }).first();
+  }
+  if (action.explicitActionId) {
+    return page
+      .locator(`[data-ui-action-id='${cssString(action.explicitActionId)}']`)
+      .filter({ visible: true })
+      .first();
   }
   if (action.cssPath) {
     return page.locator(action.cssPath).first();
@@ -1040,6 +1143,9 @@ function metadataIssuesFor(action) {
   if (!action.owner) {
     issues.push("missing-owner");
   }
+  if (!action.hasStableActionId) {
+    issues.push("missing-stable-action-id");
+  }
   if (
     (!action.label && !action.visibleLabel && !action.accessibleName) ||
     action.label === "Unlabeled control"
@@ -1118,9 +1224,22 @@ function normalize(value) {
   return String(value).replaceAll(/\s+/g, " ").trim();
 }
 
-function slug(value) {
-  return normalize(value)
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, "-")
-    .replaceAll(/^-|-$/g, "");
+function stableActionFingerprint(rawAction, label) {
+  return [
+    rawAction.scenarioId,
+    rawAction.surface,
+    rawAction.owner ?? rawAction.playbackOwner ?? "",
+    rawAction.explicitActionId ?? rawAction.testId ?? "",
+    rawAction.commandId ?? "",
+    rawAction.playbackAction ?? "",
+    rawAction.railModeIdentity ?? "",
+    rawAction.compactControlId ?? "",
+    rawAction.segmentedIdentity ?? "",
+    rawAction.sourceId ?? rawAction.bookSourceId ?? rawAction.preparedSourceId ?? "",
+    rawAction.projectId ?? "",
+    rawAction.stageId ?? "",
+    rawAction.role ?? rawAction.tagName ?? "",
+    rawAction.type ?? "",
+    slugUiActionPart(rawAction.actionSlug ?? label),
+  ].join("|");
 }

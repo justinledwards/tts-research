@@ -51,6 +51,7 @@ export function CinemaFocusModeToolbar({
         <Button
           aria-pressed={mode === item}
           className="min-w-0 rounded px-2"
+          data-testid={`ui-action-cinema-focus-${item}`}
           key={item}
           onClick={() => {
             onModeChange(item);

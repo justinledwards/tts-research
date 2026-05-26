@@ -75,7 +75,13 @@ export function TopProductBar({
   return (
     <header className="vs-raised grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 lg:px-4 2xl:grid-cols-[minmax(205px,auto)_minmax(330px,0.9fr)_auto]">
       <div className="flex min-w-0 items-center gap-2.5">
-        <Button aria-label="Open workspace" onClick={onWorkspaceOpen} size="icon" variant="ghost">
+        <Button
+          aria-label="Open workspace"
+          data-testid="ui-action-workspace-open-menu"
+          onClick={onWorkspaceOpen}
+          size="icon"
+          variant="ghost"
+        >
           <MenuIcon />
         </Button>
         <div className="min-w-0 md:shrink-0">
@@ -89,6 +95,7 @@ export function TopProductBar({
         <Button
           align="start"
           className="hidden grid-cols-[auto_auto] items-center gap-2 2xl:grid"
+          data-testid="ui-action-workspace-open"
           onClick={onWorkspaceOpen}
           size="md"
           variant="secondary"
@@ -161,8 +168,12 @@ export function TopProductBar({
           ariaLabel="Studio mode"
           className="min-w-[230px]"
           options={[
-            { label: "Narration", value: "narration" },
-            { label: "Voice Cloning", value: "voiceCloning" },
+            { label: "Narration", testId: "ui-action-studio-mode-narration", value: "narration" },
+            {
+              label: "Voice Cloning",
+              testId: "ui-action-studio-mode-voice-cloning",
+              value: "voiceCloning",
+            },
           ]}
           value={studioMode}
           onChange={onStudioModeChange}
@@ -172,9 +183,24 @@ export function TopProductBar({
           className="hidden min-w-[230px] xl:grid"
           columns={3}
           options={[
-            { ariaLabel: "Focus workspace layout", label: "Focus", value: "focus" },
-            { ariaLabel: "Balanced workspace layout", label: "Balanced", value: "balanced" },
-            { ariaLabel: "Full workspace layout", label: "Full", value: "full" },
+            {
+              ariaLabel: "Focus workspace layout",
+              label: "Focus",
+              testId: "ui-action-workspace-layout-focus",
+              value: "focus",
+            },
+            {
+              ariaLabel: "Balanced workspace layout",
+              label: "Balanced",
+              testId: "ui-action-workspace-layout-balanced",
+              value: "balanced",
+            },
+            {
+              ariaLabel: "Full workspace layout",
+              label: "Full",
+              testId: "ui-action-workspace-layout-full",
+              value: "full",
+            },
           ]}
           value={workspaceLayoutMode}
           onChange={onWorkspaceLayoutModeChange}

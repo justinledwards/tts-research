@@ -673,7 +673,7 @@ function collectUiActionAuditFindings(documents, auditStatus) {
   const noOpResults = failedResults.filter(isNoOpResult);
   const failedActivations = failedResults.filter((result) => !isNoOpResult(result));
   const duplicates = summaryFindings.duplicates ?? documents.actionInventory?.duplicates ?? [];
-  const missingStableTestIds = actions.filter((action) => !action.hasStableTestId);
+  const missingStableTestIds = actions.filter((action) => !hasStableActionId(action));
   const waivers = collectUiActionAuditWaivers(documents);
   const findings = [];
 
@@ -806,6 +806,10 @@ function collectUiActionAuditFindings(documents, auditStatus) {
   }
 
   return findings;
+}
+
+function hasStableActionId(action) {
+  return action.hasStableActionId ?? action.hasStableTestId;
 }
 
 function uiActionFinding({

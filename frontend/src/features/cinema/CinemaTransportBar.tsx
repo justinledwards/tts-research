@@ -11,6 +11,7 @@ import type { CinemaPlaybackState } from "./model";
 
 interface CinemaTransportButtonModel {
   disabled: boolean;
+  disabledReason?: string;
   icon?: ReactNode;
   label?: string;
   onClick: () => void;
@@ -282,6 +283,7 @@ function DesktopPlaybackTransport({
             aria-keyshortcuts="Home"
             className="h-11 gap-2"
             disabled={model.restart.disabled}
+            disabledReason={model.restart.disabledReason}
             onClick={model.restart.onClick}
             size="md"
             variant="secondary"
@@ -295,7 +297,9 @@ function DesktopPlaybackTransport({
             data-ui-action-owner="cinema"
             aria-keyshortcuts="ArrowLeft J"
             className="h-11 min-w-14 gap-1 px-3"
+            data-testid="ui-action-cinema-skip-backward"
             disabled={model.skipBackward.disabled}
+            disabledReason={model.skipBackward.disabledReason}
             onClick={model.skipBackward.onClick}
             size="md"
             variant="secondary"
@@ -307,6 +311,7 @@ function DesktopPlaybackTransport({
           {...playbackActionDataAttributes("play", lifecycle, { primary: true })}
           aria-keyshortcuts="Space K"
           className={`h-12 min-w-32 gap-2 rounded-full px-5 text-sm shadow-md ${model.primary.className}`}
+          data-testid="ui-action-cinema-play"
           disabled={model.primary.disabled}
           disabledReason={cinemaPrimaryDisabledReason(model, "play", lifecycle)}
           onClick={model.primary.onClick}
@@ -321,7 +326,9 @@ function DesktopPlaybackTransport({
             data-ui-action-owner="cinema"
             aria-keyshortcuts="ArrowRight L"
             className="h-11 min-w-14 gap-1 px-3"
+            data-testid="ui-action-cinema-skip-forward"
             disabled={model.skipForward.disabled}
+            disabledReason={model.skipForward.disabledReason}
             onClick={model.skipForward.onClick}
             size="md"
             variant="secondary"
@@ -344,7 +351,9 @@ function DesktopPlaybackTransport({
             data-ui-action-owner="cinema"
             aria-keyshortcuts="B"
             className="h-11"
+            data-testid="ui-action-cinema-bookmark"
             disabled={model.bookmark.disabled}
+            disabledReason={model.bookmark.disabledReason}
             onClick={model.bookmark.onClick}
             size="md"
             variant="secondary"
@@ -376,6 +385,7 @@ function ReaderDisplayPopoverButton({
         aria-haspopup="dialog"
         aria-label="Open reader display settings"
         className="h-11"
+        data-testid="ui-action-cinema-display-settings"
         onClick={popover.toggle}
         ref={popover.buttonRef}
         selected={popover.open}
@@ -441,6 +451,7 @@ function MobilePlaybackTransport({
         {visibility.skipBackward ? (
           <IconTransportButton
             disabled={model.skipBackward.disabled}
+            disabledReason={model.skipBackward.disabledReason}
             label={`-${READER_SEEK_SECONDS.toString()}s`}
             onClick={model.skipBackward.onClick}
             uiActionOwner="cinema"
@@ -454,6 +465,7 @@ function MobilePlaybackTransport({
           {...playbackActionDataAttributes("play", lifecycle, { primary: true })}
           aria-keyshortcuts="Space K"
           className={`col-span-2 h-16 gap-3 px-4 text-base shadow-lg ${model.primary.className}`}
+          data-testid="ui-action-cinema-play"
           disabled={model.primary.disabled}
           disabledReason={cinemaPrimaryDisabledReason(model, "play", lifecycle)}
           onClick={model.primary.onClick}
@@ -466,6 +478,7 @@ function MobilePlaybackTransport({
         {visibility.skipForward ? (
           <IconTransportButton
             disabled={model.skipForward.disabled}
+            disabledReason={model.skipForward.disabledReason}
             label={`+${READER_SEEK_SECONDS.toString()}s`}
             onClick={model.skipForward.onClick}
             uiActionOwner="cinema"
@@ -496,7 +509,9 @@ function MobilePlaybackTransport({
             data-ui-action-owner="cinema"
             aria-keyshortcuts="B"
             className="h-11"
+            data-testid="ui-action-cinema-bookmark"
             disabled={model.bookmark.disabled}
+            disabledReason={model.bookmark.disabledReason}
             onClick={model.bookmark.onClick}
             size="md"
             variant="secondary"
@@ -621,6 +636,7 @@ function PlaybackRateSelect({
       data-ui-action-owner="cinema"
       aria-label="Playback speed"
       className={`${fieldControlClassName} ${mobile ? "h-11 font-medium" : "h-11 font-semibold"}`}
+      data-testid="ui-action-cinema-playback-speed"
       disabled={model.playbackRate.disabled}
       onChange={(event) => {
         model.playbackRate.onChange?.(Number(event.currentTarget.value));
@@ -641,6 +657,7 @@ function IconTransportButton({
   ariaExpanded,
   children,
   disabled = false,
+  disabledReason,
   label,
   onClick,
   uiActionOwner,
@@ -649,6 +666,7 @@ function IconTransportButton({
   ariaExpanded?: boolean;
   children: ReactNode;
   disabled?: boolean;
+  disabledReason?: string;
   label: string;
   onClick: () => void;
   uiActionOwner?: string;
@@ -658,8 +676,10 @@ function IconTransportButton({
       aria-controls={ariaControls}
       aria-expanded={ariaExpanded}
       className="grid h-12 place-items-center"
+      data-testid={`ui-action-cinema-${labelId(label)}`}
       data-ui-action-owner={uiActionOwner}
       disabled={disabled}
+      disabledReason={disabledReason}
       onClick={onClick}
       size="icon"
       variant="secondary"
@@ -668,6 +688,16 @@ function IconTransportButton({
       <span className="sr-only">{label}</span>
     </Button>
   );
+}
+
+function labelId(label: string): string {
+  return label
+    .trim()
+    .toLowerCase()
+    .replaceAll("+", "plus")
+    .replaceAll("-", "minus")
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-|-$/g, "");
 }
 
 function shouldShowControl(control: { disabled: boolean; visible?: boolean }): boolean {

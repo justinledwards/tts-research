@@ -335,6 +335,7 @@ export function SettingsPanel({
               <Button
                 align="start"
                 className="grid gap-1 px-3 py-2"
+                data-testid={`settings-group-${group.id}`}
                 key={group.id}
                 onClick={() => {
                   setActiveGroup(group.id);
@@ -598,6 +599,7 @@ function QuickSettings({
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <QuickSelect
+          testId="settings-quick-output-intent"
           label="Output intent"
           scope="session"
           value={runConfiguration.runMode}
@@ -617,6 +619,7 @@ function QuickSettings({
           ))}
         </QuickSelect>
         <QuickSelect
+          testId="settings-quick-speed"
           label="Speed"
           scope="session"
           value={runConfiguration.performanceMode}
@@ -636,6 +639,7 @@ function QuickSettings({
         <QuickFact label="Voice" scope="session" value={selectedProfile?.name ?? "Default voice"} />
         <QuickFact label="Source" scope="source" value={activeSourceLabel} />
         <QuickSelect
+          testId="settings-quick-reader-scale"
           label="Reader scale"
           scope="machine"
           value={readerAccessibilitySettings.textScale}
@@ -653,6 +657,7 @@ function QuickSettings({
           ))}
         </QuickSelect>
         <QuickSelect
+          testId="settings-quick-theme"
           label="Theme"
           scope="machine"
           value={themeName}
@@ -667,6 +672,7 @@ function QuickSettings({
           ))}
         </QuickSelect>
         <QuickSelect
+          testId="settings-quick-basic-policy"
           label="Basic policy"
           scope="project"
           value={speechPolicyProfile}
@@ -688,6 +694,7 @@ function QuickSettings({
           ) : null}
         </QuickSelect>
         <QuickSelect
+          testId="settings-quick-engine"
           label="Engine"
           scope="session"
           value={kokoroEngineFamilyValue(runConfiguration.ttsEngine)}
@@ -749,6 +756,7 @@ function QuickSettings({
             <Button
               align="start"
               className="grid gap-1 px-3 py-2"
+              data-testid={`settings-quick-group-${group.id}`}
               key={group.id}
               onClick={() => {
                 onOpenGroup(group.id);
@@ -788,12 +796,14 @@ function QuickSelect({
   children,
   label,
   scope,
+  testId,
   value,
   onChange,
 }: Readonly<{
   children: ReactNode;
   label: string;
   scope: SettingsScope;
+  testId: string;
   value: string;
   onChange: (value: string) => void;
 }>) {
@@ -805,6 +815,7 @@ function QuickSelect({
       </span>
       <select
         className={`${fieldControlClassName} min-w-0`}
+        data-testid={testId}
         onChange={(event) => {
           onChange(event.currentTarget.value);
         }}
@@ -1313,6 +1324,7 @@ function VoiceSettingsGroup({
       <QuickSelect
         label="Narration engine"
         scope="session"
+        testId="settings-voices-narration-engine"
         value={kokoroEngineFamilyValue(runConfiguration.ttsEngine)}
         onChange={(value) => {
           onRunConfigurationChange(applyRunEngineSelection(runConfiguration, value, ttsEngines));

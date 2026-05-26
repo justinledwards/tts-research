@@ -2009,6 +2009,12 @@ async function pageIssuesForReport(issues) {
 }
 
 function summarizeInventory(actions) {
+  const stableIdCoverageBySurface = Object.fromEntries(
+    [...new Set(actions.map((action) => action.surface))].map((surface) => {
+      const surfaceActions = actions.filter((action) => action.surface === surface);
+      return [surface, stableIdCoverageSummary(surfaceActions)];
+    }),
+  );
   return {
     advancedOperatorControls: actions.filter((action) => action.operatorAdvanced).length,
     capabilityGatedDisabled: actions.filter((action) => action.disabled && action.capabilityGated)
@@ -2018,7 +2024,18 @@ function summarizeInventory(actions) {
     ).length,
     destructive: actions.filter((action) => action.destructive).length,
     disabled: actions.filter((action) => action.disabled).length,
-    missingStableTestIds: actions.filter((action) => !action.hasStableTestId).length,
+    explicitStableTestIds: actions.filter((action) => action.stableIdKind === "explicit-testid")
+      .length,
+    explicitStableActionIds: actions.filter(
+      (action) => action.stableIdKind === "explicit-action-id",
+    ).length,
+    generatedStableActionIds: actions.filter((action) => action.stableIdKind === "generated-stable")
+      .length,
+    generatedUnstableActionIds: actions.filter(
+      (action) => action.stableIdKind === "generated-unstable",
+    ).length,
+    missingStableTestIds: actions.filter((action) => !hasStableActionId(action)).length,
+    stableIdCoverageBySurface,
     surfaces: Object.fromEntries(
       [...new Set(actions.map((action) => action.surface))].map((surface) => [
         surface,
@@ -2027,6 +2044,23 @@ function summarizeInventory(actions) {
     ),
     total: actions.length,
   };
+}
+
+function stableIdCoverageSummary(actions) {
+  return {
+    explicitActionId: actions.filter((action) => action.stableIdKind === "explicit-action-id")
+      .length,
+    explicitTestId: actions.filter((action) => action.stableIdKind === "explicit-testid").length,
+    generatedStable: actions.filter((action) => action.stableIdKind === "generated-stable").length,
+    generatedUnstable: actions.filter((action) => action.stableIdKind === "generated-unstable")
+      .length,
+    missingStableActionId: actions.filter((action) => !hasStableActionId(action)).length,
+    total: actions.length,
+  };
+}
+
+function hasStableActionId(action) {
+  return action.hasStableActionId ?? action.hasStableTestId;
 }
 
 function summarizeResults(results) {
@@ -2123,7 +2157,7 @@ function summarizeUiActionReviewGate({
   inventoryOnly,
   resultsStatus,
 }) {
-  const missingStableTestIds = actions.filter((action) => !action.hasStableTestId).length;
+  const missingStableTestIds = actions.filter((action) => !hasStableActionId(action)).length;
   const noOpControls = gateFindings.failedResults.filter((result) =>
     /no observable result/i.test(result.outcome ?? result.reason ?? ""),
   ).length;

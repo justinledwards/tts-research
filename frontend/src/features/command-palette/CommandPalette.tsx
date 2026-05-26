@@ -100,6 +100,7 @@ export function CommandPalette({
                     ? "bg-orange-500 text-white"
                     : "vs-muted hover:bg-[var(--vs-raised)]"
                 }`}
+                data-testid="ui-action-command-palette-view-commands"
                 onClick={() => {
                   onViewChange("commands");
                 }}
@@ -114,6 +115,7 @@ export function CommandPalette({
                     ? "bg-orange-500 text-white"
                     : "vs-muted hover:bg-[var(--vs-raised)]"
                 }`}
+                data-testid="ui-action-command-palette-view-shortcuts"
                 onClick={() => {
                   onViewChange("shortcuts");
                 }}
@@ -216,6 +218,7 @@ export function CommandPalette({
               </div>
               <button
                 className="h-10 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-raised)] vs-border"
+                data-testid="ui-action-command-palette-customize-settings"
                 onClick={onCustomizeShortcuts}
                 type="button"
               >

@@ -1091,6 +1091,8 @@ function PreparedSourceCinemaSourceLibrary({
         <select
           aria-label="Cinema prepared source"
           className={`${fieldControlClassName} min-w-0 px-2`}
+          data-prepared-source-id={source.id}
+          data-testid="ui-action-prepared-cinema-source"
           onChange={(event) => {
             onSelectSource(event.currentTarget.value);
           }}
@@ -1104,6 +1106,8 @@ function PreparedSourceCinemaSourceLibrary({
         </select>
       </label>
       <Button
+        data-prepared-source-id={source.id}
+        data-testid="ui-action-prepared-cinema-prepare-file"
         disabled={isImporting}
         onClick={() => {
           inputRef.current?.click();
@@ -1878,6 +1882,14 @@ function PreparedSourceCinemaTransport({
   if (isPlaybackTransport) {
     primaryIcon = playbackControls.isPlaying ? <PauseIcon /> : <PlayIcon />;
   }
+  const playbackUnavailableReason = preparedSourcePlaybackDisabledReason(
+    playbackControls.isAvailable,
+    rendererReady,
+  );
+  const seekUnavailableReason = preparedSourceSeekDisabledReason(
+    Boolean(playbackControls.skipBy),
+    rendererReady,
+  );
   const handlePrimary = () => {
     if (isPlaybackTransport) {
       onPlayPause();
@@ -1939,22 +1951,27 @@ function PreparedSourceCinemaTransport({
     },
     restart: {
       disabled: !playbackControls.isAvailable || !rendererReady,
+      disabledReason: playbackUnavailableReason,
       icon: <RestartIcon />,
       onClick: onRestart,
     },
     skipBackward: {
       disabled: !playbackControls.skipBy || !rendererReady,
+      disabledReason: seekUnavailableReason,
       icon: <SkipBackIcon />,
       onClick: () => {
         onSkip(-READER_SEEK_SECONDS);
       },
+      visible: true,
     },
     skipForward: {
       disabled: !playbackControls.skipBy || !rendererReady,
+      disabledReason: seekUnavailableReason,
       icon: <SkipForwardIcon />,
       onClick: () => {
         onSkip(READER_SEEK_SECONDS);
       },
+      visible: true,
     },
     stateSummary: {
       detail: preparedSourceTransportDetail(source, job, playbackState, rendererLifecycle),
@@ -1963,6 +1980,32 @@ function PreparedSourceCinemaTransport({
   };
 
   return <CinemaTransportBar model={transportModel} />;
+}
+
+function preparedSourcePlaybackDisabledReason(
+  isAvailable: boolean,
+  rendererReady: boolean,
+): string | undefined {
+  if (isAvailable && rendererReady) {
+    return undefined;
+  }
+  if (isAvailable) {
+    return "Audio renderer is still preparing.";
+  }
+  return "Audio playback is not available for this source.";
+}
+
+function preparedSourceSeekDisabledReason(
+  canSeek: boolean,
+  rendererReady: boolean,
+): string | undefined {
+  if (canSeek && rendererReady) {
+    return undefined;
+  }
+  if (canSeek) {
+    return "Audio renderer is still preparing.";
+  }
+  return "Seeking is unavailable for this audio.";
 }
 
 function playbackPrimaryLabel(

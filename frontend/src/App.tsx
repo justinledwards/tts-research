@@ -9522,6 +9522,7 @@ function PipelineStatusFooter({
       >
         <button
           className="flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-md border px-3 text-left transition hover:bg-[var(--vs-surface)] vs-border"
+          data-testid="ui-action-activity-footer-open"
           onClick={() => {
             onModeChange("compact");
           }}
@@ -9727,6 +9728,7 @@ function ActivityFooterModeControls({
               ? "bg-orange-500 text-white"
               : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
           }`}
+          data-testid={`ui-action-activity-footer-${item}`}
           key={item}
           onClick={() => {
             onModeChange(item);
@@ -9738,6 +9740,7 @@ function ActivityFooterModeControls({
       ))}
       <button
         className="h-7 min-w-[3.8rem] flex-1 rounded border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50 sm:flex-none"
+        data-testid={`ui-action-activity-footer-toggle-${mode}`}
         onClick={() => {
           onModeChange(nextMode);
         }}

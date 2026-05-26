@@ -7,7 +7,8 @@ import process from "node:process";
 const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "g");
 
 export function renderDeadControlsReport({ actions, generatedAt, results }) {
-  const missingTestIds = actions.filter((action) => !action.hasStableTestId);
+  const missingTestIds = actions.filter((action) => !hasStableActionId(action));
+  const stableIdCoverage = stableIdCoverageSummary(actions);
   const missingLabels = actions.filter((action) =>
     action.metadataIssues.includes("missing-human-label"),
   );
@@ -40,7 +41,11 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
     `- Total visible actions inventoried: ${String(actions.length)}`,
     `- Failed action activations: ${String(failedResults.length)}`,
     `- No-op activations: ${String(noOps.length)}`,
-    `- Missing stable data-testid: ${String(missingTestIds.length)}`,
+    `- Missing stable action IDs: ${String(missingTestIds.length)}`,
+    `- Explicit data-testid IDs: ${String(stableIdCoverage.explicitTestId)}`,
+    `- Explicit equivalent action IDs: ${String(stableIdCoverage.explicitActionId)}`,
+    `- Stable generated action IDs: ${String(stableIdCoverage.generatedStable)}`,
+    `- Unstable generated action IDs: ${String(stableIdCoverage.generatedUnstable)}`,
     `- Missing human label: ${String(missingLabels.length)}`,
     `- Missing accessible name: ${String(missingAccessibleNames.length)}`,
     `- Missing owner: ${String(missingOwners.length)}`,
@@ -97,6 +102,20 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
       ],
     ),
     "",
+    "## Stable ID Coverage By Surface",
+    "",
+    ...table(
+      stableIdCoverage.bySurface,
+      ["Surface", "Explicit test IDs", "Equivalent IDs", "Stable generated", "Unstable"],
+      (entry) => [
+        entry.surface,
+        entry.explicitTestId,
+        entry.explicitActionId,
+        entry.generatedStable,
+        entry.generatedUnstable,
+      ],
+    ),
+    "",
     "## Destructive controls",
     "",
     ...table(
@@ -112,6 +131,36 @@ export function renderDeadControlsReport({ actions, generatedAt, results }) {
     "",
   ];
   return `${lines.join("\n")}\n`;
+}
+
+function hasStableActionId(action) {
+  return action.hasStableActionId ?? action.hasStableTestId;
+}
+
+function stableIdCoverageSummary(actions) {
+  const bySurface = [...new Set(actions.map((action) => action.surface))].map((surface) => {
+    const surfaceActions = actions.filter((action) => action.surface === surface);
+    return {
+      explicitActionId: surfaceActions.filter(
+        (action) => action.stableIdKind === "explicit-action-id",
+      ).length,
+      explicitTestId: surfaceActions.filter((action) => action.stableIdKind === "explicit-testid")
+        .length,
+      generatedStable: surfaceActions.filter((action) => action.stableIdKind === "generated-stable")
+        .length,
+      generatedUnstable: surfaceActions.filter(
+        (action) => action.stableIdKind === "generated-unstable",
+      ).length,
+      surface,
+    };
+  });
+  return {
+    bySurface,
+    explicitActionId: bySurface.reduce((total, entry) => total + entry.explicitActionId, 0),
+    explicitTestId: bySurface.reduce((total, entry) => total + entry.explicitTestId, 0),
+    generatedStable: bySurface.reduce((total, entry) => total + entry.generatedStable, 0),
+    generatedUnstable: bySurface.reduce((total, entry) => total + entry.generatedUnstable, 0),
+  };
 }
 
 export function renderDuplicatesReport({ duplicates, generatedAt }) {
