@@ -339,6 +339,7 @@ function uiActionArtifacts(context, id) {
     duplicates: path.join(dir, "duplicates.md"),
     reviewerSummary: path.join(dir, "reviewer-summary.md"),
     screenshots: path.join(dir, "screenshots"),
+    summary: path.join(dir, "summary.json"),
     websiteExtractionQuality: path.join(dir, "website-extraction-quality.json"),
   };
 }
@@ -572,6 +573,7 @@ async function readQaDocuments(artifactRecords) {
     ),
     actionInventory: await readJsonIfPresent(byStepAndKey.get("ui-actions-e2e:actionInventory")),
     actionResults: await readJsonIfPresent(byStepAndKey.get("ui-actions-e2e:actionResults")),
+    actionSummary: await readJsonIfPresent(byStepAndKey.get("ui-actions-e2e:summary")),
     surfaceComplexity: await readJsonIfPresent(
       byStepAndKey.get("surface-complexity-budget-e2e:budgetJson"),
     ),
@@ -673,7 +675,7 @@ export function buildPassFailSummary({
   const dirtyTreeFailed = dirtyTree.gateStatus === "failed";
   const qa = {
     accessibility: statusSummary(qaDocuments.accessibilityResults),
-    actionAudit: statusSummary(qaDocuments.actionResults),
+    actionAudit: statusSummary(qaDocuments.actionSummary ?? qaDocuments.actionResults),
     bookCinema: statusSummary(qaDocuments.bookCinema),
     commandPalette: statusSummary(qaDocuments.commandPalette),
     contextPanel: statusSummary(qaDocuments.contextPanel),

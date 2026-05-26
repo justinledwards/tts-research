@@ -700,3 +700,10 @@
 - [x] Add git status metadata to review manifest
 - [x] Run local review and validation commands
 - [x] Commit WP42 changes
+
+## 2026-05-26 14:06 CEST - WP43 Final UX Action Audit Consistency
+- [x] Inspect Final UX and UI action audit report contracts
+- [x] Add severity and waiver-aware action audit gating to Final UX
+- [x] Expose unresolved and waived findings in final summaries
+- [x] Run WP43 local validation commands
+- [x] Commit WP43 changes

@@ -13,6 +13,7 @@ const artifactPaths = {
   responsiveResults: "/tmp/final/responsive-results.json",
   telepromptMemoryReport: "/tmp/final/teleprompt-memory-report.md",
   telepromptMemoryResults: "/tmp/final/teleprompt-memory-results.json",
+  uiActionSummary: "/tmp/final/ui-action-summary.json",
 };
 
 test("passes final UX gates from composed local evidence", () => {
@@ -25,9 +26,140 @@ test("passes final UX gates from composed local evidence", () => {
   });
 
   assert.equal(result.status, "passed");
-  assert.equal(result.summary.total, 10);
+  assert.equal(result.summary.total, 11);
   assert.equal(result.summary.failed, 0);
   assert.match(renderFinalUxSummary(result), /More menu is functional/);
+});
+
+test("fails when UI action audit is completed with unwaived findings", () => {
+  const documents = passingDocuments();
+  const failedResult = {
+    actionId: "project-open",
+    activationMode: "pointer",
+    label: "Open project",
+    outcome: "no observable result",
+    passed: false,
+    scenarioId: "project-dashboard",
+    surface: "Project dashboard",
+  };
+  documents.actionResults = {
+    results: [...documents.actionResults.results, failedResult],
+    status: "completed-with-findings",
+  };
+  documents.actionInventory.actions.push({
+    actionId: "project-open",
+    hasStableTestId: true,
+    label: "Open project",
+    metadataIssues: [],
+    owner: "project-dashboard",
+    scenarioId: "project-dashboard",
+    surface: "Project dashboard",
+  });
+  documents.actionInventory.duplicates = [
+    {
+      actionIds: ["project-open", "project-open-secondary"],
+      count: 2,
+      label: "Open project",
+      scenarios: ["project-dashboard"],
+      surface: "Project dashboard",
+    },
+  ];
+  documents.uiActionSummary = {
+    status: "completed-with-findings",
+    summaries: {
+      gateFindings: {
+        duplicates: documents.actionInventory.duplicates,
+        failedResults: [failedResult],
+        total: 1,
+      },
+    },
+  };
+
+  const result = evaluateFinalUxGates({
+    artifactPaths,
+    commandSteps: [],
+    documents,
+    outputDir: "/tmp/final",
+    rootDir: "/repo",
+  });
+  const actionGate = result.gates.find((gate) => gate.id === "ui-action-audit-review-complete");
+  const markdown = renderFinalUxSummary(result);
+
+  assert.equal(result.status, "failed");
+  assert.equal(actionGate.status, "failed");
+  assert.match(markdown, /Unresolved Findings/);
+  assert.match(markdown, /Owner: project-dashboard/);
+  assert.match(markdown, /duplicate action group/);
+});
+
+test("reports passed-with-findings when UI action findings are explicitly waived", () => {
+  const documents = passingDocuments();
+  const failedResult = {
+    actionId: "project-open",
+    activationMode: "pointer",
+    label: "Open project",
+    outcome: "no observable result",
+    passed: false,
+    scenarioId: "project-dashboard",
+    surface: "Project dashboard",
+  };
+  documents.actionResults.status = "completed-with-findings";
+  documents.actionResults.results = [...documents.actionResults.results, failedResult];
+  documents.actionInventory.actions.push({
+    actionId: "project-open",
+    hasStableTestId: true,
+    label: "Open project",
+    metadataIssues: [],
+    owner: "project-dashboard",
+    scenarioId: "project-dashboard",
+    surface: "Project dashboard",
+  });
+  documents.actionInventory.duplicates = [
+    {
+      actionIds: ["project-open", "project-open-secondary"],
+      count: 2,
+      label: "Open project",
+      scenarios: ["project-dashboard"],
+      surface: "Project dashboard",
+    },
+  ];
+  documents.uiActionSummary = {
+    status: "completed-with-findings",
+    summaries: {
+      gateFindings: {
+        duplicates: documents.actionInventory.duplicates,
+        failedResults: [failedResult],
+        total: 1,
+      },
+    },
+    waivers: [
+      {
+        category: "no-op-controls",
+        owner: "project-dashboard",
+        reason: "Tracked in WP follow-up for project dashboard generated source rows.",
+      },
+      {
+        category: "duplicate-groups",
+        owner: "design-systems",
+        reason: "Known repeated project actions stay visible until the dashboard IA pass lands.",
+      },
+    ],
+  };
+
+  const result = evaluateFinalUxGates({
+    artifactPaths,
+    commandSteps: [],
+    documents,
+    outputDir: "/tmp/final",
+    rootDir: "/repo",
+  });
+  const markdown = renderFinalUxSummary(result);
+
+  assert.equal(result.status, "passed-with-findings");
+  assert.equal(result.summary.passedWithFindings, 1);
+  assert.match(markdown, /Why Final Still Passes/);
+  assert.match(markdown, /Waived Findings/);
+  assert.match(markdown, /not clean passed/);
 });
 
 test("fails hard when stale audio drives an active highlight", () => {
@@ -99,6 +231,7 @@ function passingDocuments() {
         ...["BookCinema", "DocumentCinema", "WebsiteCinema"].map((surface) => ({
           actionId: "ui-action-cinema-more-menu",
           disabled: false,
+          hasStableTestId: true,
           label: "Open Cinema More menu",
           metadataIssues: [],
           owner: "cinema-more",
@@ -108,6 +241,7 @@ function passingDocuments() {
         ...Array.from({ length: 6 }, (_, index) => ({
           actionId: `ui-action-cinema-more-entry-${String(index)}`,
           disabled: false,
+          hasStableTestId: true,
           label: `More entry ${String(index)}`,
           metadataIssues: [],
           owner: "cinema-more",
@@ -118,6 +252,7 @@ function passingDocuments() {
           actionId: "ui-action-disabled",
           disabled: true,
           disabledReason: "Generated audio is not ready.",
+          hasStableTestId: true,
           label: "Play",
           metadataIssues: [],
           owner: "cinema",
@@ -137,7 +272,7 @@ function passingDocuments() {
           surface,
         })),
       ),
-      status: "completed-with-findings",
+      status: "passed",
     },
     commandPaletteResults: {
       result: {
@@ -196,6 +331,16 @@ function passingDocuments() {
         failures: [],
       },
       status: "passed",
+    },
+    uiActionSummary: {
+      status: "passed",
+      summaries: {
+        gateFindings: {
+          duplicates: [],
+          failedResults: [],
+          total: 0,
+        },
+      },
     },
   };
 }

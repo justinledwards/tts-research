@@ -10,6 +10,12 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.
 const isMain = process.argv[1]
   ? path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
   : false;
+const PASSING_GATE_STATUSES = new Set(["passed", "passed-with-findings"]);
+const UI_ACTION_AUDIT_SEVERITIES = ["blocking", "needs-review", "waived", "informational"];
+const UI_ACTION_AUDIT_THRESHOLDS = {
+  duplicateGroups: 0,
+  missingStableTestIds: 0,
+};
 
 export const finalUxGateOutputDir =
   process.env.FINAL_UX_GATES_OUTPUT_DIR ?? path.join(rootDir, "output", "final-ux-gates", "latest");
@@ -43,18 +49,14 @@ export async function runFinalUxGates({ outputDir = finalUxGateOutputDir, root =
         },
         metrics: {
           failedGates: result.summary.failed,
+          passedWithFindingsGates: result.summary.passedWithFindings,
           passedGates: result.summary.passed,
           totalGates: result.summary.total,
+          unresolvedFindings: result.summary.unresolvedFindings,
+          waivedFindings: result.summary.waivedFindings,
           waivers: result.waivers.length,
         },
-        thresholds: result.gates.map((gate) => ({
-          actual: gate.status,
-          expected: "passed",
-          metric: gate.id,
-          operator: "===",
-          passed: gate.status === "passed",
-          threshold: gate.title,
-        })),
+        thresholds: finalUxGateThresholds(result.gates),
       };
     },
   );
@@ -199,6 +201,7 @@ export function evaluateFinalUxGates({
 }) {
   const commandFailures = commandSteps.filter((step) => step.status !== "passed");
   const gates = [
+    evaluateUiActionAuditReviewGate(documents),
     evaluateMoreMenuGate(documents),
     evaluateTelepromptEntryGate(documents),
     evaluateFullscreenFallbackGate(documents),
@@ -214,12 +217,30 @@ export function evaluateFinalUxGates({
     artifactPaths: gate.artifactKeys.map((key) => relativePath(outputDir, artifactPaths[key])),
   }));
   const waivers = collectFinalUxWaivers(documents);
-  const failedGates = gates.filter((gate) => gate.status !== "passed");
+  const failedGates = gates.filter((gate) => gate.status === "failed");
+  const passedWithFindingsGates = gates.filter((gate) => gate.status === "passed-with-findings");
+  const unresolvedFindings = gates.flatMap((gate) =>
+    (gate.findings ?? []).filter((finding) =>
+      ["blocking", "needs-review"].includes(finding.severity),
+    ),
+  );
+  const waivedFindings = gates.flatMap((gate) =>
+    (gate.findings ?? []).filter((finding) => finding.severity === "waived"),
+  );
+  const status =
+    commandFailures.length > 0 || failedGates.length > 0
+      ? "failed"
+      : passedWithFindingsGates.length > 0
+        ? "passed-with-findings"
+        : "passed";
   const summary = {
     commandsFailed: commandFailures.length,
     failed: failedGates.length,
-    passed: gates.length - failedGates.length,
+    passed: gates.filter((gate) => gate.status === "passed").length,
+    passedWithFindings: passedWithFindingsGates.length,
     total: gates.length,
+    unresolvedFindings: unresolvedFindings.length,
+    waivedFindings: waivedFindings.length,
     waivers: waivers.length,
   };
   return {
@@ -239,10 +260,52 @@ export function evaluateFinalUxGates({
     outputDir,
     rootDir,
     schemaVersion: "final-ux-gates.v1",
-    status: commandFailures.length === 0 && failedGates.length === 0 ? "passed" : "failed",
+    severityLevels: UI_ACTION_AUDIT_SEVERITIES,
+    status,
     summary,
+    unresolvedFindings,
     waivers,
+    waivedFindings,
   };
+}
+
+function evaluateUiActionAuditReviewGate(documents) {
+  const auditStatus = documents.uiActionSummary?.status ?? documents.actionResults?.status ?? null;
+  const findings = collectUiActionAuditFindings(documents, auditStatus);
+  const severityCounts = severityCountsFor(findings);
+  const blockingFindings = findings.filter((finding) => finding.severity === "blocking");
+  const needsReviewFindings = findings.filter((finding) => finding.severity === "needs-review");
+  const waivedFindings = findings.filter((finding) => finding.severity === "waived");
+  const status =
+    blockingFindings.length > 0
+      ? "failed"
+      : needsReviewFindings.length > 0 || waivedFindings.length > 0
+        ? "passed-with-findings"
+        : "passed";
+  const passExplanation =
+    status === "passed-with-findings" && blockingFindings.length === 0 && waivedFindings.length > 0
+      ? "Final still passes because every waiver-required UI action audit finding has an explicit owner/reason waiver; the result remains passed-with-findings, not clean passed."
+      : null;
+
+  return gate({
+    artifactKeys: ["uiActionSummary", "actionInventory", "actionResults"],
+    evidence: [
+      `UI action audit status ${auditStatus ?? "missing"}.`,
+      `Severity counts ${formatSeverityCounts(severityCounts)}.`,
+      passExplanation ?? "",
+    ].filter(Boolean),
+    failures: blockingFindings.map(
+      (finding) =>
+        `${finding.message} Owner: ${finding.owner}. Required waiver: ${finding.waiverRequired ? "missing" : "not required"}.`,
+    ),
+    findings,
+    id: "ui-action-audit-review-complete",
+    passExplanation,
+    severity: worstSeverity(findings),
+    severityCounts,
+    status,
+    title: "UI action audit is review-complete or explicitly waived",
+  });
 }
 
 function evaluateMoreMenuGate(documents) {
@@ -576,15 +639,348 @@ function evaluateDisabledReasonGate(documents) {
   });
 }
 
-function gate({ artifactKeys, evidence = [], failures = [], id, title }) {
+function gate({
+  artifactKeys,
+  evidence = [],
+  failures = [],
+  findings = [],
+  id,
+  passExplanation = null,
+  severity = failures.length === 0 ? "informational" : "blocking",
+  severityCounts = severityCountsFor(findings),
+  status = failures.length === 0 ? "passed" : "failed",
+  title,
+}) {
   return {
     artifactKeys,
     evidence,
     failures,
+    findings,
     id,
-    status: failures.length === 0 ? "passed" : "failed",
+    passExplanation,
+    severity,
+    severityCounts,
+    status,
     title,
   };
+}
+
+function collectUiActionAuditFindings(documents, auditStatus) {
+  const actions = documents.actionInventory?.actions ?? [];
+  const actionResults = documents.actionResults?.results ?? [];
+  const summaryFindings = documents.uiActionSummary?.summaries?.gateFindings ?? {};
+  const failedResults = summaryFindings.failedResults ?? actionResults.filter(isFailedResult);
+  const noOpResults = failedResults.filter(isNoOpResult);
+  const failedActivations = failedResults.filter((result) => !isNoOpResult(result));
+  const duplicates = summaryFindings.duplicates ?? documents.actionInventory?.duplicates ?? [];
+  const missingStableTestIds = actions.filter((action) => !action.hasStableTestId);
+  const waivers = collectUiActionAuditWaivers(documents);
+  const findings = [];
+
+  if (!auditStatus) {
+    findings.push(
+      uiActionFinding({
+        category: "ui-action-audit-status",
+        count: 1,
+        message: "UI action audit status was missing.",
+        owner: "UX QA owner",
+        samples: [],
+        severity: "blocking",
+        waiverRequired: false,
+      }),
+    );
+  } else if (!["passed", "completed-with-findings"].includes(auditStatus)) {
+    findings.push(
+      uiActionFinding({
+        category: "ui-action-audit-status",
+        count: 1,
+        message: `UI action audit status was ${auditStatus}.`,
+        owner: "UX QA owner",
+        samples: [],
+        severity: auditStatus === "inventory-only" ? "blocking" : "needs-review",
+        waiverRequired: false,
+      }),
+    );
+  } else if (auditStatus === "completed-with-findings") {
+    findings.push(
+      uiActionFinding({
+        category: "ui-action-audit-status",
+        count: 1,
+        message: "UI action audit completed with findings and is not clean review-complete.",
+        owner: "UX QA owner",
+        samples: [],
+        severity: "needs-review",
+        waiverRequired: false,
+      }),
+    );
+  }
+
+  if (failedActivations.length > 0) {
+    findings.push(
+      applyUiActionWaiver(
+        uiActionFinding({
+          category: "failed-activations",
+          count: failedActivations.length,
+          message: `${String(failedActivations.length)} failed action activation(s) require review.`,
+          owner: ownersForResults(failedActivations, actions),
+          samples: failedActivations.slice(0, 5).map(formatResultSample),
+          severity: "blocking",
+          waiverRequired: true,
+        }),
+        waivers,
+      ),
+    );
+  }
+
+  if (noOpResults.length > 0) {
+    findings.push(
+      applyUiActionWaiver(
+        uiActionFinding({
+          category: "no-op-controls",
+          count: noOpResults.length,
+          message: `${String(noOpResults.length)} no-op control activation(s) require review.`,
+          owner: ownersForResults(noOpResults, actions),
+          samples: noOpResults.slice(0, 5).map(formatResultSample),
+          severity: "blocking",
+          waiverRequired: true,
+        }),
+        waivers,
+      ),
+    );
+  }
+
+  if (duplicates.length > UI_ACTION_AUDIT_THRESHOLDS.duplicateGroups) {
+    findings.push(
+      applyUiActionWaiver(
+        uiActionFinding({
+          category: "duplicate-groups",
+          count: duplicates.length,
+          message: `${String(duplicates.length)} duplicate action group(s) exceed the threshold of ${String(
+            UI_ACTION_AUDIT_THRESHOLDS.duplicateGroups,
+          )}.`,
+          owner: ownersForDuplicates(duplicates),
+          samples: duplicates.slice(0, 5).map(formatDuplicateSample),
+          severity: "blocking",
+          threshold: UI_ACTION_AUDIT_THRESHOLDS.duplicateGroups,
+          waiverRequired: true,
+        }),
+        waivers,
+      ),
+    );
+  }
+
+  if (missingStableTestIds.length > UI_ACTION_AUDIT_THRESHOLDS.missingStableTestIds) {
+    findings.push(
+      applyUiActionWaiver(
+        uiActionFinding({
+          category: "missing-stable-test-ids",
+          count: missingStableTestIds.length,
+          message: `${String(
+            missingStableTestIds.length,
+          )} visible action(s) without stable data-testid exceed the threshold of ${String(
+            UI_ACTION_AUDIT_THRESHOLDS.missingStableTestIds,
+          )}.`,
+          owner: ownersForActions(missingStableTestIds),
+          samples: missingStableTestIds.slice(0, 5).map(formatActionSample),
+          severity: "blocking",
+          threshold: UI_ACTION_AUDIT_THRESHOLDS.missingStableTestIds,
+          waiverRequired: true,
+        }),
+        waivers,
+      ),
+    );
+  }
+
+  if (findings.length === 0) {
+    findings.push(
+      uiActionFinding({
+        category: "ui-action-audit-status",
+        count: 0,
+        message: "UI action audit is clean review-complete.",
+        owner: "UX QA owner",
+        samples: [],
+        severity: "informational",
+        waiverRequired: false,
+      }),
+    );
+  }
+
+  return findings;
+}
+
+function uiActionFinding({
+  category,
+  count,
+  message,
+  owner,
+  samples,
+  severity,
+  threshold = 0,
+  waiver = null,
+  waiverRequired,
+}) {
+  return {
+    category,
+    count,
+    id: `ui-action-audit:${category}`,
+    message,
+    owner: owner || "UX QA owner",
+    samples,
+    severity,
+    threshold,
+    waiver,
+    waiverRequired,
+    waived: severity === "waived",
+  };
+}
+
+function applyUiActionWaiver(finding, waivers) {
+  const waiver = waivers.find((candidate) => waiverMatchesFinding(candidate, finding));
+  if (!waiver) {
+    return finding;
+  }
+  return {
+    ...finding,
+    severity: "waived",
+    waiver,
+    waived: true,
+  };
+}
+
+function waiverMatchesFinding(waiver, finding) {
+  if (!validWaiver(waiver)) {
+    return false;
+  }
+  return (
+    waiver.findingId === finding.id ||
+    waiver.id === finding.id ||
+    waiver.category === finding.category ||
+    waiver.id === finding.category
+  );
+}
+
+function validWaiver(waiver) {
+  return Boolean(String(waiver?.owner ?? "").trim() && String(waiver?.reason ?? "").trim());
+}
+
+function collectUiActionAuditWaivers(documents) {
+  return [
+    ...(documents.uiActionSummary?.waivers ?? []),
+    ...(documents.uiActionSummary?.qualityWaivers ?? []),
+    ...(documents.actionResults?.waivers ?? []),
+    ...(documents.actionResults?.qualityWaivers ?? []),
+    ...(documents.actionInventory?.waivers ?? []),
+    ...(documents.actionInventory?.qualityWaivers ?? []),
+  ].map((waiver) => ({
+    category: waiver.category ?? null,
+    findingId: waiver.findingId ?? null,
+    id: waiver.id ?? waiver.category ?? waiver.findingId ?? "ui-action-audit-waiver",
+    owner: waiver.owner ?? "unassigned",
+    reason: waiver.reason ?? "No reason provided.",
+    source: waiver.source ?? "ui-action-audit",
+  }));
+}
+
+function severityCountsFor(findings) {
+  return Object.fromEntries(
+    UI_ACTION_AUDIT_SEVERITIES.map((severity) => [
+      severity,
+      findings.filter((finding) => finding.severity === severity).length,
+    ]),
+  );
+}
+
+function worstSeverity(findings) {
+  if (findings.some((finding) => finding.severity === "blocking")) {
+    return "blocking";
+  }
+  if (findings.some((finding) => finding.severity === "needs-review")) {
+    return "needs-review";
+  }
+  if (findings.some((finding) => finding.severity === "waived")) {
+    return "waived";
+  }
+  return "informational";
+}
+
+function finalUxGateThresholds(gates) {
+  return gates.map((gateResult) => ({
+    actual: gateResult.status,
+    expected: "passed or passed-with-findings",
+    metric: gateResult.id,
+    operator: "in",
+    passed: PASSING_GATE_STATUSES.has(gateResult.status),
+    threshold: gateResult.title,
+  }));
+}
+
+function formatSeverityCounts(severityCounts) {
+  return UI_ACTION_AUDIT_SEVERITIES.map(
+    (severity) => `${severity}=${String(severityCounts[severity] ?? 0)}`,
+  ).join(", ");
+}
+
+function isFailedResult(result) {
+  return result?.passed === false;
+}
+
+function isNoOpResult(result) {
+  return /no observable result/i.test(result?.outcome ?? result?.reason ?? "");
+}
+
+function ownersForResults(results, actions) {
+  const actionByKey = new Map(
+    actions.map((action) => [`${action.scenarioId}|${action.actionId}`, action]),
+  );
+  const owners = results
+    .map((result) => actionByKey.get(`${result.scenarioId}|${result.actionId}`)?.owner)
+    .filter(Boolean);
+  return formatOwnerList(owners);
+}
+
+function ownersForActions(actions) {
+  return formatOwnerList(actions.map((action) => action.owner).filter(Boolean));
+}
+
+function ownersForDuplicates(duplicates) {
+  const owners = duplicates.flatMap((duplicate) => [
+    ...(duplicate.playbackOwners ?? []),
+    ...(duplicate.surfaces ?? []),
+  ]);
+  return formatOwnerList(owners, "UX action inventory owner");
+}
+
+function formatOwnerList(owners, fallback = "UX QA owner") {
+  const unique = [...new Set(owners.map((owner) => String(owner).trim()).filter(Boolean))].slice(
+    0,
+    4,
+  );
+  return unique.length > 0 ? unique.join(", ") : fallback;
+}
+
+function formatResultSample(result) {
+  return `${result.surface ?? "unknown surface"} / ${result.scenarioId ?? "unknown scenario"} / ${result.label ?? result.actionId ?? "unknown action"} / ${result.activationMode ?? "activation"}: ${result.outcome ?? result.reason ?? result.status ?? "failed"}`;
+}
+
+function formatActionSample(action) {
+  return `${action.surface ?? "unknown surface"} / ${action.scenarioId ?? "unknown scenario"} / ${action.label ?? action.actionId ?? "unknown action"}`;
+}
+
+function formatDuplicateSample(duplicate) {
+  return `${duplicate.surface ?? duplicate.surfaces?.join(", ") ?? "unknown surface"} / ${duplicate.label ?? "unknown label"} / count=${String(duplicate.count ?? 0)}`;
+}
+
+function formatFindingSummary(finding) {
+  return `[${finding.severity}] ${finding.message} Owner: ${finding.owner}. Count: ${String(
+    finding.count,
+  )}; threshold: ${String(finding.threshold)}.`;
+}
+
+function formatWaiver(waiver) {
+  if (!waiver) {
+    return "missing";
+  }
+  return `${waiver.reason} (owner: ${waiver.owner})`;
 }
 
 function isCinemaMoreMenuAction(action) {
@@ -595,12 +991,22 @@ function isCinemaMoreMenuAction(action) {
 }
 
 function collectFinalUxWaivers(documents) {
-  return (documents.readalongSync?.waivers ?? []).map((waiver) => ({
-    fixtureId: waiver.fixtureId,
-    owner: waiver.owner,
-    reason: waiver.reason,
-    source: "readalong-sync",
-  }));
+  return [
+    ...(documents.readalongSync?.waivers ?? []).map((waiver) => ({
+      id: waiver.fixtureId,
+      owner: waiver.owner,
+      reason: waiver.reason,
+      source: "readalong-sync",
+    })),
+    ...collectUiActionAuditWaivers(documents)
+      .filter(validWaiver)
+      .map((waiver) => ({
+        id: waiver.findingId ?? waiver.category ?? waiver.id,
+        owner: waiver.owner,
+        reason: waiver.reason,
+        source: "ui-action-audit",
+      })),
+  ];
 }
 
 function explicitReason(value) {
@@ -616,23 +1022,53 @@ export function renderFinalUxSummary(result) {
     "",
     "## Summary",
     "",
-    `- Gates: ${String(result.summary.passed)}/${String(result.summary.total)} passed`,
+    `- Gates: ${String(result.summary.passed)}/${String(result.summary.total)} clean passed`,
+    `- Passed with findings: ${String(result.summary.passedWithFindings)}`,
+    `- Failed gates: ${String(result.summary.failed)}`,
     `- Command failures: ${String(result.summary.commandsFailed)}`,
+    `- Unresolved findings: ${String(result.summary.unresolvedFindings)}`,
+    `- Waived findings: ${String(result.summary.waivedFindings)}`,
     `- Waivers: ${String(result.summary.waivers)}`,
     "",
     "## Gate Results",
     "",
-    "| Gate | Status | Evidence | Artifacts |",
-    "| --- | --- | --- | --- |",
+    "| Gate | Status | Severity | Evidence | Artifacts |",
+    "| --- | --- | --- | --- | --- |",
   ];
   for (const gateResult of result.gates) {
     lines.push(
       `| ${escapeMarkdown(gateResult.title)} | ${gateResult.status.toUpperCase()} | ${escapeMarkdown(
+        gateResult.severity ?? "informational",
+      ).toUpperCase()} | ${escapeMarkdown(
         gateResult.evidence.join("; ") || "-",
       )} | ${gateResult.artifactPaths.map((item) => `[${escapeMarkdown(item)}](${encodeURI(item)})`).join("<br>")} |`,
     );
   }
-  const failedGates = result.gates.filter((gateResult) => gateResult.status !== "passed");
+  const passExplanations = result.gates
+    .map((gateResult) => gateResult.passExplanation)
+    .filter(Boolean);
+  if (passExplanations.length > 0) {
+    lines.push("", "## Why Final Still Passes", "");
+    for (const explanation of passExplanations) {
+      lines.push(`- ${explanation}`);
+    }
+  }
+  if (result.unresolvedFindings.length > 0) {
+    lines.push("", "## Unresolved Findings", "");
+    for (const finding of result.unresolvedFindings) {
+      lines.push(`- ${formatFindingSummary(finding)}`);
+      for (const sample of finding.samples ?? []) {
+        lines.push(`  - ${escapeMarkdown(sample)}`);
+      }
+    }
+  }
+  if (result.waivedFindings.length > 0) {
+    lines.push("", "## Waived Findings", "");
+    for (const finding of result.waivedFindings) {
+      lines.push(`- ${formatFindingSummary(finding)} Waiver: ${formatWaiver(finding.waiver)}`);
+    }
+  }
+  const failedGates = result.gates.filter((gateResult) => gateResult.status === "failed");
   if (failedGates.length > 0) {
     lines.push("", "## Failures", "");
     for (const gateResult of failedGates) {
@@ -657,7 +1093,7 @@ export function renderFinalUxSummary(result) {
     lines.push("No waivers declared.");
   } else {
     for (const waiver of result.waivers) {
-      lines.push(`- ${waiver.fixtureId}: ${waiver.reason} (owner: ${waiver.owner})`);
+      lines.push(`- ${waiver.id}: ${waiver.reason} (owner: ${waiver.owner})`);
     }
   }
   lines.push("");
@@ -686,6 +1122,7 @@ async function readFinalUxDocuments(paths) {
     responsiveResults: await readJsonIfPresent(paths.responsiveResults),
     surfaceComplexity: await readJsonIfPresent(paths.surfaceComplexityBudget),
     telepromptMemory: await readJsonIfPresent(paths.telepromptMemoryResults),
+    uiActionSummary: await readJsonIfPresent(paths.uiActionSummary),
   };
 }
 
@@ -706,6 +1143,7 @@ function finalUxArtifactPaths(artifactsDir) {
     ),
     actionInventory: path.join(artifactsDir, "ui-actions", "action-inventory.json"),
     actionResults: path.join(artifactsDir, "ui-actions", "action-results.json"),
+    uiActionSummary: path.join(artifactsDir, "ui-actions", "summary.json"),
     commandPaletteReport: path.join(artifactsDir, "command-palette", "command-palette-report.md"),
     commandPaletteResults: path.join(
       artifactsDir,
@@ -741,6 +1179,7 @@ function finalUiActionArtifacts(artifactsDir) {
     overlayCollisions: path.join(dir, "overlay-collisions.json"),
     reviewerSummary: path.join(dir, "reviewer-summary.md"),
     screenshots: path.join(dir, "screenshots"),
+    summary: path.join(dir, "summary.json"),
   };
 }
 

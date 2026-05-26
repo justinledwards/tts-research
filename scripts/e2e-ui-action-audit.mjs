@@ -43,6 +43,11 @@ const actionTimeoutMs = Number.parseInt(
 const failOnFindings = process.env.UI_ACTION_AUDIT_FAIL_ON_FINDINGS === "1";
 const inventoryOnly = process.env.UI_ACTION_AUDIT_INVENTORY_ONLY === "1";
 const scenarioFilter = parseScenarioFilter(process.env.UI_ACTION_AUDIT_SCENARIOS);
+const UI_ACTION_AUDIT_SEVERITIES = ["blocking", "needs-review", "waived", "informational"];
+const UI_ACTION_AUDIT_THRESHOLDS = {
+  duplicateGroups: 0,
+  missingStableTestIds: 0,
+};
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
@@ -241,10 +246,18 @@ async function main() {
       scenarios,
       surfaceComplexity,
     });
+    const reviewGate = summarizeUiActionReviewGate({
+      actions,
+      duplicates,
+      gateFindings,
+      inventoryOnly,
+      resultsStatus: resultsDocument.status,
+    });
     const status =
       !inventoryOnly && gateFindings.total > 0 && failOnFindings
         ? "failed"
         : resultsDocument.status;
+    resultsDocument.reviewGate = reviewGate;
 
     await writeFile(
       path.join(outputDir, "action-inventory.json"),
@@ -282,6 +295,7 @@ async function main() {
         generatedAt,
         inventoryOnly,
         outputDir,
+        reviewGate,
         results,
         scenarioFilterActive: Boolean(scenarioFilter),
         scenarios,
@@ -316,7 +330,9 @@ async function main() {
           total: summarizeResults(results).total,
         },
         overlayCollisions: overlayCollisionSummary,
+        reviewGate,
       },
+      reviewGate,
       websiteExtractionQuality: websiteExtractionQualityDocument.quality,
     };
     await writeSummary(runSummary);
@@ -2074,12 +2090,79 @@ function summarizeGateFindings({
   };
 }
 
+function summarizeUiActionReviewGate({
+  actions,
+  duplicates,
+  gateFindings,
+  inventoryOnly,
+  resultsStatus,
+}) {
+  const missingStableTestIds = actions.filter((action) => !action.hasStableTestId).length;
+  const noOpControls = gateFindings.failedResults.filter((result) =>
+    /no observable result/i.test(result.outcome ?? result.reason ?? ""),
+  ).length;
+  const failedActivations = gateFindings.failedResults.length - noOpControls;
+  const findings = [
+    reviewGateFinding({
+      category: "failed-activations",
+      count: failedActivations,
+      threshold: 0,
+      waiverRequired: true,
+    }),
+    reviewGateFinding({
+      category: "no-op-controls",
+      count: noOpControls,
+      threshold: 0,
+      waiverRequired: true,
+    }),
+    reviewGateFinding({
+      category: "duplicate-groups",
+      count: duplicates.length,
+      threshold: UI_ACTION_AUDIT_THRESHOLDS.duplicateGroups,
+      waiverRequired: true,
+    }),
+    reviewGateFinding({
+      category: "missing-stable-test-ids",
+      count: missingStableTestIds,
+      threshold: UI_ACTION_AUDIT_THRESHOLDS.missingStableTestIds,
+      waiverRequired: true,
+    }),
+  ];
+  const blocking = findings.filter((finding) => finding.severity === "blocking").length;
+  const needsReview =
+    resultsStatus === "completed-with-findings" || inventoryOnly || gateFindings.total > 0 ? 1 : 0;
+  return {
+    findings,
+    needsReview,
+    schemaVersion: "ui-action-review-gate.v1",
+    severityLevels: UI_ACTION_AUDIT_SEVERITIES,
+    status: blocking > 0 || needsReview > 0 ? "not-review-complete" : "review-complete",
+    summary: {
+      blocking,
+      informational: findings.filter((finding) => finding.severity === "informational").length,
+      "needs-review": needsReview,
+      waived: 0,
+    },
+  };
+}
+
+function reviewGateFinding({ category, count, threshold, waiverRequired }) {
+  return {
+    category,
+    count,
+    severity: count > threshold ? "blocking" : "informational",
+    threshold,
+    waiverRequired,
+  };
+}
+
 function renderReviewerSummary({
   actions,
   duplicates,
   generatedAt,
   inventoryOnly,
   outputDir,
+  reviewGate,
   results,
   scenarioFilterActive = false,
   scenarios,
@@ -2112,6 +2195,7 @@ function renderReviewerSummary({
     `## Status`,
     "",
     status,
+    `Review gate: ${reviewGate?.status ?? "missing"} (${formatReviewGateSeverities(reviewGate)})`,
     "",
     "## Artifact checklist",
     "",
@@ -2214,6 +2298,13 @@ function assertWebsiteExtractionQuality(source) {
 
 function formatFindingCount(count) {
   return count === 0 ? "0" : `${String(count)} (see reports before leaving draft)`;
+}
+
+function formatReviewGateSeverities(reviewGate) {
+  const summary = reviewGate?.summary ?? {};
+  return UI_ACTION_AUDIT_SEVERITIES.map(
+    (severity) => `${severity}=${String(summary[severity] ?? 0)}`,
+  ).join(", ");
 }
 
 function normalizeSurface(value) {
