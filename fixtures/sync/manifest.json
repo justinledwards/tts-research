@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "readalong-sync-manifest.v1",
+  "fixtureFiles": ["fixtures/sync/fixtures.json"],
+  "requiredTypes": [
+    "clean-generated-known-timings",
+    "provider-word-timing",
+    "phrase-only-timing",
+    "forced-alignment",
+    "long-chapter",
+    "short-document",
+    "citation-heavy-document",
+    "website-article",
+    "speed-change",
+    "seek-resume",
+    "stale-audio"
+  ]
+}

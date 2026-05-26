@@ -10,6 +10,9 @@
       "fixtures/markdown/citations.md"
     ]
   },
+  "readAlongSync": {
+    "manifest": "fixtures/sync/manifest.json"
+  },
   "e2e": {
     "markdown": "fixtures/markdown/citations.md",
     "pdf": "fixtures/pdf/born_digital_multicolumn.pdf",

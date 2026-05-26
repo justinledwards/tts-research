@@ -100,6 +100,20 @@ export const SURFACE_COMPLEXITY_BUDGETS = {
     notes: ["Read mode stays canvas-first with diagnostics hidden by default."],
     tier: "calm",
   },
+  readModeMoreMenu: {
+    maxActiveModesTabs: 10,
+    maxAverageAccessibleLabelLength: 40,
+    maxChipsBadges: 40,
+    maxDestructiveActions: 0,
+    maxDisabledActions: 4,
+    maxDuplicatedVisibleLabels: 2,
+    maxPanelsOpenByDefault: 6,
+    maxPrimaryActions: 10,
+    maxReachableDrawersSheets: 7,
+    maxVisibleActions: 25,
+    notes: ["Cinema More may expose display, advanced, and navigation entry points on demand."],
+    tier: "calm",
+  },
   websiteReadCalm: {
     maxActiveModesTabs: 6,
     maxAverageAccessibleLabelLength: 36,
@@ -187,6 +201,7 @@ export const SURFACE_COMPLEXITY_BUDGETS = {
 export const SURFACE_COMPLEXITY_SCENARIO_BUDGETS = {
   "book-docx-audio-ready": SURFACE_COMPLEXITY_BUDGETS.readMode,
   "book-epub-audio-ready": SURFACE_COMPLEXITY_BUDGETS.readMode,
+  "book-more-menu": SURFACE_COMPLEXITY_BUDGETS.readModeMoreMenu,
   "book-pdf-pre-audio": SURFACE_COMPLEXITY_BUDGETS.workspace,
   "command-palette": SURFACE_COMPLEXITY_BUDGETS.commandPalette,
   "document-cinema": SURFACE_COMPLEXITY_BUDGETS.readMode,

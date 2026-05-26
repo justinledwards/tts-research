@@ -1,0 +1,483 @@
+{
+  "schemaVersion": "readalong-sync-fixtures.v1",
+  "fixtures": [
+    {
+      "id": "clean-generated-audio",
+      "kind": "clean-generated-known-timings",
+      "title": "Clean generated audio with known timings",
+      "timingSource": "provider-word",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "clean-p1",
+          "text": "Clear timing lets every spoken word remain anchored.",
+          "startMs": 0,
+          "durationMs": 3500
+        }
+      ],
+      "observations": [
+        {
+          "id": "clean-open",
+          "audioTimeMs": 250,
+          "highlightedNodeId": "clean-p1",
+          "highlightedWordIndex": 0,
+          "observedHighlightTimeMs": 260
+        },
+        {
+          "id": "clean-middle",
+          "audioTimeMs": 1280,
+          "highlightedNodeId": "clean-p1",
+          "highlightedWordIndex": 2,
+          "observedHighlightTimeMs": 1320
+        },
+        {
+          "id": "clean-close",
+          "audioTimeMs": 2850,
+          "highlightedNodeId": "clean-p1",
+          "highlightedWordIndex": 6,
+          "observedHighlightTimeMs": 2910
+        }
+      ]
+    },
+    {
+      "id": "provider-word-timing",
+      "kind": "provider-word-timing",
+      "title": "Provider word timing fixture",
+      "timingSource": "provider-word",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "provider-p1",
+          "text": "Provider word marks should pass the exact highlight budget.",
+          "startMs": 0,
+          "durationMs": 4000
+        }
+      ],
+      "observations": [
+        {
+          "id": "provider-open",
+          "audioTimeMs": 480,
+          "highlightedNodeId": "provider-p1",
+          "highlightedWordIndex": 1,
+          "observedHighlightTimeMs": 500
+        },
+        {
+          "id": "provider-third",
+          "audioTimeMs": 1500,
+          "highlightedNodeId": "provider-p1",
+          "highlightedWordIndex": 3,
+          "observedHighlightTimeMs": 1560
+        },
+        {
+          "id": "provider-tail",
+          "audioTimeMs": 3450,
+          "highlightedNodeId": "provider-p1",
+          "highlightedWordIndex": 7,
+          "observedHighlightTimeMs": 3510
+        }
+      ]
+    },
+    {
+      "id": "phrase-only-timing",
+      "kind": "phrase-only-timing",
+      "title": "Phrase-only timing fixture",
+      "timingSource": "phrase-estimate",
+      "expectedLevel": "phrase",
+      "nodes": [
+        {
+          "nodeId": "phrase-p1",
+          "text": "Phrase timing should stay honest when words are unavailable.",
+          "startMs": 0,
+          "durationMs": 4200,
+          "phraseWordCount": 3
+        }
+      ],
+      "observations": [
+        {
+          "id": "phrase-open",
+          "audioTimeMs": 750,
+          "highlightedNodeId": "phrase-p1",
+          "highlightedPhraseIndex": 0,
+          "observedHighlightTimeMs": 820
+        },
+        {
+          "id": "phrase-middle",
+          "audioTimeMs": 2250,
+          "highlightedNodeId": "phrase-p1",
+          "highlightedPhraseIndex": 1,
+          "observedHighlightTimeMs": 2380
+        },
+        {
+          "id": "phrase-tail",
+          "audioTimeMs": 3700,
+          "highlightedNodeId": "phrase-p1",
+          "highlightedPhraseIndex": 2,
+          "observedHighlightTimeMs": 3860
+        }
+      ]
+    },
+    {
+      "id": "forced-alignment",
+      "kind": "forced-alignment",
+      "title": "Forced-alignment fixture",
+      "timingSource": "forced-alignment",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "forced-p1",
+          "text": "Local alignment corrects provider gaps without fake precision.",
+          "startMs": 0,
+          "durationMs": 4200
+        }
+      ],
+      "observations": [
+        {
+          "id": "forced-open",
+          "audioTimeMs": 620,
+          "highlightedNodeId": "forced-p1",
+          "highlightedWordIndex": 1,
+          "observedHighlightTimeMs": 660
+        },
+        {
+          "id": "forced-corrected",
+          "audioTimeMs": 1900,
+          "highlightedNodeId": "forced-p1",
+          "highlightedWordIndex": 3,
+          "observedHighlightTimeMs": 1970
+        },
+        {
+          "id": "forced-tail",
+          "audioTimeMs": 3550,
+          "highlightedNodeId": "forced-p1",
+          "highlightedWordIndex": 6,
+          "observedHighlightTimeMs": 3620
+        }
+      ]
+    },
+    {
+      "id": "long-chapter",
+      "kind": "long-chapter",
+      "title": "Long chapter sync fixture",
+      "timingSource": "forced-alignment",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "chapter-p1",
+          "text": "Long chapters need stable anchors across sections pages pauses and resumed playback.",
+          "startMs": 0,
+          "durationMs": 6000
+        },
+        {
+          "nodeId": "chapter-p2",
+          "text": "Later passages must not drift into the earlier rendered paragraph.",
+          "startMs": 6000,
+          "durationMs": 4500
+        }
+      ],
+      "observations": [
+        {
+          "id": "chapter-open",
+          "audioTimeMs": 400,
+          "highlightedNodeId": "chapter-p1",
+          "highlightedWordIndex": 0,
+          "observedHighlightTimeMs": 430
+        },
+        {
+          "id": "chapter-mid",
+          "audioTimeMs": 3600,
+          "highlightedNodeId": "chapter-p1",
+          "highlightedWordIndex": 7,
+          "observedHighlightTimeMs": 3675,
+          "scrollJumpPx": 90
+        },
+        {
+          "id": "chapter-late",
+          "audioTimeMs": 6500,
+          "highlightedNodeId": "chapter-p2",
+          "highlightedWordIndex": 13,
+          "observedHighlightTimeMs": 6570,
+          "scrollJumpPx": 120
+        },
+        {
+          "id": "chapter-finish",
+          "audioTimeMs": 9800,
+          "highlightedNodeId": "chapter-p2",
+          "highlightedWordIndex": 20,
+          "observedHighlightTimeMs": 9880
+        }
+      ]
+    },
+    {
+      "id": "short-document",
+      "kind": "short-document",
+      "title": "Short document sync fixture",
+      "timingSource": "provider-word",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "doc-p1",
+          "text": "Short documents still need exact bookmark and highlight positions.",
+          "startMs": 0,
+          "durationMs": 4000
+        }
+      ],
+      "observations": [
+        {
+          "id": "doc-open",
+          "audioTimeMs": 420,
+          "highlightedNodeId": "doc-p1",
+          "highlightedWordIndex": 0,
+          "observedHighlightTimeMs": 450
+        },
+        {
+          "id": "doc-bookmark",
+          "audioTimeMs": 1750,
+          "highlightedNodeId": "doc-p1",
+          "highlightedWordIndex": 3,
+          "observedHighlightTimeMs": 1810
+        },
+        {
+          "id": "doc-resume",
+          "audioTimeMs": 3180,
+          "highlightedNodeId": "doc-p1",
+          "highlightedWordIndex": 7,
+          "observedHighlightTimeMs": 3230
+        }
+      ]
+    },
+    {
+      "id": "citation-heavy-document",
+      "kind": "citation-heavy-document",
+      "title": "Citation-heavy document fixture",
+      "timingSource": "forced-alignment",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "citation-p1",
+          "text": "Citation chips remain on demand while spoken prose stays aligned.",
+          "startMs": 0,
+          "durationMs": 4600
+        }
+      ],
+      "observations": [
+        {
+          "id": "citation-open",
+          "audioTimeMs": 500,
+          "highlightedNodeId": "citation-p1",
+          "highlightedWordIndex": 1,
+          "observedHighlightTimeMs": 540
+        },
+        {
+          "id": "citation-skip-chip",
+          "audioTimeMs": 1800,
+          "highlightedNodeId": "citation-p1",
+          "highlightedWordIndex": 3,
+          "observedHighlightTimeMs": 1880
+        },
+        {
+          "id": "citation-close",
+          "audioTimeMs": 3900,
+          "highlightedNodeId": "citation-p1",
+          "highlightedWordIndex": 8,
+          "observedHighlightTimeMs": 3980
+        }
+      ]
+    },
+    {
+      "id": "website-article",
+      "kind": "website-article",
+      "title": "Website article sync fixture",
+      "timingSource": "provider-word",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "website-article-body",
+          "text": "Article body text starts after skipped navigation and stays in scope.",
+          "startMs": 0,
+          "durationMs": 5200
+        }
+      ],
+      "observations": [
+        {
+          "id": "website-body-start",
+          "audioTimeMs": 540,
+          "highlightedNodeId": "website-article-body",
+          "highlightedWordIndex": 1,
+          "observedHighlightTimeMs": 590
+        },
+        {
+          "id": "website-body-middle",
+          "audioTimeMs": 2600,
+          "highlightedNodeId": "website-article-body",
+          "highlightedWordIndex": 5,
+          "observedHighlightTimeMs": 2685
+        },
+        {
+          "id": "website-body-tail",
+          "audioTimeMs": 4550,
+          "highlightedNodeId": "website-article-body",
+          "highlightedWordIndex": 9,
+          "observedHighlightTimeMs": 4620
+        }
+      ]
+    },
+    {
+      "id": "speed-change",
+      "kind": "speed-change",
+      "title": "Playback speed-change sync fixture",
+      "timingSource": "provider-word",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "speed-p1",
+          "text": "Changing speed should resync from the audio clock immediately.",
+          "startMs": 0,
+          "durationMs": 4200
+        }
+      ],
+      "observations": [
+        {
+          "id": "speed-before",
+          "audioTimeMs": 500,
+          "highlightedNodeId": "speed-p1",
+          "highlightedWordIndex": 1,
+          "observedHighlightTimeMs": 530
+        },
+        {
+          "id": "speed-resync",
+          "audioTimeMs": 2100,
+          "highlightedNodeId": "speed-p1",
+          "highlightedWordIndex": 4,
+          "observedHighlightTimeMs": 2220,
+          "resync": true
+        },
+        {
+          "id": "speed-after",
+          "audioTimeMs": 3650,
+          "highlightedNodeId": "speed-p1",
+          "highlightedWordIndex": 7,
+          "observedHighlightTimeMs": 3710
+        }
+      ]
+    },
+    {
+      "id": "seek-resume",
+      "kind": "seek-resume",
+      "title": "Seek and resume sync fixture",
+      "timingSource": "forced-alignment",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "seek-p1",
+          "text": "Seeking and resuming should snap to the requested passage.",
+          "startMs": 0,
+          "durationMs": 4200
+        }
+      ],
+      "observations": [
+        {
+          "id": "seek-before",
+          "audioTimeMs": 520,
+          "highlightedNodeId": "seek-p1",
+          "highlightedWordIndex": 1,
+          "observedHighlightTimeMs": 560
+        },
+        {
+          "id": "seek-target",
+          "audioTimeMs": 2600,
+          "highlightedNodeId": "seek-p1",
+          "highlightedWordIndex": 5,
+          "observedHighlightTimeMs": 2720,
+          "resync": true,
+          "scrollJumpPx": 140
+        },
+        {
+          "id": "seek-resumed",
+          "audioTimeMs": 3600,
+          "highlightedNodeId": "seek-p1",
+          "highlightedWordIndex": 7,
+          "observedHighlightTimeMs": 3660
+        }
+      ]
+    },
+    {
+      "id": "stale-audio",
+      "kind": "stale-audio",
+      "title": "Stale audio does not drive highlight",
+      "timingSource": "provider-word",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "stale-p1",
+          "text": "Stale generated audio must not keep moving the highlight.",
+          "startMs": 0,
+          "durationMs": 4200
+        }
+      ],
+      "observations": [
+        {
+          "id": "stale-open",
+          "audioTimeMs": 500,
+          "audioState": "stale",
+          "highlightedNodeId": null,
+          "highlightedWordIndex": null
+        },
+        {
+          "id": "stale-middle",
+          "audioTimeMs": 2100,
+          "audioState": "stale",
+          "highlightedNodeId": null,
+          "highlightedWordIndex": null
+        },
+        {
+          "id": "stale-tail",
+          "audioTimeMs": 3600,
+          "audioState": "stale",
+          "highlightedNodeId": null,
+          "highlightedWordIndex": null
+        }
+      ]
+    },
+    {
+      "id": "heuristic-degraded",
+      "kind": "heuristic-degraded",
+      "title": "Heuristic degraded timing fixture",
+      "timingSource": "heuristic",
+      "expectedLevel": "degraded",
+      "nodes": [
+        {
+          "nodeId": "degraded-p1",
+          "text": "Heuristic timing reports degraded mode instead of fake word sync.",
+          "startMs": 0,
+          "durationMs": 4200
+        }
+      ],
+      "observations": [
+        {
+          "id": "degraded-open",
+          "audioTimeMs": 600,
+          "highlightedNodeId": null,
+          "highlightedWordIndex": null
+        },
+        {
+          "id": "degraded-middle",
+          "audioTimeMs": 2100,
+          "highlightedNodeId": null,
+          "highlightedWordIndex": null
+        },
+        {
+          "id": "degraded-tail",
+          "audioTimeMs": 3600,
+          "highlightedNodeId": null,
+          "highlightedWordIndex": null
+        }
+      ],
+      "waivers": [
+        {
+          "owner": "alignment",
+          "reason": "Heuristic fallback is intentionally reported as degraded and excluded from accurate word-sync claims."
+        }
+      ]
+    }
+  ]
+}

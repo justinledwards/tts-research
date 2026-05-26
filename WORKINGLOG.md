@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-26 09:21 CEST - Sync Benchmark Fixtures and Local Evidence Gate
+- [x] Inspect existing alignment, reader-wayfinding, and Book Cinema evidence scripts
+- [x] Add deterministic sync fixtures and shared benchmark/e2e reporting
+- [x] Generate sync metrics, drift timeline, summary, and waiver artifacts
+- [x] Wire local commands into package scripts and review evidence where appropriate
+- [x] Run WP39 local validation commands
+
 ## 2026-05-26 08:43 CEST - Read-Along Highlight Rendering and Scroll Ergonomics
 - [x] Inspect current reader highlight rendering, timing artifact, and scroll paths
 - [x] Add shared DOM anchor resolver, highlight visual modes, and scroll policy modules

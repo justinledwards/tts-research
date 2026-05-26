@@ -14,6 +14,18 @@
     "maxTotalWarnings": 10,
     "minTotalNodes": 5
   },
+  "readAlongSync": {
+    "maxMedianWordDriftMs": 150,
+    "maxP95WordDriftMs": 150,
+    "maxPhraseDriftMs": 350,
+    "maxWrongNodeCount": 0,
+    "maxWrongWordCount": 0,
+    "maxMissedHighlightCount": 0,
+    "maxStaleHighlightCount": 0,
+    "maxScrollJumpCount": 0,
+    "maxDegradedTimePercentage": 35,
+    "minFixtureCount": 10
+  },
   "frontendBundle": {
     "maxInitialJsRawBytes": 523700,
     "maxInitialJsGzipBytes": 160000,

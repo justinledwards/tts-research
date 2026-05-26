@@ -171,6 +171,16 @@ export function buildReviewSteps(context) {
       id: "read-along-fidelity-e2e",
       title: "Read-along Fidelity E2E",
     },
+    {
+      args: ["e2e:readalong-sync"],
+      artifacts: readAlongSyncArtifacts(context, "readalong-sync-e2e"),
+      command: "pnpm",
+      env: {
+        E2E_READALONG_SYNC_OUTPUT_DIR: artifactDir(context, "readalong-sync-e2e"),
+      },
+      id: "readalong-sync-e2e",
+      title: "Read-along Sync E2E",
+    },
     bookCinemaStep(context, {
       id: "book-cinema-responsive-e2e",
       script: "e2e:book-cinema:responsive",
@@ -346,6 +356,16 @@ function readAlongFidelityArtifacts(context, id) {
     readAlongReport: path.join(dir, "read-along-fidelity-report.md"),
     readAlongResults: path.join(dir, "read-along-fidelity-results.json"),
     screenshots: path.join(dir, "screenshots"),
+  };
+}
+
+function readAlongSyncArtifacts(context, id) {
+  const dir = artifactDir(context, id);
+  return {
+    screenshots: path.join(dir, "screenshots"),
+    syncMetrics: path.join(dir, "sync-metrics.json"),
+    syncSummary: path.join(dir, "sync-summary.md"),
+    syncTimeline: path.join(dir, "drift-timeline.json"),
   };
 }
 

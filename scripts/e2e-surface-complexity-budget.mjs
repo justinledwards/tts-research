@@ -21,6 +21,9 @@ const budgets = {
   readMode: budget("calm", 25, 10, 4, 0, 6, 6, 2, 40, 40, 10, [
     "Read mode stays canvas-first with diagnostics hidden by default.",
   ]),
+  readModeMoreMenu: budget("calm", 25, 10, 4, 0, 6, 7, 2, 40, 40, 10, [
+    "Cinema More may expose display, advanced, and navigation entry points on demand.",
+  ]),
   websiteReadCalm: budget(
     "calm",
     16,
@@ -66,6 +69,7 @@ const budgets = {
 const scenarioBudgetKeys = {
   "book-docx-audio-ready": "readMode",
   "book-epub-audio-ready": "readMode",
+  "book-more-menu": "readModeMoreMenu",
   "book-pdf-pre-audio": "workspace",
   "command-palette": "commandPalette",
   "document-cinema": "readMode",

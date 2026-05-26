@@ -6,6 +6,10 @@ import process from "node:process";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { startLocalServices } from "../e2e-browser-qa-helpers.mjs";
+import {
+  evaluateReadAlongSyncFixtures,
+  loadReadAlongSyncFixtures,
+} from "../readalong-sync-evidence.mjs";
 import { loadBenchmarkConfig, runAlignmentBenchmark } from "./benchmarks.mjs";
 import { runFrontendBundleBenchmark } from "./frontend-performance.mjs";
 import { evaluateReaderTimingSummary } from "./reader-timing.mjs";
@@ -130,6 +134,27 @@ if (runFastLane) {
   await runCommandBatch(context, fastCommandBatchB, {
     concurrency: fastCommandConcurrency,
   });
+
+  await runCallbackStep(
+    context,
+    {
+      id: "readalong-sync-benchmark",
+      title: "Read-along Sync Benchmark",
+      command: "read-along sync benchmark",
+    },
+    async () => {
+      const fixtureSet = await loadReadAlongSyncFixtures(rootDir, manifest.readAlongSync);
+      const result = evaluateReadAlongSyncFixtures({
+        fixtures: fixtureSet.fixtures,
+        thresholds: thresholds.readAlongSync,
+      });
+      return {
+        metrics: result.metrics,
+        output: `Read-along sync benchmark ${result.status}`,
+        thresholds: result.comparisons,
+      };
+    },
+  );
 }
 
 for (const step of runReleaseLane ? releaseCommandSteps : []) {
@@ -242,6 +267,23 @@ if (runE2ELane) {
           "read-along-fidelity-results.json",
         ),
         screenshots: path.join(context.artifactsDir, "read-along-fidelity-e2e", "screenshots"),
+      },
+    });
+
+    await runCommandStep(context, {
+      id: "readalong-sync-e2e",
+      title: "Read-along Sync E2E",
+      command: "pnpm",
+      args: ["e2e:readalong-sync"],
+      env: {
+        ...sharedE2EEnv,
+        E2E_READALONG_SYNC_OUTPUT_DIR: path.join(context.artifactsDir, "readalong-sync-e2e"),
+      },
+      artifacts: {
+        screenshots: path.join(context.artifactsDir, "readalong-sync-e2e", "screenshots"),
+        syncMetrics: path.join(context.artifactsDir, "readalong-sync-e2e", "sync-metrics.json"),
+        syncSummary: path.join(context.artifactsDir, "readalong-sync-e2e", "sync-summary.md"),
+        syncTimeline: path.join(context.artifactsDir, "readalong-sync-e2e", "drift-timeline.json"),
       },
     });
 

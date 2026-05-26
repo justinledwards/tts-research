@@ -21,9 +21,9 @@ const destructivePattern =
 const nonDestructiveClearPattern = /\bclear selection\b/i;
 const transportPattern = /(?:\b(play|pause|resume|restart|seek|speed)\b|[+-]10s)/i;
 const modePattern =
-  /\b(intake|review|preview|read|inspect|debug|narration|voice cloning|focus|balanced|full|teleprompt)\b/i;
+  /\b(intake|review|preview|read|inspect|debug|narration|voice cloning|focus|balanced|full|teleprompt|cue sync mode)\b/i;
 const settingsPattern =
-  /\b(settings|reader|policy|profile|scope|motion|contrast|typography|font|spacing|voice)\b/i;
+  /\b(settings|reader|policy|profile|scope|motion|contrast|typography|font|spacing|voice|preset|standard|large text|dyslexic friendly|mirror mode|rail|activity footer)\b/i;
 const diagnosticPattern =
   /\b(help|diagnostic|debug|pipeline|validation|source|inspect|context guide|details)\b/i;
 const navigationPattern =
