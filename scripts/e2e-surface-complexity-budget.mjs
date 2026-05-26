@@ -21,6 +21,34 @@ const budgets = {
   readMode: budget("calm", 25, 10, 4, 0, 6, 6, 2, 40, 40, 10, [
     "Read mode stays canvas-first with diagnostics hidden by default.",
   ]),
+  websiteReadCalm: budget(
+    "calm",
+    16,
+    6,
+    2,
+    0,
+    3,
+    4,
+    1,
+    36,
+    10,
+    6,
+    [
+      "Website Cinema Read mode keeps one source summary, one mode group, and one playback group visible.",
+      "Source, policy, provenance, and display details stay available through Inspect or popovers.",
+    ],
+    {
+      maxExpandedPolicySourceDetails: 0,
+      maxFooterRows: 3,
+      maxHeaderLines: 3,
+      maxInlineDisplaySettings: 0,
+      maxModeControlGroups: 1,
+      maxPanelCount: 0,
+      maxPrimaryPlaybackGroups: 1,
+      maxSourceIdentitySummaries: 1,
+      maxVisibleBadges: 2,
+    },
+  ),
   reviewWorkspace: budget("dense", 68, 26, 14, 2, 12, 10, 8, 45, 72, 16, [
     "Review may expose batch actions, but one review action group remains primary.",
   ]),
@@ -49,7 +77,8 @@ const scenarioBudgetKeys = {
   "settings-speech-policy": "settingsQuick",
   "settings-ui-memory": "settingsQuick",
   "voice-dashboard": "commandPalette",
-  "website-cinema": "readMode",
+  "website-cinema": "websiteReadCalm",
+  "website-cinema-calm-read": "websiteReadCalm",
   "workspace-intake": "workspace",
   "workspace-preview": "workspace",
   "workspace-review": "reviewWorkspace",
@@ -116,6 +145,7 @@ async function main() {
       scenarios: scenarios.length,
       surfaces: new Set(scenarios.map((scenario) => scenario.surface)).size,
     },
+    websiteReadModeCalmness: websiteReadModeCalmnessSummary(scenarios),
     scenarios,
     failures,
   };
@@ -182,7 +212,14 @@ function metricsFromActions(actions) {
     destructiveActions: actions.filter((action) => action.destructive).length,
     disabledActions: actions.filter((action) => action.disabled).length,
     duplicatedVisibleLabels: [...labels.values()].filter((count) => count > 1).length,
+    expandedPolicySourceDetails: 0,
+    footerRows: 0,
+    headerLines: 0,
+    inlineDisplaySettings: 0,
+    modeControlGroups: 0,
     panelsOpenByDefault: 0,
+    panelCount: 0,
+    primaryPlaybackGroups: 0,
     primaryActions: actions.filter(
       (action) =>
         action.playbackPrimary ||
@@ -190,6 +227,8 @@ function metricsFromActions(actions) {
         action.actionClass === "preview",
     ).length,
     reachableDrawersSheets,
+    sourceIdentitySummaries: 0,
+    visibleBadges: 0,
     visibleActions: actions.length,
   };
 }
@@ -222,6 +261,7 @@ function evaluate(metrics, activeBudget) {
     ),
     threshold("chipsBadges", metrics.chipsBadges, activeBudget.maxChipsBadges),
     threshold("activeModesTabs", metrics.activeModesTabs, activeBudget.maxActiveModesTabs),
+    ...optionalThresholds(metrics, activeBudget),
   ];
 }
 
@@ -238,8 +278,10 @@ function budget(
   chips,
   activeModes,
   notes,
+  extras = {},
 ) {
   return {
+    ...extras,
     maxActiveModesTabs: activeModes,
     maxAverageAccessibleLabelLength: labelLength,
     maxChipsBadges: chips,
@@ -252,6 +294,91 @@ function budget(
     maxVisibleActions: visible,
     notes,
     tier,
+  };
+}
+
+function optionalThresholds(metrics, activeBudget) {
+  return [
+    optionalThreshold("visibleBadges", metrics.visibleBadges, activeBudget.maxVisibleBadges),
+    optionalThreshold("headerLines", metrics.headerLines, activeBudget.maxHeaderLines),
+    optionalThreshold("footerRows", metrics.footerRows, activeBudget.maxFooterRows),
+    optionalThreshold("panelCount", metrics.panelCount, activeBudget.maxPanelCount),
+    optionalThreshold(
+      "primaryPlaybackGroups",
+      metrics.primaryPlaybackGroups,
+      activeBudget.maxPrimaryPlaybackGroups,
+    ),
+    optionalThreshold(
+      "sourceIdentitySummaries",
+      metrics.sourceIdentitySummaries,
+      activeBudget.maxSourceIdentitySummaries,
+    ),
+    optionalThreshold(
+      "modeControlGroups",
+      metrics.modeControlGroups,
+      activeBudget.maxModeControlGroups,
+    ),
+    optionalThreshold(
+      "inlineDisplaySettings",
+      metrics.inlineDisplaySettings,
+      activeBudget.maxInlineDisplaySettings,
+    ),
+    optionalThreshold(
+      "expandedPolicySourceDetails",
+      metrics.expandedPolicySourceDetails,
+      activeBudget.maxExpandedPolicySourceDetails,
+    ),
+  ].filter(Boolean);
+}
+
+function optionalThreshold(metric, actual, budgetValue) {
+  if (typeof budgetValue !== "number") {
+    return null;
+  }
+  return threshold(metric, actual ?? 0, budgetValue);
+}
+
+function websiteReadModeCalmnessSummary(scenarios) {
+  const websiteScenarios = scenarios.filter((scenario) => scenario.budgetKey === "websiteReadCalm");
+  if (websiteScenarios.length === 0) {
+    return null;
+  }
+  return websiteScenarios.map((scenario) => ({
+    after: pickWebsiteReadModeMetrics(scenario.metrics),
+    beforeBudget: pickWebsiteReadModeBudget(budgets.readMode),
+    scenarioId: scenario.id,
+    status: scenario.status,
+    websiteCalmBudget: pickWebsiteReadModeBudget(scenario.budget),
+  }));
+}
+
+function pickWebsiteReadModeMetrics(metrics) {
+  return {
+    expandedPolicySourceDetails: metrics.expandedPolicySourceDetails ?? 0,
+    footerRows: metrics.footerRows ?? 0,
+    headerLines: metrics.headerLines ?? 0,
+    inlineDisplaySettings: metrics.inlineDisplaySettings ?? 0,
+    modeControlGroups: metrics.modeControlGroups ?? 0,
+    panelCount: metrics.panelCount ?? 0,
+    primaryPlaybackGroups: metrics.primaryPlaybackGroups ?? 0,
+    sourceIdentitySummaries: metrics.sourceIdentitySummaries ?? 0,
+    visibleActions: metrics.visibleActions,
+    visibleBadges: metrics.visibleBadges ?? 0,
+  };
+}
+
+function pickWebsiteReadModeBudget(activeBudget) {
+  return {
+    expandedPolicySourceDetails: activeBudget.maxExpandedPolicySourceDetails ?? null,
+    footerRows: activeBudget.maxFooterRows ?? null,
+    headerLines: activeBudget.maxHeaderLines ?? null,
+    inlineDisplaySettings: activeBudget.maxInlineDisplaySettings ?? null,
+    modeControlGroups: activeBudget.maxModeControlGroups ?? null,
+    panelCount: activeBudget.maxPanelCount ?? null,
+    primaryPlaybackGroups: activeBudget.maxPrimaryPlaybackGroups ?? null,
+    sourceIdentitySummaries: activeBudget.maxSourceIdentitySummaries ?? null,
+    visibleActions: activeBudget.maxVisibleActions,
+    visibleBadges: activeBudget.maxVisibleBadges ?? null,
   };
 }
 
@@ -278,7 +405,10 @@ function budgetKeyForSurface(surface) {
   if (surface === "Review") {
     return "reviewWorkspace";
   }
-  if (surface === "BookCinema" || surface === "DocumentCinema" || surface === "WebsiteCinema") {
+  if (surface === "WebsiteCinema") {
+    return "websiteReadCalm";
+  }
+  if (surface === "BookCinema" || surface === "DocumentCinema") {
     return "readMode";
   }
   return "workspace";
@@ -323,6 +453,22 @@ function renderMarkdown(document) {
     );
   }
   lines.push("", "## Budget Notes", "");
+  if (document.websiteReadModeCalmness?.length) {
+    lines.push("## Website Cinema Read-Mode Calmness", "");
+    for (const item of document.websiteReadModeCalmness) {
+      lines.push(`### ${item.scenarioId}`, "");
+      lines.push("| Metric | Before general read budget | Calm budget | Actual |");
+      lines.push("| --- | ---: | ---: | ---: |");
+      for (const metric of Object.keys(item.after)) {
+        lines.push(
+          `| ${metric} | ${formatBudgetCell(item.beforeBudget[metric])} | ${formatBudgetCell(
+            item.websiteCalmBudget[metric],
+          )} | ${String(item.after[metric])} |`,
+        );
+      }
+      lines.push("");
+    }
+  }
   for (const [key, activeBudget] of Object.entries(budgets)) {
     lines.push(`### ${key}`, "");
     for (const note of activeBudget.notes) {
@@ -346,6 +492,10 @@ function renderMarkdown(document) {
 
 function escapeMarkdown(value) {
   return String(value ?? "").replaceAll("|", "\\|");
+}
+
+function formatBudgetCell(value) {
+  return typeof value === "number" ? String(value) : "n/a";
 }
 
 function runCommand(command, args, env) {

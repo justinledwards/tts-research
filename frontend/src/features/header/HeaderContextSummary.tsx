@@ -17,6 +17,7 @@ export interface HeaderContextSummaryProps {
   density?: "compact" | "comfortable";
   id?: string;
   icon?: ReactNode;
+  inlineSummary?: boolean;
   metadata?: HeaderContextMetadataItem[];
   scopeTitle?: string | null;
   sourceLifecycleDescriptorOverride?: SourceLifecycleDescriptor | null;
@@ -33,6 +34,7 @@ export function HeaderContextSummary({
   density = "comfortable",
   id,
   icon,
+  inlineSummary = true,
   metadata = [],
   scopeTitle,
   sourceLifecycleDescriptorOverride = null,
@@ -82,10 +84,11 @@ export function HeaderContextSummary({
     <section
       aria-label={ariaLabel}
       className={`${isBar ? "flex min-w-0 items-center gap-3" : "grid min-w-0 gap-2"} ${className}`}
+      data-source-identity-summary=""
     >
       {icon ? <div className="shrink-0">{icon}</div> : null}
       <div className="min-w-0">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2" data-cinema-header-line="state">
           <p className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
             {surfaceName}
           </p>
@@ -94,6 +97,7 @@ export function HeaderContextSummary({
               className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${sourceLifecycleToneClassName(
                 lifecycleSentence.primaryTone,
               )}`}
+              data-status-chip=""
               title={lifecycleSentence.primaryDetail}
             >
               {lifecycleSentence.primaryLabel}
@@ -104,6 +108,7 @@ export function HeaderContextSummary({
           <h2
             aria-label={`${surfaceName} source: ${normalizedSourceTitle}`}
             className={`min-w-0 truncate font-semibold text-[var(--vs-text)] ${textSizeClass}`}
+            data-cinema-header-line="source-title"
             id={id}
             title={normalizedSourceTitle}
           >
@@ -113,12 +118,13 @@ export function HeaderContextSummary({
         <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs vs-muted">
           <span
             className="inline-flex min-w-0 max-w-full items-center gap-1 truncate"
+            data-cinema-header-line="scope"
             title={normalizedScopeTitle}
           >
             <span className="shrink-0 font-semibold">Scope</span>
             {normalizedScopeTitle}
           </span>
-          {lifecycleSentence.visibleSummary ? (
+          {inlineSummary && lifecycleSentence.visibleSummary ? (
             <span
               className="inline-flex min-w-0 max-w-full items-center gap-1 before:text-[var(--vs-muted)] before:content-['·'] sm:max-w-[30rem]"
               title={lifecycleSentence.visibleSummary}

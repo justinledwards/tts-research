@@ -304,9 +304,12 @@ describe("prepared source cinema helpers", () => {
 
     expect(markup).toContain("Website Cinema");
     expect(markup).toContain("Example article");
-    expect(markup).toContain("Article high");
-    expect(markup).toContain("Review article");
-    expect(markup).toContain("Select cinema source");
+    expect(markup).toContain('data-website-read-mode-calm="true"');
+    expect(markup).toContain('data-source-identity-summary=""');
+    expect(markup).toContain("Show full Website Cinema context");
+    expect(markup).not.toContain("Article high");
+    expect(markup).not.toContain("Review article");
+    expect(markup).not.toContain("Select cinema source");
     expect(markup).toContain("Read");
     expect(markup).toContain("Inspect");
     expect(markup).toContain("Review");

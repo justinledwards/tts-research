@@ -33,6 +33,7 @@ export function CinemaInspectorDock({
   return (
     <aside
       className={`hidden min-h-0 min-w-0 overflow-y-auto pl-1 lg:block ${className}`}
+      data-cinema-inspector-dock=""
       data-cinema-inspector-mode={mode}
     >
       <div data-cinema-inspector-body="" data-cinema-inspector-panel={state.activePanel.id}>

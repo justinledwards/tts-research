@@ -62,7 +62,10 @@ export function CinemaFocusModeToolbar({
   };
 
   return (
-    <div className="grid grid-cols-[repeat(3,minmax(0,1fr))_auto] rounded-md border p-0.5 text-xs font-semibold vs-border vs-surface">
+    <div
+      className="grid grid-cols-[repeat(3,minmax(0,1fr))_auto] rounded-md border p-0.5 text-xs font-semibold vs-border vs-surface"
+      data-cinema-mode-control-group=""
+    >
       {CINEMA_PRIMARY_FOCUS_MODES.map((item) => (
         <Button
           aria-pressed={mode === item}

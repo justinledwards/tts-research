@@ -9,9 +9,18 @@ export interface SurfaceComplexityMetrics {
   readonly destructiveActions: number;
   readonly disabledActions: number;
   readonly duplicatedVisibleLabels: number;
+  readonly expandedPolicySourceDetails?: number;
+  readonly footerRows?: number;
+  readonly headerLines?: number;
+  readonly inlineDisplaySettings?: number;
+  readonly modeControlGroups?: number;
   readonly panelsOpenByDefault: number;
+  readonly panelCount?: number;
+  readonly primaryPlaybackGroups?: number;
   readonly primaryActions: number;
   readonly reachableDrawersSheets: number;
+  readonly sourceIdentitySummaries?: number;
+  readonly visibleBadges?: number;
   readonly visibleActions: number;
 }
 
@@ -23,9 +32,18 @@ export interface SurfaceComplexityBudget {
   readonly maxDestructiveActions: number;
   readonly maxDisabledActions: number;
   readonly maxDuplicatedVisibleLabels: number;
+  readonly maxExpandedPolicySourceDetails?: number;
+  readonly maxFooterRows?: number;
+  readonly maxHeaderLines?: number;
+  readonly maxInlineDisplaySettings?: number;
+  readonly maxModeControlGroups?: number;
   readonly maxPanelsOpenByDefault: number;
+  readonly maxPanelCount?: number;
+  readonly maxPrimaryPlaybackGroups?: number;
   readonly maxPrimaryActions: number;
   readonly maxReachableDrawersSheets: number;
+  readonly maxSourceIdentitySummaries?: number;
+  readonly maxVisibleBadges?: number;
   readonly maxVisibleActions: number;
   readonly notes: readonly string[];
   readonly tier: SurfaceComplexityTier;
@@ -80,6 +98,32 @@ export const SURFACE_COMPLEXITY_BUDGETS = {
     maxReachableDrawersSheets: 6,
     maxVisibleActions: 25,
     notes: ["Read mode stays canvas-first with diagnostics hidden by default."],
+    tier: "calm",
+  },
+  websiteReadCalm: {
+    maxActiveModesTabs: 6,
+    maxAverageAccessibleLabelLength: 36,
+    maxChipsBadges: 10,
+    maxDestructiveActions: 0,
+    maxDisabledActions: 2,
+    maxDuplicatedVisibleLabels: 1,
+    maxExpandedPolicySourceDetails: 0,
+    maxFooterRows: 3,
+    maxHeaderLines: 3,
+    maxInlineDisplaySettings: 0,
+    maxModeControlGroups: 1,
+    maxPanelsOpenByDefault: 3,
+    maxPanelCount: 0,
+    maxPrimaryActions: 6,
+    maxPrimaryPlaybackGroups: 1,
+    maxReachableDrawersSheets: 4,
+    maxSourceIdentitySummaries: 1,
+    maxVisibleActions: 16,
+    maxVisibleBadges: 2,
+    notes: [
+      "Website Cinema Read mode keeps one source summary, one mode group, and one playback group visible.",
+      "Source, policy, provenance, and display details stay available through Inspect or popovers.",
+    ],
     tier: "calm",
   },
   reviewWorkspace: {
@@ -154,7 +198,8 @@ export const SURFACE_COMPLEXITY_SCENARIO_BUDGETS = {
   "settings-speech-policy": SURFACE_COMPLEXITY_BUDGETS.settingsQuick,
   "settings-ui-memory": SURFACE_COMPLEXITY_BUDGETS.settingsQuick,
   "voice-dashboard": SURFACE_COMPLEXITY_BUDGETS.commandPalette,
-  "website-cinema": SURFACE_COMPLEXITY_BUDGETS.readMode,
+  "website-cinema": SURFACE_COMPLEXITY_BUDGETS.websiteReadCalm,
+  "website-cinema-calm-read": SURFACE_COMPLEXITY_BUDGETS.websiteReadCalm,
   "workspace-intake": SURFACE_COMPLEXITY_BUDGETS.workspace,
   "workspace-preview": SURFACE_COMPLEXITY_BUDGETS.workspace,
   "workspace-review": SURFACE_COMPLEXITY_BUDGETS.reviewWorkspace,
@@ -177,7 +222,7 @@ export function evaluateSurfaceComplexity(
   metrics: SurfaceComplexityMetrics,
   budget: SurfaceComplexityBudget,
 ): SurfaceComplexityResult[] {
-  return [
+  const results = [
     result("visibleActions", metrics.visibleActions, budget.maxVisibleActions),
     result("primaryActions", metrics.primaryActions, budget.maxPrimaryActions),
     result("disabledActions", metrics.disabledActions, budget.maxDisabledActions),
@@ -201,6 +246,41 @@ export function evaluateSurfaceComplexity(
     result("chipsBadges", metrics.chipsBadges, budget.maxChipsBadges),
     result("activeModesTabs", metrics.activeModesTabs, budget.maxActiveModesTabs),
   ];
+  appendOptionalResult(results, "visibleBadges", metrics.visibleBadges, budget.maxVisibleBadges);
+  appendOptionalResult(results, "headerLines", metrics.headerLines, budget.maxHeaderLines);
+  appendOptionalResult(results, "footerRows", metrics.footerRows, budget.maxFooterRows);
+  appendOptionalResult(results, "panelCount", metrics.panelCount, budget.maxPanelCount);
+  appendOptionalResult(
+    results,
+    "primaryPlaybackGroups",
+    metrics.primaryPlaybackGroups,
+    budget.maxPrimaryPlaybackGroups,
+  );
+  appendOptionalResult(
+    results,
+    "sourceIdentitySummaries",
+    metrics.sourceIdentitySummaries,
+    budget.maxSourceIdentitySummaries,
+  );
+  appendOptionalResult(
+    results,
+    "modeControlGroups",
+    metrics.modeControlGroups,
+    budget.maxModeControlGroups,
+  );
+  appendOptionalResult(
+    results,
+    "inlineDisplaySettings",
+    metrics.inlineDisplaySettings,
+    budget.maxInlineDisplaySettings,
+  );
+  appendOptionalResult(
+    results,
+    "expandedPolicySourceDetails",
+    metrics.expandedPolicySourceDetails,
+    budget.maxExpandedPolicySourceDetails,
+  );
+  return results;
 }
 
 function budgetForSurface(surface: UiActionSurface): SurfaceComplexityBudget {
@@ -216,7 +296,10 @@ function budgetForSurface(surface: UiActionSurface): SurfaceComplexityBudget {
   if (surface === "Review") {
     return SURFACE_COMPLEXITY_BUDGETS.reviewWorkspace;
   }
-  if (surface === "BookCinema" || surface === "DocumentCinema" || surface === "WebsiteCinema") {
+  if (surface === "WebsiteCinema") {
+    return SURFACE_COMPLEXITY_BUDGETS.websiteReadCalm;
+  }
+  if (surface === "BookCinema" || surface === "DocumentCinema") {
     return SURFACE_COMPLEXITY_BUDGETS.readMode;
   }
   return SURFACE_COMPLEXITY_BUDGETS.workspace;
@@ -233,4 +316,15 @@ function result(
     metric,
     passed: actual <= budget,
   };
+}
+
+function appendOptionalResult(
+  results: SurfaceComplexityResult[],
+  metric: keyof SurfaceComplexityMetrics,
+  actual: number | undefined,
+  budget: number | undefined,
+): void {
+  if (typeof budget === "number") {
+    results.push(result(metric, actual ?? 0, budget));
+  }
 }

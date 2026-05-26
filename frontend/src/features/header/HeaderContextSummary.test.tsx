@@ -61,6 +61,33 @@ describe("HeaderContextSummary", () => {
       }).primaryLabel,
     ).toBe("Preview ready");
   });
+
+  it("can keep lifecycle details available only through the info popover", () => {
+    const markup = renderToStaticMarkup(
+      <HeaderContextSummary
+        inlineSummary={false}
+        metadata={[
+          { label: "Policy", value: "Education" },
+          { label: "Voice", value: "Narrator Alpha" },
+        ]}
+        scopeTitle="Full source"
+        sourceLifecycle={sourceLifecycleFixture("audioReady", "ready")}
+        sourceTitle="Website fixture article"
+        stateLabel="Audio ready"
+        surfaceName="Website Cinema"
+        variant="bar"
+      />,
+    );
+
+    expect(markup).toContain('data-source-identity-summary=""');
+    expect(markup).toContain('data-cinema-header-line="state"');
+    expect(markup).toContain('data-cinema-header-line="source-title"');
+    expect(markup).toContain('data-cinema-header-line="scope"');
+    expect(markup).toContain("Show full Website Cinema context");
+    expect(markup).toContain("Policy");
+    expect(markup).toContain("Education");
+    expect(markup).not.toContain("Lifecycle summary");
+  });
 });
 
 function sourceLifecycleFixture(

@@ -270,7 +270,11 @@ function DesktopPlaybackTransport({
   const displayPopover = useCinemaDisplayPopover(visibility.displayControls);
 
   return (
-    <div className="hidden min-w-0 grid-cols-[auto_minmax(14rem,1fr)_auto] items-center gap-3 lg:grid">
+    <div
+      className="hidden min-w-0 grid-cols-[auto_minmax(14rem,1fr)_auto] items-center gap-3 lg:grid"
+      data-cinema-footer-row="desktop-transport"
+      data-cinema-primary-playback-group=""
+    >
       <div className="flex min-w-0 items-center gap-2">
         {visibility.restart ? (
           <Button
@@ -416,7 +420,10 @@ function MobilePlaybackTransport({
 
   return (
     <div className="grid gap-3 lg:hidden">
-      <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-3 text-sm tabular-nums vs-muted">
+      <div
+        className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-3 text-sm tabular-nums vs-muted"
+        data-cinema-footer-row="mobile-progress"
+      >
         <span>{model.progress.currentLabel}</span>
         <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-surface)]">
           <div
@@ -426,7 +433,11 @@ function MobilePlaybackTransport({
         </div>
         <span className="text-right">{model.progress.durationLabel}</span>
       </div>
-      <div className="grid grid-cols-5 items-center gap-2">
+      <div
+        className="grid grid-cols-5 items-center gap-2"
+        data-cinema-footer-row="mobile-primary"
+        data-cinema-primary-playback-group=""
+      >
         {visibility.skipBackward ? (
           <IconTransportButton
             disabled={model.skipBackward.disabled}
@@ -475,7 +486,10 @@ function MobilePlaybackTransport({
           </IconTransportButton>
         ) : null}
       </div>
-      <div className="flex items-center justify-center gap-2">
+      <div
+        className="flex items-center justify-center gap-2"
+        data-cinema-footer-row="mobile-secondary"
+      >
         {visibility.playbackRate ? <PlaybackRateSelect model={model} mobile /> : null}
         {visibility.bookmark && model.bookmark ? (
           <Button

@@ -675,10 +675,31 @@ export function PreparedSourceCinemaOverlay({
     onStateChange: onUiMemoryFocusStateChange,
     resetSignal: uiMemoryResetSignal,
   });
+  const websiteReadModeCalm = isWebsiteCinema && cinemaFocus.mode === "read";
+  const hasWebsiteQuality = websiteQuality !== null;
+  let websiteNeedsExtractionAttention = false;
+  if (hasWebsiteQuality) {
+    websiteNeedsExtractionAttention = websiteQuality.extractionConfidence !== "high";
+    if (websiteQuality.articleUncertain) {
+      websiteNeedsExtractionAttention = true;
+    }
+  }
+  const showWebsiteExtractionSummary =
+    isWebsiteCinema && (!websiteReadModeCalm || websiteNeedsExtractionAttention);
+  const showWebsiteReviewAction =
+    isWebsiteCinema &&
+    hasWebsiteQuality &&
+    (!websiteReadModeCalm || websiteNeedsExtractionAttention);
   const handleReviewWebsiteExtraction = () => {
     cinemaFocus.setMode("inspect");
     cinemaFocus.setActivePanelId("overview");
   };
+
+  useEffect(() => {
+    if (websiteReadModeCalm) {
+      setSettingsOpen(false);
+    }
+  }, [websiteReadModeCalm]);
 
   useReaderKeyboardControls({
     canBookmark,
@@ -777,7 +798,11 @@ export function PreparedSourceCinemaOverlay({
       }
       focusMode={cinemaFocus.mode}
       header={
-        <header className="relative flex min-h-[4rem] flex-wrap items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
+        <header
+          className="relative flex min-h-[4rem] flex-wrap items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6"
+          data-cinema-header=""
+          data-website-read-mode-calm={websiteReadModeCalm ? "true" : undefined}
+        >
           <HeaderContextSummary
             className="min-w-0 flex-1 basis-[18rem] sm:min-w-[16rem] sm:basis-[26rem] lg:max-w-[min(36rem,42vw)]"
             density="compact"
@@ -787,6 +812,7 @@ export function PreparedSourceCinemaOverlay({
               </span>
             }
             id="prepared-source-cinema-title"
+            inlineSummary={!websiteReadModeCalm}
             metadata={[
               { label: "Reader", value: headerReadiness.readerLabel },
               { label: "Policy", value: sourcePolicySummary.compactLabel },
@@ -806,13 +832,15 @@ export function PreparedSourceCinemaOverlay({
             surfaceName={cinemaLabel}
             variant="bar"
           />
-          {isWebsiteCinema ? <WebsiteExtractionSummary source={source} /> : null}
+          {showWebsiteExtractionSummary ? <WebsiteExtractionSummary source={source} /> : null}
           <div className="order-last flex min-w-0 flex-1 basis-full flex-wrap items-center gap-3 lg:flex xl:order-none xl:basis-auto xl:flex-nowrap">
-            <PreparedSourceCinemaHeaderSourceSelect
-              source={source}
-              sources={sources}
-              onSelectSource={onSelectSource}
-            />
+            {websiteReadModeCalm ? null : (
+              <PreparedSourceCinemaHeaderSourceSelect
+                source={source}
+                sources={sources}
+                onSelectSource={onSelectSource}
+              />
+            )}
             <div className="hidden min-w-[17rem] shrink-0 lg:block">
               <CinemaFocusModeToolbar
                 activePanelId={cinemaFocus.activePanelId}
@@ -826,7 +854,7 @@ export function PreparedSourceCinemaOverlay({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {isWebsiteCinema && websiteQuality ? (
+            {showWebsiteReviewAction ? (
               <Button
                 className="hidden gap-2 sm:inline-flex"
                 onClick={handleReviewWebsiteExtraction}
@@ -836,17 +864,19 @@ export function PreparedSourceCinemaOverlay({
                 Review article
               </Button>
             ) : null}
-            <Button
-              className="hidden gap-2 sm:inline-flex"
-              onClick={() => {
-                setSettingsOpen((current) => !current);
-              }}
-              size="md"
-              variant="secondary"
-            >
-              <SettingsIcon />
-              Settings
-            </Button>
+            {websiteReadModeCalm ? null : (
+              <Button
+                className="hidden gap-2 sm:inline-flex"
+                onClick={() => {
+                  setSettingsOpen((current) => !current);
+                }}
+                size="md"
+                variant="secondary"
+              >
+                <SettingsIcon />
+                Settings
+              </Button>
+            )}
             <Button
               className="gap-1.5 px-2.5 sm:gap-2 sm:px-3"
               onClick={onClose}
@@ -941,7 +971,7 @@ function PreparedSourceCinemaSourceLibrary({
 }>) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   return (
-    <div className="mt-3 grid gap-2 border-b pb-3 vs-border">
+    <div className="mt-3 grid gap-2 border-b pb-3 vs-border" data-cinema-expanded-source-detail="">
       <label className="grid gap-1 text-xs font-semibold">
         <span className="vs-muted">Cinema source</span>
         <select
@@ -1004,7 +1034,10 @@ function PreparedSourceCinemaHeaderSourceSelect({
 }>) {
   const currentLabel = preparedSourceCinemaOptionLabel(source);
   return (
-    <label className="hidden min-w-[13rem] max-w-[18rem] flex-1 basis-[13rem] items-center gap-2 lg:flex">
+    <label
+      className="hidden min-w-[13rem] max-w-[18rem] flex-1 basis-[13rem] items-center gap-2 lg:flex"
+      data-cinema-expanded-source-detail=""
+    >
       <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em] vs-muted">
         Cinema
       </span>

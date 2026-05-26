@@ -607,6 +607,12 @@
 - [x] Run WP29 local validation commands
 - [x] Commit WP29 changes
 
+## 2026-05-26 03:11 CEST - Website Cinema Read-mode Calmness Verification
+- [x] Inspect Website Cinema read-mode chrome, header, footer, and existing complexity gates
+- [x] Add Website Cinema calm read-mode budget and metrics
+- [x] Add calm read-mode screenshot scenario and validation coverage
+- [x] Run WP31 local validation commands
+
 ## 2026-05-26 02:41 CEST - Collapsed Rail and Compact Control Affordance Validation
 - [x] Inspect workspace/layout rail controls, command metadata, and audit scripts
 - [x] Add shared compact rail control metadata and affordance rendering

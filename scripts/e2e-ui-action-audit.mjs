@@ -560,11 +560,20 @@ async function collectSurfaceComplexity(page, scenario, actions) {
         "[aria-selected='true'], [aria-pressed='true'], [data-state='active']",
       ),
       chipsBadges: countVisible(
-        "[data-testid*='chip' i], [data-testid*='badge' i], [class*='chip' i], [class*='badge' i]",
+        "[data-status-chip], [data-testid*='chip' i], [data-testid*='badge' i], [class*='chip' i], [class*='badge' i]",
       ),
+      expandedPolicySourceDetails: countVisible("[data-cinema-expanded-source-detail]"),
+      footerRows: countVisible("[data-cinema-footer-row]"),
+      headerLines: countVisible("[data-cinema-header-line]"),
+      inlineDisplaySettings: countVisible("[data-cinema-display-popover]"),
+      modeControlGroups: countVisible("[data-cinema-mode-control-group]"),
       panelsOpenByDefault: countVisible(
         "[role='dialog'], [data-testid*='panel' i], [data-testid*='drawer' i], [data-testid*='sheet' i], details[open]",
       ),
+      panelCount: countVisible("[data-cinema-inspector-dock], [data-cinema-mobile-sheet]"),
+      primaryPlaybackGroups: countVisible("[data-cinema-primary-playback-group]"),
+      sourceIdentitySummaries: countVisible("[data-source-identity-summary]"),
+      visibleBadges: countVisible("[data-status-chip]"),
     };
   });
   const overlayCollision = await collectOverlayCollisionReport(page);
@@ -599,9 +608,16 @@ async function collectSurfaceComplexity(page, scenario, actions) {
       destructiveActions: actions.filter((action) => action.destructive).length,
       disabledActions: actions.filter((action) => action.disabled).length,
       duplicatedVisibleLabels: [...labels.values()].filter((count) => count > 1).length,
+      expandedPolicySourceDetails: domMetrics.expandedPolicySourceDetails,
+      footerRows: domMetrics.footerRows,
+      headerLines: domMetrics.headerLines,
+      inlineDisplaySettings: domMetrics.inlineDisplaySettings,
+      modeControlGroups: domMetrics.modeControlGroups,
       overlayCollisions: overlayCollision.summary.failures,
       overlayProtectedTargets: overlayCollision.summary.protectedTargets,
       panelsOpenByDefault: domMetrics.panelsOpenByDefault,
+      panelCount: domMetrics.panelCount,
+      primaryPlaybackGroups: domMetrics.primaryPlaybackGroups,
       primaryActions: actions.filter(
         (action) =>
           action.playbackPrimary ||
@@ -609,6 +625,8 @@ async function collectSurfaceComplexity(page, scenario, actions) {
           action.actionClass === "preview",
       ).length,
       reachableDrawersSheets,
+      sourceIdentitySummaries: domMetrics.sourceIdentitySummaries,
+      visibleBadges: domMetrics.visibleBadges,
       visibleActions,
     },
     overlayCollision,

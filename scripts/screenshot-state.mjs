@@ -56,6 +56,9 @@ export function deriveScreenshotStateExpectations(screenshotPath) {
     expectations.expectedMode = "Read";
     if (!responsiveCinemaScreenshot) {
       expectations.expectedSelectedModeControl = "Read";
+      if (basename.includes("calm-read")) {
+        expectations.expectedSelectedModeControlMinWidth = 1024;
+      }
     }
     expectations.expectedContextPanelDefault = null;
   } else if (cinemaStatefulScreenshot && /-inspect\.png$/.test(basename)) {
@@ -238,6 +241,7 @@ export async function collectScreenshotState(page) {
         selectedModeControls,
         sourceTitle,
         surface,
+        viewportWidth: window.innerWidth,
         url: window.location.href,
       };
 
@@ -358,7 +362,9 @@ export function assertScreenshotState({ expectations = {}, screenshotPath = "", 
 
   if (expectations.expectedSelectedModeControl) {
     const expectedControl = expectations.expectedSelectedModeControl;
-    if (!selectedModeLabels.has(expectedControl)) {
+    const minWidth = Number(expectations.expectedSelectedModeControlMinWidth ?? 0);
+    const shouldRequireSelectedControl = !minWidth || (state.viewportWidth ?? 0) >= minWidth;
+    if (shouldRequireSelectedControl && !selectedModeLabels.has(expectedControl)) {
       mismatches.push({
         actual: [...selectedModeLabels].join(", ") || "none",
         expected: expectedControl,
