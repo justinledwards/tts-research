@@ -3,6 +3,10 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import {
+  classifyDuplicateGroup,
+  summarizeDuplicateClassifications,
+} from "./ui-action-duplicate-waivers.mjs";
 
 const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "g");
 
@@ -164,6 +168,7 @@ function stableIdCoverageSummary(actions) {
 }
 
 export function renderDuplicatesReport({ duplicates, generatedAt }) {
+  const classificationSummary = summarizeDuplicateClassifications(duplicates);
   const lines = [
     "# UI action duplicate-control report",
     "",
@@ -173,12 +178,42 @@ export function renderDuplicatesReport({ duplicates, generatedAt }) {
       ? "No duplicate visible action groups were found."
       : `${String(duplicates.length)} duplicate action group(s) were found.`,
     "",
+    "## Classification Summary",
+    "",
+    ...table(
+      Object.entries(classificationSummary.byCategory).map(([category, count]) => ({
+        category,
+        count,
+      })),
+      ["Category", "Groups"],
+      (entry) => [entry.category, entry.count],
+    ),
+    "",
+    "## Burn-down List",
+    "",
+    ...table(
+      classificationSummary.burnDownIssues,
+      ["Issue", "Owner", "Groups", "Review date", "Reason"],
+      (issue) => [issue.issue, issue.owner, issue.count, issue.reviewDate, issue.reason],
+    ),
+    "",
   ];
   for (const duplicate of duplicates) {
+    const classification = duplicate.classification ?? classifyDuplicateGroup(duplicate);
     lines.push(`## ${duplicate.surface}: ${duplicate.label}`);
     lines.push("");
     lines.push(`- Action class: ${duplicate.actionClass}`);
     lines.push(`- Finding type: ${duplicate.kind ?? "same-label-same-surface"}`);
+    if (classification) {
+      lines.push(`- Classification: ${classification.category}`);
+      lines.push(`- Owner: ${classification.owner}`);
+      lines.push(`- Review date: ${classification.reviewDate}`);
+      lines.push(`- Reason: ${classification.reason}`);
+      lines.push(`- Accepted surfaces: ${(classification.acceptedSurfaces ?? []).join(", ")}`);
+      if (classification.burnDownIssue) {
+        lines.push(`- Burn-down issue: ${classification.burnDownIssue}`);
+      }
+    }
     lines.push(`- Count: ${String(duplicate.count)}`);
     lines.push(`- Surfaces: ${(duplicate.surfaces ?? [duplicate.surface]).join(", ")}`);
     lines.push(`- Scenarios: ${duplicate.scenarios.join(", ")}`);

@@ -116,11 +116,12 @@ test("reports passed-with-findings when UI action findings are explicitly waived
   });
   documents.actionInventory.duplicates = [
     {
-      actionIds: ["project-open", "project-open-secondary"],
+      actionIds: ["project-review", "project-review-secondary"],
       count: 2,
-      label: "Open project",
+      label: "Review",
       scenarios: ["project-dashboard"],
       surface: "Project dashboard",
+      surfaces: ["Project dashboard"],
     },
   ];
   documents.uiActionSummary = {
@@ -139,9 +140,9 @@ test("reports passed-with-findings when UI action findings are explicitly waived
         reason: "Tracked in WP follow-up for project dashboard generated source rows.",
       },
       {
-        category: "duplicate-groups",
+        category: "classified-duplicate-waivers",
         owner: "design-systems",
-        reason: "Known repeated project actions stay visible until the dashboard IA pass lands.",
+        reason: "Known repeated project actions are covered by the WP46 duplicate registry.",
       },
     ],
   };

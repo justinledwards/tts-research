@@ -113,6 +113,7 @@ async function main() {
   await rm(outputDir, { force: true, recursive: true });
   await mkdir(outputDir, { recursive: true });
   const inventory = await runInventory();
+  const duplicateClassification = inventory.duplicateClassification ?? null;
   const snapshots = normalizeSnapshots(inventory);
   const scenarios = snapshots.map((snapshot) => {
     const budgetKey = scenarioBudgetKeys[snapshot.id] ?? budgetKeyForSurface(snapshot.surface);
@@ -144,6 +145,12 @@ async function main() {
     status: failures.length === 0 ? "passed" : "failed",
     summary: {
       advancedScenarios: scenarios.filter((scenario) => scenario.budget.tier === "advanced").length,
+      duplicateClassification: duplicateClassification
+        ? {
+            byCategory: duplicateClassification.byCategory,
+            unclassified: duplicateClassification.unclassified,
+          }
+        : null,
       failures: failures.length,
       maxVisibleActions: Math.max(...scenarios.map((scenario) => scenario.metrics.visibleActions)),
       scenarios: scenarios.length,
@@ -151,6 +158,7 @@ async function main() {
     },
     websiteReadModeCalmness: websiteReadModeCalmnessSummary(scenarios),
     scenarios,
+    duplicateClassification,
     failures,
   };
   await writeFile(path.join(outputDir, "budget.json"), `${JSON.stringify(document, null, 2)}\n`);
@@ -431,12 +439,24 @@ function renderMarkdown(document) {
     `- Surfaces: ${String(document.summary.surfaces)}`,
     `- Failures: ${String(document.summary.failures)}`,
     `- Max visible actions: ${String(document.summary.maxVisibleActions)}`,
+    `- Unclassified duplicate groups: ${String(
+      document.duplicateClassification?.unclassified ?? "missing",
+    )}`,
     "",
+  ];
+  if (document.duplicateClassification) {
+    lines.push("## Duplicate Classifications", "");
+    for (const [category, count] of Object.entries(document.duplicateClassification.byCategory)) {
+      lines.push(`- ${category}: ${String(count)}`);
+    }
+    lines.push("");
+  }
+  lines.push(
     "## Scenarios",
     "",
     "| Scenario | Surface | Tier | Visible | Primary | Disabled | Duplicates | Chips | Active Modes | Status |",
     "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
-  ];
+  );
   for (const scenario of document.scenarios) {
     lines.push(
       `| ${escapeMarkdown(scenario.label)} | ${escapeMarkdown(scenario.surface)} | ${

@@ -1,4 +1,5 @@
 import { generatedUiActionId, slugUiActionPart } from "./ui-action-stable-ids.mjs";
+import { classifyDuplicateGroup } from "./ui-action-duplicate-waivers.mjs";
 
 const interactiveSelector = [
   "button",
@@ -726,9 +727,14 @@ export function summarizeDuplicates(actions) {
     ...overexposedActions,
     ...duplicatePlaybackActionOwners,
     ...multiplePrimaryPlaybackOwners,
-  ].sort((left, right) =>
-    `${left.kind}:${left.label}`.localeCompare(`${right.kind}:${right.label}`),
-  );
+  ]
+    .map((duplicate) => ({
+      ...duplicate,
+      classification: classifyDuplicateGroup(duplicate),
+    }))
+    .sort((left, right) =>
+      `${left.kind}:${left.label}`.localeCompare(`${right.kind}:${right.label}`),
+    );
 }
 
 function groupedActions(actions, keyFor, shouldReport, kind) {

@@ -4,6 +4,10 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import {
+  classifyDuplicateGroups,
+  summarizeDuplicateClassifications,
+} from "../ui-action-duplicate-waivers.mjs";
 import { createRunContext, finalizeRun, runCallbackStep, runCommandStep } from "./reporting.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -672,7 +676,15 @@ function collectUiActionAuditFindings(documents, auditStatus) {
   const failedResults = summaryFindings.failedResults ?? actionResults.filter(isFailedResult);
   const noOpResults = failedResults.filter(isNoOpResult);
   const failedActivations = failedResults.filter((result) => !isNoOpResult(result));
-  const duplicates = summaryFindings.duplicates ?? documents.actionInventory?.duplicates ?? [];
+  const duplicates = classifyDuplicateGroups(
+    summaryFindings.duplicates ?? documents.actionInventory?.duplicates ?? [],
+  );
+  const duplicateClassification =
+    summaryFindings.duplicateClassification ??
+    documents.actionInventory?.duplicateClassification ??
+    summarizeDuplicateClassifications(duplicates);
+  const duplicatesByCategory = (category) =>
+    duplicates.filter((duplicate) => duplicate.classification?.category === category);
   const missingStableTestIds = actions.filter((action) => !hasStableActionId(action));
   const waivers = collectUiActionAuditWaivers(documents);
   const findings = [];
@@ -749,23 +761,85 @@ function collectUiActionAuditFindings(documents, auditStatus) {
     );
   }
 
-  if (duplicates.length > UI_ACTION_AUDIT_THRESHOLDS.duplicateGroups) {
+  if (duplicateClassification.unclassified > 0) {
+    const unclassified = duplicatesByCategory("unclassified");
     findings.push(
-      applyUiActionWaiver(
-        uiActionFinding({
-          category: "duplicate-groups",
-          count: duplicates.length,
-          message: `${String(duplicates.length)} duplicate action group(s) exceed the threshold of ${String(
-            UI_ACTION_AUDIT_THRESHOLDS.duplicateGroups,
-          )}.`,
-          owner: ownersForDuplicates(duplicates),
-          samples: duplicates.slice(0, 5).map(formatDuplicateSample),
-          severity: "blocking",
-          threshold: UI_ACTION_AUDIT_THRESHOLDS.duplicateGroups,
-          waiverRequired: true,
-        }),
-        waivers,
-      ),
+      uiActionFinding({
+        category: "unclassified-duplicate-groups",
+        count: duplicateClassification.unclassified,
+        message: `${String(
+          duplicateClassification.unclassified,
+        )} duplicate action group(s) are missing duplicate waiver registry classification.`,
+        owner: ownersForDuplicates(unclassified),
+        samples: unclassified.slice(0, 5).map(formatDuplicateSample),
+        severity: "blocking",
+        threshold: 0,
+        waiverRequired: false,
+      }),
+    );
+  }
+
+  if (duplicateClassification.overexposed > 0) {
+    const overexposed = duplicatesByCategory("overexposed");
+    findings.push(
+      uiActionFinding({
+        category: "overexposed-duplicate-groups",
+        count: duplicateClassification.overexposed,
+        message: `${String(
+          duplicateClassification.overexposed,
+        )} overexposed duplicate action group(s) have burn-down owners/issues.`,
+        owner: ownersForDuplicates(overexposed),
+        samples: overexposed.slice(0, 5).map(formatDuplicateSample),
+        severity: "needs-review",
+        threshold: 0,
+        waiverRequired: false,
+      }),
+    );
+  }
+
+  if (duplicateClassification.needsConsolidation > 0) {
+    const needsConsolidation = duplicatesByCategory("needs-consolidation");
+    findings.push(
+      uiActionFinding({
+        category: "needs-consolidation-duplicate-groups",
+        count: duplicateClassification.needsConsolidation,
+        message: `${String(
+          duplicateClassification.needsConsolidation,
+        )} duplicate action group(s) are classified for IA consolidation.`,
+        owner: ownersForDuplicates(needsConsolidation),
+        samples: needsConsolidation.slice(0, 5).map(formatDuplicateSample),
+        severity: "needs-review",
+        threshold: 0,
+        waiverRequired: false,
+      }),
+    );
+  }
+
+  if (duplicateClassification.waived > 0) {
+    findings.push(
+      uiActionFinding({
+        category: "classified-duplicate-waivers",
+        count: duplicateClassification.waived,
+        message: `${String(
+          duplicateClassification.waived,
+        )} duplicate action group(s) are classified by the duplicate waiver registry.`,
+        owner: "UX action inventory owner",
+        samples: duplicates
+          .filter((duplicate) => duplicate.classification?.category?.startsWith("allowed-"))
+          .slice(0, 5)
+          .map(formatDuplicateSample),
+        severity: "waived",
+        threshold: 0,
+        waiver: {
+          id: "wp46-duplicate-waiver-registry",
+          owner: "UX action inventory owner",
+          reason:
+            "WP46 duplicate waiver registry classifies accepted duplicate controls with owners, reasons, accepted surfaces, and review dates.",
+          reviewDate: duplicateClassification.duplicateWaiverRegistry?.[0]?.reviewDate ?? null,
+          source: "ui-action-audit",
+        },
+        waiverRequired: false,
+      }),
     );
   }
 
@@ -875,12 +949,21 @@ function collectUiActionAuditWaivers(documents) {
     ...(documents.actionResults?.qualityWaivers ?? []),
     ...(documents.actionInventory?.waivers ?? []),
     ...(documents.actionInventory?.qualityWaivers ?? []),
+    ...(documents.actionInventory?.duplicateWaiverRegistry ?? [])
+      .filter((waiver) => String(waiver.category ?? "").startsWith("allowed-"))
+      .map((waiver) => ({
+        ...waiver,
+        category: `duplicate:${waiver.category}`,
+        source: "duplicate-waiver-registry",
+      })),
   ].map((waiver) => ({
+    acceptedSurfaces: waiver.acceptedSurfaces ?? [],
     category: waiver.category ?? null,
     findingId: waiver.findingId ?? null,
     id: waiver.id ?? waiver.category ?? waiver.findingId ?? "ui-action-audit-waiver",
     owner: waiver.owner ?? "unassigned",
     reason: waiver.reason ?? "No reason provided.",
+    reviewDate: waiver.reviewDate ?? waiver.expiresAt ?? null,
     source: waiver.source ?? "ui-action-audit",
   }));
 }
@@ -948,6 +1031,7 @@ function ownersForActions(actions) {
 
 function ownersForDuplicates(duplicates) {
   const owners = duplicates.flatMap((duplicate) => [
+    duplicate.classification?.owner,
     ...(duplicate.playbackOwners ?? []),
     ...(duplicate.surfaces ?? []),
   ]);
@@ -971,7 +1055,13 @@ function formatActionSample(action) {
 }
 
 function formatDuplicateSample(duplicate) {
-  return `${duplicate.surface ?? duplicate.surfaces?.join(", ") ?? "unknown surface"} / ${duplicate.label ?? "unknown label"} / count=${String(duplicate.count ?? 0)}`;
+  const classification = duplicate.classification?.category
+    ? ` / ${duplicate.classification.category}`
+    : "";
+  const issue = duplicate.classification?.burnDownIssue
+    ? ` / ${duplicate.classification.burnDownIssue}`
+    : "";
+  return `${duplicate.surface ?? duplicate.surfaces?.join(", ") ?? "unknown surface"} / ${duplicate.label ?? "unknown label"} / count=${String(duplicate.count ?? 0)}${classification}${issue}`;
 }
 
 function formatFindingSummary(finding) {
@@ -984,7 +1074,8 @@ function formatWaiver(waiver) {
   if (!waiver) {
     return "missing";
   }
-  return `${waiver.reason} (owner: ${waiver.owner})`;
+  const reviewDate = waiver.reviewDate ? `, review: ${waiver.reviewDate}` : "";
+  return `${waiver.reason} (owner: ${waiver.owner}${reviewDate})`;
 }
 
 function isCinemaMoreMenuAction(action) {
@@ -1005,9 +1096,11 @@ function collectFinalUxWaivers(documents) {
     ...collectUiActionAuditWaivers(documents)
       .filter(validWaiver)
       .map((waiver) => ({
+        acceptedSurfaces: waiver.acceptedSurfaces,
         id: waiver.findingId ?? waiver.category ?? waiver.id,
         owner: waiver.owner,
         reason: waiver.reason,
+        reviewDate: waiver.reviewDate,
         source: "ui-action-audit",
       })),
   ];
@@ -1097,7 +1190,8 @@ export function renderFinalUxSummary(result) {
     lines.push("No waivers declared.");
   } else {
     for (const waiver of result.waivers) {
-      lines.push(`- ${waiver.id}: ${waiver.reason} (owner: ${waiver.owner})`);
+      const reviewDate = waiver.reviewDate ? `, review: ${waiver.reviewDate}` : "";
+      lines.push(`- ${waiver.id}: ${waiver.reason} (owner: ${waiver.owner}${reviewDate})`);
     }
   }
   lines.push("");

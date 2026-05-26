@@ -20,6 +20,10 @@ import {
   renderOverlayCollisionReport,
   summarizeOverlayCollisionReports,
 } from "./overlay-collision-audit.mjs";
+import {
+  classifyDuplicateGroups,
+  summarizeDuplicateClassifications,
+} from "./ui-action-duplicate-waivers.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
@@ -196,6 +200,7 @@ async function main() {
 
     const generatedAt = new Date().toISOString();
     const duplicates = summarizeDuplicates(actions);
+    const duplicateClassification = summarizeDuplicateClassifications(duplicates);
     const overlayCollisionReports = surfaceComplexity
       .map((complexity) => complexity.overlayCollision)
       .filter(Boolean);
@@ -209,6 +214,8 @@ async function main() {
       appBaseUrl,
       apiBaseUrl,
       duplicates,
+      duplicateClassification,
+      duplicateWaiverRegistry: duplicateClassification.duplicateWaiverRegistry,
       generatedAt,
       schemaVersion: "ui-action-inventory.v1",
       scenarios: scenarios.map((scenario) => ({
@@ -249,15 +256,21 @@ async function main() {
     const reviewGate = summarizeUiActionReviewGate({
       actions,
       duplicates,
+      duplicateClassification,
       gateFindings,
       inventoryOnly,
       resultsStatus: resultsDocument.status,
     });
-    const status =
-      !inventoryOnly && gateFindings.total > 0 && failOnFindings
+    const hardDuplicateFailure = duplicateClassification.unclassified > 0;
+    const status = hardDuplicateFailure
+      ? "failed"
+      : !inventoryOnly && gateFindings.total > 0 && failOnFindings
         ? "failed"
-        : resultsDocument.status;
+        : reviewGate.status === "not-review-complete" && resultsDocument.status === "passed"
+          ? "completed-with-findings"
+          : resultsDocument.status;
     resultsDocument.reviewGate = reviewGate;
+    resultsDocument.status = status === "failed" && hardDuplicateFailure ? "failed" : status;
 
     await writeFile(
       path.join(outputDir, "action-inventory.json"),
@@ -320,6 +333,7 @@ async function main() {
       status,
       summaries: {
         gateFindings,
+        duplicateClassification,
         inventory: {
           actionCount: actions.length,
           scenarioCount: scenarios.length,
@@ -338,7 +352,7 @@ async function main() {
     await writeSummary(runSummary);
 
     console.log(`UI action audit ${runSummary.status}. Reports written to ${outputDir}`);
-    if (failOnFindings && gateFindings.total > 0) {
+    if (hardDuplicateFailure || (failOnFindings && gateFindings.total > 0)) {
       process.exitCode = 1;
     }
   } finally {
@@ -2080,6 +2094,10 @@ function summarizeGateFindings({
   scenarios,
   surfaceComplexity = [],
 }) {
+  const classifiedDuplicates = classifyDuplicateGroups(duplicates);
+  const duplicateClassification = summarizeDuplicateClassifications(classifiedDuplicates);
+  const duplicateGroupsByCategory = (category) =>
+    classifiedDuplicates.filter((duplicate) => duplicate.classification?.category === category);
   const requiredSurfaces = [
     "Workspace Intake",
     "Review",
@@ -2132,7 +2150,14 @@ function summarizeGateFindings({
   return {
     capabilityGatedDisabled,
     disabledWithoutReason,
-    duplicates,
+    duplicates: classifiedDuplicates,
+    duplicateClassification,
+    needsConsolidationDuplicateGroups: duplicateGroupsByCategory("needs-consolidation"),
+    overexposedDuplicateGroups: duplicateGroupsByCategory("overexposed"),
+    unclassifiedDuplicateGroups: duplicateGroupsByCategory("unclassified"),
+    waivedDuplicateGroups: classifiedDuplicates.filter((duplicate) =>
+      duplicate.classification?.category?.startsWith("allowed-"),
+    ),
     failedResults,
     metadataFindings,
     missingSafeActivations,
@@ -2146,13 +2171,15 @@ function summarizeGateFindings({
       missingSurfaces.length +
       overlayCollisionFindings.length +
       destructiveMissingConfirmation.length +
-      disabledWithoutReason.length,
+      disabledWithoutReason.length +
+      duplicateClassification.unclassified,
   };
 }
 
 function summarizeUiActionReviewGate({
   actions,
   duplicates,
+  duplicateClassification = summarizeDuplicateClassifications(duplicates),
   gateFindings,
   inventoryOnly,
   resultsStatus,
@@ -2178,8 +2205,36 @@ function summarizeUiActionReviewGate({
     reviewGateFinding({
       category: "duplicate-groups",
       count: duplicates.length,
+      severity: "informational",
       threshold: UI_ACTION_AUDIT_THRESHOLDS.duplicateGroups,
-      waiverRequired: true,
+      waiverRequired: false,
+    }),
+    reviewGateFinding({
+      category: "unclassified-duplicate-groups",
+      count: duplicateClassification.unclassified,
+      threshold: 0,
+      waiverRequired: false,
+    }),
+    reviewGateFinding({
+      category: "overexposed-duplicate-groups",
+      count: duplicateClassification.overexposed,
+      severity: duplicateClassification.overexposed > 0 ? "needs-review" : "informational",
+      threshold: 0,
+      waiverRequired: false,
+    }),
+    reviewGateFinding({
+      category: "needs-consolidation-duplicate-groups",
+      count: duplicateClassification.needsConsolidation,
+      severity: duplicateClassification.needsConsolidation > 0 ? "needs-review" : "informational",
+      threshold: 0,
+      waiverRequired: false,
+    }),
+    reviewGateFinding({
+      category: "classified-duplicate-waivers",
+      count: duplicateClassification.waived,
+      severity: duplicateClassification.waived > 0 ? "waived" : "informational",
+      threshold: 0,
+      waiverRequired: false,
     }),
     reviewGateFinding({
       category: "missing-stable-test-ids",
@@ -2189,9 +2244,14 @@ function summarizeUiActionReviewGate({
     }),
   ];
   const blocking = findings.filter((finding) => finding.severity === "blocking").length;
+  const needsReviewFindings = findings.filter((finding) => finding.severity === "needs-review");
   const needsReview =
-    resultsStatus === "completed-with-findings" || inventoryOnly || gateFindings.total > 0 ? 1 : 0;
+    needsReviewFindings.length +
+    (resultsStatus === "completed-with-findings" || inventoryOnly || gateFindings.total > 0
+      ? 1
+      : 0);
   return {
+    duplicateClassification,
     findings,
     needsReview,
     schemaVersion: "ui-action-review-gate.v1",
@@ -2201,16 +2261,16 @@ function summarizeUiActionReviewGate({
       blocking,
       informational: findings.filter((finding) => finding.severity === "informational").length,
       "needs-review": needsReview,
-      waived: 0,
+      waived: findings.filter((finding) => finding.severity === "waived").length,
     },
   };
 }
 
-function reviewGateFinding({ category, count, threshold, waiverRequired }) {
+function reviewGateFinding({ category, count, severity = null, threshold, waiverRequired }) {
   return {
     category,
     count,
-    severity: count > threshold ? "blocking" : "informational",
+    severity: severity ?? (count > threshold ? "blocking" : "informational"),
     threshold,
     waiverRequired,
   };
@@ -2240,8 +2300,10 @@ function renderReviewerSummary({
     scenarios,
     surfaceComplexity,
   });
+  const duplicateClassification =
+    reviewGate?.duplicateClassification ?? findings.duplicateClassification;
   const status =
-    inventoryOnly || findings.total > 0
+    inventoryOnly || findings.total > 0 || reviewGate?.status === "not-review-complete"
       ? "Not review-complete: UI action audit has findings or did not run activation replay."
       : scenarioFilterActive
         ? "Focused UI action audit passed for filtered scenarios."
@@ -2304,8 +2366,29 @@ function renderReviewerSummary({
     `- Destructive without confirmation: ${formatFindingCount(
       findings.destructiveMissingConfirmation.length,
     )}`,
-    `- Duplicate groups requiring review: ${formatFindingCount(duplicates.length)}`,
+    `- Duplicate groups: ${String(duplicates.length)}`,
+    `- Unclassified duplicate groups: ${formatFindingCount(duplicateClassification.unclassified)}`,
+    `- Overexposed duplicate groups: ${formatFindingCount(duplicateClassification.overexposed)}`,
+    `- Needs-consolidation duplicate groups: ${formatFindingCount(
+      duplicateClassification.needsConsolidation,
+    )}`,
+    `- Classified duplicate waivers: ${String(duplicateClassification.waived)}`,
     `- Overlay collisions: ${formatFindingCount(findings.overlayCollisionFindings.length)}`,
+    "",
+    "## Duplicate Categories",
+    "",
+    ...Object.entries(duplicateClassification.byCategory).map(
+      ([category, count]) => `- ${category}: ${String(count)}`,
+    ),
+    "",
+    "## Duplicate Burn-down",
+    "",
+    ...(duplicateClassification.burnDownIssues.length === 0
+      ? ["No overexposed duplicate burn-down issues."]
+      : duplicateClassification.burnDownIssues.map(
+          (issue) =>
+            `- ${issue.issue}: ${String(issue.count)} group(s), owner ${issue.owner}, review ${issue.reviewDate}`,
+        )),
     "",
     "## Surface counts",
     "",

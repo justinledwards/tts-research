@@ -722,3 +722,11 @@
 - [x] Mark core and generated controls with stable IDs
 - [x] Update inventory stability reporting and thresholds
 - [x] Run WP45 validation commands
+
+## 2026-05-26 17:56 CEST - WP46 Duplicate Action Burn-down
+- [x] Inspect duplicate report generation and current action metadata
+- [x] Add duplicate classification and waiver registry
+- [x] Surface duplicate category summaries and burn-down owners
+- [x] Fail on unclassified duplicate groups
+- [x] Run WP46 validation commands
+- [x] Commit WP46 changes
