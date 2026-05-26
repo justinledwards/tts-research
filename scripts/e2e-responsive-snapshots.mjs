@@ -83,12 +83,18 @@ async function main() {
 
   try {
     const websiteCalmFixture = await seedWebsiteCalmReadFixture();
+    const telepromptTheatreProject = await createQaProject(
+      apiBaseUrl,
+      `Teleprompt Theatre Responsive QA ${new Date().toISOString()}`,
+    );
     const { chromium } = await loadPlaywright();
     const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
     const results = [];
     try {
       for (const viewport of viewports) {
-        results.push(await captureViewport(browser, viewport, websiteCalmFixture));
+        results.push(
+          await captureViewport(browser, viewport, websiteCalmFixture, telepromptTheatreProject.id),
+        );
       }
     } finally {
       await browser.close();
@@ -97,6 +103,10 @@ async function main() {
     const layoutFailures = results.filter((result) => !result.layoutPassed).length;
     const websiteCalmReadFailures = results.reduce(
       (count, result) => count + result.websiteCalmRead.summary.failures,
+      0,
+    );
+    const telepromptTheatreFailures = results.reduce(
+      (count, result) => count + result.telepromptTheatre.summary.failures,
       0,
     );
     const overlayCollisionReports = results.map((result) => result.overlayCollision);
@@ -117,10 +127,11 @@ async function main() {
         failures: failures + stateMismatches,
         layoutFailures,
         overlayCollisionFailures: overlayCollisionSummary.failures,
-        websiteCalmReadFailures,
         screenshotStateMismatches: stateMismatches,
         screenshots: results.reduce((count, result) => count + result.screenshots.length, 0),
+        telepromptTheatreFailures,
         viewports: results.length,
+        websiteCalmReadFailures,
       },
     };
     document.screenshotState = {
@@ -157,7 +168,7 @@ async function main() {
   }
 }
 
-async function captureViewport(browser, viewport, websiteCalmFixture) {
+async function captureViewport(browser, viewport, websiteCalmFixture, telepromptTheatreProjectId) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
   instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
@@ -183,6 +194,12 @@ async function captureViewport(browser, viewport, websiteCalmFixture) {
       websiteCalmFixture,
     );
     screenshots.push(websiteCalmRead.screenshot);
+    const telepromptTheatre = await captureTelepromptTheatreScenario(
+      browser,
+      viewport,
+      telepromptTheatreProjectId,
+    );
+    screenshots.push(telepromptTheatre.screenshot);
 
     const layout = await page.evaluate(() => {
       const normalize = (value) =>
@@ -269,10 +286,68 @@ async function captureViewport(browser, viewport, websiteCalmFixture) {
       layout,
       layoutPassed,
       overlayCollision,
-      passed: layoutPassed && websiteCalmRead.summary.failures === 0,
+      passed:
+        layoutPassed &&
+        websiteCalmRead.summary.failures === 0 &&
+        telepromptTheatre.summary.failures === 0,
       screenshots,
+      telepromptTheatre,
       viewport,
       websiteCalmRead,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+async function captureTelepromptTheatreScenario(browser, viewport, projectId) {
+  const context = await browser.newContext({
+    storageState: projectStorageState(appBaseUrl, projectId, {
+      sourceMode: "text",
+      stage: "preview",
+      text: "Teleprompt Theatre responsive fixture. This presenter cue should remain readable in fullscreen fallback mode. The next cue verifies operator preview spacing and status.",
+    }),
+    viewport,
+  });
+  const page = await context.newPage();
+  instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
+  page.setDefaultTimeout(60_000);
+  const pageIssues = collectPageIssues(page);
+  try {
+    await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.getByTestId("workspace-stage-action-openTeleprompt").click();
+    await page.getByTestId("teleprompt-studio").waitFor();
+    await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
+    await page.getByTestId("teleprompt-theatre").waitFor();
+    await page.getByTestId("ui-action-teleprompt-theatre-preset-largeText").click();
+    await page.getByTestId("ui-action-teleprompt-operator-preview").click();
+    const screenshot = path.join(screenshotsDir, `${viewport.id}-teleprompt-theatre.png`);
+    await page.screenshot({ fullPage: false, path: screenshot });
+    const metrics = await page.evaluate(() => {
+      const theatre = document.querySelector("[data-testid='teleprompt-theatre']");
+      const cue = document.querySelector("[data-testid='teleprompt-theatre-current-cue']");
+      const text = cue?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+      return {
+        hasTheatre: theatre !== null,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 4,
+        textLength: text.length,
+      };
+    });
+    const failures = [
+      ...blockingPageIssues(pageIssues),
+      ...(metrics.hasTheatre ? [] : ["Teleprompt Theatre did not render."]),
+      ...(metrics.textLength > 0 ? [] : ["Teleprompt Theatre current cue was empty."]),
+      ...(metrics.horizontalOverflow ? ["Teleprompt Theatre created horizontal overflow."] : []),
+    ];
+    return {
+      failures,
+      metrics,
+      screenshot,
+      summary: {
+        failures: failures.length,
+        status: failures.length === 0 ? "passed" : "failed",
+      },
     };
   } finally {
     await context.close();

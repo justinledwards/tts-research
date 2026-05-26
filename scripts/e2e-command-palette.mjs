@@ -169,6 +169,18 @@ async function runCommandPaletteAudit(browser, projectId, screenshots) {
     ) {
       failures.push("Command palette did not expose Cinema Advanced/Diagnostics commands.");
     }
+    const telepromptTheatreInventory = await searchPalette(page, dialog, "teleprompt theatre");
+    commandsObserved.push(...telepromptTheatreInventory.commands);
+    disabledCommands.push(
+      ...telepromptTheatreInventory.commands.filter((command) => command.disabled),
+    );
+    if (
+      !telepromptTheatreInventory.commands.some((command) =>
+        /Open Teleprompt Theatre/i.test(command.title),
+      )
+    ) {
+      failures.push("Command palette did not expose Open Teleprompt Theatre.");
+    }
 
     const disabledWithoutReason = disabledCommands.filter((command) => !command.reason);
     if (disabledWithoutReason.length > 0) {

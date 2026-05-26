@@ -140,7 +140,10 @@ export async function buildActionInventory(page, scenario) {
             element.getAttribute("data-playback-primary") === "true" ||
             element.closest("[data-playback-primary='true']") !== null,
           scenarioId,
-          surface: element.getAttribute("data-ui-action-surface") ?? surface,
+          surface:
+            element.getAttribute("data-ui-action-surface") ??
+            element.closest("[data-ui-action-surface]")?.getAttribute("data-ui-action-surface") ??
+            surface,
           tagName: element.tagName.toLowerCase(),
           testId: element.getAttribute("data-testid"),
           text: normalizeText(element.textContent ?? ""),

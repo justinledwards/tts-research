@@ -3,6 +3,15 @@ export {
   type TelepromptPlaybackController,
   type TelepromptStudioProps,
 } from "./TelepromptStudio";
+export { TelepromptTheatre, type TelepromptTheatreProps } from "./TelepromptTheatre";
+export {
+  exitTelepromptFullscreen,
+  isTelepromptFullscreenActive,
+  requestTelepromptFullscreen,
+  subscribeTelepromptFullscreenChange,
+  telepromptFullscreenAvailability,
+  type TelepromptFullscreenAvailability,
+} from "./telepromptFullscreen";
 export {
   TELEPROMPT_PRESET_IDS,
   TELEPROMPT_PRESETS,
@@ -23,6 +32,16 @@ export {
   type TelepromptReturnSnapshot,
   type TelepromptReturnTarget,
 } from "./telepromptReturnMemory";
+export {
+  resolveTelepromptTheatreShortcut,
+  type TelepromptTheatreShortcutAction,
+} from "./telepromptTheatreShortcuts";
+export {
+  buildTelepromptTheatreSummary,
+  type TelepromptTheatreMode,
+  type TelepromptTheatreSummary,
+  type TelepromptTheatreViewMode,
+} from "./telepromptTheatreState";
 export {
   TELEPROMPT_SHORTCUTS,
   adjacentTelepromptBlockId,

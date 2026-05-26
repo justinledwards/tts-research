@@ -150,6 +150,32 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
       .waitFor();
     checks.push("Teleprompt shows voice and policy context.");
 
+    await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
+    await page.getByTestId("teleprompt-theatre").waitFor();
+    await page.getByTestId("teleprompt-theatre-current-cue").waitFor();
+    await page.getByTestId("ui-action-teleprompt-theatre-preset-highContrast").click();
+    await page.getByTestId("ui-action-teleprompt-theatre-mirror").click();
+    await page.getByTestId("ui-action-teleprompt-operator-preview").click();
+    await capture("teleprompt-theatre-from-preview");
+    checks.push(
+      "Teleprompt Theatre opens with presenter presets, mirror mode, and operator preview.",
+    );
+    const nativeFullscreen = page.getByTestId("ui-action-teleprompt-native-fullscreen");
+    const nativeFullscreenDisabled = await nativeFullscreen.isDisabled().catch(() => true);
+    if (nativeFullscreenDisabled) {
+      const disabledReason = await nativeFullscreen.getAttribute("data-disabled-reason");
+      if (!disabledReason) {
+        failures.push("Native fullscreen fallback did not expose an unavailable reason.");
+      } else {
+        checks.push("Native fullscreen fallback explains availability.");
+      }
+    } else {
+      checks.push("Native fullscreen action is reachable when supported.");
+    }
+    await page.keyboard.press("Escape");
+    await page.getByTestId("teleprompt-theatre").waitFor({ state: "detached" });
+    checks.push("Escape exits Theatre while preserving inline Teleprompt state.");
+
     const nextCue = page.getByTestId("ui-action-teleprompt-next-cue");
     if (await nextCue.isEnabled().catch(() => false)) {
       await nextCue.click();
@@ -197,6 +223,23 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
         `Expected originating stage preview, got ${storedPreviewMemory?.originatingStage ?? "none"}.`,
       );
     }
+
+    await page.keyboard.press("Control+K");
+    const commandDialog = page.getByRole("dialog", { name: "Command palette" });
+    await commandDialog.waitFor();
+    await commandDialog
+      .getByRole("combobox", { name: "Search commands" })
+      .fill("teleprompt theatre");
+    await commandDialog
+      .getByRole("option", { name: /Open Teleprompt Theatre/i })
+      .first()
+      .click();
+    await page.getByTestId("teleprompt-theatre").waitFor();
+    await capture("teleprompt-theatre-command-palette");
+    await page.getByTestId("ui-action-teleprompt-theatre-back-preview").click();
+    await page.getByTestId("teleprompt-theatre").waitFor({ state: "detached" });
+    await page.getByText("Spoken Form").first().waitFor();
+    checks.push("Command palette opens Teleprompt Theatre and can return to Preview.");
 
     await page.getByTestId("workspace-stage-action-openTeleprompt").click();
     await page.getByTestId("teleprompt-studio").waitFor();

@@ -619,6 +619,13 @@
 - [x] Add clipped/cryptic compact-control validation coverage
 - [x] Run WP30 local validation commands
 
+## 2026-05-26 05:07 CEST - Cinematic Full-Screen Teleprompt Studio
+- [x] Inspect Teleprompt state, toolbar, command, and E2E entry points
+- [x] Add shared Teleprompt theatre/fullscreen state and shortcut helpers
+- [x] Add presenter-first Teleprompt Theatre layout and wire entry/exit paths
+- [x] Add command/action/audit coverage and screenshot scenarios
+- [x] Run WP33 local validation commands
+
 ## 2026-05-26 04:05 CEST - Cinema More Menu Functionality and Dead-Control Closure
 - [x] Inspect current Cinema More, advanced modes, command palette, and UI audit coverage
 - [x] Add shared Cinema More action model and menu component

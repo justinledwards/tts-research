@@ -2795,6 +2795,7 @@ export function App() {
   );
   const [sourceMode, setSourceMode] = useState<SourceMode>("text");
   const [teleprompterOpenSignal, setTeleprompterOpenSignal] = useState(0);
+  const [telepromptTheatreOpenSignal, setTelepromptTheatreOpenSignal] = useState(0);
   const workspaceRails = workspaceLayoutRails(workspaceContext.layoutMode);
   const activityFooterMode: ActivityFooterMode = workspaceRails.activityFooterMode;
   const leftRailMode = workspaceRails.leftRailMode;
@@ -2803,6 +2804,7 @@ export function App() {
   const runWorkspaceStageAction = useCallback(
     (actionId: WorkspaceStageActionId) => {
       if (actionId === "openTeleprompt") {
+        setTelepromptTheatreOpenSignal(0);
         setUiMemory((currentMemory) =>
           rememberTelepromptReturnStage(currentMemory, activeProjectId, contentMode),
         );
@@ -3457,6 +3459,10 @@ export function App() {
   }, [bookCinemaOpenTiming, canOpenBookCinema, themeName]);
   const openTelepromptStage = useCallback(() => {
     runWorkspaceStageAction("openTeleprompt");
+  }, [runWorkspaceStageAction]);
+  const openTelepromptTheatreStage = useCallback(() => {
+    runWorkspaceStageAction("openTeleprompt");
+    setTelepromptTheatreOpenSignal((currentSignal) => currentSignal + 1);
   }, [runWorkspaceStageAction]);
   const handleSelectBookCinemaSource = useCallback(
     (bookId: string) => {
@@ -6331,6 +6337,17 @@ export function App() {
       title: workspaceStageActionLabel("openTeleprompt"),
     },
     {
+      category: "Teleprompt",
+      detail: "Open the presenter-first Theatre teleprompter with fullscreen fallback.",
+      id: "teleprompt:theatre",
+      keywords: ["fullscreen", "presenter", "cinematic", "recording"],
+      perform: () => {
+        openTelepromptTheatreStage();
+      },
+      section: "Teleprompt",
+      title: "Open Teleprompt Theatre",
+    },
+    {
       category: "Voice",
       detail: "Open saved voices, candidates, targets, and voice diagnostics.",
       id: "voice:dashboard",
@@ -7499,6 +7516,7 @@ export function App() {
                     }
                     voiceProfile={selectedVoiceProfileLabel}
                     sourceType={activeNarrationSourceType}
+                    theatreOpenSignal={telepromptTheatreOpenSignal}
                     onActiveBlockChange={(blockId) => {
                       setWorkspaceContext((currentContext) =>
                         withWorkspaceActiveBlock(currentContext, blockId),

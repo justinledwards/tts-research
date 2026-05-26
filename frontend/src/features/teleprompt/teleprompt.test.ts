@@ -20,6 +20,9 @@ import {
   resolveTelepromptShortcut,
   totalTelepromptWords,
 } from "./telepromptToolbar";
+import { telepromptFullscreenAvailability } from "./telepromptFullscreen";
+import { resolveTelepromptTheatreShortcut } from "./telepromptTheatreShortcuts";
+import { buildTelepromptTheatreSummary } from "./telepromptTheatreState";
 import type { RevisionBlock } from "../revision";
 
 const blocks: RevisionBlock[] = [
@@ -43,6 +46,39 @@ describe("teleprompt toolbar model", () => {
     expect(resolveTelepromptBlockIndex(blocks, "b")).toBe(1);
     expect(adjacentTelepromptBlockId(blocks, "b", 1)).toBe("c");
     expect(adjacentTelepromptBlockId(blocks, "a", -1)).toBe("a");
+  });
+});
+
+describe("teleprompt theatre model", () => {
+  it("resolves presenter shortcuts before falling back to cue shortcuts", () => {
+    expect(resolveTelepromptTheatreShortcut({ key: "Escape" })).toBe("exitTheatre");
+    expect(resolveTelepromptTheatreShortcut({ key: "f" })).toBe("toggleNativeFullscreen");
+    expect(resolveTelepromptTheatreShortcut({ key: "m" })).toBe("toggleMirror");
+    expect(resolveTelepromptTheatreShortcut({ key: "ArrowRight" })).toBe("nextCue");
+  });
+
+  it("summarizes presenter cue state and sync status", () => {
+    const summary = buildTelepromptTheatreSummary({
+      activeBlockId: "b",
+      blocks,
+      estimatedDurationMs: estimateTelepromptDurationMs(totalTelepromptWords(blocks)),
+      isPlaybackActive: true,
+      playbackAvailable: true,
+      scopeLabel: "Chapter One",
+      sourceLabel: "Demo Source",
+    });
+
+    expect(summary.cuePositionLabel).toBe("Cue 2 of 3");
+    expect(summary.sourceScopeLabel).toBe("Demo Source · Chapter One");
+    expect(summary.playbackStatusLabel).toBe("Playback running");
+    expect(summary.syncStatusLabel).toBe("Audio-follow cue sync ready");
+    expect(summary.progressPercent).toBe(67);
+  });
+
+  it("explains unavailable native fullscreen without blocking theatre fallback", () => {
+    expect(telepromptFullscreenAvailability(null)).toMatchObject({
+      supported: false,
+    });
   });
 });
 

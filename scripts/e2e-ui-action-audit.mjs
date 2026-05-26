@@ -986,6 +986,18 @@ function createScenarios(seed) {
       }),
       surface: "Teleprompt",
     },
+    {
+      description: "Teleprompt Theatre presenter overlay reached from workspace review.",
+      id: "workspace-teleprompt-theatre",
+      label: "Workspace Teleprompt Theatre",
+      open: openTelepromptTheatre,
+      storageState: projectStorageState(seed.projectId, {
+        sourceMode: "text",
+        stage: "review",
+        text: workspaceText,
+      }),
+      surface: "Teleprompt",
+    },
   ];
 }
 
@@ -1246,6 +1258,12 @@ async function openTeleprompt(page) {
   await openWorkspaceStage(page, "Preview");
   await page.getByTestId("workspace-stage-action-openTeleprompt").click();
   await page.getByText("Teleprompt Studio").first().waitFor();
+}
+
+async function openTelepromptTheatre(page) {
+  await openTeleprompt(page);
+  await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
+  await page.getByTestId("teleprompt-theatre").waitFor();
 }
 
 async function openBookPanel(page, scope) {
