@@ -40,6 +40,7 @@ export interface CinemaTransportModel {
   primary: {
     className: string;
     disabled: boolean;
+    disabledReason?: string;
     icon?: ReactNode;
     label: string;
     mobileLabel?: string;
@@ -728,6 +729,9 @@ function cinemaPrimaryDisabledReason(
 ): string | undefined {
   if (!model.primary.disabled) {
     return undefined;
+  }
+  if (model.primary.disabledReason) {
+    return model.primary.disabledReason;
   }
   return playbackActionDisabledReason({
     action,

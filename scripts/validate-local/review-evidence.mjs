@@ -201,6 +201,16 @@ export function buildReviewSteps(context) {
       id: "readalong-sync-e2e",
       title: "Read-along Sync E2E",
     },
+    {
+      args: ["e2e:golden-minute"],
+      artifacts: goldenMinuteArtifacts(context, "golden-minute-e2e"),
+      command: "pnpm",
+      env: {
+        E2E_GOLDEN_MINUTE_OUTPUT_DIR: artifactDir(context, "golden-minute-e2e"),
+      },
+      id: "golden-minute-e2e",
+      title: "Golden Minute E2E",
+    },
     bookCinemaStep(context, {
       id: "book-cinema-responsive-e2e",
       script: "e2e:book-cinema:responsive",
@@ -400,6 +410,16 @@ function readAlongSyncArtifacts(context, id) {
   };
 }
 
+function goldenMinuteArtifacts(context, id) {
+  const dir = artifactDir(context, id);
+  return {
+    goldenMinuteReport: path.join(dir, "golden-minute-report.md"),
+    goldenMinuteResults: path.join(dir, "golden-minute-results.json"),
+    goldenMinuteSync: path.join(dir, "golden-minute-sync.json"),
+    screenshots: path.join(dir, "screenshots"),
+  };
+}
+
 function telepromptMemoryArtifacts(context, id) {
   const dir = artifactDir(context, id);
   return {
@@ -596,6 +616,9 @@ async function readQaDocuments(artifactRecords) {
     readAlongFidelity: await readJsonIfPresent(
       byStepAndKey.get("read-along-fidelity-e2e:readAlongResults"),
     ),
+    goldenMinute: await readJsonIfPresent(
+      byStepAndKey.get("golden-minute-e2e:goldenMinuteResults"),
+    ),
     responsiveCinema: await readJsonIfPresent(
       byStepAndKey.get("book-cinema-responsive-e2e:e2eSummary"),
     ),
@@ -682,6 +705,7 @@ export function buildPassFailSummary({
     lowResourceTiming: statusSummary(
       qaDocuments.lowResourceSummary ?? qaDocuments.lowResourceTiming,
     ),
+    goldenMinute: statusSummary(qaDocuments.goldenMinute),
     readAlongFidelity: statusSummary(qaDocuments.readAlongFidelity),
     responsiveCinema: statusSummary(qaDocuments.responsiveCinema),
     responsiveSnapshots: statusSummary(qaDocuments.responsiveSnapshots),
@@ -869,6 +893,7 @@ export function renderReviewerSummary(manifest) {
   );
   lines.push(...artifactSection("Accessibility", manifest, ["accessibility-audit-e2e"]));
   lines.push(...artifactSection("Low-resource Timing", manifest, ["book-cinema-low-resource-e2e"]));
+  lines.push(...artifactSection("Golden Minute", manifest, ["golden-minute-e2e"]));
   lines.push(
     ...artifactSection("Command Palette, Teleprompt, and Context Panel", manifest, [
       "command-palette-e2e",

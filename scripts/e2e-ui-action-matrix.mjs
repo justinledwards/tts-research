@@ -588,11 +588,13 @@ export async function exerciseAction(page, action, { activationMode }) {
 
   const disabled = action.disabled || (await isLocatorDisabled(locator.first()));
   if (disabled) {
-    const passed = Boolean(action.disabledReason);
+    const disabledReason =
+      action.disabledReason ?? (await disabledReasonForLocator(locator.first()));
+    const passed = Boolean(disabledReason);
     return {
       ...resultBase,
       capabilityGate: action.capabilityGate,
-      disabledReason: action.disabledReason,
+      disabledReason,
       outcome: passed
         ? action.capabilityGated
           ? "capability-gated disabled with explicit reason"
@@ -600,7 +602,7 @@ export async function exerciseAction(page, action, { activationMode }) {
         : "disabled without explicit reason",
       passed,
       reason: passed
-        ? action.disabledReason
+        ? disabledReason
         : "Disabled controls must expose data-disabled-reason, data-ui-disabled-reason, title, or aria-describedby text.",
       status: passed ? "passed" : "failed",
     };
@@ -884,6 +886,28 @@ async function isLocatorDisabled(locator) {
       return element.disabled;
     }
     return element.getAttribute("aria-disabled") === "true";
+  });
+}
+
+async function disabledReasonForLocator(locator) {
+  return locator.evaluate((element) => {
+    const normalizeText = (value) => String(value).replaceAll(/\s+/g, " ").trim();
+    const explicit =
+      element.getAttribute("data-disabled-reason") ??
+      element.getAttribute("data-ui-disabled-reason") ??
+      element.getAttribute("title");
+    if (explicit) {
+      return normalizeText(explicit);
+    }
+    const describedBy = element.getAttribute("aria-describedby");
+    if (!describedBy) {
+      return null;
+    }
+    const text = describedBy
+      .split(/\s+/)
+      .map((id) => element.ownerDocument.getElementById(id)?.textContent ?? "")
+      .join(" ");
+    return normalizeText(text) || null;
   });
 }
 

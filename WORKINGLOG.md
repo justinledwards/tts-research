@@ -1,5 +1,22 @@
 # Working Log
 
+## 2026-05-26 21:55 CEST - Scrap TTS Studio Concept Boards
+- [x] Remove revised concept board artifacts
+- [x] Verify no UX concept files remain
+- [x] Run project checks
+
+## 2026-05-26 21:40 CEST - Revised TTS Studio Concept Images
+- [x] Remove prior UX redesign artifacts
+- [x] Generate improved conceptual images
+- [x] Save revised image assets
+- [x] Verify asset quality and repository status
+
+## 2026-05-26 21:24 CEST - TTS Studio Redesign Wireframe
+- [x] Inspect UX docs structure and existing design references
+- [x] Generate high-fidelity concept images
+- [x] Add Markdown and Mermaid redesign artifact
+- [x] Verify artifact links and formatting
+
 ## 2026-05-26 11:32 CEST - Cross-Package Verification Gate
 - [x] Inspect existing local validation, UI action, Teleprompt, read-along, and report artifacts
 - [x] Add final UX gate script and top-level command
@@ -730,3 +747,14 @@
 - [x] Fail on unclassified duplicate groups
 - [x] Run WP46 validation commands
 - [x] Commit WP46 changes
+
+## 2026-05-26 19:43 CEST - WP47 Golden Minute Fixture
+- [x] Inspect existing read-along, fidelity, and review evidence gates
+- [x] Add canonical golden-minute fixture and expectations
+- [x] Add golden-minute end-to-end command and report artifacts
+- [x] Wire golden-minute evidence into local review
+- [x] Fix Document Cinema replay-time disabled-reason blockers
+- [x] Run WP47 core validation commands
+- [x] Run dirty-waived review bundle integration validation
+- [ ] Regenerate clean review bundle from committed head
+- [x] Commit WP47 changes

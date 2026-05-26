@@ -1886,6 +1886,14 @@ function PreparedSourceCinemaTransport({
     playbackControls.isAvailable,
     rendererReady,
   );
+  const primaryDisabledReason = preparedSourcePrimaryDisabledReason({
+    canStart,
+    isPlaybackTransport,
+    isProcessing,
+    playbackUnavailableReason,
+    playbackState,
+    source,
+  });
   const seekUnavailableReason = preparedSourceSeekDisabledReason(
     Boolean(playbackControls.skipBy),
     rendererReady,
@@ -1935,6 +1943,7 @@ function PreparedSourceCinemaTransport({
           ? "bg-amber-400 text-zinc-950 shadow-amber-500/20"
           : "bg-orange-600 text-white shadow-orange-500/25",
       disabled: primaryDisabled,
+      disabledReason: primaryDisabled ? primaryDisabledReason : undefined,
       icon: primaryIcon,
       label: primaryLabel,
       onClick: handlePrimary,
@@ -1980,6 +1989,39 @@ function PreparedSourceCinemaTransport({
   };
 
   return <CinemaTransportBar model={transportModel} />;
+}
+
+function preparedSourcePrimaryDisabledReason({
+  canStart,
+  isPlaybackTransport,
+  isProcessing,
+  playbackUnavailableReason,
+  playbackState,
+  source,
+}: Readonly<{
+  canStart: boolean;
+  isPlaybackTransport: boolean;
+  isProcessing: boolean;
+  playbackUnavailableReason: string | undefined;
+  playbackState: ReturnType<typeof deriveCinemaPlaybackState>;
+  source: PreparedSource;
+}>): string | undefined {
+  if (isPlaybackTransport) {
+    return playbackUnavailableReason;
+  }
+  if (playbackState === "generating") {
+    return "Audio generation is already in progress.";
+  }
+  if (canStart) {
+    return undefined;
+  }
+  if (isProcessing) {
+    return "Source preparation is already running.";
+  }
+  if (source.status !== "ready") {
+    return source.error ?? "Source is not ready yet.";
+  }
+  return "Audio creation is not available for this source.";
 }
 
 function preparedSourcePlaybackDisabledReason(

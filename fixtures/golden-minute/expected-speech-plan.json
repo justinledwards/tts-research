@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "golden-minute-speech-plan.v1",
+  "sampleId": "golden-minute-readalong",
+  "policyProfile": "Enterprise",
+  "citationPolicy": {
+    "mode": "onDemand",
+    "inlineToken": "[^gm1]",
+    "expectedHandling": "The inline reference marker and footnote body are omitted from the default spoken pass and remain available on demand."
+  },
+  "pauseModel": {
+    "defaultCommaPauseMs": 180,
+    "defaultSentencePauseMs": 420,
+    "paragraphTransitionPauseMs": 750,
+    "naturalPauseMarkers": [
+      {
+        "segmentId": "gm-p3",
+        "marker": "waits for a breath",
+        "expectedPauseMs": 900
+      },
+      {
+        "segmentId": "gm-p5",
+        "marker": "Then listen.",
+        "expectedPauseMs": 650
+      }
+    ]
+  },
+  "pronunciationOverrides": [
+    {
+      "token": "Dr.",
+      "spoken": "Doctor",
+      "reason": "Abbreviation should be expanded for speech fluency."
+    },
+    {
+      "token": "7:05",
+      "spoken": "seven oh five",
+      "reason": "Clock time should be read naturally."
+    },
+    {
+      "token": "golden-minute://resume-anchor",
+      "spoken": "golden minute resume anchor",
+      "reason": "Source locator should not be read as punctuation."
+    },
+    {
+      "token": "47",
+      "spoken": "forty seven",
+      "reason": "Seek target number should be spoken as words."
+    }
+  ],
+  "segments": [
+    {
+      "id": "gm-h1",
+      "kind": "heading",
+      "sourceLocator": "sample.md#L1",
+      "normalizedSpokenText": "Golden Minute Calibration"
+    },
+    {
+      "id": "gm-p1",
+      "kind": "paragraph",
+      "sourceLocator": "sample.md#L3",
+      "normalizedSpokenText": "Doctor Mira Chen unlocked the studio at seven oh five, placed a brass bookmark on paragraph three, and said, \"Start with the listener, then chase the waveform.\""
+    },
+    {
+      "id": "gm-p2",
+      "kind": "paragraph",
+      "sourceLocator": "sample.md#L5",
+      "normalizedSpokenText": "The first source block names the route: Intake to Review, Preview, mock audio, Cinema, and Teleprompt Theatre, with each handoff recorded for later evidence."
+    },
+    {
+      "id": "gm-p3",
+      "kind": "paragraph",
+      "sourceLocator": "sample.md#L7",
+      "normalizedSpokenText": "Before playback begins, she taps the source locator golden minute resume anchor, waits for a breath, and checks that citation stays silent under the default policy."
+    },
+    {
+      "id": "gm-p4",
+      "kind": "paragraph",
+      "sourceLocator": "sample.md#L9",
+      "normalizedSpokenText": "Because the sample moves from a heading into measured paragraphs, then into a quoted instruction, a citation token, a bookmark target, and a final theatre cue, it can expose drift that tiny fixtures usually miss."
+    },
+    {
+      "id": "gm-p5",
+      "kind": "paragraph",
+      "sourceLocator": "sample.md#L11",
+      "normalizedSpokenText": "Then listen."
+    },
+    {
+      "id": "gm-p6",
+      "kind": "paragraph",
+      "sourceLocator": "sample.md#L13",
+      "normalizedSpokenText": "After the pause, the voice should resume gently, cross the segment boundary without jumping backward, and keep the highlighted word in the visible reading lane."
+    },
+    {
+      "id": "gm-p7",
+      "kind": "paragraph",
+      "sourceLocator": "sample.md#L15",
+      "bookmarkTarget": "golden-minute://resume-anchor",
+      "normalizedSpokenText": "At forty seven seconds, the player seeks ahead, returns to the saved bookmark, and proves that the resumed paragraph still belongs to the same source; the last theatre cue says, \"let the final word land.\""
+    }
+  ]
+}
