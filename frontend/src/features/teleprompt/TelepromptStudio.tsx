@@ -18,7 +18,7 @@ import {
 import type { HighlightMap, VoiceJob } from "../../types";
 import { Button, Panel, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
 import { ContextPanel, buildContextPanelTabs, type ContextPanelTabId } from "../context-panel";
-import type { HighlightMapV2 } from "../readalong";
+import { HighlightRenderer, type HighlightMapV2 } from "../readalong";
 import type { RevisionBlock } from "../revision";
 import { HeaderContextSummary } from "../header";
 import {
@@ -210,6 +210,12 @@ export function TelepromptStudio({
     activeBlockIndex >= 0 && activeBlockIndex < blocks.length - 1
       ? blocks[activeBlockIndex + 1]
       : null;
+  const previousCueUnavailable = activeBlockIndex <= 0;
+  const previousCueNoopReason =
+    previousCueUnavailable && activeBlockIndex >= 0 ? "Already at the first cue." : undefined;
+  const nextCueUnavailable = activeBlockIndex < 0 || activeBlockIndex >= blocks.length - 1;
+  const nextCueNoopReason =
+    nextCueUnavailable && activeBlockIndex >= 0 ? "Already at the final cue." : undefined;
   const totalWords = totalTelepromptWords(blocks);
   const activeWords = activeBlock ? countTelepromptWords(activeBlock.spokenText) : 0;
   const estimatedDurationMs =
@@ -808,8 +814,9 @@ export function TelepromptStudio({
               </Button>
               <Button
                 data-testid="ui-action-teleprompt-previous-cue"
-                disabled={activeBlockIndex <= 0}
-                disabledReason={activeBlockIndex > 0 ? undefined : "Already at the first cue."}
+                data-ui-noop-reason={previousCueNoopReason}
+                disabled={activeBlockIndex < 0}
+                disabledReason={activeBlockIndex < 0 ? "No cue is selected." : undefined}
                 onClick={() => {
                   moveCue(-1);
                 }}
@@ -849,12 +856,9 @@ export function TelepromptStudio({
               </Button>
               <Button
                 data-testid="ui-action-teleprompt-next-cue"
-                disabled={activeBlockIndex < 0 || activeBlockIndex >= blocks.length - 1}
-                disabledReason={
-                  activeBlockIndex >= 0 && activeBlockIndex < blocks.length - 1
-                    ? undefined
-                    : "Already at the final cue."
-                }
+                data-ui-noop-reason={nextCueNoopReason}
+                disabled={activeBlockIndex < 0}
+                disabledReason={activeBlockIndex < 0 ? "No cue is selected." : undefined}
                 onClick={() => {
                   moveCue(1);
                 }}
@@ -1213,15 +1217,24 @@ function TelepromptCueWords({
         );
   const cueByIndex = new Map(cues.map((cue) => [cue.wordIndex, cue]));
   return (
-    <>
-      {tokens.map((token, index) => (
-        <TelepromptCueToken
-          cue={token.wordIndex === null ? null : (cueByIndex.get(token.wordIndex) ?? null)}
-          key={`${token.text}-${index.toString()}`}
-          token={token}
-        />
-      ))}
-    </>
+    <HighlightRenderer
+      activeWordIndex={currentWordIndex}
+      classNameForWord={({ token }) => {
+        const cue = cueByIndex.get(token.wordIndex);
+        return `teleprompter-word teleprompter-word--${cue?.state ?? "idle"} rounded px-1 py-0.5`;
+      }}
+      dataEffect="classic"
+      mode="word"
+      surface="teleprompt"
+      text={text}
+      wordStyle={({ token }) => {
+        const cue = cueByIndex.get(token.wordIndex);
+        return {
+          "--teleprompter-accent": "#f97316",
+          "--teleprompter-intensity": String(cue?.intensity ?? 0),
+        } as CSSProperties;
+      }}
+    />
   );
 }
 
@@ -1272,30 +1285,6 @@ function buildTelepromptWordCuesFromIndex(
       wordIndex,
     };
   });
-}
-
-function TelepromptCueToken({
-  cue,
-  token,
-}: Readonly<{ cue: TeleprompterWordCue | null; token: TeleprompterToken }>) {
-  if (token.kind === "space") {
-    return <span className="whitespace-pre-wrap">{token.text}</span>;
-  }
-  const state = cue?.state ?? "idle";
-  return (
-    <span
-      className={`teleprompter-word teleprompter-word--${state} rounded px-1 py-0.5`}
-      data-effect="classic"
-      style={
-        {
-          "--teleprompter-accent": "#f97316",
-          "--teleprompter-intensity": String(cue?.intensity ?? 0),
-        } as CSSProperties
-      }
-    >
-      {token.text}
-    </span>
-  );
 }
 
 function TelepromptBlockPreview({

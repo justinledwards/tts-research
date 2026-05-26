@@ -703,6 +703,34 @@ select {
   box-shadow: 0 0 0 0.08em color-mix(in srgb, var(--vs-accent) 16%, transparent);
 }
 
+.readalong-highlight {
+  scroll-margin-block: 42%;
+}
+
+.readalong-highlight--active {
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    text-decoration-color 160ms ease;
+}
+
+.readalong-highlight--phrase {
+  border-radius: 0.16em;
+}
+
+.readalong-highlight--degraded {
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  box-shadow: 0 0 0 0.08em color-mix(in srgb, #f59e0b 20%, transparent);
+}
+
+.readalong-highlight--sentence,
+.readalong-highlight--block {
+  text-decoration-color: color-mix(in srgb, var(--vs-accent) 48%, transparent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.16em;
+}
+
 [data-reader-motion="reduced"] .book-cinema-word-active {
   background: color-mix(in srgb, var(--vs-accent) 22%, transparent);
   box-shadow: 0 0 0 0.08em color-mix(in srgb, var(--vs-accent) 30%, transparent);
@@ -713,6 +741,7 @@ select {
 
 [data-reader-motion="reduced"] .markdown-cinema-block-active,
 [data-reader-motion="reduced"] .markdown-cinema-word-active,
+[data-reader-motion="reduced"] .readalong-highlight--active,
 [data-reader-motion="reduced"] .prepared-source-cinema-active,
 [data-reader-motion="reduced"] .website-cinema-word-active {
   box-shadow: 0 0 0 0.08em color-mix(in srgb, var(--vs-accent) 28%, transparent);
@@ -748,6 +777,7 @@ select {
 
 [data-reader-highlight="high-contrast"] .markdown-cinema-block-active,
 [data-reader-highlight="high-contrast"] .markdown-cinema-word-active,
+[data-reader-highlight="high-contrast"] .readalong-highlight--active,
 [data-reader-highlight="high-contrast"] .prepared-source-cinema-active,
 [data-reader-highlight="high-contrast"] .website-cinema-word-active {
   border-radius: 0.2em;

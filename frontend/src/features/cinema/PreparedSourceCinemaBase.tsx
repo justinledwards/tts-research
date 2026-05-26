@@ -35,8 +35,16 @@ import { PolicyScopeSummary, policyScopeSummary, SourcePolicyPinEditor } from ".
 import type { UiMemoryCinemaState } from "../preferences";
 import {
   evaluatePreparedSourceReadAlongInvariant,
+  HighlightRenderer,
   readAlongInvariantStatusLabel,
+  readAlongAnchorForBlock,
+  readAlongAnchorForWord,
+  readAlongShouldHighlightBlock,
+  readAlongShouldHighlightWord,
+  readAlongVisualModeFromRuntime,
   resolveReadAlongRuntimeSnapshot,
+  scrollReadAlongAnchor,
+  type ReadAlongHighlightVisualMode,
 } from "../readalong";
 import {
   normalizeReaderAccessibilitySettings,
@@ -405,6 +413,7 @@ export function PreparedSourceCinemaOverlay({
       playbackControls.isSeeking,
     ],
   );
+  const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime);
   const readAlongReport = useMemo(
     () =>
       evaluatePreparedSourceReadAlongInvariant({
@@ -785,6 +794,7 @@ export function PreparedSourceCinemaOverlay({
           accessibilitySettings={normalizedAccessibility}
           canvasFirst={cinemaFocus.layoutState.canvasFirst}
           isFullscreen={isFullscreen}
+          readAlongVisualMode={readAlongVisualMode}
           rendererLifecycle={rendererLifecycle}
           rendererRetryKey={rendererRetryKey}
           source={source}
@@ -1240,6 +1250,7 @@ function PreparedSourceCinemaReader({
   autoFollow,
   canvasFirst,
   isFullscreen,
+  readAlongVisualMode,
   rendererLifecycle,
   rendererRetryKey,
   source,
@@ -1256,6 +1267,7 @@ function PreparedSourceCinemaReader({
   autoFollow: boolean;
   canvasFirst: boolean;
   isFullscreen: boolean;
+  readAlongVisualMode: ReadAlongHighlightVisualMode;
   rendererLifecycle: CinemaRendererLifecycleState;
   rendererRetryKey: number;
   source: PreparedSource;
@@ -1281,20 +1293,29 @@ function PreparedSourceCinemaReader({
     READER_LINE_SPACING_CLASS[accessibilitySettings.lineSpacing]
   }`;
   const scrollBehavior = readerScrollBehavior(accessibilitySettings);
-  const shouldHighlightWord = activeBlock ? isPreparedCinemaWordHighlightable(activeBlock) : false;
+  const shouldHighlightWord =
+    activeBlock &&
+    isPreparedCinemaWordHighlightable(activeBlock) &&
+    readAlongShouldHighlightWord(readAlongVisualMode);
+  const shouldHighlightBlock = readAlongShouldHighlightBlock(readAlongVisualMode);
   const blockHighlight =
-    activeWord && activeBlock && !shouldHighlightWord
+    activeWord && activeBlock && shouldHighlightBlock
       ? {
           blockEndOffset: activeWord.blockEndOffset,
           blockStartOffset: activeWord.blockStartOffset,
+          nodeId: activeWord.blockId,
+          sourceId: source.id,
         }
       : undefined;
   const wordHighlight =
     activeWord && shouldHighlightWord
       ? {
           activeWordOffset: activeWord.wordOffset,
+          activeWordIndex,
           blockEndOffset: activeWord.blockEndOffset,
           blockStartOffset: activeWord.blockStartOffset,
+          nodeId: activeWord.blockId,
+          sourceId: source.id,
         }
       : undefined;
   let readerContent: ReactNode;
@@ -1318,7 +1339,7 @@ function PreparedSourceCinemaReader({
             <PreparedMarkdownRenderer
               artifactRendering="document-cinema"
               blockHighlight={blockHighlight}
-              className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
+              className={`markdown-cinema prose-markdown readalong-markdown-renderer ${textClass} text-[var(--vs-text)]`}
               wordHighlight={wordHighlight}
             >
               {source.text}
@@ -1345,6 +1366,9 @@ function PreparedSourceCinemaReader({
               block={block}
               isActive={block.id === activeBlockId}
               key={block.id}
+              readAlongVisualMode={readAlongVisualMode}
+              sourceId={source.id}
+              surface={preparedSourceCinemaKind(source) === "website" ? "website" : "document"}
             />
           ))}
         </div>
@@ -1366,7 +1390,7 @@ function PreparedSourceCinemaReader({
             <PreparedMarkdownRenderer
               artifactRendering="document-cinema"
               blockHighlight={blockHighlight}
-              className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
+              className={`markdown-cinema prose-markdown readalong-markdown-renderer ${textClass} text-[var(--vs-text)]`}
               wordHighlight={wordHighlight}
             >
               {source.text ?? source.speechText ?? ""}
@@ -1390,12 +1414,41 @@ function PreparedSourceCinemaReader({
     if (!autoFollow || activeWordIndex < 0) {
       return;
     }
-    readerRef.current
-      ?.querySelector(
-        ".prepared-source-cinema-active, .website-cinema-word-active, .markdown-cinema-word-active",
-      )
-      ?.scrollIntoView({ block: "center", inline: "nearest", behavior: scrollBehavior });
-  }, [activeWordIndex, autoFollow, scrollBehavior]);
+    const anchor =
+      activeWord && shouldHighlightWord
+        ? readAlongAnchorForWord({
+            nodeId: activeWord.blockId,
+            sourceId: source.id,
+            tokenOffset: activeWord.wordOffset,
+            wordIndex: activeWordIndex,
+          })
+        : readAlongAnchorForBlock({
+            nodeId: activeBlock?.id ?? activeBlockId,
+            sourceId: source.id,
+          });
+    scrollReadAlongAnchor(readerRef.current, anchor, {
+      autoFollow,
+      fallbackSelectors: [
+        ".prepared-source-cinema-active",
+        ".website-cinema-word-active",
+        ".markdown-cinema-word-active",
+        ".markdown-cinema-block-active",
+      ],
+      mode: readAlongVisualMode,
+      settings: accessibilitySettings,
+      surface: preparedSourceCinemaKind(source) === "website" ? "website" : "document",
+    });
+  }, [
+    accessibilitySettings,
+    activeBlock?.id,
+    activeBlockId,
+    activeWord,
+    activeWordIndex,
+    autoFollow,
+    readAlongVisualMode,
+    shouldHighlightWord,
+    source,
+  ]);
 
   useEffect(() => {
     if (!activeBlockId) {
@@ -1925,22 +1978,43 @@ function PreparedSourceCinemaBlock({
   activeWordOffset,
   block,
   isActive,
-}: Readonly<{ activeWordOffset: number | null; block: NarrationBlock; isActive: boolean }>) {
+  readAlongVisualMode,
+  sourceId,
+  surface,
+}: Readonly<{
+  activeWordOffset: number | null;
+  block: NarrationBlock;
+  isActive: boolean;
+  readAlongVisualMode: ReadAlongHighlightVisualMode;
+  sourceId: string;
+  surface: "document" | "website";
+}>) {
   const ref = useRef<HTMLElement | null>(null);
   const text = markdownBlockText(block);
+  const highlightActiveBlock = isActive && readAlongVisualMode !== "none";
 
   if (!text.trim()) {
     return null;
   }
 
   const id = `cinema-block-${block.id}`;
-  const content = renderPreparedSourceCinemaBlockContent(block, text, activeWordOffset, isActive);
+  const content = renderPreparedSourceCinemaBlockContent({
+    activeWordOffset,
+    block,
+    isActive,
+    readAlongVisualMode,
+    sourceId,
+    surface,
+    text,
+  });
   if (block.kind === "heading") {
     return (
       <h1
         className={`mt-0 scroll-mt-20 text-3xl font-semibold leading-tight tracking-[-0.01em] first:mt-0 sm:text-[28px] ${
-          isActive ? "prepared-source-cinema-active" : ""
+          highlightActiveBlock ? "prepared-source-cinema-active" : ""
         }`}
+        data-readalong-node-id={block.id}
+        data-readalong-source-id={sourceId}
         id={id}
         ref={ref as React.RefObject<HTMLHeadingElement>}
       >
@@ -1952,8 +2026,10 @@ function PreparedSourceCinemaBlock({
     return (
       <h2
         className={`mt-8 scroll-mt-20 text-xl font-semibold leading-snug ${
-          isActive ? "prepared-source-cinema-active" : ""
+          highlightActiveBlock ? "prepared-source-cinema-active" : ""
         }`}
+        data-readalong-node-id={block.id}
+        data-readalong-source-id={sourceId}
         id={id}
         ref={ref as React.RefObject<HTMLHeadingElement>}
       >
@@ -1964,8 +2040,10 @@ function PreparedSourceCinemaBlock({
   return (
     <section
       className={`my-5 scroll-mt-20 transition ${
-        isActive ? "text-[var(--vs-text)]" : ""
-      } ${isActive ? "prepared-source-cinema-active" : ""}`}
+        highlightActiveBlock ? "text-[var(--vs-text)]" : ""
+      } ${highlightActiveBlock ? "prepared-source-cinema-active" : ""}`}
+      data-readalong-node-id={block.id}
+      data-readalong-source-id={sourceId}
       id={id}
       ref={ref}
     >
@@ -1974,12 +2052,23 @@ function PreparedSourceCinemaBlock({
   );
 }
 
-function renderPreparedSourceCinemaBlockContent(
-  block: NarrationBlock,
-  text: string,
-  activeWordOffset: number | null,
-  isActive: boolean,
-): ReactNode {
+function renderPreparedSourceCinemaBlockContent({
+  activeWordOffset,
+  block,
+  isActive,
+  readAlongVisualMode,
+  sourceId,
+  surface,
+  text,
+}: Readonly<{
+  activeWordOffset: number | null;
+  block: NarrationBlock;
+  isActive: boolean;
+  readAlongVisualMode: ReadAlongHighlightVisualMode;
+  sourceId: string;
+  surface: "document" | "website";
+  text: string;
+}>): ReactNode {
   if (block.kind === "code" && looksLikeMermaidDiagram(text)) {
     return (
       <Suspense
@@ -2002,11 +2091,20 @@ function renderPreparedSourceCinemaBlockContent(
       </pre>
     );
   }
-  const words = renderTextWithActiveWord(text, activeWordOffset);
+  const words = (
+    <HighlightRenderer
+      activeWordIndex={activeWordOffset}
+      mode={readAlongVisualMode}
+      nodeId={block.id}
+      sourceId={sourceId}
+      surface={surface}
+      text={text}
+    />
+  );
   if (block.kind === "heading" || block.kind === "subheading") {
     return <>{words}</>;
   }
-  if (isActive) {
+  if (isActive && readAlongVisualMode !== "none") {
     return (
       <p className="m-0">
         <span className="rounded-md bg-orange-100/80 px-1 py-0.5 box-decoration-clone">
@@ -2016,29 +2114,6 @@ function renderPreparedSourceCinemaBlockContent(
     );
   }
   return <p className="m-0">{words}</p>;
-}
-
-function renderTextWithActiveWord(text: string, activeWordOffset: number | null): ReactNode[] {
-  let wordIndex = 0;
-  return text.split(/(\s+)/).map((part, index) => {
-    const key = `${part}:${index.toString()}`;
-    if (!part || /^\s+$/.test(part)) {
-      return <span key={key}>{part}</span>;
-    }
-    const currentWord = wordIndex;
-    wordIndex += 1;
-    if (currentWord !== activeWordOffset) {
-      return <span key={key}>{part}</span>;
-    }
-    return (
-      <span
-        className="website-cinema-word-active rounded bg-orange-300/80 px-0.5 font-semibold text-zinc-950"
-        key={key}
-      >
-        {part}
-      </span>
-    );
-  });
 }
 
 function Waveform({

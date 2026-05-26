@@ -13,6 +13,24 @@ export {
   type AlignmentStatusTone,
 } from "./alignmentStatus";
 export {
+  HighlightRenderer,
+  renderHighlightTextOrFallback,
+  splitHighlightText,
+  type HighlightRendererProps,
+  type HighlightRendererToken,
+  type HighlightRendererWordState,
+} from "./HighlightRenderer";
+export {
+  normalizeAnchorText,
+  readAlongAnchorForBlock,
+  readAlongAnchorForWord,
+  readAlongAnchorId,
+  readAlongAnchorSelectors,
+  resolveReadAlongDomAnchor,
+  type ReadAlongDomAnchor,
+  type ReadAlongResolvedDomAnchor,
+} from "./domAnchorResolver";
+export {
   ReadAlongResyncController,
   resolveReadAlongRuntimeSnapshot,
   type ReadAlongResyncInput,
@@ -48,6 +66,18 @@ export {
   type TimingArtifact,
 } from "./highlightMapV2";
 export {
+  normalizeReadAlongVisualMode,
+  readAlongHighlightClassName,
+  readAlongHighlightDataAttributes,
+  readAlongHighlightModeLabel,
+  readAlongShouldHighlightBlock,
+  readAlongShouldHighlightPhrase,
+  readAlongShouldHighlightWord,
+  readAlongVisualModeFromRuntime,
+  type ReadAlongHighlightSurface,
+  type ReadAlongHighlightVisualMode,
+} from "./highlightVisualModes";
+export {
   readAlongRuntimeDebugRows,
   readAlongRuntimeStateLabel,
   readAlongRuntimeStatusClassName,
@@ -56,6 +86,14 @@ export {
   type ReadAlongRuntimeState,
   type ReadAlongVisualMode,
 } from "./readAlongState";
+export {
+  readAlongScrollPolicyDataAttributes,
+  resolveReadAlongScrollPolicy,
+  scrollReadAlongAnchor,
+  type ReadAlongScrollDecision,
+  type ReadAlongScrollDecisionInput,
+  type ReadAlongScrollPolicy,
+} from "./scrollFollowPolicy";
 export {
   timingArtifactDebugRows,
   validateTimingArtifact,

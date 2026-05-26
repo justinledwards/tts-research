@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-26 08:43 CEST - Read-Along Highlight Rendering and Scroll Ergonomics
+- [x] Inspect current reader highlight rendering, timing artifact, and scroll paths
+- [x] Add shared DOM anchor resolver, highlight visual modes, and scroll policy modules
+- [x] Wire shared HighlightRenderer into reader surfaces without breaking citation/policy rendering
+- [x] Add regression coverage for anchors, fallback modes, reduced motion, and scroll policy
+- [x] Run WP38 local validation commands
+
 ## 2026-05-26 07:35 CEST - Teleprompt Cue Timeline Synchronization
 - [x] Inspect Teleprompt cue, timing artifact, playback cursor, and return-memory paths
 - [x] Add cue timeline model derived from HighlightMap v2 and legacy timing

@@ -9,7 +9,7 @@ export type ReadAlongRuntimeState =
   | "seeking"
   | "stale-audio";
 
-export type ReadAlongVisualMode = "word" | "phrase" | "block" | "none";
+export type ReadAlongVisualMode = "word" | "phrase" | "sentence" | "block" | "degraded" | "none";
 
 export interface ReadAlongRuntimeSnapshot {
   activeCue: HighlightCue | null;

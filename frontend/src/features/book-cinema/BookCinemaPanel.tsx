@@ -91,10 +91,14 @@ import {
 import {
   alignmentStatusFromReport,
   evaluateBookReadAlongInvariant,
+  HighlightRenderer,
   ReadAlongResyncController,
   readAlongInvariantStatusLabel,
   readAlongRuntimeStateLabel,
+  readAlongVisualModeFromRuntime,
   type AlignmentStatus,
+  type HighlightRendererToken,
+  type ReadAlongHighlightVisualMode,
   type ReadAlongRuntimeSnapshot,
 } from "../readalong";
 import { useAudioWaveformBars } from "../../audioWaveform";
@@ -978,6 +982,7 @@ export function BookCinemaOverlay({
     ],
   );
   const runtimeHighlightCue = readAlongRuntime.activeCue ?? highlightCue;
+  const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime);
   const timingActiveWordIndex = runtimeHighlightCue?.activeWordIndex ?? activeWordIndex;
   const displayedActiveWordIndex = resolveDisplayedBookActiveWordIndex(
     timingActiveWordIndex,
@@ -1551,6 +1556,7 @@ export function BookCinemaOverlay({
           pointerLabel={pointerOption?.label ?? null}
           phraseWordEnd={phraseRange.end}
           phraseWordStart={phraseRange.start}
+          readAlongVisualMode={readAlongVisualMode}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
         />
       }
@@ -2648,6 +2654,7 @@ function BookCinemaReaderStage({
   pointerLabel,
   phraseWordEnd,
   phraseWordStart,
+  readAlongVisualMode,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -2661,6 +2668,7 @@ function BookCinemaReaderStage({
   pointerLabel: string | null;
   phraseWordEnd?: number;
   phraseWordStart?: number;
+  readAlongVisualMode: ReadAlongHighlightVisualMode;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   if (book.kind === "markdown") {
@@ -2677,6 +2685,9 @@ function BookCinemaReaderStage({
           accessibilitySettings={accessibilitySettings}
           pointerLabel={pointerLabel}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
+          phraseWordEnd={phraseWordEnd}
+          phraseWordStart={phraseWordStart}
+          readAlongVisualMode={readAlongVisualMode}
         />
       </Suspense>
     );
@@ -2692,6 +2703,7 @@ function BookCinemaReaderStage({
       accessibilitySettings={accessibilitySettings}
       phraseWordEnd={phraseWordEnd}
       phraseWordStart={phraseWordStart}
+      readAlongVisualMode={readAlongVisualMode}
       onAccessibilitySettingsChange={onAccessibilitySettingsChange}
     />
   );
@@ -2707,6 +2719,7 @@ function BookPagedReaderStage({
   accessibilitySettings,
   phraseWordEnd,
   phraseWordStart,
+  readAlongVisualMode,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -2718,6 +2731,7 @@ function BookPagedReaderStage({
   accessibilitySettings: ReaderAccessibilitySettings;
   phraseWordEnd?: number;
   phraseWordStart?: number;
+  readAlongVisualMode: ReadAlongHighlightVisualMode;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const pageMetrics = useBookPageMetrics(accessibilitySettings);
@@ -2766,6 +2780,7 @@ function BookPagedReaderStage({
           page={page}
           phraseWordEnd={phraseWordEnd}
           phraseWordStart={phraseWordStart}
+          readAlongVisualMode={readAlongVisualMode}
           scope={scope}
           totalPages={pagination.totalPages}
         />
@@ -2782,6 +2797,7 @@ function BookPagedReaderStage({
           page={null}
           phraseWordEnd={phraseWordEnd}
           phraseWordStart={phraseWordStart}
+          readAlongVisualMode={readAlongVisualMode}
           scope={scope}
           totalPages={pagination.totalPages}
         />
@@ -2874,6 +2890,7 @@ function BookReaderPage({
   page,
   phraseWordEnd,
   phraseWordStart,
+  readAlongVisualMode,
   scope,
   totalPages,
 }: Readonly<{
@@ -2887,12 +2904,31 @@ function BookReaderPage({
   page: BookPage | null;
   phraseWordEnd?: number;
   phraseWordStart?: number;
+  readAlongVisualMode: ReadAlongHighlightVisualMode;
   scope: BookScope;
   totalPages: number;
 }>) {
   const pageNumber = page ? page.index + 1 : totalPages + 1;
   const pageLabel = page ? `Reader page ${String(pageNumber)} of ${String(totalPages)}` : "End";
   const visibleFallback = fallbackText.split(/\s+/).filter(Boolean).slice(0, 120).join(" ");
+  const pageTokens = useMemo(
+    () =>
+      page
+        ? page.spans.map(
+            (span): HighlightRendererToken => ({
+              key: `${book.id}-cinema-page-${String(page.index)}-${String(span.index)}`,
+              pageIndex: page.index,
+              sourceId: book.id,
+              text: span.text,
+              title: bookSpanTitle(span),
+              tokenOffset: span.index - page.startWordIndex,
+              trailingText: " ",
+              wordIndex: span.index,
+            }),
+          )
+        : [],
+    [book.id, page],
+  );
 
   return (
     <article
@@ -2914,23 +2950,19 @@ function BookReaderPage({
           } as CSSProperties
         }
       >
-        {page && page.spans.length > 0
-          ? page.spans.map((span) => (
-              <span
-                className={bookWordClassName(
-                  span.index,
-                  activeWordIndex,
-                  phraseWordStart,
-                  phraseWordEnd,
-                )}
-                data-book-word={span.index}
-                key={`${book.id}-cinema-page-${String(page.index)}-${String(span.index)}`}
-                title={bookSpanTitle(span)}
-              >
-                {span.text}{" "}
-              </span>
-            ))
-          : visibleFallback}
+        {page && pageTokens.length > 0 ? (
+          <HighlightRenderer
+            activeWordIndex={activeWordIndex}
+            mode={readAlongVisualMode}
+            phraseWordEnd={phraseWordEnd}
+            phraseWordStart={phraseWordStart}
+            sourceId={book.id}
+            surface="book"
+            tokens={pageTokens}
+          />
+        ) : (
+          visibleFallback
+        )}
       </p>
       <footer className="book-cinema-page-footer">
         <span>{bookSourceName(book)}</span>
@@ -3091,23 +3123,6 @@ function resolveHighlightPhraseRange(cue: HighlightCue | null): {
     end: cue.phraseWordEnd,
     start: cue.phraseWordStart,
   };
-}
-
-function bookWordClassName(
-  index: number,
-  activeWordIndex: number,
-  phraseWordStart?: number,
-  phraseWordEnd?: number,
-): string {
-  if (
-    phraseWordStart !== undefined &&
-    phraseWordEnd !== undefined &&
-    index >= phraseWordStart &&
-    index <= phraseWordEnd
-  ) {
-    return "book-cinema-word-phrase";
-  }
-  return index === activeWordIndex ? "book-cinema-word-active" : "";
 }
 
 function clampNumber(value: number, min: number, max: number): number {

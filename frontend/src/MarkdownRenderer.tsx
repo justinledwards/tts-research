@@ -316,13 +316,18 @@ function reactNodeToText(node: ReactNode): string {
 
 export interface MarkdownWordHighlight {
   activeWordOffset: number;
+  activeWordIndex?: number;
   blockEndOffset: number;
   blockStartOffset: number;
+  nodeId?: string;
+  sourceId?: string;
 }
 
 export interface MarkdownBlockHighlight {
   blockEndOffset: number;
   blockStartOffset: number;
+  nodeId?: string;
+  sourceId?: string;
 }
 
 interface HastPositionPoint {
@@ -376,6 +381,12 @@ function markHighlightedElements(node: HastNode, highlight: MarkdownBlockHighlig
       classes = className.split(/\s+/);
     }
     properties.className = [...classes, "markdown-cinema-block-active"];
+    if (highlight.nodeId) {
+      properties["data-readalong-node-id"] = highlight.nodeId;
+    }
+    if (highlight.sourceId) {
+      properties["data-readalong-source-id"] = highlight.sourceId;
+    }
     node.properties = properties;
   }
   return overlaps || childOverlaps;
@@ -432,12 +443,7 @@ function splitHighlightedTextNode(
     const wordOffset = nextWordOffset();
     parts.push(
       wordOffset === highlight.activeWordOffset
-        ? {
-            children: [{ type: "text", value: word }],
-            properties: { className: ["markdown-cinema-word-active"] },
-            tagName: "span",
-            type: "element",
-          }
+        ? highlightedMarkdownWordNode(word, highlight)
         : { type: "text", value: word },
     );
     lastIndex = index + word.length;
@@ -447,6 +453,27 @@ function splitHighlightedTextNode(
     parts.push({ type: "text", value: node.value.slice(lastIndex) });
   }
   return parts.length > 0 ? parts : [node];
+}
+
+function highlightedMarkdownWordNode(word: string, highlight: MarkdownWordHighlight): HastNode {
+  const properties: Record<string, unknown> = {
+    className: ["markdown-cinema-word-active"],
+  };
+  if (highlight.activeWordIndex !== undefined) {
+    properties["data-readalong-word-index"] = String(highlight.activeWordIndex);
+  }
+  if (highlight.nodeId) {
+    properties["data-readalong-node-id"] = highlight.nodeId;
+  }
+  if (highlight.sourceId) {
+    properties["data-readalong-source-id"] = highlight.sourceId;
+  }
+  return {
+    children: [{ type: "text", value: word }],
+    properties,
+    tagName: "span",
+    type: "element",
+  };
 }
 
 function nodePositionOverlapsHighlight(
