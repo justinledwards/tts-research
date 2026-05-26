@@ -42,12 +42,14 @@ export function SegmentedControl<T extends string>({
         columnClassName,
         className,
       )}
+      data-segmented-control={ariaLabel}
     >
       <legend className="sr-only">{ariaLabel}</legend>
       {options.map((option) => (
         <Button
           aria-label={option.ariaLabel}
           className="min-w-0 whitespace-nowrap border-transparent shadow-none"
+          data-segmented-option={option.value}
           data-testid={option.testId}
           disabled={option.disabled}
           key={option.value}

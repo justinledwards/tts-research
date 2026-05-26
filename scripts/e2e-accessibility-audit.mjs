@@ -266,6 +266,79 @@ async function scanPageAccessibility(page) {
           width: rect.width,
         };
       });
+    const compactRailControlAffordanceFailures = () =>
+      Array.from(document.querySelectorAll("[data-compact-control='rail-toggle']")).flatMap(
+        (element) => {
+          if (!(element instanceof HTMLElement) || !visible(element)) {
+            return [];
+          }
+          const visibleLabel = normalize(element.textContent);
+          const failures = [];
+          const controlId =
+            element.getAttribute("data-testid") ||
+            element.getAttribute("data-compact-control-id") ||
+            "compact-rail-control";
+          if (visibleLabel.length <= 1) {
+            failures.push({
+              controlId,
+              detail: "Collapsed rail control uses a one-letter visible label.",
+              ruleId: "compact-rail-label",
+              severity: "fail",
+            });
+          }
+          if (!normalize(element.getAttribute("aria-label"))) {
+            failures.push({
+              controlId,
+              detail: "Collapsed rail control has no aria-label.",
+              ruleId: "compact-rail-aria",
+              severity: "fail",
+            });
+          }
+          if (!normalize(element.getAttribute("title"))) {
+            failures.push({
+              controlId,
+              detail: "Collapsed rail control has no tooltip/title.",
+              ruleId: "compact-rail-tooltip",
+              severity: "fail",
+            });
+          }
+          if (!normalize(element.getAttribute("data-command-id"))) {
+            failures.push({
+              controlId,
+              detail: "Collapsed rail control has no command id for command-palette parity.",
+              ruleId: "compact-rail-command",
+              severity: "fail",
+            });
+          }
+          return failures;
+        },
+      );
+    const clippedSegmentedControlFailures = () =>
+      Array.from(document.querySelectorAll("[data-segmented-option], [data-rail-mode-option]"))
+        .filter((element) => element instanceof HTMLElement && visible(element))
+        .flatMap((element) => {
+          const visibleLabel = normalize(element.textContent);
+          if (!visibleLabel) {
+            return [];
+          }
+          if (
+            element.scrollWidth <= element.clientWidth + 1 &&
+            element.scrollHeight <= element.clientHeight + 1
+          ) {
+            return [];
+          }
+          return [
+            {
+              controlId:
+                element.getAttribute("data-testid") ||
+                element.getAttribute("data-segmented-option") ||
+                "segmented-control-option",
+              detail: `Segmented control label appears clipped: ${visibleLabel}`,
+              ruleId: "segmented-control-clipped",
+              severity: "fail",
+            },
+          ];
+        });
     const issues = [];
     for (const control of controls) {
       const name = control.accessibleName || control.visibleLabel;
@@ -301,6 +374,12 @@ async function scanPageAccessibility(page) {
           severity: "warning",
         });
       }
+    }
+    for (const control of compactRailControlAffordanceFailures()) {
+      issues.push(control);
+    }
+    for (const control of clippedSegmentedControlFailures()) {
+      issues.push(control);
     }
     for (const image of Array.from(document.images).filter(visible)) {
       if (!image.hasAttribute("alt")) {

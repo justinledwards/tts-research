@@ -138,7 +138,7 @@ import {
 } from "./theme";
 import { nextActivityFooterMode, type ActivityFooterMode } from "./activityFooter";
 import {
-  CollapsedRailButton,
+  CompactRailToggle,
   RailMiniStack,
   RailModeToolbar,
   overlayDataAttributes,
@@ -7656,9 +7656,8 @@ function NarrationRailMini({
 }>) {
   if (mode === "collapsed") {
     return (
-      <CollapsedRailButton
-        label="Voice Command"
-        shortLabel="V"
+      <CompactRailToggle
+        controlId="voice-command"
         onExpand={() => {
           onModeChange("compact");
         }}
@@ -7693,9 +7692,8 @@ function VoiceCloningRailMini({
 }>) {
   if (mode === "collapsed") {
     return (
-      <CollapsedRailButton
-        label="Voice Cloning"
-        shortLabel="C"
+      <CompactRailToggle
+        controlId="voice-cloning"
         onExpand={() => {
           onModeChange("compact");
         }}
@@ -7730,9 +7728,8 @@ function PlaybackRailMini({
   const ready = job?.audioReadySegments ?? 0;
   if (mode === "collapsed") {
     return (
-      <CollapsedRailButton
-        label="Playback"
-        shortLabel="P"
+      <CompactRailToggle
+        controlId="playback"
         onExpand={() => {
           onModeChange("compact");
         }}
@@ -7769,9 +7766,8 @@ function CloneReadinessRailMini({
 }>) {
   if (mode === "collapsed") {
     return (
-      <CollapsedRailButton
-        label="Readiness"
-        shortLabel="R"
+      <CompactRailToggle
+        controlId="readiness"
         onExpand={() => {
           onModeChange("compact");
         }}

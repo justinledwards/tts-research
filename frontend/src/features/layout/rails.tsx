@@ -1,5 +1,9 @@
-import type { ReactNode } from "react";
 import type { WorkspaceRailMode } from "../workspace/model";
+import {
+  compactRailControlMeta,
+  railModeControlMeta,
+  type CompactRailControlId,
+} from "./railControls";
 
 export function railColumnWidth(mode: WorkspaceRailMode, side: "left" | "right"): string {
   if (mode === "collapsed") {
@@ -23,11 +27,6 @@ export function RailModeToolbar({
   mode: WorkspaceRailMode;
   onModeChange: (mode: WorkspaceRailMode) => void;
 }>) {
-  const labelByMode: Record<WorkspaceRailMode, string> = {
-    collapsed: "Hide",
-    compact: "Slim",
-    full: "Full",
-  };
   const visibleLabel = label === "Voice Command" ? "Voice" : label;
   return (
     <div
@@ -43,25 +42,36 @@ export function RailModeToolbar({
       >
         {visibleLabel}
       </span>
-      <div className="grid shrink-0 grid-cols-3 gap-0.5 rounded-md border p-0.5 vs-border vs-surface">
-        {(["full", "compact", "collapsed"] as const).map((item) => (
-          <button
-            aria-label={`${label} ${item}`}
-            aria-pressed={mode === item}
-            className={`h-6 rounded px-1.5 text-[0.58rem] font-semibold capitalize transition ${
-              mode === item
-                ? "bg-orange-500 text-white"
-                : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-            }`}
-            key={item}
-            onClick={() => {
-              onModeChange(item);
-            }}
-            type="button"
-          >
-            {labelByMode[item]}
-          </button>
-        ))}
+      <div
+        className="grid shrink-0 grid-cols-3 gap-0.5 rounded-md border p-0.5 vs-border vs-surface"
+        data-rail-mode-toolbar={label}
+        data-segmented-control="rail-mode"
+      >
+        {(["full", "compact", "collapsed"] as const).map((item) => {
+          const meta = railModeControlMeta(item);
+          return (
+            <button
+              aria-label={meta.ariaLabel(label)}
+              aria-pressed={mode === item}
+              className={`h-7 min-w-10 rounded px-1.5 text-[0.58rem] font-semibold transition ${
+                mode === item
+                  ? "bg-orange-500 text-white"
+                  : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
+              }`}
+              data-command-id={meta.commandId}
+              data-rail-mode-option={item}
+              data-segmented-option={item}
+              key={item}
+              onClick={() => {
+                onModeChange(item);
+              }}
+              title={meta.tooltip(label)}
+              type="button"
+            >
+              {meta.visibleLabel}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -104,20 +114,26 @@ export function RailMiniStack({
   );
 }
 
-export function CollapsedRailButton({
-  label,
-  shortLabel,
+export function CompactRailToggle({
+  controlId,
   onExpand,
-}: Readonly<{ label: string; shortLabel: ReactNode; onExpand: () => void }>) {
+}: Readonly<{ controlId: CompactRailControlId; onExpand: () => void }>) {
+  const meta = compactRailControlMeta(controlId);
   return (
     <button
-      aria-label={`Expand ${label}`}
-      className="mx-auto mt-2 grid h-9 w-9 place-items-center rounded-md border text-xs font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+      aria-label={meta.ariaLabel}
+      className="compact-rail-toggle mx-auto mt-2 grid min-h-14 w-11 place-items-center rounded-md border px-1 py-1.5 text-[0.58rem] font-semibold leading-none transition hover:bg-[var(--vs-surface)] vs-border"
+      data-collapsed-state={meta.collapsedState}
+      data-command-id={meta.commandId}
+      data-compact-control="rail-toggle"
+      data-compact-control-id={meta.id}
+      data-expanded-state={meta.expandedState}
       onClick={onExpand}
-      title={label}
+      title={meta.tooltip}
       type="button"
     >
-      {shortLabel}
+      <span aria-hidden="true" className="compact-rail-toggle-icon" />
+      <span className="compact-rail-toggle-label">{meta.visibleLabel}</span>
     </button>
   );
 }

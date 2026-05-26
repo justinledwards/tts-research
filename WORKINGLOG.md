@@ -606,3 +606,9 @@
 - [x] Add policy-note and speech-plan citation fixture coverage
 - [x] Run WP29 local validation commands
 - [x] Commit WP29 changes
+
+## 2026-05-26 02:41 CEST - Collapsed Rail and Compact Control Affordance Validation
+- [x] Inspect workspace/layout rail controls, command metadata, and audit scripts
+- [x] Add shared compact rail control metadata and affordance rendering
+- [x] Add clipped/cryptic compact-control validation coverage
+- [x] Run WP30 local validation commands

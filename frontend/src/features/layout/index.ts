@@ -1,4 +1,13 @@
-export { CollapsedRailButton, RailMiniStack, RailModeToolbar, railColumnWidth } from "./rails";
+export {
+  COMPACT_RAIL_CONTROL_META,
+  RAIL_MODE_CONTROL_META,
+  compactRailControlMeta,
+  railModeControlMeta,
+  type CompactRailControlId,
+  type CompactRailControlMetadata,
+  type RailModeControlMetadata,
+} from "./railControls";
+export { CompactRailToggle, RailMiniStack, RailModeToolbar, railColumnWidth } from "./rails";
 export {
   OVERLAY_RESERVED_ZONES,
   OVERLAY_SURFACE_OWNERS,

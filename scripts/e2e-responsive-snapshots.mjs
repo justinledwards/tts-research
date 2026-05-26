@@ -149,18 +149,76 @@ async function captureViewport(browser, viewport) {
     await page.screenshot({ fullPage: false, path: settingsScreenshot });
     screenshots.push(settingsScreenshot);
 
-    const layout = await page.evaluate(() => ({
-      bodyText: document.body.textContent?.replace(/\s+/g, " ").trim().slice(0, 400) ?? "",
-      horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 4,
-      viewportHeight: window.innerHeight,
-      viewportWidth: window.innerWidth,
-      visibleDialogCount: Array.from(document.querySelectorAll("[role='dialog']")).filter(
-        (element) =>
-          element instanceof HTMLElement &&
-          element.offsetParent !== null &&
-          element.getClientRects().length > 0,
-      ).length,
-    }));
+    const layout = await page.evaluate(() => {
+      const normalize = (value) =>
+        String(value ?? "")
+          .replace(/\s+/g, " ")
+          .trim();
+      const visible = (element) =>
+        element instanceof HTMLElement &&
+        element.getAttribute("aria-hidden") !== "true" &&
+        !element.closest("[aria-hidden='true']") &&
+        element.offsetParent !== null &&
+        element.getClientRects().length > 0;
+      const compactControlFailures = Array.from(
+        document.querySelectorAll("[data-compact-control='rail-toggle']"),
+      ).flatMap((element) => {
+        if (!visible(element)) {
+          return [];
+        }
+        const visibleLabel = normalize(element.textContent);
+        const controlId =
+          element.getAttribute("data-testid") ||
+          element.getAttribute("data-compact-control-id") ||
+          "compact-rail-control";
+        const failures = [];
+        if (visibleLabel.length <= 1) {
+          failures.push(`${controlId}: collapsed rail control uses a one-letter visible label`);
+        }
+        if (!normalize(element.getAttribute("aria-label"))) {
+          failures.push(`${controlId}: collapsed rail control has no aria-label`);
+        }
+        if (!normalize(element.getAttribute("title"))) {
+          failures.push(`${controlId}: collapsed rail control has no tooltip/title`);
+        }
+        if (!normalize(element.getAttribute("data-command-id"))) {
+          failures.push(`${controlId}: collapsed rail control has no command id`);
+        }
+        return failures;
+      });
+      const clippedControlFailures = Array.from(
+        document.querySelectorAll("[data-segmented-option], [data-rail-mode-option]"),
+      ).flatMap((element) => {
+        if (!visible(element)) {
+          return [];
+        }
+        const visibleLabel = normalize(element.textContent);
+        if (!visibleLabel) {
+          return [];
+        }
+        if (
+          element.scrollWidth <= element.clientWidth + 1 &&
+          element.scrollHeight <= element.clientHeight + 1
+        ) {
+          return [];
+        }
+        const controlId =
+          element.getAttribute("data-testid") ||
+          element.getAttribute("data-segmented-option") ||
+          "segmented-control-option";
+        return [`${controlId}: segmented control label appears clipped: ${visibleLabel}`];
+      });
+      return {
+        bodyText: document.body.textContent?.replace(/\s+/g, " ").trim().slice(0, 400) ?? "",
+        clippedControlFailures,
+        compactControlFailures,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 4,
+        viewportHeight: window.innerHeight,
+        viewportWidth: window.innerWidth,
+        visibleDialogCount: Array.from(document.querySelectorAll("[role='dialog']")).filter(visible)
+          .length,
+      };
+    });
     const overlayCollision = await collectOverlayCollisionReport(page);
     const issues = blockingPageIssues(pageIssues);
     return {
@@ -170,6 +228,8 @@ async function captureViewport(browser, viewport) {
       overlayCollision,
       passed:
         !layout.horizontalOverflow &&
+        layout.compactControlFailures.length === 0 &&
+        layout.clippedControlFailures.length === 0 &&
         issues.length === 0 &&
         layout.bodyText.length > 0 &&
         overlayCollision.summary.failures === 0,
