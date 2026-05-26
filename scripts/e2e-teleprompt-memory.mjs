@@ -263,6 +263,17 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
       );
     }
 
+    await page.getByTestId("workspace-stage-teleprompt").click();
+    await page.getByTestId("teleprompt-studio").waitFor();
+    await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
+    await page.getByTestId("teleprompt-theatre").waitFor();
+    await page.getByTestId("teleprompt-theatre-current-cue").waitFor();
+    await capture("teleprompt-theatre-from-review");
+    checks.push("Teleprompt Theatre opens from Review.");
+    await page.getByTestId("ui-action-teleprompt-theatre-back-review").click();
+    await page.getByTestId("teleprompt-theatre").waitFor({ state: "detached" });
+    await page.getByText("Revision Panel").first().waitFor();
+
     await page.evaluate(
       ({ memoryKey, uiMemoryStorageKey }) => {
         const raw = localStorage.getItem(uiMemoryStorageKey);

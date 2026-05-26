@@ -74,6 +74,13 @@ test("renders reviewer summary with local-only evidence, surfaces, artifacts, an
         stepId: "book-cinema-low-resource-e2e",
         stepTitle: "Book Cinema Low-resource E2E",
       },
+      {
+        key: "finalUxResults",
+        ok: true,
+        relativePath: "artifacts/final-ux-gates/final-ux-results.json",
+        stepId: "final-ux-gates",
+        stepTitle: "Final UX Gates",
+      },
     ],
     branch: "feature/review",
     commandRunList: [
@@ -88,9 +95,10 @@ test("renders reviewer summary with local-only evidence, surfaces, artifacts, an
     head: "abc123",
     outputDir,
     passFailSummary: {
-      artifacts: { missingPaths: [], present: 2, total: 2 },
+      artifacts: { missingPaths: [], present: 3, total: 3 },
       commands: { passed: 1, total: 1 },
       qa: {
+        finalUxGates: { status: "passed", summary: { failed: 0, total: 10 } },
         lowResourceTiming: { status: "recorded", summary: { maxMs: 100 } },
       },
       surfaces: {
@@ -115,6 +123,8 @@ test("renders reviewer summary with local-only evidence, surfaces, artifacts, an
   assert.match(markdown, /Action Audit/);
   assert.match(markdown, /Low-resource Timing/);
   assert.match(markdown, /Low Resource Timing/);
+  assert.match(markdown, /Final UX Gates/);
+  assert.match(markdown, /Final Ux Gates/);
   for (const surface of REQUIRED_REVIEW_SURFACES) {
     assert.match(markdown, new RegExp(surface.replaceAll(" ", "\\s+")));
   }

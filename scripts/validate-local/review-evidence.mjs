@@ -249,6 +249,16 @@ export function buildReviewSteps(context) {
       title: "Context Panel E2E",
     },
     {
+      args: ["validate:ux-final"],
+      artifacts: finalUxGateArtifacts(context, "final-ux-gates"),
+      command: "pnpm",
+      env: {
+        FINAL_UX_GATES_OUTPUT_DIR: artifactDir(context, "final-ux-gates"),
+      },
+      id: "final-ux-gates",
+      title: "Final UX Gates",
+    },
+    {
       args: ["validate:local"],
       artifacts: {
         htmlReport: path.join(artifactDir(context, "validate-local"), "report.html"),
@@ -386,6 +396,14 @@ function contextPanelArtifacts(context, id) {
     screenshotStateManifest: path.join(dir, "manifest.json"),
     screenshotStateMismatches: path.join(dir, "state-mismatches.md"),
     screenshots: path.join(dir, "screenshots"),
+  };
+}
+
+function finalUxGateArtifacts(context, id) {
+  const dir = artifactDir(context, id);
+  return {
+    finalUxResults: path.join(dir, "final-ux-results.json"),
+    finalUxSummary: path.join(dir, "final-ux-summary.md"),
   };
 }
 
@@ -560,6 +578,7 @@ async function readQaDocuments(artifactRecords) {
     telepromptMemory: await readJsonIfPresent(
       byStepAndKey.get("teleprompt-memory-e2e:telepromptMemoryResults"),
     ),
+    finalUxGates: await readJsonIfPresent(byStepAndKey.get("final-ux-gates:finalUxResults")),
     validateLocal: await readJsonIfPresent(byStepAndKey.get("validate-local:summary")),
   };
 }
@@ -639,6 +658,7 @@ export function buildPassFailSummary({
     responsiveSnapshots: statusSummary(qaDocuments.responsiveSnapshots),
     surfaceComplexity: statusSummary(qaDocuments.surfaceComplexity),
     telepromptMemory: statusSummary(qaDocuments.telepromptMemory),
+    finalUxGates: statusSummary(qaDocuments.finalUxGates),
     validateLocal: statusSummary(qaDocuments.validateLocal),
     websiteExtractionQuality: statusSummary(qaDocuments.websiteExtractionQuality),
   };
@@ -800,6 +820,7 @@ export function renderReviewerSummary(manifest) {
       "context-panel-e2e",
     ]),
   );
+  lines.push(...artifactSection("Final UX Gates", manifest, ["final-ux-gates"]));
   lines.push(
     ...artifactSection("Workspace, Settings, Reader, and Book Cinema", manifest, [
       "workspace-flow-e2e",

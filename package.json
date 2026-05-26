@@ -25,6 +25,7 @@
     "validate:local:e2e": "node scripts/validate-local/validate-local.mjs --lane=e2e",
     "validate:local:release": "node scripts/validate-local/validate-local.mjs --lane=release",
     "validate:local:full": "pnpm validate:local:release",
+    "validate:ux-final": "node scripts/validate-local/validate-final-ux-gates.mjs",
     "local:bloat": "node scripts/local-bloat.mjs",
     "local:clean": "node scripts/local-bloat.mjs --clean",
     "bench:local": "node scripts/validate-local/bench-local.mjs",
