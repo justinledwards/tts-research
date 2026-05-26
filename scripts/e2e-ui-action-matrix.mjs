@@ -102,6 +102,10 @@ export async function buildActionInventory(page, scenario) {
           cssPath: cssPathFor(element),
           disabled: isDisabled(element),
           disabledReason: disabledReasonFor(element),
+          focusTarget:
+            element.getAttribute("data-ui-focus-target") ??
+            element.getAttribute("data-ui-action-focus-target") ??
+            null,
           hasConfirmationAffordance: hasConfirmationAffordance(element),
           href: element instanceof HTMLAnchorElement ? element.href : null,
           index: controls.length,
@@ -427,12 +431,14 @@ export async function buildActionInventory(page, scenario) {
       accessibleName,
       destructive,
       enabledDisabledReason,
-      expectedTransition: expectedTransitionFor({
-        actionClass,
-        label,
-        role: rawAction.role,
-        tagName: rawAction.tagName,
-      }),
+      expectedTransition: rawAction.focusTarget
+        ? "focus moved predictably"
+        : expectedTransitionFor({
+            actionClass,
+            label,
+            role: rawAction.role,
+            tagName: rawAction.tagName,
+          }),
       generatedTestId,
       hasStableTestId: Boolean(rawAction.testId),
       keyboardPath: keyboardPathFor(rawAction),
@@ -454,6 +460,7 @@ export async function exerciseAction(page, action, { activationMode }) {
     activationMode,
     destructive: action.destructive,
     expectedTransition: action.expectedTransition,
+    focusTarget: action.focusTarget,
     label: action.label,
     scenarioId: action.scenarioId,
     surface: action.surface,
@@ -893,6 +900,16 @@ async function capturePageState(page) {
             normalizeText(document.activeElement.textContent ?? "") ??
             document.activeElement.tagName)
           : null,
+      activeElementTargets:
+        document.activeElement instanceof HTMLElement
+          ? [
+              document.activeElement.getAttribute("data-testid"),
+              document.activeElement.getAttribute("id"),
+              document.activeElement.getAttribute("aria-label"),
+              normalizeText(document.activeElement.textContent ?? ""),
+              document.activeElement.tagName.toLowerCase(),
+            ].filter(Boolean)
+          : [],
       bodyHash: hash(bodyText),
       controlHash: hash(JSON.stringify(controls)),
       dialogCount: document.querySelectorAll("[role='dialog']").length,
@@ -923,9 +940,25 @@ function classifyOutcome(before, after, action, { networkEvents = [] } = {}) {
     menuChanged: before.menuCount !== after.menuCount,
     networkChanged: networkEvents.length > 0,
     routeChanged: before.url !== after.url,
+    focusTargetMatched: Boolean(
+      action.focusTarget && after.activeElementTargets.includes(action.focusTarget),
+    ),
   };
   if (delta.routeChanged) {
     return { delta, label: "route changed", passed: true };
+  }
+  if (action.expectedTransition === "focus moved predictably") {
+    if (delta.focusChanged && (!action.focusTarget || delta.focusTargetMatched)) {
+      return { delta, label: "focus moved predictably", passed: true };
+    }
+    return {
+      delta,
+      label: action.focusTarget ? "focus moved to unexpected target" : "focus did not move",
+      passed: false,
+      reason: action.focusTarget
+        ? `Expected focus target ${action.focusTarget}.`
+        : "Expected focus to move to a declared target.",
+    };
   }
   if (delta.dialogChanged || delta.menuChanged) {
     return { delta, label: "menu/panel opened", passed: true };
@@ -941,9 +974,6 @@ function classifyOutcome(before, after, action, { networkEvents = [] } = {}) {
   }
   if (delta.controlChanged || delta.bodyChanged) {
     return { delta, label: "state changed as expected", passed: true };
-  }
-  if (delta.focusChanged && action.expectedTransition === "focus moved predictably") {
-    return { delta, label: "focus moved predictably", passed: true };
   }
   if (isAlreadyActiveAction(action)) {
     return {

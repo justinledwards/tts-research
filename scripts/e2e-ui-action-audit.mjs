@@ -1272,14 +1272,40 @@ async function openMobileMoreSheet(page, scope) {
 
 async function openTeleprompt(page) {
   await openWorkspaceStage(page, "Preview");
+  await waitForEnabledTestId(page, "workspace-stage-action-openTeleprompt");
   await page.getByTestId("workspace-stage-action-openTeleprompt").click();
   await page.getByText("Teleprompt Studio").first().waitFor();
+  await page.getByTestId("ui-action-teleprompt-previous-cue").waitFor({ state: "visible" });
+  await page.getByTestId("teleprompt-status-message").waitFor({ state: "visible" });
 }
 
 async function openTelepromptTheatre(page) {
   await openTeleprompt(page);
   await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
   await page.getByTestId("teleprompt-theatre").waitFor();
+}
+
+async function waitForEnabledTestId(page, testId) {
+  await page.getByTestId(testId).waitFor({ state: "visible" });
+  await page.waitForFunction(
+    (id) => {
+      const element = document.querySelector(`[data-testid="${CSS.escape(id)}"]`);
+      if (!(element instanceof HTMLElement)) {
+        return false;
+      }
+      if (
+        element instanceof HTMLButtonElement ||
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLSelectElement ||
+        element instanceof HTMLTextAreaElement
+      ) {
+        return !element.disabled;
+      }
+      return element.getAttribute("aria-disabled") !== "true";
+    },
+    testId,
+    { timeout: 15_000 },
+  );
 }
 
 async function openBookPanel(page, scope) {

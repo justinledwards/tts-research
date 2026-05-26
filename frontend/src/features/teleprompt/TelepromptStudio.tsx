@@ -1042,6 +1042,7 @@ export function TelepromptStudio({
         </div>
 
         <output
+          aria-live="polite"
           className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs font-semibold vs-border"
           data-testid="teleprompt-status-message"
         >

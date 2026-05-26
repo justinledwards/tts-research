@@ -64,8 +64,10 @@ export function ProjectDashboard({
   selectedPreparedSourceId = null,
 }: Readonly<ProjectDashboardProps>) {
   const dialogRef = useRef<HTMLElement | null>(null);
+  const statusRef = useRef<HTMLOutputElement | null>(null);
   useReaderModalLifecycle(dialogRef, { closeOnEscape: true, isOpen: true, onClose });
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("Project Dashboard ready.");
   const activeProject = projects.find((project) => project.id === activeProjectId);
   const visibleJobs = useMemo(
     () => uniqueJobs(job ? [job, ...projectJobs] : projectJobs),
@@ -91,6 +93,21 @@ export function ProjectDashboard({
     ],
   );
   const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
+  const announceDashboardStatus = (message: string, options: { focusStatus?: boolean } = {}) => {
+    setStatusMessage(message);
+    if (options.focusStatus) {
+      globalThis.requestAnimationFrame(() => {
+        statusRef.current?.focus();
+      });
+    }
+  };
+  const handleReviewSource = onReviewSource
+    ? (source: SourceCardModel) => {
+        announceDashboardStatus(`Opening ${source.title} in Review.`);
+        onReviewSource(source);
+        onClose();
+      }
+    : undefined;
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950/35 p-3 md:p-6" role="presentation">
@@ -142,6 +159,15 @@ export function ProjectDashboard({
               Close
             </Button>
           </div>
+          <output
+            aria-live="polite"
+            className="w-full rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs font-semibold vs-border"
+            data-testid="project-dashboard-status-message"
+            ref={statusRef}
+            tabIndex={-1}
+          >
+            {statusMessage}
+          </output>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
@@ -208,6 +234,7 @@ export function ProjectDashboard({
                         key={project.id}
                         project={project}
                         onDeleteProject={onDeleteProject}
+                        onProjectSelectionStatus={announceDashboardStatus}
                         onRenameProject={onRenameProject}
                         onSelectProject={onSelectProject}
                       />
@@ -230,7 +257,7 @@ export function ProjectDashboard({
                       model={source}
                       onOpenCinema={onOpenSourceCinema}
                       onPreview={onPreviewSource}
-                      onReview={onReviewSource}
+                      onReview={handleReviewSource}
                     />
                   ))}
                   {sourceModels.length === 0 ? (
@@ -319,12 +346,14 @@ function ProjectDashboardRow({
   activeProjectId,
   project,
   onDeleteProject,
+  onProjectSelectionStatus,
   onRenameProject,
   onSelectProject,
 }: Readonly<{
   activeProjectId: string;
   project: VoiceProject;
   onDeleteProject: (id: string) => Promise<void>;
+  onProjectSelectionStatus: (message: string, options?: { focusStatus?: boolean }) => void;
   onRenameProject: (id: string, name: string) => Promise<void>;
   onSelectProject: (id: string) => void;
 }>) {
@@ -336,6 +365,14 @@ function ProjectDashboardRow({
   const isActive = project.id === activeProjectId;
   const isProtected = project.id === "default";
   const deleteDisabledReason = projectDeleteDisabledReason(isProtected, isDeleting);
+  const selectProject = () => {
+    if (isActive) {
+      onProjectSelectionStatus(`${project.name} is already selected.`, { focusStatus: true });
+      return;
+    }
+    onProjectSelectionStatus(`Opened ${project.name}.`);
+    onSelectProject(project.id);
+  };
 
   useEffect(() => {
     if (!isEditing) {
@@ -381,7 +418,7 @@ function ProjectDashboardRow({
               isActive={isActive}
               isProtected={isProtected}
               project={project}
-              onSelectProject={onSelectProject}
+              onSelectProject={selectProject}
             />
           )}
           <p className="vs-muted mt-1 text-xs">
@@ -400,7 +437,7 @@ function ProjectDashboardRow({
           onEdit={() => {
             setIsEditing(true);
           }}
-          onSelectProject={onSelectProject}
+          onSelectProject={selectProject}
         />
       </div>
       {isConfirmingDelete ? (
@@ -485,17 +522,17 @@ function ProjectDashboardTitle({
   isActive: boolean;
   isProtected: boolean;
   project: VoiceProject;
-  onSelectProject: (id: string) => void;
+  onSelectProject: () => void;
 }>) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
       <button
+        aria-current={isActive ? "page" : undefined}
         className="min-w-0 truncate text-left text-base font-semibold hover:text-orange-700"
         data-testid={`ui-action-project-dashboard-open-${project.id}`}
+        data-ui-focus-target={isActive ? "project-dashboard-status-message" : undefined}
         data-ui-action-surface="Workspace"
-        onClick={() => {
-          onSelectProject(project.id);
-        }}
+        onClick={onSelectProject}
         title={project.name}
         type="button"
       >
@@ -524,16 +561,14 @@ function ProjectDashboardRowActions({
   project: VoiceProject;
   onDelete: () => void;
   onEdit: () => void;
-  onSelectProject: (id: string) => void;
+  onSelectProject: () => void;
 }>) {
   return (
     <div className="flex flex-wrap gap-2 md:justify-end">
       <Button
         data-testid={`ui-action-project-dashboard-select-${project.id}`}
         data-ui-action-surface="Workspace"
-        onClick={() => {
-          onSelectProject(project.id);
-        }}
+        onClick={onSelectProject}
         selected={isActive}
         size="sm"
         variant="secondary"

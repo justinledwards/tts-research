@@ -707,3 +707,11 @@
 - [x] Expose unresolved and waived findings in final summaries
 - [x] Run WP43 local validation commands
 - [x] Commit WP43 changes
+
+## 2026-05-26 14:57 CEST - WP44 UI Action Activation Fixes
+- [x] Inspect failed/no-op activation artifacts
+- [x] Fix dashboard review and generated project activations
+- [x] Fix Teleprompt previous cue replay readiness
+- [x] Add focus target declarations where focus movement is expected
+- [x] Run WP44 validation commands
+- [x] Commit WP44 changes
