@@ -4,6 +4,7 @@ import type { AlignmentRepairMap, AlignmentRepairStaleReport } from "./alignment
 import { alignmentRepairSummary } from "./alignmentRepairModel";
 import type { ReadAlongRuntimeSnapshot } from "./readAlongState";
 import { readAlongRuntimeDebugRows, readAlongRuntimeStateLabel } from "./readAlongState";
+import { buildSpeechFluencyDiagnostics } from "./speechFluencyDiagnostics";
 
 export interface AlignmentDiagnosticsSkippedItem {
   count: number;
@@ -29,6 +30,7 @@ export function AlignmentDiagnosticsPanel({
   const summary = job?.timing?.summary;
   const drift = alignmentQuality?.drift ?? summary?.drift;
   const confidence = alignmentQuality?.confidence ?? summary?.confidence;
+  const speechFluency = buildSpeechFluencyDiagnostics(job);
   const totalDurationMs = Math.max(
     1,
     alignmentQuality?.durationMs ?? summary?.durationMs ?? job?.durationMs ?? 1,
@@ -141,6 +143,31 @@ export function AlignmentDiagnosticsPanel({
         <BarMetric label="Overall" max={1} tone="bg-blue-500" value={confidence?.overall ?? 0} />
         <BarMetric label="Segment" max={1} tone="bg-blue-500" value={confidence?.segment ?? 0} />
         <BarMetric label="Token" max={1} tone="bg-blue-500" value={confidence?.token ?? 0} />
+      </div>
+
+      <div className="grid gap-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
+          Segment seam quality
+        </p>
+        <div
+          className="grid gap-3 rounded-md border bg-[var(--vs-raised)] p-3 text-xs vs-border"
+          data-testid="speech-fluency-diagnostics"
+        >
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
+            <MetricRow label="Segment seam quality" value={speechFluency.segmentSeamQuality} />
+            <MetricRow label="Pause model" value={speechFluency.pauseModel} />
+            <MetricRow label="Duration estimate" value={speechFluency.durationEstimate} />
+            <MetricRow
+              label="Potential clipped audio"
+              value={speechFluency.potentialClippedAudio}
+            />
+          </dl>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 border-t pt-3 vs-border">
+            {speechFluency.rows.map((row) => (
+              <MetricRow key={`${row.label}:${row.value}`} label={row.label} value={row.value} />
+            ))}
+          </dl>
+        </div>
       </div>
 
       <div className="grid gap-2">

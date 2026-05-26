@@ -5,6 +5,10 @@ import process from "node:process";
 import { emitMarkdownAdapter } from "../../adapters/markdown/emit_ir.js";
 import { parseMarkdown } from "../../adapters/markdown/parse.js";
 import { transformMarkdownAst } from "../../adapters/markdown/transform.js";
+import {
+  evaluateGoldenMinuteSpeechFluency,
+  loadGoldenMinuteFixture,
+} from "../golden-minute-fixture.mjs";
 
 const defaultAlignmentDir = "backend/internal/alignment/testdata/gold";
 const defaultMarkdownFixtures = ["fixtures/markdown/plain.md"];
@@ -40,15 +44,35 @@ export async function runAlignmentBenchmark({ rootDir, manifest, thresholds }) {
     minMeanCoverage: ["meanCoverage", ">="],
     minTokenCount: ["tokenCount", ">="],
   });
+  const goldenMinute = await loadGoldenMinuteFixture(rootDir);
+  const speechFluency = evaluateGoldenMinuteSpeechFluency(goldenMinute);
+  const speechFluencyComparisons = compareThresholds(
+    speechFluency.metrics,
+    thresholds?.speechFluency ?? {},
+    {
+      maxClippedEndCount: ["clippedEndCount", "<="],
+      maxClippedStartCount: ["clippedStartCount", "<="],
+      maxDurationEstimateDeltaRatio: ["maxDurationEstimateDeltaRatio", "<="],
+      maxExcessivePauseCount: ["excessivePauseCount", "<="],
+      maxInterSegmentPauseMs: ["maxInterSegmentPauseMs", "<="],
+      maxRepeatedSilenceCount: ["repeatedSilenceCount", "<="],
+      maxSilentSegmentCount: ["silentSegmentCount", "<="],
+    },
+  );
 
   return {
     id: "alignment",
     metrics: {
       ...metrics,
       fixtures,
+      speechFluency,
     },
-    thresholds: comparisons,
-    output: formatAlignmentBenchmark(fixtures, metrics, comparisons),
+    thresholds: [...comparisons, ...speechFluencyComparisons],
+    output: [
+      formatAlignmentBenchmark(fixtures, metrics, comparisons),
+      "",
+      formatSpeechFluencyBenchmark(speechFluency, speechFluencyComparisons),
+    ].join("\n"),
   };
 }
 
@@ -125,6 +149,27 @@ export function formatMarkdownBenchmark(fixtures, metrics, comparisons = []) {
       2,
     )}ms emit=${metrics.totalEmitMs.toFixed(2)}ms nodes=${metrics.totalNodes} warnings=${metrics.totalWarnings}`,
   );
+  appendComparisons(lines, comparisons);
+  return lines.join("\n");
+}
+
+export function formatSpeechFluencyBenchmark(report, comparisons = []) {
+  const lines = [
+    "Speech fluency benchmark",
+    `Status: ${report.status.toUpperCase()}`,
+    `Segments: ${String(report.metrics.segmentCount)} seams=${String(report.metrics.seamCount)}`,
+    `Energy: clipped-starts=${String(report.metrics.clippedStartCount)} clipped-ends=${String(
+      report.metrics.clippedEndCount,
+    )} silent=${String(report.metrics.silentSegmentCount)}`,
+    `Pauses: max-seam=${formatNumber(
+      report.metrics.maxInterSegmentPauseMs,
+    )}ms excessive=${String(report.metrics.excessivePauseCount)} repeated-silence=${String(
+      report.metrics.repeatedSilenceCount,
+    )}`,
+    `Duration estimate: max-delta=${formatNumber(
+      report.metrics.maxDurationEstimateDeltaRatio * 100,
+    )}%`,
+  ];
   appendComparisons(lines, comparisons);
   return lines.join("\n");
 }

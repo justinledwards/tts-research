@@ -1,6 +1,12 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { evaluateReadAlongSyncFixtures } from "./readalong-sync-evidence.mjs";
+import {
+  buildSpeechFluencySegmentsFromFixture,
+  buildSpeechFluencySegmentsFromJob,
+  evaluateSpeechFluency,
+  renderSpeechFluencyReport,
+} from "./speech-fluency.mjs";
 
 export const GOLDEN_MINUTE_THRESHOLDS = {
   maxDegradedTimePercentage: 0,
@@ -13,6 +19,15 @@ export const GOLDEN_MINUTE_THRESHOLDS = {
   maxWrongNodeCount: 0,
   maxWrongWordCount: 0,
   minFixtureCount: 1,
+};
+
+export const GOLDEN_MINUTE_SPEECH_FLUENCY_THRESHOLDS = {
+  maxDurationEstimateDeltaRatio: 0.18,
+  maxInterSegmentPauseMs: 900,
+  maxRepeatedSilenceMs: 450,
+  maxUnpunctuatedInterSegmentPauseMs: 500,
+  minEdgeRms: 0.012,
+  minSegmentRms: 0.018,
 };
 
 export async function loadGoldenMinuteFixture(rootDir) {
@@ -274,6 +289,23 @@ export function evaluateGoldenMinuteFluency(fixture, browserResult = {}) {
   };
 }
 
+export function evaluateGoldenMinuteSpeechFluency(
+  fixture,
+  { audioBuffer = null, job = null } = {},
+) {
+  const segments = job
+    ? buildSpeechFluencySegmentsFromJob(job)
+    : buildSpeechFluencySegmentsFromFixture(fixture);
+  return evaluateSpeechFluency({
+    audioBuffer,
+    label: "Golden Minute speech fluency",
+    pauseModel: fixture.speechPlan.pauseModel,
+    segments,
+    segmentTransitions: fixture.timing.segmentTransitions ?? [],
+    thresholds: GOLDEN_MINUTE_SPEECH_FLUENCY_THRESHOLDS,
+  });
+}
+
 export function renderGoldenMinuteReport(document) {
   const lines = [
     "# Golden Minute E2E",
@@ -328,6 +360,33 @@ export function renderGoldenMinuteReport(document) {
       `| ${check.id} | ${check.passed ? "PASS" : "FAIL"} | ${String(check.actual)} | ${check.target} |`,
     );
   }
+  if (document.speechFluency) {
+    lines.push(
+      "",
+      "## Speech Fluency Quality",
+      "",
+      `- Status: ${document.speechFluency.status}`,
+      `- Audio source: ${document.speechFluency.audio.source}`,
+      `- Segments inspected: ${String(document.speechFluency.metrics.segmentCount)}`,
+      `- Segment seams inspected: ${String(document.speechFluency.metrics.seamCount)}`,
+      `- Max inter-segment pause: ${String(document.speechFluency.metrics.maxInterSegmentPauseMs)} ms`,
+      `- Max duration estimate delta: ${String(
+        Math.round(document.speechFluency.metrics.maxDurationEstimateDeltaRatio * 1000) / 10,
+      )}%`,
+      `- Clipped starts: ${String(document.speechFluency.metrics.clippedStartCount)}`,
+      `- Clipped ends: ${String(document.speechFluency.metrics.clippedEndCount)}`,
+      `- Silent segments: ${String(document.speechFluency.metrics.silentSegmentCount)}`,
+      `- Excessive pauses: ${String(document.speechFluency.metrics.excessivePauseCount)}`,
+      "",
+      "| Check | Status | Actual | Target |",
+      "| --- | --- | ---: | --- |",
+    );
+    for (const check of document.speechFluency.checks) {
+      lines.push(
+        `| ${check.id} | ${check.passed ? "PASS" : "FAIL"} | ${String(check.actual)} | ${check.target} |`,
+      );
+    }
+  }
   lines.push("", "## Screenshots", "");
   for (const screenshot of document.screenshots) {
     lines.push(`- ${screenshot}`);
@@ -337,6 +396,9 @@ export function renderGoldenMinuteReport(document) {
     ...document.sync.timeline.flatMap((row) => row.failures),
     ...document.browser.failures,
     ...document.fluency.checks
+      .filter((check) => !check.passed)
+      .map((check) => `${check.id} failed: ${String(check.actual)} vs ${check.target}`),
+    ...(document.speechFluency?.checks ?? [])
       .filter((check) => !check.passed)
       .map((check) => `${check.id} failed: ${String(check.actual)} vs ${check.target}`),
   ];
@@ -349,6 +411,8 @@ export function renderGoldenMinuteReport(document) {
   lines.push("");
   return lines.join("\n");
 }
+
+export { renderSpeechFluencyReport };
 
 function paragraphCount(markdown) {
   return markdown

@@ -50,7 +50,7 @@ func (agent *MockTTSAgent) Synthesize(ctx context.Context, text string) (TTSResu
 
 func (agent *MockTTSAgent) SynthesizeWithVoice(_ context.Context, text string, voice string, _ string) (TTSResult, error) {
 	durationMS := audio.DurationForText(text)
-	wav, err := audio.SilentWAV(durationMS)
+	wav, err := audio.SpeechLikeWAV(durationMS)
 	if err != nil {
 		return TTSResult{}, err
 	}

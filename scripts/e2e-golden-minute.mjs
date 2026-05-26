@@ -19,9 +19,11 @@ import {
 import {
   buildGoldenMinuteSyncFixture,
   evaluateGoldenMinuteFluency,
+  evaluateGoldenMinuteSpeechFluency,
   evaluateGoldenMinuteSync,
   loadGoldenMinuteFixture,
   renderGoldenMinuteReport,
+  renderSpeechFluencyReport,
   validateGoldenMinuteFixture,
 } from "./golden-minute-fixture.mjs";
 import { renderSyncEvidenceHtml } from "./readalong-sync-evidence.mjs";
@@ -78,12 +80,19 @@ async function main() {
       await browser.close();
     }
     const fluency = evaluateGoldenMinuteFluency(fixture, browserResult);
+    const speechFluency = evaluateGoldenMinuteSpeechFluency(fixture, {
+      audioBuffer: browserResult.audioState.audioBuffer,
+      job: browserResult.audioState.job,
+    });
     const failures = [
       ...fixtureValidation.failures,
       ...(sync.status === "passed" ? [] : ["Golden minute sync baseline failed."]),
       ...browserResult.failures,
       ...(fluency.status === "passed" ? [] : ["Golden minute fluency rubric failed."]),
+      ...(speechFluency.status === "passed" ? [] : ["Golden minute speech fluency report failed."]),
     ];
+    delete browserResult.audioState.audioBuffer;
+    delete browserResult.audioState.job;
     const document = {
       appBaseUrl,
       browser: browserResult,
@@ -99,12 +108,14 @@ async function main() {
       generatedAt: new Date().toISOString(),
       schemaVersion: "golden-minute-e2e.v1",
       screenshots: screenshots.map((screenshot) => path.relative(rootDir, screenshot)),
+      speechFluency,
       status: failures.length === 0 ? "passed" : "failed",
       summary: {
         browserFailures: browserResult.failures.length,
         driftMedianMs: sync.metrics.medianWordDriftMs,
         driftP95Ms: sync.metrics.p95WordDriftMs,
         durationMs: fixtureValidation.coverage.durationMs,
+        speechFluencyStatus: speechFluency.status,
         readySegments: browserResult.audioState.readySegments,
         screenshots: screenshots.length,
         segmentTransitions: browserResult.segmentTransitionState.uniqueActiveSegments,
@@ -113,6 +124,11 @@ async function main() {
     };
     await writeJson(path.join(outputDir, "golden-minute-results.json"), document);
     await writeJson(path.join(outputDir, "golden-minute-sync.json"), sync);
+    await writeJson(path.join(outputDir, "speech-fluency-report.json"), speechFluency);
+    await writeFile(
+      path.join(outputDir, "speech-fluency-report.md"),
+      renderSpeechFluencyReport(speechFluency),
+    );
     await writeFile(
       path.join(outputDir, "golden-minute-report.md"),
       renderGoldenMinuteReport(document),
@@ -190,6 +206,10 @@ async function runGoldenMinuteFlow(browser, fixture, projectId, screenshots) {
     const source = job.preparedSourceId
       ? await apiJson(apiBaseUrl, `/api/source-preps/${job.preparedSourceId}`)
       : null;
+    const audioBuffer = await apiArrayBuffer(
+      apiBaseUrl,
+      job.audioUrl || `/api/voice-jobs/${job.id}/audio`,
+    );
     const highlightMapV2 = await apiJson(apiBaseUrl, `/api/voice-jobs/${job.id}/highlight-map-v2`);
     const alignment = await apiJson(apiBaseUrl, `/api/voice-jobs/${job.id}/timing/alignment`);
     await page.getByTestId("global-preview-player").waitFor({ state: "visible" });
@@ -237,8 +257,10 @@ async function runGoldenMinuteFlow(browser, fixture, projectId, screenshots) {
         wordTimingReliable: alignment.wordTimingReliable,
       },
       audioState: {
+        audioBuffer,
         cloudDependency: false,
         durationMs: job.durationMs ?? 0,
+        job,
         jobStatus: job.status,
         provider: job.provider ?? "mock",
         readySegments: job.audioReadySegments ?? 0,
@@ -504,6 +526,14 @@ async function waitForJob(jobId) {
     await sleep(500);
   }
   throw new Error(`Timed out waiting for job ${jobId}.`);
+}
+
+async function apiArrayBuffer(apiBaseUrl, pathname, init = {}) {
+  const response = await fetch(`${apiBaseUrl}${pathname}`, init);
+  if (!response.ok) {
+    throw new Error(`${init.method ?? "GET"} ${pathname} failed: ${await response.text()}`);
+  }
+  return response.arrayBuffer();
 }
 
 function validateGeneratedArtifacts({ alignment, failures, fixture, highlightMapV2, job, source }) {

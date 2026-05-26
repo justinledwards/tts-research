@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildGoldenMinuteSyncFixture,
   evaluateGoldenMinuteFluency,
+  evaluateGoldenMinuteSpeechFluency,
   evaluateGoldenMinuteSync,
   loadGoldenMinuteFixture,
   validateGoldenMinuteFixture,
@@ -37,6 +38,17 @@ test("golden minute sync baseline passes local drift thresholds", async () => {
   assert.equal(result.metrics.fixtureCount, 1);
   assert.equal(result.metrics.wrongNodeCount, 0);
   assert.equal(result.metrics.staleHighlightCount, 0);
+});
+
+test("golden minute speech fluency baseline passes local seam thresholds", async () => {
+  const fixture = await loadGoldenMinuteFixture(rootDir);
+  const report = evaluateGoldenMinuteSpeechFluency(fixture);
+
+  assert.equal(report.status, "passed");
+  assert.equal(report.metrics.clippedStartCount, 0);
+  assert.equal(report.metrics.clippedEndCount, 0);
+  assert.equal(report.metrics.silentSegmentCount, 0);
+  assert.equal(report.metrics.excessivePauseCount, 0);
 });
 
 test("golden minute fluency rubric fails without visible segment handoff evidence", async () => {

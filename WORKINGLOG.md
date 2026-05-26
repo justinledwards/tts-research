@@ -758,3 +758,11 @@
 - [x] Run dirty-waived review bundle integration validation
 - [ ] Regenerate clean review bundle from committed head
 - [x] Commit WP47 changes
+
+## 2026-05-26 23:04 CEST - WP48 Speech Fluency Rubric
+- [x] Inspect audio, read-along, golden-minute, and diagnostics surfaces
+- [x] Add local fluency and seam analysis report
+- [x] Wire golden-minute fluency thresholds into evidence
+- [x] Surface seam quality in Debug/Diagnostics
+- [x] Run WP48 validation commands
+- [x] Commit WP48 changes

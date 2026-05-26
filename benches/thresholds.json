@@ -26,6 +26,15 @@
     "maxDegradedTimePercentage": 35,
     "minFixtureCount": 10
   },
+  "speechFluency": {
+    "maxClippedStartCount": 0,
+    "maxClippedEndCount": 0,
+    "maxSilentSegmentCount": 0,
+    "maxRepeatedSilenceCount": 0,
+    "maxExcessivePauseCount": 0,
+    "maxInterSegmentPauseMs": 900,
+    "maxDurationEstimateDeltaRatio": 0.18
+  },
   "frontendBundle": {
     "maxInitialJsRawBytes": 523700,
     "maxInitialJsGzipBytes": 160000,

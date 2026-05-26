@@ -108,6 +108,11 @@ export {
   type ReadAlongVisualMode,
 } from "./readAlongState";
 export {
+  buildSpeechFluencyDiagnostics,
+  type SpeechFluencyDiagnosticRow,
+  type SpeechFluencyDiagnostics,
+} from "./speechFluencyDiagnostics";
+export {
   readAlongScrollPolicyDataAttributes,
   resolveReadAlongScrollPolicy,
   scrollReadAlongAnchor,

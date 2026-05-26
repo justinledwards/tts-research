@@ -416,6 +416,8 @@ function goldenMinuteArtifacts(context, id) {
     goldenMinuteReport: path.join(dir, "golden-minute-report.md"),
     goldenMinuteResults: path.join(dir, "golden-minute-results.json"),
     goldenMinuteSync: path.join(dir, "golden-minute-sync.json"),
+    speechFluencyReport: path.join(dir, "speech-fluency-report.md"),
+    speechFluencyResults: path.join(dir, "speech-fluency-report.json"),
     screenshots: path.join(dir, "screenshots"),
   };
 }
