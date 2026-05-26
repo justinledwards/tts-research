@@ -128,6 +128,7 @@ const PREPARED_SOURCE_RENDERER_DEGRADED_AFTER_MS = 2500;
 export interface PreparedSourceCinemaPlaybackControls {
   isAvailable: boolean;
   isPlaying: boolean;
+  isSeeking?: boolean;
   playbackRate: number;
   pause: () => void;
   play: () => Promise<void> | void;
@@ -395,8 +396,14 @@ export function PreparedSourceCinemaOverlay({
         highlightMap: null,
         isPaused: !playbackControls.isPlaying,
         isPlaying: playbackControls.isPlaying,
+        isSeeking: playbackControls.isSeeking,
       }),
-    [effectivePlaybackCursorSec, generatedAudioState, playbackControls.isPlaying],
+    [
+      effectivePlaybackCursorSec,
+      generatedAudioState,
+      playbackControls.isPlaying,
+      playbackControls.isSeeking,
+    ],
   );
   const readAlongReport = useMemo(
     () =>

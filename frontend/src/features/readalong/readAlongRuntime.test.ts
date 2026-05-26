@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HighlightFragment, HighlightMap, HighlightToken } from "../../types";
-import { ReadAlongClock } from "./ReadAlongClock";
+import { ReadAlongClock, startReadAlongPlaybackClock } from "./ReadAlongClock";
 import { detectReadAlongDrift } from "./driftDetection";
 import {
   ReadAlongResyncController,
@@ -164,6 +164,72 @@ describe("ReadAlongClock", () => {
     clock.stop();
 
     expect(ticks).toEqual([1.25, 1.5]);
+  });
+
+  it("does not reschedule a frame after stop is called during a tick", () => {
+    const scheduledFrames: ((timestamp: number) => void)[] = [];
+    const audio = { currentTime: 0.25 } as HTMLAudioElement;
+    const clock = new ReadAlongClock({
+      audioElement: () => audio,
+      minFrameIntervalMs: 16,
+      onTick: () => {
+        clock.stop();
+      },
+      runtime: {
+        cancelAnimationFrame: () => {
+          scheduledFrames.length = 0;
+        },
+        now: () => 0,
+        requestAnimationFrame: (callback) => {
+          scheduledFrames.push(callback);
+          return scheduledFrames.length;
+        },
+      },
+    });
+
+    clock.start();
+    const frame = scheduledFrames.shift();
+    if (!frame) {
+      throw new Error("Expected ReadAlongClock to schedule a frame");
+    }
+    frame(40);
+
+    expect(scheduledFrames).toHaveLength(0);
+  });
+
+  it("stops the playback clock when the audio element pauses between frames", () => {
+    const scheduledFrames: ((timestamp: number) => void)[] = [];
+    const cursors: number[] = [];
+    const audio = { currentTime: 1.25, paused: false } as HTMLAudioElement;
+    const stop = startReadAlongPlaybackClock({
+      audioElement: () => audio,
+      onCursor: (cursorSec) => {
+        cursors.push(cursorSec);
+      },
+      runtime: {
+        cancelAnimationFrame: () => {
+          scheduledFrames.length = 0;
+        },
+        now: () => 0,
+        requestAnimationFrame: (callback) => {
+          scheduledFrames.push(callback);
+          return scheduledFrames.length;
+        },
+      },
+    });
+
+    expect(cursors).toEqual([1.25]);
+    audio.currentTime = 1.5;
+    Object.defineProperty(audio, "paused", { configurable: true, value: true });
+    const frame = scheduledFrames.shift();
+    if (!frame) {
+      throw new Error("Expected playback clock to schedule a frame");
+    }
+    frame(100);
+    stop();
+
+    expect(cursors).toEqual([1.25]);
+    expect(scheduledFrames).toHaveLength(0);
   });
 });
 

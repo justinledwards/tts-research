@@ -873,6 +873,7 @@ export function BookCinemaOverlay({
   playbackControls: {
     isAvailable: boolean;
     isPlaying: boolean;
+    isSeeking?: boolean;
     playbackRate: number;
     play: () => void | Promise<void>;
     pause: () => void;
@@ -964,12 +965,14 @@ export function BookCinemaOverlay({
         highlightMap: activeReadAlongTimingMap,
         isPaused: !playbackControls.isPlaying,
         isPlaying: playbackControls.isPlaying,
+        isSeeking: playbackControls.isSeeking,
       }),
     [
       activeBookJob,
       activeReadAlongTimingMap,
       highlightMap,
       playbackControls.isPlaying,
+      playbackControls.isSeeking,
       playbackCursorSec,
       readAlongResyncController,
     ],

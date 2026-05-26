@@ -1,8 +1,10 @@
 export {
   ReadAlongClock,
+  startReadAlongPlaybackClock,
   type ReadAlongClockReason,
   type ReadAlongClockRuntime,
   type ReadAlongClockTick,
+  type ReadAlongPlaybackClockOptions,
 } from "./ReadAlongClock";
 export {
   alignmentQualityLabel,

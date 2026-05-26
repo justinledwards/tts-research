@@ -24,6 +24,7 @@ export interface ReadAlongPlaybackClockOptions {
   minCursorDeltaSec?: number;
   minFrameIntervalMs?: number;
   onCursor: (cursorSec: number) => void;
+  runtime?: ReadAlongClockRuntime;
 }
 
 const DEFAULT_MIN_FRAME_INTERVAL_MS = 80;
@@ -34,6 +35,7 @@ function noopReadAlongClockStop(): void {
 }
 
 export class ReadAlongClock {
+  private isRunning = false;
   private frameId: number | null = null;
   private lastEmitMs = 0;
   private readonly minFrameIntervalMs: number;
@@ -63,13 +65,15 @@ export class ReadAlongClock {
   }
 
   start() {
-    if (this.frameId !== null) {
+    if (this.isRunning) {
       return;
     }
+    this.isRunning = true;
     this.schedule();
   }
 
   stop() {
+    this.isRunning = false;
     if (this.frameId === null) {
       return;
     }
@@ -78,8 +82,14 @@ export class ReadAlongClock {
   }
 
   private schedule() {
+    if (!this.isRunning) {
+      return;
+    }
     this.frameId = this.runtime.requestAnimationFrame((timestamp) => {
       this.frameId = null;
+      if (!this.isRunning) {
+        return;
+      }
       if (timestamp - this.lastEmitMs >= this.minFrameIntervalMs) {
         this.sample("frame");
       }
@@ -93,6 +103,7 @@ export function startReadAlongPlaybackClock({
   minCursorDeltaSec = DEFAULT_MIN_CURSOR_DELTA_SEC,
   minFrameIntervalMs,
   onCursor,
+  runtime,
 }: ReadAlongPlaybackClockOptions): () => void {
   const audio = audioElement();
   if (!audio || audio.paused) {
@@ -118,6 +129,7 @@ export function startReadAlongPlaybackClock({
       lastPublishedCursorSec = tick.audioTimeSec;
       onCursor(tick.audioTimeSec);
     },
+    runtime,
   });
   stopClock = clock.stop.bind(clock);
   clock.sample("play");

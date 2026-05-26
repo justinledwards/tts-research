@@ -560,6 +560,7 @@ interface VoiceCloningActivitySummary {
 interface PlaybackController {
   isAvailable: boolean;
   isPlaying: boolean;
+  isSeeking: boolean;
   playbackRate: number;
   play: () => Promise<void> | void;
   pause: () => void;
@@ -598,6 +599,7 @@ function isSameCinemaFocusState(left: UiMemoryCinemaState, right: UiMemoryCinema
 const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   isAvailable: false,
   isPlaying: false,
+  isSeeking: false,
   playbackRate: 1,
   play: () => Promise.resolve(),
   pause: () => false,
@@ -13829,6 +13831,7 @@ function resetUnavailableCompletedAudio({
   setDurationSec,
   setError,
   setIsPlaying,
+  setIsSeeking,
 }: {
   audioRef: WritableRef<HTMLAudioElement | null>;
   isSeekCommitInProgressRef: WritableRef<boolean>;
@@ -13837,6 +13840,7 @@ function resetUnavailableCompletedAudio({
   setDurationSec: (value: number) => void;
   setError: (value: string | null) => void;
   setIsPlaying: (value: boolean) => void;
+  setIsSeeking: (value: boolean) => void;
 }) {
   const audio = audioRef.current;
   if (audio) {
@@ -13849,6 +13853,7 @@ function resetUnavailableCompletedAudio({
   setDurationSec(0);
   isSeekingRef.current = false;
   isSeekCommitInProgressRef.current = false;
+  setIsSeeking(false);
 }
 
 function useCompletedAudioAvailabilityReset({
@@ -13861,6 +13866,7 @@ function useCompletedAudioAvailabilityReset({
   setDurationSec,
   setError,
   setIsPlaying,
+  setIsSeeking,
 }: {
   audioRef: WritableRef<HTMLAudioElement | null>;
   canPlayCompleted: boolean;
@@ -13871,6 +13877,7 @@ function useCompletedAudioAvailabilityReset({
   setDurationSec: (value: number) => void;
   setError: (value: string | null) => void;
   setIsPlaying: (value: boolean) => void;
+  setIsSeeking: (value: boolean) => void;
 }) {
   useEffect(() => {
     if (!canPlayCompleted) {
@@ -13882,6 +13889,7 @@ function useCompletedAudioAvailabilityReset({
         setDurationSec,
         setError,
         setIsPlaying,
+        setIsSeeking,
       });
     }
     onPlaybackStateChange?.(false);
@@ -13895,6 +13903,7 @@ function useCompletedAudioAvailabilityReset({
     setDurationSec,
     setError,
     setIsPlaying,
+    setIsSeeking,
   ]);
 }
 
@@ -13908,6 +13917,7 @@ function useCompletedSeekControls({
   onPlaybackCursorChange,
   seekSliderValueRef,
   setCurrentTimeSec,
+  setIsSeeking,
 }: {
   audioRef: WritableRef<HTMLAudioElement | null>;
   currentTimeRef: WritableRef<number>;
@@ -13918,11 +13928,13 @@ function useCompletedSeekControls({
   onPlaybackCursorChange?: (cursorSec: number) => void;
   seekSliderValueRef: WritableRef<number>;
   setCurrentTimeSec: (value: number) => void;
+  setIsSeeking: (value: boolean) => void;
 }) {
   const handleSeekStart = useCallback(() => {
     isSeekingRef.current = true;
+    setIsSeeking(true);
     seekSliderValueRef.current = currentTimeRef.current;
-  }, [currentTimeRef, isSeekingRef, seekSliderValueRef]);
+  }, [currentTimeRef, isSeekingRef, seekSliderValueRef, setIsSeeking]);
 
   const clampSeekTarget = useCallback(
     (target: number) => {
@@ -13941,12 +13953,26 @@ function useCompletedSeekControls({
       }
 
       const safeTarget = clampSeekTarget(target);
+      isSeekingRef.current = true;
+      setIsSeeking(true);
       currentTimeRef.current = safeTarget;
       setCurrentTimeSec(safeTarget);
       onPlaybackCursorChange?.(safeTarget);
       audio.currentTime = safeTarget;
+      requestAnimationFrame(() => {
+        isSeekingRef.current = false;
+        setIsSeeking(false);
+      });
     },
-    [audioRef, clampSeekTarget, currentTimeRef, onPlaybackCursorChange, setCurrentTimeSec],
+    [
+      audioRef,
+      clampSeekTarget,
+      currentTimeRef,
+      isSeekingRef,
+      onPlaybackCursorChange,
+      setCurrentTimeSec,
+      setIsSeeking,
+    ],
   );
 
   const resolveSeekTarget = useCallback(
@@ -13963,6 +13989,7 @@ function useCompletedSeekControls({
     (value?: number) => {
       if (!isSeekingRef.current && !isSeekCommitInProgressRef.current) {
         isSeekingRef.current = true;
+        setIsSeeking(true);
         seekSliderValueRef.current = currentTimeRef.current;
       }
 
@@ -13978,6 +14005,7 @@ function useCompletedSeekControls({
       requestAnimationFrame(() => {
         isSeekingRef.current = false;
         isSeekCommitInProgressRef.current = false;
+        setIsSeeking(false);
       });
     },
     [
@@ -13988,6 +14016,7 @@ function useCompletedSeekControls({
       resolveSeekTarget,
       seekSliderValueRef,
       setCurrentTimeSec,
+      setIsSeeking,
     ],
   );
 
@@ -13995,6 +14024,7 @@ function useCompletedSeekControls({
     (rawValue: number) => {
       if (!isSeekingRef.current && !isSeekCommitInProgressRef.current) {
         isSeekingRef.current = true;
+        setIsSeeking(true);
         seekSliderValueRef.current = currentTimeRef.current;
       }
 
@@ -14018,6 +14048,7 @@ function useCompletedSeekControls({
       onPlaybackCursorChange,
       seekSliderValueRef,
       setCurrentTimeSec,
+      setIsSeeking,
     ],
   );
 
@@ -14229,6 +14260,7 @@ function useCompletedPlaybackControllerRegistration({
   audioRef,
   canPlayCompleted,
   isPlaying,
+  isSeeking,
   onPlaybackControlsChange,
   playbackRate,
   playCompletedAudio,
@@ -14240,6 +14272,7 @@ function useCompletedPlaybackControllerRegistration({
   audioRef: WritableRef<HTMLAudioElement | null>;
   canPlayCompleted: boolean;
   isPlaying: boolean;
+  isSeeking: boolean;
   onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
   playbackRate: number;
   playCompletedAudio: () => Promise<void> | void;
@@ -14256,6 +14289,7 @@ function useCompletedPlaybackControllerRegistration({
     onPlaybackControlsChange?.({
       isAvailable: true,
       isPlaying,
+      isSeeking,
       playbackRate,
       pause: () => {
         audioRef.current?.pause();
@@ -14273,6 +14307,7 @@ function useCompletedPlaybackControllerRegistration({
     audioRef,
     canPlayCompleted,
     isPlaying,
+    isSeeking,
     onPlaybackControlsChange,
     playbackRate,
     playCompletedAudio,
@@ -14328,6 +14363,7 @@ function CompletedAudioPlayer({
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
   const [durationSec, setDurationSec] = useState(0);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -14349,6 +14385,7 @@ function CompletedAudioPlayer({
     setDurationSec,
     setError,
     setIsPlaying,
+    setIsSeeking,
   });
 
   useEffect(() => {
@@ -14373,8 +14410,13 @@ function CompletedAudioPlayer({
     if (!canPlayCompleted || !isPlaying) {
       return;
     }
+    let isMounted = true;
+    let stopClock: (() => void) | null = null;
     void import("./features/readalong/ReadAlongClock").then(({ startReadAlongPlaybackClock }) => {
-      startReadAlongPlaybackClock({
+      if (!isMounted) {
+        return;
+      }
+      stopClock = startReadAlongPlaybackClock({
         audioElement: () => audioRef.current,
         onCursor: (cursorSec) => {
           currentTimeRef.current = cursorSec;
@@ -14383,6 +14425,10 @@ function CompletedAudioPlayer({
         },
       });
     });
+    return () => {
+      isMounted = false;
+      stopClock?.();
+    };
   }, [canPlayCompleted, isPlaying, onPlaybackCursorChange]);
 
   const { handlePlayToggle, playCompletedAudio, restartCompletedAudio } = useCompletedAudioCommands(
@@ -14420,6 +14466,7 @@ function CompletedAudioPlayer({
     onPlaybackCursorChange,
     seekSliderValueRef,
     setCurrentTimeSec,
+    setIsSeeking,
   });
 
   const handleVolume = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -14443,6 +14490,7 @@ function CompletedAudioPlayer({
     audioRef,
     canPlayCompleted,
     isPlaying,
+    isSeeking,
     onPlaybackControlsChange,
     playbackRate,
     playCompletedAudio,
@@ -14768,6 +14816,7 @@ function ArrivalAudioPlayerQueue({
 }>) {
   const readySegments = job.audioReadySegments ?? 0;
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
   const [isQueued, setIsQueued] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
@@ -14912,6 +14961,7 @@ function ArrivalAudioPlayerQueue({
       playbackSessionCursorRef.current = 0;
       playbackSessionContextRef.current = 0;
       setIsPlaying(false);
+      setIsSeeking(false);
       setIsQueued(false);
       if (notify) {
         onPlaybackStateChange?.(false);
@@ -15115,6 +15165,7 @@ function ArrivalAudioPlayerQueue({
 
   const handleSeekStart = useCallback(() => {
     isScrubbingRef.current = true;
+    setIsSeeking(true);
     seekSliderValueRef.current = cursorSecRef.current;
   }, []);
 
@@ -15132,6 +15183,7 @@ function ArrivalAudioPlayerQueue({
     (rawValue: number) => {
       if (!isScrubbingRef.current && !isSeekCommitInProgressRef.current) {
         isScrubbingRef.current = true;
+        setIsSeeking(true);
         seekSliderValueRef.current = cursorSecRef.current;
       }
 
@@ -15150,6 +15202,7 @@ function ArrivalAudioPlayerQueue({
     (value?: number) => {
       if (!isScrubbingRef.current && !isSeekCommitInProgressRef.current) {
         isScrubbingRef.current = true;
+        setIsSeeking(true);
         seekSliderValueRef.current = cursorSecRef.current;
       }
 
@@ -15168,6 +15221,7 @@ function ArrivalAudioPlayerQueue({
       requestAnimationFrame(() => {
         isScrubbingRef.current = false;
         isSeekCommitInProgressRef.current = false;
+        setIsSeeking(false);
       });
     },
     [commitSeek, publishCursor, resolveSeekTarget],
@@ -15246,8 +15300,12 @@ function ArrivalAudioPlayerQueue({
   const seekTo = useCallback(
     (seconds: number) => {
       const next = clampCursor(seconds);
+      setIsSeeking(true);
       publishCursor(next);
       void commitSeek(next);
+      requestAnimationFrame(() => {
+        setIsSeeking(false);
+      });
     },
     [clampCursor, commitSeek, publishCursor],
   );
@@ -15276,6 +15334,7 @@ function ArrivalAudioPlayerQueue({
     onPlaybackControlsChange?.({
       isAvailable: true,
       isPlaying,
+      isSeeking,
       playbackRate,
       pause: pausePlayback,
       play: beginPlayback,
@@ -15290,6 +15349,7 @@ function ArrivalAudioPlayerQueue({
   }, [
     beginPlayback,
     canPlay,
+    isSeeking,
     isPlaying,
     onPlaybackControlsChange,
     pausePlayback,
@@ -15560,6 +15620,7 @@ function ArrivalAudioPlayerQueue({
     isScrubbingRef.current = false;
     isSeekCommitInProgressRef.current = false;
     setIsPlaying(false);
+    setIsSeeking(false);
     setIsQueued(false);
     cursorSecRef.current = 0;
     setCurrentTimeSec(0);

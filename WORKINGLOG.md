@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-26 07:03 CEST - Runtime Drift Detection and Resync Controller
+- [x] Inspect current read-along timing, playback, and debug surfaces
+- [x] Add audio-clock read-along state, drift detection, and resync controller
+- [x] Surface honest sync/debug status in Book Cinema
+- [x] Add regression coverage for play, pause, seek, stale audio, and degraded fallback
+- [x] Run WP36 local validation commands
+
 ## 2026-05-26 06:41 CEST - Audio/Text Alignment Pipeline
 - [x] Inspect existing alignment, provider timing, and HighlightMap output paths
 - [x] Add backend alignment service, provider timing normalization, fallback alignment, and quality report
