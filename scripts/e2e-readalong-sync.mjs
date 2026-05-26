@@ -15,7 +15,7 @@ import {
   renderSyncEvidenceHtml,
   writeReadAlongSyncArtifacts,
 } from "./readalong-sync-evidence.mjs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
@@ -41,6 +41,7 @@ async function main() {
   const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
   const screenshots = [];
   const browserFailures = [];
+  let syncDebugSnapshot = null;
   try {
     const page = await browser.newPage({ viewport: { height: 900, width: 1280 } });
     page.setDefaultTimeout(30_000);
@@ -76,10 +77,23 @@ async function main() {
       const screenshot = path.join(screenshotsDir, `${fixture.id}.png`);
       await page.screenshot({ fullPage: true, path: screenshot });
       screenshots.push(screenshot);
+      if (!syncDebugSnapshot && timelineRows[0]) {
+        syncDebugSnapshot = buildSyncDebugSnapshot({
+          fixture,
+          generatedAt: result.generatedAt,
+          rootDir,
+          row: timelineRows[0],
+          screenshot,
+        });
+      }
     }
     browserFailures.push(...blockingPageIssues(issues));
   } finally {
     await browser.close();
+  }
+  const syncDebugSnapshotPath = path.join(outputDir, "sync-debug-snapshot.json");
+  if (syncDebugSnapshot) {
+    await writeFile(syncDebugSnapshotPath, `${JSON.stringify(syncDebugSnapshot, null, 2)}\n`);
   }
   const e2eResult = {
     ...result,
@@ -87,10 +101,123 @@ async function main() {
       failureCount: browserFailures.length,
       failures: browserFailures,
       screenshotCount: screenshots.length,
+      syncDebugSnapshot: syncDebugSnapshot ? path.relative(rootDir, syncDebugSnapshotPath) : null,
     },
     status: result.status === "passed" && browserFailures.length === 0 ? "passed" : "failed",
   };
   await writeReadAlongSyncArtifacts({ outputDir, result: e2eResult, rootDir, screenshots });
   console.log(`Read-along sync E2E ${e2eResult.status}. Artifacts written to ${outputDir}`);
   process.exitCode = e2eResult.status === "passed" ? 0 : 1;
+}
+
+function buildSyncDebugSnapshot({ fixture, generatedAt, rootDir, row, screenshot }) {
+  const audioTimeSec = Math.max(0, row.audioTimeMs / 1000);
+  const activeWordIndex = row.highlightedWordIndex ?? row.expectedWordIndex ?? null;
+  const activePhraseIndex = row.highlightedPhraseIndex ?? row.expectedPhraseIndex ?? null;
+  const locatorValue = `fixture:${fixture.id}:${row.observationId}`;
+  return {
+    activeCue: {
+      activeWordIndex,
+      fragmentIndex: activePhraseIndex,
+      nodeId: row.highlightedNodeId ?? row.expectedNodeId ?? null,
+      phraseWordEnd: null,
+      phraseWordStart: null,
+      readingPosition: {
+        activeWordIndex,
+        nodeId: row.highlightedNodeId ?? row.expectedNodeId ?? null,
+        textQuote: fixture.title,
+      },
+      segmentIndex: null,
+      text: null,
+      timingMs: {
+        end: null,
+        start: null,
+      },
+      tokenIndex: activeWordIndex,
+    },
+    activePhrase: {
+      id: activePhraseIndex === null ? null : String(activePhraseIndex),
+      index: activePhraseIndex,
+      label:
+        activePhraseIndex === null ? "No active phrase" : `Phrase ${String(activePhraseIndex + 1)}`,
+      text: null,
+    },
+    activeSegment: {
+      id: row.expectedNodeId ?? null,
+      index: null,
+      label: row.expectedNodeId ?? "No active segment",
+      text: null,
+    },
+    activeWord: {
+      id: activeWordIndex === null ? null : String(activeWordIndex),
+      index: activeWordIndex,
+      label: activeWordIndex === null ? "No active word" : `Word ${String(activeWordIndex)}`,
+      text: null,
+    },
+    capturedAt: generatedAt,
+    confidence: null,
+    currentAudioTimeSec: audioTimeSec,
+    currentAudioTimestamp: formatAudioTimestamp(audioTimeSec),
+    currentSourceLocator: {
+      activeWordIndex,
+      blockId: row.highlightedNodeId ?? row.expectedNodeId ?? null,
+      bookmarkTarget: locatorValue,
+      kind: "fixture",
+      sourceId: fixture.id,
+      sourceTitle: fixture.title,
+      textQuote: fixture.title,
+      value: locatorValue,
+    },
+    degradedModeReason:
+      row.runtimeState === "degraded" ? "Fixture entered degraded read-along sync." : null,
+    driftMs: row.wordDriftMs ?? row.phraseDriftMs ?? null,
+    expectedCue: {
+      activeWordIndex: row.expectedWordIndex ?? null,
+      fragmentIndex: row.expectedPhraseIndex ?? null,
+      nodeId: row.expectedNodeId ?? null,
+      phraseWordEnd: null,
+      phraseWordStart: null,
+      readingPosition: {
+        activeWordIndex: row.expectedWordIndex ?? null,
+        nodeId: row.expectedNodeId ?? null,
+        textQuote: fixture.title,
+      },
+      segmentIndex: null,
+      text: null,
+      timingMs: {
+        end: null,
+        start: null,
+      },
+      tokenIndex: row.expectedWordIndex ?? null,
+    },
+    exportHints: {
+      jsonFileName: "sync-debug-snapshot.json",
+      screenshot: path.relative(rootDir, screenshot),
+      screenshotRecommended: true,
+    },
+    highlightMode: highlightModeForRow(row),
+    manualQaMarker: null,
+    resyncCount: row.runtimeState === "resyncing" ? 1 : 0,
+    runtimeState: row.runtimeState,
+    schemaVersion: "sync-debug-snapshot.v1",
+    surface: "ReadAlongSyncFixture",
+    timingSource: fixture.timingSource,
+  };
+}
+
+function highlightModeForRow(row) {
+  if (row.runtimeState === "degraded") {
+    return "block";
+  }
+  if (row.expectedLevel === "phrase" || row.runtimeState === "resyncing") {
+    return "phrase";
+  }
+  return "word";
+}
+
+function formatAudioTimestamp(seconds) {
+  const safeSeconds = Math.max(0, seconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds - minutes * 60;
+  return `${String(minutes).padStart(2, "0")}:${remainingSeconds.toFixed(2).padStart(5, "0")}`;
 }

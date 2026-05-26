@@ -137,6 +137,22 @@ export {
   type ReadAlongRuntimeState,
   type ReadAlongVisualMode,
 } from "./readAlongState";
+export { SyncDebugOverlay, type SyncDebugOverlayProps } from "./SyncDebugOverlay";
+export {
+  SYNC_DEBUG_SNAPSHOT_SCHEMA_VERSION,
+  buildReadAlongSyncDebugSnapshot,
+  makeSyncDebugManualMarker,
+  serializeSyncDebugSnapshot,
+  syncDebugSnapshotRows,
+  withSyncDebugManualMarker,
+  type BuildSyncDebugSnapshotInput,
+  type SyncDebugCueSnapshot,
+  type SyncDebugEntity,
+  type SyncDebugManualMarker,
+  type SyncDebugSnapshot,
+  type SyncDebugSnapshotRow,
+  type SyncDebugSourceLocator,
+} from "./syncDebugSnapshot";
 export {
   buildSpeechFluencyDiagnostics,
   type SpeechFluencyDiagnosticRow,

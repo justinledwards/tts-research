@@ -90,6 +90,7 @@ import {
 } from "../performance";
 import {
   alignmentStatusFromReport,
+  buildReadAlongSyncDebugSnapshot,
   evaluateBookReadAlongInvariant,
   HighlightRenderer,
   ReadAlongResyncController,
@@ -106,6 +107,7 @@ import {
   type ReadAlongPreferences,
   type ReadAlongRuntimeSnapshot,
   type ReadAlongScrollFollow,
+  type SyncDebugSourceLocator,
 } from "../readalong";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import type {
@@ -1025,6 +1027,51 @@ export function BookCinemaOverlay({
   const activeSpan = scopedSpans.find((span) => span.index === readerActiveWordIndex) ?? null;
   const activeBlock = bookCinemaActiveBlock(scopeContent?.blocks ?? [], activeSpan);
   const activePassage = bookCinemaActivePassage(activeBlock, scopedText);
+  const phraseStart = phraseRange.start;
+  const phraseEnd = phraseRange.end;
+  const phraseText =
+    phraseStart === undefined || phraseEnd === undefined
+      ? (runtimeHighlightCue?.fragment?.text ?? null)
+      : scopedSpans
+          .filter((span) => span.index >= phraseStart && span.index <= phraseEnd)
+          .map((span) => span.text)
+          .join(" ");
+  const syncDebugSnapshot = useMemo(() => {
+    const locator: SyncDebugSourceLocator = {
+      activeWordIndex: readerActiveWordIndex,
+      blockId: activeBlock?.id ?? null,
+      bookmarkTarget: progress?.targetId ?? null,
+      kind: "book",
+      pageIndex: activeSpan?.pageIndex ?? null,
+      projectId: book.projectId,
+      scopeKey: normalizedScopeKey,
+      sourceId: book.id,
+      sourceTitle: bookSourceName(book),
+      textQuote: activeSpan?.text ?? (activePassage || null),
+      value: `book:${book.id}:${normalizedScopeKey}:word-${String(readerActiveWordIndex)}`,
+    };
+    return buildReadAlongSyncDebugSnapshot({
+      activePhraseText: phraseText,
+      activeWordText: activeSpan?.text ?? runtimeHighlightCue?.token?.text ?? null,
+      currentSourceLocator: locator,
+      highlightMode: readAlongVisualMode,
+      runtime: readAlongRuntime,
+      surface: "BookCinema",
+    });
+  }, [
+    activeBlock?.id,
+    activePassage,
+    activeSpan?.pageIndex,
+    activeSpan?.text,
+    book,
+    normalizedScopeKey,
+    phraseText,
+    progress?.targetId,
+    readAlongRuntime,
+    readAlongVisualMode,
+    readerActiveWordIndex,
+    runtimeHighlightCue?.token?.text,
+  ]);
   const sourceLifecycle = useMemo(
     () =>
       bookSourceLifecycleEnvelope(book, {
@@ -1363,7 +1410,11 @@ export function BookCinemaOverlay({
     }),
     buildCinemaInspectorSection({
       children: (
-        <ReadAlongInvariantDebugPanel report={readAlongReport} runtime={readAlongRuntime} />
+        <ReadAlongInvariantDebugPanel
+          report={readAlongReport}
+          runtime={readAlongRuntime}
+          syncDebugSnapshot={syncDebugSnapshot}
+        />
       ),
       detail: readAlongInvariantStatusLabel(readAlongReport),
       id: "read-along-fidelity",

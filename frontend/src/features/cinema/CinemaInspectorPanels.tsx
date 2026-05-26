@@ -12,6 +12,8 @@ import {
   readAlongRuntimeStatusClassName,
   readAlongInvariantDebugRows,
   readAlongInvariantStatusLabel,
+  SyncDebugOverlay,
+  type SyncDebugSnapshot,
   type ReadAlongRuntimeSnapshot,
   type ReadAlongInvariantReport,
 } from "../readalong";
@@ -106,7 +108,12 @@ export function buildCinemaInspectorSection(
 export function ReadAlongInvariantDebugPanel({
   report,
   runtime,
-}: Readonly<{ report: ReadAlongInvariantReport; runtime?: ReadAlongRuntimeSnapshot | null }>) {
+  syncDebugSnapshot,
+}: Readonly<{
+  report: ReadAlongInvariantReport;
+  runtime?: ReadAlongRuntimeSnapshot | null;
+  syncDebugSnapshot?: SyncDebugSnapshot | null;
+}>) {
   const rows = readAlongInvariantDebugRows(report);
   const runtimeRows = readAlongRuntimeDebugRows(runtime);
   return (
@@ -143,6 +150,7 @@ export function ReadAlongInvariantDebugPanel({
               </div>
             ))}
           </dl>
+          {syncDebugSnapshot ? <SyncDebugOverlay snapshot={syncDebugSnapshot} /> : null}
         </div>
       ) : null}
     </div>

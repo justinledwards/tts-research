@@ -37,6 +37,7 @@ import {
   AlignmentDiagnosticsPanel,
   AlignmentRepairEditor,
   alignmentRepairMapStaleness,
+  buildReadAlongSyncDebugSnapshot,
   effectiveReadAlongPreferences,
   evaluatePreparedSourceReadAlongInvariant,
   HighlightRenderer,
@@ -58,6 +59,7 @@ import {
   type ReadAlongHighlightVisualMode,
   type ReadAlongPreferences,
   type ReadAlongScrollFollow,
+  type SyncDebugSourceLocator,
 } from "../readalong";
 import {
   normalizeReaderAccessibilitySettings,
@@ -485,6 +487,45 @@ export function PreparedSourceCinemaOverlay({
       source,
     ],
   );
+  const syncDebugSnapshot = useMemo(() => {
+    const activeSegment = displayBlock?.segments?.[0] ?? null;
+    const locator: SyncDebugSourceLocator = {
+      activeWordIndex: effectiveActiveWordIndex,
+      blockId: displayBlock?.id ?? null,
+      bookmarkTarget: progress?.targetId ?? null,
+      kind: "prepared-source",
+      projectId: source.projectId,
+      sourceId: source.id,
+      sourceTitle: title,
+      textQuote: activeText || null,
+      value: `prepared-source:${source.id}:${
+        displayBlock?.id ?? "no-block"
+      }:word-${String(effectiveActiveWordIndex)}`,
+    };
+    return buildReadAlongSyncDebugSnapshot({
+      activePhraseText: activeText || null,
+      activeSegmentId: activeSegment ? String(activeSegment.index) : null,
+      activeSegmentIndex: activeSegment?.index ?? null,
+      activeSegmentLabel:
+        activeSegment === null ? undefined : `Segment ${String(activeSegment.index + 1)}`,
+      activeWordText: preparedSourceActiveWordText(source, effectiveActiveWordIndex),
+      currentSourceLocator: locator,
+      highlightMode: readAlongVisualMode,
+      runtime: readAlongRuntime,
+      surface: isWebsiteCinema ? "WebsiteCinema" : "DocumentCinema",
+    });
+  }, [
+    activeText,
+    displayBlock?.id,
+    displayBlock?.segments,
+    effectiveActiveWordIndex,
+    isWebsiteCinema,
+    progress?.targetId,
+    readAlongRuntime,
+    readAlongVisualMode,
+    source,
+    title,
+  ]);
   const sourcePolicyState = {
     projectProfile: policyProfile,
     resolvedProfile: displayBlock?.speechPolicy.profile ?? source.speechPolicyProfile,
@@ -728,7 +769,11 @@ export function PreparedSourceCinemaOverlay({
     }),
     buildCinemaInspectorSection({
       children: (
-        <ReadAlongInvariantDebugPanel report={readAlongReport} runtime={readAlongRuntime} />
+        <ReadAlongInvariantDebugPanel
+          report={readAlongReport}
+          runtime={readAlongRuntime}
+          syncDebugSnapshot={syncDebugSnapshot}
+        />
       ),
       detail: readAlongInvariantStatusLabel(readAlongReport),
       id: "read-along-fidelity",
@@ -2440,6 +2485,18 @@ function blockSnippet(block: NarrationBlock | null, fallback: string): string {
     return fallback;
   }
   return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+}
+
+function preparedSourceActiveWordText(
+  source: PreparedSource,
+  activeWordIndex: number,
+): string | null {
+  const activeWord = resolvePreparedSourceActiveWord(source, activeWordIndex);
+  const block = source.blocks?.find((item) => item.id === activeWord?.blockId);
+  if (!activeWord || !block) {
+    return null;
+  }
+  return markdownBlockText(block).trim().split(/\s+/)[activeWord.wordOffset] ?? null;
 }
 
 function blockKindLabel(block: NarrationBlock): string {

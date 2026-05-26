@@ -774,3 +774,10 @@
 - [x] Apply high-contrast/reduced-motion highlight behavior
 - [x] Run WP49 validation commands
 - [x] Commit WP49 changes
+
+## 2026-05-26 23:50 CEST - WP50 Runtime Follow-along Debug Overlay
+- [x] Inspect read-along diagnostics, context panel, Cinema debug mode, and e2e scripts
+- [x] Add sync debug snapshot model and overlay controls
+- [x] Wire copy, manual QA marker, and export artifacts
+- [x] Keep overlay Debug/Advanced only
+- [x] Run WP50 validation commands
