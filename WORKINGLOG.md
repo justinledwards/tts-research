@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-26 07:35 CEST - Teleprompt Cue Timeline Synchronization
+- [x] Inspect Teleprompt cue, timing artifact, playback cursor, and return-memory paths
+- [x] Add cue timeline model derived from HighlightMap v2 and legacy timing
+- [x] Add audio-follow/manual cue sync UI for inline and theatre Teleprompt
+- [x] Preserve timing context when opening Cinema from Teleprompt
+- [x] Add regression coverage and run WP37 local validation commands
+
 ## 2026-05-26 07:03 CEST - Runtime Drift Detection and Resync Controller
 - [x] Inspect current read-along timing, playback, and debug surfaces
 - [x] Add audio-clock read-along state, drift detection, and resync controller

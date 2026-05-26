@@ -5,6 +5,7 @@ import { cx } from "../tokens";
 export interface SegmentedControlOption<T extends string> {
   ariaLabel?: string;
   disabled?: boolean;
+  disabledReason?: string;
   label: ReactNode;
   testId?: string;
   value: T;
@@ -52,6 +53,7 @@ export function SegmentedControl<T extends string>({
           data-segmented-option={option.value}
           data-testid={option.testId}
           disabled={option.disabled}
+          disabledReason={option.disabledReason}
           key={option.value}
           onClick={() => {
             onChange(option.value);

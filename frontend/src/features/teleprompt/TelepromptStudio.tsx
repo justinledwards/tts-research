@@ -15,9 +15,10 @@ import {
   type TeleprompterToken,
   type TeleprompterWordCue,
 } from "../../teleprompter";
-import type { VoiceJob } from "../../types";
+import type { HighlightMap, VoiceJob } from "../../types";
 import { Button, Panel, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
 import { ContextPanel, buildContextPanelTabs, type ContextPanelTabId } from "../context-panel";
+import type { HighlightMapV2 } from "../readalong";
 import type { RevisionBlock } from "../revision";
 import { HeaderContextSummary } from "../header";
 import {
@@ -59,6 +60,13 @@ import {
   type TelepromptTheatreMode,
   type TelepromptTheatreViewMode,
 } from "./telepromptTheatreState";
+import { TelepromptCueSync } from "./TelepromptCueSync";
+import {
+  buildTelepromptCueTimeline,
+  resolveTelepromptCueSync,
+  telepromptCueSeekSeconds,
+  type TelepromptCueSyncMode,
+} from "./telepromptCueTimeline";
 import {
   TELEPROMPT_SHORTCUTS,
   adjacentTelepromptBlockId,
@@ -76,6 +84,7 @@ export interface TelepromptPlaybackController {
   readonly pause: () => void;
   readonly play: () => Promise<void> | void;
   readonly restart: () => Promise<void> | void;
+  readonly seekTo?: (seconds: number) => void;
   readonly skipBy?: (seconds: number) => void;
 }
 
@@ -88,6 +97,8 @@ export interface TelepromptStudioProps {
   readonly createAndListenDisabledReason?: string;
   readonly isPlaybackActive: boolean;
   readonly job: VoiceJob | null;
+  readonly highlightMap?: HighlightMap | null;
+  readonly highlightMapV2?: HighlightMapV2 | null;
   readonly playbackControls: TelepromptPlaybackController;
   readonly playbackCursorSec: number;
   readonly policyProfile: string;
@@ -120,6 +131,8 @@ export function TelepromptStudio({
   createAndListenDisabledReason: externalCreateAndListenDisabledReason,
   isPlaybackActive,
   job,
+  highlightMap = null,
+  highlightMapV2 = null,
   playbackControls,
   playbackCursorSec,
   policyProfile,
@@ -152,6 +165,7 @@ export function TelepromptStudio({
   const [nativeFullscreenActive, setNativeFullscreenActive] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Teleprompt Studio ready.");
   const [workflowMenuOpen, setWorkflowMenuOpen] = useState(false);
+  const [cueSyncMode, setCueSyncMode] = useState<TelepromptCueSyncMode>("audio-follow");
   const scriptScrollerRef = useRef<HTMLDivElement | null>(null);
   const activeBlockElementRef = useRef<HTMLDivElement | null>(null);
   const theatreRootRef = useRef<HTMLDivElement | null>(null);
@@ -163,7 +177,32 @@ export function TelepromptStudio({
     [scopeLabel, sourceId, sourceLabel, sourceType],
   );
   const returnTarget = workspaceStageToTelepromptReturnTarget(returnStage);
-  const activeBlockIndex = resolveTelepromptBlockIndex(blocks, activeBlockId);
+  const cueTimeline = useMemo(
+    () => buildTelepromptCueTimeline({ blocks, highlightMap, highlightMapV2, job }),
+    [blocks, highlightMap, highlightMapV2, job],
+  );
+  const cueSync = useMemo(
+    () =>
+      resolveTelepromptCueSync({
+        activeBlockId,
+        mode: cueSyncMode,
+        playbackAvailable: playbackControls.isAvailable,
+        playbackCursorSec,
+        playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
+        timeline: cueTimeline,
+      }),
+    [
+      activeBlockId,
+      cueSyncMode,
+      cueTimeline,
+      isPlaybackActive,
+      playbackControls.isAvailable,
+      playbackControls.isPlaying,
+      playbackCursorSec,
+    ],
+  );
+  const syncedActiveBlockId = cueSync.activeCue?.sourceBlockId ?? activeBlockId;
+  const activeBlockIndex = resolveTelepromptBlockIndex(blocks, syncedActiveBlockId);
   const activeBlock = activeBlockIndex >= 0 ? blocks[activeBlockIndex] : null;
   const activeBlockIdForScroll = activeBlock?.id ?? null;
   const previousBlock = activeBlockIndex > 0 ? blocks[activeBlockIndex - 1] : null;
@@ -212,10 +251,12 @@ export function TelepromptStudio({
     activeBlockIndex >= 0 && blocks.length > 0
       ? Math.round(((activeBlockIndex + 1) / blocks.length) * 100)
       : 0;
-  const audioProgressPercent = cue ? Math.round(cue.segmentProgress * 100) : 0;
+  const audioProgressPercent = cueSync.activeCue
+    ? Math.round(cueSync.activeCue.cueProgress * 100)
+    : Math.round((cue?.segmentProgress ?? 0) * 100);
   const theatreSummary = useMemo(
-    () =>
-      buildTelepromptTheatreSummary({
+    () => ({
+      ...buildTelepromptTheatreSummary({
         activeBlockId: activeBlock?.id ?? activeBlockId,
         blocks,
         estimatedDurationMs,
@@ -224,10 +265,13 @@ export function TelepromptStudio({
         scopeLabel,
         sourceLabel,
       }),
+      syncStatusLabel: cueSync.statusLabel,
+    }),
     [
       activeBlock?.id,
       activeBlockId,
       blocks,
+      cueSync.statusLabel,
       estimatedDurationMs,
       isPlaybackActive,
       playbackControls.isAvailable,
@@ -346,6 +390,13 @@ export function TelepromptStudio({
   }, [activeBlock, blocks, onActiveBlockChange]);
 
   useEffect(() => {
+    if (!cueSync.shouldUpdateActiveBlock || !cueSync.activeCue) {
+      return;
+    }
+    onActiveBlockChange(cueSync.activeCue.sourceBlockId);
+  }, [cueSync.activeCue, cueSync.shouldUpdateActiveBlock, onActiveBlockChange]);
+
+  useEffect(() => {
     if (!activeBlockIdForScroll) {
       return;
     }
@@ -394,6 +445,7 @@ export function TelepromptStudio({
 
   const moveCue = useCallback(
     (direction: -1 | 1) => {
+      setCueSyncMode("manual");
       const nextId = adjacentTelepromptBlockId(blocks, activeBlock?.id ?? activeBlockId, direction);
       if (!nextId || nextId === activeBlock?.id) {
         setStatusMessage(direction < 0 ? "Already at the first cue." : "Already at the final cue.");
@@ -464,13 +516,30 @@ export function TelepromptStudio({
       setStatusMessage("Create audio before opening Cinema.");
       return;
     }
-    persistSnapshot(returnTarget);
+    const seekSeconds = telepromptCueSeekSeconds(cueSync.activeCue);
+    if (seekSeconds !== null && playbackControls.seekTo) {
+      playbackControls.seekTo(seekSeconds);
+      setStatusMessage("Opening Cinema at the current Teleprompt cue.");
+    } else if (seekSeconds !== null && playbackControls.skipBy) {
+      playbackControls.skipBy(seekSeconds - playbackCursorSec);
+      setStatusMessage("Opening Cinema at the current Teleprompt cue.");
+    }
+    persistSnapshot(returnTarget, cueSync.activeCue?.sourceBlockId ?? activeBlock?.id ?? null);
     void exitTelepromptFullscreen();
     setNativeFullscreenActive(false);
     setTheatreMode("inline");
     setWorkflowMenuOpen(false);
     onOpenCinema();
-  }, [canOpenCinema, onOpenCinema, persistSnapshot, returnTarget]);
+  }, [
+    activeBlock?.id,
+    canOpenCinema,
+    cueSync.activeCue,
+    onOpenCinema,
+    persistSnapshot,
+    playbackControls,
+    playbackCursorSec,
+    returnTarget,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -612,9 +681,18 @@ export function TelepromptStudio({
               label="Playback"
               value={playbackControls.isAvailable ? playbackStatusLabel : "Not generated"}
             />
+            <TelepromptContextFact label="Cue sync" value={cueSync.statusLabel} />
+            <TelepromptContextFact
+              label="Cue timing"
+              value={
+                cueSync.activeCue
+                  ? `${cueSync.activeCue.timingSource} / word ${cueSync.activeCue.currentWordIndex.toString()}`
+                  : "No active timing cue"
+              }
+            />
           </dl>
         ),
-        detail: playbackControls.isAvailable ? playbackStatusLabel : "Waiting for generated audio",
+        detail: cueSync.detail,
         id: "teleprompt-diagnostics",
         kind: "generated-audio-health",
         tabId: "diagnostics",
@@ -709,6 +787,15 @@ export function TelepromptStudio({
                     : ""}
                 </p>
               </div>
+              <TelepromptCueSync
+                mode={cueSyncMode}
+                playbackAvailable={playbackControls.isAvailable}
+                sync={cueSync}
+                onModeChange={(nextMode) => {
+                  setCueSyncMode(nextMode);
+                  setStatusMessage(`${cueSyncModeLabel(nextMode)} selected.`);
+                }}
+              />
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:justify-end">
               <Button
@@ -923,12 +1010,16 @@ export function TelepromptStudio({
                     active={block.id === activeBlock?.id}
                     block={block}
                     cueText={cue?.currentText ?? null}
+                    currentWordIndex={
+                      block.id === activeBlock?.id ? cueSync.activeCue?.currentWordIndex : null
+                    }
                     highContrast={presetId === "highContrast"}
                     key={block.id}
                     presetClassName={preset.scriptClassName}
                     activeRef={block.id === activeBlock?.id ? activeBlockElementRef : undefined}
                     settings={effectiveSettings}
                     onSelect={() => {
+                      setCueSyncMode("manual");
                       onActiveBlockChange(block.id);
                       persistSnapshot(returnTarget, block.id);
                       setStatusMessage(`Selected cue ${block.index.toString()}.`);
@@ -971,7 +1062,11 @@ export function TelepromptStudio({
           createAndListenCapabilityReason={createAndListenCapabilityReason}
           createAndListenDisabledReason={createAndListenDisabledReason}
           cuePlaybackDisabledReason={cuePlaybackDisabledReason}
-          currentCueText={cue?.currentText ?? null}
+          cueSyncDetail={cueSync.detail}
+          cueSyncMode={cueSyncMode}
+          cueSyncStatusLabel={cueSync.statusLabel}
+          currentCueText={cueSync.activeCue?.spokenText ?? cue?.currentText ?? null}
+          currentWordIndex={cueSync.activeCue?.currentWordIndex ?? null}
           fullscreenActive={nativeFullscreenActive}
           fullscreenAvailability={fullscreenAvailability}
           mirrorMode={mirrorMode}
@@ -1024,6 +1119,7 @@ function TelepromptScriptBlock({
   active,
   block,
   cueText,
+  currentWordIndex,
   highContrast,
   presetClassName,
   settings,
@@ -1033,6 +1129,7 @@ function TelepromptScriptBlock({
   active: boolean;
   block: RevisionBlock;
   cueText: string | null;
+  currentWordIndex?: number | null;
   highContrast: boolean;
   presetClassName: string;
   settings: TeleprompterHighlightSettings;
@@ -1040,7 +1137,9 @@ function TelepromptScriptBlock({
 }>) {
   const spokenText = block.spokenText || block.text;
   const shouldRenderCue =
-    active && cueText && normalizeCueText(cueText) === normalizeCueText(spokenText);
+    active &&
+    ((typeof currentWordIndex === "number" && currentWordIndex >= 0) ||
+      Boolean(cueText && normalizeCueText(cueText) === normalizeCueText(spokenText)));
   return (
     <div
       className={cx(
@@ -1064,7 +1163,11 @@ function TelepromptScriptBlock({
       </button>
       <p className={cx("whitespace-pre-wrap", presetClassName)}>
         {shouldRenderCue ? (
-          <TelepromptCueWords settings={settings} text={spokenText} />
+          <TelepromptCueWords
+            currentWordIndex={currentWordIndex}
+            settings={settings}
+            text={spokenText}
+          />
         ) : (
           spokenText || "No spoken text is available for this cue."
         )}
@@ -1090,16 +1193,24 @@ function telepromptScriptBlockClassName({
 }
 
 function TelepromptCueWords({
+  currentWordIndex,
   settings,
   text,
-}: Readonly<{ settings: TeleprompterHighlightSettings; text: string }>) {
+}: Readonly<{
+  currentWordIndex?: number | null;
+  settings: TeleprompterHighlightSettings;
+  text: string;
+}>) {
   const tokens = splitTeleprompterTokens(text);
-  const cues = buildTeleprompterWordCues(
-    text,
-    settings.leadMs,
-    estimateTelepromptDurationMs(countTelepromptWords(text)),
-    settings,
-  );
+  const cues =
+    typeof currentWordIndex === "number" && currentWordIndex >= 0
+      ? buildTelepromptWordCuesFromIndex(tokens, currentWordIndex, settings)
+      : buildTeleprompterWordCues(
+          text,
+          settings.leadMs,
+          estimateTelepromptDurationMs(countTelepromptWords(text)),
+          settings,
+        );
   const cueByIndex = new Map(cues.map((cue) => [cue.wordIndex, cue]));
   return (
     <>
@@ -1112,6 +1223,55 @@ function TelepromptCueWords({
       ))}
     </>
   );
+}
+
+function buildTelepromptWordCuesFromIndex(
+  tokens: readonly TeleprompterToken[],
+  currentWordIndex: number,
+  settings: TeleprompterHighlightSettings,
+): TeleprompterWordCue[] {
+  const wordTokens = tokens.filter((token) => token.kind === "word");
+  return wordTokens.map((token) => {
+    const wordIndex = token.wordIndex ?? 0;
+    if (wordIndex === currentWordIndex) {
+      return {
+        endMs: 1,
+        intensity: settings.activeIntensity,
+        progress: 0.5,
+        startMs: 0,
+        state: "active",
+        wordIndex,
+      };
+    }
+    if (wordIndex < currentWordIndex) {
+      return {
+        endMs: 1,
+        intensity: settings.spokenIntensity,
+        progress: 1,
+        startMs: 0,
+        state: "spoken",
+        wordIndex,
+      };
+    }
+    if (wordIndex <= currentWordIndex + 2) {
+      return {
+        endMs: 1,
+        intensity: settings.upcomingIntensity,
+        progress: 0,
+        startMs: 0,
+        state: "upcoming",
+        wordIndex,
+      };
+    }
+    return {
+      endMs: 1,
+      intensity: 0,
+      progress: 0,
+      startMs: 0,
+      state: "idle",
+      wordIndex,
+    };
+  });
 }
 
 function TelepromptCueToken({
@@ -1179,6 +1339,23 @@ function TelepromptContextFact({ label, value }: Readonly<{ label: string; value
       </dd>
     </div>
   );
+}
+
+function cueSyncModeLabel(mode: TelepromptCueSyncMode): string {
+  switch (mode) {
+    case "audio-follow": {
+      return "Audio-follow cue sync";
+    }
+    case "manual": {
+      return "Manual cue sync";
+    }
+    case "recording-rehearsal": {
+      return "Recording rehearsal cue sync";
+    }
+    case "review-playback": {
+      return "Review playback cue sync";
+    }
+  }
 }
 
 function normalizeCueText(value: string): string {

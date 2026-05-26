@@ -20,6 +20,7 @@ import type {
   TelepromptTheatreSummary,
   TelepromptTheatreViewMode,
 } from "./telepromptTheatreState";
+import type { TelepromptCueSyncMode } from "./telepromptCueTimeline";
 
 export interface TelepromptTheatreProps {
   readonly activeBlock: RevisionBlock | null;
@@ -30,7 +31,11 @@ export interface TelepromptTheatreProps {
   readonly createAndListenCapabilityReason?: string;
   readonly createAndListenDisabledReason?: string;
   readonly cuePlaybackDisabledReason?: string;
+  readonly cueSyncDetail: string;
+  readonly cueSyncMode: TelepromptCueSyncMode;
+  readonly cueSyncStatusLabel: string;
   readonly currentCueText: string | null;
+  readonly currentWordIndex: number | null;
   readonly fullscreenAvailability: TelepromptFullscreenAvailability;
   readonly fullscreenActive: boolean;
   readonly mirrorMode: boolean;
@@ -69,7 +74,11 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       createAndListenCapabilityReason,
       createAndListenDisabledReason,
       cuePlaybackDisabledReason,
+      cueSyncDetail,
+      cueSyncMode,
+      cueSyncStatusLabel,
       currentCueText,
+      currentWordIndex,
       fullscreenAvailability,
       fullscreenActive,
       mirrorMode,
@@ -100,6 +109,8 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
   ) {
     const preset = telepromptPreset(presetId);
     const currentCue = currentCueText ?? activeBlock?.spokenText ?? activeBlock?.text ?? "";
+    const cueSyncTone = telepromptTheatreCueSyncTone(cueSyncMode);
+    const currentWordLabel = telepromptTheatreWordLabel(currentWordIndex);
     return (
       <section
         aria-label="Teleprompt Theatre"
@@ -127,6 +138,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
             <StatusChip tone={playbackControlsPlaying ? "success" : "neutral"}>
               {summary.playbackStatusLabel}
             </StatusChip>
+            <StatusChip tone={cueSyncTone}>{cueSyncStatusLabel}</StatusChip>
             <span className="truncate text-sm font-semibold text-zinc-200">
               {summary.sourceScopeLabel}
             </span>
@@ -292,7 +304,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
                 </div>
               </div>
               <p className="text-xs text-zinc-400">
-                {summary.syncStatusLabel}
+                {cueSyncDetail || summary.syncStatusLabel}
                 {playbackControlsAvailable
                   ? ` · audio segment ${audioProgressPercent.toString()}%`
                   : ""}
@@ -390,6 +402,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
                 </div>
                 <dl className="grid gap-2 text-xs text-orange-50">
                   <OperatorFact label="Sync" value={summary.syncStatusLabel} />
+                  <OperatorFact label="Word" value={currentWordLabel} />
                   <OperatorFact label="Confidence" value={summary.confidenceLabel} />
                   <OperatorFact label="Progress" value={`${summary.progressPercent.toString()}%`} />
                 </dl>
@@ -416,6 +429,17 @@ function theatreTextSizeClassName(presetId: TelepromptPresetId): string {
     return "text-4xl leading-[1.25] md:text-6xl";
   }
   return "text-4xl leading-[1.3] md:text-5xl";
+}
+
+function telepromptTheatreCueSyncTone(mode: TelepromptCueSyncMode): "info" | "neutral" {
+  return mode === "manual" ? "neutral" : "info";
+}
+
+function telepromptTheatreWordLabel(currentWordIndex: number | null): string {
+  if (currentWordIndex === null || currentWordIndex < 0) {
+    return "Phrase cue";
+  }
+  return `Word ${(currentWordIndex + 1).toString()}`;
 }
 
 function OperatorFact({ label, value }: Readonly<{ label: string; value: string }>) {

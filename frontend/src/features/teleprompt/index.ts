@@ -4,6 +4,21 @@ export {
   type TelepromptStudioProps,
 } from "./TelepromptStudio";
 export { TelepromptTheatre, type TelepromptTheatreProps } from "./TelepromptTheatre";
+export { TelepromptCueSync, type TelepromptCueSyncProps } from "./TelepromptCueSync";
+export {
+  buildTelepromptCueTimeline,
+  resolveTelepromptCueSync,
+  telepromptCueSeekSeconds,
+  timelineSourceLabel,
+  type BuildTelepromptCueTimelineInput,
+  type ResolveTelepromptCueSyncInput,
+  type TelepromptCueSyncMode,
+  type TelepromptCueSyncState,
+  type TelepromptCueTimeline,
+  type TelepromptCueTimelineEntry,
+  type TelepromptCueTimelineSource,
+  type TelepromptCueWordTiming,
+} from "./telepromptCueTimeline";
 export {
   exitTelepromptFullscreen,
   isTelepromptFullscreenActive,

@@ -36,6 +36,7 @@ import {
   getBookSourceScope,
   getContentIR,
   getHighlightMap,
+  getHighlightMapV2,
   getPreparedSource,
   getProjectSpeechPolicy,
   getProjectStorageSummary,
@@ -173,6 +174,7 @@ import {
 import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPreferences";
 import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
 import type { HeaderContextSummaryProps } from "./features/header";
+import type { HighlightMapV2 } from "./features/readalong";
 import { generatedAudioLifecycleFromJob } from "./features/playback/generatedAudioLifecycle";
 import { providerRuntimeLeavesLocalBoundary } from "./features/provider-capabilities/providerCapabilityLite";
 import {
@@ -2762,6 +2764,7 @@ export function App() {
   const [playbackCursorSec, setPlaybackCursorSec] = useState(0);
   const [isPlaybackActive, setIsPlaybackActive] = useState(false);
   const [highlightMap, setHighlightMap] = useState<HighlightMap | null>(null);
+  const [highlightMapV2, setHighlightMapV2] = useState<HighlightMapV2 | null>(null);
   const [playbackControls, setPlaybackControls] = useState<PlaybackController>(
     DISABLED_PLAYBACK_CONTROLLER,
   );
@@ -5754,6 +5757,28 @@ export function App() {
   ]);
 
   useEffect(() => {
+    if (!job?.id || !job.timing?.highlightMapV2Url) {
+      setHighlightMapV2(null);
+      return;
+    }
+    let isCancelled = false;
+    void getHighlightMapV2(job.id)
+      .then((map) => {
+        if (!isCancelled) {
+          setHighlightMapV2(map);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setHighlightMapV2(null);
+        }
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [job?.id, job?.timing?.highlightMapV2Url]);
+
+  useEffect(() => {
     if (!hasActiveVoiceCloningActivity) {
       return;
     }
@@ -7469,6 +7494,8 @@ export function App() {
                     canOpenCinema={canOpenCurrentCinema}
                     createAndListenCapabilityReason={createAndListenCapabilityReason}
                     createAndListenDisabledReason={createAndListenDisabledReason}
+                    highlightMap={highlightMap}
+                    highlightMapV2={highlightMapV2}
                     isPlaybackActive={isPlaybackActive}
                     job={job}
                     playbackControls={playbackControls}
