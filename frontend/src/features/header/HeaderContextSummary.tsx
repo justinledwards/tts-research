@@ -1,11 +1,10 @@
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
+import { buildHeaderLifecycleSentence, type HeaderLifecycleFact } from "./headerLifecycleSentence";
 import {
-  generatedAudioStateLabel,
   type SourceLifecycleDescriptor,
   type SourceLifecycleEnvelope,
   type SourceLifecycleTone,
   sourceLifecycleDescriptor,
-  sourcePolicyScopeLabel,
 } from "../source-lifecycle/sourceLifecycle";
 
 export interface HeaderContextMetadataItem {
@@ -55,24 +54,20 @@ export function HeaderContextSummary({
     ? (sourceLifecycleDescriptorOverride ??
       sourceLifecycleDescriptor(sourceLifecycle.canonicalState))
     : null;
-  const effectiveMetadata = sourceLifecycle
-    ? [
-        ...metadata,
-        { label: "Lifecycle", value: lifecycleDescriptor?.label ?? "Unknown" },
-        {
-          label: "Audio",
-          value:
-            cleanOptionalLabel(sourceLifecycleGeneratedAudioLabel) ??
-            generatedAudioStateLabel(sourceLifecycle.generatedAudioState),
-        },
-        { label: "Source policy", value: sourcePolicyScopeLabel(sourceLifecycle.policyScope) },
-      ]
-    : metadata;
+  const lifecycleSentence = buildHeaderLifecycleSentence({
+    metadata,
+    sourceLifecycle,
+    sourceLifecycleDescriptorOverride: lifecycleDescriptor,
+    sourceLifecycleGeneratedAudioLabel,
+    stateLabel: normalizedStateLabel,
+    surfaceName,
+  });
+  const effectiveMetadata = lifecycleSentence.detailFacts;
   const ariaLabel = buildHeaderContextAriaLabel({
     metadata: effectiveMetadata,
     scopeTitle: normalizedScopeTitle,
     sourceTitle: normalizedSourceTitle,
-    stateLabel: normalizedStateLabel,
+    stateLabel: lifecycleSentence.primaryLabel,
     surfaceName,
   });
   const isBar = variant === "bar";
@@ -94,22 +89,14 @@ export function HeaderContextSummary({
           <p className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
             {surfaceName}
           </p>
-          {normalizedStateLabel ? (
-            <span
-              className="shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold vs-border vs-muted"
-              title={`State: ${normalizedStateLabel}`}
-            >
-              {normalizedStateLabel}
-            </span>
-          ) : null}
-          {lifecycleDescriptor ? (
+          {lifecycleSentence.primaryLabel ? (
             <span
               className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${sourceLifecycleToneClassName(
-                lifecycleDescriptor.tone,
+                lifecycleSentence.primaryTone,
               )}`}
-              title={lifecycleDescriptor.detail}
+              title={lifecycleSentence.primaryDetail}
             >
-              {lifecycleDescriptor.label}
+              {lifecycleSentence.primaryLabel}
             </span>
           ) : null}
         </div>
@@ -131,22 +118,21 @@ export function HeaderContextSummary({
             <span className="shrink-0 font-semibold">Scope</span>
             {normalizedScopeTitle}
           </span>
-          {effectiveMetadata.map((item) => (
+          {lifecycleSentence.visibleSummary ? (
             <span
-              className="inline-flex min-w-0 max-w-full items-center gap-1 before:text-[var(--vs-muted)] before:content-['·'] sm:max-w-[14rem]"
-              key={`${item.label}-${item.value}`}
-              title={`${item.label}: ${item.value}`}
+              className="inline-flex min-w-0 max-w-full items-center gap-1 before:text-[var(--vs-muted)] before:content-['·'] sm:max-w-[30rem]"
+              title={lifecycleSentence.visibleSummary}
             >
-              <span className="shrink-0 font-semibold">{item.label}</span>
-              <span className="sr-only">: </span>
-              <span className="min-w-0 truncate">{item.value}</span>
+              <span className="sr-only">Lifecycle summary: </span>
+              <span className="min-w-0 truncate">{lifecycleSentence.visibleSummary}</span>
             </span>
-          ))}
+          ) : null}
           <HeaderContextPopover
             metadata={effectiveMetadata}
             scopeTitle={normalizedScopeTitle}
             sourceTitle={normalizedSourceTitle}
-            stateLabel={normalizedStateLabel}
+            stateLabel={lifecycleSentence.primaryLabel}
+            summary={lifecycleSentence.visibleSummary}
             surfaceName={surfaceName}
           />
         </div>
@@ -184,23 +170,18 @@ function HeaderContextPopover({
   scopeTitle,
   sourceTitle,
   stateLabel,
+  summary,
   surfaceName,
 }: Readonly<{
-  metadata: HeaderContextMetadataItem[];
+  metadata: HeaderLifecycleFact[];
   scopeTitle: string;
   sourceTitle: string;
   stateLabel: string | null;
+  summary: string;
   surfaceName: string;
 }>) {
-  const [isOpen, setIsOpen] = useState(false);
-
   return (
-    <details
-      className="group relative shrink-0"
-      onToggle={(event) => {
-        setIsOpen(event.currentTarget.open);
-      }}
-    >
+    <details className="group relative shrink-0">
       <summary
         aria-label={`Show full ${surfaceName} context`}
         className="grid h-7 w-7 cursor-pointer list-none place-items-center rounded-md border text-[0.68rem] font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-raised [&::-webkit-details-marker]:hidden"
@@ -208,23 +189,18 @@ function HeaderContextPopover({
       >
         <InfoIcon />
       </summary>
-      {isOpen ? (
-        <div className="absolute left-1/2 z-30 mt-2 w-[min(22rem,86vw)] -translate-x-1/2 rounded-md border bg-[var(--vs-raised)] p-3 text-left text-xs shadow-xl vs-border">
-          <dl className="grid gap-2">
-            <ContextRow label="Surface" value={surfaceName} />
-            <ContextRow label="Source" value={sourceTitle} />
-            <ContextRow label="Scope" value={scopeTitle} />
-            {stateLabel ? <ContextRow label="State" value={stateLabel} /> : null}
-            {metadata.map((item) => (
-              <ContextRow
-                key={`${item.label}-${item.value}`}
-                label={item.label}
-                value={item.value}
-              />
-            ))}
-          </dl>
-        </div>
-      ) : null}
+      <div className="absolute left-1/2 z-30 mt-2 w-[min(22rem,86vw)] -translate-x-1/2 rounded-md border bg-[var(--vs-raised)] p-3 text-left text-xs shadow-xl vs-border">
+        <dl className="grid gap-2">
+          <ContextRow label="Surface" value={surfaceName} />
+          <ContextRow label="Source" value={sourceTitle} />
+          <ContextRow label="Scope" value={scopeTitle} />
+          <ContextRow label="Summary" value={summary} />
+          {stateLabel ? <ContextRow label="State" value={stateLabel} /> : null}
+          {metadata.map((item) => (
+            <ContextRow key={`${item.label}-${item.value}`} label={item.label} value={item.value} />
+          ))}
+        </dl>
+      </div>
     </details>
   );
 }

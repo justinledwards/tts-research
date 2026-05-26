@@ -47,7 +47,7 @@ describe("Book Cinema degraded-state UI", () => {
 
     expect(timingMarkup).toContain("Low confidence");
     expect(timingMarkup).toContain("Timing confidence is below");
-    expect(statusMarkup).toContain("Reader ready");
+    expect(statusMarkup).toContain("Audio missing");
   });
 
   it("explains generated audio that is not playable yet", () => {

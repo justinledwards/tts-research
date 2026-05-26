@@ -260,6 +260,26 @@ describe("CinemaTransportBar", () => {
     expect(markup).toContain('aria-expanded="true"');
   });
 
+  it("explains disabled playback even when generated audio is ready", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaTransportBar
+        model={{
+          ...makeTransportModel(),
+          playbackState: "playable",
+          primary: {
+            className: "bg-orange-600 text-white",
+            disabled: true,
+            label: "Play",
+            onClick: () => null,
+          },
+        }}
+      />,
+    );
+
+    expect(markup).toContain("data-disabled-reason=");
+    expect(markup).toContain("reader can attach to generated audio");
+  });
+
   it("renders pre-audio as create, summary, and settings without disabled playback controls", () => {
     const markup = renderToStaticMarkup(
       <CinemaTransportBar

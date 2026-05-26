@@ -10561,7 +10561,7 @@ function NarrationPreviewStage({
           scopeTitle={scopeTitle}
           sourceLifecycle={sourceLifecycle}
           sourceTitle={sourceLabel}
-          stateLabel={job?.status ?? "Waiting"}
+          stateLabel={generatedAudioLifecycle === "missing" ? "Source ready" : null}
           surfaceName="Preview"
         />
         <div className="flex flex-wrap items-center gap-2">

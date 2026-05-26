@@ -473,7 +473,7 @@ function hasPreviewPlayback(
 }
 
 function previewPlaybackStatusLabel(isPlaying: boolean, isPlaybackActive: boolean): string {
-  return isPlaying || isPlaybackActive ? "Playing" : "Ready";
+  return isPlaying || isPlaybackActive ? "Playing" : "Preview ready";
 }
 
 function previewPlayerClassName(placement: PreviewPlayerPlacement): string {

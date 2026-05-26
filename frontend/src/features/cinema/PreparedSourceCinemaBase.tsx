@@ -806,7 +806,6 @@ export function PreparedSourceCinemaOverlay({
             surfaceName={cinemaLabel}
             variant="bar"
           />
-          <PlaybackStatusChip label={headerReadiness.label} rendererLifecycle={rendererLifecycle} />
           {isWebsiteCinema ? <WebsiteExtractionSummary source={source} /> : null}
           <div className="order-last flex min-w-0 flex-1 basis-full flex-wrap items-center gap-3 lg:flex xl:order-none xl:basis-auto xl:flex-nowrap">
             <PreparedSourceCinemaHeaderSourceSelect
@@ -1003,18 +1002,20 @@ function PreparedSourceCinemaHeaderSourceSelect({
   sources: PreparedSource[];
   onSelectSource: (sourceId: string) => void;
 }>) {
+  const currentLabel = preparedSourceCinemaOptionLabel(source);
   return (
     <label className="hidden min-w-[13rem] max-w-[18rem] flex-1 basis-[13rem] items-center gap-2 lg:flex">
       <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em] vs-muted">
         Cinema
       </span>
       <select
-        aria-label="Select cinema source"
+        aria-label={`Select cinema source: ${currentLabel}`}
         className={`${fieldControlClassName} h-11 min-w-0 flex-1 truncate py-0`}
         data-testid="prepared-source-cinema-source-select"
         onChange={(event) => {
           onSelectSource(event.currentTarget.value);
         }}
+        title={currentLabel}
         value={source.id}
       >
         {sources.map((item, index) => (
@@ -2010,30 +2011,6 @@ function TransportWaveformPlaceholder({
     >
       <span className="min-w-0 truncate">{label}</span>
     </div>
-  );
-}
-
-function PlaybackStatusChip({
-  label,
-  rendererLifecycle,
-}: Readonly<{ label: string; rendererLifecycle: CinemaRendererLifecycleState }>) {
-  const isReady = isCinemaRendererReady(rendererLifecycle);
-  let className = "border-orange-200 bg-orange-50 text-orange-700";
-  if (isReady) {
-    className = "border-emerald-200 bg-emerald-50 text-emerald-700";
-  } else if (rendererLifecycle === "failed") {
-    className =
-      "border-[var(--vs-danger-border)] bg-[var(--vs-danger-soft)] text-[var(--vs-danger)]";
-  }
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium sm:gap-2 sm:px-3 sm:py-1.5 sm:text-sm ${className}`}
-    >
-      <span className="hidden sm:inline-flex">
-        <AudioBarsIcon />
-      </span>
-      {label}
-    </span>
   );
 }
 

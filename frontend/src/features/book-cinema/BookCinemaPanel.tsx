@@ -1560,11 +1560,6 @@ export function BookCinemaOverlay({
             surfaceName={book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}
             variant="bar"
           />
-          <BookCinemaStatusChip
-            hasPlayableAudio={hasPlayableAudio}
-            isPlaying={playbackControls.isPlaying}
-            job={activeBookJob}
-          />
           <div className="hidden min-w-[20rem] shrink-0 lg:block">
             <CinemaFocusModeToolbar
               activePanelId={cinemaFocus.activePanelId}
@@ -1843,11 +1838,12 @@ function BookCinemaSourceLibrary({
       <label className="grid gap-1 text-xs font-semibold">
         <span className="vs-muted">Cinema source</span>
         <select
-          aria-label="Cinema source"
+          aria-label={`Cinema source: ${bookSourceName(book)}`}
           className="cinema-touch-target min-w-0 rounded-md border bg-[var(--vs-raised)] px-2 text-sm font-medium outline-none vs-border"
           onChange={(event) => {
             onSelectBook(event.currentTarget.value);
           }}
+          title={bookSourceName(book)}
           value={book.id}
         >
           {bookSources.map((source, index) => (
@@ -2328,10 +2324,10 @@ function bookCinemaStatusLabel({
     return "Playing";
   }
   if (hasPlayableAudio) {
-    return "Ready";
+    return "Audio ready";
   }
   if (!job) {
-    return "Reader ready";
+    return "Audio missing";
   }
   if (["queued", "optimizing", "synthesizing", "checking", "retrying"].includes(job.status)) {
     return "Creating";

@@ -592,3 +592,10 @@
 - [x] Add shared canvas/transport budget semantics
 - [x] Compact Read-mode display and waveform affordances
 - [x] Run WP27 local validation commands
+
+## 2026-05-26 00:53 CEST - Header Status and Lifecycle Copy Normalization
+- [x] Inspect header, source lifecycle, playback, provider, and surface copy sources
+- [x] Add shared lifecycle sentence/status model
+- [x] Normalize Cinema, Workspace, and Preview header copy/disclosure
+- [x] Add shared disabled playback reason for ready-audio transport edge case
+- [x] Run WP28 local validation commands

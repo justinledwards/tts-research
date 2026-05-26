@@ -685,5 +685,11 @@ function cinemaPrimaryDisabledReason(
   if (!model.primary.disabled) {
     return undefined;
   }
-  return playbackActionDisabledReason({ action, lifecycle });
+  return playbackActionDisabledReason({
+    action,
+    fallbackReason:
+      model.stateSummary?.detail ??
+      "Playback controls are unavailable until the reader can attach to generated audio.",
+    lifecycle,
+  });
 }
