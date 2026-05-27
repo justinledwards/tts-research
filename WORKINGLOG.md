@@ -855,3 +855,9 @@
 - [x] Add compatibility identity model and checks
 - [x] Add stale artifact labels and golden-minute stale cases
 - [x] Run WP61 validation commands
+
+## 2026-05-27 09:35 CEST - WP62 Golden-Minute Human QA Script
+- [x] Inspect existing QA and golden-minute evidence docs
+- [x] Add human review script and reporting template
+- [x] Run automated golden-minute validation
+- [ ] Manual QA remains for a human reviewer using the new script
