@@ -54,6 +54,12 @@ export {
   type CinemaMobilePanelSpec,
 } from "./CinemaMobileSheet";
 export { CinemaShell } from "./CinemaShell";
+export {
+  CinemaTheatreChrome,
+  CinemaTheatreTransport,
+  useCinemaTheatreController,
+  type CinemaTheatreController,
+} from "./CinemaTheatre";
 export { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 export {
   CINEMA_ADVANCED_FOCUS_MODES,

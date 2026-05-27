@@ -818,3 +818,10 @@
 - [x] Wire Theatre configuration UI and keyboard bindings
 - [x] Add Settings preview and regression coverage
 - [x] Run WP55 validation commands
+
+## 2026-05-27 05:34 CEST - WP56 Cinema Theatre Mode
+- [x] Inspect Cinema surfaces, fullscreen helpers, commands, and responsive evidence
+- [x] Add shared Cinema Theatre state, controls, fullscreen, focus, and Escape handling
+- [x] Wire Book, Document, and Website Cinema Theatre views
+- [x] Add command palette actions and screenshot coverage
+- [x] Run WP56 validation commands

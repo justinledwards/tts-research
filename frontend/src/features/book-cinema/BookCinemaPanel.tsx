@@ -1,6 +1,7 @@
 import {
   Suspense,
   lazy,
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -18,6 +19,8 @@ import {
   CinemaInspectorDock,
   CinemaMobileSheet,
   CinemaShell,
+  CinemaTheatreChrome,
+  CinemaTheatreTransport,
   CinemaTransportBar,
   ReadAlongInvariantDebugPanel,
   buildCinemaCurrentReadingSection,
@@ -27,6 +30,7 @@ import {
   deriveCinemaPlaybackState,
   returnFocusToCinemaReaderCanvas,
   useCinemaFocusController,
+  useCinemaTheatreController,
   type CinemaMobilePanelSpec,
   type CinemaTransportModel,
 } from "../cinema";
@@ -847,6 +851,9 @@ export function BookCinemaOverlay({
   scope,
   scopeContent,
   sourcePolicySaving,
+  theatreControlsSignal,
+  theatreExitSignal,
+  theatreOpenSignal,
   uiMemoryFocusState,
   uiMemoryResetSignal,
   highlightMap,
@@ -892,6 +899,9 @@ export function BookCinemaOverlay({
   readAlongPreferences: ReadAlongPreferences;
   resumeFallbackNotice: string | null;
   sourcePolicySaving: boolean;
+  theatreControlsSignal: number;
+  theatreExitSignal: number;
+  theatreOpenSignal: number;
   uiMemoryFocusState: UiMemoryCinemaState;
   uiMemoryResetSignal: number;
   playbackControls: {
@@ -1461,11 +1471,21 @@ export function BookCinemaOverlay({
     onStateChange: onUiMemoryFocusStateChange,
     resetSignal: uiMemoryResetSignal,
   });
+  const cinemaTheatre = useCinemaTheatreController(dialogRef);
+  const theatreOpenSignalRef = useRef(theatreOpenSignal);
+  const theatreExitSignalRef = useRef(theatreExitSignal);
+  const theatreControlsSignalRef = useRef(theatreControlsSignal);
 
   useReaderKeyboardControls({
     canBookmark,
     onBookmark,
-    onClose,
+    onClose: () => {
+      if (cinemaTheatre.active) {
+        cinemaTheatre.exit();
+        return;
+      }
+      onClose();
+    },
     onPlayPause,
     onRestart,
     onSkip,
@@ -1474,18 +1494,47 @@ export function BookCinemaOverlay({
 
   useReaderModalLifecycle(dialogRef, { closeOnEscape: false });
 
-  const handleCompactTransport = () => {
+  const handleCompactTransport = useCallback(() => {
     cinemaFocus.setMode("read");
     cinemaFocus.setPinnedPanelId(null);
     setMobilePanel(null);
-  };
+  }, [cinemaFocus]);
 
-  const handleTheatreMode = () => {
+  const handleTheatreMode = useCallback(() => {
     handleCompactTransport();
-    if (!document.fullscreenElement && dialogRef.current?.requestFullscreen) {
-      void dialogRef.current.requestFullscreen().catch(() => null);
+    setSettingsOpen(false);
+    cinemaTheatre.open();
+  }, [cinemaTheatre, handleCompactTransport]);
+
+  useEffect(() => {
+    if (theatreOpenSignalRef.current === theatreOpenSignal) {
+      return;
     }
-  };
+    theatreOpenSignalRef.current = theatreOpenSignal;
+    if (theatreOpenSignal > 0) {
+      handleTheatreMode();
+    }
+  }, [handleTheatreMode, theatreOpenSignal]);
+
+  useEffect(() => {
+    if (theatreExitSignalRef.current === theatreExitSignal) {
+      return;
+    }
+    theatreExitSignalRef.current = theatreExitSignal;
+    if (theatreExitSignal > 0) {
+      cinemaTheatre.exit();
+    }
+  }, [cinemaTheatre, theatreExitSignal]);
+
+  useEffect(() => {
+    if (theatreControlsSignalRef.current === theatreControlsSignal) {
+      return;
+    }
+    theatreControlsSignalRef.current = theatreControlsSignal;
+    if (theatreControlsSignal > 0) {
+      cinemaTheatre.toggleControls();
+    }
+  }, [cinemaTheatre, theatreControlsSignal]);
 
   useEffect(() => {
     if (book.id || normalizedScopeKey) {
@@ -1633,7 +1682,7 @@ export function BookCinemaOverlay({
           scopedText={scopedText}
           scopeContent={scopeContent}
           accessibilitySettings={normalizedAccessibility}
-          canvasFirst={cinemaFocus.layoutState.canvasFirst}
+          canvasFirst={cinemaTheatre.active || cinemaFocus.layoutState.canvasFirst}
           pointerLabel={pointerOption?.label ?? null}
           phraseWordEnd={phraseRange.end}
           phraseWordStart={phraseRange.start}
@@ -1643,70 +1692,115 @@ export function BookCinemaOverlay({
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
         />
       }
-      canvasFirst={cinemaFocus.layoutState.canvasFirst}
+      canvasFirst={cinemaTheatre.active || cinemaFocus.layoutState.canvasFirst}
       footer={
-        <>
-          <CinemaTransportBar model={bookTransportModel} />
-          <BookCinemaReaderNoticeList
-            audioNotice={playbackState === "degraded" && !isCancelledBookJob ? audioNotice : null}
-            isResumeRestoring={isResumeRestoring}
-            resumeFallbackNotice={resumeFallbackNotice}
-            timingConfidence={timingConfidence}
+        cinemaTheatre.active ? (
+          <CinemaTheatreTransport
+            controlsVisible={cinemaTheatre.controlsVisible}
+            model={bookTransportModel}
           />
-        </>
+        ) : (
+          <>
+            <CinemaTransportBar model={bookTransportModel} />
+            <BookCinemaReaderNoticeList
+              audioNotice={playbackState === "degraded" && !isCancelledBookJob ? audioNotice : null}
+              isResumeRestoring={isResumeRestoring}
+              resumeFallbackNotice={resumeFallbackNotice}
+              timingConfidence={timingConfidence}
+            />
+          </>
+        )
       }
       focusMode={cinemaFocus.mode}
       header={
-        <header className="relative flex min-h-[4rem] items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
-          <HeaderContextSummary
-            className="flex-1 lg:max-w-[min(36rem,42vw)]"
-            density="compact"
-            icon={
-              <span className="grid h-9 w-9 place-items-center rounded-md border border-orange-400/30 bg-orange-500/10 text-orange-400">
-                <CinemaFilmIcon />
-              </span>
-            }
-            id="book-cinema-title"
-            metadata={[
-              { label: "Policy", value: bookPolicySummary.compactLabel },
-              { label: "Voice", value: activeBookJob?.voice ?? "Default narrative" },
-            ]}
-            scopeTitle={bookScopeLabel(normalizedScope)}
-            sourceLifecycle={sourceLifecycle}
-            sourceTitle={bookSourceName(book)}
-            stateLabel={bookTransportStateTitle(playbackState)}
+        cinemaTheatre.active ? (
+          <CinemaTheatreChrome
+            activePassage={activePassage}
+            controlsVisible={cinemaTheatre.controlsVisible}
+            fullscreenActive={cinemaTheatre.fullscreenActive}
+            fullscreenAvailability={cinemaTheatre.fullscreenAvailability}
+            highContrast={normalizedAccessibility.highContrast}
+            scopeLabel={bookScopeLabel(normalizedScope)}
+            sourceLabel={bookSourceName(book)}
             surfaceName={book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}
-            variant="bar"
+            onExit={cinemaTheatre.exit}
+            onRequestFullscreen={cinemaTheatre.requestFullscreen}
+            onToggleControls={cinemaTheatre.toggleControls}
           />
-          <div className="hidden min-w-[20rem] shrink-0 lg:block">
-            <CinemaFocusModeToolbar
-              activePanelId={cinemaFocus.activePanelId}
-              mode={cinemaFocus.mode}
-              onAdvancedAction={(action) => {
-                cinemaFocus.setMode(action.mode);
-                cinemaFocus.setActivePanelId(action.panelId);
-              }}
-              onCommandPalette={onCommandPaletteOpen}
-              onCompactTransport={handleCompactTransport}
-              onHelpGuide={onHelpOpen}
-              onKeyboardShortcuts={onShortcutCheatSheetOpen}
-              onModeChange={cinemaFocus.setMode}
-              onReaderSettings={() => {
-                setSettingsOpen(true);
-              }}
-              onTheatreMode={handleTheatreMode}
+        ) : (
+          <header className="relative flex min-h-[4rem] items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6">
+            <HeaderContextSummary
+              className="flex-1 lg:max-w-[min(36rem,42vw)]"
+              density="compact"
+              icon={
+                <span className="grid h-9 w-9 place-items-center rounded-md border border-orange-400/30 bg-orange-500/10 text-orange-400">
+                  <CinemaFilmIcon />
+                </span>
+              }
+              id="book-cinema-title"
+              metadata={[
+                { label: "Policy", value: bookPolicySummary.compactLabel },
+                { label: "Voice", value: activeBookJob?.voice ?? "Default narrative" },
+              ]}
+              scopeTitle={bookScopeLabel(normalizedScope)}
+              sourceLifecycle={sourceLifecycle}
+              sourceTitle={bookSourceName(book)}
+              stateLabel={bookTransportStateTitle(playbackState)}
+              surfaceName={book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}
+              variant="bar"
             />
-          </div>
-          {timingConfidence.isDegraded ? (
-            <BookCinemaTimingStatusChip display={timingConfidence} />
-          ) : null}
-          {isResumeRestoring ? <BookCinemaResumeChip /> : null}
-          <div className="flex shrink-0 items-center gap-2">
-            <label className="hidden items-center gap-2 text-sm vs-muted lg:flex">
-              <span>Scope</span>
+            <div className="hidden min-w-[20rem] shrink-0 lg:block">
+              <CinemaFocusModeToolbar
+                activePanelId={cinemaFocus.activePanelId}
+                mode={cinemaFocus.mode}
+                onAdvancedAction={(action) => {
+                  cinemaFocus.setMode(action.mode);
+                  cinemaFocus.setActivePanelId(action.panelId);
+                }}
+                onCommandPalette={onCommandPaletteOpen}
+                onCompactTransport={handleCompactTransport}
+                onHelpGuide={onHelpOpen}
+                onKeyboardShortcuts={onShortcutCheatSheetOpen}
+                onModeChange={cinemaFocus.setMode}
+                onReaderSettings={() => {
+                  setSettingsOpen(true);
+                }}
+                onTheatreMode={handleTheatreMode}
+              />
+            </div>
+            {timingConfidence.isDegraded ? (
+              <BookCinemaTimingStatusChip display={timingConfidence} />
+            ) : null}
+            {isResumeRestoring ? <BookCinemaResumeChip /> : null}
+            <div className="flex shrink-0 items-center gap-2">
+              <label className="hidden items-center gap-2 text-sm vs-muted lg:flex">
+                <span>Scope</span>
+                <select
+                  aria-label={`Book scope: ${bookScopeLabel(normalizedScope)}`}
+                  className="cinema-touch-target max-w-64 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold text-[var(--vs-text)] outline-none vs-border"
+                  data-book-source-id={book.id}
+                  data-testid="ui-action-book-cinema-scope"
+                  onChange={(event) => {
+                    const nextScope = scopeOptions.find(
+                      (option) => option.key === event.currentTarget.value,
+                    )?.scope;
+                    if (nextScope) {
+                      handleScopeChange(nextScope);
+                    }
+                  }}
+                  title={`Scope: ${bookScopeLabel(normalizedScope)}`}
+                  value={normalizedScopeKey}
+                >
+                  {scopeOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <select
-                aria-label={`Book scope: ${bookScopeLabel(normalizedScope)}`}
-                className="cinema-touch-target max-w-64 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold text-[var(--vs-text)] outline-none vs-border"
+                aria-label="Book scope"
+                className="cinema-touch-target hidden max-w-[9rem] rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-semibold outline-none vs-border"
                 data-book-source-id={book.id}
                 data-testid="ui-action-book-cinema-scope"
                 onChange={(event) => {
@@ -1717,7 +1811,6 @@ export function BookCinemaOverlay({
                     handleScopeChange(nextScope);
                   }
                 }}
-                title={`Scope: ${bookScopeLabel(normalizedScope)}`}
                 value={normalizedScopeKey}
               >
                 {scopeOptions.map((option) => (
@@ -1726,59 +1819,38 @@ export function BookCinemaOverlay({
                   </option>
                 ))}
               </select>
-            </label>
-            <select
-              aria-label="Book scope"
-              className="cinema-touch-target hidden max-w-[9rem] rounded-md border bg-[var(--vs-surface)] px-2 text-sm font-semibold outline-none vs-border"
-              data-book-source-id={book.id}
-              data-testid="ui-action-book-cinema-scope"
-              onChange={(event) => {
-                const nextScope = scopeOptions.find(
-                  (option) => option.key === event.currentTarget.value,
-                )?.scope;
-                if (nextScope) {
-                  handleScopeChange(nextScope);
-                }
-              }}
-              value={normalizedScopeKey}
-            >
-              {scopeOptions.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <button
-              className="cinema-touch-target hidden h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
-              onClick={() => {
-                setSettingsOpen((current) => !current);
-              }}
-              type="button"
-            >
-              <SettingsIcon />
-              Settings
-            </button>
-            <button
-              className="cinema-touch-target inline-flex h-11 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
-              onClick={onClose}
-              type="button"
-            >
-              <ExitIcon />
-              <span className="hidden sm:inline">Exit</span>
-            </button>
-          </div>
-          {settingsOpen ? (
-            <ReaderSettingsPopover
-              accessibilitySettings={normalizedAccessibility}
-              themeName={themeName}
-              onAccessibilitySettingsChange={onAccessibilitySettingsChange}
-              onThemeChange={onThemeChange}
-            />
-          ) : null}
-        </header>
+              <button
+                className="cinema-touch-target hidden h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
+                onClick={() => {
+                  setSettingsOpen((current) => !current);
+                }}
+                type="button"
+              >
+                <SettingsIcon />
+                Settings
+              </button>
+              <button
+                className="cinema-touch-target inline-flex h-11 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:gap-2 sm:px-3"
+                onClick={onClose}
+                type="button"
+              >
+                <ExitIcon />
+                <span className="hidden sm:inline">Exit</span>
+              </button>
+            </div>
+            {settingsOpen ? (
+              <ReaderSettingsPopover
+                accessibilitySettings={normalizedAccessibility}
+                themeName={themeName}
+                onAccessibilitySettingsChange={onAccessibilitySettingsChange}
+                onThemeChange={onThemeChange}
+              />
+            ) : null}
+          </header>
+        )
       }
       inspector={
-        cinemaFocus.layoutState.railVisible ? (
+        !cinemaTheatre.active && cinemaFocus.layoutState.railVisible ? (
           <CinemaInspectorDock
             activePanelId={cinemaFocus.activePanelId}
             mode={cinemaFocus.mode}
@@ -1792,38 +1864,40 @@ export function BookCinemaOverlay({
       }
       liveAnnouncement={liveAnnouncement}
       mobileSheet={
-        <BookCinemaMobileSheet
-          activePassage={activePassage}
-          activeScope={normalizedScope}
-          book={book}
-          bookSources={bookSources}
-          hasPlayableAudio={hasPlayableAudio}
-          importError={importError}
-          isImporting={isImporting}
-          mobilePanel={mobilePanel}
-          displayControls={
-            <ReaderAccessibilityControls
-              settings={normalizedAccessibility}
-              variant="panel"
-              onChange={onAccessibilitySettingsChange}
-            />
-          }
-          bookmarkItems={bookmarkItems}
-          outlineItems={outlineItems}
-          progress={progress}
-          recentItems={recentItems}
-          scopeContent={scopeContent}
-          canBookmark={canBookmark}
-          onAddBookmark={onBookmark}
-          onBookmarkNavigate={handleBookmarkNavigate}
-          onImport={onImport}
-          onInspectStructure={onInspectStructure}
-          onMobilePanelChange={setMobilePanel}
-          onSelectBook={onSelectBook}
-          onResumeProgress={onResumeProgress}
-          onRecentNavigate={handleRecentNavigate}
-          onOutlineNavigate={handleWayfindingOutlineNavigate}
-        />
+        cinemaTheatre.active ? undefined : (
+          <BookCinemaMobileSheet
+            activePassage={activePassage}
+            activeScope={normalizedScope}
+            book={book}
+            bookSources={bookSources}
+            hasPlayableAudio={hasPlayableAudio}
+            importError={importError}
+            isImporting={isImporting}
+            mobilePanel={mobilePanel}
+            displayControls={
+              <ReaderAccessibilityControls
+                settings={normalizedAccessibility}
+                variant="panel"
+                onChange={onAccessibilitySettingsChange}
+              />
+            }
+            bookmarkItems={bookmarkItems}
+            outlineItems={outlineItems}
+            progress={progress}
+            recentItems={recentItems}
+            scopeContent={scopeContent}
+            canBookmark={canBookmark}
+            onAddBookmark={onBookmark}
+            onBookmarkNavigate={handleBookmarkNavigate}
+            onImport={onImport}
+            onInspectStructure={onInspectStructure}
+            onMobilePanelChange={setMobilePanel}
+            onSelectBook={onSelectBook}
+            onResumeProgress={onResumeProgress}
+            onRecentNavigate={handleRecentNavigate}
+            onOutlineNavigate={handleWayfindingOutlineNavigate}
+          />
+        )
       }
       readerAttributes={{
         ...readerDataAttributes(normalizedAccessibility),
@@ -1831,6 +1905,7 @@ export function BookCinemaOverlay({
       }}
       rootRef={dialogRef}
       surfaceKind={book.kind === "markdown" ? "document" : "book"}
+      theatreActive={cinemaTheatre.active}
       themeName={themeName}
     />
   );

@@ -1316,6 +1316,12 @@ async function runResponsiveBookCinemaSurface(
         viewport,
       }),
     );
+    screenshots.push(
+      await captureResponsiveCinemaTheatre(page, {
+        surface,
+        viewport,
+      }),
+    );
     if (viewport.width < 1024) {
       screenshots.push(
         await exerciseResponsiveCinemaMobileSheet(page, {
@@ -1361,6 +1367,12 @@ async function runResponsivePreparedCinemaSurface(
         viewport,
       }),
     );
+    screenshots.push(
+      await captureResponsiveCinemaTheatre(page, {
+        surface,
+        viewport,
+      }),
+    );
     if (viewport.width < 1024) {
       screenshots.push(
         await exerciseResponsiveCinemaMobileSheet(page, {
@@ -1394,6 +1406,38 @@ async function captureResponsiveCinemaSurface(page, { surface, viewport }) {
   await assertCinemaResponsiveContract(page, `${surface}:${viewport.name}`);
   const screenshot = path.join(screenshotsDir, `responsive-${surface}-${viewport.name}.png`);
   await page.screenshot({ fullPage: false, path: screenshot });
+  return screenshot;
+}
+
+async function captureResponsiveCinemaTheatre(page, { surface, viewport }) {
+  await runCommandPaletteAction(page, "open cinema theatre", /Open Cinema Theatre/);
+  await cinemaOverlay(page).getByTestId("cinema-theatre-chrome").waitFor({ state: "visible" });
+  await assertCinemaReadyForScreenshot(page, `${surface}:${viewport.name}:theatre`);
+  await assertCinemaTheatreContract(page, `${surface}:${viewport.name}:theatre`);
+  const screenshot = path.join(
+    screenshotsDir,
+    `responsive-${surface}-${viewport.name}-theatre.png`,
+  );
+  await page.screenshot({ fullPage: false, path: screenshot });
+  await runCommandPaletteAction(page, "toggle theatre controls", /Toggle Theatre controls/);
+  await page.getByTestId("cinema-theatre-transport").waitFor({ state: "visible" });
+  await page.waitForFunction(
+    (selector) =>
+      document
+        .querySelector(selector)
+        ?.querySelector("[data-cinema-theatre-transport]")
+        ?.getAttribute("data-cinema-theatre-controls") === "hidden",
+    cinemaOverlaySelector,
+    { timeout: 5_000 },
+  );
+  await runCommandPaletteAction(page, "exit theatre", /Exit Theatre/);
+  await page.waitForFunction(
+    (selector) =>
+      document.querySelector(selector)?.getAttribute("data-cinema-theatre-mode") === "false",
+    cinemaOverlaySelector,
+    { timeout: 5_000 },
+  );
+  await assertCinemaFocusModeSelected(page, "Read");
   return screenshot;
 }
 
@@ -1439,6 +1483,46 @@ async function assertCinemaResponsiveContract(page, label) {
   await assertNoHorizontalOverflow(page, label);
   await assertCinemaTouchTargets(page, label);
   await assertCinemaCanvasBudget(page, label);
+}
+
+async function assertCinemaTheatreContract(page, label) {
+  await assertCinemaActiveTargetVisible(page);
+  await assertNoHorizontalOverflow(page, label);
+  await assertCinemaTouchTargets(page, label);
+  await assertCinemaCanvasBudget(page, label);
+  const result = await page.evaluate((selector) => {
+    const overlay = document.querySelector(selector);
+    if (!(overlay instanceof HTMLElement)) {
+      return { ok: false, reason: "missing overlay" };
+    }
+    const chrome = overlay.querySelector("[data-testid='cinema-theatre-chrome']");
+    const transport = overlay.querySelector("[data-testid='cinema-theatre-transport']");
+    const inspector = overlay.querySelector("[data-cinema-inspector-dock]");
+    const main = overlay.querySelector("main");
+    const canvas = main?.firstElementChild;
+    if (
+      !(chrome instanceof HTMLElement) ||
+      !(transport instanceof HTMLElement) ||
+      !(main instanceof HTMLElement) ||
+      !(canvas instanceof HTMLElement)
+    ) {
+      return { ok: false, reason: "missing theatre chrome, transport, main, or canvas" };
+    }
+    const mainRect = main.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    return {
+      canvasHeightRatio: canvasRect.height / window.innerHeight,
+      canvasWidthRatio: canvasRect.width / Math.max(1, mainRect.width),
+      hasInspector: inspector instanceof HTMLElement,
+      mode: overlay.getAttribute("data-cinema-theatre-mode"),
+      ok:
+        overlay.getAttribute("data-cinema-theatre-mode") === "true" &&
+        !(inspector instanceof HTMLElement) &&
+        canvasRect.height / window.innerHeight >= 0.43 &&
+        canvasRect.width / Math.max(1, mainRect.width) >= 0.9,
+    };
+  }, cinemaOverlaySelector);
+  assert(result.ok, `${label} violates Cinema Theatre contract: ${JSON.stringify(result)}`);
 }
 
 async function assertCinemaCanvasBudget(page, label) {

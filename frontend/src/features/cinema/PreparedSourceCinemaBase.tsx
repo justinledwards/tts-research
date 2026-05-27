@@ -110,6 +110,11 @@ import {
   returnFocusToCinemaReaderCanvas,
 } from "./CinemaMobileSheet";
 import { CinemaShell } from "./CinemaShell";
+import {
+  CinemaTheatreChrome,
+  CinemaTheatreTransport,
+  useCinemaTheatreController,
+} from "./CinemaTheatre";
 import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 import {
   type CinemaRendererLifecycleState,
@@ -226,6 +231,9 @@ export function PreparedSourceCinemaOverlay({
   surfaceKind,
   sourcePolicySaving,
   sources,
+  theatreControlsSignal,
+  theatreExitSignal,
+  theatreOpenSignal,
   themeName,
   uiMemoryFocusState,
   uiMemoryResetSignal,
@@ -272,6 +280,9 @@ export function PreparedSourceCinemaOverlay({
   surfaceKind?: PreparedSourceCinemaKind;
   sourcePolicySaving: boolean;
   sources: PreparedSource[];
+  theatreControlsSignal: number;
+  theatreExitSignal: number;
+  theatreOpenSignal: number;
   themeName: ThemeName;
   uiMemoryFocusState: UiMemoryCinemaState;
   uiMemoryResetSignal: number;
@@ -832,6 +843,10 @@ export function PreparedSourceCinemaOverlay({
     onStateChange: onUiMemoryFocusStateChange,
     resetSignal: uiMemoryResetSignal,
   });
+  const cinemaTheatre = useCinemaTheatreController(dialogRef);
+  const theatreOpenSignalRef = useRef(theatreOpenSignal);
+  const theatreExitSignalRef = useRef(theatreExitSignal);
+  const theatreControlsSignalRef = useRef(theatreControlsSignal);
   const websiteReadModeCalm = isWebsiteCinema && cinemaFocus.mode === "read";
   const hasWebsiteQuality = websiteQuality !== null;
   let websiteNeedsExtractionAttention = false;
@@ -864,6 +879,10 @@ export function PreparedSourceCinemaOverlay({
     onClose: () => {
       if (settingsOpen) {
         setSettingsOpen(false);
+        return;
+      }
+      if (cinemaTheatre.active) {
+        cinemaTheatre.exit();
         return;
       }
       onClose();
@@ -906,18 +925,47 @@ export function PreparedSourceCinemaOverlay({
     }
   };
 
-  const handleCompactTransport = () => {
+  const handleCompactTransport = useCallback(() => {
     cinemaFocus.setMode("read");
     cinemaFocus.setPinnedPanelId(null);
     setMobilePanel(null);
-  };
+  }, [cinemaFocus]);
 
-  const handleTheatreMode = () => {
+  const handleTheatreMode = useCallback(() => {
     handleCompactTransport();
-    if (!document.fullscreenElement && dialogRef.current?.requestFullscreen) {
-      void dialogRef.current.requestFullscreen().catch(() => null);
+    setSettingsOpen(false);
+    cinemaTheatre.open();
+  }, [cinemaTheatre, handleCompactTransport]);
+
+  useEffect(() => {
+    if (theatreOpenSignalRef.current === theatreOpenSignal) {
+      return;
     }
-  };
+    theatreOpenSignalRef.current = theatreOpenSignal;
+    if (theatreOpenSignal > 0) {
+      handleTheatreMode();
+    }
+  }, [handleTheatreMode, theatreOpenSignal]);
+
+  useEffect(() => {
+    if (theatreExitSignalRef.current === theatreExitSignal) {
+      return;
+    }
+    theatreExitSignalRef.current = theatreExitSignal;
+    if (theatreExitSignal > 0) {
+      cinemaTheatre.exit();
+    }
+  }, [cinemaTheatre, theatreExitSignal]);
+
+  useEffect(() => {
+    if (theatreControlsSignalRef.current === theatreControlsSignal) {
+      return;
+    }
+    theatreControlsSignalRef.current = theatreControlsSignal;
+    if (theatreControlsSignal > 0) {
+      cinemaTheatre.toggleControls();
+    }
+  }, [cinemaTheatre, theatreControlsSignal]);
 
   return (
     <CinemaShell
@@ -928,9 +976,9 @@ export function PreparedSourceCinemaOverlay({
           activeWordIndex={effectiveActiveWordIndex}
           autoFollow={autoFollow}
           accessibilitySettings={normalizedAccessibility}
-          canvasFirst={cinemaFocus.layoutState.canvasFirst}
+          canvasFirst={cinemaTheatre.active || cinemaFocus.layoutState.canvasFirst}
           highlightStyle={effectiveReadAlong.highlightStyle}
-          isFullscreen={isFullscreen}
+          isFullscreen={isFullscreen || cinemaTheatre.fullscreenActive}
           readAlongVisualMode={readAlongVisualMode}
           rendererLifecycle={rendererLifecycle}
           rendererRetryKey={rendererRetryKey}
@@ -944,7 +992,7 @@ export function PreparedSourceCinemaOverlay({
           onRendererRetry={handleRendererRetry}
         />
       }
-      canvasFirst={cinemaFocus.layoutState.canvasFirst}
+      canvasFirst={cinemaTheatre.active || cinemaFocus.layoutState.canvasFirst}
       footer={
         <PreparedSourceCinemaTransport
           accessibilitySettings={normalizedAccessibility}
@@ -959,6 +1007,8 @@ export function PreparedSourceCinemaOverlay({
           progress={progress}
           rendererLifecycle={rendererLifecycle}
           source={source}
+          theatreControlsVisible={cinemaTheatre.controlsVisible}
+          variant={cinemaTheatre.active ? "theatre" : "normal"}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           onBookmark={onBookmark}
           onCreateAudio={onCreateAudio}
@@ -972,117 +1022,133 @@ export function PreparedSourceCinemaOverlay({
       }
       focusMode={cinemaFocus.mode}
       header={
-        <header
-          className="relative flex min-h-[4rem] flex-wrap items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6"
-          data-cinema-header=""
-          data-website-read-mode-calm={websiteReadModeCalm ? "true" : undefined}
-        >
-          <HeaderContextSummary
-            className="min-w-0 flex-1 basis-[18rem] sm:min-w-[16rem] sm:basis-[26rem] lg:max-w-[min(36rem,42vw)]"
-            density="compact"
-            icon={
-              <span className="grid h-9 w-9 place-items-center rounded-md border border-orange-200 text-orange-600 sm:border-zinc-900 sm:bg-zinc-950 sm:text-white">
-                <CinemaFilmIcon />
-              </span>
-            }
-            id="prepared-source-cinema-title"
-            inlineSummary={!websiteReadModeCalm}
-            metadata={[
-              { label: "Reader", value: headerReadiness.readerLabel },
-              { label: "Policy", value: sourcePolicySummary.compactLabel },
-              { label: "Voice", value: job?.voice ?? "Default narrative" },
-            ]}
-            scopeTitle="Full source"
-            sourceLifecycle={sourceLifecycle}
-            sourceLifecycleDescriptorOverride={{
-              detail: headerReadiness.detail,
-              label: headerReadiness.label,
-              state: sourceLifecycle.canonicalState,
-              tone: headerReadiness.tone,
-            }}
-            sourceLifecycleGeneratedAudioLabel={headerReadiness.audioLabel}
-            sourceTitle={title}
-            stateLabel={headerReadiness.label}
+        cinemaTheatre.active ? (
+          <CinemaTheatreChrome
+            activePassage={activeText}
+            controlsVisible={cinemaTheatre.controlsVisible}
+            fullscreenActive={cinemaTheatre.fullscreenActive}
+            fullscreenAvailability={cinemaTheatre.fullscreenAvailability}
+            highContrast={normalizedAccessibility.highContrast}
+            scopeLabel="Full source"
+            sourceLabel={title}
             surfaceName={cinemaLabel}
-            variant="bar"
+            onExit={cinemaTheatre.exit}
+            onRequestFullscreen={cinemaTheatre.requestFullscreen}
+            onToggleControls={cinemaTheatre.toggleControls}
           />
-          {showWebsiteExtractionSummary ? <WebsiteExtractionSummary source={source} /> : null}
-          <div className="order-last flex min-w-0 flex-1 basis-full flex-wrap items-center gap-3 lg:flex xl:order-none xl:basis-auto xl:flex-nowrap">
-            {websiteReadModeCalm ? null : (
-              <PreparedSourceCinemaHeaderSourceSelect
-                source={source}
-                sources={sources}
-                onSelectSource={onSelectSource}
-              />
-            )}
-            <div className="hidden min-w-[17rem] shrink-0 lg:block">
-              <CinemaFocusModeToolbar
-                activePanelId={cinemaFocus.activePanelId}
-                mode={cinemaFocus.mode}
-                onAdvancedAction={(action) => {
-                  cinemaFocus.setMode(action.mode);
-                  cinemaFocus.setActivePanelId(action.panelId);
-                }}
-                onCommandPalette={onCommandPaletteOpen}
-                onCompactTransport={handleCompactTransport}
-                onHelpGuide={onHelpOpen}
-                onKeyboardShortcuts={onShortcutCheatSheetOpen}
-                onModeChange={cinemaFocus.setMode}
-                onReaderSettings={() => {
-                  setSettingsOpen(true);
-                }}
-                onTheatreMode={handleTheatreMode}
-              />
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {showWebsiteReviewAction ? (
-              <Button
-                className="hidden gap-2 sm:inline-flex"
-                onClick={handleReviewWebsiteExtraction}
-                size="md"
-                variant="secondary"
-              >
-                Review article
-              </Button>
-            ) : null}
-            {websiteReadModeCalm ? null : (
-              <Button
-                className="hidden gap-2 sm:inline-flex"
-                onClick={() => {
-                  setSettingsOpen((current) => !current);
-                }}
-                size="md"
-                variant="secondary"
-              >
-                <SettingsIcon />
-                Settings
-              </Button>
-            )}
-            <Button
-              className="gap-1.5 px-2.5 sm:gap-2 sm:px-3"
-              onClick={onClose}
-              size="md"
-              variant="secondary"
-            >
-              <ExitIcon />
-              Exit
-            </Button>
-          </div>
-          {settingsOpen ? (
-            <ReaderSettingsPopover
-              accessibilitySettings={normalizedAccessibility}
-              autoFollow={autoFollow}
-              themeName={themeName}
-              onAccessibilitySettingsChange={onAccessibilitySettingsChange}
-              onAutoFollowChange={setAutoFollow}
-              onThemeChange={onThemeChange}
+        ) : (
+          <header
+            className="relative flex min-h-[4rem] flex-wrap items-center justify-between gap-3 border-b bg-[var(--vs-raised)] px-4 py-2.5 vs-border sm:px-6"
+            data-cinema-header=""
+            data-website-read-mode-calm={websiteReadModeCalm ? "true" : undefined}
+          >
+            <HeaderContextSummary
+              className="min-w-0 flex-1 basis-[18rem] sm:min-w-[16rem] sm:basis-[26rem] lg:max-w-[min(36rem,42vw)]"
+              density="compact"
+              icon={
+                <span className="grid h-9 w-9 place-items-center rounded-md border border-orange-200 text-orange-600 sm:border-zinc-900 sm:bg-zinc-950 sm:text-white">
+                  <CinemaFilmIcon />
+                </span>
+              }
+              id="prepared-source-cinema-title"
+              inlineSummary={!websiteReadModeCalm}
+              metadata={[
+                { label: "Reader", value: headerReadiness.readerLabel },
+                { label: "Policy", value: sourcePolicySummary.compactLabel },
+                { label: "Voice", value: job?.voice ?? "Default narrative" },
+              ]}
+              scopeTitle="Full source"
+              sourceLifecycle={sourceLifecycle}
+              sourceLifecycleDescriptorOverride={{
+                detail: headerReadiness.detail,
+                label: headerReadiness.label,
+                state: sourceLifecycle.canonicalState,
+                tone: headerReadiness.tone,
+              }}
+              sourceLifecycleGeneratedAudioLabel={headerReadiness.audioLabel}
+              sourceTitle={title}
+              stateLabel={headerReadiness.label}
+              surfaceName={cinemaLabel}
+              variant="bar"
             />
-          ) : null}
-        </header>
+            {showWebsiteExtractionSummary ? <WebsiteExtractionSummary source={source} /> : null}
+            <div className="order-last flex min-w-0 flex-1 basis-full flex-wrap items-center gap-3 lg:flex xl:order-none xl:basis-auto xl:flex-nowrap">
+              {websiteReadModeCalm ? null : (
+                <PreparedSourceCinemaHeaderSourceSelect
+                  source={source}
+                  sources={sources}
+                  onSelectSource={onSelectSource}
+                />
+              )}
+              <div className="hidden min-w-[17rem] shrink-0 lg:block">
+                <CinemaFocusModeToolbar
+                  activePanelId={cinemaFocus.activePanelId}
+                  mode={cinemaFocus.mode}
+                  onAdvancedAction={(action) => {
+                    cinemaFocus.setMode(action.mode);
+                    cinemaFocus.setActivePanelId(action.panelId);
+                  }}
+                  onCommandPalette={onCommandPaletteOpen}
+                  onCompactTransport={handleCompactTransport}
+                  onHelpGuide={onHelpOpen}
+                  onKeyboardShortcuts={onShortcutCheatSheetOpen}
+                  onModeChange={cinemaFocus.setMode}
+                  onReaderSettings={() => {
+                    setSettingsOpen(true);
+                  }}
+                  onTheatreMode={handleTheatreMode}
+                />
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {showWebsiteReviewAction ? (
+                <Button
+                  className="hidden gap-2 sm:inline-flex"
+                  onClick={handleReviewWebsiteExtraction}
+                  size="md"
+                  variant="secondary"
+                >
+                  Review article
+                </Button>
+              ) : null}
+              {websiteReadModeCalm ? null : (
+                <Button
+                  className="hidden gap-2 sm:inline-flex"
+                  onClick={() => {
+                    setSettingsOpen((current) => !current);
+                  }}
+                  size="md"
+                  variant="secondary"
+                >
+                  <SettingsIcon />
+                  Settings
+                </Button>
+              )}
+              <Button
+                className="gap-1.5 px-2.5 sm:gap-2 sm:px-3"
+                onClick={onClose}
+                size="md"
+                variant="secondary"
+              >
+                <ExitIcon />
+                Exit
+              </Button>
+            </div>
+            {settingsOpen ? (
+              <ReaderSettingsPopover
+                accessibilitySettings={normalizedAccessibility}
+                autoFollow={autoFollow}
+                themeName={themeName}
+                onAccessibilitySettingsChange={onAccessibilitySettingsChange}
+                onAutoFollowChange={setAutoFollow}
+                onThemeChange={onThemeChange}
+              />
+            ) : null}
+          </header>
+        )
       }
       inspector={
-        cinemaFocus.layoutState.railVisible ? (
+        !cinemaTheatre.active && cinemaFocus.layoutState.railVisible ? (
           <CinemaInspectorDock
             activePanelId={cinemaFocus.activePanelId}
             mode={cinemaFocus.mode}
@@ -1096,36 +1162,38 @@ export function PreparedSourceCinemaOverlay({
       }
       liveAnnouncement={liveAnnouncement}
       mobileSheet={
-        <PreparedSourceCinemaMobileSheet
-          activeBlock={displayBlock}
-          bookmarkItems={bookmarkItems}
-          canBookmark={canBookmark}
-          displayControls={
-            <ReaderAccessibilityControls
-              settings={normalizedAccessibility}
-              variant="panel"
-              onChange={onAccessibilitySettingsChange}
-            />
-          }
-          job={job}
-          mobilePanel={mobilePanel}
-          outlineItems={outlineItems}
-          progress={progress}
-          recentItems={recentItems}
-          source={source}
-          sources={sources}
-          importError={importError}
-          isImporting={isImporting}
-          onAddBookmark={onBookmark}
-          onBookmarkNavigate={handleBookmarkNavigate}
-          onInspectStructure={onInspectStructure}
-          onMobilePanelChange={setMobilePanel}
-          onOutlineNavigate={handleWayfindingOutlineNavigate}
-          onPrepareFile={onPrepareFile}
-          onRecentNavigate={handleRecentNavigate}
-          onSelectSource={onSelectSource}
-          onResumeProgress={onResumeProgress}
-        />
+        cinemaTheatre.active ? undefined : (
+          <PreparedSourceCinemaMobileSheet
+            activeBlock={displayBlock}
+            bookmarkItems={bookmarkItems}
+            canBookmark={canBookmark}
+            displayControls={
+              <ReaderAccessibilityControls
+                settings={normalizedAccessibility}
+                variant="panel"
+                onChange={onAccessibilitySettingsChange}
+              />
+            }
+            job={job}
+            mobilePanel={mobilePanel}
+            outlineItems={outlineItems}
+            progress={progress}
+            recentItems={recentItems}
+            source={source}
+            sources={sources}
+            importError={importError}
+            isImporting={isImporting}
+            onAddBookmark={onBookmark}
+            onBookmarkNavigate={handleBookmarkNavigate}
+            onInspectStructure={onInspectStructure}
+            onMobilePanelChange={setMobilePanel}
+            onOutlineNavigate={handleWayfindingOutlineNavigate}
+            onPrepareFile={onPrepareFile}
+            onRecentNavigate={handleRecentNavigate}
+            onSelectSource={onSelectSource}
+            onResumeProgress={onResumeProgress}
+          />
+        )
       }
       readerAttributes={{
         ...readerDataAttributes(normalizedAccessibility),
@@ -1134,6 +1202,7 @@ export function PreparedSourceCinemaOverlay({
       rootRef={dialogRef}
       rendererLifecycle={rendererLifecycle}
       surfaceKind={isWebsiteCinema ? "website" : "document"}
+      theatreActive={cinemaTheatre.active}
       themeName={themeName}
     />
   );
@@ -1907,6 +1976,8 @@ function PreparedSourceCinemaTransport({
   progress,
   rendererLifecycle,
   source,
+  theatreControlsVisible = true,
+  variant = "normal",
   onAccessibilitySettingsChange,
   onBookmark,
   onCreateAudio,
@@ -1927,6 +1998,8 @@ function PreparedSourceCinemaTransport({
   progress: PlaybackProgress | null;
   rendererLifecycle: CinemaRendererLifecycleState;
   source: PreparedSource;
+  theatreControlsVisible?: boolean;
+  variant?: "normal" | "theatre";
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onBookmark: () => void;
   onCreateAudio: (source: PreparedSource) => void;
@@ -2066,6 +2139,12 @@ function PreparedSourceCinemaTransport({
       title: preparedSourceTransportTitle(playbackState, rendererLifecycle),
     },
   };
+
+  if (variant === "theatre") {
+    return (
+      <CinemaTheatreTransport controlsVisible={theatreControlsVisible} model={transportModel} />
+    );
+  }
 
   return <CinemaTransportBar model={transportModel} />;
 }

@@ -2850,6 +2850,9 @@ export function App() {
   const [sourceMode, setSourceMode] = useState<SourceMode>("text");
   const [teleprompterOpenSignal, setTeleprompterOpenSignal] = useState(0);
   const [telepromptTheatreOpenSignal, setTelepromptTheatreOpenSignal] = useState(0);
+  const [cinemaTheatreOpenSignal, setCinemaTheatreOpenSignal] = useState(0);
+  const [cinemaTheatreExitSignal, setCinemaTheatreExitSignal] = useState(0);
+  const [cinemaTheatreControlsSignal, setCinemaTheatreControlsSignal] = useState(0);
   const workspaceRails = workspaceLayoutRails(workspaceContext.layoutMode);
   const activityFooterMode: ActivityFooterMode = workspaceRails.activityFooterMode;
   const leftRailMode = workspaceRails.leftRailMode;
@@ -6756,6 +6759,48 @@ export function App() {
     section: "Cinema",
     title: "Open current Cinema",
   };
+  const cinemaTheatreDisabledReason = activeCinemaSurfaceKind
+    ? undefined
+    : "Open Book, Document, or Website Cinema first.";
+  const openCinemaTheatreCommand: CommandEntry = {
+    category: "Playback",
+    detail: "Enter the reader-first theatre layout for the active Cinema surface.",
+    disabled: !activeCinemaSurfaceKind,
+    disabledReason: cinemaTheatreDisabledReason,
+    id: "cinema:theatre:open",
+    keywords: ["cinema", "theatre", "immersive", "fullscreen", "reader"],
+    perform: () => {
+      setCinemaTheatreOpenSignal((current) => current + 1);
+    },
+    section: "Cinema",
+    title: "Open Cinema Theatre",
+  };
+  const exitTheatreCommand: CommandEntry = {
+    category: "Playback",
+    detail: "Leave Theatre and return to the normal Cinema layout.",
+    disabled: !activeCinemaSurfaceKind,
+    disabledReason: cinemaTheatreDisabledReason,
+    id: "cinema:theatre:exit",
+    keywords: ["cinema", "theatre", "exit", "close", "reader"],
+    perform: () => {
+      setCinemaTheatreExitSignal((current) => current + 1);
+    },
+    section: "Cinema",
+    title: "Exit Theatre",
+  };
+  const toggleTheatreControlsCommand: CommandEntry = {
+    category: "Playback",
+    detail: "Show or hide the compact Theatre controls.",
+    disabled: !activeCinemaSurfaceKind,
+    disabledReason: cinemaTheatreDisabledReason,
+    id: "cinema:theatre:toggle-controls",
+    keywords: ["cinema", "theatre", "controls", "hide", "show"],
+    perform: () => {
+      setCinemaTheatreControlsSignal((current) => current + 1);
+    },
+    section: "Cinema",
+    title: "Toggle Theatre controls",
+  };
   let bookmarkDisabledReason: string | undefined;
   if (!activeCinemaSurfaceKind) {
     bookmarkDisabledReason = "Open a Cinema surface first.";
@@ -6810,6 +6855,9 @@ export function App() {
     ...bookSourceCommandEntries,
     ...preparedSourceCommandEntries,
     openCurrentCinemaCommand,
+    openCinemaTheatreCommand,
+    exitTheatreCommand,
+    toggleTheatreControlsCommand,
     bookmarkCurrentCommand,
     ...bookmarkCommandEntries,
     ...recentCommandEntries,
@@ -7325,6 +7373,9 @@ export function App() {
             resumeFallbackNotice={resumeFallbackNotice}
             readAlongPreferences={readAlongPreferences}
             sourcePolicySaving={sourcePolicySavingKey === `book:${selectedBookSource.id}`}
+            theatreControlsSignal={cinemaTheatreControlsSignal}
+            theatreExitSignal={cinemaTheatreExitSignal}
+            theatreOpenSignal={cinemaTheatreOpenSignal}
             uiMemoryFocusState={resolveLiveCinemaFocusState("book")}
             uiMemoryResetSignal={uiMemoryResetSignal}
             accessibilitySettings={readerAccessibilitySettings}
@@ -7398,6 +7449,9 @@ export function App() {
               sourcePolicySavingKey === `prepared:${preparedSourceCinemaSource.id}`
             }
             sources={preparedSources}
+            theatreControlsSignal={cinemaTheatreControlsSignal}
+            theatreExitSignal={cinemaTheatreExitSignal}
+            theatreOpenSignal={cinemaTheatreOpenSignal}
             themeName={preparedSourceCinemaThemeName}
             uiMemoryFocusState={resolveLiveCinemaFocusState(preparedSourceCinemaSurfaceKind)}
             uiMemoryResetSignal={uiMemoryResetSignal}
