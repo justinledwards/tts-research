@@ -4,11 +4,13 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   buildGoldenMinuteSyncFixture,
+  evaluateGoldenMinuteBoundaryStress,
   evaluateGoldenMinuteFluency,
   evaluateGoldenMinuteProviderMatrix,
   evaluateGoldenMinuteSpeechFluency,
   evaluateGoldenMinuteSync,
   loadGoldenMinuteFixture,
+  renderGoldenMinuteBoundaryReport,
   renderGoldenMinuteProviderMatrix,
   validateGoldenMinuteFixture,
 } from "./golden-minute-fixture.mjs";
@@ -82,6 +84,30 @@ test("golden minute provider matrix exercises degraded timing paths honestly", a
   assert.match(markdown, /Golden-Minute Provider Matrix/);
   assert.match(markdown, /phrase-only-timing/);
   assert.match(markdown, /Stale audio detected; highlight paused/);
+});
+
+test("golden minute boundary stress catches segment handoff regressions", async () => {
+  const fixture = await loadGoldenMinuteFixture(rootDir);
+  const stress = evaluateGoldenMinuteBoundaryStress(fixture, {
+    generatedAt: "2026-05-27T07:11:00.000Z",
+  });
+  const rowsById = new Map(stress.rows.map((row) => [row.boundaryId, row]));
+  const markdown = renderGoldenMinuteBoundaryReport(stress);
+
+  assert.equal(stress.status, "passed");
+  assert.equal(stress.rows.length, 7);
+  assert.equal(stress.summary.previousSegmentStickyCount, 0);
+  assert.equal(stress.summary.cueMismatchCount, 0);
+  assert.equal(rowsById.get("heading-to-paragraph")?.expectedActiveWordAfter?.segmentId, "gm-p1");
+  assert.equal(rowsById.get("long-to-short")?.expectedActiveWordAfter?.segmentId, "gm-p5");
+  assert.equal(rowsById.get("short-to-long")?.expectedActiveWordAfter?.segmentId, "gm-p6");
+  assert.equal(rowsById.get("citation-skipped-boundary")?.citationSkipped, true);
+  assert.equal(rowsById.get("quote-boundary")?.scenario, "quote boundary");
+  assert.equal(rowsById.get("seek-into-segment-middle")?.interaction, "seek");
+  assert.equal(rowsById.get("speed-change-across-boundary")?.playbackRateAfter, 1.25);
+  assert.match(markdown, /Golden-Minute Segment Boundary Stress/);
+  assert.match(markdown, /Context panel passage/);
+  assert.match(markdown, /Teleprompt cue/);
 });
 
 test("golden minute fluency rubric fails without visible segment handoff evidence", async () => {

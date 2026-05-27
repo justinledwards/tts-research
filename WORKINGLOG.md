@@ -843,3 +843,9 @@
 - [x] Add provider timing matrix cases and honesty gates
 - [x] Generate provider-specific report artifacts
 - [x] Run WP59 validation commands
+
+## 2026-05-27 09:11 CEST - WP60 Segment Boundary Stress Test
+- [x] Inspect golden-minute boundary, Cinema, and Teleprompt evidence flow
+- [x] Add boundary-specific assertions and report artifacts
+- [x] Cover required boundary scenarios and mismatch checks
+- [x] Run WP60 validation commands

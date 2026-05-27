@@ -18,10 +18,12 @@ import {
 } from "./e2e-browser-qa-helpers.mjs";
 import {
   buildGoldenMinuteSyncFixture,
+  evaluateGoldenMinuteBoundaryStress,
   evaluateGoldenMinuteFluency,
   evaluateGoldenMinuteSpeechFluency,
   evaluateGoldenMinuteSync,
   loadGoldenMinuteFixture,
+  renderGoldenMinuteBoundaryReport,
   renderGoldenMinuteReport,
   renderSpeechFluencyReport,
   validateGoldenMinuteFixture,
@@ -109,16 +111,21 @@ async function main() {
       audioBuffer: browserResult.audioState.audioBuffer,
       job: browserResult.audioState.job,
     });
+    const generatedAt = new Date().toISOString();
+    const boundaryStress = evaluateGoldenMinuteBoundaryStress(fixture, { generatedAt });
+    const boundaryStressPath = path.join(outputDir, "segment-boundary-report.md");
     const failures = [
       ...fixtureValidation.failures,
       ...(sync.status === "passed" ? [] : ["Golden minute sync baseline failed."]),
       ...browserResult.failures,
       ...(fluency.status === "passed" ? [] : ["Golden minute fluency rubric failed."]),
       ...(speechFluency.status === "passed" ? [] : ["Golden minute speech fluency report failed."]),
+      ...(boundaryStress.status === "passed"
+        ? []
+        : ["Golden minute segment boundary stress failed."]),
     ];
     delete browserResult.audioState.audioBuffer;
     delete browserResult.audioState.job;
-    const generatedAt = new Date().toISOString();
     const visualTimeline = buildGoldenMinuteVisualTimeline({
       checkpoints: browserResult.segmentTransitionState.activeSamples,
       generatedAt,
@@ -138,6 +145,10 @@ async function main() {
         status: fixtureValidation.status,
         timingPath: path.relative(rootDir, fixture.paths.expectedTiming),
       },
+      boundaryStress: {
+        ...boundaryStress,
+        path: path.relative(rootDir, boundaryStressPath),
+      },
       fluency,
       generatedAt,
       schemaVersion: "golden-minute-e2e.v1",
@@ -149,6 +160,8 @@ async function main() {
         driftMedianMs: sync.metrics.medianWordDriftMs,
         driftP95Ms: sync.metrics.p95WordDriftMs,
         durationMs: fixtureValidation.coverage.durationMs,
+        boundaryStressStatus: boundaryStress.status,
+        boundaryCount: boundaryStress.summary.boundaryCount,
         speechFluencyStatus: speechFluency.status,
         readySegments: browserResult.audioState.readySegments,
         screenshots: screenshots.length,
@@ -190,6 +203,8 @@ async function main() {
     );
     await writeJson(path.join(outputDir, "visual-timeline.json"), visualTimeline);
     await writeJson(path.join(outputDir, "speech-fluency-report.json"), speechFluency);
+    await writeJson(path.join(outputDir, "segment-boundary-report.json"), boundaryStress);
+    await writeFile(boundaryStressPath, renderGoldenMinuteBoundaryReport(boundaryStress));
     await writeFile(
       path.join(outputDir, "visual-timeline.md"),
       renderGoldenMinuteVisualTimeline(visualTimeline),

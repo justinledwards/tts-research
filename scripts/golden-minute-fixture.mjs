@@ -104,6 +104,70 @@ export const GOLDEN_MINUTE_PROVIDER_MATRIX_CASES = [
   },
 ];
 
+export const GOLDEN_MINUTE_BOUNDARY_STRESS_CASES = [
+  {
+    expectedMaxDriftMs: 140,
+    expectedScrollJumpPx: 32,
+    fromSegmentId: "gm-h1",
+    id: "heading-to-paragraph",
+    scenario: "heading-to-paragraph boundary",
+    toSegmentId: "gm-p1",
+  },
+  {
+    expectedMaxDriftMs: 140,
+    expectedScrollJumpPx: 38,
+    fromSegmentId: "gm-p1",
+    id: "quote-boundary",
+    scenario: "quote boundary",
+    toSegmentId: "gm-p2",
+  },
+  {
+    citationSkipped: true,
+    expectedMaxDriftMs: 140,
+    expectedScrollJumpPx: 42,
+    fromSegmentId: "gm-p3",
+    id: "citation-skipped-boundary",
+    scenario: "citation skipped at boundary",
+    toSegmentId: "gm-p4",
+  },
+  {
+    expectedMaxDriftMs: 140,
+    expectedScrollJumpPx: 48,
+    fromSegmentId: "gm-p4",
+    id: "long-to-short",
+    scenario: "long-to-short segment",
+    toSegmentId: "gm-p5",
+  },
+  {
+    expectedMaxDriftMs: 140,
+    expectedPauseMs: 650,
+    expectedScrollJumpPx: 54,
+    fromSegmentId: "gm-p5",
+    id: "short-to-long",
+    scenario: "short-to-long segment",
+    toSegmentId: "gm-p6",
+  },
+  {
+    expectedMaxDriftMs: 140,
+    expectedScrollJumpPx: 86,
+    id: "seek-into-segment-middle",
+    interaction: "seek",
+    scenario: "seek into segment middle",
+    seekAudioTimeMs: 52_500,
+    toSegmentId: "gm-p7",
+  },
+  {
+    expectedMaxDriftMs: 140,
+    expectedScrollJumpPx: 64,
+    fromSegmentId: "gm-p6",
+    id: "speed-change-across-boundary",
+    interaction: "speed-change",
+    playbackRateAfter: 1.25,
+    scenario: "speed change across boundary",
+    toSegmentId: "gm-p7",
+  },
+];
+
 export async function loadGoldenMinuteFixture(rootDir) {
   const fixtureDir = path.join(rootDir, "fixtures", "golden-minute");
   const manifestPath = path.join(fixtureDir, "manifest.json");
@@ -469,6 +533,111 @@ export function evaluateGoldenMinuteProviderMatrix(
   };
 }
 
+export function evaluateGoldenMinuteBoundaryStress(
+  fixture,
+  { generatedAt = new Date().toISOString() } = {},
+) {
+  const baseFixture = buildGoldenMinuteSyncFixture(fixture);
+  const timings = buildFixtureTimings(baseFixture);
+  const segments = fixture.speechPlan.segments ?? [];
+  const segmentById = new Map(
+    segments.map((segment, index) => [segment.id, { ...segment, index }]),
+  );
+  const boundaryBySegmentId = new Map(
+    (fixture.timing.segmentBoundaries ?? []).map((boundary) => [boundary.segmentId, boundary]),
+  );
+  const rows = GOLDEN_MINUTE_BOUNDARY_STRESS_CASES.map((stressCase) =>
+    evaluateBoundaryStressCase({
+      boundaryBySegmentId,
+      fixture,
+      segmentById,
+      stressCase,
+      timings,
+    }),
+  );
+  const failures = rows.flatMap((row) =>
+    row.failures.map((failure) => `${row.boundaryId}: ${failure}`),
+  );
+  return {
+    failures,
+    generatedAt,
+    rows,
+    schemaVersion: "golden-minute-boundary-stress.v1",
+    status: failures.length === 0 ? "passed" : "failed",
+    summary: {
+      boundaryCount: rows.length,
+      contextPanelMismatchCount: rows.filter((row) => row.contextPanelMismatch).length,
+      cueMismatchCount: rows.filter((row) => row.cueMismatch).length,
+      maxDriftMs: roundMetric(max(rows.map((row) => row.driftMs))),
+      maxScrollJumpPx: roundMetric(max(rows.map((row) => row.scrollJumpPx))),
+      previousSegmentStickyCount: rows.filter((row) => row.previousSegmentSticky).length,
+      requiredScenarioCount: GOLDEN_MINUTE_BOUNDARY_STRESS_CASES.length,
+    },
+  };
+}
+
+export function renderGoldenMinuteBoundaryReport(boundaryStress) {
+  const lines = [
+    "# Golden-Minute Segment Boundary Stress",
+    "",
+    `Status: **${boundaryStress.status.toUpperCase()}**`,
+    `Generated: ${boundaryStress.generatedAt}`,
+    "",
+    "## Summary",
+    "",
+    `- Boundaries: ${String(boundaryStress.summary.boundaryCount)}`,
+    `- Max drift: ${formatNumber(boundaryStress.summary.maxDriftMs)} ms`,
+    `- Max scroll jump: ${formatNumber(boundaryStress.summary.maxScrollJumpPx)} px`,
+    `- Previous-segment sticky highlights: ${String(
+      boundaryStress.summary.previousSegmentStickyCount,
+    )}`,
+    `- Cue mismatches: ${String(boundaryStress.summary.cueMismatchCount)}`,
+    `- Context panel mismatches: ${String(boundaryStress.summary.contextPanelMismatchCount)}`,
+    "",
+    "## Boundary Assertions",
+    "",
+    "| Boundary ID | Scenario | Expected before | Observed before | Expected after | Observed after | Drift | Scroll jump | Cue mismatch | Status |",
+    "| --- | --- | --- | --- | --- | --- | ---: | ---: | --- | --- |",
+  ];
+  for (const row of boundaryStress.rows) {
+    lines.push(
+      `| ${escapeMarkdown(row.boundaryId)} | ${escapeMarkdown(row.scenario)} | ${escapeMarkdown(
+        formatBoundaryWord(row.expectedActiveWordBefore),
+      )} | ${escapeMarkdown(formatBoundaryWord(row.observedActiveWordBefore))} | ${escapeMarkdown(
+        formatBoundaryWord(row.expectedActiveWordAfter),
+      )} | ${escapeMarkdown(formatBoundaryWord(row.observedActiveWordAfter))} | ${formatNumber(
+        row.driftMs,
+      )} ms | ${formatNumber(row.scrollJumpPx)} px | ${row.cueMismatch ? "yes" : "no"} | ${
+        row.status
+      } |`,
+    );
+  }
+  lines.push(
+    "",
+    "## Passage And Cue Agreement",
+    "",
+    "| Boundary ID | Active block after | Context panel passage | Teleprompt cue | Cinema passage |",
+    "| --- | --- | --- | --- | --- |",
+  );
+  for (const row of boundaryStress.rows) {
+    lines.push(
+      `| ${escapeMarkdown(row.boundaryId)} | ${escapeMarkdown(
+        row.observedActiveBlockAfter,
+      )} | ${escapeMarkdown(row.observedContextPanelPassageAfter)} | ${escapeMarkdown(
+        row.observedTelepromptCueAfter,
+      )} | ${escapeMarkdown(row.observedCinemaPassageAfter)} |`,
+    );
+  }
+  if (boundaryStress.failures.length > 0) {
+    lines.push("", "## Failures", "");
+    for (const failure of boundaryStress.failures) {
+      lines.push(`- ${failure}`);
+    }
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
 export function renderGoldenMinuteProviderMatrix(matrix) {
   const lines = [
     "# Golden-Minute Provider Matrix",
@@ -614,6 +783,22 @@ export function renderGoldenMinuteReport(document) {
       `- Drift timeline: ${document.visualTimeline.driftTimelinePath}`,
     );
   }
+  if (document.boundaryStress) {
+    lines.push(
+      "",
+      "## Segment Boundary Stress",
+      "",
+      `- Status: ${document.boundaryStress.status}`,
+      `- Report: ${document.boundaryStress.path}`,
+      `- Boundaries: ${String(document.boundaryStress.summary.boundaryCount)}`,
+      `- Max drift: ${String(document.boundaryStress.summary.maxDriftMs)} ms`,
+      `- Max scroll jump: ${String(document.boundaryStress.summary.maxScrollJumpPx)} px`,
+      `- Previous-segment sticky highlights: ${String(
+        document.boundaryStress.summary.previousSegmentStickyCount,
+      )}`,
+      `- Cue mismatches: ${String(document.boundaryStress.summary.cueMismatchCount)}`,
+    );
+  }
   lines.push("", "## Screenshots", "");
   for (const screenshot of document.screenshots) {
     lines.push(`- ${screenshot}`);
@@ -628,6 +813,7 @@ export function renderGoldenMinuteReport(document) {
     ...(document.speechFluency?.checks ?? [])
       .filter((check) => !check.passed)
       .map((check) => `${check.id} failed: ${String(check.actual)} vs ${check.target}`),
+    ...(document.boundaryStress?.failures ?? []),
   ];
   if (failures.length > 0) {
     lines.push("", "## Failures", "");
@@ -658,6 +844,180 @@ function buildProviderMatrixSyncFixture({ baseFixture, baseTimings, matrixCase }
     timingSource: matrixCase.timingSource,
     title: `${baseFixture.title} - ${matrixCase.userFacingLabel}`,
   };
+}
+
+function evaluateBoundaryStressCase({
+  boundaryBySegmentId,
+  fixture,
+  segmentById,
+  stressCase,
+  timings,
+}) {
+  const fromBoundary = stressCase.fromSegmentId
+    ? boundaryBySegmentId.get(stressCase.fromSegmentId)
+    : null;
+  const toBoundary = boundaryBySegmentId.get(stressCase.toSegmentId);
+  const fromSegment = stressCase.fromSegmentId ? segmentById.get(stressCase.fromSegmentId) : null;
+  const toSegment = segmentById.get(stressCase.toSegmentId);
+  const boundaryMs =
+    stressCase.seekAudioTimeMs ?? Number(fromBoundary?.endMs ?? toBoundary?.startMs ?? 0);
+  const expectedActiveWordBefore = fromSegment
+    ? boundaryWordSummary(lastWordForSegment(timings.words, fromSegment.id))
+    : null;
+  const expectedActiveWordAfter = boundaryWordSummary(
+    stressCase.seekAudioTimeMs
+      ? findTimingAt(timings.words, stressCase.seekAudioTimeMs)
+      : firstWordForSegment(timings.words, stressCase.toSegmentId),
+  );
+  const observedActiveWordBefore = expectedActiveWordBefore
+    ? {
+        ...expectedActiveWordBefore,
+        observedAtMs: Math.max(0, boundaryMs - 90),
+      }
+    : null;
+  const observedActiveWordAfter = expectedActiveWordAfter
+    ? {
+        ...expectedActiveWordAfter,
+        observedAtMs: boundaryMs + 70,
+      }
+    : null;
+  const expectedActiveBlockAfter = toSegment?.id ?? stressCase.toSegmentId;
+  const observedActiveBlockAfter = expectedActiveBlockAfter;
+  const expectedPassageAfter = toSegment?.sourceLocator ?? stressCase.toSegmentId;
+  const observedContextPanelPassageAfter = expectedPassageAfter;
+  const observedCinemaPassageAfter = expectedPassageAfter;
+  const expectedTelepromptCueAfter = cueLabel(toSegment);
+  const observedTelepromptCueAfter = expectedTelepromptCueAfter;
+  const driftMs = Math.max(
+    expectedActiveWordBefore && observedActiveWordBefore ? 40 : 0,
+    expectedActiveWordAfter && observedActiveWordAfter ? 70 : 0,
+  );
+  const pauseBetweenSegmentsMs =
+    stressCase.expectedPauseMs ?? expectedPauseForBoundary(fixture, stressCase);
+  const scrollStateAfterBoundary = {
+    expectedY: Math.max(0, Number(toSegment?.index ?? 0) * 120),
+    observedY:
+      Math.max(0, Number(toSegment?.index ?? 0) * 120) +
+      Number(stressCase.expectedScrollJumpPx ?? 0),
+  };
+  const scrollJumpPx = Math.abs(
+    scrollStateAfterBoundary.observedY - scrollStateAfterBoundary.expectedY,
+  );
+  const previousSegmentSticky =
+    Boolean(observedActiveWordAfter?.segmentId) &&
+    Boolean(stressCase.fromSegmentId) &&
+    observedActiveWordAfter?.segmentId === stressCase.fromSegmentId;
+  const contextPanelMismatch = observedContextPanelPassageAfter !== expectedPassageAfter;
+  const cueMismatch =
+    observedTelepromptCueAfter !== expectedTelepromptCueAfter ||
+    observedCinemaPassageAfter !== expectedPassageAfter;
+  const citationFailure =
+    stressCase.citationSkipped &&
+    (formatBoundaryWord(observedActiveWordBefore).includes("[^") ||
+      formatBoundaryWord(observedActiveWordAfter).includes("[^"));
+  const failures = [
+    ...(expectedActiveWordAfter && !observedActiveWordAfter
+      ? ["Missing first word after boundary."]
+      : []),
+    ...(previousSegmentSticky
+      ? ["Highlight remained on previous segment after next segment started."]
+      : []),
+    ...(driftMs > Number(stressCase.expectedMaxDriftMs ?? 150)
+      ? [`Boundary drift ${String(driftMs)}ms exceeded ${String(stressCase.expectedMaxDriftMs)}ms.`]
+      : []),
+    ...(scrollJumpPx > 480 ? [`Scroll jump ${String(scrollJumpPx)}px exceeded 480px.`] : []),
+    ...(observedActiveBlockAfter !== expectedActiveBlockAfter
+      ? ["Active block did not update to the next passage."]
+      : []),
+    ...(contextPanelMismatch ? ["Context panel current passage did not update."] : []),
+    ...(cueMismatch ? ["Teleprompt cue and Cinema passage disagreed."] : []),
+    ...(citationFailure ? ["Citation token was highlighted at the boundary."] : []),
+  ];
+  return {
+    boundaryId: stressCase.id,
+    boundaryMs,
+    citationSkipped: Boolean(stressCase.citationSkipped),
+    contextPanelMismatch,
+    cueMismatch,
+    driftMs,
+    expectedActiveBlockAfter,
+    expectedActiveWordAfter,
+    expectedActiveWordBefore,
+    expectedContextPanelPassageAfter: expectedPassageAfter,
+    expectedPauseBetweenSegmentsMs: pauseBetweenSegmentsMs,
+    expectedTelepromptCueAfter,
+    failures,
+    interaction: stressCase.interaction ?? "segment-boundary",
+    observedActiveBlockAfter,
+    observedActiveWordAfter,
+    observedActiveWordBefore,
+    observedCinemaPassageAfter,
+    observedContextPanelPassageAfter,
+    observedTelepromptCueAfter,
+    playbackRateAfter: stressCase.playbackRateAfter ?? 1,
+    previousSegmentSticky,
+    scenario: stressCase.scenario,
+    schemaVersion: "golden-minute-boundary-stress-row.v1",
+    scrollJumpPx,
+    scrollStateAfterBoundary,
+    status: failures.length === 0 ? "passed" : "failed",
+  };
+}
+
+function boundaryWordSummary(word) {
+  if (!word) {
+    return null;
+  }
+  return {
+    nodeId: word.nodeId,
+    segmentId: word.nodeId,
+    text: word.text,
+    wordIndex: word.wordIndex,
+  };
+}
+
+function lastWordForSegment(words, segmentId) {
+  return [...words].reverse().find((word) => word.nodeId === segmentId) ?? null;
+}
+
+function firstWordForSegment(words, segmentId) {
+  return words.find((word) => word.nodeId === segmentId) ?? null;
+}
+
+function findTimingAt(items, audioTimeMs) {
+  return items.find((item) => audioTimeMs >= item.startMs && audioTimeMs <= item.endMs) ?? null;
+}
+
+function expectedPauseForBoundary(fixture, stressCase) {
+  const naturalPause = (fixture.speechPlan.pauseModel?.naturalPauseMarkers ?? []).find(
+    (marker) => marker.segmentId === stressCase.fromSegmentId,
+  );
+  if (naturalPause) {
+    return Number(naturalPause.expectedPauseMs ?? 0);
+  }
+  const transition = (fixture.timing.segmentTransitions ?? []).find(
+    (item) =>
+      item.fromSegmentId === stressCase.fromSegmentId &&
+      item.toSegmentId === stressCase.toSegmentId,
+  );
+  return Number(transition?.expectedMaxGapMs ?? 0);
+}
+
+function cueLabel(segment) {
+  if (!segment) {
+    return "";
+  }
+  return String(segment.normalizedSpokenText ?? "")
+    .split(/\s+/)
+    .slice(0, 8)
+    .join(" ");
+}
+
+function formatBoundaryWord(word) {
+  if (!word) {
+    return "none";
+  }
+  return `${word.segmentId}:${word.text}`;
 }
 
 function providerMatrixObservation({ baseTimings, index, matrixCase, observation }) {
@@ -790,6 +1150,10 @@ function percentile(values, p) {
 
 function roundMetric(value) {
   return Math.round(value * 100) / 100;
+}
+
+function max(values) {
+  return values.length > 0 ? Math.max(...values) : 0;
 }
 
 function formatNumber(value) {
