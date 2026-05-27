@@ -826,6 +826,12 @@
 - [x] Add command palette actions and screenshot coverage
 - [x] Run WP56 validation commands
 
+## 2026-05-27 08:02 CEST - WP58 Provider Capability Gating
+- [x] Inspect provider capability model, settings UI, command registry, and UI action audit hooks
+- [x] Add test provider profiles and propagate limitations into visible/command disabled reasons
+- [x] Exercise provider-limited UI action audit and settings/read-along fallback evidence
+- [x] Run WP58 validation commands
+
 ## 2026-05-27 06:05 CEST - WP57 Cinema More Menu Quality
 - [x] Inspect Cinema More actions, metadata, audits, and mobile sheet behavior
 - [x] Add More menu information architecture, budgets, reasons, and shortcut hints

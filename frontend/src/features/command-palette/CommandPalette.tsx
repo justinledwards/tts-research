@@ -290,6 +290,7 @@ function CommandButton({
       } ${entry.disabled ? "opacity-55" : ""}`}
       data-capability-gated={entry.capabilityGated ? "true" : undefined}
       data-capability-reason={entry.capabilityGated ? entry.disabledReason : undefined}
+      data-command-id={entry.id}
       data-disabled-reason={entry.disabledReason}
       data-provider-capability={entry.capabilityGate}
       disabled={entry.disabled}

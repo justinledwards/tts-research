@@ -20,6 +20,11 @@ import {
   type ReadAlongSyncStrictness,
 } from "../readalong";
 import type { ReaderAccessibilitySettings } from "../reader-accessibility";
+import {
+  providerCapabilityDataAttributes,
+  providerCapabilityGate,
+  type ProviderRuntimeCapabilities,
+} from "../provider-capabilities";
 import { ScopeBadge } from "./ScopeBadge";
 
 const READ_ALONG_RESET_CALIBRATION_CONFIRMATION =
@@ -29,17 +34,32 @@ export function ReadAlongSettingsControls({
   accessibilitySettings,
   preferences,
   providerId,
+  providerRuntime,
   onChange,
 }: Readonly<{
   accessibilitySettings: ReaderAccessibilitySettings;
   preferences: ReadAlongPreferences;
   providerId: string;
+  providerRuntime: ProviderRuntimeCapabilities;
   onChange: (preferences: ReadAlongPreferences) => void;
 }>) {
-  const effectivePreferences = effectiveReadAlongPreferences(preferences, accessibilitySettings);
+  const wordTimingGate = providerCapabilityGate(providerRuntime, "wordTiming");
+  const phraseTimingGate = providerCapabilityGate(providerRuntime, "phraseTiming");
+  const wordTimingDisabledReason = wordTimingGate.disabled ? wordTimingGate.reason : undefined;
+  const phraseTimingDisabledReason = phraseTimingGate.disabled
+    ? phraseTimingGate.reason
+    : undefined;
+  const displayPreferences = normalizeProviderLimitedReadAlongPreferences(preferences, {
+    phraseTimingDisabled: Boolean(phraseTimingDisabledReason),
+    wordTimingDisabled: Boolean(wordTimingDisabledReason),
+  });
+  const effectivePreferences = effectiveReadAlongPreferences(
+    displayPreferences,
+    accessibilitySettings,
+  );
   const activeProviderOffset = preferences.providerOffsetsMs[providerId] ?? 0;
   const previewMode = readAlongVisualModeFromPreferences(
-    { confidence: 0.91, mode: "word", state: "synced-word" },
+    readAlongPreviewSnapshot(providerRuntime),
     effectivePreferences,
   );
   const update = (patch: Partial<ReadAlongPreferences>) => {
@@ -126,8 +146,11 @@ export function ReadAlongSettingsControls({
         <ReadAlongSelect<ReadAlongHighlightGranularity>
           label="Highlight granularity"
           options={READ_ALONG_HIGHLIGHT_GRANULARITIES}
+          optionDisabledReasons={{
+            word: wordTimingDisabledReason,
+          }}
           testId="ui-action-readalong-highlight-granularity"
-          value={preferences.highlightGranularity}
+          value={displayPreferences.highlightGranularity}
           valueLabels={READ_ALONG_PREFERENCE_LABELS.granularity}
           onChange={(highlightGranularity) => {
             update({ highlightGranularity });
@@ -156,14 +179,23 @@ export function ReadAlongSettingsControls({
         <ReadAlongSelect<ReadAlongSyncStrictness>
           label="Sync strictness"
           options={READ_ALONG_SYNC_STRICTNESS_OPTIONS}
+          optionDisabledReasons={{
+            exactWordWhenAvailable: wordTimingDisabledReason,
+          }}
           testId="ui-action-readalong-sync-strictness"
-          value={preferences.syncStrictness}
+          value={displayPreferences.syncStrictness}
           valueLabels={READ_ALONG_PREFERENCE_LABELS.syncStrictness}
           onChange={(syncStrictness) => {
             update({ syncStrictness });
           }}
         />
       </div>
+
+      <ProviderTimingLimitations
+        phraseTimingDisabledReason={phraseTimingDisabledReason}
+        providerRuntime={providerRuntime}
+        wordTimingDisabledReason={wordTimingDisabledReason}
+      />
 
       <Panel className="grid gap-3 p-3" variant="raised">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -277,6 +309,7 @@ export function ReadAlongSettingsControls({
 function ReadAlongSelect<T extends string>({
   label,
   options,
+  optionDisabledReasons,
   testId,
   value,
   valueLabels,
@@ -284,6 +317,7 @@ function ReadAlongSelect<T extends string>({
 }: Readonly<{
   label: string;
   options: readonly T[];
+  optionDisabledReasons?: Partial<Record<T, string | undefined>>;
   testId: string;
   value: T;
   valueLabels: Record<T, string>;
@@ -302,7 +336,7 @@ function ReadAlongSelect<T extends string>({
         value={value}
       >
         {options.map((option) => (
-          <option key={option} value={option}>
+          <option disabled={Boolean(optionDisabledReasons?.[option])} key={option} value={option}>
             {valueLabels[option]}
           </option>
         ))}
@@ -353,4 +387,112 @@ function scopeDescription(scope: ReadAlongPreferenceScope): string {
     return "Persists for the current project when reader memory is enabled.";
   }
   return "Applies until this page session ends.";
+}
+
+function ProviderTimingLimitations({
+  phraseTimingDisabledReason,
+  providerRuntime,
+  wordTimingDisabledReason,
+}: Readonly<{
+  phraseTimingDisabledReason?: string;
+  providerRuntime: ProviderRuntimeCapabilities;
+  wordTimingDisabledReason?: string;
+}>) {
+  const needsForcedAlignment =
+    providerRuntime.capabilities.alignmentRequiredForWordHighlight &&
+    Boolean(wordTimingDisabledReason);
+  const heuristicDegraded =
+    Boolean(wordTimingDisabledReason) &&
+    Boolean(phraseTimingDisabledReason) &&
+    !providerRuntime.capabilities.alignmentSupported;
+  if (!wordTimingDisabledReason && !phraseTimingDisabledReason && !needsForcedAlignment) {
+    return null;
+  }
+  return (
+    <Panel
+      className="grid gap-3 p-3"
+      data-readalong-provider-label={providerRuntime.providerLabel}
+      data-testid="readalong-provider-limitations"
+      variant="raised"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h5 className="text-sm font-semibold">Provider timing limits</h5>
+        <span className="vs-muted text-xs">{providerRuntime.providerLabel}</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {wordTimingDisabledReason ? (
+          <Button
+            {...providerCapabilityDataAttributes("wordTiming", wordTimingDisabledReason)}
+            data-command-id="readalong:word-highlight"
+            data-testid="ui-action-readalong-word-highlight-unavailable"
+            disabled
+            disabledReason={wordTimingDisabledReason}
+            variant="secondary"
+          >
+            Word highlight unavailable
+          </Button>
+        ) : null}
+        {phraseTimingDisabledReason ? (
+          <Button
+            {...providerCapabilityDataAttributes("phraseTiming", phraseTimingDisabledReason)}
+            data-testid="ui-action-readalong-phrase-fallback-unavailable"
+            disabled
+            disabledReason={phraseTimingDisabledReason}
+            variant="secondary"
+          >
+            Phrase fallback unavailable
+          </Button>
+        ) : (
+          <span
+            className="rounded-md border px-3 py-2 text-sm font-semibold vs-border vs-surface"
+            data-readalong-provider-fallback="phrase"
+          >
+            Phrase highlight fallback available
+          </span>
+        )}
+      </div>
+      <div className="grid gap-1 text-xs leading-5 vs-muted">
+        {needsForcedAlignment ? (
+          <span data-readalong-provider-requires-alignment="true">
+            Forced alignment required before this provider can claim word-level sync.
+          </span>
+        ) : null}
+        {heuristicDegraded ? (
+          <span data-readalong-provider-degraded-mode="heuristic">
+            Heuristic degraded mode will be shown instead of unsupported timing precision.
+          </span>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
+
+function normalizeProviderLimitedReadAlongPreferences(
+  preferences: ReadAlongPreferences,
+  limits: Readonly<{
+    phraseTimingDisabled: boolean;
+    wordTimingDisabled: boolean;
+  }>,
+): ReadAlongPreferences {
+  const next = { ...preferences };
+  if (limits.wordTimingDisabled && next.highlightGranularity === "word") {
+    next.highlightGranularity = limits.phraseTimingDisabled ? "block" : "phrase";
+  }
+  if (limits.wordTimingDisabled && next.syncStrictness === "exactWordWhenAvailable") {
+    next.syncStrictness = limits.phraseTimingDisabled ? "blockFallback" : "phraseFallback";
+  }
+  return next;
+}
+
+function readAlongPreviewSnapshot(providerRuntime: ProviderRuntimeCapabilities) {
+  if (providerRuntime.capabilities.wordTiming) {
+    return { confidence: 0.91, mode: "word" as const, state: "synced-word" as const };
+  }
+  if (
+    providerRuntime.capabilities.phraseTiming ||
+    providerRuntime.capabilities.alignmentSupported
+  ) {
+    return { confidence: 0.78, mode: "phrase" as const, state: "synced-phrase" as const };
+  }
+  return { confidence: 0.38, mode: "degraded" as const, state: "degraded" as const };
 }

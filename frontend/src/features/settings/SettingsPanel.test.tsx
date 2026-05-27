@@ -10,6 +10,7 @@ import { defaultUiMemoryState } from "../preferences";
 import { DEFAULT_SHORTCUT_PREFERENCES } from "../shortcuts/shortcutRegistry";
 import { SettingsPanel } from "./SettingsPanel";
 import type { SettingsCommandTarget } from "./model";
+import type { TTSEngineDiagnostics } from "../../types";
 
 const noop = () => {
   // Test callback.
@@ -19,7 +20,10 @@ const asyncNoop = async () => {
   // Test callback.
 };
 
-function renderSettingsPanel(commandTarget?: SettingsCommandTarget): string {
+function renderSettingsPanel(
+  commandTarget?: SettingsCommandTarget,
+  options: Readonly<{ ttsEngines?: TTSEngineDiagnostics[] }> = {},
+): string {
   return renderToStaticMarkup(
     <SettingsPanel
       canSubmit
@@ -53,7 +57,7 @@ function renderSettingsPanel(commandTarget?: SettingsCommandTarget): string {
       teleprompterSettings={DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS}
       themeName="light"
       ttsEngineError={null}
-      ttsEngines={[]}
+      ttsEngines={options.ttsEngines ?? []}
       uiMemory={defaultUiMemoryState()}
       onClearBookSourcePolicy={asyncNoop}
       onClearPreparedSourcePolicy={asyncNoop}
@@ -112,5 +116,57 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Laptop presenter");
     expect(markup).toContain("Recording booth");
     expect(markup).toContain("Cue font size");
+  });
+
+  it("shows provider timing limits in read-along settings", () => {
+    const markup = renderSettingsPanel(
+      {
+        fieldId: "readAlongPreferences",
+        groupId: "reader",
+        layerId: "advanced",
+        scope: "machine",
+      },
+      {
+        ttsEngines: [
+          {
+            capabilities: {
+              abComparison: true,
+              alignment: true,
+              alignmentRequiredForWordHighlight: true,
+              alignmentSupported: true,
+              cancelJob: true,
+              localOnly: true,
+              mockTts: false,
+              phonemeOverrides: true,
+              phraseTiming: true,
+              retryJob: true,
+              ssml: true,
+              ssmlMarks: true,
+              streaming: true,
+              tts: true,
+              voiceCloning: true,
+              voicePreview: true,
+              wordTiming: false,
+            },
+            default: true,
+            experimental: false,
+            id: "kokoro",
+            label: "No word timing profile",
+            local: true,
+            status: "ready",
+            supportsReference: true,
+            supportsSSML: true,
+            supportsSwedish: true,
+            supportsVoice: true,
+          },
+        ],
+      },
+    );
+
+    expect(markup).toContain("Provider timing limits");
+    expect(markup).toContain("Word highlight unavailable");
+    expect(markup).toContain("Phrase highlight fallback available");
+    expect(markup).toContain("Forced alignment required");
+    expect(markup).toContain('data-command-id="readalong:word-highlight"');
   });
 });

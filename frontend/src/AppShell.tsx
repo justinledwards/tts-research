@@ -209,7 +209,9 @@ export function TopProductBar({
           aria-label="Open command palette"
           className="gap-2"
           data-testid="ui-action-command-palette-open"
-          onClick={onCommandPaletteOpen}
+          onClick={() => {
+            onCommandPaletteOpen();
+          }}
           size="md"
           title={`Actions (${commandPaletteShortcutLabel})`}
           variant="secondary"
@@ -270,7 +272,9 @@ export function TopProductBar({
           aria-label="Open command palette"
           className="text-orange-600"
           data-testid="ui-action-command-palette-open"
-          onClick={onCommandPaletteOpen}
+          onClick={() => {
+            onCommandPaletteOpen();
+          }}
           size="icon"
           title={`Actions (${commandPaletteShortcutLabel})`}
           variant="secondary"

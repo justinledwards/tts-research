@@ -405,6 +405,7 @@ export function SettingsPanel({
                 telepromptTheatreSettings={telepromptTheatreSettings}
                 teleprompterSettings={teleprompterSettings}
                 themeName={themeName}
+                ttsEngines={ttsEngines}
                 uiMemory={uiMemory}
                 onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
                 onReadAlongPreferencesChange={onReadAlongPreferencesChange}
@@ -1027,6 +1028,7 @@ function ReaderSettingsGroup({
   telepromptTheatreSettings,
   teleprompterSettings,
   themeName,
+  ttsEngines,
   uiMemory,
   onReaderAccessibilitySettingsChange,
   onReadAlongPreferencesChange,
@@ -1048,6 +1050,7 @@ function ReaderSettingsGroup({
   telepromptTheatreSettings: TelepromptTheatreSettings;
   teleprompterSettings: TeleprompterHighlightSettings;
   themeName: ThemeName;
+  ttsEngines: TTSEngineDiagnostics[];
   uiMemory: UiMemoryState;
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onReadAlongPreferencesChange: (settings: ReadAlongPreferences) => void;
@@ -1094,6 +1097,7 @@ function ReaderSettingsGroup({
         accessibilitySettings={readerAccessibilitySettings}
         preferences={readAlongPreferences}
         providerId={runConfiguration.ttsEngine}
+        providerRuntime={resolveProviderRuntimeCapabilities(runConfiguration.ttsEngine, ttsEngines)}
         onChange={onReadAlongPreferencesChange}
       />
       <TelepromptTheatreSettingsControls

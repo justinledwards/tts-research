@@ -190,6 +190,10 @@ import {
   type TelepromptTheatreSettings,
 } from "./features/teleprompt/telepromptTheatreSettings";
 import { generatedAudioLifecycleFromJob } from "./features/playback/generatedAudioLifecycle";
+import {
+  providerCapabilityGate,
+  resolveProviderRuntimeCapabilities,
+} from "./features/provider-capabilities";
 import { providerRuntimeLeavesLocalBoundary } from "./features/provider-capabilities/providerCapabilityLite";
 import {
   createAndListenAriaLabel,
@@ -2821,6 +2825,14 @@ export function App() {
   const [systemMetricsUnavailable, setSystemMetricsUnavailable] = useState(false);
   const [ttsEngines, setTTSEngines] = useState<TTSEngineDiagnostics[]>([]);
   const [ttsEngineError, setTTSEngineError] = useState<string | null>(null);
+  const providerRuntimeCapabilities = useMemo(
+    () => resolveProviderRuntimeCapabilities(runConfiguration.ttsEngine, ttsEngines),
+    [runConfiguration.ttsEngine, ttsEngines],
+  );
+  const wordHighlightCapabilityReason = useMemo(() => {
+    const gate = providerCapabilityGate(providerRuntimeCapabilities, "wordTiming");
+    return gate.disabled ? gate.reason : undefined;
+  }, [providerRuntimeCapabilities]);
   const createAndListenCapabilityReason = useMemo(
     () => resolveCreateAndListenCapabilityReason(runConfiguration.ttsEngine, ttsEngines),
     [runConfiguration.ttsEngine, ttsEngines],
@@ -5387,7 +5399,7 @@ export function App() {
   }, [refreshProjects, refreshSpeechPolicyProfiles, refreshVoiceProfiles]);
 
   useEffect(() => {
-    if (studioMode !== "voiceCloning" && !isHelpOpen && !isSettingsOpen) {
+    if (studioMode !== "voiceCloning" && !isCommandPaletteOpen && !isHelpOpen && !isSettingsOpen) {
       return;
     }
     void refreshProfileSourceDiagnostics();
@@ -5396,6 +5408,7 @@ export function App() {
     void refreshVoiceProfileCredentials();
   }, [
     isHelpOpen,
+    isCommandPaletteOpen,
     isSettingsOpen,
     refreshProfileSourceDiagnostics,
     refreshResearchModules,
@@ -6548,6 +6561,28 @@ export function App() {
       section: "Playback",
       shortcutCommandId: "playback.createListen",
       title: workspaceStageActionLabel("createAndListen"),
+    },
+    {
+      capabilityGate: "wordTiming",
+      capabilityGated: Boolean(wordHighlightCapabilityReason),
+      category: "Settings",
+      detail: "Open read-along settings for word-level highlight configuration.",
+      disabled: Boolean(wordHighlightCapabilityReason),
+      disabledReason: wordHighlightCapabilityReason,
+      id: "readalong:word-highlight",
+      keywords: ["readalong", "highlight", "word", "timing", "provider"],
+      perform: () => {
+        setIsWorkspaceOpen(false);
+        setSettingsCommandTarget({
+          fieldId: "readAlongPreferences",
+          groupId: "reader",
+          layerId: "advanced",
+          scope: "machine",
+        });
+        setIsSettingsOpen(true);
+      },
+      section: "Settings",
+      title: "Use word highlight",
     },
     {
       category: "Teleprompt",

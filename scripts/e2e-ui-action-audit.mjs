@@ -47,6 +47,7 @@ const actionTimeoutMs = Number.parseInt(
 const failOnFindings = process.env.UI_ACTION_AUDIT_FAIL_ON_FINDINGS === "1";
 const inventoryOnly = process.env.UI_ACTION_AUDIT_INVENTORY_ONLY === "1";
 const scenarioFilter = parseScenarioFilter(process.env.UI_ACTION_AUDIT_SCENARIOS);
+let providerProfile = null;
 const UI_ACTION_AUDIT_SEVERITIES = ["blocking", "needs-review", "waived", "informational"];
 const UI_ACTION_AUDIT_THRESHOLDS = {
   duplicateGroups: 0,
@@ -85,35 +86,8 @@ let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
 let runSummary = null;
 
-main().catch(async (error) => {
-  const message = error instanceof Error ? error.stack || error.message : String(error);
-  console.error(message);
-  if (runSummary) {
-    runSummary.generatedAt = new Date().toISOString();
-    runSummary.status = "failed";
-    runSummary.error = message;
-    runSummary.durationMs = Math.max(0, Date.now() - Date.parse(runSummary.startedAt));
-    runSummary.phaseTimings = runSummary.phaseTimings ?? {};
-    runSummary.phaseTimings.totalMs = runSummary.durationMs;
-    await writeSummary(runSummary).catch(() => {});
-    await writeFile(
-      path.join(outputDir, "action-results.json"),
-      `${JSON.stringify(
-        {
-          error: message,
-          generatedAt: new Date().toISOString(),
-          schemaVersion: "ui-action-results.v1",
-          status: "failed",
-        },
-        null,
-        2,
-      )}\n`,
-    ).catch(() => {});
-  }
-  process.exitCode = 1;
-});
-
 async function main() {
+  providerProfile = resolveProviderProfile(parseProviderProfileArg(process.argv.slice(2)));
   const startAt = Date.now();
   await rm(outputDir, { force: true, recursive: true });
   await mkdir(screenshotsDir, { recursive: true });
@@ -128,6 +102,7 @@ async function main() {
       inventoryOnly,
       jobTimeoutMs,
       maxActions,
+      providerProfile: providerProfile ? providerProfile.id : "runtime",
       quickMode,
       scenarioCount: null,
       workerLimit: resolvedWorkerLimit,
@@ -246,6 +221,7 @@ async function main() {
       duplicateWaiverRegistry: duplicateClassification.duplicateWaiverRegistry,
       generatedAt,
       schemaVersion: "ui-action-inventory.v1",
+      providerProfile: providerProfile ? providerProfileSummary(providerProfile) : null,
       scenarios: scenarios.map((scenario) => ({
         description: scenario.description,
         id: scenario.id,
@@ -276,6 +252,7 @@ async function main() {
     const gateFindings = summarizeGateFindings({
       actions,
       duplicates,
+      providerProfile,
       requireAllSurfaces: !scenarioFilter,
       results,
       scenarios,
@@ -287,18 +264,24 @@ async function main() {
       duplicateClassification,
       gateFindings,
       inventoryOnly,
+      providerProfile,
       resultsStatus: resultsDocument.status,
     });
     const hardDuplicateFailure = duplicateClassification.unclassified > 0;
-    const status = hardDuplicateFailure
-      ? "failed"
-      : !inventoryOnly && gateFindings.total > 0 && failOnFindings
+    const hardProviderProfileFailure = gateFindings.providerProfileCoverageFindings.length > 0;
+    const status =
+      hardDuplicateFailure || hardProviderProfileFailure
         ? "failed"
-        : reviewGate.status === "not-review-complete" && resultsDocument.status === "passed"
-          ? "completed-with-findings"
-          : resultsDocument.status;
+        : !inventoryOnly && gateFindings.total > 0 && failOnFindings
+          ? "failed"
+          : reviewGate.status === "not-review-complete" && resultsDocument.status === "passed"
+            ? "completed-with-findings"
+            : resultsDocument.status;
     resultsDocument.reviewGate = reviewGate;
-    resultsDocument.status = status === "failed" && hardDuplicateFailure ? "failed" : status;
+    resultsDocument.status =
+      status === "failed" && (hardDuplicateFailure || hardProviderProfileFailure)
+        ? "failed"
+        : status;
 
     await writeFile(
       path.join(outputDir, "action-inventory.json"),
@@ -336,6 +319,7 @@ async function main() {
         generatedAt,
         inventoryOnly,
         outputDir,
+        providerProfile,
         reviewGate,
         results,
         scenarioFilterActive: Boolean(scenarioFilter),
@@ -362,6 +346,7 @@ async function main() {
       summaries: {
         gateFindings,
         duplicateClassification,
+        providerProfile: providerProfile ? providerProfileSummary(providerProfile) : null,
         inventory: {
           actionCount: actions.length,
           scenarioCount: scenarios.length,
@@ -375,12 +360,17 @@ async function main() {
         reviewGate,
       },
       reviewGate,
+      providerProfile: providerProfile ? providerProfileSummary(providerProfile) : null,
       websiteExtractionQuality: websiteExtractionQualityDocument.quality,
     };
     await writeSummary(runSummary);
 
     console.log(`UI action audit ${runSummary.status}. Reports written to ${outputDir}`);
-    if (hardDuplicateFailure || (failOnFindings && gateFindings.total > 0)) {
+    if (
+      hardDuplicateFailure ||
+      hardProviderProfileFailure ||
+      (failOnFindings && gateFindings.total > 0)
+    ) {
       process.exitCode = 1;
     }
   } finally {
@@ -550,12 +540,211 @@ function shouldRunTraversal(filter) {
   return !filter || filter.has("workspace-stage-traversal");
 }
 
+function parseProviderProfileArg(args) {
+  const envValue = process.env.UI_ACTION_AUDIT_PROVIDER_PROFILE ?? process.env.E2E_PROVIDER_PROFILE;
+  for (const [index, arg] of args.entries()) {
+    if (arg.startsWith("--provider-profile=")) {
+      return arg.slice("--provider-profile=".length);
+    }
+    if (arg === "--provider-profile") {
+      return args[index + 1] ?? "";
+    }
+  }
+  return envValue ?? "";
+}
+
+function resolveProviderProfile(id) {
+  const clean = String(id ?? "").trim();
+  if (!clean) {
+    return null;
+  }
+  const profile = TEST_PROVIDER_PROFILES[clean];
+  if (!profile) {
+    throw new Error(
+      `Unknown provider profile ${JSON.stringify(clean)}. Available profiles: ${Object.keys(
+        TEST_PROVIDER_PROFILES,
+      ).join(", ")}`,
+    );
+  }
+  return profile;
+}
+
+async function installProviderProfileRoutes(page) {
+  if (!providerProfile) {
+    return;
+  }
+  const engines = providerProfileEngines(providerProfile);
+  await page.route("**/api/tts-engines", async (route) => {
+    await route.fulfill({
+      body: `${JSON.stringify(engines)}\n`,
+      contentType: "application/json",
+      headers: {
+        "access-control-allow-origin": "*",
+      },
+      status: 200,
+    });
+  });
+}
+
+const FULL_PROVIDER_CAPABILITIES = {
+  abComparison: true,
+  alignment: true,
+  alignmentRequiredForWordHighlight: false,
+  alignmentSupported: true,
+  cancelJob: true,
+  localOnly: true,
+  mockTts: true,
+  phonemeOverrides: true,
+  phraseTiming: true,
+  retryJob: true,
+  ssml: true,
+  ssmlMarks: true,
+  streaming: true,
+  tts: true,
+  voiceCloning: true,
+  voicePreview: true,
+  wordTiming: true,
+};
+
+const LIMITED_PROVIDER_BASE = {
+  ...FULL_PROVIDER_CAPABILITIES,
+  mockTts: false,
+};
+
+const TEST_PROVIDER_PROFILES = Object.freeze({
+  "local-audio-only": providerProfileDefinition({
+    capabilities: {
+      ...LIMITED_PROVIDER_BASE,
+      abComparison: false,
+      alignment: false,
+      alignmentRequiredForWordHighlight: false,
+      alignmentSupported: false,
+      cancelJob: false,
+      phonemeOverrides: false,
+      phraseTiming: false,
+      ssml: false,
+      ssmlMarks: false,
+      streaming: false,
+      voiceCloning: false,
+      voicePreview: false,
+      wordTiming: false,
+    },
+    description: "Local synthesis can create audio but exposes no timing or hosted features.",
+    id: "local-audio-only",
+    label: "Local audio-only profile",
+  }),
+  "mock-full": providerProfileDefinition({
+    capabilities: FULL_PROVIDER_CAPABILITIES,
+    description: "Fully capable deterministic mock profile for local review.",
+    id: "mock-full",
+    label: "Mock full profile",
+  }),
+  "no-cancel": providerProfileDefinition({
+    capabilities: { ...LIMITED_PROVIDER_BASE, cancelJob: false },
+    description: "Provider cannot cancel in-flight jobs.",
+    id: "no-cancel",
+    label: "No cancel profile",
+  }),
+  "no-ssml": providerProfileDefinition({
+    capabilities: {
+      ...LIMITED_PROVIDER_BASE,
+      phonemeOverrides: false,
+      ssml: false,
+      ssmlMarks: false,
+    },
+    description: "Provider accepts plain text only; SSML and mark callbacks are unavailable.",
+    id: "no-ssml",
+    label: "No SSML profile",
+  }),
+  "no-streaming": providerProfileDefinition({
+    capabilities: { ...LIMITED_PROVIDER_BASE, streaming: false },
+    description: "Provider creates complete files but cannot stream partial results.",
+    id: "no-streaming",
+    label: "No streaming profile",
+  }),
+  "no-voice-cloning": providerProfileDefinition({
+    capabilities: {
+      ...LIMITED_PROVIDER_BASE,
+      voiceCloning: false,
+    },
+    description: "Provider supports default voices but not reference/profile cloning.",
+    id: "no-voice-cloning",
+    label: "No voice cloning profile",
+  }),
+  "no-word-timing": providerProfileDefinition({
+    capabilities: {
+      ...LIMITED_PROVIDER_BASE,
+      alignmentRequiredForWordHighlight: true,
+      wordTiming: false,
+    },
+    description: "Provider offers phrase timing but requires forced alignment for word sync.",
+    id: "no-word-timing",
+    label: "No word timing profile",
+  }),
+});
+
+function providerProfileDefinition(profile) {
+  const disabledCapabilities = Object.entries(profile.capabilities)
+    .filter(([, available]) => available === false)
+    .map(([capability]) => capability)
+    .sort();
+  return Object.freeze({
+    ...profile,
+    disabledCapabilities,
+  });
+}
+
+function providerProfileEngines(profile) {
+  const baseEngine = {
+    capabilities: profile.capabilities,
+    experimental: false,
+    languages: ["en"],
+    local: true,
+    metadata: {
+      providerProfile: profile.id,
+      runtimeProvider: "provider-profile",
+    },
+    modelCache: "provider-profile-fixture",
+    reason: profile.description,
+    setup: profile.description,
+    status: "ready",
+    supportsReference: profile.capabilities.voiceCloning,
+    supportsSSML: profile.capabilities.ssml,
+    supportsSwedish: true,
+    supportsVoice: profile.capabilities.voicePreview,
+  };
+  return [
+    {
+      ...baseEngine,
+      default: false,
+      id: "auto",
+      label: `${profile.label} Auto`,
+    },
+    {
+      ...baseEngine,
+      default: true,
+      id: "kokoro",
+      label: profile.label,
+    },
+  ];
+}
+
+function providerProfileSummary(profile) {
+  return {
+    description: profile.description,
+    disabledCapabilities: profile.disabledCapabilities,
+    id: profile.id,
+    label: profile.label,
+  };
+}
+
 async function inventoryScenario(browser, scenario) {
   const context = await browser.newContext({
     storageState: scenario.storageState,
     viewport: scenario.viewport ?? { height: 980, width: 1440 },
   });
   const page = await context.newPage();
+  await installProviderProfileRoutes(page);
   page.setDefaultTimeout(60_000);
   const issues = collectPageIssues(page);
   try {
@@ -700,6 +889,7 @@ async function exerciseScenarioAction(browser, scenario, action, activationMode)
     viewport: scenario.viewport ?? { height: 980, width: 1440 },
   });
   const page = await context.newPage();
+  await installProviderProfileRoutes(page);
   page.setDefaultTimeout(60_000);
   const issues = collectPageIssues(page);
   try {
@@ -1006,6 +1196,23 @@ function createScenarios(seed) {
       }),
       surface: "Command Palette",
     },
+    ...(providerProfile
+      ? [
+          {
+            description:
+              "Command palette searched for provider-gated capability actions under the active test profile.",
+            id: "command-palette-provider-capabilities",
+            label: "Command palette provider capabilities",
+            open: openProviderCapabilityCommandPalette,
+            storageState: projectStorageState(seed.projectId, {
+              sourceMode: "text",
+              stage: "intake",
+              text: workspaceText,
+            }),
+            surface: "Command Palette",
+          },
+        ]
+      : []),
     {
       description: "Project dashboard opened from the workspace rail.",
       id: "project-dashboard",
@@ -1102,6 +1309,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
     viewport: { height: 980, width: 1440 },
   });
   const page = await context.newPage();
+  await installProviderProfileRoutes(page);
   page.setDefaultTimeout(60_000);
   const issues = collectPageIssues(page);
   const screenshots = [];
@@ -1305,6 +1513,14 @@ async function openCommandPalette(page) {
   await gotoApp(page);
   await page.getByTestId("ui-action-command-palette-open").first().click();
   await page.getByRole("dialog", { name: "Command palette" }).waitFor();
+}
+
+async function openProviderCapabilityCommandPalette(page) {
+  await openCommandPalette(page);
+  await page.locator("#command-palette-search").fill("word highlight");
+  await page
+    .getByRole("option", { name: /Use word highlight.*does not support word timing/i })
+    .waitFor();
 }
 
 async function openProjectDashboard(page) {
@@ -2301,6 +2517,7 @@ function summarizeResults(results) {
 function summarizeGateFindings({
   actions,
   duplicates,
+  providerProfile: activeProviderProfile = null,
   requireAllSurfaces = true,
   results,
   scenarios,
@@ -2356,11 +2573,17 @@ function summarizeGateFindings({
   const capabilityGatedDisabled = actions.filter(
     (action) => action.disabled && action.capabilityGated,
   );
+  const capabilityReasonMismatches = summarizeCapabilityReasonMismatches(capabilityGatedDisabled);
+  const providerProfileCoverageFindings = summarizeProviderProfileCoverageFindings({
+    capabilityGatedDisabled,
+    providerProfile: activeProviderProfile,
+  });
   const overlayCollisionFindings = surfaceComplexity.flatMap(
     (complexity) => complexity.overlayCollision?.findings ?? [],
   );
   return {
     capabilityGatedDisabled,
+    capabilityReasonMismatches,
     disabledWithoutReason,
     duplicates: classifiedDuplicates,
     duplicateClassification,
@@ -2375,6 +2598,7 @@ function summarizeGateFindings({
     missingSafeActivations,
     missingSurfaces,
     overlayCollisionFindings,
+    providerProfileCoverageFindings,
     destructiveMissingConfirmation,
     total:
       failedResults.length +
@@ -2384,8 +2608,52 @@ function summarizeGateFindings({
       overlayCollisionFindings.length +
       destructiveMissingConfirmation.length +
       disabledWithoutReason.length +
+      capabilityReasonMismatches.length +
+      providerProfileCoverageFindings.length +
       duplicateClassification.unclassified,
   };
+}
+
+function summarizeCapabilityReasonMismatches(actions) {
+  const byCommand = new Map();
+  for (const action of actions) {
+    if (!action.commandId || !action.disabledReason) {
+      continue;
+    }
+    const item = byCommand.get(action.commandId) ?? {
+      commandId: action.commandId,
+      entries: [],
+      reasons: new Set(),
+      surfaces: new Set(),
+    };
+    item.entries.push(action);
+    item.reasons.add(action.disabledReason);
+    item.surfaces.add(action.surface);
+    byCommand.set(action.commandId, item);
+  }
+  return [...byCommand.values()]
+    .filter((item) => item.entries.length > 1 && item.reasons.size > 1)
+    .map((item) => ({
+      commandId: item.commandId,
+      reasons: [...item.reasons].sort(),
+      surfaces: [...item.surfaces].sort(),
+    }));
+}
+
+function summarizeProviderProfileCoverageFindings({ capabilityGatedDisabled, providerProfile }) {
+  if (!providerProfile || providerProfile.disabledCapabilities.length === 0) {
+    return [];
+  }
+  if (capabilityGatedDisabled.length > 0) {
+    return [];
+  }
+  return [
+    {
+      disabledCapabilities: providerProfile.disabledCapabilities,
+      message: `${providerProfile.id} disables capabilities, but no provider-gated disabled controls were inventoried.`,
+      providerProfile: providerProfile.id,
+    },
+  ];
 }
 
 function summarizeUiActionReviewGate({
@@ -2494,6 +2762,7 @@ function renderReviewerSummary({
   generatedAt,
   inventoryOnly,
   outputDir,
+  providerProfile: activeProviderProfile = null,
   reviewGate,
   results,
   scenarioFilterActive = false,
@@ -2507,6 +2776,7 @@ function renderReviewerSummary({
   const findings = summarizeGateFindings({
     actions,
     duplicates,
+    providerProfile: activeProviderProfile,
     requireAllSurfaces: !scenarioFilterActive,
     results,
     scenarios,
@@ -2553,6 +2823,7 @@ function renderReviewerSummary({
     `- Failed/no-op/browser findings: ${String(resultSummary.failed)}`,
     `- Disabled controls: ${String(inventorySummary.disabled)}`,
     `- Capability-gated disabled controls: ${String(inventorySummary.capabilityGatedDisabled)}`,
+    `- Provider profile: ${activeProviderProfile ? activeProviderProfile.id : "runtime"}`,
     `- Advanced/operator controls: ${String(inventorySummary.advancedOperatorControls)}`,
     `- Advanced/debug controls with mode metadata: ${String(
       inventorySummary.debugOperatorControls,
@@ -2575,6 +2846,12 @@ function renderReviewerSummary({
     `- Metadata findings: ${formatFindingCount(findings.metadataFindings.length)}`,
     `- Disabled without reason: ${formatFindingCount(findings.disabledWithoutReason.length)}`,
     `- Capability-gated disabled controls: ${String(findings.capabilityGatedDisabled.length)}`,
+    `- Capability reason mismatches: ${formatFindingCount(
+      findings.capabilityReasonMismatches.length,
+    )}`,
+    `- Provider profile coverage findings: ${formatFindingCount(
+      findings.providerProfileCoverageFindings.length,
+    )}`,
     `- Destructive without confirmation: ${formatFindingCount(
       findings.destructiveMissingConfirmation.length,
     )}`,
@@ -2693,3 +2970,31 @@ function sleep(ms) {
     setTimeout(resolve, ms);
   });
 }
+
+main().catch(async (error) => {
+  const message = error instanceof Error ? error.stack || error.message : String(error);
+  console.error(message);
+  if (runSummary) {
+    runSummary.generatedAt = new Date().toISOString();
+    runSummary.status = "failed";
+    runSummary.error = message;
+    runSummary.durationMs = Math.max(0, Date.now() - Date.parse(runSummary.startedAt));
+    runSummary.phaseTimings = runSummary.phaseTimings ?? {};
+    runSummary.phaseTimings.totalMs = runSummary.durationMs;
+    await writeSummary(runSummary).catch(() => {});
+    await writeFile(
+      path.join(outputDir, "action-results.json"),
+      `${JSON.stringify(
+        {
+          error: message,
+          generatedAt: new Date().toISOString(),
+          schemaVersion: "ui-action-results.v1",
+          status: "failed",
+        },
+        null,
+        2,
+      )}\n`,
+    ).catch(() => {});
+  }
+  process.exitCode = 1;
+});
