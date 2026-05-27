@@ -38,6 +38,58 @@ test("classifies clone controls as overexposed with a burn-down issue", () => {
   assert.equal(classification.severity, "needs-review");
 });
 
+test("classifies voice-command clone controls under the clone burn-down", () => {
+  const classification = classifyDuplicateGroup({
+    actionClass: "generation",
+    actionIds: ["clone-a", "clone-b"],
+    count: 2,
+    kind: "same-label-same-surface",
+    label: "Clone",
+    scenarios: ["workspace-review", "workspace-preview"],
+    surface: "Voice Command",
+    surfaces: ["Voice Command"],
+  });
+
+  assert.equal(classification.category, "overexposed");
+  assert.equal(classification.burnDownIssue, "WP46-BD-VOICE-CLONE");
+});
+
+test("classifies shared Cinema More IA entries as surface parity", () => {
+  const classification = classifyDuplicateGroup({
+    actionClass: "diagnostic",
+    actionIds: [
+      "ui-action-cinema-advanced-alignment-repair",
+      "ui-action-cinema-advanced-alignment-repair",
+      "ui-action-cinema-advanced-alignment-repair",
+    ],
+    count: 3,
+    kind: "same-label-different-behavior",
+    label: "Alignment repair",
+    scenarios: ["book-more-menu", "document-more-menu", "website-more-menu"],
+    surface: "BookCinema, DocumentCinema, WebsiteCinema",
+    surfaces: ["BookCinema", "DocumentCinema", "WebsiteCinema"],
+  });
+
+  assert.equal(classification.category, "allowed-surface-parity");
+  assert.equal(classification.id, "wp57-cinema-more-ia-parity");
+});
+
+test("classifies playback Cinema navigation under the cinema navigation burn-down", () => {
+  const classification = classifyDuplicateGroup({
+    actionClass: "navigation",
+    actionIds: ["ui-action-rail-playback-open-cinema", "ui-action-rail-playback-open-cinema"],
+    count: 2,
+    kind: "same-label-same-surface",
+    label: "Cinema",
+    scenarios: ["book-pdf-pre-audio", "workspace-intake"],
+    surface: "Playback",
+    surfaces: ["Playback"],
+  });
+
+  assert.equal(classification.category, "overexposed");
+  assert.equal(classification.burnDownIssue, "WP46-BD-CINEMA-NAV");
+});
+
 test("leaves unknown duplicate groups unclassified", () => {
   const classification = classifyDuplicateGroup({
     actionClass: "navigation",

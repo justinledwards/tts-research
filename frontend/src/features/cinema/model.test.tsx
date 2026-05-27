@@ -13,6 +13,8 @@ import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransport
 import { cinemaCanvasBudgetFor } from "./canvasBudget";
 import {
   CINEMA_MORE_ACTIONS,
+  CINEMA_MORE_ACTION_BUDGETS,
+  CINEMA_MORE_REQUIRED_SECTION_IDS,
   CINEMA_MORE_SECTIONS,
   activeCinemaMoreAction,
   cinemaMoreActionsBySection,
@@ -343,16 +345,36 @@ describe("CinemaFocusModeToolbar", () => {
     expect(markup).not.toContain("Active operator mode");
   });
 
-  it("groups Cinema More actions by display, advanced, and navigation ownership", () => {
+  it("groups Cinema More actions by useful information architecture", () => {
     const grouped = cinemaMoreActionsBySection(CINEMA_MORE_ACTIONS);
 
     for (const section of CINEMA_MORE_SECTIONS) {
       expect(grouped[section.id].length).toBeGreaterThan(0);
     }
+    expect(CINEMA_MORE_SECTIONS.map((section) => section.id)).toEqual([
+      "display",
+      "theatre",
+      "advanced",
+      "diagnostics",
+      "help-shortcuts",
+    ]);
+    expect(CINEMA_MORE_REQUIRED_SECTION_IDS).toEqual(
+      CINEMA_MORE_SECTIONS.map((section) => section.id),
+    );
     expect(grouped.display.every((action) => action.owner === "cinema-display")).toBe(true);
+    expect(grouped.theatre.every((action) => action.owner === "cinema-theatre")).toBe(true);
     expect(grouped.advanced.every((action) => action.owner === "cinema-advanced")).toBe(true);
-    expect(grouped.navigation.every((action) => action.owner === "cinema-navigation")).toBe(true);
-    expect(grouped.advanced.map((action) => action.id)).toContain("alignment-repair");
+    expect(grouped.diagnostics.every((action) => action.owner === "cinema-diagnostics")).toBe(true);
+    expect(grouped["help-shortcuts"].every((action) => action.owner === "cinema-help")).toBe(true);
+    expect(grouped.diagnostics.map((action) => action.id)).toContain("alignment-repair");
+    expect(grouped["help-shortcuts"].every((action) => action.shortcutHint)).toBe(true);
+    expect(CINEMA_MORE_ACTIONS.map((action) => action.id)).not.toContain("compact-transport");
+    expect(CINEMA_MORE_ACTIONS.length).toBeLessThanOrEqual(
+      CINEMA_MORE_ACTION_BUDGETS.BookCinema.max,
+    );
+    expect(CINEMA_MORE_ACTIONS.length).toBeGreaterThanOrEqual(
+      CINEMA_MORE_ACTION_BUDGETS.BookCinema.min,
+    );
     expect(activeCinemaMoreAction({ activePanelId: "diagnostics", mode: "debug" })?.label).toBe(
       "Diagnostics",
     );

@@ -20,6 +20,38 @@ const UI_ACTION_AUDIT_THRESHOLDS = {
   duplicateGroups: 0,
   missingStableTestIds: 0,
 };
+const CINEMA_MORE_REQUIRED_SECTIONS = [
+  "display",
+  "theatre",
+  "advanced",
+  "diagnostics",
+  "help-shortcuts",
+];
+const CINEMA_MORE_SURFACE_SCENARIOS = new Map([
+  ["BookCinema", "book-more-menu"],
+  ["DocumentCinema", "document-more-menu"],
+  ["WebsiteCinema", "website-more-menu"],
+]);
+const CINEMA_MORE_ACTION_BUDGETS = new Map([
+  ["BookCinema", { max: 10, min: 8 }],
+  ["DocumentCinema", { max: 10, min: 8 }],
+  ["WebsiteCinema", { max: 10, min: 8 }],
+]);
+const CINEMA_MORE_PRIMARY_LABELS = new Set([
+  "Bookmark",
+  "Debug",
+  "Display",
+  "Inspect",
+  "Open reader display settings",
+  "Pause",
+  "Play",
+  "Playback speed",
+  "Read",
+  "Restart",
+  "Review",
+  "+10s",
+  "-10s",
+]);
 
 export const finalUxGateOutputDir =
   process.env.FINAL_UX_GATES_OUTPUT_DIR ?? path.join(rootDir, "output", "final-ux-gates", "latest");
@@ -313,14 +345,13 @@ function evaluateUiActionAuditReviewGate(documents) {
 }
 
 function evaluateMoreMenuGate(documents) {
-  const requiredSurfaces = ["BookCinema", "DocumentCinema", "WebsiteCinema"];
   const results = documents.actionResults?.results ?? [];
   const actions = documents.actionInventory?.actions ?? [];
   const failures = [];
   const evidence = [];
   const moreActions = actions.filter(isCinemaMoreMenuAction);
 
-  for (const surface of requiredSurfaces) {
+  for (const [surface, scenarioId] of CINEMA_MORE_SURFACE_SCENARIOS) {
     const surfaceInventory = moreActions.filter((action) => action.surface === surface);
     if (surfaceInventory.length === 0) {
       failures.push(`${surface} did not expose the Cinema More menu in the action inventory.`);
@@ -347,17 +378,99 @@ function evaluateMoreMenuGate(documents) {
         failures.push(`${surface} Cinema More menu did not open by ${mode}.`);
       }
     }
-    evidence.push(`${surface}: pointer and keyboard menu-open evidence recorded.`);
-  }
 
-  const menuItemCount = actions.filter(
-    (action) =>
-      action.scenarioId === "book-more-menu" && /^ui-action-cinema-more-/.test(action.actionId),
-  ).length;
-  if (menuItemCount < 6) {
-    failures.push(`Cinema More menu only exposed ${String(menuItemCount)} menu entries.`);
-  } else {
-    evidence.push(`Cinema More menu entries observed: ${String(menuItemCount)}.`);
+    const menuEntries = actions.filter(
+      (action) => action.scenarioId === scenarioId && isCinemaMoreMenuEntry(action),
+    );
+    const budget = CINEMA_MORE_ACTION_BUDGETS.get(surface) ?? { max: 10, min: 1 };
+    if (menuEntries.length < budget.min || menuEntries.length > budget.max) {
+      failures.push(
+        `${surface} Cinema More exposed ${String(menuEntries.length)} actions outside budget ${String(
+          budget.min,
+        )}-${String(budget.max)}.`,
+      );
+    }
+
+    const sections = new Set(
+      menuEntries.map((action) => action.cinemaMoreSectionId).filter(Boolean),
+    );
+    for (const section of CINEMA_MORE_REQUIRED_SECTIONS) {
+      if (!sections.has(section)) {
+        failures.push(`${surface} Cinema More did not expose the ${section} section.`);
+      }
+    }
+
+    const disabledWithoutReason = menuEntries.filter(
+      (action) =>
+        action.disabled &&
+        !action.disabledReason &&
+        !action.cinemaMoreDisabledReason &&
+        !action.intentionallyNoOpReason,
+    );
+    if (disabledWithoutReason.length > 0) {
+      failures.push(
+        `${surface} Cinema More disabled actions lack reasons: ${disabledWithoutReason
+          .map((action) => action.actionId ?? action.label ?? "unknown")
+          .join(", ")}.`,
+      );
+    }
+
+    const missingOwners = menuEntries.filter((action) => !action.owner);
+    if (missingOwners.length > 0) {
+      failures.push(
+        `${surface} Cinema More actions lack owners: ${missingOwners
+          .map((action) => action.actionId ?? action.label ?? "unknown")
+          .join(", ")}.`,
+      );
+    }
+
+    const helpWithoutHints = menuEntries.filter(
+      (action) => action.cinemaMoreSectionId === "help-shortcuts" && !action.cinemaMoreShortcutHint,
+    );
+    if (helpWithoutHints.length > 0) {
+      failures.push(
+        `${surface} Cinema More help actions lack keyboard shortcut hints: ${helpWithoutHints
+          .map((action) => action.actionId ?? action.label ?? "unknown")
+          .join(", ")}.`,
+      );
+    }
+
+    const primaryLabels = new Set(
+      actions
+        .filter(
+          (action) =>
+            action.scenarioId === scenarioId &&
+            !isCinemaMoreMenuAction(action) &&
+            !isCinemaMoreMenuEntry(action),
+        )
+        .map((action) => normalizeFinalUxLabel(action.label))
+        .filter((label) => CINEMA_MORE_PRIMARY_LABELS.has(label)),
+    );
+    const duplicatePrimaryControls = menuEntries.filter((action) => {
+      const label = normalizeFinalUxLabel(action.label);
+      return (
+        label &&
+        primaryLabels.has(label) &&
+        CINEMA_MORE_PRIMARY_LABELS.has(label) &&
+        !action.cinemaMorePrimaryProxy
+      );
+    });
+    if (duplicatePrimaryControls.length > 0) {
+      failures.push(
+        `${surface} Cinema More duplicates visible primary controls without proxy metadata: ${duplicatePrimaryControls
+          .map((action) => action.label ?? action.actionId ?? "unknown")
+          .join(", ")}.`,
+      );
+    }
+
+    if (menuEntries.length > 0) {
+      evidence.push(
+        `${surface}: ${String(menuEntries.length)} More actions across ${[...sections].join(
+          ", ",
+        )} within budget ${String(budget.min)}-${String(budget.max)}.`,
+      );
+    }
+    evidence.push(`${surface}: pointer and keyboard menu-open evidence recorded.`);
   }
 
   return gate({
@@ -365,7 +478,7 @@ function evaluateMoreMenuGate(documents) {
     evidence,
     failures,
     id: "more-menu-functional",
-    title: "More menu is functional on every Cinema surface",
+    title: "More menu is useful on every Cinema surface",
   });
 }
 
@@ -375,7 +488,8 @@ function evaluateTelepromptEntryGate(documents) {
   const required = [
     {
       label: "Preview to Theatre",
-      pattern: /Teleprompt Theatre opens .*from Preview|Teleprompt Theatre opens with presenter/i,
+      pattern:
+        /Teleprompt Theatre opens .*from Preview|Teleprompt Theatre opens with (?:presenter|Theatre presets)/i,
     },
     {
       label: "Review to Theatre",
@@ -1083,6 +1197,22 @@ function isCinemaMoreMenuAction(action) {
     action.actionId === "ui-action-cinema-more-menu" ||
     /Open Cinema More menu/i.test(action.label ?? "")
   );
+}
+
+function isCinemaMoreMenuEntry(action) {
+  if (isCinemaMoreMenuAction(action)) {
+    return false;
+  }
+  if (action.cinemaMoreActionId || action.cinemaMoreSectionId) {
+    return true;
+  }
+  return /^ui-action-cinema-(more|advanced)-/.test(action.actionId ?? "");
+}
+
+function normalizeFinalUxLabel(label) {
+  return String(label ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function collectFinalUxWaivers(documents) {

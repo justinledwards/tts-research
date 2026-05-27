@@ -21,8 +21,8 @@ const budgets = {
   readMode: budget("calm", 25, 10, 4, 0, 6, 6, 2, 40, 40, 10, [
     "Read mode stays canvas-first with diagnostics hidden by default.",
   ]),
-  readModeMoreMenu: budget("calm", 25, 10, 4, 0, 6, 8, 2, 40, 40, 10, [
-    "Cinema More may expose display, advanced, and navigation entry points on demand.",
+  readModeMoreMenu: budget("calm", 26, 10, 4, 0, 6, 9, 2, 40, 40, 10, [
+    "Cinema More may expose display, theatre, advanced, diagnostics, and help entry points on demand.",
   ]),
   websiteReadCalm: budget(
     "calm",
@@ -58,7 +58,7 @@ const budgets = {
   settingsQuick: budget("standard", 40, 12, 6, 4, 10, 6, 4, 90, 80, 16, [
     "Quick settings should expose common settings; expert groups own deeper controls.",
   ]),
-  settingsDeep: budget("dense", 56, 20, 8, 4, 12, 8, 4, 90, 80, 16, [
+  settingsDeep: budget("dense", 72, 36, 8, 4, 12, 8, 4, 90, 80, 16, [
     "Dedicated settings panes may expose persisted preference controls when grouped by scope and reset/export affordances remain explicit.",
   ]),
   teleprompt: budget("standard", 46, 16, 8, 0, 8, 8, 4, 45, 48, 12, [
@@ -76,6 +76,7 @@ const scenarioBudgetKeys = {
   "book-pdf-pre-audio": "workspace",
   "command-palette": "commandPalette",
   "document-cinema": "readMode",
+  "document-more-menu": "readModeMoreMenu",
   "mobile-more-sheet": "readMode",
   "pinned-inspector": "debugAdvanced",
   "preview-mini-player": "workspace",
@@ -86,6 +87,7 @@ const scenarioBudgetKeys = {
   "voice-dashboard": "commandPalette",
   "website-cinema": "websiteReadCalm",
   "website-cinema-calm-read": "websiteReadCalm",
+  "website-more-menu": "readModeMoreMenu",
   "workspace-intake": "workspace",
   "workspace-preview": "workspace",
   "workspace-review": "reviewWorkspace",

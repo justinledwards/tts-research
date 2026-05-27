@@ -45,7 +45,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
-    acceptedSurfaces: WORKSPACE_STAGE_SURFACES,
+    acceptedSurfaces: [...WORKSPACE_STAGE_SURFACES, "Voice Command"],
     burnDownIssue: "WP46-BD-VOICE-CLONE",
     category: "overexposed",
     id: "wp46-clone-workflow",
@@ -59,6 +59,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     acceptedSurfaces: [
       "BookCinema",
       "Intake",
+      "Playback",
       "Preview",
       "Preview mini-player",
       "Project dashboard",
@@ -209,6 +210,26 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     owner: "cinema-ux",
     reason:
       "Book, document, and website cinema surfaces share reader transport and reader settings controls.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: CINEMA_SURFACES,
+    category: "allowed-surface-parity",
+    id: "wp57-cinema-more-ia-parity",
+    labels: [
+      "Alignment repair",
+      "Cinema Theatre",
+      "Command palette",
+      "Help/guide",
+      "Keyboard shortcuts",
+      "Policy internals",
+      "Reader settings",
+      "Source internals",
+      "Timing map",
+    ],
+    owner: "cinema-ux",
+    reason:
+      "Book, document, and website Cinema share the same curated More menu information architecture so repeated entries represent surface parity, not extra exposure.",
     reviewDate: REVIEW_DATE,
   },
   {

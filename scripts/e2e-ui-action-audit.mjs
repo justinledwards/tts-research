@@ -52,6 +52,34 @@ const UI_ACTION_AUDIT_THRESHOLDS = {
   duplicateGroups: 0,
   missingStableTestIds: 0,
 };
+const CINEMA_MORE_REQUIRED_SECTIONS = [
+  "display",
+  "theatre",
+  "advanced",
+  "diagnostics",
+  "help-shortcuts",
+];
+const CINEMA_MORE_ACTION_BUDGETS = new Map([
+  ["BookCinema", { max: 10, min: 8 }],
+  ["DocumentCinema", { max: 10, min: 8 }],
+  ["WebsiteCinema", { max: 10, min: 8 }],
+  ["Mobile/narrow More sheet", { max: 6, min: 3 }],
+]);
+const CINEMA_MORE_PRIMARY_LABELS = new Set([
+  "Bookmark",
+  "Debug",
+  "Display",
+  "Inspect",
+  "Open reader display settings",
+  "Pause",
+  "Play",
+  "Playback speed",
+  "Read",
+  "Restart",
+  "Review",
+  "+10s",
+  "-10s",
+]);
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
@@ -861,10 +889,40 @@ function createScenarios(seed) {
       surface: "DocumentCinema",
     },
     {
+      description: "Document Cinema More menu opened from the focus mode toolbar.",
+      id: "document-more-menu",
+      label: "Document Cinema More menu",
+      open: (page) => openPreparedCinemaMoreMenu(page, "Document Cinema", "DocumentCinema"),
+      storageState: projectStorageState(seed.projectId, {
+        jobId: seed.markdown.job.id,
+        preparedSourceId: seed.markdown.source.id,
+        sourceMode: "fileUrl",
+        sourceType: "prepared",
+        stage: "intake",
+        text: seed.markdown.source.speechText ?? seed.markdown.source.text ?? "",
+      }),
+      surface: "DocumentCinema",
+    },
+    {
       description: "Website Cinema for a local website fixture.",
       id: "website-cinema",
       label: "Website source",
       open: (page) => openPreparedCinemaOverlay(page, "Website Cinema"),
+      storageState: projectStorageState(seed.projectId, {
+        jobId: seed.website.job.id,
+        preparedSourceId: seed.website.source.id,
+        sourceMode: "fileUrl",
+        sourceType: "prepared",
+        stage: "intake",
+        text: seed.website.source.speechText ?? seed.website.source.text ?? "",
+      }),
+      surface: "WebsiteCinema",
+    },
+    {
+      description: "Website Cinema More menu opened from the focus mode toolbar.",
+      id: "website-more-menu",
+      label: "Website Cinema More menu",
+      open: (page) => openPreparedCinemaMoreMenu(page, "Website Cinema", "WebsiteCinema"),
       storageState: projectStorageState(seed.projectId, {
         jobId: seed.website.job.id,
         preparedSourceId: seed.website.source.id,
@@ -1220,10 +1278,6 @@ async function clickPreviewMiniPlayerIfReady(page) {
   if (await speed.isEnabled().catch(() => false)) {
     await speed.selectOption("1.25");
   }
-  const source = page.getByTestId("ui-action-preview-mini-source");
-  if (await source.isEnabled().catch(() => false)) {
-    await source.click();
-  }
 }
 
 async function openSettings(page) {
@@ -1277,11 +1331,73 @@ async function openMobileMoreSheet(page, scope) {
   await openBookCinemaOverlay(page, scope);
   const overlay = cinemaOverlay(page);
   await overlay.getByRole("button", { exact: true, name: "More" }).first().click();
-  await page
+  const sheet = page
     .locator("[data-cinema-mobile-sheet], [role='dialog']")
     .filter({ hasText: /Focus|Settings|Source|More/i })
-    .first()
-    .waitFor();
+    .first();
+  await sheet.waitFor();
+  await assertMobileMoreSheet(overlay, sheet);
+}
+
+async function assertMobileMoreSheet(overlay, sheet) {
+  const report = await sheet.evaluate((sheetElement) => {
+    const visibleControls = [...sheetElement.querySelectorAll("button, select, [role='button']")]
+      .filter((control) => {
+        const rect = control.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      })
+      .map((control) =>
+        String(control.getAttribute("aria-label") || control.textContent || "")
+          .replace(/\s+/g, " ")
+          .trim(),
+      )
+      .filter(Boolean);
+    const tabLabels = [...sheetElement.querySelectorAll("button")]
+      .map((button) =>
+        String(button.textContent ?? "")
+          .replace(/\s+/g, " ")
+          .trim(),
+      )
+      .filter(Boolean);
+    return {
+      hasDisplayControls:
+        sheetElement.querySelector("[data-cinema-mobile-display-controls]") !== null,
+      tabLabels,
+      visibleControls,
+    };
+  });
+  const footerVisible = await overlay
+    .locator("[data-cinema-transport-footer]")
+    .evaluate((footer) => {
+      const rect = footer.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && footer.offsetParent !== null;
+    });
+  const primaryControlsVisible = await overlay
+    .locator("[data-cinema-primary-playback-group] button")
+    .evaluateAll((controls) =>
+      controls.some((control) => {
+        const rect = control.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && control.offsetParent !== null;
+      }),
+    );
+  const failures = [];
+  if (report.visibleControls.length === 0) {
+    failures.push("Mobile More sheet opened without visible actions.");
+  }
+  for (const expected of ["Source", "Structure", "Narration"]) {
+    if (!report.tabLabels.some((label) => label.includes(expected))) {
+      failures.push(`Mobile More sheet is missing ${expected}.`);
+    }
+  }
+  if (!report.hasDisplayControls) {
+    failures.push("Mobile More sheet did not preserve display controls.");
+  }
+  if (!footerVisible || !primaryControlsVisible) {
+    failures.push("Mobile More sheet hid the Cinema transport controls.");
+  }
+  if (failures.length > 0) {
+    throw new Error(failures.join(" "));
+  }
 }
 
 async function openTeleprompt(page) {
@@ -1340,7 +1456,14 @@ async function openBookCinemaMoreMenu(page, scope) {
   await openBookCinemaOverlay(page, scope);
   const overlay = cinemaOverlay(page);
   await openCinemaMoreMenu(page, overlay);
-  await assertCinemaMoreMenu(page, overlay);
+  await assertCinemaMoreMenu(page, overlay, "BookCinema");
+}
+
+async function openPreparedCinemaMoreMenu(page, expectedLabel, surface) {
+  await openPreparedCinemaOverlay(page, expectedLabel);
+  const overlay = cinemaOverlay(page);
+  await openCinemaMoreMenu(page, overlay);
+  await assertCinemaMoreMenu(page, overlay, surface);
 }
 
 async function openCinemaMoreMenu(page, overlay) {
@@ -1353,46 +1476,111 @@ async function openCinemaMoreMenu(page, overlay) {
   await page.waitForTimeout(100);
 }
 
-async function assertCinemaMoreMenu(page, overlay) {
-  const report = await overlay.locator("#cinema-more-menu").evaluate((menu) => {
-    const actions = [...menu.querySelectorAll("[data-cinema-more-action-id]")].map((action) => ({
-      commandId: action.getAttribute("data-command-id") ?? "",
-      id: action.getAttribute("data-cinema-more-action-id") ?? "",
-      kind: action.getAttribute("data-cinema-more-action-kind") ?? "",
-      owner: action.getAttribute("data-ui-action-owner") ?? "",
-      role: action.getAttribute("role") ?? "",
-      section: action.getAttribute("data-cinema-more-section-id") ?? "",
-    }));
-    const sections = [...menu.querySelectorAll("[data-cinema-more-section]")].map(
-      (section) => section.getAttribute("data-cinema-more-section") ?? "",
-    );
-    const expectedCommandIds = new Map([
-      ["command-palette", "command.palette"],
-      ["keyboard-shortcuts", "shortcuts:open"],
-      ["help-guide", "help:open"],
-    ]);
-    return {
-      actionCount: actions.length,
-      commandMismatches: actions.filter((action) => {
-        const expected = expectedCommandIds.get(action.id);
-        if (!expected) {
-          return false;
-        }
-        return action.commandId !== expected;
-      }),
-      emptySections: sections.filter(
-        (section) => !actions.some((action) => action.section === section),
-      ),
-      missingAdvancedModeIds: actions.filter((action) => action.kind === "advanced" && !action.id),
-      missingOwners: actions.filter((action) => !action.owner),
-      sections,
-    };
-  });
+async function assertCinemaMoreMenu(page, overlay, surface) {
+  const budget = CINEMA_MORE_ACTION_BUDGETS.get(surface) ?? { max: 10, min: 1 };
+  const report = await overlay.locator("#cinema-more-menu").evaluate(
+    (menu, context) => {
+      const normalize = (value) =>
+        String(value ?? "")
+          .replace(/\s+/g, " ")
+          .trim();
+      const menuRoot = menu;
+      const actions = [...menuRoot.querySelectorAll("[data-cinema-more-action-id]")].map(
+        (action) => {
+          const label = normalize(action.getAttribute("aria-label") || action.textContent);
+          return {
+            commandId: action.getAttribute("data-command-id") ?? "",
+            disabled:
+              action.matches(":disabled") ||
+              action.getAttribute("aria-disabled") === "true" ||
+              action.getAttribute("disabled") !== null,
+            disabledReason:
+              action.getAttribute("data-cinema-more-disabled-reason") ??
+              action.getAttribute("data-disabled-reason") ??
+              "",
+            id: action.getAttribute("data-cinema-more-action-id") ?? "",
+            kind: action.getAttribute("data-cinema-more-action-kind") ?? "",
+            label,
+            owner: action.getAttribute("data-ui-action-owner") ?? "",
+            primaryProxy: action.getAttribute("data-cinema-more-primary-proxy") ?? "",
+            role: action.getAttribute("role") ?? "",
+            section: action.getAttribute("data-cinema-more-section-id") ?? "",
+            shortcutHint: action.getAttribute("data-cinema-more-shortcut-hint") ?? "",
+          };
+        },
+      );
+      const sections = [...menu.querySelectorAll("[data-cinema-more-section]")].map(
+        (section) => section.getAttribute("data-cinema-more-section") ?? "",
+      );
+      const primaryCandidates =
+        menuRoot
+          .closest("[role='dialog']")
+          ?.querySelectorAll(
+            "[data-cinema-mode-control-group] button, [data-cinema-primary-playback-group] button, [data-testid='ui-action-cinema-display-settings']",
+          ) ?? [];
+      const visiblePrimaryLabels = [
+        ...new Set(
+          [...primaryCandidates]
+            .filter((control) => !menuRoot.contains(control) && control.offsetParent !== null)
+            .map((control) => normalize(control.getAttribute("aria-label") || control.textContent)),
+        ),
+      ];
+      const visiblePrimarySet = new Set(visiblePrimaryLabels);
+      const expectedPrimarySet = new Set(context.primaryLabels);
+      const expectedCommandIds = new Map([
+        ["command-palette", "command.palette"],
+        ["keyboard-shortcuts", "shortcuts:open"],
+        ["help-guide", "help:open"],
+      ]);
+      return {
+        actionCount: actions.length,
+        commandMismatches: actions.filter((action) => {
+          const expected = expectedCommandIds.get(action.id);
+          if (!expected) {
+            return false;
+          }
+          return action.commandId !== expected;
+        }),
+        emptySections: sections.filter(
+          (section) => !actions.some((action) => action.section === section),
+        ),
+        duplicatePrimaryControls: actions.filter(
+          (action) =>
+            !action.primaryProxy &&
+            expectedPrimarySet.has(action.label) &&
+            visiblePrimarySet.has(action.label),
+        ),
+        helpActionsMissingShortcuts: actions.filter(
+          (action) => action.section === "help-shortcuts" && !action.shortcutHint,
+        ),
+        missingAdvancedModeIds: actions.filter(
+          (action) => (action.kind === "advanced" || action.kind === "diagnostics") && !action.id,
+        ),
+        missingDisabledReasons: actions.filter(
+          (action) => action.disabled && !action.disabledReason,
+        ),
+        missingLabels: actions.filter((action) => !action.label),
+        missingOwners: actions.filter((action) => !action.owner),
+        sections,
+        visiblePrimaryLabels,
+      };
+    },
+    {
+      primaryLabels: [...CINEMA_MORE_PRIMARY_LABELS],
+    },
+  );
   const failures = [];
   if (report.actionCount === 0) {
     failures.push("Cinema More opened an empty menu.");
   }
-  for (const section of ["display", "advanced", "navigation"]) {
+  if (report.actionCount < budget.min || report.actionCount > budget.max) {
+    failures.push(
+      `Cinema More on ${surface} exposed ${String(report.actionCount)} actions outside budget ${String(
+        budget.min,
+      )}-${String(budget.max)}.`,
+    );
+  }
+  for (const section of CINEMA_MORE_REQUIRED_SECTIONS) {
     if (!report.sections.includes(section)) {
       failures.push(`Cinema More menu did not expose the ${section} section.`);
     }
@@ -1404,6 +1592,30 @@ async function assertCinemaMoreMenu(page, overlay) {
     failures.push(
       `Cinema More actions missing owners: ${report.missingOwners
         .map((action) => action.id || action.role)
+        .join(", ")}.`,
+    );
+  }
+  if (report.missingLabels.length > 0) {
+    failures.push("Cinema More contains actions without readable labels.");
+  }
+  if (report.missingDisabledReasons.length > 0) {
+    failures.push(
+      `Cinema More disabled actions missing reasons: ${report.missingDisabledReasons
+        .map((action) => action.id || action.label)
+        .join(", ")}.`,
+    );
+  }
+  if (report.helpActionsMissingShortcuts.length > 0) {
+    failures.push(
+      `Cinema More help actions missing shortcut hints: ${report.helpActionsMissingShortcuts
+        .map((action) => action.id || action.label)
+        .join(", ")}.`,
+    );
+  }
+  if (report.duplicatePrimaryControls.length > 0) {
+    failures.push(
+      `Cinema More duplicates nearby primary controls without proxy metadata: ${report.duplicatePrimaryControls
+        .map((action) => action.label)
         .join(", ")}.`,
     );
   }

@@ -1758,7 +1758,6 @@ export function BookCinemaOverlay({
                   cinemaFocus.setActivePanelId(action.panelId);
                 }}
                 onCommandPalette={onCommandPaletteOpen}
-                onCompactTransport={handleCompactTransport}
                 onHelpGuide={onHelpOpen}
                 onKeyboardShortcuts={onShortcutCheatSheetOpen}
                 onModeChange={cinemaFocus.setMode}

@@ -13,7 +13,6 @@ export function CinemaFocusModeToolbar({
   mode,
   onAdvancedAction,
   onCommandPalette,
-  onCompactTransport,
   onHelpGuide,
   onKeyboardShortcuts,
   onModeChange,
@@ -24,7 +23,6 @@ export function CinemaFocusModeToolbar({
   mode: CinemaFocusMode;
   onAdvancedAction?: (action: CinemaAdvancedModeAction) => void;
   onCommandPalette?: () => void;
-  onCompactTransport?: () => void;
   onHelpGuide?: () => void;
   onKeyboardShortcuts?: () => void;
   onModeChange: (mode: CinemaFocusMode) => void;
@@ -68,7 +66,6 @@ export function CinemaFocusModeToolbar({
         mode={mode}
         onAdvancedAction={handleAdvancedAction}
         onCommandPalette={onCommandPalette}
-        onCompactTransport={onCompactTransport}
         onHelpGuide={onHelpGuide}
         onKeyboardShortcuts={onKeyboardShortcuts}
         onReaderSettings={onReaderSettings}

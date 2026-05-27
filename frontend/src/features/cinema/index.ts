@@ -16,21 +16,28 @@ export {
 } from "./cinemaAdvancedMode";
 export {
   CINEMA_MORE_ACTIONS,
+  CINEMA_MORE_ACTION_BUDGETS,
   CINEMA_MORE_MENU_ID,
+  CINEMA_MORE_REQUIRED_SECTION_IDS,
   CINEMA_MORE_SECTIONS,
   activeCinemaMoreAction,
   cinemaMoreAction,
   cinemaMoreActionsBySection,
+  isCinemaMoreOperatorAction,
   type CinemaMoreAction,
+  type CinemaMoreActionBudget,
   type CinemaMoreActionId,
   type CinemaMoreActionKind,
   type CinemaMoreActionOwner,
   type CinemaMoreAdvancedAction,
+  type CinemaMoreDiagnosticsAction,
   type CinemaMoreDisplayAction,
   type CinemaMoreNavigationAction,
   type CinemaMoreNavigationActionId,
+  type CinemaMoreOperatorAction,
   type CinemaMoreSection,
   type CinemaMoreSectionId,
+  type CinemaMoreTheatreAction,
 } from "./cinemaMoreActions";
 export {
   useCinemaFocusController,

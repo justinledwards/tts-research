@@ -28,7 +28,7 @@ test("passes final UX gates from composed local evidence", () => {
   assert.equal(result.status, "passed");
   assert.equal(result.summary.total, 11);
   assert.equal(result.summary.failed, 0);
-  assert.match(renderFinalUxSummary(result), /More menu is functional/);
+  assert.match(renderFinalUxSummary(result), /More menu is useful/);
 });
 
 test("fails when UI action audit is completed with unwaived findings", () => {
@@ -214,6 +214,80 @@ test("fails when Cinema More lacks keyboard evidence on a required surface", () 
   assert.match(moreGate.failures.join("\n"), /WebsiteCinema.*keyboard/);
 });
 
+test("fails when Cinema More omits required information architecture", () => {
+  const documents = passingDocuments();
+  documents.actionInventory.actions = documents.actionInventory.actions.filter(
+    (action) =>
+      !(action.scenarioId === "book-more-menu" && action.cinemaMoreSectionId === "diagnostics"),
+  );
+  const result = evaluateFinalUxGates({
+    artifactPaths,
+    commandSteps: [],
+    documents,
+    outputDir: "/tmp/final",
+    rootDir: "/repo",
+  });
+
+  const moreGate = result.gates.find((gate) => gate.id === "more-menu-functional");
+  assert.equal(result.status, "failed");
+  assert.equal(moreGate.status, "failed");
+  assert.match(moreGate.failures.join("\n"), /BookCinema.*diagnostics section/);
+});
+
+test("fails when Cinema More duplicates visible primary controls without proxy metadata", () => {
+  const documents = passingDocuments();
+  documents.actionInventory.actions.push({
+    actionId: "ui-action-visible-read-mode",
+    disabled: false,
+    hasStableTestId: true,
+    label: "Read",
+    metadataIssues: [],
+    owner: "cinema",
+    scenarioId: "book-more-menu",
+    surface: "BookCinema",
+  });
+  documents.actionInventory.actions = documents.actionInventory.actions.map((action) =>
+    action.scenarioId === "book-more-menu" &&
+    action.actionId === "ui-action-cinema-more-reader-settings"
+      ? { ...action, label: "Read" }
+      : action,
+  );
+  const result = evaluateFinalUxGates({
+    artifactPaths,
+    commandSteps: [],
+    documents,
+    outputDir: "/tmp/final",
+    rootDir: "/repo",
+  });
+
+  const moreGate = result.gates.find((gate) => gate.id === "more-menu-functional");
+  assert.equal(result.status, "failed");
+  assert.equal(moreGate.status, "failed");
+  assert.match(moreGate.failures.join("\n"), /duplicates visible primary controls/);
+});
+
+test("fails when Cinema More help actions omit shortcut hints", () => {
+  const documents = passingDocuments();
+  documents.actionInventory.actions = documents.actionInventory.actions.map((action) =>
+    action.scenarioId === "website-more-menu" &&
+    action.actionId === "ui-action-cinema-more-keyboard-shortcuts"
+      ? { ...action, cinemaMoreShortcutHint: "" }
+      : action,
+  );
+  const result = evaluateFinalUxGates({
+    artifactPaths,
+    commandSteps: [],
+    documents,
+    outputDir: "/tmp/final",
+    rootDir: "/repo",
+  });
+
+  const moreGate = result.gates.find((gate) => gate.id === "more-menu-functional");
+  assert.equal(result.status, "failed");
+  assert.equal(moreGate.status, "failed");
+  assert.match(moreGate.failures.join("\n"), /help actions lack keyboard shortcut hints/);
+});
+
 function passingDocuments() {
   return {
     accessibilityResults: {
@@ -239,16 +313,7 @@ function passingDocuments() {
           scenarioId: `${surface}-read`,
           surface,
         })),
-        ...Array.from({ length: 6 }, (_, index) => ({
-          actionId: `ui-action-cinema-more-entry-${String(index)}`,
-          disabled: false,
-          hasStableTestId: true,
-          label: `More entry ${String(index)}`,
-          metadataIssues: [],
-          owner: "cinema-more",
-          scenarioId: "book-more-menu",
-          surface: "BookCinema",
-        })),
+        ...moreMenuEntries(),
         {
           actionId: "ui-action-disabled",
           disabled: true,
@@ -344,4 +409,107 @@ function passingDocuments() {
       },
     },
   };
+}
+
+function moreMenuEntries() {
+  const surfaces = [
+    { scenarioId: "book-more-menu", surface: "BookCinema" },
+    { scenarioId: "document-more-menu", surface: "DocumentCinema" },
+    { scenarioId: "website-more-menu", surface: "WebsiteCinema" },
+  ];
+  const entries = [
+    {
+      actionId: "ui-action-cinema-more-reader-settings",
+      cinemaMoreActionId: "reader-settings",
+      cinemaMoreActionKind: "display",
+      cinemaMoreSectionId: "display",
+      label: "Reader settings",
+      owner: "cinema-display",
+    },
+    {
+      actionId: "ui-action-cinema-more-theatre-mode",
+      cinemaMoreActionId: "theatre-mode",
+      cinemaMoreActionKind: "theatre",
+      cinemaMoreSectionId: "theatre",
+      label: "Cinema Theatre",
+      owner: "cinema-theatre",
+    },
+    {
+      actionId: "ui-action-cinema-advanced-policy-internals",
+      cinemaMoreActionId: "policy-internals",
+      cinemaMoreActionKind: "advanced",
+      cinemaMoreSectionId: "advanced",
+      label: "Policy internals",
+      owner: "cinema-advanced",
+    },
+    {
+      actionId: "ui-action-cinema-advanced-source-internals",
+      cinemaMoreActionId: "source-internals",
+      cinemaMoreActionKind: "advanced",
+      cinemaMoreSectionId: "advanced",
+      label: "Source internals",
+      owner: "cinema-advanced",
+    },
+    {
+      actionId: "ui-action-cinema-advanced-diagnostics",
+      cinemaMoreActionId: "diagnostics",
+      cinemaMoreActionKind: "diagnostics",
+      cinemaMoreSectionId: "diagnostics",
+      label: "Diagnostics",
+      owner: "cinema-diagnostics",
+    },
+    {
+      actionId: "ui-action-cinema-advanced-timing-map",
+      cinemaMoreActionId: "timing-map",
+      cinemaMoreActionKind: "diagnostics",
+      cinemaMoreSectionId: "diagnostics",
+      label: "Timing map",
+      owner: "cinema-diagnostics",
+    },
+    {
+      actionId: "ui-action-cinema-advanced-alignment-repair",
+      cinemaMoreActionId: "alignment-repair",
+      cinemaMoreActionKind: "diagnostics",
+      cinemaMoreSectionId: "diagnostics",
+      label: "Alignment repair",
+      owner: "cinema-diagnostics",
+    },
+    {
+      actionId: "ui-action-cinema-more-command-palette",
+      cinemaMoreActionId: "command-palette",
+      cinemaMoreActionKind: "help-shortcuts",
+      cinemaMoreSectionId: "help-shortcuts",
+      cinemaMoreShortcutHint: "Ctrl+K / Cmd+K",
+      label: "Command palette",
+      owner: "cinema-help",
+    },
+    {
+      actionId: "ui-action-cinema-more-keyboard-shortcuts",
+      cinemaMoreActionId: "keyboard-shortcuts",
+      cinemaMoreActionKind: "help-shortcuts",
+      cinemaMoreSectionId: "help-shortcuts",
+      cinemaMoreShortcutHint: "? / F1",
+      label: "Keyboard shortcuts",
+      owner: "cinema-help",
+    },
+    {
+      actionId: "ui-action-cinema-more-help-guide",
+      cinemaMoreActionId: "help-guide",
+      cinemaMoreActionKind: "help-shortcuts",
+      cinemaMoreSectionId: "help-shortcuts",
+      cinemaMoreShortcutHint: "Shift+F1",
+      label: "Help/guide",
+      owner: "cinema-help",
+    },
+  ];
+  return surfaces.flatMap(({ scenarioId, surface }) =>
+    entries.map((entry) => ({
+      ...entry,
+      disabled: false,
+      hasStableTestId: true,
+      metadataIssues: [],
+      scenarioId,
+      surface,
+    })),
+  );
 }

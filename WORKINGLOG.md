@@ -825,3 +825,9 @@
 - [x] Wire Book, Document, and Website Cinema Theatre views
 - [x] Add command palette actions and screenshot coverage
 - [x] Run WP56 validation commands
+
+## 2026-05-27 06:05 CEST - WP57 Cinema More Menu Quality
+- [x] Inspect Cinema More actions, metadata, audits, and mobile sheet behavior
+- [x] Add More menu information architecture, budgets, reasons, and shortcut hints
+- [x] Add duplicate-primary-control validation and surface/mobile coverage
+- [x] Run WP57 validation commands

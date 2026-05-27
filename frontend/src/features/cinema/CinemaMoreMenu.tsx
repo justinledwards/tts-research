@@ -7,6 +7,7 @@ import {
   CINEMA_MORE_SECTIONS,
   activeCinemaMoreAction,
   cinemaMoreActionsBySection,
+  isCinemaMoreOperatorAction,
   type CinemaMoreAction,
   type CinemaMoreNavigationActionId,
 } from "./cinemaMoreActions";
@@ -18,7 +19,6 @@ export interface CinemaMoreMenuProps {
   mode: CinemaFocusMode;
   onAdvancedAction?: (action: CinemaAdvancedModeAction) => void;
   onCommandPalette?: () => void;
-  onCompactTransport?: () => void;
   onHelpGuide?: () => void;
   onKeyboardShortcuts?: () => void;
   onReaderSettings?: () => void;
@@ -31,7 +31,6 @@ export function CinemaMoreMenu({
   mode,
   onAdvancedAction,
   onCommandPalette,
-  onCompactTransport,
   onHelpGuide,
   onKeyboardShortcuts,
   onReaderSettings,
@@ -98,14 +97,11 @@ export function CinemaMoreMenu({
     if (action.disabledReason) {
       return action.disabledReason;
     }
-    if (action.kind === "advanced" && !onAdvancedAction) {
+    if (isCinemaMoreOperatorAction(action) && !onAdvancedAction) {
       return "Advanced Cinema actions are unavailable in this surface.";
     }
     if (action.id === "reader-settings" && !onReaderSettings) {
       return "Reader settings are unavailable in this surface.";
-    }
-    if (action.id === "compact-transport" && !onCompactTransport) {
-      return "Compact transport cannot be changed in this surface.";
     }
     if (action.id === "theatre-mode" && !onTheatreMode) {
       return "Theatre mode is unavailable in this surface.";
@@ -126,7 +122,7 @@ export function CinemaMoreMenu({
     if (disabledReasonFor(action)) {
       return;
     }
-    if (action.kind === "advanced") {
+    if (isCinemaMoreOperatorAction(action)) {
       closeAndReturnFocus();
       onAdvancedAction?.(action.advancedAction);
       return;
@@ -135,11 +131,6 @@ export function CinemaMoreMenu({
       case "reader-settings": {
         closeAndReturnFocus();
         onReaderSettings?.();
-        return;
-      }
-      case "compact-transport": {
-        closeAndReturnFocus();
-        onCompactTransport?.();
         return;
       }
       case "theatre-mode": {
@@ -281,7 +272,11 @@ export function CinemaMoreMenu({
               return null;
             }
             return (
-              <div data-cinema-more-section={section.id} key={section.id}>
+              <div
+                data-cinema-more-section={section.id}
+                data-cinema-more-section-label={section.label}
+                key={section.id}
+              >
                 <p className="px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
                   {section.label}
                 </p>
@@ -290,39 +285,40 @@ export function CinemaMoreMenu({
                   const selected = activeAction?.id === action.id;
                   const commandId = commandIdForAction(action);
                   const detailId = `${CINEMA_MORE_MENU_ID}-${action.id}-detail`;
+                  const operatorAction = isCinemaMoreOperatorAction(action);
                   return (
                     <Button
                       align="start"
-                      aria-checked={action.kind === "advanced" ? selected : undefined}
+                      aria-checked={operatorAction ? selected : undefined}
                       aria-describedby={detailId}
                       aria-label={action.label}
-                      className="w-full justify-start rounded px-2"
-                      data-advanced-mode-id={action.kind === "advanced" ? action.id : undefined}
-                      data-advanced-mode-reason={
-                        action.kind === "advanced" ? action.reason : undefined
-                      }
+                      className="w-full justify-between gap-3 rounded px-2"
+                      data-advanced-mode-id={operatorAction ? action.id : undefined}
+                      data-advanced-mode-reason={operatorAction ? action.reason : undefined}
                       data-cinema-more-action-id={action.id}
                       data-cinema-more-action-kind={action.kind}
+                      data-cinema-more-disabled-reason={disabledReason}
                       data-cinema-more-section-id={action.sectionId}
+                      data-cinema-more-shortcut-hint={action.shortcutHint}
                       data-command-id={commandId}
                       data-testid={action.testId}
-                      data-ui-action-advanced={action.kind === "advanced" ? "true" : undefined}
+                      data-ui-action-advanced={operatorAction ? "true" : undefined}
                       data-ui-action-owner={action.owner}
-                      data-ui-action-scope={action.kind === "advanced" ? "operator" : action.kind}
+                      data-ui-action-scope={operatorAction ? "operator" : action.kind}
                       disabled={Boolean(disabledReason)}
                       disabledReason={disabledReason}
                       key={action.id}
                       onClick={() => {
                         handleAction(action);
                       }}
-                      role={action.kind === "advanced" ? "menuitemradio" : "menuitem"}
+                      role={operatorAction ? "menuitemradio" : "menuitem"}
                       selected={selected}
                       size="sm"
                       title={disabledReason ?? action.reason}
                       variant="mode"
                     >
-                      <span className="grid gap-0.5">
-                        <span>{action.label}</span>
+                      <span className="grid min-w-0 gap-0.5">
+                        <span className="truncate">{action.label}</span>
                         <span
                           className="text-[0.65rem] font-medium leading-4 vs-muted"
                           id={detailId}
@@ -330,6 +326,11 @@ export function CinemaMoreMenu({
                           {disabledReason ?? action.detail}
                         </span>
                       </span>
+                      {action.shortcutHint ? (
+                        <span className="ml-auto shrink-0 rounded border px-1.5 py-0.5 text-[0.62rem] font-semibold leading-4 vs-border vs-muted">
+                          {action.shortcutHint}
+                        </span>
+                      ) : null}
                     </Button>
                   );
                 })}

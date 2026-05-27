@@ -447,18 +447,13 @@ export const STATIC_UI_ACTION_METADATA = [
     "menu-or-panel-opened",
   ),
   action(
-    "cinema-more-compact-transport",
-    "Compact transport",
-    "BookCinema",
-    "navigation",
-    "state-changed",
-  ),
-  action(
     "cinema-more-theatre-mode",
-    "Theatre/Cinematic mode",
+    "Cinema Theatre",
     "BookCinema",
     "navigation",
     "state-changed",
+    false,
+    ["Theatre/Cinematic mode", "Open Cinema Theatre"],
   ),
   action(
     "cinema-more-command-palette",

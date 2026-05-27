@@ -73,6 +73,7 @@ export async function buildActionInventory(page, scenario) {
           element.getAttribute("data-command-id") ??
           element.closest("[data-command-id]")?.getAttribute("data-command-id") ??
           null;
+        const cinemaMoreSection = element.closest("[data-cinema-more-section]");
         const railModeToolbar =
           element.closest("[data-rail-mode-toolbar]")?.getAttribute("data-rail-mode-toolbar") ??
           null;
@@ -115,6 +116,42 @@ export async function buildActionInventory(page, scenario) {
             element.closest("[data-capability-reason]")?.getAttribute("data-capability-reason") ??
             null,
           commandId,
+          cinemaMoreActionId:
+            element.getAttribute("data-cinema-more-action-id") ??
+            element
+              .closest("[data-cinema-more-action-id]")
+              ?.getAttribute("data-cinema-more-action-id") ??
+            null,
+          cinemaMoreActionKind:
+            element.getAttribute("data-cinema-more-action-kind") ??
+            element
+              .closest("[data-cinema-more-action-kind]")
+              ?.getAttribute("data-cinema-more-action-kind") ??
+            null,
+          cinemaMoreDisabledReason:
+            element.getAttribute("data-cinema-more-disabled-reason") ??
+            element
+              .closest("[data-cinema-more-disabled-reason]")
+              ?.getAttribute("data-cinema-more-disabled-reason") ??
+            null,
+          cinemaMorePrimaryProxy:
+            element.getAttribute("data-cinema-more-primary-proxy") ??
+            element
+              .closest("[data-cinema-more-primary-proxy]")
+              ?.getAttribute("data-cinema-more-primary-proxy") ??
+            null,
+          cinemaMoreSectionId:
+            element.getAttribute("data-cinema-more-section-id") ??
+            cinemaMoreSection?.getAttribute("data-cinema-more-section") ??
+            null,
+          cinemaMoreSectionLabel:
+            cinemaMoreSection?.getAttribute("data-cinema-more-section-label") ?? null,
+          cinemaMoreShortcutHint:
+            element.getAttribute("data-cinema-more-shortcut-hint") ??
+            element
+              .closest("[data-cinema-more-shortcut-hint]")
+              ?.getAttribute("data-cinema-more-shortcut-hint") ??
+            null,
           compactControlId:
             element.getAttribute("data-compact-control-id") ??
             element.closest("[data-compact-control-id]")?.getAttribute("data-compact-control-id") ??
