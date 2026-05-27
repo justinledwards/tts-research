@@ -1,6 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SPEECH_POLICY_DEFINITION } from "../../speechPolicy";
+import {
+  BUILT_IN_SPEECH_POLICY_SETTINGS,
+  DEFAULT_SPEECH_POLICY_DEFINITION,
+} from "../../speechPolicy";
 import { createRunConfiguration } from "../../runConfig";
 import { DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS } from "../../teleprompter";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
@@ -10,7 +13,7 @@ import { defaultUiMemoryState } from "../preferences";
 import { DEFAULT_SHORTCUT_PREFERENCES } from "../shortcuts/shortcutRegistry";
 import { SettingsPanel } from "./SettingsPanel";
 import type { SettingsCommandTarget } from "./model";
-import type { TTSEngineDiagnostics } from "../../types";
+import type { CustomSpeechPolicyProfile, TTSEngineDiagnostics } from "../../types";
 
 const noop = () => {
   // Test callback.
@@ -22,13 +25,17 @@ const asyncNoop = async () => {
 
 function renderSettingsPanel(
   commandTarget?: SettingsCommandTarget,
-  options: Readonly<{ ttsEngines?: TTSEngineDiagnostics[] }> = {},
+  options: Readonly<{
+    customSpeechPolicyProfiles?: CustomSpeechPolicyProfile[];
+    speechPolicyProfile?: string;
+    ttsEngines?: TTSEngineDiagnostics[];
+  }> = {},
 ): string {
   return renderToStaticMarkup(
     <SettingsPanel
       canSubmit
       commandTarget={commandTarget}
-      customSpeechPolicyProfiles={[]}
+      customSpeechPolicyProfiles={options.customSpeechPolicyProfiles ?? []}
       isOpen
       isSpeechPolicyPreviewing={false}
       job={null}
@@ -50,7 +57,7 @@ function renderSettingsPanel(
       speechPolicyDefinition={DEFAULT_SPEECH_POLICY_DEFINITION}
       speechPolicyError={null}
       speechPolicyOverrides={{}}
-      speechPolicyProfile="Enterprise"
+      speechPolicyProfile={options.speechPolicyProfile ?? "Enterprise"}
       speechPolicyProfiles={DEFAULT_SPEECH_POLICY_DEFINITION.profiles}
       shortcutPreferences={DEFAULT_SHORTCUT_PREFERENCES}
       telepromptTheatreSettings={DEFAULT_TELEPROMPT_THEATRE_SETTINGS}
@@ -108,6 +115,22 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Machine");
   });
 
+  it("renders the golden-minute speech-policy preview when targeted", () => {
+    const markup = renderSettingsPanel({
+      fieldId: "projectSpeechPolicy",
+      groupId: "sources",
+      layerId: "advanced",
+      scope: "project",
+    });
+
+    expect(markup).toContain("Golden-minute policy preview");
+    expect(markup).toContain("Visual spoken-text preview");
+    expect(markup).toContain("citation [^gm1]");
+    expect(markup).toContain("Dr. -&gt; Doctor");
+    expect(markup).toContain("Enterprise vs Education");
+    expect(markup).toContain("Accessibility vs Technical Docs");
+  });
+
   it("renders Teleprompt Theatre settings when targeted", () => {
     const markup = renderSettingsPanel({
       fieldId: "telepromptTheatre",
@@ -120,6 +143,39 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Laptop presenter");
     expect(markup).toContain("Recording booth");
     expect(markup).toContain("Cue font size");
+  });
+
+  it("renders custom golden-minute policy comparison when a user profile exists", () => {
+    const markup = renderSettingsPanel(
+      {
+        fieldId: "projectSpeechPolicy",
+        groupId: "sources",
+        layerId: "advanced",
+        scope: "project",
+      },
+      {
+        customSpeechPolicyProfiles: [
+          {
+            baseProfile: "Enterprise",
+            createdAt: "2026-05-27T00:00:00.000Z",
+            id: "custom-policy",
+            name: "Project proofing custom",
+            settings: {
+              ...BUILT_IN_SPEECH_POLICY_SETTINGS.Enterprise,
+              citationMode: "inline",
+              footnoteMode: "inline",
+            },
+            updatedAt: "2026-05-27T00:00:00.000Z",
+          },
+        ],
+        speechPolicyProfile: "custom-policy",
+      },
+    );
+
+    expect(markup).toContain("Project proofing custom");
+    expect(markup).toContain("Custom vs project default");
+    expect(markup).toContain("sentence highlight");
+    expect(markup).toContain("Citation marker [^gm1] is read inline");
   });
 
   it("shows provider timing limits in read-along settings", () => {

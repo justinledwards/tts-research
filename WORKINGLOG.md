@@ -881,3 +881,9 @@
 - [x] Add failure checks for hidden required tasks, dead aliases, reason drift, and shortcut drift
 - [x] Align Command Palette surface complexity budget with audited search contract
 - [x] Run WP65 validation commands
+
+## 2026-05-27 13:28 CEST - WP66 Speech Policy Golden-Minute Preview
+- [x] Inspect Speech Policy settings, golden-minute fixtures, and settings IA tests
+- [x] Add golden-minute policy preview and A/B compare model
+- [x] Surface speech plan, highlight plan, citation, pronunciation, pause, and granularity differences
+- [x] Run WP66 validation commands

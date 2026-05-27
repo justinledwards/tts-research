@@ -670,6 +670,11 @@ async function runSettingsIAUX(browser, projectId) {
 
     await runCommandPaletteAction(page, "project policy", /Project policy/);
     await page.getByText("Project defaults, session overrides").first().waitFor();
+    await page.getByTestId("speech-policy-golden-minute-preview").waitFor();
+    await page.getByText("Visual spoken-text preview").first().waitFor();
+    await page.getByText("citation [^gm1]").first().waitFor();
+    await page.getByTestId("speech-policy-ab-accessibility-technical").click();
+    await page.getByText("Accessibility vs Technical Docs").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
 
     await runCommandPaletteAction(page, "machine scope", /Machine scope/);

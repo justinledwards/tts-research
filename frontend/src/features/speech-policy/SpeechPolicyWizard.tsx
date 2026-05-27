@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Panel, StatusChip, fieldControlClassName } from "../../design";
 import {
+  BUILT_IN_SPEECH_POLICY_SETTINGS,
+  DEFAULT_SPEECH_POLICY_PROFILE,
   DEFAULT_SPEECH_POLICY_DEFINITION,
   applySpeechPolicyOverridesToSettings,
   hasSpeechPolicyOverrides,
@@ -20,7 +22,8 @@ import { policyOverridesWithField, resolveSpeechPolicyProfileOptions } from "../
 import { ScopeBadge } from "../settings/ScopeBadge";
 import { settingsScopeAppliesTo } from "../settings/model";
 import {
-  buildSpeechPolicyPreview,
+  buildGoldenMinutePolicyComparison,
+  buildGoldenMinutePolicyPreview,
   exportSpeechPolicyProfileJson,
   formatPolicyValue,
   parseSpeechPolicyProfileJson,
@@ -33,6 +36,11 @@ const GUIDED_POLICY_KEYS: (keyof SpeechPolicyOverrides)[] = [
   "citationMode",
   "footnoteMode",
 ];
+
+type GoldenMinuteCompareMode =
+  | "enterprise-education"
+  | "accessibility-technical"
+  | "custom-project";
 
 export function SpeechPolicyWizard({
   customProfiles,
@@ -84,7 +92,62 @@ export function SpeechPolicyWizard({
   const effectiveSettings = applySpeechPolicyOverridesToSettings(baseSettings, overrides);
   const baseProfile = activeCustomProfile?.baseProfile ?? profile;
   const displayName = speechPolicyProfileDisplayName(profile, customProfiles);
-  const preview = useMemo(() => buildSpeechPolicyPreview(effectiveSettings), [effectiveSettings]);
+  const [goldenMinuteCompareMode, setGoldenMinuteCompareMode] =
+    useState<GoldenMinuteCompareMode>("enterprise-education");
+  const goldenMinutePreview = useMemo(
+    () => buildGoldenMinutePolicyPreview(effectiveSettings, `${displayName} effective`),
+    [displayName, effectiveSettings],
+  );
+  const goldenMinuteProfilePreviews = useMemo(
+    () => [
+      ...profileOptions.map((option) =>
+        buildGoldenMinutePolicyPreview(
+          option.settings,
+          option.label || speechPolicyProfileLabel(option.name),
+        ),
+      ),
+      ...customProfiles.map((customProfile) =>
+        buildGoldenMinutePolicyPreview(customProfile.settings, customProfile.name),
+      ),
+    ],
+    [customProfiles, profileOptions],
+  );
+  const enterpriseEducationComparison = useMemo(
+    () =>
+      buildGoldenMinutePolicyComparison(
+        goldenMinutePreviewForProfile("Enterprise", profileOptions, customProfiles),
+        goldenMinutePreviewForProfile("Education", profileOptions, customProfiles),
+      ),
+    [customProfiles, profileOptions],
+  );
+  const accessibilityTechnicalComparison = useMemo(
+    () =>
+      buildGoldenMinutePolicyComparison(
+        goldenMinutePreviewForProfile("Accessibility", profileOptions, customProfiles),
+        goldenMinutePreviewForProfile("TechnicalDocs", profileOptions, customProfiles),
+      ),
+    [customProfiles, profileOptions],
+  );
+  const customProfileForComparison = activeCustomProfile ?? customProfiles.at(0);
+  const customProjectComparison = useMemo(() => {
+    if (!customProfileForComparison) {
+      return null;
+    }
+    const baseProfileName = customProfileForComparison.baseProfile ?? DEFAULT_SPEECH_POLICY_PROFILE;
+    return buildGoldenMinutePolicyComparison(
+      buildGoldenMinutePolicyPreview(
+        customProfileForComparison.settings,
+        `${customProfileForComparison.name} custom`,
+      ),
+      goldenMinutePreviewForProfile(baseProfileName, profileOptions, []),
+    );
+  }, [customProfileForComparison, profileOptions]);
+  let goldenMinuteComparison = enterpriseEducationComparison;
+  if (goldenMinuteCompareMode === "accessibility-technical") {
+    goldenMinuteComparison = accessibilityTechnicalComparison;
+  } else if (goldenMinuteCompareMode === "custom-project" && customProjectComparison) {
+    goldenMinuteComparison = customProjectComparison;
+  }
   const profileJson = useMemo(
     () => exportSpeechPolicyProfileJson(displayName, baseProfile, effectiveSettings),
     [baseProfile, displayName, effectiveSettings],
@@ -204,33 +267,132 @@ export function SpeechPolicyWizard({
         </div>
       </section>
 
-      <section className="grid gap-3" aria-labelledby="policy-wizard-preview">
+      <section
+        className="grid gap-3"
+        aria-labelledby="policy-wizard-golden-minute"
+        data-testid="speech-policy-golden-minute-preview"
+      >
         <WizardStepHeader
-          id="policy-wizard-preview"
-          detail="The sample updates immediately, before a paid or slow generation run starts."
-          label="3. Preview sample sentence"
+          id="policy-wizard-golden-minute"
+          detail="Preview the canonical one-minute fixture before a paid or slow generation run starts."
+          label="3. Golden-minute policy preview"
           scope="session"
         />
-        <div className="grid gap-2 xl:grid-cols-2">
-          {preview.items.map((item) => (
-            <Panel className="grid gap-2 p-3" key={item.id} variant="raised">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h5 className="text-sm font-semibold">{item.label}</h5>
-                <StatusChip tone="accent">{formatPolicyValue(item.id)}</StatusChip>
-              </div>
-              <p className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 font-mono text-xs vs-border">
-                {item.written}
-              </p>
-              <p className="text-sm leading-6">{item.spoken}</p>
-              <p className="vs-muted text-xs leading-5">{item.note}</p>
-            </Panel>
-          ))}
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]">
+          <Panel
+            className="grid max-h-[34rem] gap-3 overflow-auto p-3"
+            data-testid="speech-policy-golden-spoken-preview"
+            title="Visual spoken-text preview"
+            variant="raised"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusChip tone="accent">{goldenMinutePreview.profileLabel}</StatusChip>
+              <StatusChip tone="info">
+                {goldenMinutePreview.highlightGranularity} highlight
+              </StatusChip>
+            </div>
+            <p className="vs-muted text-xs leading-5">{goldenMinutePreview.speechPlanSummary}</p>
+            <ol className="grid gap-2">
+              {goldenMinutePreview.segments.map((segment) => (
+                <li className="grid gap-1 rounded-md border p-3 vs-border" key={segment.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-semibold">
+                      {segment.id} · {segment.label}
+                    </span>
+                    <span className="vs-muted text-[0.7rem]">{segment.sourceLocator}</span>
+                  </div>
+                  <p className="rounded-md bg-[var(--vs-surface)] px-3 py-2 font-mono text-xs leading-5">
+                    {segment.written}
+                  </p>
+                  <p className="text-sm leading-6">{segment.spoken}</p>
+                  <p className="vs-muted text-xs leading-5">{segment.policyNote}</p>
+                </li>
+              ))}
+            </ol>
+          </Panel>
+          <Panel className="grid gap-3 p-3" title="Speech and highlight plan" variant="raised">
+            <PreviewFact label="Citation handling" value={goldenMinutePreview.citationHandling} />
+            <PreviewFact label="Highlight plan" value={goldenMinutePreview.highlightPlan} />
+            <PreviewList
+              items={goldenMinutePreview.pronunciationSubstitutions}
+              label="Pronunciation substitutions"
+            />
+            <PreviewList items={goldenMinutePreview.pauseChanges} label="Pause changes" />
+          </Panel>
         </div>
-        <ul className="grid gap-1 text-xs leading-5 vs-muted">
-          {preview.notes.map((note) => (
-            <li key={note}>{note}</li>
-          ))}
-        </ul>
+
+        <Panel
+          className="grid gap-3 p-3"
+          data-testid="speech-policy-golden-profile-matrix"
+          title="Policy profile impact"
+          variant="raised"
+        >
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {goldenMinuteProfilePreviews.map((previewItem) => (
+              <div
+                className="grid gap-2 rounded-md border p-3 vs-border"
+                key={previewItem.profileLabel}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h5 className="text-sm font-semibold">{previewItem.profileLabel}</h5>
+                  <StatusChip tone="neutral">{previewItem.highlightGranularity}</StatusChip>
+                </div>
+                <p className="vs-muted text-xs leading-5">{previewItem.citationHandling}</p>
+                <p className="text-xs leading-5">{previewItem.highlightPlan}</p>
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel
+          className="grid gap-3 p-3"
+          data-testid="speech-policy-golden-ab-compare"
+          title="A/B compare"
+          variant="raised"
+        >
+          <div className="flex flex-wrap gap-2">
+            <Button
+              data-testid="speech-policy-ab-enterprise-education"
+              onClick={() => {
+                setGoldenMinuteCompareMode("enterprise-education");
+              }}
+              selected={goldenMinuteCompareMode === "enterprise-education"}
+              size="sm"
+              variant="mode"
+            >
+              Enterprise vs Education
+            </Button>
+            <Button
+              data-testid="speech-policy-ab-accessibility-technical"
+              onClick={() => {
+                setGoldenMinuteCompareMode("accessibility-technical");
+              }}
+              selected={goldenMinuteCompareMode === "accessibility-technical"}
+              size="sm"
+              variant="mode"
+            >
+              Accessibility vs Technical Docs
+            </Button>
+            <Button
+              data-testid="speech-policy-ab-custom-project"
+              disabled={!customProjectComparison}
+              disabledReason={
+                customProjectComparison
+                  ? undefined
+                  : "Save a custom speech-policy profile before comparing it with the project default."
+              }
+              onClick={() => {
+                setGoldenMinuteCompareMode("custom-project");
+              }}
+              selected={goldenMinuteCompareMode === "custom-project"}
+              size="sm"
+              variant="mode"
+            >
+              Custom vs project default
+            </Button>
+          </div>
+          <GoldenMinuteComparisonView comparison={goldenMinuteComparison} />
+        </Panel>
       </section>
 
       <section className="grid gap-3" aria-labelledby="policy-wizard-json">
@@ -372,6 +534,69 @@ function ScopeFact({
   );
 }
 
+function PreviewFact({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="grid gap-1 rounded-md border p-3 vs-border">
+      <span className="text-xs font-semibold">{label}</span>
+      <p className="vs-muted text-xs leading-5">{value}</p>
+    </div>
+  );
+}
+
+function PreviewList({ items, label }: Readonly<{ items: string[]; label: string }>) {
+  return (
+    <div className="grid gap-1 rounded-md border p-3 vs-border">
+      <h5 className="text-xs font-semibold">{label}</h5>
+      <ul className="grid gap-1 text-xs leading-5 vs-muted">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function GoldenMinuteComparisonView({
+  comparison,
+}: Readonly<{
+  comparison: ReturnType<typeof buildGoldenMinutePolicyComparison>;
+}>) {
+  return (
+    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <GoldenMinuteComparisonColumn preview={comparison.left} />
+      <GoldenMinuteComparisonColumn preview={comparison.right} />
+      <div className="grid gap-2 rounded-md border p-3 vs-border xl:col-span-2">
+        <h5 className="text-xs font-semibold">Differences</h5>
+        <ul className="grid gap-1 text-xs leading-5 vs-muted">
+          {comparison.differences.map((difference) => (
+            <li key={difference}>{difference}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function GoldenMinuteComparisonColumn({
+  preview,
+}: Readonly<{
+  preview: ReturnType<typeof buildGoldenMinutePolicyPreview>;
+}>) {
+  return (
+    <div className="grid gap-2 rounded-md border p-3 vs-border">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h5 className="text-sm font-semibold">{preview.profileLabel}</h5>
+        <StatusChip tone="info">{preview.highlightGranularity}</StatusChip>
+      </div>
+      <p className="text-xs leading-5">{preview.citationHandling}</p>
+      <p className="vs-muted text-xs leading-5">{preview.highlightPlan}</p>
+      <p className="rounded-md bg-[var(--vs-surface)] px-3 py-2 text-xs leading-5">
+        {preview.segments.find((segment) => segment.id === "gm-p3")?.spoken}
+      </p>
+    </div>
+  );
+}
+
 function WizardStepHeader({
   detail,
   id,
@@ -393,6 +618,22 @@ function WizardStepHeader({
       </div>
       <ScopeBadge scope={scope} />
     </div>
+  );
+}
+
+function goldenMinutePreviewForProfile(
+  profileName: string,
+  profileOptions: SpeechPolicyProfile[],
+  customProfiles: CustomSpeechPolicyProfile[],
+) {
+  const customProfile = customProfiles.find((item) => item.id === profileName);
+  if (customProfile) {
+    return buildGoldenMinutePolicyPreview(customProfile.settings, customProfile.name);
+  }
+  const profileOption = profileOptions.find((item) => item.name === profileName);
+  return buildGoldenMinutePolicyPreview(
+    profileOption?.settings ?? BUILT_IN_SPEECH_POLICY_SETTINGS.Enterprise,
+    profileOption?.label ?? speechPolicyProfileLabel(profileName),
   );
 }
 
