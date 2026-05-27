@@ -21,6 +21,7 @@ const screenshotsDir = path.join(outputDir, "screenshots");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 const findingsPath =
   process.env.E2E_ACCESSIBILITY_FINDINGS_PATH ?? path.join(outputDir, "a11y-findings.json");
+const minInteractiveSize = 44;
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
@@ -161,7 +162,7 @@ async function runScenario(browser, scenario) {
 }
 
 async function scanPageAccessibility(page) {
-  return page.evaluate(() => {
+  return page.evaluate((minimumInteractiveSize) => {
     const visible = (element) =>
       element instanceof HTMLElement &&
       element.getAttribute("aria-hidden") !== "true" &&
@@ -235,6 +236,22 @@ async function scanPageAccessibility(page) {
           element.getAttribute("title") ||
           "",
       );
+    const surfaceFor = (element) =>
+      normalize(
+        element.getAttribute("data-ui-action-surface") ||
+          element.closest("[data-ui-action-surface]")?.getAttribute("data-ui-action-surface") ||
+          element.closest("[data-rail-mode-toolbar]")?.getAttribute("data-rail-mode-toolbar") ||
+          element.closest("[data-overlay-zone]")?.getAttribute("data-overlay-zone") ||
+          element.closest("[data-overlay-owner]")?.getAttribute("data-overlay-owner") ||
+          "",
+      );
+    const declaredHitTargetMin = (element) => {
+      const rawValue = Number.parseFloat(element.getAttribute("data-hit-target-min") ?? "");
+      const classValue = element.classList.contains("vs-compact-hit-target")
+        ? minimumInteractiveSize
+        : 0;
+      return Math.max(Number.isFinite(rawValue) ? rawValue : 0, classValue);
+    };
     const selector = [
       "button",
       "a[href]",
@@ -252,16 +269,23 @@ async function scanPageAccessibility(page) {
         const rect = element.getBoundingClientRect();
         const disabled =
           element.disabled === true || element.getAttribute("aria-disabled") === "true";
+        const stableTestId = element.getAttribute("data-testid") || null;
+        const hitTargetMin = declaredHitTargetMin(element);
+        const hitAreaHeight = Math.max(rect.height, hitTargetMin);
+        const hitAreaWidth = Math.max(rect.width, hitTargetMin);
         return {
           accessibleName: accessibleName(element),
           disabled,
           disabledReason: disabled ? disabledReason(element) : "",
           height: rect.height,
-          id:
-            element.getAttribute("data-testid") ||
-            element.id ||
-            `${element.tagName.toLowerCase()}-${String(index)}`,
+          hitAreaHeight,
+          hitAreaWidth,
+          id: stableTestId || element.id || `${element.tagName.toLowerCase()}-${String(index)}`,
           role: roleFor(element),
+          stableTestId,
+          surface: surfaceFor(element) || null,
+          visualHeight: rect.height,
+          visualWidth: rect.width,
           visibleLabel: normalize(element.textContent || labelsText(element)),
           width: rect.width,
         };
@@ -321,9 +345,12 @@ async function scanPageAccessibility(page) {
           if (!visibleLabel) {
             return [];
           }
+          const declaredHitTarget = declaredHitTargetMin(element);
+          const allowedHeight = Math.max(element.clientHeight, declaredHitTarget);
+          const allowedWidth = Math.max(element.clientWidth, declaredHitTarget);
           if (
-            element.scrollWidth <= element.clientWidth + 1 &&
-            element.scrollHeight <= element.clientHeight + 1
+            element.scrollWidth <= allowedWidth + 1 &&
+            element.scrollHeight <= allowedHeight + 1
           ) {
             return [];
           }
@@ -340,39 +367,69 @@ async function scanPageAccessibility(page) {
           ];
         });
     const issues = [];
+    const controlIssue = (control, issue) => ({
+      ...issue,
+      stableTestId: control.stableTestId,
+      surface: control.surface,
+    });
     for (const control of controls) {
       const name = control.accessibleName || control.visibleLabel;
       if (!name) {
-        issues.push({
-          controlId: control.id,
-          detail: "Interactive control has no visible or programmatic name.",
-          ruleId: "control-name",
-          severity: "fail",
-        });
+        issues.push(
+          controlIssue(control, {
+            controlId: control.id,
+            detail: "Interactive control has no visible or programmatic name.",
+            ruleId: "control-name",
+            severity: "fail",
+          }),
+        );
       }
       if (control.disabled && !control.disabledReason) {
-        issues.push({
-          controlId: control.id,
-          detail: "Disabled control does not expose a reason.",
-          ruleId: "disabled-reason",
-          severity: "fail",
-        });
+        issues.push(
+          controlIssue(control, {
+            controlId: control.id,
+            detail: "Disabled control does not expose a reason.",
+            ruleId: "disabled-reason",
+            severity: "fail",
+          }),
+        );
       }
-      if (control.width < 44 || control.height < 44) {
-        issues.push({
-          controlId: control.id,
-          detail: `Touch target is ${Math.round(control.width)} x ${Math.round(control.height)} px.`,
-          ruleId: "touch-target",
-          severity: "warning",
-        });
+      if (
+        control.hitAreaWidth < minimumInteractiveSize ||
+        control.hitAreaHeight < minimumInteractiveSize
+      ) {
+        issues.push(
+          controlIssue(control, {
+            controlId: control.id,
+            detail: `Touch target hit area is ${Math.round(control.hitAreaWidth)} x ${Math.round(
+              control.hitAreaHeight,
+            )} px; visual box is ${Math.round(control.visualWidth)} x ${Math.round(
+              control.visualHeight,
+            )} px; target minimum is ${String(minimumInteractiveSize)} x ${String(
+              minimumInteractiveSize,
+            )} px.`,
+            hitAreaSize: {
+              height: control.hitAreaHeight,
+              width: control.hitAreaWidth,
+            },
+            ruleId: "touch-target",
+            severity: "warning",
+            visualSize: {
+              height: control.visualHeight,
+              width: control.visualWidth,
+            },
+          }),
+        );
       }
       if (!control.role) {
-        issues.push({
-          controlId: control.id,
-          detail: "Interactive control has no explicit or implicit role.",
-          ruleId: "control-role",
-          severity: "warning",
-        });
+        issues.push(
+          controlIssue(control, {
+            controlId: control.id,
+            detail: "Interactive control has no explicit or implicit role.",
+            ruleId: "control-role",
+            severity: "warning",
+          }),
+        );
       }
     }
     for (const control of compactRailControlAffordanceFailures()) {
@@ -408,7 +465,7 @@ async function scanPageAccessibility(page) {
       liveRegionCount,
       warningCount: issues.filter((issue) => issue.severity === "warning").length,
     };
-  });
+  }, minInteractiveSize);
 }
 
 function summarize(results) {
@@ -526,7 +583,14 @@ function renderReport(document) {
       lines.push("- No findings.");
     } else {
       for (const issue of result.scan.issues.slice(0, 30)) {
-        lines.push(`- ${issue.severity}: ${issue.ruleId} on ${issue.controlId} - ${issue.detail}`);
+        const surface = issue.surface ? ` [${issue.surface}]` : "";
+        const stableTestId =
+          issue.stableTestId && issue.stableTestId !== issue.controlId
+            ? ` stable-id=${issue.stableTestId}`
+            : "";
+        lines.push(
+          `- ${issue.severity}: ${issue.ruleId} on ${issue.controlId}${surface}${stableTestId} - ${issue.detail}`,
+        );
       }
       for (const issue of result.browserIssues) {
         lines.push(`- fail: browser issue - ${issue}`);

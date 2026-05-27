@@ -1,4 +1,5 @@
 import type { WorkspaceRailMode } from "../workspace/model";
+import { compactHitTargetClassName, minInteractiveSize } from "../../design";
 import {
   compactRailControlMeta,
   railModeControlMeta,
@@ -53,12 +54,13 @@ export function RailModeToolbar({
             <button
               aria-label={meta.ariaLabel(label)}
               aria-pressed={mode === item}
-              className={`h-7 min-w-10 rounded px-1.5 text-[0.58rem] font-semibold transition ${
+              className={`${compactHitTargetClassName} h-7 min-w-10 rounded px-1.5 text-[0.58rem] font-semibold transition ${
                 mode === item
                   ? "bg-orange-500 text-white"
                   : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
               }`}
               data-command-id={meta.commandId}
+              data-hit-target-min={minInteractiveSize}
               data-rail-mode-option={item}
               data-segmented-option={item}
               data-testid={`ui-action-rail-${railLabelId(label)}-${item}`}
@@ -80,10 +82,14 @@ export function RailModeToolbar({
 
 export function RailMiniStack({
   actionLabel,
+  actionSurface,
+  actionTestId,
   items,
   onAction,
 }: Readonly<{
   actionLabel?: string;
+  actionSurface?: string;
+  actionTestId?: string;
   items: { detail: string; label: string; value: string }[];
   onAction?: () => void;
 }>) {
@@ -104,7 +110,10 @@ export function RailMiniStack({
       ))}
       {actionLabel && onAction ? (
         <button
-          className="min-h-8 rounded-md border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50"
+          className={`${compactHitTargetClassName} min-h-8 rounded-md border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50`}
+          data-hit-target-min={minInteractiveSize}
+          data-testid={actionTestId}
+          data-ui-action-surface={actionSurface}
           onClick={onAction}
           type="button"
         >

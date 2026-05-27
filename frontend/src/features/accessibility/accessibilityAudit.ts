@@ -2,6 +2,7 @@ import {
   DEFAULT_READER_ACCESSIBILITY_SETTINGS,
   type ReaderAccessibilitySettings,
 } from "../reader-accessibility";
+import { minInteractiveSize } from "../../design";
 
 export type AccessibilityAuditSeverity = "fail" | "warning";
 
@@ -25,8 +26,14 @@ export interface AccessibilityControlAuditInput {
   disabled: boolean;
   disabledReason?: string | null;
   height: number;
+  hitAreaHeight?: number;
+  hitAreaWidth?: number;
   id: string;
   role: string | null;
+  stableTestId?: string | null;
+  surface?: string | null;
+  visualHeight?: number;
+  visualWidth?: number;
   visibleLabel: string;
   width: number;
 }
@@ -34,8 +41,18 @@ export interface AccessibilityControlAuditInput {
 export interface AccessibilityAuditIssue {
   controlId: string;
   detail: string;
+  hitAreaSize?: {
+    height: number;
+    width: number;
+  };
   ruleId: string;
   severity: AccessibilityAuditSeverity;
+  stableTestId?: string | null;
+  surface?: string | null;
+  visualSize?: {
+    height: number;
+    width: number;
+  };
 }
 
 export interface AccessibilityAuditSummary {
@@ -137,40 +154,73 @@ export function auditAccessibilityControls(
 
 function auditControl(control: AccessibilityControlAuditInput): AccessibilityAuditIssue[] {
   const issues: AccessibilityAuditIssue[] = [];
+  const controlIssue = (
+    issue: Omit<AccessibilityAuditIssue, "stableTestId" | "surface">,
+  ): AccessibilityAuditIssue => ({
+    ...issue,
+    stableTestId: control.stableTestId,
+    surface: control.surface,
+  });
   const label = control.accessibleName.trim() || control.visibleLabel.trim();
   if (!label) {
-    issues.push({
-      controlId: control.id,
-      detail: "Interactive controls need a visible or programmatic name.",
-      ruleId: "control-name",
-      severity: "fail",
-    });
+    issues.push(
+      controlIssue({
+        controlId: control.id,
+        detail: "Interactive controls need a visible or programmatic name.",
+        ruleId: "control-name",
+        severity: "fail",
+      }),
+    );
   }
   if (control.disabled && !control.disabledReason?.trim()) {
-    issues.push({
-      controlId: control.id,
-      detail: "Disabled controls need an exposed reason.",
-      ruleId: "disabled-reason",
-      severity: "fail",
-    });
+    issues.push(
+      controlIssue({
+        controlId: control.id,
+        detail: "Disabled controls need an exposed reason.",
+        ruleId: "disabled-reason",
+        severity: "fail",
+      }),
+    );
   }
-  if (control.width > 0 && control.height > 0 && (control.width < 44 || control.height < 44)) {
-    issues.push({
-      controlId: control.id,
-      detail: `Touch target is ${Math.round(control.width).toString()} x ${Math.round(
-        control.height,
-      ).toString()} px; target minimum is 44 x 44 px.`,
-      ruleId: "touch-target",
-      severity: "warning",
-    });
+  const visualWidth = control.visualWidth ?? control.width;
+  const visualHeight = control.visualHeight ?? control.height;
+  const hitAreaWidth = control.hitAreaWidth ?? control.width;
+  const hitAreaHeight = control.hitAreaHeight ?? control.height;
+  if (
+    hitAreaWidth > 0 &&
+    hitAreaHeight > 0 &&
+    (hitAreaWidth < minInteractiveSize || hitAreaHeight < minInteractiveSize)
+  ) {
+    issues.push(
+      controlIssue({
+        controlId: control.id,
+        detail: `Touch target hit area is ${Math.round(hitAreaWidth).toString()} x ${Math.round(
+          hitAreaHeight,
+        ).toString()} px; visual box is ${Math.round(visualWidth).toString()} x ${Math.round(
+          visualHeight,
+        ).toString()} px; target minimum is ${minInteractiveSize.toString()} x ${minInteractiveSize.toString()} px.`,
+        hitAreaSize: {
+          height: hitAreaHeight,
+          width: hitAreaWidth,
+        },
+        ruleId: "touch-target",
+        severity: "warning",
+        visualSize: {
+          height: visualHeight,
+          width: visualWidth,
+        },
+      }),
+    );
   }
   if (!control.role) {
-    issues.push({
-      controlId: control.id,
-      detail: "Interactive element has no explicit or implicit role.",
-      ruleId: "control-role",
-      severity: "warning",
-    });
+    issues.push(
+      controlIssue({
+        controlId: control.id,
+        detail: "Interactive element has no explicit or implicit role.",
+        ruleId: "control-role",
+        severity: "warning",
+      }),
+    );
   }
   return issues;
 }

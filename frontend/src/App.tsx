@@ -202,7 +202,14 @@ import type {
   SourceLifecycleEnvelope,
   SourceLifecycleSurface,
 } from "./features/source-lifecycle/sourceLifecycleCore";
-import { Button, Panel, SegmentedControl, StatusChip } from "./design";
+import {
+  Button,
+  Panel,
+  SegmentedControl,
+  StatusChip,
+  compactHitTargetClassName,
+  minInteractiveSize,
+} from "./design";
 import {
   createWorkspaceContext,
   defaultWorkspaceLayoutMode,
@@ -7896,6 +7903,8 @@ function NarrationRailMini({
         { label: "Backend", value: "Run", detail: "Settings" },
       ]}
       actionLabel="Clone"
+      actionSurface="Voice Command"
+      actionTestId="ui-action-rail-narration-open-voice-cloning"
       onAction={onOpenVoiceCloning}
     />
   );
@@ -7972,6 +7981,8 @@ function PlaybackRailMini({
         { label: "Check", value: formatSimilarity(job?.voiceCheck.similarity ?? 0), detail: "ASR" },
       ]}
       actionLabel={showCinemaAction ? "Cinema" : undefined}
+      actionSurface="Playback"
+      actionTestId="ui-action-rail-playback-open-cinema"
       onAction={showCinemaAction ? onOpenCinema : undefined}
     />
   );
@@ -9378,10 +9389,13 @@ function CloneTargetReadinessRow({
       </p>
       {canAct || isSelected ? (
         <button
-          className={`h-8 w-full rounded-md border px-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${cloneTargetActionButtonClass(
+          className={`${compactHitTargetClassName} h-8 w-full rounded-md border px-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${cloneTargetActionButtonClass(
             isBusy,
             isReady,
           )}`}
+          data-hit-target-min={minInteractiveSize}
+          data-testid={`ui-action-clone-target-${moduleId}`}
+          data-ui-action-surface="Voice Cloning"
           disabled={isCanceling || isSelected || timeoutBlocksAction}
           onClick={() => {
             handleCloneTargetReadinessAction({
@@ -9640,7 +9654,8 @@ function PipelineStatusFooter({
   if (isProcessing) {
     narrationAction = (
       <button
-        className="h-10 rounded-md border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+        className="min-h-11 rounded-md border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+        data-testid="ui-action-activity-footer-cancel-run"
         disabled={!activeJobId}
         onClick={onCancel}
         type="button"
@@ -9651,7 +9666,8 @@ function PipelineStatusFooter({
   } else if (showNarrationAction) {
     narrationAction = (
       <button
-        className="h-10 rounded-md px-4 text-sm font-semibold text-white transition disabled:bg-zinc-300 vs-accent-bg"
+        className="min-h-11 rounded-md px-4 text-sm font-semibold text-white transition disabled:bg-zinc-300 vs-accent-bg"
+        data-testid="ui-action-activity-footer-create-listen"
         disabled={!canSubmit}
         onClick={onSubmit}
         type="button"
@@ -9662,11 +9678,12 @@ function PipelineStatusFooter({
   }
   const voiceCloningAction = (
     <button
-      className={`h-10 rounded-md px-4 text-sm font-semibold transition ${
+      className={`min-h-11 rounded-md px-4 text-sm font-semibold transition ${
         voiceCloningActivity.status === "attention"
           ? "border border-amber-300 bg-white text-amber-800 hover:bg-amber-50"
           : "border border-orange-300 bg-orange-500/10 text-orange-700 hover:bg-orange-50"
       }`}
+      data-testid="ui-action-activity-footer-voice-cloning"
       onClick={onOpenVoiceCloning}
       type="button"
     >
@@ -9684,7 +9701,7 @@ function PipelineStatusFooter({
         {...overlayDataAttributes("activity-footer", "bottom-activity-footer")}
       >
         <button
-          className="flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-md border px-3 text-left transition hover:bg-[var(--vs-surface)] vs-border"
+          className="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-md border px-3 text-left transition hover:bg-[var(--vs-surface)] vs-border"
           data-testid="ui-action-activity-footer-open"
           onClick={() => {
             onModeChange("compact");
@@ -9886,11 +9903,12 @@ function ActivityFooterModeControls({
         <button
           aria-label={`Show ${item} activity footer`}
           aria-pressed={mode === item}
-          className={`h-7 min-w-[3.8rem] flex-1 rounded px-2 text-[0.68rem] font-semibold transition sm:flex-none ${
+          className={`${compactHitTargetClassName} h-7 min-w-[3.8rem] flex-1 rounded px-2 text-[0.68rem] font-semibold transition sm:flex-none ${
             mode === item
               ? "bg-orange-500 text-white"
               : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
           }`}
+          data-hit-target-min={minInteractiveSize}
           data-testid={`ui-action-activity-footer-${item}`}
           key={item}
           onClick={() => {
@@ -9902,7 +9920,8 @@ function ActivityFooterModeControls({
         </button>
       ))}
       <button
-        className="h-7 min-w-[3.8rem] flex-1 rounded border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50 sm:flex-none"
+        className={`${compactHitTargetClassName} h-7 min-w-[3.8rem] flex-1 rounded border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50 sm:flex-none`}
+        data-hit-target-min={minInteractiveSize}
         data-testid={`ui-action-activity-footer-toggle-${mode}`}
         onClick={() => {
           onModeChange(nextMode);

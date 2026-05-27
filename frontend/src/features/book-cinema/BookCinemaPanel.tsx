@@ -9,6 +9,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { compactHitTargetClassName, minInteractiveSize } from "../../design";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
 import { generatedAudioLifecycleFromJob, playbackActionLabel } from "../playback";
@@ -646,7 +647,9 @@ function BookScopeActionHeader({
       />
       <div className="flex min-w-0 flex-wrap gap-2">
         <button
-          className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+          className={`${compactHitTargetClassName} h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border`}
+          data-hit-target-min={minInteractiveSize}
+          data-testid="ui-action-book-source-inspect-structure"
           onClick={() => {
             onInspectStructure(selectedBook);
           }}
@@ -655,8 +658,10 @@ function BookScopeActionHeader({
           Inspect structure
         </button>
         <button
-          className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+          className={`${compactHitTargetClassName} h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border`}
           data-disabled-reason={useTextDisabledReason}
+          data-hit-target-min={minInteractiveSize}
+          data-testid="ui-action-book-source-use-text"
           disabled={selectedBook.status !== "ready" || isScopeLoading || !scopeContent}
           onClick={() => {
             onUseText(selectedBook, scope);
@@ -666,8 +671,10 @@ function BookScopeActionHeader({
           Use Text
         </button>
         <button
-          className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 disabled:opacity-50"
+          className={`${compactHitTargetClassName} h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 disabled:opacity-50`}
           data-disabled-reason={cinemaDisabledReason}
+          data-hit-target-min={minInteractiveSize}
+          data-testid="ui-action-book-source-open-cinema"
           disabled={selectedBook.status !== "ready" || isScopeLoading}
           onClick={onOpenCinema}
           type="button"
@@ -675,8 +682,10 @@ function BookScopeActionHeader({
           Cinema
         </button>
         <button
-          className="h-8 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          className={`${compactHitTargetClassName} h-8 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg`}
           data-disabled-reason={createAudioDisabledReason}
+          data-hit-target-min={minInteractiveSize}
+          data-testid="ui-action-book-source-create-audio"
           disabled={!canCreateAudio || selectedBook.status !== "ready" || isScopeLoading}
           onClick={() => {
             onCreateAudio(selectedBook, scope);

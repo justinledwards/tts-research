@@ -25,6 +25,7 @@
   --vs-warning: #b45309;
   --vs-warning-soft: rgb(245 158 11 / 0.12);
   --vs-warning-border: #fcd34d;
+  --vs-min-interactive-size: 44px;
   --vs-shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 12px 32px rgb(15 23 42 / 0.04);
   --book-paper: #f8f0df;
   --book-paper-raised: #fff8eb;
@@ -52,6 +53,23 @@ button,
 textarea,
 select {
   font: inherit;
+}
+
+.vs-compact-hit-target {
+  position: relative;
+  overflow: visible;
+  touch-action: manipulation;
+}
+
+.vs-compact-hit-target::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--vs-min-interactive-size, 44px));
+  height: max(100%, var(--vs-min-interactive-size, 44px));
+  transform: translate(-50%, -50%);
+  border-radius: inherit;
+  content: "";
 }
 
 [data-theme="dark"] {

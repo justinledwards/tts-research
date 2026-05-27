@@ -42,4 +42,25 @@ describe("accessibility audit foundations", () => {
       "control-role",
     ]);
   });
+
+  it("allows compact visual controls when the hit area meets the shared minimum", () => {
+    const summary = auditAccessibilityControls([
+      {
+        accessibleName: "Collapse rail",
+        disabled: false,
+        height: 28,
+        hitAreaHeight: 44,
+        hitAreaWidth: 44,
+        id: "ui-action-rail-voice-command-compact",
+        role: "button",
+        stableTestId: "ui-action-rail-voice-command-compact",
+        surface: "Voice Command rail",
+        visibleLabel: "Compact",
+        width: 40,
+      },
+    ]);
+
+    expect(summary.warningCount).toBe(0);
+    expect(summary.issues).toEqual([]);
+  });
 });

@@ -35,6 +35,7 @@ const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
 const screenshotStateRecords = [];
+const minInteractiveSize = 44;
 const preparedCinemaOverlaySelector =
   "[role='dialog'][aria-labelledby='prepared-source-cinema-title']";
 
@@ -201,7 +202,7 @@ async function captureViewport(browser, viewport, websiteCalmFixture, teleprompt
     );
     screenshots.push(telepromptTheatre.screenshot);
 
-    const layout = await page.evaluate(() => {
+    const layout = await page.evaluate((minimumInteractiveSize) => {
       const normalize = (value) =>
         String(value ?? "")
           .replace(/\s+/g, " ")
@@ -248,10 +249,19 @@ async function captureViewport(browser, viewport, websiteCalmFixture, teleprompt
         if (!visibleLabel) {
           return [];
         }
-        if (
-          element.scrollWidth <= element.clientWidth + 1 &&
-          element.scrollHeight <= element.clientHeight + 1
-        ) {
+        const declaredHitTargetMin = Number.parseFloat(
+          element.getAttribute("data-hit-target-min") ?? "",
+        );
+        const compactHitTarget = element.classList.contains("vs-compact-hit-target")
+          ? minimumInteractiveSize
+          : 0;
+        const hitTargetMin = Math.max(
+          Number.isFinite(declaredHitTargetMin) ? declaredHitTargetMin : 0,
+          compactHitTarget,
+        );
+        const allowedHeight = Math.max(element.clientHeight, hitTargetMin);
+        const allowedWidth = Math.max(element.clientWidth, hitTargetMin);
+        if (element.scrollWidth <= allowedWidth + 1 && element.scrollHeight <= allowedHeight + 1) {
           return [];
         }
         const controlId =
@@ -270,7 +280,7 @@ async function captureViewport(browser, viewport, websiteCalmFixture, teleprompt
         visibleDialogCount: Array.from(document.querySelectorAll("[role='dialog']")).filter(visible)
           .length,
       };
-    });
+    }, minInteractiveSize);
     const overlayCollision = await collectOverlayCollisionReport(page);
     const issues = blockingPageIssues(pageIssues);
     const layoutPassed =

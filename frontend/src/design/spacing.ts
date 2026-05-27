@@ -1,4 +1,5 @@
-export const touchTargetPx = 44;
+export const minInteractiveSize = 44;
+export const touchTargetPx = minInteractiveSize;
 
 export const spacing = {
   actionGap: "gap-2",

@@ -1,5 +1,11 @@
 import { semanticColors, toneClassName } from "./color";
-import { controlSizeClassName, radius, spacing, touchTargetPx } from "./spacing";
+import {
+  controlSizeClassName,
+  minInteractiveSize,
+  radius,
+  spacing,
+  touchTargetPx,
+} from "./spacing";
 import { textStyles, truncation } from "./typography";
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
@@ -12,6 +18,7 @@ export const focusRingClassName =
 export const disabledStateClassName = "disabled:cursor-not-allowed disabled:opacity-50";
 
 export const touchTargetClassName = "min-h-11 min-w-11 touch-manipulation";
+export const compactHitTargetClassName = "vs-compact-hit-target";
 
 export const fieldControlClassName = cx(
   touchTargetClassName,
@@ -21,6 +28,7 @@ export const fieldControlClassName = cx(
 
 export const designTokens = {
   colors: semanticColors,
+  compactHitTargetClassName,
   componentSizeClassName: controlSizeClassName,
   disabledStateClassName,
   fieldControlClassName,
@@ -29,6 +37,7 @@ export const designTokens = {
   spacing,
   textStyles,
   toneClassName,
+  minInteractiveSize,
   touchTargetClassName,
   touchTargetPx,
   truncation,

@@ -1,8 +1,9 @@
 export { semanticColors, toneClassName } from "./color";
-export { radius, spacing, touchTargetPx } from "./spacing";
+export { minInteractiveSize, radius, spacing, touchTargetPx } from "./spacing";
 export { textStyles, truncation } from "./typography";
 export {
   cx,
+  compactHitTargetClassName,
   designTokens,
   disabledStateClassName,
   fieldControlClassName,

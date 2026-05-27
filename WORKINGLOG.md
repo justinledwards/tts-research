@@ -804,3 +804,10 @@
 - [x] Wire key async announcements without read-along spam
 - [x] Add live-region tests and accessibility evidence
 - [x] Run WP53 validation commands
+
+## 2026-05-27 04:41 CEST - WP54 Touch Target Warning Burn-down
+- [x] Inspect accessibility touch-target warnings by stable ID and surface
+- [x] Add minimum interactive size design token and audit hit-area model
+- [x] Patch compact controls with preserved visual style and 44px hit areas
+- [x] Add regression tests for visual size versus hit area
+- [x] Run WP54 validation commands
