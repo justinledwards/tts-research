@@ -19,10 +19,14 @@ export interface SyncDebugSourceLocator {
 }
 
 export interface SyncDebugManualMarker {
+  actualHighlightedWord: string | null;
   markedAt: string;
   reason: string;
   sourceLocator: SyncDebugSourceLocator;
   audioTimeSec: number;
+  confidence: number | null;
+  expectedVisibleWord: string | null;
+  timingSource: string;
 }
 
 export interface SyncDebugEntity {
@@ -206,10 +210,18 @@ export function makeSyncDebugManualMarker(
   markedAt = new Date().toISOString(),
 ): SyncDebugManualMarker {
   return {
+    actualHighlightedWord: snapshot.activeWord.text ?? snapshot.activeCue?.text ?? null,
     audioTimeSec: snapshot.currentAudioTimeSec,
+    confidence: snapshot.confidence,
+    expectedVisibleWord:
+      snapshot.currentSourceLocator.textQuote ??
+      snapshot.expectedCue?.text ??
+      snapshot.activeWord.text ??
+      null,
     markedAt,
     reason,
     sourceLocator: snapshot.currentSourceLocator,
+    timingSource: snapshot.timingSource,
   };
 }
 

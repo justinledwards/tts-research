@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  addAlignmentRepairCandidate,
   addAlignmentRepairOperation,
+  addAlignmentRepairOperationFromCandidate,
   alignmentRepairMapStaleness,
   alignmentRepairSummary,
+  createAlignmentRepairCandidateFromSyncSnapshot,
   createAlignmentRepairMap,
   parseAlignmentRepairMap,
   serializeAlignmentRepairMap,
 } from "./alignmentRepairModel";
+import { buildReadAlongSyncDebugSnapshot } from "./syncDebugSnapshot";
 
 const context = {
   contentFingerprint: "source-v1-policy-v1-run-v1",
@@ -70,5 +74,66 @@ describe("alignmentRepairModel", () => {
       operations: [{ kind: "mark-token-unspoken", tokenIndex: 4 }],
       sourceId: "source-1",
     });
+  });
+
+  it("stores QA drift markers as repair candidates and links repair actions", () => {
+    const snapshot = buildReadAlongSyncDebugSnapshot({
+      activePhraseText: "the highlighted phrase",
+      activeWordText: "highlighted",
+      capturedAt: "2026-05-27T11:00:00.000Z",
+      currentSourceLocator: {
+        activeWordIndex: 12,
+        blockId: "block-1",
+        kind: "prepared-source",
+        projectId: "project-1",
+        sourceId: "source-1",
+        textQuote: "expected",
+        value: "prepared-source:source-1:block-1:word-12",
+      },
+      runtime: {
+        activeCue: null,
+        activeTokenIndex: 7,
+        audioTimeSec: 31.25,
+        confidence: 0.72,
+        driftMs: 180,
+        expectedCue: null,
+        expectedTokenIndex: 8,
+        mode: "word",
+        reason: "Runtime drift exceeds the word budget.",
+        resyncCount: 1,
+        state: "degraded",
+        timingSource: "trusted-word",
+      },
+      surface: "DocumentCinema",
+    });
+    const candidate = createAlignmentRepairCandidateFromSyncSnapshot(
+      snapshot,
+      "2026-05-27T11:01:00.000Z",
+    );
+    const map = addAlignmentRepairCandidate(
+      createAlignmentRepairMap(context),
+      candidate,
+      "2026-05-27T11:02:00.000Z",
+    );
+    const repaired = addAlignmentRepairOperationFromCandidate(
+      map,
+      candidate.id,
+      "phrase-fallback",
+      "2026-05-27T11:03:00.000Z",
+    );
+
+    expect(repaired.candidates).toHaveLength(1);
+    expect(repaired.candidates[0]).toMatchObject({
+      actualHighlightedWord: "highlighted",
+      audioTimestamp: "00:31.25",
+      expectedVisibleWord: "expected",
+      timingSource: "trusted-word",
+    });
+    expect(repaired.operations[0]).toMatchObject({
+      candidateId: candidate.id,
+      kind: "force-phrase-fallback",
+    });
+    expect(alignmentRepairSummary(repaired)).toContain("Repair candidates: 1");
+    expect(alignmentRepairSummary(repaired)).toContain("Phrase fallback: 1");
   });
 });

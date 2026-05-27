@@ -44,6 +44,7 @@ describe("sync debug snapshot", () => {
         activeWordIndex: 4,
         kind: "prepared-source",
         sourceId: "source-1",
+        textQuote: "hello synchronized world",
         value: "prepared-source:source-1:block-1:word-4",
       },
       runtime: runtimeSnapshot(),
@@ -55,6 +56,12 @@ describe("sync debug snapshot", () => {
     );
 
     expect(marked.manualQaMarker?.reason).toBe("Observed highlight drift.");
+    expect(marked.manualQaMarker).toMatchObject({
+      actualHighlightedWord: "synchronized",
+      confidence: 0.91,
+      expectedVisibleWord: "hello synchronized world",
+      timingSource: "trusted-word",
+    });
     expect(serializeSyncDebugSnapshot(marked)).toContain('"manualQaMarker"');
     expect(serializeSyncDebugSnapshot(marked)).toContain("prepared-source:source-1");
   });

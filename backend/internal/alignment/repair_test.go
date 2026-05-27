@@ -45,6 +45,23 @@ func TestApplyAlignmentRepairMapRejectsStaleRepairs(t *testing.T) {
 	}
 }
 
+func TestApplyAlignmentRepairMapCarriesRegenerateSegmentAction(t *testing.T) {
+	timing := simpleTiming(t)
+	repairMap := validRepairMap([]AlignmentRepairOperation{{
+		FragmentIndex: 0,
+		Kind:          RepairRegenerateSegment,
+		Reason:        "Human QA marked highlight drift at 00:31.25.",
+	}})
+
+	_, report := ApplyAlignmentRepairMap(timing, repairMap, repairContext())
+	if report.Applied != 1 || report.Skipped != 0 {
+		t.Fatalf("repair report = %+v, want regenerate action recorded as applied warning", report)
+	}
+	if len(report.Warnings) == 0 {
+		t.Fatalf("expected regenerate action warning")
+	}
+}
+
 func TestAlignmentServiceAppliesRepairsBeforeQualityReport(t *testing.T) {
 	service := NewAlignmentService(AlignmentServiceOptions{Mode: AlignmentModeProviderPlusValidation})
 	result, err := service.Generate(context.Background(), AlignmentServiceRequest{

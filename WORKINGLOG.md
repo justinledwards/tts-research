@@ -887,3 +887,9 @@
 - [x] Add golden-minute policy preview and A/B compare model
 - [x] Surface speech plan, highlight plan, citation, pronunciation, pause, and granularity differences
 - [x] Run WP66 validation commands
+
+## 2026-05-27 13:43 CEST - WP67 Drift Marker Repair Workflow
+- [x] Inspect read-along debug overlay, QA marker, and repair diagnostics flow
+- [x] Add repair candidate model, local artifact storage, and invalidation checks
+- [x] Wire mark drift action and repair choices into Debug/diagnostics UI
+- [x] Run WP67 validation commands

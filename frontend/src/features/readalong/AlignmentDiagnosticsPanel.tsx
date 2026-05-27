@@ -1,7 +1,7 @@
 import type { VoiceJob } from "../../types";
 import { StatusChip } from "../../design";
 import type { AlignmentRepairMap, AlignmentRepairStaleReport } from "./alignmentRepairModel";
-import { alignmentRepairSummary } from "./alignmentRepairModel";
+import { alignmentRepairOperationLabel, alignmentRepairSummary } from "./alignmentRepairModel";
 import type { ReadAlongRuntimeSnapshot } from "./readAlongState";
 import { readAlongRuntimeDebugRows, readAlongRuntimeStateLabel } from "./readAlongState";
 import { buildSpeechFluencyDiagnostics } from "./speechFluencyDiagnostics";
@@ -200,6 +200,48 @@ export function AlignmentDiagnosticsPanel({
       <p className="rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs leading-5 vs-border">
         {alignmentRepairSummary(repairMap)}
       </p>
+
+      <ActiveRepairWorkflow repairMap={repairMap} />
+    </div>
+  );
+}
+
+function ActiveRepairWorkflow({ repairMap }: Readonly<{ repairMap?: AlignmentRepairMap | null }>) {
+  if (!repairMap || (repairMap.candidates.length === 0 && repairMap.operations.length === 0)) {
+    return null;
+  }
+  const candidates = repairMap.candidates.slice(-3);
+  const operations = repairMap.operations.slice(-3);
+  return (
+    <div
+      className="grid gap-2 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs leading-5 vs-border"
+      data-testid="alignment-active-repairs"
+    >
+      <p className="font-semibold">Active repair workflow</p>
+      {candidates.length > 0 ? (
+        <ul className="grid gap-1">
+          {candidates.map((candidate) => (
+            <li key={candidate.id}>
+              Candidate at {candidate.audioTimestamp}: expected{" "}
+              {formatQuoted(candidate.expectedVisibleWord)}, highlighted{" "}
+              {formatQuoted(candidate.actualHighlightedWord)}.
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {operations.length > 0 ? (
+        <ul className="grid gap-1">
+          {operations.map((operation) => (
+            <li key={operation.id}>
+              {alignmentRepairOperationLabel(operation.kind)}: {operation.reason}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="vs-muted">
+        Repairs are local project artifacts; source, speech plan, or audio changes make them stale
+        until reviewed again.
+      </p>
     </div>
   );
 }
@@ -246,4 +288,8 @@ function formatPercent(value: number | null | undefined): string {
   return value === null || value === undefined
     ? "-"
     : `${Math.round(value * 100).toLocaleString()}%`;
+}
+
+function formatQuoted(value: string | null): string {
+  return value ? `"${value}"` : "unknown";
 }

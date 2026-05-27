@@ -20,6 +20,7 @@ const REPAIR_OPERATION_KINDS: AlignmentRepairOperationKind[] = [
   "force-phrase-fallback",
   "mark-token-unspoken",
   "mark-inserted-audio",
+  "regenerate-segment",
 ];
 
 export function AlignmentRepairEditor({
@@ -49,6 +50,7 @@ export function AlignmentRepairEditor({
     () => alignmentRepairMapStaleness(repairMap, context),
     [context, repairMap],
   );
+  const candidateCount = repairMap?.candidates.length ?? 0;
   const operationCount = repairMap?.operations.length ?? 0;
   const exportText = repairMap ? serializeAlignmentRepairMap(repairMap) : "";
   const canAddRepair = Boolean(job?.id);
@@ -97,6 +99,7 @@ export function AlignmentRepairEditor({
           {staleness.stale ? "Stale repair" : "Project-local repair"}
         </StatusChip>
         <StatusChip tone="neutral">{operationCount.toLocaleString()} operations</StatusChip>
+        <StatusChip tone="neutral">{candidateCount.toLocaleString()} candidates</StatusChip>
       </div>
 
       {staleness.stale ? (

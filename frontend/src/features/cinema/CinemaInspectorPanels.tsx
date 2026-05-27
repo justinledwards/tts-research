@@ -13,6 +13,8 @@ import {
   readAlongInvariantDebugRows,
   readAlongInvariantStatusLabel,
   SyncDebugOverlay,
+  type AlignmentRepairContext,
+  type AlignmentRepairMap,
   type SyncDebugSnapshot,
   type ReadAlongRuntimeSnapshot,
   type ReadAlongInvariantReport,
@@ -106,11 +108,17 @@ export function buildCinemaInspectorSection(
 }
 
 export function ReadAlongInvariantDebugPanel({
+  onRepairMapChange,
   report,
+  repairContext,
+  repairMap,
   runtime,
   syncDebugSnapshot,
 }: Readonly<{
+  onRepairMapChange?: (map: AlignmentRepairMap | null) => void;
   report: ReadAlongInvariantReport;
+  repairContext?: AlignmentRepairContext;
+  repairMap?: AlignmentRepairMap | null;
   runtime?: ReadAlongRuntimeSnapshot | null;
   syncDebugSnapshot?: SyncDebugSnapshot | null;
 }>) {
@@ -150,7 +158,14 @@ export function ReadAlongInvariantDebugPanel({
               </div>
             ))}
           </dl>
-          {syncDebugSnapshot ? <SyncDebugOverlay snapshot={syncDebugSnapshot} /> : null}
+          {syncDebugSnapshot ? (
+            <SyncDebugOverlay
+              onRepairMapChange={onRepairMapChange}
+              repairContext={repairContext}
+              repairMap={repairMap}
+              snapshot={syncDebugSnapshot}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>

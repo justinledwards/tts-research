@@ -13,6 +13,7 @@ const (
 	RepairForcePhraseFallback    AlignmentRepairOperationKind = "force-phrase-fallback"
 	RepairMarkTokenUnspoken      AlignmentRepairOperationKind = "mark-token-unspoken"
 	RepairMarkInsertedAudio      AlignmentRepairOperationKind = "mark-inserted-audio"
+	RepairRegenerateSegment      AlignmentRepairOperationKind = "regenerate-segment"
 )
 
 type AlignmentRepairOperation struct {
@@ -152,6 +153,9 @@ func applyAlignmentRepairOperation(
 		return true
 	case RepairMarkInsertedAudio:
 		report.Warnings = append(report.Warnings, repairWarning(operation, "marked inserted audio"))
+		return true
+	case RepairRegenerateSegment:
+		report.Warnings = append(report.Warnings, repairWarning(operation, "segment regeneration requested"))
 		return true
 	default:
 		return false

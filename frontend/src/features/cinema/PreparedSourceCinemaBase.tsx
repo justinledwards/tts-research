@@ -506,6 +506,7 @@ export function PreparedSourceCinemaOverlay({
   );
   const syncDebugSnapshot = useMemo(() => {
     const activeSegment = displayBlock?.segments?.[0] ?? null;
+    const activeWordText = preparedSourceActiveWordText(source, effectiveActiveWordIndex);
     const locator: SyncDebugSourceLocator = {
       activeWordIndex: effectiveActiveWordIndex,
       blockId: displayBlock?.id ?? null,
@@ -514,7 +515,7 @@ export function PreparedSourceCinemaOverlay({
       projectId: source.projectId,
       sourceId: source.id,
       sourceTitle: title,
-      textQuote: activeText || null,
+      textQuote: activeWordText ?? (activeText || null),
       value: `prepared-source:${source.id}:${
         displayBlock?.id ?? "no-block"
       }:word-${String(effectiveActiveWordIndex)}`,
@@ -525,7 +526,7 @@ export function PreparedSourceCinemaOverlay({
       activeSegmentIndex: activeSegment?.index ?? null,
       activeSegmentLabel:
         activeSegment === null ? undefined : `Segment ${String(activeSegment.index + 1)}`,
-      activeWordText: preparedSourceActiveWordText(source, effectiveActiveWordIndex),
+      activeWordText,
       currentSourceLocator: locator,
       highlightMode: readAlongVisualMode,
       runtime: readAlongRuntime,
@@ -787,7 +788,10 @@ export function PreparedSourceCinemaOverlay({
     buildCinemaInspectorSection({
       children: (
         <ReadAlongInvariantDebugPanel
+          onRepairMapChange={handleAlignmentRepairMapChange}
           report={readAlongReport}
+          repairContext={alignmentRepairContext}
+          repairMap={alignmentRepairMap}
           runtime={readAlongRuntime}
           syncDebugSnapshot={syncDebugSnapshot}
         />
