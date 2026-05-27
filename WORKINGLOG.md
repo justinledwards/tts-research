@@ -1,7 +1,74 @@
+## 2026-05-27 23:40 CEST - Whole-App Follow-Along Sync Spine (Execution 202605272340)
+- [ ] Define NarrationSyncSnapshot + provider integration API
+- [ ] Add source-word global timeline normalization and fallback/degradation rules
+- [ ] Migrate all follow-along renderers to consume activeSourceWordId only
+- [ ] Add render-mounted registry and stale-active clear behavior
+- [ ] Extend diagnostics overlay with sync reason/mount and identity fields
+- [ ] Add/adjust unit + integration tests for canonical sync path and resets
+- [ ] Run focused checks and summarize gaps
+
 # Working Log
 
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
+
+## 2026-05-28 00:11 CEST - Codebase Sanitization
+- [x] Inspect prior sanitization entries and oversized candidate set
+- [x] Seed rotation ledger for the current cycle and candidate status
+- [x] Extract reusable helper cluster from `frontend/src/App.tsx` into `frontend/src/appHelpers.ts`
+- [x] Run `pnpm check` as handoff validation
+- [x] Commit focused refactor (`00af50d`)
+
+## 2026-05-27 23:16 CEST - Whole-App Follow-Along Sync Spine
+- [ ] Define NarrationSyncSnapshot contract and shared provider API
+- [ ] Normalize legacy and v2 highlight maps into global NarrationWordTimeline
+- [ ] Migrate Book Cinema to snapshot-driven activeSourceWordId
+- [ ] Migrate Document/Website Cinema to snapshot-driven activeSourceWordId
+- [ ] Migrate Theatre/Teleprompt highlight paths to source-word identity
+- [ ] Add render registry and non-stale active token behavior
+- [ ] Add degraded-sync diagnostics overlay fields and controls
+- [ ] Add regression coverage for timeline handoff and binary-search resolution
+- [ ] Run targeted checks/tests and report blockers
+
+## 2026-05-27 22:30 CEST - Mechanical Word Sync
+- [x] Inspect current source/timing/render identity pipeline
+- [x] Add canonical word timeline and ledger helpers
+- [x] Drive Cinema highlighting from source word identity
+- [x] Drive Theatre highlighting and crawl from source word identity
+- [x] Add regression coverage
+- [x] Run targeted and project checks
+- [x] Validate rendered Cinema and Theatre playback
+
+## 2026-05-27 21:29 CEST - Multi-Block Follow-Along Repair
+- [x] Inspect current Cinema/Theatre timing identity pipeline
+- [x] Normalize multi-block source word indexes
+- [x] Stabilize Theatre crawl by active row
+- [x] Add regression coverage
+- [x] Run targeted and project checks
+
+## 2026-05-27 20:50 CEST - Cinema Theatre Follow-Along Fix
+- [x] Normalize Book Cinema timing indexes
+- [x] Add Theatre word-follow rendering
+- [x] Add Theatre cinematic crawl
+- [x] Add regression coverage
+- [x] Run targeted and project checks
+- [x] Validate rendered follow-along views
+
+## 2026-05-27 19:48 CEST - Book Cinema Structure Restoration
+- [x] Preserve Book Cinema structure and punctuation
+- [x] Improve Theatre cue hierarchy
+- [x] Add focused regression coverage
+- [x] Run targeted and project checks
+- [x] Validate rendered reader/theatre views
+
+## 2026-05-27 20:18 CEST - Book Cinema Density And Heading Polish
+- [x] Improve Book Cinema page density and heading spacing
+- [x] Add display-only intro heading splitting for flat sources
+- [x] Classify obvious PDF text-layer headings
+- [x] Improve Theatre combined cue hierarchy
+- [x] Add regression coverage
+- [x] Run targeted and project checks
+- [x] Validate rendered reader and theatre views
 
 ## 2026-05-27 14:06 CEST - Work Log and PR Refresh
 - [x] Condense redundant historical checklist entries into a branch summary
@@ -51,3 +118,74 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [ ] Run the WP62 manual golden-minute QA script with a human reviewer and attach findings if any.
 - [ ] Regenerate a clean final review bundle from a clean checkout after the PR branch is pushed.
 - [ ] Keep the existing local `.gitignore` modification out of this PR unless explicitly accepted.
+
+## 2026-05-27 23:20 CEST - Whole-App Follow-Along Sync Spine
+- [ ] implement canonical NarrationSyncProvider contract
+- [ ] migrate timeline normalization and legacy/v2 mapping
+- [ ] wire Book Cinema to canonical activeSourceWordId
+- [ ] wire Book Document reader to canonical activeSourceWordId
+- [ ] wire Teleprompt Theatre/Studio to canonical activeSourceWordId
+- [ ] add render registry + not-visible/clear stale behavior
+- [ ] upgrade sync debug overlay fields
+- [ ] update tests for canonical sync path and regression coverage
+
+## 2026-05-27 23:24 CEST - Whole-App Follow-Along Sync Spine
+- [ ] add shared readalong SyncSnapshot contract and provider
+- [ ] normalize legacy/highlight-map inputs into global NarrationWordTimeline
+- [ ] migrate Book Cinema / Document Cinema follow-along consumers to activeSourceWordId
+- [ ] migrate Theatre/Teleprompt follow-along consumers to activeSourceWordId
+- [ ] add mounted token render registry and stale-word clear behavior
+- [ ] update sync diagnostics overlay with canonical and degraded state
+- [ ] add focused tests for tokenIndex reset and binary-search resolution
+
+## 2026-05-27 23:29 CEST - Follow-Along Sync Spine Handoff
+- [x] capture inspected sync-spine context
+- [x] document current implementation state and gaps
+- [x] outline next safe implementation steps
+
+## 2026-05-27 23:34 CEST - Whole-App Follow-Along Sync Spine
+- [ ] Review handoff and current implementation for follow-along identity handling
+- [ ] Define shared SyncSnapshot and NarrationSyncProvider in readalong layer
+- [ ] Implement global NarrationWordTimeline normalization with legacy/legacy fallback
+- [ ] Refactor Book Cinema, Theatre, Teleprompt, and related follow-along surfaces to consume activeSourceWordId
+- [ ] Add render registry keyed by sourceWordId for mount/visibility signaling
+- [ ] Add sync diagnostics overlay and degraded-sync state handling
+- [ ] Add/update tests for timeline normalization, binary search resolution, and non-stale highlighting
+
+## 2026-05-27 21:51 UTC - Whole-App Follow-Along Sync Spine
+- [ ] wire shared readalong sync snapshot contract
+- [ ] implement timeline normalizer and resolver
+- [ ] add sync diagnostics fields and overlay
+- [ ] migrate Book Cinema to activeSourceWordId
+- [ ] migrate Prepared Source/Cinema renderer to activeSourceWordId
+- [ ] migrate Teleprompt/Theatre crawl to source-word identity
+
+## 2026-05-27 23:54 CEST - Whole-App Follow-Along Sync Spine
+- [ ] define shared narration sync contract and provider wiring
+- [ ] migrate readalong highlighting to activeSourceWordId
+- [ ] migrate cinema/book/teleprompt surfaces to registry + crawl-by-row
+- [ ] add sync diagnostics overlay fields and stale-clear behavior
+
+## 2026-05-27 23:55 CEST - Whole-App Follow-Along Sync Spine
+- [ ] Add sync contract and provider for canonical source-word identity playback state
+- [ ] Implement global NarrationWordTimeline normalization with degraded fallback handling
+- [ ] Update read-along runtime resolver to binary-search + fail-closed stale handling
+- [ ] Migrate BookCinema/PreparedSourceCinema/Teleprompt/Markdown renderer to sourceWordId rendering and consumption
+- [ ] Add render registry + crawl/scroll by data-source-word-id and stale visibility handling
+- [ ] Expand SyncDebugOverlay with active source word, token, segment/block, provenance, confidence, mount state
+- [ ] Add regression tests for batch handoffs, timeline resets, seek/pause/rate binary-search behavior
+- [ ] Verify and document remaining follow-along surfaces using sourceWordId only
+
+## 2026-05-27 23:58 CEST - Whole-App Follow-Along Sync Spine (Phase 1)
+- [ ] Define shared NarrationSync contract and provider
+- [ ] Normalize timeline resolution to source-word-first snapshots
+- [ ] Migrate ReadAlong runtime consumers to activeSourceWordId
+- [ ] Convert Book/PreparedSource/Markdown surfaces away from activeWordIndex
+- [ ] Add fail-closed degradation diagnostics
+## 2026-05-28 00:02 CEST - Whole-App Follow-Along Sync Spine
+- [ ] design NarrationSyncSnapshot contract and provider implementation in readalong feature
+- [ ] normalize highlight-map inputs into global narration word timeline with source-word canonical identity
+- [ ] migrate Book Cinema, Prepared Source Cinema, Theatre, and Teleprompt to consume shared activeSourceWordId
+- [ ] replace index-based active resolution in Markdown/Document renderers with source-word based highlighting
+- [ ] add render registry and degrade-aware diagnostics fields
+- [ ] add focused lint/test/gate coverage scaffolding for sync contract and boundary regression
