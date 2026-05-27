@@ -174,6 +174,7 @@ import {
 import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPreferences";
 import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
 import type { HeaderContextSummaryProps } from "./features/header";
+import { liveStatusMessages, useLiveStatus } from "./features/accessibility";
 import {
   DEFAULT_READ_ALONG_PREFERENCES,
   clearStoredReadAlongPreferences,
@@ -2821,6 +2822,7 @@ export function App() {
   const [savingHuggingFaceTokenKey, setSavingHuggingFaceTokenKey] = useState<string | null>(null);
   const [isClearingHuggingFaceToken, setIsClearingHuggingFaceToken] = useState(false);
   const [studioMode, setStudioMode] = useState<StudioMode>("narration");
+  const { announceAssertive, announcePolite } = useLiveStatus();
   const handleStudioModeChange = useCallback(
     (mode: StudioMode) => {
       if (mode !== studioMode) {
@@ -2963,6 +2965,7 @@ export function App() {
         setReadAlongPreferences(DEFAULT_READ_ALONG_PREFERENCES);
         localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
         clearStoredReadAlongPreferences(activeProjectId);
+        announcePolite(liveStatusMessages.settingsReset("Reader"));
         return;
       }
       if (scope === "workspace") {
@@ -2976,6 +2979,7 @@ export function App() {
           layoutMode: defaultWorkspaceLayoutMode(),
         }));
         setActiveReviewPane("blocks");
+        announcePolite(liveStatusMessages.settingsReset("Workspace"));
         return;
       }
       setUiMemory((currentMemory) => {
@@ -3003,8 +3007,9 @@ export function App() {
       }));
       setActiveReviewPane("blocks");
       setUiMemoryResetSignal((currentSignal) => currentSignal + 1);
+      announcePolite(liveStatusMessages.settingsReset("All"));
     },
-    [activeProjectId],
+    [activeProjectId, announcePolite],
   );
   const handleCinemaFocusStateChange = useCallback(
     (surfaceKind: "book" | "document" | "website", state: UiMemoryCinemaState) => {
@@ -4241,6 +4246,30 @@ export function App() {
     );
   }, []);
 
+  const announceVoiceJobTerminalStatus = useCallback(
+    (nextJob: VoiceJob) => {
+      if (nextJob.status === "completed") {
+        announcePolite(liveStatusMessages.audioGenerationCompleted());
+        return;
+      }
+      if (nextJob.status === "failed") {
+        announceAssertive(liveStatusMessages.audioGenerationFailed());
+      }
+    },
+    [announceAssertive, announcePolite],
+  );
+
+  const announceSourceExtractionResult = useCallback(
+    (source: BookSource | PreparedSource) => {
+      if (source.status === "ready") {
+        announcePolite(liveStatusMessages.sourceExtractionCompleted());
+        return;
+      }
+      announceAssertive(liveStatusMessages.sourceExtractionFailed());
+    },
+    [announceAssertive, announcePolite],
+  );
+
   const applyJobStatusState = useCallback((nextJob: VoiceJob) => {
     if (nextJob.status === "completed") {
       setRequestState("complete");
@@ -4739,6 +4768,7 @@ export function App() {
     async (files: File[], options: BookSourceImportOptions = {}) => {
       setIsImportingBookSource(true);
       setBookSourceError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
       try {
         const book = await createBookSource(activeProjectId, files, options);
         setBookSources((currentBooks) => [
@@ -4753,22 +4783,32 @@ export function App() {
         if (book.status === "ready") {
           setText(bookScopeText(book, defaultScope));
         }
+        announceSourceExtractionResult(book);
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setBookSourceError(
             "The selected project is no longer available. I refreshed the workspace; choose a project and import again.",
           );
           void refreshProjects();
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
           return;
         }
         setBookSourceError(
           caughtError instanceof Error ? caughtError.message : "Unable to import book source",
         );
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
       } finally {
         setIsImportingBookSource(false);
       }
     },
-    [activeProjectId, refreshProjects, setContentMode],
+    [
+      activeProjectId,
+      announceAssertive,
+      announcePolite,
+      announceSourceExtractionResult,
+      refreshProjects,
+      setContentMode,
+    ],
   );
 
   const handlePrepareSourceFile = useCallback(
@@ -4779,6 +4819,7 @@ export function App() {
     ) => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
       try {
         const extension = file.name.toLowerCase().split(".").pop() ?? "";
         if (
@@ -4794,6 +4835,7 @@ export function App() {
           setSelectedBookScope(resolveDefaultBookScope(book));
           setSourceMode("book");
           setContentMode("review");
+          announceSourceExtractionResult(book);
           return;
         }
         const source = await createPreparedSource(activeProjectId, file, { markdownParseMode });
@@ -4807,27 +4849,38 @@ export function App() {
         if (source.speechText) {
           setText(source.speechText);
         }
+        announceSourceExtractionResult(source);
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setSourcePrepError(
             "The selected project is no longer available. I refreshed the workspace; choose a project and prepare the file again.",
           );
           void refreshProjects();
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
           return;
         }
         setSourcePrepError(
           caughtError instanceof Error ? caughtError.message : "Unable to prepare source file",
         );
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
       } finally {
         setIsPreparingSource(false);
       }
     },
-    [activeProjectId, refreshProjects, setContentMode],
+    [
+      activeProjectId,
+      announceAssertive,
+      announcePolite,
+      announceSourceExtractionResult,
+      refreshProjects,
+      setContentMode,
+    ],
   );
   const handlePrepareCinemaSourceFile = useCallback(
     async (file: File) => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
       try {
         const source = await createPreparedSource(activeProjectId, file, {
           markdownParseMode: "strict",
@@ -4843,22 +4896,32 @@ export function App() {
         if (source.speechText) {
           setText(source.speechText);
         }
+        announceSourceExtractionResult(source);
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setSourcePrepError(
             "The selected project is no longer available. I refreshed the workspace; choose a project and prepare the file again.",
           );
           void refreshProjects();
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
           return;
         }
         setSourcePrepError(
           caughtError instanceof Error ? caughtError.message : "Unable to prepare that source",
         );
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
       } finally {
         setIsPreparingSource(false);
       }
     },
-    [activeProjectId, refreshProjects, setContentMode],
+    [
+      activeProjectId,
+      announceAssertive,
+      announcePolite,
+      announceSourceExtractionResult,
+      refreshProjects,
+      setContentMode,
+    ],
   );
   const handleSelectPreparedCinemaSource = useCallback(
     (sourceId: string) => {
@@ -4881,6 +4944,7 @@ export function App() {
     ) => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
       try {
         const lowerURL = url.toLowerCase().split("?")[0] ?? "";
         if (
@@ -4896,6 +4960,7 @@ export function App() {
           setSelectedBookScope(resolveDefaultBookScope(book));
           setSourceMode("book");
           setContentMode("review");
+          announceSourceExtractionResult(book);
           return;
         }
         const source = await createPreparedSource(activeProjectId, {
@@ -4915,22 +4980,32 @@ export function App() {
         if (source.speechText) {
           setText(source.speechText);
         }
+        announceSourceExtractionResult(source);
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setSourcePrepError(
             "The selected project is no longer available. I refreshed the workspace; choose a project and prepare the URL again.",
           );
           void refreshProjects();
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
           return;
         }
         setSourcePrepError(
           caughtError instanceof Error ? caughtError.message : "Unable to prepare source URL",
         );
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
       } finally {
         setIsPreparingSource(false);
       }
     },
-    [activeProjectId, refreshProjects, setContentMode],
+    [
+      activeProjectId,
+      announceAssertive,
+      announcePolite,
+      announceSourceExtractionResult,
+      refreshProjects,
+      setContentMode,
+    ],
   );
 
   const handleRerunWebsiteExtraction = useCallback(
@@ -5255,11 +5330,15 @@ export function App() {
         progress,
         ...currentProgress.filter((item) => item.targetId !== progress.targetId),
       ]);
+      announcePolite(liveStatusMessages.bookmarkSaved());
     } catch {
       setError("Unable to save bookmark.");
+      announceAssertive("Bookmark could not be saved.");
     }
   }, [
     activeWordIndexForPlaybackProgress,
+    announceAssertive,
+    announcePolite,
     job,
     playbackCursorSec,
     readingPositionForPlaybackProgress,
@@ -5762,12 +5841,14 @@ export function App() {
         }
         if (nextJob.status === "completed") {
           setRequestState("complete");
+          announceVoiceJobTerminalStatus(nextJob);
           void refreshProjectJobs(nextJob.projectId || activeProjectId);
           void refreshProjectStorage(nextJob.projectId || activeProjectId);
         }
         if (nextJob.status === "failed") {
           setRequestState("error");
           setError(nextJob.error ?? "Voice job failed");
+          announceVoiceJobTerminalStatus(nextJob);
           void refreshProjectJobs(nextJob.projectId || activeProjectId);
         }
 
@@ -5784,7 +5865,13 @@ export function App() {
         setError(caughtError.message);
       },
     );
-  }, [activeJobId, activeProjectId, refreshProjectJobs, refreshProjectStorage]);
+  }, [
+    activeJobId,
+    activeProjectId,
+    announceVoiceJobTerminalStatus,
+    refreshProjectJobs,
+    refreshProjectStorage,
+  ]);
 
   useEffect(() => {
     if (!job?.id || !job.timing?.highlightMapUrl) {
@@ -6065,6 +6152,7 @@ export function App() {
     setError(null);
     setPlaybackCursorSec(0);
     setIsPlaybackActive(false);
+    announcePolite(liveStatusMessages.audioGenerationStarted());
 
     try {
       const nextJob = await createVoiceJob(request);
@@ -6073,9 +6161,11 @@ export function App() {
       setContentMode("preview");
       void refreshProjectJobs(nextJob.projectId || activeProjectId);
       setRequestState(nextJob.status === "completed" ? "complete" : "running");
+      announceVoiceJobTerminalStatus(nextJob);
     } catch (caughtError) {
       setRequestState("error");
       setError(caughtError instanceof Error ? caughtError.message : "Unable to create voice job");
+      announceAssertive(liveStatusMessages.audioGenerationFailed());
     }
   }
 
@@ -6126,6 +6216,7 @@ export function App() {
     setSelectedBookSourceId(book.id);
     setSelectedBookScope(scope);
     setText(scopedText);
+    announcePolite(liveStatusMessages.audioGenerationStarted());
 
     try {
       const nextJob = await createBookNarrationJob(book.id, request);
@@ -6136,11 +6227,13 @@ export function App() {
       setContentMode("preview");
       void refreshProjectJobs(nextJob.projectId || activeProjectId);
       setRequestState(nextJob.status === "completed" ? "complete" : "running");
+      announceVoiceJobTerminalStatus(nextJob);
     } catch (caughtError) {
       setRequestState("error");
       setBookSourceError(
         caughtError instanceof Error ? caughtError.message : "Unable to create book narration",
       );
+      announceAssertive(liveStatusMessages.audioGenerationFailed());
     }
   }
 
@@ -6173,6 +6266,7 @@ export function App() {
     setIsPlaybackActive(false);
     setSelectedPreparedSourceId(source.id);
     setText(speechText);
+    announcePolite(liveStatusMessages.audioGenerationStarted());
 
     try {
       const nextJob = await createPreparedSourceJob(source.id, request);
@@ -6181,11 +6275,13 @@ export function App() {
       setContentMode("preview");
       void refreshProjectJobs(nextJob.projectId || activeProjectId);
       setRequestState(nextJob.status === "completed" ? "complete" : "running");
+      announceVoiceJobTerminalStatus(nextJob);
     } catch (caughtError) {
       setRequestState("error");
       setSourcePrepError(
         caughtError instanceof Error ? caughtError.message : "Unable to create prepared narration",
       );
+      announceAssertive(liveStatusMessages.audioGenerationFailed());
     }
   }
 
@@ -7027,6 +7123,7 @@ export function App() {
             onShortcutPreferencesChange={setShortcutPreferences}
             onShortcutPreferencesReset={() => {
               setShortcutPreferences(resetShortcutPreferences());
+              announcePolite(liveStatusMessages.settingsReset("Shortcut"));
             }}
             onClose={() => {
               setIsSettingsOpen(false);

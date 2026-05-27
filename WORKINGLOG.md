@@ -797,3 +797,10 @@
 - [x] Adjust UI memory surface complexity budget classification
 - [x] Add confirmation affordance to read-along calibration reset
 - [x] Run WP51 validation commands
+
+## 2026-05-27 04:23 CEST - WP53 Live Region Accessibility
+- [x] Inspect async reader, generation, Teleprompt, bookmark, and settings status flows
+- [x] Add shared polite/assertive live status infrastructure
+- [x] Wire key async announcements without read-along spam
+- [x] Add live-region tests and accessibility evidence
+- [x] Run WP53 validation commands

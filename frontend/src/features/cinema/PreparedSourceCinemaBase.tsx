@@ -29,6 +29,7 @@ import type {
 } from "../../types";
 import { HeaderContextSummary } from "../header";
 import { ExitIcon, SettingsIcon } from "../navigation";
+import { useReadAlongLiveStatus } from "../accessibility";
 import { LazyPanelFallback } from "../performance";
 import { generatedAudioLifecycleFromJob, playbackActionLabel } from "../playback";
 import { PolicyScopeSummary, policyScopeSummary, SourcePolicyPinEditor } from "../policy";
@@ -461,6 +462,11 @@ export function PreparedSourceCinemaOverlay({
       playbackControls.isSeeking,
     ],
   );
+  useReadAlongLiveStatus({
+    reason: readAlongRuntime.reason,
+    state: readAlongRuntime.state,
+    surface: isWebsiteCinema ? "Website Cinema" : "Document Cinema",
+  });
   const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime, effectiveReadAlong);
   const readAlongReport = useMemo(
     () =>

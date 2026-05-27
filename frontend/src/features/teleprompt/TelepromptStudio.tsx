@@ -19,6 +19,7 @@ import type { HighlightMap, VoiceJob } from "../../types";
 import { Button, Panel, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
 import { ContextPanel, buildContextPanelTabs, type ContextPanelTabId } from "../context-panel";
 import { HighlightRenderer, type HighlightMapV2 } from "../readalong";
+import { liveStatusMessages, useLiveStatus } from "../accessibility";
 import type { RevisionBlock } from "../revision";
 import { HeaderContextSummary } from "../header";
 import {
@@ -164,6 +165,7 @@ export function TelepromptStudio({
   );
   const [nativeFullscreenActive, setNativeFullscreenActive] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Teleprompt Studio ready.");
+  const { announcePolite } = useLiveStatus();
   const [workflowMenuOpen, setWorkflowMenuOpen] = useState(false);
   const [cueSyncMode, setCueSyncMode] = useState<TelepromptCueSyncMode>("audio-follow");
   const scriptScrollerRef = useRef<HTMLDivElement | null>(null);
@@ -334,18 +336,20 @@ export function TelepromptStudio({
     setFullscreenAvailability(telepromptFullscreenAvailability());
     setTheatreMode("theatre");
     setStatusMessage("Teleprompt Theatre opened.");
-  }, [persistSnapshot, returnTarget]);
+    announcePolite(liveStatusMessages.telepromptTheatreEntered());
+  }, [announcePolite, persistSnapshot, returnTarget]);
 
   const handleExitTheatre = useCallback(() => {
     void exitTelepromptFullscreen();
     setNativeFullscreenActive(false);
     setTheatreMode("inline");
     setStatusMessage("Exited Teleprompt Theatre.");
+    announcePolite(liveStatusMessages.telepromptTheatreExited());
     requestAnimationFrame(() => {
       theatreReturnFocusRef.current?.focus();
       theatreReturnFocusRef.current = null;
     });
-  }, []);
+  }, [announcePolite]);
 
   const handleRequestNativeFullscreen = useCallback(() => {
     const availability = telepromptFullscreenAvailability();
@@ -460,8 +464,24 @@ export function TelepromptStudio({
       onActiveBlockChange(nextId);
       persistSnapshot(returnTarget, nextId);
       setStatusMessage(direction < 0 ? "Moved to previous cue." : "Moved to next cue.");
+      announcePolite(
+        liveStatusMessages.cueChanged(
+          telepromptCueLiveLabel(
+            blocks.find((block) => block.id === nextId) ?? null,
+            blocks.length,
+          ),
+        ),
+      );
     },
-    [activeBlock?.id, activeBlockId, blocks, onActiveBlockChange, persistSnapshot, returnTarget],
+    [
+      activeBlock?.id,
+      activeBlockId,
+      announcePolite,
+      blocks,
+      onActiveBlockChange,
+      persistSnapshot,
+      returnTarget,
+    ],
   );
 
   const handlePlayPause = useCallback(() => {
@@ -493,6 +513,9 @@ export function TelepromptStudio({
       void exitTelepromptFullscreen();
       setNativeFullscreenActive(false);
       setTheatreMode("inline");
+      if (theatreMode !== "inline") {
+        announcePolite(liveStatusMessages.telepromptTheatreExited());
+      }
       if (target === "preview") {
         setWorkflowMenuOpen(false);
         onBackToPreview();
@@ -501,7 +524,7 @@ export function TelepromptStudio({
       setWorkflowMenuOpen(false);
       onBackToReview();
     },
-    [onBackToPreview, onBackToReview, persistSnapshot],
+    [announcePolite, onBackToPreview, onBackToReview, persistSnapshot, theatreMode],
   );
 
   const handleCreateAndListen = useCallback(() => {
@@ -513,9 +536,12 @@ export function TelepromptStudio({
     void exitTelepromptFullscreen();
     setNativeFullscreenActive(false);
     setTheatreMode("inline");
+    if (theatreMode !== "inline") {
+      announcePolite(liveStatusMessages.telepromptTheatreExited());
+    }
     setWorkflowMenuOpen(false);
     onCreateAndListen();
-  }, [canCreate, onCreateAndListen, persistSnapshot, returnTarget]);
+  }, [announcePolite, canCreate, onCreateAndListen, persistSnapshot, returnTarget, theatreMode]);
 
   const handleOpenCinema = useCallback(() => {
     if (!canOpenCinema) {
@@ -534,10 +560,14 @@ export function TelepromptStudio({
     void exitTelepromptFullscreen();
     setNativeFullscreenActive(false);
     setTheatreMode("inline");
+    if (theatreMode !== "inline") {
+      announcePolite(liveStatusMessages.telepromptTheatreExited());
+    }
     setWorkflowMenuOpen(false);
     onOpenCinema();
   }, [
     activeBlock?.id,
+    announcePolite,
     canOpenCinema,
     cueSync.activeCue,
     onOpenCinema,
@@ -545,6 +575,7 @@ export function TelepromptStudio({
     playbackControls,
     playbackCursorSec,
     returnTarget,
+    theatreMode,
   ]);
 
   useEffect(() => {
@@ -1027,6 +1058,9 @@ export function TelepromptStudio({
                       onActiveBlockChange(block.id);
                       persistSnapshot(returnTarget, block.id);
                       setStatusMessage(`Selected cue ${block.index.toString()}.`);
+                      announcePolite(
+                        liveStatusMessages.cueChanged(telepromptCueLiveLabel(block, blocks.length)),
+                      );
                     }}
                   />
                 ))}
@@ -1346,6 +1380,13 @@ function cueSyncModeLabel(mode: TelepromptCueSyncMode): string {
       return "Review playback cue sync";
     }
   }
+}
+
+function telepromptCueLiveLabel(block: RevisionBlock | null, totalBlocks: number): string {
+  if (!block) {
+    return "the selected cue";
+  }
+  return `${block.index.toString()} of ${totalBlocks.toString()}`;
 }
 
 function normalizeCueText(value: string): string {

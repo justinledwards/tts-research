@@ -66,6 +66,7 @@ import { HeaderContextSummary } from "../header";
 import { PolicyScopeSummary, SourcePolicyPinEditor, policyScopeSummary } from "../policy";
 import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
 import { ExitIcon, SettingsIcon } from "../navigation";
+import { useReadAlongLiveStatus } from "../accessibility";
 import {
   bookSourceLifecycleEnvelope,
   sourceSelectorOption,
@@ -998,6 +999,11 @@ export function BookCinemaOverlay({
       readAlongResyncController,
     ],
   );
+  useReadAlongLiveStatus({
+    reason: readAlongRuntime.reason,
+    state: readAlongRuntime.state,
+    surface: "Book Cinema",
+  });
   const runtimeHighlightCue = readAlongRuntime.activeCue ?? highlightCue;
   const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime, effectiveReadAlong);
   const timingActiveWordIndex = runtimeHighlightCue?.activeWordIndex ?? activeWordIndex;
