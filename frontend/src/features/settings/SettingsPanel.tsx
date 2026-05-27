@@ -21,6 +21,7 @@ import { RunConfigurationWizard } from "../run-config/RunConfigurationWizard";
 import { applyRunEngineSelection } from "../run-config/runConfigSteps";
 import { SpeechPolicyWizard } from "../speech-policy/SpeechPolicyWizard";
 import { ShortcutSettings, type ShortcutPreferences } from "./shortcutSettings";
+import { accessibilityPresetById } from "../accessibility";
 import {
   SpeechPolicyControls,
   SourcePolicyPinEditor,
@@ -48,8 +49,11 @@ import {
   type TeleprompterHighlightSettings,
 } from "../../teleprompter";
 import { TelepromptTheatreSettingsControls } from "../teleprompt/TelepromptTheatreSettingsControls";
-import type { TelepromptTheatreSettings } from "../teleprompt/telepromptTheatreSettings";
-import type { ReadAlongPreferences } from "../readalong";
+import {
+  telepromptTheatrePreset,
+  type TelepromptTheatreSettings,
+} from "../teleprompt/telepromptTheatreSettings";
+import { READ_ALONG_PREFERENCE_LABELS, type ReadAlongPreferences } from "../readalong";
 import {
   bookSourceLifecycleEnvelope,
   preparedSourceLifecycleEnvelope,
@@ -93,6 +97,16 @@ import {
 } from "./model";
 import { ScopeBadge } from "./ScopeBadge";
 import { ReadAlongSettingsControls } from "./ReadAlongSettingsControls";
+import {
+  ERGONOMIC_CONTEXT_PANEL_LABELS,
+  ERGONOMIC_PRESETS,
+  ERGONOMIC_PREVIEW_BEHAVIOR_LABELS,
+  ERGONOMIC_TRANSPORT_DENSITY_LABELS,
+  applyErgonomicPresetDefaults,
+  ergonomicPresetById,
+  type ErgonomicPreset,
+  type ErgonomicPresetId,
+} from "./ergonomicPresets";
 
 const COMMON_PIPELINE_OPTIONS: (keyof PipelineOptions)[] = [
   "textPreprocess",
@@ -322,6 +336,7 @@ export function SettingsPanel({
           definition={speechPolicyDefinition}
           highlightedCommandToken={highlightedCommandToken}
           readerAccessibilitySettings={readerAccessibilitySettings}
+          readAlongPreferences={readAlongPreferences}
           runConfiguration={runConfiguration}
           selectedBookSource={selectedBookSource}
           selectedPreparedSource={selectedPreparedSource}
@@ -329,9 +344,11 @@ export function SettingsPanel({
           sourceMode={sourceMode}
           speechPolicyProfile={speechPolicyProfile}
           speechPolicyProfiles={speechPolicyProfiles}
+          telepromptTheatreSettings={telepromptTheatreSettings}
           themeName={themeName}
           ttsEngines={ttsEngines}
           onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
+          onReadAlongPreferencesChange={onReadAlongPreferencesChange}
           onRunConfigurationChange={onRunConfigurationChange}
           onOpenGroup={(groupId) => {
             setActiveLayer(settingsGroupMeta(groupId).layer);
@@ -339,6 +356,7 @@ export function SettingsPanel({
           }}
           onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
           onSubmit={onSubmit}
+          onTelepromptTheatreSettingsChange={onTelepromptTheatreSettingsChange}
           onThemeChange={onThemeChange}
         />
       ) : (
@@ -527,6 +545,7 @@ function QuickSettings({
   definition,
   highlightedCommandToken,
   readerAccessibilitySettings,
+  readAlongPreferences,
   runConfiguration,
   selectedBookSource,
   selectedPreparedSource,
@@ -534,13 +553,16 @@ function QuickSettings({
   sourceMode,
   speechPolicyProfile,
   speechPolicyProfiles,
+  telepromptTheatreSettings,
   themeName,
   ttsEngines,
   onReaderAccessibilitySettingsChange,
+  onReadAlongPreferencesChange,
   onRunConfigurationChange,
   onOpenGroup,
   onSpeechPolicyProfileChange,
   onSubmit,
+  onTelepromptTheatreSettingsChange,
   onThemeChange,
 }: Readonly<{
   canSubmit: boolean;
@@ -548,6 +570,7 @@ function QuickSettings({
   definition: SpeechPolicyDefinition;
   highlightedCommandToken: string | null;
   readerAccessibilitySettings: ReaderAccessibilitySettings;
+  readAlongPreferences: ReadAlongPreferences;
   runConfiguration: RunConfiguration;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
@@ -555,16 +578,21 @@ function QuickSettings({
   sourceMode: SettingsSourceMode;
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
+  telepromptTheatreSettings: TelepromptTheatreSettings;
   themeName: ThemeName;
   ttsEngines: TTSEngineDiagnostics[];
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
+  onReadAlongPreferencesChange: (settings: ReadAlongPreferences) => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onOpenGroup: (groupId: SettingsGroupId) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onSubmit: () => void;
+  onTelepromptTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
 }>) {
   const profileOptions = resolveSpeechPolicyProfileOptions(definition, speechPolicyProfiles);
+  const [selectedErgonomicPresetId, setSelectedErgonomicPresetId] =
+    useState<ErgonomicPresetId>("longFormBookListening");
   const activeSourceLabel = quickSourceLabel(
     sourceMode,
     selectedBookSource,
@@ -591,13 +619,20 @@ function QuickSettings({
         "field-activeSource",
         "field-projectSpeechPolicy",
         "field-previewSample",
+        "field-ergonomicPresets",
+        "field-readerPreferences",
+        "field-readAlongPreferences",
+        "field-telepromptTheatre",
         "scope-session",
+        "scope-machine",
         "scope-source",
         "scope-project",
       ].join(" ")}
       highlighted={
         highlightedCommandToken
-          ? ["field-previewSample", highlightedCommandToken].includes(highlightedCommandToken)
+          ? ["field-previewSample", "field-ergonomicPresets", highlightedCommandToken].includes(
+              highlightedCommandToken,
+            )
           : false
       }
       variant="raised"
@@ -730,6 +765,21 @@ function QuickSettings({
           ))}
         </QuickSelect>
       </div>
+      <ErgonomicPresetControls
+        profileOptions={profileOptions}
+        readerAccessibilitySettings={readerAccessibilitySettings}
+        readAlongPreferences={readAlongPreferences}
+        runConfiguration={runConfiguration}
+        selectedPresetId={selectedErgonomicPresetId}
+        speechPolicyProfile={speechPolicyProfile}
+        telepromptTheatreSettings={telepromptTheatreSettings}
+        onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
+        onReadAlongPreferencesChange={onReadAlongPreferencesChange}
+        onRunConfigurationChange={onRunConfigurationChange}
+        onSelectPreset={setSelectedErgonomicPresetId}
+        onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+        onTelepromptTheatreSettingsChange={onTelepromptTheatreSettingsChange}
+      />
       <div className="grid gap-2 sm:grid-cols-3">
         <Button
           data-testid="settings-quick-preview-sample"
@@ -846,6 +896,239 @@ function QuickSelect({
       </select>
     </label>
   );
+}
+
+function ErgonomicPresetControls({
+  profileOptions,
+  readerAccessibilitySettings,
+  readAlongPreferences,
+  runConfiguration,
+  selectedPresetId,
+  speechPolicyProfile,
+  telepromptTheatreSettings,
+  onReaderAccessibilitySettingsChange,
+  onReadAlongPreferencesChange,
+  onRunConfigurationChange,
+  onSelectPreset,
+  onSpeechPolicyProfileChange,
+  onTelepromptTheatreSettingsChange,
+}: Readonly<{
+  profileOptions: SpeechPolicyProfile[];
+  readerAccessibilitySettings: ReaderAccessibilitySettings;
+  readAlongPreferences: ReadAlongPreferences;
+  runConfiguration: RunConfiguration;
+  selectedPresetId: ErgonomicPresetId;
+  speechPolicyProfile: string;
+  telepromptTheatreSettings: TelepromptTheatreSettings;
+  onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
+  onReadAlongPreferencesChange: (settings: ReadAlongPreferences) => void;
+  onRunConfigurationChange: (configuration: RunConfiguration) => void;
+  onSelectPreset: (presetId: ErgonomicPresetId) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
+  onTelepromptTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
+}>) {
+  const preset = ergonomicPresetById(selectedPresetId);
+  const policyLabel = speechPolicyProfileLabel(preset.speechPolicyProfile, profileOptions);
+  const policyAlreadyActive = speechPolicyProfile === preset.speechPolicyProfile;
+  const applyPreset = () => {
+    const next = applyErgonomicPresetDefaults(selectedPresetId, {
+      readerAccessibilitySettings,
+      readAlongPreferences,
+      runConfiguration,
+      telepromptTheatreSettings,
+    });
+    onReaderAccessibilitySettingsChange(next.readerAccessibilitySettings);
+    onReadAlongPreferencesChange(next.readAlongPreferences);
+    onRunConfigurationChange(next.runConfiguration);
+    onTelepromptTheatreSettingsChange(next.telepromptTheatreSettings);
+  };
+  const applyPolicy = () => {
+    if (policyAlreadyActive || !confirmErgonomicPolicyChange(preset, policyLabel)) {
+      return;
+    }
+    onSpeechPolicyProfileChange(preset.speechPolicyProfile);
+  };
+
+  return (
+    <Panel
+      className="grid gap-3 p-3"
+      data-settings-command-targets="field-ergonomicPresets scope-machine scope-session scope-project"
+      data-testid="settings-ergonomic-presets"
+      variant="surface"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="flex items-center gap-2 text-sm font-semibold">
+            Use-case preset
+            <ScopeBadge scope="machine" />
+          </h4>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            Presets set display, read-along, Theatre, preview, and run defaults.
+          </p>
+        </div>
+        <span className="rounded-full border px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] vs-border vs-muted">
+          Policy requires confirm
+        </span>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {ERGONOMIC_PRESETS.map((candidate) => (
+          <Button
+            align="start"
+            className="grid gap-1 p-3"
+            data-testid={`ui-action-ergonomic-preset-${candidate.id}`}
+            data-ui-action-surface="Settings"
+            key={candidate.id}
+            onClick={() => {
+              onSelectPreset(candidate.id);
+            }}
+            selected={candidate.id === selectedPresetId}
+            variant="mode"
+          >
+            <span className="text-sm font-semibold">{candidate.label}</span>
+            <span className="vs-muted text-xs leading-5">{candidate.description}</span>
+          </Button>
+        ))}
+      </div>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_15rem]">
+        <div
+          className="grid gap-2 rounded-md border bg-[var(--vs-raised)] p-3 vs-border"
+          data-testid="ergonomic-preset-preview"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h5 className="text-sm font-semibold">{preset.label}</h5>
+            <span className="vs-muted text-xs">{getRunModePreset(preset.runMode).label}</span>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <ErgonomicPreviewRow
+              label="Reader display"
+              scope="machine"
+              value={accessibilityPresetById(preset.readerDisplayPreset).label}
+            />
+            <ErgonomicPreviewRow
+              label="Highlight"
+              scope="machine"
+              value={`${READ_ALONG_PREFERENCE_LABELS.granularity[preset.readAlong.highlightGranularity]} / ${READ_ALONG_PREFERENCE_LABELS.style[preset.readAlong.highlightStyle]}`}
+            />
+            <ErgonomicPreviewRow
+              label="Scroll follow"
+              scope="machine"
+              value={READ_ALONG_PREFERENCE_LABELS.scrollFollow[preset.readAlong.scrollFollow]}
+            />
+            <ErgonomicPreviewRow
+              label="Sync strictness"
+              scope="machine"
+              value={READ_ALONG_PREFERENCE_LABELS.syncStrictness[preset.readAlong.syncStrictness]}
+            />
+            <ErgonomicPreviewRow
+              label="Transport"
+              scope="session"
+              value={ERGONOMIC_TRANSPORT_DENSITY_LABELS[preset.transportDensity]}
+            />
+            <ErgonomicPreviewRow
+              label="Context panel"
+              scope="session"
+              value={ERGONOMIC_CONTEXT_PANEL_LABELS[preset.contextPanelDefault]}
+            />
+            <ErgonomicPreviewRow
+              label="Teleprompt Theatre"
+              scope="machine"
+              value={telepromptTheatrePreset(preset.telepromptTheatrePreset).label}
+            />
+            <ErgonomicPreviewRow
+              label="Preview player"
+              scope="session"
+              value={ERGONOMIC_PREVIEW_BEHAVIOR_LABELS[preset.previewPlayerBehavior]}
+            />
+            <ErgonomicPreviewRow
+              label="Segment boundary"
+              scope="machine"
+              value={segmentBoundaryPreview(preset)}
+            />
+            <ErgonomicPreviewRow
+              label="Speech policy"
+              scope="project"
+              value={`${policyLabel} (confirm)`}
+            />
+          </div>
+        </div>
+        <div className="grid content-start gap-2">
+          <Button
+            data-testid="ui-action-ergonomic-preset-apply"
+            data-ui-action-surface="Settings"
+            onClick={applyPreset}
+            variant="primary"
+          >
+            Apply preset defaults
+          </Button>
+          <Button
+            data-confirm={`Apply ${policyLabel} project speech policy`}
+            data-testid="ui-action-ergonomic-preset-apply-policy"
+            data-ui-action-surface="Settings"
+            disabled={policyAlreadyActive}
+            disabledReason={
+              policyAlreadyActive ? "Project speech policy already matches this preset." : undefined
+            }
+            onClick={applyPolicy}
+            variant="secondary"
+          >
+            Apply speech policy
+          </Button>
+          <Panel className="grid gap-1 px-3 py-2 text-xs" variant="raised">
+            <span className="font-semibold">Source pins stay unchanged</span>
+            <span className="vs-muted leading-5">
+              Individual controls below remain editable after applying a preset.
+            </span>
+          </Panel>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function ErgonomicPreviewRow({
+  label,
+  scope,
+  value,
+}: Readonly<{ label: string; scope: SettingsScope; value: string }>) {
+  return (
+    <div className="min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 py-2 vs-border">
+      <div className="flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.12em] vs-muted">
+        {label}
+        <ScopeBadge scope={scope} />
+      </div>
+      <p className="mt-1 truncate text-sm font-semibold" title={value}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function speechPolicyProfileLabel(profile: string, options: SpeechPolicyProfile[]): string {
+  return options.find((option) => option.name === profile)?.label ?? profile;
+}
+
+function confirmErgonomicPolicyChange(preset: ErgonomicPreset, policyLabel: string): boolean {
+  if (typeof globalThis.confirm !== "function") {
+    return true;
+  }
+  return globalThis.confirm(
+    `Apply ${policyLabel} as the project speech policy for ${preset.label}? Source-level pins and overrides stay unchanged.`,
+  );
+}
+
+function segmentBoundaryPreview(preset: ErgonomicPreset): string {
+  const boundary = preset.readAlong.segmentBoundary;
+  const parts = [
+    boundary.autoAdvance ? "auto advance" : "manual advance",
+    boundary.pauseAtSegmentBoundary ? "pause at boundary" : "no boundary pause",
+  ];
+  if (boundary.flashSegment) {
+    parts.push("flash segment");
+  }
+  if (boundary.fadePreviousPhrase) {
+    parts.push("fade previous");
+  }
+  return parts.join(", ");
 }
 
 function ScopeLegend() {

@@ -97,6 +97,10 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Advanced");
     expect(markup).toContain("Expert / Diagnostics");
     expect(markup).toContain("Output intent");
+    expect(markup).toContain("Use-case preset");
+    expect(markup).toContain("Long-form book listening");
+    expect(markup).toContain("Apply preset defaults");
+    expect(markup).toContain("Policy requires confirm");
     expect(markup).toContain("Preview sample");
     expect(markup).toContain("Session");
     expect(markup).toContain("Project");

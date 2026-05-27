@@ -182,6 +182,15 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     scope: "session",
   },
   {
+    description:
+      "Applies transparent use-case defaults across reader display, read-along, Theatre, preview, and run behavior.",
+    group: "reader",
+    id: "ergonomicPresets",
+    label: "Use-case presets",
+    layer: "quick",
+    scope: "machine",
+  },
+  {
     description: "Controls typography and motion across reader surfaces on this machine.",
     group: "reader",
     id: "readerPreferences",

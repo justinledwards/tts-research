@@ -868,3 +868,9 @@
 - [x] Add regression coverage for triage signals and merge readiness
 - [x] Run WP63 validation commands
 - [x] Confirm dirty-tree and waived review paths generate triage output
+
+## 2026-05-27 10:57 CEST - WP64 Ergonomic Use-Case Presets
+- [x] Inspect settings, reader, teleprompt, and UI memory preset patterns
+- [x] Add transparent reversible ergonomic preset model and controls
+- [x] Add preview and override behavior for preset defaults
+- [x] Run WP64 validation commands
