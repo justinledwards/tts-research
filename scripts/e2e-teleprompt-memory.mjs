@@ -100,6 +100,7 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
     rememberLayout: true,
     rememberPanelPins: false,
     rememberReaderPreferences: true,
+    rememberTelepromptTheatreSettings: true,
     rememberTelepromptReturnTarget: true,
     rememberTheme: true,
     version: 1,
@@ -107,6 +108,7 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
       layoutMode: "focus",
       projectLayoutModes: {},
       reviewPanes: {},
+      telepromptTheatreSettings: null,
       telepromptReturnStages: {},
     },
   });
@@ -153,13 +155,31 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
     await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
     await page.getByTestId("teleprompt-theatre").waitFor();
     await page.getByTestId("teleprompt-theatre-current-cue").waitFor();
+    await page.getByTestId("ui-action-teleprompt-operator-preview").click();
+    await page.getByTestId("ui-action-teleprompt-theatre-config-preset-operatorReview").click();
     await page.getByTestId("ui-action-teleprompt-theatre-preset-highContrast").click();
     await page.getByTestId("ui-action-teleprompt-theatre-mirror").click();
-    await page.getByTestId("ui-action-teleprompt-operator-preview").click();
     await capture("teleprompt-theatre-from-preview");
     checks.push(
-      "Teleprompt Theatre opens with presenter presets, mirror mode, and operator preview.",
+      "Teleprompt Theatre opens with Theatre presets, mirror mode, and operator preview.",
     );
+    await page.waitForFunction((uiMemoryStorageKey) => {
+      const raw = localStorage.getItem(uiMemoryStorageKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed?.workspace?.telepromptTheatreSettings?.presetId === "operatorReview";
+    }, uiMemoryKey);
+    const storedTheatreSettings = await readTelepromptTheatreSettings(page);
+    if (storedTheatreSettings?.presetId !== "operatorReview") {
+      failures.push(
+        `Expected Theatre preset operatorReview in UI memory, got ${
+          storedTheatreSettings?.presetId ?? "none"
+        }.`,
+      );
+    } else if (!storedTheatreSettings.mirrorMode) {
+      failures.push("Theatre mirror setting was not persisted by UI memory.");
+    } else {
+      checks.push("Theatre ergonomic settings persist when UI memory allows it.");
+    }
     const nativeFullscreen = page.getByTestId("ui-action-teleprompt-native-fullscreen");
     const nativeFullscreenDisabled = await nativeFullscreen.isDisabled().catch(() => true);
     if (nativeFullscreenDisabled) {
@@ -280,7 +300,11 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
         const current = raw ? JSON.parse(raw) : {};
         localStorage.setItem(
           uiMemoryStorageKey,
-          JSON.stringify({ ...current, rememberTelepromptReturnTarget: false }),
+          JSON.stringify({
+            ...current,
+            rememberTelepromptReturnTarget: false,
+            rememberTelepromptTheatreSettings: false,
+          }),
         );
         localStorage.setItem(memoryKey, JSON.stringify({ stale: { returnTarget: "preview" } }));
       },
@@ -297,6 +321,12 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
       failures.push("Teleprompt return memory was not cleared when the preference was disabled.");
     } else {
       checks.push("Disabling return memory clears stored Teleprompt snapshots.");
+    }
+    const disabledUiMemory = await readUiMemory(page);
+    if (disabledUiMemory?.workspace?.telepromptTheatreSettings !== null) {
+      failures.push("Theatre settings were not cleared when the preference was disabled.");
+    } else {
+      checks.push("Disabling Theatre memory clears persisted Theatre settings.");
     }
 
     const issues = blockingPageIssues(pageIssues);
@@ -323,6 +353,18 @@ async function openPreview(page) {
     await page.getByRole("button", { exact: true, name: "Preview" }).click();
   }
   await page.getByText("Spoken Form").first().waitFor();
+}
+
+async function readUiMemory(page) {
+  return page.evaluate((uiMemoryStorageKey) => {
+    const raw = localStorage.getItem(uiMemoryStorageKey);
+    return raw ? JSON.parse(raw) : null;
+  }, uiMemoryKey);
+}
+
+async function readTelepromptTheatreSettings(page) {
+  const memory = await readUiMemory(page);
+  return memory?.workspace?.telepromptTheatreSettings ?? null;
 }
 
 async function readTelepromptMemory(page, projectId) {

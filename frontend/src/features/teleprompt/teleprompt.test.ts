@@ -4,6 +4,10 @@ import {
   telepromptPresetHighlightSettings,
 } from "./telepromptPresets";
 import {
+  applyTelepromptTheatrePreset,
+  normalizeTelepromptTheatreSettings,
+} from "./telepromptTheatreSettings";
+import {
   clearTelepromptReturnMemory,
   normalizeTelepromptReturnTarget,
   readTelepromptReturnSnapshot,
@@ -54,6 +58,7 @@ describe("teleprompt theatre model", () => {
     expect(resolveTelepromptTheatreShortcut({ key: "Escape" })).toBe("exitTheatre");
     expect(resolveTelepromptTheatreShortcut({ key: "f" })).toBe("toggleNativeFullscreen");
     expect(resolveTelepromptTheatreShortcut({ key: "m" })).toBe("toggleMirror");
+    expect(resolveTelepromptTheatreShortcut({ key: "j" })).toBe("jumpCurrentAudio");
     expect(resolveTelepromptTheatreShortcut({ key: "ArrowRight" })).toBe("nextCue");
   });
 
@@ -89,6 +94,30 @@ describe("teleprompt presets and return memory", () => {
 
     expect(settings.effectStyle).toBe("classic");
     expect(settings.activeIntensity).toBeGreaterThan(1);
+  });
+
+  it("applies reversible Theatre presets and normalizes invalid settings", () => {
+    expect(applyTelepromptTheatrePreset("mirrorRig")).toMatchObject({
+      mirrorMode: true,
+      presetId: "mirrorRig",
+    });
+    expect(applyTelepromptTheatrePreset("operatorReview")).toMatchObject({
+      operatorPanelVisible: true,
+      syncOverlayVisible: true,
+    });
+    expect(
+      normalizeTelepromptTheatreSettings({
+        countdownSeconds: 4,
+        cueFontSize: "huge",
+        cuePreviewCount: 9,
+        presetId: "lowVision",
+      }),
+    ).toMatchObject({
+      countdownSeconds: 0,
+      cueFontSize: "massive",
+      cuePreviewCount: 0,
+      presetId: "lowVision",
+    });
   });
 
   it("normalizes return targets and stable source keys", () => {

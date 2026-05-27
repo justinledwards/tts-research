@@ -7,6 +7,7 @@ import {
 export type TelepromptTheatreShortcutAction =
   | TelepromptShortcutAction
   | "exitTheatre"
+  | "jumpCurrentAudio"
   | "largeText"
   | "operatorPreview"
   | "toggleHighContrast"
@@ -31,6 +32,9 @@ export function resolveTelepromptTheatreShortcut(
   }
   if (key === "o") {
     return "operatorPreview";
+  }
+  if (key === "j") {
+    return "jumpCurrentAudio";
   }
   if (key === "l") {
     return "largeText";

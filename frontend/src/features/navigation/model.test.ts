@@ -82,6 +82,7 @@ describe("metadata command generation", () => {
       layerId: "quick",
     });
     expect(commands.map((command) => command.id)).toContain("settings:field:sourceSpeechPolicy");
+    expect(commands.map((command) => command.id)).toContain("settings:field:telepromptTheatre");
     expect(commands.map((command) => command.id)).toContain("settings:scope:machine");
   });
 

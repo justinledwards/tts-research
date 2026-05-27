@@ -811,3 +811,10 @@
 - [x] Patch compact controls with preserved visual style and 44px hit areas
 - [x] Add regression tests for visual size versus hit area
 - [x] Run WP54 validation commands
+
+## 2026-05-27 04:58 CEST - WP55 Teleprompt Theatre Ergonomics
+- [x] Inspect Theatre, settings, UI memory, and validation flows
+- [x] Add Theatre settings model, presets, and persistence scope
+- [x] Wire Theatre configuration UI and keyboard bindings
+- [x] Add Settings preview and regression coverage
+- [x] Run WP55 validation commands

@@ -16,6 +16,11 @@ import {
   type CinemaPanelDefinition,
   type CinemaSurfaceKind,
 } from "../cinema/model";
+import {
+  DEFAULT_TELEPROMPT_THEATRE_SETTINGS,
+  normalizeTelepromptTheatreSettings,
+  type TelepromptTheatreSettings,
+} from "../teleprompt/telepromptTheatreSettings";
 
 export const UI_MEMORY_STORAGE_KEY = "tts-ui-memory";
 export const UI_MEMORY_VERSION = 1;
@@ -26,6 +31,7 @@ export type UiMemoryPreferenceId =
   | "rememberLayout"
   | "rememberPanelPins"
   | "rememberReaderPreferences"
+  | "rememberTelepromptTheatreSettings"
   | "rememberTelepromptReturnTarget"
   | "rememberTheme";
 
@@ -35,6 +41,7 @@ export const UI_MEMORY_PREFERENCE_IDS: readonly UiMemoryPreferenceId[] = [
   "rememberLastProject",
   "rememberReaderPreferences",
   "rememberTelepromptReturnTarget",
+  "rememberTelepromptTheatreSettings",
   "rememberPanelPins",
 ];
 
@@ -52,6 +59,7 @@ export interface UiMemoryState {
   rememberLayout: boolean;
   rememberPanelPins: boolean;
   rememberReaderPreferences: boolean;
+  rememberTelepromptTheatreSettings: boolean;
   rememberTelepromptReturnTarget: boolean;
   rememberTheme: boolean;
   version: typeof UI_MEMORY_VERSION;
@@ -59,6 +67,7 @@ export interface UiMemoryState {
     layoutMode: WorkspaceLayoutMode | null;
     projectLayoutModes: Record<string, WorkspaceLayoutMode>;
     reviewPanes: Record<string, ReviewPane>;
+    telepromptTheatreSettings: TelepromptTheatreSettings | null;
     telepromptReturnStages: Record<string, TelepromptReturnStage>;
   };
 }
@@ -70,6 +79,7 @@ export const DEFAULT_UI_MEMORY_PREFERENCES: UiMemoryPreferenceValues = {
   rememberLayout: false,
   rememberPanelPins: false,
   rememberReaderPreferences: true,
+  rememberTelepromptTheatreSettings: true,
   rememberTelepromptReturnTarget: true,
   rememberTheme: true,
 };
@@ -93,6 +103,7 @@ export function defaultUiMemoryState(
       layoutMode: null,
       projectLayoutModes: {},
       reviewPanes: {},
+      telepromptTheatreSettings: null,
       telepromptReturnStages: {},
     },
   };
@@ -282,6 +293,36 @@ export function rememberTelepromptReturnStage(
   };
 }
 
+export function resolveTelepromptTheatreSettings(memory: UiMemoryState): TelepromptTheatreSettings {
+  if (!memory.rememberTelepromptTheatreSettings) {
+    return DEFAULT_TELEPROMPT_THEATRE_SETTINGS;
+  }
+  return normalizeTelepromptTheatreSettings(memory.workspace.telepromptTheatreSettings);
+}
+
+export function rememberTelepromptTheatreSettings(
+  memory: UiMemoryState,
+  settings: TelepromptTheatreSettings,
+): UiMemoryState {
+  if (!memory.rememberTelepromptTheatreSettings) {
+    return memory;
+  }
+  const normalizedSettings = normalizeTelepromptTheatreSettings(settings);
+  const currentSettings = normalizeTelepromptTheatreSettings(
+    memory.workspace.telepromptTheatreSettings,
+  );
+  if (telepromptTheatreSettingsEqual(currentSettings, normalizedSettings)) {
+    return memory;
+  }
+  return {
+    ...memory,
+    workspace: {
+      ...memory.workspace,
+      telepromptTheatreSettings: normalizedSettings,
+    },
+  };
+}
+
 export function resolveCinemaFocusState(
   memory: UiMemoryState,
   surfaceKind: CinemaSurfaceKind,
@@ -356,6 +397,10 @@ function normalizeUiMemoryPreferences(value: unknown): UiMemoryPreferenceValues 
       candidate.rememberReaderPreferences,
       DEFAULT_UI_MEMORY_PREFERENCES.rememberReaderPreferences,
     ),
+    rememberTelepromptTheatreSettings: normalizeBooleanPreference(
+      candidate.rememberTelepromptTheatreSettings,
+      DEFAULT_UI_MEMORY_PREFERENCES.rememberTelepromptTheatreSettings,
+    ),
     rememberTelepromptReturnTarget: normalizeBooleanPreference(
       candidate.rememberTelepromptReturnTarget,
       DEFAULT_UI_MEMORY_PREFERENCES.rememberTelepromptReturnTarget,
@@ -377,6 +422,7 @@ function uiMemoryPreferenceValues(memory: UiMemoryState): UiMemoryPreferenceValu
     rememberLayout: memory.rememberLayout,
     rememberPanelPins: memory.rememberPanelPins,
     rememberReaderPreferences: memory.rememberReaderPreferences,
+    rememberTelepromptTheatreSettings: memory.rememberTelepromptTheatreSettings,
     rememberTelepromptReturnTarget: memory.rememberTelepromptReturnTarget,
     rememberTheme: memory.rememberTheme,
   };
@@ -388,6 +434,9 @@ function clearDisabledUiMemory(memory: UiMemoryState): UiMemoryState {
     layoutMode: memory.rememberLayout ? memory.workspace.layoutMode : null,
     projectLayoutModes: memory.rememberLayout ? memory.workspace.projectLayoutModes : {},
     reviewPanes: memory.rememberLayout ? memory.workspace.reviewPanes : {},
+    telepromptTheatreSettings: memory.rememberTelepromptTheatreSettings
+      ? memory.workspace.telepromptTheatreSettings
+      : null,
     telepromptReturnStages: memory.rememberTelepromptReturnTarget
       ? memory.workspace.telepromptReturnStages
       : {},
@@ -411,6 +460,11 @@ function normalizeWorkspaceMemory(value: unknown): UiMemoryState["workspace"] {
         : normalizeWorkspaceLayoutMode(candidate.layoutMode),
     projectLayoutModes: normalizeWorkspaceLayoutMap(candidate.projectLayoutModes),
     reviewPanes: normalizeReviewPaneMap(candidate.reviewPanes),
+    telepromptTheatreSettings:
+      candidate.telepromptTheatreSettings === null ||
+      candidate.telepromptTheatreSettings === undefined
+        ? null
+        : normalizeTelepromptTheatreSettings(candidate.telepromptTheatreSettings),
     telepromptReturnStages: normalizeTelepromptReturnStageMap(candidate.telepromptReturnStages),
   };
 }
@@ -491,6 +545,13 @@ function normalizeCinemaMemoryState(
 function normalizeTelepromptReturnStage(value: unknown): TelepromptReturnStage {
   const stage = normalizeWorkspaceStage(value);
   return stage === "preview" ? "preview" : "review";
+}
+
+function telepromptTheatreSettingsEqual(
+  left: TelepromptTheatreSettings,
+  right: TelepromptTheatreSettings,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function normalizeLegacyWorkspaceLayoutMode(value: unknown): WorkspaceLayoutMode | null {

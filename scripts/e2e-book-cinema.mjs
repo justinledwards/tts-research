@@ -675,6 +675,13 @@ async function runSettingsIAUX(browser, projectId) {
     await runCommandPaletteAction(page, "machine scope", /Machine scope/);
     await page.getByTestId("ui-memory-preferences").waitFor();
     await page.getByText("Remember Teleprompt return target").first().waitFor();
+    await page.getByText("Remember Teleprompt Theatre settings").first().waitFor();
+    await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
+
+    await runCommandPaletteAction(page, "teleprompt theatre settings", /^Teleprompt Theatre\b/);
+    await page.getByTestId("teleprompt-theatre-settings-preview").waitFor();
+    await page.getByTestId("ui-action-teleprompt-theatre-config-preset-lowVision").click();
+    await page.getByText("Low vision").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
 
     await page.keyboard.press("Shift+/");

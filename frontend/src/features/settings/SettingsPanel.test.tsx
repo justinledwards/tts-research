@@ -5,9 +5,11 @@ import { createRunConfiguration } from "../../runConfig";
 import { DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS } from "../../teleprompter";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
 import { DEFAULT_READ_ALONG_PREFERENCES } from "../readalong";
+import { DEFAULT_TELEPROMPT_THEATRE_SETTINGS } from "../teleprompt/telepromptTheatreSettings";
 import { defaultUiMemoryState } from "../preferences";
 import { DEFAULT_SHORTCUT_PREFERENCES } from "../shortcuts/shortcutRegistry";
 import { SettingsPanel } from "./SettingsPanel";
+import type { SettingsCommandTarget } from "./model";
 
 const noop = () => {
   // Test callback.
@@ -17,66 +19,73 @@ const asyncNoop = async () => {
   // Test callback.
 };
 
+function renderSettingsPanel(commandTarget?: SettingsCommandTarget): string {
+  return renderToStaticMarkup(
+    <SettingsPanel
+      canSubmit
+      commandTarget={commandTarget}
+      customSpeechPolicyProfiles={[]}
+      isOpen
+      isSpeechPolicyPreviewing={false}
+      job={null}
+      metrics={null}
+      metricsError={null}
+      profileSource={null}
+      profileSourceDiagnostics={null}
+      projectStorage={null}
+      projectStorageError={null}
+      readerAccessibilitySettings={DEFAULT_READER_ACCESSIBILITY_SETTINGS}
+      readAlongPreferences={DEFAULT_READ_ALONG_PREFERENCES}
+      researchModules={[]}
+      runConfiguration={createRunConfiguration("checkedMaster")}
+      selectedBookSource={null}
+      selectedPreparedSource={null}
+      selectedProfile={null}
+      sourceMode="text"
+      sourcePolicySavingKey={null}
+      speechPolicyDefinition={DEFAULT_SPEECH_POLICY_DEFINITION}
+      speechPolicyError={null}
+      speechPolicyOverrides={{}}
+      speechPolicyProfile="Enterprise"
+      speechPolicyProfiles={DEFAULT_SPEECH_POLICY_DEFINITION.profiles}
+      shortcutPreferences={DEFAULT_SHORTCUT_PREFERENCES}
+      telepromptTheatreSettings={DEFAULT_TELEPROMPT_THEATRE_SETTINGS}
+      teleprompterSettings={DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS}
+      themeName="light"
+      ttsEngineError={null}
+      ttsEngines={[]}
+      uiMemory={defaultUiMemoryState()}
+      onClearBookSourcePolicy={asyncNoop}
+      onClearPreparedSourcePolicy={asyncNoop}
+      onClearSpeechPolicyOverrides={noop}
+      onClose={noop}
+      onCreateCustomSpeechPolicyProfile={asyncNoop}
+      onDeleteCustomSpeechPolicyProfile={asyncNoop}
+      onReaderAccessibilitySettingsChange={noop}
+      onReadAlongPreferencesChange={noop}
+      onRunConfigurationChange={noop}
+      onSaveBookSourcePolicy={asyncNoop}
+      onSavePreparedSourcePolicy={asyncNoop}
+      onShortcutPreferencesChange={noop}
+      onShortcutPreferencesReset={noop}
+      onSpeechPolicyOverridesChange={noop}
+      onSpeechPolicyProfileChange={noop}
+      onSubmit={noop}
+      onTelepromptTheatreSettingsChange={noop}
+      onTeleprompterSettingsChange={noop}
+      onThemeChange={noop}
+      onUiMemoryExportPreferences={() => "{}"}
+      onUiMemoryImportPreferences={() => ({ message: "Imported.", ok: true })}
+      onUiMemoryPreferenceChange={noop}
+      onUiMemoryReset={noop}
+      onUpdateCustomSpeechPolicyProfile={asyncNoop}
+    />,
+  );
+}
+
 describe("SettingsPanel", () => {
   it("renders task groups, quick settings, and scope labels", () => {
-    const markup = renderToStaticMarkup(
-      <SettingsPanel
-        canSubmit
-        customSpeechPolicyProfiles={[]}
-        isOpen
-        isSpeechPolicyPreviewing={false}
-        job={null}
-        metrics={null}
-        metricsError={null}
-        profileSource={null}
-        profileSourceDiagnostics={null}
-        projectStorage={null}
-        projectStorageError={null}
-        readerAccessibilitySettings={DEFAULT_READER_ACCESSIBILITY_SETTINGS}
-        readAlongPreferences={DEFAULT_READ_ALONG_PREFERENCES}
-        researchModules={[]}
-        runConfiguration={createRunConfiguration("checkedMaster")}
-        selectedBookSource={null}
-        selectedPreparedSource={null}
-        selectedProfile={null}
-        sourceMode="text"
-        sourcePolicySavingKey={null}
-        speechPolicyDefinition={DEFAULT_SPEECH_POLICY_DEFINITION}
-        speechPolicyError={null}
-        speechPolicyOverrides={{}}
-        speechPolicyProfile="Enterprise"
-        speechPolicyProfiles={DEFAULT_SPEECH_POLICY_DEFINITION.profiles}
-        shortcutPreferences={DEFAULT_SHORTCUT_PREFERENCES}
-        teleprompterSettings={DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS}
-        themeName="light"
-        ttsEngineError={null}
-        ttsEngines={[]}
-        uiMemory={defaultUiMemoryState()}
-        onClearBookSourcePolicy={asyncNoop}
-        onClearPreparedSourcePolicy={asyncNoop}
-        onClearSpeechPolicyOverrides={noop}
-        onClose={noop}
-        onCreateCustomSpeechPolicyProfile={asyncNoop}
-        onDeleteCustomSpeechPolicyProfile={asyncNoop}
-        onReaderAccessibilitySettingsChange={noop}
-        onReadAlongPreferencesChange={noop}
-        onRunConfigurationChange={noop}
-        onSaveBookSourcePolicy={asyncNoop}
-        onSavePreparedSourcePolicy={asyncNoop}
-        onShortcutPreferencesChange={noop}
-        onShortcutPreferencesReset={noop}
-        onSpeechPolicyOverridesChange={noop}
-        onSpeechPolicyProfileChange={noop}
-        onSubmit={noop}
-        onTeleprompterSettingsChange={noop}
-        onThemeChange={noop}
-        onUiMemoryExportPreferences={() => "{}"}
-        onUiMemoryImportPreferences={() => ({ message: "Imported.", ok: true })}
-        onUiMemoryPreferenceChange={noop}
-        onUiMemoryReset={noop}
-        onUpdateCustomSpeechPolicyProfile={asyncNoop}
-      />,
-    );
+    const markup = renderSettingsPanel();
 
     expect(markup).toContain("Studio Settings");
     expect(markup).toContain("Quick settings");
@@ -89,5 +98,19 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Project");
     expect(markup).toContain("Source");
     expect(markup).toContain("Machine");
+  });
+
+  it("renders Teleprompt Theatre settings when targeted", () => {
+    const markup = renderSettingsPanel({
+      fieldId: "telepromptTheatre",
+      groupId: "reader",
+      layerId: "advanced",
+      scope: "machine",
+    });
+
+    expect(markup).toContain("Teleprompt Theatre");
+    expect(markup).toContain("Laptop presenter");
+    expect(markup).toContain("Recording booth");
+    expect(markup).toContain("Cue font size");
   });
 });

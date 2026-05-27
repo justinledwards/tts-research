@@ -41,6 +41,12 @@ export const UI_MEMORY_PREFERENCE_META: readonly UiMemoryPreferenceMeta[] = [
     testId: "ui-action-ui-memory-remember-teleprompt-return-target",
   },
   {
+    detail: "Teleprompt Theatre presets and presenter layout stay local to this browser.",
+    id: "rememberTelepromptTheatreSettings",
+    label: "Remember Teleprompt Theatre settings",
+    testId: "ui-action-ui-memory-remember-teleprompt-theatre-settings",
+  },
+  {
     detail: "Pinned Cinema context panels remain session-only unless this is enabled.",
     id: "rememberPanelPins",
     label: "Remember panel pins",
@@ -55,7 +61,7 @@ export const UI_MEMORY_RESET_LABELS: Record<UiMemoryResetScope, string> = {
 };
 
 export const UI_MEMORY_RESET_CONFIRMATION: Record<UiMemoryResetScope, string> = {
-  all: "Reset all UI memory on this machine? This clears remembered layout, theme, reader preferences, last project, Teleprompt return memory, and panel pins.",
+  all: "Reset all UI memory on this machine? This clears remembered layout, theme, reader preferences, last project, Teleprompt return memory, Theatre settings, and panel pins.",
   reader:
     "Reset reader preferences on this machine? Typography, spacing, contrast, and motion preferences will return to defaults.",
   workspace:

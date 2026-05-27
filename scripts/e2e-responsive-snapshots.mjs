@@ -330,8 +330,8 @@ async function captureTelepromptTheatreScenario(browser, viewport, projectId) {
     await page.getByTestId("teleprompt-studio").waitFor();
     await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
     await page.getByTestId("teleprompt-theatre").waitFor();
-    await page.getByTestId("ui-action-teleprompt-theatre-preset-largeText").click();
     await page.getByTestId("ui-action-teleprompt-operator-preview").click();
+    await page.getByTestId("ui-action-teleprompt-theatre-config-preset-lowVision").click();
     const screenshot = path.join(screenshotsDir, `${viewport.id}-teleprompt-theatre.png`);
     await page.screenshot({ fullPage: false, path: screenshot });
     const metrics = await page.evaluate(() => {

@@ -157,12 +157,14 @@ import {
   loadUiMemory,
   rememberCinemaFocusState,
   rememberReviewPane,
+  rememberTelepromptTheatreSettings,
   rememberTelepromptReturnStage,
   rememberWorkspaceLayoutMode,
   resetUiMemory,
   resetWorkspaceUiMemory,
   resolveCinemaFocusState,
   resolveReviewPane,
+  resolveTelepromptTheatreSettings,
   resolveTelepromptReturnStage,
   resolveWorkspaceLayoutMode,
   saveUiMemory,
@@ -183,6 +185,10 @@ import {
   type HighlightMapV2,
   type ReadAlongPreferences,
 } from "./features/readalong";
+import {
+  normalizeTelepromptTheatreSettings,
+  type TelepromptTheatreSettings,
+} from "./features/teleprompt/telepromptTheatreSettings";
 import { generatedAudioLifecycleFromJob } from "./features/playback/generatedAudioLifecycle";
 import { providerRuntimeLeavesLocalBoundary } from "./features/provider-capabilities/providerCapabilityLite";
 import {
@@ -2697,6 +2703,8 @@ export function App() {
       }
     },
   );
+  const [telepromptTheatreSettings, setTelepromptTheatreSettings] =
+    useState<TelepromptTheatreSettings>(() => resolveTelepromptTheatreSettings(uiMemory));
   const [themeName, setThemeName] = useState<ThemeName>(() =>
     uiMemory.rememberTheme
       ? normalizeThemeName(localStorage.getItem(THEME_STORAGE_KEY))
@@ -4514,6 +4522,7 @@ export function App() {
         const imported = parseUiMemoryImportJson(json);
         uiMemoryRef.current = imported.uiMemory;
         setUiMemory(imported.uiMemory);
+        setTelepromptTheatreSettings(resolveTelepromptTheatreSettings(imported.uiMemory));
         if (imported.readerAccessibilitySettings) {
           setReaderAccessibilitySettings(imported.readerAccessibilitySettings);
         }
@@ -4546,6 +4555,19 @@ export function App() {
       }
     },
     [activeProjectId, projects, selectProject],
+  );
+
+  const handleTelepromptTheatreSettingsChange = useCallback(
+    (settings: TelepromptTheatreSettings) => {
+      const normalizedSettings = normalizeTelepromptTheatreSettings(settings);
+      setTelepromptTheatreSettings(normalizedSettings);
+      setUiMemory((currentMemory) => {
+        const nextMemory = rememberTelepromptTheatreSettings(currentMemory, normalizedSettings);
+        uiMemoryRef.current = nextMemory;
+        return nextMemory;
+      });
+    },
+    [],
   );
 
   const handleRenameProject = useCallback(async (id: string, name: string) => {
@@ -5731,6 +5753,13 @@ export function App() {
   useEffect(() => {
     saveUiMemory(uiMemory);
     uiMemoryRef.current = uiMemory;
+  }, [uiMemory]);
+
+  useEffect(() => {
+    if (!uiMemory.rememberTelepromptTheatreSettings) {
+      return;
+    }
+    setTelepromptTheatreSettings(resolveTelepromptTheatreSettings(uiMemory));
   }, [uiMemory]);
 
   useEffect(() => {
@@ -7112,6 +7141,7 @@ export function App() {
             speechPolicyProfile={speechPolicyProfile}
             speechPolicyProfiles={speechPolicyProfiles}
             shortcutPreferences={shortcutPreferences}
+            telepromptTheatreSettings={telepromptTheatreSettings}
             teleprompterSettings={teleprompterSettings}
             themeName={themeName}
             ttsEngineError={ttsEngineError}
@@ -7143,6 +7173,7 @@ export function App() {
               setIsSettingsOpen(false);
               createAndListenFromCurrentSource();
             }}
+            onTelepromptTheatreSettingsChange={handleTelepromptTheatreSettingsChange}
             onTeleprompterSettingsChange={(settings) => {
               setTeleprompterSettings(normalizeTeleprompterHighlightSettings(settings));
             }}
@@ -7710,6 +7741,8 @@ export function App() {
                       text,
                     })}
                     settings={teleprompterSettings}
+                    theatreSettings={telepromptTheatreSettings}
+                    theatreSettingsMemoryEnabled={uiMemory.rememberTelepromptTheatreSettings}
                     sourceId={
                       activeNarrationPreparedSource?.id ?? activeNarrationBookSource?.id ?? null
                     }
@@ -7729,6 +7762,7 @@ export function App() {
                     }}
                     onCreateAndListen={createAndListenFromCurrentSource}
                     onOpenCinema={openReadingCinema}
+                    onTheatreSettingsChange={handleTelepromptTheatreSettingsChange}
                   />
                 </Suspense>
               }

@@ -4,6 +4,7 @@ export {
   type TelepromptStudioProps,
 } from "./TelepromptStudio";
 export { TelepromptTheatre, type TelepromptTheatreProps } from "./TelepromptTheatre";
+export { TelepromptTheatreSettingsControls } from "./TelepromptTheatreSettingsControls";
 export { TelepromptCueSync, type TelepromptCueSyncProps } from "./TelepromptCueSync";
 export {
   buildTelepromptCueTimeline,
@@ -36,6 +37,15 @@ export {
   type TelepromptPreset,
   type TelepromptPresetId,
 } from "./telepromptPresets";
+export {
+  DEFAULT_TELEPROMPT_THEATRE_SETTINGS,
+  TELEPROMPT_THEATRE_PRESET_IDS,
+  applyTelepromptTheatrePreset,
+  normalizeTelepromptTheatreSettings,
+  telepromptTheatrePreset,
+  type TelepromptTheatrePresetId,
+  type TelepromptTheatreSettings,
+} from "./telepromptTheatreSettings";
 export {
   TELEPROMPT_RETURN_MEMORY_KEY,
   clearTelepromptReturnMemory,

@@ -47,6 +47,8 @@ import {
   type TeleprompterEffectStyle,
   type TeleprompterHighlightSettings,
 } from "../../teleprompter";
+import { TelepromptTheatreSettingsControls } from "../teleprompt/TelepromptTheatreSettingsControls";
+import type { TelepromptTheatreSettings } from "../teleprompt/telepromptTheatreSettings";
 import type { ReadAlongPreferences } from "../readalong";
 import {
   bookSourceLifecycleEnvelope,
@@ -165,6 +167,7 @@ export function SettingsPanel({
   speechPolicyProfile,
   speechPolicyProfiles,
   shortcutPreferences,
+  telepromptTheatreSettings,
   teleprompterSettings,
   themeName,
   ttsEngineError,
@@ -186,6 +189,7 @@ export function SettingsPanel({
   onSpeechPolicyOverridesChange,
   onSpeechPolicyProfileChange,
   onSubmit,
+  onTelepromptTheatreSettingsChange,
   onTeleprompterSettingsChange,
   onThemeChange,
   onUiMemoryExportPreferences,
@@ -221,6 +225,7 @@ export function SettingsPanel({
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
   shortcutPreferences: ShortcutPreferences;
+  telepromptTheatreSettings: TelepromptTheatreSettings;
   teleprompterSettings: TeleprompterHighlightSettings;
   themeName: ThemeName;
   ttsEngineError: string | null;
@@ -252,6 +257,7 @@ export function SettingsPanel({
   onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onSubmit: () => void;
+  onTelepromptTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
   onUiMemoryExportPreferences: () => Promise<string> | string;
@@ -267,8 +273,12 @@ export function SettingsPanel({
     baseProfile: string,
   ) => Promise<void>;
 }>) {
-  const [activeLayer, setActiveLayer] = useState<SettingsLayerId>("quick");
-  const [activeGroup, setActiveGroup] = useState<SettingsGroupId>("run");
+  const [activeLayer, setActiveLayer] = useState<SettingsLayerId>(() =>
+    commandTarget ? settingsLayerForCommandTarget(commandTarget) : "quick",
+  );
+  const [activeGroup, setActiveGroup] = useState<SettingsGroupId>(
+    () => commandTarget?.groupId ?? "run",
+  );
   const highlightedCommandToken = commandTarget ? settingsCommandTargetToken(commandTarget) : null;
 
   useEffect(() => {
@@ -392,6 +402,7 @@ export function SettingsPanel({
                 readAlongPreferences={readAlongPreferences}
                 runConfiguration={runConfiguration}
                 shortcutPreferences={shortcutPreferences}
+                telepromptTheatreSettings={telepromptTheatreSettings}
                 teleprompterSettings={teleprompterSettings}
                 themeName={themeName}
                 uiMemory={uiMemory}
@@ -399,6 +410,7 @@ export function SettingsPanel({
                 onReadAlongPreferencesChange={onReadAlongPreferencesChange}
                 onShortcutPreferencesChange={onShortcutPreferencesChange}
                 onShortcutPreferencesReset={onShortcutPreferencesReset}
+                onTelepromptTheatreSettingsChange={onTelepromptTheatreSettingsChange}
                 onTeleprompterSettingsChange={onTeleprompterSettingsChange}
                 onThemeChange={onThemeChange}
                 onUiMemoryExportPreferences={onUiMemoryExportPreferences}
@@ -1012,6 +1024,7 @@ function ReaderSettingsGroup({
   readAlongPreferences,
   runConfiguration,
   shortcutPreferences,
+  telepromptTheatreSettings,
   teleprompterSettings,
   themeName,
   uiMemory,
@@ -1019,6 +1032,7 @@ function ReaderSettingsGroup({
   onReadAlongPreferencesChange,
   onShortcutPreferencesChange,
   onShortcutPreferencesReset,
+  onTelepromptTheatreSettingsChange,
   onTeleprompterSettingsChange,
   onThemeChange,
   onUiMemoryExportPreferences,
@@ -1031,6 +1045,7 @@ function ReaderSettingsGroup({
   readAlongPreferences: ReadAlongPreferences;
   runConfiguration: RunConfiguration;
   shortcutPreferences: ShortcutPreferences;
+  telepromptTheatreSettings: TelepromptTheatreSettings;
   teleprompterSettings: TeleprompterHighlightSettings;
   themeName: ThemeName;
   uiMemory: UiMemoryState;
@@ -1038,6 +1053,7 @@ function ReaderSettingsGroup({
   onReadAlongPreferencesChange: (settings: ReadAlongPreferences) => void;
   onShortcutPreferencesChange: (preferences: ShortcutPreferences) => void;
   onShortcutPreferencesReset: () => void;
+  onTelepromptTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
   onUiMemoryExportPreferences: () => Promise<string> | string;
@@ -1053,6 +1069,7 @@ function ReaderSettingsGroup({
         "group-reader",
         "field-readerPreferences",
         "field-readAlongPreferences",
+        "field-telepromptTheatre",
         "field-uiMemory",
         "field-shortcuts",
         "scope-machine",
@@ -1078,6 +1095,11 @@ function ReaderSettingsGroup({
         preferences={readAlongPreferences}
         providerId={runConfiguration.ttsEngine}
         onChange={onReadAlongPreferencesChange}
+      />
+      <TelepromptTheatreSettingsControls
+        memoryEnabled={uiMemory.rememberTelepromptTheatreSettings}
+        settings={telepromptTheatreSettings}
+        onChange={onTelepromptTheatreSettingsChange}
       />
       <ThemeSettingsControls themeName={themeName} onThemeChange={onThemeChange} />
       <UiMemoryPreferences

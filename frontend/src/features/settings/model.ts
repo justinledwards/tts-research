@@ -200,6 +200,15 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
   },
   {
     description:
+      "Controls Teleprompt Theatre presets, cue sizing, operator layout, countdown, metronome, and fullscreen fallback.",
+    group: "reader",
+    id: "telepromptTheatre",
+    label: "Teleprompt Theatre",
+    layer: "advanced",
+    scope: "machine",
+  },
+  {
+    description:
       "Controls local memory for layout, theme, last project, reader preferences, Teleprompt returns, and panel pins.",
     group: "reader",
     id: "uiMemory",

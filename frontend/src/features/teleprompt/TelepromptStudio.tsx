@@ -40,6 +40,10 @@ import {
   telepromptPresetHighlightSettings,
   type TelepromptPresetId,
 } from "./telepromptPresets";
+import {
+  normalizeTelepromptTheatreSettings,
+  type TelepromptTheatreSettings,
+} from "./telepromptTheatreSettings";
 import { TelepromptTheatre } from "./TelepromptTheatre";
 import {
   exitTelepromptFullscreen,
@@ -108,6 +112,8 @@ export interface TelepromptStudioProps {
   readonly returnStage: Exclude<WorkspaceStage, "teleprompt">;
   readonly scopeLabel: string;
   readonly settings: TeleprompterHighlightSettings;
+  readonly theatreSettings: TelepromptTheatreSettings;
+  readonly theatreSettingsMemoryEnabled: boolean;
   readonly sourceId: string | null;
   readonly sourceLabel: string;
   readonly sourceLifecycle?: SourceLifecycleEnvelope | null;
@@ -120,6 +126,7 @@ export interface TelepromptStudioProps {
   readonly onBackToReview: () => void;
   readonly onCreateAndListen: () => void;
   readonly onOpenCinema: () => void;
+  readonly onTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
 }
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -142,6 +149,8 @@ export function TelepromptStudio({
   returnStage,
   scopeLabel,
   settings,
+  theatreSettings,
+  theatreSettingsMemoryEnabled,
   sourceId,
   sourceLabel,
   sourceLifecycle = null,
@@ -154,12 +163,13 @@ export function TelepromptStudio({
   onBackToReview,
   onCreateAndListen,
   onOpenCinema,
+  onTheatreSettingsChange,
 }: Readonly<TelepromptStudioProps>) {
   const [activeContextTab, setActiveContextTab] = useState<ContextPanelTabId>("overview");
   const [presetId, setPresetId] = useState<TelepromptPresetId>("standard");
-  const [mirrorMode, setMirrorMode] = useState(false);
   const [theatreMode, setTheatreMode] = useState<TelepromptTheatreMode>("inline");
   const [theatreViewMode, setTheatreViewMode] = useState<TelepromptTheatreViewMode>("manual");
+  const [countdownRemaining, setCountdownRemaining] = useState<number | null>(null);
   const [fullscreenAvailability, setFullscreenAvailability] = useState(() =>
     telepromptFullscreenAvailability(),
   );
@@ -328,6 +338,30 @@ export function TelepromptStudio({
     ],
   );
 
+  const updateTheatreSettings = useCallback(
+    (patch: Partial<TelepromptTheatreSettings>) => {
+      onTheatreSettingsChange(normalizeTelepromptTheatreSettings({ ...theatreSettings, ...patch }));
+    },
+    [onTheatreSettingsChange, theatreSettings],
+  );
+
+  const toggleOperatorPanel = useCallback(() => {
+    updateTheatreSettings({
+      operatorPanelVisible: !theatreSettings.operatorPanelVisible,
+      syncOverlayVisible: theatreSettings.operatorPanelVisible
+        ? theatreSettings.syncOverlayVisible
+        : true,
+    });
+    setTheatreViewMode("operator-preview");
+    setStatusMessage(
+      theatreSettings.operatorPanelVisible ? "Operator panel hidden." : "Operator panel shown.",
+    );
+  }, [
+    theatreSettings.operatorPanelVisible,
+    theatreSettings.syncOverlayVisible,
+    updateTheatreSettings,
+  ]);
+
   const openTheatre = useCallback(() => {
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
       theatreReturnFocusRef.current = document.activeElement;
@@ -342,6 +376,7 @@ export function TelepromptStudio({
   const handleExitTheatre = useCallback(() => {
     void exitTelepromptFullscreen();
     setNativeFullscreenActive(false);
+    setCountdownRemaining(null);
     setTheatreMode("inline");
     setStatusMessage("Exited Teleprompt Theatre.");
     announcePolite(liveStatusMessages.telepromptTheatreExited());
@@ -498,6 +533,59 @@ export function TelepromptStudio({
     setStatusMessage("Playback started.");
   }, [playbackControls]);
 
+  const handleTheatrePlayPause = useCallback(() => {
+    if (
+      playbackControls.isPlaying ||
+      !playbackControls.isAvailable ||
+      theatreSettings.countdownSeconds === 0
+    ) {
+      setCountdownRemaining(null);
+      handlePlayPause();
+      return;
+    }
+    setCountdownRemaining(theatreSettings.countdownSeconds);
+    setStatusMessage(
+      `Playback countdown started: ${theatreSettings.countdownSeconds.toString()} seconds.`,
+    );
+  }, [
+    handlePlayPause,
+    playbackControls.isAvailable,
+    playbackControls.isPlaying,
+    theatreSettings.countdownSeconds,
+  ]);
+
+  useEffect(() => {
+    if (countdownRemaining === null) {
+      return;
+    }
+    if (countdownRemaining <= 0) {
+      setCountdownRemaining(null);
+      if (playbackControls.isAvailable && !playbackControls.isPlaying) {
+        void playbackControls.play();
+        setStatusMessage("Playback started.");
+      }
+      return;
+    }
+    const timerId = globalThis.setTimeout(() => {
+      setCountdownRemaining((current) => (current === null ? null : Math.max(0, current - 1)));
+    }, 1000);
+    return () => {
+      globalThis.clearTimeout(timerId);
+    };
+  }, [countdownRemaining, playbackControls]);
+
+  const handleJumpToCurrentAudio = useCallback(() => {
+    setCueSyncMode("audio-follow");
+    const sourceBlockId = cueSync.activeCue?.sourceBlockId;
+    if (!sourceBlockId) {
+      setStatusMessage("Current audio cue is not available yet.");
+      return;
+    }
+    onActiveBlockChange(sourceBlockId);
+    persistSnapshot(returnTarget, sourceBlockId);
+    setStatusMessage("Jumped to the current audio cue.");
+  }, [cueSync.activeCue?.sourceBlockId, onActiveBlockChange, persistSnapshot, returnTarget]);
+
   const handleRestart = useCallback(() => {
     if (!playbackControls.isAvailable) {
       setStatusMessage("Playback controls are available after Create & Listen.");
@@ -512,6 +600,7 @@ export function TelepromptStudio({
       persistSnapshot(target);
       void exitTelepromptFullscreen();
       setNativeFullscreenActive(false);
+      setCountdownRemaining(null);
       setTheatreMode("inline");
       if (theatreMode !== "inline") {
         announcePolite(liveStatusMessages.telepromptTheatreExited());
@@ -535,6 +624,7 @@ export function TelepromptStudio({
     persistSnapshot(returnTarget);
     void exitTelepromptFullscreen();
     setNativeFullscreenActive(false);
+    setCountdownRemaining(null);
     setTheatreMode("inline");
     if (theatreMode !== "inline") {
       announcePolite(liveStatusMessages.telepromptTheatreExited());
@@ -559,6 +649,7 @@ export function TelepromptStudio({
     persistSnapshot(returnTarget, cueSync.activeCue?.sourceBlockId ?? activeBlock?.id ?? null);
     void exitTelepromptFullscreen();
     setNativeFullscreenActive(false);
+    setCountdownRemaining(null);
     setTheatreMode("inline");
     if (theatreMode !== "inline") {
       announcePolite(liveStatusMessages.telepromptTheatreExited());
@@ -599,10 +690,11 @@ export function TelepromptStudio({
           break;
         }
         case "operatorPreview": {
-          setTheatreViewMode((currentMode) =>
-            currentMode === "operator-preview" ? "manual" : "operator-preview",
-          );
-          setStatusMessage("Operator preview toggled.");
+          toggleOperatorPanel();
+          break;
+        }
+        case "jumpCurrentAudio": {
+          handleJumpToCurrentAudio();
           break;
         }
         case "toggleHighContrast": {
@@ -613,8 +705,10 @@ export function TelepromptStudio({
           break;
         }
         case "toggleMirror": {
-          setMirrorMode((currentMirrorMode) => !currentMirrorMode);
-          setStatusMessage("Mirror mode toggled.");
+          updateTheatreSettings({ mirrorMode: !theatreSettings.mirrorMode });
+          setStatusMessage(
+            theatreSettings.mirrorMode ? "Mirror mode disabled." : "Mirror mode enabled.",
+          );
           break;
         }
         case "toggleNativeFullscreen": {
@@ -630,7 +724,11 @@ export function TelepromptStudio({
           break;
         }
         case "playPause": {
-          handlePlayPause();
+          if (theatreMode === "inline") {
+            handlePlayPause();
+          } else {
+            handleTheatrePlayPause();
+          }
           break;
         }
         case "previousCue": {
@@ -654,11 +752,16 @@ export function TelepromptStudio({
   }, [
     handleCreateAndListen,
     handleExitTheatre,
+    handleJumpToCurrentAudio,
     handlePlayPause,
     handleRequestNativeFullscreen,
     handleReturn,
+    handleTheatrePlayPause,
     moveCue,
+    theatreSettings.mirrorMode,
     theatreMode,
+    toggleOperatorPanel,
+    updateTheatreSettings,
   ]);
 
   const contextTabs = buildContextPanelTabs(
@@ -1003,13 +1106,13 @@ export function TelepromptStudio({
                   }}
                 />
                 <Toggle
-                  checked={mirrorMode}
+                  checked={theatreSettings.mirrorMode}
                   className="sm:min-w-48"
                   data-testid="ui-action-teleprompt-mirror"
                   detail="Flip the script for mirrored recording rigs."
                   label="Mirror mode"
                   onChange={(checked) => {
-                    setMirrorMode(checked);
+                    updateTheatreSettings({ mirrorMode: checked });
                     setStatusMessage(checked ? "Mirror mode enabled." : "Mirror mode disabled.");
                   }}
                 />
@@ -1036,7 +1139,7 @@ export function TelepromptStudio({
                 className="grid gap-5"
                 data-testid="teleprompt-script"
                 style={{
-                  transform: mirrorMode ? "scaleX(-1)" : undefined,
+                  transform: theatreSettings.mirrorMode ? "scaleX(-1)" : undefined,
                   wordSpacing: preset.wordSpacing,
                 }}
               >
@@ -1108,7 +1211,6 @@ export function TelepromptStudio({
           currentWordIndex={cueSync.activeCue?.currentWordIndex ?? null}
           fullscreenActive={nativeFullscreenActive}
           fullscreenAvailability={fullscreenAvailability}
-          mirrorMode={mirrorMode}
           mode={theatreMode}
           nativeFullscreenDisabledReason={fullscreenAvailability.reason ?? undefined}
           nextBlock={nextBlock}
@@ -1117,7 +1219,14 @@ export function TelepromptStudio({
           playbackControlsPlaying={playbackControls.isPlaying}
           playbackLifecycle={playbackLifecycle}
           presetId={presetId}
+          countdownRemaining={countdownRemaining}
+          previewBlocks={blocks.slice(
+            Math.max(0, activeBlockIndex + 1),
+            Math.max(0, activeBlockIndex + 1 + theatreSettings.cuePreviewCount),
+          )}
           ref={theatreRootRef}
+          settings={theatreSettings}
+          settingsMemoryEnabled={theatreSettingsMemoryEnabled}
           summary={theatreSummary}
           theatreViewMode={theatreViewMode}
           onBackToPreview={() => {
@@ -1130,23 +1239,22 @@ export function TelepromptStudio({
           onExitTheatre={handleExitTheatre}
           onMoveCue={moveCue}
           onOpenCinema={handleOpenCinema}
+          onJumpToCurrentAudio={handleJumpToCurrentAudio}
           onPresetChange={(id) => {
             setPresetId(id);
             setStatusMessage(`${telepromptPreset(id).label} presenter preset applied.`);
           }}
           onRequestNativeFullscreen={handleRequestNativeFullscreen}
           onRestart={handleRestart}
+          onSettingsChange={onTheatreSettingsChange}
           onToggleMirror={(checked) => {
-            setMirrorMode(checked);
+            updateTheatreSettings({ mirrorMode: checked });
             setStatusMessage(checked ? "Mirror mode enabled." : "Mirror mode disabled.");
           }}
           onToggleOperatorPreview={() => {
-            setTheatreViewMode((currentMode) =>
-              currentMode === "operator-preview" ? "manual" : "operator-preview",
-            );
-            setStatusMessage("Operator preview toggled.");
+            toggleOperatorPanel();
           }}
-          onTogglePlayback={handlePlayPause}
+          onTogglePlayback={handleTheatrePlayPause}
         />
       )}
     </>
