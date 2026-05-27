@@ -18,11 +18,13 @@ import {
 } from "./e2e-browser-qa-helpers.mjs";
 import {
   buildGoldenMinuteSyncFixture,
+  evaluateGoldenMinuteArtifactCompatibility,
   evaluateGoldenMinuteBoundaryStress,
   evaluateGoldenMinuteFluency,
   evaluateGoldenMinuteSpeechFluency,
   evaluateGoldenMinuteSync,
   loadGoldenMinuteFixture,
+  renderGoldenMinuteArtifactCompatibilityReport,
   renderGoldenMinuteBoundaryReport,
   renderGoldenMinuteReport,
   renderSpeechFluencyReport,
@@ -114,6 +116,11 @@ async function main() {
     const generatedAt = new Date().toISOString();
     const boundaryStress = evaluateGoldenMinuteBoundaryStress(fixture, { generatedAt });
     const boundaryStressPath = path.join(outputDir, "segment-boundary-report.md");
+    const artifactCompatibility = evaluateGoldenMinuteArtifactCompatibility(fixture, {
+      artifactIdentity: browserResult.artifactIdentity,
+      generatedAt,
+    });
+    const artifactCompatibilityPath = path.join(outputDir, "artifact-compatibility-report.md");
     const failures = [
       ...fixtureValidation.failures,
       ...(sync.status === "passed" ? [] : ["Golden minute sync baseline failed."]),
@@ -123,6 +130,9 @@ async function main() {
       ...(boundaryStress.status === "passed"
         ? []
         : ["Golden minute segment boundary stress failed."]),
+      ...(artifactCompatibility.status === "passed"
+        ? []
+        : ["Golden minute artifact compatibility failed."]),
     ];
     delete browserResult.audioState.audioBuffer;
     delete browserResult.audioState.job;
@@ -149,6 +159,10 @@ async function main() {
         ...boundaryStress,
         path: path.relative(rootDir, boundaryStressPath),
       },
+      artifactCompatibility: {
+        ...artifactCompatibility,
+        path: path.relative(rootDir, artifactCompatibilityPath),
+      },
       fluency,
       generatedAt,
       schemaVersion: "golden-minute-e2e.v1",
@@ -162,6 +176,9 @@ async function main() {
         durationMs: fixtureValidation.coverage.durationMs,
         boundaryStressStatus: boundaryStress.status,
         boundaryCount: boundaryStress.summary.boundaryCount,
+        artifactCompatibilityStatus: artifactCompatibility.status,
+        artifactCompatibilityBlockedWordHighlightCases:
+          artifactCompatibility.summary.blockedWordHighlightCases,
         speechFluencyStatus: speechFluency.status,
         readySegments: browserResult.audioState.readySegments,
         screenshots: screenshots.length,
@@ -204,7 +221,15 @@ async function main() {
     await writeJson(path.join(outputDir, "visual-timeline.json"), visualTimeline);
     await writeJson(path.join(outputDir, "speech-fluency-report.json"), speechFluency);
     await writeJson(path.join(outputDir, "segment-boundary-report.json"), boundaryStress);
+    await writeJson(
+      path.join(outputDir, "artifact-compatibility-report.json"),
+      artifactCompatibility,
+    );
     await writeFile(boundaryStressPath, renderGoldenMinuteBoundaryReport(boundaryStress));
+    await writeFile(
+      artifactCompatibilityPath,
+      renderGoldenMinuteArtifactCompatibilityReport(artifactCompatibility),
+    );
     await writeFile(
       path.join(outputDir, "visual-timeline.md"),
       renderGoldenMinuteVisualTimeline(visualTimeline),
@@ -367,6 +392,12 @@ async function runGoldenMinuteFlow(browser, fixture, projectId, screenshots, opt
         schemaVersion: alignment.schemaVersion,
         wordTimingReliable: alignment.wordTimingReliable,
       },
+      artifactIdentity: goldenMinuteRuntimeArtifactIdentity({
+        alignment,
+        highlightMapV2,
+        job,
+        source,
+      }),
       audioState: {
         audioBuffer,
         cloudDependency: false,
@@ -774,6 +805,24 @@ function validateGeneratedArtifacts({ alignment, failures, fixture, highlightMap
   if (expectedLocator && !fixture.sampleText.includes(expectedLocator)) {
     failures.push("Fixture source locator was not present in the sample text.");
   }
+}
+
+function goldenMinuteRuntimeArtifactIdentity({ alignment, highlightMapV2, job, source }) {
+  const sourceRevisionId = source
+    ? `prepared-source:${source.id}:${source.updatedAt ?? source.createdAt ?? "unknown"}`
+    : `prepared-source:missing:${job.updatedAt ?? job.createdAt ?? "unknown"}`;
+  const generatedAudioId = highlightMapV2.generatedAudioId ?? job.id;
+  const speechPlanId = highlightMapV2.speechPlanId ?? job.id;
+  return {
+    alignmentMapId:
+      alignment?.schemaVersion && job.id ? `${job.id}:alignment:${alignment.schemaVersion}` : null,
+    generatedAudioId,
+    highlightMapId: `${generatedAudioId}:highlight-map-v2:${highlightMapV2.generatedAt ?? "latest"}`,
+    policyProfileId: job.speechPolicyProfile || "default",
+    sourceRevisionId,
+    speechPlanId,
+    voiceProfileId: job.voiceProfileId || job.voiceId || job.ttsVoice || job.voice || "default",
+  };
 }
 
 function sleep(ms) {

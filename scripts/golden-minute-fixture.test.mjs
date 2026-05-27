@@ -3,13 +3,17 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS,
+  GOLDEN_MINUTE_ARTIFACT_IDENTITY_FIELDS,
   buildGoldenMinuteSyncFixture,
+  evaluateGoldenMinuteArtifactCompatibility,
   evaluateGoldenMinuteBoundaryStress,
   evaluateGoldenMinuteFluency,
   evaluateGoldenMinuteProviderMatrix,
   evaluateGoldenMinuteSpeechFluency,
   evaluateGoldenMinuteSync,
   loadGoldenMinuteFixture,
+  renderGoldenMinuteArtifactCompatibilityReport,
   renderGoldenMinuteBoundaryReport,
   renderGoldenMinuteProviderMatrix,
   validateGoldenMinuteFixture,
@@ -84,6 +88,55 @@ test("golden minute provider matrix exercises degraded timing paths honestly", a
   assert.match(markdown, /Golden-Minute Provider Matrix/);
   assert.match(markdown, /phrase-only-timing/);
   assert.match(markdown, /Stale audio detected; highlight paused/);
+});
+
+test("golden minute artifact compatibility blocks stale source audio and highlight maps", async () => {
+  const fixture = await loadGoldenMinuteFixture(rootDir);
+  const compatibility = evaluateGoldenMinuteArtifactCompatibility(fixture, {
+    generatedAt: "2026-05-27T07:21:00.000Z",
+  });
+  const rowsById = new Map(compatibility.rows.map((row) => [row.caseId, row]));
+  const markdown = renderGoldenMinuteArtifactCompatibilityReport(compatibility);
+
+  assert.equal(compatibility.status, "passed");
+  assert.deepEqual(compatibility.identityFields, GOLDEN_MINUTE_ARTIFACT_IDENTITY_FIELDS);
+  assert.equal(rowsById.get("current-compatible")?.wordHighlightAllowed, true);
+  assert.equal(rowsById.get("audio-stale-speech-plan")?.wordHighlightAllowed, false);
+  assert.equal(rowsById.get("highlight-stale-audio")?.wordHighlightAllowed, false);
+  assert.equal(rowsById.get("alignment-missing")?.wordHighlightAllowed, false);
+  assert.equal(rowsById.get("speech-plan-source-policy-voice-stale")?.wordHighlightAllowed, false);
+  assert.equal(
+    rowsById.get("source-compatible-bookmark")?.bookmarkState,
+    "source-compatible-survived",
+  );
+  for (const row of compatibility.rows) {
+    for (const field of GOLDEN_MINUTE_ARTIFACT_IDENTITY_FIELDS) {
+      assert.ok(Object.hasOwn(row.artifactIdentity, field));
+    }
+  }
+  assert.equal(
+    rowsById
+      .get("audio-stale-speech-plan")
+      ?.uiLabels.includes(GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.audioStale),
+    true,
+  );
+  assert.equal(
+    rowsById
+      .get("highlight-stale-audio")
+      ?.uiLabels.includes(GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.highlightStale),
+    true,
+  );
+  assert.equal(
+    rowsById
+      .get("alignment-missing")
+      ?.uiLabels.includes(GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.alignmentMissing),
+    true,
+  );
+  assert.match(markdown, /Golden-Minute Artifact Compatibility/);
+  assert.match(markdown, /Audio stale/);
+  assert.match(markdown, /Highlight stale/);
+  assert.match(markdown, /Alignment missing/);
+  assert.match(markdown, /Regenerate required/);
 });
 
 test("golden minute boundary stress catches segment handoff regressions", async () => {

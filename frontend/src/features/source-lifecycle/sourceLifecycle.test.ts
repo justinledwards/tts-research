@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { BookSource, PreparedSource, VoiceJob } from "../../types";
 import {
+  ARTIFACT_COMPATIBILITY_UI_LABELS,
   SOURCE_LIFECYCLE_STATES,
+  artifactCompatibilityUiLabel,
   bookSourceLifecycleEnvelope,
   generatedAudioIsStale,
   preparedSourceLifecycleEnvelope,
@@ -26,6 +28,20 @@ describe("canonical source lifecycle", () => {
       "failed",
       "archived",
     ]);
+  });
+
+  it("keeps artifact compatibility UI labels explicit", () => {
+    expect(ARTIFACT_COMPATIBILITY_UI_LABELS).toEqual({
+      alignmentMissing: "Alignment missing",
+      audioReady: "Audio ready",
+      audioStale: "Audio stale",
+      highlightStale: "Highlight stale",
+      regenerateRequired: "Regenerate required",
+    });
+    expect(artifactCompatibilityUiLabel("audioReady")).toBe("Audio ready");
+    expect(artifactCompatibilityUiLabel("highlightStale")).toBe("Highlight stale");
+    expect(artifactCompatibilityUiLabel("alignmentMissing")).toBe("Alignment missing");
+    expect(artifactCompatibilityUiLabel("regenerateRequired")).toBe("Regenerate required");
   });
 
   it("builds one identity envelope for prepared Website Cinema sources", () => {

@@ -40,6 +40,30 @@ export interface SourceLifecycleDescriptor {
   tone: SourceLifecycleTone;
 }
 
+export const ARTIFACT_COMPATIBILITY_UI_LABELS = {
+  alignmentMissing: "Alignment missing",
+  audioReady: "Audio ready",
+  audioStale: "Audio stale",
+  highlightStale: "Highlight stale",
+  regenerateRequired: "Regenerate required",
+} as const;
+
+export type ArtifactCompatibilityUiLabel =
+  (typeof ARTIFACT_COMPATIBILITY_UI_LABELS)[keyof typeof ARTIFACT_COMPATIBILITY_UI_LABELS];
+
+export type ArtifactCompatibilityUiState =
+  | "alignmentMissing"
+  | "audioReady"
+  | "audioStale"
+  | "highlightStale"
+  | "regenerateRequired";
+
+export function artifactCompatibilityUiLabel(
+  state: ArtifactCompatibilityUiState,
+): ArtifactCompatibilityUiLabel {
+  return ARTIFACT_COMPATIBILITY_UI_LABELS[state];
+}
+
 export function sourceLifecycleDescriptor(state: SourceLifecycleState): SourceLifecycleDescriptor {
   switch (state) {
     case "new": {
@@ -90,7 +114,12 @@ export function sourceLifecycleDescriptor(state: SourceLifecycleState): SourceLi
       return descriptor(state, "Generating", "Generated audio is being created.", "info");
     }
     case "audioReady": {
-      return descriptor(state, "Audio ready", "Current generated audio is ready.", "success");
+      return descriptor(
+        state,
+        ARTIFACT_COMPATIBILITY_UI_LABELS.audioReady,
+        "Current generated audio is ready.",
+        "success",
+      );
     }
     case "stale": {
       return descriptor(
@@ -235,10 +264,10 @@ export function generatedAudioStateLabel(state: GeneratedAudioLifecycleState): s
       return "Audio queued";
     }
     case "ready": {
-      return "Audio ready";
+      return ARTIFACT_COMPATIBILITY_UI_LABELS.audioReady;
     }
     case "stale": {
-      return "Audio stale";
+      return ARTIFACT_COMPATIBILITY_UI_LABELS.audioStale;
     }
   }
 }

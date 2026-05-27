@@ -1,6 +1,8 @@
 export { SourceLifecycleCard, type SourceLifecycleCardProps } from "./SourceLifecycleCard";
 export {
+  ARTIFACT_COMPATIBILITY_UI_LABELS,
   SOURCE_LIFECYCLE_STATES,
+  artifactCompatibilityUiLabel,
   canonicalSourceLifecycleState,
   generatedAudioIsStale,
   generatedAudioStateLabel,
@@ -15,6 +17,8 @@ export {
   sourcePolicyScopeLabel,
   sourceSelectionContinuityFacts,
   sourceSelectionContinuitySummary,
+  type ArtifactCompatibilityUiLabel,
+  type ArtifactCompatibilityUiState,
   type SourceAdapterKind,
   type SourceExtractionState,
   type SourceFreshnessInput,

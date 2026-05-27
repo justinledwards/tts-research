@@ -849,3 +849,9 @@
 - [x] Add boundary-specific assertions and report artifacts
 - [x] Cover required boundary scenarios and mismatch checks
 - [x] Run WP60 validation commands
+
+## 2026-05-27 09:18 CEST - WP61 Artifact Version Compatibility
+- [x] Inspect artifact identity, stale audio, highlight map, and Content IR flows
+- [x] Add compatibility identity model and checks
+- [x] Add stale artifact labels and golden-minute stale cases
+- [x] Run WP61 validation commands

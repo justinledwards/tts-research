@@ -168,6 +168,75 @@ export const GOLDEN_MINUTE_BOUNDARY_STRESS_CASES = [
   },
 ];
 
+export const GOLDEN_MINUTE_ARTIFACT_IDENTITY_FIELDS = [
+  "sourceRevisionId",
+  "speechPlanId",
+  "policyProfileId",
+  "voiceProfileId",
+  "generatedAudioId",
+  "highlightMapId",
+  "alignmentMapId",
+];
+
+export const GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS = {
+  alignmentMissing: "Alignment missing",
+  audioReady: "Audio ready",
+  audioStale: "Audio stale",
+  highlightStale: "Highlight stale",
+  regenerateRequired: "Regenerate required",
+};
+
+export const GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_CASES = [
+  {
+    expectedResult: "compatible",
+    id: "current-compatible",
+    title: "Current source, speech plan, audio, highlight map, and alignment map",
+    uiLabels: [GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.audioReady],
+  },
+  {
+    expectedResult: "blocked",
+    id: "audio-stale-speech-plan",
+    title: "Generated audio points at an older speech plan",
+    uiLabels: [
+      GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.audioStale,
+      GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.regenerateRequired,
+    ],
+  },
+  {
+    expectedResult: "blocked",
+    id: "highlight-stale-audio",
+    title: "Highlight map points at an older generated audio artifact",
+    uiLabels: [
+      GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.highlightStale,
+      GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.regenerateRequired,
+    ],
+  },
+  {
+    expectedResult: "blocked",
+    id: "alignment-missing",
+    title: "Alignment map is absent for a word-highlight path",
+    uiLabels: [
+      GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.alignmentMissing,
+      GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.regenerateRequired,
+    ],
+  },
+  {
+    expectedResult: "blocked",
+    id: "speech-plan-source-policy-voice-stale",
+    title: "Speech plan no longer matches source, policy, or voice",
+    uiLabels: [
+      GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.audioStale,
+      GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.regenerateRequired,
+    ],
+  },
+  {
+    expectedResult: "compatible",
+    id: "source-compatible-bookmark",
+    title: "Bookmark survives a source-compatible revision",
+    uiLabels: [GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.audioReady],
+  },
+];
+
 export async function loadGoldenMinuteFixture(rootDir) {
   const fixtureDir = path.join(rootDir, "fixtures", "golden-minute");
   const manifestPath = path.join(fixtureDir, "manifest.json");
@@ -533,6 +602,63 @@ export function evaluateGoldenMinuteProviderMatrix(
   };
 }
 
+export function evaluateGoldenMinuteArtifactCompatibility(
+  fixture,
+  { artifactIdentity = {}, generatedAt = new Date().toISOString() } = {},
+) {
+  const baseGraph = buildArtifactCompatibilityGraph(fixture, artifactIdentity);
+  const rows = GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_CASES.map((compatibilityCase) =>
+    evaluateArtifactCompatibilityCase(
+      applyArtifactCompatibilityCase(baseGraph, compatibilityCase),
+      {
+        compatibilityCase,
+      },
+    ),
+  );
+  const failures = rows.flatMap((row) =>
+    row.failures.map((failure) => `${row.caseId}: ${failure}`),
+  );
+  const identityFieldFailures = rows.flatMap((row) =>
+    GOLDEN_MINUTE_ARTIFACT_IDENTITY_FIELDS.filter(
+      (field) =>
+        !(field in row.artifactIdentity) ||
+        row.artifactIdentity[field] === undefined ||
+        row.artifactIdentity[field] === "",
+    ).map((field) => `${row.caseId}: missing artifact identity field ${field}.`),
+  );
+  return {
+    failures: [...failures, ...identityFieldFailures],
+    generatedAt,
+    identityFields: GOLDEN_MINUTE_ARTIFACT_IDENTITY_FIELDS,
+    rows,
+    schemaVersion: "golden-minute-artifact-compatibility.v1",
+    status: failures.length === 0 && identityFieldFailures.length === 0 ? "passed" : "failed",
+    summary: {
+      alignmentMissingCases: rows.filter((row) =>
+        row.uiLabels.includes(GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.alignmentMissing),
+      ).length,
+      audioReadyCases: rows.filter((row) =>
+        row.uiLabels.includes(GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.audioReady),
+      ).length,
+      audioStaleCases: rows.filter((row) =>
+        row.uiLabels.includes(GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.audioStale),
+      ).length,
+      blockedWordHighlightCases: rows.filter((row) => !row.wordHighlightAllowed).length,
+      highlightStaleCases: rows.filter((row) =>
+        row.uiLabels.includes(GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.highlightStale),
+      ).length,
+      regenerateRequiredCases: rows.filter((row) =>
+        row.uiLabels.includes(GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS.regenerateRequired),
+      ).length,
+      rowCount: rows.length,
+      sourceCompatibleBookmarkCases: rows.filter(
+        (row) => row.bookmarkState === "source-compatible-survived",
+      ).length,
+    },
+    uiLabels: Object.values(GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS),
+  };
+}
+
 export function evaluateGoldenMinuteBoundaryStress(
   fixture,
   { generatedAt = new Date().toISOString() } = {},
@@ -689,6 +815,64 @@ export function renderGoldenMinuteProviderMatrix(matrix) {
   return lines.join("\n");
 }
 
+export function renderGoldenMinuteArtifactCompatibilityReport(compatibility) {
+  const lines = [
+    "# Golden-Minute Artifact Compatibility",
+    "",
+    `Status: **${compatibility.status.toUpperCase()}**`,
+    `Generated: ${compatibility.generatedAt}`,
+    "",
+    "## Identity Model",
+    "",
+    `- Fields: ${compatibility.identityFields.map((field) => `\`${field}\``).join(", ")}`,
+    "",
+    "## Summary",
+    "",
+    `- Cases: ${String(compatibility.summary.rowCount)}`,
+    `- Blocked word-highlight cases: ${String(compatibility.summary.blockedWordHighlightCases)}`,
+    `- Regenerate-required cases: ${String(compatibility.summary.regenerateRequiredCases)}`,
+    `- Source-compatible bookmarks: ${String(compatibility.summary.sourceCompatibleBookmarkCases)}`,
+    "",
+    "## Compatibility Cases",
+    "",
+    "| Case | Gate | UI labels | Word highlight | Failed checks | Bookmark state | Status |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
+  ];
+  for (const row of compatibility.rows) {
+    lines.push(
+      `| ${escapeMarkdown(row.caseId)} | ${escapeMarkdown(row.gateStatus)} | ${escapeMarkdown(
+        row.uiLabels.join(", "),
+      )} | ${row.wordHighlightAllowed ? "allowed" : "blocked"} | ${String(
+        row.compatibilityChecks.filter((check) => !check.passed).length,
+      )} | ${escapeMarkdown(row.bookmarkState)} | ${row.status} |`,
+    );
+  }
+  lines.push(
+    "",
+    "## Check Details",
+    "",
+    "| Case | Check | Expected | Observed | Result |",
+    "| --- | --- | --- | --- | --- |",
+  );
+  for (const row of compatibility.rows) {
+    for (const check of row.compatibilityChecks) {
+      lines.push(
+        `| ${escapeMarkdown(row.caseId)} | ${escapeMarkdown(check.label)} | ${escapeMarkdown(
+          check.expected,
+        )} | ${escapeMarkdown(check.observed)} | ${check.passed ? "PASS" : "BLOCK"} |`,
+      );
+    }
+  }
+  if (compatibility.failures.length > 0) {
+    lines.push("", "## Failures", "");
+    for (const failure of compatibility.failures) {
+      lines.push(`- ${failure}`);
+    }
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
 export function renderGoldenMinuteReport(document) {
   const lines = [
     "# Golden Minute E2E",
@@ -799,6 +983,22 @@ export function renderGoldenMinuteReport(document) {
       `- Cue mismatches: ${String(document.boundaryStress.summary.cueMismatchCount)}`,
     );
   }
+  if (document.artifactCompatibility) {
+    lines.push(
+      "",
+      "## Artifact Compatibility",
+      "",
+      `- Status: ${document.artifactCompatibility.status}`,
+      `- Report: ${document.artifactCompatibility.path}`,
+      `- Blocked word-highlight cases: ${String(
+        document.artifactCompatibility.summary.blockedWordHighlightCases,
+      )}`,
+      `- Regenerate-required cases: ${String(
+        document.artifactCompatibility.summary.regenerateRequiredCases,
+      )}`,
+      `- Labels: ${document.artifactCompatibility.uiLabels.join(", ")}`,
+    );
+  }
   lines.push("", "## Screenshots", "");
   for (const screenshot of document.screenshots) {
     lines.push(`- ${screenshot}`);
@@ -814,6 +1014,7 @@ export function renderGoldenMinuteReport(document) {
       .filter((check) => !check.passed)
       .map((check) => `${check.id} failed: ${String(check.actual)} vs ${check.target}`),
     ...(document.boundaryStress?.failures ?? []),
+    ...(document.artifactCompatibility?.failures ?? []),
   ];
   if (failures.length > 0) {
     lines.push("", "## Failures", "");
@@ -826,6 +1027,250 @@ export function renderGoldenMinuteReport(document) {
 }
 
 export { renderSpeechFluencyReport };
+
+function buildArtifactCompatibilityGraph(fixture, artifactIdentityOverrides = {}) {
+  const identity = normalizeArtifactIdentity(fixture, artifactIdentityOverrides);
+  const compatibleRevisionId = `${identity.sourceRevisionId}:compatible-copyedit`;
+  return {
+    bookmarks: [
+      {
+        id: "golden-minute-resume",
+        sourceRevisionId: identity.sourceRevisionId,
+        target:
+          fixture.timing.bookmarkResumeTarget?.sourceLocator ?? "golden-minute://resume-anchor",
+      },
+    ],
+    currentSourceRevisionId: identity.sourceRevisionId,
+    generatedAudio: {
+      id: identity.generatedAudioId,
+      speechPlanId: identity.speechPlanId,
+    },
+    highlightMap: {
+      generatedAudioId: identity.generatedAudioId,
+      id: identity.highlightMapId,
+      speechPlanId: identity.speechPlanId,
+      timingLevels: ["word", "phrase", "block"],
+    },
+    alignmentMap: {
+      generatedAudioId: identity.generatedAudioId,
+      id: identity.alignmentMapId,
+      speechPlanId: identity.speechPlanId,
+      status: "ready",
+    },
+    identity,
+    sourceCompatibleRevisionIds: [identity.sourceRevisionId, compatibleRevisionId],
+    speechPlan: {
+      id: identity.speechPlanId,
+      policyProfileId: identity.policyProfileId,
+      sourceRevisionId: identity.sourceRevisionId,
+      voiceProfileId: identity.voiceProfileId,
+    },
+  };
+}
+
+function normalizeArtifactIdentity(fixture, overrides) {
+  const sampleId = fixture.speechPlan.sampleId ?? fixture.manifest.id ?? "golden-minute";
+  const sourceRevisionId = firstNonEmpty(
+    overrides.sourceRevisionId,
+    `${sampleId}:source-revision:v1`,
+  );
+  const speechPlanId = firstNonEmpty(overrides.speechPlanId, `${sampleId}:speech-plan:v1`);
+  const policyProfileId = firstNonEmpty(
+    overrides.policyProfileId,
+    fixture.speechPlan.policyProfile,
+    "policy:default",
+  );
+  const voiceProfileId = firstNonEmpty(overrides.voiceProfileId, "voice:mock-default");
+  const generatedAudioId = firstNonEmpty(
+    overrides.generatedAudioId,
+    `${sampleId}:generated-audio:v1`,
+  );
+  const highlightMapId = firstNonEmpty(
+    overrides.highlightMapId,
+    `${generatedAudioId}:highlight-map:v1`,
+  );
+  const alignmentMapId =
+    Object.hasOwn(overrides, "alignmentMapId") && overrides.alignmentMapId === null
+      ? null
+      : firstNonEmpty(overrides.alignmentMapId, `${generatedAudioId}:alignment-map:v1`);
+  return {
+    alignmentMapId,
+    generatedAudioId,
+    highlightMapId,
+    policyProfileId,
+    sourceRevisionId,
+    speechPlanId,
+    voiceProfileId,
+  };
+}
+
+function applyArtifactCompatibilityCase(baseGraph, compatibilityCase) {
+  const graph = cloneArtifactGraph(baseGraph);
+  switch (compatibilityCase.id) {
+    case "audio-stale-speech-plan": {
+      graph.generatedAudio.speechPlanId = `${graph.identity.speechPlanId}:old`;
+      return graph;
+    }
+    case "highlight-stale-audio": {
+      graph.highlightMap.generatedAudioId = `${graph.identity.generatedAudioId}:old`;
+      return graph;
+    }
+    case "alignment-missing": {
+      graph.alignmentMap = null;
+      graph.identity.alignmentMapId = null;
+      return graph;
+    }
+    case "speech-plan-source-policy-voice-stale": {
+      graph.currentSourceRevisionId = `${graph.identity.sourceRevisionId}:breaking-edit`;
+      graph.sourceCompatibleRevisionIds = [graph.currentSourceRevisionId];
+      graph.speechPlan.policyProfileId = `${graph.identity.policyProfileId}:old`;
+      graph.speechPlan.voiceProfileId = `${graph.identity.voiceProfileId}:old`;
+      return graph;
+    }
+    case "source-compatible-bookmark": {
+      graph.currentSourceRevisionId =
+        graph.sourceCompatibleRevisionIds.find((id) => id !== graph.identity.sourceRevisionId) ??
+        `${graph.identity.sourceRevisionId}:compatible-copyedit`;
+      return graph;
+    }
+    default: {
+      return graph;
+    }
+  }
+}
+
+function evaluateArtifactCompatibilityCase(graph, { compatibilityCase }) {
+  const preWordChecks = artifactCompatibilityChecks(graph);
+  const blockingChecks = preWordChecks.filter(
+    (check) => check.requiredForWordHighlight && !check.passed,
+  );
+  const wordHighlightAllowed = blockingChecks.length === 0;
+  const compatibilityChecks = [
+    ...preWordChecks,
+    {
+      expected:
+        compatibilityCase.expectedResult === "blocked"
+          ? "stale or missing artifacts block word highlight"
+          : "compatible artifacts can drive word highlight",
+      id: "stale-artifact-word-highlight",
+      label: "Stale artifacts cannot drive word highlight",
+      observed: wordHighlightAllowed ? "word highlight allowed" : "word highlight blocked",
+      passed: true,
+      requiredForWordHighlight: false,
+    },
+  ];
+  const missingLabels = compatibilityCase.uiLabels.filter(
+    (label) => !Object.values(GOLDEN_MINUTE_ARTIFACT_COMPATIBILITY_LABELS).includes(label),
+  );
+  const failures = [
+    ...missingLabels.map((label) => `Unknown UI label ${label}.`),
+    ...(compatibilityCase.expectedResult === "blocked" && wordHighlightAllowed
+      ? ["Stale or missing artifacts could still drive word highlight."]
+      : []),
+    ...(compatibilityCase.expectedResult === "compatible" && !wordHighlightAllowed
+      ? ["Compatible artifacts were blocked from word highlight."]
+      : []),
+    ...(compatibilityCase.id === "source-compatible-bookmark" &&
+    !compatibilityChecks.find((check) => check.id === "bookmarks-source-compatible")?.passed
+      ? ["Bookmark did not survive a source-compatible revision."]
+      : []),
+  ];
+  return {
+    artifactIdentity: graph.identity,
+    bookmarkState: bookmarkStateForGraph(graph, compatibilityChecks),
+    caseId: compatibilityCase.id,
+    compatibilityChecks,
+    failures,
+    gateStatus: wordHighlightAllowed ? "compatible" : "blocked-word-highlight",
+    schemaVersion: "golden-minute-artifact-compatibility-row.v1",
+    status: failures.length === 0 ? "passed" : "failed",
+    title: compatibilityCase.title,
+    uiLabels: compatibilityCase.uiLabels,
+    wordHighlightAllowed,
+  };
+}
+
+function artifactCompatibilityChecks(graph) {
+  const highlightMatchesAudio =
+    graph.highlightMap?.generatedAudioId === graph.generatedAudio.id &&
+    graph.highlightMap?.speechPlanId === graph.generatedAudio.speechPlanId;
+  const audioMatchesSpeechPlan = graph.generatedAudio.speechPlanId === graph.speechPlan.id;
+  const speechPlanMatchesSource =
+    graph.speechPlan.sourceRevisionId === graph.currentSourceRevisionId ||
+    graph.sourceCompatibleRevisionIds.includes(graph.speechPlan.sourceRevisionId);
+  const speechPlanMatchesPolicy =
+    graph.speechPlan.policyProfileId === graph.identity.policyProfileId;
+  const speechPlanMatchesVoice = graph.speechPlan.voiceProfileId === graph.identity.voiceProfileId;
+  const alignmentMatchesAudio =
+    graph.alignmentMap !== null &&
+    graph.alignmentMap.generatedAudioId === graph.generatedAudio.id &&
+    graph.alignmentMap.speechPlanId === graph.generatedAudio.speechPlanId;
+  const bookmarksCompatible = graph.bookmarks.every(
+    (bookmark) =>
+      bookmark.sourceRevisionId === graph.currentSourceRevisionId ||
+      graph.sourceCompatibleRevisionIds.includes(bookmark.sourceRevisionId),
+  );
+  return [
+    {
+      expected: `highlight ${graph.generatedAudio.id}/${graph.generatedAudio.speechPlanId}`,
+      id: "highlight-map-audio",
+      label: "Highlight map matches generated audio",
+      observed: graph.highlightMap
+        ? `highlight ${graph.highlightMap.generatedAudioId}/${graph.highlightMap.speechPlanId}`
+        : "missing highlight map",
+      passed: highlightMatchesAudio,
+      requiredForWordHighlight: true,
+    },
+    {
+      expected: graph.speechPlan.id,
+      id: "audio-speech-plan",
+      label: "Generated audio matches speech plan",
+      observed: graph.generatedAudio.speechPlanId,
+      passed: audioMatchesSpeechPlan,
+      requiredForWordHighlight: true,
+    },
+    {
+      expected: `${graph.currentSourceRevisionId}/${graph.identity.policyProfileId}/${graph.identity.voiceProfileId}`,
+      id: "speech-plan-source-policy-voice",
+      label: "Speech plan matches source, policy, and voice",
+      observed: `${graph.speechPlan.sourceRevisionId}/${graph.speechPlan.policyProfileId}/${graph.speechPlan.voiceProfileId}`,
+      passed: speechPlanMatchesSource && speechPlanMatchesPolicy && speechPlanMatchesVoice,
+      requiredForWordHighlight: true,
+    },
+    {
+      expected: `alignment ${graph.generatedAudio.id}/${graph.generatedAudio.speechPlanId}`,
+      id: "alignment-map-audio",
+      label: "Alignment map matches generated audio",
+      observed: graph.alignmentMap
+        ? `alignment ${graph.alignmentMap.generatedAudioId}/${graph.alignmentMap.speechPlanId}`
+        : "missing alignment map",
+      passed: alignmentMatchesAudio,
+      requiredForWordHighlight: true,
+    },
+    {
+      expected: "bookmarks use current or source-compatible revisions",
+      id: "bookmarks-source-compatible",
+      label: "Bookmarks survive source-compatible changes",
+      observed: graph.bookmarks.map((bookmark) => bookmark.sourceRevisionId).join(", "),
+      passed: bookmarksCompatible,
+      requiredForWordHighlight: false,
+    },
+  ];
+}
+
+function bookmarkStateForGraph(graph, compatibilityChecks) {
+  const bookmarksCompatible = compatibilityChecks.find(
+    (check) => check.id === "bookmarks-source-compatible",
+  )?.passed;
+  if (bookmarksCompatible && graph.currentSourceRevisionId !== graph.identity.sourceRevisionId) {
+    return "source-compatible-survived";
+  }
+  return bookmarksCompatible ? "current" : "incompatible";
+}
+
+function cloneArtifactGraph(graph) {
+  return JSON.parse(JSON.stringify(graph));
+}
 
 function buildProviderMatrixSyncFixture({ baseFixture, baseTimings, matrixCase }) {
   return {
@@ -1154,6 +1599,15 @@ function roundMetric(value) {
 
 function max(values) {
   return values.length > 0 ? Math.max(...values) : 0;
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return "";
 }
 
 function formatNumber(value) {
