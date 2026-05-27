@@ -12,6 +12,20 @@
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
 
+## 2026-05-28 01:03 CEST - Codebase Sanitization
+- [x] Inspect sanitization ledger state and pick next untouched hotspot
+- [x] Create reusable book-cinema import helper in feature-local module
+- [x] Replace duplicated upload/import entrypoint logic with shared helper
+- [x] Update sanitization ledger and refactor status
+- [x] Run project handoff check (`pnpm check`)
+- [x] Commit focused refactor patch
+
+## 2026-05-28 01:13 CEST - Codebase Sanitization
+- [x] Extract library upload-import flow into shared helper callpath
+- [x] Stage `BookCinemaPanel.tsx` import + library import handler refactor only
+- [x] Update ledger and working log entries to reflect completed run
+- [x] Run project handoff validation and commit
+
 ## 2026-05-28 00:11 CEST - Codebase Sanitization
 - [x] Inspect prior sanitization entries and oversized candidate set
 - [x] Seed rotation ledger for the current cycle and candidate status

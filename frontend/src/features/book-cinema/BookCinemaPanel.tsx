@@ -57,6 +57,8 @@ import {
   type BookPaginationResult,
   type BookScopeOption,
 } from "./model";
+
+import { importBookCinemaSources, normalizeBookCinemaImportFiles } from "./bookCinemaImportHelpers";
 import {
   ReaderWayfindingPanel,
   playbackProgressForBookmark,
@@ -2040,6 +2042,15 @@ function BookCinemaSourceLibrary({
   onSelectBook: (bookId: string) => void;
 }>) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const handleLibraryImport = async (files: FileList | File[] | null | undefined) => {
+    await importBookCinemaSources({
+      files,
+      importProfile: "auto",
+      onImport,
+      pdfTableMode: "auto",
+      validateBatch: false,
+    });
+  };
   return (
     <div className="mb-4 grid gap-2 border-b pb-3 vs-border">
       <label className="grid gap-1 text-xs font-semibold">
@@ -2081,10 +2092,10 @@ function BookCinemaSourceLibrary({
           className="sr-only"
           multiple
           onChange={(event) => {
-            const files = event.currentTarget.files ? [...event.currentTarget.files] : [];
+            const files = normalizeBookCinemaImportFiles(event.currentTarget.files);
             event.currentTarget.value = "";
             if (files.length > 0) {
-              void onImport(files, { importProfile: "auto", pdfTableMode: "auto" });
+              void handleLibraryImport(files);
             }
           }}
           ref={inputRef}
