@@ -73,6 +73,10 @@ export async function buildActionInventory(page, scenario) {
           element.getAttribute("data-command-id") ??
           element.closest("[data-command-id]")?.getAttribute("data-command-id") ??
           null;
+        const shortcutCommandId =
+          element.getAttribute("data-shortcut-command-id") ??
+          element.closest("[data-shortcut-command-id]")?.getAttribute("data-shortcut-command-id") ??
+          null;
         const cinemaMoreSection = element.closest("[data-cinema-more-section]");
         const railModeToolbar =
           element.closest("[data-rail-mode-toolbar]")?.getAttribute("data-rail-mode-toolbar") ??
@@ -116,6 +120,7 @@ export async function buildActionInventory(page, scenario) {
             element.closest("[data-capability-reason]")?.getAttribute("data-capability-reason") ??
             null,
           commandId,
+          shortcutCommandId,
           cinemaMoreActionId:
             element.getAttribute("data-cinema-more-action-id") ??
             element

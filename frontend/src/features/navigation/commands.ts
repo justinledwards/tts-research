@@ -51,6 +51,7 @@ export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandT
     detail: layer.summary,
     id: `settings:layer:${layer.id}`,
     keywords: ["settings", "configuration", layer.detail],
+    owner: "settings",
     section: "Settings" as const,
     target: { groupId: defaultSettingsGroupForLayer(layer.id), layerId: layer.id },
     title: `Open ${layer.label} settings`,
@@ -60,6 +61,7 @@ export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandT
     detail: group.summary,
     id: `settings:group:${group.id}`,
     keywords: ["settings", group.layer, group.detail],
+    owner: "settings",
     section: "Settings" as const,
     target: { groupId: group.id, layerId: group.layer },
     title: `Open ${group.label} settings`,
@@ -75,6 +77,7 @@ export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandT
       field.scope,
       SETTINGS_SCOPE_META[field.scope].description,
     ],
+    owner: "settings",
     section: "Settings" as const,
     target: { fieldId: field.id, groupId: field.group, layerId: field.layer, scope: field.scope },
     title: field.label,
@@ -84,6 +87,7 @@ export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandT
     detail: SETTINGS_SCOPE_META[scope].appliesTo,
     id: `settings:scope:${scope}`,
     keywords: ["scope", "settings", SETTINGS_SCOPE_META[scope].description],
+    owner: "settings",
     section: "Settings" as const,
     target: {
       groupId: defaultSettingsGroupForScope(scope),
@@ -103,6 +107,7 @@ export function buildWorkspaceCommandMetadata(): CommandMetadata<WorkspaceComman
       detail: meta.description,
       id: `workspace:stage:${stage}`,
       keywords: ["stage", "workspace", ...meta.keywords],
+      owner: "workspace",
       section: "Workspace" as const,
       target: { kind: "stage" as const, stage },
       title: `Go to ${meta.label}`,
@@ -115,6 +120,7 @@ export function buildWorkspaceCommandMetadata(): CommandMetadata<WorkspaceComman
       detail: meta.description,
       id: `workspace:layout:${layoutMode}`,
       keywords: ["layout", "workspace", ...meta.keywords],
+      owner: "workspace",
       section: "Workspace" as const,
       target: { kind: "layout" as const, layoutMode },
       title: `${meta.label} workspace layout`,
@@ -137,6 +143,7 @@ export function buildCinemaFocusCommandMetadata(): CommandMetadata<CinemaFocusCo
         ...(advanced ? ["advanced", "operator"] : []),
         ...meta.keywords,
       ],
+      owner: "cinema",
       section: "Cinema" as const,
       target: { mode },
       title: advanced ? "Advanced: Debug cinema focus" : `${meta.label} cinema focus`,
@@ -150,6 +157,7 @@ export function buildCinemaAdvancedCommandMetadata(): CommandMetadata<CinemaAdva
     detail: `${action.detail} ${action.reason}`,
     id: action.commandId,
     keywords: ["cinema", "more", ...action.keywords],
+    owner: cinemaAdvancedCommandOwner(action.id),
     section: "Cinema" as const,
     target: {
       actionId: action.id,
@@ -166,10 +174,18 @@ export function buildHelpCommandMetadata(): CommandMetadata<HelpCommandTarget>[]
     detail: anchor.detail,
     id: `help:${anchor.id}`,
     keywords: ["help", "guide", "workflow"],
+    owner: "help",
     section: "Help" as const,
     target: { anchorId: anchor.id },
     title: `Help: ${anchor.label}`,
   }));
+}
+
+function cinemaAdvancedCommandOwner(actionId: CinemaAdvancedModeId): string {
+  if (actionId === "diagnostics" || actionId === "timing-map" || actionId === "alignment-repair") {
+    return "cinema-diagnostics";
+  }
+  return "cinema-advanced";
 }
 
 function workspaceStageCommandCategory(stage: WorkspaceStage): CommandCategory {

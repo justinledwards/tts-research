@@ -138,6 +138,7 @@ export function CommandPalette({
                 aria-controls="command-palette-results"
                 aria-expanded="true"
                 className="h-12 w-full rounded-md border bg-[var(--vs-surface)] px-4 text-base font-semibold outline-none transition placeholder:text-[var(--vs-muted)] focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
+                data-ui-noop-reason="Search input is already focused when the command palette opens; typing filters commands."
                 id="command-palette-search"
                 onChange={(event) => {
                   setQuery(event.currentTarget.value);
@@ -291,8 +292,11 @@ function CommandButton({
       data-capability-gated={entry.capabilityGated ? "true" : undefined}
       data-capability-reason={entry.capabilityGated ? entry.disabledReason : undefined}
       data-command-id={entry.id}
+      data-command-owner={entry.owner}
       data-disabled-reason={entry.disabledReason}
       data-provider-capability={entry.capabilityGate}
+      data-shortcut-command-id={entry.shortcutCommandId}
+      data-ui-action-owner={entry.owner}
       disabled={entry.disabled}
       id={`command-palette-${entry.id}`}
       onClick={onClick}

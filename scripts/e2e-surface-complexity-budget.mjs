@@ -15,6 +15,10 @@ const budgets = {
   commandPalette: budget("standard", 12, 4, 4, 0, 3, 2, 1, 40, 16, 4, [
     "Command palette is secondary navigation, not a hidden required-task dump.",
   ]),
+  commandSearch: budget("standard", 24, 4, 4, 0, 3, 14, 1, 80, 16, 4, [
+    "Command search may show filters, search input, and a bounded result list.",
+    "WP65 cross-audit prevents required tasks from existing only in command search.",
+  ]),
   debugAdvanced: budget("advanced", 48, 16, 18, 4, 12, 8, 8, 90, 80, 18, [
     "Advanced/debug surfaces may exceed normal density when explicitly operator-facing.",
   ]),
@@ -74,7 +78,7 @@ const scenarioBudgetKeys = {
   "book-epub-audio-ready": "readMode",
   "book-more-menu": "readModeMoreMenu",
   "book-pdf-pre-audio": "workspace",
-  "command-palette": "commandPalette",
+  "command-palette": "commandSearch",
   "document-cinema": "readMode",
   "document-more-menu": "readModeMoreMenu",
   "mobile-more-sheet": "readMode",

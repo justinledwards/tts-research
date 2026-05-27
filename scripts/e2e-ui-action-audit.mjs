@@ -24,6 +24,10 @@ import {
   classifyDuplicateGroups,
   summarizeDuplicateClassifications,
 } from "./ui-action-duplicate-waivers.mjs";
+import {
+  buildCommandMoreCrossAudit,
+  renderCommandMoreCrossAuditMarkdown,
+} from "./command-more-cross-audit.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
@@ -216,6 +220,7 @@ async function main() {
       actions,
       appBaseUrl,
       apiBaseUrl,
+      commandMoreCrossAudit: null,
       duplicates,
       duplicateClassification,
       duplicateWaiverRegistry: duplicateClassification.duplicateWaiverRegistry,
@@ -232,6 +237,10 @@ async function main() {
       surfaceComplexity,
       summary: summarizeInventory(actions),
     };
+    inventoryDocument.commandMoreCrossAudit = buildCommandMoreCrossAudit({
+      actionInventory: inventoryDocument,
+      generatedAt,
+    });
     const resultsDocument = {
       generatedAt,
       results,
@@ -302,6 +311,14 @@ async function main() {
     await writeFile(
       path.join(outputDir, "website-extraction-quality.json"),
       `${JSON.stringify(websiteExtractionQualityDocument, null, 2)}\n`,
+    );
+    await writeFile(
+      path.join(outputDir, "command-more-matrix.json"),
+      `${JSON.stringify(inventoryDocument.commandMoreCrossAudit, null, 2)}\n`,
+    );
+    await writeFile(
+      path.join(outputDir, "command-more-matrix.md"),
+      renderCommandMoreCrossAuditMarkdown(inventoryDocument.commandMoreCrossAudit),
     );
     await writeFile(
       path.join(outputDir, "overlay-collisions.json"),
@@ -1744,6 +1761,13 @@ async function assertCinemaMoreMenu(page, overlay, surface) {
       const visiblePrimarySet = new Set(visiblePrimaryLabels);
       const expectedPrimarySet = new Set(context.primaryLabels);
       const expectedCommandIds = new Map([
+        ["reader-settings", "settings:field:readerPreferences"],
+        ["theatre-mode", "cinema:theatre:open"],
+        ["policy-internals", "cinema:advanced:policy-internals"],
+        ["source-internals", "cinema:advanced:source-internals"],
+        ["diagnostics", "cinema:advanced:diagnostics"],
+        ["timing-map", "cinema:advanced:timing-map"],
+        ["alignment-repair", "cinema:advanced:alignment-repair"],
         ["command-palette", "command.palette"],
         ["keyboard-shortcuts", "shortcuts:open"],
         ["help-guide", "help:open"],
@@ -2578,12 +2602,17 @@ function summarizeGateFindings({
     capabilityGatedDisabled,
     providerProfile: activeProviderProfile,
   });
+  const commandMoreCrossAudit = buildCommandMoreCrossAudit({
+    actionInventory: { actions },
+  });
   const overlayCollisionFindings = surfaceComplexity.flatMap(
     (complexity) => complexity.overlayCollision?.findings ?? [],
   );
   return {
     capabilityGatedDisabled,
     capabilityReasonMismatches,
+    commandMoreCrossAudit,
+    commandMoreCrossAuditFindings: commandMoreCrossAudit.findings,
     disabledWithoutReason,
     duplicates: classifiedDuplicates,
     duplicateClassification,
@@ -2610,6 +2639,7 @@ function summarizeGateFindings({
       disabledWithoutReason.length +
       capabilityReasonMismatches.length +
       providerProfileCoverageFindings.length +
+      commandMoreCrossAudit.findings.length +
       duplicateClassification.unclassified,
   };
 }
@@ -2722,6 +2752,12 @@ function summarizeUiActionReviewGate({
       threshold: UI_ACTION_AUDIT_THRESHOLDS.missingStableTestIds,
       waiverRequired: true,
     }),
+    reviewGateFinding({
+      category: "command-more-cross-audit",
+      count: gateFindings.commandMoreCrossAuditFindings?.length ?? 0,
+      threshold: 0,
+      waiverRequired: false,
+    }),
   ];
   const blocking = findings.filter((finding) => finding.severity === "blocking").length;
   const needsReviewFindings = findings.filter((finding) => finding.severity === "needs-review");
@@ -2809,6 +2845,8 @@ function renderReviewerSummary({
     "- duplicates.md: present",
     "- overlay-collisions.json: present",
     "- overlay-collisions.md: present",
+    "- command-more-matrix.json: present",
+    "- command-more-matrix.md: present",
     "- website-extraction-quality.json: present",
     "- reviewer-summary.md: present",
     `- screenshots/: ${String(screenshots.length)} captured`,
@@ -2851,6 +2889,9 @@ function renderReviewerSummary({
     )}`,
     `- Provider profile coverage findings: ${formatFindingCount(
       findings.providerProfileCoverageFindings.length,
+    )}`,
+    `- Command/More cross-audit findings: ${formatFindingCount(
+      findings.commandMoreCrossAuditFindings.length,
     )}`,
     `- Destructive without confirmation: ${formatFindingCount(
       findings.destructiveMissingConfirmation.length,

@@ -46,7 +46,7 @@ export type CinemaMoreActionOwner =
   | "cinema-theatre";
 
 interface CinemaMoreActionBase {
-  readonly commandId?: string;
+  readonly commandId: string;
   readonly detail: string;
   readonly disabledReason?: string;
   readonly id: CinemaMoreActionId;
@@ -56,6 +56,7 @@ interface CinemaMoreActionBase {
   readonly owner: CinemaMoreActionOwner;
   readonly reason: string;
   readonly sectionId: CinemaMoreSectionId;
+  readonly shortcutCommandId?: string;
   readonly shortcutHint?: string;
   readonly testId: `ui-action-cinema-more-${string}` | `ui-action-cinema-advanced-${string}`;
 }
@@ -148,6 +149,7 @@ export const CINEMA_MORE_SECTIONS: readonly CinemaMoreSection[] = [
 
 const CINEMA_MORE_DISPLAY_ACTIONS: readonly CinemaMoreDisplayAction[] = [
   {
+    commandId: "settings:field:readerPreferences",
     detail: "Open reader typography, accessibility, and theme settings.",
     id: "reader-settings",
     keywords: ["display", "reader", "settings", "typography", "accessibility"],
@@ -162,6 +164,7 @@ const CINEMA_MORE_DISPLAY_ACTIONS: readonly CinemaMoreDisplayAction[] = [
 
 const CINEMA_MORE_THEATRE_ACTIONS: readonly CinemaMoreTheatreAction[] = [
   {
+    commandId: "cinema:theatre:open",
     detail: "Enter the reader-first theatre layout for the active Cinema surface.",
     id: "theatre-mode",
     keywords: ["theatre", "cinematic", "fullscreen", "reader", "immersive"],
@@ -186,6 +189,7 @@ const CINEMA_MORE_NAVIGATION_ACTIONS: readonly CinemaMoreNavigationAction[] = [
     owner: "cinema-help",
     reason: "Command palette entries use the same owners as visible Cinema controls.",
     sectionId: "help-shortcuts",
+    shortcutCommandId: "command.palette",
     shortcutHint: "Ctrl+K / Cmd+K",
     testId: "ui-action-cinema-more-command-palette",
   },
@@ -199,6 +203,7 @@ const CINEMA_MORE_NAVIGATION_ACTIONS: readonly CinemaMoreNavigationAction[] = [
     owner: "cinema-help",
     reason: "Shortcut help is reachable from More without adding another header button.",
     sectionId: "help-shortcuts",
+    shortcutCommandId: "shortcut.cheatsheet",
     shortcutHint: "? / F1",
     testId: "ui-action-cinema-more-keyboard-shortcuts",
   },
@@ -212,6 +217,7 @@ const CINEMA_MORE_NAVIGATION_ACTIONS: readonly CinemaMoreNavigationAction[] = [
     owner: "cinema-help",
     reason: "Help is available on demand from the same local command surface.",
     sectionId: "help-shortcuts",
+    shortcutCommandId: "help.open",
     shortcutHint: "Shift+F1",
     testId: "ui-action-cinema-more-help-guide",
   },

@@ -26,9 +26,10 @@ test("passes final UX gates from composed local evidence", () => {
   });
 
   assert.equal(result.status, "passed");
-  assert.equal(result.summary.total, 11);
+  assert.equal(result.summary.total, 12);
   assert.equal(result.summary.failed, 0);
   assert.match(renderFinalUxSummary(result), /More menu is useful/);
+  assert.match(renderFinalUxSummary(result), /Command palette, More menu/);
 });
 
 test("fails when UI action audit is completed with unwaived findings", () => {
@@ -288,6 +289,95 @@ test("fails when Cinema More help actions omit shortcut hints", () => {
   assert.match(moreGate.failures.join("\n"), /help actions lack keyboard shortcut hints/);
 });
 
+test("fails when a required task exists only in command palette", () => {
+  const documents = passingDocuments();
+  documents.actionInventory.actions = documents.actionInventory.actions.filter(
+    (action) => action.commandId !== "settings:open",
+  );
+  const result = evaluateFinalUxGates({
+    artifactPaths,
+    commandSteps: [],
+    documents,
+    outputDir: "/tmp/final",
+    rootDir: "/repo",
+  });
+
+  const crossGate = result.gates.find((gate) => gate.id === "command-more-cross-audit");
+  assert.equal(result.status, "failed");
+  assert.equal(crossGate.status, "failed");
+  assert.match(crossGate.failures.join("\n"), /Open settings exists only in the command palette/);
+});
+
+test("fails when a More action has no command owner", () => {
+  const documents = passingDocuments();
+  documents.actionInventory.actions = documents.actionInventory.actions.map((action) =>
+    action.cinemaMoreActionId === "reader-settings" ? { ...action, owner: "" } : action,
+  );
+  const result = evaluateFinalUxGates({
+    artifactPaths,
+    commandSteps: [],
+    documents,
+    outputDir: "/tmp/final",
+    rootDir: "/repo",
+  });
+
+  const crossGate = result.gates.find((gate) => gate.id === "command-more-cross-audit");
+  assert.equal(result.status, "failed");
+  assert.equal(crossGate.status, "failed");
+  assert.match(crossGate.failures.join("\n"), /Reader settings owner missing/);
+});
+
+test("fails when command and visible button disabled reasons drift", () => {
+  const documents = passingDocuments();
+  documents.actionInventory.actions = documents.actionInventory.actions.map((action) =>
+    action.commandId === "playback:create-listen"
+      ? { ...action, disabled: true, disabledReason: "Select a source first." }
+      : action,
+  );
+  documents.commandPaletteResults.result.commandsObserved =
+    documents.commandPaletteResults.result.commandsObserved.map((command) =>
+      command.id === "playback:create-listen"
+        ? { ...command, disabled: true, reason: "Create audio is unavailable." }
+        : command,
+    );
+  const result = evaluateFinalUxGates({
+    artifactPaths,
+    commandSteps: [],
+    documents,
+    outputDir: "/tmp/final",
+    rootDir: "/repo",
+  });
+
+  const crossGate = result.gates.find((gate) => gate.id === "command-more-cross-audit");
+  assert.equal(result.status, "failed");
+  assert.equal(crossGate.status, "failed");
+  assert.match(crossGate.failures.join("\n"), /Create & Listen visible disabled reason/);
+});
+
+test("fails when a keyboard shortcut points at a different command action", () => {
+  const documents = passingDocuments();
+  documents.actionInventory.actions = documents.actionInventory.actions.map((action) =>
+    action.commandId === "settings:open"
+      ? { ...action, shortcutCommandId: "playback.createListen" }
+      : action,
+  );
+  const result = evaluateFinalUxGates({
+    artifactPaths,
+    commandSteps: [],
+    documents,
+    outputDir: "/tmp/final",
+    rootDir: "/repo",
+  });
+
+  const crossGate = result.gates.find((gate) => gate.id === "command-more-cross-audit");
+  assert.equal(result.status, "failed");
+  assert.equal(crossGate.status, "failed");
+  assert.match(
+    crossGate.failures.join("\n"),
+    /shortcut playback\.createListen maps to settings:open/,
+  );
+});
+
 function passingDocuments() {
   return {
     accessibilityResults: {
@@ -303,6 +393,45 @@ function passingDocuments() {
     },
     actionInventory: {
       actions: [
+        {
+          actionId: "ui-action-settings-open",
+          commandId: "settings:open",
+          disabled: false,
+          hasStableTestId: true,
+          label: "Open settings",
+          metadataIssues: [],
+          owner: "settings",
+          scenarioId: "workspace-review",
+          shortcutCommandId: "settings.open",
+          surface: "Workspace",
+          testId: "ui-action-settings-open",
+        },
+        {
+          actionId: "workspace-stage-action-createAndListen",
+          commandId: "playback:create-listen",
+          disabled: false,
+          hasStableTestId: true,
+          label: "Create & Listen",
+          metadataIssues: [],
+          owner: "workspace",
+          scenarioId: "workspace-preview",
+          shortcutCommandId: "playback.createListen",
+          surface: "Preview",
+          testId: "workspace-stage-action-createAndListen",
+        },
+        {
+          actionId: "ui-action-command-palette-open",
+          commandId: "command.palette",
+          disabled: false,
+          hasStableTestId: true,
+          label: "Open command palette",
+          metadataIssues: [],
+          owner: "command-palette",
+          scenarioId: "workspace-review",
+          shortcutCommandId: "command.palette",
+          surface: "Workspace",
+          testId: "ui-action-command-palette-open",
+        },
         ...["BookCinema", "DocumentCinema", "WebsiteCinema"].map((surface) => ({
           actionId: "ui-action-cinema-more-menu",
           disabled: false,
@@ -342,17 +471,12 @@ function passingDocuments() {
     },
     commandPaletteResults: {
       result: {
-        commandsObserved: [
-          {
-            id: "cinema:advanced:diagnostics",
-            title: "Advanced: Diagnostics",
-          },
-        ],
+        commandsObserved: contractCommandsObserved(),
         disabledCommands: [{ id: "disabled-command", reason: "Unavailable in this context." }],
         failures: [],
       },
       status: "passed",
-      summary: { commandsObserved: 1, disabledCommands: 1 },
+      summary: { commandsObserved: contractCommandsObserved().length, disabledCommands: 1 },
     },
     readalongSync: {
       browser: { failureCount: 0 },
@@ -423,6 +547,7 @@ function moreMenuEntries() {
       cinemaMoreActionId: "reader-settings",
       cinemaMoreActionKind: "display",
       cinemaMoreSectionId: "display",
+      commandId: "settings:field:readerPreferences",
       label: "Reader settings",
       owner: "cinema-display",
     },
@@ -431,6 +556,7 @@ function moreMenuEntries() {
       cinemaMoreActionId: "theatre-mode",
       cinemaMoreActionKind: "theatre",
       cinemaMoreSectionId: "theatre",
+      commandId: "cinema:theatre:open",
       label: "Cinema Theatre",
       owner: "cinema-theatre",
     },
@@ -439,6 +565,7 @@ function moreMenuEntries() {
       cinemaMoreActionId: "policy-internals",
       cinemaMoreActionKind: "advanced",
       cinemaMoreSectionId: "advanced",
+      commandId: "cinema:advanced:policy-internals",
       label: "Policy internals",
       owner: "cinema-advanced",
     },
@@ -447,6 +574,7 @@ function moreMenuEntries() {
       cinemaMoreActionId: "source-internals",
       cinemaMoreActionKind: "advanced",
       cinemaMoreSectionId: "advanced",
+      commandId: "cinema:advanced:source-internals",
       label: "Source internals",
       owner: "cinema-advanced",
     },
@@ -455,6 +583,7 @@ function moreMenuEntries() {
       cinemaMoreActionId: "diagnostics",
       cinemaMoreActionKind: "diagnostics",
       cinemaMoreSectionId: "diagnostics",
+      commandId: "cinema:advanced:diagnostics",
       label: "Diagnostics",
       owner: "cinema-diagnostics",
     },
@@ -463,6 +592,7 @@ function moreMenuEntries() {
       cinemaMoreActionId: "timing-map",
       cinemaMoreActionKind: "diagnostics",
       cinemaMoreSectionId: "diagnostics",
+      commandId: "cinema:advanced:timing-map",
       label: "Timing map",
       owner: "cinema-diagnostics",
     },
@@ -471,6 +601,7 @@ function moreMenuEntries() {
       cinemaMoreActionId: "alignment-repair",
       cinemaMoreActionKind: "diagnostics",
       cinemaMoreSectionId: "diagnostics",
+      commandId: "cinema:advanced:alignment-repair",
       label: "Alignment repair",
       owner: "cinema-diagnostics",
     },
@@ -480,8 +611,10 @@ function moreMenuEntries() {
       cinemaMoreActionKind: "help-shortcuts",
       cinemaMoreSectionId: "help-shortcuts",
       cinemaMoreShortcutHint: "Ctrl+K / Cmd+K",
+      commandId: "command.palette",
       label: "Command palette",
       owner: "cinema-help",
+      shortcutCommandId: "command.palette",
     },
     {
       actionId: "ui-action-cinema-more-keyboard-shortcuts",
@@ -489,8 +622,10 @@ function moreMenuEntries() {
       cinemaMoreActionKind: "help-shortcuts",
       cinemaMoreSectionId: "help-shortcuts",
       cinemaMoreShortcutHint: "? / F1",
+      commandId: "shortcuts:open",
       label: "Keyboard shortcuts",
       owner: "cinema-help",
+      shortcutCommandId: "shortcut.cheatsheet",
     },
     {
       actionId: "ui-action-cinema-more-help-guide",
@@ -498,8 +633,10 @@ function moreMenuEntries() {
       cinemaMoreActionKind: "help-shortcuts",
       cinemaMoreSectionId: "help-shortcuts",
       cinemaMoreShortcutHint: "Shift+F1",
+      commandId: "help:open",
       label: "Help/guide",
       owner: "cinema-help",
+      shortcutCommandId: "help.open",
     },
   ];
   return surfaces.flatMap(({ scenarioId, surface }) =>
@@ -512,4 +649,68 @@ function moreMenuEntries() {
       surface,
     })),
   );
+}
+
+function contractCommandsObserved() {
+  return [
+    {
+      id: "settings:open",
+      owner: "settings",
+      shortcutCommandId: "settings.open",
+      title: "Open settings",
+    },
+    {
+      id: "playback:create-listen",
+      owner: "workspace",
+      shortcutCommandId: "playback.createListen",
+      title: "Create & Listen",
+    },
+    {
+      id: "settings:field:readerPreferences",
+      owner: "settings",
+      title: "Reader preferences",
+    },
+    {
+      id: "cinema:theatre:open",
+      owner: "cinema-theatre",
+      title: "Open Cinema Theatre",
+    },
+    {
+      id: "cinema:advanced:policy-internals",
+      owner: "cinema-advanced",
+      title: "Advanced: Policy internals",
+    },
+    {
+      id: "cinema:advanced:source-internals",
+      owner: "cinema-advanced",
+      title: "Advanced: Source internals",
+    },
+    {
+      id: "cinema:advanced:diagnostics",
+      owner: "cinema-diagnostics",
+      title: "Advanced: Diagnostics",
+    },
+    {
+      id: "cinema:advanced:timing-map",
+      owner: "cinema-diagnostics",
+      title: "Advanced: Timing map",
+    },
+    {
+      id: "cinema:advanced:alignment-repair",
+      owner: "cinema-diagnostics",
+      title: "Advanced: Alignment repair",
+    },
+    {
+      id: "shortcuts:open",
+      owner: "settings",
+      shortcutCommandId: "shortcut.cheatsheet",
+      title: "Open shortcut cheat sheet",
+    },
+    {
+      id: "help:open",
+      owner: "help",
+      shortcutCommandId: "help.open",
+      title: "Open help",
+    },
+  ];
 }

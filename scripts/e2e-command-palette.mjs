@@ -5,6 +5,11 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
+  buildCommandMoreCrossAudit,
+  contractCommandSearchQueries,
+  renderCommandMoreCrossAuditMarkdown,
+} from "./command-more-cross-audit.mjs";
+import {
   blockingPageIssues,
   collectPageIssues,
   createQaProject,
@@ -97,13 +102,28 @@ async function main() {
       summary: {
         categoriesCovered: result.categoriesCovered.length,
         commandsObserved: result.commandsObserved.length,
+        crossAuditFindings: 0,
         disabledCommands: result.disabledCommands.length,
         failures: result.failures.length,
         screenshots: screenshots.length,
       },
     };
+    const crossAudit = buildCommandMoreCrossAudit({ commandPaletteResults: document });
+    document.crossAudit = crossAudit;
+    document.summary.crossAuditFindings = crossAudit.findings.length;
+    document.status = result.passed && crossAudit.status === "passed" ? "passed" : "failed";
+    if (crossAudit.status !== "passed") {
+      result.passed = false;
+      result.failures.push(...crossAudit.findings.map((finding) => finding.message));
+      document.summary.failures = result.failures.length;
+    }
     await writeJson(path.join(outputDir, "command-palette-results.json"), document);
     await writeFile(path.join(outputDir, "command-palette-report.md"), renderReport(document));
+    await writeJson(path.join(outputDir, "command-more-matrix.json"), crossAudit);
+    await writeFile(
+      path.join(outputDir, "command-more-matrix.md"),
+      renderCommandMoreCrossAuditMarkdown(crossAudit),
+    );
     console.log(`Command palette E2E ${document.status}. Reports written to ${outputDir}`);
     process.exitCode = document.status === "passed" ? 0 : 1;
   } finally {
@@ -182,6 +202,18 @@ async function runCommandPaletteAudit(browser, projectId, screenshots) {
       failures.push("Command palette did not expose Open Teleprompt Theatre.");
     }
 
+    for (const { commandId, query } of contractCommandSearchQueries()) {
+      if (commandId === "command.palette") {
+        continue;
+      }
+      const inventory = await searchPalette(page, dialog, query);
+      commandsObserved.push(...inventory.commands);
+      disabledCommands.push(...inventory.commands.filter((command) => command.disabled));
+      if (!inventory.commands.some((command) => command.id === commandId)) {
+        failures.push(`Command palette did not expose ${commandId} for query "${query}".`);
+      }
+    }
+
     const disabledWithoutReason = disabledCommands.filter((command) => !command.reason);
     if (disabledWithoutReason.length > 0) {
       failures.push(
@@ -254,8 +286,10 @@ async function collectCommandInventory(dialog) {
       return {
         category,
         disabled,
-        id: button.getAttribute("id") ?? "",
+        id: button.getAttribute("data-command-id") ?? button.getAttribute("id") ?? "",
         reason,
+        shortcutCommandId: button.getAttribute("data-shortcut-command-id") ?? "",
+        owner: button.getAttribute("data-command-owner") ?? "",
         title,
       };
     });

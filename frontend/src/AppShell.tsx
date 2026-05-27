@@ -208,7 +208,10 @@ export function TopProductBar({
         <Button
           aria-label="Open command palette"
           className="gap-2"
+          data-command-id="command.palette"
+          data-shortcut-command-id="command.palette"
           data-testid="ui-action-command-palette-open"
+          data-ui-action-owner="command-palette"
           onClick={() => {
             onCommandPaletteOpen();
           }}
@@ -221,7 +224,10 @@ export function TopProductBar({
         </Button>
         <Button
           aria-label="Open settings"
+          data-command-id="settings:open"
+          data-shortcut-command-id="settings.open"
           data-testid="ui-action-settings-open"
+          data-ui-action-owner="settings"
           onClick={onSettingsOpen}
           size="icon"
           title={`Settings (${settingsShortcutLabel})`}
@@ -271,7 +277,10 @@ export function TopProductBar({
         <Button
           aria-label="Open command palette"
           className="text-orange-600"
+          data-command-id="command.palette"
+          data-shortcut-command-id="command.palette"
           data-testid="ui-action-command-palette-open"
+          data-ui-action-owner="command-palette"
           onClick={() => {
             onCommandPaletteOpen();
           }}
@@ -284,7 +293,10 @@ export function TopProductBar({
         <Button
           aria-label="Open settings"
           className="text-orange-600"
+          data-command-id="settings:open"
+          data-shortcut-command-id="settings.open"
           data-testid="ui-action-settings-open"
+          data-ui-action-owner="settings"
           onClick={onSettingsOpen}
           size="icon"
           title={`Settings (${settingsShortcutLabel})`}

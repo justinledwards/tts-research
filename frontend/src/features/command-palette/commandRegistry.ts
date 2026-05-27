@@ -46,6 +46,7 @@ export interface CommandEntry {
   disabledReason?: string;
   id: string;
   keywords?: string[];
+  owner?: string;
   perform: (context: CommandActionContext) => void | Promise<void>;
   section: CommandSection;
   shortcut?: string;
@@ -58,6 +59,7 @@ export interface CommandMetadata<TTarget = unknown> {
   detail?: string;
   id: string;
   keywords?: string[];
+  owner?: string;
   section: CommandSection;
   target: TTarget;
   title: string;

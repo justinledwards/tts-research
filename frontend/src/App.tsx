@@ -6502,6 +6502,7 @@ export function App() {
       detail: "Open the project library and current chapter context.",
       id: "workspace:open",
       keywords: ["drawer", "project", "library"],
+      owner: "workspace",
       perform: () => {
         setIsWorkspaceOpen(true);
       },
@@ -6513,6 +6514,7 @@ export function App() {
       detail: "Open Studio Settings.",
       id: "settings:open",
       keywords: ["configuration", "preferences"],
+      owner: "settings",
       perform: () => {
         setSettingsCommandTarget(null);
         setIsSettingsOpen(true);
@@ -6526,6 +6528,7 @@ export function App() {
       detail: "Show available keyboard shortcuts and customization entry.",
       id: "shortcuts:open",
       keywords: ["keyboard", "hotkey", "cheat sheet"],
+      owner: "settings",
       perform: () => {
         openShortcutCheatSheet();
       },
@@ -6538,6 +6541,7 @@ export function App() {
       detail: "Open contextual workflow help.",
       id: "help:open",
       keywords: ["guide", "support", "workflow"],
+      owner: "help",
       perform: () => {
         setHelpCommandTarget(null);
         setIsHelpOpen(true);
@@ -6555,6 +6559,7 @@ export function App() {
       disabledReason: createAndListenDisabledReason,
       id: "playback:create-listen",
       keywords: ["run", "generate", "listen", "audio"],
+      owner: "workspace",
       perform: () => {
         createAndListenFromCurrentSource();
       },
@@ -6571,6 +6576,7 @@ export function App() {
       disabledReason: wordHighlightCapabilityReason,
       id: "readalong:word-highlight",
       keywords: ["readalong", "highlight", "word", "timing", "provider"],
+      owner: "settings",
       perform: () => {
         setIsWorkspaceOpen(false);
         setSettingsCommandTarget({
@@ -6589,6 +6595,7 @@ export function App() {
       detail: "Follow the current script inline with preserved context.",
       id: "workspace:teleprompt",
       keywords: ["script", "read", "stage"],
+      owner: "workspace",
       perform: () => {
         openTelepromptStage();
       },
@@ -6600,6 +6607,7 @@ export function App() {
       detail: "Open the presenter-first Theatre teleprompter with fullscreen fallback.",
       id: "teleprompt:theatre",
       keywords: ["fullscreen", "presenter", "cinematic", "recording"],
+      owner: "teleprompt",
       perform: () => {
         openTelepromptTheatreStage();
       },
@@ -6611,6 +6619,7 @@ export function App() {
       detail: "Open saved voices, candidates, targets, and voice diagnostics.",
       id: "voice:dashboard",
       keywords: ["voice", "profile", "candidate", "diagnostics"],
+      owner: "voice",
       perform: () => {
         setIsWorkspaceOpen(false);
         setIsVoiceDashboardOpen(true);
@@ -6624,6 +6633,7 @@ export function App() {
       detail: metadata.detail,
       id: metadata.id,
       keywords: metadata.keywords,
+      owner: metadata.owner,
       perform: () => {
         if (metadata.target.kind === "stage") {
           setContentMode(metadata.target.stage);
@@ -6641,6 +6651,7 @@ export function App() {
       detail: metadata.detail,
       id: metadata.id,
       keywords: metadata.keywords,
+      owner: metadata.owner,
       perform: () => {
         setIsWorkspaceOpen(false);
         setSettingsCommandTarget(metadata.target);
@@ -6655,6 +6666,7 @@ export function App() {
     detail: metadata.detail,
     id: metadata.id,
     keywords: metadata.keywords,
+    owner: metadata.owner,
     perform: () => {
       setHelpCommandTarget(metadata.target);
       setIsHelpOpen(true);
@@ -6672,6 +6684,7 @@ export function App() {
         : "Open Book, Document, or Website Cinema first.",
       id: metadata.id,
       keywords: metadata.keywords,
+      owner: metadata.owner,
       perform: () => {
         if (activeCinemaSurfaceKind) {
           setCinemaFocusModeFromCommand(activeCinemaSurfaceKind, metadata.target.mode);
@@ -6691,6 +6704,7 @@ export function App() {
         : "Open Book, Document, or Website Cinema before using operator diagnostics.",
       id: metadata.id,
       keywords: metadata.keywords,
+      owner: metadata.owner,
       perform: () => {
         if (activeCinemaSurfaceKind) {
           setCinemaAdvancedActionFromCommand(activeCinemaSurfaceKind, metadata.target);
@@ -6708,6 +6722,7 @@ export function App() {
     disabledReason: project.id === activeProjectId ? "Already selected." : undefined,
     id: `project:${project.id}`,
     keywords: ["project", project.name],
+    owner: "project-dashboard",
     perform: () => {
       setIsBookCinemaOpen(false);
       setPreparedSourceCinemaSourceId(null);
@@ -6721,6 +6736,7 @@ export function App() {
     detail: "Return to draft text intake.",
     id: "source:text",
     keywords: ["draft", "text", "source"],
+    owner: "source",
     perform: () => {
       setSourceMode("text");
       setContentMode("intake");
@@ -6741,6 +6757,7 @@ export function App() {
       disabledReason: isReady ? undefined : (book.error ?? "Book source is not ready."),
       id: `source:book:${book.id}`,
       keywords: ["book", "source", label],
+      owner: "source",
       perform: () => {
         handleUseBookText(book, defaultScope);
       },
@@ -6760,6 +6777,7 @@ export function App() {
         disabledReason,
         id: `source:prepared:${source.id}`,
         keywords: ["prepared", "source", source.kind, label],
+        owner: "source",
         perform: () => {
           void handleUsePreparedSource(source);
         },
@@ -6773,6 +6791,7 @@ export function App() {
         disabledReason,
         id: `source:prepared-cinema:${source.id}`,
         keywords: ["cinema", "read", "prepared", source.kind, label],
+        owner: "source",
         perform: () => {
           openPreparedSourceCinema(source);
         },
@@ -6788,6 +6807,7 @@ export function App() {
     disabledReason: canOpenCurrentCinema ? undefined : "Create audio or select a ready book first.",
     id: "cinema:open-current",
     keywords: ["reader", "cinema", "listen"],
+    owner: "cinema",
     perform: () => {
       openReadingCinema();
     },
@@ -6804,6 +6824,7 @@ export function App() {
     disabledReason: cinemaTheatreDisabledReason,
     id: "cinema:theatre:open",
     keywords: ["cinema", "theatre", "immersive", "fullscreen", "reader"],
+    owner: "cinema-theatre",
     perform: () => {
       setCinemaTheatreOpenSignal((current) => current + 1);
     },
@@ -6817,6 +6838,7 @@ export function App() {
     disabledReason: cinemaTheatreDisabledReason,
     id: "cinema:theatre:exit",
     keywords: ["cinema", "theatre", "exit", "close", "reader"],
+    owner: "cinema-theatre",
     perform: () => {
       setCinemaTheatreExitSignal((current) => current + 1);
     },
@@ -6830,6 +6852,7 @@ export function App() {
     disabledReason: cinemaTheatreDisabledReason,
     id: "cinema:theatre:toggle-controls",
     keywords: ["cinema", "theatre", "controls", "hide", "show"],
+    owner: "cinema-theatre",
     perform: () => {
       setCinemaTheatreControlsSignal((current) => current + 1);
     },
@@ -6849,6 +6872,7 @@ export function App() {
     disabledReason: bookmarkDisabledReason,
     id: "wayfinding:bookmark-current",
     keywords: ["save", "marker", "reader"],
+    owner: "wayfinding",
     perform: () => {
       void handleAddPlaybackBookmark();
     },
@@ -6861,6 +6885,7 @@ export function App() {
     detail: bookmark.detail,
     id: bookmark.id,
     keywords: bookmark.keywords,
+    owner: "wayfinding",
     perform: () => {
       void handleResumeProgress(bookmark.resumeProgress);
     },
@@ -6872,6 +6897,7 @@ export function App() {
     detail: recent.detail,
     id: recent.id,
     keywords: recent.keywords,
+    owner: "wayfinding",
     perform: () => {
       void handleResumeProgress(recent.progressItem);
     },

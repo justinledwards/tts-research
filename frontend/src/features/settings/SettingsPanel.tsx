@@ -21,7 +21,7 @@ import { RunConfigurationWizard } from "../run-config/RunConfigurationWizard";
 import { applyRunEngineSelection } from "../run-config/runConfigSteps";
 import { SpeechPolicyWizard } from "../speech-policy/SpeechPolicyWizard";
 import { ShortcutSettings, type ShortcutPreferences } from "./shortcutSettings";
-import { accessibilityPresetById } from "../accessibility";
+import { accessibilityPresetById, useLiveStatus } from "../accessibility";
 import {
   SpeechPolicyControls,
   SourcePolicyPinEditor,
@@ -927,6 +927,7 @@ function ErgonomicPresetControls({
   onSpeechPolicyProfileChange: (profile: string) => void;
   onTelepromptTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
 }>) {
+  const { announcePolite } = useLiveStatus();
   const preset = ergonomicPresetById(selectedPresetId);
   const policyLabel = speechPolicyProfileLabel(preset.speechPolicyProfile, profileOptions);
   const policyAlreadyActive = speechPolicyProfile === preset.speechPolicyProfile;
@@ -941,12 +942,19 @@ function ErgonomicPresetControls({
     onReadAlongPreferencesChange(next.readAlongPreferences);
     onRunConfigurationChange(next.runConfiguration);
     onTelepromptTheatreSettingsChange(next.telepromptTheatreSettings);
+    announcePolite(`Applied ${preset.label} ergonomic defaults.`);
   };
   const applyPolicy = () => {
-    if (policyAlreadyActive || !confirmErgonomicPolicyChange(preset, policyLabel)) {
+    if (policyAlreadyActive) {
+      announcePolite(`${policyLabel} speech policy is already active.`);
+      return;
+    }
+    if (!confirmErgonomicPolicyChange(preset, policyLabel)) {
+      announcePolite(`Speech policy change cancelled for ${preset.label}.`);
       return;
     }
     onSpeechPolicyProfileChange(preset.speechPolicyProfile);
+    announcePolite(`Applied ${policyLabel} speech policy.`);
   };
 
   return (

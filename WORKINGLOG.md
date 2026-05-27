@@ -874,3 +874,10 @@
 - [x] Add transparent reversible ergonomic preset model and controls
 - [x] Add preview and override behavior for preset defaults
 - [x] Run WP64 validation commands
+
+## 2026-05-27 11:14 CEST - WP65 Command Palette and More Cross-Audit
+- [x] Inspect command palette, More menu, shortcuts, and UI action audit contracts
+- [x] Add cross-surface action matrix and classifications
+- [x] Add failure checks for hidden required tasks, dead aliases, reason drift, and shortcut drift
+- [x] Align Command Palette surface complexity budget with audited search contract
+- [x] Run WP65 validation commands

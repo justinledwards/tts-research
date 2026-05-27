@@ -8,6 +8,10 @@ import {
   classifyDuplicateGroups,
   summarizeDuplicateClassifications,
 } from "../ui-action-duplicate-waivers.mjs";
+import {
+  buildCommandMoreCrossAudit,
+  renderCommandMoreCrossAuditMarkdown,
+} from "../command-more-cross-audit.mjs";
 import { createRunContext, finalizeRun, runCallbackStep, runCommandStep } from "./reporting.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -209,12 +213,19 @@ export async function writeFinalUxGateArtifacts({ commandSteps, context }) {
     outputDir: context.outputDir,
     rootDir: context.rootDir,
   });
+  const commandMoreCrossAudit = buildCommandMoreCrossAudit({
+    actionInventory: documents.actionInventory,
+    commandPaletteResults: documents.commandPaletteResults,
+  });
   const files = {
+    commandMoreMatrix: path.join(context.outputDir, "command-more-matrix.md"),
+    commandMoreMatrixJson: path.join(context.outputDir, "command-more-matrix.json"),
     results: path.join(context.outputDir, "final-ux-results.json"),
     summary: path.join(context.outputDir, "final-ux-summary.md"),
   };
   const withFiles = {
     ...result,
+    commandMoreCrossAudit,
     files,
     reports: {
       validateLocalHtml: path.join(context.outputDir, "report.html"),
@@ -222,6 +233,14 @@ export async function writeFinalUxGateArtifacts({ commandSteps, context }) {
       validateLocalSummary: path.join(context.outputDir, "summary.json"),
     },
   };
+  await writeFile(
+    files.commandMoreMatrixJson,
+    `${JSON.stringify(commandMoreCrossAudit, null, 2)}\n`,
+  );
+  await writeFile(
+    files.commandMoreMatrix,
+    renderCommandMoreCrossAuditMarkdown(commandMoreCrossAudit),
+  );
   await writeFile(files.results, `${JSON.stringify(withFiles, null, 2)}\n`);
   await writeFile(files.summary, renderFinalUxSummary(withFiles));
   return withFiles;
@@ -248,6 +267,7 @@ export function evaluateFinalUxGates({
     evaluateAccessibilityReadAlongGate(documents),
     evaluateActionOwnerGate(documents),
     evaluateDisabledReasonGate(documents),
+    evaluateCommandMoreCrossAuditGate(documents),
   ].map((gate) => ({
     ...gate,
     artifactPaths: gate.artifactKeys.map((key) => relativePath(outputDir, artifactPaths[key])),
@@ -754,6 +774,39 @@ function evaluateDisabledReasonGate(documents) {
     failures,
     id: "disabled-controls-explain-why",
     title: "All disabled controls explain why",
+  });
+}
+
+function evaluateCommandMoreCrossAuditGate(documents) {
+  const audit = buildCommandMoreCrossAudit({
+    actionInventory: documents.actionInventory,
+    commandPaletteResults: documents.commandPaletteResults,
+  });
+  return gate({
+    artifactKeys: ["actionInventory", "commandPaletteResults"],
+    evidence: [
+      `Matrix rows ${String(audit.summary.rows)}.`,
+      `Visible-required actions ${String(audit.summary.visibleRequired)}.`,
+      `Contextual More actions ${String(audit.summary.contextualMore)}.`,
+      `Command palette actions observed ${String(audit.summary.commandPaletteActions)}.`,
+      `More actions observed ${String(audit.summary.moreActions)}.`,
+    ],
+    failures: audit.findings.map((finding) => finding.message),
+    findings: audit.findings.map((finding) => ({
+      category: "command-more-cross-audit",
+      message: finding.message,
+      owner: "ui-platform",
+      severity: finding.severity,
+      waiverRequired: false,
+    })),
+    id: "command-more-cross-audit",
+    severity: worstSeverity(
+      audit.findings.map((finding) => ({
+        severity: finding.severity,
+      })),
+    ),
+    status: audit.status,
+    title: "Command palette, More menu, visible controls, and shortcuts share one action contract",
   });
 }
 

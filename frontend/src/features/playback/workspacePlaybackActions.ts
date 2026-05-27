@@ -62,10 +62,12 @@ export function workspacePlaybackActionDataAttributes(
 ) {
   const owner = action === "openCinema" ? "cinema" : "workspace";
   return {
+    "data-command-id": action === "openCinema" ? "cinema:open-current" : "playback:create-listen",
     "data-generated-audio-lifecycle": lifecycle,
     "data-playback-action": action === "openCinema" ? "open-cinema" : "create-and-listen",
     "data-playback-owner": owner,
     "data-playback-primary": undefined,
+    "data-shortcut-command-id": action === "createAndListen" ? "playback.createListen" : undefined,
     "data-ui-action-owner": owner,
   } as const;
 }

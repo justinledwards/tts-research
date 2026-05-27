@@ -30,6 +30,20 @@ describe("surface complexity budgets", () => {
     );
   });
 
+  it("uses a bounded search-result budget for the Command Palette scenario", () => {
+    const budget = surfaceComplexityBudgetFor("command-palette", "Command Palette");
+    const fallbackBudget = surfaceComplexityBudgetFor("unknown-command-surface", "Command Palette");
+
+    expect(budget).toBe(SURFACE_COMPLEXITY_BUDGETS.commandSearch);
+    expect(fallbackBudget).toBe(SURFACE_COMPLEXITY_BUDGETS.commandPalette);
+    expect(budget.maxVisibleActions).toBeGreaterThan(
+      SURFACE_COMPLEXITY_BUDGETS.commandPalette.maxVisibleActions,
+    );
+    expect(budget.maxReachableDrawersSheets).toBeGreaterThan(
+      SURFACE_COMPLEXITY_BUDGETS.commandPalette.maxReachableDrawersSheets,
+    );
+  });
+
   it("flags expanded Website Cinema details in calm read mode", () => {
     const metrics: SurfaceComplexityMetrics = {
       activeModesTabs: 1,

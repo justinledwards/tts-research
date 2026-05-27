@@ -301,6 +301,7 @@ export function CinemaMoreMenu({
                       data-cinema-more-section-id={action.sectionId}
                       data-cinema-more-shortcut-hint={action.shortcutHint}
                       data-command-id={commandId}
+                      data-shortcut-command-id={action.shortcutCommandId}
                       data-testid={action.testId}
                       data-ui-action-advanced={operatorAction ? "true" : undefined}
                       data-ui-action-owner={action.owner}
