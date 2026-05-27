@@ -322,13 +322,14 @@ function bookCinemaStep(context, { id, includePerformanceArtifacts = false, scri
   if (includePerformanceArtifacts) {
     const performanceDir = path.join(stepArtifactDir, "performance");
     env.E2E_PERFORMANCE_ARTIFACT_DIR = performanceDir;
-    env.E2E_READER_TIMING_WARN_ONLY = "1";
     artifacts.lowResourceBudgetFailures = path.join(performanceDir, "budget-failures.md");
     artifacts.lowResourceDegradedStates = path.join(performanceDir, "degraded-states.md");
     artifacts.lowResourceFixtureCoverage = path.join(performanceDir, "fixture-coverage.json");
     artifacts.lowResourceInteractionBudget = path.join(performanceDir, "interaction-budget.md");
     artifacts.lowResourceReaderResume = path.join(performanceDir, "reader-resume.json");
     artifacts.lowResourceTiming = path.join(performanceDir, "timing.json");
+    artifacts.lowResourceWaiverBurndown = path.join(performanceDir, "waiver-burndown.md");
+    artifacts.lowResourceWaiverBurndownJson = path.join(performanceDir, "waiver-burndown.json");
   }
   return {
     args: [script],
@@ -522,6 +523,10 @@ function extractLowResourceWaivers(summary) {
       metric: threshold.metric,
       owner: threshold.waiver.owner,
       reason: threshold.waiver.reason,
+      reviewDate: threshold.waiver.reviewDate,
+      target: threshold.waiver.target,
+      targetMs: threshold.waiver.targetMs,
+      trackingIssue: threshold.waiver.trackingIssue,
     }));
 }
 
@@ -919,7 +924,12 @@ export function renderReviewerSummary(manifest) {
     lines.push("No waivers declared.");
   } else {
     for (const waiver of manifest.waivers) {
-      lines.push(`- ${waiver.id}: ${waiver.reason}`);
+      const target = waiver.target ? ` Target: ${waiver.target}` : "";
+      const reviewDate = waiver.reviewDate ? ` Review: ${waiver.reviewDate}.` : "";
+      const trackingIssue = waiver.trackingIssue ? ` Tracking: ${waiver.trackingIssue}.` : "";
+      lines.push(
+        `- ${waiver.id}: ${waiver.reason} Owner: ${waiver.owner}.${target}${reviewDate}${trackingIssue}`,
+      );
     }
   }
 

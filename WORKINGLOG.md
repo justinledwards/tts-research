@@ -1,5 +1,12 @@
 # Working Log
 
+## 2026-05-27 03:04 CEST - WP52 Low-Resource Waiver Burn-down
+- [x] Inspect low-resource timing reports, budgets, and waiver model
+- [x] Add distribution and first/warm run reporting
+- [x] Add waiver burn-down ownership and breakdown evidence
+- [x] Enforce blocking regressions unless explicitly waived
+- [x] Run WP52 validation commands
+
 ## 2026-05-26 21:55 CEST - Scrap TTS Studio Concept Boards
 - [x] Remove revised concept board artifacts
 - [x] Verify no UX concept files remain

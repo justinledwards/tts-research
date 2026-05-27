@@ -15,6 +15,7 @@ import {
   evaluateReaderTimingSummary,
   formatBudgetFailuresMarkdown,
   formatInteractionBudgetMarkdown,
+  formatLowResourceWaiverBurndownMarkdown,
   loadReaderTimingThresholds,
 } from "./validate-local/reader-timing.mjs";
 
@@ -49,6 +50,7 @@ let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
 let hasRunBookCinemaMemorySmoke = false;
 let hasRunLowResourceInteractionBudgetSmoke = false;
+let commandPaletteInvocationCount = 0;
 const screenshotStateRecords = [];
 
 const lowResourceFixtureRequirements = [
@@ -740,7 +742,11 @@ async function runLowResourceInteractionBudgetSmoke(page) {
         .first()
         .click();
     },
-    { surface: "book-cinema" },
+    {
+      breakdown: "inspector-layout-switch",
+      runPhase: "first-run",
+      surface: "book-cinema",
+    },
   );
 
   await visibleOverlayButton(page, "Exit").click();
@@ -753,7 +759,11 @@ async function runLowResourceInteractionBudgetSmoke(page) {
       await page.getByRole("button", { exact: true, name: "Open settings" }).click();
       await page.getByText("Studio Settings").first().waitFor();
     },
-    { surface: "workspace" },
+    {
+      breakdown: "settings-hydration",
+      runPhase: "first-run",
+      surface: "workspace",
+    },
   );
   await page.getByRole("button", { exact: true, name: "Close Settings" }).click();
 
@@ -788,7 +798,11 @@ async function runLowResourceInteractionBudgetSmoke(page) {
       await page.getByText("Teleprompt Studio").first().waitFor();
       await page.getByTestId("ui-action-teleprompt-next-cue").click();
     },
-    { surface: "teleprompt" },
+    {
+      breakdown: "teleprompt-panel-boot",
+      runPhase: "first-run",
+      surface: "teleprompt",
+    },
   );
 }
 
@@ -837,6 +851,8 @@ async function assertReviewPaneSelected(page, label) {
 }
 
 async function runCommandPaletteAction(page, query, optionName) {
+  const invocation = commandPaletteInvocationCount;
+  const runPhase = invocation === 0 ? "first-run" : "warm-run";
   await measureFrontendInteraction(
     page,
     "command-palette-open-search",
@@ -850,8 +866,13 @@ async function runCommandPaletteAction(page, query, optionName) {
       await option.click();
       await palette.waitFor({ state: "hidden" }).catch(() => {});
     },
-    { query },
+    {
+      breakdown: invocation === 0 ? "command-indexing-first-run" : "warm-search-latency",
+      query,
+      runPhase,
+    },
   );
+  commandPaletteInvocationCount += 1;
 }
 
 async function clickPreviewMiniPlayerIfReady(page) {
@@ -917,7 +938,11 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
         pauseButton = visibleOverlayButton(page, "Pause");
         await pauseButton.waitFor();
       },
-      { action: "play" },
+      {
+        action: "play",
+        breakdown: "audio-context-resume",
+        runPhase: "first-run",
+      },
     );
     await page
       .locator(".book-cinema-word-active, .book-cinema-word-phrase")
@@ -1888,6 +1913,10 @@ async function selectCinemaInspectorPanel(page, label) {
   const overlay = page.locator(cinemaOverlaySelector).first();
   const name = new RegExp(label);
   const tab = overlay.getByRole("tab", { name }).first();
+  const existingMetricCount = await performanceMetricCount(page, "context-panel-tab-switch").catch(
+    () => 0,
+  );
+  const runPhase = existingMetricCount === 0 ? "first-run" : "warm-run";
   await measureFrontendInteraction(
     page,
     "context-panel-tab-switch",
@@ -1898,7 +1927,11 @@ async function selectCinemaInspectorPanel(page, label) {
       }
       await overlay.getByRole("button", { name }).first().click();
     },
-    { tab: label },
+    {
+      breakdown: existingMetricCount === 0 ? "context-panel-boot" : "warm-tab-switch-variance",
+      runPhase,
+      tab: label,
+    },
   );
 }
 
@@ -2979,6 +3012,14 @@ async function writePerformanceArtifacts(summary) {
   await writeFile(
     path.join(performanceArtifactDir, "budget-failures.md"),
     formatBudgetFailuresMarkdown(summary.readerTiming.thresholds),
+  );
+  await writeFile(
+    path.join(performanceArtifactDir, "waiver-burndown.json"),
+    `${JSON.stringify(summary.readerTiming.waiverBurndown, null, 2)}\n`,
+  );
+  await writeFile(
+    path.join(performanceArtifactDir, "waiver-burndown.md"),
+    formatLowResourceWaiverBurndownMarkdown(summary.readerTiming.waiverBurndown),
   );
   await writeFile(
     path.join(performanceArtifactDir, "fixture-coverage.json"),

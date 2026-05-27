@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildLowResourceWaiverBurndown,
   compareReaderTimingBudgets,
   formatBudgetFailuresMarkdown,
+  formatLowResourceWaiverBurndownMarkdown,
   formatReaderTimingReport,
   summarizeReaderTimingFailures,
   summarizeReaderTimingSummary,
@@ -34,7 +36,16 @@ test("summarizes reader timing metrics across Book Cinema fixtures", () => {
               { durationMs: 170, name: "teleprompt-cue-switch" },
               { durationMs: 420, name: "settings-open" },
               { durationMs: 500, name: "preview-generation-handoff" },
-              { durationMs: 190, name: "command-palette-open-search" },
+              {
+                detail: { runPhase: "first-run" },
+                durationMs: 190,
+                name: "command-palette-open-search",
+              },
+              {
+                detail: { runPhase: "warm-run" },
+                durationMs: 120,
+                name: "command-palette-open-search",
+              },
               { durationMs: 130, name: "context-panel-tab-switch" },
             ],
           },
@@ -77,9 +88,15 @@ test("summarizes reader timing metrics across Book Cinema fixtures", () => {
   assert.equal(metrics.metrics["source-switch"].maxMs, 210);
   assert.equal(metrics.metrics["book-cinema-open"].byKind.pdf, 270.1);
   assert.equal(metrics.metrics["book-cinema-open"].count, 3);
+  assert.equal(metrics.metrics["book-cinema-open"].p50Ms, 235.3);
+  assert.equal(metrics.metrics["book-cinema-open"].p99Ms, 270.1);
+  assert.equal(metrics.metrics["book-cinema-open"].byRunPhase["first-run"].maxMs, 230.3);
+  assert.equal(metrics.metrics["book-cinema-open"].byRunPhase["warm-run"].maxMs, 270.1);
   assert.equal(metrics.metrics["preview-cinema-open"].maxMs, 330);
   assert.equal(metrics.metrics["waveform-progress-render"].maxMs, 360);
-  assert.equal(metrics.metrics["command-palette-open-search"].count, 2);
+  assert.equal(metrics.metrics["command-palette-open-search"].count, 3);
+  assert.equal(metrics.metrics["command-palette-open-search"].byRunPhase["first-run"].maxMs, 190);
+  assert.equal(metrics.metrics["command-palette-open-search"].byRunPhase["warm-run"].maxMs, 220);
   assert.equal(metrics.metrics["teleprompt-cue-switch"].byKind.pdf, 205);
   assert.equal(metrics.metrics["studio-route-switch"].byKind.epub, 80);
   assert.equal(metrics.degradedStates.total, 1);
@@ -136,4 +153,55 @@ test("fails configured reader timing budgets when metrics are slow or missing", 
     comparisons.find((item) => item.metric === "reader-resume.maxMs").classification,
     "known budget overrun",
   );
+});
+
+test("reports actionable low-resource waiver burn-down with explicit blocking waiver support", () => {
+  const metrics = summarizeReaderTimingSummary({
+    lowResourceMode: true,
+    performance: [
+      {
+        kind: "epub",
+        metrics: {
+          firstOpen: {
+            metrics: [
+              { durationMs: 520, name: "book-cinema-open" },
+              {
+                detail: { runPhase: "first-run" },
+                durationMs: 2400,
+                name: "command-palette-open-search",
+              },
+              {
+                detail: { runPhase: "warm-run" },
+                durationMs: 410,
+                name: "command-palette-open-search",
+              },
+            ],
+          },
+        },
+      },
+    ],
+  });
+  const comparisons = compareReaderTimingBudgets(
+    metrics,
+    {
+      maxBookCinemaOpenMs: 450,
+      maxCommandPaletteOpenSearchMs: 2200,
+    },
+    { allowBlockingWaivers: true },
+  );
+  const bookCinema = comparisons.find((item) => item.metric === "book-cinema-open.maxMs");
+  const commandPalette = comparisons.find(
+    (item) => item.metric === "command-palette-open-search.maxMs",
+  );
+  const burndown = buildLowResourceWaiverBurndown(metrics, comparisons);
+  const markdown = formatLowResourceWaiverBurndownMarkdown(burndown);
+
+  assert.equal(bookCinema.blocking, false);
+  assert.equal(bookCinema.waiver.owner, "WP52 cinema launch budget owner");
+  assert.equal(commandPalette.firstRunMaxMs, 2400);
+  assert.equal(commandPalette.warmRunMaxMs, 410);
+  assert.equal(burndown.activeWaivers, 2);
+  assert.match(markdown, /WP52-1/);
+  assert.match(markdown, /First-run command indexing/);
+  assert.match(markdown, /Warm-run search latency/);
 });
