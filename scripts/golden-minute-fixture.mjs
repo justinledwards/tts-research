@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { evaluateReadAlongSyncFixtures } from "./readalong-sync-evidence.mjs";
+import { buildFixtureTimings, evaluateReadAlongSyncFixtures } from "./readalong-sync-evidence.mjs";
 import {
   buildSpeechFluencySegmentsFromFixture,
   buildSpeechFluencySegmentsFromJob,
@@ -29,6 +29,80 @@ export const GOLDEN_MINUTE_SPEECH_FLUENCY_THRESHOLDS = {
   minEdgeRms: 0.012,
   minSegmentRms: 0.018,
 };
+
+export const GOLDEN_MINUTE_PROVIDER_MATRIX_CASES = [
+  {
+    capabilities: {
+      alignmentRequiredForWordHighlight: false,
+      alignmentSupported: false,
+      phraseTiming: true,
+      wordTiming: true,
+    },
+    expectedLevel: "word",
+    id: "provider-word-timing",
+    runtimeState: "synced-word",
+    timingSource: "provider-word",
+    userFacingLabel: "Word-level highlight from provider timing",
+    visualHighlightMode: "word",
+  },
+  {
+    capabilities: {
+      alignmentRequiredForWordHighlight: false,
+      alignmentSupported: false,
+      phraseTiming: true,
+      wordTiming: false,
+    },
+    expectedLevel: "phrase",
+    id: "phrase-only-timing",
+    runtimeState: "synced-phrase",
+    timingSource: "provider-phrase",
+    userFacingLabel: "Phrase-level highlight from provider timing",
+    visualHighlightMode: "phrase",
+  },
+  {
+    capabilities: {
+      alignmentRequiredForWordHighlight: true,
+      alignmentSupported: true,
+      phraseTiming: true,
+      wordTiming: false,
+    },
+    expectedLevel: "word",
+    id: "forced-alignment",
+    runtimeState: "synced-word",
+    timingSource: "forced-alignment",
+    userFacingLabel: "Word-level highlight after forced alignment",
+    visualHighlightMode: "word",
+  },
+  {
+    capabilities: {
+      alignmentRequiredForWordHighlight: false,
+      alignmentSupported: false,
+      phraseTiming: false,
+      wordTiming: false,
+    },
+    expectedLevel: "degraded",
+    id: "heuristic-degraded-fallback",
+    runtimeState: "degraded",
+    timingSource: "heuristic-estimate",
+    userFacingLabel: "Approximate block highlight in degraded mode",
+    visualHighlightMode: "block",
+  },
+  {
+    audioState: "stale",
+    capabilities: {
+      alignmentRequiredForWordHighlight: false,
+      alignmentSupported: false,
+      phraseTiming: true,
+      wordTiming: true,
+    },
+    expectedLevel: "word",
+    id: "stale-audio",
+    runtimeState: "stale-audio",
+    timingSource: "stale-audio",
+    userFacingLabel: "Stale audio detected; highlight paused",
+    visualHighlightMode: "none",
+  },
+];
 
 export async function loadGoldenMinuteFixture(rootDir) {
   const fixtureDir = path.join(rootDir, "fixtures", "golden-minute");
@@ -306,6 +380,146 @@ export function evaluateGoldenMinuteSpeechFluency(
   });
 }
 
+export function evaluateGoldenMinuteProviderMatrix(
+  fixture,
+  { generatedAt = new Date().toISOString() } = {},
+) {
+  const baseFixture = buildGoldenMinuteSyncFixture(fixture);
+  const baseTimings = buildFixtureTimings(baseFixture);
+  const speechFluency = evaluateGoldenMinuteSpeechFluency(fixture);
+  const rows = GOLDEN_MINUTE_PROVIDER_MATRIX_CASES.map((matrixCase) => {
+    const syncFixture = buildProviderMatrixSyncFixture({
+      baseFixture,
+      baseTimings,
+      matrixCase,
+    });
+    const sync = evaluateReadAlongSyncFixtures({
+      fixtures: [syncFixture],
+      generatedAt,
+      thresholds: providerMatrixThresholds(matrixCase),
+    });
+    const driftMetrics = driftMetricsForMatrixCase(matrixCase, sync.timeline);
+    const honestyFindings = providerMatrixHonestyFindings(matrixCase);
+    const staleAudioHighlightFailures =
+      matrixCase.id === "stale-audio"
+        ? sync.timeline.filter((row) => row.highlightedNodeId || row.highlightedWordIndex !== null)
+            .length
+        : 0;
+    const failures = [
+      ...sync.timeline.flatMap((row) => row.failures),
+      ...honestyFindings,
+      ...(staleAudioHighlightFailures > 0 ? ["Stale audio rendered a visible highlight."] : []),
+      ...(speechFluency.status === "passed" ? [] : ["Speech fluency failed for matrix case."]),
+    ];
+    return {
+      capabilities: matrixCase.capabilities,
+      degradedPercentage: sync.metrics.degradedTimePercentage,
+      driftSampleCount: driftMetrics.sampleCount,
+      failures,
+      id: matrixCase.id,
+      medianDriftMs: driftMetrics.medianDriftMs,
+      p95DriftMs: driftMetrics.p95DriftMs,
+      schemaVersion: "golden-minute-provider-matrix-row.v1",
+      speechFluencyStatus: speechFluency.status,
+      status: sync.status === "passed" && failures.length === 0 ? "passed" : "failed",
+      syncStatus: sync.status,
+      timingSource: matrixCase.timingSource,
+      userFacingLabel: matrixCase.userFacingLabel,
+      visualHighlightMode: matrixCase.visualHighlightMode,
+    };
+  });
+  const requiredCaseIds = [
+    "provider-word-timing",
+    "phrase-only-timing",
+    "forced-alignment",
+    "heuristic-degraded-fallback",
+    "stale-audio",
+  ];
+  const rowIds = new Set(rows.map((row) => row.id));
+  const missingCases = requiredCaseIds.filter((id) => !rowIds.has(id));
+  const failures = [
+    ...missingCases.map((id) => `Missing provider matrix case ${id}.`),
+    ...rows.flatMap((row) => row.failures.map((failure) => `${row.id}: ${failure}`)),
+  ];
+  return {
+    generatedAt,
+    rows,
+    schemaVersion: "golden-minute-provider-matrix.v1",
+    speechFluency: {
+      metrics: speechFluency.metrics,
+      status: speechFluency.status,
+    },
+    status: failures.length === 0 ? "passed" : "failed",
+    summary: {
+      degradedCases: rows.filter((row) => row.visualHighlightMode === "block").length,
+      forcedAlignmentCases: rows.filter((row) => row.timingSource === "forced-alignment").length,
+      honestLabelFailures: rows.reduce(
+        (total, row) =>
+          total +
+          row.failures.filter((failure) => /word-level accuracy|word-level label/i.test(failure))
+            .length,
+        0,
+      ),
+      phraseCases: rows.filter((row) => row.visualHighlightMode === "phrase").length,
+      rowCount: rows.length,
+      staleAudioCases: rows.filter((row) => row.timingSource === "stale-audio").length,
+      wordCases: rows.filter((row) => row.visualHighlightMode === "word").length,
+    },
+    failures,
+  };
+}
+
+export function renderGoldenMinuteProviderMatrix(matrix) {
+  const lines = [
+    "# Golden-Minute Provider Matrix",
+    "",
+    `Status: **${matrix.status.toUpperCase()}**`,
+    `Generated: ${matrix.generatedAt}`,
+    "",
+    "## Matrix",
+    "",
+    "| Case | Timing source | Median drift | P95 drift | Degraded | Visual highlight mode | Speech fluency | User-facing label | Status |",
+    "| --- | --- | ---: | ---: | ---: | --- | --- | --- | --- |",
+  ];
+  for (const row of matrix.rows) {
+    lines.push(
+      `| ${escapeMarkdown(row.id)} | ${escapeMarkdown(row.timingSource)} | ${formatNumber(
+        row.medianDriftMs,
+      )} ms | ${formatNumber(row.p95DriftMs)} ms | ${formatNumber(
+        row.degradedPercentage,
+      )}% | ${escapeMarkdown(row.visualHighlightMode)} | ${escapeMarkdown(
+        row.speechFluencyStatus,
+      )} | ${escapeMarkdown(row.userFacingLabel)} | ${row.status} |`,
+    );
+  }
+  lines.push(
+    "",
+    "## Capability Coverage",
+    "",
+    "| Case | Word timing | Phrase timing | Forced alignment | Label honesty |",
+    "| --- | --- | --- | --- | --- |",
+  );
+  for (const row of matrix.rows) {
+    lines.push(
+      `| ${escapeMarkdown(row.id)} | ${String(row.capabilities.wordTiming)} | ${String(
+        row.capabilities.phraseTiming,
+      )} | ${String(row.capabilities.alignmentSupported)} | ${
+        row.failures.some((failure) => /word-level accuracy|word-level label/i.test(failure))
+          ? "FAIL"
+          : "PASS"
+      } |`,
+    );
+  }
+  if (matrix.failures.length > 0) {
+    lines.push("", "## Failures", "");
+    for (const failure of matrix.failures) {
+      lines.push(`- ${failure}`);
+    }
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
 export function renderGoldenMinuteReport(document) {
   const lines = [
     "# Golden Minute E2E",
@@ -426,6 +640,165 @@ export function renderGoldenMinuteReport(document) {
 }
 
 export { renderSpeechFluencyReport };
+
+function buildProviderMatrixSyncFixture({ baseFixture, baseTimings, matrixCase }) {
+  return {
+    ...baseFixture,
+    expectedLevel: matrixCase.expectedLevel,
+    id: `${baseFixture.id}-${matrixCase.id}`,
+    kind: `golden-minute-provider-${matrixCase.id}`,
+    observations: baseFixture.observations.map((observation, index) =>
+      providerMatrixObservation({
+        baseTimings,
+        index,
+        matrixCase,
+        observation,
+      }),
+    ),
+    timingSource: matrixCase.timingSource,
+    title: `${baseFixture.title} - ${matrixCase.userFacingLabel}`,
+  };
+}
+
+function providerMatrixObservation({ baseTimings, index, matrixCase, observation }) {
+  const phrase = phraseForObservation(baseTimings, observation);
+  const base = {
+    ...observation,
+    expectedLevel: matrixCase.expectedLevel,
+    id: `${matrixCase.id}-${observation.id ?? String(index + 1)}`,
+    runtimeState: matrixCase.runtimeState,
+  };
+  if (matrixCase.audioState === "stale") {
+    return {
+      ...base,
+      audioState: "stale",
+      highlightedNodeId: null,
+      highlightedPhraseIndex: null,
+      highlightedWordIndex: null,
+      observedHighlightTimeMs: null,
+    };
+  }
+  if (matrixCase.expectedLevel === "phrase") {
+    return {
+      ...base,
+      highlightedNodeId: phrase?.nodeId ?? observation.highlightedNodeId,
+      highlightedPhraseIndex: phrase?.phraseIndex ?? null,
+      highlightedWordIndex: null,
+    };
+  }
+  if (matrixCase.expectedLevel === "degraded") {
+    return {
+      ...base,
+      highlightedNodeId: null,
+      highlightedPhraseIndex: null,
+      highlightedWordIndex: null,
+    };
+  }
+  return base;
+}
+
+function phraseForObservation(timings, observation) {
+  const highlightedWord =
+    typeof observation.highlightedWordIndex === "number"
+      ? timings.words.find((word) => word.wordIndex === observation.highlightedWordIndex)
+      : null;
+  if (highlightedWord) {
+    const containingPhrase = timings.phrases.find(
+      (phrase) =>
+        phrase.nodeId === highlightedWord.nodeId &&
+        highlightedWord.wordIndex >= phrase.wordStartIndex &&
+        highlightedWord.wordIndex <= phrase.wordEndIndex,
+    );
+    if (containingPhrase) {
+      return containingPhrase;
+    }
+  }
+  return (
+    timings.phrases.find(
+      (phrase) =>
+        observation.audioTimeMs >= phrase.startMs && observation.audioTimeMs <= phrase.endMs,
+    ) ?? null
+  );
+}
+
+function providerMatrixThresholds(matrixCase) {
+  return {
+    ...GOLDEN_MINUTE_THRESHOLDS,
+    maxDegradedTimePercentage: matrixCase.expectedLevel === "degraded" ? 100 : 0,
+    minFixtureCount: 1,
+  };
+}
+
+function driftMetricsForMatrixCase(matrixCase, timeline) {
+  const driftValues = timeline
+    .map((row) => {
+      if (matrixCase.expectedLevel === "phrase") {
+        return row.phraseDriftMs;
+      }
+      if (matrixCase.expectedLevel === "word") {
+        return row.wordDriftMs;
+      }
+      return null;
+    })
+    .filter((value) => typeof value === "number");
+  return {
+    medianDriftMs: roundMetric(percentile(driftValues, 50)),
+    p95DriftMs: roundMetric(percentile(driftValues, 95)),
+    sampleCount: driftValues.length,
+  };
+}
+
+function providerMatrixHonestyFindings(matrixCase) {
+  const findings = [];
+  const canClaimWordAccuracy =
+    Boolean(matrixCase.capabilities.wordTiming) ||
+    Boolean(matrixCase.capabilities.alignmentSupported);
+  if (!canClaimWordAccuracy && matrixCase.visualHighlightMode === "word") {
+    findings.push("Provider cannot support word-level accuracy but visual mode is word.");
+  }
+  if (
+    !canClaimWordAccuracy &&
+    /word[- ]level|word sync|word accuracy/i.test(matrixCase.userFacingLabel)
+  ) {
+    findings.push(
+      "Provider cannot support word-level accuracy but label claims word-level output.",
+    );
+  }
+  if (matrixCase.id === "phrase-only-timing" && matrixCase.visualHighlightMode !== "phrase") {
+    findings.push("Phrase-only provider must render phrase highlight mode.");
+  }
+  if (
+    matrixCase.id === "heuristic-degraded-fallback" &&
+    matrixCase.visualHighlightMode !== "block"
+  ) {
+    findings.push("Heuristic fallback must render degraded block highlight mode.");
+  }
+  if (matrixCase.id === "stale-audio" && matrixCase.visualHighlightMode !== "none") {
+    findings.push("Stale audio must pause visible highlights.");
+  }
+  return findings;
+}
+
+function percentile(values, p) {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1);
+  return sorted[index] ?? 0;
+}
+
+function roundMetric(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function formatNumber(value) {
+  return typeof value === "number" && !Number.isInteger(value) ? value.toFixed(2) : String(value);
+}
+
+function escapeMarkdown(value) {
+  return String(value).replaceAll("|", "\\|");
+}
 
 function paragraphCount(markdown) {
   return markdown

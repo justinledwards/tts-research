@@ -5,9 +5,11 @@ import { fileURLToPath } from "node:url";
 import {
   buildGoldenMinuteSyncFixture,
   evaluateGoldenMinuteFluency,
+  evaluateGoldenMinuteProviderMatrix,
   evaluateGoldenMinuteSpeechFluency,
   evaluateGoldenMinuteSync,
   loadGoldenMinuteFixture,
+  renderGoldenMinuteProviderMatrix,
   validateGoldenMinuteFixture,
 } from "./golden-minute-fixture.mjs";
 import {
@@ -53,6 +55,33 @@ test("golden minute speech fluency baseline passes local seam thresholds", async
   assert.equal(report.metrics.clippedEndCount, 0);
   assert.equal(report.metrics.silentSegmentCount, 0);
   assert.equal(report.metrics.excessivePauseCount, 0);
+});
+
+test("golden minute provider matrix exercises degraded timing paths honestly", async () => {
+  const fixture = await loadGoldenMinuteFixture(rootDir);
+  const matrix = evaluateGoldenMinuteProviderMatrix(fixture, {
+    generatedAt: "2026-05-27T07:03:00.000Z",
+  });
+  const rowsById = new Map(matrix.rows.map((row) => [row.id, row]));
+  const markdown = renderGoldenMinuteProviderMatrix(matrix);
+
+  assert.equal(matrix.status, "passed");
+  assert.equal(rowsById.size, 5);
+  assert.equal(rowsById.get("provider-word-timing")?.visualHighlightMode, "word");
+  assert.equal(rowsById.get("phrase-only-timing")?.visualHighlightMode, "phrase");
+  assert.equal(rowsById.get("forced-alignment")?.visualHighlightMode, "word");
+  assert.equal(rowsById.get("heuristic-degraded-fallback")?.visualHighlightMode, "block");
+  assert.equal(rowsById.get("stale-audio")?.visualHighlightMode, "none");
+  assert.equal(rowsById.get("phrase-only-timing")?.capabilities.wordTiming, false);
+  assert.doesNotMatch(rowsById.get("phrase-only-timing")?.userFacingLabel ?? "", /word-level/i);
+  assert.doesNotMatch(
+    rowsById.get("heuristic-degraded-fallback")?.userFacingLabel ?? "",
+    /word-level/i,
+  );
+  assert.equal(rowsById.get("heuristic-degraded-fallback")?.degradedPercentage, 100);
+  assert.match(markdown, /Golden-Minute Provider Matrix/);
+  assert.match(markdown, /phrase-only-timing/);
+  assert.match(markdown, /Stale audio detected; highlight paused/);
 });
 
 test("golden minute fluency rubric fails without visible segment handoff evidence", async () => {

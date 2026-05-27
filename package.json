@@ -51,6 +51,7 @@
     "generate:contracts": "node scripts/generate-contract-types.mjs",
     "validate:ir": "node scripts/validate-content-ir.mjs",
     "e2e:golden-minute": "node scripts/e2e-golden-minute.mjs",
+    "e2e:golden-minute:matrix": "node scripts/e2e-golden-minute-provider-matrix.mjs",
     "e2e:book-cinema": "node scripts/e2e-book-cinema.mjs",
     "e2e:read-along-fidelity": "node scripts/e2e-read-along-fidelity.mjs",
     "e2e:readalong-sync": "node scripts/e2e-readalong-sync.mjs",
