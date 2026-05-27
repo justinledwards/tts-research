@@ -18,6 +18,18 @@ describe("surface complexity budgets", () => {
     expect(budget.maxInlineDisplaySettings).toBe(0);
   });
 
+  it("uses a deeper settings budget for the UI memory preference pane", () => {
+    const budget = surfaceComplexityBudgetFor("settings-ui-memory", "UI Memory");
+
+    expect(budget).toBe(SURFACE_COMPLEXITY_BUDGETS.settingsDeep);
+    expect(budget.maxVisibleActions).toBeGreaterThan(
+      SURFACE_COMPLEXITY_BUDGETS.settingsQuick.maxVisibleActions,
+    );
+    expect(budget.maxPrimaryActions).toBeGreaterThan(
+      SURFACE_COMPLEXITY_BUDGETS.settingsQuick.maxPrimaryActions,
+    );
+  });
+
   it("flags expanded Website Cinema details in calm read mode", () => {
     const metrics: SurfaceComplexityMetrics = {
       activeModesTabs: 1,

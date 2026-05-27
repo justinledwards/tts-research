@@ -387,6 +387,19 @@ export function renderGoldenMinuteReport(document) {
       );
     }
   }
+  if (document.visualTimeline) {
+    lines.push(
+      "",
+      "## Visual Timeline",
+      "",
+      `- Status: ${document.visualTimeline.status}`,
+      `- Report: ${document.visualTimeline.path}`,
+      `- Highlight visible: ${String(document.visualTimeline.highlightVisiblePercentage)}%`,
+      `- Visual highlights: ${document.visualTimeline.visualTimelinePath}`,
+      `- Audio currentTime: ${document.visualTimeline.audioTimelinePath}`,
+      `- Drift timeline: ${document.visualTimeline.driftTimelinePath}`,
+    );
+  }
   lines.push("", "## Screenshots", "");
   for (const screenshot of document.screenshots) {
     lines.push(`- ${screenshot}`);

@@ -10,6 +10,10 @@ import {
   loadGoldenMinuteFixture,
   validateGoldenMinuteFixture,
 } from "./golden-minute-fixture.mjs";
+import {
+  buildGoldenMinuteVisualTimeline,
+  renderGoldenMinuteVisualTimeline,
+} from "./golden-minute-visual-timeline.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -66,4 +70,74 @@ test("golden minute fluency rubric fails without visible segment handoff evidenc
     }).status,
     "passed",
   );
+});
+
+test("golden minute visual timeline summarizes continuity evidence", () => {
+  const timeline = buildGoldenMinuteVisualTimeline({
+    checkpoints: [
+      {
+        audioTimeSec: 1.25,
+        label: "play-start",
+        nodeId: "segment-1",
+        scroll: { y: 0 },
+        text: "Opening word",
+        visible: true,
+        wordIndex: "0",
+      },
+      {
+        audioTimeSec: 11.5,
+        label: "seek-10",
+        nodeId: "segment-2",
+        scroll: { y: 220 },
+        text: "After seek",
+        visible: true,
+        wordIndex: "18",
+      },
+      {
+        audioTimeSec: 12.0,
+        label: "speed-change-1.25x",
+        nodeId: "segment-2",
+        playbackRate: 1.25,
+        scroll: { y: 220 },
+        text: "After speed change",
+        visible: true,
+        wordIndex: "19",
+      },
+      {
+        audioTimeSec: 47.0,
+        label: "resume",
+        nodeId: "segment-4",
+        scroll: { y: 900 },
+        text: "Resume target",
+        visible: true,
+        wordIndex: "120",
+      },
+    ],
+    generatedAt: "2026-05-27T00:08:00.000Z",
+    sampleIntervalSec: 2,
+    sync: {
+      timeline: [
+        {
+          audioTimeMs: 1250,
+          observationId: "gm-1",
+          phraseDriftMs: 0,
+          runtimeState: "synced-word",
+          wordDriftMs: 20,
+        },
+      ],
+    },
+    traceArtifacts: {
+      enabled: true,
+      tracePath: "output/golden-minute/latest/golden-minute-trace.zip",
+    },
+  });
+  const markdown = renderGoldenMinuteVisualTimeline(timeline);
+
+  assert.equal(timeline.summary.coveredEvents.seek, true);
+  assert.equal(timeline.summary.coveredEvents.resume, true);
+  assert.equal(timeline.summary.coveredEvents["speed-change"], true);
+  assert.equal(timeline.summary.segmentHandoffCount, 2);
+  assert.match(markdown, /Golden-Minute Visual Timeline/);
+  assert.match(markdown, /speed-change-1.25x/);
+  assert.match(markdown, /Segment Handoffs/);
 });

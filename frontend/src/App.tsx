@@ -1998,6 +1998,8 @@ function isLinkTrailingPunctuation(character: string): boolean {
   );
 }
 
+const CINEMA_PLAYBACK_RATES = [0.8, 1, 1.25, 1.5] as const;
+
 type CinemaViewMode = "teleprompter" | "markdown";
 
 function CinemaTeleprompterOverlay({
@@ -2262,6 +2264,25 @@ function CinemaTeleprompterOverlay({
           >
             Next segment
           </button>
+          <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm font-semibold vs-border">
+            Speed
+            <select
+              className="bg-transparent text-sm font-semibold outline-none"
+              data-testid="ui-action-cinema-playback-speed"
+              data-ui-action-owner="cinema"
+              disabled={!playbackControls.setPlaybackRate}
+              onChange={(event) => {
+                playbackControls.setPlaybackRate?.(Number(event.currentTarget.value));
+              }}
+              value={String(playbackControls.playbackRate)}
+            >
+              {CINEMA_PLAYBACK_RATES.map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate.toFixed(rate === 1 ? 0 : 2)}x
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
             onClick={() => {

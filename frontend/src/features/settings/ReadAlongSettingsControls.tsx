@@ -22,6 +22,9 @@ import {
 import type { ReaderAccessibilitySettings } from "../reader-accessibility";
 import { ScopeBadge } from "./ScopeBadge";
 
+const READ_ALONG_RESET_CALIBRATION_CONFIRMATION =
+  "Reset read-along calibration offsets for this provider and the global highlight timing?";
+
 export function ReadAlongSettingsControls({
   accessibilitySettings,
   preferences,
@@ -63,6 +66,9 @@ export function ReadAlongSettingsControls({
     });
   };
   const resetCalibration = () => {
+    if (!globalThis.confirm(READ_ALONG_RESET_CALIBRATION_CONFIRMATION)) {
+      return;
+    }
     const providerOffsetsMs = Object.fromEntries(
       Object.entries(preferences.providerOffsetsMs).filter(([key]) => key !== providerId),
     );
@@ -163,6 +169,7 @@ export function ReadAlongSettingsControls({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h5 className="text-sm font-semibold">Calibration</h5>
           <Button
+            data-confirm={READ_ALONG_RESET_CALIBRATION_CONFIRMATION}
             data-testid="ui-action-readalong-reset-calibration"
             data-ui-action-surface="Settings"
             onClick={resetCalibration}

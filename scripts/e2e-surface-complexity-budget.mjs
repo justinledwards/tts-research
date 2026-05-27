@@ -58,6 +58,9 @@ const budgets = {
   settingsQuick: budget("standard", 40, 12, 6, 4, 10, 6, 4, 90, 80, 16, [
     "Quick settings should expose common settings; expert groups own deeper controls.",
   ]),
+  settingsDeep: budget("dense", 56, 20, 8, 4, 12, 8, 4, 90, 80, 16, [
+    "Dedicated settings panes may expose persisted preference controls when grouped by scope and reset/export affordances remain explicit.",
+  ]),
   teleprompt: budget("standard", 46, 16, 8, 0, 8, 8, 4, 45, 48, 12, [
     "Teleprompt keeps presenter controls primary; workflow actions stay secondary.",
   ]),
@@ -79,7 +82,7 @@ const scenarioBudgetKeys = {
   "project-dashboard": "workspace",
   "settings-open": "settingsQuick",
   "settings-speech-policy": "settingsQuick",
-  "settings-ui-memory": "settingsQuick",
+  "settings-ui-memory": "settingsDeep",
   "voice-dashboard": "commandPalette",
   "website-cinema": "websiteReadCalm",
   "website-cinema-calm-read": "websiteReadCalm",

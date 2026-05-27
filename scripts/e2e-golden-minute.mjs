@@ -26,14 +26,31 @@ import {
   renderSpeechFluencyReport,
   validateGoldenMinuteFixture,
 } from "./golden-minute-fixture.mjs";
+import {
+  buildGoldenMinuteVisualTimeline,
+  renderGoldenMinuteVisualTimeline,
+} from "./golden-minute-visual-timeline.mjs";
 import { renderSyncEvidenceHtml } from "./readalong-sync-evidence.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const cliArgs = new Set(process.argv.slice(2));
 const outputDir =
   process.env.E2E_GOLDEN_MINUTE_OUTPUT_DIR ??
   path.join(rootDir, "output", "golden-minute", "latest");
 const screenshotsDir = path.join(outputDir, "screenshots");
+const visualTimelineScreenshotsDir = path.join(outputDir, "visual-timeline", "screenshots");
+const videosDir = path.join(outputDir, "videos");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
+const traceCaptureEnabled =
+  cliArgs.has("--trace") || cliArgs.has("--trace=1") || process.env.E2E_GOLDEN_MINUTE_TRACE === "1";
+const visualSampleIntervalSec = readPositiveNumber(
+  process.env.E2E_GOLDEN_MINUTE_VISUAL_SAMPLE_SECONDS,
+  2,
+);
+const visualSampleCount = Math.max(
+  1,
+  Math.round(readPositiveNumber(process.env.E2E_GOLDEN_MINUTE_VISUAL_SAMPLE_COUNT, 3)),
+);
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
@@ -53,6 +70,10 @@ main().catch(async (error) => {
 
 async function main() {
   await prepareOutputDir(outputDir, screenshotsDir);
+  if (traceCaptureEnabled) {
+    await mkdir(visualTimelineScreenshotsDir, { recursive: true });
+    await mkdir(videosDir, { recursive: true });
+  }
   const fixture = await loadGoldenMinuteFixture(rootDir);
   const fixtureValidation = validateGoldenMinuteFixture(fixture);
   const sync = evaluateGoldenMinuteSync(fixture);
@@ -75,7 +96,11 @@ async function main() {
     let browserResult;
     try {
       await captureSyncEvidence(browser, fixture, sync, screenshots);
-      browserResult = await runGoldenMinuteFlow(browser, fixture, project.id, screenshots);
+      browserResult = await runGoldenMinuteFlow(browser, fixture, project.id, screenshots, {
+        sampleCount: visualSampleCount,
+        sampleIntervalMs: Math.round(visualSampleIntervalSec * 1000),
+        traceCaptureEnabled,
+      });
     } finally {
       await browser.close();
     }
@@ -93,6 +118,15 @@ async function main() {
     ];
     delete browserResult.audioState.audioBuffer;
     delete browserResult.audioState.job;
+    const generatedAt = new Date().toISOString();
+    const visualTimeline = buildGoldenMinuteVisualTimeline({
+      checkpoints: browserResult.segmentTransitionState.activeSamples,
+      generatedAt,
+      modeledSegmentTransitions: fixture.timing.segmentTransitions ?? [],
+      sampleIntervalSec: traceCaptureEnabled ? visualSampleIntervalSec : null,
+      sync,
+      traceArtifacts: browserResult.traceArtifacts,
+    });
     const document = {
       appBaseUrl,
       browser: browserResult,
@@ -105,7 +139,7 @@ async function main() {
         timingPath: path.relative(rootDir, fixture.paths.expectedTiming),
       },
       fluency,
-      generatedAt: new Date().toISOString(),
+      generatedAt,
       schemaVersion: "golden-minute-e2e.v1",
       screenshots: screenshots.map((screenshot) => path.relative(rootDir, screenshot)),
       speechFluency,
@@ -119,12 +153,47 @@ async function main() {
         readySegments: browserResult.audioState.readySegments,
         screenshots: screenshots.length,
         segmentTransitions: browserResult.segmentTransitionState.uniqueActiveSegments,
+        visualTimelineCheckpoints: visualTimeline.summary.checkpointCount,
       },
       sync,
+      visualTimeline: {
+        audioTimelinePath: path.relative(
+          rootDir,
+          path.join(outputDir, "audio-current-time-timeline.json"),
+        ),
+        driftTimelinePath: path.relative(rootDir, path.join(outputDir, "drift-timeline.json")),
+        highlightVisiblePercentage: visualTimeline.summary.highlightVisiblePercentage,
+        path: path.relative(rootDir, path.join(outputDir, "visual-timeline.md")),
+        status:
+          visualTimeline.summary.coveredEvents.seek &&
+          visualTimeline.summary.coveredEvents.resume &&
+          visualTimeline.summary.coveredEvents["speed-change"] &&
+          visualTimeline.summary.segmentHandoffCount > 0
+            ? "passed"
+            : "needs-review",
+        visualTimelinePath: path.relative(
+          rootDir,
+          path.join(outputDir, "visual-highlight-timeline.json"),
+        ),
+      },
     };
     await writeJson(path.join(outputDir, "golden-minute-results.json"), document);
     await writeJson(path.join(outputDir, "golden-minute-sync.json"), sync);
+    await writeJson(path.join(outputDir, "drift-timeline.json"), visualTimeline.driftTimeline);
+    await writeJson(
+      path.join(outputDir, "audio-current-time-timeline.json"),
+      visualTimeline.audioCurrentTimeTimeline,
+    );
+    await writeJson(
+      path.join(outputDir, "visual-highlight-timeline.json"),
+      visualTimeline.visualHighlightTimeline,
+    );
+    await writeJson(path.join(outputDir, "visual-timeline.json"), visualTimeline);
     await writeJson(path.join(outputDir, "speech-fluency-report.json"), speechFluency);
+    await writeFile(
+      path.join(outputDir, "visual-timeline.md"),
+      renderGoldenMinuteVisualTimeline(visualTimeline),
+    );
     await writeFile(
       path.join(outputDir, "speech-fluency-report.md"),
       renderSpeechFluencyReport(speechFluency),
@@ -155,8 +224,26 @@ async function captureSyncEvidence(browser, fixture, sync, screenshots) {
   }
 }
 
-async function runGoldenMinuteFlow(browser, fixture, projectId, screenshots) {
+async function runGoldenMinuteFlow(browser, fixture, projectId, screenshots, options = {}) {
+  const traceArtifacts = {
+    enabled: Boolean(options.traceCaptureEnabled),
+    sampleCount: options.sampleCount ?? 0,
+    sampleIntervalMs: options.sampleIntervalMs ?? 0,
+    sampledScreenshotDir: options.traceCaptureEnabled
+      ? path.relative(rootDir, visualTimelineScreenshotsDir)
+      : null,
+    tracePath: options.traceCaptureEnabled
+      ? path.relative(rootDir, path.join(outputDir, "golden-minute-trace.zip"))
+      : null,
+    videoPath: null,
+  };
   const context = await browser.newContext({
+    recordVideo: options.traceCaptureEnabled
+      ? {
+          dir: videosDir,
+          size: { height: 960, width: 1440 },
+        }
+      : undefined,
     storageState: projectStorageState(appBaseUrl, projectId, {
       sourceMode: "text",
       sourceType: "draft",
@@ -165,7 +252,16 @@ async function runGoldenMinuteFlow(browser, fixture, projectId, screenshots) {
     }),
     viewport: { height: 960, width: 1440 },
   });
-  const page = await context.newPage();
+  let page;
+  let result;
+  if (options.traceCaptureEnabled) {
+    await context.tracing.start({
+      screenshots: true,
+      snapshots: true,
+      sources: true,
+    });
+  }
+  page = await context.newPage();
   page.setDefaultTimeout(60_000);
   const pageIssues = collectPageIssues(page);
   const checks = [];
@@ -251,7 +347,7 @@ async function runGoldenMinuteFlow(browser, fixture, projectId, screenshots) {
     await capture("golden-minute-07-teleprompt-theatre");
 
     failures.push(...blockingPageIssues(pageIssues));
-    return {
+    result = {
       alignmentState: {
         schemaVersion: alignment.schemaVersion,
         wordTimingReliable: alignment.wordTimingReliable,
@@ -278,13 +374,27 @@ async function runGoldenMinuteFlow(browser, fixture, projectId, screenshots) {
         schemaVersion: highlightMapV2.schemaVersion,
       },
       segmentTransitionState: playbackEvidence,
+      traceArtifacts,
     };
   } catch (error) {
     await capture("golden-minute-failure").catch(() => {});
     throw error;
   } finally {
+    if (options.traceCaptureEnabled) {
+      await context.tracing
+        .stop({ path: path.join(outputDir, "golden-minute-trace.zip") })
+        .catch(() => {});
+    }
+    const video = page?.video?.();
     await context.close();
+    if (video) {
+      const videoPath = await video.path().catch(() => null);
+      if (videoPath) {
+        traceArtifacts.videoPath = path.relative(rootDir, videoPath);
+      }
+    }
   }
+  return result;
 }
 
 async function ensureIntakeStage(page) {
@@ -348,6 +458,22 @@ async function waitForCinemaSurface(page) {
 
 async function exerciseCinemaPlayback(page, overlay, projectId, job, source) {
   const activeSamples = [];
+  const startedAt = Date.now();
+  const collectSample = async (label, options = {}) => {
+    const sample = await activeReadAlongRegion(page, label, {
+      elapsedMs: Date.now() - startedAt,
+    });
+    if (traceCaptureEnabled && options.screenshot !== false) {
+      const screenshot = path.join(
+        visualTimelineScreenshotsDir,
+        `${String(activeSamples.length + 1).padStart(2, "0")}-${slugArtifactName(label)}.png`,
+      );
+      await page.screenshot({ fullPage: false, path: screenshot });
+      sample.screenshot = path.relative(rootDir, screenshot);
+    }
+    activeSamples.push(sample);
+    return sample;
+  };
   const playButton = overlay.getByRole("button", { exact: true, name: "Play" }).first();
   if (await playButton.isEnabled().catch(() => false)) {
     await playButton.click();
@@ -359,16 +485,25 @@ async function exerciseCinemaPlayback(page, overlay, projectId, job, source) {
     .first()
     .waitFor({ timeout: 15_000 })
     .catch(() => {});
-  activeSamples.push(await activeReadAlongRegion(page, "play-start"));
+  await collectSample("play-start");
+  if (traceCaptureEnabled) {
+    for (let index = 0; index < visualSampleCount; index += 1) {
+      await page.waitForTimeout(Math.round(visualSampleIntervalSec * 1000));
+      await collectSample(`sample-${String(index + 1)}-${String(visualSampleIntervalSec)}s`);
+    }
+  }
 
   const forwardButton = overlay.getByRole("button", { exact: true, name: "+10s" }).first();
   for (const label of ["seek-10", "seek-20", "seek-30", "seek-40"]) {
     if (await forwardButton.isEnabled().catch(() => false)) {
       await forwardButton.click();
       await page.waitForTimeout(250);
-      activeSamples.push(await activeReadAlongRegion(page, label));
+      await collectSample(label);
     }
   }
+  const speedChangeObserved = await tryChangePlaybackSpeed(page, "1.25");
+  await page.waitForTimeout(250);
+  await collectSample(speedChangeObserved ? "speed-change-1.25x" : "speed-change-unavailable");
   const nextSegmentButton = overlay
     .getByRole("button", { exact: true, name: "Next segment" })
     .first();
@@ -376,7 +511,7 @@ async function exerciseCinemaPlayback(page, overlay, projectId, job, source) {
     if (await nextSegmentButton.isEnabled().catch(() => false)) {
       await nextSegmentButton.click();
       await page.waitForTimeout(250);
-      activeSamples.push(await activeReadAlongRegion(page, label));
+      await collectSample(label);
     }
   }
 
@@ -401,7 +536,7 @@ async function exerciseCinemaPlayback(page, overlay, projectId, job, source) {
       await waitForCinemaSurface(page);
     }
   }
-  activeSamples.push(await activeReadAlongRegion(page, "resume"));
+  await collectSample("resume");
 
   const activeSegmentIds = activeSamples
     .map((sample) => sample.nodeId)
@@ -418,8 +553,23 @@ async function exerciseCinemaPlayback(page, overlay, projectId, job, source) {
     seekTargetObserved: activeSamples.some(
       (sample) => sample.label.startsWith("seek-") && sample.visible,
     ),
+    speedChangeObserved,
     uniqueActiveSegments: uniqueSegments.size,
   };
+}
+
+async function tryChangePlaybackSpeed(page, value) {
+  const speed = page
+    .locator('select[data-testid="ui-action-cinema-playback-speed"]:visible')
+    .first();
+  if (!(await speed.isVisible().catch(() => false))) {
+    return false;
+  }
+  if (!(await speed.isEnabled().catch(() => false))) {
+    return false;
+  }
+  await speed.selectOption(value).catch(() => null);
+  return (await speed.inputValue().catch(() => "")) === value;
 }
 
 async function tryRunCommandPaletteAction(page, query, optionName) {
@@ -442,24 +592,67 @@ async function tryRunCommandPaletteAction(page, query, optionName) {
   return true;
 }
 
-async function activeReadAlongRegion(page, label) {
-  return page.evaluate((sampleLabel) => {
-    const active = document.querySelector(
-      ".markdown-cinema-word-active, [aria-current='true'][data-readalong-node-id], .prepared-source-cinema-active",
-    );
-    const canvas = document.querySelector("[data-cinema-reader-canvas]");
-    const target = active ?? canvas;
-    const rect = target?.getBoundingClientRect();
-    const bodyText = document.body.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    const segmentLabel = bodyText.match(/Segment\s+\d+\s*\/\s*\d+/i)?.[0] ?? null;
-    return {
-      label: sampleLabel,
-      nodeId: active?.getAttribute("data-readalong-node-id") ?? segmentLabel,
-      text: target?.textContent?.replace(/\s+/g, " ").trim().slice(0, 120) ?? "",
-      visible: Boolean(rect && rect.width > 0 && rect.height > 0),
-      wordIndex: active?.getAttribute("data-readalong-word-index") ?? null,
-    };
-  }, label);
+async function activeReadAlongRegion(page, label, options = {}) {
+  return page.evaluate(
+    ({ elapsedMs, sampleLabel }) => {
+      const active = document.querySelector(
+        ".markdown-cinema-word-active, [aria-current='true'][data-readalong-node-id], .prepared-source-cinema-active",
+      );
+      const phrase = document.querySelector(
+        ".readalong-highlight--phrase, [data-readalong-visual-mode='phrase']",
+      );
+      const audio = document.querySelector("audio");
+      const canvas = document.querySelector("[data-cinema-reader-canvas]");
+      const target = active ?? canvas;
+      const rect = target?.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      const bodyText = document.body.textContent?.replace(/\s+/g, " ").trim() ?? "";
+      const segmentLabel = bodyText.match(/Segment\s+\d+\s*\/\s*\d+/i)?.[0] ?? null;
+      const visible = Boolean(
+        rect &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.bottom >= 0 &&
+          rect.right >= 0 &&
+          rect.top <= viewportHeight &&
+          rect.left <= viewportWidth,
+      );
+      return {
+        audioPaused: audio ? audio.paused : null,
+        audioTimeSec: audio ? audio.currentTime : null,
+        elapsedMs,
+        highlightMode:
+          active?.getAttribute("data-readalong-visual-mode") ??
+          phrase?.getAttribute("data-readalong-visual-mode") ??
+          (active ? "word" : "none"),
+        label: sampleLabel,
+        nodeId: active?.getAttribute("data-readalong-node-id") ?? segmentLabel,
+        phraseText: phrase?.textContent?.replace(/\s+/g, " ").trim().slice(0, 160) ?? null,
+        playbackRate: audio ? audio.playbackRate : null,
+        rect: rect
+          ? {
+              bottom: Math.round(rect.bottom),
+              height: Math.round(rect.height),
+              left: Math.round(rect.left),
+              right: Math.round(rect.right),
+              top: Math.round(rect.top),
+              width: Math.round(rect.width),
+            }
+          : null,
+        scroll: {
+          documentHeight: document.documentElement.scrollHeight,
+          viewportHeight,
+          x: Math.round(window.scrollX),
+          y: Math.round(window.scrollY),
+        },
+        text: target?.textContent?.replace(/\s+/g, " ").trim().slice(0, 120) ?? "",
+        visible,
+        wordIndex: active?.getAttribute("data-readalong-word-index") ?? null,
+      };
+    },
+    { elapsedMs: options.elapsedMs ?? null, sampleLabel: label },
+  );
 }
 
 async function savePreparedProgressFallback(projectId, job, source) {
@@ -572,4 +765,17 @@ function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function readPositiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function slugArtifactName(value) {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-|-$/g, "");
 }

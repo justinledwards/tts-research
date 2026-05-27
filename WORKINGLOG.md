@@ -781,3 +781,12 @@
 - [x] Wire copy, manual QA marker, and export artifacts
 - [x] Keep overlay Debug/Advanced only
 - [x] Run WP50 validation commands
+
+## 2026-05-27 00:08 CEST - WP51 Golden-Minute Visual Trace Capture
+- [x] Inspect golden-minute browser flow and existing report artifacts
+- [x] Add optional trace/video capture and sampled visual timeline
+- [x] Write visual timeline JSON/Markdown artifacts
+- [x] Include seek, resume, speed-change, segment handoff, and visibility checkpoints
+- [x] Adjust UI memory surface complexity budget classification
+- [x] Add confirmation affordance to read-along calibration reset
+- [x] Run WP51 validation commands
