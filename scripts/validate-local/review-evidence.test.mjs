@@ -4,8 +4,10 @@ import {
   REQUIRED_REVIEW_SURFACES,
   buildDirtyTreeReviewState,
   buildPassFailSummary,
+  buildReviewTriage,
   isDirtyTreeWaiverEnabled,
   renderReviewerSummary,
+  renderTriageDashboard,
   summarizeSurfaceCoverage,
 } from "./review-evidence.mjs";
 
@@ -131,6 +133,235 @@ test("renders reviewer summary with local-only evidence, surfaces, artifacts, an
   for (const surface of REQUIRED_REVIEW_SURFACES) {
     assert.match(markdown, new RegExp(surface.replaceAll(" ", "\\s+")));
   }
+});
+
+test("renders severity-sorted triage dashboard with merge readiness and artifact links", () => {
+  const outputDir = "/tmp/review";
+  const manifest = {
+    artifactRecords: [
+      {
+        key: "finalUxResults",
+        ok: true,
+        relativePath: "artifacts/final-ux-gates/final-ux-results.json",
+        stepId: "final-ux-gates",
+        stepTitle: "Final UX Gates",
+      },
+      {
+        key: "summary",
+        ok: true,
+        relativePath: "artifacts/ui-actions-e2e/summary.json",
+        stepId: "ui-actions-e2e",
+        stepTitle: "UI Action Audit E2E",
+      },
+      {
+        key: "actionInventory",
+        ok: true,
+        relativePath: "artifacts/ui-actions-e2e/action-inventory.json",
+        stepId: "ui-actions-e2e",
+        stepTitle: "UI Action Audit E2E",
+      },
+      {
+        key: "duplicates",
+        ok: true,
+        relativePath: "artifacts/ui-actions-e2e/duplicates.md",
+        stepId: "ui-actions-e2e",
+        stepTitle: "UI Action Audit E2E",
+      },
+      {
+        key: "lowResourceWaiverBurndownJson",
+        ok: true,
+        relativePath: "artifacts/book-cinema-low-resource-e2e/performance/waiver-burndown.json",
+        stepId: "book-cinema-low-resource-e2e",
+        stepTitle: "Book Cinema Low-resource E2E",
+      },
+      {
+        key: "accessibilityFindings",
+        ok: true,
+        relativePath: "artifacts/accessibility-audit-e2e/a11y-findings.json",
+        stepId: "accessibility-audit-e2e",
+        stepTitle: "Accessibility Audit E2E",
+      },
+      {
+        key: "syncMetrics",
+        ok: true,
+        relativePath: "artifacts/readalong-sync-e2e/sync-metrics.json",
+        stepId: "readalong-sync-e2e",
+        stepTitle: "Read-along Sync E2E",
+      },
+      {
+        key: "goldenMinuteResults",
+        ok: true,
+        relativePath: "artifacts/golden-minute-e2e/golden-minute-results.json",
+        stepId: "golden-minute-e2e",
+        stepTitle: "Golden Minute E2E",
+      },
+      {
+        key: "telepromptMemoryResults",
+        ok: true,
+        relativePath: "artifacts/teleprompt-memory-e2e/teleprompt-memory-results.json",
+        stepId: "teleprompt-memory-e2e",
+        stepTitle: "Teleprompt Memory E2E",
+      },
+      {
+        key: "screenshots",
+        ok: true,
+        relativePath: "artifacts/golden-minute-e2e/screenshots",
+        stepId: "golden-minute-e2e",
+        stepTitle: "Golden Minute E2E",
+      },
+    ],
+    branch: "feature/review",
+    commandRunList: [],
+    dirtyTree: { dirty: false, gateStatus: "passed", waived: false },
+    generatedAt: "2026-05-23T20:00:00.000Z",
+    head: "abc123",
+    outputDir,
+    passFailSummary: {
+      artifacts: { missing: 0, missingPaths: [], present: 10, total: 10 },
+      commands: { failed: 0, passed: 18, total: 18 },
+      qa: {},
+      surfaces: {
+        covered: REQUIRED_REVIEW_SURFACES.length,
+        missing: [],
+        total: REQUIRED_REVIEW_SURFACES.length,
+      },
+    },
+    reviewFiles: {
+      commands: `${outputDir}/commands.txt`,
+      head: `${outputDir}/head.txt`,
+      reviewManifest: `${outputDir}/review-manifest.json`,
+      reviewerSummary: `${outputDir}/reviewer-summary.md`,
+      triage: `${outputDir}/triage.md`,
+    },
+    rootDir: "/repo",
+    status: "passed",
+    surfaceCoverage: REQUIRED_REVIEW_SURFACES.map((surface) => ({
+      actionCount: 1,
+      status: "covered",
+      surface,
+    })),
+    waivers: [],
+    workingTree: { diffStat: [], dirty: false, status: [], untrackedFiles: [] },
+  };
+  const qaDocuments = {
+    accessibilityFindings: {
+      summary: { failures: 0, warnings: 2 },
+    },
+    actionInventory: {
+      summary: {
+        explicitStableTestIds: 482,
+        generatedStableActionIds: 47,
+        generatedUnstableActionIds: 0,
+        missingStableTestIds: 0,
+      },
+    },
+    actionSummary: {
+      resultSummary: { failed: 0, passed: 100, skipped: 1, total: 100 },
+      reviewGate: {
+        duplicateClassification: {
+          needsConsolidation: 1,
+          overexposed: 3,
+          total: 12,
+          unclassified: 0,
+          waived: 8,
+        },
+        status: "not-review-complete",
+        summary: { blocking: 0, "needs-review": 2, waived: 1 },
+      },
+      status: "completed-with-findings",
+    },
+    finalUxGates: {
+      status: "passed-with-findings",
+      summary: { unresolvedFindings: 1, waivedFindings: 1 },
+      unresolvedFindings: [
+        {
+          message: "UI action audit completed with findings.",
+          owner: "UX QA owner",
+          severity: "needs-review",
+        },
+      ],
+      waivedFindings: [
+        {
+          message: "Duplicate registry has accepted surface parity waivers.",
+          owner: "UX action inventory owner",
+          severity: "waived",
+        },
+      ],
+      waivers: [
+        {
+          id: "duplicate:allowed-surface-parity",
+          owner: "UX action inventory owner",
+          reason: "Surface parity duplicates are accepted.",
+          reviewDate: "2026-06-30",
+        },
+      ],
+    },
+    goldenMinute: {
+      status: "passed",
+      summary: {
+        browserFailures: 0,
+        driftMedianMs: 70,
+        driftP95Ms: 80,
+        screenshots: 8,
+        speechFluencyStatus: "passed",
+      },
+    },
+    lowResourceWaiverBurndown: {
+      activeWaivers: 1,
+      blocking: 0,
+      closedUnderBudget: 2,
+      items: [
+        {
+          actualMaxMs: 2789,
+          budgetMs: 2200,
+          classification: "known budget overrun",
+          metric: "command-palette-open-search.maxMs",
+          owner: "Performance owner",
+          p95Ms: 2789,
+          p99Ms: 2789,
+          reviewDate: "2026-06-10",
+          status: "waived-over-budget",
+          target: "Split first-run indexing from warm search.",
+          waiverId: "command-palette-open-search-low-resource-budget",
+        },
+      ],
+    },
+    readAlongSync: {
+      metrics: {
+        degradedTimePercentage: 8.11,
+        medianWordDriftMs: 60,
+        p95WordDriftMs: 120,
+        staleHighlightCount: 0,
+        wrongNodeCount: 0,
+        wrongWordCount: 0,
+      },
+      status: "passed",
+    },
+    telepromptMemory: {
+      status: "passed",
+      summary: { checks: 11, failures: 0, screenshots: 6 },
+    },
+  };
+
+  const triage = buildReviewTriage(manifest, qaDocuments);
+  const markdown = renderTriageDashboard(manifest, qaDocuments, triage);
+
+  assert.equal(triage.mergeReadiness.status, "not ready");
+  assert.equal(triage.severityCounts["needs-review"] > 0, true);
+  assert.match(markdown, /Merge Readiness/);
+  assert.match(markdown, /Decision: \*\*NOT READY\*\*/);
+  assert.match(markdown, /Action audit findings/);
+  assert.match(markdown, /Duplicate count/);
+  assert.match(markdown, /Stable test ID coverage/);
+  assert.match(markdown, /Low-resource blocking\/waived metrics/);
+  assert.match(markdown, /Accessibility warnings/);
+  assert.match(markdown, /Read-along metrics/);
+  assert.match(markdown, /Golden-minute metrics/);
+  assert.match(markdown, /Teleprompt Theatre status/);
+  assert.match(markdown, /Top 10 Next Issues/);
+  assert.match(markdown, /Human QA/);
+  assert.match(markdown, /\[artifacts\/ui-actions-e2e\/summary\.json\]/);
+  assert.match(markdown, /\[artifacts\/golden-minute-e2e\/screenshots\]/);
 });
 
 test("dirty tree state requires explicit REVIEW_ALLOW_DIRTY waiver", () => {

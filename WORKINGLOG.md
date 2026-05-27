@@ -861,3 +861,10 @@
 - [x] Add human review script and reporting template
 - [x] Run automated golden-minute validation
 - [ ] Manual QA remains for a human reviewer using the new script
+
+## 2026-05-27 09:40 CEST - WP63 Review Triage Dashboard
+- [x] Inspect review evidence manifest, summaries, and artifact paths
+- [x] Add severity-sorted triage dashboard generation
+- [x] Add regression coverage for triage signals and merge readiness
+- [x] Run WP63 validation commands
+- [x] Confirm dirty-tree and waived review paths generate triage output
