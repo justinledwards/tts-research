@@ -6,6 +6,14 @@
 - [x] Run `pnpm check` (fails in unrelated pre-existing script formatting/typecheck issues).
 - [x] Commit focused refactor patch.
 
+## 2026-05-28 17:51 CEST - Codebase Sanitization
+- [x] Select new highest-value unrotated oversized file `backend/internal/sourceprep/html_quality.go`.
+- [x] Create `backend/internal/sourceprep/html_quality_helpers.go` and extract pure HTML quality candidate/scoring/container helpers.
+- [x] Rewire `backend/internal/sourceprep/html_quality.go` to delegate helper logic to the extracted helper module.
+- [x] Update `docs/refactor-sanitization-ledger.md` and AGENTS-required run log entries.
+- [x] Run targeted checks and handoff validation `pnpm check` (fails for pre-existing script issues in `scripts/golden-minute-fixture*.mjs`).
+- [ ] Commit focused refactor patch.
+
 ## 2026-05-28 17:18 CEST - Codebase Sanitization
 - [x] Select highest-value unrotated oversized candidate `frontend/src/api.ts:extract transcript normalization helpers`.
 - [x] Create `frontend/src/apiNormalizationHelpers.ts` for `normalizeVoiceProfileSource`, `normalizePreparedSource`, and shared transcript field coercion.

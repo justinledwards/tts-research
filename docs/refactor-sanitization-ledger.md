@@ -1,6 +1,7 @@
 # Refactor Sanitization Ledger
 
 ## Cycle 2026-05-28 - Codebase Sanitization
+- backend/internal/sourceprep/html_quality.go:extract html quality helpers and confidence heuristics — done
 - backend/internal/agents/tts.go:extract kokoro synthesis helpers — done
 - scripts/validate-local/review-evidence.mjs:extract review command step and artifact builders — done
 - frontend/src/App.tsx:extract trailing utility helpers: done
