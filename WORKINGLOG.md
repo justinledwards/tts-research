@@ -1,3 +1,11 @@
+## 2026-05-28 19:45 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/features/ui-audit/actionMetadata.ts:extract static action catalog helpers`.
+- [x] Create `frontend/src/features/ui-audit/actionMetadataCatalog.ts` and move static action metadata entries.
+- [x] Rewire `actionMetadata.ts` to import catalog exports and keep inference behavior local.
+- [x] Update `docs/refactor-sanitization-ledger.md` and automation memory with completion and next candidate.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 20:09 CEST - Codebase Sanitization
 - [x] Select candidate `adapters/html/emit_ir.js:extract traversal and metadata helpers`.
 - [x] Add `adapters/html/emit_ir_helpers.js` and move reusable DOM/speech helper cluster.

@@ -48,3 +48,4 @@
 - scripts/speech-fluency.mjs:extract fluency analytics and PCM helper cluster — done
 - adapters/markdown/transform.js:extract markdown parsing helper and citation utilities — done
 - adapters/html/emit_ir.js:extract traversal and metadata helper cluster — done
+- frontend/src/features/ui-audit/actionMetadata.ts:extract static catalog data and owner/classification helpers — done
