@@ -1,3 +1,21 @@
+## 2026-05-28 20:09 CEST - Codebase Sanitization
+- [x] Select candidate `adapters/html/emit_ir.js:extract traversal and metadata helpers`.
+- [x] Add `adapters/html/emit_ir_helpers.js` and move reusable DOM/speech helper cluster.
+- [x] Rewire `adapters/html/emit_ir.js` to delegate extraction and metadata helpers.
+- [x] Update `docs/refactor-sanitization-ledger.md` with candidate completion.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
+## 2026-05-28 19:38 CEST - Codebase Sanitization
+- [x] Select candidate `backend/internal/pipeline/project_bundles.go:extract project bundle helper cluster`.
+- [x] Move shared project bundle utility and quality helper cluster to `backend/internal/pipeline/project_bundle_helpers.go`.
+- [x] Keep public service methods in `backend/internal/pipeline/project_bundles.go` as orchestration delegates.
+- [x] Update `docs/refactor-sanitization-ledger.md` with completion status.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check`.
+- [ ] Commit focused refactor patch.
+
 ## 2026-05-28 19:27 CEST - Codebase Sanitization
 - [x] Select candidate `frontend/src/RunConfigDrawer.tsx:extract run configuration control helpers`.
 - [x] Add `frontend/src/features/run-config/RunConfigDrawerHelpers.tsx` and move `RunConfigurationControls` plus inline diagnostics/render helpers.

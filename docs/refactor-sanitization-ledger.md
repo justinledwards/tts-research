@@ -1,6 +1,7 @@
 # Refactor Sanitization Ledger
 
 ## Cycle 2026-05-28 - Codebase Sanitization
+- backend/internal/pipeline/project_bundles.go:extract bundle helper cluster — done
 - backend/internal/pipeline/research_modules.go:extract configuration helper cluster — done
 - scripts/e2e-golden-minute.mjs:extract interaction and artifact helpers — done
 - backend/internal/sourceprep/html_quality.go:extract html quality helpers and confidence heuristics — done
@@ -46,3 +47,4 @@
 - frontend/src/features/cinema/CinemaTransportBar.tsx:extract transport helpers and display-popover hook — done
 - scripts/speech-fluency.mjs:extract fluency analytics and PCM helper cluster — done
 - adapters/markdown/transform.js:extract markdown parsing helper and citation utilities — done
+- adapters/html/emit_ir.js:extract traversal and metadata helper cluster — done
