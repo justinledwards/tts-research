@@ -1,3 +1,21 @@
+## 2026-05-28 18:36 CEST - Codebase Sanitization
+- [x] Select next unrotated oversized candidate `backend/internal/pipeline/research_modules.go:extract configuration helper cluster`.
+- [x] Add `backend/internal/pipeline/research_modules_config.go` and move research module constants, required file list, config type, and normalization helpers there.
+- [x] Rewire `backend/internal/pipeline/research_modules.go` to use moved configuration helper symbols.
+- [x] Update `docs/refactor-sanitization-ledger.md` with the completed candidate.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md` with this run and next recommended candidate.
+- [x] Run `pnpm check` and record remaining unrelated failures.
+- [ ] Commit focused refactor patch.
+
+## 2026-05-28 18:32 CEST - Codebase Sanitization
+- [x] Select next unrotated oversized candidate `scripts/golden-minute-fixture.mjs:extract fixture constants`.
+- [x] Create `scripts/golden-minute-fixture-constants.mjs` and move threshold/case constants there.
+- [x] Rewire `scripts/golden-minute-fixture.mjs` to re-export fixture constants and keep all logic behavior unchanged.
+- [x] Update `docs/refactor-sanitization-ledger.md` with candidate completion.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md` with this run and the next recommended candidate.
+- [x] Run `pnpm check` and record one pre-existing formatter failure in `scripts/golden-minute-fixture-helpers.mjs`.
+- [ ] Commit focused refactor patch (`scripts/golden-minute-fixture.mjs` constants extraction).
+
 ## 2026-05-28 18:22 CEST - Codebase Sanitization
 - [x] Select next unrotated oversized candidate `backend/cmd/api/main.go:extract pipeline service bootstrap`.
 - [x] Extract pipeline environment parsing, clamping, and service-options construction into `backend/cmd/api/pipeline_bootstrap.go`.

@@ -1,6 +1,7 @@
 # Refactor Sanitization Ledger
 
 ## Cycle 2026-05-28 - Codebase Sanitization
+- backend/internal/pipeline/research_modules.go:extract configuration helper cluster — done
 - scripts/e2e-golden-minute.mjs:extract interaction and artifact helpers — done
 - backend/internal/sourceprep/html_quality.go:extract html quality helpers and confidence heuristics — done
 - backend/internal/agents/tts.go:extract kokoro synthesis helpers — done
@@ -35,3 +36,4 @@
 - frontend/src/features/speech-policy/SpeechPolicyWizard.tsx:extract wizard subcomponents and helpers — done
 - scripts/validate-local/validate-local.mjs:extract reusable CLI/runtime/report helpers — done
 - backend/cmd/api/main.go:extract pipeline service bootstrap — done
+- scripts/golden-minute-fixture.mjs:extract fixture constants — done
