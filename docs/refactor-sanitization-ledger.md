@@ -7,6 +7,7 @@
 - backend/internal/agents/tts.go:extract kokoro synthesis helpers — done
 - scripts/validate-local/review-evidence.mjs:extract review command step and artifact builders — done
 - frontend/src/App.tsx:extract trailing utility helpers: done
+- frontend/src/RunConfigDrawer.tsx:extract run configuration control helpers — done
 - frontend/src/features/book-cinema/BookCinemaPanel.tsx:extract reusable upload/import helpers: done
 - frontend/src/features/cinema/PreparedSourceCinemaBase.tsx:extract transport/player subcomponents: done
 - frontend/src/features/settings/SettingsPanel.tsx:extract section components and state helpers — done
@@ -29,6 +30,7 @@
 - frontend/src/features/intake/IntakeWizard.tsx:extract intake decision helpers — done
 - frontend/src/features/revision/RevisionPanel.tsx:extract pure view helpers — done
 - frontend/src/features/teleprompt/telepromptCueTimeline.ts:extract timeline text/math helper cluster — done
+- frontend/src/features/voices/VoiceProfileDashboard.tsx:extract dashboard row and utility helpers — done
 - frontend/src/types.ts:extract speech-policy type cluster — done
 - backend/internal/pipeline/models.go:extract job and voice-profile model cluster — done
 - backend/internal/pipeline/projects.go:extract project speech-policy utility helpers — done

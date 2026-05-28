@@ -1,3 +1,18 @@
+## 2026-05-28 19:27 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/RunConfigDrawer.tsx:extract run configuration control helpers`.
+- [x] Add `frontend/src/features/run-config/RunConfigDrawerHelpers.tsx` and move `RunConfigurationControls` plus inline diagnostics/render helpers.
+- [x] Rewire `RunConfigDrawer.tsx` to consume the helper module.
+- [x] Update `docs/refactor-sanitization-ledger.md` and automation memory.
+- [x] Run `pnpm check`.
+
+## 2026-05-28 19:36 CEST - Codebase Sanitization
+- [x] Select next unrotated oversized hotspot `frontend/src/features/voices/VoiceProfileDashboard.tsx`.
+- [x] Extract `frontend/src/features/voices/VoiceProfileDashboardHelpers.tsx` and move row, stat, and utility helpers.
+- [x] Rewire `VoiceProfileDashboard.tsx` to use helper exports without changing lifecycle/prop wiring.
+- [x] Update `docs/refactor-sanitization-ledger.md` and `memory.md`.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 19:25 CEST - Codebase Sanitization
 - [x] Select next oversized candidate `adapters/markdown/transform.js:extract markdown parsing helpers and citation utilities`.
 - [x] Add `adapters/markdown/transformHelpers.js` and move citation, speech-text, AST-span, and inline-artifact logic.
