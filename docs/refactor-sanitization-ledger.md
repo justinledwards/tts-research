@@ -23,3 +23,5 @@
 - frontend/src/features/revision/RevisionPanel.tsx:extract pure view helpers — done
 - frontend/src/features/teleprompt/telepromptCueTimeline.ts:extract timeline text/math helper cluster — done
 - frontend/src/types.ts:extract speech-policy type cluster — done
+- backend/internal/pipeline/models.go:extract job and voice-profile model cluster — done
+- backend/internal/pipeline/projects.go:extract project speech-policy utility helpers — done

@@ -1,3 +1,22 @@
+## 2026-05-28 15:26 CEST - Codebase Sanitization
+- [x] Select oversized candidate `backend/internal/pipeline/projects.go:extract project speech-policy utility helpers`.
+- [x] Add `backend/internal/pipeline/project_speech_policy_helpers.go`.
+- [x] Remove extracted speech-policy and project-normalization helpers from `backend/internal/pipeline/projects.go`.
+- [x] Keep project service behavior unchanged and preserve call sites.
+- [x] Update `docs/refactor-sanitization-ledger.md` with completed candidate status.
+- [x] Update `docs/refactor-sanitization-ledger.md` and `WORKINGLOG.md` for this run.
+- [x] Run `pnpm check`.
+- [ ] Record validation results and commit focused refactor patch.
+
+## 2026-05-28 15:09 CEST - Codebase Sanitization
+- [x] Select candidate `backend/internal/pipeline/models.go:extract job and voice-profile model cluster`.
+- [x] Add new model split file and move extracted job and voice-profile type clusters.
+- [x] Rewire `models.go` imports and retain package-local types through split module.
+- [x] Update ledger entry for completed candidate state.
+- [x] Run `pnpm check` and capture unrelated failures.
+- [x] Summarize rollback path for this run.
+- [ ] Commit focused refactor patch (skipped: repository commits are blocked by local policy; patch prepared for manual commit).
+
 ## 2026-05-28 15:03 CEST - Codebase Sanitization
 - [x] Select oversized candidate `frontend/src/types.ts:extract speech-policy type cluster`.
 - [x] Create `frontend/src/types/speechPolicyTypes.ts` and move speech-policy types out of `types.ts`.
