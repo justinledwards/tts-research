@@ -70,3 +70,5 @@
 - scripts/readalong-sync-evidence.mjs:extract sync-report helpers — done
 
 - frontend/src/App.tsx:extract voice cloning activity helpers — done
+- frontend/src/App.tsx:extract command palette registration helpers — done
+- frontend/src/features/cinema/PreparedSourceCinemaTransport.tsx:extract transport presentation helpers — done

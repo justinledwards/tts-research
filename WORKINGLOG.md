@@ -1,3 +1,22 @@
+## 2026-05-28 22:02 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/features/cinema/PreparedSourceCinemaTransport.tsx:extract transport presentation helpers`.
+- [x] Add `frontend/src/features/cinema/PreparedSourceCinemaTransportHelpers.tsx` with transport control icon/UI/format helpers.
+- [x] Rewire `frontend/src/features/cinema/PreparedSourceCinemaTransport.tsx` to consume helper exports.
+- [x] Re-export `PreparedSourceCinemaAudioBarsIcon` from `PreparedSourceCinemaTransport.tsx`.
+- [x] Update `docs/refactor-sanitization-ledger.md` with completed candidate.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check` (report failures if unrelated).
+- [x] Commit focused refactor patch.
+
+## 2026-05-28 22:00 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/App.tsx:extract command palette registration helpers`.
+- [x] Add `frontend/src/features/command-palette/commandPaletteHelpers.ts` and move command metadata loading and command entry construction.
+- [x] Rewire `frontend/src/App.tsx` to consume `loadCommandMetadata` and `buildCommandEntries`.
+- [x] Update `docs/refactor-sanitization-ledger.md` with candidate result.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check` (fails due pre-existing `scripts/golden-minute-fixture-helpers.mjs` formatter issue).
+- [ ] Commit focused refactor patch.
+
 ## 2026-05-28 21:50 CEST - Codebase Sanitization
 - [x] Select candidate `frontend/src/features/teleprompt/TelepromptStudio.tsx:extract context panel tab builder`.
 - [x] Add `frontend/src/features/teleprompt/telepromptStudioHelpers.tsx` and move context-tab definitions.
