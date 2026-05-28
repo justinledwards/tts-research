@@ -1,3 +1,9 @@
+## 2026-05-28 19:18 CEST - Codebase Sanitization
+- [x] Extract speech-fluency analysis helper cluster into `scripts/speech-fluency-helpers.mjs`.
+- [x] Rewire `scripts/speech-fluency.mjs` to delegate exports to helper module.
+- [x] Record new candidate status in sanitization ledger.
+- [x] Run `pnpm check`.
+
 ## 2026-05-28 19:17 CEST - Codebase Sanitization
 - [x] Select next highest-value oversized candidate `frontend/src/features/cinema/CinemaTransportBar.tsx:extract transport helpers and popover hook`.
 - [x] Create `frontend/src/features/cinema/utils/cinemaTransportBarHelpers.ts` and extract reusable transport state, clamp, label-id, visibility, and popover-hook helpers.

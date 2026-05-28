@@ -42,3 +42,4 @@
 - frontend/src/VoiceSourceAnalysisPanel.tsx:extract helper components and target-option helpers — done
 - frontend/src/features/dashboard/ProjectDashboard.tsx:extract panel helper components and format utilities — done
 - frontend/src/features/cinema/CinemaTransportBar.tsx:extract transport helpers and display-popover hook — done
+- scripts/speech-fluency.mjs:extract fluency analytics and PCM helper cluster — done
