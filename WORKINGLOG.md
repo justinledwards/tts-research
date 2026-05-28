@@ -1,3 +1,11 @@
+## 2026-05-28 17:43 CEST - Codebase Sanitization
+- [x] Select highest-value unrotated oversized candidate `scripts/e2e-ui-action-matrix.mjs:extract action classification and interaction helpers`.
+- [x] Create `scripts/e2e-ui-action-matrix-helpers.mjs` for interactive-selector, classification, discovery, activation, outcome, and metadata helpers.
+- [x] Rewire `scripts/e2e-ui-action-matrix.mjs` to consume extracted helpers while keeping behavior and payload semantics.
+- [x] Update `docs/refactor-sanitization-ledger.md` with this candidate completion.
+- [x] Run `pnpm check` (fails in unrelated pre-existing script formatting/typecheck issues).
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 17:18 CEST - Codebase Sanitization
 - [x] Select highest-value unrotated oversized candidate `frontend/src/api.ts:extract transcript normalization helpers`.
 - [x] Create `frontend/src/apiNormalizationHelpers.ts` for `normalizeVoiceProfileSource`, `normalizePreparedSource`, and shared transcript field coercion.

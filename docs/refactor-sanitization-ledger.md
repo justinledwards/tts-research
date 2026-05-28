@@ -12,6 +12,7 @@
 - backend/internal/httpapi/router.go:split route registration helpers — done
 - scripts/e2e-book-cinema.mjs:extract reusable e2e command helpers — done
 - scripts/e2e-ui-action-audit.mjs:extract audit helpers and table builders — done
+- scripts/e2e-ui-action-matrix.mjs:extract action classification and interaction helpers — done
 - backend/internal/pipeline/source_preps.go:extract source prep helpers — done
 - backend/internal/pipeline/profile_targets.go:extract target normalization helpers — done
 - backend/internal/pipeline/profile_sources.go:extract audio and candidate scoring helpers — done
