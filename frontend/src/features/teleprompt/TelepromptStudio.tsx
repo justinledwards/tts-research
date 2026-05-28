@@ -1,24 +1,9 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type RefObject,
-} from "react";
-import {
-  buildTeleprompterCue,
-  buildTeleprompterWordCues,
-  splitTeleprompterTokens,
-  type TeleprompterHighlightSettings,
-  type TeleprompterToken,
-  type TeleprompterWordCue,
-} from "../../teleprompter";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { buildTeleprompterCue, type TeleprompterHighlightSettings } from "../../teleprompter";
 import type { HighlightMap, VoiceJob } from "../../types";
 import { Button, Panel, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
 import { ContextPanel, buildContextPanelTabs, type ContextPanelTabId } from "../context-panel";
-import { HighlightRenderer, type HighlightMapV2 } from "../readalong";
+import type { HighlightMapV2 } from "../readalong";
 import { liveStatusMessages, useLiveStatus } from "../accessibility";
 import type { RevisionBlock } from "../revision";
 import { HeaderContextSummary } from "../header";
@@ -72,6 +57,14 @@ import {
   telepromptCueSeekSeconds,
   type TelepromptCueSyncMode,
 } from "./telepromptCueTimeline";
+import {
+  TelepromptContextFact,
+  TelepromptMetric,
+  TelepromptScriptBlock,
+  TelepromptBlockPreview,
+  telepromptCueLiveLabel,
+  cueSyncModeLabel,
+} from "./telepromptStudioComponents";
 import {
   TELEPROMPT_SHORTCUTS,
   adjacentTelepromptBlockId,
@@ -1208,6 +1201,7 @@ export function TelepromptStudio({
           cueSyncMode={cueSyncMode}
           cueSyncStatusLabel={cueSync.statusLabel}
           currentCueText={cueSync.activeCue?.spokenText ?? cue?.currentText ?? null}
+          currentSourceWordId={cueSync.activeCue?.currentSourceWordId ?? null}
           currentWordIndex={cueSync.activeCue?.currentWordIndex ?? null}
           fullscreenActive={nativeFullscreenActive}
           fullscreenAvailability={fullscreenAvailability}
@@ -1229,6 +1223,7 @@ export function TelepromptStudio({
           settingsMemoryEnabled={theatreSettingsMemoryEnabled}
           summary={theatreSummary}
           theatreViewMode={theatreViewMode}
+          wordTimings={cueSync.activeCue?.wordTimings ?? []}
           onBackToPreview={() => {
             handleReturn("preview");
           }}
@@ -1259,244 +1254,4 @@ export function TelepromptStudio({
       )}
     </>
   );
-}
-
-function TelepromptScriptBlock({
-  activeRef,
-  active,
-  block,
-  cueText,
-  currentWordIndex,
-  highContrast,
-  presetClassName,
-  settings,
-  onSelect,
-}: Readonly<{
-  activeRef?: RefObject<HTMLDivElement | null>;
-  active: boolean;
-  block: RevisionBlock;
-  cueText: string | null;
-  currentWordIndex?: number | null;
-  highContrast: boolean;
-  presetClassName: string;
-  settings: TeleprompterHighlightSettings;
-  onSelect: () => void;
-}>) {
-  const spokenText = block.spokenText || block.text;
-  const shouldRenderCue =
-    active &&
-    ((typeof currentWordIndex === "number" && currentWordIndex >= 0) ||
-      Boolean(cueText && normalizeCueText(cueText) === normalizeCueText(spokenText)));
-  return (
-    <div
-      className={cx(
-        "rounded-lg border p-3 transition vs-border",
-        telepromptScriptBlockClassName({ active, highContrast }),
-      )}
-      data-testid={`teleprompt-block-${block.id}`}
-      ref={activeRef}
-    >
-      <button
-        className="mb-3 flex min-h-11 w-full items-center justify-between gap-3 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-left text-sm font-semibold vs-border"
-        data-testid={`ui-action-teleprompt-cue-${String(block.index)}`}
-        data-ui-noop-reason={active ? "Cue is already selected." : undefined}
-        onClick={onSelect}
-        type="button"
-      >
-        <span>
-          Cue {block.index.toString()}: {block.label}
-        </span>
-        {active ? <StatusChip tone="success">Selected</StatusChip> : null}
-      </button>
-      <p className={cx("whitespace-pre-wrap", presetClassName)}>
-        {shouldRenderCue ? (
-          <TelepromptCueWords
-            currentWordIndex={currentWordIndex}
-            settings={settings}
-            text={spokenText}
-          />
-        ) : (
-          spokenText || "No spoken text is available for this cue."
-        )}
-      </p>
-    </div>
-  );
-}
-
-function telepromptScriptBlockClassName({
-  active,
-  highContrast,
-}: Readonly<{ active: boolean; highContrast: boolean }>): string {
-  if (active && highContrast) {
-    return "border-zinc-100 bg-zinc-950 text-white ring-2 ring-orange-300";
-  }
-  if (active) {
-    return "border-orange-300 bg-orange-500/10 ring-1 ring-orange-300";
-  }
-  if (highContrast) {
-    return "border-zinc-100 bg-zinc-950 text-white";
-  }
-  return "bg-[var(--vs-surface)]";
-}
-
-function TelepromptCueWords({
-  currentWordIndex,
-  settings,
-  text,
-}: Readonly<{
-  currentWordIndex?: number | null;
-  settings: TeleprompterHighlightSettings;
-  text: string;
-}>) {
-  const tokens = splitTeleprompterTokens(text);
-  const cues =
-    typeof currentWordIndex === "number" && currentWordIndex >= 0
-      ? buildTelepromptWordCuesFromIndex(tokens, currentWordIndex, settings)
-      : buildTeleprompterWordCues(
-          text,
-          settings.leadMs,
-          estimateTelepromptDurationMs(countTelepromptWords(text)),
-          settings,
-        );
-  const cueByIndex = new Map(cues.map((cue) => [cue.wordIndex, cue]));
-  return (
-    <HighlightRenderer
-      activeWordIndex={currentWordIndex}
-      classNameForWord={({ token }) => {
-        const cue = cueByIndex.get(token.wordIndex);
-        return `teleprompter-word teleprompter-word--${cue?.state ?? "idle"} rounded px-1 py-0.5`;
-      }}
-      dataEffect="classic"
-      mode="word"
-      surface="teleprompt"
-      text={text}
-      wordStyle={({ token }) => {
-        const cue = cueByIndex.get(token.wordIndex);
-        return {
-          "--teleprompter-accent": "#f97316",
-          "--teleprompter-intensity": String(cue?.intensity ?? 0),
-        } as CSSProperties;
-      }}
-    />
-  );
-}
-
-function buildTelepromptWordCuesFromIndex(
-  tokens: readonly TeleprompterToken[],
-  currentWordIndex: number,
-  settings: TeleprompterHighlightSettings,
-): TeleprompterWordCue[] {
-  const wordTokens = tokens.filter((token) => token.kind === "word");
-  return wordTokens.map((token) => {
-    const wordIndex = token.wordIndex ?? 0;
-    if (wordIndex === currentWordIndex) {
-      return {
-        endMs: 1,
-        intensity: settings.activeIntensity,
-        progress: 0.5,
-        startMs: 0,
-        state: "active",
-        wordIndex,
-      };
-    }
-    if (wordIndex < currentWordIndex) {
-      return {
-        endMs: 1,
-        intensity: settings.spokenIntensity,
-        progress: 1,
-        startMs: 0,
-        state: "spoken",
-        wordIndex,
-      };
-    }
-    if (wordIndex <= currentWordIndex + 2) {
-      return {
-        endMs: 1,
-        intensity: settings.upcomingIntensity,
-        progress: 0,
-        startMs: 0,
-        state: "upcoming",
-        wordIndex,
-      };
-    }
-    return {
-      endMs: 1,
-      intensity: 0,
-      progress: 0,
-      startMs: 0,
-      state: "idle",
-      wordIndex,
-    };
-  });
-}
-
-function TelepromptBlockPreview({
-  block,
-  label,
-  words,
-}: Readonly<{ block: RevisionBlock | null; label: string; words?: number }>) {
-  return (
-    <Panel className="grid gap-2 p-3" variant="surface">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">{label}</p>
-        {block ? (
-          <StatusChip tone="neutral">
-            {words?.toLocaleString() ?? countTelepromptWords(block.spokenText)} words
-          </StatusChip>
-        ) : null}
-      </div>
-      <p className="text-sm font-semibold">{block ? block.label : "No block"}</p>
-      <p className="line-clamp-4 text-xs leading-5 vs-muted">
-        {block ? block.spokenText || block.text : "This edge of the script is empty."}
-      </p>
-    </Panel>
-  );
-}
-
-function TelepromptMetric({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
-      <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] vs-muted">{label}</dt>
-      <dd className="mt-1 text-base font-semibold">{value}</dd>
-    </div>
-  );
-}
-
-function TelepromptContextFact({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="grid min-w-0 grid-cols-2 gap-2">
-      <dt className="vs-muted">{label}</dt>
-      <dd className="truncate font-semibold text-[var(--vs-text)]" title={value}>
-        {value}
-      </dd>
-    </div>
-  );
-}
-
-function cueSyncModeLabel(mode: TelepromptCueSyncMode): string {
-  switch (mode) {
-    case "audio-follow": {
-      return "Audio-follow cue sync";
-    }
-    case "manual": {
-      return "Manual cue sync";
-    }
-    case "recording-rehearsal": {
-      return "Recording rehearsal cue sync";
-    }
-    case "review-playback": {
-      return "Review playback cue sync";
-    }
-  }
-}
-
-function telepromptCueLiveLabel(block: RevisionBlock | null, totalBlocks: number): string {
-  if (!block) {
-    return "the selected cue";
-  }
-  return `${block.index.toString()} of ${totalBlocks.toString()}`;
-}
-
-function normalizeCueText(value: string): string {
-  return value.trim().replaceAll(/\s+/g, " ");
 }

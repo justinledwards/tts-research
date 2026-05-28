@@ -36,6 +36,14 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Run `pnpm check`.
 - [x] Commit focused refactor patch for this run.
 
+## 2026-05-28 13:37 CEST - Codebase Sanitization
+- [x] Select next hotspot candidate `frontend/src/features/teleprompt/TelepromptStudio.tsx:extract studio view helpers`.
+- [x] Extract reusable studio display helpers to `frontend/src/features/teleprompt/telepromptStudioComponents.tsx`.
+- [x] Rewire `TelepromptStudio.tsx` to consume extracted helpers and remove local duplicate implementations.
+- [x] Update refactor ledger and automation memory for selected candidate.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 13:11 CEST - Codebase Sanitization
 - [x] Select next oversized test file candidate `backend/internal/httpapi/router_test.go:extract reusable endpoint test helpers`.
 - [x] Create `backend/internal/httpapi/router_test_helpers_test.go` and move shared helper/type cluster there.
