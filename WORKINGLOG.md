@@ -1,3 +1,19 @@
+## 2026-05-28 20:01 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/features/readalong/wordTimeline.ts:extract segment match helpers`.
+- [x] Add `frontend/src/features/readalong/wordTimelineHelpers.ts` with private ledger, cursor, and normalization helpers.
+- [x] Rewire `frontend/src/features/readalong/wordTimeline.ts` to delegate helper calls and keep exports unchanged.
+- [x] Update `docs/refactor-sanitization-ledger.md` and automation `memory.md`.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
+## 2026-05-28 20:15 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/features/preview/GlobalPreviewPlayer.tsx:extract preview UI helpers and playback hooks`.
+- [x] Create `frontend/src/features/preview/GlobalPreviewPlayerHelpers.tsx` and move waveform/rendering, playback, and comparison helpers.
+- [x] Rewire `GlobalPreviewPlayer.tsx` to consume extracted helper exports and keep orchestration behavior unchanged.
+- [x] Update `docs/refactor-sanitization-ledger.md` and automation `memory.md` with this focused extraction.
+- [x] Run `pnpm check`.
+- [ ] Commit focused refactor patch.
+
 ## 2026-05-28 19:45 CEST - Codebase Sanitization
 - [x] Select candidate `frontend/src/features/ui-audit/actionMetadata.ts:extract static action catalog helpers`.
 - [x] Create `frontend/src/features/ui-audit/actionMetadataCatalog.ts` and move static action metadata entries.

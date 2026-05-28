@@ -49,5 +49,7 @@
 - adapters/markdown/transform.js:extract markdown parsing helper and citation utilities — done
 - adapters/html/emit_ir.js:extract traversal and metadata helper cluster — done
 - frontend/src/features/ui-audit/actionMetadata.ts:extract static catalog data and owner/classification helpers — done
+- frontend/src/features/preview/GlobalPreviewPlayer.tsx:extract preview player controls and helpers — done
+- frontend/src/features/readalong/wordTimeline.ts:extract segment helper cluster — done
 
 - frontend/src/features/readalong/readAlongInvariant.ts:extract invariant helper cluster — done
