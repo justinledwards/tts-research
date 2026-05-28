@@ -1,3 +1,11 @@
+## 2026-05-28 19:25 CEST - Codebase Sanitization
+- [x] Select next oversized candidate `adapters/markdown/transform.js:extract markdown parsing helpers and citation utilities`.
+- [x] Add `adapters/markdown/transformHelpers.js` and move citation, speech-text, AST-span, and inline-artifact logic.
+- [x] Rewire `adapters/markdown/transform.js` to consume helper exports while preserving node transformation outputs.
+- [x] Update `docs/refactor-sanitization-ledger.md`, automation memory, and working-log state.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 19:18 CEST - Codebase Sanitization
 - [x] Extract speech-fluency analysis helper cluster into `scripts/speech-fluency-helpers.mjs`.
 - [x] Rewire `scripts/speech-fluency.mjs` to delegate exports to helper module.
