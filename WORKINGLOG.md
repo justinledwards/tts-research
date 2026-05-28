@@ -1,3 +1,20 @@
+## 2026-05-28 20:45 CEST - Codebase Sanitization
+- [x] Select candidate `backend/internal/policy/evaluator.go:extract pure inline and media helper cluster`.
+- [x] Add `backend/internal/policy/evaluator_helpers.go` and move policy helper functions/patterns.
+- [x] Rewire `backend/internal/policy/evaluator.go` to delegate helper operations without changing decision output.
+- [x] Update `docs/refactor-sanitization-ledger.md` with completed candidate state.
+- [x] Run `pnpm check`.
+- [ ] Commit focused refactor patch.
+
+## 2026-05-28 20:54 CEST - Codebase Sanitization
+- [x] Select candidate `scripts/e2e-accessibility-audit.mjs:extract accessibility audit helpers`.
+- [x] Extract shared audit/report helpers into `scripts/e2e-accessibility-helpers.mjs`.
+- [x] Rewire `scripts/e2e-accessibility-audit.mjs` to use helper module.
+- [x] Update `docs/refactor-sanitization-ledger.md`.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check` (fails on unrelated `scripts/golden-minute-fixture-helpers.mjs` formatter issue).
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 20:13 CEST - Codebase Sanitization
 - [x] Select candidate `frontend/src/features/teleprompt/telepromptTheatreCueContent.tsx:extract cue parsing/rendering helpers`.
 - [x] Add `frontend/src/features/teleprompt/telepromptTheatreCueContentHelpers.ts` and extract cue paragraph, section, crawl, and rendering helpers.

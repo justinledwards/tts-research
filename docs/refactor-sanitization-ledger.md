@@ -1,6 +1,7 @@
 # Refactor Sanitization Ledger
 
 ## Cycle 2026-05-28 - Codebase Sanitization
+- backend/internal/policy/evaluator.go:extract pure inline and media helper cluster — done
 - frontend/src/features/teleprompt/telepromptTheatreCueContent.tsx:extract cue parsing/rendering helpers — done
 - backend/internal/pipeline/project_bundles.go:extract bundle helper cluster — done
 - backend/internal/pipeline/research_modules.go:extract configuration helper cluster — done
@@ -56,3 +57,4 @@
 
 - frontend/src/features/readalong/readAlongInvariant.ts:extract invariant helper cluster — done
 - frontend/src/features/book-cinema/model.ts:extract timing cue resolution helpers — done
+- scripts/e2e-accessibility-audit.mjs:extract accessibility scan/report helpers — done
