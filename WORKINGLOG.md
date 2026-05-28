@@ -1,3 +1,12 @@
+## 2026-05-28 21:39 CEST - Codebase Sanitization
+- [x] Select candidate `scripts/generate-contract-types.mjs:extract generated contract templates`.
+- [x] Add `scripts/generate-contract-types-templates.mjs` and move generated contract schema/template payloads.
+- [x] Rewire `scripts/generate-contract-types.mjs` to consume template helpers and keep orchestration behavior unchanged.
+- [x] Update `docs/refactor-sanitization-ledger.md`.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check` (fails on pre-existing `scripts/golden-minute-fixture-helpers.mjs` formatter issue).
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 21:35 CEST - Codebase Sanitization
 - [x] Select candidate `frontend/src/App.tsx:extract voice cloning activity helpers`.
 - [x] Add `frontend/src/appVoiceCloningHelpers.ts` and move voice-cloning activity helper cluster.
