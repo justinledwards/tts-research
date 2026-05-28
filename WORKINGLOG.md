@@ -6,7 +6,7 @@
 - [x] Update `docs/refactor-sanitization-ledger.md` with completed candidate status.
 - [x] Update `docs/refactor-sanitization-ledger.md` and `WORKINGLOG.md` for this run.
 - [x] Run `pnpm check`.
-- [ ] Record validation results and commit focused refactor patch.
+- [x] Record validation results and commit focused refactor patch (`aa3c63b`).
 
 ## 2026-05-28 15:09 CEST - Codebase Sanitization
 - [x] Select candidate `backend/internal/pipeline/models.go:extract job and voice-profile model cluster`.
