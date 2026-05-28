@@ -393,3 +393,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] run targeted checks and `pnpm check`
 - [x] update refactor ledger and memory entries
 - [x] commit focused refactor
+
+## 2026-05-28 15:30 CEST - Codebase Sanitization
+- [x] Select highest-priority oversized hotspot with no current-cycle refactor entry.
+- [x] Extract `scripts/validate-local/review-evidence.mjs` evidence-collection and coverage helpers into `scripts/validate-local/review-evidence-helpers.mjs`.
+- [x] Rewire `scripts/validate-local/review-evidence.mjs` to consume helpers without changing signatures.
+- [x] Run `pnpm check` (format passed; lint/typecheck still fail on pre-existing items in `scripts/e2e-ui-actions-guard.mjs`, `scripts/validate-local/validate-local.mjs`, and teleprompt sourceWordId typing drift).
+- [x] Update sanitization ledger, automation memory, and commit patch.

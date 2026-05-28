@@ -25,3 +25,4 @@
 - frontend/src/types.ts:extract speech-policy type cluster — done
 - backend/internal/pipeline/models.go:extract job and voice-profile model cluster — done
 - backend/internal/pipeline/projects.go:extract project speech-policy utility helpers — done
+- scripts/validate-local/review-evidence.mjs:extract review evidence collection and coverage helpers — done
