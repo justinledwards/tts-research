@@ -61,3 +61,4 @@
 - frontend/src/features/readalong/readAlongInvariant.ts:extract invariant helper cluster — done
 - frontend/src/features/book-cinema/model.ts:extract timing cue resolution helpers — done
 - scripts/e2e-accessibility-audit.mjs:extract accessibility scan/report helpers — done
+- frontend/src/features/book-cinema/model.test.ts:extract assertion fixtures and result builders — done

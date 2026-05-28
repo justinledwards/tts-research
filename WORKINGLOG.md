@@ -686,3 +686,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] update ledger with candidate completion status
 - [x] run `pnpm check`
 - [x] commit focused refactor
+
+## 2026-05-28 21:22 CEST - Codebase Sanitization
+- [x] select oversized test hotspot and candidate key
+- [x] extract fixture and builder helpers into a feature-local module
+- [x] update test imports and call sites
+- [x] run required checks (pnpm check)
+- [x] update refactor ledger and automation memory
+- [x] create focused commit

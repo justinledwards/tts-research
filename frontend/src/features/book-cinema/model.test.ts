@@ -1,26 +1,37 @@
 import { describe, expect, it } from "vitest";
 import {
-  bookScopeKey,
-  bookScopeOptions,
-  bookScopeText,
-  bookSourceName,
   BOOK_SOURCE_ACCEPT,
   bookCinemaKeyboardCommandForKey,
   bookCinemaLiveAnnouncement,
   bookCinemaPolicyNotes,
-  isSupportedBookSourceBatch,
+  bookScopeKey,
+  bookScopeOptions,
+  bookScopeText,
+  bookSourceName,
+  estimateBookWordsPerPage,
   isSupportedBookSource,
+  isSupportedBookSourceBatch,
   nextBookCinemaPlaybackRate,
   normalizeBookScopeForBook,
   normalizeReaderAccessibilitySettings,
   paginateBookSpans,
   resolveBookActiveWordIndex,
-  resolveDisplayedBookActiveWordIndex,
+  resolveBookTimingCueWordIndexes,
+  resolveBookTimingMapV2WordIndexes,
   resolveDefaultBookScope,
+  resolveDisplayedBookActiveWordIndex,
   shouldIgnoreBookCinemaKeyboardTarget,
   visibleBookSpans,
 } from "./model";
-import type { BookSource, VoiceJob } from "../../types";
+import {
+  highlightCue,
+  highlightMapV2,
+  indexedSpans,
+  makeBookSource,
+  makePDFBookSource,
+  makeVoiceJob,
+  v2Entry,
+} from "./modelTestHelpers";
 
 describe("Book Cinema helpers", () => {
   it("maps playback progress onto book word spans without changing text color state", () => {
@@ -55,6 +66,202 @@ describe("Book Cinema helpers", () => {
       }),
     ).toBe(12);
     expect(resolveDisplayedBookActiveWordIndex(4, null)).toBe(4);
+  });
+
+  it("normalizes narration-token timing cues to source word span indexes", () => {
+    const spans = indexedSpans("one two three four five", 40);
+    const cue = highlightCue({
+      activeWordIndex: 2,
+      phraseWordEnd: 3,
+      phraseWordStart: 1,
+      tokenIndex: 2,
+      tokenText: "three",
+    });
+
+    expect(
+      resolveBookTimingCueWordIndexes({
+        cue,
+        fallbackActiveWordIndex: -1,
+        scopedSpans: spans,
+      }),
+    ).toEqual({
+      activeWordIndex: 42,
+      phraseWordEnd: 43,
+      phraseWordStart: 41,
+    });
+  });
+
+  it("keeps legacy timing cues that already point at source word span indexes", () => {
+    const spans = indexedSpans("one two three four five", 40);
+    const cue = highlightCue({
+      activeWordIndex: 42,
+      phraseWordEnd: 43,
+      phraseWordStart: 41,
+      tokenText: "three",
+    });
+
+    expect(
+      resolveBookTimingCueWordIndexes({
+        cue,
+        fallbackActiveWordIndex: -1,
+        scopedSpans: spans,
+      }),
+    ).toEqual({
+      activeWordIndex: 42,
+      phraseWordEnd: 43,
+      phraseWordStart: 41,
+    });
+  });
+
+  it("resolves raw v2 timing entries to source word span indexes across blocks", () => {
+    const spans = indexedSpans("Heading Intro Alpha beta gamma delta", 80);
+    const map = highlightMapV2([
+      v2Entry({
+        audioEndMs: 800,
+        audioStartMs: 0,
+        fragmentIndex: 0,
+        level: "phrase",
+        spokenText: "Heading Intro",
+      }),
+      v2Entry({
+        audioEndMs: 2800,
+        audioStartMs: 800,
+        fragmentIndex: 1,
+        level: "phrase",
+        spokenText: "Alpha beta gamma delta",
+      }),
+      v2Entry({
+        audioEndMs: 1800,
+        audioStartMs: 1400,
+        fragmentIndex: 1,
+        level: "word",
+        readingPosition: { activeWordIndex: 83, textQuote: "beta" },
+        spokenText: "beta",
+        tokenIndex: 3,
+      }),
+      v2Entry({
+        audioEndMs: 2200,
+        audioStartMs: 1800,
+        fragmentIndex: 1,
+        level: "word",
+        readingPosition: { activeWordIndex: 84, textQuote: "gamma" },
+        spokenText: "gamma",
+        tokenIndex: 4,
+      }),
+    ]);
+
+    expect(
+      resolveBookTimingMapV2WordIndexes({
+        map,
+        playbackCursorSec: 1.9,
+        scopedSpans: spans,
+      }),
+    ).toEqual({
+      activeWordIndex: 84,
+      phraseWordEnd: 84,
+      phraseWordStart: 83,
+    });
+  });
+
+  it("trusts v2 source identity across blocks even when spoken text is transformed", () => {
+    const spans = indexedSpans("Heading Intro Alpha beta gamma delta", 80);
+    const map = highlightMapV2([
+      v2Entry({
+        audioEndMs: 800,
+        audioStartMs: 0,
+        fragmentIndex: 0,
+        level: "phrase",
+        spokenText: "Heading Intro",
+      }),
+      v2Entry({
+        audioEndMs: 2800,
+        audioStartMs: 800,
+        fragmentIndex: 1,
+        level: "phrase",
+        spokenText: "Alpha beta gamma delta",
+      }),
+      v2Entry({
+        audioEndMs: 1800,
+        audioStartMs: 1400,
+        fragmentIndex: 1,
+        level: "word",
+        readingPosition: {
+          activeWordIndex: 83,
+          bookSourceId: "book-1",
+          scopeKey: "book",
+          textQuote: "beta",
+        },
+        sourceWordId: "book-1:book:word:83",
+        sourceWordIndex: 83,
+        spokenText: "bee ta",
+        tokenIndex: 3,
+      }),
+      v2Entry({
+        audioEndMs: 2200,
+        audioStartMs: 1800,
+        fragmentIndex: 1,
+        level: "word",
+        readingPosition: {
+          activeWordIndex: 84,
+          bookSourceId: "book-1",
+          scopeKey: "book",
+          textQuote: "gamma",
+        },
+        sourceWordId: "book-1:book:word:84",
+        sourceWordIndex: 84,
+        spokenText: "transformed gamma",
+        tokenIndex: 4,
+      }),
+    ]);
+
+    expect(
+      resolveBookTimingMapV2WordIndexes({
+        map,
+        playbackCursorSec: 1.9,
+        scopedSpans: spans,
+      }),
+    ).toEqual({
+      activeWordIndex: 84,
+      phraseWordEnd: 84,
+      phraseWordStart: 83,
+    });
+  });
+
+  it("maps v2 token indexes as scoped narration ordinals before accepting source indexes", () => {
+    const spans = indexedSpans("one two three four", 40);
+    const ordinalMap = highlightMapV2([
+      v2Entry({
+        audioEndMs: 1000,
+        audioStartMs: 0,
+        level: "word",
+        spokenText: "three",
+        tokenIndex: 2,
+      }),
+    ]);
+    const sourceIndexMap = highlightMapV2([
+      v2Entry({
+        audioEndMs: 1000,
+        audioStartMs: 0,
+        level: "word",
+        spokenText: "three",
+        tokenIndex: 42,
+      }),
+    ]);
+
+    expect(
+      resolveBookTimingMapV2WordIndexes({
+        map: ordinalMap,
+        playbackCursorSec: 0.5,
+        scopedSpans: spans,
+      })?.activeWordIndex,
+    ).toBe(42);
+    expect(
+      resolveBookTimingMapV2WordIndexes({
+        map: sourceIndexMap,
+        playbackCursorSec: 0.5,
+        scopedSpans: spans,
+      })?.activeWordIndex,
+    ).toBe(42);
   });
 
   it("maps keyboard-first playback shortcuts without depending on focus text", () => {
@@ -387,6 +594,27 @@ describe("Book Cinema helpers", () => {
     expect(pagination.pages[0]?.spans.at(-1)?.index).toBe(53);
   });
 
+  it("estimates measured reader page capacity above the old sparse cap", () => {
+    const desktopCapacity = estimateBookWordsPerPage({
+      lineSpacing: "compact",
+      pagesPerSpread: 2,
+      textScale: "compact",
+      viewportHeight: 960,
+      viewportWidth: 2048,
+    });
+    const mobileCapacity = estimateBookWordsPerPage({
+      lineSpacing: "compact",
+      pagesPerSpread: 1,
+      textScale: "compact",
+      viewportHeight: 720,
+      viewportWidth: 390,
+    });
+
+    expect(desktopCapacity).toBeGreaterThan(128);
+    expect(desktopCapacity).toBeGreaterThan(mobileCapacity);
+    expect(desktopCapacity).toBeLessThanOrEqual(320);
+  });
+
   it("falls back to source filename when metadata has no title", () => {
     expect(bookSourceName({ ...makeBookSource("hello"), title: "" })).toBe("demo.epub");
   });
@@ -420,111 +648,3 @@ describe("Book Cinema helpers", () => {
     expect(isSupportedBookSource(new File([""], "notes.txt"))).toBe(false);
   });
 });
-
-function makeBookSource(text: string): BookSource {
-  const words = text.split(/\s+/).filter(Boolean);
-  let offset = 0;
-  return {
-    id: "book-1",
-    projectId: "default",
-    status: "ready",
-    kind: "epub",
-    sourceFile: "demo.epub",
-    sourceBytes: 128,
-    title: "Demo Book",
-    text,
-    wordCount: words.length,
-    pageCount: 0,
-    chapterCount: 1,
-    chapters: [{ index: 1, title: "Chapter", text, wordCount: words.length }],
-    wordSpans: words.map((word, index) => {
-      const startOffset = offset;
-      offset += word.length + 1;
-      return {
-        index,
-        text: word,
-        chapter: 1,
-        startOffset,
-        endOffset: startOffset + word.length,
-      };
-    }),
-    createdAt: "2026-05-15T00:00:00Z",
-    updatedAt: "2026-05-15T00:00:00Z",
-  };
-}
-
-function makePDFBookSource(): BookSource {
-  const pages = [
-    { index: 1, label: "Page 1", text: "Page one text", wordCount: 3 },
-    { index: 2, label: "Page 2", text: "Page two text", wordCount: 3 },
-    { index: 3, label: "Page 3", text: "Page three text", wordCount: 3 },
-  ];
-  const text = pages.map((page) => page.text).join("\n\n");
-  let offset = 0;
-  const wordSpans = pages.flatMap((page) =>
-    page.text.split(/\s+/).map((word, localIndex) => {
-      const startOffset = offset;
-      offset += word.length + 1;
-      return {
-        index: (page.index - 1) * 3 + localIndex,
-        text: word,
-        pageIndex: page.index,
-        startOffset,
-        endOffset: startOffset + word.length,
-      };
-    }),
-  );
-  return {
-    id: "pdf-1",
-    projectId: "default",
-    status: "ready",
-    kind: "pdf",
-    sourceFile: "demo.pdf",
-    sourceBytes: 128,
-    title: "Demo PDF",
-    text,
-    wordCount: wordSpans.length,
-    pageCount: pages.length,
-    chapterCount: 0,
-    pages,
-    wordSpans,
-    createdAt: "2026-05-15T00:00:00Z",
-    updatedAt: "2026-05-15T00:00:00Z",
-  };
-}
-
-function makeVoiceJob(inputText: string, durationMs: number): VoiceJob {
-  return {
-    id: "job-1",
-    projectId: "default",
-    status: "completed",
-    stages: { optimization: "done", synthesis: "done", checker: "done" },
-    inputText,
-    optimizedText: inputText,
-    optimizer: "test",
-    audioUrl: "/audio.wav",
-    contentType: "audio/wav",
-    durationMs,
-    provider: "mock",
-    voice: "default",
-    retries: {
-      maxRetries: 1,
-      attempts: 1,
-      segmentAttempts: 1,
-      currentSegment: 1,
-      totalSegments: 1,
-    },
-    voiceCheck: {
-      complete: true,
-      transcript: inputText,
-      needsResume: false,
-      reason: "ok",
-      provider: "disabled",
-      similarity: 1,
-    },
-    progress: { message: "done", detail: "", activeStage: "completed" },
-    createdAt: "2026-05-15T00:00:00Z",
-    updatedAt: "2026-05-15T00:00:00Z",
-    completedAt: "2026-05-15T00:00:00Z",
-  };
-}
