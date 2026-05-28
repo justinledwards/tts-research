@@ -7,6 +7,14 @@
 - [ ] Add/adjust unit + integration tests for canonical sync path and resets
 - [ ] Run focused checks and summarize gaps
 
+## 2026-05-28 11:02 CEST - Codebase Sanitization
+- [x] Select next hotspot candidate `backend/internal/pipeline/profile_targets.go:extract target normalization helpers`.
+- [x] Move shared target resolution helpers into `backend/internal/pipeline/profile_target_helpers.go`.
+- [x] Leave orchestrator logic in `backend/internal/pipeline/profile_targets.go` unchanged.
+- [x] Update refactor ledger and handoff metadata for candidate completion.
+- [x] Run `pnpm check` and report remaining unrelated failures.
+- [x] Commit focused refactor patch.
+
 # Working Log
 
 This log is intentionally concise. It records branch-level progress and open follow-ups without
