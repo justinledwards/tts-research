@@ -12,6 +12,15 @@
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
 
+## 2026-05-28 08:02 CEST - Codebase Sanitization
+- [x] Select next candidate `scripts/e2e-book-cinema.mjs:extract reusable e2e command helpers`.
+- [x] Add `scripts/e2e-book-cinema-commands.mjs` to house command/API helper logic.
+- [x] Replace in-script command helper implementations with destructured helper references.
+- [x] Update rotation ledger with candidate state and next target.
+- [x] Run `pnpm check` and capture remaining known failures.
+- [x] Finish helper extraction polish by removing remaining dynamic `fs` imports.
+- [ ] Resolve unrelated pre-existing lint/test failures noted during handoff checks.
+
 ## 2026-05-28 07:03 CEST - Codebase Sanitization
 - [x] Select next candidate `scripts/e2e-ui-action-audit.mjs:extract provider profile/config helpers`
 - [x] Extract reusable provider profile and audit constants into `scripts/e2e-ui-action-audit-config.mjs`
@@ -128,6 +137,13 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add regression coverage
 - [x] Run targeted and project checks
 - [x] Validate rendered reader and theatre views
+
+## 2026-05-28 09:02 CEST - Codebase Sanitization
+- [x] Extract `backend/internal/httpapi/router.go` `voice-jobs` route registrations into `backend/internal/httpapi/voice_job_routes.go`
+- [x] Register extracted helper from `NewRouter`
+- [x] Update sanitization ledger candidate status
+- [x] Run `pnpm check`
+- [ ] Pick the next oversized-file candidate for the next cycle
 
 ## 2026-05-27 14:06 CEST - Work Log and PR Refresh
 - [x] Condense redundant historical checklist entries into a branch summary
