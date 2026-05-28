@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildTeleprompterCue, type TeleprompterHighlightSettings } from "../../teleprompter";
 import type { HighlightMap, VoiceJob } from "../../types";
 import { Button, Panel, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
-import { ContextPanel, buildContextPanelTabs, type ContextPanelTabId } from "../context-panel";
+import { ContextPanel, type ContextPanelTabId } from "../context-panel";
 import type { HighlightMapV2 } from "../readalong";
 import { liveStatusMessages, useLiveStatus } from "../accessibility";
 import type { RevisionBlock } from "../revision";
@@ -58,15 +58,14 @@ import {
   type TelepromptCueSyncMode,
 } from "./telepromptCueTimeline";
 import {
-  TelepromptContextFact,
   TelepromptMetric,
   TelepromptScriptBlock,
   TelepromptBlockPreview,
   telepromptCueLiveLabel,
   cueSyncModeLabel,
 } from "./telepromptStudioComponents";
+import { buildTelepromptContextTabs } from "./telepromptStudioHelpers";
 import {
-  TELEPROMPT_SHORTCUTS,
   adjacentTelepromptBlockId,
   countTelepromptWords,
   estimateTelepromptDurationMs,
@@ -757,102 +756,21 @@ export function TelepromptStudio({
     updateTheatreSettings,
   ]);
 
-  const contextTabs = buildContextPanelTabs(
-    [
-      {
-        children: (
-          <dl className="grid gap-2 text-xs">
-            <TelepromptContextFact label="Source" value={sourceLabel} />
-            <TelepromptContextFact label="Scope" value={scopeLabel} />
-            <TelepromptContextFact label="Block" value={activeBlock?.label ?? "No active block"} />
-          </dl>
-        ),
-        detail: sourceMeta,
-        id: "teleprompt-source-overview",
-        kind: "source-provenance",
-        tabId: "overview",
-        title: "Teleprompt source",
-      },
-      {
-        children: (
-          <p className="text-xs leading-5 vs-muted">
-            Back to Review and Back to Preview preserve this source, block, policy, voice, and
-            script scroll position.
-          </p>
-        ),
-        detail: `Current return target: ${returnTarget}`,
-        id: "teleprompt-return-review",
-        kind: "narration-block-status",
-        tabId: "review",
-        title: "Return context",
-      },
-      {
-        children: (
-          <dl className="grid gap-2 text-xs">
-            <TelepromptContextFact label="Policy" value={policyProfile} />
-            <TelepromptContextFact label="Voice" value={voiceProfile} />
-          </dl>
-        ),
-        detail: `${policyProfile} - ${voiceProfile}`,
-        id: "teleprompt-policy",
-        kind: "speech-policy",
-        tabId: "policy",
-        title: "Speech policy",
-      },
-      {
-        children: (
-          <dl className="grid gap-2 text-xs">
-            <TelepromptContextFact
-              label="Audio cue"
-              value={
-                cue
-                  ? `Segment ${String(cue.segmentIndex + 1)} of ${String(cue.segmentCount)}`
-                  : "Waiting for generated audio"
-              }
-            />
-            <TelepromptContextFact
-              label="Playback"
-              value={playbackControls.isAvailable ? playbackStatusLabel : "Not generated"}
-            />
-            <TelepromptContextFact label="Cue sync" value={cueSync.statusLabel} />
-            <TelepromptContextFact
-              label="Cue timing"
-              value={
-                cueSync.activeCue
-                  ? `${cueSync.activeCue.timingSource} / word ${cueSync.activeCue.currentWordIndex.toString()}`
-                  : "No active timing cue"
-              }
-            />
-          </dl>
-        ),
-        detail: cueSync.detail,
-        id: "teleprompt-diagnostics",
-        kind: "generated-audio-health",
-        tabId: "diagnostics",
-        title: "Generated audio health",
-      },
-      {
-        children: (
-          <div className="grid gap-2 text-xs">
-            {TELEPROMPT_SHORTCUTS.map((shortcut) => (
-              <div className="flex items-center justify-between gap-3" key={shortcut.action}>
-                <span className="font-semibold">{shortcut.label}</span>
-                <kbd className="rounded border bg-[var(--vs-raised)] px-2 py-1 text-[0.68rem] vs-border">
-                  {shortcut.key}
-                </kbd>
-              </div>
-            ))}
-          </div>
-        ),
-        detail: "Keyboard operation",
-        id: "teleprompt-history",
-        kind: "wayfinding",
-        tabId: "history",
-        title: "Keyboard shortcuts",
-      },
-    ],
-    { allowedSurfaces: ["Teleprompt"], owner: "teleprompt" },
-  );
+  const contextTabs = buildTelepromptContextTabs({
+    activeBlock,
+    cueSegmentCount: cue?.segmentCount ?? null,
+    cueSegmentIndex: cue?.segmentIndex ?? null,
+    cueSync,
+    cueSyncStatusLabel: cueSync.statusLabel,
+    playbackAvailable: playbackControls.isAvailable,
+    playbackStatusLabel,
+    policyProfile,
+    returnTarget,
+    scopeLabel,
+    sourceLabel,
+    sourceMeta,
+    voiceProfile,
+  });
 
   return (
     <>

@@ -33,6 +33,7 @@
 - frontend/src/features/teleprompt/TelepromptStudio.tsx:extract studio view helpers — done
 - frontend/src/WorkspaceDrawer.tsx:extract workspace drawer helper components — done
 - frontend/src/features/teleprompt/TelepromptTheatre.tsx:extract cue rendering and parsing helpers — done
+- frontend/src/features/teleprompt/TelepromptStudio.tsx:extract context panel tab builder — done
 - frontend/src/features/intake/IntakeWizard.tsx:extract intake decision helpers — done
 - scripts/validate-local/validate-final-ux-gates-helpers.mjs:extract final UX constants and artifact map — done
 - frontend/src/features/revision/RevisionPanel.tsx:extract pure view helpers — done

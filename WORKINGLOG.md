@@ -1,3 +1,12 @@
+## 2026-05-28 21:50 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/features/teleprompt/TelepromptStudio.tsx:extract context panel tab builder`.
+- [x] Add `frontend/src/features/teleprompt/telepromptStudioHelpers.tsx` and move context-tab definitions.
+- [x] Rewire `frontend/src/features/teleprompt/TelepromptStudio.tsx` to consume `buildTelepromptContextTabs`.
+- [x] Update `docs/refactor-sanitization-ledger.md`.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check` (passes for refactor files; format check still fails due pre-existing `scripts/golden-minute-fixture-helpers.mjs` issue).
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 21:47 CEST - Codebase Sanitization
 - [x] Select candidate `scripts/readalong-sync-evidence.mjs:extract sync-report helpers`.
 - [x] Add `scripts/readalong-sync-evidence-helpers.mjs` and move report/evaluation utility cluster.
