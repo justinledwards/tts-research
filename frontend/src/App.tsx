@@ -348,8 +348,16 @@ import type {
   SettingsCommandTarget,
   WorkspaceCommandTarget,
 } from "./features/navigation/commands";
-import type { CommandEntry, CommandMetadata } from "./features/command-palette/commandRegistry";
 import type { CommandPaletteView } from "./features/command-palette/CommandPalette";
+import {
+  buildCommandEntries,
+  buildCommandPaletteHandlers,
+  type CommandBookmarkData,
+  type CommandRecentData,
+  type CommandMetadataState,
+  type CommandWayfindingState,
+  loadCommandMetadata,
+} from "./features/command-palette/commandPaletteHelpers";
 import {
   loadShortcutPreferences,
   resetShortcutPreferences,
@@ -508,35 +516,6 @@ export {
   resolveVoiceCloningActivityNow,
   resolveVoiceCloningActivity,
 };
-
-interface CommandMetadataState {
-  cinemaAdvanced: CommandMetadata<CinemaAdvancedCommandTarget>[];
-  cinemaFocus: CommandMetadata<CinemaFocusCommandTarget>[];
-  help: CommandMetadata<HelpCommandTarget>[];
-  settings: CommandMetadata<SettingsCommandTarget>[];
-  workspace: CommandMetadata<WorkspaceCommandTarget>[];
-}
-
-interface CommandBookmarkData {
-  detail: string;
-  id: string;
-  keywords: string[];
-  label: string;
-  resumeProgress: PlaybackProgress;
-}
-
-interface CommandRecentData {
-  detail: string;
-  id: string;
-  keywords: string[];
-  label: string;
-  progressItem: PlaybackProgress;
-}
-
-interface CommandWayfindingState {
-  bookmarks: CommandBookmarkData[];
-  recentPositions: CommandRecentData[];
-}
 
 function LazySurfaceFallback({
   detail,
@@ -2150,8 +2129,8 @@ export function App() {
   const openShortcutCheatSheet = useCallback(() => {
     openCommandPalette("shortcuts");
   }, [openCommandPalette]);
-  const openContextualHelp = useCallback(() => {
-    setHelpCommandTarget(null);
+  const openContextualHelp = useCallback((target: HelpCommandTarget | null = null) => {
+    setHelpCommandTarget(target);
     setIsHelpOpen(true);
   }, []);
   const openShortcutSettings = useCallback(() => {
@@ -2170,17 +2149,11 @@ export function App() {
       return;
     }
     let cancelled = false;
-    void import("./features/navigation/commands").then((module) => {
+    void loadCommandMetadata().then((metadata) => {
       if (cancelled) {
         return;
       }
-      setCommandMetadata({
-        cinemaAdvanced: module.buildCinemaAdvancedCommandMetadata(),
-        cinemaFocus: module.buildCinemaFocusCommandMetadata(),
-        help: module.buildHelpCommandMetadata(),
-        settings: module.buildSettingsCommandMetadata(),
-        workspace: module.buildWorkspaceCommandMetadata(),
-      });
+      setCommandMetadata(metadata);
     });
     return () => {
       cancelled = true;
@@ -5876,433 +5849,60 @@ export function App() {
       cancelled = true;
     };
   }, [commandBookmarkProgress, isCommandPaletteOpen, projectProgress, readerNavigationLabels]);
-  const coreCommandEntries: CommandEntry[] = [
-    {
-      category: "Navigation",
-      detail: "Open the project library and current chapter context.",
-      id: "workspace:open",
-      keywords: ["drawer", "project", "library"],
-      owner: "workspace",
-      perform: () => {
-        setIsWorkspaceOpen(true);
+  const commandEntries = buildCommandEntries({
+    activeCinemaSurfaceKind,
+    activeProjectId,
+    canCreateCurrentSource,
+    canOpenCurrentCinema,
+    commandMetadata,
+    commandWayfinding,
+    createAndListenCapabilityReason,
+    createAndListenDisabledReason,
+    createAndListenScope,
+    handlers: buildCommandPaletteHandlers({
+      activeCinemaSurfaceKind,
+      setCinemaAdvancedActionFromCommand: (target, surface) => {
+        setCinemaAdvancedActionFromCommand(surface, target);
       },
-      section: "Workspace",
-      title: "Open workspace",
-    },
-    {
-      category: "Settings",
-      detail: "Open Studio Settings.",
-      id: "settings:open",
-      keywords: ["configuration", "preferences"],
-      owner: "settings",
-      perform: () => {
-        setSettingsCommandTarget(null);
-        setIsSettingsOpen(true);
+      setCinemaFocusModeFromCommand: (mode, surface) => {
+        setCinemaFocusModeFromCommand(surface, mode);
       },
-      section: "Settings",
-      shortcutCommandId: "settings.open",
-      title: "Open settings",
-    },
-    {
-      category: "Settings",
-      detail: "Show available keyboard shortcuts and customization entry.",
-      id: "shortcuts:open",
-      keywords: ["keyboard", "hotkey", "cheat sheet"],
-      owner: "settings",
-      perform: () => {
-        openShortcutCheatSheet();
-      },
-      section: "Settings",
-      shortcutCommandId: "shortcut.cheatsheet",
-      title: "Open shortcut cheat sheet",
-    },
-    {
-      category: "Diagnostics",
-      detail: "Open contextual workflow help.",
-      id: "help:open",
-      keywords: ["guide", "support", "workflow"],
-      owner: "help",
-      perform: () => {
-        setHelpCommandTarget(null);
-        setIsHelpOpen(true);
-      },
-      section: "Help",
-      shortcutCommandId: "help.open",
-      title: "Open help",
-    },
-    {
-      capabilityGate: "tts",
-      capabilityGated: Boolean(createAndListenCapabilityReason),
-      category: "Playback",
-      detail: `Generate ${createAndListenScopeLabel(createAndListenScope)} audio from the current draft, book, or prepared source.`,
-      disabled: !canCreateCurrentSource,
-      disabledReason: createAndListenDisabledReason,
-      id: "playback:create-listen",
-      keywords: ["run", "generate", "listen", "audio"],
-      owner: "workspace",
-      perform: () => {
-        createAndListenFromCurrentSource();
-      },
-      section: "Playback",
-      shortcutCommandId: "playback.createListen",
-      title: workspaceStageActionLabel("createAndListen"),
-    },
-    {
-      capabilityGate: "wordTiming",
-      capabilityGated: Boolean(wordHighlightCapabilityReason),
-      category: "Settings",
-      detail: "Open read-along settings for word-level highlight configuration.",
-      disabled: Boolean(wordHighlightCapabilityReason),
-      disabledReason: wordHighlightCapabilityReason,
-      id: "readalong:word-highlight",
-      keywords: ["readalong", "highlight", "word", "timing", "provider"],
-      owner: "settings",
-      perform: () => {
-        setIsWorkspaceOpen(false);
-        setSettingsCommandTarget({
-          fieldId: "readAlongPreferences",
-          groupId: "reader",
-          layerId: "advanced",
-          scope: "machine",
-        });
-        setIsSettingsOpen(true);
-      },
-      section: "Settings",
-      title: "Use word highlight",
-    },
-    {
-      category: "Teleprompt",
-      detail: "Follow the current script inline with preserved context.",
-      id: "workspace:teleprompt",
-      keywords: ["script", "read", "stage"],
-      owner: "workspace",
-      perform: () => {
-        openTelepromptStage();
-      },
-      section: "Workspace",
-      title: workspaceStageActionLabel("openTeleprompt"),
-    },
-    {
-      category: "Teleprompt",
-      detail: "Open the presenter-first Theatre teleprompter with fullscreen fallback.",
-      id: "teleprompt:theatre",
-      keywords: ["fullscreen", "presenter", "cinematic", "recording"],
-      owner: "teleprompt",
-      perform: () => {
-        openTelepromptTheatreStage();
-      },
-      section: "Teleprompt",
-      title: "Open Teleprompt Theatre",
-    },
-    {
-      category: "Voice",
-      detail: "Open saved voices, candidates, targets, and voice diagnostics.",
-      id: "voice:dashboard",
-      keywords: ["voice", "profile", "candidate", "diagnostics"],
-      owner: "voice",
-      perform: () => {
-        setIsWorkspaceOpen(false);
-        setIsVoiceDashboardOpen(true);
-      },
-      section: "Voice",
-      title: "Open voice dashboard",
-    },
-  ];
-  const workspaceCommandEntries = (commandMetadata?.workspace ?? []).map<CommandEntry>(
-    (metadata) => ({
-      detail: metadata.detail,
-      id: metadata.id,
-      keywords: metadata.keywords,
-      owner: metadata.owner,
-      perform: () => {
-        if (metadata.target.kind === "stage") {
-          setContentMode(metadata.target.stage);
-          return;
-        }
-        setWorkspaceLayoutMode(metadata.target.layoutMode);
-      },
-      category: metadata.category,
-      section: metadata.section,
-      title: metadata.title,
+      setHelpCommandTarget,
+      setIsHelpOpen,
+      setIsWorkspaceOpen,
+      setSettingsCommandTarget,
+      setIsSettingsOpen,
+      setContentMode,
+      setWorkspaceLayoutMode,
+      createAndListenFromCurrentSource,
+      handleAddPlaybackBookmark,
+      handleResumeProgress,
+      handleUseBookText,
+      handleUsePreparedSource,
+      openShortcutCheatSheet,
+      openTelepromptStage,
+      openTelepromptTheatreStage,
+      openReadingCinema,
+      openPreparedSourceCinema,
+      preparedSourceCinemaActionLabel,
+      resolveBookSourceLabel: bookSourceName,
+      resolveDefaultBookScope,
+      setIsBookCinemaOpen,
+      setPreparedSourceCinemaSourceId,
+      selectProject,
+      setCinemaTheatreOpenSignal,
+      setCinemaTheatreControlsSignal,
+      setCinemaTheatreExitSignal,
+      setIsVoiceDashboardOpen,
+      setSourceMode,
     }),
-  );
-  const settingsCommandEntries = (commandMetadata?.settings ?? []).map<CommandEntry>(
-    (metadata) => ({
-      detail: metadata.detail,
-      id: metadata.id,
-      keywords: metadata.keywords,
-      owner: metadata.owner,
-      perform: () => {
-        setIsWorkspaceOpen(false);
-        setSettingsCommandTarget(metadata.target);
-        setIsSettingsOpen(true);
-      },
-      category: metadata.category,
-      section: metadata.section,
-      title: metadata.title,
-    }),
-  );
-  const helpCommandEntries = (commandMetadata?.help ?? []).map<CommandEntry>((metadata) => ({
-    detail: metadata.detail,
-    id: metadata.id,
-    keywords: metadata.keywords,
-    owner: metadata.owner,
-    perform: () => {
-      setHelpCommandTarget(metadata.target);
-      setIsHelpOpen(true);
-    },
-    category: metadata.category,
-    section: metadata.section,
-    title: metadata.title,
-  }));
-  const cinemaFocusCommandEntries = (commandMetadata?.cinemaFocus ?? []).map<CommandEntry>(
-    (metadata) => ({
-      detail: metadata.detail,
-      disabled: !activeCinemaSurfaceKind,
-      disabledReason: activeCinemaSurfaceKind
-        ? undefined
-        : "Open Book, Document, or Website Cinema first.",
-      id: metadata.id,
-      keywords: metadata.keywords,
-      owner: metadata.owner,
-      perform: () => {
-        if (activeCinemaSurfaceKind) {
-          setCinemaFocusModeFromCommand(activeCinemaSurfaceKind, metadata.target.mode);
-        }
-      },
-      category: metadata.category,
-      section: metadata.section,
-      title: metadata.title,
-    }),
-  );
-  const cinemaAdvancedCommandEntries = (commandMetadata?.cinemaAdvanced ?? []).map<CommandEntry>(
-    (metadata) => ({
-      detail: metadata.detail,
-      disabled: !activeCinemaSurfaceKind,
-      disabledReason: activeCinemaSurfaceKind
-        ? undefined
-        : "Open Book, Document, or Website Cinema before using operator diagnostics.",
-      id: metadata.id,
-      keywords: metadata.keywords,
-      owner: metadata.owner,
-      perform: () => {
-        if (activeCinemaSurfaceKind) {
-          setCinemaAdvancedActionFromCommand(activeCinemaSurfaceKind, metadata.target);
-        }
-      },
-      category: metadata.category,
-      section: metadata.section,
-      title: metadata.title,
-    }),
-  );
-  const projectCommandEntries = projects.map<CommandEntry>((project) => ({
-    category: "Project",
-    detail: project.id === activeProjectId ? "Current project" : "Switch active project.",
-    disabled: project.id === activeProjectId,
-    disabledReason: project.id === activeProjectId ? "Already selected." : undefined,
-    id: `project:${project.id}`,
-    keywords: ["project", project.name],
-    owner: "project-dashboard",
-    perform: () => {
-      setIsBookCinemaOpen(false);
-      setPreparedSourceCinemaSourceId(null);
-      selectProject(project.id);
-    },
-    section: "Projects",
-    title: `Switch project: ${project.name}`,
-  }));
-  const draftSourceCommand: CommandEntry = {
-    category: "Source",
-    detail: "Return to draft text intake.",
-    id: "source:text",
-    keywords: ["draft", "text", "source"],
-    owner: "source",
-    perform: () => {
-      setSourceMode("text");
-      setContentMode("intake");
-    },
-    section: "Sources",
-    title: "Use draft text source",
-  };
-  const bookSourceCommandEntries = bookSources.map<CommandEntry>((book) => {
-    const defaultScope = resolveDefaultBookScope(book);
-    const isReady = book.status === "ready";
-    const label = bookSourceName(book);
-    return {
-      category: "Source",
-      detail: isReady
-        ? "Use this book source in Review."
-        : (book.error ?? "Book source is still preparing."),
-      disabled: !isReady,
-      disabledReason: isReady ? undefined : (book.error ?? "Book source is not ready."),
-      id: `source:book:${book.id}`,
-      keywords: ["book", "source", label],
-      owner: "source",
-      perform: () => {
-        handleUseBookText(book, defaultScope);
-      },
-      section: "Sources",
-      title: `Use book: ${label}`,
-    };
+    job,
+    projects,
+    bookSources,
+    preparedSources,
+    wordHighlightCapabilityReason,
+    workspaceStageActionLabel,
   });
-  const preparedSourceCommandEntries = preparedSources.flatMap<CommandEntry>((source) => {
-    const isReady = source.status === "ready";
-    const label = source.title ?? source.sourceName;
-    const disabledReason = isReady ? undefined : (source.error ?? "Prepared source is not ready.");
-    return [
-      {
-        category: "Source",
-        detail: "Use this prepared source in Review.",
-        disabled: !isReady,
-        disabledReason,
-        id: `source:prepared:${source.id}`,
-        keywords: ["prepared", "source", source.kind, label],
-        owner: "source",
-        perform: () => {
-          void handleUsePreparedSource(source);
-        },
-        section: "Sources",
-        title: `Use source: ${label}`,
-      },
-      {
-        category: "Source",
-        detail: preparedSourceCinemaActionLabel(source),
-        disabled: !isReady,
-        disabledReason,
-        id: `source:prepared-cinema:${source.id}`,
-        keywords: ["cinema", "read", "prepared", source.kind, label],
-        owner: "source",
-        perform: () => {
-          openPreparedSourceCinema(source);
-        },
-        section: "Sources",
-        title: `Open ${label} in Cinema`,
-      },
-    ];
-  });
-  const openCurrentCinemaCommand: CommandEntry = {
-    category: "Playback",
-    detail: "Open the current narration or selected book in Cinema.",
-    disabled: !canOpenCurrentCinema,
-    disabledReason: canOpenCurrentCinema ? undefined : "Create audio or select a ready book first.",
-    id: "cinema:open-current",
-    keywords: ["reader", "cinema", "listen"],
-    owner: "cinema",
-    perform: () => {
-      openReadingCinema();
-    },
-    section: "Cinema",
-    title: "Open current Cinema",
-  };
-  const cinemaTheatreDisabledReason = activeCinemaSurfaceKind
-    ? undefined
-    : "Open Book, Document, or Website Cinema first.";
-  const openCinemaTheatreCommand: CommandEntry = {
-    category: "Playback",
-    detail: "Enter the reader-first theatre layout for the active Cinema surface.",
-    disabled: !activeCinemaSurfaceKind,
-    disabledReason: cinemaTheatreDisabledReason,
-    id: "cinema:theatre:open",
-    keywords: ["cinema", "theatre", "immersive", "fullscreen", "reader"],
-    owner: "cinema-theatre",
-    perform: () => {
-      setCinemaTheatreOpenSignal((current) => current + 1);
-    },
-    section: "Cinema",
-    title: "Open Cinema Theatre",
-  };
-  const exitTheatreCommand: CommandEntry = {
-    category: "Playback",
-    detail: "Leave Theatre and return to the normal Cinema layout.",
-    disabled: !activeCinemaSurfaceKind,
-    disabledReason: cinemaTheatreDisabledReason,
-    id: "cinema:theatre:exit",
-    keywords: ["cinema", "theatre", "exit", "close", "reader"],
-    owner: "cinema-theatre",
-    perform: () => {
-      setCinemaTheatreExitSignal((current) => current + 1);
-    },
-    section: "Cinema",
-    title: "Exit Theatre",
-  };
-  const toggleTheatreControlsCommand: CommandEntry = {
-    category: "Playback",
-    detail: "Show or hide the compact Theatre controls.",
-    disabled: !activeCinemaSurfaceKind,
-    disabledReason: cinemaTheatreDisabledReason,
-    id: "cinema:theatre:toggle-controls",
-    keywords: ["cinema", "theatre", "controls", "hide", "show"],
-    owner: "cinema-theatre",
-    perform: () => {
-      setCinemaTheatreControlsSignal((current) => current + 1);
-    },
-    section: "Cinema",
-    title: "Toggle Theatre controls",
-  };
-  let bookmarkDisabledReason: string | undefined;
-  if (!activeCinemaSurfaceKind) {
-    bookmarkDisabledReason = "Open a Cinema surface first.";
-  } else if (!job) {
-    bookmarkDisabledReason = "Create audio before saving bookmarks.";
-  }
-  const bookmarkCurrentCommand: CommandEntry = {
-    category: "Review",
-    detail: "Save the current reader position as a bookmark.",
-    disabled: Boolean(bookmarkDisabledReason),
-    disabledReason: bookmarkDisabledReason,
-    id: "wayfinding:bookmark-current",
-    keywords: ["save", "marker", "reader"],
-    owner: "wayfinding",
-    perform: () => {
-      void handleAddPlaybackBookmark();
-    },
-    section: "Wayfinding",
-    shortcut: "B",
-    title: "Bookmark current position",
-  };
-  const bookmarkCommandEntries = commandWayfinding.bookmarks.map<CommandEntry>((bookmark) => ({
-    category: "Review",
-    detail: bookmark.detail,
-    id: bookmark.id,
-    keywords: bookmark.keywords,
-    owner: "wayfinding",
-    perform: () => {
-      void handleResumeProgress(bookmark.resumeProgress);
-    },
-    section: "Wayfinding",
-    title: `Bookmark: ${bookmark.label}`,
-  }));
-  const recentCommandEntries = commandWayfinding.recentPositions.map<CommandEntry>((recent) => ({
-    category: "Navigation",
-    detail: recent.detail,
-    id: recent.id,
-    keywords: recent.keywords,
-    owner: "wayfinding",
-    perform: () => {
-      void handleResumeProgress(recent.progressItem);
-    },
-    section: "Wayfinding",
-    title: `Recent: ${recent.label}`,
-  }));
-  const commandEntries: CommandEntry[] = [
-    ...coreCommandEntries,
-    ...workspaceCommandEntries,
-    ...settingsCommandEntries,
-    ...helpCommandEntries,
-    ...cinemaFocusCommandEntries,
-    ...cinemaAdvancedCommandEntries,
-    ...projectCommandEntries,
-    draftSourceCommand,
-    ...bookSourceCommandEntries,
-    ...preparedSourceCommandEntries,
-    openCurrentCinemaCommand,
-    openCinemaTheatreCommand,
-    exitTheatreCommand,
-    toggleTheatreControlsCommand,
-    bookmarkCurrentCommand,
-    ...bookmarkCommandEntries,
-    ...recentCommandEntries,
-  ];
   let globalPreviewOwner: "preview" | "teleprompt" = "preview";
   if (contentMode === "teleprompt") {
     globalPreviewOwner = "teleprompt";

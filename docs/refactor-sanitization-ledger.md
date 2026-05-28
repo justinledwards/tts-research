@@ -1,6 +1,7 @@
 # Refactor Sanitization Ledger
 
 ## Cycle 2026-05-28 - Codebase Sanitization
+- frontend/src/App.tsx:extract command palette handler map — done
 - scripts/e2e-surface-complexity-budget.mjs:extract budget config and reporting helpers — done
 - backend/internal/policy/evaluator.go:extract pure inline and media helper cluster — done
 - frontend/src/features/teleprompt/telepromptTheatreCueContent.tsx:extract cue parsing/rendering helpers — done

@@ -1,3 +1,12 @@
+## 2026-05-28 22:07 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/App.tsx:extract command palette handler map`.
+- [x] Add `buildCommandPaletteHandlers` and `CommandPaletteHandlerContext` to `frontend/src/features/command-palette/commandPaletteHelpers.ts`.
+- [x] Replace inline command palette handler object in `frontend/src/App.tsx` with `buildCommandPaletteHandlers(...)`.
+- [x] Update `docs/refactor-sanitization-ledger.md` with completed candidate.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md` with completed candidate and next recommendation.
+- [x] Run `pnpm check`.
+- [ ] Commit focused refactor patch.
+
 ## 2026-05-28 22:02 CEST - Codebase Sanitization
 - [x] Select candidate `frontend/src/features/cinema/PreparedSourceCinemaTransport.tsx:extract transport presentation helpers`.
 - [x] Add `frontend/src/features/cinema/PreparedSourceCinemaTransportHelpers.tsx` with transport control icon/UI/format helpers.
