@@ -9,4 +9,4 @@
 - backend/internal/pipeline/service_test.go:extract fixture builders and assertion helpers — done
 - backend/internal/httpapi/router.go:split route registration helpers — skipped-with-reason: not selected in first pass of cycle
 - scripts/e2e-book-cinema.mjs:extract reusable e2e command helpers — skipped-with-reason: not selected in first pass of cycle
-- scripts/e2e-ui-action-audit.mjs:extract audit helpers and table builders — skipped-with-reason: not selected in first pass of cycle
+- scripts/e2e-ui-action-audit.mjs:extract audit helpers and table builders — done

@@ -12,6 +12,13 @@
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
 
+## 2026-05-28 07:03 CEST - Codebase Sanitization
+- [x] Select next candidate `scripts/e2e-ui-action-audit.mjs:extract provider profile/config helpers`
+- [x] Extract reusable provider profile and audit constants into `scripts/e2e-ui-action-audit-config.mjs`
+- [x] Remove extracted helper and constant block from `scripts/e2e-ui-action-audit.mjs`
+- [x] Update rotation ledger for this candidate and run `pnpm check`
+- [ ] Resolve remaining unrelated lint/check failures outside this refactor if they persist
+
 ## 2026-05-28 06:01 CEST - Codebase Sanitization
 - [x] Select next candidate `backend/internal/pipeline/service.go:decompose generation orchestration functions`
 - [x] Extract `CreateJob` preparation/normalization to `backend/internal/pipeline/service_create_job.go`
