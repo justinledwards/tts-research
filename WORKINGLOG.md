@@ -1,3 +1,11 @@
+## 2026-05-28 18:22 CEST - Codebase Sanitization
+- [x] Select next unrotated oversized candidate `backend/cmd/api/main.go:extract pipeline service bootstrap`.
+- [x] Extract pipeline environment parsing, clamping, and service-options construction into `backend/cmd/api/pipeline_bootstrap.go`.
+- [x] Rewire `backend/cmd/api/main.go` to delegate bootstrap responsibility to the helper and keep startup behavior.
+- [x] Update `docs/refactor-sanitization-ledger.md` with completed candidate and next recommended target.
+- [ ] Run `pnpm check`.
+- [ ] Commit focused refactor patch.
+
 ## 2026-05-28 18:11 CEST - Codebase Sanitization
 - [x] Select next highest-value oversized candidate `scripts/validate-local/validate-final-ux-gates.mjs:extract orchestration and gate reporting helpers`.
 - [x] Rewire `scripts/validate-local/validate-final-ux-gates.mjs` to delegate gate math, artifacts, and evaluations to helper module.

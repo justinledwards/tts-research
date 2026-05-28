@@ -34,3 +34,4 @@
 - scripts/validate-local/review-evidence.mjs:extract review evidence collection and coverage helpers — done
 - frontend/src/features/speech-policy/SpeechPolicyWizard.tsx:extract wizard subcomponents and helpers — done
 - scripts/validate-local/validate-local.mjs:extract reusable CLI/runtime/report helpers — done
+- backend/cmd/api/main.go:extract pipeline service bootstrap — done
