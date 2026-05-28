@@ -28,6 +28,14 @@
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
 
+## 2026-05-28 13:01 CEST - Codebase Sanitization
+- [x] Select highest-value oversized helper-heavy candidate `backend/internal/pipeline/book_sources.go:extract narration, metadata, and import helpers`.
+- [x] Extract reusable helper cluster from `backend/internal/pipeline/book_sources.go` into `backend/internal/pipeline/book_source_helpers.go`.
+- [x] Keep `book_sources.go` orchestration logic and all callsites unchanged.
+- [x] Update `docs/refactor-sanitization-ledger.md` with candidate completion.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch for this run.
+
 ## 2026-05-28 10:02 CEST - Codebase Sanitization
 - [x] Select next oversized candidate `backend/internal/pipeline/source_preps.go:extract source prep helpers`.
 - [x] Move shared source-prep helper cluster into `backend/internal/pipeline/source_preps_text_helpers.go`.

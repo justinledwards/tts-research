@@ -13,3 +13,4 @@
 - backend/internal/pipeline/source_preps.go:extract source prep helpers — done
 - backend/internal/pipeline/profile_targets.go:extract target normalization helpers — done
 - backend/internal/pipeline/profile_sources.go:extract audio and candidate scoring helpers — done
+- backend/internal/pipeline/book_sources.go:extract book scope and import helper cluster — done
