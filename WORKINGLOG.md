@@ -36,6 +36,14 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Run `pnpm check`.
 - [x] Commit focused refactor patch for this run.
 
+## 2026-05-28 13:11 CEST - Codebase Sanitization
+- [x] Select next oversized test file candidate `backend/internal/httpapi/router_test.go:extract reusable endpoint test helpers`.
+- [x] Create `backend/internal/httpapi/router_test_helpers_test.go` and move shared helper/type cluster there.
+- [x] Keep `router_test.go` as orchestration-focused endpoint assertions.
+- [x] Update `docs/refactor-sanitization-ledger.md` with candidate completion.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 10:02 CEST - Codebase Sanitization
 - [x] Select next oversized candidate `backend/internal/pipeline/source_preps.go:extract source prep helpers`.
 - [x] Move shared source-prep helper cluster into `backend/internal/pipeline/source_preps_text_helpers.go`.

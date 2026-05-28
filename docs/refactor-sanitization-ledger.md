@@ -14,3 +14,4 @@
 - backend/internal/pipeline/profile_targets.go:extract target normalization helpers — done
 - backend/internal/pipeline/profile_sources.go:extract audio and candidate scoring helpers — done
 - backend/internal/pipeline/book_sources.go:extract book scope and import helper cluster — done
+- backend/internal/httpapi/router_test.go:extract reusable endpoint helper cluster — done
