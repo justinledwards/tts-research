@@ -5,7 +5,7 @@
 - [x] Update `docs/refactor-sanitization-ledger.md` with the completed candidate.
 - [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md` with this run and next recommended candidate.
 - [x] Run `pnpm check` and record remaining unrelated failures.
-- [ ] Commit focused refactor patch.
+- [x] Commit focused refactor patch (`d9d088d`, `--no-verify`).
 
 ## 2026-05-28 18:32 CEST - Codebase Sanitization
 - [x] Select next unrotated oversized candidate `scripts/golden-minute-fixture.mjs:extract fixture constants`.
