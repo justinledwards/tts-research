@@ -12,7 +12,7 @@
 - [x] Rewire `backend/internal/sourceprep/html_quality.go` to delegate helper logic to the extracted helper module.
 - [x] Update `docs/refactor-sanitization-ledger.md` and AGENTS-required run log entries.
 - [x] Run targeted checks and handoff validation `pnpm check` (fails for pre-existing script issues in `scripts/golden-minute-fixture*.mjs`).
-- [ ] Commit focused refactor patch.
+- [x] Commit focused refactor patch.
 
 ## 2026-05-28 17:18 CEST - Codebase Sanitization
 - [x] Select highest-value unrotated oversized candidate `frontend/src/api.ts:extract transcript normalization helpers`.
