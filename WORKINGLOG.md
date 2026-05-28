@@ -184,6 +184,13 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Run `pnpm check`
 - [ ] Pick the next oversized-file candidate for the next cycle
 
+## 2026-05-28 13:22 CEST - Codebase Sanitization
+- [x] Select next oversized hotspot and define focused extraction theme.
+- [x] Move review command step construction and artifact builders to `scripts/validate-local/review-evidence-steps.mjs`.
+- [x] Update `docs/refactor-sanitization-ledger.md` and automation memory with status.
+- [ ] Run `pnpm check` and document unrelated failure context.
+- [ ] Commit focused refactor.
+
 ## 2026-05-27 14:06 CEST - Work Log and PR Refresh
 - [x] Condense redundant historical checklist entries into a branch summary
 - [x] Commit the log cleanup

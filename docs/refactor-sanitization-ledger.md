@@ -1,6 +1,7 @@
 # Refactor Sanitization Ledger
 
 ## Cycle 2026-05-28 - Codebase Sanitization
+- scripts/validate-local/review-evidence.mjs:extract review command step and artifact builders — done
 - frontend/src/App.tsx:extract trailing utility helpers: done
 - frontend/src/features/book-cinema/BookCinemaPanel.tsx:extract reusable upload/import helpers: done
 - frontend/src/features/cinema/PreparedSourceCinemaBase.tsx:extract transport/player subcomponents: done
