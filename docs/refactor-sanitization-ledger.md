@@ -1,6 +1,7 @@
 # Refactor Sanitization Ledger
 
 ## Cycle 2026-05-28 - Codebase Sanitization
+- frontend/src/features/teleprompt/telepromptTheatreCueContent.tsx:extract cue parsing/rendering helpers — done
 - backend/internal/pipeline/project_bundles.go:extract bundle helper cluster — done
 - backend/internal/pipeline/research_modules.go:extract configuration helper cluster — done
 - scripts/e2e-golden-minute.mjs:extract interaction and artifact helpers — done

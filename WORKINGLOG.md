@@ -1,3 +1,11 @@
+## 2026-05-28 20:13 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/features/teleprompt/telepromptTheatreCueContent.tsx:extract cue parsing/rendering helpers`.
+- [x] Add `frontend/src/features/teleprompt/telepromptTheatreCueContentHelpers.ts` and extract cue paragraph, section, crawl, and rendering helpers.
+- [x] Rewire `frontend/src/features/teleprompt/telepromptTheatreCueContent.tsx` to consume helper exports while preserving exported API.
+- [x] Update `docs/refactor-sanitization-ledger.md` and automation memory.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 20:01 CEST - Codebase Sanitization
 - [x] Select candidate `frontend/src/features/readalong/wordTimeline.ts:extract segment match helpers`.
 - [x] Add `frontend/src/features/readalong/wordTimelineHelpers.ts` with private ledger, cursor, and normalization helpers.
