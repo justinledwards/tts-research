@@ -634,3 +634,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] update docs sanitization ledger and automation memory
 - [x] run `pnpm check`
 - [ ] commit focused refactor
+
+## 2026-05-28 20:36 CEST - Codebase Sanitization
+- [x] select next oversized hotspot `scripts/validate-local/validate-local.mjs`
+- [x] extract command batch configuration constants into `scripts/validate-local/validate-local-workflow.mjs`
+- [x] rewire `scripts/validate-local/validate-local.mjs` to consume shared helper constants
+- [x] update ledger with candidate completion status
+- [x] run `pnpm check`
+- [ ] commit focused refactor
