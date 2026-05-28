@@ -1,3 +1,11 @@
+## 2026-05-28 19:17 CEST - Codebase Sanitization
+- [x] Select next highest-value oversized candidate `frontend/src/features/cinema/CinemaTransportBar.tsx:extract transport helpers and popover hook`.
+- [x] Create `frontend/src/features/cinema/utils/cinemaTransportBarHelpers.ts` and extract reusable transport state, clamp, label-id, visibility, and popover-hook helpers.
+- [x] Rewire `CinemaTransportBar.tsx` imports to use helper module while preserving playback/render behavior.
+- [x] Update `docs/refactor-sanitization-ledger.md` and automation memory entries.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 18:44 CEST - Codebase Sanitization
 - [x] Select next unrotated candidate `frontend/src/VoiceSourceAnalysisPanel.tsx:extract helper components and target-option helpers`.
 - [x] Add `frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` for source/card/progress helper cluster.

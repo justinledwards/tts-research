@@ -1,13 +1,20 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Button, fieldControlClassName } from "../../design";
 import { READER_PLAYBACK_RATES, READER_SEEK_SECONDS } from "../reader-accessibility";
 import {
   generatedAudioLifecycleFromPlaybackState,
   playbackActionDataAttributes,
-  playbackActionDisabledReason,
-  type PlaybackActionKey,
 } from "../playback";
 import type { CinemaPlaybackState } from "./model";
+import {
+  PLAYBACK_TRANSPORT_STATES,
+  clampProgress,
+  cinemaPrimaryActionForState,
+  cinemaPrimaryDisabledReason,
+  labelId,
+  shouldShowControl,
+  useCinemaDisplayPopover,
+} from "./utils/cinemaTransportBarHelpers";
 
 interface CinemaTransportButtonModel {
   disabled: boolean;
@@ -60,13 +67,6 @@ export interface CinemaTransportModel {
     title: string;
   };
 }
-
-const PLAYBACK_TRANSPORT_STATES = new Set<CinemaPlaybackState>([
-  "playable",
-  "playing",
-  "paused",
-  "completed",
-]);
 
 export function CinemaTransportBar({ model }: Readonly<{ model: CinemaTransportModel }>) {
   if (model.playbackState === "preAudio") {
@@ -525,59 +525,6 @@ function MobilePlaybackTransport({
   );
 }
 
-function useCinemaDisplayPopover(available: boolean) {
-  const id = useId();
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!available) {
-      setOpen(false);
-    }
-  }, [available]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-      if (buttonRef.current?.contains(target) || popoverRef.current?.contains(target)) {
-        return;
-      }
-      setOpen(false);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [open]);
-
-  return {
-    buttonRef,
-    id,
-    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-      event.stopPropagation();
-      setOpen(false);
-      buttonRef.current?.focus();
-    },
-    open,
-    popoverRef,
-    toggle: () => {
-      setOpen((current) => !current);
-    },
-  };
-}
-
 function TransportFooter({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <footer
@@ -689,55 +636,4 @@ function IconTransportButton({
       <span className="sr-only">{label}</span>
     </Button>
   );
-}
-
-function labelId(label: string): string {
-  return label
-    .trim()
-    .toLowerCase()
-    .replaceAll("+", "plus")
-    .replaceAll("-", "minus")
-    .replaceAll(/[^a-z0-9]+/g, "-")
-    .replaceAll(/^-|-$/g, "");
-}
-
-function shouldShowControl(control: { disabled: boolean; visible?: boolean }): boolean {
-  return control.visible ?? !control.disabled;
-}
-
-function clampProgress(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-  return Math.min(1, Math.max(0, value));
-}
-
-function cinemaPrimaryActionForState(playbackState: CinemaPlaybackState): PlaybackActionKey {
-  if (playbackState === "degraded") {
-    return "rebuildAudio";
-  }
-  if (playbackState === "preAudio" || playbackState === "generating") {
-    return "createAndListen";
-  }
-  return "play";
-}
-
-function cinemaPrimaryDisabledReason(
-  model: CinemaTransportModel,
-  action: PlaybackActionKey,
-  lifecycle: ReturnType<typeof generatedAudioLifecycleFromPlaybackState>,
-): string | undefined {
-  if (!model.primary.disabled) {
-    return undefined;
-  }
-  if (model.primary.disabledReason) {
-    return model.primary.disabledReason;
-  }
-  return playbackActionDisabledReason({
-    action,
-    fallbackReason:
-      model.stateSummary?.detail ??
-      "Playback controls are unavailable until the reader can attach to generated audio.",
-    lifecycle,
-  });
 }
