@@ -63,3 +63,6 @@
 - scripts/e2e-accessibility-audit.mjs:extract accessibility scan/report helpers — done
 - frontend/src/features/book-cinema/model.test.ts:extract assertion fixtures and result builders — done
 - scripts/validate-local/reader-timing.mjs:extract reader timing budget constants into dedicated config module — done
+- scripts/e2e-responsive-snapshots.mjs:extract website calm fixture and metric helpers — done
+
+- frontend/src/App.tsx:extract voice cloning activity helpers — done

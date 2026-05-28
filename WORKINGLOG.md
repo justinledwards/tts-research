@@ -1,3 +1,21 @@
+## 2026-05-28 21:35 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/App.tsx:extract voice cloning activity helpers`.
+- [x] Add `frontend/src/appVoiceCloningHelpers.ts` and move voice-cloning activity helper cluster.
+- [x] Rewire `frontend/src/App.tsx` to use helper module and keep helper exports intact.
+- [x] Update `docs/refactor-sanitization-ledger.md`.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check` (formatter still fails only on pre-existing `scripts/golden-minute-fixture-helpers.mjs`).
+- [x] Commit focused refactor patch.
+
+## 2026-05-28 21:30 CEST - Codebase Sanitization
+- [x] Select candidate `scripts/e2e-responsive-snapshots.mjs:extract website calm fixture and metric helpers`.
+- [x] Add `scripts/e2e-responsive-snapshots-helpers.mjs` with website calm fixture/metrics helpers.
+- [x] Rewire `scripts/e2e-responsive-snapshots.mjs` to consume extracted helpers and keep orchestration unchanged.
+- [x] Update `docs/refactor-sanitization-ledger.md`.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check`.
+- [ ] Commit focused refactor patch.
+
 ## 2026-05-28 21:14 CEST - Codebase Sanitization
 - [x] Select candidate `scripts/validate-local/validate-final-ux-gates-helpers.mjs:extract final UX constants and artifact map`.
 - [x] Create `scripts/validate-local/validate-final-ux-gates-contracts.mjs` with shared thresholds, labels, budgets, and artifact factories.
@@ -702,3 +720,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] update refactor ledger and automation memory entries
 - [x] run `pnpm check` for handoff validation
 - [x] commit focused refactor
+
+## 2026-05-28 21:33 CEST - Codebase Sanitization
+- [x] append working log section for voice-cloning helper extraction
+- [x] extract voice cloning workflow helpers from `App.tsx` into `appVoiceCloningHelpers.ts`
+- [x] rewire `App.tsx` to import/export helper functions and helper types
+- [x] update sanitization ledger and automation memory
+- [x] run `pnpm check`
