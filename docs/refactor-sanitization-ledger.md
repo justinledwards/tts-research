@@ -37,3 +37,4 @@
 - scripts/validate-local/validate-local.mjs:extract reusable CLI/runtime/report helpers — done
 - backend/cmd/api/main.go:extract pipeline service bootstrap — done
 - scripts/golden-minute-fixture.mjs:extract fixture constants — done
+- frontend/src/BundlePanels.tsx:extract panel section dispatch and shared helpers — done

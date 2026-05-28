@@ -1,3 +1,11 @@
+## 2026-05-28 18:38 CEST - Codebase Sanitization
+- [x] Select next candidate `frontend/src/BundlePanels.tsx:extract panel UI helper cluster`.
+- [x] Create `frontend/src/BundlePanelsHelpers.tsx` and move shared bundle-flow helper components and formatters.
+- [x] Rewire `BundlePanels.tsx` to consume helper exports while preserving flow behavior.
+- [x] Update `docs/refactor-sanitization-ledger.md` and automation memory with status.
+- [x] Run `pnpm check` and record failure context.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 18:36 CEST - Codebase Sanitization
 - [x] Select next unrotated oversized candidate `backend/internal/pipeline/research_modules.go:extract configuration helper cluster`.
 - [x] Add `backend/internal/pipeline/research_modules_config.go` and move research module constants, required file list, config type, and normalization helpers there.
