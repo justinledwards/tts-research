@@ -15,6 +15,14 @@
 - [x] Run `pnpm check` and report remaining unrelated failures.
 - [x] Commit focused refactor patch.
 
+## 2026-05-28 12:01 CEST - Codebase Sanitization
+- [x] Select highest-value oversized candidate not improved in this cycle.
+- [x] Extract source profile orchestration helpers from `backend/internal/pipeline/profile_sources.go` into `backend/internal/pipeline/profile_source_helpers.go`.
+- [x] Preserve orchestration behavior and public interfaces while reducing cognitive load in `profile_sources.go`.
+- [x] Update ledger status for candidate completion and follow-up target.
+- [x] Run `pnpm check` and capture unrelated failures.
+- [x] Commit focused refactor patch.
+
 # Working Log
 
 This log is intentionally concise. It records branch-level progress and open follow-ups without
