@@ -21,3 +21,5 @@
 - frontend/src/features/teleprompt/TelepromptTheatre.tsx:extract cue rendering and parsing helpers — done
 - frontend/src/features/intake/IntakeWizard.tsx:extract intake decision helpers — done
 - frontend/src/features/revision/RevisionPanel.tsx:extract pure view helpers — done
+- frontend/src/features/teleprompt/telepromptCueTimeline.ts:extract timeline text/math helper cluster — done
+- frontend/src/types.ts:extract speech-policy type cluster — done

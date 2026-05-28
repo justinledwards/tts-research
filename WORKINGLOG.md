@@ -1,3 +1,11 @@
+## 2026-05-28 15:03 CEST - Codebase Sanitization
+- [x] Select oversized candidate `frontend/src/types.ts:extract speech-policy type cluster`.
+- [x] Create `frontend/src/types/speechPolicyTypes.ts` and move speech-policy types out of `types.ts`.
+- [x] Rewire `frontend/src/types.ts` to import speech policy types and re-export them.
+- [x] Update sanitization ledger and memory state for this candidate.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-27 23:40 CEST - Whole-App Follow-Along Sync Spine (Execution 202605272340)
 - [ ] Define NarrationSyncSnapshot + provider integration API
 - [ ] Add source-word global timeline normalization and fallback/degradation rules
