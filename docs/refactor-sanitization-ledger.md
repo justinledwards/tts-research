@@ -10,3 +10,4 @@
 - backend/internal/httpapi/router.go:split route registration helpers — done
 - scripts/e2e-book-cinema.mjs:extract reusable e2e command helpers — done
 - scripts/e2e-ui-action-audit.mjs:extract audit helpers and table builders — done
+- backend/internal/pipeline/source_preps.go:extract source prep helpers — done

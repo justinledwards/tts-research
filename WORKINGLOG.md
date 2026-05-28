@@ -12,6 +12,13 @@
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
 
+## 2026-05-28 10:02 CEST - Codebase Sanitization
+- [x] Select next oversized candidate `backend/internal/pipeline/source_preps.go:extract source prep helpers`.
+- [x] Move shared source-prep helper cluster into `backend/internal/pipeline/source_preps_text_helpers.go`.
+- [x] Update `docs/refactor-sanitization-ledger.md` with candidate status.
+- [x] Run `pnpm check` and capture unresolved pre-existing issues.
+- [x] Commit focused refactor.
+
 ## 2026-05-28 08:02 CEST - Codebase Sanitization
 - [x] Select next candidate `scripts/e2e-book-cinema.mjs:extract reusable e2e command helpers`.
 - [x] Add `scripts/e2e-book-cinema-commands.mjs` to house command/API helper logic.
