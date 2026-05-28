@@ -44,6 +44,22 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Run `pnpm check`.
 - [x] Commit focused refactor patch.
 
+## 2026-05-28 13:45 CEST - Codebase Sanitization
+- [x] Select next hotspot candidate `frontend/src/WorkspaceDrawer.tsx:extract workspace drawer helper components`.
+- [x] Add `frontend/src/WorkspaceDrawerHelpers.tsx` and move bottom-anchored drawer helpers.
+- [x] Rewire `WorkspaceDrawer.tsx` to consume extracted helper components and functions.
+- [x] Update `docs/refactor-sanitization-ledger.md` with candidate status.
+- [x] Run `pnpm check` and capture pre-existing failures unrelated to this refactor.
+- [x] Commit focused refactor patch.
+
+## 2026-05-28 13:56 CEST - Codebase Sanitization
+- [x] Select next oversized candidate `frontend/src/features/teleprompt/TelepromptTheatre.tsx:extract cue rendering/parsing helpers`.
+- [x] Create `frontend/src/features/teleprompt/telepromptTheatreCueContent.tsx` for cue rendering/parsing helpers.
+- [x] Rewire `TelepromptTheatre.tsx` to delegate helper logic and preserve behavior.
+- [x] Update `docs/refactor-sanitization-ledger.md` with completed Theatre extraction.
+- [x] Run `pnpm check` and capture remaining unrelated failures.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 13:11 CEST - Codebase Sanitization
 - [x] Select next oversized test file candidate `backend/internal/httpapi/router_test.go:extract reusable endpoint test helpers`.
 - [x] Create `backend/internal/httpapi/router_test_helpers_test.go` and move shared helper/type cluster there.

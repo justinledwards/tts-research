@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, useMemo } from "react";
 import type { RevisionBlock } from "../revision";
 import { Button, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
 import {
@@ -12,6 +12,7 @@ import { workspaceStageActionLabel } from "../workspace";
 import {
   TELEPROMPT_PRESET_IDS,
   telepromptPreset,
+  telepromptPresetHighlightSettings,
   type TelepromptPresetId,
 } from "./telepromptPresets";
 import type { TelepromptFullscreenAvailability } from "./telepromptFullscreen";
@@ -20,12 +21,19 @@ import type {
   TelepromptTheatreSummary,
   TelepromptTheatreViewMode,
 } from "./telepromptTheatreState";
-import type { TelepromptCueSyncMode } from "./telepromptCueTimeline";
+import type { TelepromptCueSyncMode, TelepromptCueWordTiming } from "./telepromptCueTimeline";
 import { TelepromptTheatreSettingsControls } from "./TelepromptTheatreSettingsControls";
 import {
   telepromptTheatrePreset,
   type TelepromptTheatreSettings,
 } from "./telepromptTheatreSettings";
+import {
+  CuePreviewList,
+  OperatorFact,
+  TelepromptTheatreCueText,
+  telepromptTheatreCueSyncTone,
+  telepromptTheatreWordLabel,
+} from "./telepromptTheatreCueContent";
 
 export interface TelepromptTheatreProps {
   readonly activeBlock: RevisionBlock | null;
@@ -40,6 +48,7 @@ export interface TelepromptTheatreProps {
   readonly cueSyncMode: TelepromptCueSyncMode;
   readonly cueSyncStatusLabel: string;
   readonly currentCueText: string | null;
+  readonly currentSourceWordId?: string | null;
   readonly currentWordIndex: number | null;
   readonly fullscreenAvailability: TelepromptFullscreenAvailability;
   readonly fullscreenActive: boolean;
@@ -57,6 +66,7 @@ export interface TelepromptTheatreProps {
   readonly settingsMemoryEnabled: boolean;
   readonly summary: TelepromptTheatreSummary;
   readonly theatreViewMode: TelepromptTheatreViewMode;
+  readonly wordTimings?: readonly TelepromptCueWordTiming[];
   readonly onBackToPreview: () => void;
   readonly onBackToReview: () => void;
   readonly onCreateAndListen: () => void;
@@ -90,6 +100,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       cueSyncMode,
       cueSyncStatusLabel,
       currentCueText,
+      currentSourceWordId,
       currentWordIndex,
       countdownRemaining,
       fullscreenAvailability,
@@ -107,6 +118,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       settingsMemoryEnabled,
       summary,
       theatreViewMode,
+      wordTimings = [],
       onBackToPreview,
       onBackToReview,
       onCreateAndListen,
@@ -125,6 +137,10 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     ref,
   ) {
     const preset = telepromptPreset(presetId);
+    const theatreHighlightSettings = useMemo(
+      () => telepromptPresetHighlightSettings(presetId),
+      [presetId],
+    );
     const theatrePreset = telepromptTheatrePreset(settings.presetId);
     const currentCue = currentCueText ?? activeBlock?.spokenText ?? activeBlock?.text ?? "";
     const cueSyncTone = telepromptTheatreCueSyncTone(cueSyncMode);
@@ -368,19 +384,21 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
               )}
               data-testid="teleprompt-theatre-current-cue"
             >
-              <p
-                className={cx(
-                  "mx-auto whitespace-pre-wrap text-center font-semibold",
-                  theatreCueWidthClassName(settings.cueWidth),
-                  theatreTextSizeClassName(settings.cueFontSize, presetId),
-                )}
-                style={{
-                  transform: settings.mirrorMode ? "scaleX(-1)" : undefined,
-                  wordSpacing: preset.wordSpacing,
-                }}
-              >
-                {currentCue || "No spoken text is available for this cue."}
-              </p>
+              <TelepromptTheatreCueText
+                activeBlock={activeBlock}
+                blockKind={activeBlock?.kind}
+                currentSourceWordId={currentSourceWordId}
+                currentWordIndex={currentWordIndex}
+                fallbackText="No spoken text is available for this cue."
+                highlightSettings={theatreHighlightSettings}
+                mirrorMode={settings.mirrorMode}
+                previewBlocks={previewBlocks}
+                text={currentCue}
+                textClassName={theatreTextSizeClassName(settings.cueFontSize, presetId)}
+                widthClassName={theatreCueWidthClassName(settings.cueWidth)}
+                wordTimings={wordTimings}
+                wordSpacing={preset.wordSpacing}
+              />
             </div>
 
             <div className="grid gap-3 rounded-lg border border-white/15 bg-white/5 p-3">
@@ -537,43 +555,21 @@ function theatreTextSizeClassName(
   return "text-3xl leading-[1.3] md:text-4xl";
 }
 
-function CuePreviewList({ blocks }: Readonly<{ blocks: RevisionBlock[] }>) {
-  if (blocks.length === 0) {
-    return (
-      <div>
-        <p className="text-xs font-semibold uppercase text-zinc-400">Next cue</p>
-        <p className="mt-1 text-sm text-zinc-200">Final cue.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="grid gap-2">
-      <p className="text-xs font-semibold uppercase text-zinc-400">Next cue</p>
-      {blocks.map((block) => (
-        <p className="line-clamp-2 text-sm text-zinc-200" key={block.id}>
-          {block.spokenText}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-function telepromptTheatreCueSyncTone(mode: TelepromptCueSyncMode): "info" | "neutral" {
-  return mode === "manual" ? "neutral" : "info";
-}
-
-function telepromptTheatreWordLabel(currentWordIndex: number | null): string {
-  if (currentWordIndex === null || currentWordIndex < 0) {
-    return "Phrase cue";
-  }
-  return `Word ${(currentWordIndex + 1).toString()}`;
-}
-
-function OperatorFact({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="text-orange-200">{label}</dt>
-      <dd className="text-right font-semibold text-white">{value}</dd>
-    </div>
-  );
-}
+export {
+  TelepromptTheatreCueText,
+  telepromptTheatreCueSections,
+  telepromptTheatreCuePresentationKind,
+  telepromptTheatreCueParagraphs,
+  telepromptTheatreRenderedCueSections,
+  telepromptTheatreCrawlOffset,
+  telepromptTheatreCrawlRowKey,
+  telepromptTheatreCueSyncTone,
+  telepromptTheatreWordLabel,
+  CuePreviewList,
+  OperatorFact,
+} from "./telepromptTheatreCueContent";
+export type {
+  TelepromptTheatreCueParagraph,
+  TelepromptTheatreCueSection,
+  TelepromptTheatreRenderedCueSection,
+} from "./telepromptTheatreCueContent";

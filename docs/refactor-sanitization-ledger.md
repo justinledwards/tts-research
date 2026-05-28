@@ -17,3 +17,5 @@
 - backend/internal/pipeline/book_sources.go:extract book scope and import helper cluster — done
 - backend/internal/httpapi/router_test.go:extract reusable endpoint helper cluster — done
 - frontend/src/features/teleprompt/TelepromptStudio.tsx:extract studio view helpers — done
+- frontend/src/WorkspaceDrawer.tsx:extract workspace drawer helper components — done
+- frontend/src/features/teleprompt/TelepromptTheatre.tsx:extract cue rendering and parsing helpers — done
