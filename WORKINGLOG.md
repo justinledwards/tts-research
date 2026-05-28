@@ -1,3 +1,12 @@
+## 2026-05-28 21:47 CEST - Codebase Sanitization
+- [x] Select candidate `scripts/readalong-sync-evidence.mjs:extract sync-report helpers`.
+- [x] Add `scripts/readalong-sync-evidence-helpers.mjs` and move report/evaluation utility cluster.
+- [x] Rewire `scripts/readalong-sync-evidence.mjs` to consume helper module.
+- [x] Update `docs/refactor-sanitization-ledger.md`.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 21:46 CEST - Codebase Sanitization
 - [x] Select candidate `scripts/e2e-surface-complexity-budget.mjs:extract budget config and reporting helpers`
 - [x] Add `scripts/e2e-surface-complexity-budget-helpers.mjs` with budgets, thresholds, normalization, and Markdown report helpers

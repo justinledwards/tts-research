@@ -66,5 +66,6 @@
 - scripts/validate-local/reader-timing.mjs:extract reader timing budget constants into dedicated config module — done
 - scripts/e2e-responsive-snapshots.mjs:extract website calm fixture and metric helpers — done
 - scripts/generate-contract-types.mjs:extract generated contract templates — done
+- scripts/readalong-sync-evidence.mjs:extract sync-report helpers — done
 
 - frontend/src/App.tsx:extract voice cloning activity helpers — done
