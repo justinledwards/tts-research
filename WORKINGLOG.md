@@ -12,6 +12,14 @@
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
 
+## 2026-05-28 05:02 CEST - Codebase Sanitization
+- [x] Select next candidate `frontend/src/features/settings/SettingsPanel.tsx:extract section components and state helpers` from rotation ledger
+- [x] Extract `settingsPanelHelpers.tsx` for settings command/selection helpers and shared section widgets
+- [x] Rewire `SettingsPanel.tsx` to import shared helpers and remove local helper definitions
+- [x] Update `WORKINGLOG.md` and sanitization ledger entries for this run
+- [x] Run `pnpm check`
+- [ ] Resolve unrelated pre-existing lint failures in unrelated script/runtime test paths before full green check
+
 ## 2026-05-28 02:02 CEST - Codebase Sanitization
 - [x] Select next candidate from sanitization cycle with highest-value skipped item
 - [x] Extract transport and playback helper cluster into `frontend/src/features/cinema/PreparedSourceCinemaTransport.tsx`

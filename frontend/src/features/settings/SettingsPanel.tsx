@@ -98,6 +98,18 @@ import {
 import { ScopeBadge } from "./ScopeBadge";
 import { ReadAlongSettingsControls } from "./ReadAlongSettingsControls";
 import {
+  DiagnosticLine,
+  PanelSection,
+  engineFamilyOptions,
+  findSettingsCommandTargetElement,
+  formatBytes,
+  formatProviderLanguageSummary,
+  nextActiveGroupForLayer,
+  quickSourceLabel,
+  settingsCommandTargetToken,
+  settingsGroupsForActiveLayer,
+} from "./settingsPanelHelpers";
+import {
   ERGONOMIC_CONTEXT_PANEL_LABELS,
   ERGONOMIC_PRESETS,
   ERGONOMIC_PREVIEW_BEHAVIOR_LABELS,
@@ -2340,159 +2352,4 @@ function PanelShell({
       {children}
     </Drawer>
   );
-}
-
-function PanelSection({
-  children,
-  commandTargetTokens,
-  highlightedCommandToken,
-  scope,
-  subtitle,
-  title,
-}: Readonly<{
-  children: ReactNode;
-  commandTargetTokens: string[];
-  highlightedCommandToken: string | null;
-  scope: SettingsScope;
-  subtitle: string;
-  title: string;
-}>) {
-  const isHighlighted = highlightedCommandToken
-    ? commandTargetTokens.includes(highlightedCommandToken)
-    : false;
-  return (
-    <Panel
-      className="grid gap-3 p-4"
-      data-settings-command-targets={commandTargetTokens.join(" ")}
-      highlighted={isHighlighted}
-      variant="raised"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold">{title}</h3>
-          <p className="vs-muted mt-1 text-sm leading-6">{subtitle}</p>
-        </div>
-        <AppliesToScope scope={scope} />
-      </div>
-      {children}
-    </Panel>
-  );
-}
-
-function AppliesToScope({ scope }: Readonly<{ scope: SettingsScope }>) {
-  return (
-    <StatusChip className="gap-2" tone="neutral">
-      <span className="vs-muted">Applies to</span>
-      <ScopeBadge scope={scope} />
-    </StatusChip>
-  );
-}
-
-function settingsCommandTargetToken(target: SettingsCommandTarget): string {
-  if (target.fieldId) {
-    return `field-${target.fieldId}`;
-  }
-  if (target.scope) {
-    return `scope-${target.scope}`;
-  }
-  return `group-${target.groupId}`;
-}
-
-function findSettingsCommandTargetElement(token: string): HTMLElement | null {
-  const elements = document.querySelectorAll<HTMLElement>("[data-settings-command-targets]");
-  for (const element of elements) {
-    if (element.dataset.settingsCommandTargets?.split(" ").includes(token)) {
-      return element;
-    }
-  }
-  return null;
-}
-
-function DiagnosticLine({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="flex items-start justify-between gap-4 text-sm">
-      <dt className="vs-muted">{label}</dt>
-      <dd className="max-w-[65%] break-words text-right font-medium">{value}</dd>
-    </div>
-  );
-}
-
-function engineFamilyOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiagnostics[] {
-  const source = engines.length > 0 ? engines : fallbackTTSEngines();
-  return source.filter((engine) => engine.id !== "kokoro-clone" && engine.id !== "kokoro-embed");
-}
-
-function quickSourceLabel(
-  sourceMode: SettingsSourceMode,
-  selectedBookSource: BookSource | null,
-  selectedPreparedSource: PreparedSource | null,
-): string {
-  if (sourceMode === "book") {
-    return selectedBookSource?.title ?? selectedBookSource?.sourceFile ?? "No book selected";
-  }
-  if (sourceMode === "fileUrl") {
-    return (
-      selectedPreparedSource?.title ??
-      selectedPreparedSource?.sourceName ??
-      "No prepared source selected"
-    );
-  }
-  return "Draft text";
-}
-
-function settingsGroupsForActiveLayer(activeLayer: SettingsLayerId) {
-  if (activeLayer === "quick") {
-    return [];
-  }
-  return settingsGroupsForLayer(activeLayer);
-}
-
-function nextActiveGroupForLayer(layerId: SettingsLayerId, activeGroup: SettingsGroupId) {
-  const activeGroupLayer = settingsGroupMeta(activeGroup).layer;
-  if (layerId === "expert") {
-    return activeGroupLayer === "expert" ? activeGroup : "runtime";
-  }
-  if (layerId === "advanced") {
-    return activeGroupLayer === "advanced" ? activeGroup : "run";
-  }
-  return activeGroup;
-}
-
-function fallbackTTSEngines(): TTSEngineDiagnostics[] {
-  return [
-    {
-      default: false,
-      experimental: false,
-      id: "auto",
-      label: "Auto",
-      local: true,
-      status: "ready",
-      supportsReference: true,
-      supportsSSML: false,
-      supportsSwedish: true,
-      supportsVoice: true,
-    },
-  ];
-}
-
-function formatProviderLanguageSummary(engine: TTSEngineDiagnostics): string {
-  const count = engine.languages?.length ?? 0;
-  if (count > 0) {
-    return `${count.toLocaleString()} languages`;
-  }
-  return engine.supportsSwedish ? "Swedish" : "language auto";
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
