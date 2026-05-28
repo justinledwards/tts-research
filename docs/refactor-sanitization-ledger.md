@@ -26,18 +26,21 @@
 - backend/internal/pipeline/profile_targets.go:extract target normalization helpers — done
 - backend/internal/pipeline/profile_sources.go:extract audio and candidate scoring helpers — done
 - backend/internal/pipeline/book_sources.go:extract book scope and import helper cluster — done
+- backend/internal/pipeline/profile_source_helpers.go:extract candidate scoring and candidate selection helpers — done
 - backend/internal/httpapi/router_test.go:extract reusable endpoint helper cluster — done
 - frontend/src/api.ts:extract transcript normalization helpers — done
 - frontend/src/features/teleprompt/TelepromptStudio.tsx:extract studio view helpers — done
 - frontend/src/WorkspaceDrawer.tsx:extract workspace drawer helper components — done
 - frontend/src/features/teleprompt/TelepromptTheatre.tsx:extract cue rendering and parsing helpers — done
 - frontend/src/features/intake/IntakeWizard.tsx:extract intake decision helpers — done
+- scripts/validate-local/validate-final-ux-gates-helpers.mjs:extract final UX constants and artifact map — done
 - frontend/src/features/revision/RevisionPanel.tsx:extract pure view helpers — done
 - frontend/src/features/teleprompt/telepromptCueTimeline.ts:extract timeline text/math helper cluster — done
 - frontend/src/features/voices/VoiceProfileDashboard.tsx:extract dashboard row and utility helpers — done
 - frontend/src/types.ts:extract speech-policy type cluster — done
 - backend/internal/pipeline/models.go:extract job and voice-profile model cluster — done
 - backend/internal/pipeline/projects.go:extract project speech-policy utility helpers — done
+- frontend/src/features/preferences/model.ts:extract persistence and normalization helpers — done
 - scripts/validate-local/review-evidence.mjs:extract review evidence collection and coverage helpers — done
 - frontend/src/features/speech-policy/SpeechPolicyWizard.tsx:extract wizard subcomponents and helpers — done
 - frontend/src/features/speech-policy/policyPreview.ts:extract speech-policy preview helper cluster — done

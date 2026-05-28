@@ -1,3 +1,30 @@
+## 2026-05-28 21:14 CEST - Codebase Sanitization
+- [x] Select candidate `scripts/validate-local/validate-final-ux-gates-helpers.mjs:extract final UX constants and artifact map`.
+- [x] Create `scripts/validate-local/validate-final-ux-gates-contracts.mjs` with shared thresholds, labels, budgets, and artifact factories.
+- [x] Rewire `scripts/validate-local/validate-final-ux-gates-helpers.mjs` to import constants/artifact builders from contracts module and re-export artifact APIs.
+- [x] Update `docs/refactor-sanitization-ledger.md` for completed candidate.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
+## 2026-05-28 21:11 CEST - Codebase Sanitization
+- [x] Select candidate `backend/internal/pipeline/profile_source_helpers.go:extract candidate scoring helpers`.
+- [x] Add `backend/internal/pipeline/profile_source_candidate_helpers.go` with candidate ranking, selection, and span/reference builders.
+- [x] Rewire `backend/internal/pipeline/profile_source_helpers.go` to remove inlined candidate scoring/wrangling cluster.
+- [x] Update `docs/refactor-sanitization-ledger.md` with completed candidate status.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check`.
+- [ ] Commit focused refactor patch.
+
+## 2026-05-28 21:02 CEST - Codebase Sanitization
+- [x] Select candidate `frontend/src/features/preferences/model.ts:extract persistence and normalization helpers`.
+- [x] Create `frontend/src/features/preferences/modelHelpers.ts` with shared persistence and normalization helpers.
+- [x] Rewire `frontend/src/features/preferences/model.ts` to consume helper exports and constants.
+- [x] Update `docs/refactor-sanitization-ledger.md` with completed candidate status.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md`.
+- [x] Run `pnpm check`.
+- [ ] Commit focused refactor patch.
+
 ## 2026-05-28 20:45 CEST - Codebase Sanitization
 - [x] Select candidate `backend/internal/policy/evaluator.go:extract pure inline and media helper cluster`.
 - [x] Add `backend/internal/policy/evaluator_helpers.go` and move policy helper functions/patterns.
