@@ -36,6 +36,14 @@
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
 
+## 2026-05-28 14:11 CEST - Codebase Sanitization
+- [x] Select oversized candidate `frontend/src/features/revision/RevisionPanel.tsx:extract pure view helpers` from this cycle.
+- [x] Extract pure revision UI helpers into `frontend/src/features/revision/revisionPanelHelpers.tsx`.
+- [x] Rewire `RevisionPanel.tsx` to use shared helper module.
+- [x] Update `docs/refactor-sanitization-ledger.md` with candidate status.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 13:01 CEST - Codebase Sanitization
 - [x] Select highest-value oversized helper-heavy candidate `backend/internal/pipeline/book_sources.go:extract narration, metadata, and import helpers`.
 - [x] Extract reusable helper cluster from `backend/internal/pipeline/book_sources.go` into `backend/internal/pipeline/book_source_helpers.go`.

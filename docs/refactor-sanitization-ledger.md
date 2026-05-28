@@ -20,3 +20,4 @@
 - frontend/src/WorkspaceDrawer.tsx:extract workspace drawer helper components — done
 - frontend/src/features/teleprompt/TelepromptTheatre.tsx:extract cue rendering and parsing helpers — done
 - frontend/src/features/intake/IntakeWizard.tsx:extract intake decision helpers — done
+- frontend/src/features/revision/RevisionPanel.tsx:extract pure view helpers — done
