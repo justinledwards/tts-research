@@ -596,3 +596,9 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update `docs/refactor-sanitization-ledger.md` to mark candidate completion.
 - [x] Run `pnpm check` and capture outcomes for this run (fails in pre-existing `scripts/golden-minute-fixture-helpers.mjs` format check).
 - [x] Commit focused refactor patch.
+
+## 2026-05-28 19:49 CEST - Codebase Sanitization
+- [x] Extract read-along invariant validation helper cluster into `frontend/src/features/readalong/readAlongInvariantHelpers.ts`.
+- [x] Update `docs/refactor-sanitization-ledger.md` and automation memory with candidate status.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor.
