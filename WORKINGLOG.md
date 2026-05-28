@@ -694,3 +694,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] run required checks (pnpm check)
 - [x] update refactor ledger and automation memory
 - [x] create focused commit
+
+## 2026-05-28 21:27 CEST - Codebase Sanitization
+- [x] select oversized hotspot for focused constant extraction
+- [x] extract reader timing policy constants into helper config module
+- [x] rewire reader-timing summary evaluator to import shared constants
+- [x] update refactor ledger and automation memory entries
+- [x] run `pnpm check` for handoff validation
+- [x] commit focused refactor
