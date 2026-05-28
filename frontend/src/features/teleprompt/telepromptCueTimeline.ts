@@ -7,6 +7,22 @@ import type {
   HighlightMapV2TimingSource,
 } from "../readalong";
 import type { RevisionBlock } from "../revision";
+import {
+  applyEstimateRange,
+  clamp,
+  compareV2EntryTime,
+  cueTextScore,
+  fallbackAt,
+  normalizeCueText,
+  previousEndMsFromDrafts,
+  resolvedEndMs,
+  resolvedStartMs,
+  safeConfidence,
+  safeDurationMs,
+  sortedCopy,
+  v2EntryKey,
+  v2EntryText,
+} from "./utils/telepromptCueTimelineHelpers";
 
 export type TelepromptCueSyncMode =
   | "manual"
@@ -448,13 +464,6 @@ function firstCue(timeline: TelepromptCueTimeline): TelepromptCueTimelineEntry |
   return fallbackAt(timeline.cues, 0);
 }
 
-function fallbackAt<T>(values: readonly T[], index: number): T | null {
-  if (index < 0 || index >= values.length) {
-    return null;
-  }
-  return values[index];
-}
-
 function cueWithRuntimePosition(
   cue: TelepromptCueTimelineEntry,
   cursorMs: number,
@@ -547,106 +556,4 @@ export function timelineSourceLabel(source: TelepromptCueTimelineSource): string
       return "estimated cue timing";
     }
   }
-}
-
-function compareV2EntryTime(left: HighlightMapV2Entry, right: HighlightMapV2Entry): number {
-  return resolvedStartMs(left) - resolvedStartMs(right);
-}
-
-function resolvedStartMs(entry: HighlightMapV2Entry): number {
-  return Math.max(0, entry.alignedStartMs ?? entry.providerTimingStartMs ?? entry.audioStartMs);
-}
-
-function resolvedEndMs(entry: HighlightMapV2Entry): number {
-  return Math.max(
-    resolvedStartMs(entry) + 1,
-    entry.alignedEndMs ?? entry.providerTimingEndMs ?? entry.audioEndMs,
-  );
-}
-
-function v2EntryText(entry: HighlightMapV2Entry): string {
-  return entry.spokenText || entry.normalizedText || entry.rawText || entry.textQuote;
-}
-
-function v2EntryKey(entry: HighlightMapV2Entry): string {
-  return (
-    entry.entryId ??
-    `${entry.level}:${String(entry.fragmentIndex ?? "fragment")}:${String(entry.sentenceIndex ?? "sentence")}:${String(entry.tokenIndex ?? "token")}:${entry.audioStartMs.toString()}`
-  );
-}
-
-function cueTextScore(left: string, right: string): number {
-  if (!left || !right) {
-    return 0;
-  }
-  if (left === right) {
-    return 1;
-  }
-  if (left.includes(right) || right.includes(left)) {
-    return Math.min(left.length, right.length) / Math.max(left.length, right.length);
-  }
-  const leftWords = new Set(left.split(" ").filter(Boolean));
-  const rightWords = new Set(right.split(" ").filter(Boolean));
-  if (leftWords.size === 0 || rightWords.size === 0) {
-    return 0;
-  }
-  let overlap = 0;
-  for (const word of leftWords) {
-    if (rightWords.has(word)) {
-      overlap += 1;
-    }
-  }
-  return overlap / Math.max(leftWords.size, rightWords.size);
-}
-
-function normalizeCueText(value: string): string {
-  return value
-    .normalize("NFKD")
-    .toLocaleLowerCase()
-    .replaceAll(/[^\p{L}\p{N}]+/gu, " ")
-    .trim()
-    .replaceAll(/\s+/g, " ");
-}
-
-function safeConfidence(value: number | null | undefined, fallback: number): number {
-  if (!Number.isFinite(value)) {
-    return fallback;
-  }
-  return clamp(value ?? fallback, 0, 1);
-}
-
-function safeDurationMs(value: number | null | undefined, text: string): number {
-  if (Number.isFinite(value) && (value ?? 0) > 0) {
-    return Math.max(1, Math.round(value ?? 0));
-  }
-  const wordCount = Math.max(1, normalizeCueText(text).split(" ").filter(Boolean).length);
-  return Math.max(900, wordCount * 320);
-}
-
-function previousEndMsFromDrafts(index: number, blocks: readonly RevisionBlock[]): number {
-  return blocks
-    .slice(0, index)
-    .reduce(
-      (cursor, block) => cursor + safeDurationMs(block.estimatedDurationMs, block.spokenText),
-      0,
-    );
-}
-
-function applyEstimateRange(draft: MutableCueDraft, startMs: number) {
-  const durationMs = safeDurationMs(draft.audioEndMs - draft.audioStartMs, draft.spokenText);
-  draft.audioStartMs = startMs;
-  draft.audioEndMs = startMs + durationMs;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) {
-    return min;
-  }
-  return Math.min(max, Math.max(min, value));
-}
-
-function sortedCopy<T>(values: readonly T[], compare: (left: T, right: T) => number): T[] {
-  const copy = [...values];
-  copy.sort(compare);
-  return copy;
 }

@@ -25,6 +25,14 @@
 
 # Working Log
 
+## 2026-05-28 14:25 CEST - Codebase Sanitization
+- [x] Select oversized candidate `frontend/src/features/teleprompt/telepromptCueTimeline.ts:extract timeline text/math helper cluster`.
+- [x] Create `frontend/src/features/teleprompt/utils/telepromptCueTimelineHelpers.ts` and move extracted pure helper logic out of timeline.
+- [x] Rewire `telepromptCueTimeline.ts` imports/calls to shared helper functions.
+- [x] Update `docs/refactor-sanitization-ledger.md` for completed extraction candidate.
+- [x] Run `pnpm check` and record remaining unrelated failures.
+- [x] Commit focused refactor commit.
+
 ## 2026-05-28 14:02 CEST - Codebase Sanitization
 - [x] Select highest-value oversized candidate `frontend/src/features/intake/IntakeWizard.tsx:extract intake decision helpers`.
 - [x] Create `frontend/src/features/intake/intakeWizardHelpers.ts` for pure selection/import/domain helpers.
@@ -350,3 +358,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [ ] replace index-based active resolution in Markdown/Document renderers with source-word based highlighting
 - [ ] add render registry and degrade-aware diagnostics fields
 - [ ] add focused lint/test/gate coverage scaffolding for sync contract and boundary regression
+
+## 2026-05-28 14:18 CEST - Codebase Sanitization
+- [x] select oversized hotspot for one focused extraction
+- [x] extract teleprompt cue timeline pure text/math helpers into feature-local utils
+- [x] update imports and call sites in `telepromptCueTimeline.ts`
+- [x] run targeted checks and `pnpm check`
+- [x] update refactor ledger and memory entries
+- [x] commit focused refactor
