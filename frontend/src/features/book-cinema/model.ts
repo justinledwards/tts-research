@@ -2,25 +2,47 @@ import type {
   BookScope,
   BookSource,
   BookSourceScopeContent,
+  BookSourceWordSpan,
   BookSourceSectionRole,
   PlaybackProgress,
   VoiceJob,
 } from "../../types";
+import type { HighlightCue } from "../../highlightMap";
 import {
+  resolveWordTimelineAtCursor,
+  wordTimelineFromHighlightMapV2,
+  type HighlightMapV2,
+  type HighlightMapV2Entry,
+} from "../readalong";
+import {
+  READER_LINE_HEIGHT_RATIO,
+  READER_TEXT_SCALE_FONT_PX,
   readerLiveAnnouncement,
+  type ReaderLineSpacing,
   type ReaderKeyboardCommand,
   type ReaderTextScale,
 } from "../reader-accessibility";
+import {
+  resolveCueActiveWordIndex,
+  resolveCueBoundaryWordIndex,
+  resolveV2EntrySourceWordIndex,
+  v2AnchorEntryForWord,
+  v2EntryAtCursor,
+  v2PhraseWordIndexes,
+  sortedV2Entries,
+} from "./modelHelpers";
 
 export const BOOK_SOURCE_ACCEPT =
   ".pdf,.epub,.docx,.md,.markdown,.html,.htm,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/x-markdown,text/html,application/xhtml+xml,application/zip,image/png,image/jpeg,image/tiff,image/webp";
+const BOOK_PAGE_VERTICAL_PADDING = 108;
+const BOOK_PAGE_HORIZONTAL_PADDING = 76;
 const BOOK_PAGE_MIN_WORDS = 18;
-const BOOK_PAGE_MAX_WORDS = 128;
+const BOOK_PAGE_MAX_WORDS = 320;
 const BOOK_PAGE_DEFAULT_WORDS: Record<BookCinemaTextSize, number> = {
-  compact: 116,
-  comfortable: 98,
-  giant: 54,
-  large: 76,
+  compact: 156,
+  comfortable: 132,
+  giant: 72,
+  large: 104,
 };
 const POLICY_NOTE_KINDS = new Set([
   "admonition",
@@ -82,6 +104,14 @@ export interface BookPaginationResult {
 interface BookPaginationOptions {
   pagesPerSpread?: 1 | 2;
   wordsPerPage?: number;
+}
+
+export interface BookPageWordCapacityInput {
+  lineSpacing: ReaderLineSpacing;
+  pagesPerSpread: 1 | 2;
+  textScale: BookCinemaTextSize;
+  viewportHeight: number;
+  viewportWidth: number;
 }
 
 export function resolveDefaultBookScope(book: BookSource): BookScope {
@@ -363,6 +393,105 @@ export function resolveDisplayedBookActiveWordIndex(
   return activeWordIndex >= 0 ? activeWordIndex : (progress?.activeWordIndex ?? -1);
 }
 
+export interface BookTimingCueWordIndexes {
+  activeWordIndex: number;
+  phraseWordEnd?: number;
+  phraseWordStart?: number;
+}
+
+export function resolveBookTimingCueWordIndexes({
+  cue,
+  fallbackActiveWordIndex,
+  scopedSpans,
+}: Readonly<{
+  cue: HighlightCue | null | undefined;
+  fallbackActiveWordIndex: number;
+  scopedSpans: readonly BookSourceWordSpan[];
+}>): BookTimingCueWordIndexes {
+  if (!cue) {
+    return { activeWordIndex: fallbackActiveWordIndex };
+  }
+  const activeWordIndex =
+    resolveCueActiveWordIndex(cue, scopedSpans) ??
+    (fallbackActiveWordIndex >= 0 ? fallbackActiveWordIndex : -1);
+  const phraseWordStart = resolveCueBoundaryWordIndex(cue.phraseWordStart, scopedSpans, "start");
+  const phraseWordEnd = resolveCueBoundaryWordIndex(cue.phraseWordEnd, scopedSpans, "end");
+  const result: BookTimingCueWordIndexes = { activeWordIndex };
+  if (
+    phraseWordStart !== undefined &&
+    phraseWordEnd !== undefined &&
+    phraseWordStart <= phraseWordEnd
+  ) {
+    result.phraseWordStart = phraseWordStart;
+    result.phraseWordEnd = phraseWordEnd;
+  }
+  return result;
+}
+
+export function resolveBookTimingMapV2WordIndexes({
+  map,
+  playbackCursorSec,
+  scopedSpans,
+}: Readonly<{
+  map: HighlightMapV2 | null | undefined;
+  playbackCursorSec: number;
+  scopedSpans: readonly BookSourceWordSpan[];
+}>): BookTimingCueWordIndexes | null {
+  if (!map || scopedSpans.length === 0) {
+    return null;
+  }
+  const cursorMs = Math.max(0, Math.round(playbackCursorSec * 1000));
+  const timelineResolution = resolveWordTimelineAtCursor(
+    wordTimelineFromHighlightMapV2({
+      map,
+      scopeKey: map.scopeKey,
+      sourceId: map.sourceId,
+      spans: scopedSpans,
+    }),
+    cursorMs,
+  );
+  if (timelineResolution) {
+    const result: BookTimingCueWordIndexes = {
+      activeWordIndex: timelineResolution.activeEntry.sourceWordIndex,
+    };
+    if (
+      timelineResolution.phraseWordStart !== undefined &&
+      timelineResolution.phraseWordEnd !== undefined &&
+      timelineResolution.phraseWordStart <= timelineResolution.phraseWordEnd
+    ) {
+      result.phraseWordStart = timelineResolution.phraseWordStart;
+      result.phraseWordEnd = timelineResolution.phraseWordEnd;
+    }
+    return result;
+  }
+  const wordEntries = sortedV2Entries(map.entries.filter((entry) => entry.level === "word"));
+  const anchorEntries = sortedV2Entries(map.entries.filter((entry) => entry.level !== "word"));
+  const activeWordEntry = v2EntryAtCursor(wordEntries, cursorMs);
+  const activeAnchorEntry =
+    v2AnchorEntryForWord(anchorEntries, activeWordEntry, cursorMs) ??
+    v2EntryAtCursor(anchorEntries, cursorMs);
+  const activeEntry = activeWordEntry ?? activeAnchorEntry;
+  if (!activeEntry) {
+    return null;
+  }
+  const activeWordIndex = resolveV2EntrySourceWordIndex(activeEntry, scopedSpans);
+  if (activeWordIndex === undefined) {
+    return null;
+  }
+  const result: BookTimingCueWordIndexes = { activeWordIndex };
+  const phraseWordIndexes = v2PhraseWordIndexes({
+    activeEntry,
+    anchorEntry: activeAnchorEntry,
+    scopedSpans,
+    wordEntries,
+  });
+  if (phraseWordIndexes.length > 0) {
+    result.phraseWordStart = Math.min(...phraseWordIndexes);
+    result.phraseWordEnd = Math.max(...phraseWordIndexes);
+  }
+  return result;
+}
+
 export function visibleBookSpans(
   spans: BookSource["wordSpans"],
   activeWordIndex: number,
@@ -429,6 +558,30 @@ export function paginateBookSpans(
     spreadIndex,
     totalPages: pages.length,
   };
+}
+
+export function estimateBookWordsPerPage({
+  lineSpacing,
+  pagesPerSpread,
+  textScale,
+  viewportHeight,
+  viewportWidth,
+}: BookPageWordCapacityInput): number {
+  const safeWidth = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 0;
+  const safeHeight = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 0;
+  const pageWidth = Math.max(260, safeWidth / pagesPerSpread - BOOK_PAGE_HORIZONTAL_PADDING);
+  const pageHeight = Math.max(280, safeHeight - BOOK_PAGE_VERTICAL_PADDING);
+  const baseFontPx = READER_TEXT_SCALE_FONT_PX[textScale];
+  const lineHeightPx = baseFontPx * READER_LINE_HEIGHT_RATIO[lineSpacing];
+  const averageWordWidthPx = baseFontPx * 2.55;
+  const wordsPerLine = Math.max(5, Math.floor(pageWidth / averageWordWidthPx));
+  const linesPerPage = Math.max(6, Math.floor(pageHeight / lineHeightPx));
+  const estimatedWords = Math.floor(wordsPerLine * linesPerPage * 0.92);
+  return clampNumber(
+    Number.isFinite(estimatedWords) ? estimatedWords : BOOK_PAGE_DEFAULT_WORDS[textScale],
+    BOOK_PAGE_MIN_WORDS,
+    BOOK_PAGE_MAX_WORDS,
+  );
 }
 
 export function bookSourceName(book: BookSource): string {

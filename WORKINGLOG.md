@@ -588,7 +588,7 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] wire `SpeechPolicyWizard.tsx` imports and usage to new helper module
 - [x] run `pnpm check` and report outcomes
 - [x] update sanitization ledger and automation memory
-- [ ] commit focused refactor
+- [x] commit focused refactor
 
 ## 2026-05-28 18:13 CEST - Codebase Sanitization
 - [x] select an unrotated oversized hotspot for one focused refactor
@@ -618,3 +618,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update `docs/refactor-sanitization-ledger.md` and automation memory with candidate status.
 - [x] Run `pnpm check`.
 - [x] Commit focused refactor.
+
+## 2026-05-28 20:06 CEST - Codebase Sanitization
+- [x] select new oversized hotspot `frontend/src/features/book-cinema/model.ts`
+- [x] extract timing cue resolution helpers to `frontend/src/features/book-cinema/modelHelpers.ts`
+- [x] keep `model.ts` behavior and exports unchanged through helper delegation
+- [x] update docs sanitization ledger and automation memory
+- [x] run `pnpm check`
+- [ ] commit focused refactor

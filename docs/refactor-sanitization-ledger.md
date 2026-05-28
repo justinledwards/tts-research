@@ -53,3 +53,4 @@
 - frontend/src/features/readalong/wordTimeline.ts:extract segment helper cluster — done
 
 - frontend/src/features/readalong/readAlongInvariant.ts:extract invariant helper cluster — done
+- frontend/src/features/book-cinema/model.ts:extract timing cue resolution helpers — done
