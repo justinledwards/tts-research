@@ -1,6 +1,7 @@
 # Refactor Sanitization Ledger
 
 ## Cycle 2026-05-28 - Codebase Sanitization
+- scripts/e2e-surface-complexity-budget.mjs:extract budget config and reporting helpers — done
 - backend/internal/policy/evaluator.go:extract pure inline and media helper cluster — done
 - frontend/src/features/teleprompt/telepromptTheatreCueContent.tsx:extract cue parsing/rendering helpers — done
 - backend/internal/pipeline/project_bundles.go:extract bundle helper cluster — done
