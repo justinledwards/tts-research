@@ -525,3 +525,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update docs ledger and automation memory
 - [x] Run `pnpm check`
 - [x] Commit focused refactor
+
+## 2026-05-28 19:02 CEST - Codebase Sanitization
+- [x] Select next oversized candidate `frontend/src/features/speech-policy/policyPreview.ts:extract pure speech-policy preview helpers`.
+- [x] Move preview policy preview logic and helper functions into `frontend/src/features/speech-policy/policyPreviewHelpers.ts`.
+- [x] Rewire `frontend/src/features/speech-policy/policyPreview.ts` to export from the helper module while preserving exported types.
+- [x] Update `docs/refactor-sanitization-ledger.md` to mark candidate completion.
+- [x] Run `pnpm check` and capture outcomes for this run (fails in pre-existing `scripts/golden-minute-fixture-helpers.mjs` format check).
+- [x] Commit focused refactor patch.
