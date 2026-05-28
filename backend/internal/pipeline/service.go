@@ -21,7 +21,6 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/agents"
 	"github.com/justinedwards/tts-research/backend/internal/alignment"
 	"github.com/justinedwards/tts-research/backend/internal/audio"
-	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 var (
@@ -589,155 +588,11 @@ func (service *Service) Options() Options {
 }
 
 func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest) (VoiceJob, error) {
-	inputText := strings.TrimSpace(request.Text)
-	projectID := strings.TrimSpace(request.ProjectID)
-	bookSourceID := strings.TrimSpace(request.BookSourceID)
-	preparedSourceID := strings.TrimSpace(request.PreparedSourceID)
-	progressTargetID := strings.TrimSpace(request.ProgressTargetID)
-	speechPolicyProfile := strings.TrimSpace(request.SpeechPolicyProfile)
-	speechPolicyOverrides := policy.NormalizeOverrides(request.SpeechPolicyOverrides)
-	sourceKind := strings.TrimSpace(request.SourceKind)
-	voiceProfileID := strings.TrimSpace(request.VoiceProfileID)
-	voiceLanguage := strings.TrimSpace(request.VoiceLanguage)
-	ttsEngine := normalizeTTSEngineID(request.TTSEngine)
-	engineOptions := sanitizeEngineOptions(request.EngineOptions)
-	ttsVoice := strings.TrimSpace(request.TTSVoice)
-	ttsLanguage := strings.TrimSpace(request.TTSLanguage)
-	config := resolveJobConfig(request)
-	voiceID := strings.TrimSpace(request.VoiceID)
-	var selectedVoice Voice
-	usesCloneVoice := false
-	adaptiveMode := config.performanceMode == PerformanceModeThroughput
-	maxRetries := service.options.MaxRetries
-	if !config.pipelineOptions.AutoRetry {
-		maxRetries = 1
-	}
-	if inputText == "" {
-		return VoiceJob{}, ErrEmptyText
-	}
-	if projectID == "" {
-		projectID = defaultProjectID
-	}
-	if _, err := service.GetProject(projectID); err != nil {
-		return VoiceJob{}, err
-	}
-	if voiceID != "" {
-		voice, err := service.ResolveVoice(voiceID)
-		if err != nil {
-			return VoiceJob{}, err
-		}
-		selectedVoice = voice
-		switch voice.Kind {
-		case VoiceKindNative:
-			if (ttsEngine == TTSEngineKokoro || ttsEngine == TTSEngineAuto) && ttsVoice == "" {
-				ttsVoice = voiceSynthesisName(voice)
-			}
-			if (ttsEngine == TTSEngineKokoro || ttsEngine == TTSEngineAuto) && ttsLanguage == "" {
-				ttsLanguage = voice.LangCode
-			}
-		case VoiceKindClone:
-			usesCloneVoice = true
-			if normalizeTTSEngineID(request.TTSEngine) == TTSEngineAuto {
-				ttsEngine = TTSEngineKokoroClone
-			}
-			if voiceLanguage == "" {
-				voiceLanguage = voice.LangCode
-			}
-		}
-	}
-	if voiceProfileID != "" && !config.pipelineOptions.VoiceClone {
-		voiceProfileID = ""
-		voiceLanguage = ""
-	}
-	if usesCloneVoice && !config.pipelineOptions.VoiceClone {
-		usesCloneVoice = false
-		voiceID = ""
-		if normalizeTTSEngineID(request.TTSEngine) == TTSEngineAuto {
-			ttsEngine = TTSEngineAuto
-		}
-	}
-	if voiceProfileID != "" {
-		profile, err := service.GetVoiceProfile(voiceProfileID)
-		if err != nil {
-			return VoiceJob{}, err
-		}
-		if profile.Status != VoiceProfileStatusReady {
-			return VoiceJob{}, fmt.Errorf("voice profile not ready: %s", profile.ID)
-		}
-		if voiceLanguage == "" && profile.Language != "" {
-			voiceLanguage = profile.Language
-		}
-		if !voiceProfileTargetReadyForEngine(profile, ttsEngine) {
-			return VoiceJob{}, fmt.Errorf("%w: prepare the %s target for %s first", ErrProfileArtifactMissing, voiceProfileTargetLabel(voiceProfileTargetIDForEngine(ttsEngine)), profile.Name)
-		}
-		if service.readyVoiceProfileArtifact(profile, ttsEngine) == nil {
-			switch normalizeTTSEngineID(ttsEngine) {
-			case TTSEngineSupertonic, TTSEngineKokoroEmbed:
-				return VoiceJob{}, fmt.Errorf("%w: build the %s artifact for %s first", ErrProfileArtifactMissing, normalizeTTSEngineID(ttsEngine), profile.Name)
-			}
-		}
-	}
-	isReferenceRequest := voiceProfileID != "" || usesCloneVoice
-	if voiceProfileID != "" {
-		profile, _ := service.GetVoiceProfile(voiceProfileID)
-		if service.readyVoiceProfileArtifact(profile, ttsEngine) != nil {
-			isReferenceRequest = false
-		}
-	}
-	if _, _, err := service.resolveTTSEngine(ttsEngine, isReferenceRequest); err != nil {
+	job, err := service.prepareCreateJob(request)
+	if err != nil {
 		return VoiceJob{}, err
 	}
 
-	now := time.Now().UTC()
-	voiceProfileName := ""
-	if voiceProfileID != "" {
-		profile, _ := service.GetVoiceProfile(voiceProfileID)
-		voiceProfileName = profile.Name
-	} else if usesCloneVoice {
-		voiceProfileName = selectedVoice.Name
-	}
-
-	job := storedJob{
-		VoiceJob: VoiceJob{
-			ID:                    newID(),
-			ProjectID:             projectID,
-			BookSourceID:          bookSourceID,
-			BookScope:             cloneBookScope(request.BookScope),
-			PreparedSourceID:      preparedSourceID,
-			SelectedBlockIDs:      append([]string(nil), request.SelectedBlockIDs...),
-			SourceKind:            sourceKind,
-			ProgressTargetID:      progressTargetID,
-			SpeechPolicyProfile:   speechPolicyProfile,
-			SpeechPolicyOverrides: speechPolicyOverrides,
-			Locale:                request.Locale,
-			SpeechRenderApplied:   request.SpeechRenderApplied,
-			Status:                JobStatusQueued,
-			Stages:                initialStages(),
-			AdaptiveMode:          adaptiveMode,
-			RunMode:               config.runMode,
-			PerformanceMode:       config.performanceMode,
-			PipelineOptions:       config.pipelineOptions,
-			VoiceProfileID:        voiceProfileID,
-			VoiceProfileName:      voiceProfileName,
-			VoiceProfileLanguage:  voiceLanguage,
-			VoiceID:               voiceID,
-			TTSEngine:             ttsEngine,
-			EngineOptions:         engineOptions,
-			TTSVoice:              ttsVoice,
-			TTSLanguage:           ttsLanguage,
-			InputText:             inputText,
-			Progress: JobProgress{
-				Message: "Queued",
-				Detail:  "Waiting to start voice optimization.",
-			},
-			Retries: RetryMetadata{
-				MaxRetries: maxRetries,
-				Attempts:   0,
-			},
-			CreatedAt: now,
-			UpdatedAt: now,
-		},
-	}
 	service.save(job)
 	runCtx, cancel := context.WithCancel(context.Background())
 	service.registerJobCancel(job.ID, cancel)

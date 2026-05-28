@@ -12,6 +12,14 @@
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
 
+## 2026-05-28 06:01 CEST - Codebase Sanitization
+- [x] Select next candidate `backend/internal/pipeline/service.go:decompose generation orchestration functions`
+- [x] Extract `CreateJob` preparation/normalization to `backend/internal/pipeline/service_create_job.go`
+- [x] Rewire `CreateJob` to delegate to `prepareCreateJob` and launch job runner
+- [x] Update sanitization ledger and working log for candidate completion
+- [x] Run `pnpm check`
+- [ ] Resolve pre-existing `pnpm check` failures in unrelated lint/test paths (`scripts/e2e-ui-actions-guard.mjs`, `scripts/validate-local/validate-local.mjs`, backend `TestCreateBookSourceFromURLUsesHTMLContentType`)
+
 ## 2026-05-28 05:02 CEST - Codebase Sanitization
 - [x] Select next candidate `frontend/src/features/settings/SettingsPanel.tsx:extract section components and state helpers` from rotation ledger
 - [x] Extract `settingsPanelHelpers.tsx` for settings command/selection helpers and shared section widgets
