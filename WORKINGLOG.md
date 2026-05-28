@@ -1,3 +1,11 @@
+## 2026-05-28 18:01 CEST - Codebase Sanitization
+- [x] Select next highest-value unrotated oversized candidate `scripts/e2e-golden-minute.mjs:extract interaction and artifact helpers`.
+- [x] Add `scripts/e2e-golden-minute-helpers.mjs` and move capture/run helpers and validation helpers out of the main script.
+- [x] Rewire `scripts/e2e-golden-minute.mjs` to consume extracted helper module while preserving existing payload/reporting behavior.
+- [x] Update `docs/refactor-sanitization-ledger.md` with the completed candidate status.
+- [x] Run `pnpm check` and capture check outcome.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 17:43 CEST - Codebase Sanitization
 - [x] Select highest-value unrotated oversized candidate `scripts/e2e-ui-action-matrix.mjs:extract action classification and interaction helpers`.
 - [x] Create `scripts/e2e-ui-action-matrix-helpers.mjs` for interactive-selector, classification, discovery, activation, outcome, and metadata helpers.

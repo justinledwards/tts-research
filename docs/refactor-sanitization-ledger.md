@@ -1,6 +1,7 @@
 # Refactor Sanitization Ledger
 
 ## Cycle 2026-05-28 - Codebase Sanitization
+- scripts/e2e-golden-minute.mjs:extract interaction and artifact helpers — done
 - backend/internal/sourceprep/html_quality.go:extract html quality helpers and confidence heuristics — done
 - backend/internal/agents/tts.go:extract kokoro synthesis helpers — done
 - scripts/validate-local/review-evidence.mjs:extract review command step and artifact builders — done
