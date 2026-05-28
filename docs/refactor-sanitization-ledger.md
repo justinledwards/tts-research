@@ -1,6 +1,7 @@
 # Refactor Sanitization Ledger
 
 ## Cycle 2026-05-28 - Codebase Sanitization
+- backend/internal/agents/tts.go:extract kokoro synthesis helpers — done
 - scripts/validate-local/review-evidence.mjs:extract review command step and artifact builders — done
 - frontend/src/App.tsx:extract trailing utility helpers: done
 - frontend/src/features/book-cinema/BookCinemaPanel.tsx:extract reusable upload/import helpers: done
@@ -16,6 +17,7 @@
 - backend/internal/pipeline/profile_sources.go:extract audio and candidate scoring helpers — done
 - backend/internal/pipeline/book_sources.go:extract book scope and import helper cluster — done
 - backend/internal/httpapi/router_test.go:extract reusable endpoint helper cluster — done
+- frontend/src/api.ts:extract transcript normalization helpers — done
 - frontend/src/features/teleprompt/TelepromptStudio.tsx:extract studio view helpers — done
 - frontend/src/WorkspaceDrawer.tsx:extract workspace drawer helper components — done
 - frontend/src/features/teleprompt/TelepromptTheatre.tsx:extract cue rendering and parsing helpers — done
@@ -26,3 +28,4 @@
 - backend/internal/pipeline/models.go:extract job and voice-profile model cluster — done
 - backend/internal/pipeline/projects.go:extract project speech-policy utility helpers — done
 - scripts/validate-local/review-evidence.mjs:extract review evidence collection and coverage helpers — done
+- frontend/src/features/speech-policy/SpeechPolicyWizard.tsx:extract wizard subcomponents and helpers — done

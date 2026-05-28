@@ -1,3 +1,30 @@
+## 2026-05-28 17:18 CEST - Codebase Sanitization
+- [x] Select highest-value unrotated oversized candidate `frontend/src/api.ts:extract transcript normalization helpers`.
+- [x] Create `frontend/src/apiNormalizationHelpers.ts` for `normalizeVoiceProfileSource`, `normalizePreparedSource`, and shared transcript field coercion.
+- [x] Rewire `frontend/src/api.ts` to import and re-export normalization helpers from `apiNormalizationHelpers.ts`.
+- [x] Update `docs/refactor-sanitization-ledger.md` with this candidate completion.
+- [x] Run `pnpm check` (format fails due pre-existing issues in `scripts/golden-minute-fixture.mjs` import duplicate `max`).
+- [x] Commit focused refactor patch.
+
+## 2026-05-28 16:44 CEST - Codebase Sanitization
+- [x] Select highest-value oversized candidate `backend/internal/agents/voice_checker.go:extract transcript comparison helpers`
+- [x] Move transcript tokenization, normalization, matching, and constant helpers into `backend/internal/agents/voice_checker_transcript.go`.
+- [x] Rewire `backend/internal/agents/voice_checker.go` to call extracted transcript helpers.
+- [x] Keep behavior paths and public function signatures unchanged.
+- [x] Update `docs/refactor-sanitization-ledger.md` with candidate completion.
+- [ ] Run `pnpm check`.
+- [ ] Commit focused refactor patch.
+
+
+## 2026-05-28 16:16 CEST - Codebase Sanitization
+- [x] Select highest-value remaining oversized candidate `backend/internal/agents/tts.go:extract kokoro synthesis helpers`.
+- [x] Add `backend/internal/agents/kokoro_helpers.go` for shared Kokoro command/metadata/language fallback helpers.
+- [x] Rewire `backend/internal/agents/tts.go` to use extracted helper functions while preserving behavior.
+- [x] Remove Kokoro metadata/helper duplication from `backend/internal/agents/tts.go`.
+- [x] Update `docs/refactor-sanitization-ledger.md` with candidate completion.
+- [x] Run `pnpm check`.
+- [x] Record this focused refactor and validation summary in automation memory.
+
 ## 2026-05-28 15:26 CEST - Codebase Sanitization
 - [x] Select oversized candidate `backend/internal/pipeline/projects.go:extract project speech-policy utility helpers`.
 - [x] Add `backend/internal/pipeline/project_speech_policy_helpers.go`.
@@ -400,3 +427,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Rewire `scripts/validate-local/review-evidence.mjs` to consume helpers without changing signatures.
 - [x] Run `pnpm check` (format passed; lint/typecheck still fail on pre-existing items in `scripts/e2e-ui-actions-guard.mjs`, `scripts/validate-local/validate-local.mjs`, and teleprompt sourceWordId typing drift).
 - [x] Update sanitization ledger, automation memory, and commit patch.
+
+## 2026-05-28 17:03 CEST - Codebase Sanitization
+- [x] select highest-value unsanitized hotspot
+- [x] extract speech-policy wizard pure helpers into feature-local helper module
+- [x] wire `SpeechPolicyWizard.tsx` imports and usage to new helper module
+- [x] run `pnpm check` and report outcomes
+- [x] update sanitization ledger and automation memory
+- [ ] commit focused refactor
