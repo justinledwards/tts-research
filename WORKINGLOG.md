@@ -473,4 +473,4 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] extract reusable validation helpers into `scripts/validate-local/validate-local-helpers.mjs`
 - [x] rewire `scripts/validate-local/validate-local.mjs` to delegate helper functions
 - [x] run project checks (`pnpm check`) and report outcomes
-- [x] commit focused refactor and update status artifacts
+- [x] commit focused refactor and update status artifacts (`ac2c7b4`)
