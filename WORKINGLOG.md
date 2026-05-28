@@ -12,6 +12,28 @@
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
 
+## 2026-05-28 02:02 CEST - Codebase Sanitization
+- [x] Select next candidate from sanitization cycle with highest-value skipped item
+- [x] Extract transport and playback helper cluster into `frontend/src/features/cinema/PreparedSourceCinemaTransport.tsx`
+- [x] Wire overlay to extracted transport component
+- [x] Remove moved transport-only helpers/icons from `PreparedSourceCinemaBase.tsx`
+- [x] Update sanitization ledger entry to completed for transport/player split
+- [x] Run `pnpm check`
+
+## 2026-05-28 02:07 CEST - Codebase Sanitization
+- [x] Clean final lint/type issues in `PreparedSourceCinemaTransport.tsx`
+- [x] Re-run `pnpm format`
+- [x] Re-run `pnpm check` and capture remaining failures outside refactor scope
+- [ ] Address unrelated lint/test failures outside current candidate scope
+
+## 2026-05-28 03:01 CEST - Codebase Sanitization
+- [x] Select next oversize candidate `backend/internal/pipeline/service_test.go:extract fixture builders and assertion helpers`
+- [x] Move shared test fixture and helper constructors/wait helpers into `backend/internal/pipeline/service_test_fixtures_test.go`
+- [x] Update sanitization ledger status for this cycle candidate
+- [x] Trim and preserve source file boundary to keep imports/APIs stable
+- [x] Run `pnpm check` handoff validation
+- [ ] Add follow-up candidate from cycle rotation in next pass
+
 ## 2026-05-28 01:03 CEST - Codebase Sanitization
 - [x] Inspect sanitization ledger state and pick next untouched hotspot
 - [x] Create reusable book-cinema import helper in feature-local module
