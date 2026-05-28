@@ -641,4 +641,4 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] rewire `scripts/validate-local/validate-local.mjs` to consume shared helper constants
 - [x] update ledger with candidate completion status
 - [x] run `pnpm check`
-- [ ] commit focused refactor
+- [x] commit focused refactor
