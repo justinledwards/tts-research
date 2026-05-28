@@ -5,7 +5,7 @@
 - [x] Update `docs/refactor-sanitization-ledger.md` with completed candidate.
 - [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md` with completed candidate and next recommendation.
 - [x] Run `pnpm check`.
-- [ ] Commit focused refactor patch.
+- [x] Commit focused refactor patch.
 
 ## 2026-05-28 22:02 CEST - Codebase Sanitization
 - [x] Select candidate `frontend/src/features/cinema/PreparedSourceCinemaTransport.tsx:extract transport presentation helpers`.
