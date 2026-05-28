@@ -85,7 +85,6 @@ import {
   formatPace,
   formatPercentage,
   formatPercentageRatio,
-  formatRelativeTime,
   formatSegment,
   formatSimilarity,
   likenessBadgeClass,
@@ -95,20 +94,15 @@ import {
   progressTargetIdForJob,
   replaceBookCinemaHash,
   scopeFromBookScopeKey,
-  shortIdentifier,
 } from "./appHelpers";
 import {
   type ActivityStageSummary,
   type ActivityStatus,
-  resolveVoiceCloneCompletionReference,
   resolveVoiceCloningActivity,
-  resolveVoiceCloningActivityNow,
   type VoiceCloningActivitySummary,
   isVoiceProfileSourceActive,
   profileHasActiveTarget,
   profileHasTargetAttention,
-  profileHasBlockingTargetAttention,
-  profileHasTargetCancelled,
   profileHasReadyCloneTarget,
   voiceCloningProgressRatio,
 } from "./appVoiceCloningHelpers";
@@ -234,7 +228,6 @@ import {
 import { providerRuntimeLeavesLocalBoundary } from "./features/provider-capabilities/providerCapabilityLite";
 import {
   createAndListenAriaLabel,
-  createAndListenScopeLabel,
   workspacePlaybackActionDataAttributes,
   workspacePlaybackActionDisabledReason,
   type CreateAndListenScope,
@@ -343,10 +336,8 @@ import {
 import type { CinemaFocusMode, CinemaSurfaceKind } from "./features/cinema";
 import type {
   CinemaAdvancedCommandTarget,
-  CinemaFocusCommandTarget,
   HelpCommandTarget,
   SettingsCommandTarget,
-  WorkspaceCommandTarget,
 } from "./features/navigation/commands";
 import type { CommandPaletteView } from "./features/command-palette/CommandPalette";
 import {
@@ -513,9 +504,9 @@ function clearStoredTelepromptReturnMemory(): void {
 
 export {
   resolveVoiceCloneCompletionReference,
-  resolveVoiceCloningActivityNow,
   resolveVoiceCloningActivity,
-};
+  resolveVoiceCloningActivityNow,
+} from "./appVoiceCloningHelpers";
 
 function LazySurfaceFallback({
   detail,

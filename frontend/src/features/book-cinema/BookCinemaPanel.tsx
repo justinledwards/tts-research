@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ElementType,
   type ReactNode,
 } from "react";
 import { compactHitTargetClassName, minInteractiveSize } from "../../design";
@@ -45,19 +46,25 @@ import {
   bookScopeSpans,
   bookScopeText,
   bookSourceName,
-  isSupportedBookSourceBatch,
+  estimateBookWordsPerPage,
   normalizeBookScopeForBook,
   paginateBookSpans,
   resolveBookActiveWordIndex,
   resolveDefaultBookScope,
   resolveDisplayedBookActiveWordIndex,
+  resolveBookTimingMapV2WordIndexes,
+  resolveBookTimingCueWordIndexes,
   visibleBookSpans,
   type BookCinemaPolicyNote,
   type BookPage,
   type BookPaginationResult,
   type BookScopeOption,
 } from "./model";
-
+import {
+  bookPageBlocksFromScopeContent,
+  bookPageStructuredBlocks,
+  type BookPageStructuredBlock,
+} from "./pageStructure";
 import { importBookCinemaSources, normalizeBookCinemaImportFiles } from "./bookCinemaImportHelpers";
 import {
   ReaderWayfindingPanel,
@@ -109,13 +116,13 @@ import {
   readAlongRuntimeStateLabel,
   readAlongVisualModeFromRuntime,
   type AlignmentStatus,
-  type HighlightRendererToken,
   type ReadAlongHighlightStyle,
   type ReadAlongHighlightVisualMode,
   type ReadAlongPreferences,
   type ReadAlongRuntimeSnapshot,
   type ReadAlongScrollFollow,
   type SyncDebugSourceLocator,
+  type HighlightMapV2,
 } from "../readalong";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import type {
@@ -140,16 +147,6 @@ import type {
 } from "../../types";
 import { resolveHighlightCue, type HighlightCue } from "../../highlightMap";
 
-const BOOK_PAGE_VERTICAL_PADDING = 108;
-const BOOK_PAGE_HORIZONTAL_PADDING = 76;
-const BOOK_PAGE_MIN_WORDS = 18;
-const BOOK_PAGE_MAX_WORDS = 128;
-const BOOK_PAGE_DEFAULT_WORDS: Record<BookCinemaTextSize, number> = {
-  compact: 116,
-  comfortable: 98,
-  giant: 54,
-  large: 76,
-};
 const LazyBookDocumentReaderStage = lazy(() =>
   import("../cinema/BookDocumentReaderStage").then((module) => ({
     default: module.BookDocumentReaderStage,
@@ -172,6 +169,8 @@ export {
   resolveBookActiveWordIndex,
   resolveDefaultBookScope,
   resolveDisplayedBookActiveWordIndex,
+  resolveBookTimingMapV2WordIndexes,
+  resolveBookTimingCueWordIndexes,
   visibleBookSpans,
 } from "./model";
 export {
@@ -246,16 +245,13 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
   const groupedScopeOptions = useMemo(() => groupBookScopeOptions(scopeOptions), [scopeOptions]);
 
   const importFiles = async (files: FileList | File[] | null | undefined) => {
-    setLocalError(null);
-    const fileArray = files ? [...files] : [];
-    if (fileArray.length === 0) {
-      return;
-    }
-    if (!isSupportedBookSourceBatch(fileArray)) {
-      setLocalError("Upload one book source or an ordered batch of image pages.");
-      return;
-    }
-    await onImport(fileArray, { importProfile, pdfTableMode });
+    await importBookCinemaSources({
+      files,
+      importProfile,
+      onError: setLocalError,
+      onImport,
+      pdfTableMode,
+    });
   };
 
   return (
@@ -859,6 +855,7 @@ export function BookCinemaOverlay({
   uiMemoryFocusState,
   uiMemoryResetSignal,
   highlightMap,
+  highlightMapV2,
   themeName,
   onClose,
   onAccessibilitySettingsChange,
@@ -920,6 +917,7 @@ export function BookCinemaOverlay({
   scope: BookScope;
   scopeContent: BookSourceScopeContent | null;
   highlightMap: HighlightMap | null;
+  highlightMapV2: HighlightMapV2 | null;
   themeName: ThemeName;
   onClose: () => void;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
@@ -976,6 +974,8 @@ export function BookCinemaOverlay({
   const activeBookJob = activeJobMatchesBook ? job : null;
   const activeReadAlongTimingMap =
     activeBookJob && highlightMap?.jobId === activeBookJob.id ? highlightMap : null;
+  const activeReadAlongTimingMapV2 =
+    activeBookJob && highlightMapV2?.generatedAudioId === activeBookJob.id ? highlightMapV2 : null;
   const highlightCue = useMemo(
     () =>
       activeReadAlongTimingMap
@@ -1005,7 +1005,8 @@ export function BookCinemaOverlay({
           activeBookJob && highlightMap && highlightMap.jobId !== activeBookJob.id
             ? "stale"
             : generatedAudioLifecycleFromJob({ job: activeBookJob }),
-        highlightMap: activeReadAlongTimingMap,
+        highlightMap: activeReadAlongTimingMapV2 ? null : activeReadAlongTimingMap,
+        timingArtifact: activeReadAlongTimingMapV2 ?? activeReadAlongTimingMap,
         isPaused: !playbackControls.isPlaying,
         isPlaying: playbackControls.isPlaying,
         isSeeking: playbackControls.isSeeking,
@@ -1013,6 +1014,7 @@ export function BookCinemaOverlay({
     [
       activeBookJob,
       activeReadAlongTimingMap,
+      activeReadAlongTimingMapV2,
       highlightMap,
       playbackControls.isPlaying,
       playbackControls.isSeeking,
@@ -1027,7 +1029,28 @@ export function BookCinemaOverlay({
   });
   const runtimeHighlightCue = readAlongRuntime.activeCue ?? highlightCue;
   const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime, effectiveReadAlong);
-  const timingActiveWordIndex = runtimeHighlightCue?.activeWordIndex ?? activeWordIndex;
+  const resolvedTimingCue = useMemo(() => {
+    const directV2Timing = resolveBookTimingMapV2WordIndexes({
+      map: activeReadAlongTimingMapV2,
+      playbackCursorSec: calibratedPlaybackCursorSec,
+      scopedSpans,
+    });
+    if (directV2Timing) {
+      return directV2Timing;
+    }
+    return resolveBookTimingCueWordIndexes({
+      cue: runtimeHighlightCue,
+      fallbackActiveWordIndex: activeWordIndex,
+      scopedSpans,
+    });
+  }, [
+    activeReadAlongTimingMapV2,
+    activeWordIndex,
+    calibratedPlaybackCursorSec,
+    runtimeHighlightCue,
+    scopedSpans,
+  ]);
+  const timingActiveWordIndex = resolvedTimingCue.activeWordIndex;
   const displayedActiveWordIndex = resolveDisplayedBookActiveWordIndex(
     timingActiveWordIndex,
     progress,
@@ -1039,7 +1062,10 @@ export function BookCinemaOverlay({
     return bookScopeSpans(book, pointerOption.scope)[0]?.index ?? -1;
   }, [book, pointerOption]);
   const readerActiveWordIndex = pointerWordIndex >= 0 ? pointerWordIndex : displayedActiveWordIndex;
-  const phraseRange = resolveHighlightPhraseRange(runtimeHighlightCue);
+  const phraseRange = {
+    end: resolvedTimingCue.phraseWordEnd,
+    start: resolvedTimingCue.phraseWordStart,
+  };
   const queueOptions = useMemo(() => {
     const narratable = scopeOptions.filter(
       (option) => option.isNarratable && (option.wordCount ?? 0) > 0,
@@ -2887,6 +2913,7 @@ function BookCinemaReaderStage({
       scope={scope}
       scopedSpans={scopedSpans}
       scopedText={scopedText}
+      scopeContent={scopeContent}
       accessibilitySettings={accessibilitySettings}
       highlightStyle={highlightStyle}
       phraseWordEnd={phraseWordEnd}
@@ -2905,6 +2932,7 @@ function BookPagedReaderStage({
   scope,
   scopedSpans,
   scopedText,
+  scopeContent,
   accessibilitySettings,
   highlightStyle,
   phraseWordEnd,
@@ -2919,6 +2947,7 @@ function BookPagedReaderStage({
   scope: BookScope;
   scopedSpans: NonNullable<BookSource["wordSpans"]>;
   scopedText: string;
+  scopeContent: BookSourceScopeContent | null;
   accessibilitySettings: ReaderAccessibilitySettings;
   highlightStyle: ReadAlongHighlightStyle;
   phraseWordEnd?: number;
@@ -2964,7 +2993,6 @@ function BookPagedReaderStage({
         <BookReaderPage
           activeWordIndex={activeWordIndex}
           book={book}
-          fallbackText={index === 0 ? scopedText : ""}
           fontSizePx={pageMetrics.fontSizePx}
           highlightStyle={highlightStyle}
           isActivePage={isReaderPageActive(page, activeWordIndex)}
@@ -2977,6 +3005,8 @@ function BookPagedReaderStage({
           readAlongVisualMode={readAlongVisualMode}
           scrollFollow={scrollFollow}
           scope={scope}
+          scopedText={index === 0 || page ? scopedText : ""}
+          scopeContent={scopeContent}
           totalPages={pagination.totalPages}
         />
       ))}
@@ -2984,7 +3014,6 @@ function BookPagedReaderStage({
         <BookReaderPage
           activeWordIndex={activeWordIndex}
           book={book}
-          fallbackText=""
           fontSizePx={pageMetrics.fontSizePx}
           highlightStyle={highlightStyle}
           isActivePage={false}
@@ -2996,6 +3025,8 @@ function BookPagedReaderStage({
           readAlongVisualMode={readAlongVisualMode}
           scrollFollow={scrollFollow}
           scope={scope}
+          scopedText=""
+          scopeContent={null}
           totalPages={pagination.totalPages}
         />
       ) : null}
@@ -3079,7 +3110,6 @@ function BookDocumentReaderSkeleton({
 function BookReaderPage({
   activeWordIndex,
   book,
-  fallbackText,
   fontSizePx,
   highlightStyle,
   isActivePage,
@@ -3091,11 +3121,12 @@ function BookReaderPage({
   readAlongVisualMode,
   scrollFollow,
   scope,
+  scopedText,
+  scopeContent,
   totalPages,
 }: Readonly<{
   activeWordIndex: number;
   book: BookSource;
-  fallbackText: string;
   fontSizePx: number;
   highlightStyle: ReadAlongHighlightStyle;
   isActivePage: boolean;
@@ -3107,28 +3138,23 @@ function BookReaderPage({
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   scrollFollow: ReadAlongScrollFollow;
   scope: BookScope;
+  scopedText: string;
+  scopeContent: BookSourceScopeContent | null;
   totalPages: number;
 }>) {
   const pageNumber = page ? page.index + 1 : totalPages + 1;
   const pageLabel = page ? `Reader page ${String(pageNumber)} of ${String(totalPages)}` : "End";
-  const visibleFallback = fallbackText.split(/\s+/).filter(Boolean).slice(0, 120).join(" ");
-  const pageTokens = useMemo(
+  const visibleFallback = scopedText.split(/\s+/).filter(Boolean).slice(0, 120).join(" ");
+  const pageBlocks = useMemo(
     () =>
-      page
-        ? page.spans.map(
-            (span): HighlightRendererToken => ({
-              key: `${book.id}-cinema-page-${String(page.index)}-${String(span.index)}`,
-              pageIndex: page.index,
-              sourceId: book.id,
-              text: span.text,
-              title: bookSpanTitle(span),
-              tokenOffset: span.index - page.startWordIndex,
-              trailingText: " ",
-              wordIndex: span.index,
-            }),
-          )
-        : [],
-    [book.id, page],
+      bookPageStructuredBlocks({
+        blocks: bookPageBlocksFromScopeContent(scopeContent),
+        page,
+        scopeKey: bookScopeKey(scope),
+        scopedText,
+        sourceId: book.id,
+      }),
+    [book.id, page, scope, scopedText, scopeContent],
   );
 
   return (
@@ -3143,7 +3169,7 @@ function BookReaderPage({
         <span className="truncate">{bookScopeLabel(scope)}</span>
         <span>{pageLabel}</span>
       </header>
-      <p
+      <div
         className="book-cinema-page-copy"
         style={
           {
@@ -3152,21 +3178,23 @@ function BookReaderPage({
           } as CSSProperties
         }
       >
-        {page && pageTokens.length > 0 ? (
-          <HighlightRenderer
-            activeWordIndex={activeWordIndex}
-            highlightStyle={highlightStyle}
-            mode={readAlongVisualMode}
-            phraseWordEnd={phraseWordEnd}
-            phraseWordStart={phraseWordStart}
-            sourceId={book.id}
-            surface="book"
-            tokens={pageTokens}
-          />
+        {page && pageBlocks.length > 0 ? (
+          pageBlocks.map((block) => (
+            <BookReaderPageBlock
+              activeWordIndex={activeWordIndex}
+              block={block}
+              highlightStyle={highlightStyle}
+              key={block.id}
+              phraseWordEnd={phraseWordEnd}
+              phraseWordStart={phraseWordStart}
+              readAlongVisualMode={readAlongVisualMode}
+              sourceId={book.id}
+            />
+          ))
         ) : (
-          visibleFallback
+          <p className="book-cinema-page-block book-cinema-page-block--body">{visibleFallback}</p>
         )}
-      </p>
+      </div>
       <footer className="book-cinema-page-footer">
         <span>{bookSourceName(book)}</span>
         <span>{page ? String(pageNumber) : ""}</span>
@@ -3174,6 +3202,79 @@ function BookReaderPage({
     </article>
   );
 }
+
+function BookReaderPageBlock({
+  activeWordIndex,
+  block,
+  highlightStyle,
+  phraseWordEnd,
+  phraseWordStart,
+  readAlongVisualMode,
+  sourceId,
+}: Readonly<{
+  activeWordIndex: number;
+  block: BookPageStructuredBlock;
+  highlightStyle: ReadAlongHighlightStyle;
+  phraseWordEnd?: number;
+  phraseWordStart?: number;
+  readAlongVisualMode: ReadAlongHighlightVisualMode;
+  sourceId: string;
+}>) {
+  const BlockElement = bookReaderPageBlockElement(block.kind);
+  return (
+    <BlockElement
+      className={bookReaderPageBlockClassName(block.kind)}
+      data-book-page-block-kind={block.kind}
+      data-readalong-node-id={block.sourceBlockId}
+      id={block.sourceBlockId ? `cinema-block-${block.sourceBlockId}` : undefined}
+    >
+      <HighlightRenderer
+        activeWordIndex={activeWordIndex}
+        highlightStyle={highlightStyle}
+        mode={readAlongVisualMode}
+        nodeId={block.sourceBlockId}
+        phraseWordEnd={phraseWordEnd}
+        phraseWordStart={phraseWordStart}
+        sourceId={sourceId}
+        surface="book"
+        tokens={block.tokens}
+      />
+    </BlockElement>
+  );
+}
+
+function bookReaderPageBlockElement(kind: BookPageStructuredBlock["kind"]): ElementType {
+  if (kind === "heading") {
+    return "h1";
+  }
+  if (kind === "subheading") {
+    return "h2";
+  }
+  if (kind === "quote") {
+    return "blockquote";
+  }
+  if (kind === "code" || kind === "table") {
+    return "pre";
+  }
+  return "p";
+}
+
+function bookReaderPageBlockClassName(kind: BookPageStructuredBlock["kind"]): string {
+  const normalizedKind = BOOK_PAGE_BLOCK_STYLE_KINDS.has(kind) ? kind : "body";
+  return `book-cinema-page-block book-cinema-page-block--${normalizedKind}`;
+}
+
+const BOOK_PAGE_BLOCK_STYLE_KINDS = new Set<BookPageStructuredBlock["kind"]>([
+  "body",
+  "caption",
+  "code",
+  "footnote",
+  "heading",
+  "list",
+  "quote",
+  "subheading",
+  "table",
+]);
 
 function useBookPageMetrics(settings: ReaderAccessibilitySettings): {
   fontSizePx: number;
@@ -3208,27 +3309,20 @@ function useBookPageMetrics(settings: ReaderAccessibilitySettings): {
     const viewportWidth = size.width > 0 ? size.width : fallbackBookViewportWidth();
     const viewportHeight = size.height > 0 ? size.height : fallbackBookViewportHeight();
     const pagesPerSpread: 1 | 2 = viewportWidth >= 620 ? 2 : 1;
-    const pageWidth = Math.max(260, viewportWidth / pagesPerSpread - BOOK_PAGE_HORIZONTAL_PADDING);
-    const pageHeight = Math.max(280, viewportHeight - BOOK_PAGE_VERTICAL_PADDING);
     const baseFontPx = READER_TEXT_SCALE_FONT_PX[settings.textScale];
     const lineHeightRatio = READER_LINE_HEIGHT_RATIO[settings.lineSpacing];
-    const lineHeightPx = baseFontPx * lineHeightRatio;
-    const averageWordWidthPx = baseFontPx * 3.15;
-    const wordsPerLine = Math.max(5, Math.floor(pageWidth / averageWordWidthPx));
-    const linesPerPage = Math.max(6, Math.floor(pageHeight / lineHeightPx));
-    const estimatedWords = Math.floor(wordsPerLine * linesPerPage * 0.86);
     return {
       fontSizePx: baseFontPx,
       lineHeightRatio,
       pagesPerSpread,
       ref: setElement,
-      wordsPerPage: clampNumber(
-        Number.isFinite(estimatedWords)
-          ? estimatedWords
-          : BOOK_PAGE_DEFAULT_WORDS[settings.textScale],
-        BOOK_PAGE_MIN_WORDS,
-        BOOK_PAGE_MAX_WORDS,
-      ),
+      wordsPerPage: estimateBookWordsPerPage({
+        lineSpacing: settings.lineSpacing,
+        pagesPerSpread,
+        textScale: settings.textScale,
+        viewportHeight,
+        viewportWidth,
+      }),
     };
   }, [settings.lineSpacing, settings.textScale, size.height, size.width]);
 }
@@ -3313,23 +3407,6 @@ function formatPolicyModeLabel(value: string): string {
     return "Row and column";
   }
   return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function resolveHighlightPhraseRange(cue: HighlightCue | null): {
-  end?: number;
-  start?: number;
-} {
-  if (cue?.mode !== "phrase") {
-    return {};
-  }
-  return {
-    end: cue.phraseWordEnd,
-    start: cue.phraseWordStart,
-  };
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 function stringsFirstNonEmpty(...values: (string | null | undefined)[]): string {
@@ -3417,16 +3494,6 @@ function formatProgressPercent(progress: number): string {
     return "0%";
   }
   return `${Math.round(Math.min(1, progress) * 100).toString()}%`;
-}
-
-function bookSpanTitle(span: NonNullable<BookSource["wordSpans"]>[number]): string | undefined {
-  if (span.pageIndex) {
-    return `Page ${String(span.pageIndex)}`;
-  }
-  if (span.chapter) {
-    return `Chapter ${String(span.chapter)}`;
-  }
-  return undefined;
 }
 
 function formatAdapterDiagnostics(diagnostics: BookCinemaDiagnostics | null): string {

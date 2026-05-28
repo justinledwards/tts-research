@@ -1,4 +1,4 @@
-import { pickTeleprompterWordIndex } from "../../teleprompter";
+import { pickTeleprompterWordIndex, splitTeleprompterTokens } from "../../teleprompter";
 import type { HighlightMap, HighlightToken, VoiceJob } from "../../types";
 import type {
   HighlightMapV2,
@@ -6,6 +6,7 @@ import type {
   HighlightMapV2TimingLevel,
   HighlightMapV2TimingSource,
 } from "../readalong";
+import { sourceWordIdFor } from "../readalong";
 import type { RevisionBlock } from "../revision";
 import {
   applyEstimateRange,
@@ -40,6 +41,9 @@ export interface TelepromptCueWordTiming {
   readonly audioEndMs: number;
   readonly audioStartMs: number;
   readonly confidence: number;
+  readonly sourceWordId?: string;
+  readonly sourceWordIndex?: number;
+  readonly spokenTokenId?: string;
   readonly text: string;
   readonly wordIndex: number;
 }
@@ -50,6 +54,7 @@ export interface TelepromptCueTimelineEntry {
   readonly confidence: number;
   readonly cueId: string;
   readonly cueProgress: number;
+  readonly currentSourceWordId?: string | null;
   readonly currentWordIndex: number;
   readonly nextCueId: string | null;
   readonly normalizedText: string;
@@ -395,16 +400,57 @@ function wordTimingsForV2Cue(
   entries: readonly HighlightMapV2Entry[],
   cue: MutableCueDraft,
 ): TelepromptCueWordTiming[] {
+  const cueWords = splitTeleprompterTokens(cue.spokenText).filter(
+    (token): token is { kind: "word"; text: string; wordIndex: number } =>
+      token.kind === "word" && token.wordIndex !== null,
+  );
+  let nextCueWordSearchIndex = 0;
   return sortedCopy(
     entries.filter((entry) => entry.level === "word" && entryInCueRange(entry, cue)),
     compareV2EntryTime,
-  ).map((entry, index) => ({
-    audioEndMs: resolvedEndMs(entry),
-    audioStartMs: resolvedStartMs(entry),
-    confidence: safeConfidence(entry.confidence, cue.confidence),
-    text: v2EntryText(entry),
-    wordIndex: index,
-  }));
+  ).map((entry, index) => {
+    const mappedWordIndex =
+      cueWordIndexForV2Entry(entry, cueWords, nextCueWordSearchIndex) ?? index;
+    nextCueWordSearchIndex = Math.max(nextCueWordSearchIndex, mappedWordIndex + 1);
+    return {
+      audioEndMs: resolvedEndMs(entry),
+      audioStartMs: resolvedStartMs(entry),
+      confidence: safeConfidence(entry.confidence, cue.confidence),
+      sourceWordId: sourceWordIdForV2Entry(entry),
+      sourceWordIndex: entry.sourceWordIndex,
+      spokenTokenId: entry.spokenTokenId,
+      text: v2EntryText(entry),
+      wordIndex: mappedWordIndex,
+    };
+  });
+}
+
+function sourceWordIdForV2Entry(entry: HighlightMapV2Entry): string | undefined {
+  if (entry.sourceWordId) {
+    return entry.sourceWordId;
+  }
+  const sourceWordIndex = entry.sourceWordIndex;
+  return typeof sourceWordIndex === "number" && Number.isInteger(sourceWordIndex)
+    ? sourceWordIdFor(entry.sourceId, entry.scopeKey, sourceWordIndex)
+    : undefined;
+}
+
+function cueWordIndexForV2Entry(
+  entry: HighlightMapV2Entry,
+  cueWords: readonly { text: string; wordIndex: number }[],
+  startIndex: number,
+): number | null {
+  const entryText = normalizeCueText(v2EntryText(entry));
+  if (!entryText) {
+    return null;
+  }
+  const start = clamp(startIndex, 0, cueWords.length);
+  for (let index = start; index < cueWords.length; index += 1) {
+    if (normalizeCueText(cueWords[index]?.text ?? "") === entryText) {
+      return cueWords[index]?.wordIndex ?? index;
+    }
+  }
+  return null;
 }
 
 function wordTimingsForLegacyCue(
@@ -474,6 +520,7 @@ function cueWithRuntimePosition(
   return {
     ...cue,
     cueProgress,
+    currentSourceWordId: sourceWordIdForCue(cue, cursorMs),
     currentWordIndex: wordIndexForCue(cue, cursorMs, cueProgress),
   };
 }
@@ -490,6 +537,13 @@ function wordIndexForCue(
     return activeTiming.wordIndex;
   }
   return pickTeleprompterWordIndex(cue.spokenText, cueProgress);
+}
+
+function sourceWordIdForCue(cue: TelepromptCueTimelineEntry, cursorMs: number): string | null {
+  return (
+    cue.wordTimings.find((word) => cursorMs >= word.audioStartMs && cursorMs < word.audioEndMs)
+      ?.sourceWordId ?? null
+  );
 }
 
 function cueSyncStatusLabel(

@@ -58,14 +58,18 @@ type HighlightMapV2Entry struct {
 	ScopeKey              string                      `json:"scopeKey"`
 	GeneratedAudioID      string                      `json:"generatedAudioId"`
 	SpeechPlanID          string                      `json:"speechPlanId"`
+	SpokenTokenID         string                      `json:"spokenTokenId,omitempty"`
 	ContentIRVersion      string                      `json:"contentIrVersion"`
 	SourceLocator         contentir.Locator           `json:"sourceLocator"`
 	NodeID                string                      `json:"nodeId"`
 	SegmentID             string                      `json:"segmentId,omitempty"`
+	SourceWordID          string                      `json:"sourceWordId,omitempty"`
+	SourceWordIndex       *int                        `json:"sourceWordIndex,omitempty"`
 	TextQuote             string                      `json:"textQuote"`
 	RawText               string                      `json:"rawText"`
 	NormalizedText        string                      `json:"normalizedText"`
 	SpokenText            string                      `json:"spokenText"`
+	ReadingPosition       ReadingPosition             `json:"readingPosition,omitempty"`
 	TokenIndex            *int                        `json:"tokenIndex"`
 	FragmentIndex         *int                        `json:"fragmentIndex"`
 	SentenceIndex         *int                        `json:"sentenceIndex"`
@@ -110,6 +114,13 @@ func BuildV2(request BuildV2Request) HighlightMapV2 {
 	entries := make([]HighlightMapV2Entry, 0, len(request.Fragments.Fragments)+len(request.Tokens.Tokens))
 	for _, fragment := range request.Fragments.Fragments {
 		fragmentIndex := fragment.Index
+		position := readingPositionForTiming(
+			sourceID,
+			scopeKey,
+			fragment.Text,
+			request.WordSpans,
+			fragment.TokenStart,
+		)
 		entries = append(entries, v2Entry(v2EntryInput{
 			audioEndMS:       fragment.EndMS,
 			audioStartMS:     fragment.StartMS,
@@ -119,9 +130,11 @@ func BuildV2(request BuildV2Request) HighlightMapV2 {
 			fragmentIndex:    &fragmentIndex,
 			generatedAudioID: request.JobID,
 			level:            "phrase",
+			readingPosition:  position,
 			scopeKey:         scopeKey,
 			sourceID:         sourceID,
-			sourceLocator:    locatorForV2Entry(request.WordSpans, fragment.TokenStart, fragment.Text),
+			sourceWordIndex:  sourceWordIndexForTiming(request.WordSpans, fragment.TokenStart),
+			sourceLocator:    locatorForV2Entry(request.WordSpans, fragment.TokenStart, fragment.Text, position),
 			speechPlanID:     speechPlanID,
 			text:             fragment.Text,
 			timingSource:     timingSource,
@@ -132,6 +145,13 @@ func BuildV2(request BuildV2Request) HighlightMapV2 {
 		for _, token := range request.Tokens.Tokens {
 			tokenIndex := token.Index
 			fragmentIndex := token.FragmentIndex
+			position := readingPositionForTiming(
+				sourceID,
+				scopeKey,
+				token.Text,
+				request.WordSpans,
+				token.Index,
+			)
 			entries = append(entries, v2Entry(v2EntryInput{
 				audioEndMS:       token.EndMS,
 				audioStartMS:     token.StartMS,
@@ -141,9 +161,11 @@ func BuildV2(request BuildV2Request) HighlightMapV2 {
 				fragmentIndex:    &fragmentIndex,
 				generatedAudioID: request.JobID,
 				level:            "word",
+				readingPosition:  position,
 				scopeKey:         scopeKey,
 				sourceID:         sourceID,
-				sourceLocator:    locatorForV2Entry(request.WordSpans, token.Index, token.Text),
+				sourceWordIndex:  sourceWordIndexForTiming(request.WordSpans, token.Index),
+				sourceLocator:    locatorForV2Entry(request.WordSpans, token.Index, token.Text, position),
 				speechPlanID:     speechPlanID,
 				text:             token.Text,
 				timingSource:     timingSource,
@@ -183,8 +205,10 @@ type v2EntryInput struct {
 	fragmentIndex    *int
 	generatedAudioID string
 	level            string
+	readingPosition  ReadingPosition
 	scopeKey         string
 	sourceID         string
+	sourceWordIndex  *int
 	sourceLocator    contentir.Locator
 	speechPlanID     string
 	text             string
@@ -199,6 +223,11 @@ func v2Entry(input v2EntryInput) HighlightMapV2Entry {
 		input.audioStartMS,
 		input.audioEndMS,
 	)
+	sourceWordIndex := input.sourceWordIndex
+	sourceWordID := ""
+	if sourceWordIndex != nil {
+		sourceWordID = sourceWordIDForV2(input.sourceID, input.scopeKey, *sourceWordIndex)
+	}
 	return HighlightMapV2Entry{
 		EntryID:               fmt.Sprintf("%s:%04d", input.level, input.entryIndex),
 		Level:                 input.level,
@@ -206,14 +235,18 @@ func v2Entry(input v2EntryInput) HighlightMapV2Entry {
 		ScopeKey:              input.scopeKey,
 		GeneratedAudioID:      firstNonEmpty(input.generatedAudioID, "generated-audio"),
 		SpeechPlanID:          input.speechPlanID,
+		SpokenTokenID:         spokenTokenIDForV2(input.speechPlanID, input.level, input.tokenIndex, input.fragmentIndex, input.entryIndex),
 		ContentIRVersion:      "content-ir.v1",
 		SourceLocator:         input.sourceLocator,
 		NodeID:                fmt.Sprintf("%s:%s:%04d", input.scopeKey, input.level, input.entryIndex),
 		SegmentID:             fmt.Sprintf("segment-%04d", max(1, input.entryIndex+1)),
+		SourceWordID:          sourceWordID,
+		SourceWordIndex:       sourceWordIndex,
 		TextQuote:             strings.TrimSpace(input.text),
 		RawText:               strings.TrimSpace(input.text),
 		NormalizedText:        strings.TrimSpace(input.text),
 		SpokenText:            strings.TrimSpace(input.text),
+		ReadingPosition:       input.readingPosition,
 		TokenIndex:            input.tokenIndex,
 		FragmentIndex:         input.fragmentIndex,
 		SentenceIndex:         nil,
@@ -323,7 +356,10 @@ func driftBudgetForV2(level string) int {
 	}
 }
 
-func locatorForV2Entry(spans []WordSpan, index int, text string) contentir.Locator {
+func locatorForV2Entry(spans []WordSpan, index int, text string, position ReadingPosition) contentir.Locator {
+	if position.Locator != nil {
+		return *position.Locator
+	}
 	if index >= 0 && index < len(spans) {
 		if locator := locatorForWordSpan(spans[index]); locator != nil {
 			return *locator
@@ -331,4 +367,33 @@ func locatorForV2Entry(spans []WordSpan, index int, text string) contentir.Locat
 	}
 	progression := 0.0
 	return contentir.NewHTMLLocator("", "source", text, &progression, "")
+}
+
+func sourceWordIndexForTiming(spans []WordSpan, tokenIndex int) *int {
+	if tokenIndex >= 0 && tokenIndex < len(spans) {
+		index := spans[tokenIndex].Index
+		return &index
+	}
+	return nil
+}
+
+func sourceWordIDForV2(sourceID string, scopeKey string, sourceWordIndex int) string {
+	return fmt.Sprintf("%s:%s:word:%d", firstNonEmpty(sourceID, "source"), firstNonEmpty(scopeKey, "scope"), sourceWordIndex)
+}
+
+func spokenTokenIDForV2(
+	speechPlanID string,
+	level string,
+	tokenIndex *int,
+	fragmentIndex *int,
+	entryIndex int,
+) string {
+	prefix := firstNonEmpty(speechPlanID, "speech-plan")
+	if tokenIndex != nil {
+		return fmt.Sprintf("%s:token:%d", prefix, *tokenIndex)
+	}
+	if fragmentIndex != nil {
+		return fmt.Sprintf("%s:fragment:%d", prefix, *fragmentIndex)
+	}
+	return fmt.Sprintf("%s:%s:%d", prefix, firstNonEmpty(level, "entry"), entryIndex)
 }

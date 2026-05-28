@@ -12,7 +12,6 @@ import {
   resolveWordTimelineAtCursor,
   wordTimelineFromHighlightMapV2,
   type HighlightMapV2,
-  type HighlightMapV2Entry,
 } from "../readalong";
 import {
   READER_LINE_HEIGHT_RATIO,

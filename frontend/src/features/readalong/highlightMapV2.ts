@@ -71,12 +71,16 @@ export interface HighlightMapV2Entry {
   providerTimingEndMs: number | null;
   providerTimingStartMs: number | null;
   rawText: string;
+  readingPosition?: ReadingPosition;
   scopeKey: string;
   segmentId?: string;
+  sourceWordId?: string;
+  sourceWordIndex?: number;
   sentenceIndex: number | null;
   sourceId: string;
   sourceLocator: ContentIRLocator;
   speechPlanId: string;
+  spokenTokenId?: string;
   spokenText: string;
   textQuote: string;
   timingSource: HighlightMapV2TimingSource;
@@ -261,13 +265,16 @@ function readingPositionFromV2Entry(
   entry: HighlightMapV2Entry,
   activeWordIndex: number,
 ): ReadingPosition {
+  const sourceWordIndex =
+    entry.sourceWordIndex ?? entry.readingPosition?.activeWordIndex ?? activeWordIndex;
   return {
-    activeWordIndex,
-    bookSourceId: entry.sourceId,
-    locator: entry.sourceLocator,
-    nodeId: entry.nodeId,
-    scopeKey: entry.scopeKey,
-    textQuote: entry.textQuote,
+    ...entry.readingPosition,
+    activeWordIndex: sourceWordIndex,
+    bookSourceId: entry.readingPosition?.bookSourceId ?? entry.sourceId,
+    locator: entry.readingPosition?.locator ?? entry.sourceLocator,
+    nodeId: entry.readingPosition?.nodeId ?? entry.nodeId,
+    scopeKey: entry.readingPosition?.scopeKey ?? entry.scopeKey,
+    textQuote: entry.readingPosition?.textQuote ?? entry.textQuote,
   };
 }
 

@@ -791,3 +791,24 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] rewire `App.tsx` to import/export helper functions and helper types
 - [x] update sanitization ledger and automation memory
 - [x] run `pnpm check`
+
+## 2026-05-28 23:13 CEST - Alignment Timing Refactor
+- [x] extract unexported timing normalization helpers into same-package helper file
+- [x] keep public timing schema/API in `timing_schema.go`
+- [x] update sanitization ledger
+- [x] run targeted and project checks
+- [x] resolve unrelated pre-existing project gate blockers
+
+## 2026-05-28 23:26 CEST - App Startup Debug
+- [x] reproduce `mise start -- pnpm start:local`
+- [x] identify first startup blocker
+- [x] fix startup blockers without reverting unrelated work
+- [x] verify local startup command
+- [x] clear unrelated frontend lint backlog blocking `pnpm check`
+
+## 2026-05-28 23:33 CEST - Rendered UI Playwright Debug
+- [x] validate first screen with Playwright
+- [x] capture console and overlay evidence
+- [x] fix first rendered UI blockers
+- [x] re-validate desktop and mobile UI state
+- [x] run focused frontend checks

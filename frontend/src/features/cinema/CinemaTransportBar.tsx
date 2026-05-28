@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Button, fieldControlClassName } from "../../design";
 import { READER_PLAYBACK_RATES, READER_SEEK_SECONDS } from "../reader-accessibility";
 import {

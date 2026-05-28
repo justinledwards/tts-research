@@ -181,6 +181,21 @@ export {
   type TimingArtifactValidationStatus,
 } from "./timingArtifact";
 export {
+  buildNarrationWordLedger,
+  resolveWordTimelineAtCursor,
+  sourceWordIdFor,
+  sourceWordIdForSpan,
+  wordTimelineEntryForSourceWordId,
+  wordTimelineFromHighlightMapV2,
+  wordTimelineFromLegacyHighlightMap,
+  type NarrationWordLedgerEntry,
+  type SpeechTokenLedgerEntry,
+  type WordTimeline,
+  type WordTimelineCursorResolution,
+  type WordTimelineEntry,
+  type WordTimelineProvenance,
+} from "./wordTimeline";
+export {
   evaluateBookReadAlongInvariant,
   evaluatePreparedSourceReadAlongInvariant,
   evaluateSourceSwitchInvariant,

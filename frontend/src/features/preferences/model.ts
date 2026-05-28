@@ -1,26 +1,37 @@
-import {
-  WORKSPACE_LAYOUT_MODES,
-  WORKSPACE_LAYOUT_STORAGE_KEY,
-  defaultWorkspaceLayoutMode,
-  normalizeWorkspaceLayoutMode,
-  normalizeWorkspaceStage,
-  type WorkspaceLayoutMode,
-  type WorkspaceStage,
-} from "../workspace/model";
-import { normalizeReviewPane, type ReviewPane } from "../review/model";
-import {
-  normalizeCinemaFocusMode,
-  normalizeCinemaInspectorPanelId,
-  type CinemaFocusMode,
-  type CinemaInspectorPanelId,
-  type CinemaPanelDefinition,
-  type CinemaSurfaceKind,
+import type {
+  CinemaFocusMode,
+  CinemaInspectorPanelId,
+  CinemaPanelDefinition,
+  CinemaSurfaceKind,
 } from "../cinema/model";
+import { normalizeReviewPane, type ReviewPane } from "../review/model";
 import {
   DEFAULT_TELEPROMPT_THEATRE_SETTINGS,
   normalizeTelepromptTheatreSettings,
   type TelepromptTheatreSettings,
 } from "../teleprompt/telepromptTheatreSettings";
+import {
+  defaultWorkspaceLayoutMode,
+  normalizeWorkspaceLayoutMode,
+  WORKSPACE_LAYOUT_STORAGE_KEY,
+  type WorkspaceLayoutMode,
+  type WorkspaceStage,
+} from "../workspace/model";
+import {
+  cleanProjectId,
+  clearDisabledUiMemory,
+  defaultCinemaMemoryState,
+  normalizeCinemaMemoryMap,
+  normalizeCinemaMemoryState,
+  normalizeLegacyWorkspaceLayoutMode,
+  normalizeTelepromptReturnStage,
+  normalizeUiMemoryPreferences,
+  normalizeWorkspaceMemory,
+  safeStorageGet,
+  safeStorageRemove,
+  safeStorageSet,
+  uiMemoryPreferenceValues,
+} from "./modelHelpers";
 
 export const UI_MEMORY_STORAGE_KEY = "tts-ui-memory";
 export const UI_MEMORY_VERSION = 1;
@@ -72,8 +83,6 @@ export interface UiMemoryState {
   };
 }
 
-const CINEMA_SURFACES: readonly CinemaSurfaceKind[] = ["book", "document", "website"];
-
 export const DEFAULT_UI_MEMORY_PREFERENCES: UiMemoryPreferenceValues = {
   rememberLastProject: true,
   rememberLayout: false,
@@ -90,7 +99,7 @@ export function defaultUiMemoryState(
   const normalizedPreferences =
     typeof preferences === "boolean"
       ? { ...DEFAULT_UI_MEMORY_PREFERENCES, rememberLayout: preferences }
-      : normalizeUiMemoryPreferences(preferences);
+      : normalizeUiMemoryPreferences(preferences, DEFAULT_UI_MEMORY_PREFERENCES);
   return {
     cinema: {
       book: defaultCinemaMemoryState(),
@@ -365,12 +374,14 @@ export function normalizeUiMemoryState(value: unknown): UiMemoryState {
     return defaultUiMemoryState();
   }
   const candidate = value as Partial<UiMemoryState>;
-  const blank = defaultUiMemoryState(normalizeUiMemoryPreferences(candidate));
+  const blank = defaultUiMemoryState(
+    normalizeUiMemoryPreferences(candidate, DEFAULT_UI_MEMORY_PREFERENCES),
+  );
   return clearDisabledUiMemory({
     ...blank,
     cinema: normalizeCinemaMemoryMap(candidate.cinema),
     version: UI_MEMORY_VERSION,
-    workspace: normalizeWorkspaceMemory(candidate.workspace),
+    workspace: normalizeWorkspaceMemory(candidate.workspace, defaultUiMemoryState().workspace),
   });
 }
 
@@ -378,220 +389,9 @@ export function persistableUiMemoryState(memory: UiMemoryState): UiMemoryState {
   return clearDisabledUiMemory(normalizeUiMemoryState(memory));
 }
 
-function normalizeUiMemoryPreferences(value: unknown): UiMemoryPreferenceValues {
-  const candidate = value && typeof value === "object" ? (value as Partial<UiMemoryState>) : {};
-  return {
-    rememberLastProject: normalizeBooleanPreference(
-      candidate.rememberLastProject,
-      DEFAULT_UI_MEMORY_PREFERENCES.rememberLastProject,
-    ),
-    rememberLayout: normalizeBooleanPreference(
-      candidate.rememberLayout,
-      DEFAULT_UI_MEMORY_PREFERENCES.rememberLayout,
-    ),
-    rememberPanelPins: normalizeBooleanPreference(
-      candidate.rememberPanelPins,
-      DEFAULT_UI_MEMORY_PREFERENCES.rememberPanelPins,
-    ),
-    rememberReaderPreferences: normalizeBooleanPreference(
-      candidate.rememberReaderPreferences,
-      DEFAULT_UI_MEMORY_PREFERENCES.rememberReaderPreferences,
-    ),
-    rememberTelepromptTheatreSettings: normalizeBooleanPreference(
-      candidate.rememberTelepromptTheatreSettings,
-      DEFAULT_UI_MEMORY_PREFERENCES.rememberTelepromptTheatreSettings,
-    ),
-    rememberTelepromptReturnTarget: normalizeBooleanPreference(
-      candidate.rememberTelepromptReturnTarget,
-      DEFAULT_UI_MEMORY_PREFERENCES.rememberTelepromptReturnTarget,
-    ),
-    rememberTheme: normalizeBooleanPreference(
-      candidate.rememberTheme,
-      DEFAULT_UI_MEMORY_PREFERENCES.rememberTheme,
-    ),
-  };
-}
-
-function normalizeBooleanPreference(value: unknown, fallback: boolean): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function uiMemoryPreferenceValues(memory: UiMemoryState): UiMemoryPreferenceValues {
-  return {
-    rememberLastProject: memory.rememberLastProject,
-    rememberLayout: memory.rememberLayout,
-    rememberPanelPins: memory.rememberPanelPins,
-    rememberReaderPreferences: memory.rememberReaderPreferences,
-    rememberTelepromptTheatreSettings: memory.rememberTelepromptTheatreSettings,
-    rememberTelepromptReturnTarget: memory.rememberTelepromptReturnTarget,
-    rememberTheme: memory.rememberTheme,
-  };
-}
-
-function clearDisabledUiMemory(memory: UiMemoryState): UiMemoryState {
-  const workspace = {
-    ...memory.workspace,
-    layoutMode: memory.rememberLayout ? memory.workspace.layoutMode : null,
-    projectLayoutModes: memory.rememberLayout ? memory.workspace.projectLayoutModes : {},
-    reviewPanes: memory.rememberLayout ? memory.workspace.reviewPanes : {},
-    telepromptTheatreSettings: memory.rememberTelepromptTheatreSettings
-      ? memory.workspace.telepromptTheatreSettings
-      : null,
-    telepromptReturnStages: memory.rememberTelepromptReturnTarget
-      ? memory.workspace.telepromptReturnStages
-      : {},
-  };
-  return {
-    ...memory,
-    cinema: memory.rememberPanelPins ? memory.cinema : normalizeCinemaMemoryMap(null),
-    workspace,
-  };
-}
-
-function normalizeWorkspaceMemory(value: unknown): UiMemoryState["workspace"] {
-  if (!value || typeof value !== "object") {
-    return defaultUiMemoryState().workspace;
-  }
-  const candidate = value as Partial<UiMemoryState["workspace"]>;
-  return {
-    layoutMode:
-      candidate.layoutMode === null || candidate.layoutMode === undefined
-        ? null
-        : normalizeWorkspaceLayoutMode(candidate.layoutMode),
-    projectLayoutModes: normalizeWorkspaceLayoutMap(candidate.projectLayoutModes),
-    reviewPanes: normalizeReviewPaneMap(candidate.reviewPanes),
-    telepromptTheatreSettings:
-      candidate.telepromptTheatreSettings === null ||
-      candidate.telepromptTheatreSettings === undefined
-        ? null
-        : normalizeTelepromptTheatreSettings(candidate.telepromptTheatreSettings),
-    telepromptReturnStages: normalizeTelepromptReturnStageMap(candidate.telepromptReturnStages),
-  };
-}
-
-function normalizeCinemaMemoryMap(value: unknown): Record<CinemaSurfaceKind, UiMemoryCinemaState> {
-  const candidate =
-    value && typeof value === "object" ? (value as Partial<UiMemoryState["cinema"]>) : {};
-  const memory: Record<CinemaSurfaceKind, UiMemoryCinemaState> = {
-    book: defaultCinemaMemoryState(),
-    document: defaultCinemaMemoryState(),
-    website: defaultCinemaMemoryState(),
-  };
-  for (const surfaceKind of CINEMA_SURFACES) {
-    memory[surfaceKind] = normalizeCinemaMemoryState(candidate[surfaceKind]);
-  }
-  return memory;
-}
-
-function normalizeWorkspaceLayoutMap(value: unknown): Record<string, WorkspaceLayoutMode> {
-  return normalizeRecord(value, (item) => normalizeWorkspaceLayoutMode(item));
-}
-
-function normalizeReviewPaneMap(value: unknown): Record<string, ReviewPane> {
-  return normalizeRecord(value, (item) => normalizeReviewPane(item));
-}
-
-function normalizeTelepromptReturnStageMap(value: unknown): Record<string, TelepromptReturnStage> {
-  return normalizeRecord(value, (item) => normalizeTelepromptReturnStage(item));
-}
-
-function normalizeRecord<T>(
-  value: unknown,
-  normalizeItem: (item: unknown) => T,
-): Record<string, T> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  const result: Record<string, T> = {};
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    result[cleanProjectId(key)] = normalizeItem(item);
-  }
-  return result;
-}
-
-function defaultCinemaMemoryState(): UiMemoryCinemaState {
-  return {
-    activePanelId: null,
-    mode: "read",
-    pinnedPanelId: null,
-  };
-}
-
-function normalizeCinemaMemoryState(
-  value: unknown,
-  panels: readonly CinemaPanelDefinition[] = [],
-): UiMemoryCinemaState {
-  if (!value || typeof value !== "object") {
-    return defaultCinemaMemoryState();
-  }
-  const candidate = value as Partial<UiMemoryCinemaState>;
-  const availablePanelIds = new Set(panels.map((panel) => panel.id));
-  const hasPanelList = panels.length > 0;
-  const activePanelId = normalizeCinemaInspectorPanelId(candidate.activePanelId);
-  const pinnedPanelId = normalizeCinemaInspectorPanelId(candidate.pinnedPanelId);
-  return {
-    activePanelId:
-      activePanelId && (!hasPanelList || availablePanelIds.has(activePanelId))
-        ? activePanelId
-        : null,
-    mode: normalizeCinemaFocusMode(candidate.mode),
-    pinnedPanelId:
-      pinnedPanelId && (!hasPanelList || availablePanelIds.has(pinnedPanelId))
-        ? pinnedPanelId
-        : null,
-  };
-}
-
-function normalizeTelepromptReturnStage(value: unknown): TelepromptReturnStage {
-  const stage = normalizeWorkspaceStage(value);
-  return stage === "preview" ? "preview" : "review";
-}
-
 function telepromptTheatreSettingsEqual(
   left: TelepromptTheatreSettings,
   right: TelepromptTheatreSettings,
 ): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function normalizeLegacyWorkspaceLayoutMode(value: unknown): WorkspaceLayoutMode | null {
-  return WORKSPACE_LAYOUT_MODES.includes(value as WorkspaceLayoutMode)
-    ? (value as WorkspaceLayoutMode)
-    : null;
-}
-
-function cleanProjectId(projectId: string): string {
-  const clean = projectId.trim();
-  return clean.length > 0 ? clean : "default";
-}
-
-function safeStorageGet(key: string): string | null {
-  try {
-    if (typeof localStorage === "undefined") {
-      return null;
-    }
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeStorageSet(key: string, value: string): void {
-  try {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(key, value);
-    }
-  } catch {
-    // UI memory is best-effort local presentation state.
-  }
-}
-
-function safeStorageRemove(key: string): void {
-  try {
-    if (typeof localStorage !== "undefined") {
-      localStorage.removeItem(key);
-    }
-  } catch {
-    // UI memory is best-effort local presentation state.
-  }
 }

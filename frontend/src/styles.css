@@ -344,6 +344,19 @@ select {
   transform: scale(calc(0.96 + var(--teleprompter-intensity) * 0.05));
 }
 
+.teleprompt-theatre-crawl-viewport {
+  contain: layout paint;
+}
+
+[data-teleprompt-theatre-crawl-content] {
+  will-change: transform;
+}
+
+[data-teleprompt-theatre-crawl-motion="reduced"] [data-teleprompt-theatre-crawl-content] {
+  transition: none;
+  transform: none;
+}
+
 .book-cinema-text {
   color: var(--vs-text);
   word-break: normal;
@@ -420,6 +433,7 @@ select {
 }
 
 .book-cinema-page-copy {
+  display: block;
   min-height: 0;
   flex: 1;
   overflow: hidden;
@@ -430,6 +444,67 @@ select {
   line-height: var(--book-page-line-height, 1.76);
   overflow-wrap: break-word;
   word-break: normal;
+}
+
+.book-cinema-page-block {
+  margin: 0;
+}
+
+.book-cinema-page-block + .book-cinema-page-block {
+  margin-top: 0.45em;
+}
+
+.book-cinema-page-block--heading {
+  margin-bottom: 0.42em;
+  font-size: clamp(1.24em, 1.1em + 0.58vw, 1.66em);
+  font-weight: 760;
+  line-height: 1.18;
+}
+
+.book-cinema-page-block--subheading {
+  margin-bottom: 0.32em;
+  font-size: clamp(1.08em, 1em + 0.3vw, 1.24em);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.book-cinema-page-block--heading + .book-cinema-page-block--subheading {
+  margin-top: 0;
+}
+
+.book-cinema-page-block--heading + .book-cinema-page-block--body,
+.book-cinema-page-block--subheading + .book-cinema-page-block--body {
+  margin-top: 0;
+}
+
+.book-cinema-page-block--quote {
+  border-left: 3px solid color-mix(in srgb, var(--book-gutter) 82%, var(--book-ink));
+  padding-left: 0.8rem;
+  color: color-mix(in srgb, var(--book-ink) 82%, var(--book-muted));
+  font-style: italic;
+}
+
+.book-cinema-page-block--list {
+  padding-left: 0.8rem;
+}
+
+.book-cinema-page-block--caption,
+.book-cinema-page-block--footnote {
+  color: color-mix(in srgb, var(--book-ink) 72%, var(--book-muted));
+  font-size: 0.86em;
+  line-height: 1.45;
+}
+
+.book-cinema-page-block--code,
+.book-cinema-page-block--table {
+  max-width: 100%;
+  overflow: hidden;
+  border-left: 3px solid color-mix(in srgb, var(--book-gutter) 72%, var(--book-ink));
+  padding-left: 0.75rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, ui-monospace, monospace;
+  font-size: 0.78em;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .book-cinema-page-footer {
@@ -902,6 +977,7 @@ select {
   .teleprompter-word,
   .teleprompter-word::before,
   .teleprompter-word::after,
+  [data-teleprompt-theatre-crawl-content],
   .book-cinema-word-active::after {
     animation: none;
     transition: none;

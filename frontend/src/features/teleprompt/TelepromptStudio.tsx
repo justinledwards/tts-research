@@ -264,6 +264,10 @@ export function TelepromptStudio({
   const audioProgressPercent = cueSync.activeCue
     ? Math.round(cueSync.activeCue.cueProgress * 100)
     : Math.round((cue?.segmentProgress ?? 0) * 100);
+  const activeCueCurrentSourceWordId: string | null =
+    typeof cueSync.activeCue?.currentSourceWordId === "string"
+      ? cueSync.activeCue.currentSourceWordId
+      : null;
   const theatreSummary = useMemo(
     () => ({
       ...buildTelepromptTheatreSummary({
@@ -1119,7 +1123,7 @@ export function TelepromptStudio({
           cueSyncMode={cueSyncMode}
           cueSyncStatusLabel={cueSync.statusLabel}
           currentCueText={cueSync.activeCue?.spokenText ?? cue?.currentText ?? null}
-          currentSourceWordId={cueSync.activeCue?.currentSourceWordId ?? null}
+          currentSourceWordId={activeCueCurrentSourceWordId}
           currentWordIndex={cueSync.activeCue?.currentWordIndex ?? null}
           fullscreenActive={nativeFullscreenActive}
           fullscreenAvailability={fullscreenAvailability}

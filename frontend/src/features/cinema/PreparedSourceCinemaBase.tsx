@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useAudioWaveformBars } from "../../audioWaveform";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
 import { Button, fieldControlClassName, Toggle } from "../../design";
@@ -31,7 +30,7 @@ import { HeaderContextSummary } from "../header";
 import { ExitIcon, SettingsIcon } from "../navigation";
 import { useReadAlongLiveStatus } from "../accessibility";
 import { LazyPanelFallback } from "../performance";
-import { generatedAudioLifecycleFromJob, playbackActionLabel } from "../playback";
+import { generatedAudioLifecycleFromJob } from "../playback";
 import { PolicyScopeSummary, policyScopeSummary, SourcePolicyPinEditor } from "../policy";
 import type { UiMemoryCinemaState } from "../preferences";
 import {
@@ -66,7 +65,6 @@ import {
   normalizeReaderAccessibilitySettings,
   READER_LINE_SPACING_CLASS,
   READER_MEASURE_CLASS,
-  READER_SEEK_SECONDS,
   READER_TEXT_SCALE_CLASS,
   type ReaderAccessibilitySettings,
   readerDataAttributes,
@@ -111,18 +109,15 @@ import {
 } from "./CinemaMobileSheet";
 import { CinemaShell } from "./CinemaShell";
 import {
-  CinemaTheatreChrome,
-  CinemaTheatreTransport,
-  useCinemaTheatreController,
-} from "./CinemaTheatre";
-import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
+  PreparedSourceCinemaAudioBarsIcon,
+  PreparedSourceCinemaTransport,
+} from "./PreparedSourceCinemaTransport";
+import { CinemaTheatreChrome, useCinemaTheatreController } from "./CinemaTheatre";
 import {
   type CinemaRendererLifecycleState,
   cinemaRendererLifecycleDetail,
-  cinemaRendererLifecycleLabel,
   deriveCinemaPlaybackState,
   deriveCinemaReadinessDisplay,
-  isCinemaRendererReady,
 } from "./model";
 import { PreparedSourcePolicyNotes } from "./policy-notes/PreparedSourcePolicyNotes";
 import {
@@ -1948,7 +1943,7 @@ function PreparedSourceCinemaMobileSheet({
           ) : null}
         </div>
       ),
-      icon: <AudioBarsIcon />,
+      icon: <PreparedSourceCinemaAudioBarsIcon />,
       id: "narration",
       label: "Narration",
     },
@@ -1963,330 +1958,6 @@ function PreparedSourceCinemaMobileSheet({
       panels={panels}
       onPanelChange={onMobilePanelChange}
     />
-  );
-}
-
-function PreparedSourceCinemaTransport({
-  accessibilitySettings,
-  canBookmark,
-  canCreateAudio,
-  isMobileSheetOpen,
-  isProcessing,
-  job,
-  playbackState,
-  playbackControls,
-  playbackCursorSec,
-  progress,
-  rendererLifecycle,
-  source,
-  theatreControlsVisible = true,
-  variant = "normal",
-  onAccessibilitySettingsChange,
-  onBookmark,
-  onCreateAudio,
-  onPlayPause,
-  onRestart,
-  onSkip,
-  onToggleMobilePanel,
-}: Readonly<{
-  accessibilitySettings: ReaderAccessibilitySettings;
-  canBookmark: boolean;
-  canCreateAudio: boolean;
-  isMobileSheetOpen: boolean;
-  isProcessing: boolean;
-  job: VoiceJob | null;
-  playbackState: ReturnType<typeof deriveCinemaPlaybackState>;
-  playbackControls: PreparedSourceCinemaPlaybackControls;
-  playbackCursorSec: number;
-  progress: PlaybackProgress | null;
-  rendererLifecycle: CinemaRendererLifecycleState;
-  source: PreparedSource;
-  theatreControlsVisible?: boolean;
-  variant?: "normal" | "theatre";
-  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
-  onBookmark: () => void;
-  onCreateAudio: (source: PreparedSource) => void;
-  onPlayPause: () => void;
-  onRestart: () => void;
-  onSkip: (seconds: number) => void;
-  onToggleMobilePanel: () => void;
-}>) {
-  const progressRatio = playbackProgressRatio(playbackCursorSec, job, progress);
-  const durationMs = job?.durationMs ?? 0;
-  const displayCursorSec = playbackDisplayCursorSec(
-    playbackCursorSec,
-    job,
-    progress,
-    progressRatio,
-  );
-  const canStart = canCreateAudio && !isProcessing && source.status === "ready";
-  const isPlaybackTransport =
-    playbackState === "playable" ||
-    playbackState === "playing" ||
-    playbackState === "paused" ||
-    playbackState === "completed";
-  const rendererReady = isCinemaRendererReady(rendererLifecycle);
-  const primaryLabel = playbackPrimaryLabel(playbackState, playbackControls.isPlaying);
-  let primaryDisabled = !canStart;
-  if (isPlaybackTransport) {
-    primaryDisabled = !playbackControls.isAvailable || !rendererReady;
-  } else if (playbackState === "generating") {
-    primaryDisabled = true;
-  }
-  let primaryIcon: ReactNode = <AudioBarsIcon />;
-  if (isPlaybackTransport) {
-    primaryIcon = playbackControls.isPlaying ? <PauseIcon /> : <PlayIcon />;
-  }
-  const playbackUnavailableReason = preparedSourcePlaybackDisabledReason(
-    playbackControls.isAvailable,
-    rendererReady,
-  );
-  const primaryDisabledReason = preparedSourcePrimaryDisabledReason({
-    canStart,
-    isPlaybackTransport,
-    isProcessing,
-    playbackUnavailableReason,
-    playbackState,
-    source,
-  });
-  const seekUnavailableReason = preparedSourceSeekDisabledReason(
-    Boolean(playbackControls.skipBy),
-    rendererReady,
-  );
-  const handlePrimary = () => {
-    if (isPlaybackTransport) {
-      onPlayPause();
-      return;
-    }
-    onCreateAudio(source);
-  };
-  const transportModel: CinemaTransportModel = {
-    bookmark: {
-      disabled: !canBookmark,
-      onClick: onBookmark,
-    },
-    displayControls: (
-      <ReaderAccessibilityControls
-        settings={accessibilitySettings}
-        variant="panel"
-        onChange={onAccessibilitySettingsChange}
-      />
-    ),
-    generationSettings: (
-      <TransportSettingPills
-        items={[
-          source.sourceSpeechPolicyProfile ?? "Project voice",
-          `${preparedSourceCinemaMetrics(source).wordCount.toLocaleString()} words`,
-        ]}
-      />
-    ),
-    mobileMore: {
-      active: isMobileSheetOpen,
-      controlsId: PREPARED_SOURCE_CINEMA_MOBILE_SHEET_ID,
-      icon: <MoreIcon />,
-      onClick: onToggleMobilePanel,
-    },
-    playbackRate: {
-      disabled: !playbackControls.setPlaybackRate,
-      value: playbackControls.playbackRate,
-      onChange: playbackControls.setPlaybackRate,
-    },
-    playbackState,
-    primary: {
-      className:
-        playbackState === "preAudio"
-          ? "bg-amber-400 text-zinc-950 shadow-amber-500/20"
-          : "bg-orange-600 text-white shadow-orange-500/25",
-      disabled: primaryDisabled,
-      disabledReason: primaryDisabled ? primaryDisabledReason : undefined,
-      icon: primaryIcon,
-      label: primaryLabel,
-      onClick: handlePrimary,
-    },
-    progress: {
-      currentLabel: formatClockTime(displayCursorSec),
-      durationLabel: durationMs > 0 ? formatClockTime(durationMs / 1000) : "--:--",
-      ratio: progressRatio,
-      waveform: job ? (
-        <Waveform audioUrl={job.audioUrl} progressRatio={progressRatio} />
-      ) : (
-        <TransportWaveformPlaceholder />
-      ),
-    },
-    restart: {
-      disabled: !playbackControls.isAvailable || !rendererReady,
-      disabledReason: playbackUnavailableReason,
-      icon: <RestartIcon />,
-      onClick: onRestart,
-    },
-    skipBackward: {
-      disabled: !playbackControls.skipBy || !rendererReady,
-      disabledReason: seekUnavailableReason,
-      icon: <SkipBackIcon />,
-      onClick: () => {
-        onSkip(-READER_SEEK_SECONDS);
-      },
-      visible: true,
-    },
-    skipForward: {
-      disabled: !playbackControls.skipBy || !rendererReady,
-      disabledReason: seekUnavailableReason,
-      icon: <SkipForwardIcon />,
-      onClick: () => {
-        onSkip(READER_SEEK_SECONDS);
-      },
-      visible: true,
-    },
-    stateSummary: {
-      detail: preparedSourceTransportDetail(source, job, playbackState, rendererLifecycle),
-      title: preparedSourceTransportTitle(playbackState, rendererLifecycle),
-    },
-  };
-
-  if (variant === "theatre") {
-    return (
-      <CinemaTheatreTransport controlsVisible={theatreControlsVisible} model={transportModel} />
-    );
-  }
-
-  return <CinemaTransportBar model={transportModel} />;
-}
-
-function preparedSourcePrimaryDisabledReason({
-  canStart,
-  isPlaybackTransport,
-  isProcessing,
-  playbackUnavailableReason,
-  playbackState,
-  source,
-}: Readonly<{
-  canStart: boolean;
-  isPlaybackTransport: boolean;
-  isProcessing: boolean;
-  playbackUnavailableReason: string | undefined;
-  playbackState: ReturnType<typeof deriveCinemaPlaybackState>;
-  source: PreparedSource;
-}>): string | undefined {
-  if (isPlaybackTransport) {
-    return playbackUnavailableReason;
-  }
-  if (playbackState === "generating") {
-    return "Audio generation is already in progress.";
-  }
-  if (canStart) {
-    return undefined;
-  }
-  if (isProcessing) {
-    return "Source preparation is already running.";
-  }
-  if (source.status !== "ready") {
-    return source.error ?? "Source is not ready yet.";
-  }
-  return "Audio creation is not available for this source.";
-}
-
-function preparedSourcePlaybackDisabledReason(
-  isAvailable: boolean,
-  rendererReady: boolean,
-): string | undefined {
-  if (isAvailable && rendererReady) {
-    return undefined;
-  }
-  if (isAvailable) {
-    return "Audio renderer is still preparing.";
-  }
-  return "Audio playback is not available for this source.";
-}
-
-function preparedSourceSeekDisabledReason(
-  canSeek: boolean,
-  rendererReady: boolean,
-): string | undefined {
-  if (canSeek && rendererReady) {
-    return undefined;
-  }
-  if (canSeek) {
-    return "Audio renderer is still preparing.";
-  }
-  return "Seeking is unavailable for this audio.";
-}
-
-function playbackPrimaryLabel(
-  playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
-  isPlaying: boolean,
-): string {
-  if (playbackState === "generating") {
-    return "Creating audio";
-  }
-  if (playbackState === "degraded") {
-    return playbackActionLabel("rebuildAudio");
-  }
-  if (playbackState === "preAudio") {
-    return "Create audio";
-  }
-  return isPlaying ? "Pause" : playbackActionLabel("play");
-}
-
-function preparedSourceTransportTitle(
-  playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
-  rendererLifecycle: CinemaRendererLifecycleState,
-): string {
-  if (!isCinemaRendererReady(rendererLifecycle)) {
-    return cinemaRendererLifecycleLabel(rendererLifecycle);
-  }
-  if (playbackState === "generating") {
-    return "Creating audio";
-  }
-  if (playbackState === "degraded") {
-    return "Audio needs attention";
-  }
-  if (playbackState === "preAudio") {
-    return "Ready to create audio";
-  }
-  return "Audio ready";
-}
-
-function preparedSourceTransportDetail(
-  source: PreparedSource,
-  job: VoiceJob | null,
-  playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
-  rendererLifecycle: CinemaRendererLifecycleState,
-): string {
-  const title = preparedSourceCinemaTitle(source);
-  if (!isCinemaRendererReady(rendererLifecycle)) {
-    return cinemaRendererLifecycleDetail(rendererLifecycle);
-  }
-  if (playbackState === "generating") {
-    return `${title} is being narrated. You can keep reading while audio is prepared.`;
-  }
-  if (playbackState === "degraded") {
-    if (job?.status === "failed") {
-      return job.error ?? "Generation failed for this source. Rebuild audio when ready.";
-    }
-    if (job?.status === "cancelled") {
-      return "Generation was cancelled. Rebuild audio for this source when ready.";
-    }
-    return "Generated audio is not playable yet. Rebuild audio if the controls do not recover.";
-  }
-  if (playbackState === "preAudio") {
-    return `${title} is ready to read. Create audio when you want synchronized playback.`;
-  }
-  return `${title} has generated audio.`;
-}
-
-function TransportSettingPills({ items }: Readonly<{ items: string[] }>) {
-  return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-      {items.map((item) => (
-        <span
-          className="max-w-40 truncate rounded-md border px-2 py-1 text-xs font-semibold vs-border vs-muted"
-          key={item}
-          title={item}
-        >
-          {item}
-        </span>
-      ))}
-    </div>
   );
 }
 
@@ -2443,46 +2114,6 @@ function renderPreparedSourceCinemaBlockContent({
   return <p className="m-0">{words}</p>;
 }
 
-function Waveform({
-  audioUrl,
-  progressRatio,
-}: Readonly<{ audioUrl: string; progressRatio: number }>) {
-  const bars = useAudioWaveformBars(audioUrl, 96);
-  if (!bars) {
-    return <TransportWaveformPlaceholder label="Loading audio waveform..." />;
-  }
-  if (bars.length === 0) {
-    return <TransportWaveformPlaceholder label="Waveform unavailable for this audio." />;
-  }
-  return (
-    <div aria-hidden="true" className="flex h-7 min-w-0 flex-1 items-center gap-[2px]">
-      {bars.map((amplitude, index) => {
-        const active = index / bars.length <= progressRatio;
-        return (
-          <span
-            className={`w-[2px] rounded-full ${active ? "bg-orange-600" : "bg-zinc-300"}`}
-            key={`${audioUrl}-${index.toString()}`}
-            style={{ height: `${String(5 + Math.round(amplitude * 20))}px` }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function TransportWaveformPlaceholder({
-  label = "Audio waveform appears after generation.",
-}: Readonly<{ label?: string }>) {
-  return (
-    <div
-      className="flex h-7 min-w-0 flex-1 items-center overflow-hidden rounded-md border border-dashed px-2 text-xs font-medium vs-border vs-muted"
-      title={label}
-    >
-      <span className="min-w-0 truncate">{label}</span>
-    </div>
-  );
-}
-
 function HealthRow({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -2629,47 +2260,6 @@ function increasePreparedSourceCinemaTextSize(
   return order[Math.min(order.length - 1, order.indexOf(size) + 1)] ?? "large";
 }
 
-function playbackProgressRatio(
-  playbackCursorSec: number,
-  job: VoiceJob | null,
-  progress: PlaybackProgress | null,
-): number {
-  if (progress) {
-    return clamp01(progress.progress);
-  }
-  if (!job || job.durationMs <= 0) {
-    return 0;
-  }
-  return clamp01(playbackCursorSec / (job.durationMs / 1000));
-}
-
-function playbackDisplayCursorSec(
-  playbackCursorSec: number,
-  job: VoiceJob | null,
-  progress: PlaybackProgress | null,
-  progressRatio: number,
-): number {
-  if (playbackCursorSec > 0) {
-    return playbackCursorSec;
-  }
-  if (progress && progress.currentTimeSec > 0) {
-    return progress.currentTimeSec;
-  }
-  if (job && job.durationMs > 0 && progressRatio > 0) {
-    return (job.durationMs / 1000) * progressRatio;
-  }
-  return playbackCursorSec;
-}
-
-function formatClockTime(totalSeconds: number): string {
-  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
-    return "0:00";
-  }
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = Math.floor(totalSeconds % 60);
-  return `${minutes.toString()}:${seconds.toString().padStart(2, "0")}`;
-}
-
 function formatDateTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -2687,10 +2277,6 @@ function formatDateTime(value: string): string {
 function sentenceCase(value: string): string {
   const normalised = value.replaceAll(/[-_]+/g, " ").trim();
   return normalised ? `${normalised.charAt(0).toUpperCase()}${normalised.slice(1)}` : value;
-}
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
 }
 
 function scrollToCinemaBlock(blockId: string, behavior: ScrollBehavior) {
@@ -2772,19 +2358,6 @@ function CinemaFilmIcon() {
         strokeWidth="1.5"
       />
       <path d="m10.5 9.4 4.2 2.6-4.2 2.6V9.4Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function AudioBarsIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path
-        d="M5 10v4M9 5v14M13 8v8M17 3v18M21 9v6"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="2"
-      />
     </svg>
   );
 }
@@ -2880,69 +2453,6 @@ function MicrophoneIcon() {
         d="M12 14a4 4 0 0 0 4-4V5a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4ZM5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"
         stroke="currentColor"
         strokeLinecap="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
-function MoreIcon() {
-  return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-      <path d="M10 6.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM10 11.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM10 16.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
-    </svg>
-  );
-}
-
-function PauseIcon() {
-  return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-      <path d="M6 4h3v12H6V4ZM11 4h3v12h-3V4Z" />
-    </svg>
-  );
-}
-
-function PlayIcon() {
-  return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-      <path d="m6 4 10 6-10 6V4Z" />
-    </svg>
-  );
-}
-
-function RestartIcon() {
-  return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-      <path
-        d="M4 12a8 8 0 1 0 2.34-5.66L4 8.68M4 4v4.68h4.68"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
-function SkipBackIcon() {
-  return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-      <path
-        d="M11 7 6 12l5 5V7ZM18 7l-5 5 5 5V7Z"
-        stroke="currentColor"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
-function SkipForwardIcon() {
-  return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-      <path
-        d="m13 7 5 5-5 5V7ZM6 7l5 5-5 5V7Z"
-        stroke="currentColor"
-        strokeLinejoin="round"
         strokeWidth="1.8"
       />
     </svg>

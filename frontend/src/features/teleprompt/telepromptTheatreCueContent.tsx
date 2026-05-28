@@ -9,8 +9,6 @@ import {
 import { HighlightRenderer } from "../readalong";
 import type { TelepromptCueWordTiming } from "./telepromptCueTimeline";
 import {
-  CuePreviewList,
-  OperatorFact,
   telepromptTheatreCrawlOffset,
   telepromptTheatreCrawlRowKey,
   telepromptTheatreCueElement,
@@ -18,7 +16,7 @@ import {
   telepromptTheatreCueSectionKindAttribute,
   telepromptTheatreCueSections,
   telepromptTheatreRenderedCueSections,
-  TelepromptTheatreCrawlRow,
+  type TelepromptTheatreCrawlRow,
 } from "./telepromptTheatreCueContentHelpers";
 
 export function TelepromptTheatreCueText({
@@ -70,8 +68,9 @@ export function TelepromptTheatreCueText({
   const sourceWordIdByCueIndex = useMemo(() => {
     const values = new Map<number, string>();
     for (const timing of wordTimings) {
-      if (timing.sourceWordId) {
-        values.set(timing.wordIndex, timing.sourceWordId);
+      const sourceWordId = timing.sourceWordId;
+      if (typeof sourceWordId === "string" && sourceWordId.length > 0) {
+        values.set(timing.wordIndex, sourceWordId);
       }
     }
     return values;

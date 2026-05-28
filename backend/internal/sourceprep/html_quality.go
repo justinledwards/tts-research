@@ -59,9 +59,6 @@ type htmlCandidate struct {
 	linkWords   int
 }
 
-var readableClassPattern = regexp.MustCompile(`(?i)(article|post|entry-content|story|main-content|content-body|docs-content|documentation|prose|readable|article-body|blog-post)`)
-var chromeClassPattern = regexp.MustCompile(`(?i)(nav|menu|breadcrumb|header|footer|aside|sidebar|social|share|newsletter|subscribe|promo|advert|ad-|comments?|related|cookie|modal|drawer|search)`)
-
 func AnalyzeHTMLQuality(input string, options HTMLQualityOptions) HTMLAnalysis {
 	root, err := xhtml.Parse(strings.NewReader(input))
 	if err != nil {

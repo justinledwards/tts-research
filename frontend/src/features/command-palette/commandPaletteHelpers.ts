@@ -11,15 +11,11 @@ import type {
   WorkspaceCommandTarget,
 } from "../navigation/commands";
 import type { CinemaFocusMode, CinemaSurfaceKind } from "../cinema";
-import type {
-  BookScope,
-  BookSource,
-  PlaybackProgress,
-  PreparedSource,
-  SourceMode,
-} from "../../types";
+import type { BookScope, BookSource, PlaybackProgress, PreparedSource } from "../../types";
 import type { WorkspaceStageActionId } from "../workspace/stageActions";
 import type { WorkspaceLayoutMode, WorkspaceStage } from "../workspace/model";
+
+type SourceMode = "book" | "fileUrl" | "text";
 
 export interface CommandMetadataState {
   cinemaAdvanced: CommandMetadata<CinemaAdvancedCommandTarget>[];
@@ -92,7 +88,7 @@ export interface CommandPaletteBuildContext {
   createAndListenScope: CreateAndListenScope;
   handlers: CommandPaletteHandlers;
   job: { id?: string } | null;
-  projects: Array<{ id: string; name: string }>;
+  projects: { id: string; name: string }[];
   bookSources: BookSource[];
   preparedSources: PreparedSource[];
   wordHighlightCapabilityReason: string | undefined;

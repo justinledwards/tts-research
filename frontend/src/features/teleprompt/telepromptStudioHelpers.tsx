@@ -40,9 +40,9 @@ export function buildTelepromptContextTabs({
     ? `${cueSync.activeCue.timingSource} / word ${cueSync.activeCue.currentWordIndex.toString()}`
     : "No active timing cue";
   const audioCueValue =
-    cueSegmentIndex !== null
-      ? `Segment ${String(cueSegmentIndex + 1)} of ${String(cueSegmentCount ?? 0)}`
-      : "Waiting for generated audio";
+    cueSegmentIndex === null
+      ? "Waiting for generated audio"
+      : `Segment ${String(cueSegmentIndex + 1)} of ${String(cueSegmentCount ?? 0)}`;
   const sectionInputs: readonly ContextPanelSectionInput[] = [
     {
       children: (

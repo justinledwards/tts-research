@@ -2,7 +2,6 @@ package agents
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -238,20 +237,16 @@ func (agent *KokoroTTSAgent) synthesizeWithConfig(ctx context.Context, text stri
 		config.Device,
 	)
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-
-	if err := command.Run(); err != nil {
+	stdout, stderr, runErr := runKokoroCommand(command)
+	if runErr != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return TTSResult{}, fmt.Errorf("kokoro synthesis timed out after %d seconds", config.TimeoutSeconds)
 		}
 
-		return TTSResult{}, fmt.Errorf("kokoro synthesis failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+		return TTSResult{}, fmt.Errorf("kokoro synthesis failed: %w: %s", runErr, stderr)
 	}
 
-	metadata, err := parseKokoroMetadata(stdout.String())
+	metadata, err := parseKokoroMetadata(stdout)
 	if err != nil {
 		return TTSResult{}, err
 	}
@@ -325,12 +320,8 @@ func (agent *KokoroTTSAgent) synthesizeWithEmbedArtifact(
 		command.Args = append(command.Args, "--upstream-dir", modulePath)
 	}
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-
-	if err := command.Run(); err != nil {
+	stdout, stderr, runErr := runKokoroCommand(command)
+	if runErr != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return TTSResult{}, fmt.Errorf(
 				"%w: kokoro embed synthesis timed out after %d seconds",
@@ -338,28 +329,24 @@ func (agent *KokoroTTSAgent) synthesizeWithEmbedArtifact(
 				config.ReferenceTimeoutSeconds,
 			)
 		}
-		return TTSResult{}, fmt.Errorf("kokoro embed synthesis failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+		return TTSResult{}, fmt.Errorf("kokoro embed synthesis failed: %w: %s", runErr, stderr)
 	}
 
-	metadata, parseErr := parseKokoroMetadata(stdout.String())
 	wav, err := os.ReadFile(outputPath)
 	if err != nil {
 		return TTSResult{}, fmt.Errorf("read kokoro embed output: %w", err)
 	}
+	metadata, parseErr := resolveKokoroMetadataFallback(stdout, wav, kokoroMetadata{
+		Provider:    "kokoro-embed",
+		RepoID:      "hexgrad/Kokoro-82M",
+		Voice:       firstNonEmptyString(artifact.File, artifact.ModuleID, "kokoro-embed"),
+		LangCode:    config.LangCode,
+		SampleRate:  0,
+		SampleCount: 0,
+		DurationMS:  0,
+	})
 	if parseErr != nil {
-		spec, pcm, pcmErr := audio.ParsePCM16WAV(wav)
-		if pcmErr != nil {
-			return TTSResult{}, fmt.Errorf("parse kokoro embed metadata: %w", parseErr)
-		}
-		metadata = kokoroMetadata{
-			Provider:    "kokoro-embed",
-			RepoID:      "hexgrad/Kokoro-82M",
-			Voice:       firstNonEmptyString(artifact.File, artifact.ModuleID, "kokoro-embed"),
-			LangCode:    config.LangCode,
-			SampleRate:  spec.SampleRate,
-			SampleCount: len(pcm) / (spec.BitsPerSample * spec.ChannelCount / 8),
-			DurationMS:  audio.DurationMSForWAVData(len(pcm), spec),
-		}
+		return TTSResult{}, fmt.Errorf("parse kokoro embed metadata: %w", parseErr)
 	}
 	if metadata.DurationMS <= 0 {
 		return TTSResult{}, errors.New("kokoro embed output did not include a positive duration")
@@ -441,13 +428,7 @@ func (agent *KokoroTTSAgent) synthesizeWithReferenceWorker(
 		_ = os.Remove(outputPath)
 	}()
 
-	voiceLanguage := strings.TrimSpace(referenceLanguage)
-	if voiceLanguage == "" {
-		voiceLanguage = config.LangCode
-	}
-	if voiceLanguage == "" {
-		voiceLanguage = "a"
-	}
+	voiceLanguage := resolveKokoroReferenceLanguage(config.LangCode, referenceLanguage)
 
 	if err := agent.ensureReferenceWorkers(ctx); err != nil {
 		return TTSResult{}, err
@@ -520,22 +501,14 @@ func (agent *KokoroTTSAgent) synthesizeWithReferenceWorker(
 		return TTSResult{}, fmt.Errorf("read kokoro clone output: %w", err)
 	}
 
-	metadata, parseErr := parseKokoroMetadata(line)
+	metadata, parseErr := resolveKokoroMetadataFallback(line, wav, kokoroMetadata{
+		Provider: "kokoro-clone",
+		RepoID:   "koko-clone",
+		Voice:    "clone",
+		LangCode: voiceLanguage,
+	})
 	if parseErr != nil {
-		spec, pcm, pcmErr := audio.ParsePCM16WAV(wav)
-		if pcmErr != nil {
-			return TTSResult{}, fmt.Errorf("parse kokoro clone metadata: %w", parseErr)
-		}
-
-		metadata = kokoroMetadata{
-			Provider:    "kokoro-clone",
-			RepoID:      "koko-clone",
-			Voice:       "clone",
-			LangCode:    voiceLanguage,
-			SampleRate:  spec.SampleRate,
-			SampleCount: len(pcm) / (spec.BitsPerSample * spec.ChannelCount / 8),
-			DurationMS:  audio.DurationMSForWAVData(len(pcm), spec),
-		}
+		return TTSResult{}, fmt.Errorf("parse kokoro clone metadata: %w", parseErr)
 	}
 	if metadata.DurationMS <= 0 {
 		return TTSResult{}, errors.New("kokoro clone output did not include a positive duration")
@@ -578,13 +551,7 @@ func (agent *KokoroTTSAgent) synthesizeWithReferenceOneShot(
 		return TTSResult{}, fmt.Errorf("write kokoro input: %w", err)
 	}
 
-	voiceLanguage := strings.TrimSpace(referenceLanguage)
-	if voiceLanguage == "" {
-		voiceLanguage = config.LangCode
-	}
-	if voiceLanguage == "" {
-		voiceLanguage = "a"
-	}
+	voiceLanguage := resolveKokoroReferenceLanguage(config.LangCode, referenceLanguage)
 
 	command := exec.CommandContext(
 		ctx,
@@ -607,12 +574,8 @@ func (agent *KokoroTTSAgent) synthesizeWithReferenceOneShot(
 		)
 	}
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-
-	if err := command.Run(); err != nil {
+	stdout, stderr, runErr := runKokoroCommand(command)
+	if runErr != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return TTSResult{}, fmt.Errorf(
 				"%w: kokoro reference synthesis timed out after %d seconds",
@@ -621,7 +584,7 @@ func (agent *KokoroTTSAgent) synthesizeWithReferenceOneShot(
 			)
 		}
 
-		return TTSResult{}, fmt.Errorf("kokoro reference synthesis failed: %w: %s", err, strings.TrimSpace(stderr.String()))
+		return TTSResult{}, fmt.Errorf("kokoro reference synthesis failed: %w: %s", runErr, stderr)
 	}
 
 	wav, err := os.ReadFile(outputPath)
@@ -629,22 +592,14 @@ func (agent *KokoroTTSAgent) synthesizeWithReferenceOneShot(
 		return TTSResult{}, fmt.Errorf("read kokoro clone output: %w", err)
 	}
 
-	metadata, parseErr := parseKokoroMetadata(stdout.String())
+	metadata, parseErr := resolveKokoroMetadataFallback(stdout, wav, kokoroMetadata{
+		Provider: "kokoro-clone",
+		RepoID:   "koko-clone",
+		Voice:    "clone",
+		LangCode: voiceLanguage,
+	})
 	if parseErr != nil {
-		spec, pcm, pcmErr := audio.ParsePCM16WAV(wav)
-		if pcmErr != nil {
-			return TTSResult{}, fmt.Errorf("parse kokoro clone metadata: %w", parseErr)
-		}
-
-		metadata = kokoroMetadata{
-			Provider:    "kokoro-clone",
-			RepoID:      "koko-clone",
-			Voice:       "clone",
-			LangCode:    voiceLanguage,
-			SampleRate:  spec.SampleRate,
-			SampleCount: len(pcm) / (spec.BitsPerSample * spec.ChannelCount / 8),
-			DurationMS:  audio.DurationMSForWAVData(len(pcm), spec),
-		}
+		return TTSResult{}, fmt.Errorf("parse kokoro clone metadata: %w", parseErr)
 	}
 	if metadata.DurationMS <= 0 {
 		return TTSResult{}, errors.New("kokoro clone output did not include a positive duration")
@@ -813,45 +768,6 @@ func (agent *KokoroTTSAgent) spawnReferenceWorkerReplacement() {
 			agent.stopReferenceWorker(replacement)
 		}
 	}()
-}
-
-func configReferenceWorkerCount(value int) int {
-	if value <= 0 {
-		return 1
-	}
-
-	return value
-}
-
-func parseKokoroMetadata(stdout string) (kokoroMetadata, error) {
-	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	for index := len(lines) - 1; index >= 0; index-- {
-		line := strings.TrimSpace(lines[index])
-		if line == "" {
-			continue
-		}
-
-		var metadata kokoroMetadata
-		if err := json.Unmarshal([]byte(line), &metadata); err != nil {
-			return kokoroMetadata{}, fmt.Errorf("parse kokoro metadata: %w", err)
-		}
-		if metadata.DurationMS <= 0 {
-			return kokoroMetadata{}, errors.New("kokoro metadata did not include a positive duration")
-		}
-
-		return metadata, nil
-	}
-
-	return kokoroMetadata{}, errors.New("kokoro did not return metadata")
-}
-
-func firstNonEmptyString(values ...string) string {
-	for _, value := range values {
-		if clean := strings.TrimSpace(value); clean != "" {
-			return clean
-		}
-	}
-	return ""
 }
 
 func max(a int, b int) int {

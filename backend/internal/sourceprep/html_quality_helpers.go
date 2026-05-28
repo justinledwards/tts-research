@@ -260,6 +260,7 @@ func firstHeadingDepth(node *xhtml.Node) int {
 			walk(child)
 		}
 	}
+	walk(node)
 	return depth
 }
 

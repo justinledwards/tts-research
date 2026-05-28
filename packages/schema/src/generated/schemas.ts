@@ -1328,6 +1328,34 @@ export const highlightMapV2Schema = {
       type: ["integer", "null"],
       minimum: 0,
     },
+    readingPosition: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        bookSourceId: {
+          type: "string",
+        },
+        scopeKey: {
+          type: "string",
+        },
+        activeWordIndex: {
+          type: "integer",
+          minimum: 0,
+        },
+        nodeId: {
+          type: "string",
+        },
+        locator: {
+          $ref: "content-ir.v1.schema.json#/$defs/locator",
+        },
+        locatorEnvelope: {
+          $ref: "locator-envelope.v1.schema.json",
+        },
+        textQuote: {
+          type: "string",
+        },
+      },
+    },
     highlightMapV2Summary: {
       type: "object",
       additionalProperties: false,
@@ -1458,6 +1486,9 @@ export const highlightMapV2Schema = {
           type: "string",
           minLength: 1,
         },
+        spokenTokenId: {
+          type: "string",
+        },
         contentIrVersion: {
           const: "content-ir.v1",
         },
@@ -1471,6 +1502,13 @@ export const highlightMapV2Schema = {
         segmentId: {
           type: "string",
         },
+        sourceWordId: {
+          type: "string",
+        },
+        sourceWordIndex: {
+          type: "integer",
+          minimum: 0,
+        },
         textQuote: {
           type: "string",
         },
@@ -1482,6 +1520,9 @@ export const highlightMapV2Schema = {
         },
         spokenText: {
           type: "string",
+        },
+        readingPosition: {
+          $ref: "#/$defs/readingPosition",
         },
         tokenIndex: {
           $ref: "#/$defs/nullableIndex",
@@ -3173,6 +3214,34 @@ export const schemaBundle = {
           type: ["integer", "null"],
           minimum: 0,
         },
+        readingPosition: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            bookSourceId: {
+              type: "string",
+            },
+            scopeKey: {
+              type: "string",
+            },
+            activeWordIndex: {
+              type: "integer",
+              minimum: 0,
+            },
+            nodeId: {
+              type: "string",
+            },
+            locator: {
+              $ref: "content-ir.v1.schema.json#/$defs/locator",
+            },
+            locatorEnvelope: {
+              $ref: "locator-envelope.v1.schema.json",
+            },
+            textQuote: {
+              type: "string",
+            },
+          },
+        },
         highlightMapV2Summary: {
           type: "object",
           additionalProperties: false,
@@ -3303,6 +3372,9 @@ export const schemaBundle = {
               type: "string",
               minLength: 1,
             },
+            spokenTokenId: {
+              type: "string",
+            },
             contentIrVersion: {
               const: "content-ir.v1",
             },
@@ -3316,6 +3388,13 @@ export const schemaBundle = {
             segmentId: {
               type: "string",
             },
+            sourceWordId: {
+              type: "string",
+            },
+            sourceWordIndex: {
+              type: "integer",
+              minimum: 0,
+            },
             textQuote: {
               type: "string",
             },
@@ -3327,6 +3406,9 @@ export const schemaBundle = {
             },
             spokenText: {
               type: "string",
+            },
+            readingPosition: {
+              $ref: "#/$defs/readingPosition",
             },
             tokenIndex: {
               $ref: "#/$defs/nullableIndex",

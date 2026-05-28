@@ -48,6 +48,11 @@ import type {
 } from "./types";
 import type { ContentIRDocument, ContentIRSchemaVersion, SpeechPlanDocument } from "./content-ir";
 import type { HighlightMapV2 } from "./features/readalong";
+import {
+  normalizePreparedSource,
+  normalizeVoiceProfileCandidate,
+  normalizeVoiceProfileSource,
+} from "./apiNormalizationHelpers";
 export {
   normalizePreparedSource,
   normalizeVoiceProfileCandidate,

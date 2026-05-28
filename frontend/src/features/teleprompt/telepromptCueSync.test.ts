@@ -98,6 +98,57 @@ describe("teleprompt cue timeline sync", () => {
     expect(sync.statusLabel).toBe("Manual cue mode");
   });
 
+  it("maps v2 word timings into the rendered cue text when headings precede body words", () => {
+    const combinedBlocks = [
+      block({
+        id: "combined",
+        index: 1,
+        kind: "body",
+        spokenText: "Cache and Cache Coherency Executive summary A cache follows audio.",
+      }),
+    ];
+    const timeline = buildTelepromptCueTimeline({
+      blocks: combinedBlocks,
+      highlightMapV2: highlightMapV2([
+        phraseEntry({
+          audioEndMs: 1800,
+          audioStartMs: 0,
+          fragmentIndex: 0,
+          spokenText: combinedBlocks[0].spokenText,
+        }),
+        wordEntry({
+          audioEndMs: 600,
+          audioStartMs: 300,
+          fragmentIndex: 0,
+          sourceWordIndex: 20,
+          spokenText: "A",
+          tokenIndex: 0,
+        }),
+        wordEntry({
+          audioEndMs: 900,
+          audioStartMs: 600,
+          fragmentIndex: 0,
+          sourceWordIndex: 21,
+          spokenText: "cache",
+          tokenIndex: 1,
+        }),
+      ]),
+    });
+
+    const sync = resolveTelepromptCueSync({
+      activeBlockId: "combined",
+      mode: "audio-follow",
+      playbackAvailable: true,
+      playbackCursorSec: 0.45,
+      playbackPlaying: true,
+      timeline,
+    });
+
+    expect(sync.activeCue?.currentWordIndex).toBe(6);
+    expect(sync.activeCue?.currentSourceWordId).toBe("source-1:demo:word:20");
+    expect(sync.activeCue?.wordTimings[0]?.sourceWordId).toBe("source-1:demo:word:20");
+  });
+
   it("keeps Cinema handoff anchored to the active cue start time", () => {
     const timeline = buildTelepromptCueTimeline({
       blocks,

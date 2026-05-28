@@ -5,9 +5,6 @@ import type {
   ReadAlongInvariantDebugRow,
   ReadAlongInvariantIssue,
   ReadAlongInvariantReport,
-  ReadAlongInvariantSurface,
-  ReadAlongInvariantSeverity,
-  ReadAlongInvariantStatus,
   SourceSwitchInvariantInput,
 } from "./readAlongInvariantHelpers";
 import {
@@ -35,7 +32,7 @@ export type {
   ReadAlongInvariantSurface,
   ReadAlongInvariantStatus,
   SourceSwitchInvariantInput,
-};
+} from "./readAlongInvariantHelpers";
 
 export function evaluateBookReadAlongInvariant({
   activeBlock,

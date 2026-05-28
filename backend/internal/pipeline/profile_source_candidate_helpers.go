@@ -1,0 +1,657 @@
+package pipeline
+
+import (
+	"encoding/binary"
+	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/justinedwards/tts-research/backend/internal/audio"
+)
+
+type candidateSpanScore struct {
+	span         DetectedSpeakerSpan
+	durationMS   int
+	score        float64
+	rms          float64
+	silenceRatio float64
+	clippingRisk float64
+	noiseRisk    float64
+}
+
+func buildVoiceProfileCandidates(
+	rawPath string,
+	cleanPath string,
+	outputDir string,
+	sourceID string,
+	result VoiceProfileSourceAnalysisResult,
+	options Options,
+	denoiseMetadata VoiceProfileDenoiseMetadata,
+) ([]VoiceProfileCandidate, error) {
+	rawBytes, err := os.ReadFile(rawPath)
+	if err != nil {
+		return nil, err
+	}
+	rawSpec, rawData, err := audio.ParsePCM16WAV(rawBytes)
+	if err != nil {
+		return nil, err
+	}
+	cleanBytes, err := os.ReadFile(cleanPath)
+	if err != nil {
+		return nil, err
+	}
+	spec, data, err := audio.ParsePCM16WAV(cleanBytes)
+	if err != nil {
+		return nil, err
+	}
+	sourceDurationMS := audio.DurationMSForWAVData(len(data), spec)
+	if sourceDurationMS <= 0 {
+		sourceDurationMS = audio.DurationMSForWAVData(len(rawData), rawSpec)
+	}
+
+	spansBySpeaker := map[string][]DetectedSpeakerSpan{}
+	for _, span := range result.Spans {
+		speakerID := strings.TrimSpace(span.SpeakerID)
+		if speakerID == "" {
+			continue
+		}
+		if span.EndMS <= span.StartMS {
+			continue
+		}
+		spansBySpeaker[speakerID] = append(spansBySpeaker[speakerID], span)
+	}
+	speakerIDs := make([]string, 0, len(spansBySpeaker))
+	for speakerID := range spansBySpeaker {
+		speakerIDs = append(speakerIDs, speakerID)
+	}
+	sort.Strings(speakerIDs)
+
+	now := time.Now().UTC()
+	candidates := make([]VoiceProfileCandidate, 0, len(speakerIDs))
+	for index, speakerID := range speakerIDs {
+		scoredSpans := scoreSpeakerSpans(spansBySpeaker[speakerID], result.Spans, spec, data)
+		totalSpeechMS := 0
+		for _, scored := range scoredSpans {
+			totalSpeechMS += scored.durationMS
+		}
+		candidateID := sanitizeCandidateID(speakerID, index)
+		candidateDir := filepath.Join(outputDir, "candidates", candidateID)
+		candidate := VoiceProfileCandidate{
+			ID:                      candidateID,
+			SpeakerID:               speakerID,
+			SuggestedName:           fmt.Sprintf("Voice %d", index+1),
+			Status:                  "rejected",
+			Suitability:             "rejected",
+			Reason:                  "not enough clean single-speaker speech",
+			ReferenceVersion:        profileReferenceVersion,
+			ReferenceSampleStrategy: "speaker-aware-best-spans",
+			StrategyVersion:         options.VoiceProfileAnalysisStrategyVersion,
+			ModelVersion:            result.ModelVersion,
+			TotalSpeechDurationMS:   totalSpeechMS,
+			Denoise:                 cloneDenoiseMetadata(denoiseMetadata),
+			CreatedAt:               now,
+			UpdatedAt:               now,
+		}
+
+		maxReferenceMS := max(1000, options.VoiceProfileReferenceMaxSeconds*1000)
+		preferredMinReferenceMS := min(options.VoiceProfileReferenceMinSeconds*1000, maxReferenceMS)
+		targetReferenceMS := clampInt(
+			options.VoiceProfileReferenceTargetSeconds*1000,
+			preferredMinReferenceMS,
+			maxReferenceMS,
+		)
+		selected, metrics := selectCandidateSpans(
+			scoredSpans,
+			sourceDurationMS,
+			preferredMinReferenceMS,
+			targetReferenceMS,
+			maxReferenceMS,
+		)
+		candidate.Spans = selected
+		candidate.QualityMetrics = metrics
+		candidate.QualityMetrics.NoiseRiskBefore = denoiseMetadata.NoiseRiskBefore
+		candidate.QualityMetrics.NoiseRiskAfter = denoiseMetadata.NoiseRiskAfter
+		candidate.Score = scoreVoiceProfileCandidate(metrics, preferredMinReferenceMS, targetReferenceMS)
+		candidate.ReferenceDurationMS = metrics.UsableDurationMS
+		candidate.ReferenceSpanCount = len(selected)
+		shortReferenceMinMS := shortReferenceMinimumMS(sourceDurationMS, preferredMinReferenceMS)
+		meetsPreferredDuration := metrics.UsableDurationMS >= preferredMinReferenceMS
+		meetsShortDuration := metrics.UsableDurationMS >= shortReferenceMinMS
+		if !meetsPreferredDuration &&
+			(!meetsShortDuration ||
+				!isStrongShortReference(metrics, sourceDurationMS, preferredMinReferenceMS)) {
+			candidate.Reason = fmt.Sprintf(
+				"needs at least %ds of clean speech or a high-quality short reference; found %s",
+				preferredMinReferenceMS/1000,
+				formatDurationMS(metrics.UsableDurationMS),
+			)
+			candidates = append(candidates, candidate)
+			continue
+		}
+
+		if err := os.MkdirAll(candidateDir, 0o755); err != nil {
+			return nil, err
+		}
+		referencePCM := buildReferencePCM(data, spec, selected)
+		if len(referencePCM) == 0 {
+			candidate.Reason = "selected spans produced empty reference audio"
+			candidates = append(candidates, candidate)
+			continue
+		}
+		referenceAudio := fmt.Sprintf("reference-%s.wav", profileReferenceVersion)
+		referencePath := filepath.Join(candidateDir, referenceAudio)
+		referenceBytes := audio.BuildPCM16WAV(referencePCM, spec)
+		if err := os.WriteFile(referencePath, referenceBytes, 0o644); err != nil {
+			return nil, err
+		}
+
+		previewPath := filepath.Join(candidateDir, "preview.wav")
+		previewPCM := trimPCMToDuration(referencePCM, spec, previewDurationMS)
+		if err := os.WriteFile(previewPath, audio.BuildPCM16WAV(previewPCM, spec), 0o644); err != nil {
+			return nil, err
+		}
+		rawPreviewPath := filepath.Join(candidateDir, "preview.raw.wav")
+		rawReferencePCM := buildReferencePCM(rawData, rawSpec, selected)
+		rawPreviewPCM := trimPCMToDuration(rawReferencePCM, rawSpec, previewDurationMS)
+		if len(rawPreviewPCM) > 0 {
+			if err := os.WriteFile(rawPreviewPath, audio.BuildPCM16WAV(rawPreviewPCM, rawSpec), 0o644); err != nil {
+				return nil, err
+			}
+		}
+
+		candidate.Status = "ready"
+		candidate.Suitability = "recommended"
+		candidate.Reason = "clean single-speaker reference is ready"
+		if len(selected) > 1 {
+			candidate.Warnings = append(
+				candidate.Warnings,
+				fmt.Sprintf("Stitched %d clean same-speaker spans with short crossfades.", len(selected)),
+			)
+		}
+		if candidate.Denoise != nil {
+			candidate.Warnings = append(candidate.Warnings, candidate.Denoise.Warnings...)
+		}
+		if !meetsPreferredDuration {
+			candidate.Suitability = "short_reference"
+			candidate.Reason = "high-quality short reference is ready"
+			candidate.Warnings = append(
+				candidate.Warnings,
+				fmt.Sprintf(
+					"Short reference: %s is below the preferred %ds minimum.",
+					formatDurationMS(candidate.ReferenceDurationMS),
+					preferredMinReferenceMS/1000,
+				),
+			)
+		}
+		candidate.ReferenceAudio = referenceAudio
+		candidate.ReferencePath = referencePath
+		candidate.PreviewAudio = fmt.Sprintf(
+			"/api/voice-profile-sources/%s/candidates/%s/preview.wav",
+			sourceID,
+			candidateID,
+		)
+		candidate.PreviewPath = previewPath
+		candidate.CleanPreviewAudio = fmt.Sprintf(
+			"/api/voice-profile-sources/%s/candidates/%s/preview.wav?kind=clean",
+			sourceID,
+			candidateID,
+		)
+		candidate.CleanPreviewPath = previewPath
+		if len(rawPreviewPCM) > 0 {
+			candidate.RawPreviewAudio = fmt.Sprintf(
+				"/api/voice-profile-sources/%s/candidates/%s/preview.wav?kind=raw",
+				sourceID,
+				candidateID,
+			)
+			candidate.RawPreviewPath = rawPreviewPath
+		}
+		candidate.ReferenceDurationMS = audio.DurationMSForWAVData(len(referencePCM), spec)
+		candidate.QualityMetrics.UsableDurationMS = candidate.ReferenceDurationMS
+		candidates = append(candidates, candidate)
+	}
+
+	rankVoiceProfileCandidates(candidates)
+	return candidates, nil
+}
+
+func shortReferenceMinimumMS(sourceDurationMS int, preferredMinReferenceMS int) int {
+	shortMinMS := min(dynamicShortReferenceMinMS, preferredMinReferenceMS)
+	if sourceDurationMS > 0 && sourceDurationMS < preferredMinReferenceMS {
+		shortMinMS = min(shortMinMS, max(6000, int(math.Round(float64(sourceDurationMS)*0.4))))
+	}
+	return shortMinMS
+}
+
+func isStrongShortReference(
+	metrics VoiceProfileQualityMetrics,
+	sourceDurationMS int,
+	preferredMinReferenceMS int,
+) bool {
+	minCleanSpeech := 0.68
+	maxNoiseRisk := 0.28
+	maxSilenceRatio := 0.35
+	minSourceCoverage := 0.0
+	if sourceDurationMS > 0 && sourceDurationMS < preferredMinReferenceMS {
+		minCleanSpeech = 0.40
+		maxNoiseRisk = 0.35
+		maxSilenceRatio = 0.50
+		minSourceCoverage = 0.35
+	}
+	return metrics.CleanSpeech >= minCleanSpeech &&
+		metrics.SingleSpeakerConfidence >= 0.75 &&
+		metrics.ClippingRisk <= 0.18 &&
+		metrics.NoiseRisk <= maxNoiseRisk &&
+		metrics.SilenceRatio <= maxSilenceRatio &&
+		metrics.SourceCoverage >= minSourceCoverage
+}
+
+func rankVoiceProfileCandidates(candidates []VoiceProfileCandidate) {
+	sort.SliceStable(candidates, func(left int, right int) bool {
+		leftReady := candidates[left].Status == "ready"
+		rightReady := candidates[right].Status == "ready"
+		if leftReady != rightReady {
+			return leftReady
+		}
+		if candidates[left].Suitability != candidates[right].Suitability {
+			if candidates[left].Suitability == "recommended" {
+				return true
+			}
+			if candidates[right].Suitability == "recommended" {
+				return false
+			}
+		}
+		return candidates[left].Score > candidates[right].Score
+	})
+	recommendedSet := false
+	for index := range candidates {
+		candidates[index].Rank = index + 1
+		candidates[index].Recommended = false
+		if candidates[index].Status == "ready" && !recommendedSet {
+			candidates[index].Recommended = true
+			recommendedSet = true
+		}
+	}
+}
+
+func scoreVoiceProfileCandidate(
+	metrics VoiceProfileQualityMetrics,
+	preferredMinReferenceMS int,
+	targetReferenceMS int,
+) float64 {
+	durationFit := 0.0
+	if targetReferenceMS > 0 {
+		durationFit = clamp01(float64(metrics.UsableDurationMS) / float64(targetReferenceMS))
+	}
+	if preferredMinReferenceMS > 0 && metrics.UsableDurationMS >= preferredMinReferenceMS {
+		durationFit = max(durationFit, 0.92)
+	}
+	noiseQuality := 1 - clamp01(metrics.NoiseRisk)
+	clippingQuality := 1 - clamp01(metrics.ClippingRisk)
+	silenceQuality := 1 - clamp01(metrics.SilenceRatio)
+	score := metrics.CleanSpeech*0.34 +
+		metrics.SingleSpeakerConfidence*0.22 +
+		durationFit*0.18 +
+		noiseQuality*0.10 +
+		clippingQuality*0.08 +
+		silenceQuality*0.05 +
+		metrics.SourceCoverage*0.03
+	return math.Round(clamp01(score)*1000) / 1000
+}
+
+func scoreSpeakerSpans(
+	speakerSpans []DetectedSpeakerSpan,
+	allSpans []DetectedSpeakerSpan,
+	spec audio.WAVSpec,
+	data []byte,
+) []candidateSpanScore {
+	scored := make([]candidateSpanScore, 0, len(speakerSpans))
+	for _, span := range speakerSpans {
+		for _, cleanSpan := range splitSpanAroundOtherSpeakers(span, allSpans) {
+			durationMS := cleanSpan.EndMS - cleanSpan.StartMS
+			if durationMS < minCandidateSpanDurationMS {
+				continue
+			}
+			rms, silenceRatio, clippingRisk := pcmStatsForSpan(data, spec, cleanSpan.StartMS, cleanSpan.EndMS)
+			noiseRisk := estimateNoiseRisk(rms, silenceRatio)
+			confidence := clamp01(cleanSpan.Confidence)
+			if confidence == 0 {
+				confidence = 0.75
+			}
+			cleanSpeech := confidence * (1 - clippingRisk) * (1 - noiseRisk) * (1 - silenceRatio*0.85)
+			if rms < 0.01 || silenceRatio > 0.8 || clippingRisk > 0.4 {
+				continue
+			}
+			scored = append(scored, candidateSpanScore{
+				span:         cleanSpan,
+				durationMS:   durationMS,
+				score:        clamp01(cleanSpeech),
+				rms:          rms,
+				silenceRatio: silenceRatio,
+				clippingRisk: clippingRisk,
+				noiseRisk:    noiseRisk,
+			})
+		}
+	}
+	sort.SliceStable(scored, func(left int, right int) bool {
+		return scored[left].score > scored[right].score
+	})
+	return scored
+}
+
+func selectCandidateSpans(
+	scoredSpans []candidateSpanScore,
+	sourceDurationMS int,
+	minDurationMS int,
+	targetDurationMS int,
+	maxDurationMS int,
+) ([]VoiceProfileReferenceSpan, VoiceProfileQualityMetrics) {
+	selected := make([]VoiceProfileReferenceSpan, 0)
+	available := append([]candidateSpanScore(nil), scoredSpans...)
+	usableDurationMS := 0
+	totalScore := 0.0
+	totalConfidence := 0.0
+	totalSilenceRatio := 0.0
+	totalClippingRisk := 0.0
+	totalNoiseRisk := 0.0
+
+	for len(available) > 0 {
+		if usableDurationMS >= targetDurationMS {
+			break
+		}
+		remaining := maxDurationMS - usableDurationMS
+		if remaining <= 0 {
+			break
+		}
+		bestIndex := pickDiverseSpanIndex(available, selected, sourceDurationMS)
+		if bestIndex < 0 {
+			break
+		}
+		scored := available[bestIndex]
+		available = append(available[:bestIndex], available[bestIndex+1:]...)
+
+		durationMS := scored.durationMS
+		if durationMS > remaining {
+			durationMS = remaining
+		}
+		if usableDurationMS+durationMS > targetDurationMS && usableDurationMS >= minDurationMS {
+			durationMS = targetDurationMS - usableDurationMS
+		}
+		if durationMS < minCandidateSpanDurationMS {
+			continue
+		}
+
+		span := VoiceProfileReferenceSpan{
+			StartMS:    scored.span.StartMS,
+			EndMS:      scored.span.StartMS + durationMS,
+			DurationMS: durationMS,
+			Score:      scored.score,
+		}
+		selected = append(selected, span)
+		usableDurationMS += durationMS
+		totalScore += scored.score * float64(durationMS)
+		confidence := clamp01(scored.span.Confidence)
+		if confidence == 0 {
+			confidence = 0.75
+		}
+		totalConfidence += confidence * float64(durationMS)
+		totalSilenceRatio += scored.silenceRatio * float64(durationMS)
+		totalClippingRisk += scored.clippingRisk * float64(durationMS)
+		totalNoiseRisk += scored.noiseRisk * float64(durationMS)
+	}
+
+	sort.SliceStable(selected, func(left int, right int) bool {
+		return selected[left].StartMS < selected[right].StartMS
+	})
+
+	metrics := VoiceProfileQualityMetrics{UsableDurationMS: usableDurationMS}
+	if usableDurationMS > 0 {
+		weight := float64(usableDurationMS)
+		metrics.CleanSpeech = clamp01(totalScore / weight)
+		metrics.SingleSpeakerConfidence = clamp01(totalConfidence / weight)
+		metrics.SilenceRatio = clamp01(totalSilenceRatio / weight)
+		metrics.ClippingRisk = clamp01(totalClippingRisk / weight)
+		metrics.NoiseRisk = clamp01(totalNoiseRisk / weight)
+	}
+	if sourceDurationMS > 0 {
+		metrics.SourceCoverage = clamp01(float64(usableDurationMS) / float64(sourceDurationMS))
+	}
+	return selected, metrics
+}
+
+func pickDiverseSpanIndex(
+	available []candidateSpanScore,
+	selected []VoiceProfileReferenceSpan,
+	sourceDurationMS int,
+) int {
+	bestIndex := -1
+	bestScore := -1.0
+	for index, scored := range available {
+		adjustedScore := scored.score
+		if len(selected) > 0 && sourceDurationMS > 0 {
+			adjustedScore += temporalDiversityBonus(scored.span, selected, sourceDurationMS)
+		}
+		if adjustedScore > bestScore {
+			bestScore = adjustedScore
+			bestIndex = index
+		}
+	}
+	return bestIndex
+}
+
+func temporalDiversityBonus(
+	span DetectedSpeakerSpan,
+	selected []VoiceProfileReferenceSpan,
+	sourceDurationMS int,
+) float64 {
+	center := span.StartMS + (span.EndMS-span.StartMS)/2
+	nearestDistance := sourceDurationMS
+	for _, selectedSpan := range selected {
+		selectedCenter := selectedSpan.StartMS + (selectedSpan.EndMS-selectedSpan.StartMS)/2
+		distance := absInt(center - selectedCenter)
+		if distance < nearestDistance {
+			nearestDistance = distance
+		}
+	}
+	return clamp01(float64(nearestDistance)/float64(sourceDurationMS)) * 0.12
+}
+
+func buildReferencePCM(
+	data []byte,
+	spec audio.WAVSpec,
+	spans []VoiceProfileReferenceSpan,
+) []byte {
+	pcm := make([]byte, 0, referencePCMCapacity(spec, spans))
+	for _, span := range spans {
+		next := pcmSlice(data, spec, span.StartMS, span.EndMS)
+		if len(pcm) == 0 {
+			pcm = append(pcm, next...)
+			continue
+		}
+		pcm = appendPCMWithCrossfade(pcm, next, spec, referenceCrossfadeMS)
+	}
+	return pcm
+}
+
+func referencePCMCapacity(spec audio.WAVSpec, spans []VoiceProfileReferenceSpan) int {
+	capacity := 0
+	for _, span := range spans {
+		capacity += bytesForDuration(spec, span.DurationMS)
+	}
+	return max(0, capacity)
+}
+
+func appendPCMWithCrossfade(base []byte, next []byte, spec audio.WAVSpec, crossfadeMS int) []byte {
+	bytesPerFrame := spec.ChannelCount * spec.BitsPerSample / 8
+	if bytesPerFrame <= 0 || spec.BitsPerSample != 16 || crossfadeMS <= 0 || len(base) == 0 || len(next) == 0 {
+		output := make([]byte, 0, len(base)+len(next))
+		output = append(output, base...)
+		output = append(output, next...)
+		return output
+	}
+
+	fadeBytes := bytesForDuration(spec, crossfadeMS)
+	fadeBytes -= fadeBytes % bytesPerFrame
+	if fadeBytes <= 0 || fadeBytes >= len(base) || fadeBytes >= len(next) {
+		output := make([]byte, 0, len(base)+len(next))
+		output = append(output, base...)
+		output = append(output, next...)
+		return output
+	}
+
+	output := make([]byte, len(base))
+	copy(output, base)
+	fadeFrames := fadeBytes / bytesPerFrame
+	for frame := 0; frame < fadeFrames; frame += 1 {
+		alpha := float64(frame+1) / float64(fadeFrames+1)
+		for channel := 0; channel < spec.ChannelCount; channel += 1 {
+			offset := frame*bytesPerFrame + channel*2
+			baseOffset := len(output) - fadeBytes + offset
+			nextOffset := offset
+			baseSample := int16(binary.LittleEndian.Uint16(output[baseOffset : baseOffset+2]))
+			nextSample := int16(binary.LittleEndian.Uint16(next[nextOffset : nextOffset+2]))
+			mixed := int(math.Round(float64(baseSample)*(1-alpha) + float64(nextSample)*alpha))
+			mixed = clampInt(mixed, -32768, 32767)
+			binary.LittleEndian.PutUint16(output[baseOffset:baseOffset+2], uint16(int16(mixed)))
+		}
+	}
+	output = append(output, next[fadeBytes:]...)
+	return output
+}
+
+func trimPCMToDuration(data []byte, spec audio.WAVSpec, durationMS int) []byte {
+	maxBytes := bytesForDuration(spec, durationMS)
+	if maxBytes <= 0 || len(data) <= maxBytes {
+		output := make([]byte, len(data))
+		copy(output, data)
+		return output
+	}
+	output := make([]byte, maxBytes)
+	copy(output, data[:maxBytes])
+	return output
+}
+
+func pcmSlice(data []byte, spec audio.WAVSpec, startMS int, endMS int) []byte {
+	bytesPerFrame := spec.ChannelCount * spec.BitsPerSample / 8
+	if bytesPerFrame <= 0 || spec.SampleRate <= 0 || endMS <= startMS {
+		return nil
+	}
+	startFrame := int(math.Round(float64(startMS) * float64(spec.SampleRate) / 1000))
+	endFrame := int(math.Round(float64(endMS) * float64(spec.SampleRate) / 1000))
+	startByte := clampInt(startFrame*bytesPerFrame, 0, len(data))
+	endByte := clampInt(endFrame*bytesPerFrame, 0, len(data))
+	startByte -= startByte % bytesPerFrame
+	endByte -= endByte % bytesPerFrame
+	if endByte <= startByte {
+		return nil
+	}
+	output := make([]byte, endByte-startByte)
+	copy(output, data[startByte:endByte])
+	return output
+}
+
+func bytesForDuration(spec audio.WAVSpec, durationMS int) int {
+	bytesPerFrame := spec.ChannelCount * spec.BitsPerSample / 8
+	if bytesPerFrame <= 0 || spec.SampleRate <= 0 || durationMS <= 0 {
+		return 0
+	}
+	frames := int(math.Round(float64(durationMS) * float64(spec.SampleRate) / 1000))
+	return frames * bytesPerFrame
+}
+
+func pcmStatsForSpan(
+	data []byte,
+	spec audio.WAVSpec,
+	startMS int,
+	endMS int,
+) (float64, float64, float64) {
+	slice := pcmSlice(data, spec, startMS, endMS)
+	if len(slice) < 2 {
+		return 0, 1, 0
+	}
+	sampleCount := len(slice) / 2
+	rmsTotal := 0.0
+	silentCount := 0
+	clippedCount := 0
+	for index := 0; index+1 < len(slice); index += 2 {
+		sample := int16(binary.LittleEndian.Uint16(slice[index : index+2]))
+		normalized := math.Abs(float64(sample) / 32768)
+		rmsTotal += normalized * normalized
+		if normalized < 0.015 {
+			silentCount += 1
+		}
+		if normalized > 0.98 {
+			clippedCount += 1
+		}
+	}
+	rms := math.Sqrt(rmsTotal / float64(sampleCount))
+	silenceRatio := float64(silentCount) / float64(sampleCount)
+	clippingRisk := math.Min(1, float64(clippedCount)/float64(sampleCount)*80)
+	return rms, clamp01(silenceRatio), clamp01(clippingRisk)
+}
+
+func estimateNoiseRisk(rms float64, silenceRatio float64) float64 {
+	if rms <= 0 {
+		return 1
+	}
+	lowLevelRisk := 0.0
+	if rms < 0.07 {
+		lowLevelRisk = (0.07 - rms) / 0.07
+	}
+	return clamp01(lowLevelRisk*0.8 + silenceRatio*0.25)
+}
+
+type spanInterval struct {
+	startMS int
+	endMS   int
+}
+
+func splitSpanAroundOtherSpeakers(
+	span DetectedSpeakerSpan,
+	allSpans []DetectedSpeakerSpan,
+) []DetectedSpeakerSpan {
+	intervals := []spanInterval{{startMS: span.StartMS, endMS: span.EndMS}}
+	for _, other := range allSpans {
+		if other.SpeakerID == span.SpeakerID {
+			continue
+		}
+		overlapStart := max(span.StartMS, other.StartMS)
+		overlapEnd := min(span.EndMS, other.EndMS)
+		if overlapEnd-overlapStart < 250 {
+			continue
+		}
+
+		next := make([]spanInterval, 0, len(intervals)+1)
+		for _, interval := range intervals {
+			if overlapEnd <= interval.startMS || overlapStart >= interval.endMS {
+				next = append(next, interval)
+				continue
+			}
+			if overlapStart-interval.startMS >= minCandidateSpanDurationMS {
+				next = append(next, spanInterval{startMS: interval.startMS, endMS: overlapStart})
+			}
+			if interval.endMS-overlapEnd >= minCandidateSpanDurationMS {
+				next = append(next, spanInterval{startMS: overlapEnd, endMS: interval.endMS})
+			}
+		}
+		intervals = next
+		if len(intervals) == 0 {
+			return nil
+		}
+	}
+
+	spans := make([]DetectedSpeakerSpan, 0, len(intervals))
+	for _, interval := range intervals {
+		if interval.endMS-interval.startMS < minCandidateSpanDurationMS {
+			continue
+		}
+		cleanSpan := span
+		cleanSpan.StartMS = interval.startMS
+		cleanSpan.EndMS = interval.endMS
+		spans = append(spans, cleanSpan)
+	}
+	return spans
+}

@@ -461,14 +461,18 @@ export interface HighlightMapV2Entry {
   scopeKey: string;
   generatedAudioId: string;
   speechPlanId: string;
+  spokenTokenId?: string;
   contentIrVersion: ContentIRSchemaVersion;
   sourceLocator: ContentIRLocator;
   nodeId: string;
   segmentId?: string;
+  sourceWordId?: string;
+  sourceWordIndex?: number;
   textQuote: string;
   rawText: string;
   normalizedText: string;
   spokenText: string;
+  readingPosition?: ReadingPosition;
   tokenIndex: number | null;
   fragmentIndex: number | null;
   sentenceIndex: number | null;

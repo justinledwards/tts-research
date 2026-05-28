@@ -31,7 +31,7 @@ import {
 } from "./PreparedSourceCinemaTransportHelpers";
 import { preparedSourceCinemaMetrics, preparedSourceCinemaTitle } from "./preparedSourceModel";
 
-export { PreparedSourceCinemaAudioBarsIcon };
+export { PreparedSourceCinemaAudioBarsIcon } from "./PreparedSourceCinemaTransportHelpers";
 
 export function PreparedSourceCinemaTransport({
   accessibilitySettings,

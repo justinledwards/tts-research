@@ -109,6 +109,34 @@
       "type": ["integer", "null"],
       "minimum": 0
     },
+    "readingPosition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bookSourceId": {
+          "type": "string"
+        },
+        "scopeKey": {
+          "type": "string"
+        },
+        "activeWordIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "content-ir.v1.schema.json#/$defs/locator"
+        },
+        "locatorEnvelope": {
+          "$ref": "locator-envelope.v1.schema.json"
+        },
+        "textQuote": {
+          "type": "string"
+        }
+      }
+    },
     "highlightMapV2Summary": {
       "type": "object",
       "additionalProperties": false,
@@ -239,6 +267,9 @@
           "type": "string",
           "minLength": 1
         },
+        "spokenTokenId": {
+          "type": "string"
+        },
         "contentIrVersion": {
           "const": "content-ir.v1"
         },
@@ -252,6 +283,13 @@
         "segmentId": {
           "type": "string"
         },
+        "sourceWordId": {
+          "type": "string"
+        },
+        "sourceWordIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
         "textQuote": {
           "type": "string"
         },
@@ -263,6 +301,9 @@
         },
         "spokenText": {
           "type": "string"
+        },
+        "readingPosition": {
+          "$ref": "#/$defs/readingPosition"
         },
         "tokenIndex": {
           "$ref": "#/$defs/nullableIndex"

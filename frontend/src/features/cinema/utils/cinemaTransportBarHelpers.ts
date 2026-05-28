@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import type { GeneratedAudioLifecycleState } from "../../playback/generatedAudioLifecycle";
 import {
-  generatedAudioLifecycleFromPlaybackState,
   playbackActionDisabledReason,
   type PlaybackActionKey,
-} from "../playback";
-import type { CinemaPlaybackState } from "./model";
+} from "../../playback/playbackActionRules";
+import type { CinemaPlaybackState } from "../model";
 
 export const PLAYBACK_TRANSPORT_STATES = new Set<CinemaPlaybackState>([
   "playable",
@@ -108,7 +108,7 @@ export function cinemaPrimaryDisabledReason(
     };
   },
   action: PlaybackActionKey,
-  lifecycle: ReturnType<typeof generatedAudioLifecycleFromPlaybackState>,
+  lifecycle: GeneratedAudioLifecycleState,
 ): string | undefined {
   if (!model.primary.disabled) {
     return undefined;

@@ -22,7 +22,6 @@ import type {
 import {
   BundleContentRow,
   BundlePreviewCard,
-  BundleStat,
   ExportOptionalContent,
   ExportReviewSummary,
   ExportWarnings,

@@ -90,6 +90,58 @@ func TestBuildV2SuppressesWordEntriesForHeuristicFallback(t *testing.T) {
 	}
 }
 
+func TestBuildV2CarriesSourceWordReadingPositions(t *testing.T) {
+	request := fixtureRequest(alignment.TimingConfidence{
+		Overall: 0.95,
+		Segment: 0.95,
+		Token:   0.95,
+	}, alignment.DriftStats{})
+	request.Fragments.Source = alignment.TimingSourceNative
+	request.Tokens.Source = alignment.TimingSourceNative
+	report := alignment.AlignmentReportForTiming(
+		alignment.NormalizedTiming{Fragments: request.Fragments, Tokens: request.Tokens},
+		alignment.AlignmentModeProviderOnly,
+		nil,
+		nil,
+	)
+	highlight := BuildV2(BuildV2Request{
+		JobID:        request.JobID,
+		BookSourceID: request.BookSourceID,
+		ScopeKey:     request.ScopeKey,
+		SpeechPlanID: request.JobID,
+		WordSpans:    request.WordSpans,
+		Fragments:    request.Fragments,
+		Tokens:       request.Tokens,
+		GeneratedAt:  request.GeneratedAt,
+		Quality:      report,
+	})
+	if highlight.Summary.WordCount != 2 {
+		t.Fatalf("word count = %d, want 2", highlight.Summary.WordCount)
+	}
+	var world HighlightMapV2Entry
+	for _, entry := range highlight.Entries {
+		if entry.Level == "word" && entry.SpokenText == "world" {
+			world = entry
+			break
+		}
+	}
+	if world.ReadingPosition.ActiveWordIndex != 11 {
+		t.Fatalf("world active word index = %d, want 11", world.ReadingPosition.ActiveWordIndex)
+	}
+	if world.ReadingPosition.TextQuote != "world" {
+		t.Fatalf("world text quote = %q, want world", world.ReadingPosition.TextQuote)
+	}
+	if world.SourceWordIndex == nil || *world.SourceWordIndex != 11 {
+		t.Fatalf("world source word index = %#v, want 11", world.SourceWordIndex)
+	}
+	if world.SourceWordID != "book-1:chapter:1:word:11" {
+		t.Fatalf("world source word id = %q, want canonical source identity", world.SourceWordID)
+	}
+	if world.SpokenTokenID != "job-1:token:1" {
+		t.Fatalf("world spoken token id = %q, want speech token identity", world.SpokenTokenID)
+	}
+}
+
 func fixtureRequest(confidence alignment.TimingConfidence, drift alignment.DriftStats) BuildRequest {
 	generatedAt := time.Unix(0, 0).UTC()
 	fragments := []alignment.FragmentTiming{{

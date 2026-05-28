@@ -316,7 +316,7 @@ def _nodes_from_pages(
                 },
                 "ui": {"progressionHint": "linear", "highlightUnitHint": "node"},
                 "speech": {
-                    "policyHint": {"mode": "speak", "emphasis": "", "pauseBeforeMs": 0, "pauseAfterMs": 0},
+                    "policyHint": _policy_hint(kind),
                     "speechPolicy": {
                         "profile": "Enterprise",
                         "mode": "speak",
@@ -337,6 +337,19 @@ def _nodes_from_pages(
             nodes.append(node)
     confidence = sum(confidences) / len(confidences) if confidences else 0
     return nodes, round(confidence, 3)
+
+
+def _policy_hint(kind: str) -> dict[str, Any]:
+    if kind == "heading":
+        return {"mode": "speak", "emphasis": "heading", "pauseBeforeMs": 420, "pauseAfterMs": 520}
+    if kind == "subheading":
+        return {
+            "mode": "speak",
+            "emphasis": "subheading",
+            "pauseBeforeMs": 280,
+            "pauseAfterMs": 360,
+        }
+    return {"mode": "speak", "emphasis": "", "pauseBeforeMs": 0, "pauseAfterMs": 0}
 
 
 def _locator(source_format: str, page_index: int, block: dict[str, Any], ocr_engine: str, confidence: float) -> dict[str, Any]:

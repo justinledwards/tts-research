@@ -180,6 +180,56 @@ export function buildTeleprompterWordCues(
   });
 }
 
+export function buildTelepromptWordCuesFromIndex(
+  tokens: readonly TeleprompterToken[],
+  currentWordIndex: number,
+  settings: TeleprompterHighlightSettings = DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS,
+): TeleprompterWordCue[] {
+  const normalizedSettings = normalizeTeleprompterHighlightSettings(settings);
+  const wordTokens = tokens.filter((token) => token.kind === "word");
+  return wordTokens.map((token) => {
+    const wordIndex = token.wordIndex ?? 0;
+    if (wordIndex === currentWordIndex) {
+      return {
+        endMs: 1,
+        intensity: normalizedSettings.activeIntensity,
+        progress: 0.5,
+        startMs: 0,
+        state: "active",
+        wordIndex,
+      };
+    }
+    if (wordIndex < currentWordIndex) {
+      return {
+        endMs: 1,
+        intensity: normalizedSettings.spokenIntensity,
+        progress: 1,
+        startMs: 0,
+        state: "spoken",
+        wordIndex,
+      };
+    }
+    if (wordIndex <= currentWordIndex + 2) {
+      return {
+        endMs: 1,
+        intensity: normalizedSettings.upcomingIntensity,
+        progress: 0,
+        startMs: 0,
+        state: "upcoming",
+        wordIndex,
+      };
+    }
+    return {
+      endMs: 1,
+      intensity: 0,
+      progress: 0,
+      startMs: 0,
+      state: "idle",
+      wordIndex,
+    };
+  });
+}
+
 function resolveTeleprompterWordCue(
   wordIndex: number,
   startMs: number,

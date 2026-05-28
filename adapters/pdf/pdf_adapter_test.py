@@ -41,6 +41,17 @@ class PDFAdapterTests(unittest.TestCase):
         kinds = [node["kind"] for node in result["document"]["nodes"]]
         self.assertIn("table", kinds)
 
+    def test_classifies_obvious_text_layer_headings_from_metrics(self):
+        result = self.emit("fixtures/pdf/heading_metrics_fixture.pdf")
+        nodes = result["document"]["nodes"]
+
+        self.assertEqual(nodes[0]["kind"], "heading")
+        self.assertEqual(nodes[1]["kind"], "subheading")
+        self.assertEqual(nodes[2]["kind"], "body")
+        self.assertEqual(nodes[3]["kind"], "body")
+        self.assertEqual(nodes[0]["speech"]["policyHint"]["emphasis"], "heading")
+        self.assertEqual(nodes[1]["speech"]["policyHint"]["emphasis"], "subheading")
+
     def test_uses_fixture_ocr_for_scanned_pdf(self):
         result = self.emit("fixtures/pdf/scanned_fixture.pdf")
         self.assertEqual(result["metadata"]["supportTier"], "C")

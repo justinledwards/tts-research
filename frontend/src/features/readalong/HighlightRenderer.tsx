@@ -16,6 +16,7 @@ export interface HighlightRendererToken {
   nodeId?: string;
   pageIndex?: number;
   sourceId?: string;
+  sourceWordId?: string;
   text: string;
   title?: string;
   tokenOffset?: number;
@@ -31,6 +32,7 @@ export interface HighlightRendererWordState {
 }
 
 export interface HighlightRendererProps {
+  activeSourceWordId?: string | null;
   activeWordIndex?: number | null;
   classNameForWord?: (state: HighlightRendererWordState) => string | undefined;
   dataEffect?: string;
@@ -47,6 +49,7 @@ export interface HighlightRendererProps {
 }
 
 export function HighlightRenderer({
+  activeSourceWordId,
   activeWordIndex,
   classNameForWord,
   dataEffect,
@@ -80,7 +83,12 @@ export function HighlightRenderer({
           phraseWordEnd !== undefined &&
           token.wordIndex >= phraseWordStart &&
           token.wordIndex <= phraseWordEnd;
-        const active = canHighlightWord && token.wordIndex === activeWordIndex;
+        const activeBySourceIdentity =
+          activeSourceWordId !== null &&
+          activeSourceWordId !== undefined &&
+          token.sourceWordId === activeSourceWordId;
+        const active =
+          canHighlightWord && (activeBySourceIdentity || token.wordIndex === activeWordIndex);
         const state: HighlightRendererWordState = {
           active,
           phrase,
@@ -117,6 +125,7 @@ export function HighlightRenderer({
               token.pageIndex === undefined ? undefined : String(token.pageIndex)
             }
             data-readalong-source-id={token.sourceId ?? sourceId}
+            data-source-word-id={token.sourceWordId}
             data-readalong-token-offset={
               token.tokenOffset === undefined ? undefined : String(token.tokenOffset)
             }
