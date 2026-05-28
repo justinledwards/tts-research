@@ -1,3 +1,11 @@
+## 2026-05-28 18:44 CEST - Codebase Sanitization
+- [x] Select next unrotated candidate `frontend/src/VoiceSourceAnalysisPanel.tsx:extract helper components and target-option helpers`.
+- [x] Add `frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` for source/card/progress helper cluster.
+- [x] Rewire `VoiceSourceAnalysisPanel.tsx` to delegate helper components and status/error utility logic.
+- [x] Update `docs/refactor-sanitization-ledger.md` and automation memory with completion and next target.
+- [x] Run `pnpm check` and record pre-existing failures if present.
+- [x] Commit focused refactor patch.
+
 ## 2026-05-28 18:38 CEST - Codebase Sanitization
 - [x] Select next candidate `frontend/src/BundlePanels.tsx:extract panel UI helper cluster`.
 - [x] Create `frontend/src/BundlePanelsHelpers.tsx` and move shared bundle-flow helper components and formatters.
