@@ -517,3 +517,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] rewire `scripts/validate-local/validate-local.mjs` to delegate helper functions
 - [x] run project checks (`pnpm check`) and report outcomes
 - [x] commit focused refactor and update status artifacts (`ac2c7b4`)
+
+## 2026-05-28 18:46 CEST - Codebase Sanitization
+- [x] Select the next oversized candidate not completed in this ledger cycle
+- [x] Extract reusable project dashboard panel/helper components
+- [x] Rewire `ProjectDashboard.tsx` to consume feature-local helper module
+- [x] Update docs ledger and automation memory
+- [x] Run `pnpm check`
+- [x] Commit focused refactor
