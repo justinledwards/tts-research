@@ -14,7 +14,6 @@ import {
   bookScopeLabel,
   bookScopeOptions,
   bookSourceName,
-  normalizeBookScopeForBook,
   resolveDefaultBookScope,
 } from "../book-cinema/model";
 import {
@@ -33,7 +32,6 @@ import {
 } from "./projectTemplates";
 import {
   detectIntakeSource,
-  extensionForName,
   languageLabel,
   sourceTypeLabel,
   type IntakeIntentId,
@@ -47,13 +45,24 @@ import {
   preparedSourceLifecycleEnvelope,
   sourceSelectorOption,
 } from "../source-lifecycle/sourceSelectors";
-import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
+import { PRIVACY_NOTICES, sourcePrepFailureNotice, urlIntakeNotice } from "../privacy";
+import type { PrivacyNotice } from "../privacy";
 import {
-  PRIVACY_NOTICES,
-  sourcePrepFailureNotice,
-  urlIntakeNotice,
-  type PrivacyNotice,
-} from "../privacy";
+  activeDestinationBook,
+  activeDestinationPrepared,
+  bookImportOptionsForTemplate,
+  bookScopeForWizard,
+  destinationStructureLabel,
+  existingSourceTypeForDetection,
+  initialExistingSourceKey,
+  initialIntentForSelection,
+  intentForHydratedSource,
+  initialSourceChoiceForSelection,
+  type IntakeExistingSource,
+  selectedSourceKeyForMode,
+  shouldImportFileAsBook,
+  shouldImportUrlAsBook,
+} from "./intakeWizardHelpers";
 
 export type IntakeDestinationStage = "review" | "preview";
 
@@ -124,151 +133,6 @@ type VoiceStrategy = "default" | "language" | "profile";
 
 const INTAKE_SOURCE_FILE_ACCEPT =
   ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,image/png,image/jpeg,image/tiff,image/webp";
-
-type IntakeExistingSource =
-  | {
-      detail: string;
-      envelope: SourceLifecycleEnvelope;
-      key: string;
-      label: string;
-      optionLabel: string;
-      source: BookSource;
-      type: "book";
-    }
-  | {
-      detail: string;
-      envelope: SourceLifecycleEnvelope;
-      key: string;
-      label: string;
-      optionLabel: string;
-      source: PreparedSource;
-      type: "prepared";
-    };
-
-function initialIntentForSelection(
-  sourceMode: IntakeSourceMode,
-  selectedBookSource: BookSource | null,
-  selectedPreparedSource: PreparedSource | null,
-): IntakeIntentId {
-  return intentForHydratedSource(
-    sourceMode,
-    Boolean(selectedBookSource),
-    selectedPreparedSource?.kind ?? null,
-  );
-}
-
-function intentForHydratedSource(
-  sourceMode: IntakeSourceMode,
-  hasBookSource: boolean,
-  preparedSourceKind: PreparedSource["kind"] | null,
-): IntakeIntentId {
-  if (sourceMode === "book" && hasBookSource) {
-    return "book";
-  }
-  if (sourceMode === "fileUrl" && preparedSourceKind === "url") {
-    return "webpage";
-  }
-  if (sourceMode === "fileUrl" && preparedSourceKind) {
-    return "document";
-  }
-  return "document";
-}
-
-function initialSourceChoiceForSelection(
-  sourceMode: IntakeSourceMode,
-  selectedBookSource: BookSource | null,
-  selectedPreparedSource: PreparedSource | null,
-  text: string,
-): IntakeSourceChoice {
-  if (
-    (sourceMode === "book" && selectedBookSource) ||
-    (sourceMode === "fileUrl" && selectedPreparedSource)
-  ) {
-    return "existing";
-  }
-  if (text.trim()) {
-    return "pastedText";
-  }
-  return "file";
-}
-
-function initialExistingSourceKey(
-  sourceMode: IntakeSourceMode,
-  selectedBookSource: BookSource | null,
-  selectedPreparedSource: PreparedSource | null,
-): string {
-  if (sourceMode === "fileUrl" && selectedPreparedSource) {
-    return `prepared:${selectedPreparedSource.id}`;
-  }
-  if (sourceMode === "book" && selectedBookSource) {
-    return `book:${selectedBookSource.id}`;
-  }
-  if (selectedPreparedSource) {
-    return `prepared:${selectedPreparedSource.id}`;
-  }
-  return "";
-}
-
-function existingSourceTypeForDetection(
-  source: IntakeExistingSource | undefined,
-): IntakeSourceType | null {
-  if (!source) {
-    return null;
-  }
-  if (source.type === "book") {
-    return "book";
-  }
-  return source.source.kind === "url" ? "webpage" : "document";
-}
-
-function selectedSourceKeyForMode(
-  sourceMode: IntakeSourceMode,
-  selectedBookSource: BookSource | null,
-  selectedPreparedSource: PreparedSource | null,
-): string {
-  return initialExistingSourceKey(sourceMode, selectedBookSource, selectedPreparedSource);
-}
-
-function bookScopeForWizard(source: BookSource | null, selectedScope: BookScope | null) {
-  if (!source) {
-    return null;
-  }
-  return selectedScope
-    ? normalizeBookScopeForBook(source, selectedScope)
-    : resolveDefaultBookScope(source);
-}
-
-function activeDestinationBook(
-  existingSource: IntakeExistingSource | undefined,
-  selectedBookSource: BookSource | null,
-): BookSource | null {
-  if (existingSource) {
-    return existingSource.type === "book" ? existingSource.source : null;
-  }
-  return selectedBookSource?.status === "ready" ? selectedBookSource : null;
-}
-
-function activeDestinationPrepared(
-  existingSource: IntakeExistingSource | undefined,
-  selectedPreparedSource: PreparedSource | null,
-): PreparedSource | null {
-  if (existingSource) {
-    return existingSource.type === "prepared" ? existingSource.source : null;
-  }
-  return selectedPreparedSource?.status === "ready" ? selectedPreparedSource : null;
-}
-
-function destinationStructureLabel(
-  bookScopeContent: BookSourceScopeContent | null,
-  activeBook: BookSource | null,
-  detectedStructureLabel: string,
-): string {
-  const bookBlockCount = bookScopeContent?.blocks?.length ?? 0;
-  if (bookBlockCount > 0 && activeBook) {
-    return `${bookBlockCount.toLocaleString()} review blocks`;
-  }
-  return detectedStructureLabel;
-}
 
 export function IntakeWizard({
   bookSourceError,
@@ -1366,37 +1230,4 @@ function SummaryRow({ label, value }: Readonly<{ label: string; value: string }>
       </dd>
     </div>
   );
-}
-
-function shouldImportFileAsBook(file: File, sourceType: IntakeSourceType): boolean {
-  return sourceType === "book" || isBookAdapterExtension(extensionForName(file.name));
-}
-
-function shouldImportUrlAsBook(url: string, sourceType: IntakeSourceType): boolean {
-  return sourceType === "book" || isBookAdapterExtension(extensionForName(url));
-}
-
-function isBookAdapterExtension(extension: string): boolean {
-  return [
-    "pdf",
-    "epub",
-    "docx",
-    "html",
-    "htm",
-    "zip",
-    "png",
-    "jpg",
-    "jpeg",
-    "tif",
-    "tiff",
-    "bmp",
-    "webp",
-  ].includes(extension);
-}
-
-function bookImportOptionsForTemplate(template: IntakeProjectTemplate): BookSourceImportOptions {
-  if (template.id === "technical-book") {
-    return { importProfile: "scholarly", pdfTableMode: "structured" };
-  }
-  return {};
 }

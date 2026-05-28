@@ -25,6 +25,14 @@
 
 # Working Log
 
+## 2026-05-28 14:02 CEST - Codebase Sanitization
+- [x] Select highest-value oversized candidate `frontend/src/features/intake/IntakeWizard.tsx:extract intake decision helpers`.
+- [x] Create `frontend/src/features/intake/intakeWizardHelpers.ts` for pure selection/import/domain helpers.
+- [x] Rewire `IntakeWizard.tsx` to delegate helper computations to shared helper module.
+- [x] Update `docs/refactor-sanitization-ledger.md` with new candidate completion.
+- [x] Run `pnpm check`.
+- [x] Commit focused refactor patch.
+
 This log is intentionally concise. It records branch-level progress and open follow-ups without
 duplicating every implementation detail from commits, PR text, or generated review artifacts.
 
