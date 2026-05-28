@@ -15,6 +15,7 @@
 - scripts/e2e-book-cinema.mjs:extract reusable e2e command helpers — done
 - scripts/e2e-ui-action-audit.mjs:extract audit helpers and table builders — done
 - scripts/e2e-ui-action-matrix.mjs:extract action classification and interaction helpers — done
+- scripts/validate-local/validate-final-ux-gates.mjs:extract final-ux orchestration and gate helpers — done
 - backend/internal/pipeline/source_preps.go:extract source prep helpers — done
 - backend/internal/pipeline/profile_targets.go:extract target normalization helpers — done
 - backend/internal/pipeline/profile_sources.go:extract audio and candidate scoring helpers — done
@@ -32,3 +33,4 @@
 - backend/internal/pipeline/projects.go:extract project speech-policy utility helpers — done
 - scripts/validate-local/review-evidence.mjs:extract review evidence collection and coverage helpers — done
 - frontend/src/features/speech-policy/SpeechPolicyWizard.tsx:extract wizard subcomponents and helpers — done
+- scripts/validate-local/validate-local.mjs:extract reusable CLI/runtime/report helpers — done

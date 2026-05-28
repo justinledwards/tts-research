@@ -1,3 +1,11 @@
+## 2026-05-28 18:11 CEST - Codebase Sanitization
+- [x] Select next highest-value oversized candidate `scripts/validate-local/validate-final-ux-gates.mjs:extract orchestration and gate reporting helpers`.
+- [x] Rewire `scripts/validate-local/validate-final-ux-gates.mjs` to delegate gate math, artifacts, and evaluations to helper module.
+- [x] Update `docs/refactor-sanitization-ledger.md` with completed `validate-final-ux-gates` extraction status and next target.
+- [x] Update `/home/phoenix/.codex/automations/refactor-tts/memory.md` with this run and next recommended candidate.
+- [x] Run `pnpm check` (format fails due pre-existing `scripts/golden-minute-fixture-helpers.mjs` and import duplicate in `scripts/golden-minute-fixture.mjs`).
+- [ ] Commit focused refactor patch.
+
 ## 2026-05-28 18:01 CEST - Codebase Sanitization
 - [x] Select next highest-value unrotated oversized candidate `scripts/e2e-golden-minute.mjs:extract interaction and artifact helpers`.
 - [x] Add `scripts/e2e-golden-minute-helpers.mjs` and move capture/run helpers and validation helpers out of the main script.
@@ -459,3 +467,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] run `pnpm check` and report outcomes
 - [x] update sanitization ledger and automation memory
 - [ ] commit focused refactor
+
+## 2026-05-28 18:13 CEST - Codebase Sanitization
+- [x] select an unrotated oversized hotspot for one focused refactor
+- [x] extract reusable validation helpers into `scripts/validate-local/validate-local-helpers.mjs`
+- [x] rewire `scripts/validate-local/validate-local.mjs` to delegate helper functions
+- [x] run project checks (`pnpm check`) and report outcomes
+- [x] commit focused refactor and update status artifacts
