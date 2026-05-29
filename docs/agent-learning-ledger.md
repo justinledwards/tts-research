@@ -92,3 +92,12 @@
 - Validation: `pnpm exec biome format --write frontend/src/features/intake/IntakeWizard.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/features/intake/IntakeWizard.tsx` passed; `pnpm --filter @tts-research/frontend exec vitest run src/features/intake/projectTemplates.test.ts src/features/intake/sourceTypeModel.test.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `git diff --check` passed; first `pnpm check` run failed at backend `TestPreparedSourceURLIngestHonorsPrivateNetworkDefault` due sandbox TCP listener denial; pre-commit `pnpm check` rerun passed fully.
 - Repo lessons: The existing backend TCP listener sandbox failure can be transient; rerun may pass.
 - Suggested next safe target: inspect `frontend/src/features/run-config/RunConfigDrawerHelpers.tsx` for one narrow render/data-shaping helper extraction.
+
+### 2026-05-29 16:07 CEST
+
+- Refactor target: `frontend/src/features/run-config/RunConfigDrawerHelpers.tsx` Supertonic engine option fallback construction.
+- Theme: Extract a private same-file helper to name local engine option data shaping in `updateTTSEngine`.
+- Files changed: `frontend/src/features/run-config/RunConfigDrawerHelpers.tsx`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/features/run-config/RunConfigDrawerHelpers.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/features/run-config/RunConfigDrawerHelpers.tsx` passed; `pnpm --filter @tts-research/frontend exec vitest run src/runConfig.test.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `git diff --check` passed; `pnpm --filter @tts-research/frontend test` passed; `pnpm check` failed twice in backend `backend/internal/pipeline` because `httptest.NewServer` could not bind a local TCP listener, observed at `TestPreparedSourceURLIngestHonorsPrivateNetworkDefault` and `TestCreateBookSourceFromURLUsesHTMLContentType`; pre-commit `pnpm check` rerun passed fully.
+- Repo lessons: No new durable rule; the existing backend sandbox TCP listener quirk repeated.
+- Suggested next safe target: inspect `frontend/src/features/command-palette/commandPaletteHelpers.ts` for one narrow local helper extraction.

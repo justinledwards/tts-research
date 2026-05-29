@@ -133,14 +133,11 @@ export function RunConfigurationControls({
     onChange({
       ...runConfiguration,
       ttsEngine: engineId,
-      engineOptions:
-        engineId === "supertonic-3"
-          ? {
-              ...runConfiguration.engineOptions,
-              voiceStyle: runConfiguration.engineOptions.voiceStyle ?? firstVoice ?? "M1",
-              lang: runConfiguration.engineOptions.lang ?? "na",
-            }
-          : {},
+      engineOptions: engineOptionsForSelectedDrawerEngine(
+        engineId,
+        runConfiguration.engineOptions,
+        firstVoice,
+      ),
     });
   };
 
@@ -312,6 +309,21 @@ export function RunConfigurationControls({
       ) : null}
     </div>
   );
+}
+
+function engineOptionsForSelectedDrawerEngine(
+  engineId: string,
+  currentOptions: RunConfiguration["engineOptions"],
+  firstVoice: string | undefined,
+): RunConfiguration["engineOptions"] {
+  if (engineId !== "supertonic-3") {
+    return {};
+  }
+  return {
+    ...currentOptions,
+    voiceStyle: currentOptions.voiceStyle ?? firstVoice ?? "M1",
+    lang: currentOptions.lang ?? "na",
+  };
 }
 
 function EngineDiagnosticsCard({
