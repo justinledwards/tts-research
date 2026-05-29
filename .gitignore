@@ -67,10 +67,13 @@ frontend/.vercel/
 
 # Tool caches
 .cache/
+.codex/
+.agents/
 .turbo/
 .upstreams/
 .playwright-cli/
 .playwright-mcp/
+.learnings-skillpack.json
 
 # Local verification screenshots
 /tts-research-*.png

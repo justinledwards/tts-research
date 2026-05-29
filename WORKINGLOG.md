@@ -812,3 +812,104 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] fix first rendered UI blockers
 - [x] re-validate desktop and mobile UI state
 - [x] run focused frontend checks
+
+## 2026-05-29 00:03 CEST - Codebase Sanitization
+- [x] Inspect caretaker ledgers and repo structure
+- [x] Select `frontend/src/AppShell.tsx` project/chapter selector extraction because it is high-churn and not in the current rotation ledger
+- [x] Implement focused source cleanup
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Skip commit because a pre-existing `.gitignore` modification kept the worktree mixed
+- Improved: Extracted the project/chapter selectors from `TopProductBar` into a private same-file component.
+- Left alone: Pre-existing `.gitignore` change, runtime behavior, public exports, selector labels, option ordering, disabled states, callbacks, and unsafe backend/persistence areas.
+- Validation: `pnpm exec biome check frontend/src/AppShell.tsx` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `pnpm --filter @tts-research/frontend test` pass; `pnpm check` failed in backend pipeline test because sandbox TCP listener creation is denied.
+- Next suggested target: `frontend/src/features/cinema/model.ts` readiness display helper extraction.
+
+## 2026-05-29 02:02 CEST - Codebase Sanitization
+- [x] Check automation memory and git status
+- [x] Read ledger and discover refactor candidates
+- [x] Select `frontend/src/features/cinema/model.ts` renderer readiness helper extraction because the cinema model has recent churn, tests, and pure display logic
+- [x] Implement focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Skip commit because the final worktree includes pre-existing `.gitignore`, `AppShell`, and ledger changes
+- Improved: Extracted the non-ready renderer lifecycle readiness display construction into a private same-file helper.
+- Left alone: Pre-existing `.gitignore` and `AppShell` changes, public exports, string literals, readiness data shape, branch ordering, backend, persistence, auth, and timing-sensitive areas.
+- Validation: `pnpm exec biome check frontend/src/features/cinema/model.ts` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/cinema/model.test.tsx` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; `pnpm check` failed in backend pipeline test because sandbox TCP listener creation is denied.
+- Next suggested target: Resolve or commit the existing dirty caretaker worktree before another refactor; then inspect `frontend/src/features/cinema/PreparedSourceCinemaTransport.tsx`.
+
+## 2026-05-29 04:01 CEST - Codebase Sanitization
+- [x] Check automation memory, repo ledger, and dirty worktree
+- [x] Select `frontend/src/features/cinema/PreparedSourceCinemaBase.tsx` source option rendering because it is large, high-churn, unmodified in the current dirty tree, and has duplicated local mapping
+- [x] Implement one behavior-preserving refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Skip commit because the final worktree includes pre-existing unrelated `.gitignore`, `AppShell`, `model.ts`, and ledger/log changes
+- Improved: Extracted duplicated prepared-source `<option>` rendering into a private same-file helper.
+- Left alone: Pre-existing `.gitignore`, `AppShell`, and `model.ts` changes, select labels, option ordering, keys, values, callbacks, runtime behavior, public APIs, backend, persistence, auth, and timing-sensitive areas.
+- Validation: `pnpm exec biome check frontend/src/features/cinema/PreparedSourceCinemaBase.tsx` failed on pre-existing import organization assist; `pnpm exec biome format frontend/src/features/cinema/PreparedSourceCinemaBase.tsx` pass; `pnpm exec biome lint frontend/src/features/cinema/PreparedSourceCinemaBase.tsx` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/cinema/model.test.tsx src/features/cinema/preparedSourceModel.test.tsx` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; `pnpm check` failed in backend pipeline test because sandbox TCP listener creation is denied.
+- Next suggested target: Clear or commit the current dirty caretaker worktree before another refactor; then inspect an untouched high-churn helper such as `frontend/src/features/settings/SettingsPanel.tsx`.
+
+## 2026-05-29 06:03 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, and dirty worktree
+- [x] Discover a clean behavior-preserving refactor target
+- [x] Select `frontend/src/features/settings/SettingsPanel.tsx` performance mode option extraction because the file is large, high-churn, clean, and has duplicated local option literals
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Skip commit because the final worktree includes pre-existing unrelated `.gitignore`, `AppShell`, and cinema changes
+- Improved: Replaced duplicated performance-mode option literals with a private same-file constant in `SettingsPanel`.
+- Left alone: Pre-existing `.gitignore`, `AppShell`, cinema changes, labels, option ordering, callbacks, public APIs, backend, persistence, auth, and timing-sensitive areas.
+- Validation: `pnpm exec biome format frontend/src/features/settings/SettingsPanel.tsx` pass; `pnpm exec biome lint frontend/src/features/settings/SettingsPanel.tsx` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/settings/SettingsPanel.test.tsx` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; `pnpm check` failed in backend pipeline test because sandbox TCP listener creation is denied.
+- Next suggested target: Clear or commit the current mixed caretaker worktree before another refactor; then inspect `frontend/src/features/book-cinema/BookCinemaPanel.tsx`.
+
+## 2026-05-29 08:03 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, and dirty worktree
+- [x] Discover a clean behavior-preserving refactor target
+- [x] Select `frontend/src/features/book-cinema/BookCinemaPanel.tsx` scope lookup helper extraction because it is large, high-churn, clean, and has repeated local select-key lookup logic
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Skip commit because the final worktree includes pre-existing unrelated `.gitignore`, `AppShell`, cinema, settings, ledger, and log changes
+- Improved: Replaced repeated book-cinema scope select key lookup with a private same-file helper.
+- Left alone: Pre-existing dirty files, select option labels/order/values, callback behavior, public APIs, backend, persistence, auth, concurrency, and timing-sensitive areas.
+- Validation: `pnpm exec biome format frontend/src/features/book-cinema/BookCinemaPanel.tsx` pass after one formatting adjustment; `pnpm exec biome lint frontend/src/features/book-cinema/BookCinemaPanel.tsx` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/book-cinema/degradedState.test.tsx src/features/book-cinema/model.test.ts src/features/book-cinema/pageStructure.test.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; `pnpm check` failed in backend pipeline test because sandbox TCP listener creation is denied.
+- Next suggested target: Clear or commit the current mixed caretaker worktree before another refactor; then inspect `frontend/src/features/teleprompt/TelepromptStudio.tsx`.
+
+## 2026-05-29 10:01 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, and dirty worktree
+- [x] Discover a clean behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/features/teleprompt/TelepromptStudio.tsx` block-id lookup helper extraction because it is large, high-churn, clean, and has repeated local block lookup logic
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger and working log
+- [x] Update automation memory
+- [x] Skip commit because the final worktree includes pre-existing unrelated `.gitignore`, `AppShell`, cinema, settings, book-cinema, ledger, and log changes
+- Improved: Replaced repeated teleprompt block-id lookup with a private same-file helper.
+- Left alone: Pre-existing dirty files, public APIs, render output, block ordering, snapshot data shape, callbacks, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/features/teleprompt/TelepromptStudio.tsx` pass with no fixes; `pnpm exec biome lint frontend/src/features/teleprompt/TelepromptStudio.tsx` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/teleprompt/teleprompt.test.ts src/features/teleprompt/telepromptCueSync.test.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; `pnpm check` failed in backend pipeline test because sandbox TCP listener creation is denied.
+- Next suggested target: Clear or commit the current mixed caretaker worktree before another refactor; then inspect `frontend/src/features/revision/RevisionPanel.tsx`.
+
+## 2026-05-29 12:01 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, and dirty worktree
+- [x] Discover a clean behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/features/revision/RevisionPanel.tsx` active/base block derivation helper extraction because it is large, clean, outside the current dirty source set, and has inline fallback logic in the main component
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Decide whether the focused diff can be committed
+- [x] Skip commit because the final worktree includes pre-existing unrelated `.gitignore`, `AppShell`, cinema, settings, book-cinema, teleprompt, ledger, and log changes
+- Improved: Extracted active/base revision block fallback derivation into a private same-file helper.
+- Left alone: Pre-existing dirty files, public APIs, render output, selected-block fallback ordering, inline edit callbacks, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/features/revision/RevisionPanel.tsx` pass with no fixes; `pnpm exec biome lint frontend/src/features/revision/RevisionPanel.tsx` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/revision/revision.test.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; `pnpm check` failed in backend pipeline test because sandbox TCP listener creation is denied.
+- Next suggested target: Clear or commit the current mixed caretaker worktree before another refactor; then inspect `frontend/src/features/intake/IntakeWizard.tsx`.
+
+## 2026-05-29 12:16 CEST - Publish Current State
+- [x] Inspect dirty worktree and PR context
+- [x] Run project checks
+- [x] Stage and commit current state
+- [x] Push branch and update PR
+- [x] Confirm final tidy state
+- Validation: `git diff --check` pass; `pnpm check` pass.

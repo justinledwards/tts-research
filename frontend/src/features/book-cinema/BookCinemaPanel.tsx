@@ -718,9 +718,7 @@ function BookScopeSelector({
       <select
         className="min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm outline-none vs-border"
         onChange={(event) => {
-          const nextScope = scopeOptions.find(
-            (option) => option.key === event.currentTarget.value,
-          )?.scope;
+          const nextScope = findScopeByOptionKey(scopeOptions, event.currentTarget.value);
           if (nextScope) {
             onScopeChange(nextScope);
           }
@@ -1808,9 +1806,7 @@ export function BookCinemaOverlay({
                   data-book-source-id={book.id}
                   data-testid="ui-action-book-cinema-scope"
                   onChange={(event) => {
-                    const nextScope = scopeOptions.find(
-                      (option) => option.key === event.currentTarget.value,
-                    )?.scope;
+                    const nextScope = findScopeByOptionKey(scopeOptions, event.currentTarget.value);
                     if (nextScope) {
                       handleScopeChange(nextScope);
                     }
@@ -1831,9 +1827,7 @@ export function BookCinemaOverlay({
                 data-book-source-id={book.id}
                 data-testid="ui-action-book-cinema-scope"
                 onChange={(event) => {
-                  const nextScope = scopeOptions.find(
-                    (option) => option.key === event.currentTarget.value,
-                  )?.scope;
+                  const nextScope = findScopeByOptionKey(scopeOptions, event.currentTarget.value);
                   if (nextScope) {
                     handleScopeChange(nextScope);
                   }
@@ -3447,6 +3441,10 @@ function groupBookScopeOptions(options: BookScopeOption[]): {
       options: options.filter((option) => option.group === group),
     }))
     .filter((group) => group.options.length > 0);
+}
+
+function findScopeByOptionKey(options: BookScopeOption[], key: string): BookScope | undefined {
+  return options.find((option) => option.key === key)?.scope;
 }
 
 function bookCreateLabel(scope: BookScope, book?: BookSource): string {

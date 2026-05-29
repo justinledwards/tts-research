@@ -226,21 +226,7 @@ export function deriveCinemaReadinessDisplay({
   rendererLifecycle: CinemaRendererLifecycleState;
 }>): CinemaReadinessDisplay {
   if (rendererLifecycle !== "ready") {
-    const label = cinemaRendererLifecycleLabel(rendererLifecycle);
-    let tone: CinemaReadinessDisplay["tone"] = "info";
-    if (rendererLifecycle === "failed") {
-      tone = "danger";
-    } else if (rendererLifecycle === "degraded") {
-      tone = "warning";
-    }
-    return {
-      audioLabel: rendererLifecycle === "failed" ? "Audio held" : "Waiting for reader",
-      detail: cinemaRendererLifecycleDetail(rendererLifecycle),
-      label,
-      readerLabel: label,
-      rendererLifecycle,
-      tone,
-    };
+    return rendererLifecycleReadinessDisplay(rendererLifecycle);
   }
 
   if (isPlaybackActive || playbackState === "playing") {
@@ -382,6 +368,27 @@ function normalizePlaybackProgressRatio(value: number | null | undefined): numbe
     return 0;
   }
   return Math.min(1, Math.max(0, value));
+}
+
+function rendererLifecycleReadinessDisplay(
+  rendererLifecycle: CinemaRendererLifecycleState,
+): CinemaReadinessDisplay {
+  const label = cinemaRendererLifecycleLabel(rendererLifecycle);
+  let tone: CinemaReadinessDisplay["tone"] = "info";
+  if (rendererLifecycle === "failed") {
+    tone = "danger";
+  } else if (rendererLifecycle === "degraded") {
+    tone = "warning";
+  }
+
+  return {
+    audioLabel: rendererLifecycle === "failed" ? "Audio held" : "Waiting for reader",
+    detail: cinemaRendererLifecycleDetail(rendererLifecycle),
+    label,
+    readerLabel: label,
+    rendererLifecycle,
+    tone,
+  };
 }
 
 function readinessDisplay(

@@ -121,6 +121,16 @@ export interface TelepromptStudioProps {
   readonly onTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
 }
 
+function findTelepromptBlockById(
+  blocks: readonly RevisionBlock[],
+  blockId: string | null,
+): RevisionBlock | null {
+  if (!blockId) {
+    return null;
+  }
+  return blocks.find((block) => block.id === blockId) ?? null;
+}
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function TelepromptStudio({
   activeBlockId,
@@ -302,7 +312,7 @@ export function TelepromptStudio({
       if (!rememberReturnMemory) {
         return;
       }
-      const snapshotBlock = nextBlockId ? blocks.find((block) => block.id === nextBlockId) : null;
+      const snapshotBlock = findTelepromptBlockById(blocks, nextBlockId);
       rememberTelepromptReturnSnapshot({
         activeBlockId: nextBlockId,
         activeBlockLabel: snapshotBlock?.label ?? activeBlock?.label ?? null,
@@ -408,9 +418,9 @@ export function TelepromptStudio({
     }
     restoredMemoryRef.current = true;
     const snapshot = readTelepromptReturnSnapshot(projectId, sourceKey);
-    const activeBlockStillExists = blocks.some((block) => block.id === activeBlockId);
+    const activeBlockStillExists = findTelepromptBlockById(blocks, activeBlockId) !== null;
     if (!activeBlockStillExists && snapshot?.activeBlockId) {
-      const restoredBlock = blocks.find((block) => block.id === snapshot.activeBlockId);
+      const restoredBlock = findTelepromptBlockById(blocks, snapshot.activeBlockId);
       if (restoredBlock) {
         onActiveBlockChange(restoredBlock.id);
       }
@@ -497,10 +507,7 @@ export function TelepromptStudio({
       setStatusMessage(direction < 0 ? "Moved to previous cue." : "Moved to next cue.");
       announcePolite(
         liveStatusMessages.cueChanged(
-          telepromptCueLiveLabel(
-            blocks.find((block) => block.id === nextId) ?? null,
-            blocks.length,
-          ),
+          telepromptCueLiveLabel(findTelepromptBlockById(blocks, nextId), blocks.length),
         ),
       );
     },

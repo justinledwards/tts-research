@@ -126,6 +126,8 @@ const COMMON_PIPELINE_OPTIONS: (keyof PipelineOptions)[] = [
   "arrivalPlayback",
 ];
 
+const PERFORMANCE_MODE_OPTIONS: readonly PerformanceMode[] = ["balanced", "throughput", "quality"];
+
 const PIPELINE_OPTION_LABELS: Record<keyof PipelineOptions, { label: string; detail: string }> = {
   arrivalPlayback: {
     detail: "Play completed segments as they arrive.",
@@ -698,7 +700,7 @@ function QuickSettings({
             });
           }}
         >
-          {(["balanced", "throughput", "quality"] as const).map((mode) => (
+          {PERFORMANCE_MODE_OPTIONS.map((mode) => (
             <option key={mode} value={mode}>
               {mode}
             </option>
@@ -1245,7 +1247,7 @@ function RunSettingsGroup({
             ))}
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
-            {(["balanced", "throughput", "quality"] as const).map((mode) => (
+            {PERFORMANCE_MODE_OPTIONS.map((mode) => (
               <Button
                 align="start"
                 className="grid px-3 py-3 capitalize"

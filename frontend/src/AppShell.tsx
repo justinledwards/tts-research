@@ -1,9 +1,9 @@
+import { Button, SegmentedControl, StatusChip } from "./design";
+import { CommandIcon, SettingsIcon } from "./features/navigation/SurfaceActions";
+import type { WorkspaceLayoutMode } from "./features/workspace/model";
 import type { RunConfiguration } from "./runConfig";
 import { describePerformanceMode } from "./runConfig";
 import type { VoiceJob, VoiceProject } from "./types";
-import type { WorkspaceLayoutMode } from "./features/workspace/model";
-import { CommandIcon, SettingsIcon } from "./features/navigation/SurfaceActions";
-import { Button, SegmentedControl, StatusChip } from "./design";
 
 export type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 export type StudioMode = "narration" | "voiceCloning";
@@ -65,11 +65,6 @@ export function TopProductBar({
   onWorkspaceLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
   onWorkspaceOpen: () => void;
 }>) {
-  const visibleJobs =
-    job && !projectJobs.some((projectJob) => projectJob.id === job.id)
-      ? [job, ...projectJobs]
-      : projectJobs;
-  const selectedJobId = job?.id ?? "";
   const primaryButtonLabel = isProcessing ? "Cancel Job" : "Create & Listen";
 
   return (
@@ -106,60 +101,16 @@ export function TopProductBar({
           </StatusChip>
         </Button>
       </div>
-      <div className="hidden min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 vs-surface 2xl:flex">
-        <label className="grid min-w-0 flex-1 gap-0.5">
-          <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
-            Project
-          </span>
-          <select
-            aria-label="Select project"
-            className="min-w-0 truncate rounded-md border-0 bg-transparent px-1 py-0.5 text-sm font-semibold outline-none"
-            onChange={(event) => {
-              onProjectSelect(event.currentTarget.value);
-            }}
-            value={activeProjectId}
-          >
-            {projects.length > 0 ? (
-              projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))
-            ) : (
-              <option value={activeProjectId}>{projectName}</option>
-            )}
-          </select>
-        </label>
-        <label className="grid min-w-0 flex-1 gap-0.5 border-l pl-3 vs-border">
-          <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
-            Chapter
-          </span>
-          <select
-            aria-label="Select chapter"
-            className="min-w-0 truncate rounded-md border-0 bg-transparent px-1 py-0.5 text-sm font-semibold outline-none"
-            data-disabled-reason={
-              visibleJobs.length === 0
-                ? "Create audio before selecting a generated chapter."
-                : undefined
-            }
-            disabled={visibleJobs.length === 0}
-            onChange={(event) => {
-              onJobSelect(event.currentTarget.value);
-            }}
-            value={selectedJobId}
-          >
-            {visibleJobs.length > 0 ? (
-              visibleJobs.map((item, index) => (
-                <option key={item.id} value={item.id}>
-                  {`Chapter ${String(index + 1)} · ${chapterLabel(item)}`}
-                </option>
-              ))
-            ) : (
-              <option value="">Draft chapter · {jobName}</option>
-            )}
-          </select>
-        </label>
-      </div>
+      <TopProductBarProjectSelectors
+        activeProjectId={activeProjectId}
+        job={job}
+        jobName={jobName}
+        projectJobs={projectJobs}
+        projectName={projectName}
+        projects={projects}
+        onJobSelect={onJobSelect}
+        onProjectSelect={onProjectSelect}
+      />
       <nav
         aria-label="Primary workspace actions"
         className="hidden min-w-0 items-center justify-end gap-1.5 md:flex"
@@ -316,6 +267,89 @@ export function TopProductBar({
         ) : null}
       </nav>
     </header>
+  );
+}
+
+function TopProductBarProjectSelectors({
+  activeProjectId,
+  job,
+  jobName,
+  projectJobs,
+  projectName,
+  projects,
+  onJobSelect,
+  onProjectSelect,
+}: Readonly<{
+  activeProjectId: string;
+  job: VoiceJob | null;
+  jobName: string;
+  projectJobs: VoiceJob[];
+  projectName: string;
+  projects: VoiceProject[];
+  onJobSelect: (jobId: string) => void;
+  onProjectSelect: (projectId: string) => void;
+}>) {
+  const visibleJobs =
+    job && !projectJobs.some((projectJob) => projectJob.id === job.id)
+      ? [job, ...projectJobs]
+      : projectJobs;
+  const selectedJobId = job?.id ?? "";
+
+  return (
+    <div className="hidden min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 vs-surface 2xl:flex">
+      <label className="grid min-w-0 flex-1 gap-0.5">
+        <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
+          Project
+        </span>
+        <select
+          aria-label="Select project"
+          className="min-w-0 truncate rounded-md border-0 bg-transparent px-1 py-0.5 text-sm font-semibold outline-none"
+          onChange={(event) => {
+            onProjectSelect(event.currentTarget.value);
+          }}
+          value={activeProjectId}
+        >
+          {projects.length > 0 ? (
+            projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))
+          ) : (
+            <option value={activeProjectId}>{projectName}</option>
+          )}
+        </select>
+      </label>
+      <label className="grid min-w-0 flex-1 gap-0.5 border-l pl-3 vs-border">
+        <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
+          Chapter
+        </span>
+        <select
+          aria-label="Select chapter"
+          className="min-w-0 truncate rounded-md border-0 bg-transparent px-1 py-0.5 text-sm font-semibold outline-none"
+          data-disabled-reason={
+            visibleJobs.length === 0
+              ? "Create audio before selecting a generated chapter."
+              : undefined
+          }
+          disabled={visibleJobs.length === 0}
+          onChange={(event) => {
+            onJobSelect(event.currentTarget.value);
+          }}
+          value={selectedJobId}
+        >
+          {visibleJobs.length > 0 ? (
+            visibleJobs.map((item, index) => (
+              <option key={item.id} value={item.id}>
+                {`Chapter ${String(index + 1)} · ${chapterLabel(item)}`}
+              </option>
+            ))
+          ) : (
+            <option value="">Draft chapter · {jobName}</option>
+          )}
+        </select>
+      </label>
+    </div>
   );
 }
 

@@ -124,11 +124,11 @@ export function RevisionPanel({
   );
   const summary = useMemo(() => summarizeRevisionBlocks(blocksWithState), [blocksWithState]);
   const hasActiveFilters = useMemo(() => !revisionFiltersAreDefault(filters), [filters]);
-  const activeBlock =
-    blocksWithState.find((block) => block.id === activeBlockId) ?? blocksWithState.at(0) ?? null;
-  const activeBaseBlock = activeBlock
-    ? (blocks.find((block) => block.id === activeBlock.id) ?? activeBlock)
-    : null;
+  const { activeBaseBlock, activeBlock } = selectActiveRevisionBlocks(
+    blocksWithState,
+    blocks,
+    activeBlockId,
+  );
   const lifecycleDescriptor = sourceLifecycle
     ? sourceLifecycleDescriptor(sourceLifecycle.canonicalState)
     : null;
@@ -402,6 +402,20 @@ export function RevisionPanel({
       ) : null}
     </section>
   );
+}
+
+function selectActiveRevisionBlocks(
+  blocksWithState: readonly RevisionBlock[],
+  baseBlocks: readonly RevisionBlock[],
+  activeBlockId: string | null,
+): { activeBaseBlock: RevisionBlock | null; activeBlock: RevisionBlock | null } {
+  const activeBlock =
+    blocksWithState.find((block) => block.id === activeBlockId) ?? blocksWithState.at(0) ?? null;
+  const activeBaseBlock = activeBlock
+    ? (baseBlocks.find((block) => block.id === activeBlock.id) ?? activeBlock)
+    : null;
+
+  return { activeBaseBlock, activeBlock };
 }
 
 function RevisionFilterBar({

@@ -1236,11 +1236,7 @@ function PreparedSourceCinemaSourceLibrary({
           }}
           value={source.id}
         >
-          {sources.map((item, index) => (
-            <option key={`${item.id}-${String(index)}`} value={item.id}>
-              {preparedSourceCinemaOptionLabel(item)}
-            </option>
-          ))}
+          {preparedSourceCinemaSourceOptions(sources)}
         </select>
       </label>
       <Button
@@ -1307,14 +1303,18 @@ function PreparedSourceCinemaHeaderSourceSelect({
         title={currentLabel}
         value={source.id}
       >
-        {sources.map((item, index) => (
-          <option key={`${item.id}-${String(index)}`} value={item.id}>
-            {preparedSourceCinemaOptionLabel(item)}
-          </option>
-        ))}
+        {preparedSourceCinemaSourceOptions(sources)}
       </select>
     </label>
   );
+}
+
+function preparedSourceCinemaSourceOptions(sources: PreparedSource[]): ReactNode {
+  return sources.map((item, index) => (
+    <option key={`${item.id}-${String(index)}`} value={item.id}>
+      {preparedSourceCinemaOptionLabel(item)}
+    </option>
+  ));
 }
 
 function preparedSourceCinemaOptionLabel(source: PreparedSource): string {
