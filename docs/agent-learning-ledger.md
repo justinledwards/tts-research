@@ -101,3 +101,12 @@
 - Validation: `pnpm exec biome format --write frontend/src/features/run-config/RunConfigDrawerHelpers.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/features/run-config/RunConfigDrawerHelpers.tsx` passed; `pnpm --filter @tts-research/frontend exec vitest run src/runConfig.test.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `git diff --check` passed; `pnpm --filter @tts-research/frontend test` passed; `pnpm check` failed twice in backend `backend/internal/pipeline` because `httptest.NewServer` could not bind a local TCP listener, observed at `TestPreparedSourceURLIngestHonorsPrivateNetworkDefault` and `TestCreateBookSourceFromURLUsesHTMLContentType`; pre-commit `pnpm check` rerun passed fully.
 - Repo lessons: No new durable rule; the existing backend sandbox TCP listener quirk repeated.
 - Suggested next safe target: inspect `frontend/src/features/command-palette/commandPaletteHelpers.ts` for one narrow local helper extraction.
+
+### 2026-05-29 18:07 CEST
+
+- Refactor target: `frontend/src/features/command-palette/commandPaletteHelpers.ts` prepared-source command pair construction.
+- Theme: Extract a private same-file helper to name local prepared-source command entry data shaping in `buildCommandEntries`.
+- Files changed: `frontend/src/features/command-palette/commandPaletteHelpers.ts`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/features/command-palette/commandPaletteHelpers.ts` passed with no fixes; `pnpm exec biome lint frontend/src/features/command-palette/commandPaletteHelpers.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `pnpm --filter @tts-research/frontend test` passed; `git diff --check` passed; `pnpm check` failed twice in backend `backend/internal/pipeline` because `httptest.NewServer` could not bind a local TCP listener, observed at `TestPreparedSourceURLIngestHonorsPrivateNetworkDefault` and `TestCreateBookSourceFromURLUsesHTMLContentType`; pre-commit `pnpm check` rerun passed fully.
+- Repo lessons: No new durable rule; the existing backend sandbox TCP listener quirk repeated. There is no dedicated command-palette test file, so this run used the full frontend suite as the closest targeted behavioral check.
+- Suggested next safe target: inspect `frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` for one narrow local render-helper extraction.

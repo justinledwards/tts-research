@@ -279,6 +279,45 @@ export async function loadCommandMetadata(): Promise<CommandMetadataState> {
   };
 }
 
+function preparedSourceCommandEntriesForSource(
+  source: PreparedSource,
+  handlers: CommandPaletteHandlers,
+): CommandEntry[] {
+  const isReady = source.status === "ready";
+  const label = source.title ?? source.sourceName;
+  const disabledReason = isReady ? undefined : (source.error ?? "Prepared source is not ready.");
+  return [
+    {
+      category: "Source",
+      detail: "Use this prepared source in Review.",
+      disabled: !isReady,
+      disabledReason,
+      id: `source:prepared:${source.id}`,
+      keywords: ["prepared", "source", source.kind, label],
+      owner: "source",
+      perform: () => {
+        void handlers.openPreparedSource(source);
+      },
+      section: "Sources",
+      title: `Use source: ${label}`,
+    },
+    {
+      category: "Source",
+      detail: handlers.resolvePreparedSourceCinemaActionLabel(source),
+      disabled: !isReady,
+      disabledReason,
+      id: `source:prepared-cinema:${source.id}`,
+      keywords: ["cinema", "read", "prepared", source.kind, label],
+      owner: "source",
+      perform: () => {
+        handlers.openPreparedSourceCinema(source);
+      },
+      section: "Sources",
+      title: `Open ${label} in Cinema`,
+    },
+  ];
+}
+
 export function buildCommandEntries(context: CommandPaletteBuildContext): CommandEntry[] {
   const {
     activeCinemaSurfaceKind,
@@ -544,41 +583,9 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     section: "Sources",
     title: `Use book: ${handlers.resolveBookSourceLabel(book)}`,
   }));
-  const preparedSourceCommandEntries = preparedSources.flatMap<CommandEntry>((source) => {
-    const isReady = source.status === "ready";
-    const label = source.title ?? source.sourceName;
-    const disabledReason = isReady ? undefined : (source.error ?? "Prepared source is not ready.");
-    return [
-      {
-        category: "Source",
-        detail: "Use this prepared source in Review.",
-        disabled: !isReady,
-        disabledReason,
-        id: `source:prepared:${source.id}`,
-        keywords: ["prepared", "source", source.kind, label],
-        owner: "source",
-        perform: () => {
-          void handlers.openPreparedSource(source);
-        },
-        section: "Sources",
-        title: `Use source: ${label}`,
-      },
-      {
-        category: "Source",
-        detail: handlers.resolvePreparedSourceCinemaActionLabel(source),
-        disabled: !isReady,
-        disabledReason,
-        id: `source:prepared-cinema:${source.id}`,
-        keywords: ["cinema", "read", "prepared", source.kind, label],
-        owner: "source",
-        perform: () => {
-          handlers.openPreparedSourceCinema(source);
-        },
-        section: "Sources",
-        title: `Open ${label} in Cinema`,
-      },
-    ];
-  });
+  const preparedSourceCommandEntries = preparedSources.flatMap((source) =>
+    preparedSourceCommandEntriesForSource(source, handlers),
+  );
   const openCurrentCinemaCommand: CommandEntry = {
     category: "Playback",
     detail: "Open the current narration or selected book in Cinema.",
