@@ -14,6 +14,8 @@ import {
   summarizeCandidateMetrics,
 } from "./voiceProfileSourceMetrics";
 
+type CandidatePreviewKind = "clean" | "raw";
+
 export function sourceStatusClass(source: VoiceProfileSource): string {
   if (source.status === "failed") {
     return "bg-red-100 text-red-700";
@@ -296,12 +298,7 @@ function CandidateCard({
 }>) {
   const isCreating = createCandidateId === candidate.id;
   const canCreate = selectedTargets.length > 0 && !isCreating;
-  const [previewKind, setPreviewKind] = useState<"clean" | "raw">("clean");
-  const previewSource = voiceProfileCandidatePreviewSource(sourceId, candidate.id, previewKind);
-  const hasRawPreview = Boolean(candidate.rawPreviewAudio);
-  const denoiseLabel = candidate.denoise?.applied
-    ? `${candidate.denoise.provider} ${candidate.denoise.strength}`
-    : "raw normalized";
+  const [previewKind, setPreviewKind] = useState<CandidatePreviewKind>("clean");
   return (
     <article className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3">
       <div className="flex min-w-0 items-start justify-between gap-3">
@@ -328,31 +325,12 @@ function CandidateCard({
           {formatPercent(candidate.score)}
         </span>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-xs text-zinc-600">
-        <span className="min-w-0 truncate" title={candidate.denoise?.reason ?? denoiseLabel}>
-          Preview: {previewKind === "clean" ? "Cleaned" : "Raw"} · {denoiseLabel}
-        </span>
-        <div className="inline-flex overflow-hidden rounded border border-zinc-200 bg-white">
-          {(["clean", "raw"] as const).map((kind) => (
-            <button
-              className={`px-2 py-1 font-semibold ${
-                previewKind === kind ? "bg-orange-50 text-orange-700" : "text-zinc-500"
-              }`}
-              disabled={kind === "raw" && !hasRawPreview}
-              key={kind}
-              onClick={() => {
-                setPreviewKind(kind);
-              }}
-              type="button"
-            >
-              {kind}
-            </button>
-          ))}
-        </div>
-      </div>
-      <audio className="h-9 w-full" controls preload="none" src={previewSource}>
-        <track kind="captions" />
-      </audio>
+      <CandidatePreview
+        candidate={candidate}
+        previewKind={previewKind}
+        sourceId={sourceId}
+        onPreviewKindChange={setPreviewKind}
+      />
       <TranscriptBlock
         isRefreshing={isRefreshingTranscript}
         label="Reference transcript"
@@ -431,6 +409,53 @@ function CandidateCard({
         {isCreating ? "Creating..." : "Create Profile"}
       </button>
     </article>
+  );
+}
+
+function CandidatePreview({
+  candidate,
+  previewKind,
+  sourceId,
+  onPreviewKindChange,
+}: Readonly<{
+  candidate: VoiceProfileCandidate;
+  previewKind: CandidatePreviewKind;
+  sourceId: string;
+  onPreviewKindChange: (kind: CandidatePreviewKind) => void;
+}>) {
+  const previewSource = voiceProfileCandidatePreviewSource(sourceId, candidate.id, previewKind);
+  const hasRawPreview = Boolean(candidate.rawPreviewAudio);
+  const denoiseLabel = candidate.denoise?.applied
+    ? `${candidate.denoise.provider} ${candidate.denoise.strength}`
+    : "raw normalized";
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-xs text-zinc-600">
+        <span className="min-w-0 truncate" title={candidate.denoise?.reason ?? denoiseLabel}>
+          Preview: {previewKind === "clean" ? "Cleaned" : "Raw"} · {denoiseLabel}
+        </span>
+        <div className="inline-flex overflow-hidden rounded border border-zinc-200 bg-white">
+          {(["clean", "raw"] as const).map((kind) => (
+            <button
+              className={`px-2 py-1 font-semibold ${
+                previewKind === kind ? "bg-orange-50 text-orange-700" : "text-zinc-500"
+              }`}
+              disabled={kind === "raw" && !hasRawPreview}
+              key={kind}
+              onClick={() => {
+                onPreviewKindChange(kind);
+              }}
+              type="button"
+            >
+              {kind}
+            </button>
+          ))}
+        </div>
+      </div>
+      <audio className="h-9 w-full" controls preload="none" src={previewSource}>
+        <track kind="captions" />
+      </audio>
+    </>
   );
 }
 

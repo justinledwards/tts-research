@@ -959,3 +959,19 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - Left alone: Public APIs, command entry ordering, labels, ids, keywords, disabled state, disabled reasons, handler calls, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
 - Validation: `pnpm exec biome format --write frontend/src/features/command-palette/commandPaletteHelpers.ts` pass with no fixes; `pnpm exec biome lint frontend/src/features/command-palette/commandPaletteHelpers.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `pnpm --filter @tts-research/frontend test` pass; `git diff --check` pass; `pnpm check` failed twice in backend pipeline because sandbox TCP listener creation was denied; pre-commit `pnpm check` rerun passed.
 - Next suggested target: Inspect `frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` for one narrow local render-helper extraction.
+
+## 2026-05-29 20:02 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, skills, and dirty worktree
+- [x] Discover a behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` candidate preview block extraction because it is a frontend size outlier outside the recent rotation with dense local preview markup in `CandidateCard`
+- [x] Plan: extract a private same-file candidate preview component while preserving `previewKind` state ownership, option order, labels, disabled raw preview behavior, audio source, and markup
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger and working log
+- [x] Update automation memory
+- [x] Decide whether the focused diff can be committed
+- Improved: Extracted candidate preview controls and audio markup into a private same-file component.
+- Left alone: Public APIs, candidate preview state ownership, option order, labels, disabled raw preview behavior, audio source construction, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` pass with no fixes; `pnpm exec biome lint frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `pnpm --filter @tts-research/frontend test` pass; `git diff --check` pass; `pnpm check` failed twice in backend pipeline because sandbox TCP listener creation was denied.
+- Next suggested target: Inspect `frontend/src/appVoiceCloningHelpers.ts` for one narrow local helper extraction.

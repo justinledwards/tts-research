@@ -110,3 +110,12 @@
 - Validation: `pnpm exec biome format --write frontend/src/features/command-palette/commandPaletteHelpers.ts` passed with no fixes; `pnpm exec biome lint frontend/src/features/command-palette/commandPaletteHelpers.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `pnpm --filter @tts-research/frontend test` passed; `git diff --check` passed; `pnpm check` failed twice in backend `backend/internal/pipeline` because `httptest.NewServer` could not bind a local TCP listener, observed at `TestPreparedSourceURLIngestHonorsPrivateNetworkDefault` and `TestCreateBookSourceFromURLUsesHTMLContentType`; pre-commit `pnpm check` rerun passed fully.
 - Repo lessons: No new durable rule; the existing backend sandbox TCP listener quirk repeated. There is no dedicated command-palette test file, so this run used the full frontend suite as the closest targeted behavioral check.
 - Suggested next safe target: inspect `frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` for one narrow local render-helper extraction.
+
+### 2026-05-29 20:05 CEST
+
+- Refactor target: `frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` candidate preview controls/audio block in `CandidateCard`.
+- Theme: Extract a private same-file presentational component to reduce scan cost in a dense candidate card while preserving state ownership.
+- Files changed: `frontend/src/VoiceSourceAnalysisPanelHelpers.tsx`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `pnpm --filter @tts-research/frontend test` passed; `git diff --check` passed; `pnpm check` failed twice in backend `backend/internal/pipeline` because `httptest.NewServer` could not bind a local TCP listener, observed at `TestCreateBookSourceFromURLUsesHTMLContentType` and `TestPreparedSourceURLIngestHonorsPrivateNetworkDefault`.
+- Repo lessons: No new durable rule; the existing backend sandbox TCP listener quirk repeated. There is no dedicated voice-source analysis render test, so this run used the full frontend suite as the closest targeted behavioral check.
+- Suggested next safe target: inspect `frontend/src/appVoiceCloningHelpers.ts` for one narrow local helper extraction.
