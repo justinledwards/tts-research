@@ -134,6 +134,58 @@ type VoiceStrategy = "default" | "language" | "profile";
 const INTAKE_SOURCE_FILE_ACCEPT =
   ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,image/png,image/jpeg,image/tiff,image/webp";
 
+type ExistingSourcesForIntakeInput = Readonly<{
+  bookSources: readonly BookSource[];
+  preparedSources: readonly PreparedSource[];
+  selectedBookScope: BookScope | null;
+  selectedBookSourceId: string | undefined;
+  selectedPreparedSourceId: string | undefined;
+}>;
+
+function existingSourcesForIntake({
+  bookSources,
+  preparedSources,
+  selectedBookScope,
+  selectedBookSourceId,
+  selectedPreparedSourceId,
+}: ExistingSourcesForIntakeInput): IntakeExistingSource[] {
+  return [
+    ...bookSources.map((source) => {
+      const envelope = bookSourceLifecycleEnvelope(source, {
+        isActive: source.id === selectedBookSourceId,
+        lastOpenedSurface: "Intake",
+        selectedScope: source.id === selectedBookSourceId ? selectedBookScope : null,
+      });
+      const option = sourceSelectorOption(envelope, "book");
+      return {
+        detail: option.detail,
+        envelope,
+        key: option.value,
+        label: option.label,
+        optionLabel: option.optionLabel,
+        source,
+        type: "book" as const,
+      };
+    }),
+    ...preparedSources.map((source) => {
+      const envelope = preparedSourceLifecycleEnvelope(source, {
+        isActive: source.id === selectedPreparedSourceId,
+        lastOpenedSurface: "Intake",
+      });
+      const option = sourceSelectorOption(envelope, "prepared");
+      return {
+        detail: option.detail,
+        envelope,
+        key: option.value,
+        label: option.label,
+        optionLabel: option.optionLabel,
+        source,
+        type: "prepared" as const,
+      };
+    }),
+  ];
+}
+
 export function IntakeWizard({
   bookSourceError,
   bookSources,
@@ -204,41 +256,14 @@ export function IntakeWizard({
 
   const template = intakeTemplateById(templateId);
   const existingSources = useMemo(
-    (): IntakeExistingSource[] => [
-      ...bookSources.map((source) => {
-        const envelope = bookSourceLifecycleEnvelope(source, {
-          isActive: source.id === selectedBookSource?.id,
-          lastOpenedSurface: "Intake",
-          selectedScope: source.id === selectedBookSource?.id ? selectedBookScope : null,
-        });
-        const option = sourceSelectorOption(envelope, "book");
-        return {
-          detail: option.detail,
-          envelope,
-          key: option.value,
-          label: option.label,
-          optionLabel: option.optionLabel,
-          source,
-          type: "book" as const,
-        };
+    () =>
+      existingSourcesForIntake({
+        bookSources,
+        preparedSources,
+        selectedBookScope,
+        selectedBookSourceId: selectedBookSource?.id,
+        selectedPreparedSourceId: selectedPreparedSource?.id,
       }),
-      ...preparedSources.map((source) => {
-        const envelope = preparedSourceLifecycleEnvelope(source, {
-          isActive: source.id === selectedPreparedSource?.id,
-          lastOpenedSurface: "Intake",
-        });
-        const option = sourceSelectorOption(envelope, "prepared");
-        return {
-          detail: option.detail,
-          envelope,
-          key: option.value,
-          label: option.label,
-          optionLabel: option.optionLabel,
-          source,
-          type: "prepared" as const,
-        };
-      }),
-    ],
     [
       bookSources,
       preparedSources,

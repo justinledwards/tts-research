@@ -12,6 +12,7 @@
 ## Validation Quirks
 
 - In this sandbox, `pnpm check` can fail in `backend/internal/pipeline` tests that call `httptest.NewServer` because local TCP listeners are denied (`operation not permitted`); observed at `TestPreparedSourceURLIngestHonorsPrivateNetworkDefault` and `TestCreateBookSourceFromURLUsesHTMLContentType`. Treat as environment-related when frontend-only changes have separate passing validation.
+- The backend TCP listener denial can be transient in this sandbox; on 2026-05-29 14:08 CEST, a pre-commit rerun of `pnpm check` passed after an earlier same-run failure at `TestPreparedSourceURLIngestHonorsPrivateNetworkDefault`.
 - `pnpm exec biome check <file>` includes assist checks such as import organization; for focused validation without applying unrelated import sorting, use `pnpm exec biome format <file>` plus `pnpm exec biome lint <file>`.
 
 ## Rotation Notes
@@ -82,3 +83,12 @@
 - Validation: `pnpm exec biome format --write frontend/src/features/revision/RevisionPanel.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/features/revision/RevisionPanel.tsx` passed; `pnpm --filter @tts-research/frontend exec vitest run src/features/revision/revision.test.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `git diff --check` passed; `pnpm check` failed at backend `TestCreateBookSourceFromURLUsesHTMLContentType` due sandbox TCP listener denial after format, lint, typecheck, package, script, adapter, and earlier backend tests passed.
 - Repo lessons: TypeScript lint enforces `readonly T[]` over `ReadonlyArray<T>` for array type syntax; the existing backend sandbox TCP listener quirk repeated.
 - Suggested next safe target: clear or commit the mixed caretaker worktree before another refactor; then inspect `frontend/src/features/intake/IntakeWizard.tsx` for one narrow render-helper extraction.
+
+### 2026-05-29 14:05 CEST
+
+- Refactor target: `frontend/src/features/intake/IntakeWizard.tsx` existing-source option construction.
+- Theme: Extract a private same-file helper to move book/prepared selector option shaping out of the main component.
+- Files changed: `frontend/src/features/intake/IntakeWizard.tsx`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/features/intake/IntakeWizard.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/features/intake/IntakeWizard.tsx` passed; `pnpm --filter @tts-research/frontend exec vitest run src/features/intake/projectTemplates.test.ts src/features/intake/sourceTypeModel.test.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `git diff --check` passed; first `pnpm check` run failed at backend `TestPreparedSourceURLIngestHonorsPrivateNetworkDefault` due sandbox TCP listener denial; pre-commit `pnpm check` rerun passed fully.
+- Repo lessons: The existing backend TCP listener sandbox failure can be transient; rerun may pass.
+- Suggested next safe target: inspect `frontend/src/features/run-config/RunConfigDrawerHelpers.tsx` for one narrow render/data-shaping helper extraction.

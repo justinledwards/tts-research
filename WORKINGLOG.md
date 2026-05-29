@@ -913,3 +913,18 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Push branch and update PR
 - [x] Confirm final tidy state
 - Validation: `git diff --check` pass; `pnpm check` pass.
+
+## 2026-05-29 14:02 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, and dirty worktree
+- [x] Discover a behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/features/intake/IntakeWizard.tsx` existing-source option construction because it is a size outlier outside the recent rotation and has dense local data shaping inside the main component
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger and working log
+- [x] Update automation memory
+- [x] Decide whether the focused diff can be committed
+- Improved: Extracted intake existing-source option construction into a private same-file helper.
+- Left alone: Public APIs, book-before-prepared ordering, lifecycle envelope inputs, selector labels/keys/values, callbacks, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/features/intake/IntakeWizard.tsx` pass with no fixes; `pnpm exec biome lint frontend/src/features/intake/IntakeWizard.tsx` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/intake/projectTemplates.test.ts src/features/intake/sourceTypeModel.test.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; first `pnpm check` failed in backend pipeline because sandbox TCP listener creation was denied; pre-commit `pnpm check` rerun passed.
+- Next suggested target: Inspect `frontend/src/features/run-config/RunConfigDrawerHelpers.tsx` for one narrow render/data-shaping helper extraction.
