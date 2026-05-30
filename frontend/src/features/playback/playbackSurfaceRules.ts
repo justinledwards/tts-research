@@ -14,7 +14,7 @@ export function shouldShowGlobalPreviewPlayer(state: PlaybackSurfaceState): bool
   if (state.isCinemaOpen || state.preparedSourceCinemaOpen) {
     return false;
   }
-  if (state.stage === "teleprompt") {
+  if (state.stage === "teleprompt" || state.stage === "theatre") {
     return false;
   }
   if (state.stage === "intake") {
@@ -36,7 +36,7 @@ export function previewPlayerVariantForSurface(
 }
 
 export function shouldShowRailCinemaShortcut(stage: WorkspaceStage): boolean {
-  return stage !== "preview" && stage !== "teleprompt" && stage !== "review";
+  return stage !== "preview" && stage !== "teleprompt" && stage !== "theatre" && stage !== "review";
 }
 
 export function telepromptSecondaryActionVariant(

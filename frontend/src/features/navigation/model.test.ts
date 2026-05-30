@@ -91,6 +91,9 @@ describe("metadata command generation", () => {
       "workspace:stage:teleprompt",
     );
     expect(buildWorkspaceCommandMetadata().map((command) => command.id)).toContain(
+      "workspace:stage:theatre",
+    );
+    expect(buildWorkspaceCommandMetadata().map((command) => command.id)).toContain(
       "workspace:layout:focus",
     );
     expect(buildWorkspaceCommandMetadata().map((command) => command.id)).toContain(

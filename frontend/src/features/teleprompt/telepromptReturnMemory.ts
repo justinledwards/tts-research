@@ -156,7 +156,9 @@ function normalizeSelectedCueIndex(value: unknown): number | null {
 }
 
 function normalizeSnapshotWorkspaceStage(value: unknown): WorkspaceStage {
-  return value === "preview" || value === "review" || value === "teleprompt" ? value : "review";
+  return value === "preview" || value === "review" || value === "teleprompt" || value === "theatre"
+    ? value
+    : "review";
 }
 
 function safeStorageGet(key: string): string | null {

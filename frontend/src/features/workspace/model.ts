@@ -1,6 +1,7 @@
 import { isNarrowViewport } from "../layout/responsive";
 
-export type WorkspaceStage = "intake" | "review" | "preview" | "teleprompt";
+export type WorkspaceStage = "intake" | "review" | "preview" | "teleprompt" | "theatre";
+export type WorkspaceReturnStage = Exclude<WorkspaceStage, "teleprompt" | "theatre">;
 export type WorkspaceLayoutMode = "focus" | "balanced" | "full" | "custom";
 export type WorkspaceRailMode = "collapsed" | "compact" | "full";
 export type WorkspaceSourceType = "book" | "draft" | "prepared";
@@ -15,7 +16,7 @@ export interface WorkspaceContext {
   sourceType: WorkspaceSourceType;
   speechPolicyProfile: string | null;
   stage: WorkspaceStage;
-  telepromptReturnStage: Exclude<WorkspaceStage, "teleprompt">;
+  telepromptReturnStage: WorkspaceReturnStage;
   voiceProfileId: string | null;
 }
 
@@ -38,6 +39,7 @@ export const WORKSPACE_STAGES: readonly WorkspaceStage[] = [
   "review",
   "preview",
   "teleprompt",
+  "theatre",
 ];
 
 export const WORKSPACE_LAYOUT_MODES: readonly WorkspaceLayoutMode[] = [
@@ -109,6 +111,12 @@ export const WORKSPACE_STAGE_META: Record<WorkspaceStage, WorkspaceStageMeta> = 
     id: "teleprompt",
     keywords: ["teleprompter", "script", "read"],
     label: "Teleprompt",
+  },
+  theatre: {
+    description: "Read or listen in an immersive, distraction-light stage.",
+    id: "theatre",
+    keywords: ["theatre", "fullscreen", "listen", "record", "immersive"],
+    label: "Theatre",
   },
 };
 
@@ -338,7 +346,7 @@ export function normalizeWorkspaceContext(value: Partial<WorkspaceContext>): Wor
     sourceType: normalizeWorkspaceSourceType(value.sourceType),
     speechPolicyProfile: cleanOptionalId(value.speechPolicyProfile),
     stage,
-    telepromptReturnStage: returnStage === "teleprompt" ? "review" : returnStage,
+    telepromptReturnStage: normalizeWorkspaceReturnStage(returnStage),
     voiceProfileId: cleanOptionalId(value.voiceProfileId),
   };
 }
@@ -350,10 +358,13 @@ export function transitionWorkspaceStage(
   if (stage === "teleprompt") {
     return enterTelepromptStage(context);
   }
+  if (stage === "theatre") {
+    return enterTheatreStage(context);
+  }
   return {
     ...context,
     stage,
-    telepromptReturnStage: stage,
+    telepromptReturnStage: normalizeWorkspaceReturnStage(stage),
   };
 }
 
@@ -362,7 +373,20 @@ export function enterTelepromptStage(context: WorkspaceContext): WorkspaceContex
     ...context,
     stage: "teleprompt",
     telepromptReturnStage:
-      context.stage === "teleprompt" ? context.telepromptReturnStage : context.stage,
+      context.stage === "teleprompt" || context.stage === "theatre"
+        ? context.telepromptReturnStage
+        : normalizeWorkspaceReturnStage(context.stage),
+  };
+}
+
+export function enterTheatreStage(context: WorkspaceContext): WorkspaceContext {
+  return {
+    ...context,
+    stage: "theatre",
+    telepromptReturnStage:
+      context.stage === "teleprompt" || context.stage === "theatre"
+        ? context.telepromptReturnStage
+        : normalizeWorkspaceReturnStage(context.stage),
   };
 }
 
@@ -371,6 +395,10 @@ export function returnFromTelepromptStage(context: WorkspaceContext): WorkspaceC
     ...context,
     stage: context.telepromptReturnStage,
   };
+}
+
+export function returnFromTheatreStage(context: WorkspaceContext): WorkspaceContext {
+  return returnFromTelepromptStage(context);
 }
 
 export function withWorkspaceSource(
@@ -424,6 +452,13 @@ function normalizeWorkspaceSourceType(value: unknown): WorkspaceSourceType {
     return value;
   }
   return "draft";
+}
+
+function normalizeWorkspaceReturnStage(stage: WorkspaceStage): WorkspaceReturnStage {
+  if (stage === "preview" || stage === "intake") {
+    return stage;
+  }
+  return "review";
 }
 
 function cleanOptionalId(value: unknown): string | null {

@@ -3,7 +3,7 @@ import { ContextPanel } from "./ContextPanel";
 import { buildContextPanelTabs } from "./contextPanelModel";
 import type { ContextPanelTabId } from "./contextPanelTabs";
 
-export type WorkspaceStageContextStage = "intake" | "preview" | "review" | "teleprompt";
+export type WorkspaceStageContextStage = "intake" | "preview" | "review" | "teleprompt" | "theatre";
 
 export function WorkspaceStageContextPanel({
   policyProfile,
@@ -20,6 +20,7 @@ export function WorkspaceStageContextPanel({
     preview: "Preview",
     review: "Review",
     teleprompt: "Teleprompt",
+    theatre: "Theatre",
   };
   const tabs = buildContextPanelTabs(
     [
@@ -79,6 +80,7 @@ export function WorkspaceStageContextPanel({
         children: (
           <p className="text-xs leading-5 vs-muted">
             Teleprompt return paths preserve the current Review and Preview context for this source.
+            Theatre uses the same return memory when it opens from the workbench.
           </p>
         ),
         detail: "Return context",

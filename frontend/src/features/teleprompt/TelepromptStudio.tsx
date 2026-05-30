@@ -17,7 +17,11 @@ import {
 } from "../playback";
 import { providerCapabilityDataAttributes } from "../provider-capabilities";
 import { workspaceStageActionLabel, workspaceStageActionTestId } from "../workspace";
-import type { WorkspaceLayoutSlotDensity, WorkspaceSourceType, WorkspaceStage } from "../workspace";
+import type {
+  WorkspaceLayoutSlotDensity,
+  WorkspaceReturnStage,
+  WorkspaceSourceType,
+} from "../workspace";
 import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
 import {
   TELEPROMPT_PRESET_IDS,
@@ -102,7 +106,7 @@ export interface TelepromptStudioProps {
   readonly policyProfile: string;
   readonly projectId: string;
   readonly rememberReturnMemory: boolean;
-  readonly returnStage: Exclude<WorkspaceStage, "teleprompt">;
+  readonly returnStage: WorkspaceReturnStage;
   readonly scopeLabel: string;
   readonly settings: TeleprompterHighlightSettings;
   readonly theatreSettings: TelepromptTheatreSettings;
@@ -118,7 +122,9 @@ export interface TelepromptStudioProps {
   readonly onBackToPreview: () => void;
   readonly onBackToReview: () => void;
   readonly onCreateAndListen: () => void;
+  readonly onExitTheatreStage?: () => void;
   readonly onOpenCinema: () => void;
+  readonly onOpenTheatreStage?: () => void;
   readonly onTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
 }
 
@@ -194,7 +200,9 @@ export function TelepromptStudio({
   onBackToPreview,
   onBackToReview,
   onCreateAndListen,
+  onExitTheatreStage,
   onOpenCinema,
+  onOpenTheatreStage,
   onTheatreSettingsChange,
 }: Readonly<TelepromptStudioProps>) {
   const [activeContextTab, setActiveContextTab] = useState<ContextPanelTabId>("overview");
@@ -308,6 +316,38 @@ export function TelepromptStudio({
     typeof cueSync.activeCue?.currentSourceWordId === "string"
       ? cueSync.activeCue.currentSourceWordId
       : null;
+  const activeCueCurrentWordTiming = cueSync.activeCue?.wordTimings.find(
+    (word) => word.wordIndex === cueSync.activeCue?.currentWordIndex,
+  );
+  const telepromptTheatreSyncDebug = useMemo(
+    () => ({
+      activeCueId: cueSync.activeCue?.cueId ?? "",
+      activeSourceWordId: activeCueCurrentSourceWordId ?? "",
+      activeWordIndex: cueSync.activeCue?.currentWordIndex ?? -1,
+      activeWordText:
+        activeCueCurrentWordTiming?.text ??
+        (cueSync.activeCue?.currentWordIndex !== undefined &&
+        cueSync.activeCue.currentWordIndex >= 0
+          ? String(cueSync.activeCue.currentWordIndex)
+          : ""),
+      jobId: job?.id ?? "",
+      playbackCursorSec,
+      runtimeState: cueSync.statusLabel,
+      syncMode: cueSyncMode,
+      timingSource: cueTimeline.source,
+    }),
+    [
+      activeCueCurrentSourceWordId,
+      activeCueCurrentWordTiming?.text,
+      cueSync.activeCue?.cueId,
+      cueSync.activeCue?.currentWordIndex,
+      cueSync.statusLabel,
+      cueSyncMode,
+      cueTimeline.source,
+      job?.id,
+      playbackCursorSec,
+    ],
+  );
   const theatreSummary = useMemo(
     () => ({
       ...buildTelepromptTheatreSummary({
@@ -398,7 +438,7 @@ export function TelepromptStudio({
     updateTheatreSettings,
   ]);
 
-  const openTheatre = useCallback(() => {
+  const activateTheatre = useCallback(() => {
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
       theatreReturnFocusRef.current = document.activeElement;
     }
@@ -408,6 +448,14 @@ export function TelepromptStudio({
     setStatusMessage("Teleprompt Theatre opened.");
     announcePolite(liveStatusMessages.telepromptTheatreEntered());
   }, [announcePolite, persistSnapshot, returnTarget]);
+
+  const openTheatre = useCallback(() => {
+    if (onOpenTheatreStage) {
+      onOpenTheatreStage();
+      return;
+    }
+    activateTheatre();
+  }, [activateTheatre, onOpenTheatreStage]);
 
   const handleExitTheatre = useCallback(() => {
     void exitTelepromptFullscreen();
@@ -420,7 +468,8 @@ export function TelepromptStudio({
       theatreReturnFocusRef.current?.focus();
       theatreReturnFocusRef.current = null;
     });
-  }, [announcePolite]);
+    onExitTheatreStage?.();
+  }, [announcePolite, onExitTheatreStage]);
 
   const handleRequestNativeFullscreen = useCallback(() => {
     const availability = telepromptFullscreenAvailability();
@@ -500,8 +549,8 @@ export function TelepromptStudio({
       return;
     }
     theatreOpenSignalRef.current = theatreOpenSignal;
-    openTheatre();
-  }, [openTheatre, theatreOpenSignal]);
+    activateTheatre();
+  }, [activateTheatre, theatreOpenSignal]);
 
   useEffect(() => {
     if (theatreMode === "inline") {
@@ -931,7 +980,7 @@ export function TelepromptStudio({
                 disabledReason={cuePlaybackDisabledReason}
                 onClick={handlePlayPause}
                 size="sm"
-                variant="primary"
+                variant="secondary"
               >
                 {playbackControls.isPlaying ? "Pause Cue" : playbackActionLabel("telepromptPlay")}
               </Button>
@@ -1203,6 +1252,7 @@ export function TelepromptStudio({
           settings={effectiveTheatreSettings}
           settingsMemoryEnabled={theatreSettingsMemoryEnabled}
           summary={theatreSummary}
+          syncDebug={telepromptTheatreSyncDebug}
           theatreViewMode={theatreViewMode}
           wordTimings={cueSync.activeCue?.wordTimings ?? []}
           onBackToPreview={() => {

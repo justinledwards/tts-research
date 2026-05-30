@@ -989,3 +989,14 @@ duplicating every implementation detail from commits, PR text, or generated revi
 ## 2026-05-30 11:53 CEST - Commit Unified Workspace Layout
 - [x] Stage unified layout work package
 - [x] Commit staged changes
+
+## 2026-05-30 11:56 CEST - Task-First Narration Workbench
+- [x] Inspect current workspace stage model and UI surfaces
+- [x] Implement five-stage workbench state and actions
+- [x] Add task-first status, blockers, and stage navigation
+- [x] Update tests and run checks
+- [x] Validate with targeted frontend tests, frontend typecheck/test, `pnpm check`, and `pnpm e2e:workspace-flow`
+
+## 2026-05-30 12:20 CEST - Commit Task-First Narration Workbench
+- [x] Stage task-first workbench package
+- [x] Commit staged changes

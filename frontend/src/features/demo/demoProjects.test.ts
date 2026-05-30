@@ -33,6 +33,7 @@ describe("demo mode fixtures", () => {
       "Review",
       "Preview",
       "Teleprompt",
+      "Theatre",
       "Create audio",
       "Cinema",
     ]);
@@ -41,6 +42,7 @@ describe("demo mode fixtures", () => {
       "review",
       "preview",
       "teleprompt",
+      "theatre",
     ]);
     expect(demoTourSteps.filter((step) => !step.stage).map((step) => step.action)).toEqual([
       "createAudio",

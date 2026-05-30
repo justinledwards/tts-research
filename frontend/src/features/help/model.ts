@@ -60,7 +60,7 @@ export function resolveActiveHelpAnchor(context: HelpWorkflowContext): HelpAncho
   if (context.studioMode === "voiceCloning") {
     return "run";
   }
-  if (context.stage === "teleprompt") {
+  if (context.stage === "teleprompt" || context.stage === "theatre") {
     return "teleprompt";
   }
   if (context.stage === "preview") {

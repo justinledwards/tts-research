@@ -84,6 +84,7 @@ export type SourceLifecycleSurface =
   | "Review"
   | "Settings"
   | "Teleprompt"
+  | "Theatre"
   | "Workspace";
 
 export type SourceLifecycleTone =

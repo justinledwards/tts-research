@@ -5,6 +5,7 @@ export type DemoTourStepId =
   | "review"
   | "preview"
   | "teleprompt"
+  | "theatre"
   | "createAudio"
   | "openCinema";
 export type DemoTourAction = "createAudio" | "openCinema" | "stage";
@@ -46,6 +47,13 @@ export const demoTourSteps: readonly DemoTourStep[] = [
     id: "teleprompt",
     label: "Teleprompt",
     stage: "teleprompt",
+  },
+  {
+    action: "stage",
+    description: "Open the immersive reading stage once the script and audio context are ready.",
+    id: "theatre",
+    label: "Theatre",
+    stage: "theatre",
   },
   {
     action: "createAudio",

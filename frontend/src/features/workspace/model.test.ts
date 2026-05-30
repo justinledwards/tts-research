@@ -4,10 +4,12 @@ import {
   createWorkspaceContext,
   defaultWorkspaceLayoutMode,
   enterTelepromptStage,
+  enterTheatreStage,
   normalizeWorkspaceCustomLayout,
   normalizeWorkspaceLayoutMode,
   normalizeWorkspaceStage,
   returnFromTelepromptStage,
+  returnFromTheatreStage,
   transitionWorkspaceStage,
   withWorkspaceActiveBlock,
   withWorkspaceSource,
@@ -18,6 +20,7 @@ import {
 } from "./model";
 import {
   transitionWorkspaceContextForStageAction,
+  resolveWorkspaceStageStatus,
   workspaceStageActionLabel,
   workspaceStageNavigationAction,
   workspaceStagePrimaryAction,
@@ -28,6 +31,7 @@ describe("workspace stage model", () => {
     expect(normalizeWorkspaceStage("sourceIntake")).toBe("intake");
     expect(normalizeWorkspaceStage("review")).toBe("review");
     expect(normalizeWorkspaceStage("teleprompt")).toBe("teleprompt");
+    expect(normalizeWorkspaceStage("theatre")).toBe("theatre");
     expect(normalizeWorkspaceStage("old")).toBe("intake");
   });
 
@@ -114,6 +118,26 @@ describe("workspace stage model", () => {
     expect(returnFromTelepromptStage(teleprompt).stage).toBe("review");
   });
 
+  it("preserves return context while entering and leaving Theatre", () => {
+    const preview = createWorkspaceContext({
+      activeBlockId: "block-2",
+      sourceId: "source-1",
+      sourceType: "prepared",
+      stage: "preview",
+    });
+
+    const theatre = enterTheatreStage(preview);
+
+    expect(theatre).toMatchObject({
+      activeBlockId: "block-2",
+      sourceId: "source-1",
+      sourceType: "prepared",
+      stage: "theatre",
+      telepromptReturnStage: "preview",
+    });
+    expect(returnFromTheatreStage(theatre).stage).toBe("preview");
+  });
+
   it("tracks stage transitions and clears stale block selection when source changes", () => {
     const context = createWorkspaceContext({
       activeBlockId: "block-1",
@@ -133,6 +157,7 @@ describe("workspace stage model", () => {
 
   it("exposes searchable metadata for stages and layouts", () => {
     expect(workspaceStageMeta("teleprompt").keywords).toContain("script");
+    expect(workspaceStageMeta("theatre").keywords).toContain("immersive");
     expect(workspaceLayoutModeMeta("focus").description).toContain("Collapse");
     expect(workspaceLayoutModeMeta("custom").keywords).toContain("pins");
   });
@@ -150,8 +175,10 @@ describe("workspace stage model", () => {
     expect(workspaceStageActionLabel("createAndListen")).toBe("Create & Listen");
     expect(workspaceStageActionLabel("previewSpeech")).toBe("Preview Speech");
     expect(workspaceStageNavigationAction("preview")).toBe("previewSpeech");
+    expect(workspaceStageNavigationAction("theatre")).toBe("openTheatre");
     expect(workspaceStagePrimaryAction("review")).toBe("previewSpeech");
-    expect(workspaceStagePrimaryAction("teleprompt")).toBe("createAndListen");
+    expect(workspaceStagePrimaryAction("teleprompt")).toBe("openTheatre");
+    expect(workspaceStagePrimaryAction("theatre")).toBe("createAndListen");
 
     const preview = transitionWorkspaceContextForStageAction(context, "previewSpeech");
     expect(preview).toMatchObject({
@@ -174,5 +201,49 @@ describe("workspace stage model", () => {
       telepromptReturnStage: "preview",
       voiceProfileId: "voice-1",
     });
+
+    const theatre = transitionWorkspaceContextForStageAction(teleprompt, "openTheatre");
+    expect(theatre).toMatchObject({
+      activeBlockId: "block-2",
+      sourceId: "source-1",
+      sourceType: "prepared",
+      speechPolicyProfile: "policy-1",
+      stage: "theatre",
+      telepromptReturnStage: "preview",
+      voiceProfileId: "voice-1",
+    });
+  });
+
+  it("derives task-first stage status, blockers, and inspector tabs", () => {
+    const waiting = resolveWorkspaceStageStatus({
+      audioLifecycle: "missing",
+      canCreate: false,
+      canOpenCinema: false,
+      hasSource: false,
+      hasVoice: true,
+      sourcePreparing: false,
+      stage: "preview",
+    });
+
+    expect(waiting.blocker).toMatchObject({
+      correctiveAction: "intakeSource",
+      id: "waitingForSource",
+    });
+    expect(waiting.primaryAction).toBe("intakeSource");
+    expect(waiting.inspectorTabs).toContain("diagnostics");
+
+    const theatre = resolveWorkspaceStageStatus({
+      audioLifecycle: "ready",
+      canCreate: true,
+      canOpenCinema: true,
+      hasSource: true,
+      hasVoice: true,
+      sourcePreparing: false,
+      stage: "theatre",
+    });
+
+    expect(theatre.blocker).toBeNull();
+    expect(theatre.primaryAction).toBe("playPauseTheatre");
+    expect(theatre.nextAction).toBe("openCinema");
   });
 });

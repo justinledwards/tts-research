@@ -242,18 +242,12 @@ import type {
   SourceLifecycleEnvelope,
   SourceLifecycleSurface,
 } from "./features/source-lifecycle/sourceLifecycleCore";
-import {
-  Button,
-  Panel,
-  SegmentedControl,
-  StatusChip,
-  compactHitTargetClassName,
-  minInteractiveSize,
-} from "./design";
+import { Button, Panel, StatusChip, compactHitTargetClassName, minInteractiveSize } from "./design";
 import {
   createWorkspaceContext,
   DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
   defaultWorkspaceLayoutMode,
+  WORKSPACE_STAGES,
   withWorkspaceActiveBlock,
   withWorkspaceSource,
   withWorkspaceSpeechPolicyProfile,
@@ -265,14 +259,18 @@ import {
   type WorkspaceCustomLayout,
   type WorkspaceLayoutMode,
   type WorkspaceLayoutSlotDensity,
+  type WorkspaceReturnStage,
   type WorkspaceSourceType,
   type WorkspaceStage,
 } from "./features/workspace/model";
 import {
+  resolveWorkspaceStageStatus,
   transitionWorkspaceContextForStageAction,
   workspaceStageActionLabel,
   workspaceStageActionTestId,
   workspaceStageNavigationAction,
+  workspaceStagePrimaryActionDisplayLabel,
+  type WorkspaceStageStatus,
   type WorkspaceStageActionId,
 } from "./features/workspace/stageActions";
 import type { IntakePreparationTarget } from "./features/intake";
@@ -2226,17 +2224,24 @@ export function App() {
   const contentMode = workspaceContext.stage;
   const runWorkspaceStageAction = useCallback(
     (actionId: WorkspaceStageActionId) => {
-      if (actionId === "openTeleprompt") {
+      if (actionId === "openTeleprompt" || actionId === "openTheatre") {
+        const returnStage =
+          contentMode === "teleprompt" || contentMode === "theatre"
+            ? workspaceContext.telepromptReturnStage
+            : contentMode;
         setTelepromptTheatreOpenSignal(0);
         setUiMemory((currentMemory) =>
-          rememberTelepromptReturnStage(currentMemory, activeProjectId, contentMode),
+          rememberTelepromptReturnStage(currentMemory, activeProjectId, returnStage),
         );
       }
       setWorkspaceContext((currentContext) =>
         transitionWorkspaceContextForStageAction(currentContext, actionId),
       );
+      if (actionId === "openTheatre") {
+        setTelepromptTheatreOpenSignal((currentSignal) => currentSignal + 1);
+      }
     },
-    [activeProjectId, contentMode],
+    [activeProjectId, contentMode, workspaceContext.telepromptReturnStage],
   );
   const setContentMode = useCallback(
     (stage: WorkspaceStage) => {
@@ -2873,6 +2878,33 @@ export function App() {
     selectedPreparedSource: activeNarrationPreparedSource,
     sourceMode,
   });
+  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
+  const hasNarrationSource = hasWorkbenchNarrationSource({
+    selectedBookSource,
+    selectedPreparedSource,
+    sourceMode,
+    text,
+  });
+  const activeWorkbenchStageStatus = resolveWorkspaceStageStatus({
+    audioLifecycle: generatedAudioLifecycle,
+    canCreate: canCreateCurrentSource,
+    canOpenCinema: canOpenCurrentCinema,
+    createDisabledReason: createAndListenDisabledReason,
+    hasSource: hasNarrationSource,
+    hasVoice: !createAndListenCapabilityReason,
+    sourceError: sourcePrepError ?? bookSourceError,
+    sourcePreparing: isPreparingSource || isImportingBookSource,
+    stage: contentMode,
+  });
+  const activeNarrationSourceLabel =
+    activeNarrationPreparedSource?.title ??
+    activeNarrationPreparedSource?.sourceName ??
+    (activeNarrationBookSource ? bookSourceName(activeNarrationBookSource) : "Draft text");
+  const telepromptTheatreStageOpenSignal = theatreOpenSignalForWorkbenchStage({
+    blocker: Boolean(activeWorkbenchStageStatus.blocker),
+    signal: telepromptTheatreOpenSignal,
+    stage: contentMode,
+  });
   const isResumeRestoring = useDelayedBusy(resumeRestoreStartedAt !== null, 250);
   const openReadingCinema = useCallback(
     (target?: "book") => {
@@ -2900,8 +2932,7 @@ export function App() {
     runWorkspaceStageAction("openTeleprompt");
   }, [runWorkspaceStageAction]);
   const openTelepromptTheatreStage = useCallback(() => {
-    runWorkspaceStageAction("openTeleprompt");
-    setTelepromptTheatreOpenSignal((currentSignal) => currentSignal + 1);
+    runWorkspaceStageAction("openTheatre");
   }, [runWorkspaceStageAction]);
   const handleSelectBookCinemaSource = useCallback(
     (bookId: string) => {
@@ -3746,11 +3777,24 @@ export function App() {
         setSpeechPolicyProfile(savedState.speechPolicyProfile);
       }
       setActiveReviewPane(resolveReviewPane(currentUiMemory, projectId));
-      let telepromptReturnStage: Exclude<WorkspaceStage, "teleprompt"> = "review";
-      if (savedState.stage === "teleprompt") {
-        telepromptReturnStage = resolveTelepromptReturnStage(currentUiMemory, projectId);
-      } else if (savedState.stage === "preview") {
-        telepromptReturnStage = "preview";
+      let telepromptReturnStage: WorkspaceReturnStage = "review";
+      switch (savedState.stage) {
+        case "teleprompt":
+        case "theatre": {
+          telepromptReturnStage = resolveTelepromptReturnStage(currentUiMemory, projectId);
+          break;
+        }
+        case "preview": {
+          telepromptReturnStage = "preview";
+          break;
+        }
+        case "intake": {
+          telepromptReturnStage = "intake";
+          break;
+        }
+        default: {
+          telepromptReturnStage = "review";
+        }
       }
       setWorkspaceContext((currentContext) =>
         createWorkspaceContext({
@@ -5912,7 +5956,7 @@ export function App() {
     workspaceStageActionLabel,
   });
   let globalPreviewOwner: "preview" | "teleprompt" = "preview";
-  if (contentMode === "teleprompt") {
+  if (contentMode === "teleprompt" || contentMode === "theatre") {
     globalPreviewOwner = "teleprompt";
   }
   const globalPreviewVisible =
@@ -6754,6 +6798,7 @@ export function App() {
               activeReviewPane={activeReviewPane}
               activeReviewBlockId={workspaceContext.activeBlockId}
               contextInspectorDensity={workspaceLayout.contextInspector}
+              stageStatus={activeWorkbenchStageStatus}
               projectId={activeProjectId}
               bookSourceError={bookSourceError}
               bookSources={bookSources}
@@ -6820,7 +6865,7 @@ export function App() {
                       selectedBookSource: activeNarrationBookSource,
                       selectedPreparedSource: activeNarrationPreparedSource,
                       sourceMode,
-                      surface: "Teleprompt",
+                      surface: contentMode === "theatre" ? "Theatre" : "Teleprompt",
                       text,
                     })}
                     sourceMeta={narrationReviewSourceMeta({
@@ -6838,7 +6883,7 @@ export function App() {
                     }
                     voiceProfile={selectedVoiceProfileLabel}
                     sourceType={activeNarrationSourceType}
-                    theatreOpenSignal={telepromptTheatreOpenSignal}
+                    theatreOpenSignal={telepromptTheatreStageOpenSignal}
                     onActiveBlockChange={(blockId) => {
                       setWorkspaceContext((currentContext) =>
                         withWorkspaceActiveBlock(currentContext, blockId),
@@ -6851,7 +6896,15 @@ export function App() {
                       runWorkspaceStageAction("reviewBlocks");
                     }}
                     onCreateAndListen={createAndListenFromCurrentSource}
+                    onExitTheatreStage={() => {
+                      runWorkspaceStageAction(
+                        workspaceStageNavigationAction(workspaceContext.telepromptReturnStage),
+                      );
+                    }}
                     onOpenCinema={openReadingCinema}
+                    onOpenTheatreStage={() => {
+                      runWorkspaceStageAction("openTheatre");
+                    }}
                     onTheatreSettingsChange={handleTelepromptTheatreSettingsChange}
                   />
                 </Suspense>
@@ -6871,6 +6924,7 @@ export function App() {
                 void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
               }}
               onOpenCinema={openReadingCinema}
+              onOpenTheatre={openTelepromptTheatreStage}
               onOpenBookCinema={openBookCinemaFromIntake}
               onOpenVoiceCloning={() => {
                 handleStudioModeChange("voiceCloning");
@@ -6954,10 +7008,15 @@ export function App() {
               </div>
             ) : null}
             {rightRailMode === "compact" ? (
-              <PlaybackRailMini
+              <NarrationCompactRightRail
+                contentMode={contentMode}
+                isProcessing={isProcessing}
                 job={job}
+                sourceLabel={activeNarrationSourceLabel}
+                status={activeWorkbenchStageStatus}
+                onCreateAndListen={createAndListenFromCurrentSource}
                 onOpenCinema={openReadingCinema}
-                showCinemaAction={shouldShowRailCinemaShortcut(contentMode)}
+                onStageAction={runWorkspaceStageAction}
               />
             ) : null}
           </aside>
@@ -7033,6 +7092,45 @@ function VoiceCloningRailMini({
   );
 }
 
+function NarrationCompactRightRail({
+  contentMode,
+  isProcessing,
+  job,
+  sourceLabel,
+  status,
+  onCreateAndListen,
+  onOpenCinema,
+  onStageAction,
+}: Readonly<{
+  contentMode: WorkspaceStage;
+  isProcessing: boolean;
+  job: VoiceJob | null;
+  sourceLabel: string;
+  status: WorkspaceStageStatus;
+  onCreateAndListen: () => void;
+  onOpenCinema: () => void;
+  onStageAction: (actionId: WorkspaceStageActionId) => void;
+}>) {
+  if (job || isProcessing) {
+    return (
+      <PlaybackRailMini
+        job={job}
+        onOpenCinema={onOpenCinema}
+        showCinemaAction={shouldShowRailCinemaShortcut(contentMode)}
+      />
+    );
+  }
+  return (
+    <WorkbenchStatusRailMini
+      sourceLabel={sourceLabel}
+      status={status}
+      onCreateAndListen={onCreateAndListen}
+      onOpenCinema={onOpenCinema}
+      onStageAction={onStageAction}
+    />
+  );
+}
+
 function PlaybackRailMini({
   job,
   onOpenCinema,
@@ -7059,6 +7157,62 @@ function PlaybackRailMini({
       actionSurface="Playback"
       actionTestId="ui-action-rail-playback-open-cinema"
       onAction={showCinemaAction ? onOpenCinema : undefined}
+    />
+  );
+}
+
+function WorkbenchStatusRailMini({
+  sourceLabel,
+  status,
+  onCreateAndListen,
+  onOpenCinema,
+  onStageAction,
+}: Readonly<{
+  sourceLabel: string;
+  status: WorkspaceStageStatus;
+  onCreateAndListen: () => void;
+  onOpenCinema: () => void;
+  onStageAction: (actionId: WorkspaceStageActionId) => void;
+}>) {
+  const action = status.nextAction;
+  const actionLabel = action ? workspaceStageActionLabel(action) : undefined;
+  return (
+    <RailMiniStack
+      items={[
+        {
+          label: "Task",
+          value: status.label,
+          detail: status.blocker?.title ?? status.description,
+        },
+        {
+          label: "Source",
+          value: sourceLabel,
+          detail: status.blocker?.id ?? "selected",
+        },
+        {
+          label: "Next",
+          value: status.primaryLabel,
+          detail: status.inspectorTabs.join(", "),
+        },
+      ]}
+      actionLabel={actionLabel}
+      actionSurface="Workspace"
+      actionTestId="ui-action-rail-workbench-next"
+      onAction={
+        action
+          ? () => {
+              if (action === "createAndListen" || action === "retryGeneration") {
+                onCreateAndListen();
+                return;
+              }
+              if (action === "openCinema") {
+                onOpenCinema();
+                return;
+              }
+              onStageAction(action);
+            }
+          : undefined
+      }
     />
   );
 }
@@ -9173,6 +9327,44 @@ function activePreparedSourceForWorkbench(
   return sourceMode === "fileUrl" ? selectedPreparedSource : null;
 }
 
+function hasWorkbenchNarrationSource({
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  text,
+}: Readonly<{
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  text: string;
+}>): boolean {
+  switch (sourceMode) {
+    case "book": {
+      return Boolean(selectedBookSource);
+    }
+    case "fileUrl": {
+      return Boolean(selectedPreparedSource);
+    }
+    case "text": {
+      return text.trim().length > 0;
+    }
+  }
+}
+
+function theatreOpenSignalForWorkbenchStage({
+  blocker,
+  signal,
+  stage,
+}: Readonly<{ blocker: boolean; signal: number; stage: WorkspaceStage }>): number {
+  if (stage !== "theatre") {
+    return signal;
+  }
+  if (blocker) {
+    return 0;
+  }
+  return Math.max(1, signal);
+}
+
 /* eslint-disable sonarjs/cognitive-complexity, sonarjs/no-nested-conditional, unicorn/no-nested-ternary, unicorn/prefer-switch */
 function workbenchSourceLifecycleEnvelope({
   job,
@@ -9375,6 +9567,9 @@ function workspaceSourceLifecycleSurface(stage: WorkspaceStage): SourceLifecycle
   if (stage === "preview") {
     return "Preview";
   }
+  if (stage === "theatre") {
+    return "Theatre";
+  }
   return "Teleprompt";
 }
 
@@ -9411,6 +9606,7 @@ function SourceTextPanel({
   isProcessing,
   job,
   contextInspectorDensity,
+  stageStatus,
   optimizedText,
   preparedSources,
   projectId,
@@ -9432,6 +9628,7 @@ function SourceTextPanel({
   onInspectBookSource,
   onInspectPreparedSource,
   onOpenCinema,
+  onOpenTheatre,
   onOpenBookCinema,
   onOpenVoiceCloning,
   onOpenPreparedSourceCinema,
@@ -9460,6 +9657,7 @@ function SourceTextPanel({
   canSubmit: boolean;
   contextInspectorDensity: WorkspaceLayoutSlotDensity;
   contentMode: WorkspaceStage;
+  stageStatus: WorkspaceStageStatus;
   isImportingBookSource: boolean;
   isPreparingSource: boolean;
   isProcessing: boolean;
@@ -9485,6 +9683,7 @@ function SourceTextPanel({
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onOpenCinema: () => void;
+  onOpenTheatre: () => void;
   onOpenBookCinema: (source?: BookSource, scope?: BookScope) => void;
   onOpenVoiceCloning: () => void;
   onOpenPreparedSourceCinema: (source: PreparedSource) => void;
@@ -9550,6 +9749,7 @@ function SourceTextPanel({
         metadata={[
           { label: "Policy", value: speechPolicyProfileLabel },
           { label: "Voice", value: voiceProfileLabel },
+          { label: "Next", value: stageStatus.primaryLabel },
         ]}
         scopeTitle={scopeTitle}
         sourceLifecycle={sourceLifecycle}
@@ -9558,20 +9758,19 @@ function SourceTextPanel({
         surfaceName="Narration Workbench"
       />
 
-      <SegmentedControl
-        ariaLabel="Workspace stage"
-        columns={4}
-        options={[
-          { label: "Intake", testId: "workspace-stage-intake", value: "intake" },
-          { label: "Review", testId: "workspace-stage-review", value: "review" },
-          { label: "Preview", testId: "workspace-stage-preview", value: "preview" },
-          { label: "Teleprompt", testId: "workspace-stage-teleprompt", value: "teleprompt" },
-        ]}
-        value={contentMode}
-        onChange={(mode) => {
-          onStageAction(workspaceStageNavigationAction(mode));
-        }}
+      <WorkbenchStageStepper
+        activeStage={contentMode}
+        status={stageStatus}
+        onStageAction={onStageAction}
       />
+
+      {stageStatus.blocker ? (
+        <WorkbenchBlockedBanner
+          status={stageStatus}
+          onCreateAndListen={onCreateAndListen}
+          onStageAction={onStageAction}
+        />
+      ) : null}
 
       {showSourceIntake ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading intake wizard..." />}>
@@ -9664,12 +9863,13 @@ function SourceTextPanel({
           createAndListenScope={createAndListenScope}
           onCreateAndListen={onCreateAndListen}
           onOpenCinema={onOpenCinema}
+          onOpenTheatre={onOpenTheatre}
           onOpenTeleprompt={() => {
             onStageAction("openTeleprompt");
           }}
         />
       ) : null}
-      {contentMode === "teleprompt" ? telepromptStage : null}
+      {contentMode === "teleprompt" || contentMode === "theatre" ? telepromptStage : null}
       {showSourceIntake && sourceMode !== "fileUrl" ? (
         <SourceMetadataStrip
           job={job}
@@ -9682,6 +9882,120 @@ function SourceTextPanel({
         />
       ) : null}
     </form>
+  );
+}
+
+function WorkbenchStageStepper({
+  activeStage,
+  status,
+  onStageAction,
+}: Readonly<{
+  activeStage: WorkspaceStage;
+  status: WorkspaceStageStatus;
+  onStageAction: (actionId: WorkspaceStageActionId) => void;
+}>) {
+  const nextActionLabel = status.nextAction
+    ? workspaceStageActionLabel(status.nextAction)
+    : workspaceStagePrimaryActionDisplayLabel(status.primaryAction);
+  return (
+    <section
+      aria-label="Narration stage map"
+      className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
+      data-testid="workspace-stage-stepper"
+    >
+      <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+            Current task
+          </p>
+          <h3 className="mt-1 text-base font-semibold text-[var(--vs-text)]">{status.label}</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 vs-muted">{status.description}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusChip tone={status.blocker ? "warning" : "success"}>
+            {status.blocker ? status.blocker.title : "Ready"}
+          </StatusChip>
+          <StatusChip tone="info">Next: {nextActionLabel}</StatusChip>
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-5" role="tablist" aria-label="Workbench stages">
+        {WORKSPACE_STAGES.map((stage) => {
+          const meta = workspaceStageMeta(stage);
+          const selected = stage === activeStage;
+          return (
+            <Button
+              align="start"
+              aria-selected={selected}
+              className="min-w-0 flex-col gap-1 px-3 py-2"
+              data-testid={`workspace-stage-${stage}`}
+              key={stage}
+              onClick={() => {
+                onStageAction(workspaceStageNavigationAction(stage));
+              }}
+              role="tab"
+              selected={selected}
+              size="sm"
+              variant={selected ? "pinned" : "secondary"}
+            >
+              <span className="truncate text-sm font-semibold">{meta.label}</span>
+              <span className="line-clamp-2 text-xs font-normal vs-muted">
+                {selected && status.blocker ? status.blocker.title : meta.description}
+              </span>
+            </Button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function WorkbenchBlockedBanner({
+  status,
+  onCreateAndListen,
+  onStageAction,
+}: Readonly<{
+  status: WorkspaceStageStatus;
+  onCreateAndListen: () => void;
+  onStageAction: (actionId: WorkspaceStageActionId) => void;
+}>) {
+  if (!status.blocker) {
+    return null;
+  }
+  const correctiveAction = status.blocker.correctiveAction;
+  const actionLabel = correctiveAction
+    ? workspaceStageActionLabel(correctiveAction)
+    : status.primaryLabel;
+  const actionDisabled = correctiveAction === null;
+  return (
+    <section
+      aria-label="Current stage blocker"
+      className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100 lg:flex-row lg:items-center lg:justify-between"
+      data-testid="workspace-stage-blocker"
+      data-workspace-stage-blocker={status.blocker.id}
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-semibold">{status.blocker.title}</p>
+        <p className="mt-1 text-sm leading-6">{status.blocker.detail}</p>
+      </div>
+      <Button
+        disabled={actionDisabled}
+        disabledReason={actionDisabled ? "This state is waiting on the current task." : undefined}
+        onClick={() => {
+          if (!correctiveAction) {
+            return;
+          }
+          if (correctiveAction === "createAndListen" || correctiveAction === "retryGeneration") {
+            onCreateAndListen();
+            return;
+          }
+          onStageAction(correctiveAction);
+        }}
+        size="sm"
+        variant="primary"
+      >
+        {actionLabel}
+      </Button>
+    </section>
   );
 }
 
@@ -9704,6 +10018,7 @@ function NarrationPreviewStage({
   createAndListenScope,
   onCreateAndListen,
   onOpenCinema,
+  onOpenTheatre,
   onOpenTeleprompt,
 }: Readonly<{
   bookScopeContent: BookSourceScopeContent | null;
@@ -9724,6 +10039,7 @@ function NarrationPreviewStage({
   createAndListenScope: CreateAndListenScope;
   onCreateAndListen: () => void;
   onOpenCinema: () => void;
+  onOpenTheatre: () => void;
   onOpenTeleprompt: () => void;
 }>) {
   const sourceLabel = narrationReviewSourceLabel(selectedPreparedSource, selectedBookSource);
@@ -9812,6 +10128,14 @@ function NarrationPreviewStage({
             variant="soft"
           >
             {workspaceStageActionLabel("openTeleprompt")}
+          </Button>
+          <Button
+            data-testid={workspaceStageActionTestId("openTheatre")}
+            onClick={onOpenTheatre}
+            size="sm"
+            variant="soft"
+          >
+            {workspaceStageActionLabel("openTheatre")}
           </Button>
           <Button
             {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
@@ -12521,7 +12845,11 @@ function StreamingAudioPanel({
 }>) {
   const readySegments = job.audioReadySegments ?? 0;
   const canPlayCompleted = job.status === "completed";
-  const canPlayArrival = job.status !== "failed";
+  const canPlayArrival =
+    job.status !== "failed" &&
+    job.status !== "cancelled" &&
+    readySegments > 0 &&
+    Boolean(job.audioPartialUrl ?? job.audioUrl);
   const [playMode, setPlayMode] = useState<AudioPlaybackMode>(() =>
     job.status === "completed" ? "completed" : "arrival",
   );
@@ -12529,7 +12857,7 @@ function StreamingAudioPanel({
   const [panelCursorSec, setPanelCursorSec] = useState(0);
 
   const isModeAvailable: Record<AudioPlaybackMode, boolean> = {
-    arrival: true,
+    arrival: canPlayArrival,
     completed: canPlayCompleted,
   };
   const isPlaybackLocked = isStreamingPlaying;
