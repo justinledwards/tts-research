@@ -101,7 +101,7 @@ func NewQwenASRVoiceCheckerAgent(config QwenASRConfig) *QwenASRVoiceCheckerAgent
 		config.Device = "auto"
 	}
 	if config.TimeoutSeconds <= 0 {
-		config.TimeoutSeconds = 240
+		config.TimeoutSeconds = 3600
 	}
 	if config.MaxNewTokens <= 0 {
 		config.MaxNewTokens = 256

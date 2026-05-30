@@ -88,6 +88,14 @@ describe("cinema focus layout model", () => {
     expect(deriveCinemaPlaybackState({ isGenerating: true })).toBe("generating");
     expect(
       deriveCinemaPlaybackState({
+        isGenerating: true,
+        isPlayable: true,
+        isPlaying: false,
+        status: "synthesizing",
+      }),
+    ).toBe("playable");
+    expect(
+      deriveCinemaPlaybackState({
         hasAudio: true,
         isPlayable: true,
         isPlaying: true,
@@ -250,22 +258,12 @@ describe("CinemaTransportBar", () => {
     expect(markup).not.toContain("Display panel");
   });
 
-  it("links the mobile More control to the active bottom sheet", () => {
-    const markup = renderToStaticMarkup(
-      <CinemaTransportBar
-        model={{
-          ...makeTransportModel(),
-          mobileMore: {
-            active: true,
-            controlsId: "cinema-more-sheet",
-            onClick: () => null,
-          },
-        }}
-      />,
-    );
+  it("keeps navigation entry points out of the transport footer", () => {
+    const markup = renderToStaticMarkup(<CinemaTransportBar model={makeTransportModel()} />);
 
-    expect(markup).toContain('aria-controls="cinema-more-sheet"');
-    expect(markup).toContain('aria-expanded="true"');
+    expect(markup).not.toContain("Theatre");
+    expect(markup).not.toContain(">More<");
+    expect(markup).not.toContain("cinema-more-sheet");
   });
 
   it("explains disabled playback even when generated audio is ready", () => {
@@ -317,6 +315,68 @@ describe("CinemaTransportBar", () => {
     expect(markup).not.toContain("Bookmark");
     expect(markup).not.toContain("Waveform");
   });
+
+  it("renders first-segment preparation as status instead of a disabled fake action", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaTransportBar
+        model={{
+          ...makeTransportModel(),
+          playbackState: "generating",
+          primary: {
+            className: "bg-orange-600 text-white",
+            disabled: true,
+            label: "Preparing first segment",
+            onClick: () => null,
+          },
+          progress: {
+            ...makeTransportModel().progress,
+            currentLabel: "Preparing first segment",
+            ratio: 0,
+          },
+          stateSummary: {
+            detail: "Full book narration is preparing its first playable segment.",
+            title: "Preparing first segment",
+          },
+        }}
+      />,
+    );
+
+    expect(markup).toContain('data-cinema-generation-preparing=""');
+    expect(markup).toContain("Preparing first segment");
+    expect(markup).not.toContain("disabled");
+  });
+
+  it("surfaces degraded recovery details without navigation clutter", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaTransportBar
+        model={{
+          ...makeTransportModel(),
+          details: {
+            disabled: false,
+            label: "View details",
+            onClick: () => null,
+          },
+          playbackState: "degraded",
+          primary: {
+            className: "bg-orange-600 text-white",
+            disabled: false,
+            label: "Try again",
+            onClick: () => null,
+          },
+          stateSummary: {
+            detail: "Provider failed while creating audio.",
+            title: "Audio generation failed",
+          },
+        }}
+      />,
+    );
+
+    expect(markup).toContain("Audio generation failed");
+    expect(markup).toContain("Provider failed while creating audio.");
+    expect(markup).toContain("View details");
+    expect(markup).toContain("Try again");
+    expect(markup).not.toContain("Theatre");
+  });
 });
 
 describe("CinemaFocusModeToolbar", () => {
@@ -343,6 +403,16 @@ describe("CinemaFocusModeToolbar", () => {
     expect(markup).toContain("Open Cinema More menu");
     expect(markup).toContain(">More<");
     expect(markup).not.toContain("Active operator mode");
+  });
+
+  it("renders Theatre as a top-level focus control when available", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaFocusModeToolbar mode="read" onModeChange={() => null} onTheatreMode={() => null} />,
+    );
+
+    expect(markup).toContain('data-testid="ui-action-cinema-theatre"');
+    expect(markup).toContain("Open Cinema Theatre");
+    expect(markup).toContain(">Theatre<");
   });
 
   it("groups Cinema More actions by useful information architecture", () => {
@@ -474,11 +544,6 @@ function makeTransportModel(): CinemaTransportModel {
       onClick: () => null,
     },
     displayControls: <span>Display panel</span>,
-    mobileMore: {
-      active: false,
-      controlsId: "cinema-more-sheet",
-      onClick: () => null,
-    },
     playbackRate: {
       disabled: false,
       value: 1,

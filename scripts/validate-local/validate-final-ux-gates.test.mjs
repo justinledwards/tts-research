@@ -442,6 +442,18 @@ function passingDocuments() {
           scenarioId: `${surface}-read`,
           surface,
         })),
+        ...["BookCinema", "DocumentCinema", "WebsiteCinema"].map((surface) => ({
+          actionId: "ui-action-cinema-theatre",
+          commandId: "cinema:theatre:open",
+          disabled: false,
+          hasStableTestId: true,
+          label: "Open Cinema Theatre",
+          metadataIssues: [],
+          owner: "cinema-theatre",
+          scenarioId: `${surface}-read`,
+          surface,
+          testId: "ui-action-cinema-theatre",
+        })),
         ...moreMenuEntries(),
         {
           actionId: "ui-action-disabled",

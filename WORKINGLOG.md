@@ -976,6 +976,67 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - Validation: `pnpm exec biome format --write frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` pass with no fixes; `pnpm exec biome lint frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `pnpm --filter @tts-research/frontend test` pass; `git diff --check` pass; `pnpm check` failed twice in backend pipeline because sandbox TCP listener creation was denied.
 - Next suggested target: Inspect `frontend/src/appVoiceCloningHelpers.ts` for one narrow local helper extraction.
 
+## 2026-05-29 20:30 CEST - Cinema Mode Ergonomic Hardening
+- [x] Inspect Cinema audio, pagination, Theatre, and menu implementation points
+- [x] Implement audio lifecycle cause and rebuild behavior
+- [x] Implement reader fit, Theatre reachability, menu, mobile, and text quality fixes
+- [x] Add focused backend, frontend, and Playwright regression coverage
+- [x] Run targeted checks and update this log
+
+## 2026-05-29 22:03 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, skills, and dirty worktree
+- [x] Discover a behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/appVoiceCloningHelpers.ts` candidate detail extraction because it is a clean frontend size outlier outside the recent rotation with dense local display-data shaping in `resolveVoiceCloningActivity`
+- [x] Plan: extract a private same-file candidate detail helper while preserving candidate ordering, ready-count predicate, string formatting, fallback text, public APIs, and summary data shape
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger and working log
+- [x] Update automation memory
+- [x] Decide whether the focused diff can be committed
+- Improved: Extracted voice cloning candidate detail construction into a private same-file helper.
+- Left alone: Public APIs, candidate ordering, ready-count predicate, string formatting, fallback text, summary data shape, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/appVoiceCloningHelpers.ts` pass with no fixes; `pnpm exec biome lint frontend/src/appVoiceCloningHelpers.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `pnpm --filter @tts-research/frontend test` pass; `git diff --check` pass; `pnpm check` pass with existing unrelated non-fatal lint warnings.
+- Next suggested target: Inspect `frontend/src/WorkspaceDrawerHelpers.tsx` for one narrow local render-helper extraction after clearing the mixed worktree.
+
+## 2026-05-29 23:21 CEST - Cinema Mode Ergonomic Hardening
+- [x] Repair PDF display text and extraction diagnostics
+- [x] Redesign Cinema footer around playback
+- [x] Harden generation timeout, retry, and terminal copy
+- [x] Add sync-lint instrumentation and Playwright coverage
+- [x] Run targeted checks and project checks
+- Validation: targeted frontend/Go checks passed; responsive Book Cinema E2E passed with a full-book mock narration job; low-resource Book Cinema sync-lint E2E passed with existing non-blocking timing waivers; `pnpm check` passed with existing lint warnings.
+
+## 2026-05-30 00:00 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, skills, and dirty worktree
+- [x] Discover a behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/WorkspaceDrawerHelpers.tsx` project library stats extraction because it is a clean frontend size outlier outside the recent rotation with inline row data shaping in `ProjectLibraryRow`
+- [x] Plan: extract a private same-file helper for generated duration, primary voice, and quality score while preserving visible-job ordering, fallback text, formatting calls, public exports, and render output
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Decide whether the focused diff can be committed
+- Improved: Extracted project library generated-duration, primary-voice, and quality-score derivation into a private same-file helper.
+- Left alone: Public APIs, visible-job ordering, fallback text, formatting calls, render output, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/WorkspaceDrawerHelpers.tsx` pass with no fixes; `pnpm exec biome lint frontend/src/WorkspaceDrawerHelpers.tsx` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `pnpm --filter @tts-research/frontend test` pass; `git diff --check` pass; `pnpm check` failed during lint on pre-existing dirty files outside this refactor.
+- Next suggested target: Clear the mixed dirty worktree, then inspect `frontend/src/BundlePanels.tsx` for one narrow render-helper extraction.
+
+## 2026-05-30 02:03 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, skills, and dirty worktree
+- [x] Discover a behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/BundlePanels.tsx` export content grouping because it is a clean frontend size outlier outside the recent rotation with inline included/optional data shaping in `ExportStepContent`
+- [x] Plan: extract a private same-file helper for included and optional bundle contents while preserving filter predicates, item ordering, public exports, and render output
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Decide whether the focused diff can be committed
+- Improved: Extracted export bundle included/optional content partitioning into a private same-file helper.
+- Left alone: Public APIs, filter predicates, item ordering, render output, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/BundlePanels.tsx` pass with no fixes; `pnpm exec biome lint frontend/src/BundlePanels.tsx` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `pnpm --filter @tts-research/frontend test` pass; `git diff --check` pass; `pnpm check` pass with existing non-fatal lint warnings outside this refactor.
+- Next suggested target: After the current mixed worktree is cleared, inspect `frontend/src/features/speech-policy/SpeechPolicyWizard.tsx` for one narrow local helper extraction.
+
 ## 2026-05-30 11:03 CEST - Unified Workspace Layout System
 - [x] Inspect current layout state and affected UI/tests
 - [x] Extend workspace layout model and persistence
@@ -985,6 +1046,74 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update tests and audits
 - [x] Run project checks
 - Validation: targeted workspace/preferences/layout/navigation/AppShell tests passed; `pnpm check` passed; `pnpm e2e:responsive-snapshots`, `pnpm e2e:workspace-flow`, and `pnpm e2e:teleprompt-memory` passed; `pnpm e2e:surface-complexity` still fails on unrelated unclassified duplicate groups (`Low confidence`, `Narration`, `Open Cinema Theatre`, `Enter Theatre`) while the legacy rail/footer layout-control assertion does not fire.
+
+## 2026-05-30 02:22 CEST - Cinema Text Parity And Sync Validation
+- [x] Repair Cinema PDF gap rendering artifacts
+- [x] Make Follow layout the default Cinema reader surface
+- [x] Add Teleprompt Theatre sync debug instrumentation
+- [x] Add unit and Playwright regression coverage
+- [x] Run targeted checks and project checks
+- Validation: targeted frontend tests passed; targeted lint/typecheck passed; responsive Book Cinema Playwright passed; golden-minute Teleprompt Theatre sync-lint passed; `git diff --check` passed; `pnpm check` passed with existing non-fatal Biome warnings outside this work.
+
+## 2026-05-30 04:02 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, skills, and dirty worktree
+- [x] Discover a behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/features/speech-policy/SpeechPolicyWizard.tsx` guided-field derivation because it is a clean frontend size outlier outside the recent rotation with inline pure data shaping in the main component
+- [x] Plan: extract a private same-file `resolveGuidedPolicyFields` helper while preserving guided key order, missing-field filtering, public APIs, render output, profile/import behavior, and timing
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Decide whether the focused diff can be committed
+- Improved: Extracted guided speech-policy field selection into a private same-file helper.
+- Left alone: Public APIs, guided key order, missing-field filtering, render output, profile/import behavior, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/features/speech-policy/SpeechPolicyWizard.tsx` pass with no fixes; `pnpm exec biome lint frontend/src/features/speech-policy/SpeechPolicyWizard.tsx` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/settings/SettingsPanel.test.tsx src/features/speech-policy/policyPreview.test.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; final `pnpm check` pass with existing non-fatal lint warnings outside this refactor.
+- Next suggested target: After clearing the mixed dirty worktree, inspect `frontend/src/features/speech-policy/policyPreviewHelpers.ts` for one narrow local helper extraction.
+
+## 2026-05-30 06:03 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, skills, and dirty worktree
+- [x] Discover a behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/features/speech-policy/policyPreviewHelpers.ts` speech-plan summary extraction because it is a clean frontend helper size outlier outside the current dirty set with dense inline preview data shaping
+- [x] Plan: extract a private same-file speech-plan summary helper while preserving segment count formatting, summary text, public exports, preview data shape, and property order
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Decide whether the focused diff can be committed
+- Improved: Extracted golden-minute speech-plan summary construction into a private same-file helper.
+- Left alone: Public APIs, preview property order, segment ordering, summary text, segment count formatting, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/features/speech-policy/policyPreviewHelpers.ts` pass with no fixes; `pnpm exec biome lint frontend/src/features/speech-policy/policyPreviewHelpers.ts` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/speech-policy/policyPreview.test.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; `pnpm check` pass with existing non-fatal lint warnings outside this refactor.
+- Next suggested target: After clearing the mixed dirty worktree, inspect `frontend/src/features/speech-policy/speechPolicyWizardHelpers.tsx` for one narrow helper or type-only import cleanup.
+
+## 2026-05-30 08:02 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, skills, and dirty worktree
+- [x] Discover a behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/features/speech-policy/speechPolicyWizardHelpers.tsx` comparison excerpt lookup because it is clean, outside the dirty source set, and has a small inline golden-minute segment lookup in JSX
+- [x] Plan: extract a private same-file helper for the `gm-p3` comparison excerpt while preserving segment lookup predicate, fallback `undefined`, render output, public exports, and policy data shape
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Decide whether the focused diff can be committed
+- Improved: Extracted golden-minute comparison excerpt lookup into a private same-file helper and clarified the type-only comparison import.
+- Left alone: Public exports, policy preview data generation, segment ordering, fallback `undefined`, render output, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/features/speech-policy/speechPolicyWizardHelpers.tsx` pass with no fixes; `pnpm exec biome lint frontend/src/features/speech-policy/speechPolicyWizardHelpers.tsx` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/speech-policy/policyPreview.test.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; `pnpm check` pass with existing non-fatal lint warnings outside this refactor.
+- Next suggested target: After clearing the mixed dirty worktree, inspect `frontend/src/features/ui-audit/actionMetadataCatalog.ts` for one narrow static metadata readability helper.
+
+## 2026-05-30 10:01 CEST - Codebase Sanitization
+- [x] Check automation memory, ledger, skills, and dirty worktree
+- [x] Discover a behavior-preserving refactor target
+- [x] Record selected target and behavior-preservation plan
+- [x] Select `frontend/src/features/ui-audit/actionMetadataCatalog.ts` playback-owner branching because it is a clean frontend metadata size outlier outside the recent caretaker rotation
+- [x] Plan: extract private same-file ownership predicate helpers while preserving branch order, string comparisons, regex checks, return values, metadata shape, and public exports
+- [x] Implement one focused refactor
+- [x] Run targeted validation and `pnpm check`
+- [x] Update ledger, working log, and automation memory
+- [x] Decide whether the focused diff can be committed
+- Improved: Extracted playback owner classification branches into private same-file predicate helpers.
+- Left alone: Static metadata entries, public exports, owner return values, branch order, string/regex checks, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
+- Validation: `pnpm exec biome format --write frontend/src/features/ui-audit/actionMetadataCatalog.ts` pass with one formatting adjustment; `pnpm exec biome lint frontend/src/features/ui-audit/actionMetadataCatalog.ts` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/ui-audit/surfaceComplexity.test.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `pnpm --filter @tts-research/frontend test` pass; `git diff --check` pass; `pnpm check` pass with existing non-fatal lint warnings outside this refactor.
+- Next suggested target: After clearing the mixed dirty worktree, inspect `frontend/src/features/ui-audit/surfaceComplexity.ts` for one narrow budget/readability helper.
 
 ## 2026-05-30 11:53 CEST - Commit Unified Workspace Layout
 - [x] Stage unified layout work package
@@ -1000,3 +1129,7 @@ duplicating every implementation detail from commits, PR text, or generated revi
 ## 2026-05-30 12:20 CEST - Commit Task-First Narration Workbench
 - [x] Stage task-first workbench package
 - [x] Commit staged changes
+
+## 2026-05-30 12:24 CEST - Catch-Up Commit
+- [x] Stage remaining worktree changes
+- [x] Commit remaining changes

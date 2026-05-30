@@ -676,6 +676,9 @@ func TestCreateJobOutlivesRequestContextCancellation(t *testing.T) {
 	if completed.Error == "cancelled by request" {
 		t.Fatal("request context cancellation should not mark the background job as user-cancelled")
 	}
+	if completed.TerminalReason != "" || completed.Retriable {
+		t.Fatalf("completed terminal metadata = (%q, %t), want empty/non-retriable", completed.TerminalReason, completed.Retriable)
+	}
 }
 
 func TestCancelJobMarksExplicitUserCancellation(t *testing.T) {
@@ -700,6 +703,9 @@ func TestCancelJobMarksExplicitUserCancellation(t *testing.T) {
 	cancelled := waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
 	if cancelled.Error != "cancelled by request" {
 		t.Fatalf("cancelled job error = %q, want explicit request reason", cancelled.Error)
+	}
+	if cancelled.TerminalReason != pipeline.JobTerminalReasonUserCancelled || !cancelled.Retriable {
+		t.Fatalf("cancelled terminal metadata = (%q, %t), want user-cancelled/retriable", cancelled.TerminalReason, cancelled.Retriable)
 	}
 }
 
@@ -1826,6 +1832,46 @@ func TestCreateBookNarrationJobUsesBookText(t *testing.T) {
 	}
 	if completed.InputText != book.Text {
 		t.Fatalf("job input text = %q, want book text %q", completed.InputText, book.Text)
+	}
+}
+
+func TestCreateBookNarrationJobOutlivesRequestContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	epubPath := writeTestEPUB(t, "book-context-cancel.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "book-context-cancel.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	job, err := service.CreateBookNarrationJob(
+		ctx,
+		book.ID,
+		pipeline.CreateJobRequest{
+			RunMode: pipeline.RunModeDraftPreview,
+			PipelineOptions: pipeline.CreateJobPipelineOptions{
+				ASRCheck:  boolPtr(false),
+				AutoRetry: boolPtr(false),
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateBookNarrationJob returned error: %v", err)
+	}
+	cancel()
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.Error == "cancelled by request" {
+		t.Fatal("book narration request context cancellation should not mark job as user-cancelled")
+	}
+	if completed.TerminalReason != "" || completed.Retriable {
+		t.Fatalf("completed terminal metadata = (%q, %t), want empty/non-retriable", completed.TerminalReason, completed.Retriable)
 	}
 }
 
@@ -4938,6 +4984,67 @@ func TestCreateJobMarksCheckerFailedWhenRetryLimitExhausts(t *testing.T) {
 	if failed.Retries.Attempts != 2 {
 		t.Fatalf("attempts = %d, want 2", failed.Retries.Attempts)
 	}
+	if failed.TerminalReason != pipeline.JobTerminalReasonValidationFailed || !failed.Retriable {
+		t.Fatalf("failed terminal metadata = (%q, %t), want validation-failed/retriable", failed.TerminalReason, failed.Retriable)
+	}
+}
+
+func TestCreateJobTreatsUnexpectedProviderCancellationAsRetriableFailure(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		cancelledTTSAgent{},
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 1, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			ASRCheck:  boolPtr(false),
+			AutoRetry: boolPtr(false),
+		},
+		Text: "Provider cancellation should be a failure unless the user cancelled the job.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	failed := waitForFailedJob(t, service, job.ID)
+	if failed.Status == pipeline.JobStatusCancelled {
+		t.Fatal("unexpected provider cancellation must not become a user-cancelled job")
+	}
+	if failed.TerminalReason != pipeline.JobTerminalReasonProviderFailed || !failed.Retriable {
+		t.Fatalf("failed terminal metadata = (%q, %t), want provider-failed/retriable", failed.TerminalReason, failed.Retriable)
+	}
+}
+
+func TestCreateJobTreatsProviderTimeoutAsRetriableFailure(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		timeoutTTSAgent{},
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 1, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			ASRCheck:  boolPtr(false),
+			AutoRetry: boolPtr(false),
+		},
+		Text: "Provider timeout should remain retryable and distinct from cancellation.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	failed := waitForFailedJob(t, service, job.ID)
+	if failed.Status == pipeline.JobStatusCancelled {
+		t.Fatal("provider timeout must not become a user-cancelled job")
+	}
+	if failed.TerminalReason != pipeline.JobTerminalReasonProviderTimeout || !failed.Retriable {
+		t.Fatalf("failed terminal metadata = (%q, %t), want provider-timeout/retriable", failed.TerminalReason, failed.Retriable)
+	}
 }
 
 func TestCreateJobExposesStreamingOptimizationPreview(t *testing.T) {
@@ -5188,6 +5295,18 @@ func (mockReferenceTTS) SynthesizeWithReference(
 		Provider:    "mock-reference",
 		Voice:       "clone",
 	}, nil
+}
+
+type cancelledTTSAgent struct{}
+
+func (cancelledTTSAgent) Synthesize(context.Context, string) (agents.TTSResult, error) {
+	return agents.TTSResult{}, context.Canceled
+}
+
+type timeoutTTSAgent struct{}
+
+func (timeoutTTSAgent) Synthesize(context.Context, string) (agents.TTSResult, error) {
+	return agents.TTSResult{}, context.DeadlineExceeded
 }
 
 type recordingTTSAgent struct {

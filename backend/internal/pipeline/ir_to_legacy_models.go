@@ -3,6 +3,7 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -33,13 +34,18 @@ func BookSourceFromIR(document contentir.Document, book BookSource) BookSource {
 	)
 	book.Ingestion = ingestionDiagnosticsFromIRMetadata(document.Metadata)
 	book.Warnings = uniqueStrings(append(metadataValueStringSlice(document.Metadata, "warnings"), nodeWarnings(document.Nodes)...))
+	var next BookSource
 	if document.SourceType == "bookSource" && nodesHavePageLocators(document.Nodes) {
-		return pagedBookSourceFromIR(document, book)
+		next = pagedBookSourceFromIR(document, book)
+	} else if sections := bookSectionsFromIRMetadata(document.Metadata); len(sections) > 0 {
+		next = structuredBookSourceFromIR(document, book, sections)
+	} else {
+		next = chapterBookSourceFromIR(document, book)
 	}
-	if sections := bookSectionsFromIRMetadata(document.Metadata); len(sections) > 0 {
-		return structuredBookSourceFromIR(document, book, sections)
+	if next.Kind == BookSourceKindPDF {
+		next.Warnings = uniqueStrings(append(next.Warnings, pdfExtractionQualityWarnings(next.Text)...))
 	}
-	return chapterBookSourceFromIR(document, book)
+	return next
 }
 
 func narrationBlockFromIRNode(node contentir.Node, index int) NarrationBlock {
@@ -234,6 +240,22 @@ func nodeWarnings(nodes []contentir.Node) []string {
 	warnings := make([]string, 0)
 	for _, node := range nodes {
 		warnings = append(warnings, node.Warnings...)
+	}
+	return warnings
+}
+
+var (
+	pdfLikelySplitWordPattern = regexp.MustCompile(`(?i)\b[a-z]{3,}\s+[a-z]\b`)
+	pdfLikelyFusedWordPattern = regexp.MustCompile(`\b[a-z]{12,}[A-Z][A-Za-z]*\b`)
+)
+
+func pdfExtractionQualityWarnings(text string) []string {
+	warnings := make([]string, 0, 2)
+	if len(pdfLikelySplitWordPattern.FindAllString(text, 24)) >= 20 {
+		warnings = append(warnings, "PDF text extraction may contain split words; Book Cinema will prefer word-span text when rendering highlights.")
+	}
+	if len(pdfLikelyFusedWordPattern.FindAllString(text, 8)) >= 4 {
+		warnings = append(warnings, "PDF text extraction may contain fused words; inspect the source text before trusting spoken form.")
 	}
 	return warnings
 }

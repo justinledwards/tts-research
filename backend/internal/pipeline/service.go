@@ -634,6 +634,8 @@ func (service *Service) CancelJob(id string) error {
 	job.AudioSegmentDurationsMS = nil
 	job.AudioSegmentLatenciesMS = nil
 	job.Error = "cancelled by request"
+	job.TerminalReason = JobTerminalReasonUserCancelled
+	job.Retriable = true
 	job.CompletedAt = &now
 	setProgress(&job, string(JobStatusCancelled), "Job cancelled", "Processing was cancelled by user request.", job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	service.jobs[id] = job
@@ -1104,7 +1106,11 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		optimizedText, err = service.optimizeText(ctx, id, job.InputText)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
-				service.cancelJobByID(id)
+				if errors.Is(ctx.Err(), context.Canceled) {
+					service.cancelJobByID(id)
+				} else {
+					service.failJobByID(id, fmt.Errorf("optimize text cancelled unexpectedly: %w", err))
+				}
 				return
 			}
 
@@ -1212,7 +1218,11 @@ func (service *Service) runJob(ctx context.Context, id string) {
 	)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			service.cancelJobByID(id)
+			if errors.Is(ctx.Err(), context.Canceled) {
+				service.cancelJobByID(id)
+			} else {
+				service.failJobByID(id, fmt.Errorf("synthesis cancelled unexpectedly: %w", err))
+			}
 			return
 		}
 
@@ -1532,12 +1542,12 @@ func (service *Service) synthesizeUntilComplete(
 
 			result, err := synthesize()
 			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					output.err = context.Canceled
-					return output
-				}
 				if pipelineCtx.Err() != nil {
 					output.err = pipelineCtx.Err()
+					return output
+				}
+				if errors.Is(err, context.Canceled) {
+					output.err = fmt.Errorf("synthesis provider cancelled segment %d unexpectedly: %w", segmentIndex, err)
 					return output
 				}
 				output.err = fmt.Errorf("synthesize text for segment %d: %w", segmentIndex, err)
@@ -1610,12 +1620,12 @@ func (service *Service) synthesizeUntilComplete(
 
 			check, err := service.checker.Check(pipelineCtx, expectedSegment, candidateSegmentAudio)
 			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					output.err = context.Canceled
-					return output
-				}
 				if pipelineCtx.Err() != nil {
 					output.err = pipelineCtx.Err()
+					return output
+				}
+				if errors.Is(err, context.Canceled) {
+					output.err = fmt.Errorf("voice checker cancelled segment %d unexpectedly: %w", segmentIndex, err)
 					return output
 				}
 				output.err = fmt.Errorf("check audio for segment %d: %w", segmentIndex, err)
@@ -1722,7 +1732,7 @@ func (service *Service) synthesizeUntilComplete(
 		}
 
 		if result.err != nil {
-			if errors.Is(result.err, context.Canceled) {
+			if errors.Is(result.err, context.Canceled) && pipelineCtx.Err() != nil {
 				failureErr = context.Canceled
 				continue
 			}
@@ -1835,7 +1845,7 @@ func (service *Service) synthesizeUntilComplete(
 	}
 
 	if failureErr != nil {
-		if errors.Is(failureErr, context.Canceled) {
+		if errors.Is(failureErr, context.Canceled) && pipelineCtx.Err() != nil {
 			return mergedResult, lastCheck, context.Canceled
 		}
 
@@ -2553,6 +2563,7 @@ func (service *Service) snapshot(id string) (VoiceJob, error) {
 }
 
 func (service *Service) failJobByID(id string, err error) {
+	reason, retriable := classifyJobFailure(err)
 	service.updateJob(id, func(job *storedJob) {
 		job.Status = JobStatusFailed
 		job.audioPartialPCM = nil
@@ -2573,6 +2584,8 @@ func (service *Service) failJobByID(id string, err error) {
 		}
 		now := time.Now().UTC()
 		job.CompletedAt = &now
+		job.TerminalReason = reason
+		job.Retriable = retriable
 		setProgress(job, string(JobStatusFailed), "Job failed", err.Error(), job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	})
 }
@@ -2598,8 +2611,48 @@ func (service *Service) cancelJobByID(id string) {
 		}
 		now := time.Now().UTC()
 		job.CompletedAt = &now
+		job.TerminalReason = JobTerminalReasonUserCancelled
+		job.Retriable = true
 		setProgress(job, string(JobStatusCancelled), "Job cancelled", "Processing was cancelled by user request.", job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	})
+}
+
+func classifyJobFailure(err error) (JobTerminalReason, bool) {
+	if err == nil {
+		return JobTerminalReasonProviderFailed, true
+	}
+	message := err.Error()
+	lowerMessage := strings.ToLower(message)
+	if errors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(lowerMessage, "timed out") ||
+		strings.Contains(lowerMessage, "timeout") ||
+		strings.Contains(lowerMessage, "deadline exceeded") {
+		return JobTerminalReasonProviderTimeout, true
+	}
+	if strings.Contains(message, "voice checker cancelled") {
+		return JobTerminalReasonValidationFailed, true
+	}
+	if strings.Contains(message, "reached max retries without completion") {
+		return JobTerminalReasonValidationFailed, true
+	}
+	if strings.Contains(message, "cancelled unexpectedly") {
+		return JobTerminalReasonProviderFailed, true
+	}
+	if errors.Is(err, context.Canceled) {
+		return JobTerminalReasonSystemCancelled, true
+	}
+	if errors.Is(err, ErrRetryExhaust) {
+		return JobTerminalReasonValidationFailed, true
+	}
+	if errors.Is(err, ErrVoiceNotFound) ||
+		errors.Is(err, ErrProfileNotFound) ||
+		errors.Is(err, ErrProfileMissingAudio) ||
+		errors.Is(err, ErrProfileUnsupported) ||
+		errors.Is(err, ErrProfileArtifactMissing) ||
+		errors.Is(err, ErrProfileArtifactUnsupported) {
+		return JobTerminalReasonConfigurationFailed, false
+	}
+	return JobTerminalReasonProviderFailed, true
 }
 
 func (service *Service) save(job storedJob) {

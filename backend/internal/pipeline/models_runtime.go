@@ -414,6 +414,8 @@ type VoiceJob struct {
 	QualityReport           *JobQualityReport `json:"qualityReport,omitempty"`
 	Progress                JobProgress       `json:"progress"`
 	Error                   string            `json:"error,omitempty"`
+	TerminalReason          JobTerminalReason `json:"terminalReason,omitempty"`
+	Retriable               bool              `json:"retriable,omitempty"`
 	CreatedAt               time.Time         `json:"createdAt"`
 	UpdatedAt               time.Time         `json:"updatedAt"`
 	CompletedAt             *time.Time        `json:"completedAt,omitempty"`

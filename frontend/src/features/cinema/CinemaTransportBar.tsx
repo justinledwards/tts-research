@@ -27,16 +27,10 @@ interface CinemaTransportButtonModel {
 
 export interface CinemaTransportModel {
   bookmark?: CinemaTransportButtonModel;
+  details?: CinemaTransportButtonModel;
   displayControls?: ReactNode;
   estimatedReadyLabel?: string;
   generationSettings?: ReactNode;
-  mobileMore?: {
-    active: boolean;
-    controlsId: string;
-    icon?: ReactNode;
-    label?: string;
-    onClick: () => void;
-  };
   playbackRate: {
     disabled: boolean;
     value: number;
@@ -92,7 +86,7 @@ function PreAudioTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
       <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
         <Button
           {...playbackActionDataAttributes(primaryAction, lifecycle, { primary: true })}
-          className={`h-14 min-w-44 gap-2 px-5 shadow-lg ${model.primary.className}`}
+          className={`h-12 min-w-40 gap-2 px-4 shadow-lg sm:h-14 sm:min-w-44 sm:px-5 ${model.primary.className}`}
           disabled={model.primary.disabled}
           disabledReason={cinemaPrimaryDisabledReason(model, primaryAction, lifecycle)}
           onClick={model.primary.onClick}
@@ -108,17 +102,6 @@ function PreAudioTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
         />
         <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
           {model.generationSettings}
-          {model.mobileMore ? (
-            <TextTransportButton
-              active={model.mobileMore.active}
-              ariaControls={model.mobileMore.controlsId}
-              label={model.mobileMore.label ?? "More"}
-              onClick={model.mobileMore.onClick}
-            >
-              {model.mobileMore.icon}
-              {model.mobileMore.label ?? "More"}
-            </TextTransportButton>
-          ) : null}
         </div>
       </div>
     </TransportFooter>
@@ -131,22 +114,34 @@ function GeneratingTransport({ model }: Readonly<{ model: CinemaTransportModel }
     progressRatio > 0 ? `${Math.round(progressRatio * 100).toString()}%` : "35%";
   const primaryAction = cinemaPrimaryActionForState(model.playbackState);
   const lifecycle = generatedAudioLifecycleFromPlaybackState(model.playbackState);
+  const showPreparingStatus =
+    model.primary.disabled && model.primary.label === "Preparing first segment";
 
   return (
     <TransportFooter>
       <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
-        <Button
-          {...playbackActionDataAttributes(primaryAction, lifecycle, { primary: true })}
-          className={`h-14 min-w-44 gap-2 px-5 shadow-lg ${model.primary.className}`}
-          disabled={model.primary.disabled}
-          disabledReason={cinemaPrimaryDisabledReason(model, primaryAction, lifecycle)}
-          onClick={model.primary.onClick}
-          size="lg"
-          variant="primary"
-        >
-          {model.primary.icon}
-          {model.primary.label}
-        </Button>
+        {showPreparingStatus ? (
+          <div
+            className="flex h-12 min-w-40 items-center justify-center gap-2 rounded-md border border-orange-300/60 bg-orange-500/10 px-4 text-sm font-semibold text-orange-600 shadow-sm sm:h-14 sm:min-w-44 sm:px-5"
+            data-cinema-generation-preparing=""
+          >
+            {model.primary.icon}
+            {model.primary.label}
+          </div>
+        ) : (
+          <Button
+            {...playbackActionDataAttributes(primaryAction, lifecycle, { primary: true })}
+            className={`h-12 min-w-40 gap-2 px-4 shadow-lg sm:h-14 sm:min-w-44 sm:px-5 ${model.primary.className}`}
+            disabled={model.primary.disabled}
+            disabledReason={cinemaPrimaryDisabledReason(model, primaryAction, lifecycle)}
+            onClick={model.primary.onClick}
+            size="lg"
+            variant="primary"
+          >
+            {model.primary.icon}
+            {model.primary.label}
+          </Button>
+        )}
         <div className="min-w-0">
           <TransportStateSummary
             detail={
@@ -167,17 +162,6 @@ function GeneratingTransport({ model }: Readonly<{ model: CinemaTransportModel }
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
           {model.generationSettings}
-          {model.mobileMore ? (
-            <TextTransportButton
-              active={model.mobileMore.active}
-              ariaControls={model.mobileMore.controlsId}
-              label={model.mobileMore.label ?? "More"}
-              onClick={model.mobileMore.onClick}
-            >
-              {model.mobileMore.icon}
-              {model.mobileMore.label ?? "More"}
-            </TextTransportButton>
-          ) : null}
         </div>
       </div>
     </TransportFooter>
@@ -197,6 +181,19 @@ function DegradedTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
           title={model.stateSummary?.title ?? "Audio needs attention"}
         />
         <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
+          {model.details ? (
+            <Button
+              className="h-12 gap-2"
+              disabled={model.details.disabled}
+              disabledReason={model.details.disabledReason}
+              onClick={model.details.onClick}
+              size="lg"
+              variant="secondary"
+            >
+              {model.details.icon}
+              {model.details.label ?? "View details"}
+            </Button>
+          ) : null}
           <Button
             {...playbackActionDataAttributes(primaryAction, lifecycle, { primary: true })}
             className={`h-12 min-w-36 gap-2 shadow ${model.primary.className}`}
@@ -209,17 +206,6 @@ function DegradedTransport({ model }: Readonly<{ model: CinemaTransportModel }>)
             {model.primary.icon}
             {model.primary.label}
           </Button>
-          {model.mobileMore ? (
-            <TextTransportButton
-              active={model.mobileMore.active}
-              ariaControls={model.mobileMore.controlsId}
-              label={model.mobileMore.label ?? "More"}
-              onClick={model.mobileMore.onClick}
-            >
-              {model.mobileMore.icon}
-              {model.mobileMore.label ?? "More"}
-            </TextTransportButton>
-          ) : null}
         </div>
       </div>
     </TransportFooter>
@@ -445,7 +431,7 @@ function MobilePlaybackTransport({
         <span className="text-right">{model.progress.durationLabel}</span>
       </div>
       <div
-        className="grid grid-cols-5 items-center gap-2"
+        className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-2"
         data-cinema-footer-row="mobile-primary"
         data-cinema-primary-playback-group=""
       >
@@ -465,7 +451,7 @@ function MobilePlaybackTransport({
         <Button
           {...playbackActionDataAttributes("play", lifecycle, { primary: true })}
           aria-keyshortcuts="Space K"
-          className={`col-span-2 h-16 gap-3 px-4 text-base shadow-lg ${model.primary.className}`}
+          className={`h-16 gap-3 px-4 text-base shadow-lg ${model.primary.className}`}
           data-testid="ui-action-cinema-play"
           disabled={model.primary.disabled}
           disabledReason={cinemaPrimaryDisabledReason(model, "play", lifecycle)}
@@ -489,16 +475,6 @@ function MobilePlaybackTransport({
         ) : (
           <span aria-hidden="true" />
         )}
-        {model.mobileMore ? (
-          <IconTransportButton
-            ariaControls={model.mobileMore.controlsId}
-            ariaExpanded={model.mobileMore.active}
-            label={model.mobileMore.label ?? "More"}
-            onClick={model.mobileMore.onClick}
-          >
-            {model.mobileMore.icon}
-          </IconTransportButton>
-        ) : null}
       </div>
       <div
         className="flex items-center justify-center gap-2"
@@ -541,37 +517,8 @@ function TransportStateSummary({ detail, title }: Readonly<{ detail: string; tit
   return (
     <div className="min-w-0">
       <p className="text-sm font-semibold text-[var(--vs-text)]">{title}</p>
-      <p className="mt-1 line-clamp-2 text-sm leading-5 vs-muted">{detail}</p>
+      <p className="mt-1 line-clamp-1 text-sm leading-5 vs-muted sm:line-clamp-2">{detail}</p>
     </div>
-  );
-}
-
-function TextTransportButton({
-  active,
-  ariaControls,
-  children,
-  label,
-  onClick,
-}: Readonly<{
-  active?: boolean;
-  ariaControls?: string;
-  children: ReactNode;
-  label: string;
-  onClick: () => void;
-}>) {
-  return (
-    <Button
-      aria-controls={ariaControls}
-      aria-expanded={active}
-      aria-label={label}
-      className="h-11 gap-2"
-      onClick={onClick}
-      selected={active}
-      size="md"
-      variant="secondary"
-    >
-      {children}
-    </Button>
   );
 }
 

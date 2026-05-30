@@ -7,7 +7,8 @@ import {
   gotoApp,
   projectStorageState,
 } from "./e2e-browser-qa-helpers.mjs";
-import { buildGoldenMinuteSyncFixture, renderSyncEvidenceHtml } from "./golden-minute-fixture.mjs";
+import { buildGoldenMinuteSyncFixture } from "./golden-minute-fixture.mjs";
+import { renderSyncEvidenceHtml } from "./readalong-sync-evidence-helpers.mjs";
 
 export function readPositiveNumber(value, fallback) {
   const parsed = Number(value);
@@ -182,7 +183,15 @@ export async function runGoldenMinuteFlow(browser, fixture, projectId, screensho
     await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
     await page.getByTestId("teleprompt-theatre").waitFor();
     await page.getByTestId("teleprompt-theatre-current-cue").waitFor();
+    const telepromptSyncFailures = await assertTelepromptTheatreSyncLint(page, {
+      highlightMapV2,
+      jobId: job.id,
+    });
+    failures.push(...telepromptSyncFailures);
     checks.push("Teleprompt Theatre opened from the generated golden-minute source.");
+    if (telepromptSyncFailures.length === 0) {
+      checks.push("Teleprompt Theatre highlight matched highlight-map-v2 after playback.");
+    }
     await capture("golden-minute-07-theatre");
 
     failures.push(...blockingPageIssues(pageIssues));
@@ -557,6 +566,154 @@ async function closeCinema(page) {
     .first()
     .waitFor({ state: "hidden", timeout: 15_000 })
     .catch(() => {});
+}
+
+async function assertTelepromptTheatreSyncLint(page, { highlightMapV2, jobId }) {
+  const failures = [];
+  const playPause = page.getByTestId("ui-action-teleprompt-theatre-play-pause");
+  await playPause.waitFor({ state: "visible" });
+  if (!(await playPause.isEnabled().catch(() => false))) {
+    return ["Teleprompt Theatre play/pause was not enabled for sync lint."];
+  }
+  if (!/pause/i.test((await playPause.textContent().catch(() => "")) ?? "")) {
+    await playPause.click();
+  }
+  await page.waitForTimeout(2600);
+  if (/pause/i.test((await playPause.textContent().catch(() => "")) ?? "")) {
+    await playPause.click();
+  }
+  const observed = await page.getByTestId("teleprompt-theatre").evaluate((root) => {
+    const active = root.querySelector('[aria-current="true"][data-readalong-word-index]');
+    return {
+      activeDomSourceWordId: active?.getAttribute("data-source-word-id") ?? "",
+      activeDomText: active?.textContent?.trim() ?? "",
+      activeDomWordIndex: Number(active?.getAttribute("data-readalong-word-index") ?? "-1"),
+      activeSourceWordId: root.getAttribute("data-teleprompt-sync-active-source-word-id") ?? "",
+      activeWordIndex: Number(root.getAttribute("data-teleprompt-sync-active-word-index") ?? "-1"),
+      activeWordText: root.getAttribute("data-teleprompt-sync-active-word-text") ?? "",
+      cursorSec: Number(root.getAttribute("data-teleprompt-sync-playback-cursor-sec") ?? "NaN"),
+      jobId: root.getAttribute("data-teleprompt-sync-job-id") ?? "",
+      timingSource: root.getAttribute("data-teleprompt-sync-timing-source") ?? "",
+    };
+  });
+  if (observed.jobId !== jobId) {
+    failures.push(`Teleprompt sync lint observed job ${observed.jobId}, want ${jobId}.`);
+  }
+  if (!Number.isFinite(observed.cursorSec) || observed.cursorSec <= 0) {
+    failures.push(`Teleprompt sync lint cursor did not advance: ${String(observed.cursorSec)}.`);
+  }
+  if (observed.timingSource !== "highlight-map-v2") {
+    failures.push(`Teleprompt sync lint timing source was ${observed.timingSource}.`);
+  }
+  const expected = expectedTelepromptWordAtCursor(highlightMapV2, observed.cursorSec);
+  if (!expected) {
+    failures.push(`Teleprompt sync lint found no expected word at ${observed.cursorSec}s.`);
+    return failures;
+  }
+  if (expected.level !== "word") {
+    const activeText = observed.activeDomText || observed.activeWordText;
+    if (!activeText) {
+      failures.push("Teleprompt sync lint phrase fallback did not expose active text.");
+    }
+    if (observed.activeWordIndex < 0 || observed.activeDomWordIndex < 0) {
+      failures.push(
+        `Teleprompt sync lint did not expose phrase-fallback word indexes: ${JSON.stringify(
+          observed,
+        )}.`,
+      );
+    }
+    return failures;
+  }
+  const expectedSourceWordId = sourceWordIdForHighlightEntry(expected);
+  if (observed.activeSourceWordId !== expectedSourceWordId) {
+    failures.push(
+      `Teleprompt sync lint active source word ${observed.activeSourceWordId} != ${expectedSourceWordId}.`,
+    );
+  }
+  if (observed.activeDomSourceWordId && observed.activeDomSourceWordId !== expectedSourceWordId) {
+    failures.push(
+      `Teleprompt sync lint DOM source word ${observed.activeDomSourceWordId} != ${expectedSourceWordId}.`,
+    );
+  }
+  if (
+    normalizeTelepromptSyncWord(observed.activeWordText) !==
+    normalizeTelepromptSyncWord(expected.rawText ?? expected.spokenText ?? expected.textQuote)
+  ) {
+    failures.push(
+      `Teleprompt sync lint active text "${observed.activeWordText}" != "${expected.rawText}".`,
+    );
+  }
+  if (
+    observed.activeDomText &&
+    !normalizeTelepromptSyncWord(observed.activeDomText).includes(
+      normalizeTelepromptSyncWord(expected.rawText ?? expected.spokenText ?? expected.textQuote),
+    )
+  ) {
+    failures.push(
+      `Teleprompt sync lint DOM text "${observed.activeDomText}" did not include "${expected.rawText}".`,
+    );
+  }
+  if (observed.activeWordIndex < 0 || observed.activeDomWordIndex < 0) {
+    failures.push(
+      `Teleprompt sync lint did not expose active word indexes: ${JSON.stringify(observed)}.`,
+    );
+  }
+  return failures;
+}
+
+function expectedTelepromptWordAtCursor(map, cursorSec) {
+  const cursorMs = cursorSec * 1000;
+  const words = [...(map.entries ?? [])]
+    .filter((entry) => entry.level === "word")
+    .sort((left, right) => highlightEntryStartMs(left) - highlightEntryStartMs(right));
+  if (words.length > 0) {
+    return (
+      words.find(
+        (entry) =>
+          cursorMs >= highlightEntryStartMs(entry) && cursorMs <= highlightEntryEndMs(entry),
+      ) ??
+      [...words].reverse().find((entry) => cursorMs >= highlightEntryStartMs(entry)) ??
+      words.find((entry) => cursorMs <= highlightEntryEndMs(entry)) ??
+      null
+    );
+  }
+  const anchors = [...(map.entries ?? [])]
+    .filter((entry) => entry.level !== "word")
+    .sort((left, right) => highlightEntryStartMs(left) - highlightEntryStartMs(right));
+  return (
+    anchors.find(
+      (entry) => cursorMs >= highlightEntryStartMs(entry) && cursorMs <= highlightEntryEndMs(entry),
+    ) ??
+    [...anchors].reverse().find((entry) => cursorMs >= highlightEntryStartMs(entry)) ??
+    anchors.find((entry) => cursorMs <= highlightEntryEndMs(entry)) ??
+    null
+  );
+}
+
+function sourceWordIdForHighlightEntry(entry) {
+  if (entry.sourceWordId) {
+    return entry.sourceWordId;
+  }
+  return `${entry.sourceId || "source"}:${entry.scopeKey || "scope"}:word:${String(
+    entry.sourceWordIndex,
+  )}`;
+}
+
+function highlightEntryStartMs(entry) {
+  return Math.max(0, entry.alignedStartMs ?? entry.providerTimingStartMs ?? entry.audioStartMs);
+}
+
+function highlightEntryEndMs(entry) {
+  return Math.max(
+    highlightEntryStartMs(entry) + 1,
+    entry.alignedEndMs ?? entry.providerTimingEndMs ?? entry.audioEndMs,
+  );
+}
+
+function normalizeTelepromptSyncWord(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replaceAll(/[^\p{L}\p{N}]+/gu, "");
 }
 
 async function waitForJob(jobId, apiBaseUrl) {

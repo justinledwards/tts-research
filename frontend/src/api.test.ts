@@ -19,6 +19,7 @@ import {
   isApiNotFoundError,
   previewPreparedSourceSpeechPolicy,
   saveHuggingFaceToken,
+  subscribeToVoiceJob,
   updateBookSourceSpeechPolicy,
   updatePreparedSourceSpeechPolicy,
   upsertProjectLexiconEntry,
@@ -134,6 +135,73 @@ describe("API errors", () => {
         JSON.stringify({ timeoutSeconds: 60 }),
       );
     } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("falls back to polling when a voice job progress stream disconnects", async () => {
+    const originalEventSource = globalThis.EventSource as typeof EventSource | undefined;
+    const originalFetch = globalThis.fetch;
+    const sources: MockEventSource[] = [];
+    class MockEventSource {
+      static readonly CLOSED = 2;
+      readonly listeners = new Map<string, ((event: Event) => void)[]>();
+      readyState = 1;
+      readonly url: string;
+
+      constructor(url: string) {
+        this.url = url;
+        sources.push(this);
+      }
+
+      addEventListener(type: string, listener: (event: Event) => void) {
+        this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+      }
+
+      close() {
+        this.readyState = MockEventSource.CLOSED;
+      }
+
+      emit(type: string) {
+        for (const listener of this.listeners.get(type) ?? []) {
+          listener(new Event(type));
+        }
+      }
+    }
+    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    const fetchUrls: string[] = [];
+    globalThis.fetch = (input) => {
+      fetchUrls.push(fetchInputUrl(input));
+      return Promise.resolve(
+        Response.json({
+          id: "job-1",
+          status: "completed",
+        }),
+      );
+    };
+    const jobs: unknown[] = [];
+    const errors: string[] = [];
+
+    try {
+      const unsubscribe = subscribeToVoiceJob(
+        "job-1",
+        (job) => jobs.push(job),
+        (error) => errors.push(error.message),
+      );
+      expect(sources[0]?.url).toBe("/api/voice-jobs/job-1/events");
+      sources[0]?.emit("error");
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+      unsubscribe();
+
+      expect(errors).toContain("Voice job progress stream disconnected");
+      expect(jobs).toMatchObject([{ id: "job-1", status: "completed" }]);
+      expect(fetchUrls).toEqual(["/api/voice-jobs/job-1"]);
+    } finally {
+      if (originalEventSource) {
+        globalThis.EventSource = originalEventSource;
+      } else {
+        Reflect.deleteProperty(globalThis, "EventSource");
+      }
       globalThis.fetch = originalFetch;
     }
   });

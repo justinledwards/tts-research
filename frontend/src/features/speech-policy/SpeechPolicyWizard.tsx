@@ -44,6 +44,16 @@ const GUIDED_POLICY_KEYS: (keyof SpeechPolicyOverrides)[] = [
   "footnoteMode",
 ];
 
+type SpeechPolicyDefinitionField = SpeechPolicyDefinition["fields"][number];
+
+function resolveGuidedPolicyFields(
+  definitionFields: readonly SpeechPolicyDefinitionField[],
+): SpeechPolicyDefinitionField[] {
+  return GUIDED_POLICY_KEYS.map((key) =>
+    definitionFields.find((field) => field.key === key),
+  ).filter(Boolean) as SpeechPolicyDefinitionField[];
+}
+
 type GoldenMinuteCompareMode =
   | "enterprise-education"
   | "accessibility-technical"
@@ -164,9 +174,7 @@ export function SpeechPolicyWizard({
     setCustomProfileName(`${displayName} custom`);
   }, [displayName]);
 
-  const guidedFields = GUIDED_POLICY_KEYS.map((key) =>
-    definitionFields.find((field) => field.key === key),
-  ).filter(Boolean) as SpeechPolicyDefinition["fields"];
+  const guidedFields = resolveGuidedPolicyFields(definitionFields);
 
   const importDisabled = importText.trim().length === 0;
 

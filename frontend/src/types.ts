@@ -17,6 +17,16 @@ export type JobStatus =
   | "failed"
   | "cancelled";
 
+export type JobTerminalReason =
+  | "user_cancelled"
+  | "system_cancelled"
+  | "provider_failed"
+  | "provider_timeout"
+  | "validation_failed"
+  | "superseded"
+  | "metadata_failed"
+  | "configuration_failed";
+
 export type StageStatus = "waiting" | "running" | "done" | "failed";
 
 export interface CreateVoiceJobRequest {
@@ -1317,6 +1327,8 @@ export interface VoiceJob {
   qualityReport?: JobQualityReport;
   progress: JobProgress;
   error?: string;
+  terminalReason?: JobTerminalReason;
+  retriable?: boolean;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;

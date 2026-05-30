@@ -154,7 +154,7 @@ func NewKokoroTTSAgent(config KokoroConfig) *KokoroTTSAgent {
 		config.ReferenceWorkerCount = 1
 	}
 	if config.TimeoutSeconds <= 0 {
-		config.TimeoutSeconds = 180
+		config.TimeoutSeconds = 3600
 	}
 	if config.ReferenceTimeoutSeconds <= 0 {
 		config.ReferenceTimeoutSeconds = config.TimeoutSeconds

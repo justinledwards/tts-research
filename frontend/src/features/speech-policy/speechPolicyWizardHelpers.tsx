@@ -7,7 +7,7 @@ import type {
   SpeechPolicySettings,
 } from "../../types";
 import {
-  buildGoldenMinutePolicyComparison,
+  type buildGoldenMinutePolicyComparison,
   buildGoldenMinutePolicyPreview,
   parseSpeechPolicyProfileJson,
 } from "./policyPreview";
@@ -89,10 +89,16 @@ function GoldenMinuteComparisonColumn({
       <p className="text-xs leading-5">{preview.citationHandling}</p>
       <p className="vs-muted text-xs leading-5">{preview.highlightPlan}</p>
       <p className="rounded-md bg-[var(--vs-surface)] px-3 py-2 text-xs leading-5">
-        {preview.segments.find((segment) => segment.id === "gm-p3")?.spoken}
+        {goldenMinuteComparisonExcerpt(preview)}
       </p>
     </div>
   );
+}
+
+function goldenMinuteComparisonExcerpt(
+  preview: ReturnType<typeof buildGoldenMinutePolicyPreview>,
+): string | undefined {
+  return preview.segments.find((segment) => segment.id === "gm-p3")?.spoken;
 }
 
 export function WizardStepHeader({

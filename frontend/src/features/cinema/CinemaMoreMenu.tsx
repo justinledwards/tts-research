@@ -21,6 +21,7 @@ export interface CinemaMoreMenuProps {
   onCommandPalette?: () => void;
   onHelpGuide?: () => void;
   onKeyboardShortcuts?: () => void;
+  onMenuOpen?: () => void;
   onReaderSettings?: () => void;
   onTheatreMode?: () => void;
 }
@@ -33,6 +34,7 @@ export function CinemaMoreMenu({
   onCommandPalette,
   onHelpGuide,
   onKeyboardShortcuts,
+  onMenuOpen,
   onReaderSettings,
   onTheatreMode,
 }: Readonly<CinemaMoreMenuProps>) {
@@ -206,7 +208,14 @@ export function CinemaMoreMenu({
         data-ui-action-owner="cinema-more"
         data-ui-action-scope={activeAction ? "operator" : "menu"}
         onClick={() => {
-          setOpen((current) => !current);
+          setOpen((current) => {
+            const nextOpen = !current;
+            if (nextOpen) {
+              focusFirstOnOpenRef.current = true;
+              onMenuOpen?.();
+            }
+            return nextOpen;
+          });
         }}
         onKeyDown={(event) => {
           if (event.key === "Escape" && open) {
@@ -216,9 +225,17 @@ export function CinemaMoreMenu({
             closeAndReturnFocus();
             return;
           }
+          if ((event.key === "Enter" || event.key === " ") && !open) {
+            event.preventDefault();
+            focusFirstOnOpenRef.current = true;
+            onMenuOpen?.();
+            setOpen(true);
+            return;
+          }
           if (event.key === "ArrowDown" && !open) {
             event.preventDefault();
             focusFirstOnOpenRef.current = true;
+            onMenuOpen?.();
             setOpen(true);
           }
         }}
@@ -232,7 +249,7 @@ export function CinemaMoreMenu({
       </Button>
       {open ? (
         <Panel
-          className="absolute right-0 top-[calc(100%+0.35rem)] z-20 grid min-w-64 gap-1 p-1 text-left shadow-lg"
+          className="absolute right-0 top-[calc(100%+0.35rem)] z-20 grid max-h-[calc(100vh-12rem)] min-w-64 gap-1 overflow-y-auto p-1 text-left shadow-lg"
           data-cinema-more-menu=""
           id={CINEMA_MORE_MENU_ID}
           onKeyDown={(event) => {

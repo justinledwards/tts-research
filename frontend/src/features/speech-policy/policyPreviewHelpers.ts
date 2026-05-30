@@ -100,10 +100,16 @@ export function buildGoldenMinutePolicyPreview(
       "47 -> forty seven",
     ],
     segments,
-    speechPlanSummary: `${String(
-      segments.length,
-    )} golden-minute segments: heading, paragraph handoffs, quote, citation token, natural pause, bookmark, and theatre cue.`,
+    speechPlanSummary: goldenMinuteSpeechPlanSummary(segments),
   };
+}
+
+function goldenMinuteSpeechPlanSummary(
+  segments: readonly GoldenMinutePolicySegmentPreview[],
+): string {
+  return `${String(
+    segments.length,
+  )} golden-minute segments: heading, paragraph handoffs, quote, citation token, natural pause, bookmark, and theatre cue.`;
 }
 
 export function buildGoldenMinutePolicyComparison(

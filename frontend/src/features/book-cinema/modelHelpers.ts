@@ -92,12 +92,55 @@ export function v2PhraseWordIndexes({
   return [resolveV2EntrySourceWordIndex(activeEntry, scopedSpans)].filter(isNonNegativeInteger);
 }
 
+export function estimateV2AnchorEntryActiveWordIndex({
+  cursorMs,
+  entry,
+  scopedSpans,
+}: Readonly<{
+  cursorMs: number;
+  entry: HighlightMapV2Entry;
+  scopedSpans: readonly BookSourceWordSpan[];
+}>): number | undefined {
+  const indexes = estimateV2AnchorEntryWordIndexes({ entry, scopedSpans });
+  if (indexes.length === 0) {
+    return undefined;
+  }
+  const durationMs = Math.max(1, v2EntryEndMs(entry) - v2EntryStartMs(entry));
+  const progress = Math.max(0, Math.min(1, (cursorMs - v2EntryStartMs(entry)) / durationMs));
+  const activeOffset = Math.min(indexes.length - 1, Math.floor(progress * indexes.length));
+  return indexes[activeOffset];
+}
+
+export function estimateV2AnchorEntryWordIndexes({
+  entry,
+  scopedSpans,
+}: Readonly<{
+  entry: HighlightMapV2Entry;
+  scopedSpans: readonly BookSourceWordSpan[];
+}>): number[] {
+  if (scopedSpans.length === 0) {
+    return [];
+  }
+  const startWordIndex = resolveV2EntrySourceWordIndex(entry, scopedSpans);
+  const startOffset = scopedSpans.findIndex((span) => span.index === startWordIndex);
+  if (startOffset === -1) {
+    return [];
+  }
+  const remainingSpans = scopedSpans.slice(startOffset);
+  const spokenWordCount = tokenizeV2EntryWords(v2EntrySpokenWordText(entry)).length;
+  const phraseWordCount = Math.max(
+    1,
+    Math.min(remainingSpans.length, spokenWordCount || remainingSpans.length),
+  );
+  return remainingSpans.slice(0, phraseWordCount).map((span) => span.index);
+}
+
 export function resolveV2EntrySourceWordIndex(
   entry: HighlightMapV2Entry,
   scopedSpans: readonly BookSourceWordSpan[],
 ): number | undefined {
   const expectedText = v2EntryExpectedText(entry);
-  const sourceIndexCandidate = entry.readingPosition?.activeWordIndex;
+  const sourceIndexCandidate = entry.readingPosition?.activeWordIndex ?? entry.sourceWordIndex;
   const readingPositionSpan = spanBySourceWordIndexForV2(scopedSpans, sourceIndexCandidate, entry);
   if (readingPositionSpan) {
     return readingPositionSpan.index;
@@ -119,7 +162,11 @@ export function resolveV2EntrySourceWordIndex(
   if (uniqueLocatedTextSpan) {
     return uniqueLocatedTextSpan.index;
   }
-  for (const candidate of uniqueNumbers([sourceIndexCandidate, entry.tokenIndex])) {
+  for (const candidate of uniqueNumbers([
+    sourceIndexCandidate,
+    entry.sourceWordIndex,
+    entry.tokenIndex,
+  ])) {
     const exact = spanBySourceWordIndex(scopedSpans, candidate, expectedText);
     if (exact) {
       return exact.index;
@@ -288,6 +335,21 @@ function v2EntryExpectedText(entry: HighlightMapV2Entry): string {
     nonEmptyString(entry.rawText) ??
     entry.textQuote
   );
+}
+
+function v2EntrySpokenWordText(entry: HighlightMapV2Entry): string {
+  return (
+    nonEmptyString(entry.spokenText) ??
+    nonEmptyString(entry.normalizedText) ??
+    nonEmptyString(entry.rawText) ??
+    nonEmptyString(entry.textQuote) ??
+    nonEmptyString(entry.readingPosition?.textQuote) ??
+    ""
+  );
+}
+
+function tokenizeV2EntryWords(value: string): string[] {
+  return value.match(/[\p{L}\p{N}]+(?:['’.-][\p{L}\p{N}]+)*/gu) ?? [];
 }
 
 function nonEmptyString(value: string | null | undefined): string | null {

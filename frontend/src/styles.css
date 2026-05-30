@@ -360,13 +360,83 @@ select {
 .book-cinema-text {
   color: var(--vs-text);
   word-break: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .book-cinema-page-text {
   color: var(--book-ink);
   word-break: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+}
+
+.book-cinema-follow-reader {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--book-paper-raised) 80%, transparent),
+      transparent 34%
+    ),
+    var(--book-paper);
+  color: var(--book-ink);
+}
+
+.book-cinema-follow-copy {
+  max-width: min(100%, 74ch);
+  color: var(--book-ink);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 420;
+  letter-spacing: 0;
+  overflow-wrap: normal;
+  text-wrap: pretty;
+  word-break: normal;
+}
+
+.book-cinema-follow-block {
+  margin: 0;
+}
+
+.book-cinema-follow-block + .book-cinema-follow-block {
+  margin-top: 1.05em;
+}
+
+.book-cinema-follow-block--heading {
+  max-width: 22ch;
+  font-size: clamp(1.35em, 1.1em + 1vw, 2em);
+  font-weight: 760;
+  line-height: 1.12;
+}
+
+.book-cinema-follow-block--subheading {
+  font-size: clamp(1.08em, 1em + 0.45vw, 1.34em);
+  font-weight: 720;
+  line-height: 1.18;
+}
+
+.book-cinema-follow-block--body,
+.book-cinema-follow-block--list,
+.book-cinema-follow-block--quote,
+.book-cinema-follow-block--caption,
+.book-cinema-follow-block--footnote {
+  font-size: 1em;
+}
+
+.book-cinema-follow-block--quote {
+  border-left: 3px solid color-mix(in srgb, var(--vs-accent) 34%, transparent);
+  padding-left: 1rem;
+  color: color-mix(in srgb, var(--book-ink) 82%, var(--vs-muted));
+}
+
+.book-cinema-follow-block--code,
+.book-cinema-follow-block--table {
+  overflow-x: auto;
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--vs-surface) 75%, transparent);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.86em;
+  line-height: 1.55;
+  padding: 0.9rem 1rem;
+  white-space: pre-wrap;
 }
 
 .book-cinema-spread {
@@ -444,6 +514,11 @@ select {
   line-height: var(--book-page-line-height, 1.76);
   overflow-wrap: break-word;
   word-break: normal;
+}
+
+.book-cinema-page-copy--fit-scroll {
+  overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
 .book-cinema-page-block {

@@ -15,6 +15,7 @@ export function CinemaFocusModeToolbar({
   onCommandPalette,
   onHelpGuide,
   onKeyboardShortcuts,
+  onMenuOpen,
   onModeChange,
   onReaderSettings,
   onTheatreMode,
@@ -25,6 +26,7 @@ export function CinemaFocusModeToolbar({
   onCommandPalette?: () => void;
   onHelpGuide?: () => void;
   onKeyboardShortcuts?: () => void;
+  onMenuOpen?: () => void;
   onModeChange: (mode: CinemaFocusMode) => void;
   onReaderSettings?: () => void;
   onTheatreMode?: () => void;
@@ -42,7 +44,7 @@ export function CinemaFocusModeToolbar({
 
   return (
     <div
-      className="grid grid-cols-[repeat(3,minmax(0,1fr))_auto] rounded-md border p-0.5 text-xs font-semibold vs-border vs-surface"
+      className="grid grid-cols-[repeat(3,minmax(0,1fr))_auto_auto] rounded-md border p-0.5 text-xs font-semibold vs-border vs-surface"
       data-cinema-mode-control-group=""
     >
       {CINEMA_PRIMARY_FOCUS_MODES.map((item) => (
@@ -61,6 +63,18 @@ export function CinemaFocusModeToolbar({
           {cinemaFocusModeLabel(item)}
         </Button>
       ))}
+      {onTheatreMode ? (
+        <Button
+          aria-label="Open Cinema Theatre"
+          className="min-w-0 rounded px-2"
+          data-testid="ui-action-cinema-theatre"
+          onClick={onTheatreMode}
+          size="sm"
+          variant="mode"
+        >
+          Theatre
+        </Button>
+      ) : null}
       <CinemaMoreMenu
         activePanelId={activePanelId}
         mode={mode}
@@ -68,6 +82,7 @@ export function CinemaFocusModeToolbar({
         onCommandPalette={onCommandPalette}
         onHelpGuide={onHelpGuide}
         onKeyboardShortcuts={onKeyboardShortcuts}
+        onMenuOpen={onMenuOpen}
         onReaderSettings={onReaderSettings}
         onTheatreMode={onTheatreMode}
       />

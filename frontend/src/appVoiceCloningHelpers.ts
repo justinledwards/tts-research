@@ -513,6 +513,14 @@ function voiceCloneSourceDetail(
   return "No source queued";
 }
 
+function voiceCloneCandidateDetail(profileSource: VoiceProfileSource | null): string {
+  const candidates = profileSource?.candidates ?? [];
+  const readyCandidates = candidates.filter((candidate) => candidate.status === "ready").length;
+  return candidates.length > 0
+    ? `${String(readyCandidates)} ready / ${String(candidates.length)} detected`
+    : "No candidates yet";
+}
+
 function voiceCloneDetail(
   profileSource: VoiceProfileSource | null,
   activeProfile: VoiceProfile | null,
@@ -645,16 +653,10 @@ export function resolveVoiceCloningActivity({
     (status === "complete" && activeProfile
       ? voiceProfileTargetReadinessText(activeProfile, activeEngineId)
       : sourceActivityMessage(profileSource));
-  const candidates = profileSource?.candidates ?? [];
-  const readyCandidates = candidates.filter((candidate) => candidate.status === "ready").length;
-  const candidateDetail =
-    candidates.length > 0
-      ? `${String(readyCandidates)} ready / ${String(candidates.length)} detected`
-      : "No candidates yet";
   return {
     activeProfile,
     actionLabel: resolveVoiceCloneActionLabel(status),
-    candidateDetail,
+    candidateDetail: voiceCloneCandidateDetail(profileSource),
     detail: voiceCloneDetail(profileSource, activeProfile, activeEngineId),
     elapsed: formatElapsed(profileSource?.createdAt ?? activeProfile?.createdAt, nowForCloneTiming),
     eta: voiceCloneEta(status),

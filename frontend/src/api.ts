@@ -1278,14 +1278,41 @@ export function subscribeToVoiceJob(
   onError: (error: Error) => void,
 ): () => void {
   const eventSource = new EventSource(`${apiBaseUrl}/api/voice-jobs/${id}/events`);
+  let closed = false;
+  let pollingTimer: ReturnType<typeof globalThis.setInterval> | null = null;
+
+  const stopPolling = () => {
+    if (pollingTimer) {
+      globalThis.clearInterval(pollingTimer);
+      pollingTimer = null;
+    }
+  };
+  const emitJob = (job: VoiceJob) => {
+    onJob(job);
+    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+      eventSource.close();
+      stopPolling();
+    }
+  };
+  const pollJob = () => {
+    void getVoiceJob(id)
+      .then(emitJob)
+      .catch((error: unknown) => {
+        onError(error instanceof Error ? error : new Error(String(error)));
+      });
+  };
+  const startPolling = () => {
+    if (pollingTimer || closed) {
+      return;
+    }
+    pollJob();
+    pollingTimer = globalThis.setInterval(pollJob, 2000);
+  };
 
   eventSource.addEventListener("voice-job", (event) => {
     const message = event as MessageEvent<string>;
     const job = JSON.parse(message.data) as VoiceJob;
-    onJob(job);
-    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
-      eventSource.close();
-    }
+    emitJob(job);
   });
 
   eventSource.addEventListener("voice-job-error", (event) => {
@@ -1297,10 +1324,14 @@ export function subscribeToVoiceJob(
   eventSource.addEventListener("error", () => {
     if (eventSource.readyState !== EventSource.CLOSED) {
       onError(new Error("Voice job progress stream disconnected"));
+      eventSource.close();
+      startPolling();
     }
   });
 
   return () => {
+    closed = true;
+    stopPolling();
     eventSource.close();
   };
 }

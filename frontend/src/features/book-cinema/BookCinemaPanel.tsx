@@ -87,11 +87,14 @@ import {
 } from "../source-lifecycle/sourceSelectors";
 import {
   READER_LINE_HEIGHT_RATIO,
+  READER_LINE_SPACING_CLASS,
   READER_MEASURE_CLASS,
   READER_SEEK_SECONDS,
+  READER_TEXT_SCALE_CLASS,
   READER_TEXT_SCALE_FONT_PX,
   normalizeReaderAccessibilitySettings,
   readerDataAttributes,
+  readerScrollBehavior,
   useReaderKeyboardControls,
   useReaderModalLifecycle,
   type ReaderAccessibilitySettings,
@@ -109,12 +112,14 @@ import {
   evaluateBookReadAlongInvariant,
   HighlightRenderer,
   ReadAlongResyncController,
+  readAlongAnchorForWord,
   readAlongInvariantStatusLabel,
   effectiveReadAlongPreferences,
   readAlongCalibrationOffsetMs,
   readAlongPreferenceDataAttributes,
   readAlongRuntimeStateLabel,
   readAlongVisualModeFromRuntime,
+  scrollReadAlongAnchor,
   type AlignmentStatus,
   type ReadAlongHighlightStyle,
   type ReadAlongHighlightVisualMode,
@@ -188,7 +193,7 @@ export type { ReaderAccessibilitySettings } from "../reader-accessibility";
 export type BookCinemaTextSize = ReaderTextScale;
 export type BookCinemaKeyboardCommand = ReaderKeyboardCommand;
 
-type BookCinemaMobilePanel = "narration" | "source" | "structure";
+type BookCinemaMobilePanel = "narration" | "source" | "structure" | "theatre";
 const BOOK_CINEMA_MOBILE_SHEET_ID = "book-cinema-mobile-sheet";
 
 export interface BookCinemaControlsProps {
@@ -1123,6 +1128,32 @@ export function BookCinemaOverlay({
     readerActiveWordIndex,
     runtimeHighlightCue?.token?.text,
   ]);
+  const readerSyncDataAttributes = useMemo(() => {
+    let timingSource = "fallback";
+    if (activeReadAlongTimingMapV2) {
+      timingSource = "highlight-map-v2";
+    } else if (activeReadAlongTimingMap) {
+      timingSource = "highlight-map-v1";
+    }
+    return {
+      "data-cinema-sync-active-word-index": readerActiveWordIndex,
+      "data-cinema-sync-active-word-text":
+        activeSpan?.text ?? runtimeHighlightCue?.token?.text ?? "",
+      "data-cinema-sync-job-id": activeBookJob?.id ?? "",
+      "data-cinema-sync-playback-cursor-sec": calibratedPlaybackCursorSec.toFixed(3),
+      "data-cinema-sync-runtime-state": readAlongRuntime.state,
+      "data-cinema-sync-timing-source": timingSource,
+    };
+  }, [
+    activeBookJob?.id,
+    activeReadAlongTimingMap,
+    activeReadAlongTimingMapV2,
+    activeSpan?.text,
+    calibratedPlaybackCursorSec,
+    readAlongRuntime.state,
+    readerActiveWordIndex,
+    runtimeHighlightCue?.token?.text,
+  ]);
   const sourceLifecycle = useMemo(
     () =>
       bookSourceLifecycleEnvelope(book, {
@@ -1155,6 +1186,7 @@ export function BookCinemaOverlay({
     [normalizedScopeKey, pointerScopeKey, scopeOptions],
   );
   const hasPlayableAudio = Boolean(activeBookJob && playbackControls.isAvailable);
+  const isActiveBookJobGenerating = isBookJobGenerating(activeBookJob);
   const createAudioScope = pointerOption?.scope ?? normalizedScope;
   const playbackState = deriveCinemaPlaybackState({
     hasAudio: Boolean(activeBookJob?.audioUrl),
@@ -1174,7 +1206,11 @@ export function BookCinemaOverlay({
     primaryTransportIcon = playbackControls.isPlaying ? <CinemaPauseIcon /> : <CinemaPlayIcon />;
   }
   const playbackTransportLabel = playbackControls.isPlaying ? "Pause" : "Play";
-  const primaryTransportLabel = bookPrimaryTransportLabel(playbackState, playbackTransportLabel);
+  const primaryTransportLabel = bookPrimaryTransportLabel({
+    activeBookJob,
+    playbackLabel: playbackTransportLabel,
+    playbackState,
+  });
   const primaryTransportStyle =
     playbackState === "preAudio"
       ? "bg-amber-400 text-zinc-950 shadow-amber-500/20"
@@ -1189,6 +1225,7 @@ export function BookCinemaOverlay({
   const canUseSkipControls = hasPlayableAudio && Boolean(playbackControls.skipBy);
   const canChangePlaybackRate = hasPlayableAudio && Boolean(playbackControls.setPlaybackRate);
   const displayedPlaybackRate = hasPlayableAudio ? playbackControls.playbackRate : 1;
+  const generationProgress = bookGenerationProgress(activeBookJob, progress?.progress ?? 0);
   const liveAnnouncementWordIndex = bookCinemaLiveWordIndex(
     runtimeHighlightCue,
     displayedActiveWordIndex,
@@ -1277,7 +1314,9 @@ export function BookCinemaOverlay({
   const handleRecentNavigate = (item: ReaderRecentPositionItem) => {
     onResumeProgress(item.progressItem, item.currentTimeSec);
   };
-  const structuralWarnings = scopeContent?.warnings ?? book.warnings ?? [];
+  const structuralWarnings = [
+    ...new Set([...(book.warnings ?? []), ...(scopeContent?.warnings ?? [])]),
+  ];
   const bookInspectorPanels = buildCinemaInspectorPanels([
     buildCinemaInspectorSection({
       children: (
@@ -1394,6 +1433,34 @@ export function BookCinemaOverlay({
             value={hasPlayableAudio ? "Generated" : "Not generated"}
           />
           <BookCinemaHealthRow label="Job status" value={activeBookJob?.status ?? "Pre-audio"} />
+          {activeBookJob ? (
+            <>
+              <BookCinemaHealthRow label="Job id" value={activeBookJob.id} />
+              <BookCinemaHealthRow
+                label="Terminal reason"
+                value={formatBookJobTerminalReason(activeBookJob.terminalReason)}
+              />
+              <BookCinemaHealthRow
+                label="Retryable"
+                value={activeBookJob.retriable ? "Yes" : "No"}
+              />
+              <BookCinemaHealthRow
+                label="Stage"
+                value={activeBookJob.progress.activeStage || activeBookJob.status}
+              />
+              <BookCinemaHealthRow
+                label="Segments"
+                value={formatBookJobSegmentProgress(activeBookJob)}
+              />
+              <BookCinemaHealthRow
+                label="Last event"
+                value={formatDateTime(activeBookJob.updatedAt)}
+              />
+              {activeBookJob.error ? (
+                <BookCinemaHealthRow label="Error" value={activeBookJob.error} />
+              ) : null}
+            </>
+          ) : null}
           <BookCinemaHealthRow label="Alignment" value={alignmentStatus.label} />
           <BookCinemaHealthRow label="Bookmarks" value={bookmarks.length.toLocaleString()} />
           {structuralWarnings.length > 0 ? (
@@ -1607,6 +1674,17 @@ export function BookCinemaOverlay({
     });
   }, [activeBookJob, hasPlayableAudio]);
 
+  let transportCurrentLabel = "0:00";
+  if (isActiveBookJobGenerating || playbackState === "generating") {
+    transportCurrentLabel = generationProgress.currentLabel;
+  } else if (progress) {
+    transportCurrentLabel = formatEstimatedDuration(progress.currentTimeSec * 1000);
+  }
+  const transportProgressRatio =
+    isActiveBookJobGenerating || playbackState === "generating"
+      ? generationProgress.ratio
+      : (progress?.progress ?? 0);
+
   const bookTransportModel: CinemaTransportModel = {
     bookmark: {
       disabled: !canBookmark,
@@ -1619,14 +1697,17 @@ export function BookCinemaOverlay({
         onChange={onAccessibilitySettingsChange}
       />
     ),
-    mobileMore: {
-      active: mobilePanel !== null,
-      controlsId: BOOK_CINEMA_MOBILE_SHEET_ID,
-      icon: <MoreTinyIcon />,
-      onClick: () => {
-        setMobilePanel((current) => (current ? null : "source"));
-      },
-    },
+    details:
+      playbackState === "degraded"
+        ? {
+            disabled: false,
+            label: "View details",
+            onClick: () => {
+              cinemaFocus.setMode("debug");
+              cinemaFocus.setActivePanelId("diagnostics");
+            },
+          }
+        : undefined,
     playbackRate: {
       disabled: !canChangePlaybackRate,
       value: displayedPlaybackRate,
@@ -1648,11 +1729,14 @@ export function BookCinemaOverlay({
       },
     },
     progress: {
-      currentLabel: progress ? formatEstimatedDuration(progress.currentTimeSec * 1000) : "0:00",
+      currentLabel: transportCurrentLabel,
       durationLabel: formatEstimatedDuration(scopeContent?.estimatedDurationMs),
-      ratio: progress?.progress ?? 0,
+      ratio: transportProgressRatio,
       waveform: activeBookJob ? (
-        <BookCinemaWaveform audioUrl={activeBookJob.audioUrl} progress={progress?.progress ?? 0} />
+        <BookCinemaWaveform
+          audioUrl={bookJobAudioUrl(activeBookJob)}
+          progress={progress?.progress ?? 0}
+        />
       ) : (
         <BookCinemaWaveformPlaceholder />
       ),
@@ -1692,8 +1776,12 @@ export function BookCinemaOverlay({
         playbackState,
         scopeContent,
       }),
-      title: bookTransportStateTitle(playbackState),
+      title: bookTransportStateTitle(playbackState, activeBookJob),
     },
+    estimatedReadyLabel:
+      isActiveBookJobGenerating || playbackState === "generating"
+        ? generationProgress.estimatedReadyLabel
+        : undefined,
   };
 
   return (
@@ -1714,6 +1802,7 @@ export function BookCinemaOverlay({
           phraseWordStart={phraseRange.start}
           highlightStyle={effectiveReadAlong.highlightStyle}
           scrollFollow={effectiveReadAlong.scrollFollow}
+          syncDataAttributes={readerSyncDataAttributes}
           readAlongVisualMode={readAlongVisualMode}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
         />
@@ -1771,7 +1860,7 @@ export function BookCinemaOverlay({
               scopeTitle={bookScopeLabel(normalizedScope)}
               sourceLifecycle={sourceLifecycle}
               sourceTitle={bookSourceName(book)}
-              stateLabel={bookTransportStateTitle(playbackState)}
+              stateLabel={bookTransportStateTitle(playbackState, activeBookJob)}
               surfaceName={book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}
               variant="bar"
             />
@@ -1786,6 +1875,9 @@ export function BookCinemaOverlay({
                 onCommandPalette={onCommandPaletteOpen}
                 onHelpGuide={onHelpOpen}
                 onKeyboardShortcuts={onShortcutCheatSheetOpen}
+                onMenuOpen={() => {
+                  setSettingsOpen(false);
+                }}
                 onModeChange={cinemaFocus.setMode}
                 onReaderSettings={() => {
                   setSettingsOpen(true);
@@ -1794,7 +1886,13 @@ export function BookCinemaOverlay({
               />
             </div>
             {timingConfidence.isDegraded ? (
-              <BookCinemaTimingStatusChip display={timingConfidence} />
+              <BookCinemaTimingStatusChip
+                display={timingConfidence}
+                onClick={() => {
+                  cinemaFocus.setMode("debug");
+                  cinemaFocus.setActivePanelId("diagnostics");
+                }}
+              />
             ) : null}
             {isResumeRestoring ? <BookCinemaResumeChip /> : null}
             <div className="flex shrink-0 items-center gap-2">
@@ -1840,6 +1938,21 @@ export function BookCinemaOverlay({
                   </option>
                 ))}
               </select>
+              <button
+                aria-label="More"
+                aria-controls={BOOK_CINEMA_MOBILE_SHEET_ID}
+                aria-expanded={mobilePanel !== null}
+                className="cinema-touch-target inline-flex h-11 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border lg:hidden"
+                data-testid="ui-action-book-cinema-mobile-more"
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setMobilePanel((current) => (current ? null : "theatre"));
+                }}
+                type="button"
+              >
+                <MoreTinyIcon />
+                <span className="hidden sm:inline">More</span>
+              </button>
               <button
                 className="cinema-touch-target hidden h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-[var(--vs-surface)] vs-border sm:inline-flex"
                 onClick={() => {
@@ -1913,6 +2026,7 @@ export function BookCinemaOverlay({
             onImport={onImport}
             onInspectStructure={onInspectStructure}
             onMobilePanelChange={setMobilePanel}
+            onTheatreMode={handleTheatreMode}
             onSelectBook={onSelectBook}
             onResumeProgress={onResumeProgress}
             onRecentNavigate={handleRecentNavigate}
@@ -1932,38 +2046,72 @@ export function BookCinemaOverlay({
   );
 }
 
-function bookPrimaryTransportLabel(
-  playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
-  playbackLabel: string,
-): string {
+export function bookPrimaryTransportLabel({
+  activeBookJob,
+  playbackLabel,
+  playbackState,
+}: Readonly<{
+  activeBookJob: VoiceJob | null;
+  playbackLabel: string;
+  playbackState: ReturnType<typeof deriveCinemaPlaybackState>;
+}>): string {
   if (playbackState === "preAudio") {
     return "Create audio";
   }
   if (playbackState === "generating") {
-    return "Creating audio";
+    return bookJobPlayableSegments(activeBookJob) > 0
+      ? "Creating audio"
+      : "Preparing first segment";
   }
   if (playbackState === "degraded") {
+    if (activeBookJob?.terminalReason === "provider_timeout") {
+      return "Try again";
+    }
+    if (activeBookJob?.terminalReason === "provider_failed") {
+      return "Try again";
+    }
+    if (activeBookJob?.terminalReason === "validation_failed") {
+      return "Try again";
+    }
+    if (activeBookJob?.terminalReason === "system_cancelled") {
+      return "Try again";
+    }
     return playbackActionLabel("rebuildAudio");
   }
   return playbackLabel === "Play" ? playbackActionLabel("play") : playbackLabel;
 }
 
-function bookTransportStateTitle(
+export function bookTransportStateTitle(
   playbackState: ReturnType<typeof deriveCinemaPlaybackState>,
+  activeBookJob: VoiceJob | null,
 ): string {
   if (playbackState === "preAudio") {
     return "Ready to create audio";
   }
-  if (playbackState === "generating") {
+  if (playbackState === "generating" || isBookJobGenerating(activeBookJob)) {
+    if (bookJobPlayableSegments(activeBookJob) <= 0) {
+      return "Preparing first segment";
+    }
     return "Creating audio";
   }
   if (playbackState === "degraded") {
+    if (activeBookJob?.status === "cancelled") {
+      return activeBookJob.terminalReason === "user_cancelled"
+        ? "Generation cancelled"
+        : "Generation stopped";
+    }
+    if (activeBookJob?.status === "failed") {
+      if (activeBookJob.terminalReason === "provider_timeout") {
+        return "Audio generation timed out";
+      }
+      return "Audio generation failed";
+    }
     return "Audio needs attention";
   }
   return "Audio ready";
 }
 
-function bookTransportStateDetail({
+export function bookTransportStateDetail({
   activeBookJob,
   createAudioScope,
   playbackState,
@@ -1979,19 +2127,139 @@ function bookTransportStateDetail({
   if (playbackState === "preAudio") {
     return `${scopeLabel} is ready to read. Create audio for synchronized playback, estimated ${estimate}.`;
   }
-  if (playbackState === "generating") {
-    return `${scopeLabel} is being narrated. You can keep reading while audio is prepared.`;
+  if (playbackState === "generating" || isBookJobGenerating(activeBookJob)) {
+    const ready = bookJobPlayableSegments(activeBookJob);
+    const segmentProgress = activeBookJob ? formatBookJobSegmentProgress(activeBookJob) : "pending";
+    if (ready <= 0) {
+      return `${scopeLabel} narration is preparing its first playable segment. Progress: ${segmentProgress}.`;
+    }
+    return `${scopeLabel} is playable while narration continues. ${ready.toLocaleString()} segments are ready.`;
   }
   if (playbackState === "degraded") {
-    if (activeBookJob?.status === "failed") {
-      return activeBookJob.error ?? `${scopeLabel} generation failed. Rebuild audio when ready.`;
-    }
-    if (activeBookJob?.status === "cancelled") {
-      return `${scopeLabel} generation was cancelled. Rebuild audio when ready.`;
-    }
-    return `${scopeLabel} has audio metadata, but playback is not available yet. Rebuild if it does not recover.`;
+    return degradedBookTransportStateDetail(activeBookJob, scopeLabel);
   }
   return `${scopeLabel} has generated audio.`;
+}
+
+function degradedBookTransportStateDetail(job: VoiceJob | null, scopeLabel: string): string {
+  if (job?.status === "failed") {
+    if (job.terminalReason === "provider_timeout") {
+      return (
+        job.error ??
+        `${scopeLabel} generation timed out before completion. Try again with the same scope and voice.`
+      );
+    }
+    if (job.terminalReason === "validation_failed") {
+      return (
+        job.error ??
+        `${scopeLabel} audio did not pass validation. Try again or inspect timing details.`
+      );
+    }
+    return job.error ?? `${scopeLabel} generation failed. Try again when ready.`;
+  }
+  if (job?.status === "cancelled") {
+    if (job.terminalReason === "user_cancelled") {
+      return `${scopeLabel} generation was cancelled by request. Rebuild audio when ready.`;
+    }
+    return `${scopeLabel} generation stopped before audio was ready. Try again when ready.`;
+  }
+  return `${scopeLabel} has audio metadata, but playback is not available yet. Rebuild if it does not recover.`;
+}
+
+function isBookJobGenerating(job: VoiceJob | null): boolean {
+  return Boolean(
+    job && ["queued", "optimizing", "synthesizing", "checking", "retrying"].includes(job.status),
+  );
+}
+
+function bookJobPlayableSegments(job: VoiceJob | null): number {
+  return Math.max(0, job?.audioReadySegments ?? 0);
+}
+
+function bookJobAudioUrl(job: VoiceJob): string {
+  if (job.audioUrl.length > 0) {
+    return job.audioUrl;
+  }
+  return job.audioPartialUrl ?? "";
+}
+
+function bookGenerationProgress(
+  activeBookJob: VoiceJob | null,
+  fallbackRatio: number,
+): { currentLabel: string; estimatedReadyLabel: string; ratio: number } {
+  const current = activeBookJob ? activeBookJob.retries.currentSegment : 0;
+  const total = activeBookJob ? activeBookJob.retries.totalSegments : 0;
+  const ready = bookJobPlayableSegments(activeBookJob);
+  if (total > 0) {
+    const clampedCurrent = Math.min(total, Math.max(0, current));
+    let currentLabel = `Preparing first segment · ${String(total)} segments`;
+    if (ready > 0) {
+      currentLabel = `${ready.toLocaleString()} ready · segment ${String(
+        clampedCurrent,
+      )} of ${String(total)}`;
+    } else if (clampedCurrent > 0) {
+      currentLabel = `Preparing first segment · ${String(clampedCurrent)} of ${String(total)}`;
+    }
+    return {
+      currentLabel,
+      estimatedReadyLabel: `${String(total)} segments`,
+      ratio: clampedCurrent / total,
+    };
+  }
+  return {
+    currentLabel: "Preparing segments",
+    estimatedReadyLabel: "Estimating",
+    ratio: fallbackRatio,
+  };
+}
+
+function formatBookJobSegmentProgress(job: VoiceJob): string {
+  const progressCurrent = job.progress.currentSegment;
+  const progressTotal = job.progress.totalSegments;
+  const current =
+    typeof progressCurrent === "number" && progressCurrent > 0
+      ? progressCurrent
+      : job.retries.currentSegment;
+  const total =
+    typeof progressTotal === "number" && progressTotal > 0
+      ? progressTotal
+      : job.retries.totalSegments;
+  if (total > 0) {
+    return `${Math.min(total, Math.max(0, current)).toLocaleString()} of ${total.toLocaleString()}`;
+  }
+  return "Not segmented yet";
+}
+
+function formatBookJobTerminalReason(reason: VoiceJob["terminalReason"]): string {
+  switch (reason) {
+    case "user_cancelled": {
+      return "User cancelled";
+    }
+    case "system_cancelled": {
+      return "System cancelled";
+    }
+    case "provider_failed": {
+      return "Provider failed";
+    }
+    case "provider_timeout": {
+      return "Provider timed out";
+    }
+    case "validation_failed": {
+      return "Validation failed";
+    }
+    case "superseded": {
+      return "Superseded";
+    }
+    case "metadata_failed": {
+      return "Metadata failed";
+    }
+    case "configuration_failed": {
+      return "Configuration failed";
+    }
+    default: {
+      return "None";
+    }
+  }
 }
 
 function BookTransportSettingPills({ items }: Readonly<{ items: string[] }>) {
@@ -2283,6 +2551,7 @@ function BookCinemaMobileSheet({
   onImport,
   onInspectStructure,
   onMobilePanelChange,
+  onTheatreMode,
   onOutlineNavigate,
   onRecentNavigate,
   onSelectBook,
@@ -2308,6 +2577,7 @@ function BookCinemaMobileSheet({
   onImport: (files: File[], options: BookSourceImportOptions) => Promise<void>;
   onInspectStructure: (book: BookSource) => void;
   onMobilePanelChange: (panel: BookCinemaMobilePanel | null) => void;
+  onTheatreMode: () => void;
   onOutlineNavigate: (item: ReaderOutlineItem<BookScope>) => void;
   onRecentNavigate: (item: ReaderRecentPositionItem) => void;
   onSelectBook: (bookId: string) => void;
@@ -2334,6 +2604,27 @@ function BookCinemaMobileSheet({
     returnToCanvas();
   };
   const panels: CinemaMobilePanelSpec<BookCinemaMobilePanel>[] = [
+    {
+      children: (
+        <div className="grid gap-3 text-sm">
+          <p className="leading-6 vs-muted">
+            Switch to the reader-first Theatre layout for focused follow-along.
+          </p>
+          <button
+            className="cinema-touch-target rounded-md border border-orange-300 bg-orange-500/10 px-3 font-semibold text-orange-500"
+            data-testid="ui-action-book-cinema-mobile-theatre"
+            onClick={() => {
+              onTheatreMode();
+            }}
+            type="button"
+          >
+            Enter Theatre
+          </button>
+        </div>
+      ),
+      id: "theatre",
+      label: "Theatre",
+    },
     {
       children: (
         <div className="grid gap-4 text-sm">
@@ -2576,20 +2867,30 @@ function bookCinemaStatusLabel({
   if (["queued", "optimizing", "synthesizing", "checking", "retrying"].includes(job.status)) {
     return "Creating";
   }
-  if (job.status === "failed" || job.status === "cancelled") {
-    return "Needs audio";
+  if (job.status === "cancelled") {
+    return job.terminalReason === "user_cancelled" ? "Cancelled" : "Stopped";
+  }
+  if (job.status === "failed") {
+    return "Try again";
   }
   return job.status;
 }
 
 export function BookCinemaTimingStatusChip({
   display,
-}: Readonly<{ display: ReturnType<typeof resolveTimingConfidenceDisplay> }>) {
+  onClick,
+}: Readonly<{ display: ReturnType<typeof resolveTimingConfidenceDisplay>; onClick?: () => void }>) {
+  const className =
+    "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-amber-400/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-500 sm:px-3 sm:py-1.5 sm:text-sm";
+  if (onClick) {
+    return (
+      <button className={className} onClick={onClick} title={display.detail} type="button">
+        {display.label}
+      </button>
+    );
+  }
   return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-amber-400/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-500 sm:px-3 sm:py-1.5 sm:text-sm"
-      title={display.detail}
-    >
+    <span className={className} title={display.detail}>
       {display.label}
     </span>
   );
@@ -2858,6 +3159,7 @@ function BookCinemaReaderStage({
   phraseWordStart,
   readAlongVisualMode,
   scrollFollow,
+  syncDataAttributes,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -2874,8 +3176,10 @@ function BookCinemaReaderStage({
   phraseWordStart?: number;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   scrollFollow: ReadAlongScrollFollow;
+  syncDataAttributes: Record<string, string | number>;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
+  const presentation = bookCinemaReaderPresentation();
   if (book.kind === "markdown") {
     return (
       <Suspense fallback={<BookDocumentReaderSkeleton book={book} scope={scope} />}>
@@ -2899,6 +3203,28 @@ function BookCinemaReaderStage({
       </Suspense>
     );
   }
+  if (presentation === "follow") {
+    return (
+      <BookFollowReaderStage
+        activeWordIndex={activeWordIndex}
+        book={book}
+        canvasFirst={canvasFirst}
+        scope={scope}
+        scopedSpans={scopedSpans}
+        scopedText={scopedText}
+        scopeContent={scopeContent}
+        accessibilitySettings={accessibilitySettings}
+        highlightStyle={highlightStyle}
+        pointerLabel={pointerLabel}
+        phraseWordEnd={phraseWordEnd}
+        phraseWordStart={phraseWordStart}
+        readAlongVisualMode={readAlongVisualMode}
+        scrollFollow={scrollFollow}
+        syncDataAttributes={syncDataAttributes}
+        onAccessibilitySettingsChange={onAccessibilitySettingsChange}
+      />
+    );
+  }
   return (
     <BookPagedReaderStage
       activeWordIndex={activeWordIndex}
@@ -2914,9 +3240,267 @@ function BookCinemaReaderStage({
       phraseWordStart={phraseWordStart}
       readAlongVisualMode={readAlongVisualMode}
       scrollFollow={scrollFollow}
+      syncDataAttributes={syncDataAttributes}
       onAccessibilitySettingsChange={onAccessibilitySettingsChange}
     />
   );
+}
+
+type BookCinemaReaderPresentation = "follow" | "pages";
+
+function bookCinemaReaderPresentation(): BookCinemaReaderPresentation {
+  return "follow";
+}
+
+function BookFollowReaderStage({
+  activeWordIndex,
+  book,
+  canvasFirst,
+  scope,
+  scopedSpans,
+  scopedText,
+  scopeContent,
+  accessibilitySettings,
+  highlightStyle,
+  pointerLabel,
+  phraseWordEnd,
+  phraseWordStart,
+  readAlongVisualMode,
+  scrollFollow,
+  syncDataAttributes,
+  onAccessibilitySettingsChange,
+}: Readonly<{
+  activeWordIndex: number;
+  book: BookSource;
+  canvasFirst: boolean;
+  scope: BookScope;
+  scopedSpans: NonNullable<BookSource["wordSpans"]>;
+  scopedText: string;
+  scopeContent: BookSourceScopeContent | null;
+  accessibilitySettings: ReaderAccessibilitySettings;
+  highlightStyle: ReadAlongHighlightStyle;
+  pointerLabel: string | null;
+  phraseWordEnd?: number;
+  phraseWordStart?: number;
+  readAlongVisualMode: ReadAlongHighlightVisualMode;
+  scrollFollow: ReadAlongScrollFollow;
+  syncDataAttributes: Record<string, string | number>;
+  onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
+}>) {
+  const readerRef = useRef<HTMLDivElement | null>(null);
+  const activeSpan = scopedSpans.find((span) => span.index === activeWordIndex) ?? null;
+  const activeBlock = bookCinemaActiveBlock(
+    bookPageBlocksFromScopeContent(scopeContent),
+    activeSpan,
+  );
+  const followPage = useMemo<BookPage | null>(() => {
+    if (scopedSpans.length === 0) {
+      return null;
+    }
+    const firstSpan = scopedSpans[0];
+    const lastSpan = scopedSpans.at(-1) ?? firstSpan;
+    return {
+      endWordIndex: lastSpan.index,
+      index: 0,
+      spans: scopedSpans,
+      startWordIndex: firstSpan.index,
+    };
+  }, [scopedSpans]);
+  const blocks = useMemo(
+    () =>
+      bookPageStructuredBlocks({
+        blocks: bookPageBlocksFromScopeContent(scopeContent),
+        page: followPage,
+        scopeKey: bookScopeKey(scope),
+        scopedText,
+        sourceId: book.id,
+      }),
+    [book.id, followPage, scope, scopedText, scopeContent],
+  );
+  const visibleFallback = scopedText.split(/\s+/).filter(Boolean).slice(0, 180).join(" ");
+  const textClass = `${READER_TEXT_SCALE_CLASS[accessibilitySettings.textScale]} ${
+    READER_LINE_SPACING_CLASS[accessibilitySettings.lineSpacing]
+  }`;
+  const scrollBehavior = readerScrollBehavior(accessibilitySettings);
+
+  useEffect(() => {
+    if (activeWordIndex < 0) {
+      return;
+    }
+    scrollReadAlongAnchor(
+      readerRef.current,
+      readAlongAnchorForWord({
+        fallbackTextQuote: activeSpan?.text,
+        nodeId: activeBlock?.id,
+        pageIndex: activeSpan?.pageIndex,
+        sourceId: book.id,
+        wordIndex: activeWordIndex,
+      }),
+      {
+        autoFollow: true,
+        fallbackSelectors: [
+          '[aria-current="true"][data-readalong-word-index]',
+          ".book-cinema-word-active",
+          ".book-cinema-word-phrase",
+        ],
+        mode: readAlongVisualMode,
+        scrollFollow,
+        settings: accessibilitySettings,
+        surface: "book",
+      },
+    );
+  }, [
+    accessibilitySettings,
+    activeBlock?.id,
+    activeSpan?.pageIndex,
+    activeSpan?.text,
+    activeWordIndex,
+    book.id,
+    readAlongVisualMode,
+    scrollFollow,
+  ]);
+
+  useEffect(() => {
+    const label = pointerLabel?.trim();
+    if (!label) {
+      return;
+    }
+    const heading = [...(readerRef.current?.querySelectorAll("h1,h2,h3,h4,h5,h6") ?? [])].find(
+      (element) => element.textContent.trim() === label,
+    );
+    heading?.scrollIntoView({ block: "start", inline: "nearest", behavior: scrollBehavior });
+  }, [pointerLabel, scrollBehavior]);
+
+  return (
+    <ReaderCanvasFrame
+      canvasFirst={canvasFirst}
+      contentClassName="book-cinema-follow-reader min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 lg:px-12"
+      contentDataAttributes={{
+        "data-book-reader-presentation": "follow",
+        "data-book-pages-per-spread": 1,
+        "data-readalong-highlight-style": highlightStyle,
+        "data-readalong-scroll-follow": scrollFollow,
+        ...syncDataAttributes,
+      }}
+      contentRef={readerRef}
+      measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
+      toolbar={
+        <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
+          <BookPageHeading book={book} scope={scope} />
+          <div className="flex items-center gap-2 text-sm">
+            <span className="vs-muted hidden text-xs font-semibold uppercase tracking-[0.16em] sm:inline">
+              Follow
+            </span>
+            <BookReaderTextButton
+              label="Decrease text size"
+              onClick={() => {
+                onAccessibilitySettingsChange({
+                  ...accessibilitySettings,
+                  textScale: decreaseBookTextSize(accessibilitySettings.textScale),
+                });
+              }}
+            >
+              A-
+            </BookReaderTextButton>
+            <BookReaderTextButton
+              label="Increase text size"
+              onClick={() => {
+                onAccessibilitySettingsChange({
+                  ...accessibilitySettings,
+                  textScale: increaseBookTextSize(accessibilitySettings.textScale),
+                });
+              }}
+            >
+              A+
+            </BookReaderTextButton>
+          </div>
+        </div>
+      }
+    >
+      <div className={`book-cinema-follow-copy mx-auto ${textClass}`}>
+        {blocks.length > 0 ? (
+          blocks.map((block) => (
+            <BookFollowReaderBlock
+              activeWordIndex={activeWordIndex}
+              block={block}
+              highlightStyle={highlightStyle}
+              key={block.id}
+              phraseWordEnd={phraseWordEnd}
+              phraseWordStart={phraseWordStart}
+              readAlongVisualMode={readAlongVisualMode}
+              sourceId={book.id}
+            />
+          ))
+        ) : (
+          <p className="book-cinema-follow-block book-cinema-follow-block--body">
+            {visibleFallback}
+          </p>
+        )}
+      </div>
+    </ReaderCanvasFrame>
+  );
+}
+
+function BookReaderTextButton({
+  children,
+  label,
+  onClick,
+}: Readonly<{ children: ReactNode; label: string; onClick: () => void }>) {
+  return (
+    <button
+      aria-label={label}
+      className="cinema-touch-target rounded-md border px-3 text-base font-semibold vs-border"
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
+function BookFollowReaderBlock({
+  activeWordIndex,
+  block,
+  highlightStyle,
+  phraseWordEnd,
+  phraseWordStart,
+  readAlongVisualMode,
+  sourceId,
+}: Readonly<{
+  activeWordIndex: number;
+  block: BookPageStructuredBlock;
+  highlightStyle: ReadAlongHighlightStyle;
+  phraseWordEnd?: number;
+  phraseWordStart?: number;
+  readAlongVisualMode: ReadAlongHighlightVisualMode;
+  sourceId: string;
+}>) {
+  const BlockElement = bookReaderPageBlockElement(block.kind);
+  return (
+    <BlockElement
+      className={bookFollowReaderBlockClassName(block.kind)}
+      data-book-page-block-kind={block.kind}
+      data-readalong-node-id={block.sourceBlockId}
+      id={block.sourceBlockId ? `cinema-block-${block.sourceBlockId}` : undefined}
+    >
+      <HighlightRenderer
+        activeWordIndex={activeWordIndex}
+        highlightStyle={highlightStyle}
+        mode={readAlongVisualMode}
+        nodeId={block.sourceBlockId}
+        phraseWordEnd={phraseWordEnd}
+        phraseWordStart={phraseWordStart}
+        sourceId={sourceId}
+        surface="book"
+        tokens={block.tokens}
+      />
+    </BlockElement>
+  );
+}
+
+function bookFollowReaderBlockClassName(kind: BookPageStructuredBlock["kind"]): string {
+  const normalizedKind = BOOK_PAGE_BLOCK_STYLE_KINDS.has(kind) ? kind : "body";
+  return `book-cinema-follow-block book-cinema-follow-block--${normalizedKind}`;
 }
 
 function BookPagedReaderStage({
@@ -2933,6 +3517,7 @@ function BookPagedReaderStage({
   phraseWordStart,
   readAlongVisualMode,
   scrollFollow,
+  syncDataAttributes,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -2948,17 +3533,92 @@ function BookPagedReaderStage({
   phraseWordStart?: number;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   scrollFollow: ReadAlongScrollFollow;
+  syncDataAttributes: Record<string, string | number>;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const pageMetrics = useBookPageMetrics(accessibilitySettings);
+  const [pageFit, setPageFit] = useState({
+    fallbackScroll: false,
+    key: "",
+    wordsPerPage: pageMetrics.wordsPerPage,
+  });
+  const pageFitKey = [
+    book.id,
+    bookScopeKey(scope),
+    pageMetrics.pagesPerSpread,
+    pageMetrics.wordsPerPage,
+    pageMetrics.fontSizePx,
+    pageMetrics.lineHeightRatio,
+  ].join(":");
+  useEffect(() => {
+    setPageFit({
+      fallbackScroll: false,
+      key: pageFitKey,
+      wordsPerPage: pageMetrics.wordsPerPage,
+    });
+  }, [pageFitKey, pageMetrics.wordsPerPage]);
+  const fittedWordsPerPage =
+    pageFit.key === pageFitKey
+      ? Math.min(pageFit.wordsPerPage, pageMetrics.wordsPerPage)
+      : pageMetrics.wordsPerPage;
   const pagination = useMemo(
     () =>
       paginateBookSpans(scopedSpans, activeWordIndex, {
         pagesPerSpread: pageMetrics.pagesPerSpread,
-        wordsPerPage: pageMetrics.wordsPerPage,
+        wordsPerPage: fittedWordsPerPage,
       }),
-    [activeWordIndex, pageMetrics.pagesPerSpread, pageMetrics.wordsPerPage, scopedSpans],
+    [activeWordIndex, fittedWordsPerPage, pageMetrics.pagesPerSpread, scopedSpans],
   );
+  const renderedPageFitKey = pagination.pages
+    .map((page) => `${page.startWordIndex.toString()}-${page.endWordIndex.toString()}`)
+    .join("|");
+  useEffect(() => {
+    const element = pageMetrics.element;
+    if (!element) {
+      return;
+    }
+    if (!renderedPageFitKey) {
+      return;
+    }
+    const copies = [...element.querySelectorAll<HTMLElement>(".book-cinema-page-copy")].filter(
+      (copy) => copy.offsetParent !== null,
+    );
+    if (copies.length === 0) {
+      return;
+    }
+    const overflowing = copies.some((copy) => copy.scrollHeight > copy.clientHeight + 2);
+    for (const copy of copies) {
+      const hiddenOverflow = copy.scrollHeight > copy.clientHeight + 2 && !pageFit.fallbackScroll;
+      copy.dataset.bookPageOverflow = hiddenOverflow ? "true" : "false";
+    }
+    if (!overflowing) {
+      return;
+    }
+    const minimumWordsPerPage = 18;
+    if (fittedWordsPerPage > minimumWordsPerPage) {
+      setPageFit((current) => {
+        if (current.key !== pageFitKey) {
+          return current;
+        }
+        return {
+          ...current,
+          wordsPerPage: Math.max(minimumWordsPerPage, Math.floor(fittedWordsPerPage * 0.86)),
+        };
+      });
+      return;
+    }
+    if (!pageFit.fallbackScroll) {
+      setPageFit((current) =>
+        current.key === pageFitKey ? { ...current, fallbackScroll: true } : current,
+      );
+    }
+  }, [
+    fittedWordsPerPage,
+    pageFit.fallbackScroll,
+    pageFitKey,
+    pageMetrics.element,
+    renderedPageFitKey,
+  ]);
   const displayedPages: (BookPage | null)[] =
     pagination.pages.length > 0 ? pagination.pages : [null];
   const pagesPerSpread = pagination.totalPages <= 1 ? 1 : pagination.pagesPerSpread;
@@ -2969,7 +3629,10 @@ function BookPagedReaderStage({
       contentClassName={`book-cinema-spread grid min-h-0 flex-1 overflow-hidden ${
         pagesPerSpread === 2 ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"
       }`}
-      contentDataAttributes={{ "data-book-pages-per-spread": pagesPerSpread }}
+      contentDataAttributes={{
+        "data-book-pages-per-spread": pagesPerSpread,
+        ...syncDataAttributes,
+      }}
       contentRef={pageMetrics.ref}
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={
@@ -2992,6 +3655,7 @@ function BookPagedReaderStage({
           isActivePage={isReaderPageActive(page, activeWordIndex)}
           isRightPage={index === 1}
           lineHeightRatio={pageMetrics.lineHeightRatio}
+          allowPageScroll={pageFit.fallbackScroll}
           key={`${book.id}-${bookScopeKey(scope)}-${String(page?.index ?? "fallback")}`}
           page={page}
           phraseWordEnd={phraseWordEnd}
@@ -3013,6 +3677,7 @@ function BookPagedReaderStage({
           isActivePage={false}
           isRightPage
           lineHeightRatio={pageMetrics.lineHeightRatio}
+          allowPageScroll={pageFit.fallbackScroll}
           page={null}
           phraseWordEnd={phraseWordEnd}
           phraseWordStart={phraseWordStart}
@@ -3102,6 +3767,7 @@ function BookDocumentReaderSkeleton({
 }
 
 function BookReaderPage({
+  allowPageScroll,
   activeWordIndex,
   book,
   fontSizePx,
@@ -3119,6 +3785,7 @@ function BookReaderPage({
   scopeContent,
   totalPages,
 }: Readonly<{
+  allowPageScroll?: boolean;
   activeWordIndex: number;
   book: BookSource;
   fontSizePx: number;
@@ -3164,7 +3831,9 @@ function BookReaderPage({
         <span>{pageLabel}</span>
       </header>
       <div
-        className="book-cinema-page-copy"
+        className={`book-cinema-page-copy ${
+          allowPageScroll ? "book-cinema-page-copy--fit-scroll" : ""
+        }`}
         style={
           {
             "--book-page-font-size": `${String(fontSizePx)}px`,
@@ -3271,6 +3940,7 @@ const BOOK_PAGE_BLOCK_STYLE_KINDS = new Set<BookPageStructuredBlock["kind"]>([
 ]);
 
 function useBookPageMetrics(settings: ReaderAccessibilitySettings): {
+  element: HTMLDivElement | null;
   fontSizePx: number;
   lineHeightRatio: number;
   pagesPerSpread: 1 | 2;
@@ -3306,6 +3976,7 @@ function useBookPageMetrics(settings: ReaderAccessibilitySettings): {
     const baseFontPx = READER_TEXT_SCALE_FONT_PX[settings.textScale];
     const lineHeightRatio = READER_LINE_HEIGHT_RATIO[settings.lineSpacing];
     return {
+      element,
       fontSizePx: baseFontPx,
       lineHeightRatio,
       pagesPerSpread,
@@ -3318,7 +3989,7 @@ function useBookPageMetrics(settings: ReaderAccessibilitySettings): {
         viewportWidth,
       }),
     };
-  }, [settings.lineSpacing, settings.textScale, size.height, size.width]);
+  }, [element, settings.lineSpacing, settings.textScale, size.height, size.width]);
 }
 
 function fallbackBookViewportWidth(): number {
@@ -3336,7 +4007,7 @@ function isReaderPageActive(page: BookPage | null, activeWordIndex: number): boo
 }
 
 function bookCinemaActiveBlock(
-  blocks: NarrationBlock[],
+  blocks: readonly NarrationBlock[],
   activeSpan: BookSourceWordSpan | null,
 ): NarrationBlock | null {
   if (blocks.length === 0) {

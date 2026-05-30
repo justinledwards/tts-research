@@ -259,7 +259,7 @@ func (service *Service) bookSourceScopeContent(
 	}
 	spans := bookScopeSpans(book, scope)
 	section := findBookSectionForScope(book, scope)
-	warnings := make([]string, 0)
+	warnings := append([]string(nil), book.Warnings...)
 	if section != nil {
 		warnings = append(warnings, section.Warnings...)
 	}

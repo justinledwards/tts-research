@@ -135,6 +135,22 @@ export function deriveCinemaPlaybackState(input: CinemaPlaybackStateInput): Cine
   if (input.degraded || status === "failed" || status === "cancelled") {
     return "degraded";
   }
+  if (input.hasAudio || input.isPlayable) {
+    if (!input.isPlayable) {
+      return "degraded";
+    }
+    if (input.isPlaying) {
+      return "playing";
+    }
+    const progressRatio = normalizePlaybackProgressRatio(input.progressRatio);
+    if (progressRatio >= 0.995) {
+      return "completed";
+    }
+    if (progressRatio > 0) {
+      return "paused";
+    }
+    return "playable";
+  }
   if (
     input.isGenerating ||
     status === "queued" ||
@@ -145,23 +161,7 @@ export function deriveCinemaPlaybackState(input: CinemaPlaybackStateInput): Cine
   ) {
     return "generating";
   }
-  if (!input.hasAudio && !input.isPlayable) {
-    return "preAudio";
-  }
-  if (!input.isPlayable) {
-    return "degraded";
-  }
-  if (input.isPlaying) {
-    return "playing";
-  }
-  const progressRatio = normalizePlaybackProgressRatio(input.progressRatio);
-  if (progressRatio >= 0.995) {
-    return "completed";
-  }
-  if (progressRatio > 0) {
-    return "paused";
-  }
-  return "playable";
+  return "preAudio";
 }
 
 export function normalizeCinemaRendererLifecycleState(

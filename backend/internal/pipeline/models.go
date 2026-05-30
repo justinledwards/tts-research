@@ -25,6 +25,19 @@ const (
 	JobStatusCancelled    JobStatus = "cancelled"
 )
 
+type JobTerminalReason string
+
+const (
+	JobTerminalReasonUserCancelled       JobTerminalReason = "user_cancelled"
+	JobTerminalReasonSystemCancelled     JobTerminalReason = "system_cancelled"
+	JobTerminalReasonProviderFailed      JobTerminalReason = "provider_failed"
+	JobTerminalReasonProviderTimeout     JobTerminalReason = "provider_timeout"
+	JobTerminalReasonValidationFailed    JobTerminalReason = "validation_failed"
+	JobTerminalReasonSuperseded          JobTerminalReason = "superseded"
+	JobTerminalReasonMetadataFailed      JobTerminalReason = "metadata_failed"
+	JobTerminalReasonConfigurationFailed JobTerminalReason = "configuration_failed"
+)
+
 type StageStatus string
 
 const (

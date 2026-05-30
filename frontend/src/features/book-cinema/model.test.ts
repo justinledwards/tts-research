@@ -227,6 +227,32 @@ describe("Book Cinema helpers", () => {
     });
   });
 
+  it("estimates the active word inside phrase-only v2 timing instead of pinning the phrase start", () => {
+    const spans = indexedSpans("Alpha beta gamma delta", 80);
+    const map = highlightMapV2([
+      v2Entry({
+        audioEndMs: 4000,
+        audioStartMs: 0,
+        level: "phrase",
+        readingPosition: { textQuote: "Alpha" },
+        sourceWordIndex: 80,
+        spokenText: "Alpha beta gamma delta",
+      }),
+    ]);
+
+    expect(
+      resolveBookTimingMapV2WordIndexes({
+        map,
+        playbackCursorSec: 2.2,
+        scopedSpans: spans,
+      }),
+    ).toEqual({
+      activeWordIndex: 82,
+      phraseWordEnd: 83,
+      phraseWordStart: 80,
+    });
+  });
+
   it("maps v2 token indexes as scoped narration ordinals before accepting source indexes", () => {
     const spans = indexedSpans("one two three four", 40);
     const ordinalMap = highlightMapV2([

@@ -176,7 +176,7 @@ async function main() {
     if (responsiveCinemaOnly) {
       const book = await uploadBook(project.id, fixtures.epub);
       verifyBook(book, "epub");
-      const scope = pickNarrationScope(book);
+      const scope = { label: "Full book", type: "book" };
       const scopeContent = await apiJson(`/api/book-sources/${book.id}/scope?${scopeQuery(scope)}`);
       const bookJob = await waitForJob(
         (await createBookNarrationJob(project.id, book.id, scope)).id,
@@ -1012,6 +1012,10 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
       .waitFor({ timeout: 15_000 })
       .catch(() => {});
     await pauseButton.click();
+    await assertBookCinemaHighlightSync(page, {
+      jobId: job.id,
+      scopedSpans: bookWordSpansForScopeE2E(book, scope),
+    });
     const skipForwardButton = visibleOverlayButton(page, "+10s");
     if (await skipForwardButton.isEnabled().catch(() => false)) {
       await skipForwardButton.click();
@@ -1093,6 +1097,171 @@ async function runBookCinemaUX(browser, { book, job, projectId, scope, screensho
   } finally {
     await context.close();
   }
+}
+
+async function assertBookCinemaHighlightSync(page, { jobId, scopedSpans }) {
+  const overlay = cinemaOverlay(page);
+  const observed = await overlay
+    .locator("[data-cinema-reader-canvas]")
+    .first()
+    .evaluate((node) => {
+      const active = node.querySelector(
+        '[aria-current="true"][data-readalong-word-index], .book-cinema-word-active[data-readalong-word-index]',
+      );
+      return {
+        activeDomText: active?.textContent?.trim() ?? "",
+        activeDomWordIndex: Number(active?.getAttribute("data-readalong-word-index") ?? "-1"),
+        activeWordIndex: Number(node.getAttribute("data-cinema-sync-active-word-index") ?? "-1"),
+        activeWordText: node.getAttribute("data-cinema-sync-active-word-text") ?? "",
+        cursorSec: Number(node.getAttribute("data-cinema-sync-playback-cursor-sec") ?? "NaN"),
+        jobId: node.getAttribute("data-cinema-sync-job-id") ?? "",
+        runtimeState: node.getAttribute("data-cinema-sync-runtime-state") ?? "",
+        timingSource: node.getAttribute("data-cinema-sync-timing-source") ?? "",
+      };
+    });
+  assert(observed.jobId === jobId, `Sync lint observed job ${observed.jobId}, want ${jobId}.`);
+  assert(
+    Number.isFinite(observed.cursorSec) && observed.cursorSec > 0,
+    `Sync lint cursor was not advanced: ${String(observed.cursorSec)}`,
+  );
+  assert(
+    observed.timingSource === "highlight-map-v2",
+    `Sync lint timing source = ${observed.timingSource}, want highlight-map-v2.`,
+  );
+  const map = await apiJson(`/api/voice-jobs/${jobId}/highlight-map-v2`);
+  const expected = expectedHighlightWordAtCursor(map, observed.cursorSec, scopedSpans);
+  assert(expected, `No highlight-map-v2 word entry at ${observed.cursorSec.toFixed(3)}s.`);
+  assert(
+    observed.activeWordIndex === expected.sourceWordIndex,
+    `Sync lint active word index ${String(observed.activeWordIndex)} != expected ${String(
+      expected.sourceWordIndex,
+    )} at ${observed.cursorSec.toFixed(3)}s.`,
+  );
+  assert(
+    normalizeSyncWord(observed.activeWordText) === normalizeSyncWord(expected.rawText),
+    `Sync lint active word "${observed.activeWordText}" != expected "${expected.rawText}".`,
+  );
+  const expectedDom = await readBookCinemaExpectedWordDom(page, expected.sourceWordIndex);
+  if (observed.activeDomWordIndex >= 0) {
+    assert(
+      observed.activeDomWordIndex === expected.sourceWordIndex,
+      `Sync lint active DOM word index ${String(observed.activeDomWordIndex)} != expected ${String(
+        expected.sourceWordIndex,
+      )}.`,
+    );
+    assert(
+      normalizeSyncWord(observed.activeDomText).includes(normalizeSyncWord(expected.rawText)),
+      `Sync lint DOM word "${observed.activeDomText}" did not include expected "${expected.rawText}".`,
+    );
+  } else {
+    assert(
+      expectedDom.phraseHighlighted,
+      `Sync lint expected word ${String(expected.sourceWordIndex)} is not inside the active phrase: ${JSON.stringify(
+        expectedDom,
+      )}.`,
+    );
+  }
+}
+
+async function readBookCinemaExpectedWordDom(page, sourceWordIndex) {
+  const overlay = cinemaOverlay(page);
+  return overlay
+    .locator(`[data-readalong-word-index="${String(sourceWordIndex)}"]`)
+    .first()
+    .evaluate((node) => ({
+      className: node.getAttribute("class") ?? "",
+      exists: true,
+      phraseHighlighted: node.classList.contains("book-cinema-word-phrase"),
+      text: node.textContent?.trim() ?? "",
+    }))
+    .catch(() => ({
+      className: "",
+      exists: false,
+      phraseHighlighted: false,
+      text: "",
+    }));
+}
+
+function expectedHighlightWordAtCursor(map, cursorSec, scopedSpans = []) {
+  const cursorMs = cursorSec * 1000;
+  const wordEntries = [...(map.entries ?? [])]
+    .filter((entry) => entry.level === "word" && Number.isFinite(entry.sourceWordIndex))
+    .sort((left, right) => left.audioStartMs - right.audioStartMs);
+  if (wordEntries.length === 0) {
+    return expectedPhraseFallbackWordAtCursor(map, cursorMs, scopedSpans);
+  }
+  const direct = wordEntries.find(
+    (entry) => cursorMs >= entry.audioStartMs && cursorMs <= entry.audioEndMs,
+  );
+  if (direct) {
+    return direct;
+  }
+  for (let index = wordEntries.length - 1; index >= 0; index -= 1) {
+    if (cursorMs >= wordEntries[index].audioStartMs) {
+      return wordEntries[index];
+    }
+  }
+  return wordEntries.find((entry) => cursorMs <= entry.audioEndMs) ?? null;
+}
+
+function expectedPhraseFallbackWordAtCursor(map, cursorMs, scopedSpans) {
+  const anchorEntries = [...(map.entries ?? [])]
+    .filter((entry) => entry.level !== "word")
+    .sort((left, right) => entryStartMs(left) - entryStartMs(right));
+  if (anchorEntries.length === 0 || scopedSpans.length === 0) {
+    return null;
+  }
+  const anchor =
+    anchorEntries.find(
+      (entry) => cursorMs >= entryStartMs(entry) && cursorMs <= entryEndMs(entry),
+    ) ??
+    anchorEntries.find((entry) => cursorMs <= entryEndMs(entry)) ??
+    anchorEntries.at(-1);
+  if (!anchor) {
+    return null;
+  }
+  const startWordIndex = anchor.readingPosition?.activeWordIndex ?? anchor.sourceWordIndex;
+  const startOffset = scopedSpans.findIndex((span) => span.index === startWordIndex);
+  if (startOffset < 0) {
+    return null;
+  }
+  const remainingSpans = scopedSpans.slice(startOffset);
+  const spokenWords = tokenizeSyncWords(
+    anchor.spokenText || anchor.normalizedText || anchor.rawText,
+  );
+  const phraseWordCount = Math.max(
+    1,
+    Math.min(remainingSpans.length, spokenWords.length || remainingSpans.length),
+  );
+  const durationMs = Math.max(1, entryEndMs(anchor) - entryStartMs(anchor));
+  const progress = Math.max(0, Math.min(1, (cursorMs - entryStartMs(anchor)) / durationMs));
+  const offset = Math.min(phraseWordCount - 1, Math.floor(progress * phraseWordCount));
+  const span = remainingSpans[offset];
+  return {
+    rawText: span?.text ?? spokenWords[offset] ?? anchor.rawText,
+    sourceWordIndex: span?.index ?? startWordIndex + offset,
+  };
+}
+
+function entryStartMs(entry) {
+  return Math.max(0, entry.alignedStartMs ?? entry.providerTimingStartMs ?? entry.audioStartMs);
+}
+
+function entryEndMs(entry) {
+  return Math.max(
+    entryStartMs(entry) + 1,
+    entry.alignedEndMs ?? entry.providerTimingEndMs ?? entry.audioEndMs,
+  );
+}
+
+function tokenizeSyncWords(value) {
+  return String(value ?? "").match(/[\p{L}\p{N}]+(?:['’.-][\p{L}\p{N}]+)*/gu) ?? [];
+}
+
+function normalizeSyncWord(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replaceAll(/[^\p{L}\p{N}]+/gu, "");
 }
 
 async function runNoAudioBookCinemaUX(browser, projectId, fixture) {
@@ -1459,13 +1628,24 @@ async function captureResponsiveCinemaSurface(page, { surface, viewport }) {
   await assertCinemaFocusModeSelected(page, "Read");
   await assertCinemaReadyForScreenshot(page, `${surface}:${viewport.name}`);
   await assertCinemaResponsiveContract(page, `${surface}:${viewport.name}`);
+  if (viewport.width >= 1024) {
+    await assertCinemaMoreMenuFitsViewport(page, `${surface}:${viewport.name}`);
+  }
   const screenshot = path.join(screenshotsDir, `responsive-${surface}-${viewport.name}.png`);
   await page.screenshot({ fullPage: false, path: screenshot });
   return screenshot;
 }
 
 async function captureResponsiveCinemaTheatre(page, { surface, viewport }) {
-  await runCommandPaletteAction(page, "open cinema theatre", /Open Cinema Theatre/);
+  if (viewport.width < 1024) {
+    await enterResponsiveCinemaTheatreFromMobileSheet(page, surface);
+  } else {
+    const theatreButton = visibleOverlayControl(page, (overlay) =>
+      overlay.getByRole("button", { name: /^(Theatre|Open Cinema Theatre)$/ }),
+    );
+    await assertEnabled(theatreButton, "Theatre");
+    await theatreButton.click();
+  }
   await cinemaOverlay(page).getByTestId("cinema-theatre-chrome").waitFor({ state: "visible" });
   await assertCinemaReadyForScreenshot(page, `${surface}:${viewport.name}:theatre`);
   await assertCinemaTheatreContract(page, `${surface}:${viewport.name}:theatre`);
@@ -1496,6 +1676,21 @@ async function captureResponsiveCinemaTheatre(page, { surface, viewport }) {
   return screenshot;
 }
 
+async function enterResponsiveCinemaTheatreFromMobileSheet(page, surface) {
+  const moreButton = visibleOverlayButton(page, "More");
+  await assertEnabled(moreButton, "More");
+  await moreButton.click();
+  const sheet = cinemaOverlay(page).locator("[data-cinema-mobile-sheet]").first();
+  await sheet.waitFor({ state: "visible" });
+  await sheet.getByRole("button", { exact: true, name: "Theatre" }).click();
+  const theatreAction =
+    surface === "book"
+      ? sheet.getByTestId("ui-action-book-cinema-mobile-theatre")
+      : sheet.getByTestId("ui-action-prepared-cinema-mobile-theatre");
+  await theatreAction.waitFor({ state: "visible" });
+  await theatreAction.click();
+}
+
 async function exerciseResponsiveCinemaMobileSheet(page, { surface, viewport }) {
   await assertCinemaFocusModeSelected(page, "Read");
   const moreButton = visibleOverlayButton(page, "More");
@@ -1505,6 +1700,15 @@ async function exerciseResponsiveCinemaMobileSheet(page, { surface, viewport }) 
   const sheet = overlay.locator("[data-cinema-mobile-sheet]").first();
   await sheet.waitFor({ state: "visible" });
   await sheet.locator("[data-cinema-mobile-display-controls]").getByText("Text scale").waitFor();
+  if (surface === "book" || surface === "document" || surface === "website") {
+    await sheet.getByRole("button", { exact: true, name: "Theatre" }).waitFor();
+    await sheet.getByRole("button", { exact: true, name: "Theatre" }).click();
+    const theatreActionTestId =
+      surface === "book"
+        ? "ui-action-book-cinema-mobile-theatre"
+        : "ui-action-prepared-cinema-mobile-theatre";
+    await sheet.getByTestId(theatreActionTestId).waitFor();
+  }
   await assertCinemaMobileSheetInFlow(page);
   await assertCinemaResponsiveContract(page, `${surface}:${viewport.name}:sheet`);
   await sheet.getByRole("button", { exact: true, name: "Structure" }).click();
@@ -1538,6 +1742,179 @@ async function assertCinemaResponsiveContract(page, label) {
   await assertNoHorizontalOverflow(page, label);
   await assertCinemaTouchTargets(page, label);
   await assertCinemaCanvasBudget(page, label);
+  await assertBookReaderPageFit(page, label);
+  await assertBookReaderTextQuality(page, label);
+  await assertNoFooterNavigationActions(page, label);
+}
+
+async function assertCinemaMoreMenuFitsViewport(page, label) {
+  await cinemaAdvancedModeButton(page).click();
+  const menu = cinemaOverlay(page).locator("[data-cinema-more-menu]").first();
+  await menu.waitFor({ state: "visible" });
+  const result = await page.evaluate((selector) => {
+    const overlay = document.querySelector(selector);
+    const menuElement = overlay?.querySelector("[data-cinema-more-menu]");
+    if (!(menuElement instanceof HTMLElement)) {
+      return { ok: false, reason: "missing Cinema More menu" };
+    }
+    const rect = menuElement.getBoundingClientRect();
+    return {
+      bottom: Math.round(rect.bottom),
+      height: Math.round(rect.height),
+      ok: rect.top >= 0 && rect.bottom <= window.innerHeight + 1,
+      top: Math.round(rect.top),
+      viewportHeight: window.innerHeight,
+    };
+  }, cinemaOverlaySelector);
+  await page.keyboard.press("Escape");
+  await menu.waitFor({ state: "hidden" }).catch(() => {});
+  assert(result.ok, `${label} Cinema More menu is clipped: ${JSON.stringify(result)}`);
+}
+
+async function assertBookReaderPageFit(page, label) {
+  const result = await page.evaluate((selector) => {
+    const overlay = document.querySelector(selector);
+    if (!(overlay instanceof HTMLElement)) {
+      return { ok: false, reason: "missing overlay" };
+    }
+    const copies = [
+      ...overlay.querySelectorAll(".book-cinema-page-copy, .book-cinema-follow-copy"),
+    ].filter((element) => {
+      if (!(element instanceof HTMLElement)) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      const styles = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && styles.visibility !== "hidden";
+    });
+    const issues = copies.flatMap((element) => {
+      if (!(element instanceof HTMLElement)) {
+        return [];
+      }
+      const styles = getComputedStyle(element);
+      const hiddenOverflow =
+        styles.overflow === "hidden" ||
+        styles.overflowY === "hidden" ||
+        styles.overflowY === "clip";
+      const overflowPixels = element.scrollHeight - element.clientHeight;
+      if (!hiddenOverflow || overflowPixels <= 2) {
+        return [];
+      }
+      return [
+        {
+          clientHeight: element.clientHeight,
+          overflowPixels,
+          overflowY: styles.overflowY,
+          scrollHeight: element.scrollHeight,
+          text: element.textContent?.replace(/\s+/g, " ").trim().slice(0, 100) ?? "",
+        },
+      ];
+    });
+    return {
+      issues,
+      ok: issues.length === 0,
+      pagesChecked: copies.length,
+      skipped: copies.length === 0,
+    };
+  }, cinemaOverlaySelector);
+  assert(result.ok, `${label} has clipped reader text: ${JSON.stringify(result)}`);
+}
+
+async function assertBookReaderTextQuality(page, label) {
+  const artifactPatterns = [
+    "\\bearl y\\b",
+    "\\bwor k\\b",
+    "\\bc aching\\b",
+    "\\bcoher ence\\b",
+    "\\baMOESDIF\\b",
+    "\\bsneed\\b",
+    "\\bnretries\\b",
+    "\\bgacknowledgements\\b",
+    "\\biand\\b",
+    "\\boReal\\b",
+    "\\bconsensus t ext\\b",
+    "\\bN agarajan\\b",
+    "\\bh eterogeneous\\b",
+    "\\bcl ient\\b",
+    "\\bdirect ory\\b",
+  ];
+  const result = await page.evaluate(
+    ({ patterns, selector }) => {
+      const overlay = document.querySelector(selector);
+      if (!(overlay instanceof HTMLElement)) {
+        return { ok: false, reason: "missing overlay" };
+      }
+      const copies = [
+        ...overlay.querySelectorAll(".book-cinema-page-copy, .book-cinema-follow-copy"),
+      ].filter((element) => {
+        if (!(element instanceof HTMLElement)) {
+          return false;
+        }
+        const rect = element.getBoundingClientRect();
+        const styles = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && styles.visibility !== "hidden";
+      });
+      const text = copies
+        .map((element) => element.textContent ?? "")
+        .join(" ")
+        .replace(/\s+/g, " ");
+      const matches = patterns
+        .map((pattern) => ({ pattern, regex: new RegExp(pattern, "i") }))
+        .filter(({ regex }) => regex.test(text))
+        .map(({ pattern }) => pattern);
+      return {
+        matches,
+        ok: matches.length === 0,
+        pagesChecked: copies.length,
+        sample: text.trim().slice(0, 220),
+        skipped: copies.length === 0,
+      };
+    },
+    { patterns: artifactPatterns, selector: cinemaOverlaySelector },
+  );
+  assert(result.ok, `${label} has PDF split-word artifacts: ${JSON.stringify(result)}`);
+}
+
+async function assertNoFooterNavigationActions(page, label) {
+  const result = await page.evaluate((selector) => {
+    const overlay = document.querySelector(selector);
+    if (!(overlay instanceof HTMLElement)) {
+      return { ok: false, reason: "missing overlay" };
+    }
+    const footers = [...overlay.querySelectorAll("[data-cinema-transport-footer]")].filter(
+      (element) => {
+        if (!(element instanceof HTMLElement)) {
+          return false;
+        }
+        const rect = element.getBoundingClientRect();
+        const styles = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && styles.visibility !== "hidden";
+      },
+    );
+    const blocked = new Set(["more", "theatre"]);
+    const actions = footers.flatMap((footer) =>
+      [...footer.querySelectorAll("button")].flatMap((button) => {
+        if (!(button instanceof HTMLButtonElement)) {
+          return [];
+        }
+        const rect = button.getBoundingClientRect();
+        const styles = getComputedStyle(button);
+        if (rect.width <= 0 || rect.height <= 0 || styles.visibility === "hidden") {
+          return [];
+        }
+        const labelText = (button.getAttribute("aria-label") || button.textContent || "")
+          .replace(/\s+/g, " ")
+          .trim();
+        return blocked.has(labelText.toLowerCase()) ? [labelText] : [];
+      }),
+    );
+    return {
+      actions,
+      footerCount: footers.length,
+      ok: actions.length === 0,
+    };
+  }, cinemaOverlaySelector);
+  assert(result.ok, `${label} exposes footer navigation actions: ${JSON.stringify(result)}`);
 }
 
 async function assertCinemaTheatreContract(page, label) {
@@ -1545,6 +1922,9 @@ async function assertCinemaTheatreContract(page, label) {
   await assertNoHorizontalOverflow(page, label);
   await assertCinemaTouchTargets(page, label);
   await assertCinemaCanvasBudget(page, label);
+  await assertBookReaderPageFit(page, label);
+  await assertBookReaderTextQuality(page, label);
+  await assertNoFooterNavigationActions(page, label);
   const result = await page.evaluate((selector) => {
     const overlay = document.querySelector(selector);
     if (!(overlay instanceof HTMLElement)) {
@@ -2360,6 +2740,26 @@ function pickNarrationScope(book) {
     };
   }
   return { type: "book", label: "Full book" };
+}
+
+function bookWordSpansForScopeE2E(book, scope) {
+  const spans = book.wordSpans ?? [];
+  if (scope.type === "chapter" && Number.isInteger(scope.chapterIndex)) {
+    const chapterSpans = spans.filter(
+      (span) => span.chapter === scope.chapterIndex || span.chapterIndex === scope.chapterIndex,
+    );
+    return chapterSpans.length > 0 ? chapterSpans : spans;
+  }
+  if (scope.type === "pages") {
+    const pageStart = scope.pageStart ?? 1;
+    const pageEnd = scope.pageEnd ?? pageStart;
+    const pageSpans = spans.filter((span) => {
+      const pageIndex = span.pageIndex ?? span.page ?? span.pageNumber;
+      return Number.isInteger(pageIndex) && pageIndex >= pageStart && pageIndex <= pageEnd;
+    });
+    return pageSpans.length > 0 ? pageSpans : spans;
+  }
+  return spans;
 }
 
 function scopeFromSection(section) {

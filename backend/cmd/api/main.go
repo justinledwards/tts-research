@@ -164,7 +164,7 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 			return nil, err
 		}
 
-		timeout, err := envIntWithDefault("KOKORO_TIMEOUT_SECONDS", 180)
+		timeout, err := envIntWithDefault("KOKORO_TIMEOUT_SECONDS", 3600)
 		if err != nil {
 			return nil, err
 		}
@@ -354,7 +354,7 @@ func supertonicRegistrationFromEnv() pipeline.TTSEngineRegistration {
 	if err != nil {
 		autoDownload = false
 	}
-	timeout, err := envIntWithDefault("SUPERTONIC_TIMEOUT_SECONDS", 180)
+	timeout, err := envIntWithDefault("SUPERTONIC_TIMEOUT_SECONDS", 3600)
 	if err != nil {
 		timeout = 180
 	}
@@ -557,7 +557,7 @@ func checkerFromEnv() (pipeline.VoiceChecker, error) {
 
 	switch provider {
 	case "qwen", "qwen-asr":
-		timeout, err := envIntWithDefault("QWEN_ASR_TIMEOUT_SECONDS", 240)
+		timeout, err := envIntWithDefault("QWEN_ASR_TIMEOUT_SECONDS", 3600)
 		if err != nil {
 			return nil, err
 		}

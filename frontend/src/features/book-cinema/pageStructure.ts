@@ -452,10 +452,62 @@ function spanDisplayText(scopedText: string, span: BookSourceWordSpan, offsetBas
   const start = span.startOffset - offsetBase;
   const end = span.endOffset - offsetBase;
   if (start >= 0 && end <= scopedText.length && end > start) {
-    return scopedText.slice(start, end).trim() || span.text;
+    const rawText = scopedText.slice(start, end).trim();
+    if (isSafeSpanDisplayText(rawText, span.text)) {
+      return rawText || span.text;
+    }
+    return repairedSpanDisplayText(rawText, span.text);
   }
   return span.text;
 }
+
+function isSafeSpanDisplayText(rawText: string, spanText: string): boolean {
+  if (!rawText) {
+    return false;
+  }
+  if (/\s/u.test(rawText)) {
+    return false;
+  }
+  return normalizedDisplayWord(rawText) === normalizedDisplayWord(spanText);
+}
+
+function repairedSpanDisplayText(rawText: string, spanText: string): string {
+  if (!rawText) {
+    return spanText;
+  }
+  const leading = leadingNonWordText(rawText);
+  const trailing = trailingNonWordText(rawText);
+  return `${leading}${spanText}${trailing}`;
+}
+
+function leadingNonWordText(value: string): string {
+  let end = 0;
+  for (const character of value) {
+    if (wordCharacterPattern.test(character)) {
+      break;
+    }
+    end += character.length;
+  }
+  return value.slice(0, end);
+}
+
+function trailingNonWordText(value: string): string {
+  let start = value.length;
+  const characters: string[] = [];
+  for (const character of value) {
+    characters.push(character);
+  }
+  for (let index = characters.length - 1; index >= 0; index -= 1) {
+    const character = characters[index];
+    if (wordCharacterPattern.test(character)) {
+      break;
+    }
+    start -= character.length;
+  }
+  return value.slice(start);
+}
+
+const wordCharacterPattern = /[\p{L}\p{N}]/u;
 
 function spanTrailingText(
   scopedText: string,
@@ -467,9 +519,58 @@ function spanTrailingText(
   const end = nextSpan.startOffset - offsetBase;
   if (start >= 0 && end <= scopedText.length && end >= start) {
     const trailing = scopedText.slice(start, end);
-    return trailing.length > 0 ? trailing : " ";
+    return displayGapBetweenBookSpans(trailing, span.text, nextSpan.text);
   }
-  return " ";
+  return displayGapBetweenBookSpans("", span.text, nextSpan.text);
+}
+
+export function displayGapBetweenBookSpans(
+  rawGap: string,
+  currentText: string,
+  nextText: string,
+): string {
+  const synthesized = shouldSeparateBookWords(currentText, nextText) ? " " : "";
+  if (rawGap.length === 0) {
+    return synthesized;
+  }
+  const compactGap = rawGap.replaceAll(/\s+/gu, "");
+  if (compactGap.length === 0) {
+    return synthesized;
+  }
+  if (wordCharacterPattern.test(compactGap)) {
+    return synthesized;
+  }
+  if (compactGap === "-" || compactGap === "/" || compactGap === "\u2013") {
+    return compactGap;
+  }
+  if (/^[,;:]$/u.test(compactGap)) {
+    return `${compactGap} `;
+  }
+  if (/^[.!?]$/u.test(compactGap)) {
+    return `${compactGap} `;
+  }
+  if (/^[)\]]$/u.test(compactGap)) {
+    return `${compactGap}${synthesized}`;
+  }
+  if (/^[([]$/u.test(compactGap)) {
+    return compactGap;
+  }
+  return synthesized;
+}
+
+function shouldSeparateBookWords(currentText: string, nextText: string): boolean {
+  const current = currentText.trim();
+  const next = nextText.trim();
+  if (!current || !next) {
+    return false;
+  }
+  if (/^[)\].,;:!?]/u.test(next)) {
+    return false;
+  }
+  if (/[([]$/u.test(current)) {
+    return false;
+  }
+  return true;
 }
 
 function uniqueNumbers(values: readonly number[]): number[] {
@@ -478,6 +579,10 @@ function uniqueNumbers(values: readonly number[]): number[] {
 
 function normalizeIntroWord(value: string): string {
   return value.toLowerCase().replaceAll(/[^a-z0-9]+/g, "");
+}
+
+function normalizedDisplayWord(value: string): string {
+  return value.toLowerCase().replaceAll(/[^\p{L}\p{N}]+/gu, "");
 }
 
 const LEGACY_INTRO_SUBTITLE_PHRASES = [["executive", "summary"]] as const;

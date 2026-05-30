@@ -22,6 +22,8 @@ import {
   type ReaderTextScale,
 } from "../reader-accessibility";
 import {
+  estimateV2AnchorEntryActiveWordIndex,
+  estimateV2AnchorEntryWordIndexes,
   resolveCueActiveWordIndex,
   resolveCueBoundaryWordIndex,
   resolveV2EntrySourceWordIndex,
@@ -473,17 +475,30 @@ export function resolveBookTimingMapV2WordIndexes({
   if (!activeEntry) {
     return null;
   }
-  const activeWordIndex = resolveV2EntrySourceWordIndex(activeEntry, scopedSpans);
+  const activeWordIndex =
+    !activeWordEntry && activeAnchorEntry
+      ? (estimateV2AnchorEntryActiveWordIndex({
+          cursorMs,
+          entry: activeAnchorEntry,
+          scopedSpans,
+        }) ?? resolveV2EntrySourceWordIndex(activeEntry, scopedSpans))
+      : resolveV2EntrySourceWordIndex(activeEntry, scopedSpans);
   if (activeWordIndex === undefined) {
     return null;
   }
   const result: BookTimingCueWordIndexes = { activeWordIndex };
-  const phraseWordIndexes = v2PhraseWordIndexes({
+  let phraseWordIndexes = v2PhraseWordIndexes({
     activeEntry,
     anchorEntry: activeAnchorEntry,
     scopedSpans,
     wordEntries,
   });
+  if (phraseWordIndexes.length <= 1 && !activeWordEntry && activeAnchorEntry) {
+    phraseWordIndexes = estimateV2AnchorEntryWordIndexes({
+      entry: activeAnchorEntry,
+      scopedSpans,
+    });
+  }
   if (phraseWordIndexes.length > 0) {
     result.phraseWordStart = Math.min(...phraseWordIndexes);
     result.phraseWordEnd = Math.max(...phraseWordIndexes);

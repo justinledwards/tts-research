@@ -8,6 +8,7 @@
 - Root JavaScript tooling is managed with `pnpm`.
 - Run targeted checks for the touched area plus `pnpm check` before handoff.
 - TypeScript lint prefers `readonly T[]` for readonly array parameters rather than `ReadonlyArray<T>`.
+- ESLint `unicorn/prefer-native-coercion-functions` prefers `.filter(Boolean)` over equivalent boolean-returning arrow callbacks.
 
 ## Validation Quirks
 
@@ -119,3 +120,66 @@
 - Validation: `pnpm exec biome format --write frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `pnpm --filter @tts-research/frontend test` passed; `git diff --check` passed; `pnpm check` failed twice in backend `backend/internal/pipeline` because `httptest.NewServer` could not bind a local TCP listener, observed at `TestCreateBookSourceFromURLUsesHTMLContentType` and `TestPreparedSourceURLIngestHonorsPrivateNetworkDefault`.
 - Repo lessons: No new durable rule; the existing backend sandbox TCP listener quirk repeated. There is no dedicated voice-source analysis render test, so this run used the full frontend suite as the closest targeted behavioral check.
 - Suggested next safe target: inspect `frontend/src/appVoiceCloningHelpers.ts` for one narrow local helper extraction.
+
+### 2026-05-29 22:07 CEST
+
+- Refactor target: `frontend/src/appVoiceCloningHelpers.ts` candidate detail construction in `resolveVoiceCloningActivity`.
+- Theme: Extract a private same-file helper to name local candidate-count display-data shaping.
+- Files changed: `frontend/src/appVoiceCloningHelpers.ts`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/appVoiceCloningHelpers.ts` passed with no fixes; `pnpm exec biome lint frontend/src/appVoiceCloningHelpers.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `pnpm --filter @tts-research/frontend test` passed; `git diff --check` passed; `pnpm check` passed. `pnpm check` emitted existing non-fatal lint warnings in unrelated files.
+- Repo lessons: No new durable rule. There is no dedicated app voice cloning helper test, so this run used the full frontend suite as the closest targeted behavioral check.
+- Suggested next safe target: inspect `frontend/src/WorkspaceDrawerHelpers.tsx` for one narrow local render-helper extraction after the current mixed worktree is cleared.
+
+### 2026-05-30 00:04 CEST
+
+- Refactor target: `frontend/src/WorkspaceDrawerHelpers.tsx` project library stats derivation in `ProjectLibraryRow`.
+- Theme: Extract a private same-file helper to name generated duration, primary voice, and quality score shaping.
+- Files changed: `frontend/src/WorkspaceDrawerHelpers.tsx`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/WorkspaceDrawerHelpers.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/WorkspaceDrawerHelpers.tsx` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `pnpm --filter @tts-research/frontend test` passed; `git diff --check` passed; `pnpm check` failed during lint on pre-existing dirty files outside this refactor (`frontend/src/App.tsx`, book-cinema files, and `frontend/src/features/cinema/model.ts`).
+- Repo lessons: No new durable rule. There is no dedicated Workspace drawer helper test, so this run used the full frontend suite as the closest targeted behavioral check.
+- Suggested next safe target: wait until the current mixed worktree is cleared, then inspect `frontend/src/BundlePanels.tsx` for one narrow render-helper extraction.
+
+### 2026-05-30 02:08 CEST
+
+- Refactor target: `frontend/src/BundlePanels.tsx` export content grouping in `ExportStepContent`.
+- Theme: Extract a private same-file helper to name included/optional bundle content partitioning.
+- Files changed: `frontend/src/BundlePanels.tsx`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/BundlePanels.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/BundlePanels.tsx` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `pnpm --filter @tts-research/frontend test` passed; `git diff --check` passed; `pnpm check` passed with existing non-fatal lint warnings outside this refactor.
+- Repo lessons: No new durable rule. There is no dedicated Bundle panel test, so this run used frontend typecheck and the full frontend suite as the closest targeted behavioral checks.
+- Suggested next safe target: after the current mixed worktree is cleared, inspect `frontend/src/features/speech-policy/SpeechPolicyWizard.tsx` for one narrow local helper extraction.
+
+### 2026-05-30 04:06 CEST
+
+- Refactor target: `frontend/src/features/speech-policy/SpeechPolicyWizard.tsx` guided-field derivation.
+- Theme: Extract a private same-file helper to name guided speech-policy field selection.
+- Files changed: `frontend/src/features/speech-policy/SpeechPolicyWizard.tsx`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/features/speech-policy/SpeechPolicyWizard.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/features/speech-policy/SpeechPolicyWizard.tsx` passed; `pnpm --filter @tts-research/frontend exec vitest run src/features/settings/SettingsPanel.test.tsx src/features/speech-policy/policyPreview.test.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `git diff --check` passed; final `pnpm check` passed with existing non-fatal lint warnings outside this refactor.
+- Repo lessons: `.filter(Boolean)` satisfies the configured ESLint native-coercion rule for this style of helper; the first project check caught and the refactor fixed an equivalent boolean-arrow callback.
+- Suggested next safe target: after the current mixed worktree is cleared, inspect `frontend/src/features/speech-policy/policyPreviewHelpers.ts` for one narrow local helper extraction.
+
+### 2026-05-30 06:06 CEST
+
+- Refactor target: `frontend/src/features/speech-policy/policyPreviewHelpers.ts` golden-minute speech-plan summary construction.
+- Theme: Extract a private same-file helper to name dense preview summary string construction.
+- Files changed: `frontend/src/features/speech-policy/policyPreviewHelpers.ts`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/features/speech-policy/policyPreviewHelpers.ts` passed with no fixes; `pnpm exec biome lint frontend/src/features/speech-policy/policyPreviewHelpers.ts` passed; `pnpm --filter @tts-research/frontend exec vitest run src/features/speech-policy/policyPreview.test.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `git diff --check` passed; `pnpm check` passed with existing non-fatal lint warnings outside this refactor.
+- Repo lessons: No new durable rule.
+- Suggested next safe target: after the current mixed worktree is cleared, inspect `frontend/src/features/speech-policy/speechPolicyWizardHelpers.tsx` for one narrow local helper or type-only import cleanup.
+
+### 2026-05-30 08:07 CEST
+
+- Refactor target: `frontend/src/features/speech-policy/speechPolicyWizardHelpers.tsx` golden-minute comparison excerpt lookup.
+- Theme: Extract a private same-file helper to name the `gm-p3` comparison segment lookup.
+- Files changed: `frontend/src/features/speech-policy/speechPolicyWizardHelpers.tsx`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/features/speech-policy/speechPolicyWizardHelpers.tsx` passed with no fixes; `pnpm exec biome lint frontend/src/features/speech-policy/speechPolicyWizardHelpers.tsx` passed; `pnpm --filter @tts-research/frontend exec vitest run src/features/speech-policy/policyPreview.test.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `git diff --check` passed; `pnpm check` passed with existing non-fatal lint warnings outside this refactor.
+- Repo lessons: No new durable rule.
+- Suggested next safe target: after the current mixed worktree is cleared, inspect `frontend/src/features/ui-audit/actionMetadataCatalog.ts` for one narrow static metadata readability helper.
+
+### 2026-05-30 10:06 CEST
+
+- Refactor target: `frontend/src/features/ui-audit/actionMetadataCatalog.ts` playback owner classification in `playbackOwnerForAction`.
+- Theme: Extract private same-file predicate helpers to name dashboard, cinema, teleprompt, and preview ownership branches.
+- Files changed: `frontend/src/features/ui-audit/actionMetadataCatalog.ts`, `docs/agent-learning-ledger.md`, `WORKINGLOG.md`.
+- Validation: `pnpm exec biome format --write frontend/src/features/ui-audit/actionMetadataCatalog.ts` passed with one formatting adjustment; `pnpm exec biome lint frontend/src/features/ui-audit/actionMetadataCatalog.ts` passed; `pnpm --filter @tts-research/frontend exec vitest run src/features/ui-audit/surfaceComplexity.test.ts` passed; `pnpm --filter @tts-research/frontend typecheck` passed; `pnpm --filter @tts-research/frontend test` passed; `git diff --check` passed; `pnpm check` passed with existing non-fatal lint warnings outside this refactor.
+- Repo lessons: No new durable rule.
+- Suggested next safe target: after the current mixed worktree is cleared, inspect `frontend/src/features/ui-audit/surfaceComplexity.ts` for one narrow budget/readability helper.

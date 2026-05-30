@@ -66,6 +66,7 @@ export interface TelepromptTheatreProps {
   readonly settingsMemoryEnabled: boolean;
   readonly summary: TelepromptTheatreSummary;
   readonly theatreViewMode: TelepromptTheatreViewMode;
+  readonly syncDebug?: TelepromptTheatreSyncDebug;
   readonly wordTimings?: readonly TelepromptCueWordTiming[];
   readonly onBackToPreview: () => void;
   readonly onBackToReview: () => void;
@@ -81,6 +82,18 @@ export interface TelepromptTheatreProps {
   readonly onToggleMirror: (checked: boolean) => void;
   readonly onToggleOperatorPreview: () => void;
   readonly onTogglePlayback: () => void;
+}
+
+export interface TelepromptTheatreSyncDebug {
+  readonly activeCueId: string;
+  readonly activeSourceWordId: string;
+  readonly activeWordIndex: number;
+  readonly activeWordText: string;
+  readonly jobId: string;
+  readonly playbackCursorSec: number;
+  readonly runtimeState: string;
+  readonly syncMode: string;
+  readonly timingSource: string;
 }
 
 export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatreProps>(
@@ -117,6 +130,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       settings,
       settingsMemoryEnabled,
       summary,
+      syncDebug,
       theatreViewMode,
       wordTimings = [],
       onBackToPreview,
@@ -257,6 +271,17 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         data-teleprompt-theatre-preset={settings.presetId}
         data-teleprompt-theatre-mode={mode}
         data-teleprompt-theatre-scroll-mode={settings.scrollMode}
+        data-teleprompt-sync-active-cue-id={syncDebug?.activeCueId ?? ""}
+        data-teleprompt-sync-active-source-word-id={syncDebug?.activeSourceWordId ?? ""}
+        data-teleprompt-sync-active-word-index={String(syncDebug?.activeWordIndex ?? -1)}
+        data-teleprompt-sync-active-word-text={syncDebug?.activeWordText ?? ""}
+        data-teleprompt-sync-job-id={syncDebug?.jobId ?? ""}
+        data-teleprompt-sync-playback-cursor-sec={
+          syncDebug ? syncDebug.playbackCursorSec.toFixed(3) : "0.000"
+        }
+        data-teleprompt-sync-runtime-state={syncDebug?.runtimeState ?? ""}
+        data-teleprompt-sync-mode={syncDebug?.syncMode ?? ""}
+        data-teleprompt-sync-timing-source={syncDebug?.timingSource ?? ""}
         data-ui-action-owner="teleprompt"
         data-ui-action-surface="Teleprompt Theatre"
         ref={ref}

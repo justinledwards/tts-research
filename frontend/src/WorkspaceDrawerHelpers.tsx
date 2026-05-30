@@ -321,6 +321,12 @@ type ProjectLibraryRowProps = Readonly<{
   onSelectProject: (id: string) => void;
 }>;
 
+type ProjectLibraryStats = Readonly<{
+  generatedDurationMs: number;
+  primaryVoice: string;
+  qualityScore: string;
+}>;
+
 export function ProjectLibraryRow({
   activeProjectId,
   project,
@@ -336,10 +342,8 @@ export function ProjectLibraryRow({
   const [isSavingName, setIsSavingName] = useState(false);
   const [draftName, setDraftName] = useState(project.name);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
-  const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
-  const primaryVoice =
-    visibleJobs.find((item) => item.voiceProfileName)?.voiceProfileName ?? "Default";
-  const qualityScore = resolveProjectQualityScore(visibleJobs);
+  const { generatedDurationMs, primaryVoice, qualityScore } =
+    resolveProjectLibraryStats(visibleJobs);
   const isActive = project.id === activeProjectId;
   const isDefault = project.id === "default";
 
@@ -550,6 +554,19 @@ export function ProjectLibraryRow({
       ) : null}
     </div>
   );
+}
+
+function resolveProjectLibraryStats(visibleJobs: VoiceJob[]): ProjectLibraryStats {
+  const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
+  const primaryVoice =
+    visibleJobs.find((item) => item.voiceProfileName)?.voiceProfileName ?? "Default";
+  const qualityScore = resolveProjectQualityScore(visibleJobs);
+
+  return {
+    generatedDurationMs,
+    primaryVoice,
+    qualityScore,
+  };
 }
 
 export function WorkspaceSection({

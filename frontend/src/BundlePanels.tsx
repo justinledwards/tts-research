@@ -162,6 +162,20 @@ function ExportBundleFlow({
 
 type ExportBundleStep = "Contents" | "Review" | "Export";
 
+type ExportBundleContentGroups = Readonly<{
+  includedItems: ProjectBundleSummary["contents"];
+  optionalItems: ProjectBundleSummary["contents"];
+}>;
+
+function splitExportBundleContents(
+  contents: ProjectBundleSummary["contents"],
+): ExportBundleContentGroups {
+  return {
+    includedItems: contents.filter((item) => item.included),
+    optionalItems: contents.filter((item) => !item.included),
+  };
+}
+
 function ExportStepContent({
   activeStep,
   summary,
@@ -169,8 +183,7 @@ function ExportStepContent({
   if (!summary) {
     return null;
   }
-  const includedItems = summary.contents.filter((item) => item.included);
-  const optionalItems = summary.contents.filter((item) => !item.included);
+  const { includedItems, optionalItems } = splitExportBundleContents(summary.contents);
 
   if (activeStep === "Contents") {
     return (

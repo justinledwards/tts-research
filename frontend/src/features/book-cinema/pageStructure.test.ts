@@ -4,9 +4,22 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { BookSourceWordSpan, NarrationBlock, NarrationBlockKind } from "../../types";
 import { HighlightRenderer } from "../readalong";
 import type { BookPage } from "./model";
-import { bookPageStructuredBlocks } from "./pageStructure";
+import { bookPageStructuredBlocks, displayGapBetweenBookSpans } from "./pageStructure";
 
 describe("book page structure", () => {
+  it("repairs display gaps for fused PDF words without breaking punctuation", () => {
+    expect(displayGapBetweenBookSpans("", "by", "Nagarajan")).toBe(" ");
+    expect(displayGapBetweenBookSpans("", "uses", "exact")).toBe(" ");
+    expect(displayGapBetweenBookSpans("a", "broader", "MOESDIF")).toBe(" ");
+    expect(displayGapBetweenBookSpans("s", "also", "need")).toBe(" ");
+    expect(displayGapBetweenBookSpans("n", "need", "retries")).toBe(" ");
+    expect(displayGapBetweenBookSpans("i", "conflict", "and")).toBe(" ");
+    expect(displayGapBetweenBookSpans(" o", "family", "Real")).toBe(" ");
+    expect(displayGapBetweenBookSpans(",", "small", "fast")).toBe(", ");
+    expect(displayGapBetweenBookSpans("-", "write", "through")).toBe("-");
+    expect(displayGapBetweenBookSpans("  \n ", "Cache", "coherence")).toBe(" ");
+  });
+
   it("segments a page into source blocks and keeps display punctuation", () => {
     const text =
       "Cache and Cache Coherency\n\nExecutive summary\n\nA cache is small, fast storage.";
@@ -29,6 +42,67 @@ describe("book page structure", () => {
     expect(structured.map((item) => item.kind)).toEqual(["heading", "subheading", "body"]);
     expect(tokensText(structured[0])).toBe("Cache and Cache Coherency");
     expect(tokensText(structured[2])).toContain("small, fast storage.");
+  });
+
+  it("uses source word spans when raw PDF offsets introduce intra-word whitespace", () => {
+    const text = "Goodman's earl y wor k framed c aching, and coher ence explicitly.";
+    const spans: BookSourceWordSpan[] = [
+      manualSpan(text, "Goodman's", "Goodman's", 0),
+      manualSpan(text, "earl y", "early", 1),
+      manualSpan(text, "wor k", "work", 2),
+      manualSpan(text, "framed", "framed", 3),
+      manualSpan(text, "c aching,", "caching", 4),
+      manualSpan(text, "and", "and", 5),
+      manualSpan(text, "coher ence", "coherence", 6),
+      manualSpan(text, "explicitly.", "explicitly", 7),
+    ];
+    const page = pageFromSpans(spans);
+
+    const structured = bookPageStructuredBlocks({
+      page,
+      scopeKey: "book",
+      scopedText: text,
+      sourceId: "book-1",
+    });
+
+    expect(tokensText(structured[0])).toBe(
+      "Goodman's early work framed caching, and coherence explicitly.",
+    );
+  });
+
+  it("rejects raw alphabetic gap artifacts while preserving source word anchors", () => {
+    const text =
+      "broader aMOESDIF family oReal protocols also sneed nretries gacknowledgements iand source.";
+    const spans: BookSourceWordSpan[] = [
+      manualSpan(text, "broader", "broader", 0),
+      manualSpan(text, "MOESDIF", "MOESDIF", 1),
+      manualSpan(text, "family", "family", 2),
+      manualSpan(text, "Real", "Real", 3),
+      manualSpan(text, "protocols", "protocols", 4),
+      manualSpan(text, "also", "also", 5),
+      manualSpan(text, "need", "need", 6),
+      manualSpan(text, "retries", "retries", 7),
+      manualSpan(text, "acknowledgements", "acknowledgements", 8),
+      manualSpan(text, "and", "and", 9),
+      manualSpan(text, "source.", "source", 10),
+    ];
+    const page = pageFromSpans(spans);
+
+    const structured = bookPageStructuredBlocks({
+      page,
+      scopeKey: "book",
+      scopedText: text,
+      sourceId: "book-1",
+    });
+
+    const renderedText = tokensText(structured[0]);
+    expect(renderedText).toBe(
+      "broader MOESDIF family Real protocols also need retries acknowledgements and source.",
+    );
+    expect(structured[0].tokens.map((token) => token.wordIndex)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
+    expect(structured[0].tokens[1].sourceWordId).toBe("book-1:book:word:1");
   });
 
   it("matches relative scope blocks against absolute source spans", () => {
@@ -169,6 +243,24 @@ function block(
     startOffset,
     text: blockText,
   });
+}
+
+function manualSpan(
+  sourceText: string,
+  rawText: string,
+  spanText: string,
+  index: number,
+): BookSourceWordSpan {
+  const startOffset = sourceText.indexOf(rawText);
+  if (startOffset === -1) {
+    throw new Error(`missing test text: ${rawText}`);
+  }
+  return {
+    endOffset: startOffset + rawText.length,
+    index,
+    startOffset,
+    text: spanText,
+  };
 }
 
 function relativeBlock(

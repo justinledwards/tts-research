@@ -16,7 +16,6 @@ import {
 import type { PreparedSourceCinemaPlaybackControls } from "./PreparedSourceCinemaBase";
 import {
   formatClockTime,
-  MoreIcon,
   PauseIcon,
   PlayIcon,
   PreparedSourceCinemaAudioBarsIcon,
@@ -37,7 +36,6 @@ export function PreparedSourceCinemaTransport({
   accessibilitySettings,
   canBookmark,
   canCreateAudio,
-  isMobileSheetOpen,
   isProcessing,
   job,
   playbackState,
@@ -54,7 +52,6 @@ export function PreparedSourceCinemaTransport({
   onPlayPause,
   onRestart,
   onSkip,
-  onToggleMobilePanel,
 }: Readonly<{
   accessibilitySettings: ReaderAccessibilitySettings;
   canBookmark: boolean;
@@ -76,6 +73,7 @@ export function PreparedSourceCinemaTransport({
   onPlayPause: () => void;
   onRestart: () => void;
   onSkip: (seconds: number) => void;
+  onTheatreMode?: () => void;
   onToggleMobilePanel: () => void;
 }>) {
   const progressRatio = playbackProgressRatio(playbackCursorSec, job, progress);
@@ -147,12 +145,6 @@ export function PreparedSourceCinemaTransport({
         ]}
       />
     ),
-    mobileMore: {
-      active: isMobileSheetOpen,
-      controlsId: "prepared-source-cinema-mobile-sheet",
-      icon: <MoreIcon />,
-      onClick: onToggleMobilePanel,
-    },
     playbackRate: {
       disabled: !playbackControls.setPlaybackRate,
       value: playbackControls.playbackRate,

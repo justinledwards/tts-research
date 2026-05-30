@@ -112,6 +112,7 @@ import {
   PreparedSourceCinemaAudioBarsIcon,
   PreparedSourceCinemaTransport,
 } from "./PreparedSourceCinemaTransport";
+import { MoreIcon } from "./PreparedSourceCinemaTransportHelpers";
 import { CinemaTheatreChrome, useCinemaTheatreController } from "./CinemaTheatre";
 import {
   type CinemaRendererLifecycleState,
@@ -162,7 +163,7 @@ export interface PreparedSourceCinemaPlaybackControls {
   skipBy?: (seconds: number) => void;
 }
 
-type PreparedSourceCinemaMobilePanel = "source" | "structure" | "narration";
+type PreparedSourceCinemaMobilePanel = "source" | "structure" | "narration" | "theatre";
 const PREPARED_SOURCE_CINEMA_MOBILE_SHEET_ID = "prepared-source-cinema-mobile-sheet";
 
 function preparedSourceCinemaLabelForKind(
@@ -1014,6 +1015,7 @@ export function PreparedSourceCinemaOverlay({
           onPlayPause={onPlayPause}
           onRestart={onRestart}
           onSkip={onSkip}
+          onTheatreMode={handleTheatreMode}
           onToggleMobilePanel={() => {
             setMobilePanel((current) => (current ? null : "source"));
           }}
@@ -1090,6 +1092,9 @@ export function PreparedSourceCinemaOverlay({
                   onCommandPalette={onCommandPaletteOpen}
                   onHelpGuide={onHelpOpen}
                   onKeyboardShortcuts={onShortcutCheatSheetOpen}
+                  onMenuOpen={() => {
+                    setSettingsOpen(false);
+                  }}
                   onModeChange={cinemaFocus.setMode}
                   onReaderSettings={() => {
                     setSettingsOpen(true);
@@ -1122,6 +1127,22 @@ export function PreparedSourceCinemaOverlay({
                   Settings
                 </Button>
               )}
+              <Button
+                aria-label="More"
+                aria-controls={PREPARED_SOURCE_CINEMA_MOBILE_SHEET_ID}
+                aria-expanded={mobilePanel !== null}
+                className="gap-1.5 px-2.5 lg:hidden"
+                data-testid="ui-action-prepared-cinema-mobile-more"
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setMobilePanel((current) => (current ? null : "theatre"));
+                }}
+                size="md"
+                variant="secondary"
+              >
+                <MoreIcon />
+                <span className="hidden sm:inline">More</span>
+              </Button>
               <Button
                 className="gap-1.5 px-2.5 sm:gap-2 sm:px-3"
                 onClick={onClose}
@@ -1190,6 +1211,7 @@ export function PreparedSourceCinemaOverlay({
             onRecentNavigate={handleRecentNavigate}
             onSelectSource={onSelectSource}
             onResumeProgress={onResumeProgress}
+            onTheatreMode={handleTheatreMode}
           />
         )
       }
@@ -1793,6 +1815,7 @@ function PreparedSourceCinemaMobileSheet({
   onRecentNavigate,
   onSelectSource,
   onResumeProgress,
+  onTheatreMode,
 }: Readonly<{
   activeBlock: NarrationBlock | null;
   bookmarkItems: ReaderBookmarkItem[];
@@ -1816,6 +1839,7 @@ function PreparedSourceCinemaMobileSheet({
   onRecentNavigate: (item: ReaderRecentPositionItem) => void;
   onSelectSource: (sourceId: string) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
+  onTheatreMode: () => void;
 }>) {
   const returnToCanvas = () => {
     onMobilePanelChange(null);
@@ -1841,6 +1865,26 @@ function PreparedSourceCinemaMobileSheet({
   const activeText = activeBlock ? markdownBlockText(activeBlock) : "";
   const href = preparedSourceCinemaSourceHref(source);
   const panels: CinemaMobilePanelSpec<PreparedSourceCinemaMobilePanel>[] = [
+    {
+      children: (
+        <div className="grid gap-3 text-sm">
+          <p className="leading-6 vs-muted">
+            Switch to the reader-first Theatre layout for focused follow-along.
+          </p>
+          <Button
+            className="border-orange-300 bg-orange-500/10 text-orange-500"
+            data-testid="ui-action-prepared-cinema-mobile-theatre"
+            onClick={onTheatreMode}
+            size="md"
+            variant="secondary"
+          >
+            Enter Theatre
+          </Button>
+        </div>
+      ),
+      id: "theatre",
+      label: "Theatre",
+    },
     {
       children: (
         <div className="grid gap-4 text-sm">

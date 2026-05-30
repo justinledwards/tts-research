@@ -638,29 +638,53 @@ function playbackOwnerForAction(
   if (id === "create-listen" || id.includes("createAndListen")) {
     return "workspace";
   }
-  if (
-    surface === "Project Dashboard" ||
-    surface === "Voice Dashboard" ||
-    id.includes("dashboard")
-  ) {
+  if (isDashboardPlaybackOwnerAction(id, surface)) {
     return "dashboard";
   }
-  if (
+  if (isCinemaPlaybackOwnerAction(id, surface)) {
+    return "cinema";
+  }
+  if (isTelepromptPlaybackOwnerAction(surface, actionClass, label)) {
+    return "teleprompt";
+  }
+  if (isPreviewPlaybackOwnerAction(id, surface, label)) {
+    return "preview";
+  }
+  return undefined;
+}
+
+function isDashboardPlaybackOwnerAction(id: string, surface: UiActionSurface): boolean {
+  return (
+    surface === "Project Dashboard" || surface === "Voice Dashboard" || id.includes("dashboard")
+  );
+}
+
+function isCinemaPlaybackOwnerAction(id: string, surface: UiActionSurface): boolean {
+  return (
     surface === "BookCinema" ||
     surface === "DocumentCinema" ||
     surface === "WebsiteCinema" ||
     id.includes("cinema")
-  ) {
-    return "cinema";
-  }
-  if (surface === "Teleprompt" && (actionClass === "transport" || /\bcue\b/i.test(label))) {
-    return "teleprompt";
-  }
-  if (surface === "Preview" || surface === "Preview mini-player" || id.startsWith("preview-mini")) {
-    return "preview";
-  }
-  if (surface === "Review" && /\bpreview\b/i.test(label)) {
-    return "preview";
-  }
-  return undefined;
+  );
+}
+
+function isTelepromptPlaybackOwnerAction(
+  surface: UiActionSurface,
+  actionClass: UiActionClass,
+  label: string,
+): boolean {
+  return surface === "Teleprompt" && (actionClass === "transport" || /\bcue\b/i.test(label));
+}
+
+function isPreviewPlaybackOwnerAction(
+  id: string,
+  surface: UiActionSurface,
+  label: string,
+): boolean {
+  return (
+    surface === "Preview" ||
+    surface === "Preview mini-player" ||
+    id.startsWith("preview-mini") ||
+    (surface === "Review" && /\bpreview\b/i.test(label))
+  );
 }

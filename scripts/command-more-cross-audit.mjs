@@ -45,13 +45,15 @@ export const COMMAND_MORE_ACTION_CONTRACTS = [
     searchQuery: "reader preferences",
   },
   {
-    classification: "contextual-more",
+    classification: "visible-required",
     commandId: "cinema:theatre:open",
     id: "cinema-theatre",
     label: "Cinema Theatre",
     moreActionId: "theatre-mode",
     owner: "cinema-theatre",
     searchQuery: "cinema theatre",
+    visibleRequired: true,
+    visibleTestIds: ["ui-action-cinema-theatre"],
   },
   {
     classification: "contextual-more",
