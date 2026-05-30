@@ -1,63 +1,181 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PipelineStatusFooter } from "./App";
 import type { VoiceCloningActivitySummary } from "./appVoiceCloningHelpers";
-import { resolveWorkspaceDisclosure, type WorkspaceDisclosureInput } from "./features/workspace";
+import { NarrationStatusStrip, type NarrationStatusModel } from "./features/status-strip";
 
-describe("PipelineStatusFooter disclosure rendering", () => {
-  it("keeps idle voice cloning out of the full footer's large activity panels", () => {
+describe("NarrationStatusStrip disclosure rendering", () => {
+  it("keeps healthy systems compact and removes old footer panel copy", () => {
     const markup = renderToStaticMarkup(
-      <PipelineStatusFooter
-        activeJobId={null}
-        canSubmit
-        disclosure={resolveWorkspaceDisclosure(baseDisclosureInput())}
-        hint="Ready"
-        isProcessing={false}
-        job={null}
-        mode="full"
-        pipeline={{ checker: "waiting", optimization: "waiting", synthesis: "waiting" }}
-        showNarrationAction={false}
-        voiceCloningActivity={idleVoiceCloningActivity}
+      <NarrationStatusStrip
+        canCancel={false}
+        canCreate
+        canOpenCinema
+        mode="compact"
+        model={model()}
         onCancel={() => null}
+        onCreate={() => null}
+        onOpenCinema={() => null}
         onOpenVoiceCloning={() => null}
-        onPinDisclosurePanel={() => null}
-        onSubmit={() => null}
       />,
     );
 
-    expect(markup).toContain("Voice cloning: collapsed");
-    expect(markup).not.toContain("Candidates</p>");
-    expect(markup).not.toContain("Voice Cloning</h2>");
+    expect(markup).toContain('data-testid="narration-status-strip"');
+    expect(markup).toContain("Audio ready");
+    expect(markup).toContain("Queue");
+    expect(markup).not.toContain("Activity Footer");
+    expect(markup).not.toContain("Narration Pipeline");
+    expect(markup).not.toContain("Job Status");
   });
 
-  it("shows hidden attention in the collapsed footer", () => {
+  it("shows blocker treatment and the next action", () => {
     const markup = renderToStaticMarkup(
-      <PipelineStatusFooter
-        activeJobId={null}
-        canSubmit
-        disclosure={resolveWorkspaceDisclosure({
-          ...baseDisclosureInput(),
-          audioGeneration: { lifecycle: "failed", requiresPlayback: false },
-        })}
-        hint="Ready"
-        isProcessing={false}
-        job={null}
+      <NarrationStatusStrip
+        canCancel={false}
+        canCreate
+        canOpenCinema={false}
         mode="collapsed"
-        pipeline={{ checker: "failed", optimization: "done", synthesis: "failed" }}
-        showNarrationAction={false}
-        voiceCloningActivity={idleVoiceCloningActivity}
+        model={model({
+          blocker: {
+            actionLabel: "Retry audio",
+            detail: "Provider failed before checked audio was ready.",
+            title: "Generation failed",
+          },
+          primaryAction: { id: "retry", label: "Retry audio", tone: "danger" },
+          primaryLabel: "Generation failed",
+          primaryMessage: "Generation failed. Retry audio",
+          state: "failed",
+          tone: "danger",
+        })}
         onCancel={() => null}
+        onCreate={() => null}
+        onOpenCinema={() => null}
         onOpenVoiceCloning={() => null}
-        onPinDisclosurePanel={() => null}
-        onSubmit={() => null}
       />,
     );
 
-    expect(markup).toContain("1 attention");
-    expect(markup).toContain("Audio generation");
-    expect(markup).toContain("failed or was cancelled");
+    expect(markup).toContain('data-pipeline-state="failed"');
+    expect(markup).toContain("Retry audio");
+    expect(markup).toContain("Generation failed");
+  });
+
+  it("opens an activity drawer with summary, timeline, queue, and history", () => {
+    const markup = renderToStaticMarkup(
+      <NarrationStatusStrip
+        canCancel={false}
+        canCreate
+        canOpenCinema
+        initialDrawerOpen
+        mode="full"
+        model={model()}
+        onCancel={() => null}
+        onCreate={() => null}
+        onOpenCinema={() => null}
+        onOpenVoiceCloning={() => null}
+      />,
+    );
+
+    expect(markup).toContain("Current Status");
+    expect(markup).toContain("Stage Timeline");
+    expect(markup).toContain("Queue and Job");
+    expect(markup).toContain("Activity History");
+    expect(markup).toContain("Recent Jobs");
+  });
+
+  it("makes cancellation visible", () => {
+    const markup = renderToStaticMarkup(
+      <NarrationStatusStrip
+        canCancel={false}
+        canCreate
+        canOpenCinema={false}
+        mode="compact"
+        model={model({
+          blocker: {
+            actionLabel: "Retry audio",
+            detail: "The active narration job was cancelled.",
+            title: "Job cancelled",
+          },
+          primaryAction: { id: "retry", label: "Retry audio", tone: "warning" },
+          primaryLabel: "Cancelled",
+          primaryMessage: "Job cancelled. Retry when ready.",
+          state: "cancelled",
+          tone: "warning",
+        })}
+        onCancel={() => null}
+        onCreate={() => null}
+        onOpenCinema={() => null}
+        onOpenVoiceCloning={() => null}
+      />,
+    );
+
+    expect(markup).toContain("Cancelled");
+    expect(markup).toContain("Job cancelled. Retry when ready.");
   });
 });
+
+function model(overrides: Partial<NarrationStatusModel> = {}): NarrationStatusModel {
+  return {
+    activeJobDetail: "completed · 5m",
+    activeJobLabel: "job-123",
+    activityItems: [
+      {
+        detail: "Draft text",
+        id: "source",
+        status: "ready",
+        title: "Source: Draft text",
+        tone: "success",
+      },
+      {
+        detail: "4 ready, 0 generating, 4 total",
+        id: "queue",
+        status: "ready",
+        title: "Queue and readiness",
+        tone: "success",
+      },
+    ],
+    blocker: null,
+    chips: [
+      { id: "source", label: "Source", tone: "success", value: "Narratable" },
+      { id: "review", label: "Review", tone: "success", value: "Ready" },
+      { id: "audio", label: "Audio", tone: "success", value: "Ready" },
+      { id: "queue", label: "Queue", tone: "success", value: "4/4 ready" },
+      { id: "check", label: "Check", tone: "success", value: "99%" },
+      { id: "system", label: "System", tone: "success", value: "Healthy" },
+    ],
+    confidenceDetail: "ASR check passed",
+    confidenceLabel: "99%",
+    detail: "4 ready, 0 generating, 4 total",
+    eta: "Ready",
+    primaryAction: { id: "openCinema", label: "Open Cinema", tone: "secondary" },
+    primaryLabel: "Audio ready",
+    primaryMessage: "Audio ready.",
+    queue: {
+      currentSegment: 4,
+      generatingCount: 0,
+      readyCount: 4,
+      totalSegments: 4,
+    },
+    recentJobs: [
+      {
+        detail: "4 of 4 ready",
+        id: "job-123",
+        status: "completed",
+        title: "job-123 · af_heart",
+        tone: "success",
+      },
+    ],
+    sourceTitle: "Draft text",
+    stageLabel: "Preview",
+    stages: [
+      { label: "Optimize", status: "done" },
+      { label: "Synthesize", status: "done" },
+      { label: "Check", status: "done" },
+    ],
+    state: "ready",
+    tone: "success",
+    voiceCloning: idleVoiceCloningActivity,
+    ...overrides,
+  };
+}
 
 const idleVoiceCloningActivity: VoiceCloningActivitySummary = {
   activeProfile: null,
@@ -78,40 +196,3 @@ const idleVoiceCloningActivity: VoiceCloningActivitySummary = {
   status: "idle",
   statusLabel: "Idle",
 };
-
-function baseDisclosureInput(): WorkspaceDisclosureInput {
-  return {
-    audioGeneration: { lifecycle: "missing", requiresPlayback: false },
-    backendState: {
-      active: false,
-      blocking: false,
-      online: true,
-      warning: false,
-    },
-    diagnostics: {
-      active: false,
-      blocking: false,
-      warning: false,
-    },
-    exportImport: {
-      active: false,
-      blocking: false,
-      warning: false,
-    },
-    sourceDetails: {
-      active: false,
-      blocking: false,
-      hasSource: true,
-      warning: false,
-    },
-    stage: "preview",
-    storage: {
-      blocking: false,
-      warning: false,
-    },
-    voiceCloning: {
-      blocking: false,
-      status: "idle",
-    },
-  };
-}

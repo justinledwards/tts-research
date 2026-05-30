@@ -1153,3 +1153,14 @@ duplicating every implementation detail from commits, PR text, or generated revi
 ## 2026-05-30 13:06 CEST - Commit Progressive Disclosure Work Package
 - [x] Stage progressive disclosure files
 - [x] Commit staged work package
+
+## 2026-05-30 13:42 CEST - Unified Narration Status Strip
+- [x] Inspect current footer, queue, rail, and status surfaces
+- [x] Add centralized narration status model
+- [x] Add bottom status strip and activity drawer
+- [x] Remove duplicated status details from existing surfaces
+- [x] Add focused model and render tests
+- [x] Run project checks
+- [x] Commit work package
+- Validation: focused status tests, frontend typecheck/test, and `pnpm check` passed.
+- UI follow-up: responsive snapshots and UI-actions smoke were attempted but blocked by existing fixture/script assumptions outside the strip change.
