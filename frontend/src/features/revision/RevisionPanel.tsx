@@ -48,6 +48,7 @@ export interface RevisionPanelProps {
   blocks: RevisionBlock[];
   initialTabId?: RevisionTabId;
   policyProfileLabel: string;
+  playbackToolbar?: ReactNode;
   runConfigurationLabel: string;
   scopeLabel: string;
   sourceLifecycle?: SourceLifecycleEnvelope | null;
@@ -68,6 +69,7 @@ export function RevisionPanel({
   blocks,
   initialTabId = "overview",
   policyProfileLabel,
+  playbackToolbar,
   runConfigurationLabel,
   scopeLabel,
   sourceLifecycle = null,
@@ -325,6 +327,8 @@ export function RevisionPanel({
         }}
         onToggleVisibleSelection={toggleVisibleSelection}
       />
+
+      {playbackToolbar ? <div className="sticky top-3 z-10">{playbackToolbar}</div> : null}
 
       <output
         className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs font-semibold vs-border"

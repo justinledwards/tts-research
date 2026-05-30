@@ -1,13 +1,5 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
-import { Button, StatusChip, fieldControlClassName } from "../../design";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { Button, StatusChip } from "../../design";
 import {
   exitTheatreFullscreen,
   isTheatreFullscreenActive,
@@ -16,7 +8,8 @@ import {
   theatreFullscreenAvailability,
   type TheatreFullscreenAvailability,
 } from "../theatre/fullscreen";
-import { READER_PLAYBACK_RATES, READER_SEEK_SECONDS } from "../reader-accessibility";
+import { READER_SEEK_SECONDS } from "../reader-accessibility";
+import { LocalizedPlaybackToolbar, type LocalizedPlaybackToolbarModel } from "../playback";
 import type { CinemaTransportModel } from "./CinemaTransportBar";
 
 const CINEMA_THEATRE_FULLSCREEN_FALLBACK =
@@ -229,8 +222,73 @@ export function CinemaTheatreTransport({
   controlsVisible: boolean;
   model: CinemaTransportModel;
 }>) {
-  const progressPercent = `${Math.round(Math.max(0, Math.min(1, model.progress.ratio)) * 100).toString()}%`;
   const showPlaybackRate = model.playbackRate.visible ?? !model.playbackRate.disabled;
+  const theatreToolbarModel: LocalizedPlaybackToolbarModel = {
+    activeDetail:
+      model.stateSummary?.detail ??
+      "Reader-first audio controls stay pinned near the current passage.",
+    activeLabel: model.stateSummary?.title ?? "Cinema audio",
+    jumpToAudio: model.bookmark
+      ? {
+          disabled: model.bookmark.disabled,
+          disabledReason: model.bookmark.disabledReason,
+          label: model.bookmark.label ?? "Bookmark",
+          onClick: model.bookmark.onClick,
+          visible: model.bookmark.visible,
+        }
+      : undefined,
+    next: {
+      disabled: model.skipForward.disabled,
+      disabledReason: model.skipForward.disabledReason,
+      icon: model.skipForward.icon,
+      label: `+${READER_SEEK_SECONDS.toString()}s`,
+      onClick: model.skipForward.onClick,
+      visible: model.skipForward.visible,
+    },
+    playPause: {
+      ariaKeyShortcuts: "Space K",
+      ariaLabel: model.primary.label,
+      disabled: model.primary.disabled,
+      disabledReason: model.primary.disabledReason,
+      icon: model.primary.icon,
+      label: model.primary.mobileLabel ?? model.primary.label,
+      primary: true,
+      onClick: model.primary.onClick,
+      testId: "ui-action-cinema-play",
+    },
+    previous: {
+      disabled: model.skipBackward.disabled,
+      disabledReason: model.skipBackward.disabledReason,
+      icon: model.skipBackward.icon,
+      label: `-${READER_SEEK_SECONDS.toString()}s`,
+      onClick: model.skipBackward.onClick,
+      visible: model.skipBackward.visible,
+    },
+    progress: model.progress,
+    restart: {
+      ariaKeyShortcuts: "Home",
+      disabled: model.restart.disabled,
+      disabledReason: model.restart.disabledReason,
+      icon: model.restart.icon,
+      label: model.restart.label ?? "Restart",
+      onClick: model.restart.onClick,
+    },
+    speed: showPlaybackRate
+      ? {
+          ariaKeyShortcuts: "[ ]",
+          disabled: model.playbackRate.disabled,
+          disabledReason: model.playbackRate.disabled
+            ? "Playback speed is available after generated audio is loaded."
+            : undefined,
+          value: model.playbackRate.value,
+          onChange: model.playbackRate.onChange,
+        }
+      : undefined,
+    stage: "cinema-theatre",
+    statusLabel: model.stateSummary?.title,
+    testId: "localized-cinema-theatre-playback-toolbar",
+    variant: "theatre",
+  };
   return (
     <footer
       className="relative shrink-0 border-t border-white/15 bg-zinc-950 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-white shadow-[0_-10px_30px_rgba(0,0,0,0.35)] lg:px-7"
@@ -240,80 +298,8 @@ export function CinemaTheatreTransport({
       data-testid="cinema-theatre-transport"
     >
       <div className="grid gap-2">
-        <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-3 text-xs tabular-nums text-zinc-300">
-          <span>{model.progress.currentLabel}</span>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
-            <div className="h-full rounded-full bg-orange-400" style={{ width: progressPercent }} />
-          </div>
-          <span className="text-right">{model.progress.durationLabel}</span>
-        </div>
         {controlsVisible ? (
-          <div className="flex min-w-0 flex-wrap items-center justify-center gap-2">
-            <TheatreTransportButton
-              disabled={model.skipBackward.disabled}
-              disabledReason={model.skipBackward.disabledReason}
-              label={`-${READER_SEEK_SECONDS.toString()}s`}
-              onClick={model.skipBackward.onClick}
-            >
-              {model.skipBackward.icon}-{READER_SEEK_SECONDS.toString()}s
-            </TheatreTransportButton>
-            <Button
-              className={`h-12 min-w-36 gap-2 rounded-full px-5 text-sm shadow-md ${model.primary.className}`}
-              data-testid="ui-action-cinema-play"
-              disabled={model.primary.disabled}
-              disabledReason={model.primary.disabledReason}
-              onClick={model.primary.onClick}
-              size="lg"
-              variant="primary"
-            >
-              {model.primary.icon}
-              {model.primary.mobileLabel ?? model.primary.label}
-            </Button>
-            <TheatreTransportButton
-              disabled={model.skipForward.disabled}
-              disabledReason={model.skipForward.disabledReason}
-              label={`+${READER_SEEK_SECONDS.toString()}s`}
-              onClick={model.skipForward.onClick}
-            >
-              {model.skipForward.icon}+{READER_SEEK_SECONDS.toString()}s
-            </TheatreTransportButton>
-            <TheatreTransportButton
-              disabled={model.restart.disabled}
-              disabledReason={model.restart.disabledReason}
-              label={model.restart.label ?? "Restart"}
-              onClick={model.restart.onClick}
-            >
-              {model.restart.icon}
-              {model.restart.label ?? "Restart"}
-            </TheatreTransportButton>
-            {model.bookmark ? (
-              <TheatreTransportButton
-                disabled={model.bookmark.disabled}
-                disabledReason={model.bookmark.disabledReason}
-                label={model.bookmark.label ?? "Bookmark"}
-                onClick={model.bookmark.onClick}
-              >
-                {model.bookmark.label ?? "Bookmark"}
-              </TheatreTransportButton>
-            ) : null}
-            {showPlaybackRate ? (
-              <select
-                aria-label="Playback speed"
-                className={`${fieldControlClassName} h-11 w-auto border-white/20 bg-white/10 text-white`}
-                disabled={model.playbackRate.disabled}
-                onChange={(event) => {
-                  model.playbackRate.onChange?.(Number(event.currentTarget.value));
-                }}
-                value={model.playbackRate.value}
-              >
-                {READER_PLAYBACK_RATES.map((rate) => (
-                  <option className="text-zinc-950" key={rate} value={rate}>
-                    {rate.toFixed(2)}x
-                  </option>
-                ))}
-              </select>
-            ) : null}
-          </div>
+          <LocalizedPlaybackToolbar model={theatreToolbarModel} />
         ) : (
           <p className="text-center text-xs font-semibold text-zinc-400">
             Theatre controls hidden. Use Toggle Theatre controls or the top bar to show them.
@@ -321,33 +307,5 @@ export function CinemaTheatreTransport({
         )}
       </div>
     </footer>
-  );
-}
-
-function TheatreTransportButton({
-  children,
-  disabled,
-  disabledReason,
-  label,
-  onClick,
-}: Readonly<{
-  children: ReactNode;
-  disabled: boolean;
-  disabledReason?: string;
-  label: string;
-  onClick: () => void;
-}>) {
-  return (
-    <Button
-      aria-label={label}
-      className="h-11 gap-2 border-white/20 bg-white/10 text-white hover:bg-white/15"
-      disabled={disabled}
-      disabledReason={disabledReason}
-      onClick={onClick}
-      size="md"
-      variant="secondary"
-    >
-      {children}
-    </Button>
   );
 }

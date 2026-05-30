@@ -74,6 +74,7 @@ export interface GlobalPreviewPlayerProps {
   readonly providerEngineId?: string;
   readonly providerEngines?: readonly TTSEngineDiagnostics[];
   readonly policyProfileLabel: string;
+  readonly mode?: "comparison-only" | "full";
   readonly runConfigurationLabel: string;
   readonly scopeLabel: string;
   readonly sourceLabel: string;
@@ -87,6 +88,7 @@ export interface GlobalPreviewPlayerProps {
   readonly onVoiceProfileChange: (profileId: string) => void;
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function GlobalPreviewPlayer({
   activeBlockId,
   blocks,
@@ -105,6 +107,7 @@ export function GlobalPreviewPlayer({
   providerEngineId = "mock",
   providerEngines = [],
   policyProfileLabel,
+  mode = "full",
   runConfigurationLabel,
   scopeLabel,
   sourceLabel,
@@ -172,6 +175,7 @@ export function GlobalPreviewPlayer({
     : playbackActionAriaLabel("audition", { lifecycle: playbackLifecycle });
   const previewPlayLabel = playbackControls.isPlaying ? "Pause" : "Audition";
   const fullVariant = variant === "full";
+  const showTransport = mode === "full";
 
   const { auditionItem, handlePlayPause, handleRestart, handleWholeSourcePreview, moveBlock } =
     usePreviewTransportActions({
@@ -213,168 +217,170 @@ export function GlobalPreviewPlayer({
       )}
     >
       <div className={cx("grid gap-3", fullVariant && "lg:grid-cols-1 lg:items-stretch")}>
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
-                Preview Player
-              </p>
-              <h2 className="truncate text-sm font-semibold" title={sourceLabel}>
-                {sourceLabel}
-              </h2>
-            </div>
-            <span className="shrink-0 rounded-full border px-2 py-1 text-xs font-semibold vs-border">
-              {statusLabel}
-            </span>
-          </div>
-          <div className="mt-2 grid gap-2">
-            <MiniWaveform bars={waveformBars} progress={progress.ratio} />
-            <div className="flex items-center justify-between gap-3 text-xs tabular-nums vs-muted">
-              <span>{progress.currentLabel}</span>
-              <span>
-                {queue.readyCount.toString()} / {queue.totalCount.toString()} ready
+        {showTransport ? (
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+                  Preview Player
+                </p>
+                <h2 className="truncate text-sm font-semibold" title={sourceLabel}>
+                  {sourceLabel}
+                </h2>
+              </div>
+              <span className="shrink-0 rounded-full border px-2 py-1 text-xs font-semibold vs-border">
+                {statusLabel}
               </span>
-              <span>{progress.durationLabel}</span>
             </div>
-          </div>
-          <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
-            <Button
-              aria-label="Previous preview block"
-              data-testid="ui-action-preview-mini-previous"
-              data-ui-action-surface="Preview"
-              onClick={() => {
-                moveBlock(-1);
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              Prev
-            </Button>
-            <Button
-              aria-label={previewPlayAriaLabel}
-              {...playbackActionDataAttributes("audition", playbackLifecycle, { primary: true })}
-              {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
-              data-testid="ui-action-preview-mini-play"
-              data-ui-action-surface="Preview"
-              disabled={!playbackAvailable}
-              disabledReason={playbackDisabledReason}
-              onClick={handlePlayPause}
-              size="sm"
-              variant="primary"
-            >
-              {previewPlayLabel}
-            </Button>
-            <Button
-              {...playbackActionDataAttributes("audition", playbackLifecycle)}
-              {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
-              aria-label="Restart preview"
-              data-testid="ui-action-preview-mini-restart"
-              data-ui-action-surface="Preview"
-              disabled={!playbackAvailable}
-              disabledReason={playbackDisabledReason}
-              onClick={handleRestart}
-              size="sm"
-              variant="secondary"
-            >
-              Restart
-            </Button>
-            <Button
-              aria-label="Next preview block"
-              data-testid="ui-action-preview-mini-next"
-              data-ui-action-surface="Preview"
-              onClick={() => {
-                moveBlock(1);
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              Next
-            </Button>
-            <label className="flex min-h-11 items-center gap-2 text-xs font-semibold">
-              <span className="sr-only">Preview playback speed</span>
-              <select
-                aria-label="Preview playback speed"
-                className={`${fieldControlClassName} h-11 text-xs font-semibold`}
-                data-disabled-reason={
-                  playbackControls.setPlaybackRate
-                    ? undefined
-                    : "Playback speed is available after generated audio is loaded."
-                }
-                data-testid="ui-action-preview-mini-speed"
+            <div className="mt-2 grid gap-2">
+              <MiniWaveform bars={waveformBars} progress={progress.ratio} />
+              <div className="flex items-center justify-between gap-3 text-xs tabular-nums vs-muted">
+                <span>{progress.currentLabel}</span>
+                <span>
+                  {queue.readyCount.toString()} / {queue.totalCount.toString()} ready
+                </span>
+                <span>{progress.durationLabel}</span>
+              </div>
+            </div>
+            <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
+              <Button
+                aria-label="Previous preview block"
+                data-testid="ui-action-preview-mini-previous"
                 data-ui-action-surface="Preview"
-                disabled={!playbackControls.setPlaybackRate}
-                onChange={(event) => {
-                  playbackControls.setPlaybackRate?.(Number(event.currentTarget.value));
+                onClick={() => {
+                  moveBlock(-1);
                 }}
-                value={String(playbackControls.playbackRate)}
+                size="sm"
+                variant="secondary"
               >
-                {READER_PLAYBACK_RATES.map((rate) => (
-                  <option key={rate} value={rate}>
-                    {rate.toFixed(rate === 1 ? 0 : 2)}x
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Toggle
-              checked={skipSilence}
-              className="min-h-11 py-1.5 text-xs"
-              data-testid="ui-action-preview-mini-skip-silence"
-              data-ui-action-surface="Preview"
-              label="Skip silence"
-              onChange={setSkipSilence}
-            />
-            <Button
-              {...playbackActionDataAttributes("audition", playbackLifecycle)}
-              {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
-              data-testid="ui-action-preview-mini-segment"
-              data-ui-action-surface="Preview"
-              disabled={!playbackAvailable}
-              disabledReason={playbackDisabledReason}
-              onClick={() => {
-                auditionItem(activeItem);
-              }}
-              size="sm"
-              variant="soft"
-            >
-              Selected segment
-            </Button>
-            {fullVariant ? (
-              <>
-                <Button
-                  {...playbackActionDataAttributes("audition", playbackLifecycle)}
-                  {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
-                  data-testid="ui-action-preview-mini-source"
+                Prev
+              </Button>
+              <Button
+                aria-label={previewPlayAriaLabel}
+                {...playbackActionDataAttributes("audition", playbackLifecycle, { primary: true })}
+                {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
+                data-testid="ui-action-preview-mini-play"
+                data-ui-action-surface="Preview"
+                disabled={!playbackAvailable}
+                disabledReason={playbackDisabledReason}
+                onClick={handlePlayPause}
+                size="sm"
+                variant="primary"
+              >
+                {previewPlayLabel}
+              </Button>
+              <Button
+                {...playbackActionDataAttributes("audition", playbackLifecycle)}
+                {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
+                aria-label="Restart preview"
+                data-testid="ui-action-preview-mini-restart"
+                data-ui-action-surface="Preview"
+                disabled={!playbackAvailable}
+                disabledReason={playbackDisabledReason}
+                onClick={handleRestart}
+                size="sm"
+                variant="secondary"
+              >
+                Restart
+              </Button>
+              <Button
+                aria-label="Next preview block"
+                data-testid="ui-action-preview-mini-next"
+                data-ui-action-surface="Preview"
+                onClick={() => {
+                  moveBlock(1);
+                }}
+                size="sm"
+                variant="secondary"
+              >
+                Next
+              </Button>
+              <label className="flex min-h-11 items-center gap-2 text-xs font-semibold">
+                <span className="sr-only">Preview playback speed</span>
+                <select
+                  aria-label="Preview playback speed"
+                  className={`${fieldControlClassName} h-11 text-xs font-semibold`}
+                  data-disabled-reason={
+                    playbackControls.setPlaybackRate
+                      ? undefined
+                      : "Playback speed is available after generated audio is loaded."
+                  }
+                  data-testid="ui-action-preview-mini-speed"
                   data-ui-action-surface="Preview"
-                  disabled={!playbackAvailable}
-                  disabledReason={playbackDisabledReason}
-                  onClick={handleWholeSourcePreview}
-                  size="sm"
-                  variant="secondary"
+                  disabled={!playbackControls.setPlaybackRate}
+                  onChange={(event) => {
+                    playbackControls.setPlaybackRate?.(Number(event.currentTarget.value));
+                  }}
+                  value={String(playbackControls.playbackRate)}
                 >
-                  Whole source
-                </Button>
-                <Button
-                  {...playbackActionDataAttributes("openCinema", playbackLifecycle)}
-                  data-testid="ui-action-preview-mini-open-cinema"
-                  data-ui-action-surface="Preview"
-                  disabled={!canOpenCinema}
-                  disabledReason={openCinemaDisabledReason}
-                  onClick={onOpenCinema}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {playbackActionLabel("openCinema")}
-                </Button>
-              </>
-            ) : null}
+                  {READER_PLAYBACK_RATES.map((rate) => (
+                    <option key={rate} value={rate}>
+                      {rate.toFixed(rate === 1 ? 0 : 2)}x
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Toggle
+                checked={skipSilence}
+                className="min-h-11 py-1.5 text-xs"
+                data-testid="ui-action-preview-mini-skip-silence"
+                data-ui-action-surface="Preview"
+                label="Skip silence"
+                onChange={setSkipSilence}
+              />
+              <Button
+                {...playbackActionDataAttributes("audition", playbackLifecycle)}
+                {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
+                data-testid="ui-action-preview-mini-segment"
+                data-ui-action-surface="Preview"
+                disabled={!playbackAvailable}
+                disabledReason={playbackDisabledReason}
+                onClick={() => {
+                  auditionItem(activeItem);
+                }}
+                size="sm"
+                variant="soft"
+              >
+                Selected segment
+              </Button>
+              {fullVariant ? (
+                <>
+                  <Button
+                    {...playbackActionDataAttributes("audition", playbackLifecycle)}
+                    {...providerCapabilityDataAttributes("voicePreview", auditionGate.reason)}
+                    data-testid="ui-action-preview-mini-source"
+                    data-ui-action-surface="Preview"
+                    disabled={!playbackAvailable}
+                    disabledReason={playbackDisabledReason}
+                    onClick={handleWholeSourcePreview}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    Whole source
+                  </Button>
+                  <Button
+                    {...playbackActionDataAttributes("openCinema", playbackLifecycle)}
+                    data-testid="ui-action-preview-mini-open-cinema"
+                    data-ui-action-surface="Preview"
+                    disabled={!canOpenCinema}
+                    disabledReason={openCinemaDisabledReason}
+                    onClick={onOpenCinema}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {playbackActionLabel("openCinema")}
+                  </Button>
+                </>
+              ) : null}
+            </div>
+            <p aria-live="polite" className="mt-2 text-xs vs-muted">
+              {previewActiveDetail(activeItem, activeWords, scopeLabel)}
+            </p>
+            <p aria-live="polite" className="sr-only">
+              {statusMessage}
+            </p>
           </div>
-          <p aria-live="polite" className="mt-2 text-xs vs-muted">
-            {previewActiveDetail(activeItem, activeWords, scopeLabel)}
-          </p>
-          <p aria-live="polite" className="sr-only">
-            {statusMessage}
-          </p>
-        </div>
+        ) : null}
 
         {fullVariant ? (
           <div className="grid min-w-0 gap-2 rounded-md border bg-[var(--vs-surface)] p-3 vs-border">

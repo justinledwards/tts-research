@@ -3,11 +3,15 @@ import { playbackActionLabel } from "../playback";
 
 export type TelepromptShortcutAction =
   | "createListen"
+  | "jumpCurrentAudio"
   | "nextCue"
   | "playPause"
   | "previousCue"
+  | "restart"
   | "returnPreview"
-  | "returnReview";
+  | "returnReview"
+  | "speedDown"
+  | "speedUp";
 
 export interface TelepromptShortcutDefinition {
   readonly action: TelepromptShortcutAction;
@@ -22,6 +26,30 @@ export const TELEPROMPT_SHORTCUTS: readonly TelepromptShortcutDefinition[] = [
     description: "Play or pause playback",
     key: "Space",
     label: "Play/Pause",
+  },
+  {
+    action: "restart",
+    description: "Restart playback",
+    key: "Home",
+    label: "Restart",
+  },
+  {
+    action: "speedDown",
+    description: "Slow playback speed",
+    key: "[",
+    label: "Speed down",
+  },
+  {
+    action: "speedUp",
+    description: "Increase playback speed",
+    key: "]",
+    label: "Speed up",
+  },
+  {
+    action: "jumpCurrentAudio",
+    description: "Jump to the current audio cue",
+    key: "Alt+J",
+    label: "Jump to audio",
   },
   {
     action: "previousCue",
@@ -67,15 +95,27 @@ export interface TelepromptKeyboardEventLike {
 export function resolveTelepromptShortcut(
   event: TelepromptKeyboardEventLike,
 ): TelepromptShortcutAction | null {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
-    return null;
-  }
   if (shouldIgnoreTelepromptShortcutTarget(event.target)) {
     return null;
   }
   const key = event.key.toLowerCase();
+  if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && key === "j") {
+    return "jumpCurrentAudio";
+  }
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return null;
+  }
   if (key === " " || key === "spacebar" || key === "k") {
     return "playPause";
+  }
+  if (key === "home") {
+    return "restart";
+  }
+  if (key === "[") {
+    return "speedDown";
+  }
+  if (key === "]") {
+    return "speedUp";
   }
   if (key === "arrowleft" || key === "arrowup") {
     return "previousCue";

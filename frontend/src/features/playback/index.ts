@@ -58,3 +58,13 @@ export {
   telepromptSecondaryActionVariant,
   type PlaybackSurfaceState,
 } from "./playbackSurfaceRules";
+export {
+  LocalizedPlaybackToolbar,
+  localizedPlaybackStageLabel,
+  type LocalizedPlaybackToolbarAction,
+  type LocalizedPlaybackToolbarModel,
+  type LocalizedPlaybackToolbarProgress,
+  type LocalizedPlaybackToolbarSpeedControl,
+  type LocalizedPlaybackToolbarStage,
+  type LocalizedPlaybackToolbarVariant,
+} from "./LocalizedPlaybackToolbar";

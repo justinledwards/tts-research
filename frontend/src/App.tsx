@@ -210,6 +210,7 @@ import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPre
 import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
 import type { HeaderContextSummaryProps } from "./features/header";
 import { liveStatusMessages, useLiveStatus } from "./features/accessibility";
+import { nextReaderPlaybackRate } from "./features/reader-accessibility";
 import {
   DEFAULT_READ_ALONG_PREFERENCES,
   clearStoredReadAlongPreferences,
@@ -239,6 +240,16 @@ import {
   shouldShowGlobalPreviewPlayer,
   shouldShowRailCinemaShortcut,
 } from "./features/playback/playbackSurfaceRules";
+import {
+  playbackActionAriaLabel,
+  playbackActionDataAttributes,
+  playbackActionDisabledReason,
+} from "./features/playback/playbackActionRules";
+import {
+  LocalizedPlaybackToolbar,
+  type LocalizedPlaybackToolbarModel,
+} from "./features/playback/LocalizedPlaybackToolbar";
+import { useAudioWaveformBars } from "./audioWaveform";
 import type { SourceCardModel } from "./features/sources";
 import type {
   SourceLifecycleEnvelope,
@@ -637,6 +648,127 @@ const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   skipBy: undefined,
   seekTo: undefined,
 };
+
+function formatPlaybackClockSeconds(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0:00";
+  }
+  const totalSeconds = Math.round(value);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes.toString()}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function playbackDurationSec(job: VoiceJob | null): number {
+  return Math.max(0, (job?.durationMs ?? 0) / 1000);
+}
+
+function playbackProgressRatioForJob(cursorSec: number, job: VoiceJob | null): number {
+  const durationSec = playbackDurationSec(job);
+  if (durationSec <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, cursorSec / durationSec));
+}
+
+function playbackSeekSecondsForRevisionBlock(
+  blocks: readonly RevisionBlock[],
+  blockId: string | null,
+  job: VoiceJob | null,
+): number | null {
+  if (!blockId || !job?.audioSegmentDurationsMs?.length) {
+    return null;
+  }
+  let segmentIndex = 0;
+  let cursorMs = 0;
+  for (const block of blocks) {
+    if (block.id === blockId) {
+      return cursorMs / 1000;
+    }
+    const segmentCount = Math.max(1, block.segmentCount);
+    for (let offset = 0; offset < segmentCount; offset += 1) {
+      const durationMs = job.audioSegmentDurationsMs[segmentIndex + offset];
+      if (!Number.isFinite(durationMs)) {
+        return null;
+      }
+      cursorMs += Math.max(0, durationMs);
+    }
+    segmentIndex += segmentCount;
+  }
+  return null;
+}
+
+function seekPlaybackToSeconds(
+  playbackControls: PlaybackController,
+  targetSec: number,
+  currentCursorSec: number,
+): void {
+  if (playbackControls.seekTo) {
+    playbackControls.seekTo(targetSec);
+    return;
+  }
+  playbackControls.skipBy?.(targetSec - currentCursorSec);
+}
+
+function playbackSpeedDisabledReason(playbackControls: PlaybackController): string | undefined {
+  return playbackControls.setPlaybackRate
+    ? undefined
+    : "Playback speed is available after generated audio is loaded.";
+}
+
+type LocalizedReviewPreviewShortcut =
+  | "jumpToAudio"
+  | "nextBlock"
+  | "playPause"
+  | "previousBlock"
+  | "restart"
+  | "speedDown"
+  | "speedUp";
+
+function resolveLocalizedReviewPreviewShortcut(
+  event: KeyboardEvent,
+): LocalizedReviewPreviewShortcut | null {
+  if (shouldIgnoreLocalizedPlaybackShortcutTarget(event.target)) {
+    return null;
+  }
+  const key = event.key.toLowerCase();
+  const altOnly = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+  if (altOnly && key === "arrowleft") {
+    return "previousBlock";
+  }
+  if (altOnly && key === "arrowright") {
+    return "nextBlock";
+  }
+  if (altOnly && key === "j") {
+    return "jumpToAudio";
+  }
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return null;
+  }
+  if (key === " " || key === "spacebar" || key === "k") {
+    return "playPause";
+  }
+  if (key === "home") {
+    return "restart";
+  }
+  if (key === "[") {
+    return "speedDown";
+  }
+  if (key === "]") {
+    return "speedUp";
+  }
+  return null;
+}
+
+function shouldIgnoreLocalizedPlaybackShortcutTarget(target: EventTarget | null): boolean {
+  if (shouldIgnoreGlobalShortcutTarget(target)) {
+    return true;
+  }
+  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
+    return false;
+  }
+  return target.tagName.toLowerCase() === "button";
+}
 
 function createPipelineBase(job?: VoiceJob): PipelineStepState {
   if (!job) {
@@ -5959,6 +6091,94 @@ export function App() {
     shortcutPreferences,
   ]);
 
+  useEffect(() => {
+    if (contentMode !== "review" && contentMode !== "preview") {
+      return;
+    }
+    // eslint-disable-next-line sonarjs/cognitive-complexity
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isCommandPaletteOpen || isHelpOpen || isSettingsOpen) {
+        return;
+      }
+      const shortcut = resolveLocalizedReviewPreviewShortcut(event);
+      if (!shortcut) {
+        return;
+      }
+      event.preventDefault();
+      const selectedBlockId = selectReviewBlockId(
+        narrationPreviewBlocks,
+        workspaceContext.activeBlockId,
+      );
+      const selectedBlockIndex = narrationPreviewBlocks.findIndex(
+        (block) => block.id === selectedBlockId,
+      );
+      if (shortcut === "playPause") {
+        if (!playbackControls.isAvailable) {
+          return;
+        }
+        if (playbackControls.isPlaying) {
+          playbackControls.pause();
+          return;
+        }
+        void playbackControls.play();
+        return;
+      }
+      if (shortcut === "restart") {
+        if (playbackControls.isAvailable) {
+          void playbackControls.restart();
+        }
+        return;
+      }
+      if (shortcut === "speedDown" || shortcut === "speedUp") {
+        playbackControls.setPlaybackRate?.(
+          nextReaderPlaybackRate(playbackControls.playbackRate, shortcut === "speedDown" ? -1 : 1),
+        );
+        return;
+      }
+      if (shortcut === "jumpToAudio") {
+        const seekTargetSec = playbackSeekSecondsForRevisionBlock(
+          narrationPreviewBlocks,
+          selectedBlockId,
+          job,
+        );
+        if (
+          playbackControls.isAvailable &&
+          seekTargetSec !== null &&
+          (playbackControls.seekTo ?? playbackControls.skipBy)
+        ) {
+          seekPlaybackToSeconds(playbackControls, seekTargetSec, playbackCursorSec);
+        }
+        return;
+      }
+      const direction = shortcut === "previousBlock" ? -1 : 1;
+      if (narrationPreviewBlocks.length === 0 || selectedBlockIndex === -1) {
+        return;
+      }
+      const nextIndex = Math.max(
+        0,
+        Math.min(narrationPreviewBlocks.length - 1, selectedBlockIndex + direction),
+      );
+      const nextBlock = narrationPreviewBlocks[nextIndex];
+      setWorkspaceContext((currentContext) =>
+        withWorkspaceActiveBlock(currentContext, nextBlock.id),
+      );
+    };
+    globalThis.addEventListener("keydown", handleKeyDown);
+    return () => {
+      globalThis.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [
+    contentMode,
+    isCommandPaletteOpen,
+    isHelpOpen,
+    isSettingsOpen,
+    job,
+    narrationPreviewBlocks,
+    playbackControls,
+    playbackCursorSec,
+    workspaceContext.activeBlockId,
+  ]);
+
   const studioJobName = getStudioJobName(job);
   const studioProjectName = activeProject?.name ?? DEFAULT_PROJECT_NAME;
   const studioGridStyle = {
@@ -6106,6 +6326,7 @@ export function App() {
   }
   const globalPreviewVisible =
     studioMode === "narration" &&
+    contentMode === "preview" &&
     shouldShowGlobalPreviewPlayer({
       activityFooterMode,
       isCinemaOpen: isBookCinemaOpen,
@@ -6517,6 +6738,7 @@ export function App() {
             hidden={!globalPreviewVisible || workspaceOverlay.previewPlacement === "hidden"}
             isPlaybackActive={isPlaybackActive}
             job={job}
+            mode="comparison-only"
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
             placement={workspaceOverlay.previewPlacement}
@@ -6578,7 +6800,7 @@ export function App() {
           void handleResumeProgress(progress);
         }}
       />
-      {rightRailMode !== "full" && job ? (
+      {job ? (
         <PlaybackControllerHost
           job={job}
           latestProgress={latestProgress}
@@ -7064,6 +7286,9 @@ export function App() {
               createAndListenCapabilityReason={createAndListenCapabilityReason}
               createAndListenDisabledReason={createAndListenDisabledReason}
               createAndListenScope={createAndListenScope}
+              isPlaybackActive={isPlaybackActive}
+              playbackControls={playbackControls}
+              playbackCursorSec={playbackCursorSec}
               onInspectBookSource={(book) => {
                 void handleInspectContentIR(book.id, bookSourceName(book));
               }}
@@ -7121,9 +7346,7 @@ export function App() {
                     job={job}
                     latestProgress={latestProgress}
                     onOpenCinema={openReadingCinema}
-                    onPlaybackCursorChange={setPlaybackCursorSec}
-                    onPlaybackControlsChange={handlePlaybackControlsChange}
-                    onPlaybackStateChange={setIsPlaybackActive}
+                    playbackCursorSec={playbackCursorSec}
                     onResumeProgress={(progress) => {
                       void handleResumeProgress(progress);
                     }}
@@ -9958,6 +10181,9 @@ function SourceTextPanel({
   createAndListenCapabilityReason,
   createAndListenDisabledReason,
   createAndListenScope,
+  isPlaybackActive,
+  playbackControls,
+  playbackCursorSec,
   onCreateAndListen,
   onInspectBookSource,
   onInspectPreparedSource,
@@ -10013,6 +10239,9 @@ function SourceTextPanel({
   createAndListenCapabilityReason?: string;
   createAndListenDisabledReason?: string;
   createAndListenScope: CreateAndListenScope;
+  isPlaybackActive: boolean;
+  playbackControls: PlaybackController;
+  playbackCursorSec: number;
   onCreateAndListen: () => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
@@ -10163,10 +10392,13 @@ function SourceTextPanel({
             selectedBookSource={activeBookSource}
             selectedPreparedSource={activePreparedSource}
             contextInspectorDensity={contextInspectorDensity}
+            isPlaybackActive={isPlaybackActive}
             sourceLifecycle={sourceLifecycle}
             text={text}
             voiceProfileLabel={voiceProfileLabel}
             voiceProfileId={voiceProfileId}
+            playbackControls={playbackControls}
+            playbackCursorSec={playbackCursorSec}
             onInspectBookSource={onInspectBookSource}
             onInspectPreparedSource={onInspectPreparedSource}
             onActiveBlockChange={onReviewBlockChange}
@@ -10195,9 +10427,14 @@ function SourceTextPanel({
           createAndListenCapabilityReason={createAndListenCapabilityReason}
           createAndListenDisabledReason={createAndListenDisabledReason}
           createAndListenScope={createAndListenScope}
+          activeBlockId={activeReviewBlockId}
+          isPlaybackActive={isPlaybackActive}
+          playbackControls={playbackControls}
+          playbackCursorSec={playbackCursorSec}
           onCreateAndListen={onCreateAndListen}
           onOpenCinema={onOpenCinema}
           onOpenTheatre={onOpenTheatre}
+          onActiveBlockChange={onReviewBlockChange}
           onOpenTeleprompt={() => {
             onStageAction("openTeleprompt");
           }}
@@ -10333,12 +10570,17 @@ function WorkbenchBlockedBanner({
   );
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 function NarrationPreviewStage({
+  activeBlockId,
   bookScopeContent,
   canCreate,
   canOpenCinema,
   job,
+  isPlaybackActive,
   optimizedText,
+  playbackControls,
+  playbackCursorSec,
   policyProfileLabel,
   selectedBookScope,
   selectedBookSource,
@@ -10350,16 +10592,21 @@ function NarrationPreviewStage({
   createAndListenCapabilityReason,
   createAndListenDisabledReason: externalCreateAndListenDisabledReason,
   createAndListenScope,
+  onActiveBlockChange,
   onCreateAndListen,
   onOpenCinema,
   onOpenTheatre,
   onOpenTeleprompt,
 }: Readonly<{
+  activeBlockId: string | null;
   bookScopeContent: BookSourceScopeContent | null;
   canCreate: boolean;
   canOpenCinema: boolean;
   job: VoiceJob | null;
+  isPlaybackActive: boolean;
   optimizedText: string;
+  playbackControls: PlaybackController;
+  playbackCursorSec: number;
   policyProfileLabel: string;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
@@ -10371,6 +10618,7 @@ function NarrationPreviewStage({
   createAndListenCapabilityReason?: string;
   createAndListenDisabledReason?: string;
   createAndListenScope: CreateAndListenScope;
+  onActiveBlockChange: (blockId: string | null) => void;
   onCreateAndListen: () => void;
   onOpenCinema: () => void;
   onOpenTheatre: () => void;
@@ -10437,6 +10685,164 @@ function NarrationPreviewStage({
     sourceMode,
     voiceProfileLabel,
   });
+  const previewBlocks = useMemo(
+    () =>
+      buildNarrationReviewBlocks({
+        optimizedText,
+        bookScopeContent,
+        selectedBookScope,
+        selectedBookSource,
+        selectedPreparedSource,
+        text,
+      }),
+    [
+      bookScopeContent,
+      optimizedText,
+      selectedBookScope,
+      selectedBookSource,
+      selectedPreparedSource,
+      text,
+    ],
+  );
+  const selectedPreviewBlockId = selectReviewBlockId(previewBlocks, activeBlockId);
+  const selectedPreviewBlock =
+    previewBlocks.find((block) => block.id === selectedPreviewBlockId) ??
+    previewBlocks.at(0) ??
+    null;
+  const selectedPreviewBlockIndex = selectedPreviewBlock
+    ? previewBlocks.findIndex((block) => block.id === selectedPreviewBlock.id)
+    : -1;
+  const previewWaveformBars = useAudioWaveformBars(
+    job ? audioSource(job, { partial: true }) : "",
+    56,
+  );
+  const playbackLifecycle = playbackControls.isAvailable ? "ready" : generatedAudioLifecycle;
+  const previewPlaybackDisabledReason = playbackControls.isAvailable
+    ? undefined
+    : playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle });
+  const previewDurationSec = playbackDurationSec(job);
+  const previewSeekTargetSec = playbackSeekSecondsForRevisionBlock(
+    previewBlocks,
+    selectedPreviewBlock?.id ?? null,
+    job,
+  );
+  const canPreviewJump = Boolean(
+    playbackControls.isAvailable &&
+      previewSeekTargetSec !== null &&
+      (playbackControls.seekTo ?? playbackControls.skipBy),
+  );
+  const movePreviewBlock = (direction: -1 | 1) => {
+    if (previewBlocks.length === 0 || selectedPreviewBlockIndex < 0) {
+      return;
+    }
+    const nextIndex = Math.max(
+      0,
+      Math.min(previewBlocks.length - 1, selectedPreviewBlockIndex + direction),
+    );
+    const nextBlock = previewBlocks[nextIndex];
+    onActiveBlockChange(nextBlock.id);
+  };
+  const previewPlaybackToolbar: LocalizedPlaybackToolbarModel = {
+    activeDetail: selectedPreviewBlock
+      ? `${selectedPreviewBlock.index.toString()} of ${Math.max(1, previewBlocks.length).toString()} · ${formatDuration(selectedPreviewBlock.estimatedDurationMs)}`
+      : scopeTitle,
+    activeLabel: selectedPreviewBlock?.label ?? sourceLabel,
+    jumpToAudio: {
+      ariaKeyShortcuts: "Alt+J",
+      disabled: !canPreviewJump,
+      disabledReason:
+        previewPlaybackDisabledReason ??
+        (previewSeekTargetSec === null
+          ? "Audio timing is not available for this block."
+          : "Seeking is unavailable for this audio."),
+      label: "Jump to Audio",
+      onClick: () => {
+        if (previewSeekTargetSec !== null) {
+          seekPlaybackToSeconds(playbackControls, previewSeekTargetSec, playbackCursorSec);
+        }
+      },
+      testId: "ui-action-preview-local-jump-audio",
+    },
+    next: {
+      ariaKeyShortcuts: "Alt+ArrowRight",
+      disabled:
+        selectedPreviewBlockIndex < 0 || selectedPreviewBlockIndex >= previewBlocks.length - 1,
+      disabledReason:
+        selectedPreviewBlockIndex >= previewBlocks.length - 1
+          ? "Already at the final block."
+          : "No block is selected.",
+      label: "Next",
+      onClick: () => {
+        movePreviewBlock(1);
+      },
+      testId: "ui-action-preview-local-next",
+    },
+    playPause: {
+      ariaKeyShortcuts: "Space K",
+      ariaLabel: playbackControls.isPlaying
+        ? "Pause preview playback"
+        : playbackActionAriaLabel("audition", { lifecycle: playbackLifecycle }),
+      dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle, {
+        primary: true,
+      }),
+      disabled: !playbackControls.isAvailable,
+      disabledReason: previewPlaybackDisabledReason,
+      label: playbackControls.isPlaying ? "Pause" : "Play",
+      primary: true,
+      onClick: () => {
+        if (!playbackControls.isAvailable) {
+          return;
+        }
+        if (playbackControls.isPlaying) {
+          playbackControls.pause();
+          return;
+        }
+        void playbackControls.play();
+      },
+      testId: "ui-action-preview-local-play",
+    },
+    previous: {
+      ariaKeyShortcuts: "Alt+ArrowLeft",
+      disabled: selectedPreviewBlockIndex <= 0,
+      disabledReason: selectedPreviewBlockIndex <= 0 ? "Already at the first block." : undefined,
+      label: "Previous",
+      onClick: () => {
+        movePreviewBlock(-1);
+      },
+      testId: "ui-action-preview-local-previous",
+    },
+    progress: {
+      currentLabel: formatPlaybackClockSeconds(playbackCursorSec),
+      durationLabel:
+        previewDurationSec > 0 ? formatPlaybackClockSeconds(previewDurationSec) : "--:--",
+      ratio: playbackProgressRatioForJob(playbackCursorSec, job),
+      waveformBars: previewWaveformBars,
+    },
+    restart: {
+      ariaKeyShortcuts: "Home",
+      dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle),
+      disabled: !playbackControls.isAvailable,
+      disabledReason: previewPlaybackDisabledReason,
+      label: "Restart",
+      onClick: () => {
+        if (playbackControls.isAvailable) {
+          void playbackControls.restart();
+        }
+      },
+      testId: "ui-action-preview-local-restart",
+    },
+    speed: {
+      ariaKeyShortcuts: "[ ]",
+      disabled: !playbackControls.setPlaybackRate,
+      disabledReason: playbackSpeedDisabledReason(playbackControls),
+      testId: "ui-action-preview-local-speed",
+      value: playbackControls.playbackRate,
+      onChange: playbackControls.setPlaybackRate,
+    },
+    stage: "preview",
+    statusLabel: playbackControls.isPlaying || isPlaybackActive ? "Playing" : "Ready",
+    testId: "localized-preview-playback-toolbar",
+  };
 
   return (
     <Panel className="grid gap-3 p-4" variant="raised">
@@ -10501,6 +10907,9 @@ function NarrationPreviewStage({
       <StatusChip className="justify-self-start" tone={job ? "info" : "neutral"}>
         {createDetail}
       </StatusChip>
+      <div className="sticky top-3 z-10">
+        <LocalizedPlaybackToolbar model={previewPlaybackToolbar} />
+      </div>
       <dl className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 text-xs sm:grid-cols-3 vs-border">
         <PreviewFact label="Voice choice" value={voiceProfileLabel} />
         <PreviewFact label="Speech policy" value={policyProfileLabel} />
@@ -12427,17 +12836,21 @@ function VoiceProfileOption({
   );
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 function NarrationReviewWorkbench({
   activePane,
   activeBlockId,
   bookScopeContent,
   job,
+  isPlaybackActive,
   onInspectBookSource,
   onInspectPreparedSource,
   onActiveBlockChange,
   onActivePaneChange,
   onPreviewSpeech,
   optimizedText,
+  playbackControls,
+  playbackCursorSec,
   policyProfileLabel,
   projectId,
   runConfigurationLabel,
@@ -12454,12 +12867,15 @@ function NarrationReviewWorkbench({
   activeBlockId: string | null;
   bookScopeContent: BookSourceScopeContent | null;
   job: VoiceJob | null;
+  isPlaybackActive: boolean;
   onActiveBlockChange: (blockId: string | null) => void;
   onActivePaneChange: (pane: ReviewPane) => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onPreviewSpeech: () => void;
   optimizedText: string;
+  playbackControls: PlaybackController;
+  playbackCursorSec: number;
   policyProfileLabel: string;
   projectId: string;
   runConfigurationLabel: string;
@@ -12535,6 +12951,141 @@ function NarrationReviewWorkbench({
           }
         }
       : undefined;
+  const reviewWaveformBars = useAudioWaveformBars(
+    job ? audioSource(job, { partial: true }) : "",
+    56,
+  );
+  const selectedBlockIndex = selectedBlock
+    ? reviewBlocks.findIndex((block) => block.id === selectedBlock.id)
+    : -1;
+  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
+  const playbackLifecycle = playbackControls.isAvailable ? "ready" : generatedAudioLifecycle;
+  const reviewPlaybackDisabledReason = playbackControls.isAvailable
+    ? undefined
+    : playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle });
+  const reviewSeekTargetSec = playbackSeekSecondsForRevisionBlock(
+    reviewBlocks,
+    selectedBlock?.id ?? null,
+    job,
+  );
+  const canReviewJump = Boolean(
+    playbackControls.isAvailable &&
+      reviewSeekTargetSec !== null &&
+      (playbackControls.seekTo ?? playbackControls.skipBy),
+  );
+  const moveReviewBlock = (direction: -1 | 1) => {
+    if (reviewBlocks.length === 0 || selectedBlockIndex < 0) {
+      return;
+    }
+    const nextIndex = Math.max(
+      0,
+      Math.min(reviewBlocks.length - 1, selectedBlockIndex + direction),
+    );
+    const nextBlock = reviewBlocks[nextIndex];
+    onActiveBlockChange(nextBlock.id);
+  };
+  const reviewPlaybackToolbar: LocalizedPlaybackToolbarModel = {
+    activeDetail: selectedBlock
+      ? `${selectedBlock.index.toString()} of ${Math.max(1, reviewBlocks.length).toString()} · ${formatDuration(selectedBlock.estimatedDurationMs)}`
+      : scopeTitle,
+    activeLabel: selectedBlock?.label ?? sourceLabel,
+    jumpToAudio: {
+      ariaKeyShortcuts: "Alt+J",
+      disabled: !canReviewJump,
+      disabledReason:
+        reviewPlaybackDisabledReason ??
+        (reviewSeekTargetSec === null
+          ? "Audio timing is not available for this block."
+          : "Seeking is unavailable for this audio."),
+      label: "Jump to Audio",
+      onClick: () => {
+        if (reviewSeekTargetSec !== null) {
+          seekPlaybackToSeconds(playbackControls, reviewSeekTargetSec, playbackCursorSec);
+        }
+      },
+      testId: "ui-action-review-local-jump-audio",
+    },
+    next: {
+      ariaKeyShortcuts: "Alt+ArrowRight",
+      disabled: selectedBlockIndex < 0 || selectedBlockIndex >= reviewBlocks.length - 1,
+      disabledReason:
+        selectedBlockIndex >= reviewBlocks.length - 1
+          ? "Already at the final block."
+          : "No block is selected.",
+      label: "Next",
+      onClick: () => {
+        moveReviewBlock(1);
+      },
+      testId: "ui-action-review-local-next",
+    },
+    playPause: {
+      ariaKeyShortcuts: "Space K",
+      ariaLabel: playbackControls.isPlaying
+        ? "Pause review playback"
+        : playbackActionAriaLabel("audition", { lifecycle: playbackLifecycle }),
+      dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle, {
+        primary: true,
+      }),
+      disabled: !playbackControls.isAvailable,
+      disabledReason: reviewPlaybackDisabledReason,
+      label: playbackControls.isPlaying ? "Pause" : "Play",
+      primary: true,
+      onClick: () => {
+        if (!playbackControls.isAvailable) {
+          return;
+        }
+        if (playbackControls.isPlaying) {
+          playbackControls.pause();
+          return;
+        }
+        void playbackControls.play();
+      },
+      testId: "ui-action-review-local-play",
+    },
+    previous: {
+      ariaKeyShortcuts: "Alt+ArrowLeft",
+      disabled: selectedBlockIndex <= 0,
+      disabledReason: selectedBlockIndex <= 0 ? "Already at the first block." : undefined,
+      label: "Previous",
+      onClick: () => {
+        moveReviewBlock(-1);
+      },
+      testId: "ui-action-review-local-previous",
+    },
+    progress: {
+      currentLabel: formatPlaybackClockSeconds(playbackCursorSec),
+      durationLabel:
+        playbackDurationSec(job) > 0
+          ? formatPlaybackClockSeconds(playbackDurationSec(job))
+          : "--:--",
+      ratio: playbackProgressRatioForJob(playbackCursorSec, job),
+      waveformBars: reviewWaveformBars,
+    },
+    restart: {
+      ariaKeyShortcuts: "Home",
+      dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle),
+      disabled: !playbackControls.isAvailable,
+      disabledReason: reviewPlaybackDisabledReason,
+      label: "Restart",
+      onClick: () => {
+        if (playbackControls.isAvailable) {
+          void playbackControls.restart();
+        }
+      },
+      testId: "ui-action-review-local-restart",
+    },
+    speed: {
+      ariaKeyShortcuts: "[ ]",
+      disabled: !playbackControls.setPlaybackRate,
+      disabledReason: playbackSpeedDisabledReason(playbackControls),
+      testId: "ui-action-review-local-speed",
+      value: playbackControls.playbackRate,
+      onChange: playbackControls.setPlaybackRate,
+    },
+    stage: "review",
+    statusLabel: playbackControls.isPlaying || isPlaybackActive ? "Playing" : "Ready",
+    testId: "localized-review-playback-toolbar",
+  };
 
   useEffect(() => {
     const nextBlockId = selectReviewBlockId(reviewBlocks, activeBlockId);
@@ -12568,6 +13119,7 @@ function NarrationReviewWorkbench({
           validationSimilarity={job?.voiceCheck.similarity ?? 0}
           validationTranscript={validationTranscript}
           voiceProfileLabel={voiceProfileLabel}
+          playbackToolbar={<LocalizedPlaybackToolbar model={reviewPlaybackToolbar} />}
           onActiveBlockChange={onActiveBlockChange}
           onInspectStructure={inspectStructure}
           onPreviewSpeech={onPreviewSpeech}
@@ -13092,32 +13644,21 @@ function AudioPanel({
   job,
   latestProgress,
   onOpenCinema,
-  onPlaybackCursorChange,
-  onPlaybackControlsChange,
-  onPlaybackStateChange,
+  playbackCursorSec,
   onResumeProgress,
 }: Readonly<{
   canOpenCinema: boolean;
   job: VoiceJob | null;
   latestProgress: PlaybackProgress | null;
   onOpenCinema: () => void;
-  onPlaybackCursorChange?: (cursorSec: number) => void;
-  onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
-  onPlaybackStateChange?: (isPlaying: boolean) => void;
+  playbackCursorSec: number;
   onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
-  useEffect(() => {
-    if (!job) {
-      onPlaybackControlsChange?.(null);
-      onPlaybackStateChange?.(false);
-    }
-  }, [job, onPlaybackControlsChange, onPlaybackStateChange]);
-
   if (!job) {
     return (
       <Panel className="p-3 shadow-sm" variant="raised">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">Audio Player</h2>
+          <h2 className="text-sm font-semibold">Audio Diagnostics</h2>
           <Button disabled={!canOpenCinema} onClick={onOpenCinema} size="sm" variant="secondary">
             Cinema
           </Button>
@@ -13146,17 +13687,67 @@ function AudioPanel({
     );
   }
 
+  const readySegments = job.audioReadySegments ?? 0;
+  const totalSegments = Math.max(job.retries.totalSegments, job.segments?.length ?? 0, 1);
+  const currentMode = job.status === "completed" ? "Completed" : "Arrival";
+
   return (
-    <StreamingAudioPanel
-      job={job}
-      key={job.id}
-      latestProgress={latestProgress}
-      onOpenCinema={onOpenCinema}
-      onPlaybackCursorChange={onPlaybackCursorChange}
-      onPlaybackControlsChange={onPlaybackControlsChange}
-      onPlaybackStateChange={onPlaybackStateChange}
-      onResumeProgress={onResumeProgress}
-    />
+    <section
+      className="min-w-0 overflow-hidden rounded-lg border p-3 shadow-sm vs-raised"
+      data-testid="audio-diagnostics-panel"
+    >
+      <div className="grid gap-2.5">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">Audio Diagnostics</h2>
+            <p className="vs-muted mt-1 truncate text-xs">
+              {job.voice ? kokoroVoicepackLabel(job.voice) : job.provider || "tts"} ·{" "}
+              {formatDuration(job.durationMs)}
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full border border-orange-300 bg-orange-500/10 px-2 py-0.5 text-[0.68rem] font-semibold text-orange-600">
+            {job.status}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 rounded-md border bg-[var(--vs-surface)] p-2 text-xs vs-border">
+          <AudioDiagnosticFact label="Mode" value={currentMode} />
+          <AudioDiagnosticFact
+            label="Ready"
+            value={`${readySegments.toString()} / ${totalSegments.toString()}`}
+          />
+          <AudioDiagnosticFact
+            label="Cursor"
+            value={formatPlaybackClockSeconds(playbackCursorSec)}
+          />
+          <AudioDiagnosticFact label="Duration" value={formatDuration(job.durationMs)} />
+        </div>
+        <Button
+          data-testid="ui-action-audio-diagnostics-open-cinema"
+          disabled={!canOpenCinema}
+          disabledReason={canOpenCinema ? undefined : "Create audio before opening Cinema."}
+          onClick={onOpenCinema}
+          size="sm"
+          variant="secondary"
+        >
+          Cinema
+        </Button>
+        {latestProgress ? (
+          <AudioResumeAction progress={latestProgress} onResumeProgress={onResumeProgress} />
+        ) : null}
+      </div>
+      <QueueBufferPanel currentTimeSec={playbackCursorSec} job={job} />
+    </section>
+  );
+}
+
+function AudioDiagnosticFact({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="min-w-0">
+      <p className="font-semibold uppercase tracking-[0.14em] vs-muted">{label}</p>
+      <p className="mt-1 truncate font-semibold text-[var(--vs-text)]" title={value}>
+        {value}
+      </p>
+    </div>
   );
 }
 

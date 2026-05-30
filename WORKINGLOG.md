@@ -1,3 +1,11 @@
+## 2026-05-30 13:11 CEST - Localized Playback Controls
+- [x] Add shared localized playback toolbar model and component.
+- [x] Move Review, Preview, Teleprompt, and Theatre primary controls near active text.
+- [x] Convert right-rail audio player to diagnostics/status while preserving hidden playback host.
+- [x] Add shortcut and regression coverage.
+- [x] Run frontend and project checks.
+- Validation: frontend typecheck passed; frontend tests passed; `pnpm check` passed with existing non-fatal Biome warnings outside this work.
+
 ## 2026-05-28 22:07 CEST - Codebase Sanitization
 - [x] Select candidate `frontend/src/App.tsx:extract command palette handler map`.
 - [x] Add `buildCommandPaletteHandlers` and `CommandPaletteHandlerContext` to `frontend/src/features/command-palette/commandPaletteHelpers.ts`.

@@ -2,10 +2,12 @@ import { forwardRef, useMemo } from "react";
 import type { RevisionBlock } from "../revision";
 import { Button, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
 import {
+  LocalizedPlaybackToolbar,
   playbackActionAriaLabel,
   playbackActionDataAttributes,
   playbackActionLabel,
   type GeneratedAudioLifecycleState,
+  type LocalizedPlaybackToolbarModel,
 } from "../playback";
 import { providerCapabilityDataAttributes } from "../provider-capabilities";
 import { workspaceStageActionLabel } from "../workspace";
@@ -59,6 +61,7 @@ export interface TelepromptTheatreProps {
   readonly playbackControlsAvailable: boolean;
   readonly playbackControlsPlaying: boolean;
   readonly playbackLifecycle: GeneratedAudioLifecycleState;
+  readonly playbackRate: number;
   readonly presetId: TelepromptPresetId;
   readonly countdownRemaining: number | null;
   readonly previewBlocks: RevisionBlock[];
@@ -75,6 +78,7 @@ export interface TelepromptTheatreProps {
   readonly onJumpToCurrentAudio: () => void;
   readonly onMoveCue: (direction: -1 | 1) => void;
   readonly onOpenCinema: () => void;
+  readonly onPlaybackRateChange?: (rate: number) => void;
   readonly onPresetChange: (presetId: TelepromptPresetId) => void;
   readonly onRequestNativeFullscreen: () => void;
   readonly onRestart: () => void;
@@ -125,6 +129,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       playbackControlsAvailable,
       playbackControlsPlaying,
       playbackLifecycle,
+      playbackRate,
       previewBlocks,
       presetId,
       settings,
@@ -140,6 +145,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       onJumpToCurrentAudio,
       onMoveCue,
       onOpenCinema,
+      onPlaybackRateChange,
       onPresetChange,
       onRequestNativeFullscreen,
       onRestart,
@@ -159,6 +165,80 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     const currentCue = currentCueText ?? activeBlock?.spokenText ?? activeBlock?.text ?? "";
     const cueSyncTone = telepromptTheatreCueSyncTone(cueSyncMode);
     const currentWordLabel = telepromptTheatreWordLabel(currentWordIndex);
+    const theatrePlaybackToolbar: LocalizedPlaybackToolbarModel = {
+      activeDetail: `${summary.cuePositionLabel} · ${summary.syncStatusLabel}`,
+      activeLabel: activeBlock?.label ?? "No active cue",
+      jumpToAudio: {
+        ariaKeyShortcuts: "J",
+        disabled: !playbackControlsAvailable,
+        disabledReason: cuePlaybackDisabledReason,
+        label: "Jump to Audio",
+        onClick: onJumpToCurrentAudio,
+        testId: "ui-action-teleprompt-theatre-jump-current-audio",
+      },
+      next: {
+        ariaKeyShortcuts: "ArrowRight ArrowDown",
+        disabled: !nextBlock,
+        disabledReason: nextBlock ? undefined : "Already at the final cue.",
+        label: "Next",
+        onClick: () => {
+          onMoveCue(1);
+        },
+        testId: "ui-action-teleprompt-theatre-next-cue",
+      },
+      playPause: {
+        ariaKeyShortcuts: "Space K",
+        ariaLabel: playbackControlsPlaying
+          ? "Pause Cue"
+          : playbackActionAriaLabel("telepromptPlay", { lifecycle: playbackLifecycle }),
+        dataAttributes: playbackActionDataAttributes("telepromptPlay", playbackLifecycle, {
+          primary: true,
+        }),
+        disabled: !playbackControlsAvailable,
+        disabledReason: cuePlaybackDisabledReason,
+        label: playbackControlsPlaying ? "Pause Cue" : playbackActionLabel("telepromptPlay"),
+        primary: true,
+        onClick: onTogglePlayback,
+        testId: "ui-action-teleprompt-theatre-play-pause",
+      },
+      previous: {
+        ariaKeyShortcuts: "ArrowLeft ArrowUp",
+        disabled: activeBlockIndex <= 0,
+        disabledReason: activeBlockIndex > 0 ? undefined : "Already at the first cue.",
+        label: "Previous",
+        onClick: () => {
+          onMoveCue(-1);
+        },
+        testId: "ui-action-teleprompt-theatre-previous-cue",
+      },
+      progress: {
+        currentLabel: `${Math.max(0, Math.min(100, audioProgressPercent)).toString()}%`,
+        durationLabel: summary.estimatedRemainingLabel,
+        ratio: audioProgressPercent / 100,
+      },
+      restart: {
+        ariaKeyShortcuts: "Home",
+        disabled: !playbackControlsAvailable,
+        disabledReason: cuePlaybackDisabledReason,
+        label: "Restart",
+        onClick: onRestart,
+        testId: "ui-action-teleprompt-theatre-restart",
+      },
+      speed: {
+        ariaKeyShortcuts: "[ ]",
+        disabled: !onPlaybackRateChange,
+        disabledReason: onPlaybackRateChange
+          ? undefined
+          : "Playback speed is available after generated audio is loaded.",
+        testId: "ui-action-teleprompt-theatre-speed",
+        value: playbackRate,
+        onChange: onPlaybackRateChange,
+      },
+      stage: "theatre",
+      statusLabel: summary.playbackStatusLabel,
+      testId: "localized-theatre-playback-toolbar",
+      variant: "theatre",
+    };
     const operatorPanel = (
       <aside className="grid min-h-0 gap-3 overflow-auto" data-testid="teleprompt-operator-panel">
         <TelepromptTheatreSettingsControls
@@ -430,85 +510,13 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
               {settings.nextCuePlacement === "below" ? (
                 <CuePreviewList blocks={previewBlocks} />
               ) : null}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-zinc-400">
-                  {cueSyncDetail || summary.syncStatusLabel}
-                  {playbackControlsAvailable
-                    ? ` · audio segment ${audioProgressPercent.toString()}%`
-                    : ""}
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    className="border-white/20 bg-white/10 text-white hover:bg-white/15"
-                    data-testid="ui-action-teleprompt-theatre-previous-cue"
-                    disabled={activeBlockIndex <= 0}
-                    disabledReason={activeBlockIndex > 0 ? undefined : "Already at the first cue."}
-                    onClick={() => {
-                      onMoveCue(-1);
-                    }}
-                    size="sm"
-                    variant="secondary"
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    {...playbackActionDataAttributes("telepromptPlay", playbackLifecycle, {
-                      primary: true,
-                    })}
-                    aria-label={
-                      playbackControlsPlaying
-                        ? "Pause Cue"
-                        : playbackActionAriaLabel("telepromptPlay", {
-                            lifecycle: playbackLifecycle,
-                          })
-                    }
-                    className="border-orange-400 bg-orange-500 text-white hover:bg-orange-600"
-                    data-testid="ui-action-teleprompt-theatre-play-pause"
-                    disabled={!playbackControlsAvailable}
-                    disabledReason={cuePlaybackDisabledReason}
-                    onClick={onTogglePlayback}
-                    size="sm"
-                    variant="primary"
-                  >
-                    {playbackControlsPlaying ? "Pause Cue" : playbackActionLabel("telepromptPlay")}
-                  </Button>
-                  <Button
-                    className="border-white/20 bg-white/10 text-white hover:bg-white/15"
-                    data-testid="ui-action-teleprompt-theatre-jump-current-audio"
-                    disabled={!playbackControlsAvailable}
-                    disabledReason={cuePlaybackDisabledReason}
-                    onClick={onJumpToCurrentAudio}
-                    size="sm"
-                    variant="secondary"
-                  >
-                    Jump to Audio
-                  </Button>
-                  <Button
-                    className="border-white/20 bg-white/10 text-white hover:bg-white/15"
-                    data-testid="ui-action-teleprompt-theatre-restart"
-                    disabled={!playbackControlsAvailable}
-                    disabledReason={cuePlaybackDisabledReason}
-                    onClick={onRestart}
-                    size="sm"
-                    variant="secondary"
-                  >
-                    Restart
-                  </Button>
-                  <Button
-                    className="border-white/20 bg-white/10 text-white hover:bg-white/15"
-                    data-testid="ui-action-teleprompt-theatre-next-cue"
-                    disabled={!nextBlock}
-                    disabledReason={nextBlock ? undefined : "Already at the final cue."}
-                    onClick={() => {
-                      onMoveCue(1);
-                    }}
-                    size="sm"
-                    variant="secondary"
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
+              <LocalizedPlaybackToolbar model={theatrePlaybackToolbar} />
+              <p className="text-xs text-zinc-400">
+                {cueSyncDetail || summary.syncStatusLabel}
+                {playbackControlsAvailable
+                  ? ` · audio segment ${audioProgressPercent.toString()}%`
+                  : ""}
+              </p>
             </div>
           </main>
 

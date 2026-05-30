@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import type { VoiceJob } from "../../types";
+import { describe, expect, it, vi } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { RunMode, VoiceJob } from "../../types";
 import type { RevisionBlock } from "../revision";
 import {
   buildPreviewComparisonModel,
@@ -12,6 +14,7 @@ import {
   type PreviewComparisonChoice,
   type PreviewComparisonOption,
 } from "./index";
+import { GlobalPreviewPlayer } from "./GlobalPreviewPlayer";
 
 const blocks: RevisionBlock[] = [
   block({ id: "a", index: 1, label: "Intro", segmentCount: 1, spokenText: "Hello world." }),
@@ -85,6 +88,51 @@ describe("preview A/B comparison", () => {
     expect(previewComparisonSummary(model)).toContain(
       "Run config: Checked Master to Draft Preview",
     );
+  });
+
+  it("keeps comparison controls without rendering a second dominant transport", () => {
+    const option: PreviewComparisonOption = { id: "default", label: "Default voice" };
+    const noop = vi.fn();
+    const markup = renderToStaticMarkup(
+      createElement(GlobalPreviewPlayer, {
+        activeBlockId: "a",
+        blocks,
+        canOpenCinema: true,
+        currentPolicyId: "Enterprise",
+        currentRunMode: "checkedMaster" as RunMode,
+        currentVoiceId: "default",
+        isPlaybackActive: false,
+        job: job(),
+        mode: "comparison-only",
+        playbackControls: {
+          isAvailable: true,
+          isPlaying: false,
+          pause: noop,
+          play: noop,
+          playbackRate: 1,
+          restart: noop,
+        },
+        playbackCursorSec: 0,
+        placement: "inline",
+        policyOptions: [{ id: "Enterprise", label: "Enterprise" }],
+        policyProfileLabel: "Enterprise",
+        runConfigurationLabel: "Checked Master",
+        scopeLabel: "Current source",
+        sourceLabel: "Preview source",
+        variant: "full",
+        voiceOptions: [option],
+        voiceProfileLabel: "Default voice",
+        onActiveBlockChange: noop,
+        onOpenCinema: noop,
+        onPolicyProfileChange: noop,
+        onRunModeChange: noop,
+        onVoiceProfileChange: noop,
+      }),
+    );
+
+    expect(markup).toContain('data-testid="global-preview-player"');
+    expect(markup).not.toContain("ui-action-preview-mini-play");
+    expect(markup).toContain("ui-action-preview-mini-audition-a");
   });
 });
 

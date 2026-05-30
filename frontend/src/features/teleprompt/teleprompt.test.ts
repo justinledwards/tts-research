@@ -51,6 +51,10 @@ describe("teleprompt toolbar model", () => {
   it("resolves keyboard shortcuts while ignoring modified keys", () => {
     expect(resolveTelepromptShortcut({ key: " " })).toBe("playPause");
     expect(resolveTelepromptShortcut({ key: "ArrowRight" })).toBe("nextCue");
+    expect(resolveTelepromptShortcut({ key: "Home" })).toBe("restart");
+    expect(resolveTelepromptShortcut({ key: "[" })).toBe("speedDown");
+    expect(resolveTelepromptShortcut({ key: "]" })).toBe("speedUp");
+    expect(resolveTelepromptShortcut({ altKey: true, key: "j" })).toBe("jumpCurrentAudio");
     expect(resolveTelepromptShortcut({ key: "r" })).toBe("returnReview");
     expect(resolveTelepromptShortcut({ ctrlKey: true, key: "k" })).toBeNull();
   });
