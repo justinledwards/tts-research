@@ -93,6 +93,9 @@ describe("metadata command generation", () => {
     expect(buildWorkspaceCommandMetadata().map((command) => command.id)).toContain(
       "workspace:layout:focus",
     );
+    expect(buildWorkspaceCommandMetadata().map((command) => command.id)).toContain(
+      "workspace:layout:custom",
+    );
     expect(buildCinemaFocusCommandMetadata().map((command) => command.id)).toEqual([
       "cinema:focus:read",
       "cinema:focus:inspect",

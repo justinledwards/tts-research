@@ -1,12 +1,15 @@
 import { isNarrowViewport } from "../layout/responsive";
 
 export type WorkspaceStage = "intake" | "review" | "preview" | "teleprompt";
-export type WorkspaceLayoutMode = "focus" | "balanced" | "full";
+export type WorkspaceLayoutMode = "focus" | "balanced" | "full" | "custom";
 export type WorkspaceRailMode = "collapsed" | "compact" | "full";
 export type WorkspaceSourceType = "book" | "draft" | "prepared";
+export type WorkspaceLayoutSlot = "sourceContext" | "contextInspector" | "systemStatus";
+export type WorkspaceLayoutSlotDensity = "hidden" | "summary" | "pinned";
 
 export interface WorkspaceContext {
   activeBlockId: string | null;
+  customLayout: WorkspaceCustomLayout;
   layoutMode: WorkspaceLayoutMode;
   sourceId: string | null;
   sourceType: WorkspaceSourceType;
@@ -22,6 +25,12 @@ export interface WorkspaceLayoutRails {
   rightRailMode: WorkspaceRailMode;
 }
 
+export type WorkspaceCustomLayout = Record<WorkspaceLayoutSlot, WorkspaceLayoutSlotDensity>;
+
+export interface WorkspaceResolvedLayout extends WorkspaceCustomLayout {
+  layoutMode: WorkspaceLayoutMode;
+}
+
 export const WORKSPACE_LAYOUT_STORAGE_KEY = "tts-workspace-layout-mode";
 
 export const WORKSPACE_STAGES: readonly WorkspaceStage[] = [
@@ -31,7 +40,24 @@ export const WORKSPACE_STAGES: readonly WorkspaceStage[] = [
   "teleprompt",
 ];
 
-export const WORKSPACE_LAYOUT_MODES: readonly WorkspaceLayoutMode[] = ["focus", "balanced", "full"];
+export const WORKSPACE_LAYOUT_MODES: readonly WorkspaceLayoutMode[] = [
+  "focus",
+  "balanced",
+  "full",
+  "custom",
+];
+
+export const WORKSPACE_LAYOUT_SLOTS: readonly WorkspaceLayoutSlot[] = [
+  "sourceContext",
+  "contextInspector",
+  "systemStatus",
+];
+
+export const WORKSPACE_LAYOUT_SLOT_DENSITIES: readonly WorkspaceLayoutSlotDensity[] = [
+  "hidden",
+  "summary",
+  "pinned",
+];
 
 export interface WorkspaceStageMeta {
   description: string;
@@ -44,6 +70,18 @@ export interface WorkspaceLayoutModeMeta {
   description: string;
   id: WorkspaceLayoutMode;
   keywords: string[];
+  label: string;
+}
+
+export interface WorkspaceLayoutSlotMeta {
+  description: string;
+  id: WorkspaceLayoutSlot;
+  label: string;
+}
+
+export interface WorkspaceLayoutSlotDensityMeta {
+  description: string;
+  id: WorkspaceLayoutSlotDensity;
   label: string;
 }
 
@@ -93,6 +131,57 @@ export const WORKSPACE_LAYOUT_MODE_META: Record<WorkspaceLayoutMode, WorkspaceLa
     keywords: ["expanded", "rails", "operator"],
     label: "Full",
   },
+  custom: {
+    description: "Use the saved workspace panel pins from the layout menu.",
+    id: "custom",
+    keywords: ["custom", "pins", "advanced"],
+    label: "Custom",
+  },
+};
+
+export const WORKSPACE_LAYOUT_SLOT_META: Record<WorkspaceLayoutSlot, WorkspaceLayoutSlotMeta> = {
+  contextInspector: {
+    description: "Stage-aware inspector, playback, review context, and teleprompt cue context.",
+    id: "contextInspector",
+    label: "Inspector",
+  },
+  sourceContext: {
+    description: "Source, voice, policy, project, and backend setup context.",
+    id: "sourceContext",
+    label: "Source context",
+  },
+  systemStatus: {
+    description: "Narration and voice-cloning activity, progress, and status.",
+    id: "systemStatus",
+    label: "System status",
+  },
+};
+
+export const WORKSPACE_LAYOUT_SLOT_DENSITY_META: Record<
+  WorkspaceLayoutSlotDensity,
+  WorkspaceLayoutSlotDensityMeta
+> = {
+  hidden: {
+    description: "Keep the slot out of the workspace. System status keeps an essential strip.",
+    id: "hidden",
+    label: "Hidden",
+  },
+  pinned: {
+    description: "Keep the full panel visible.",
+    id: "pinned",
+    label: "Pinned",
+  },
+  summary: {
+    description: "Show compact contextual information.",
+    id: "summary",
+    label: "Summary",
+  },
+};
+
+export const DEFAULT_WORKSPACE_CUSTOM_LAYOUT: WorkspaceCustomLayout = {
+  contextInspector: "summary",
+  sourceContext: "hidden",
+  systemStatus: "hidden",
 };
 
 export function defaultWorkspaceLayoutMode(): WorkspaceLayoutMode {
@@ -105,6 +194,16 @@ export function workspaceStageMeta(stage: WorkspaceStage): WorkspaceStageMeta {
 
 export function workspaceLayoutModeMeta(mode: WorkspaceLayoutMode): WorkspaceLayoutModeMeta {
   return WORKSPACE_LAYOUT_MODE_META[mode];
+}
+
+export function workspaceLayoutSlotMeta(slot: WorkspaceLayoutSlot): WorkspaceLayoutSlotMeta {
+  return WORKSPACE_LAYOUT_SLOT_META[slot];
+}
+
+export function workspaceLayoutSlotDensityMeta(
+  density: WorkspaceLayoutSlotDensity,
+): WorkspaceLayoutSlotDensityMeta {
+  return WORKSPACE_LAYOUT_SLOT_DENSITY_META[density];
 }
 
 export function normalizeWorkspaceStage(value: unknown): WorkspaceStage {
@@ -120,6 +219,45 @@ export function normalizeWorkspaceLayoutMode(value: unknown): WorkspaceLayoutMod
     : defaultWorkspaceLayoutMode();
 }
 
+export function normalizeWorkspaceLayoutSlotDensity(
+  value: unknown,
+  fallback: WorkspaceLayoutSlotDensity = "hidden",
+): WorkspaceLayoutSlotDensity {
+  return WORKSPACE_LAYOUT_SLOT_DENSITIES.includes(value as WorkspaceLayoutSlotDensity)
+    ? (value as WorkspaceLayoutSlotDensity)
+    : fallback;
+}
+
+export function normalizeWorkspaceCustomLayout(value: unknown): WorkspaceCustomLayout {
+  const candidate =
+    value && typeof value === "object" ? (value as Partial<WorkspaceCustomLayout>) : {};
+  return {
+    contextInspector: normalizeWorkspaceLayoutSlotDensity(
+      candidate.contextInspector,
+      DEFAULT_WORKSPACE_CUSTOM_LAYOUT.contextInspector,
+    ),
+    sourceContext: normalizeWorkspaceLayoutSlotDensity(
+      candidate.sourceContext,
+      DEFAULT_WORKSPACE_CUSTOM_LAYOUT.sourceContext,
+    ),
+    systemStatus: normalizeWorkspaceLayoutSlotDensity(
+      candidate.systemStatus,
+      DEFAULT_WORKSPACE_CUSTOM_LAYOUT.systemStatus,
+    ),
+  };
+}
+
+export function workspaceCustomLayoutEqual(
+  left: WorkspaceCustomLayout,
+  right: WorkspaceCustomLayout,
+): boolean {
+  return WORKSPACE_LAYOUT_SLOTS.every(
+    (slot) =>
+      normalizeWorkspaceLayoutSlotDensity(left[slot]) ===
+      normalizeWorkspaceLayoutSlotDensity(right[slot]),
+  );
+}
+
 export function normalizeWorkspaceRailMode(value: unknown): WorkspaceRailMode {
   if (value === "full" || value === "compact" || value === "collapsed") {
     return value;
@@ -127,36 +265,62 @@ export function normalizeWorkspaceRailMode(value: unknown): WorkspaceRailMode {
   return "compact";
 }
 
-export function workspaceLayoutRails(mode: WorkspaceLayoutMode): WorkspaceLayoutRails {
+export function workspaceResolvedLayout(
+  mode: WorkspaceLayoutMode,
+  customLayout: WorkspaceCustomLayout = DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+): WorkspaceResolvedLayout {
+  if (mode === "custom") {
+    return {
+      ...normalizeWorkspaceCustomLayout(customLayout),
+      layoutMode: "custom",
+    };
+  }
   if (mode === "focus") {
     return {
-      activityFooterMode: "collapsed",
-      leftRailMode: "collapsed",
-      rightRailMode: "collapsed",
+      contextInspector: "hidden",
+      layoutMode: "focus",
+      sourceContext: "hidden",
+      systemStatus: "hidden",
     };
   }
   if (mode === "full") {
     return {
-      activityFooterMode: "full",
-      leftRailMode: "full",
-      rightRailMode: "full",
+      contextInspector: "pinned",
+      layoutMode: "full",
+      sourceContext: "pinned",
+      systemStatus: "pinned",
     };
   }
   return {
-    activityFooterMode: "compact",
-    leftRailMode: "compact",
-    rightRailMode: "compact",
+    contextInspector: "summary",
+    layoutMode: "balanced",
+    sourceContext: "hidden",
+    systemStatus: "hidden",
   };
 }
 
-export function workspaceLayoutModeForRailMode(mode: WorkspaceRailMode): WorkspaceLayoutMode {
-  if (mode === "collapsed") {
-    return "focus";
-  }
-  if (mode === "full") {
+export function workspaceLayoutRails(
+  mode: WorkspaceLayoutMode,
+  customLayout: WorkspaceCustomLayout = DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+): WorkspaceLayoutRails {
+  const layout = workspaceResolvedLayout(mode, customLayout);
+  return {
+    activityFooterMode: workspaceRailModeForSlotDensity(layout.systemStatus),
+    leftRailMode: workspaceRailModeForSlotDensity(layout.sourceContext),
+    rightRailMode: workspaceRailModeForSlotDensity(layout.contextInspector),
+  };
+}
+
+export function workspaceRailModeForSlotDensity(
+  density: WorkspaceLayoutSlotDensity,
+): WorkspaceRailMode {
+  if (density === "pinned") {
     return "full";
   }
-  return "balanced";
+  if (density === "summary") {
+    return "compact";
+  }
+  return "collapsed";
 }
 
 export function createWorkspaceContext(value: Partial<WorkspaceContext> = {}): WorkspaceContext {
@@ -168,6 +332,7 @@ export function normalizeWorkspaceContext(value: Partial<WorkspaceContext>): Wor
   const returnStage = normalizeWorkspaceStage(value.telepromptReturnStage);
   return {
     activeBlockId: cleanOptionalId(value.activeBlockId),
+    customLayout: normalizeWorkspaceCustomLayout(value.customLayout),
     layoutMode: normalizeWorkspaceLayoutMode(value.layoutMode),
     sourceId: cleanOptionalId(value.sourceId),
     sourceType: normalizeWorkspaceSourceType(value.sourceType),

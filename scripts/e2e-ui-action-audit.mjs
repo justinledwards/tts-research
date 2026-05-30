@@ -564,6 +564,7 @@ async function inventoryScenario(browser, scenario) {
   try {
     await scenario.open(page);
     await assertNoPageIssues(issues);
+    await assertNoLegacyWorkspaceLayoutControls(page, scenario);
     const actions = await buildActionInventory(page, scenario);
     const surfaceComplexity = await collectSurfaceComplexity(page, scenario, actions);
     const screenshot = path.join(screenshotsDir, `${scenario.id}.png`);
@@ -576,6 +577,41 @@ async function inventoryScenario(browser, scenario) {
   } finally {
     await context.close();
   }
+}
+
+async function assertNoLegacyWorkspaceLayoutControls(page, scenario) {
+  const legacyControls = await page.evaluate(() => {
+    const visible = (element) => {
+      if (!(element instanceof HTMLElement)) {
+        return false;
+      }
+      if (
+        typeof element.checkVisibility === "function" &&
+        !element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
+      ) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
+        return false;
+      }
+      return true;
+    };
+    return [
+      ['[data-segmented-control="rail-mode"]', "legacy rail mode segmented control"],
+      ['[data-testid="ui-action-activity-footer-open"]', "legacy footer expand control"],
+      ['[data-testid="ui-action-activity-footer-toggle"]', "legacy footer density toggle"],
+      ['[data-testid="ui-action-activity-footer-full"]', "legacy footer full control"],
+      ['[data-testid="ui-action-activity-footer-compact"]', "legacy footer compact control"],
+      ['[data-testid="ui-action-activity-footer-collapsed"]', "legacy footer collapsed control"],
+    ].flatMap(([selector, label]) =>
+      [...document.querySelectorAll(selector)].filter(visible).map(() => label),
+    );
+  });
+  assert(
+    legacyControls.length === 0,
+    `${scenario.id} rendered duplicate panel-level layout controls: ${legacyControls.join(", ")}`,
+  );
 }
 
 async function collectSurfaceComplexity(page, scenario, actions) {
@@ -1144,7 +1180,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await capture("workspace-stage-02-source-selected");
     await page.getByRole("button", { exact: true, name: "Review" }).click();
     await page.getByText("Revision Panel").first().waitFor();
-    await page.getByRole("button", { name: "Full workspace layout" }).click();
+    await selectWorkspaceLayout(page, "Full");
     await page.getByTestId("ui-action-project-dashboard-open-rail").click();
     await page.getByText("Project Dashboard").first().waitFor();
     await capture("workspace-stage-03-project-dashboard");
@@ -1289,6 +1325,12 @@ async function openWorkspaceStage(page, label) {
   }
 }
 
+async function selectWorkspaceLayout(page, label) {
+  const menu = page.getByTestId("ui-action-workspace-layout-menu").first();
+  await menu.locator("summary").click();
+  await page.getByRole("button", { exact: true, name: `${label} workspace layout` }).click();
+}
+
 async function clickPreviewMiniPlayerIfReady(page) {
   const player = page.getByTestId("global-preview-player");
   await player.waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
@@ -1339,14 +1381,14 @@ async function openProviderCapabilityCommandPalette(page) {
 
 async function openProjectDashboard(page) {
   await openWorkspaceStage(page, "Review");
-  await page.getByRole("button", { name: "Full workspace layout" }).click();
+  await selectWorkspaceLayout(page, "Full");
   await page.getByTestId("ui-action-project-dashboard-open-rail").click();
   await page.getByRole("dialog", { name: "Project Dashboard" }).waitFor();
 }
 
 async function openVoiceDashboard(page) {
   await openWorkspaceStage(page, "Review");
-  await page.getByRole("button", { name: "Full workspace layout" }).click();
+  await selectWorkspaceLayout(page, "Full");
   await page.getByTestId("ui-action-voice-dashboard-open-rail").click();
   await page.getByText("Voice Profile Dashboard").first().waitFor();
 }

@@ -535,7 +535,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
       .waitFor();
 
     for (const layout of ["Focus", "Balanced", "Full"]) {
-      await page.getByRole("button", { name: `${layout} workspace layout` }).click();
+      await selectWorkspaceLayout(page, layout);
       const screenshot = path.join(screenshotsDir, `workspace-${layout.toLowerCase()}.png`);
       await page.screenshot({ fullPage: false, path: screenshot });
       screenshots.push(screenshot);
@@ -861,13 +861,44 @@ async function setRememberLayout(page, enabled, { panelPins = false, reset = fal
 }
 
 async function assertWorkspaceLayoutSelected(page, label) {
-  const button = page.getByRole("button", { name: `${label} workspace layout` });
+  const menu = await openWorkspaceLayoutMenu(page);
+  const button = menu.getByRole("button", { exact: true, name: `${label} workspace layout` });
   const pressed = await button.getAttribute("aria-pressed");
   const selected = await button.getAttribute("data-selected");
+  await closeWorkspaceLayoutMenu(page);
   assert(
     pressed === "true" || selected === "true",
     `${label} workspace layout was not selected after reopen.`,
   );
+}
+
+async function selectWorkspaceLayout(page, label) {
+  const menu = await openWorkspaceLayoutMenu(page);
+  await menu.getByRole("button", { exact: true, name: `${label} workspace layout` }).click();
+  await closeWorkspaceLayoutMenu(page);
+}
+
+async function openWorkspaceLayoutMenu(page) {
+  const menus = page.getByTestId("ui-action-workspace-layout-menu");
+  const count = await menus.count();
+  for (let index = 0; index < count; index += 1) {
+    const summary = menus.nth(index).locator("summary");
+    if (await summary.isVisible()) {
+      await summary.click();
+      return menus.nth(index);
+    }
+  }
+  throw new Error("Visible workspace layout menu was not found.");
+}
+
+async function closeWorkspaceLayoutMenu(page) {
+  await page.evaluate(() => {
+    document
+      .querySelectorAll('[data-testid="ui-action-workspace-layout-menu"][open]')
+      .forEach((element) => {
+        element.removeAttribute("open");
+      });
+  });
 }
 
 async function assertReviewPaneSelected(page, label) {

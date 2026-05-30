@@ -74,6 +74,22 @@ test("classifies shared Cinema More IA entries as surface parity", () => {
   assert.equal(classification.id, "wp57-cinema-more-ia-parity");
 });
 
+test("classifies the global workspace layout control as shell chrome", () => {
+  const classification = classifyDuplicateGroup({
+    actionClass: "navigation",
+    actionIds: ["ui-action-workspace-layout-full", "ui-action-workspace-layout-full"],
+    count: 2,
+    kind: "same-label-different-behavior",
+    label: "Full workspace layout",
+    scenarios: ["workspace-review", "workspace-preview"],
+    surface: "Review, Preview",
+    surfaces: ["Review", "Preview"],
+  });
+
+  assert.equal(classification.category, "allowed-same-control-across-scenarios");
+  assert.equal(classification.id, "wp46-workspace-layout-shell-control");
+});
+
 test("classifies playback Cinema navigation under the cinema navigation burn-down", () => {
   const classification = classifyDuplicateGroup({
     actionClass: "navigation",

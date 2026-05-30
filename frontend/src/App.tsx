@@ -168,11 +168,9 @@ import {
   VOICE_STUDIO_THEMES,
   normalizeThemeName,
 } from "./theme";
-import { nextActivityFooterMode, type ActivityFooterMode } from "./activityFooter";
+import type { ActivityFooterMode } from "./activityFooter";
 import {
-  CompactRailToggle,
   RailMiniStack,
-  RailModeToolbar,
   overlayDataAttributes,
   railColumnWidth,
   workspaceOverlayState,
@@ -190,6 +188,7 @@ import {
   rememberReviewPane,
   rememberTelepromptTheatreSettings,
   rememberTelepromptReturnStage,
+  rememberWorkspaceCustomLayout,
   rememberWorkspaceLayoutMode,
   resetUiMemory,
   resetWorkspaceUiMemory,
@@ -197,6 +196,7 @@ import {
   resolveReviewPane,
   resolveTelepromptTheatreSettings,
   resolveTelepromptReturnStage,
+  resolveWorkspaceCustomLayout,
   resolveWorkspaceLayoutMode,
   saveUiMemory,
   updateUiMemoryPreference,
@@ -252,17 +252,19 @@ import {
 } from "./design";
 import {
   createWorkspaceContext,
+  DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
   defaultWorkspaceLayoutMode,
   withWorkspaceActiveBlock,
   withWorkspaceSource,
   withWorkspaceSpeechPolicyProfile,
   withWorkspaceVoiceProfile,
   workspaceStageMeta,
-  workspaceLayoutModeForRailMode,
   workspaceLayoutRails,
+  workspaceResolvedLayout,
   type WorkspaceContext,
+  type WorkspaceCustomLayout,
   type WorkspaceLayoutMode,
-  type WorkspaceRailMode,
+  type WorkspaceLayoutSlotDensity,
   type WorkspaceSourceType,
   type WorkspaceStage,
 } from "./features/workspace/model";
@@ -2066,6 +2068,7 @@ export function App() {
   );
   const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContext>(() =>
     createWorkspaceContext({
+      customLayout: resolveWorkspaceCustomLayout(uiMemory, activeProjectId),
       layoutMode: resolveWorkspaceLayoutMode(uiMemory, activeProjectId),
       speechPolicyProfile,
       voiceProfileId: selectedVoiceProfileId,
@@ -2209,7 +2212,14 @@ export function App() {
   const [cinemaTheatreOpenSignal, setCinemaTheatreOpenSignal] = useState(0);
   const [cinemaTheatreExitSignal, setCinemaTheatreExitSignal] = useState(0);
   const [cinemaTheatreControlsSignal, setCinemaTheatreControlsSignal] = useState(0);
-  const workspaceRails = workspaceLayoutRails(workspaceContext.layoutMode);
+  const workspaceLayout = workspaceResolvedLayout(
+    workspaceContext.layoutMode,
+    workspaceContext.customLayout,
+  );
+  const workspaceRails = workspaceLayoutRails(
+    workspaceContext.layoutMode,
+    workspaceContext.customLayout,
+  );
   const activityFooterMode: ActivityFooterMode = workspaceRails.activityFooterMode;
   const leftRailMode = workspaceRails.leftRailMode;
   const rightRailMode = workspaceRails.rightRailMode;
@@ -2282,19 +2292,22 @@ export function App() {
     },
     [activeProjectId],
   );
-  const handleRailModeChange = useCallback(
-    (mode: WorkspaceRailMode) => {
-      setWorkspaceLayoutMode(workspaceLayoutModeForRailMode(mode));
+  const setWorkspaceCustomLayout = useCallback(
+    (customLayout: WorkspaceCustomLayout) => {
+      setWorkspaceContext((currentContext) => ({
+        ...currentContext,
+        customLayout,
+        layoutMode: "custom",
+      }));
+      setUiMemory((currentMemory) =>
+        rememberWorkspaceLayoutMode(
+          rememberWorkspaceCustomLayout(currentMemory, activeProjectId, customLayout),
+          activeProjectId,
+          "custom",
+        ),
+      );
     },
-    [setWorkspaceLayoutMode],
-  );
-  const setLeftRailMode = handleRailModeChange;
-  const setRightRailMode = handleRailModeChange;
-  const setActivityFooterMode = useCallback(
-    (mode: ActivityFooterMode) => {
-      setWorkspaceLayoutMode(workspaceLayoutModeForRailMode(mode));
-    },
-    [setWorkspaceLayoutMode],
+    [activeProjectId],
   );
   const handleReviewPaneChange = useCallback(
     (pane: ReviewPane) => {
@@ -2350,6 +2363,7 @@ export function App() {
         });
         setWorkspaceContext((currentContext) => ({
           ...currentContext,
+          customLayout: DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
           layoutMode: defaultWorkspaceLayoutMode(),
         }));
         setActiveReviewPane("blocks");
@@ -2376,6 +2390,7 @@ export function App() {
       });
       setWorkspaceContext((currentContext) => ({
         ...currentContext,
+        customLayout: DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
         layoutMode: defaultWorkspaceLayoutMode(),
         telepromptReturnStage: "review",
       }));
@@ -3683,6 +3698,7 @@ export function App() {
       setSourceMode("text");
       setWorkspaceContext(() =>
         createWorkspaceContext({
+          customLayout: resolveWorkspaceCustomLayout(currentUiMemory, projectId),
           layoutMode: resolveWorkspaceLayoutMode(currentUiMemory, projectId),
           speechPolicyProfile,
           voiceProfileId: selectedVoiceProfileId,
@@ -3740,6 +3756,7 @@ export function App() {
         createWorkspaceContext({
           ...currentContext,
           activeBlockId: savedState.activeBlockId,
+          customLayout: resolveWorkspaceCustomLayout(currentUiMemory, projectId),
           layoutMode: resolveWorkspaceLayoutMode(currentUiMemory, projectId),
           sourceId: savedState.preparedSourceId ?? savedState.bookSourceId,
           sourceType: savedState.sourceType,
@@ -5979,11 +5996,13 @@ export function App() {
         onSubmit={() => {
           createAndListenFromCurrentSource();
         }}
+        onWorkspaceCustomLayoutChange={setWorkspaceCustomLayout}
         onWorkspaceLayoutModeChange={setWorkspaceLayoutMode}
         onWorkspaceOpen={() => {
           setIsWorkspaceOpen(true);
         }}
         runConfiguration={runConfiguration}
+        workspaceCustomLayout={workspaceContext.customLayout}
         workspaceLayoutMode={workspaceContext.layoutMode}
       />
       {isDemoModeCollapsed ? (
@@ -6544,16 +6563,11 @@ export function App() {
           style={studioGridStyle}
         >
           <aside
-            className="vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-r"
+            className={`vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+              leftRailMode === "collapsed" ? "lg:border-r-0" : "lg:border-r"
+            }`}
             {...overlayDataAttributes("left-rail", "left-rail")}
           >
-            {leftRailMode === "collapsed" ? null : (
-              <RailModeToolbar
-                label="Voice Command"
-                mode={leftRailMode}
-                onModeChange={setLeftRailMode}
-              />
-            )}
             {leftRailMode === "full" ? (
               <VoiceCloningVoiceRail
                 buildingArtifactKey={buildingArtifactKey}
@@ -6588,15 +6602,14 @@ export function App() {
                 onSelectKokoroVoice={selectKokoroVoice}
                 onSelectProfile={selectVoiceProfile}
               />
-            ) : (
+            ) : null}
+            {leftRailMode === "compact" ? (
               <VoiceCloningRailMini
-                mode={leftRailMode}
                 profile={selectedVoiceProfile}
                 source={profileSource}
                 totalProfiles={voiceProfiles.length}
-                onModeChange={setLeftRailMode}
               />
-            )}
+            ) : null}
           </aside>
           <section className="order-1 min-w-0 px-5 pt-5 pb-24 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:pb-5 xl:px-6 xl:pt-6 xl:pb-6">
             <VoiceCloningWorkspace
@@ -6626,16 +6639,11 @@ export function App() {
             />
           </section>
           <aside
-            className="vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-l"
+            className={`vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+              rightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
+            }`}
             {...overlayDataAttributes("right-rail", "right-rail")}
           >
-            {rightRailMode === "collapsed" ? null : (
-              <RailModeToolbar
-                label="Readiness"
-                mode={rightRailMode}
-                onModeChange={setRightRailMode}
-              />
-            )}
             {rightRailMode === "full" ? (
               <div className="grid gap-3 p-4 xl:p-5">
                 <CloneArtifactReadinessPanel
@@ -6650,16 +6658,15 @@ export function App() {
                   onRunConfigurationChange={setRunConfiguration}
                 />
               </div>
-            ) : (
+            ) : null}
+            {rightRailMode === "compact" ? (
               <CloneReadinessRailMini
                 activity={voiceCloningActivity}
-                mode={rightRailMode}
-                onModeChange={setRightRailMode}
                 onOpenVoiceCloning={() => {
                   handleStudioModeChange("voiceCloning");
                 }}
               />
-            )}
+            ) : null}
           </aside>
         </section>
       ) : (
@@ -6668,16 +6675,11 @@ export function App() {
           style={studioGridStyle}
         >
           <aside
-            className="vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-r"
+            className={`vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+              leftRailMode === "collapsed" ? "lg:border-r-0" : "lg:border-r"
+            }`}
             {...overlayDataAttributes("left-rail", "left-rail")}
           >
-            {leftRailMode === "collapsed" ? null : (
-              <RailModeToolbar
-                label="Voice Command"
-                mode={leftRailMode}
-                onModeChange={setLeftRailMode}
-              />
-            )}
             {leftRailMode === "full" ? (
               <NarrationSidebar
                 bookSources={bookSources}
@@ -6729,7 +6731,8 @@ export function App() {
                   void handleSpeechPolicyProfileChange(profile);
                 }}
               />
-            ) : (
+            ) : null}
+            {leftRailMode === "compact" ? (
               <NarrationRailMini
                 activeSourceLabel={
                   activeNarrationPreparedSource?.title ??
@@ -6737,21 +6740,20 @@ export function App() {
                     ? bookSourceName(activeNarrationBookSource)
                     : undefined)
                 }
-                mode={leftRailMode}
                 profile={selectedVoiceProfile}
                 sourceCount={preparedSources.length + bookSources.length}
-                onModeChange={setLeftRailMode}
                 onOpenVoiceCloning={() => {
                   handleStudioModeChange("voiceCloning");
                 }}
               />
-            )}
+            ) : null}
           </aside>
 
           <section className="order-1 flex min-w-0 flex-col gap-3 px-4 pt-4 pb-24 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:pb-4 xl:px-5 xl:pt-5 xl:pb-5">
             <SourceTextPanel
               activeReviewPane={activeReviewPane}
               activeReviewBlockId={workspaceContext.activeBlockId}
+              contextInspectorDensity={workspaceLayout.contextInspector}
               projectId={activeProjectId}
               bookSourceError={bookSourceError}
               bookSources={bookSources}
@@ -6780,6 +6782,7 @@ export function App() {
                     blocks={narrationPreviewBlocks}
                     canCreate={canCreateCurrentSource}
                     canOpenCinema={canOpenCurrentCinema}
+                    contextInspectorDensity={workspaceLayout.contextInspector}
                     createAndListenCapabilityReason={createAndListenCapabilityReason}
                     createAndListenDisabledReason={createAndListenDisabledReason}
                     highlightMap={highlightMap}
@@ -6904,16 +6907,11 @@ export function App() {
           </section>
 
           <aside
-            className="vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-l"
+            className={`vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+              rightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
+            }`}
             {...overlayDataAttributes("right-rail", "right-rail")}
           >
-            {rightRailMode === "collapsed" ? null : (
-              <RailModeToolbar
-                label="Playback"
-                mode={rightRailMode}
-                onModeChange={setRightRailMode}
-              />
-            )}
             {rightRailMode === "full" ? (
               <div className="grid gap-3 p-4 xl:p-5">
                 {job || isProcessing ? (
@@ -6954,15 +6952,14 @@ export function App() {
                   />
                 ) : null}
               </div>
-            ) : (
+            ) : null}
+            {rightRailMode === "compact" ? (
               <PlaybackRailMini
                 job={job}
-                mode={rightRailMode}
-                onModeChange={setRightRailMode}
                 onOpenCinema={openReadingCinema}
                 showCinemaAction={shouldShowRailCinemaShortcut(contentMode)}
               />
-            )}
+            ) : null}
           </aside>
         </section>
       )}
@@ -6982,7 +6979,6 @@ export function App() {
         onOpenVoiceCloning={() => {
           handleStudioModeChange("voiceCloning");
         }}
-        onModeChange={setActivityFooterMode}
         onSubmit={() => {
           createAndListenFromCurrentSource();
         }}
@@ -6993,29 +6989,15 @@ export function App() {
 
 function NarrationRailMini({
   activeSourceLabel,
-  mode,
   profile,
   sourceCount,
-  onModeChange,
   onOpenVoiceCloning,
 }: Readonly<{
   activeSourceLabel?: string;
-  mode: ActivityFooterMode;
   profile: VoiceProfile | null;
   sourceCount: number;
-  onModeChange: (mode: ActivityFooterMode) => void;
   onOpenVoiceCloning: () => void;
 }>) {
-  if (mode === "collapsed") {
-    return (
-      <CompactRailToggle
-        controlId="voice-command"
-        onExpand={() => {
-          onModeChange("compact");
-        }}
-      />
-    );
-  }
   return (
     <RailMiniStack
       items={[
@@ -7032,28 +7014,14 @@ function NarrationRailMini({
 }
 
 function VoiceCloningRailMini({
-  mode,
   profile,
   source,
   totalProfiles,
-  onModeChange,
 }: Readonly<{
-  mode: ActivityFooterMode;
   profile: VoiceProfile | null;
   source: VoiceProfileSource | null;
   totalProfiles: number;
-  onModeChange: (mode: ActivityFooterMode) => void;
 }>) {
-  if (mode === "collapsed") {
-    return (
-      <CompactRailToggle
-        controlId="voice-cloning"
-        onExpand={() => {
-          onModeChange("compact");
-        }}
-      />
-    );
-  }
   return (
     <RailMiniStack
       items={[
@@ -7067,29 +7035,15 @@ function VoiceCloningRailMini({
 
 function PlaybackRailMini({
   job,
-  mode,
-  onModeChange,
   onOpenCinema,
   showCinemaAction = true,
 }: Readonly<{
   job: VoiceJob | null;
-  mode: ActivityFooterMode;
-  onModeChange: (mode: ActivityFooterMode) => void;
   onOpenCinema: () => void;
   showCinemaAction?: boolean;
 }>) {
   const total = job?.retries.totalSegments ?? job?.segments?.length ?? 0;
   const ready = job?.audioReadySegments ?? 0;
-  if (mode === "collapsed") {
-    return (
-      <CompactRailToggle
-        controlId="playback"
-        onExpand={() => {
-          onModeChange("compact");
-        }}
-      />
-    );
-  }
   return (
     <RailMiniStack
       items={[
@@ -7111,25 +7065,11 @@ function PlaybackRailMini({
 
 function CloneReadinessRailMini({
   activity,
-  mode,
-  onModeChange,
   onOpenVoiceCloning,
 }: Readonly<{
   activity: VoiceCloningActivitySummary;
-  mode: ActivityFooterMode;
-  onModeChange: (mode: ActivityFooterMode) => void;
   onOpenVoiceCloning: () => void;
 }>) {
-  if (mode === "collapsed") {
-    return (
-      <CompactRailToggle
-        controlId="readiness"
-        onExpand={() => {
-          onModeChange("compact");
-        }}
-      />
-    );
-  }
   return (
     <RailMiniStack
       items={[
@@ -8745,7 +8685,6 @@ function PipelineStatusFooter({
   showNarrationAction = true,
   voiceCloningActivity,
   onCancel,
-  onModeChange,
   onOpenVoiceCloning,
   onSubmit,
 }: Readonly<{
@@ -8759,7 +8698,6 @@ function PipelineStatusFooter({
   showNarrationAction?: boolean;
   voiceCloningActivity: VoiceCloningActivitySummary;
   onCancel: () => void;
-  onModeChange: (mode: ActivityFooterMode) => void;
   onOpenVoiceCloning: () => void;
   onSubmit: () => void;
 }>) {
@@ -8821,14 +8759,7 @@ function PipelineStatusFooter({
         className="z-30 shrink-0 border-t px-3 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised"
         {...overlayDataAttributes("activity-footer", "bottom-activity-footer")}
       >
-        <button
-          className="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-md border px-3 text-left transition hover:bg-[var(--vs-surface)] vs-border"
-          data-testid="ui-action-activity-footer-open"
-          onClick={() => {
-            onModeChange("compact");
-          }}
-          type="button"
-        >
+        <div className="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-md border px-3 text-left vs-border">
           <span className="flex min-w-0 items-center gap-3">
             <FooterStatusDots
               narrationStatus={narrationStatus}
@@ -8841,8 +8772,8 @@ function PipelineStatusFooter({
               Narration {job?.status ?? "Idle"} · Voice Cloning {voiceCloningActivity.statusLabel}
             </span>
           </span>
-          <span className="shrink-0 text-xs font-semibold text-orange-700">Expand</span>
-        </button>
+          <span className="shrink-0 text-xs font-semibold vs-muted">Essential</span>
+        </div>
       </footer>
     );
   }
@@ -8872,7 +8803,6 @@ function PipelineStatusFooter({
             statusLabel={voiceCloningActivity.statusLabel}
             title="Voice Cloning"
           />
-          <ActivityFooterModeControls mode={mode} onModeChange={onModeChange} />
         </div>
       </footer>
     );
@@ -8887,7 +8817,6 @@ function PipelineStatusFooter({
         <span className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
           Activity Footer
         </span>
-        <ActivityFooterModeControls mode={mode} onModeChange={onModeChange} />
       </div>
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <ActivityLanePanel
@@ -8997,61 +8926,6 @@ function ActivityLanePanel({
       </div>
       <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs md:grid-cols-4">{facts}</div>
     </section>
-  );
-}
-
-function ActivityFooterModeControls({
-  mode,
-  onModeChange,
-}: Readonly<{
-  mode: ActivityFooterMode;
-  onModeChange: (mode: ActivityFooterMode) => void;
-}>) {
-  const nextMode = nextActivityFooterMode(mode);
-  const labelByMode: Record<ActivityFooterMode, string> = {
-    collapsed: "Open",
-    compact: "Hide",
-    full: "Less",
-  };
-  const viewLabelByMode: Record<ActivityFooterMode, string> = {
-    collapsed: "Hide",
-    compact: "Slim",
-    full: "Full",
-  };
-  return (
-    <div className="flex w-full shrink-0 flex-wrap items-center gap-1 rounded-md border p-1 vs-border vs-surface sm:w-auto">
-      {(["full", "compact", "collapsed"] as const).map((item) => (
-        <button
-          aria-label={`Show ${item} activity footer`}
-          aria-pressed={mode === item}
-          className={`${compactHitTargetClassName} h-7 min-w-[3.8rem] flex-1 rounded px-2 text-[0.68rem] font-semibold transition sm:flex-none ${
-            mode === item
-              ? "bg-orange-500 text-white"
-              : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-          }`}
-          data-hit-target-min={minInteractiveSize}
-          data-testid={`ui-action-activity-footer-${item}`}
-          key={item}
-          onClick={() => {
-            onModeChange(item);
-          }}
-          type="button"
-        >
-          {viewLabelByMode[item]}
-        </button>
-      ))}
-      <button
-        className={`${compactHitTargetClassName} h-7 min-w-[3.8rem] flex-1 rounded border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50 sm:flex-none`}
-        data-hit-target-min={minInteractiveSize}
-        data-testid={`ui-action-activity-footer-toggle-${mode}`}
-        onClick={() => {
-          onModeChange(nextMode);
-        }}
-        type="button"
-      >
-        {labelByMode[mode]}
-      </button>
-    </div>
   );
 }
 
@@ -9536,6 +9410,7 @@ function SourceTextPanel({
   isPreparingSource,
   isProcessing,
   job,
+  contextInspectorDensity,
   optimizedText,
   preparedSources,
   projectId,
@@ -9583,6 +9458,7 @@ function SourceTextPanel({
   bookSourceError: string | null;
   bookSources: BookSource[];
   canSubmit: boolean;
+  contextInspectorDensity: WorkspaceLayoutSlotDensity;
   contentMode: WorkspaceStage;
   isImportingBookSource: boolean;
   isPreparingSource: boolean;
@@ -9753,6 +9629,7 @@ function SourceTextPanel({
             selectedBookScope={selectedBookScope}
             selectedBookSource={activeBookSource}
             selectedPreparedSource={activePreparedSource}
+            contextInspectorDensity={contextInspectorDensity}
             sourceLifecycle={sourceLifecycle}
             text={text}
             voiceProfileLabel={voiceProfileLabel}
@@ -11909,6 +11786,7 @@ function NarrationReviewWorkbench({
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
+  contextInspectorDensity,
   sourceLifecycle,
   text,
   voiceProfileLabel,
@@ -11930,6 +11808,7 @@ function NarrationReviewWorkbench({
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
+  contextInspectorDensity: WorkspaceLayoutSlotDensity;
   sourceLifecycle: SourceLifecycleEnvelope;
   text: string;
   voiceProfileLabel: string;
@@ -12040,13 +11919,15 @@ function NarrationReviewWorkbench({
         />
       </Suspense>
 
-      <ReviewContextPanels
-        mathPanel={mathPanel}
-        projectId={projectId}
-        rulesPanel={rulesPanel}
-        selectedPreparedSource={selectedPreparedSource}
-        voiceProfileId={voiceProfileId}
-      />
+      {contextInspectorDensity === "hidden" ? null : (
+        <ReviewContextPanels
+          mathPanel={mathPanel}
+          projectId={projectId}
+          rulesPanel={rulesPanel}
+          selectedPreparedSource={selectedPreparedSource}
+          voiceProfileId={voiceProfileId}
+        />
+      )}
     </Panel>
   );
 }

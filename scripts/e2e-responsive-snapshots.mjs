@@ -322,6 +322,7 @@ async function captureTelepromptTheatreScenario(browser, viewport, projectId) {
     await page.waitForLoadState("networkidle").catch(() => {});
     await page.getByTestId("workspace-stage-action-openTeleprompt").click();
     await page.getByTestId("teleprompt-studio").waitFor();
+    await pinWorkspaceInspector(page);
     await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
     await page.getByTestId("teleprompt-theatre").waitFor();
     await page.getByTestId("ui-action-teleprompt-operator-preview").click();
@@ -356,6 +357,35 @@ async function captureTelepromptTheatreScenario(browser, viewport, projectId) {
   } finally {
     await context.close();
   }
+}
+
+async function pinWorkspaceInspector(page) {
+  const menu = await openWorkspaceLayoutMenu(page);
+  await menu.getByTestId("ui-action-workspace-layout-custom-contextInspector-pinned").click();
+  await closeWorkspaceLayoutMenu(page);
+}
+
+async function openWorkspaceLayoutMenu(page) {
+  const menus = page.getByTestId("ui-action-workspace-layout-menu");
+  const count = await menus.count();
+  for (let index = 0; index < count; index += 1) {
+    const summary = menus.nth(index).locator("summary");
+    if (await summary.isVisible()) {
+      await summary.click();
+      return menus.nth(index);
+    }
+  }
+  throw new Error("Visible workspace layout menu was not found.");
+}
+
+async function closeWorkspaceLayoutMenu(page) {
+  await page.evaluate(() => {
+    document
+      .querySelectorAll('[data-testid="ui-action-workspace-layout-menu"][open]')
+      .forEach((element) => {
+        element.removeAttribute("open");
+      });
+  });
 }
 
 async function openSettingsIfAvailable(page) {

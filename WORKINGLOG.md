@@ -975,3 +975,17 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - Left alone: Public APIs, candidate preview state ownership, option order, labels, disabled raw preview behavior, audio source construction, backend, persistence boundaries, auth, concurrency, and timing-sensitive behavior.
 - Validation: `pnpm exec biome format --write frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` pass with no fixes; `pnpm exec biome lint frontend/src/VoiceSourceAnalysisPanelHelpers.tsx` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `pnpm --filter @tts-research/frontend test` pass; `git diff --check` pass; `pnpm check` failed twice in backend pipeline because sandbox TCP listener creation was denied.
 - Next suggested target: Inspect `frontend/src/appVoiceCloningHelpers.ts` for one narrow local helper extraction.
+
+## 2026-05-30 11:03 CEST - Unified Workspace Layout System
+- [x] Inspect current layout state and affected UI/tests
+- [x] Extend workspace layout model and persistence
+- [x] Add global workspace layout control
+- [x] Remove duplicate rail/footer layout controls
+- [x] Wire layout state through workspace and Theatre surfaces
+- [x] Update tests and audits
+- [x] Run project checks
+- Validation: targeted workspace/preferences/layout/navigation/AppShell tests passed; `pnpm check` passed; `pnpm e2e:responsive-snapshots`, `pnpm e2e:workspace-flow`, and `pnpm e2e:teleprompt-memory` passed; `pnpm e2e:surface-complexity` still fails on unrelated unclassified duplicate groups (`Low confidence`, `Narration`, `Open Cinema Theatre`, `Enter Theatre`) while the legacy rail/footer layout-control assertion does not fire.
+
+## 2026-05-30 11:53 CEST - Commit Unified Workspace Layout
+- [x] Stage unified layout work package
+- [x] Commit staged changes

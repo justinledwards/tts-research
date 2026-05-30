@@ -152,6 +152,7 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
       .waitFor();
     checks.push("Teleprompt shows voice and policy context.");
 
+    await pinWorkspaceInspector(page);
     await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
     await page.getByTestId("teleprompt-theatre").waitFor();
     await page.getByTestId("teleprompt-theatre-current-cue").waitFor();
@@ -343,6 +344,35 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
   } finally {
     await context.close();
   }
+}
+
+async function pinWorkspaceInspector(page) {
+  const menu = await openWorkspaceLayoutMenu(page);
+  await menu.getByTestId("ui-action-workspace-layout-custom-contextInspector-pinned").click();
+  await closeWorkspaceLayoutMenu(page);
+}
+
+async function openWorkspaceLayoutMenu(page) {
+  const menus = page.getByTestId("ui-action-workspace-layout-menu");
+  const count = await menus.count();
+  for (let index = 0; index < count; index += 1) {
+    const summary = menus.nth(index).locator("summary");
+    if (await summary.isVisible()) {
+      await summary.click();
+      return menus.nth(index);
+    }
+  }
+  throw new Error("Visible workspace layout menu was not found.");
+}
+
+async function closeWorkspaceLayoutMenu(page) {
+  await page.evaluate(() => {
+    document
+      .querySelectorAll('[data-testid="ui-action-workspace-layout-menu"][open]')
+      .forEach((element) => {
+        element.removeAttribute("open");
+      });
+  });
 }
 
 async function openPreview(page) {

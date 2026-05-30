@@ -1,6 +1,17 @@
-import { Button, SegmentedControl, StatusChip } from "./design";
+import { Button, SegmentedControl, StatusChip, cx } from "./design";
 import { CommandIcon, SettingsIcon } from "./features/navigation/SurfaceActions";
-import type { WorkspaceLayoutMode } from "./features/workspace/model";
+import {
+  WORKSPACE_LAYOUT_MODES,
+  WORKSPACE_LAYOUT_SLOT_DENSITIES,
+  WORKSPACE_LAYOUT_SLOTS,
+  workspaceLayoutModeMeta,
+  workspaceLayoutSlotDensityMeta,
+  workspaceLayoutSlotMeta,
+  type WorkspaceCustomLayout,
+  type WorkspaceLayoutMode,
+  type WorkspaceLayoutSlot,
+  type WorkspaceLayoutSlotDensity,
+} from "./features/workspace/model";
 import type { RunConfiguration } from "./runConfig";
 import { describePerformanceMode } from "./runConfig";
 import type { VoiceJob, VoiceProject } from "./types";
@@ -24,6 +35,7 @@ export function TopProductBar({
   settingsShortcutLabel,
   showSubmitAction = true,
   studioMode,
+  workspaceCustomLayout,
   workspaceLayoutMode,
   onCancel,
   onCommandPaletteOpen,
@@ -34,6 +46,7 @@ export function TopProductBar({
   onSettingsOpen,
   onStudioModeChange,
   onSubmit,
+  onWorkspaceCustomLayoutChange,
   onWorkspaceLayoutModeChange,
   onWorkspaceOpen,
 }: Readonly<{
@@ -52,6 +65,7 @@ export function TopProductBar({
   settingsShortcutLabel: string;
   showSubmitAction?: boolean;
   studioMode: StudioMode;
+  workspaceCustomLayout: WorkspaceCustomLayout;
   workspaceLayoutMode: WorkspaceLayoutMode;
   onCancel: () => void;
   onCommandPaletteOpen: () => void;
@@ -62,6 +76,7 @@ export function TopProductBar({
   onSettingsOpen: () => void;
   onStudioModeChange: (mode: StudioMode) => void;
   onSubmit: () => void;
+  onWorkspaceCustomLayoutChange: (layout: WorkspaceCustomLayout) => void;
   onWorkspaceLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
   onWorkspaceOpen: () => void;
 }>) {
@@ -129,32 +144,11 @@ export function TopProductBar({
           value={studioMode}
           onChange={onStudioModeChange}
         />
-        <SegmentedControl
-          ariaLabel="Workspace layout"
-          className="hidden min-w-[230px] xl:grid"
-          columns={3}
-          options={[
-            {
-              ariaLabel: "Focus workspace layout",
-              label: "Focus",
-              testId: "ui-action-workspace-layout-focus",
-              value: "focus",
-            },
-            {
-              ariaLabel: "Balanced workspace layout",
-              label: "Balanced",
-              testId: "ui-action-workspace-layout-balanced",
-              value: "balanced",
-            },
-            {
-              ariaLabel: "Full workspace layout",
-              label: "Full",
-              testId: "ui-action-workspace-layout-full",
-              value: "full",
-            },
-          ]}
-          value={workspaceLayoutMode}
-          onChange={onWorkspaceLayoutModeChange}
+        <WorkspaceLayoutControl
+          customLayout={workspaceCustomLayout}
+          layoutMode={workspaceLayoutMode}
+          onCustomLayoutChange={onWorkspaceCustomLayoutChange}
+          onLayoutModeChange={onWorkspaceLayoutModeChange}
         />
         <Button
           aria-label="Open command palette"
@@ -225,6 +219,13 @@ export function TopProductBar({
         >
           {studioMode === "narration" ? "Narration" : "Cloning"}
         </Button>
+        <WorkspaceLayoutControl
+          compact
+          customLayout={workspaceCustomLayout}
+          layoutMode={workspaceLayoutMode}
+          onCustomLayoutChange={onWorkspaceCustomLayoutChange}
+          onLayoutModeChange={onWorkspaceLayoutModeChange}
+        />
         <Button
           aria-label="Open command palette"
           className="text-orange-600"
@@ -268,6 +269,148 @@ export function TopProductBar({
       </nav>
     </header>
   );
+}
+
+export function WorkspaceLayoutControl({
+  compact = false,
+  customLayout,
+  layoutMode,
+  onCustomLayoutChange,
+  onLayoutModeChange,
+}: Readonly<{
+  compact?: boolean;
+  customLayout: WorkspaceCustomLayout;
+  layoutMode: WorkspaceLayoutMode;
+  onCustomLayoutChange: (layout: WorkspaceCustomLayout) => void;
+  onLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
+}>) {
+  const activeMeta = workspaceLayoutModeMeta(layoutMode);
+  return (
+    <details
+      className={cx("group relative", compact ? "" : "hidden lg:block")}
+      data-testid="ui-action-workspace-layout-menu"
+    >
+      <summary
+        aria-label={`Workspace layout: ${activeMeta.label}`}
+        className={cx(
+          "flex min-h-10 cursor-pointer list-none items-center justify-center rounded-md border bg-[var(--vs-raised)] px-3 text-sm font-semibold shadow-sm transition hover:bg-[var(--vs-surface)] vs-border [&::-webkit-details-marker]:hidden",
+          compact ? "min-w-11 px-2 text-orange-600" : "min-w-36 gap-2",
+        )}
+      >
+        <span>Layout</span>
+        {compact ? null : (
+          <StatusChip className="rounded-full py-0.5 text-[0.65rem]">{activeMeta.label}</StatusChip>
+        )}
+      </summary>
+      <div
+        className={cx(
+          "absolute right-0 z-50 mt-2 grid w-[min(22rem,calc(100vw-1rem))] gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 text-sm shadow-xl vs-border",
+          compact ? "-right-20" : "",
+        )}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          {WORKSPACE_LAYOUT_MODES.map((mode) => {
+            const meta = workspaceLayoutModeMeta(mode);
+            return (
+              <Button
+                align="start"
+                aria-label={`${meta.label} workspace layout`}
+                className="min-w-0 flex-col gap-1 px-3 py-2"
+                data-testid={`ui-action-workspace-layout-${mode}`}
+                key={mode}
+                onClick={() => {
+                  onLayoutModeChange(mode);
+                }}
+                selected={layoutMode === mode}
+                size="sm"
+                variant={layoutMode === mode ? "pinned" : "secondary"}
+              >
+                <span className="truncate text-sm font-semibold">{meta.label}</span>
+                <span className="line-clamp-2 text-left text-xs vs-muted">{meta.description}</span>
+              </Button>
+            );
+          })}
+        </div>
+        <div className="grid gap-2 border-t pt-3 vs-border">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+              Custom pins
+            </p>
+            <p className="mt-1 text-xs vs-muted">
+              Pin advanced panels here without adding controls to every panel.
+            </p>
+          </div>
+          {WORKSPACE_LAYOUT_SLOTS.map((slot) => (
+            <WorkspaceLayoutSlotControl
+              density={customLayout[slot]}
+              key={slot}
+              slot={slot}
+              onDensityChange={(density) => {
+                onCustomLayoutChange({
+                  ...customLayout,
+                  [slot]: density,
+                });
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function WorkspaceLayoutSlotControl({
+  density,
+  slot,
+  onDensityChange,
+}: Readonly<{
+  density: WorkspaceLayoutSlotDensity;
+  slot: WorkspaceLayoutSlot;
+  onDensityChange: (density: WorkspaceLayoutSlotDensity) => void;
+}>) {
+  const slotMeta = workspaceLayoutSlotMeta(slot);
+  return (
+    <div className="grid gap-1">
+      <p className="truncate text-xs font-semibold" title={slotMeta.description}>
+        {slotMeta.label}
+      </p>
+      <div className="grid grid-cols-3 gap-1">
+        {WORKSPACE_LAYOUT_SLOT_DENSITIES.map((item) => {
+          const meta = workspaceLayoutSlotDensityMeta(item);
+          const label = workspaceLayoutDensityLabel(slot, item);
+          return (
+            <Button
+              aria-label={`${slotMeta.label} ${label}`}
+              className="min-w-0 px-2 text-xs"
+              data-testid={`ui-action-workspace-layout-custom-${slot}-${item}`}
+              key={item}
+              onClick={() => {
+                onDensityChange(item);
+              }}
+              selected={density === item}
+              size="sm"
+              title={
+                slot === "systemStatus" && item === "hidden" ? "Essential status" : meta.description
+              }
+              variant={density === item ? "pinned" : "secondary"}
+            >
+              {label}
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function workspaceLayoutDensityLabel(
+  slot: WorkspaceLayoutSlot,
+  density: WorkspaceLayoutSlotDensity,
+): string {
+  if (slot === "systemStatus" && density === "hidden") {
+    return "Essential";
+  }
+  return workspaceLayoutSlotDensityMeta(density).label;
 }
 
 function TopProductBarProjectSelectors({

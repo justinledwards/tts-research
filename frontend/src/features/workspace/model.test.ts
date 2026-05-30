@@ -1,17 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
   createWorkspaceContext,
   defaultWorkspaceLayoutMode,
   enterTelepromptStage,
+  normalizeWorkspaceCustomLayout,
   normalizeWorkspaceLayoutMode,
   normalizeWorkspaceStage,
   returnFromTelepromptStage,
   transitionWorkspaceStage,
   withWorkspaceActiveBlock,
   withWorkspaceSource,
-  workspaceLayoutModeForRailMode,
   workspaceLayoutModeMeta,
   workspaceLayoutRails,
+  workspaceResolvedLayout,
   workspaceStageMeta,
 } from "./model";
 import {
@@ -33,8 +35,8 @@ describe("workspace stage model", () => {
     expect(normalizeWorkspaceLayoutMode(null)).toBe("balanced");
     expect(defaultWorkspaceLayoutMode()).toBe("balanced");
     expect(workspaceLayoutRails("balanced")).toEqual({
-      activityFooterMode: "compact",
-      leftRailMode: "compact",
+      activityFooterMode: "collapsed",
+      leftRailMode: "collapsed",
       rightRailMode: "compact",
     });
     expect(workspaceLayoutRails("focus")).toEqual({
@@ -47,9 +49,33 @@ describe("workspace stage model", () => {
       leftRailMode: "full",
       rightRailMode: "full",
     });
-    expect(workspaceLayoutModeForRailMode("collapsed")).toBe("focus");
-    expect(workspaceLayoutModeForRailMode("compact")).toBe("balanced");
-    expect(workspaceLayoutModeForRailMode("full")).toBe("full");
+  });
+
+  it("maps custom layout pins through the global workspace layout", () => {
+    expect(workspaceResolvedLayout("balanced")).toEqual({
+      contextInspector: "summary",
+      layoutMode: "balanced",
+      sourceContext: "hidden",
+      systemStatus: "hidden",
+    });
+    expect(workspaceResolvedLayout("custom", DEFAULT_WORKSPACE_CUSTOM_LAYOUT)).toEqual({
+      ...DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+      layoutMode: "custom",
+    });
+    expect(
+      workspaceLayoutRails("custom", {
+        contextInspector: "pinned",
+        sourceContext: "summary",
+        systemStatus: "pinned",
+      }),
+    ).toEqual({
+      activityFooterMode: "full",
+      leftRailMode: "compact",
+      rightRailMode: "full",
+    });
+    expect(normalizeWorkspaceCustomLayout({ contextInspector: "bad" })).toEqual(
+      DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+    );
   });
 
   it("defaults narrow viewports to focus density when layout memory is off", () => {
@@ -108,6 +134,7 @@ describe("workspace stage model", () => {
   it("exposes searchable metadata for stages and layouts", () => {
     expect(workspaceStageMeta("teleprompt").keywords).toContain("script");
     expect(workspaceLayoutModeMeta("focus").description).toContain("Collapse");
+    expect(workspaceLayoutModeMeta("custom").keywords).toContain("pins");
   });
 
   it("centralizes stage action labels, primary actions, and transitions", () => {

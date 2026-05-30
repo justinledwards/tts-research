@@ -17,7 +17,7 @@ import {
 } from "../playback";
 import { providerCapabilityDataAttributes } from "../provider-capabilities";
 import { workspaceStageActionLabel, workspaceStageActionTestId } from "../workspace";
-import type { WorkspaceSourceType, WorkspaceStage } from "../workspace";
+import type { WorkspaceLayoutSlotDensity, WorkspaceSourceType, WorkspaceStage } from "../workspace";
 import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
 import {
   TELEPROMPT_PRESET_IDS,
@@ -92,6 +92,7 @@ export interface TelepromptStudioProps {
   readonly canOpenCinema: boolean;
   readonly createAndListenCapabilityReason?: string;
   readonly createAndListenDisabledReason?: string;
+  readonly contextInspectorDensity: WorkspaceLayoutSlotDensity;
   readonly isPlaybackActive: boolean;
   readonly job: VoiceJob | null;
   readonly highlightMap?: HighlightMap | null;
@@ -131,6 +132,34 @@ function findTelepromptBlockById(
   return blocks.find((block) => block.id === blockId) ?? null;
 }
 
+function telepromptTheatreSettingsForWorkspaceLayout(
+  settings: TelepromptTheatreSettings,
+  density: WorkspaceLayoutSlotDensity,
+): TelepromptTheatreSettings {
+  if (density === "pinned") {
+    return {
+      ...settings,
+      cuePreviewCount: settings.cuePreviewCount === 0 ? 2 : settings.cuePreviewCount,
+      operatorPanelVisible: true,
+      syncOverlayVisible: true,
+    };
+  }
+  if (density === "summary") {
+    return {
+      ...settings,
+      cuePreviewCount: settings.cuePreviewCount === 0 ? 1 : settings.cuePreviewCount,
+      operatorPanelVisible: false,
+      syncOverlayVisible: true,
+    };
+  }
+  return {
+    ...settings,
+    cuePreviewCount: 0,
+    operatorPanelVisible: false,
+    syncOverlayVisible: false,
+  };
+}
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function TelepromptStudio({
   activeBlockId,
@@ -139,6 +168,7 @@ export function TelepromptStudio({
   canOpenCinema,
   createAndListenCapabilityReason,
   createAndListenDisabledReason: externalCreateAndListenDisabledReason,
+  contextInspectorDensity,
   isPlaybackActive,
   job,
   highlightMap = null,
@@ -782,6 +812,12 @@ export function TelepromptStudio({
     sourceMeta,
     voiceProfile,
   });
+  const showTelepromptCueSummary = contextInspectorDensity !== "hidden";
+  const showTelepromptContextPanel = contextInspectorDensity === "pinned";
+  const effectiveTheatreSettings = telepromptTheatreSettingsForWorkspaceLayout(
+    theatreSettings,
+    contextInspectorDensity,
+  );
 
   return (
     <>
@@ -1000,7 +1036,13 @@ export function TelepromptStudio({
           </div>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div
+          className={
+            showTelepromptCueSummary
+              ? "grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]"
+              : "grid gap-3"
+          }
+        >
           <section className="grid min-w-0 gap-3">
             <div className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
               <div>
@@ -1093,11 +1135,19 @@ export function TelepromptStudio({
             </div>
           </section>
 
-          <aside className="grid gap-3">
-            <TelepromptBlockPreview block={activeBlock} label="Current block" words={activeWords} />
-            <TelepromptBlockPreview block={nextBlock} label="Next block" />
-            <TelepromptBlockPreview block={previousBlock} label="Previous block" />
-          </aside>
+          {showTelepromptCueSummary ? (
+            <aside className="grid gap-3">
+              <TelepromptBlockPreview
+                block={activeBlock}
+                label="Current block"
+                words={activeWords}
+              />
+              <TelepromptBlockPreview block={nextBlock} label="Next block" />
+              {showTelepromptContextPanel ? (
+                <TelepromptBlockPreview block={previousBlock} label="Previous block" />
+              ) : null}
+            </aside>
+          ) : null}
         </div>
 
         <output
@@ -1108,13 +1158,15 @@ export function TelepromptStudio({
           {statusMessage}
         </output>
 
-        <ContextPanel
-          activeTabId={activeContextTab}
-          label="Teleprompt context"
-          surface="Teleprompt"
-          tabs={contextTabs}
-          onTabChange={setActiveContextTab}
-        />
+        {showTelepromptContextPanel ? (
+          <ContextPanel
+            activeTabId={activeContextTab}
+            label="Teleprompt context"
+            surface="Teleprompt"
+            tabs={contextTabs}
+            onTabChange={setActiveContextTab}
+          />
+        ) : null}
       </Panel>
       {theatreMode === "inline" ? null : (
         <TelepromptTheatre
@@ -1145,10 +1197,10 @@ export function TelepromptStudio({
           countdownRemaining={countdownRemaining}
           previewBlocks={blocks.slice(
             Math.max(0, activeBlockIndex + 1),
-            Math.max(0, activeBlockIndex + 1 + theatreSettings.cuePreviewCount),
+            Math.max(0, activeBlockIndex + 1 + effectiveTheatreSettings.cuePreviewCount),
           )}
           ref={theatreRootRef}
-          settings={theatreSettings}
+          settings={effectiveTheatreSettings}
           settingsMemoryEnabled={theatreSettingsMemoryEnabled}
           summary={theatreSummary}
           theatreViewMode={theatreViewMode}

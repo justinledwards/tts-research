@@ -11,7 +11,7 @@ export interface UiMemoryPreferenceMeta {
 
 export const UI_MEMORY_PREFERENCE_META: readonly UiMemoryPreferenceMeta[] = [
   {
-    detail: "Workspace rail layout and active review pane can reopen the way you left them.",
+    detail: "Workspace density, Custom pins, and active review pane can reopen as you left them.",
     id: "rememberLayout",
     label: "Remember layout",
     testId: "ui-action-ui-memory-remember-layout",
@@ -65,5 +65,5 @@ export const UI_MEMORY_RESET_CONFIRMATION: Record<UiMemoryResetScope, string> = 
   reader:
     "Reset reader preferences on this machine? Typography, spacing, contrast, and motion preferences will return to defaults.",
   workspace:
-    "Reset workspace layout memory on this machine? Workspace rails and review panes will return to defaults.",
+    "Reset workspace layout memory on this machine? Workspace density, Custom pins, and review panes will return to defaults.",
 };

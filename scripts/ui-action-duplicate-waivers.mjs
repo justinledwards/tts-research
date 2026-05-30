@@ -34,17 +34,6 @@ const ALL_REVIEW_SURFACES = [
 
 export const DUPLICATE_WAIVER_REGISTRY = [
   {
-    acceptedSurfaces: [...WORKSPACE_STAGE_SURFACES, "Mobile/narrow More sheet"],
-    burnDownIssue: "WP46-BD-RAIL-MODES",
-    category: "overexposed",
-    id: "wp46-rail-mode-controls",
-    labelPatterns: ["\\brail\\b", "workspace layout", "activity footer", "^Narration$"],
-    owner: "workspace-platform",
-    reason:
-      "Rail, layout, and narration chrome is repeated across every workspace stage. Consolidate these controls under one workspace chrome owner.",
-    reviewDate: REVIEW_DATE,
-  },
-  {
     acceptedSurfaces: [...WORKSPACE_STAGE_SURFACES, "Voice Command"],
     burnDownIssue: "WP46-BD-VOICE-CLONE",
     category: "overexposed",
@@ -110,6 +99,20 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     owner: "command-palette",
     reason:
       "The command palette trigger is intentionally available from workspace chrome and mirrors command search access.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: [...WORKSPACE_STAGE_SURFACES, "Teleprompt Theatre", "Workspace"],
+    category: "allowed-same-control-across-scenarios",
+    id: "wp46-workspace-layout-shell-control",
+    labelPatterns: [
+      "^Layout$",
+      "^Workspace layout:",
+      "^(Focus|Balanced|Full|Custom) workspace layout$",
+    ],
+    owner: "workspace-ia",
+    reason:
+      "The single global workspace density control is shell chrome and intentionally repeats across narration stages.",
     reviewDate: REVIEW_DATE,
   },
   {

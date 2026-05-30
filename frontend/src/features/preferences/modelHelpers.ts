@@ -8,9 +8,12 @@ import type { ReviewPane } from "../review/model";
 import { normalizeTelepromptTheatreSettings } from "../teleprompt/telepromptTheatreSettings";
 import { normalizeReviewPane } from "../review/model";
 import {
+  DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+  normalizeWorkspaceCustomLayout,
   normalizeWorkspaceLayoutMode,
   normalizeWorkspaceStage,
   WORKSPACE_LAYOUT_MODES,
+  type WorkspaceCustomLayout,
   type WorkspaceLayoutMode,
 } from "../workspace/model";
 import type { UiMemoryCinemaState, UiMemoryState } from "./model";
@@ -83,6 +86,12 @@ export function normalizeWorkspaceLayoutMap(value: unknown): Record<string, Work
   return normalizeRecord(value, (item) => normalizeWorkspaceLayoutMode(item));
 }
 
+export function normalizeWorkspaceCustomLayoutMap(
+  value: unknown,
+): Record<string, WorkspaceCustomLayout> {
+  return normalizeRecord(value, (item) => normalizeWorkspaceCustomLayout(item));
+}
+
 export function normalizeReviewPaneMap(value: unknown): Record<string, ReviewPane> {
   return normalizeRecord(value, (item) => normalizeReviewPane(item));
 }
@@ -102,10 +111,12 @@ export function normalizeWorkspaceMemory(
   }
   const candidate = value as Partial<UiMemoryState["workspace"]>;
   return {
+    customLayout: normalizeWorkspaceCustomLayout(candidate.customLayout),
     layoutMode:
       candidate.layoutMode === null || candidate.layoutMode === undefined
         ? null
         : normalizeWorkspaceLayoutMode(candidate.layoutMode),
+    projectCustomLayouts: normalizeWorkspaceCustomLayoutMap(candidate.projectCustomLayouts),
     projectLayoutModes: normalizeWorkspaceLayoutMap(candidate.projectLayoutModes),
     reviewPanes: normalizeReviewPaneMap(candidate.reviewPanes),
     telepromptTheatreSettings:
@@ -120,7 +131,11 @@ export function normalizeWorkspaceMemory(
 export function clearDisabledUiMemory(memory: UiMemoryState): UiMemoryState {
   const workspace = {
     ...memory.workspace,
+    customLayout: memory.rememberLayout
+      ? normalizeWorkspaceCustomLayout(memory.workspace.customLayout)
+      : DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
     layoutMode: memory.rememberLayout ? memory.workspace.layoutMode : null,
+    projectCustomLayouts: memory.rememberLayout ? memory.workspace.projectCustomLayouts : {},
     projectLayoutModes: memory.rememberLayout ? memory.workspace.projectLayoutModes : {},
     reviewPanes: memory.rememberLayout ? memory.workspace.reviewPanes : {},
     telepromptTheatreSettings: memory.rememberTelepromptTheatreSettings

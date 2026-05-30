@@ -11,9 +11,13 @@ import {
   type TelepromptTheatreSettings,
 } from "../teleprompt/telepromptTheatreSettings";
 import {
+  DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
   defaultWorkspaceLayoutMode,
+  normalizeWorkspaceCustomLayout,
   normalizeWorkspaceLayoutMode,
   WORKSPACE_LAYOUT_STORAGE_KEY,
+  workspaceCustomLayoutEqual,
+  type WorkspaceCustomLayout,
   type WorkspaceLayoutMode,
   type WorkspaceStage,
 } from "../workspace/model";
@@ -75,7 +79,9 @@ export interface UiMemoryState {
   rememberTheme: boolean;
   version: typeof UI_MEMORY_VERSION;
   workspace: {
+    customLayout: WorkspaceCustomLayout;
     layoutMode: WorkspaceLayoutMode | null;
+    projectCustomLayouts: Record<string, WorkspaceCustomLayout>;
     projectLayoutModes: Record<string, WorkspaceLayoutMode>;
     reviewPanes: Record<string, ReviewPane>;
     telepromptTheatreSettings: TelepromptTheatreSettings | null;
@@ -109,7 +115,9 @@ export function defaultUiMemoryState(
     ...normalizedPreferences,
     version: UI_MEMORY_VERSION,
     workspace: {
+      customLayout: DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
       layoutMode: null,
+      projectCustomLayouts: {},
       projectLayoutModes: {},
       reviewPanes: {},
       telepromptTheatreSettings: null,
@@ -175,7 +183,9 @@ export function resetWorkspaceUiMemory(memory: UiMemoryState): UiMemoryState {
     ...memory,
     workspace: {
       ...memory.workspace,
+      customLayout: DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
       layoutMode: null,
+      projectCustomLayouts: {},
       projectLayoutModes: {},
       reviewPanes: {},
     },
@@ -207,6 +217,20 @@ export function resolveWorkspaceLayoutMode(
   return normalizeWorkspaceLayoutMode(memory.workspace.layoutMode);
 }
 
+export function resolveWorkspaceCustomLayout(
+  memory: UiMemoryState,
+  projectId: string,
+): WorkspaceCustomLayout {
+  if (!memory.rememberLayout) {
+    return DEFAULT_WORKSPACE_CUSTOM_LAYOUT;
+  }
+  const cleanId = cleanProjectId(projectId);
+  if (Object.hasOwn(memory.workspace.projectCustomLayouts, cleanId)) {
+    return normalizeWorkspaceCustomLayout(memory.workspace.projectCustomLayouts[cleanId]);
+  }
+  return normalizeWorkspaceCustomLayout(memory.workspace.customLayout);
+}
+
 export function rememberWorkspaceLayoutMode(
   memory: UiMemoryState,
   projectId: string,
@@ -230,6 +254,38 @@ export function rememberWorkspaceLayoutMode(
       projectLayoutModes: {
         ...memory.workspace.projectLayoutModes,
         [cleanProjectId(projectId)]: normalizedLayoutMode,
+      },
+    },
+  };
+}
+
+export function rememberWorkspaceCustomLayout(
+  memory: UiMemoryState,
+  projectId: string,
+  customLayout: WorkspaceCustomLayout,
+): UiMemoryState {
+  if (!memory.rememberLayout) {
+    return memory;
+  }
+  const normalizedLayout = normalizeWorkspaceCustomLayout(customLayout);
+  const cleanId = cleanProjectId(projectId);
+  const currentProjectLayout = normalizeWorkspaceCustomLayout(
+    memory.workspace.projectCustomLayouts[cleanId],
+  );
+  if (
+    workspaceCustomLayoutEqual(memory.workspace.customLayout, normalizedLayout) &&
+    workspaceCustomLayoutEqual(currentProjectLayout, normalizedLayout)
+  ) {
+    return memory;
+  }
+  return {
+    ...memory,
+    workspace: {
+      ...memory.workspace,
+      customLayout: normalizedLayout,
+      projectCustomLayouts: {
+        ...memory.workspace.projectCustomLayouts,
+        [cleanId]: normalizedLayout,
       },
     },
   };
