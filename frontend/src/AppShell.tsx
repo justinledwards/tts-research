@@ -12,6 +12,12 @@ import {
   type WorkspaceLayoutSlot,
   type WorkspaceLayoutSlotDensity,
 } from "./features/workspace/model";
+import {
+  WORKSPACE_DISCLOSURE_PANEL_IDS,
+  workspaceDisclosurePanelMeta,
+  type WorkspaceDisclosurePanelId,
+  type WorkspaceDisclosurePins,
+} from "./features/workspace/disclosure";
 import type { RunConfiguration } from "./runConfig";
 import { describePerformanceMode } from "./runConfig";
 import type { VoiceJob, VoiceProject } from "./types";
@@ -36,6 +42,7 @@ export function TopProductBar({
   showSubmitAction = true,
   studioMode,
   workspaceCustomLayout,
+  workspaceDisclosurePins,
   workspaceLayoutMode,
   onCancel,
   onCommandPaletteOpen,
@@ -47,6 +54,7 @@ export function TopProductBar({
   onStudioModeChange,
   onSubmit,
   onWorkspaceCustomLayoutChange,
+  onWorkspaceDisclosurePinChange,
   onWorkspaceLayoutModeChange,
   onWorkspaceOpen,
 }: Readonly<{
@@ -66,6 +74,7 @@ export function TopProductBar({
   showSubmitAction?: boolean;
   studioMode: StudioMode;
   workspaceCustomLayout: WorkspaceCustomLayout;
+  workspaceDisclosurePins: WorkspaceDisclosurePins;
   workspaceLayoutMode: WorkspaceLayoutMode;
   onCancel: () => void;
   onCommandPaletteOpen: () => void;
@@ -77,6 +86,7 @@ export function TopProductBar({
   onStudioModeChange: (mode: StudioMode) => void;
   onSubmit: () => void;
   onWorkspaceCustomLayoutChange: (layout: WorkspaceCustomLayout) => void;
+  onWorkspaceDisclosurePinChange: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
   onWorkspaceLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
   onWorkspaceOpen: () => void;
 }>) {
@@ -146,8 +156,10 @@ export function TopProductBar({
         />
         <WorkspaceLayoutControl
           customLayout={workspaceCustomLayout}
+          disclosurePins={workspaceDisclosurePins}
           layoutMode={workspaceLayoutMode}
           onCustomLayoutChange={onWorkspaceCustomLayoutChange}
+          onDisclosurePinChange={onWorkspaceDisclosurePinChange}
           onLayoutModeChange={onWorkspaceLayoutModeChange}
         />
         <Button
@@ -222,8 +234,10 @@ export function TopProductBar({
         <WorkspaceLayoutControl
           compact
           customLayout={workspaceCustomLayout}
+          disclosurePins={workspaceDisclosurePins}
           layoutMode={workspaceLayoutMode}
           onCustomLayoutChange={onWorkspaceCustomLayoutChange}
+          onDisclosurePinChange={onWorkspaceDisclosurePinChange}
           onLayoutModeChange={onWorkspaceLayoutModeChange}
         />
         <Button
@@ -274,14 +288,18 @@ export function TopProductBar({
 export function WorkspaceLayoutControl({
   compact = false,
   customLayout,
+  disclosurePins,
   layoutMode,
   onCustomLayoutChange,
+  onDisclosurePinChange,
   onLayoutModeChange,
 }: Readonly<{
   compact?: boolean;
   customLayout: WorkspaceCustomLayout;
+  disclosurePins: WorkspaceDisclosurePins;
   layoutMode: WorkspaceLayoutMode;
   onCustomLayoutChange: (layout: WorkspaceCustomLayout) => void;
+  onDisclosurePinChange: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
   onLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
 }>) {
   const activeMeta = workspaceLayoutModeMeta(layoutMode);
@@ -354,6 +372,26 @@ export function WorkspaceLayoutControl({
             />
           ))}
         </div>
+        <div className="grid gap-2 border-t pt-3 vs-border">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+              Advanced pins
+            </p>
+            <p className="mt-1 text-xs vs-muted">
+              Keep frequently used advanced systems expanded when they are available.
+            </p>
+          </div>
+          {WORKSPACE_DISCLOSURE_PANEL_IDS.map((panelId) => (
+            <WorkspaceDisclosurePinControl
+              key={panelId}
+              panelId={panelId}
+              pinned={disclosurePins[panelId]}
+              onPinnedChange={(pinned) => {
+                onDisclosurePinChange(panelId, pinned);
+              }}
+            />
+          ))}
+        </div>
       </div>
     </details>
   );
@@ -411,6 +449,36 @@ function workspaceLayoutDensityLabel(
     return "Essential";
   }
   return workspaceLayoutSlotDensityMeta(density).label;
+}
+
+function WorkspaceDisclosurePinControl({
+  panelId,
+  pinned,
+  onPinnedChange,
+}: Readonly<{
+  panelId: WorkspaceDisclosurePanelId;
+  pinned: boolean;
+  onPinnedChange: (pinned: boolean) => void;
+}>) {
+  const meta = workspaceDisclosurePanelMeta(panelId);
+  return (
+    <Button
+      align="start"
+      aria-pressed={pinned}
+      className="min-w-0 justify-between gap-2 px-3 py-2"
+      data-testid={`ui-action-workspace-disclosure-pin-${panelId}`}
+      onClick={() => {
+        onPinnedChange(!pinned);
+      }}
+      selected={pinned}
+      size="sm"
+      title={meta.detail}
+      variant={pinned ? "pinned" : "secondary"}
+    >
+      <span className="min-w-0 truncate text-left text-xs font-semibold">{meta.label}</span>
+      <span className="shrink-0 text-[0.65rem]">{pinned ? "Pinned" : "Auto"}</span>
+    </Button>
+  );
 }
 
 function TopProductBarProjectSelectors({

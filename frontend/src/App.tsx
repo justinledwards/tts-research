@@ -189,6 +189,7 @@ import {
   rememberTelepromptTheatreSettings,
   rememberTelepromptReturnStage,
   rememberWorkspaceCustomLayout,
+  rememberWorkspaceDisclosurePin,
   rememberWorkspaceLayoutMode,
   resetUiMemory,
   resetWorkspaceUiMemory,
@@ -197,6 +198,7 @@ import {
   resolveTelepromptTheatreSettings,
   resolveTelepromptReturnStage,
   resolveWorkspaceCustomLayout,
+  resolveWorkspaceDisclosurePins,
   resolveWorkspaceLayoutMode,
   saveUiMemory,
   updateUiMemoryPreference,
@@ -263,6 +265,17 @@ import {
   type WorkspaceSourceType,
   type WorkspaceStage,
 } from "./features/workspace/model";
+import {
+  DEFAULT_WORKSPACE_DISCLOSURE_PINS,
+  WORKSPACE_DISCLOSURE_PANEL_IDS,
+  resolveWorkspaceDisclosure,
+  shouldExpandDisclosurePanel,
+  workspaceDisclosureRails,
+  type DisclosurePanelState,
+  type WorkspaceDisclosureModel,
+  type WorkspaceDisclosurePanelId,
+  type WorkspaceDisclosurePins,
+} from "./features/workspace/disclosure";
 import {
   resolveWorkspaceStageStatus,
   transitionWorkspaceContextForStageAction,
@@ -2072,6 +2085,9 @@ export function App() {
       voiceProfileId: selectedVoiceProfileId,
     }),
   );
+  const [workspaceDisclosurePins, setWorkspaceDisclosurePins] = useState<WorkspaceDisclosurePins>(
+    () => resolveWorkspaceDisclosurePins(uiMemory, activeProjectId),
+  );
   const [activeReviewPane, setActiveReviewPane] = useState<ReviewPane>(() =>
     resolveReviewPane(uiMemory, activeProjectId),
   );
@@ -2214,13 +2230,10 @@ export function App() {
     workspaceContext.layoutMode,
     workspaceContext.customLayout,
   );
-  const workspaceRails = workspaceLayoutRails(
+  const baseWorkspaceRails = workspaceLayoutRails(
     workspaceContext.layoutMode,
     workspaceContext.customLayout,
   );
-  const activityFooterMode: ActivityFooterMode = workspaceRails.activityFooterMode;
-  const leftRailMode = workspaceRails.leftRailMode;
-  const rightRailMode = workspaceRails.rightRailMode;
   const contentMode = workspaceContext.stage;
   const runWorkspaceStageAction = useCallback(
     (actionId: WorkspaceStageActionId) => {
@@ -2314,6 +2327,18 @@ export function App() {
     },
     [activeProjectId],
   );
+  const setWorkspaceDisclosurePin = useCallback(
+    (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => {
+      setWorkspaceDisclosurePins((currentPins) => ({
+        ...currentPins,
+        [panelId]: pinned,
+      }));
+      setUiMemory((currentMemory) =>
+        rememberWorkspaceDisclosurePin(currentMemory, activeProjectId, panelId, pinned),
+      );
+    },
+    [activeProjectId],
+  );
   const handleReviewPaneChange = useCallback(
     (pane: ReviewPane) => {
       const normalizedPane = normalizeReviewPane(pane);
@@ -2347,6 +2372,9 @@ export function App() {
       if (preferenceId === "rememberTheme") {
         localStorage.removeItem(THEME_STORAGE_KEY);
       }
+      if (preferenceId === "rememberPanelPins") {
+        setWorkspaceDisclosurePins(DEFAULT_WORKSPACE_DISCLOSURE_PINS);
+      }
     },
     [activeProjectId],
   );
@@ -2371,6 +2399,7 @@ export function App() {
           customLayout: DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
           layoutMode: defaultWorkspaceLayoutMode(),
         }));
+        setWorkspaceDisclosurePins(DEFAULT_WORKSPACE_DISCLOSURE_PINS);
         setActiveReviewPane("blocks");
         announcePolite(liveStatusMessages.settingsReset("Workspace"));
         return;
@@ -2399,6 +2428,7 @@ export function App() {
         layoutMode: defaultWorkspaceLayoutMode(),
         telepromptReturnStage: "review",
       }));
+      setWorkspaceDisclosurePins(DEFAULT_WORKSPACE_DISCLOSURE_PINS);
       setActiveReviewPane("blocks");
       setUiMemoryResetSignal((currentSignal) => currentSignal + 1);
       announcePolite(liveStatusMessages.settingsReset("All"));
@@ -2900,6 +2930,116 @@ export function App() {
     activeNarrationPreparedSource?.title ??
     activeNarrationPreparedSource?.sourceName ??
     (activeNarrationBookSource ? bookSourceName(activeNarrationBookSource) : "Draft text");
+  const workspaceDisclosure = useMemo<WorkspaceDisclosureModel>(() => {
+    const sourceError = sourcePrepError ?? bookSourceError;
+    const diagnosticsBlocking = Boolean(
+      profileSourceDiagnostics &&
+        !profileSourceDiagnostics.ffmpegAvailable &&
+        (studioMode === "voiceCloning" || profileSource !== null),
+    );
+    const diagnosticsWarning = Boolean(
+      profileError !== null ||
+        ttsEngineError !== null ||
+        diagnosticsBlocking ||
+        (profileSourceDiagnostics &&
+          (!profileSourceDiagnostics.localModelAvailable ||
+            !profileSourceDiagnostics.tokenConfigured)),
+    );
+    const backendWarning =
+      systemMetricsError !== null || ttsEngineError !== null || researchModuleError !== null;
+    const storageBytes = projectStorage?.totalBytes ?? 0;
+    return resolveWorkspaceDisclosure({
+      audioGeneration: {
+        lifecycle: generatedAudioLifecycle,
+        requiresPlayback:
+          activeWorkbenchStageStatus.blocker?.id === "audioMissing" ||
+          activeWorkbenchStageStatus.blocker?.id === "audioStale" ||
+          activeWorkbenchStageStatus.blocker?.id === "generationFailed",
+      },
+      backendState: {
+        active: isSettingsOpen || isWorkspaceOpen,
+        blocking: Boolean(createAndListenCapabilityReason && hasNarrationSource),
+        detail:
+          createAndListenCapabilityReason ??
+          ttsEngineError ??
+          systemMetricsError ??
+          researchModuleError ??
+          (systemMetrics ? "Backend metrics online." : "Backend metrics load when needed."),
+        online: !systemMetricsError,
+        warning: backendWarning,
+      },
+      diagnostics: {
+        active: isSettingsOpen,
+        blocking: diagnosticsBlocking,
+        detail:
+          profileError ??
+          ttsEngineError ??
+          profileSourceDiagnostics?.setupMessage ??
+          "Diagnostics available when setup or quality changes.",
+        warning: diagnosticsWarning,
+      },
+      exportImport: {
+        active: isBundlePanelOpen,
+        blocking: false,
+        detail: isBundlePanelOpen ? "Bundle flow is open." : "Bundle tools are in Workspace.",
+        warning: false,
+      },
+      pins: workspaceDisclosurePins,
+      sourceDetails: {
+        active: isPreparingSource || isImportingBookSource,
+        blocking: Boolean(sourceError),
+        detail:
+          sourceError ??
+          (isPreparingSource || isImportingBookSource
+            ? "Source preparation is running."
+            : activeNarrationSourceLabel),
+        hasSource: hasNarrationSource,
+        warning: false,
+      },
+      stage: contentMode,
+      storage: {
+        blocking: false,
+        detail: projectStorageError ?? `${formatBytes(storageBytes)} in current project storage`,
+        warning: projectStorageError !== null || storageBytes > 1024 * 1024 * 1024,
+      },
+      voiceCloning: {
+        blocking: false,
+        detail: voiceCloningActivity.message,
+        status: voiceCloningActivity.status,
+      },
+    });
+  }, [
+    activeNarrationSourceLabel,
+    activeWorkbenchStageStatus.blocker?.id,
+    bookSourceError,
+    contentMode,
+    createAndListenCapabilityReason,
+    generatedAudioLifecycle,
+    hasNarrationSource,
+    isBundlePanelOpen,
+    isImportingBookSource,
+    isPreparingSource,
+    isSettingsOpen,
+    isWorkspaceOpen,
+    profileError,
+    profileSource,
+    profileSourceDiagnostics,
+    projectStorage?.totalBytes,
+    projectStorageError,
+    researchModuleError,
+    sourcePrepError,
+    studioMode,
+    systemMetrics,
+    systemMetricsError,
+    ttsEngineError,
+    voiceCloningActivity.message,
+    voiceCloningActivity.status,
+    workspaceDisclosurePins,
+  ]);
+  const disclosureRails = workspaceDisclosureRails(baseWorkspaceRails, workspaceDisclosure);
+  const activityFooterMode: ActivityFooterMode = disclosureRails.activityFooterMode;
+  const leftRailMode = disclosureRails.leftRailMode;
+  const rightRailMode = disclosureRails.rightRailMode;
   const telepromptTheatreStageOpenSignal = theatreOpenSignalForWorkbenchStage({
     blocker: Boolean(activeWorkbenchStageStatus.blocker),
     signal: telepromptTheatreOpenSignal,
@@ -3735,6 +3875,7 @@ export function App() {
           voiceProfileId: selectedVoiceProfileId,
         }),
       );
+      setWorkspaceDisclosurePins(resolveWorkspaceDisclosurePins(currentUiMemory, projectId));
       setActiveReviewPane(resolveReviewPane(currentUiMemory, projectId));
       setProjectProgress([]);
       setActivePlaybackSession(null);
@@ -3810,6 +3951,7 @@ export function App() {
           voiceProfileId: savedState.voiceProfileId ?? currentContext.voiceProfileId,
         }),
       );
+      setWorkspaceDisclosurePins(resolveWorkspaceDisclosurePins(currentUiMemory, projectId));
       if (hashPosition?.bookSourceId) {
         setSelectedBookSourceId(hashPosition.bookSourceId);
       } else {
@@ -3942,6 +4084,9 @@ export function App() {
         const imported = parseUiMemoryImportJson(json);
         uiMemoryRef.current = imported.uiMemory;
         setUiMemory(imported.uiMemory);
+        setWorkspaceDisclosurePins(
+          resolveWorkspaceDisclosurePins(imported.uiMemory, activeProjectId),
+        );
         setTelepromptTheatreSettings(resolveTelepromptTheatreSettings(imported.uiMemory));
         if (imported.readerAccessibilitySettings) {
           setReaderAccessibilitySettings(imported.readerAccessibilitySettings);
@@ -6041,12 +6186,14 @@ export function App() {
           createAndListenFromCurrentSource();
         }}
         onWorkspaceCustomLayoutChange={setWorkspaceCustomLayout}
+        onWorkspaceDisclosurePinChange={setWorkspaceDisclosurePin}
         onWorkspaceLayoutModeChange={setWorkspaceLayoutMode}
         onWorkspaceOpen={() => {
           setIsWorkspaceOpen(true);
         }}
         runConfiguration={runConfiguration}
         workspaceCustomLayout={workspaceContext.customLayout}
+        workspaceDisclosurePins={workspaceDisclosurePins}
         workspaceLayoutMode={workspaceContext.layoutMode}
       />
       {isDemoModeCollapsed ? (
@@ -7030,6 +7177,7 @@ export function App() {
         job={job}
         mode={activityFooterMode}
         pipeline={ttsPipeline}
+        disclosure={workspaceDisclosure}
         showNarrationAction={false}
         voiceCloningActivity={voiceCloningActivity}
         onCancel={() => {
@@ -7038,6 +7186,7 @@ export function App() {
         onOpenVoiceCloning={() => {
           handleStudioModeChange("voiceCloning");
         }}
+        onPinDisclosurePanel={setWorkspaceDisclosurePin}
         onSubmit={() => {
           createAndListenFromCurrentSource();
         }}
@@ -8828,9 +8977,11 @@ function targetStatusClass(status: string): string {
   return "bg-zinc-100 text-zinc-600";
 }
 
-function PipelineStatusFooter({
+// eslint-disable-next-line sonarjs/cognitive-complexity
+export function PipelineStatusFooter({
   activeJobId,
   canSubmit,
+  disclosure,
   hint,
   isProcessing,
   job,
@@ -8840,10 +8991,12 @@ function PipelineStatusFooter({
   voiceCloningActivity,
   onCancel,
   onOpenVoiceCloning,
+  onPinDisclosurePanel,
   onSubmit,
 }: Readonly<{
   activeJobId: string | null;
   canSubmit: boolean;
+  disclosure: WorkspaceDisclosureModel;
   hint: string;
   isProcessing: boolean;
   job: VoiceJob | null;
@@ -8853,6 +9006,7 @@ function PipelineStatusFooter({
   voiceCloningActivity: VoiceCloningActivitySummary;
   onCancel: () => void;
   onOpenVoiceCloning: () => void;
+  onPinDisclosurePanel: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
   onSubmit: () => void;
 }>) {
   const total = job?.retries.totalSegments ?? job?.progress.totalSegments ?? 0;
@@ -8906,6 +9060,22 @@ function PipelineStatusFooter({
   const narrationMessage = narrationActivityMessage(job, hint);
   const narrationSegmentSummary = total > 0 ? `${String(current)} / ${String(total)}` : "0 / 0";
   const narrationCompactDetail = `${narrationSegmentSummary} · ${estimateFirstAudioETA(job)}`;
+  const disclosurePanels = WORKSPACE_DISCLOSURE_PANEL_IDS.map(
+    (panelId) => disclosure.panels[panelId],
+  );
+  const audioDisclosure = disclosure.panels.audioGeneration;
+  const voiceDisclosure = disclosure.panels.voiceCloning;
+  const expandedPanels = disclosurePanels.filter(shouldExpandDisclosurePanel);
+  const expandedAuxiliaryPanels = expandedPanels.filter(
+    (panel) => panel.id !== "audioGeneration" && panel.id !== "voiceCloning",
+  );
+  const summaryPanels = disclosurePanels.filter((panel) => !expandedPanels.includes(panel));
+  const highestAttentionPanel =
+    disclosure.highestPriorityPanel &&
+    (disclosure.highestPriorityPanel.status === "blocking" ||
+      disclosure.highestPriorityPanel.status === "warning")
+      ? disclosure.highestPriorityPanel
+      : null;
 
   if (mode === "collapsed") {
     return (
@@ -8925,8 +9095,17 @@ function PipelineStatusFooter({
             <span className="min-w-0 truncate text-sm font-semibold">
               Narration {job?.status ?? "Idle"} · Voice Cloning {voiceCloningActivity.statusLabel}
             </span>
+            {highestAttentionPanel ? (
+              <span className="hidden min-w-0 truncate text-sm font-semibold text-amber-700 md:inline">
+                {highestAttentionPanel.title}: {highestAttentionPanel.detail}
+              </span>
+            ) : null}
           </span>
-          <span className="shrink-0 text-xs font-semibold vs-muted">Essential</span>
+          <span className="shrink-0 text-xs font-semibold vs-muted">
+            {disclosure.attentionCount > 0
+              ? `${disclosure.attentionCount.toString()} attention`
+              : "Essential"}
+          </span>
         </div>
       </footer>
     );
@@ -8948,20 +9127,31 @@ function PipelineStatusFooter({
             statusLabel={job?.status ?? "Idle"}
             title="Narration"
           />
-          <CompactActivityLane
-            action={voiceCloningAction}
-            detail={`${voiceCloningActivity.elapsed} · ${voiceCloningActivity.lastUpdate}`}
-            message={voiceCloningActivity.message}
-            stages={voiceCloningActivity.stages}
-            status={voiceCloningActivity.status}
-            statusLabel={voiceCloningActivity.statusLabel}
-            title="Voice Cloning"
-          />
+          {shouldExpandDisclosurePanel(voiceDisclosure) ? (
+            <CompactActivityLane
+              action={voiceCloningAction}
+              detail={`${voiceCloningActivity.elapsed} · ${voiceCloningActivity.lastUpdate}`}
+              message={voiceCloningActivity.message}
+              stages={voiceCloningActivity.stages}
+              status={voiceCloningActivity.status}
+              statusLabel={voiceCloningActivity.statusLabel}
+              title="Voice Cloning"
+            />
+          ) : (
+            <DisclosureCompactRow
+              action={voiceCloningAction}
+              panel={voiceDisclosure}
+              statusLabel={voiceCloningActivity.statusLabel}
+            />
+          )}
+          <DisclosureSummaryStrip panels={summaryPanels} />
         </div>
       </footer>
     );
   }
 
+  const showAudioPanel = shouldExpandDisclosurePanel(audioDisclosure);
+  const showVoicePanel = shouldExpandDisclosurePanel(voiceDisclosure);
   return (
     <footer
       className="z-30 max-h-[min(34vh,24rem)] shrink-0 overflow-y-auto border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised"
@@ -8972,74 +9162,218 @@ function PipelineStatusFooter({
           Activity Footer
         </span>
       </div>
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <ActivityLanePanel
-          action={narrationAction}
-          facts={
-            <>
-              <ActivityFact
-                label="Job Status"
-                value={job?.status ?? "Idle"}
-                detail={activeJobId ?? hint}
-              />
-              <ActivityFact
-                label="Segments"
-                value={total > 0 ? `${String(current)} / ${String(total)}` : "0 / 0"}
-                detail={total > 0 ? formatPercentageRatio(current, total) : "Waiting"}
-              />
-              <ActivityFact
-                label="First Audio ETA"
-                value={estimateFirstAudioETA(job)}
-                detail="until checked audio"
-              />
-              <ActivityFact
-                label="Confidence"
-                value={formatSimilarity(job?.voiceCheck.similarity ?? 0)}
-                detail={job?.voiceCheck.reason ?? "waiting"}
-              />
-            </>
-          }
-          message={narrationMessage}
-          stages={narrationStages}
-          status={narrationStatus}
-          statusLabel={job?.status ?? "Idle"}
-          title="Narration Pipeline"
-        />
-        <ActivityLanePanel
-          action={voiceCloningAction}
-          facts={
-            <>
-              <ActivityFact
-                label="Status"
-                value={voiceCloningActivity.statusLabel}
-                detail={voiceCloningActivity.sourceDetail}
-              />
-              <ActivityFact
-                label="Elapsed"
-                value={voiceCloningActivity.elapsed}
-                detail={voiceCloningActivity.eta}
-              />
-              <ActivityFact
-                label="Last Update"
-                value={voiceCloningActivity.lastUpdate}
-                detail={voiceCloningActivity.eta}
-              />
-              <ActivityFact
-                label="Candidates"
-                value={voiceCloningActivity.candidateDetail}
-                detail={voiceCloningActivity.activeProfile?.name ?? "profile pending"}
-              />
-            </>
-          }
-          message={voiceCloningActivity.message}
-          stages={voiceCloningActivity.stages}
-          status={voiceCloningActivity.status}
-          statusLabel={voiceCloningActivity.statusLabel}
-          title="Voice Cloning"
-        />
+      <div className="grid gap-3 xl:grid-cols-2">
+        {showAudioPanel ? (
+          <ActivityLanePanel
+            action={
+              <ActivityLaneActions>
+                <DisclosurePinToggle panel={audioDisclosure} onPin={onPinDisclosurePanel} />
+                {narrationAction}
+              </ActivityLaneActions>
+            }
+            facts={
+              <>
+                <ActivityFact
+                  label="Job Status"
+                  value={job?.status ?? "Idle"}
+                  detail={activeJobId ?? hint}
+                />
+                <ActivityFact
+                  label="Segments"
+                  value={total > 0 ? `${String(current)} / ${String(total)}` : "0 / 0"}
+                  detail={total > 0 ? formatPercentageRatio(current, total) : "Waiting"}
+                />
+                <ActivityFact
+                  label="First Audio ETA"
+                  value={estimateFirstAudioETA(job)}
+                  detail="until checked audio"
+                />
+                <ActivityFact
+                  label="Confidence"
+                  value={formatSimilarity(job?.voiceCheck.similarity ?? 0)}
+                  detail={job?.voiceCheck.reason ?? "waiting"}
+                />
+              </>
+            }
+            message={narrationMessage}
+            stages={narrationStages}
+            status={narrationStatus}
+            statusLabel={job?.status ?? "Idle"}
+            title="Narration Pipeline"
+          />
+        ) : null}
+        {showVoicePanel ? (
+          <ActivityLanePanel
+            action={
+              <ActivityLaneActions>
+                <DisclosurePinToggle panel={voiceDisclosure} onPin={onPinDisclosurePanel} />
+                {voiceCloningAction}
+              </ActivityLaneActions>
+            }
+            facts={
+              <>
+                <ActivityFact
+                  label="Status"
+                  value={voiceCloningActivity.statusLabel}
+                  detail={voiceCloningActivity.sourceDetail}
+                />
+                <ActivityFact
+                  label="Elapsed"
+                  value={voiceCloningActivity.elapsed}
+                  detail={voiceCloningActivity.eta}
+                />
+                <ActivityFact
+                  label="Last Update"
+                  value={voiceCloningActivity.lastUpdate}
+                  detail={voiceCloningActivity.eta}
+                />
+                <ActivityFact
+                  label="Candidates"
+                  value={voiceCloningActivity.candidateDetail}
+                  detail={voiceCloningActivity.activeProfile?.name ?? "profile pending"}
+                />
+              </>
+            }
+            message={voiceCloningActivity.message}
+            stages={voiceCloningActivity.stages}
+            status={voiceCloningActivity.status}
+            statusLabel={voiceCloningActivity.statusLabel}
+            title="Voice Cloning"
+          />
+        ) : null}
+        {expandedAuxiliaryPanels.map((panel) => (
+          <DisclosureLanePanel key={panel.id} panel={panel} onPin={onPinDisclosurePanel} />
+        ))}
+        {!showAudioPanel && !showVoicePanel && expandedAuxiliaryPanels.length === 0 ? (
+          <DisclosureSummaryStrip panels={disclosurePanels} />
+        ) : null}
       </div>
+      {expandedPanels.length > 0 && summaryPanels.length > 0 ? (
+        <DisclosureSummaryStrip className="mt-3" panels={summaryPanels} />
+      ) : null}
     </footer>
   );
+}
+
+function DisclosureSummaryStrip({
+  className = "",
+  panels,
+}: Readonly<{ className?: string; panels: DisclosurePanelState[] }>) {
+  const visiblePanels = panels.filter((panel) => panel.status !== "hidden");
+  if (visiblePanels.length === 0) {
+    return null;
+  }
+  return (
+    <div className={`flex min-w-0 flex-wrap items-center gap-2 ${className}`}>
+      {visiblePanels.map((panel) => (
+        <StatusChip
+          className="max-w-full rounded-full py-0.5 text-[0.65rem]"
+          key={panel.id}
+          tone={disclosureChipTone(panel)}
+        >
+          <span className="truncate">
+            {panel.title}: {panel.status}
+          </span>
+        </StatusChip>
+      ))}
+    </div>
+  );
+}
+
+function DisclosureCompactRow({
+  action,
+  panel,
+  statusLabel,
+}: Readonly<{ action: ReactNode; panel: DisclosurePanelState; statusLabel: string }>) {
+  return (
+    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border p-3 vs-border vs-surface">
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+            {panel.title}
+          </h2>
+          <StatusChip tone={disclosureChipTone(panel)}>{statusLabel}</StatusChip>
+          {panel.pinned ? <StatusChip tone="pinned">Pinned</StatusChip> : null}
+        </div>
+        <p className="mt-2 min-w-0 truncate text-sm font-medium" title={panel.detail}>
+          {panel.detail}
+        </p>
+      </div>
+      <div className="shrink-0">{action}</div>
+    </section>
+  );
+}
+
+function DisclosureLanePanel({
+  panel,
+  onPin,
+}: Readonly<{
+  panel: DisclosurePanelState;
+  onPin: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
+}>) {
+  return (
+    <section className="min-w-0 rounded-lg border p-3 vs-border vs-surface">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+              {panel.title}
+            </h2>
+            <StatusChip tone={disclosureChipTone(panel)}>{panel.status}</StatusChip>
+          </div>
+          <p className="mt-2 break-words text-sm font-medium">{panel.detail}</p>
+        </div>
+        <DisclosurePinToggle panel={panel} onPin={onPin} />
+      </div>
+    </section>
+  );
+}
+
+function ActivityLaneActions({ children }: Readonly<{ children: ReactNode }>) {
+  return <div className="flex flex-wrap justify-end gap-2">{children}</div>;
+}
+
+function DisclosurePinToggle({
+  panel,
+  onPin,
+}: Readonly<{
+  panel: DisclosurePanelState;
+  onPin: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
+}>) {
+  return (
+    <Button
+      aria-label={`${panel.pinned ? "Unpin" : "Pin"} ${panel.title}`}
+      className="min-h-9 px-3 text-xs"
+      onClick={() => {
+        onPin(panel.id, !panel.pinned);
+      }}
+      size="sm"
+      variant={panel.pinned ? "pinned" : "secondary"}
+    >
+      {panel.pinned ? "Pinned" : "Pin"}
+    </Button>
+  );
+}
+
+function disclosureChipTone(
+  panel: DisclosurePanelState,
+): "danger" | "info" | "neutral" | "pinned" | "success" | "warning" {
+  if (panel.status === "blocking") {
+    return "danger";
+  }
+  if (panel.status === "warning") {
+    return "warning";
+  }
+  if (panel.status === "active") {
+    return "info";
+  }
+  if (panel.pinned) {
+    return "pinned";
+  }
+  if (panel.status === "available") {
+    return "success";
+  }
+  return "neutral";
 }
 
 function ActivityLanePanel({

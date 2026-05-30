@@ -16,6 +16,11 @@ import {
   type WorkspaceCustomLayout,
   type WorkspaceLayoutMode,
 } from "../workspace/model";
+import {
+  DEFAULT_WORKSPACE_DISCLOSURE_PINS,
+  normalizeWorkspaceDisclosurePins,
+  type WorkspaceDisclosurePins,
+} from "../workspace/disclosure";
 import type { UiMemoryCinemaState, UiMemoryState } from "./model";
 
 export const CINEMA_SURFACES: readonly CinemaSurfaceKind[] = ["book", "document", "website"];
@@ -92,6 +97,12 @@ export function normalizeWorkspaceCustomLayoutMap(
   return normalizeRecord(value, (item) => normalizeWorkspaceCustomLayout(item));
 }
 
+export function normalizeWorkspaceDisclosurePinsMap(
+  value: unknown,
+): Record<string, WorkspaceDisclosurePins> {
+  return normalizeRecord(value, (item) => normalizeWorkspaceDisclosurePins(item));
+}
+
 export function normalizeReviewPaneMap(value: unknown): Record<string, ReviewPane> {
   return normalizeRecord(value, (item) => normalizeReviewPane(item));
 }
@@ -112,11 +123,13 @@ export function normalizeWorkspaceMemory(
   const candidate = value as Partial<UiMemoryState["workspace"]>;
   return {
     customLayout: normalizeWorkspaceCustomLayout(candidate.customLayout),
+    disclosurePins: normalizeWorkspaceDisclosurePins(candidate.disclosurePins),
     layoutMode:
       candidate.layoutMode === null || candidate.layoutMode === undefined
         ? null
         : normalizeWorkspaceLayoutMode(candidate.layoutMode),
     projectCustomLayouts: normalizeWorkspaceCustomLayoutMap(candidate.projectCustomLayouts),
+    projectDisclosurePins: normalizeWorkspaceDisclosurePinsMap(candidate.projectDisclosurePins),
     projectLayoutModes: normalizeWorkspaceLayoutMap(candidate.projectLayoutModes),
     reviewPanes: normalizeReviewPaneMap(candidate.reviewPanes),
     telepromptTheatreSettings:
@@ -138,6 +151,10 @@ export function clearDisabledUiMemory(memory: UiMemoryState): UiMemoryState {
     projectCustomLayouts: memory.rememberLayout ? memory.workspace.projectCustomLayouts : {},
     projectLayoutModes: memory.rememberLayout ? memory.workspace.projectLayoutModes : {},
     reviewPanes: memory.rememberLayout ? memory.workspace.reviewPanes : {},
+    disclosurePins: memory.rememberPanelPins
+      ? normalizeWorkspaceDisclosurePins(memory.workspace.disclosurePins)
+      : DEFAULT_WORKSPACE_DISCLOSURE_PINS,
+    projectDisclosurePins: memory.rememberPanelPins ? memory.workspace.projectDisclosurePins : {},
     telepromptTheatreSettings: memory.rememberTelepromptTheatreSettings
       ? memory.workspace.telepromptTheatreSettings
       : null,

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_WORKSPACE_CUSTOM_LAYOUT, WORKSPACE_LAYOUT_STORAGE_KEY } from "../workspace";
+import {
+  DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+  DEFAULT_WORKSPACE_DISCLOSURE_PINS,
+  WORKSPACE_LAYOUT_STORAGE_KEY,
+} from "../workspace";
 import type { CinemaPanelDefinition } from "../cinema";
 import {
   UI_MEMORY_STORAGE_KEY,
@@ -9,12 +13,14 @@ import {
   rememberReviewPane,
   rememberTelepromptReturnStage,
   rememberWorkspaceCustomLayout,
+  rememberWorkspaceDisclosurePin,
   rememberWorkspaceLayoutMode,
   resetUiMemory,
   resolveCinemaFocusState,
   resolveReviewPane,
   resolveTelepromptReturnStage,
   resolveWorkspaceCustomLayout,
+  resolveWorkspaceDisclosurePins,
   resolveWorkspaceLayoutMode,
   saveUiMemory,
   type UiMemoryState,
@@ -54,6 +60,9 @@ describe("UI memory model", () => {
     expect(memory.rememberTheme).toBe(true);
     expect(resolveWorkspaceLayoutMode(memory, "alpha")).toBe("balanced");
     expect(resolveWorkspaceCustomLayout(memory, "alpha")).toEqual(DEFAULT_WORKSPACE_CUSTOM_LAYOUT);
+    expect(resolveWorkspaceDisclosurePins(memory, "alpha")).toEqual(
+      DEFAULT_WORKSPACE_DISCLOSURE_PINS,
+    );
     expect(resolveReviewPane(memory, "alpha")).toBe("blocks");
     expect(resolveTelepromptReturnStage(memory, "alpha")).toBe("review");
     expect(resolveCinemaFocusState(memory, "book")).toEqual({
@@ -90,6 +99,25 @@ describe("UI memory model", () => {
     saveUiMemory(customized);
     expect(resolveWorkspaceLayoutMode(loadUiMemory(), "alpha")).toBe("focus");
     expect(resolveWorkspaceCustomLayout(loadUiMemory(), "alpha").sourceContext).toBe("summary");
+  });
+
+  it("persists disclosure panel pins only when panel memory is enabled", () => {
+    const disabled = defaultUiMemoryState({ rememberPanelPins: false });
+    expect(rememberWorkspaceDisclosurePin(disabled, "alpha", "diagnostics", true)).toBe(disabled);
+    expect(resolveWorkspaceDisclosurePins(disabled, "alpha").diagnostics).toBe(false);
+
+    const enabled = defaultUiMemoryState({ rememberPanelPins: true });
+    const pinned = rememberWorkspaceDisclosurePin(enabled, "alpha", "diagnostics", true);
+
+    expect(resolveWorkspaceDisclosurePins(pinned, "alpha")).toMatchObject({
+      diagnostics: true,
+    });
+    expect(resolveWorkspaceDisclosurePins(pinned, "beta")).toMatchObject({
+      diagnostics: true,
+    });
+
+    saveUiMemory(pinned);
+    expect(resolveWorkspaceDisclosurePins(loadUiMemory(), "alpha").diagnostics).toBe(true);
   });
 
   it("does not persist remembered layout details while memory is disabled", () => {
@@ -181,6 +209,16 @@ describe("UI memory model", () => {
           sourceContext: "summary",
           systemStatus: "invalid",
         },
+        disclosurePins: {
+          ...DEFAULT_WORKSPACE_DISCLOSURE_PINS,
+          diagnostics: true,
+        },
+        projectDisclosurePins: {
+          alpha: {
+            ...DEFAULT_WORKSPACE_DISCLOSURE_PINS,
+            audioGeneration: true,
+          },
+        },
         projectCustomLayouts: {
           alpha: {
             contextInspector: "pinned",
@@ -221,6 +259,8 @@ describe("UI memory model", () => {
       sourceContext: "summary",
       systemStatus: "hidden",
     });
+    expect(resolveWorkspaceDisclosurePins(memory, "alpha").audioGeneration).toBe(true);
+    expect(resolveWorkspaceDisclosurePins(memory, "gamma").diagnostics).toBe(true);
     expect(resolveTelepromptReturnStage(memory, "alpha")).toBe("preview");
     expect(resolveTelepromptReturnStage(memory, "beta")).toBe("review");
     expect(resolveCinemaFocusState(memory, "book", panels)).toEqual({

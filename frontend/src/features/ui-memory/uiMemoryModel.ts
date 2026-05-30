@@ -47,7 +47,8 @@ export const UI_MEMORY_PREFERENCE_META: readonly UiMemoryPreferenceMeta[] = [
     testId: "ui-action-ui-memory-remember-teleprompt-theatre-settings",
   },
   {
-    detail: "Pinned Cinema context panels remain session-only unless this is enabled.",
+    detail:
+      "Pinned Cinema and advanced workspace panels remain session-only unless this is enabled.",
     id: "rememberPanelPins",
     label: "Remember panel pins",
     testId: "ui-action-ui-memory-remember-panel-pins",
@@ -65,5 +66,5 @@ export const UI_MEMORY_RESET_CONFIRMATION: Record<UiMemoryResetScope, string> = 
   reader:
     "Reset reader preferences on this machine? Typography, spacing, contrast, and motion preferences will return to defaults.",
   workspace:
-    "Reset workspace layout memory on this machine? Workspace density, Custom pins, and review panes will return to defaults.",
+    "Reset workspace layout memory on this machine? Workspace density, Custom pins, advanced panel pins, and review panes will return to defaults.",
 };

@@ -22,6 +22,13 @@ import {
   type WorkspaceStage,
 } from "../workspace/model";
 import {
+  DEFAULT_WORKSPACE_DISCLOSURE_PINS,
+  normalizeWorkspaceDisclosurePins,
+  workspaceDisclosurePinsEqual,
+  type WorkspaceDisclosurePanelId,
+  type WorkspaceDisclosurePins,
+} from "../workspace/disclosure";
+import {
   cleanProjectId,
   clearDisabledUiMemory,
   defaultCinemaMemoryState,
@@ -80,8 +87,10 @@ export interface UiMemoryState {
   version: typeof UI_MEMORY_VERSION;
   workspace: {
     customLayout: WorkspaceCustomLayout;
+    disclosurePins: WorkspaceDisclosurePins;
     layoutMode: WorkspaceLayoutMode | null;
     projectCustomLayouts: Record<string, WorkspaceCustomLayout>;
+    projectDisclosurePins: Record<string, WorkspaceDisclosurePins>;
     projectLayoutModes: Record<string, WorkspaceLayoutMode>;
     reviewPanes: Record<string, ReviewPane>;
     telepromptTheatreSettings: TelepromptTheatreSettings | null;
@@ -116,8 +125,10 @@ export function defaultUiMemoryState(
     version: UI_MEMORY_VERSION,
     workspace: {
       customLayout: DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+      disclosurePins: DEFAULT_WORKSPACE_DISCLOSURE_PINS,
       layoutMode: null,
       projectCustomLayouts: {},
+      projectDisclosurePins: {},
       projectLayoutModes: {},
       reviewPanes: {},
       telepromptTheatreSettings: null,
@@ -184,8 +195,10 @@ export function resetWorkspaceUiMemory(memory: UiMemoryState): UiMemoryState {
     workspace: {
       ...memory.workspace,
       customLayout: DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+      disclosurePins: DEFAULT_WORKSPACE_DISCLOSURE_PINS,
       layoutMode: null,
       projectCustomLayouts: {},
+      projectDisclosurePins: {},
       projectLayoutModes: {},
       reviewPanes: {},
     },
@@ -229,6 +242,20 @@ export function resolveWorkspaceCustomLayout(
     return normalizeWorkspaceCustomLayout(memory.workspace.projectCustomLayouts[cleanId]);
   }
   return normalizeWorkspaceCustomLayout(memory.workspace.customLayout);
+}
+
+export function resolveWorkspaceDisclosurePins(
+  memory: UiMemoryState,
+  projectId: string,
+): WorkspaceDisclosurePins {
+  if (!memory.rememberPanelPins) {
+    return DEFAULT_WORKSPACE_DISCLOSURE_PINS;
+  }
+  const cleanId = cleanProjectId(projectId);
+  if (Object.hasOwn(memory.workspace.projectDisclosurePins, cleanId)) {
+    return normalizeWorkspaceDisclosurePins(memory.workspace.projectDisclosurePins[cleanId]);
+  }
+  return normalizeWorkspaceDisclosurePins(memory.workspace.disclosurePins);
 }
 
 export function rememberWorkspaceLayoutMode(
@@ -286,6 +313,43 @@ export function rememberWorkspaceCustomLayout(
       projectCustomLayouts: {
         ...memory.workspace.projectCustomLayouts,
         [cleanId]: normalizedLayout,
+      },
+    },
+  };
+}
+
+export function rememberWorkspaceDisclosurePin(
+  memory: UiMemoryState,
+  projectId: string,
+  panelId: WorkspaceDisclosurePanelId,
+  pinned: boolean,
+): UiMemoryState {
+  if (!memory.rememberPanelPins) {
+    return memory;
+  }
+  const cleanId = cleanProjectId(projectId);
+  const currentPins = resolveWorkspaceDisclosurePins(memory, projectId);
+  const nextPins = normalizeWorkspaceDisclosurePins({
+    ...currentPins,
+    [panelId]: pinned,
+  });
+  if (
+    workspaceDisclosurePinsEqual(memory.workspace.disclosurePins, nextPins) &&
+    workspaceDisclosurePinsEqual(
+      normalizeWorkspaceDisclosurePins(memory.workspace.projectDisclosurePins[cleanId]),
+      nextPins,
+    )
+  ) {
+    return memory;
+  }
+  return {
+    ...memory,
+    workspace: {
+      ...memory.workspace,
+      disclosurePins: nextPins,
+      projectDisclosurePins: {
+        ...memory.workspace.projectDisclosurePins,
+        [cleanId]: nextPins,
       },
     },
   };

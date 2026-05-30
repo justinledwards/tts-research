@@ -1133,3 +1133,15 @@ duplicating every implementation detail from commits, PR text, or generated revi
 ## 2026-05-30 12:24 CEST - Catch-Up Commit
 - [x] Stage remaining worktree changes
 - [x] Commit remaining changes
+
+## 2026-05-30 12:37 CEST - Progressive Disclosure Systems
+- [x] Add shared frontend disclosure model
+- [x] Wire footer and rail disclosure behavior
+- [x] Add expert pinning support
+- [x] Add focused tests for disclosure rules and UI rendering
+- [x] Run project checks
+- Validation: focused disclosure/UI memory/footer tests passed; frontend typecheck passed; `pnpm check` passed with existing non-fatal Biome warnings outside this work; Playwright smoke on existing Vite server passed with no console warnings/errors.
+
+## 2026-05-30 13:06 CEST - Commit Progressive Disclosure Work Package
+- [x] Stage progressive disclosure files
+- [x] Commit staged work package
