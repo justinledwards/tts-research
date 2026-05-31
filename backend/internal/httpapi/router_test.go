@@ -410,6 +410,156 @@ func TestCreateJobEndpoint(t *testing.T) {
 	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 }
 
+func TestCreateVoicePreviewEndpointReturnsRawAudio(t *testing.T) {
+	t.Parallel()
+
+	app := httpapi.NewRouter(newService(t))
+	body := bytes.NewBufferString(`{"text":"This selected block previews the narrator voice.","ttsEngine":"auto"}`)
+	request, err := http.NewRequest(http.MethodPost, "/api/voice-previews", body)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusOK, payload)
+	}
+	if got := response.Header.Get("Content-Type"); !strings.Contains(got, "audio/wav") {
+		t.Fatalf("Content-Type = %q, want audio/wav", got)
+	}
+	if got := response.Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+	if got := response.Header.Get("X-Voice-Preview-Duration-Ms"); got == "" {
+		t.Fatal("duration header is empty")
+	}
+	if got := response.Header.Get("X-Voice-Preview-Provider"); got == "" {
+		t.Fatal("provider header is empty")
+	}
+	audio, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if len(audio) <= 44 {
+		t.Fatalf("audio body too short: %d bytes", len(audio))
+	}
+}
+
+func TestCreateVoicePreviewEndpointRejectsInvalidRequests(t *testing.T) {
+	t.Parallel()
+
+	app := httpapi.NewRouter(newService(t))
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "empty text",
+			body: `{"text":"   "}`,
+			want: "text is required",
+		},
+		{
+			name: "unavailable engine",
+			body: `{"text":"Preview me.","ttsEngine":"missing-engine"}`,
+			want: "tts engine",
+		},
+	}
+
+	for _, item := range cases {
+		t.Run(item.name, func(t *testing.T) {
+			t.Parallel()
+			request, err := http.NewRequest(
+				http.MethodPost,
+				"/api/voice-previews",
+				bytes.NewBufferString(item.body),
+			)
+			if err != nil {
+				t.Fatalf("NewRequest returned error: %v", err)
+			}
+			request.Header.Set("Content-Type", "application/json")
+
+			response, err := app.Test(request)
+			if err != nil {
+				t.Fatalf("app.Test returned error: %v", err)
+			}
+			defer response.Body.Close()
+
+			if response.StatusCode != http.StatusBadRequest {
+				payload, _ := io.ReadAll(response.Body)
+				t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusBadRequest, payload)
+			}
+			payload, err := io.ReadAll(response.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			if !strings.Contains(string(payload), item.want) {
+				t.Fatalf("body = %s, want %q", payload, item.want)
+			}
+		})
+	}
+}
+
+func TestCreateVoicePreviewEndpointSurfacesMissingProfileArtifact(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Preview profile", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+	app := httpapi.NewRouter(service)
+	body := bytes.NewBufferString(
+		`{"text":"Preview me.","voiceProfileId":"` +
+			profile.ID +
+			`","ttsEngine":"kokoro-embed","pipelineOptions":{"voiceClone":true}}`,
+	)
+	request, err := http.NewRequest(http.MethodPost, "/api/voice-previews", body)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusBadRequest {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusBadRequest, payload)
+	}
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !strings.Contains(string(payload), pipeline.ErrProfileArtifactMissing.Error()) {
+		t.Fatalf("body = %s, want missing artifact error", payload)
+	}
+}
+
 func TestProjectEndpointsCreateRenameAndListJobs(t *testing.T) {
 	t.Parallel()
 

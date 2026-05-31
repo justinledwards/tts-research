@@ -14,7 +14,7 @@ export function shouldShowGlobalPreviewPlayer(state: PlaybackSurfaceState): bool
   if (state.isCinemaOpen || state.preparedSourceCinemaOpen) {
     return false;
   }
-  if (state.stage === "teleprompt" || state.stage === "theatre") {
+  if (state.stage === "preview" || state.stage === "teleprompt" || state.stage === "theatre") {
     return false;
   }
   if (state.stage === "intake") {
@@ -23,7 +23,7 @@ export function shouldShowGlobalPreviewPlayer(state: PlaybackSurfaceState): bool
   if (state.owner === "cinema" || state.owner === "teleprompt") {
     return false;
   }
-  if (state.activityFooterMode === "full" && state.stage !== "preview") {
+  if (state.activityFooterMode === "full") {
     return false;
   }
   return true;

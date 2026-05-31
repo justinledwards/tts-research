@@ -180,6 +180,7 @@ export const STATIC_UI_ACTION_METADATA = [
     ["Cinema"],
   ),
   action("preview-mini-audition-a", "Audition A", "Preview", "preview", "live-status-updated"),
+  action("preview-audition-voice", "Audition voice", "Preview", "preview", "live-status-updated"),
   action("preview-mini-voice-b", "Voice B", "Preview", "settings", "state-changed"),
   action("preview-mini-policy-b", "Policy B", "Preview", "settings", "state-changed"),
   action("preview-mini-run-b", "Run B", "Preview", "settings", "state-changed"),

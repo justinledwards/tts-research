@@ -30,6 +30,7 @@ import {
   createPreparedSource,
   createPreparedSourceJob,
   createVoiceJob,
+  createVoicePreview,
   createVoiceProfileFromCandidate,
   createVoiceProfileSource,
   deleteProject,
@@ -75,6 +76,7 @@ import {
   updateCustomSpeechPolicyProfile,
   updatePlaybackProgress,
   updatePreparedSourceSpeechPolicy,
+  type VoicePreviewAudio,
 } from "./api";
 import { formatDuration } from "./format";
 import {
@@ -244,13 +246,18 @@ import { providerRuntimeLeavesLocalBoundary } from "./features/provider-capabili
 import {
   createAndListenAriaLabel,
   workspacePlaybackActionDataAttributes,
-  workspacePlaybackActionDisabledReason,
   type CreateAndListenScope,
 } from "./features/playback/workspacePlaybackActions";
 import {
   previewPlayerVariantForSurface,
   shouldShowGlobalPreviewPlayer,
 } from "./features/playback/playbackSurfaceRules";
+import { resolvePreviewReadinessModel } from "./features/preview/previewReadiness";
+import {
+  PreviewConfirmationStrip,
+  PreviewReadinessChecklist,
+  VoiceAuditionPanel,
+} from "./features/preview/PreviewReadinessPanels";
 import {
   playbackActionAriaLabel,
   playbackActionDataAttributes,
@@ -3028,7 +3035,8 @@ export function App() {
     [activeProjectId, effectiveBookScope, hashReadingPosition, selectedBookSource],
   );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
-  const canOpenCurrentCinema = Boolean(job) || canOpenBookCinema;
+  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
+  const canOpenCurrentCinema = generatedAudioLifecycle === "ready";
   let hasCreatableCurrentSource = false;
   if (!isProcessing && sourceMode === "book") {
     hasCreatableCurrentSource =
@@ -3050,7 +3058,6 @@ export function App() {
     selectedPreparedSource: activeNarrationPreparedSource,
     sourceMode,
   });
-  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
   const hasNarrationSource = hasWorkbenchNarrationSource({
     selectedBookSource,
     selectedPreparedSource,
@@ -5995,6 +6002,12 @@ export function App() {
     return request;
   }
 
+  async function auditionVoicePreviewFromCurrentConfig(
+    sampleText: string,
+  ): Promise<VoicePreviewAudio> {
+    return createVoicePreview(buildVoiceJobRequest(sampleText));
+  }
+
   async function submitVoiceJob() {
     const request = buildVoiceJobRequest(reviewedNarrationSpeechText || text);
     if (hasRevisionSessionChanges) {
@@ -7428,6 +7441,7 @@ export function App() {
               isPlaybackActive={isPlaybackActive}
               playbackControls={playbackControls}
               playbackCursorSec={playbackCursorSec}
+              onAuditionVoice={auditionVoicePreviewFromCurrentConfig}
               onInspectBookSource={(book) => {
                 void handleInspectContentIR(book.id, bookSourceName(book));
               }}
@@ -9621,6 +9635,7 @@ function SourceTextPanel({
   isPlaybackActive,
   playbackControls,
   playbackCursorSec,
+  onAuditionVoice,
   onCreateAndListen,
   onInspectBookSource,
   onInspectPreparedSource,
@@ -9685,6 +9700,7 @@ function SourceTextPanel({
   isPlaybackActive: boolean;
   playbackControls: PlaybackController;
   playbackCursorSec: number;
+  onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
   onCreateAndListen: () => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
@@ -9747,6 +9763,7 @@ function SourceTextPanel({
     surface: workspaceSourceLifecycleSurface(contentMode),
     text,
   });
+  const canOpenCinema = generatedAudioLifecycleFromJob({ job }) === "ready";
   const stageLabel = workspaceStageMeta(contentMode).label;
 
   return (
@@ -9862,7 +9879,7 @@ function SourceTextPanel({
         <NarrationPreviewStage
           bookScopeContent={bookScopeContent}
           canCreate={canSubmit && !isProcessing}
-          canOpenCinema={Boolean(job)}
+          canOpenCinema={canOpenCinema}
           job={job}
           optimizedText={optimizedText}
           policyProfileLabel={speechPolicyProfileLabel}
@@ -9873,6 +9890,7 @@ function SourceTextPanel({
           sourceMode={sourceMode}
           text={text}
           voiceProfileLabel={voiceProfileLabel}
+          runConfigurationLabel={runConfigurationLabel}
           createAndListenCapabilityReason={createAndListenCapabilityReason}
           createAndListenDisabledReason={createAndListenDisabledReason}
           createAndListenScope={createAndListenScope}
@@ -9880,6 +9898,7 @@ function SourceTextPanel({
           isPlaybackActive={isPlaybackActive}
           playbackControls={playbackControls}
           playbackCursorSec={playbackCursorSec}
+          onAuditionVoice={onAuditionVoice}
           onCreateAndListen={onCreateAndListen}
           onOpenCinema={onOpenCinema}
           onOpenTheatre={onOpenTheatre}
@@ -10027,10 +10046,12 @@ function NarrationPreviewStage({
   sourceMode,
   text,
   voiceProfileLabel,
+  runConfigurationLabel,
   createAndListenCapabilityReason,
   createAndListenDisabledReason: externalCreateAndListenDisabledReason,
   createAndListenScope,
   onActiveBlockChange,
+  onAuditionVoice,
   onCreateAndListen,
   onOpenCinema,
   onOpenTheatre,
@@ -10053,10 +10074,12 @@ function NarrationPreviewStage({
   sourceMode: SourceMode;
   text: string;
   voiceProfileLabel: string;
+  runConfigurationLabel: string;
   createAndListenCapabilityReason?: string;
   createAndListenDisabledReason?: string;
   createAndListenScope: CreateAndListenScope;
   onActiveBlockChange: (blockId: string | null) => void;
+  onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
   onCreateAndListen: () => void;
   onOpenCinema: () => void;
   onOpenTheatre: () => void;
@@ -10092,25 +10115,7 @@ function NarrationPreviewStage({
     selectedBookSource,
     selectedPreparedSource,
   });
-  const createDisabled = !canCreate;
   const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
-  const createAndListenDisabledReason = canCreate
-    ? undefined
-    : (externalCreateAndListenDisabledReason ??
-      workspacePlaybackActionDisabledReason({
-        action: "createAndListen",
-        fallbackReason: "Select a ready source before creating audio.",
-        lifecycle: generatedAudioLifecycle,
-        scope: createAndListenScope,
-      }));
-  const openCinemaDisabledReason = canOpenCinema
-    ? undefined
-    : workspacePlaybackActionDisabledReason({
-        action: "openCinema",
-        fallbackReason: "Create audio before opening Cinema.",
-        lifecycle: generatedAudioLifecycle,
-        scope: createAndListenScope,
-      });
   const createDetail = job
     ? `${job.status} · ${estimateFirstAudioETA(job)}`
     : "Ready to create checked narration";
@@ -10141,6 +10146,48 @@ function NarrationPreviewStage({
   const selectedPreviewBlockIndex = selectedPreviewBlock
     ? previewBlocks.findIndex((block) => block.id === selectedPreviewBlock.id)
     : -1;
+  const hasPreviewSource = hasPreviewStageSource({
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+    sourceMode,
+    text,
+  });
+  const hasSpokenPreviewText = previewBlocks.some((block) => block.spokenText.trim().length > 0);
+  const sourcePreparing = sourceLifecycle.extractionState === "extracting";
+  const sourceError =
+    selectedPreparedSource?.error ??
+    selectedBookSource?.error ??
+    (sourceLifecycle.canonicalState === "failed" ? sourceLifecycle.disabledReason : null);
+  const outputFormat = job?.contentType ?? "48kHz - 24bit - WAV";
+  const readiness = resolvePreviewReadinessModel({
+    canCreate,
+    createDisabledReason: externalCreateAndListenDisabledReason,
+    generatedAudioLifecycle,
+    hasSource: hasPreviewSource,
+    hasSpokenText: hasSpokenPreviewText,
+    outputFormat,
+    policyLabel: policyProfileLabel,
+    runLabel: runConfigurationLabel,
+    scopeLabel: scopeTitle,
+    sourceError,
+    sourceLabel,
+    sourcePreparing,
+    voiceCapabilityReason: createAndListenCapabilityReason,
+    voiceLabel: voiceProfileLabel,
+  });
+  const createDisabled = !readiness.canCreate;
+  const createAndListenDisabledReason = readiness.createDisabledReason;
+  const openCinemaDisabledReason = canOpenCinema ? undefined : readiness.cinemaDisabledReason;
+  const auditionSampleText = previewAuditionSampleText(
+    selectedPreviewBlock?.spokenText ?? spokenText,
+  );
+  const voiceAudition = useVoiceAuditionController({
+    canAudition: readiness.canAudition,
+    playbackControls,
+    sampleText: auditionSampleText,
+    onAuditionVoice,
+  });
   const previewWaveformBars = useAudioWaveformBars(
     job ? audioSource(job, { partial: true }) : "",
     56,
@@ -10148,7 +10195,8 @@ function NarrationPreviewStage({
   const playbackLifecycle = playbackControls.isAvailable ? "ready" : generatedAudioLifecycle;
   const previewPlaybackDisabledReason = playbackControls.isAvailable
     ? undefined
-    : playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle });
+    : (readiness.generatedPlaybackDisabledReason ??
+      playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle }));
   const previewDurationSec = playbackDurationSec(job);
   const previewSeekTargetSec = playbackSeekSecondsForRevisionBlock(
     previewBlocks,
@@ -10289,34 +10337,66 @@ function NarrationPreviewStage({
           stateLabel={generatedAudioLifecycle === "missing" ? "Source ready" : null}
           surfaceName="Preview"
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid gap-2 sm:min-w-64">
           <Button
             data-testid={workspaceStageActionTestId("openTeleprompt")}
+            disabled={!readiness.canOpenTeleprompt}
+            disabledReason={readiness.openTelepromptDisabledReason}
             onClick={onOpenTeleprompt}
             size="sm"
             variant="soft"
           >
             {workspaceStageActionLabel("openTeleprompt")}
           </Button>
+          <p className="text-xs leading-5 vs-muted">{readiness.openTelepromptDetail}</p>
           <Button
+            disabled={!readiness.canOpenTheatre}
+            disabledReason={readiness.openTheatreDisabledReason}
             data-testid={workspaceStageActionTestId("openTheatre")}
             onClick={onOpenTheatre}
             size="sm"
-            variant="soft"
+            variant="secondary"
           >
             {workspaceStageActionLabel("openTheatre")}
           </Button>
-          <Button
-            {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
-            disabledReason={openCinemaDisabledReason}
-            data-testid={workspaceStageActionTestId("openCinema")}
-            disabled={!canOpenCinema}
-            onClick={onOpenCinema}
-            size="sm"
-            variant="secondary"
-          >
-            {workspaceStageActionLabel("openCinema")}
-          </Button>
+          {!readiness.canOpenTheatre && readiness.openTheatreDisabledReason ? (
+            <p className="text-xs leading-5 text-orange-700">
+              {readiness.openTheatreDisabledReason}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <PreviewReadinessChecklist model={readiness} />
+      <PreviewConfirmationStrip model={readiness} />
+      <section className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold">
+              {readiness.canOpenCinema ? "Audio ready" : "Create full narration"}
+            </h3>
+            <StatusChip tone={job ? "info" : "neutral"}>{createDetail}</StatusChip>
+          </div>
+          <p className="mt-1 text-sm leading-6 vs-muted">
+            {readiness.createHelper}
+            {createDisabled && createAndListenDisabledReason
+              ? ` ${createAndListenDisabledReason}`
+              : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          {readiness.canOpenCinema ? (
+            <Button
+              {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
+              disabledReason={openCinemaDisabledReason}
+              data-testid={workspaceStageActionTestId("openCinema")}
+              disabled={!canOpenCinema}
+              onClick={onOpenCinema}
+              size="lg"
+              variant="primary"
+            >
+              {workspaceStageActionLabel("openCinema")}
+            </Button>
+          ) : null}
           <Button
             {...workspacePlaybackActionDataAttributes("createAndListen", generatedAudioLifecycle)}
             {...createAndListenCapabilityAttributes(createAndListenCapabilityReason)}
@@ -10326,18 +10406,50 @@ function NarrationPreviewStage({
             data-testid={workspaceStageActionTestId("createAndListen")}
             disabled={createDisabled}
             onClick={onCreateAndListen}
-            size="sm"
-            variant="primary"
+            size="lg"
+            variant={readiness.canOpenCinema ? "secondary" : "primary"}
           >
-            {workspaceStageActionLabel("createAndListen")}
+            {readiness.primaryLabel}
           </Button>
+          {readiness.canOpenCinema ? null : (
+            <Button
+              {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
+              disabledReason={openCinemaDisabledReason}
+              data-testid={workspaceStageActionTestId("openCinema")}
+              disabled={!canOpenCinema}
+              onClick={onOpenCinema}
+              size="lg"
+              variant="secondary"
+            >
+              {workspaceStageActionLabel("openCinema")}
+            </Button>
+          )}
         </div>
-      </div>
-      <StatusChip className="justify-self-start" tone={job ? "info" : "neutral"}>
-        {createDetail}
-      </StatusChip>
-      <div className="sticky top-3 z-10">
-        <LocalizedPlaybackToolbar model={previewPlaybackToolbar} />
+        {!readiness.canOpenCinema && openCinemaDisabledReason ? (
+          <p className="text-xs text-orange-700 lg:col-span-2">{openCinemaDisabledReason}</p>
+        ) : null}
+      </section>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <VoiceAuditionPanel
+          sampleText={auditionSampleText}
+          state={voiceAudition}
+          disabledReason={
+            readiness.canAudition
+              ? undefined
+              : readiness.rows.find((row) => row.id === "audition")?.detail
+          }
+        />
+        <section className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+          <div>
+            <h3 className="text-base font-semibold">Generated audio playback</h3>
+            <p className="mt-1 text-xs vs-muted">
+              Full narration playback is available after Create & Listen finishes.
+            </p>
+          </div>
+          <div className="sticky top-3 z-10">
+            <LocalizedPlaybackToolbar model={previewPlaybackToolbar} />
+          </div>
+        </section>
       </div>
       <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)]">
         <div className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border">
@@ -10363,6 +10475,149 @@ function NarrationPreviewStage({
       </div>
     </Panel>
   );
+}
+
+interface VoiceAuditionController {
+  readonly detail: string;
+  readonly label: string;
+  readonly metadata: string;
+  readonly play: () => void;
+  readonly status: "error" | "idle" | "loading" | "playing" | "ready";
+}
+
+function useVoiceAuditionController({
+  canAudition,
+  onAuditionVoice,
+  playbackControls,
+  sampleText,
+}: Readonly<{
+  canAudition: boolean;
+  onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
+  playbackControls: PlaybackController;
+  sampleText: string;
+}>): VoiceAuditionController {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  const [status, setStatus] = useState<VoiceAuditionController["status"]>("idle");
+  const [detail, setDetail] = useState(
+    "Audition the selected spoken block before full generation.",
+  );
+  const [metadata, setMetadata] = useState("");
+
+  const clearAudio = useCallback(() => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearAudio, [clearAudio]);
+
+  const play = useCallback(() => {
+    if (status === "playing") {
+      audioRef.current?.pause();
+      setStatus("ready");
+      setDetail("Audition paused.");
+      return;
+    }
+    if (!canAudition) {
+      setStatus("error");
+      setDetail("Source, spoken form, and voice must be ready before audition.");
+      return;
+    }
+    const cleanSample = sampleText.trim();
+    if (!cleanSample) {
+      setStatus("error");
+      setDetail("This source has no listener-ready text to audition or generate.");
+      return;
+    }
+
+    clearAudio();
+    setStatus("loading");
+    setDetail("Creating a short voice audition...");
+    setMetadata("");
+    if (playbackControls.isPlaying) {
+      playbackControls.pause();
+    }
+    void onAuditionVoice(cleanSample)
+      .then((preview) => {
+        const url = URL.createObjectURL(preview.audio);
+        objectUrlRef.current = url;
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.addEventListener("ended", () => {
+          setStatus("ready");
+          setDetail("Audition complete.");
+        });
+        audio.addEventListener("error", () => {
+          setStatus("error");
+          setDetail("Unable to play the generated audition.");
+        });
+        setMetadata(voicePreviewMetadata(preview));
+        return audio.play();
+      })
+      .then(() => {
+        setStatus("playing");
+        setDetail("Playing selected-block voice audition.");
+      })
+      .catch((caughtError: unknown) => {
+        clearAudio();
+        setStatus("error");
+        setDetail(
+          caughtError instanceof Error ? caughtError.message : "Unable to create voice audition.",
+        );
+      });
+  }, [canAudition, clearAudio, onAuditionVoice, playbackControls, sampleText, status]);
+
+  return {
+    detail,
+    label: status === "playing" ? "Stop audition" : "Audition voice",
+    metadata,
+    play,
+    status,
+  };
+}
+
+function hasPreviewStageSource({
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  text,
+}: Readonly<{
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  text: string;
+}>): boolean {
+  if (sourceMode === "book") {
+    return selectedBookSource?.status === "ready" && Boolean(selectedBookScope);
+  }
+  if (sourceMode === "fileUrl") {
+    return selectedPreparedSource?.status === "ready";
+  }
+  return text.trim().length > 0;
+}
+
+function previewAuditionSampleText(value: string): string {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 36) {
+    return words.join(" ");
+  }
+  return words.slice(0, 36).join(" ");
+}
+
+function voicePreviewMetadata(preview: VoicePreviewAudio): string {
+  return [
+    preview.durationMs ? formatDuration(preview.durationMs) : null,
+    preview.provider || null,
+    preview.voice || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 interface NarrationPreviewPolicyNote {

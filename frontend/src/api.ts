@@ -110,6 +110,39 @@ export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<Vo
   return response.json() as Promise<VoiceJob>;
 }
 
+export interface VoicePreviewAudio {
+  readonly audio: Blob;
+  readonly contentType: string;
+  readonly durationMs: number | null;
+  readonly provider: string;
+  readonly voice: string;
+}
+
+export async function createVoicePreview(
+  request: CreateVoiceJobRequest,
+): Promise<VoicePreviewAudio> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-previews`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  const contentType = response.headers.get("Content-Type") ?? "audio/wav";
+  return {
+    audio: await response.blob(),
+    contentType,
+    durationMs: parseOptionalNumber(response.headers.get("X-Voice-Preview-Duration-Ms")),
+    provider: response.headers.get("X-Voice-Preview-Provider") ?? "",
+    voice: response.headers.get("X-Voice-Preview-Voice") ?? "",
+  };
+}
+
 export async function getBookCinemaDiagnostics(): Promise<BookCinemaDiagnostics> {
   const response = await fetch(`${apiBaseUrl}/api/book-cinema/diagnostics`);
   if (!response.ok) {
@@ -1374,4 +1407,12 @@ async function readError(response: Response): Promise<string> {
 
 async function apiError(response: Response): Promise<ApiRequestError> {
   return new ApiRequestError(response.status, await readError(response));
+}
+
+function parseOptionalNumber(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }

@@ -1124,6 +1124,15 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - Validation: `pnpm exec biome format --write frontend/src/features/speech-policy/policyPreviewHelpers.ts` pass with no fixes; `pnpm exec biome lint frontend/src/features/speech-policy/policyPreviewHelpers.ts` pass; `pnpm --filter @tts-research/frontend exec vitest run src/features/speech-policy/policyPreview.test.ts` pass; `pnpm --filter @tts-research/frontend typecheck` pass; `git diff --check` pass; `pnpm check` pass with existing non-fatal lint warnings outside this refactor.
 - Next suggested target: After clearing the mixed dirty worktree, inspect `frontend/src/features/speech-policy/speechPolicyWizardHelpers.tsx` for one narrow helper or type-only import cleanup.
 
+## 2026-05-31 21:00 CEST - Preview Readiness Redesign
+- [x] Inspect current Preview, playback, and voice synthesis boundaries
+- [x] Add short voice preview backend API
+- [x] Add frontend audition API and readiness model
+- [x] Redesign Preview stage around preflight readiness
+- [x] Add targeted tests and update e2e expectations
+- [x] Run project checks
+- Validation: focused frontend/backend tests passed; frontend typecheck passed; `pnpm check` passed with existing non-fatal Biome warnings outside this work; workspace-preview UI action audit completed with no blocking findings; Playwright desktop/mobile Preview visual QA passed.
+
 ## 2026-05-30 08:02 CEST - Codebase Sanitization
 - [x] Check automation memory, ledger, skills, and dirty worktree
 - [x] Discover a behavior-preserving refactor target

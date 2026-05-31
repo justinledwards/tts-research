@@ -8,9 +8,13 @@ import {
   buildPreviewQueue,
   findAdjacentPreviewQueueItem,
   formatPreviewClock,
+  PreviewConfirmationStrip,
   previewComparisonSummary,
   previewQueueProgress,
+  PreviewReadinessChecklist,
+  resolvePreviewReadinessModel,
   resolvePreviewQueueIndex,
+  VoiceAuditionPanel,
   type PreviewComparisonChoice,
   type PreviewComparisonOption,
 } from "./index";
@@ -184,6 +188,127 @@ describe("preview A/B comparison", () => {
   });
 });
 
+describe("preview readiness model", () => {
+  it("blocks create and teleprompt when no source is selected", () => {
+    const model = resolvePreviewReadinessModel(readinessInput({ hasSource: false }));
+
+    expect(model.canCreate).toBe(false);
+    expect(model.canOpenTeleprompt).toBe(false);
+    expect(model.createDisabledReason).toBe("Choose or prepare a source before creating audio.");
+    expect(model.rows.find((row) => row.id === "source")).toMatchObject({
+      status: "blocked",
+    });
+  });
+
+  it("surfaces source preparation and missing spoken form", () => {
+    const preparing = resolvePreviewReadinessModel(
+      readinessInput({ hasSource: true, sourcePreparing: true }),
+    );
+    const noSpoken = resolvePreviewReadinessModel(
+      readinessInput({ hasSource: true, hasSpokenText: false }),
+    );
+
+    expect(preparing.rows.find((row) => row.id === "source")?.detail).toBe(
+      "Source preparation is still running.",
+    );
+    expect(preparing.canCreate).toBe(false);
+    expect(noSpoken.createDisabledReason).toBe(
+      "This source has no listener-ready text to audition or generate.",
+    );
+  });
+
+  it("keeps voice provider blockers explicit", () => {
+    const model = resolvePreviewReadinessModel(
+      readinessInput({ voiceCapabilityReason: "Select a ready voice or TTS engine." }),
+    );
+
+    expect(model.canAudition).toBe(false);
+    expect(model.createDisabledReason).toBe("Select a ready voice or TTS engine.");
+  });
+
+  it("distinguishes missing, generating, failed, stale, and ready audio transitions", () => {
+    const missing = resolvePreviewReadinessModel(
+      readinessInput({ generatedAudioLifecycle: "missing" }),
+    );
+    const generating = resolvePreviewReadinessModel(
+      readinessInput({ generatedAudioLifecycle: "generating" }),
+    );
+    const failed = resolvePreviewReadinessModel(
+      readinessInput({ generatedAudioLifecycle: "failed" }),
+    );
+    const stale = resolvePreviewReadinessModel(
+      readinessInput({ generatedAudioLifecycle: "stale" }),
+    );
+    const ready = resolvePreviewReadinessModel(
+      readinessInput({ generatedAudioLifecycle: "ready" }),
+    );
+
+    expect(missing.generatedPlaybackDisabledReason).toBe(
+      "Create & Listen before playing the full narration.",
+    );
+    expect(missing.openTelepromptDetail).toBe("Script-only now. Cue playback unlocks after audio.");
+    expect(missing.canOpenCinema).toBe(false);
+    expect(generating.canOpenCinema).toBe(false);
+    expect(generating.cinemaDisabledReason).toBe(
+      "Audio is generating. Playback and Cinema unlock when ready.",
+    );
+    expect(failed.cinemaDisabledReason).toContain("Audio failed");
+    expect(stale.cinemaDisabledReason).toContain("Audio stale");
+    expect(ready.canOpenCinema).toBe(true);
+    expect(ready.openTelepromptDetail).toBe("Teleprompt opens with generated cue playback ready.");
+    expect(ready.primaryLabel).toBe("Create Again");
+  });
+});
+
+describe("preview readiness UI", () => {
+  it("renders the checklist and confirmation strip as a preflight surface", () => {
+    const model = resolvePreviewReadinessModel(readinessInput());
+    const markup = renderToStaticMarkup(
+      createElement(
+        "div",
+        null,
+        createElement(PreviewReadinessChecklist, { model }),
+        createElement(PreviewConfirmationStrip, { model }),
+      ),
+    );
+
+    expect(markup).toContain('data-testid="preview-readiness-checklist"');
+    expect(markup).toContain("Narration preflight");
+    expect(markup).toContain("Ready to create");
+    expect(markup).toContain("Spoken form");
+    expect(markup).toContain("Voice/provider");
+    expect(markup).toContain('data-testid="preview-confirmation-strip"');
+    expect(markup).toContain("Preview source");
+    expect(markup).toContain("Default voice");
+    expect(markup).toContain("Checked Master");
+    expect(markup).toContain("audio/wav");
+  });
+
+  it("renders selected-block audition with disabled-state copy", () => {
+    const play = vi.fn();
+    const markup = renderToStaticMarkup(
+      createElement(VoiceAuditionPanel, {
+        disabledReason: "Select a ready voice or TTS engine.",
+        sampleText: "Selected spoken block sample.",
+        state: {
+          detail: "Audition the selected spoken block before full generation.",
+          label: "Audition voice",
+          metadata: "0:01 · mock · af_heart",
+          play,
+          status: "idle",
+        },
+      }),
+    );
+
+    expect(markup).toContain('data-testid="preview-audition-panel"');
+    expect(markup).toContain("Selected spoken block sample.");
+    expect(markup).toContain('data-testid="ui-action-preview-audition-voice"');
+    expect(markup).toContain('data-disabled-reason="Select a ready voice or TTS engine."');
+    expect(markup).toContain("Select a ready voice or TTS engine.");
+    expect(markup).toContain("0:01 · mock · af_heart");
+  });
+});
+
 function block(overrides: Partial<RevisionBlock>): RevisionBlock {
   return {
     confidence: 1,
@@ -255,5 +380,24 @@ function job(): VoiceJob {
       similarity: 0.99,
       transcript: "Output",
     },
+  };
+}
+
+function readinessInput(
+  overrides: Partial<Parameters<typeof resolvePreviewReadinessModel>[0]> = {},
+): Parameters<typeof resolvePreviewReadinessModel>[0] {
+  return {
+    canCreate: true,
+    generatedAudioLifecycle: "missing",
+    hasSource: true,
+    hasSpokenText: true,
+    outputFormat: "audio/wav",
+    policyLabel: "Enterprise",
+    runLabel: "Checked Master",
+    scopeLabel: "Current source",
+    sourceLabel: "Preview source",
+    sourcePreparing: false,
+    voiceLabel: "Default voice",
+    ...overrides,
   };
 }

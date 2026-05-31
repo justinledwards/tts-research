@@ -13,6 +13,26 @@ import (
 )
 
 func registerVoiceJobRoutes(app *fiber.App, service *pipeline.Service) {
+	app.Post("/api/voice-previews", func(ctx fiber.Ctx) error {
+		var request pipeline.CreateJobRequest
+		if err := json.Unmarshal(ctx.Body(), &request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		preview, err := service.CreateVoicePreview(ctx.Context(), request)
+		if err != nil {
+			return ctx.Status(voicePreviewErrorStatus(err)).JSON(errorResponse(err.Error()))
+		}
+
+		ctx.Set(fiber.HeaderContentType, preview.ContentType)
+		ctx.Set(fiber.HeaderCacheControl, "no-store")
+		ctx.Set("Pragma", "no-cache")
+		ctx.Set("Expires", "0")
+		ctx.Set("X-Voice-Preview-Duration-Ms", strconv.Itoa(preview.DurationMS))
+		ctx.Set("X-Voice-Preview-Provider", preview.Provider)
+		ctx.Set("X-Voice-Preview-Voice", preview.Voice)
+		return ctx.Send(preview.Audio)
+	})
+
 	app.Post("/api/voice-jobs", func(ctx fiber.Ctx) error {
 		var request pipeline.CreateJobRequest
 		if err := json.Unmarshal(ctx.Body(), &request); err != nil {
@@ -205,4 +225,21 @@ func registerVoiceJobRoutes(app *fiber.App, service *pipeline.Service) {
 		ctx.Set("Expires", "0")
 		return ctx.Send(audio)
 	})
+}
+
+func voicePreviewErrorStatus(err error) int {
+	if errors.Is(err, pipeline.ErrEmptyText) ||
+		errors.Is(err, pipeline.ErrVoiceNotFound) ||
+		errors.Is(err, pipeline.ErrProfileNotFound) ||
+		errors.Is(err, pipeline.ErrProfileMissingAudio) ||
+		errors.Is(err, pipeline.ErrProfileUnsupported) ||
+		errors.Is(err, pipeline.ErrProfileArtifactMissing) ||
+		errors.Is(err, pipeline.ErrProfileArtifactUnsupported) ||
+		strings.Contains(err.Error(), "tts engine") {
+		return fiber.StatusBadRequest
+	}
+	if errors.Is(err, pipeline.ErrProjectNotFound) {
+		return fiber.StatusNotFound
+	}
+	return fiber.StatusBadGateway
 }
