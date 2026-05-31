@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 import { Button, cx, fieldControlClassName } from "../../design";
 import { READER_PLAYBACK_RATES } from "../reader-accessibility";
+import {
+  DEFAULT_SHORTCUT_PREFERENCES,
+  shortcutAriaKeyShortcutsForCommand,
+  shortcutTooltip,
+  type ShortcutCommandId,
+} from "../shortcuts/shortcutRegistry";
 
 export type LocalizedPlaybackToolbarStage =
   | "cinema-theatre"
@@ -20,6 +26,7 @@ export interface LocalizedPlaybackToolbarAction {
   readonly icon?: ReactNode;
   readonly label: string;
   readonly primary?: boolean;
+  readonly shortcutCommandId?: ShortcutCommandId;
   readonly testId?: string;
   readonly visible?: boolean;
   readonly onClick: () => void;
@@ -30,6 +37,7 @@ export interface LocalizedPlaybackToolbarSpeedControl {
   readonly disabled?: boolean;
   readonly disabledReason?: string;
   readonly rates?: readonly number[];
+  readonly shortcutCommandId?: ShortcutCommandId;
   readonly testId?: string;
   readonly value: number;
   readonly onChange?: (rate: number) => void;
@@ -239,10 +247,15 @@ function ToolbarButton({
   action,
   highContrast,
 }: Readonly<{ action: LocalizedPlaybackToolbarAction; highContrast: boolean }>) {
+  const ariaKeyShortcuts =
+    action.ariaKeyShortcuts ??
+    (action.shortcutCommandId
+      ? shortcutAriaKeyShortcutsForCommand(action.shortcutCommandId, DEFAULT_SHORTCUT_PREFERENCES)
+      : undefined);
   return (
     <Button
       {...action.dataAttributes}
-      aria-keyshortcuts={action.ariaKeyShortcuts}
+      aria-keyshortcuts={ariaKeyShortcuts}
       aria-label={action.ariaLabel ?? action.label}
       className={cx(
         action.primary ? "min-w-32 gap-2" : "gap-2",
@@ -252,10 +265,17 @@ function ToolbarButton({
             : "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]"),
       )}
       data-testid={action.testId}
+      data-shortcut-command-id={action.shortcutCommandId}
       disabled={action.disabled}
       disabledReason={action.disabledReason}
       onClick={action.onClick}
       size={action.primary ? "lg" : "md"}
+      title={shortcutTooltip(
+        action.label,
+        action.shortcutCommandId,
+        DEFAULT_SHORTCUT_PREFERENCES,
+        action.disabledReason,
+      )}
       variant={action.primary ? "primary" : "secondary"}
     >
       {action.icon}
@@ -269,6 +289,11 @@ function ToolbarSpeedSelect({
   speed,
 }: Readonly<{ highContrast: boolean; speed: LocalizedPlaybackToolbarSpeedControl }>) {
   const rates = speed.rates ?? READER_PLAYBACK_RATES;
+  const ariaKeyShortcuts =
+    speed.ariaKeyShortcuts ??
+    (speed.shortcutCommandId
+      ? shortcutAriaKeyShortcutsForCommand(speed.shortcutCommandId, DEFAULT_SHORTCUT_PREFERENCES)
+      : undefined);
   return (
     <label
       className={cx(
@@ -278,7 +303,7 @@ function ToolbarSpeedSelect({
     >
       <span className="sr-only">Playback speed</span>
       <select
-        aria-keyshortcuts={speed.ariaKeyShortcuts}
+        aria-keyshortcuts={ariaKeyShortcuts}
         aria-label="Playback speed"
         className={cx(
           fieldControlClassName,
@@ -287,11 +312,18 @@ function ToolbarSpeedSelect({
             "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)]",
         )}
         data-disabled-reason={speed.disabledReason}
+        data-shortcut-command-id={speed.shortcutCommandId}
         data-testid={speed.testId}
         disabled={speed.disabled}
         onChange={(event) => {
           speed.onChange?.(Number(event.currentTarget.value));
         }}
+        title={shortcutTooltip(
+          "Playback speed",
+          speed.shortcutCommandId,
+          DEFAULT_SHORTCUT_PREFERENCES,
+          speed.disabledReason,
+        )}
         value={String(speed.value)}
       >
         {rates.map((rate) => (

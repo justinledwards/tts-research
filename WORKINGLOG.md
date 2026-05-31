@@ -1257,3 +1257,21 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update focused frontend tests
 - [x] Run project checks
 - Validation: focused header/Command Center/status tests passed; frontend typecheck passed; frontend test suite passed; `pnpm check` passed with existing unrelated Biome lint warnings.
+
+## 2026-05-31 23:39 CEST - Keyboard-First Narration Workflows
+- [x] Inspect current shortcut, command palette, review, Teleprompt, and Theatre surfaces
+- [x] Implement unified narration shortcut registry helpers
+- [x] Wire command palette, tooltips, shortcut settings, and focus behavior
+- [x] Add focused shortcut and keyboard workflow tests
+- [x] Run project checks
+- Validation: focused shortcut/navigation/review/Teleprompt tests passed; frontend typecheck passed; frontend test suite passed; command palette E2E passed; `pnpm check` passed with existing unrelated Biome lint warnings.
+
+## 2026-06-01 00:09 CEST - Commit Keyboard-First Narration Package
+- [x] Review keyboard workflow worktree
+- [x] Stage keyboard workflow files
+- [x] Commit staged work package
+
+## 2026-06-01 00:13 CEST - Update Keyboard Narration PR
+- [x] Inspect branch and remote status
+- [x] Push branch to PR remote
+- [x] Confirm PR update

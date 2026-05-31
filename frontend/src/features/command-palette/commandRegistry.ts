@@ -1,7 +1,10 @@
 import {
   resolveGlobalShortcutCommand,
+  shortcutAvailabilityDisabled,
+  shortcutAvailabilityReason,
   shortcutLabelForCommand,
   shouldIgnoreGlobalShortcutTarget,
+  type ShortcutAvailability,
   type ShortcutCommandId,
   type ShortcutPreferences,
 } from "../shortcuts/shortcutRegistry";
@@ -40,6 +43,7 @@ export interface CommandActionContext {
 export interface CommandEntry {
   capabilityGate?: string;
   capabilityGated?: boolean;
+  availability?: ShortcutAvailability;
   category?: CommandCategory;
   detail?: string;
   disabled?: boolean;
@@ -143,6 +147,16 @@ export function commandShortcutLabel(
   return shortcutLabelForCommand(entry.shortcutCommandId, preferences);
 }
 
+export function commandDisabled(entry: Pick<CommandEntry, "availability" | "disabled">): boolean {
+  return (entry.disabled ?? false) || shortcutAvailabilityDisabled(entry.availability);
+}
+
+export function commandDisabledReason(
+  entry: Pick<CommandEntry, "availability" | "disabledReason">,
+): string | undefined {
+  return entry.disabledReason ?? shortcutAvailabilityReason(entry.availability);
+}
+
 export function scoreCommandEntry(
   entry: Pick<CommandEntry, "category" | "detail" | "keywords" | "section" | "title">,
   tokensOrQuery: readonly string[] | string,
@@ -216,8 +230,10 @@ function compareRankedCommands(left: RankedCommand, right: RankedCommand): numbe
   if (right.score !== left.score) {
     return right.score - left.score;
   }
-  if (left.entry.disabled !== right.entry.disabled) {
-    return left.entry.disabled ? 1 : -1;
+  const leftDisabled = commandDisabled(left.entry);
+  const rightDisabled = commandDisabled(right.entry);
+  if (leftDisabled !== rightDisabled) {
+    return leftDisabled ? 1 : -1;
   }
   return left.index - right.index;
 }

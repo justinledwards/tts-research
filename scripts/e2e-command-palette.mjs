@@ -234,6 +234,10 @@ async function runCommandPaletteAudit(browser, projectId, screenshots) {
     await dialog.waitFor();
     await dialog.getByRole("button", { exact: true, name: "Shortcuts" }).click();
     await dialog.getByRole("heading", { exact: true, name: "Shortcut cheat sheet" }).waitFor();
+    await dialog.getByRole("heading", { exact: true, name: "Review" }).waitFor();
+    await dialog.getByRole("heading", { exact: true, name: "Theatre" }).waitFor();
+    await dialog.getByText("Approve current block", { exact: true }).waitFor();
+    await dialog.getByText("Exit Theatre", { exact: true }).waitFor();
     await capture("command-palette-shortcuts");
     await dialog.getByRole("button", { exact: true, name: "Customize in Settings" }).click();
     await page.getByText("Studio Settings").first().waitFor();

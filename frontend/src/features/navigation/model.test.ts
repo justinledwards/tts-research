@@ -4,6 +4,8 @@ import {
   buildCinemaFocusCommandMetadata,
   buildSettingsCommandMetadata,
   buildWorkspaceCommandMetadata,
+  commandDisabled,
+  commandDisabledReason,
   searchCommandEntries,
   type CommandEntry,
 } from "./index";
@@ -66,6 +68,19 @@ describe("command search", () => {
     expect(searchCommandEntries(entries, "review bookmarks").map((entry) => entry.id)).toEqual([
       "cinema-review",
     ]);
+  });
+
+  it("treats blocked command availability as disabled with a visible reason", () => {
+    const entry: CommandEntry = {
+      availability: { reason: "Open Review before using this command.", state: "blocked" },
+      id: "review-blocked",
+      perform: noop,
+      section: "Review",
+      title: "Approve current block",
+    };
+
+    expect(commandDisabled(entry)).toBe(true);
+    expect(commandDisabledReason(entry)).toBe("Open Review before using this command.");
   });
 });
 

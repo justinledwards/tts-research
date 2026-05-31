@@ -29,6 +29,16 @@ describe("RevisionPanel", () => {
     expect(markup).toContain("Preview Speech");
   });
 
+  it("renders review action shortcuts for discoverability", () => {
+    const markup = renderRevisionPanel();
+
+    expect(markup).toContain('data-shortcut-command-id="review.approve"');
+    expect(markup).toContain('aria-keyshortcuts="a"');
+    expect(markup).toContain('data-shortcut-command-id="review.edit"');
+    expect(markup).toContain('data-shortcut-command-id="review.retry"');
+    expect(markup).toContain('data-shortcut-command-id="review.regenerate"');
+  });
+
   it("keeps diagnostics and history available as secondary selected-block details", () => {
     expect(renderRevisionPanel("diagnostics")).toContain("Validation Transcript");
     expect(renderRevisionPanel("history")).toContain("Inline edit saved");

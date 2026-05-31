@@ -182,6 +182,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       activeLabel: activeBlock?.label ?? "No active cue",
       jumpToAudio: {
         ariaKeyShortcuts: "J",
+        shortcutCommandId: "theatre.jumpCurrentAudio",
         disabled: !playbackControlsAvailable,
         disabledReason: cuePlaybackDisabledReason,
         label: "Jump to Audio",
@@ -190,6 +191,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       },
       next: {
         ariaKeyShortcuts: "ArrowRight ArrowDown",
+        shortcutCommandId: "theatre.nextCue",
         disabled: !nextBlock,
         disabledReason: nextBlock ? undefined : "Already at the final cue.",
         label: "Next",
@@ -200,6 +202,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       },
       playPause: {
         ariaKeyShortcuts: "Space K",
+        shortcutCommandId: "theatre.playPause",
         ariaLabel: playbackControlsPlaying
           ? "Pause Cue"
           : playbackActionAriaLabel("telepromptPlay", { lifecycle: playbackLifecycle }),
@@ -215,6 +218,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       },
       previous: {
         ariaKeyShortcuts: "ArrowLeft ArrowUp",
+        shortcutCommandId: "theatre.previousCue",
         disabled: activeBlockIndex <= 0,
         disabledReason: activeBlockIndex > 0 ? undefined : "Already at the first cue.",
         label: "Previous",
@@ -230,6 +234,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       },
       restart: {
         ariaKeyShortcuts: "Home",
+        shortcutCommandId: "theatre.restart",
         disabled: !playbackControlsAvailable,
         disabledReason: cuePlaybackDisabledReason,
         label: "Restart",
@@ -238,6 +243,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       },
       speed: {
         ariaKeyShortcuts: "[ ]",
+        shortcutCommandId: "theatre.speed",
         disabled: !onPlaybackRateChange,
         disabledReason: onPlaybackRateChange
           ? undefined
@@ -253,6 +259,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     };
     const exitAction = {
       label: "Exit Theatre",
+      shortcutCommandId: "theatre.exit" as const,
       testId: "ui-action-teleprompt-exit-theatre",
       onClick: onExitTheatre,
     };
@@ -260,16 +267,19 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       {
         label: settings.operatorPanelVisible ? "Hide operator" : "Operator",
         selected: settings.operatorPanelVisible,
+        shortcutCommandId: "theatre.operator" as const,
         testId: "ui-action-teleprompt-operator-preview",
         onClick: onToggleOperatorPreview,
       },
       {
         label: "Back to Review",
+        shortcutCommandId: "teleprompt.returnReview" as const,
         testId: "ui-action-teleprompt-theatre-back-review",
         onClick: onBackToReview,
       },
       {
         label: "Back to Preview",
+        shortcutCommandId: "teleprompt.returnPreview" as const,
         testId: "ui-action-teleprompt-theatre-back-preview",
         onClick: onBackToPreview,
       },
@@ -278,6 +288,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         disabledReason:
           nativeFullscreenDisabledReason ?? fullscreenAvailability.reason ?? undefined,
         label: fullscreenActive ? "Fullscreen active" : "Native fullscreen",
+        shortcutCommandId: "theatre.fullscreen" as const,
         testId: "ui-action-teleprompt-native-fullscreen",
         onClick: onRequestNativeFullscreen,
       },

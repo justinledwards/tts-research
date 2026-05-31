@@ -9,6 +9,8 @@ export type {
 export {
   COMMAND_CATEGORIES,
   commandCategoryForEntry,
+  commandDisabled,
+  commandDisabledReason,
   commandEntriesByCategory,
   commandShortcutLabel,
   isCommandPaletteShortcut,

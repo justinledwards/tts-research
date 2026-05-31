@@ -393,6 +393,7 @@ import type {
   SettingsCommandTarget,
 } from "./features/navigation/commands";
 import type { CommandPaletteView } from "./features/command-palette/CommandPalette";
+import type { CommandEntry } from "./features/command-palette/commandRegistry";
 import {
   buildCommandEntries,
   buildCommandPaletteHandlers,
@@ -403,12 +404,16 @@ import {
   loadCommandMetadata,
 } from "./features/command-palette/commandPaletteHelpers";
 import {
+  DEFAULT_SHORTCUT_PREFERENCES,
   loadShortcutPreferences,
   resetShortcutPreferences,
   resolveGlobalShortcutCommand,
+  resolveShortcutCommandBinding,
   saveShortcutPreferences,
   shortcutLabelForCommand,
   shouldIgnoreGlobalShortcutTarget,
+  shouldIgnoreNarrationShortcutTarget,
+  type ResolvedShortcutCommand,
   type ShortcutPreferences,
 } from "./features/shortcuts/shortcutRuntime";
 import {
@@ -727,6 +732,20 @@ function playbackSpeedDisabledReason(playbackControls: PlaybackController): stri
     : "Playback speed is available after generated audio is loaded.";
 }
 
+function clickUiActionOnNextFrame(testId: string): void {
+  globalThis.requestAnimationFrame(() => {
+    document.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)?.click();
+  });
+}
+
+function focusRevisionInlineEditor(): void {
+  globalThis.requestAnimationFrame(() => {
+    document
+      .querySelector<HTMLTextAreaElement>('[data-testid="revision-inline-edit-textarea"]')
+      ?.focus();
+  });
+}
+
 type LocalizedReviewPreviewShortcut =
   | "jumpToAudio"
   | "nextBlock"
@@ -742,43 +761,54 @@ function resolveLocalizedReviewPreviewShortcut(
   if (shouldIgnoreLocalizedPlaybackShortcutTarget(event.target)) {
     return null;
   }
-  const key = event.key.toLowerCase();
-  const altOnly = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-  if (altOnly && key === "arrowleft") {
-    return "previousBlock";
-  }
-  if (altOnly && key === "arrowright") {
-    return "nextBlock";
-  }
-  if (altOnly && key === "j") {
-    return "jumpToAudio";
-  }
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
-    return null;
-  }
-  if (key === " " || key === "spacebar" || key === "k") {
-    return "playPause";
-  }
-  if (key === "home") {
-    return "restart";
-  }
-  if (key === "[") {
-    return "speedDown";
-  }
-  if (key === "]") {
-    return "speedUp";
-  }
-  return null;
+  return localizedReviewPreviewShortcutForCommand(
+    resolveShortcutCommandBinding(event, DEFAULT_SHORTCUT_PREFERENCES, "review") ??
+      resolveShortcutCommandBinding(event, DEFAULT_SHORTCUT_PREFERENCES, "reader"),
+  );
 }
 
 function shouldIgnoreLocalizedPlaybackShortcutTarget(target: EventTarget | null): boolean {
-  if (shouldIgnoreGlobalShortcutTarget(target)) {
+  if (shouldIgnoreNarrationShortcutTarget(target)) {
     return true;
   }
   if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
     return false;
   }
   return target.tagName.toLowerCase() === "button";
+}
+
+function localizedReviewPreviewShortcutForCommand(
+  resolved: ResolvedShortcutCommand | null,
+): LocalizedReviewPreviewShortcut | null {
+  if (!resolved) {
+    return null;
+  }
+  switch (resolved.commandId) {
+    case "playback.jumpToAudio":
+    case "review.jumpToAudio": {
+      return "jumpToAudio";
+    }
+    case "playback.nextBlock":
+    case "review.nextBlock": {
+      return "nextBlock";
+    }
+    case "playback.previousBlock":
+    case "review.previousBlock": {
+      return "previousBlock";
+    }
+    case "playback.restart": {
+      return "restart";
+    }
+    case "playback.speed": {
+      return resolved.bindingId === "right-bracket" ? "speedUp" : "speedDown";
+    }
+    case "playback.toggle": {
+      return "playPause";
+    }
+    default: {
+      return null;
+    }
+  }
 }
 
 function resolveRunLocale(config: RunConfiguration): string {
@@ -6366,7 +6396,7 @@ export function App() {
       cancelled = true;
     };
   }, [commandBookmarkProgress, isCommandPaletteOpen, projectProgress, readerNavigationLabels]);
-  const commandEntries = buildCommandEntries({
+  const baseCommandEntries = buildCommandEntries({
     activeCinemaSurfaceKind,
     activeProjectId,
     canCreateCurrentSource,
@@ -6420,6 +6450,323 @@ export function App() {
     wordHighlightCapabilityReason,
     workspaceStageActionLabel,
   });
+  const selectedNarrationCommandBlockId = selectReviewBlockId(
+    narrationPreviewBlocks,
+    workspaceContext.activeBlockId,
+  );
+  const selectedNarrationCommandBlock = narrationPreviewBlocks.find(
+    (block) => block.id === selectedNarrationCommandBlockId,
+  );
+  let blockNavigationCommandBlockedReason: string | undefined;
+  if (contentMode === "review" || contentMode === "preview") {
+    blockNavigationCommandBlockedReason = selectedNarrationCommandBlock
+      ? undefined
+      : "Select a block before using this command.";
+  } else {
+    blockNavigationCommandBlockedReason = "Open Review or Preview before using this command.";
+  }
+  let reviewCommandBlockedReason: string | undefined;
+  if (contentMode === "review") {
+    reviewCommandBlockedReason = selectedNarrationCommandBlock
+      ? undefined
+      : "Select a review block before using this command.";
+  } else {
+    reviewCommandBlockedReason = "Open Review before using this command.";
+  }
+  const playbackCommandDisabledReason = playbackControls.isAvailable
+    ? undefined
+    : "Create or load generated audio before controlling playback.";
+  const runPlaybackToggleCommand = () => {
+    if (!playbackControls.isAvailable) {
+      return;
+    }
+    if (playbackControls.isPlaying) {
+      playbackControls.pause();
+      return;
+    }
+    void playbackControls.play();
+  };
+  const selectedNarrationCommandBlockIndex = narrationPreviewBlocks.findIndex(
+    (block) => block.id === selectedNarrationCommandBlockId,
+  );
+  const moveNarrationCommandBlock = (direction: -1 | 1) => {
+    if (selectedNarrationCommandBlockIndex === -1 || narrationPreviewBlocks.length === 0) {
+      return;
+    }
+    const nextIndex = Math.max(
+      0,
+      Math.min(narrationPreviewBlocks.length - 1, selectedNarrationCommandBlockIndex + direction),
+    );
+    const nextBlock = narrationPreviewBlocks[nextIndex];
+    setWorkspaceContext((currentContext) => withWorkspaceActiveBlock(currentContext, nextBlock.id));
+  };
+  const jumpNarrationCommandAudio = () => {
+    const seekTargetSec = playbackSeekSecondsForRevisionBlock(
+      narrationPreviewBlocks,
+      selectedNarrationCommandBlockId,
+      job,
+    );
+    if (
+      playbackControls.isAvailable &&
+      seekTargetSec !== null &&
+      (playbackControls.seekTo ?? playbackControls.skipBy)
+    ) {
+      seekPlaybackToSeconds(playbackControls, seekTargetSec, playbackCursorSec);
+    }
+  };
+  const narrationShortcutCommandEntries: CommandEntry[] = [
+    {
+      availability: {
+        reason: playbackCommandDisabledReason,
+        state: playbackCommandDisabledReason ? "disabled" : "available",
+      },
+      category: "Playback",
+      detail: "Play or pause generated narration playback.",
+      id: "narration:playback:toggle",
+      keywords: ["pause", "resume", "audio", "keyboard"],
+      owner: "playback",
+      perform: runPlaybackToggleCommand,
+      section: "Playback",
+      shortcutCommandId: "playback.toggle",
+      title: playbackControls.isPlaying ? "Pause playback" : "Play playback",
+    },
+    {
+      availability: {
+        reason: playbackCommandDisabledReason,
+        state: playbackCommandDisabledReason ? "disabled" : "available",
+      },
+      category: "Playback",
+      detail: "Restart generated narration playback.",
+      id: "narration:playback:restart",
+      keywords: ["restart", "audio", "keyboard"],
+      owner: "playback",
+      perform: () => {
+        if (playbackControls.isAvailable) {
+          void playbackControls.restart();
+        }
+      },
+      section: "Playback",
+      shortcutCommandId: "playback.restart",
+      title: "Restart playback",
+    },
+    {
+      availability: {
+        reason: playbackControls.setPlaybackRate
+          ? undefined
+          : "Playback speed is available after generated audio is loaded.",
+        state: playbackControls.setPlaybackRate ? "available" : "disabled",
+      },
+      category: "Playback",
+      detail: "Adjust generated narration playback speed.",
+      id: "narration:playback:speed",
+      keywords: ["speed", "rate", "audio", "keyboard"],
+      owner: "playback",
+      perform: () => {
+        playbackControls.setPlaybackRate?.(
+          nextReaderPlaybackRate(playbackControls.playbackRate, 1),
+        );
+      },
+      section: "Playback",
+      shortcutCommandId: "playback.speed",
+      title: "Increase playback speed",
+    },
+    {
+      availability: {
+        reason:
+          blockNavigationCommandBlockedReason ??
+          (selectedNarrationCommandBlockIndex <= 0 ? "Already at the first block." : undefined),
+        state:
+          blockNavigationCommandBlockedReason || selectedNarrationCommandBlockIndex <= 0
+            ? "disabled"
+            : "available",
+      },
+      category: "Review",
+      detail: "Move to the previous Review or Preview block.",
+      id: "review:block:previous",
+      keywords: ["previous", "block", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        moveNarrationCommandBlock(-1);
+      },
+      section: "Review",
+      shortcutCommandId: "review.previousBlock",
+      title: "Previous block",
+    },
+    {
+      availability: {
+        reason:
+          blockNavigationCommandBlockedReason ??
+          (selectedNarrationCommandBlockIndex >= narrationPreviewBlocks.length - 1
+            ? "Already at the final block."
+            : undefined),
+        state:
+          blockNavigationCommandBlockedReason ||
+          selectedNarrationCommandBlockIndex >= narrationPreviewBlocks.length - 1
+            ? "disabled"
+            : "available",
+      },
+      category: "Review",
+      detail: "Move to the next Review or Preview block.",
+      id: "review:block:next",
+      keywords: ["next", "block", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        moveNarrationCommandBlock(1);
+      },
+      section: "Review",
+      shortcutCommandId: "review.nextBlock",
+      title: "Next block",
+    },
+    {
+      availability: {
+        reason:
+          blockNavigationCommandBlockedReason ??
+          (playbackControls.isAvailable ? undefined : playbackCommandDisabledReason),
+        state:
+          blockNavigationCommandBlockedReason || playbackCommandDisabledReason
+            ? "disabled"
+            : "available",
+      },
+      category: "Playback",
+      detail: "Jump generated audio to the selected block timing.",
+      id: "review:block:jump-audio",
+      keywords: ["jump", "audio", "timing", "review", "keyboard"],
+      owner: "review",
+      perform: jumpNarrationCommandAudio,
+      section: "Review",
+      shortcutCommandId: "review.jumpToAudio",
+      title: "Jump to selected audio",
+    },
+    {
+      availability: {
+        reason: reviewCommandBlockedReason,
+        state: reviewCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Review",
+      detail: "Approve the selected review block.",
+      id: "review:block:approve",
+      keywords: ["approve", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        clickUiActionOnNextFrame("ui-action-revision-block-approve");
+      },
+      section: "Review",
+      shortcutCommandId: "review.approve",
+      title: "Approve current block",
+    },
+    {
+      availability: {
+        reason: reviewCommandBlockedReason,
+        state: reviewCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Review",
+      detail: "Focus the inline speech editor for the selected block.",
+      id: "review:block:edit",
+      keywords: ["edit", "spoken", "block", "keyboard"],
+      owner: "review",
+      perform: focusRevisionInlineEditor,
+      section: "Review",
+      shortcutCommandId: "review.edit",
+      title: "Edit current block",
+    },
+    {
+      availability: {
+        reason: reviewCommandBlockedReason,
+        state: reviewCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Review",
+      detail: "Retry the selected review block.",
+      id: "review:block:retry",
+      keywords: ["retry", "repair", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        clickUiActionOnNextFrame("ui-action-revision-block-retry");
+      },
+      section: "Review",
+      shortcutCommandId: "review.retry",
+      title: "Retry current block",
+    },
+    {
+      availability: {
+        reason: reviewCommandBlockedReason,
+        state: reviewCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Review",
+      detail: "Regenerate the selected review block.",
+      id: "review:block:regenerate",
+      keywords: ["regenerate", "repair", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        clickUiActionOnNextFrame("ui-action-revision-block-regenerate");
+      },
+      section: "Review",
+      shortcutCommandId: "review.regenerate",
+      title: "Regenerate current block",
+    },
+    {
+      availability: {
+        reason: reviewCommandBlockedReason,
+        state: reviewCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Review",
+      detail: "Open source structure or inspector context for the selected block.",
+      id: "review:block:inspector",
+      keywords: ["inspect", "structure", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        clickUiActionOnNextFrame("workspace-stage-action-inspectStructure");
+      },
+      section: "Review",
+      shortcutCommandId: "review.inspector",
+      title: "Open review inspector",
+    },
+    {
+      category: "Teleprompt",
+      detail: "Return from Teleprompt to Review.",
+      id: "teleprompt:return-review",
+      keywords: ["teleprompt", "return", "review"],
+      owner: "teleprompt",
+      perform: () => {
+        setContentMode("review");
+      },
+      section: "Teleprompt",
+      shortcutCommandId: "teleprompt.returnReview",
+      title: "Return to Review",
+    },
+    {
+      category: "Teleprompt",
+      detail: "Return from Teleprompt to Preview.",
+      id: "teleprompt:return-preview",
+      keywords: ["teleprompt", "return", "preview"],
+      owner: "teleprompt",
+      perform: () => {
+        setContentMode("preview");
+      },
+      section: "Teleprompt",
+      shortcutCommandId: "teleprompt.returnPreview",
+      title: "Return to Preview",
+    },
+    {
+      availability: {
+        reason: contentMode === "theatre" ? undefined : "Enter Theatre before using this command.",
+        state: contentMode === "theatre" ? "available" : "blocked",
+      },
+      category: "Teleprompt",
+      detail: "Exit Theatre and return to the previous narration view.",
+      id: "theatre:exit",
+      keywords: ["theatre", "exit", "escape"],
+      owner: "theatre",
+      perform: () => {
+        document
+          .querySelector<HTMLButtonElement>('[data-testid="ui-action-teleprompt-exit-theatre"]')
+          ?.click();
+      },
+      section: "Teleprompt",
+      shortcutCommandId: "theatre.exit",
+      title: "Exit Theatre",
+    },
+  ];
+  const commandEntries = [...baseCommandEntries, ...narrationShortcutCommandEntries];
   let globalPreviewOwner: "preview" | "teleprompt" = "preview";
   if (contentMode === "teleprompt" || contentMode === "theatre") {
     globalPreviewOwner = "teleprompt";
@@ -7247,6 +7594,7 @@ export function App() {
               selectedBookScope={effectiveBookScope}
               selectedBookSource={selectedBookSource}
               selectedPreparedSource={selectedPreparedSource}
+              shortcutPreferences={shortcutPreferences}
               sourceMode={sourceMode}
               speechPolicyProfileLabel={speechPolicyProfileDisplayName(
                 speechPolicyProfile,
@@ -9568,6 +9916,7 @@ function SourceTextPanel({
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
+  shortcutPreferences,
   sourceMode,
   speechPolicyProfileLabel,
   sourcePrepError,
@@ -9633,6 +9982,7 @@ function SourceTextPanel({
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
+  shortcutPreferences: ShortcutPreferences;
   sourceMode: SourceMode;
   speechPolicyProfileLabel: string;
   sourcePrepError: string | null;
@@ -9803,6 +10153,7 @@ function SourceTextPanel({
             selectedBookScope={selectedBookScope}
             selectedBookSource={activeBookSource}
             selectedPreparedSource={activePreparedSource}
+            shortcutPreferences={shortcutPreferences}
             isPlaybackActive={isPlaybackActive}
             sourceLifecycle={sourceLifecycle}
             text={text}
@@ -10173,6 +10524,7 @@ function NarrationPreviewStage({
     activeLabel: selectedPreviewBlock?.label ?? sourceLabel,
     jumpToAudio: {
       ariaKeyShortcuts: "Alt+J",
+      shortcutCommandId: "review.jumpToAudio",
       disabled: !canPreviewJump,
       disabledReason:
         previewPlaybackDisabledReason ??
@@ -10189,6 +10541,7 @@ function NarrationPreviewStage({
     },
     next: {
       ariaKeyShortcuts: "Alt+ArrowRight",
+      shortcutCommandId: "review.nextBlock",
       disabled:
         selectedPreviewBlockIndex < 0 || selectedPreviewBlockIndex >= previewBlocks.length - 1,
       disabledReason:
@@ -10203,6 +10556,7 @@ function NarrationPreviewStage({
     },
     playPause: {
       ariaKeyShortcuts: "Space K",
+      shortcutCommandId: "playback.toggle",
       ariaLabel: playbackControls.isPlaying
         ? "Pause preview playback"
         : playbackActionAriaLabel("audition", { lifecycle: playbackLifecycle }),
@@ -10227,6 +10581,7 @@ function NarrationPreviewStage({
     },
     previous: {
       ariaKeyShortcuts: "Alt+ArrowLeft",
+      shortcutCommandId: "review.previousBlock",
       disabled: selectedPreviewBlockIndex <= 0,
       disabledReason: selectedPreviewBlockIndex <= 0 ? "Already at the first block." : undefined,
       label: "Previous",
@@ -10244,6 +10599,7 @@ function NarrationPreviewStage({
     },
     restart: {
       ariaKeyShortcuts: "Home",
+      shortcutCommandId: "playback.restart",
       dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle),
       disabled: !playbackControls.isAvailable,
       disabledReason: previewPlaybackDisabledReason,
@@ -10257,6 +10613,7 @@ function NarrationPreviewStage({
     },
     speed: {
       ariaKeyShortcuts: "[ ]",
+      shortcutCommandId: "playback.speed",
       disabled: !playbackControls.setPlaybackRate,
       disabledReason: playbackSpeedDisabledReason(playbackControls),
       testId: "ui-action-preview-local-speed",
@@ -12608,6 +12965,7 @@ function NarrationReviewWorkbench({
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
+  shortcutPreferences,
   sourceLifecycle,
   text,
   voiceProfileLabel,
@@ -12636,6 +12994,7 @@ function NarrationReviewWorkbench({
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
+  shortcutPreferences: ShortcutPreferences;
   sourceLifecycle: SourceLifecycleEnvelope;
   text: string;
   voiceProfileLabel: string;
@@ -12722,6 +13081,7 @@ function NarrationReviewWorkbench({
     activeLabel: selectedBlock?.label ?? sourceLabel,
     jumpToAudio: {
       ariaKeyShortcuts: "Alt+J",
+      shortcutCommandId: "review.jumpToAudio",
       disabled: !canReviewJump,
       disabledReason:
         reviewPlaybackDisabledReason ??
@@ -12738,6 +13098,7 @@ function NarrationReviewWorkbench({
     },
     next: {
       ariaKeyShortcuts: "Alt+ArrowRight",
+      shortcutCommandId: "review.nextBlock",
       disabled: selectedBlockIndex < 0 || selectedBlockIndex >= reviewBlocks.length - 1,
       disabledReason:
         selectedBlockIndex >= reviewBlocks.length - 1
@@ -12751,6 +13112,7 @@ function NarrationReviewWorkbench({
     },
     playPause: {
       ariaKeyShortcuts: "Space K",
+      shortcutCommandId: "playback.toggle",
       ariaLabel: playbackControls.isPlaying
         ? "Pause review playback"
         : playbackActionAriaLabel("audition", { lifecycle: playbackLifecycle }),
@@ -12775,6 +13137,7 @@ function NarrationReviewWorkbench({
     },
     previous: {
       ariaKeyShortcuts: "Alt+ArrowLeft",
+      shortcutCommandId: "review.previousBlock",
       disabled: selectedBlockIndex <= 0,
       disabledReason: selectedBlockIndex <= 0 ? "Already at the first block." : undefined,
       label: "Previous",
@@ -12794,6 +13157,7 @@ function NarrationReviewWorkbench({
     },
     restart: {
       ariaKeyShortcuts: "Home",
+      shortcutCommandId: "playback.restart",
       dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle),
       disabled: !playbackControls.isAvailable,
       disabledReason: reviewPlaybackDisabledReason,
@@ -12807,6 +13171,7 @@ function NarrationReviewWorkbench({
     },
     speed: {
       ariaKeyShortcuts: "[ ]",
+      shortcutCommandId: "playback.speed",
       disabled: !playbackControls.setPlaybackRate,
       disabledReason: playbackSpeedDisabledReason(playbackControls),
       testId: "ui-action-review-local-speed",
@@ -12849,6 +13214,7 @@ function NarrationReviewWorkbench({
           sourceLabel={sourceLabel}
           sourceMeta={sourceMeta}
           statusByBlockId={revisionStatusByBlockId}
+          shortcutPreferences={shortcutPreferences}
           validationReason={validationReason}
           validationSimilarity={job?.voiceCheck.similarity ?? 0}
           validationTranscript={validationTranscript}

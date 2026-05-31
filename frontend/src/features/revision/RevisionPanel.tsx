@@ -60,6 +60,15 @@ import {
   type SourceLifecycleEnvelope,
 } from "../source-lifecycle/sourceLifecycle";
 import {
+  DEFAULT_SHORTCUT_PREFERENCES,
+  resolveShortcutCommandBinding,
+  shortcutAriaKeyShortcutsForCommand,
+  shortcutTooltip,
+  shouldIgnoreNarrationShortcutTarget,
+  type ShortcutCommandId,
+  type ShortcutPreferences,
+} from "../shortcuts/shortcutRegistry";
+import {
   DiagnosticList,
   formatConfidence,
   formatDurationLabel,
@@ -86,6 +95,7 @@ export interface RevisionPanelProps {
   sourceLabel: string;
   sourceMeta: string;
   statusByBlockId: Record<string, RevisionStatus>;
+  shortcutPreferences?: ShortcutPreferences;
   validationReason: string;
   validationSimilarity: number;
   validationTranscript: string;
@@ -113,6 +123,7 @@ export function RevisionPanel({
   sourceLabel,
   sourceMeta,
   statusByBlockId,
+  shortcutPreferences = DEFAULT_SHORTCUT_PREFERENCES,
   validationReason,
   validationSimilarity,
   validationTranscript,
@@ -169,11 +180,14 @@ export function RevisionPanel({
   const lifecycleDescriptor = sourceLifecycle
     ? sourceLifecycleDescriptor(sourceLifecycle.canonicalState)
     : null;
-  const context: RevisionHistoryContext = {
-    policyProfile: policyProfileLabel,
-    runConfiguration: runConfigurationLabel,
-    voiceProfile: voiceProfileLabel,
-  };
+  const context: RevisionHistoryContext = useMemo(
+    () => ({
+      policyProfile: policyProfileLabel,
+      runConfiguration: runConfigurationLabel,
+      voiceProfile: voiceProfileLabel,
+    }),
+    [policyProfileLabel, runConfigurationLabel, voiceProfileLabel],
+  );
   const selectedVisibleCount = filteredBlocks.filter((block) =>
     selectedBlockIds.has(block.id),
   ).length;
@@ -284,25 +298,78 @@ export function RevisionPanel({
     setStatusMessage(`Reverted block ${block.index.toString()} to the source spoken form.`);
   };
 
-  const setBlockStatus = (block: RevisionBlock, status: RevisionStatus, userAction: string) => {
-    onStatusByBlockIdChange((current) => ({
-      ...current,
-      [block.id]: status,
-    }));
-    onHistoryEntriesChange((current) => [
-      ...current,
-      createRevisionHistoryEntry({
-        block,
-        context,
-        newSpokenText: block.spokenText,
-        previousSpokenText: block.spokenText,
-        userAction,
-      }),
-    ]);
-    setStatusMessage(
-      `Block ${block.index.toString()} set to ${REVISION_STATUS_LABELS[status].toLowerCase()}.`,
+  const setBlockStatus = useCallback(
+    (block: RevisionBlock, status: RevisionStatus, userAction: string) => {
+      onStatusByBlockIdChange((current) => ({
+        ...current,
+        [block.id]: status,
+      }));
+      onHistoryEntriesChange((current) => [
+        ...current,
+        createRevisionHistoryEntry({
+          block,
+          context,
+          newSpokenText: block.spokenText,
+          previousSpokenText: block.spokenText,
+          userAction,
+        }),
+      ]);
+      setStatusMessage(
+        `Block ${block.index.toString()} set to ${REVISION_STATUS_LABELS[status].toLowerCase()}.`,
+      );
+    },
+    [context, onHistoryEntriesChange, onStatusByBlockIdChange],
+  );
+
+  const focusInlineEditor = useCallback(() => {
+    const textarea = document.querySelector<HTMLTextAreaElement>(
+      '[data-testid="revision-inline-edit-textarea"]',
     );
-  };
+    textarea?.focus();
+    textarea?.scrollIntoView({ block: "center", behavior: "auto" });
+    if (activeBlock) {
+      setStatusMessage(`Editing block ${activeBlock.index.toString()}.`);
+    }
+  }, [activeBlock]);
+
+  const runReviewShortcut = useCallback(
+    (commandId: ShortcutCommandId) => {
+      if (!activeBlock) {
+        setStatusMessage("Select a block before using review shortcuts.");
+        return;
+      }
+      if (commandId === "review.approve") {
+        const canApprove = !activeDraftDirty && activeBlock.spokenText.trim().length > 0;
+        const disabledReason = revisionApprovalDisabledReason(canApprove, activeDraftDirty);
+        if (disabledReason) {
+          setStatusMessage(disabledReason);
+          return;
+        }
+        setBlockStatus(activeBlock, "approved", "Block approved");
+        return;
+      }
+      if (commandId === "review.edit") {
+        focusInlineEditor();
+        return;
+      }
+      if (commandId === "review.inspector") {
+        if (onInspectStructure) {
+          onInspectStructure();
+        } else {
+          setStatusMessage("Source structure is unavailable for this review source.");
+        }
+        return;
+      }
+      if (commandId === "review.regenerate") {
+        setBlockStatus(activeBlock, "regenerating", "Regeneration requested");
+        return;
+      }
+      if (commandId === "review.retry") {
+        setBlockStatus(activeBlock, "retrying", "Retry requested");
+      }
+    },
+    [activeBlock, activeDraftDirty, focusInlineEditor, onInspectStructure, setBlockStatus],
+  );
 
   const handleDraftStateChange = useCallback((blockId: string, dirty: boolean) => {
     setDirtyDraftByBlockId((current) => {
@@ -315,6 +382,33 @@ export function RevisionPanel({
       };
     });
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (shouldIgnoreNarrationShortcutTarget(event.target)) {
+        return;
+      }
+      const resolved = resolveShortcutCommandBinding(event, shortcutPreferences, "review");
+      if (
+        !resolved ||
+        ![
+          "review.approve",
+          "review.edit",
+          "review.inspector",
+          "review.regenerate",
+          "review.retry",
+        ].includes(resolved.commandId)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      runReviewShortcut(resolved.commandId);
+    };
+    globalThis.addEventListener("keydown", handleKeyDown);
+    return () => {
+      globalThis.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [runReviewShortcut, shortcutPreferences]);
 
   return (
     <section aria-label="Revision Panel" className="grid gap-3" data-testid="revision-panel">
@@ -340,6 +434,11 @@ export function RevisionPanel({
         <div className="flex flex-wrap items-center gap-2">
           {onInspectStructure ? (
             <Button
+              {...revisionShortcutButtonProps(
+                "review.inspector",
+                "Content Structure",
+                shortcutPreferences,
+              )}
               data-testid="workspace-stage-action-inspectStructure"
               onClick={onInspectStructure}
               size="sm"
@@ -416,6 +515,7 @@ export function RevisionPanel({
             historyEntries={historyEntries}
             policyProfileLabel={policyProfileLabel}
             scopeLabel={scopeLabel}
+            shortcutPreferences={shortcutPreferences}
             summary={summary}
             validationReason={validationReason}
             validationSimilarity={validationSimilarity}
@@ -923,6 +1023,7 @@ function RevisionSelectedBlockEditor({
   historyEntries,
   policyProfileLabel,
   scopeLabel,
+  shortcutPreferences,
   summary,
   validationReason,
   validationSimilarity,
@@ -944,6 +1045,7 @@ function RevisionSelectedBlockEditor({
   historyEntries: RevisionHistoryEntry[];
   policyProfileLabel: string;
   scopeLabel: string;
+  shortcutPreferences: ShortcutPreferences;
   summary: RevisionHealthSummary;
   validationReason: string;
   validationSimilarity: number;
@@ -963,6 +1065,23 @@ function RevisionSelectedBlockEditor({
 
   const canApprove = !activeDraftDirty && activeBlock.spokenText.trim().length > 0;
   const approveDisabledReason = revisionApprovalDisabledReason(canApprove, activeDraftDirty);
+  const approveShortcut = revisionShortcutButtonProps(
+    "review.approve",
+    "Approve",
+    shortcutPreferences,
+    approveDisabledReason,
+  );
+  const editShortcut = revisionShortcutButtonProps(
+    "review.edit",
+    "Edit current block",
+    shortcutPreferences,
+  );
+  const retryShortcut = revisionShortcutButtonProps("review.retry", "Retry", shortcutPreferences);
+  const regenerateShortcut = revisionShortcutButtonProps(
+    "review.regenerate",
+    "Regenerate",
+    shortcutPreferences,
+  );
 
   return (
     <section
@@ -993,6 +1112,7 @@ function RevisionSelectedBlockEditor({
 
       <div className="flex flex-wrap items-center gap-2">
         <Button
+          {...approveShortcut}
           data-testid="ui-action-revision-block-approve"
           disabled={!canApprove}
           disabledReason={approveDisabledReason}
@@ -1003,6 +1123,19 @@ function RevisionSelectedBlockEditor({
           variant="primary"
         >
           Approve
+        </Button>
+        <Button
+          {...editShortcut}
+          data-testid="ui-action-revision-block-edit-focus"
+          onClick={() => {
+            document
+              .querySelector<HTMLTextAreaElement>('[data-testid="revision-inline-edit-textarea"]')
+              ?.focus();
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Edit
         </Button>
         <Button
           data-testid="ui-action-revision-block-preview"
@@ -1033,6 +1166,7 @@ function RevisionSelectedBlockEditor({
           Skip
         </Button>
         <Button
+          {...retryShortcut}
           data-testid="ui-action-revision-block-retry"
           onClick={() => {
             onSetBlockStatus(activeBlock, "retrying", "Retry requested");
@@ -1043,6 +1177,7 @@ function RevisionSelectedBlockEditor({
           Retry
         </Button>
         <Button
+          {...regenerateShortcut}
           data-testid="ui-action-revision-block-regenerate"
           onClick={() => {
             onSetBlockStatus(activeBlock, "regenerating", "Regeneration requested");
@@ -1133,6 +1268,19 @@ function revisionApprovalDisabledReason(
     return "Save or discard the inline edit before approving.";
   }
   return "A block needs spoken text before approval.";
+}
+
+function revisionShortcutButtonProps(
+  commandId: ShortcutCommandId,
+  label: string,
+  preferences: ShortcutPreferences,
+  disabledReason?: string,
+) {
+  return {
+    "aria-keyshortcuts": shortcutAriaKeyShortcutsForCommand(commandId, preferences),
+    "data-shortcut-command-id": commandId,
+    title: shortcutTooltip(label, commandId, preferences, disabledReason),
+  };
 }
 
 function RevisionSelectedBlockFacts({ block }: Readonly<{ block: RevisionBlock }>) {

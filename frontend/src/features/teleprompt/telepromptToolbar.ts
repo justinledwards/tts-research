@@ -1,5 +1,11 @@
 import type { RevisionBlock } from "../revision";
 import { playbackActionLabel } from "../playback";
+import {
+  DEFAULT_SHORTCUT_PREFERENCES,
+  resolveShortcutCommandBinding,
+  shouldIgnoreNarrationShortcutTarget,
+  type ShortcutCommandId,
+} from "../shortcuts/shortcutRegistry";
 
 export type TelepromptShortcutAction =
   | "createListen"
@@ -98,55 +104,57 @@ export function resolveTelepromptShortcut(
   if (shouldIgnoreTelepromptShortcutTarget(event.target)) {
     return null;
   }
-  const key = event.key.toLowerCase();
-  if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && key === "j") {
-    return "jumpCurrentAudio";
-  }
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
-    return null;
-  }
-  if (key === " " || key === "spacebar" || key === "k") {
-    return "playPause";
-  }
-  if (key === "home") {
-    return "restart";
-  }
-  if (key === "[") {
-    return "speedDown";
-  }
-  if (key === "]") {
-    return "speedUp";
-  }
-  if (key === "arrowleft" || key === "arrowup") {
-    return "previousCue";
-  }
-  if (key === "arrowright" || key === "arrowdown") {
-    return "nextCue";
-  }
-  if (key === "r") {
-    return "returnReview";
-  }
-  if (key === "v" || key === "p") {
-    return "returnPreview";
-  }
-  if (key === "c") {
-    return "createListen";
-  }
-  return null;
+  return telepromptActionForShortcutCommand(
+    resolveShortcutCommandBinding(
+      event as KeyboardEvent,
+      DEFAULT_SHORTCUT_PREFERENCES,
+      "teleprompt",
+    ),
+  );
 }
 
 export function shouldIgnoreTelepromptShortcutTarget(target: EventTarget | null | undefined) {
-  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
-    return false;
+  return shouldIgnoreNarrationShortcutTarget(target ?? null);
+}
+
+function telepromptActionForShortcutCommand(
+  resolved: Readonly<{ bindingId: string; commandId: ShortcutCommandId }> | null,
+): TelepromptShortcutAction | null {
+  if (!resolved) {
+    return null;
   }
-  const tagName = target.tagName.toLowerCase();
-  return (
-    tagName === "input" ||
-    tagName === "select" ||
-    tagName === "textarea" ||
-    target.isContentEditable ||
-    Boolean(target.closest("[data-command-palette-ignore-shortcuts]"))
-  );
+  switch (resolved.commandId) {
+    case "teleprompt.playPause": {
+      return "playPause";
+    }
+    case "teleprompt.createListen": {
+      return "createListen";
+    }
+    case "teleprompt.jumpCurrentAudio": {
+      return "jumpCurrentAudio";
+    }
+    case "teleprompt.nextCue": {
+      return "nextCue";
+    }
+    case "teleprompt.previousCue": {
+      return "previousCue";
+    }
+    case "teleprompt.restart": {
+      return "restart";
+    }
+    case "teleprompt.returnPreview": {
+      return "returnPreview";
+    }
+    case "teleprompt.returnReview": {
+      return "returnReview";
+    }
+    case "teleprompt.speed": {
+      return resolved.bindingId === "right-bracket" ? "speedUp" : "speedDown";
+    }
+    default: {
+      return null;
+    }
+  }
 }
 
 export function countTelepromptWords(value: string): number {

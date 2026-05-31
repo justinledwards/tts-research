@@ -20,6 +20,8 @@ export {
   SurfaceActionButton,
 } from "./SurfaceActions";
 export {
+  commandDisabled,
+  commandDisabledReason,
   isCommandPaletteShortcut,
   normalizeCommandText,
   scoreCommandEntry,

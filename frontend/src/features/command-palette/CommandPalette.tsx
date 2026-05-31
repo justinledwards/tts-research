@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   commandCategoryForEntry,
+  commandDisabled,
+  commandDisabledReason,
   commandEntriesByCategory,
   commandShortcutLabel,
   searchCommandEntries,
@@ -71,7 +73,7 @@ export function CommandPalette({
   }
 
   const runCommand = (entry: CommandEntry | null) => {
-    if (!entry || entry.disabled) {
+    if (!entry || commandDisabled(entry)) {
       return;
     }
     onClose();
@@ -213,8 +215,8 @@ export function CommandPalette({
               <div>
                 <h3 className="text-sm font-semibold">Shortcut cheat sheet</h3>
                 <p className="vs-muted mt-1 text-xs leading-5">
-                  Global shortcuts can be changed in Reader settings. Surface shortcuts stay tied to
-                  their reader or Teleprompt context.
+                  Global shortcuts and review actions can be changed in Reader settings. Surface
+                  playback and Theatre controls stay tied to their active context.
                 </p>
               </div>
               <button
@@ -234,7 +236,7 @@ export function CommandPalette({
                 >
                   <h3 className="text-sm font-semibold">{group.category}</h3>
                   <div className="mt-3 grid gap-2">
-                    {group.commands.map(({ binding, command }) => (
+                    {group.commands.map(({ command, shortcutLabel }) => (
                       <div
                         className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-sm"
                         key={command.id}
@@ -246,7 +248,7 @@ export function CommandPalette({
                           </p>
                         </div>
                         <kbd className="rounded border bg-[var(--vs-raised)] px-2 py-1 text-[0.68rem] font-semibold vs-border">
-                          {binding?.label ?? "Unset"}
+                          {shortcutLabel}
                         </kbd>
                       </div>
                     ))}
@@ -280,24 +282,27 @@ function CommandButton({
   onClick: () => void;
   onMouseEnter: () => void;
 }>) {
+  const disabled = commandDisabled(entry);
+  const disabledReason = commandDisabledReason(entry);
   return (
     <button
-      aria-disabled={entry.disabled ? "true" : undefined}
+      aria-disabled={disabled ? "true" : undefined}
       aria-selected={active}
       className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2.5 text-left transition ${
         active
           ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
           : "border-transparent hover:border-[var(--vs-border)] hover:bg-[var(--vs-surface)]"
-      } ${entry.disabled ? "opacity-55" : ""}`}
+      } ${disabled ? "opacity-55" : ""}`}
       data-capability-gated={entry.capabilityGated ? "true" : undefined}
       data-capability-reason={entry.capabilityGated ? entry.disabledReason : undefined}
       data-command-id={entry.id}
       data-command-owner={entry.owner}
-      data-disabled-reason={entry.disabledReason}
+      data-command-availability={entry.availability?.state}
+      data-disabled-reason={disabledReason}
       data-provider-capability={entry.capabilityGate}
       data-shortcut-command-id={entry.shortcutCommandId}
       data-ui-action-owner={entry.owner}
-      disabled={entry.disabled}
+      disabled={disabled}
       id={`command-palette-${entry.id}`}
       onClick={onClick}
       onMouseEnter={onMouseEnter}
@@ -307,7 +312,7 @@ function CommandButton({
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold">{entry.title}</span>
         <span className="vs-muted mt-1 block truncate text-xs">
-          {entry.disabledReason ?? entry.detail ?? commandCategoryForEntry(entry)}
+          {disabledReason ?? entry.detail ?? commandCategoryForEntry(entry)}
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-2">

@@ -850,6 +850,7 @@ export function TelepromptStudio({
     activeLabel: activeBlock?.label ?? "No active cue",
     jumpToAudio: {
       ariaKeyShortcuts: "Alt+J",
+      shortcutCommandId: "teleprompt.jumpCurrentAudio",
       disabled: !playbackControls.isAvailable || !cueSync.activeCue,
       disabledReason:
         cuePlaybackDisabledReason ??
@@ -860,6 +861,7 @@ export function TelepromptStudio({
     },
     next: {
       ariaKeyShortcuts: "ArrowRight ArrowDown",
+      shortcutCommandId: "teleprompt.nextCue",
       disabled: nextCueUnavailable,
       disabledReason: nextCueNoopReason ?? "No cue is selected.",
       label: "Next cue",
@@ -870,6 +872,7 @@ export function TelepromptStudio({
     },
     playPause: {
       ariaKeyShortcuts: "Space K",
+      shortcutCommandId: "teleprompt.playPause",
       ariaLabel: playbackControls.isPlaying
         ? "Pause Cue"
         : playbackActionAriaLabel("telepromptPlay", { lifecycle: playbackLifecycle }),
@@ -885,6 +888,7 @@ export function TelepromptStudio({
     },
     previous: {
       ariaKeyShortcuts: "ArrowLeft ArrowUp",
+      shortcutCommandId: "teleprompt.previousCue",
       disabled: previousCueUnavailable,
       disabledReason: previousCueNoopReason ?? "No cue is selected.",
       label: "Previous cue",
@@ -905,6 +909,7 @@ export function TelepromptStudio({
     },
     restart: {
       ariaKeyShortcuts: "Home",
+      shortcutCommandId: "teleprompt.restart",
       dataAttributes: playbackActionDataAttributes("telepromptPlay", playbackLifecycle),
       disabled: !playbackControls.isAvailable,
       disabledReason: cuePlaybackDisabledReason,
@@ -914,6 +919,7 @@ export function TelepromptStudio({
     },
     speed: {
       ariaKeyShortcuts: "[ ]",
+      shortcutCommandId: "teleprompt.speed",
       disabled: !playbackControls.setPlaybackRate,
       disabledReason: playbackControls.setPlaybackRate
         ? undefined

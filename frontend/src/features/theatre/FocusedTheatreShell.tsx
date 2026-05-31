@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, StatusChip, cx } from "../../design";
+import {
+  DEFAULT_SHORTCUT_PREFERENCES,
+  shortcutAriaKeyShortcutsForCommand,
+  shortcutTooltip,
+  type ShortcutCommandId,
+} from "../shortcuts/shortcutRegistry";
 
 export interface FocusedTheatreControls {
   readonly blurControls: () => void;
@@ -16,6 +22,7 @@ export interface FocusedTheatreAction {
   readonly label: string;
   readonly primary?: boolean;
   readonly selected?: boolean;
+  readonly shortcutCommandId?: ShortcutCommandId;
   readonly testId?: string;
   readonly onClick: () => void;
 }
@@ -243,11 +250,21 @@ function FocusedTheatreTitleRow({
           </span>
         ) : null}
         <Button
+          aria-keyshortcuts={shortcutAriaKeyShortcutsForCommand(
+            "theatre.toggleControls",
+            DEFAULT_SHORTCUT_PREFERENCES,
+          )}
           className="border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]"
+          data-shortcut-command-id="theatre.toggleControls"
           data-testid={toggleControlsTestId ?? `${testId}-toggle-controls`}
           onClick={onToggleControls}
           selected={controlsVisible}
           size="sm"
+          title={shortcutTooltip(
+            controlsVisible ? "Hide controls" : "Controls",
+            "theatre.toggleControls",
+            DEFAULT_SHORTCUT_PREFERENCES,
+          )}
           variant="secondary"
         >
           {controlsVisible ? "Hide controls" : "Controls"}
@@ -339,17 +356,32 @@ function FocusedTheatreButton({
 }: Readonly<{ action: FocusedTheatreAction; persistent?: boolean }>) {
   return (
     <Button
+      aria-keyshortcuts={
+        action.shortcutCommandId
+          ? shortcutAriaKeyShortcutsForCommand(
+              action.shortcutCommandId,
+              DEFAULT_SHORTCUT_PREFERENCES,
+            )
+          : undefined
+      }
       className={cx(
         action.primary || persistent
           ? "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-text-primary)] hover:bg-[var(--vs-border-subtle)]"
           : "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]",
       )}
       data-testid={action.testId}
+      data-shortcut-command-id={action.shortcutCommandId}
       disabled={action.disabled}
       disabledReason={action.disabledReason}
       onClick={action.onClick}
       selected={action.selected}
       size="sm"
+      title={shortcutTooltip(
+        action.label,
+        action.shortcutCommandId,
+        DEFAULT_SHORTCUT_PREFERENCES,
+        action.disabledReason,
+      )}
       variant={action.primary || persistent ? "primary" : "secondary"}
     >
       {action.label}
