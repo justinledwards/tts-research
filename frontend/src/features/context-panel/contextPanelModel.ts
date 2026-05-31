@@ -20,22 +20,32 @@ export type ContextPanelRelevancePredicate =
   | "requires-active-block"
   | "requires-diagnostics"
   | "requires-generated-audio"
+  | "requires-generation-queue"
+  | "requires-import-confidence"
   | "requires-policy"
   | "requires-source"
+  | "requires-voice"
   | "requires-wayfinding";
+
+export type ContextPanelDisplayState = "collapsed" | "expanded" | "pinned";
+
+export type ContextPanelSectionPriority = "advanced" | "critical" | "primary" | "secondary";
 
 export type ContextPanelSectionKind =
   | "alignment-repair"
   | "current-passage"
   | "extraction-health"
+  | "generation-queue"
   | "generated-audio-health"
   | "highlight-confidence"
+  | "import-confidence"
   | "narration-block-status"
   | "policy-notes"
   | "skipped-content"
   | "source-provenance"
   | "speech-policy"
   | "timing-map"
+  | "voice-profile"
   | "wayfinding";
 
 export interface ContextPanelSection {
@@ -48,6 +58,7 @@ export interface ContextPanelSection {
   kind: ContextPanelSectionKind;
   owner?: ContextPanelOwner;
   panelId?: ContextPanelTabId;
+  priority?: ContextPanelSectionPriority;
   relevance?: ContextPanelRelevancePredicate;
   title: string;
 }
@@ -61,6 +72,7 @@ export interface ContextPanelSectionInput {
   readonly id: string;
   readonly kind: ContextPanelSectionKind;
   readonly owner?: ContextPanelOwner;
+  readonly priority?: ContextPanelSectionPriority;
   readonly relevance?: ContextPanelRelevancePredicate;
   readonly tabId: ContextPanelTabId;
   readonly title: string;
@@ -126,6 +138,7 @@ export function buildContextPanelTabs(
       kind: section.kind,
       owner: section.owner ?? options.owner ?? ownerForSectionId(section.id),
       panelId: section.tabId,
+      priority: section.priority ?? priorityForSection(section),
       relevance: section.relevance ?? relevanceForSectionKind(section.kind),
       title: section.title,
     });
@@ -143,7 +156,7 @@ export function buildContextPanelTabs(
         advanced: meta.advanced,
         detail: meta.detail,
         id: tabId,
-        sections: tabSections,
+        sections: sortContextPanelSections(tabSections),
         title: meta.label,
       },
     ];
@@ -211,8 +224,14 @@ function relevanceForSectionKind(kind: ContextPanelSectionKind): ContextPanelRel
     case "timing-map": {
       return "requires-diagnostics";
     }
+    case "generation-queue": {
+      return "requires-generation-queue";
+    }
     case "generated-audio-health": {
       return "requires-generated-audio";
+    }
+    case "import-confidence": {
+      return "requires-import-confidence";
     }
     case "policy-notes":
     case "speech-policy": {
@@ -222,10 +241,62 @@ function relevanceForSectionKind(kind: ContextPanelSectionKind): ContextPanelRel
     case "skipped-content": {
       return "requires-source";
     }
+    case "voice-profile": {
+      return "requires-voice";
+    }
     case "wayfinding": {
       return "requires-wayfinding";
     }
   }
   const exhaustive: never = kind;
   return exhaustive;
+}
+
+const CONTEXT_PANEL_PRIORITY_RANK: Record<ContextPanelSectionPriority, number> = {
+  critical: 0,
+  primary: 1,
+  secondary: 2,
+  advanced: 3,
+};
+
+export function compareContextPanelSectionPriority(
+  left: ContextPanelSection,
+  right: ContextPanelSection,
+): number {
+  return (
+    CONTEXT_PANEL_PRIORITY_RANK[left.priority ?? "secondary"] -
+    CONTEXT_PANEL_PRIORITY_RANK[right.priority ?? "secondary"]
+  );
+}
+
+function sortContextPanelSections(sections: readonly ContextPanelSection[]): ContextPanelSection[] {
+  const sorted: ContextPanelSection[] = [];
+  for (const section of sections) {
+    const insertionIndex = sorted.findIndex(
+      (candidate) => compareContextPanelSectionPriority(section, candidate) < 0,
+    );
+    if (insertionIndex === -1) {
+      sorted.push(section);
+    } else {
+      sorted.splice(insertionIndex, 0, section);
+    }
+  }
+  return sorted;
+}
+
+function priorityForSection(section: ContextPanelSectionInput): ContextPanelSectionPriority {
+  if (section.tabId === "diagnostics" || section.debugOnly) {
+    return "advanced";
+  }
+  if (
+    section.kind === "generated-audio-health" ||
+    section.kind === "generation-queue" ||
+    section.kind === "narration-block-status"
+  ) {
+    return "primary";
+  }
+  if (section.kind === "source-provenance" || section.kind === "current-passage") {
+    return "primary";
+  }
+  return "secondary";
 }

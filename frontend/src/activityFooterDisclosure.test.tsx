@@ -58,7 +58,7 @@ describe("NarrationStatusStrip disclosure rendering", () => {
     expect(markup).toContain("Generation failed");
   });
 
-  it("opens an activity drawer with summary, timeline, queue, and history", () => {
+  it("keeps queue, timeline, and history out of the old footer drawer", () => {
     const markup = renderToStaticMarkup(
       <NarrationStatusStrip
         canCancel={false}
@@ -74,11 +74,12 @@ describe("NarrationStatusStrip disclosure rendering", () => {
       />,
     );
 
-    expect(markup).toContain("Current Status");
-    expect(markup).toContain("Stage Timeline");
-    expect(markup).toContain("Queue and Job");
-    expect(markup).toContain("Activity History");
-    expect(markup).toContain("Recent Jobs");
+    expect(markup).not.toContain('data-testid="ui-action-status-strip-activity"');
+    expect(markup).not.toContain('data-testid="narration-activity-drawer"');
+    expect(markup).not.toContain("Stage Timeline");
+    expect(markup).not.toContain("Queue and Job");
+    expect(markup).not.toContain("Activity History");
+    expect(markup).not.toContain("Recent Jobs");
   });
 
   it("makes cancellation visible", () => {

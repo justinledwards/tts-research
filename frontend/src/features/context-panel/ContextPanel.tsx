@@ -1,7 +1,9 @@
+import type { ReactNode } from "react";
 import { Button, Panel, StatusChip } from "../../design";
 import { overlayDataAttributes } from "../layout";
 import {
   selectContextPanelTab,
+  type ContextPanelDisplayState,
   type ContextPanelSurface,
   type ContextPanelTabDefinition,
 } from "./contextPanelModel";
@@ -10,19 +12,25 @@ import type { ContextPanelTabId } from "./contextPanelTabs";
 export function ContextPanel({
   activeTabId,
   className = "",
-  label = "Context panel",
+  collapsedSummary,
+  displayState = "expanded",
+  label = "Inspector",
   pinned = false,
   surface,
   tabs,
+  onDisplayStateChange,
   onPinnedChange,
   onTabChange,
 }: Readonly<{
   activeTabId: ContextPanelTabId | null;
   className?: string;
+  collapsedSummary?: ReactNode;
+  displayState?: ContextPanelDisplayState;
   label?: string;
   pinned?: boolean;
   surface: ContextPanelSurface;
   tabs: readonly ContextPanelTabDefinition[];
+  onDisplayStateChange?: (state: ContextPanelDisplayState) => void;
   onPinnedChange?: (pinned: boolean) => void;
   onTabChange: (tabId: ContextPanelTabId) => void;
 }>) {
@@ -36,6 +44,45 @@ export function ContextPanel({
   const activeAdvancedReason = activeTab.advanced
     ? `${activeTab.title} is an operator-facing panel for diagnostics and internals. It stays hidden from Read mode unless selected or pinned intentionally.`
     : null;
+  const resolvedDisplayState: ContextPanelDisplayState = pinned ? "pinned" : displayState;
+  if (resolvedDisplayState === "collapsed") {
+    return (
+      <Panel
+        aria-label={label}
+        className={`overflow-hidden ${className}`}
+        data-context-panel-active-tab={activeTab.id}
+        data-context-panel-display-state={resolvedDisplayState}
+        data-context-panel-owner={activeTabOwners.join(",")}
+        data-context-panel-surface={surface}
+        {...overlayDataAttributes("context-panel", "context-panel")}
+      >
+        <div className="grid gap-3 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+                Inspector
+              </p>
+              <h3 className="mt-1 truncate text-sm font-semibold">{activeTab.title}</h3>
+              <p className="mt-1 line-clamp-2 text-xs vs-muted">{activeTab.detail}</p>
+            </div>
+            <Button
+              className="shrink-0"
+              onClick={() => {
+                onDisplayStateChange?.("expanded");
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              Expand Inspector
+            </Button>
+          </div>
+          {collapsedSummary ?? (
+            <p className="text-xs leading-5 vs-muted">{activeTab.sections[0]?.detail}</p>
+          )}
+        </div>
+      </Panel>
+    );
+  }
 
   return (
     <Panel
@@ -43,6 +90,7 @@ export function ContextPanel({
       className={`overflow-hidden ${className}`}
       data-context-panel-advanced={activeTab.advanced ? "true" : "false"}
       data-context-panel-active-tab={activeTab.id}
+      data-context-panel-display-state={resolvedDisplayState}
       data-context-panel-owner={activeTabOwners.join(",")}
       data-context-panel-reason={activeAdvancedReason ?? ""}
       data-context-panel-surface={surface}
@@ -52,7 +100,7 @@ export function ContextPanel({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
-              Context
+              Inspector
             </p>
             <h3 className="mt-1 truncate text-sm font-semibold">{activeTab.title}</h3>
             <p className="mt-1 line-clamp-2 text-xs vs-muted">{activeTab.detail}</p>
@@ -69,6 +117,18 @@ export function ContextPanel({
               variant={pinned ? "pinned" : "ghost"}
             >
               {pinned ? "Pinned" : "Pin"}
+            </Button>
+          ) : null}
+          {onDisplayStateChange && !pinned ? (
+            <Button
+              className="shrink-0"
+              onClick={() => {
+                onDisplayStateChange("collapsed");
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              Collapse
             </Button>
           ) : null}
         </div>
@@ -133,6 +193,7 @@ export function ContextPanel({
               data-context-section-kind={section.kind}
               data-context-section-owner={section.owner ?? ""}
               data-context-section-panel-id={section.panelId ?? activeTab.id}
+              data-context-section-priority={section.priority}
               data-context-section-relevance={section.relevance ?? ""}
               key={section.id}
             >

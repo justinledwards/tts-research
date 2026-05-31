@@ -1,18 +1,45 @@
 export { ContextPanel } from "./ContextPanel";
+export {
+  DiagnosticsInspectorSection,
+  HistoryInspectorSection,
+  InspectorFactList,
+  PolicyInspectorSection,
+  QueueInspectorSection,
+  SourceInspectorSection,
+  VoiceInspectorSection,
+  type InspectorFact,
+  type InspectorNote,
+} from "./InspectorSections";
 export { ReviewContextPanel } from "./ReviewContextPanel";
+export {
+  WorkspaceContextInspector,
+  type WorkspaceContextInspectorProps,
+  type WorkspaceInspectorAudioModel,
+  type WorkspaceInspectorDiagnosticsModel,
+  type WorkspaceInspectorHistoryModel,
+  type WorkspaceInspectorPolicyModel,
+  type WorkspaceInspectorQueueModel,
+  type WorkspaceInspectorReviewModel,
+  type WorkspaceInspectorSourceModel,
+  type WorkspaceInspectorTelepromptModel,
+  type WorkspaceInspectorVoiceModel,
+} from "./WorkspaceContextInspector";
 export { WorkspaceStageContextPanel } from "./WorkspaceStageContextPanel";
 export {
   buildContextPanelTabs,
+  compareContextPanelSectionPriority,
   contextPanelDefaultTabForFocusMode,
   normalizeContextPanelTabId,
   selectContextPanelTab,
   type ContextPanelBuildOptions,
+  type ContextPanelDisplayState,
   type ContextPanelFocusMode,
   type ContextPanelOwner,
   type ContextPanelRelevancePredicate,
   type ContextPanelSection,
   type ContextPanelSectionInput,
   type ContextPanelSectionKind,
+  type ContextPanelSectionPriority,
   type ContextPanelSurface,
   type ContextPanelTabDefinition,
 } from "./contextPanelModel";

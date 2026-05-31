@@ -28,6 +28,7 @@ const screenshotStateDir =
 const screenshotsDir = path.join(outputDir, "screenshots");
 const useExistingServers = process.env.E2E_USE_EXISTING_SERVERS === "1";
 const contextTabIds = ["overview", "review", "diagnostics", "policy", "history"];
+const requiredWorkspaceInspectorTabs = ["overview", "review", "policy", "diagnostics", "history"];
 
 let apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
 let appBaseUrl = process.env.E2E_APP_BASE_URL ?? "http://127.0.0.1:5173";
@@ -59,7 +60,7 @@ async function main() {
   try {
     const project = await createQaProject(
       apiBaseUrl,
-      `Context Panel QA ${new Date().toISOString()}`,
+      `Contextual Inspector QA ${new Date().toISOString()}`,
     );
     const { chromium } = await loadPlaywright();
     const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
@@ -98,7 +99,7 @@ async function main() {
     };
     await writeJson(path.join(outputDir, "context-panel-results.json"), document);
     await writeFile(path.join(outputDir, "context-panel-report.md"), renderReport(document));
-    console.log(`Context panel E2E ${document.status}. Reports written to ${outputDir}`);
+    console.log(`Contextual inspector E2E ${document.status}. Reports written to ${outputDir}`);
     process.exitCode = document.status === "passed" ? 0 : 1;
   } finally {
     if (services) {
@@ -191,18 +192,24 @@ async function runContextPanelAudit(browser, projectId, screenshots) {
       failures.push("Diagnostics context panel appeared in a normal Cinema Read state.");
     }
     const surfaces = new Set(panels.map((panel) => panel.surface));
-    if (!surfaces.has("Review")) {
-      failures.push("Review context panel was not visible in Review stage.");
-    }
     if (!surfaces.has("Workspace")) {
-      failures.push("Workspace context panel was not visible in the full right rail.");
+      failures.push("Workspace inspector was not visible in the full right rail.");
     }
-    const reviewTabs = new Set(
-      tabVisits.filter((visit) => visit.surface === "Review").map((visit) => visit.tabId),
+    if (surfaces.has("Review")) {
+      failures.push("Legacy Review context panel was visible alongside the Workspace inspector.");
+    }
+    const workspacePanels = panels.filter((panel) => panel.surface === "Workspace");
+    if (workspacePanels.length !== 1) {
+      failures.push(
+        `Expected exactly one Workspace inspector, but found ${String(workspacePanels.length)}.`,
+      );
+    }
+    const workspaceTabs = new Set(
+      tabVisits.filter((visit) => visit.surface === "Workspace").map((visit) => visit.tabId),
     );
-    for (const requiredTab of ["review", "policy", "diagnostics", "history"]) {
-      if (!reviewTabs.has(requiredTab)) {
-        failures.push(`Review context panel did not expose ${requiredTab} tab.`);
+    for (const requiredTab of requiredWorkspaceInspectorTabs) {
+      if (!workspaceTabs.has(requiredTab)) {
+        failures.push(`Workspace inspector did not expose ${requiredTab} tab.`);
       }
     }
     const issues = blockingPageIssues(pageIssues);
@@ -243,6 +250,7 @@ async function collectPanels(page) {
       .map((element) => ({
         surface: element.getAttribute("data-context-panel-surface") ?? "Unknown",
         title: element.querySelector("h3")?.textContent?.trim() ?? "",
+        displayState: element.getAttribute("data-context-panel-display-state") ?? "",
         visibleSections: Array.from(element.querySelectorAll("[data-context-section-kind]")).map(
           (section) => ({
             advancedReason: section.getAttribute("data-context-section-advanced-reason") ?? "",
@@ -253,6 +261,7 @@ async function collectPanels(page) {
             kind: section.getAttribute("data-context-section-kind") ?? "",
             owner: section.getAttribute("data-context-section-owner") ?? "",
             panelId: section.getAttribute("data-context-section-panel-id") ?? "",
+            priority: section.getAttribute("data-context-section-priority") ?? "",
             relevance: section.getAttribute("data-context-section-relevance") ?? "",
             title: section.querySelector("h4")?.textContent?.trim() ?? "",
           }),
@@ -278,11 +287,13 @@ async function activePanelSnapshot(page, surface, tabId) {
               kind: section.getAttribute("data-context-section-kind") ?? "",
               owner: section.getAttribute("data-context-section-owner") ?? "",
               panelId: section.getAttribute("data-context-section-panel-id") ?? "",
+              priority: section.getAttribute("data-context-section-priority") ?? "",
               relevance: section.getAttribute("data-context-section-relevance") ?? "",
               text: section.textContent?.replace(/\s+/g, " ").trim() ?? "",
               title: section.querySelector("h4")?.textContent?.trim() ?? "",
             }))
           : [],
+        displayState: panel?.getAttribute("data-context-panel-display-state") ?? "",
         surface: panelSurface,
         tabId: panelTabId,
       };
@@ -330,6 +341,9 @@ function contextPanelGuardrailFailures(snapshot) {
     if (!section.emptyState) {
       failures.push(`${label} is missing empty-state copy.`);
     }
+    if (!section.priority) {
+      failures.push(`${label} is missing inspector priority metadata.`);
+    }
     if (section.panelId !== snapshot.tabId) {
       failures.push(`${label} has panel id ${section.panelId} but rendered in ${snapshot.tabId}.`);
     }
@@ -367,8 +381,10 @@ function panelOwnershipFailures(panels) {
       if (!section.allowedSurfaces.includes(panel.surface)) {
         failures.push(`${label} rendered outside its allowed context-panel surface.`);
       }
-      if (!section.owner || !section.relevance || !section.emptyState) {
-        failures.push(`${label} is missing ownership, relevance, or empty-state metadata.`);
+      if (!section.owner || !section.relevance || !section.emptyState || !section.priority) {
+        failures.push(
+          `${label} is missing ownership, relevance, empty-state, or priority metadata.`,
+        );
       }
     }
   }
@@ -402,7 +418,7 @@ function reviewDiagnosticsDuplicationFailures(tabVisits) {
 
 function renderReport(document) {
   const lines = [
-    "# Context Panel E2E",
+    "# Contextual Inspector E2E",
     "",
     `Status: **${document.status.toUpperCase()}**`,
     `Generated: ${document.generatedAt}`,
@@ -411,7 +427,7 @@ function renderReport(document) {
     "",
   ];
   for (const panel of document.result.panels) {
-    lines.push(`- ${panel.surface}: ${panel.title}`);
+    lines.push(`- ${panel.surface}: ${panel.title} (${panel.displayState})`);
   }
   lines.push("", "## Tab Visits", "", `Visited tabs: ${String(document.summary.tabVisits)}`);
   if (document.result.failures.length > 0) {

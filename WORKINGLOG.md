@@ -1,3 +1,12 @@
+## 2026-05-31 19:00 CEST - Contextual Inspector Consolidation
+- [x] Inspect current context panel, rails, footer, review, preview, intake, and teleprompt surfaces
+- [x] Extend context panel model into inspector contract
+- [x] Add reusable inspector section components and workspace inspector adapter
+- [x] Migrate duplicated workspace side panels into one inspector area
+- [x] Add focused tests for inspector behavior and duplication guardrails
+- [x] Run targeted checks and project validation
+- [x] Note remaining surface-complexity budget failures outside inspector migration.
+
 ## 2026-05-31 18:28 CEST - Follow-Along Highlighting
 - [x] Add semantic highlight state model.
 - [x] Apply cue and word semantics across Preview, Teleprompt, Cinema, and Theatre.

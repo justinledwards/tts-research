@@ -6,6 +6,9 @@ export function railColumnWidth(mode: WorkspaceRailMode, side: "left" | "right")
     return "0px";
   }
   if (mode === "compact") {
+    if (side === "right") {
+      return "clamp(220px, 18vw, 300px)";
+    }
     return "140px";
   }
   if (side === "left") {

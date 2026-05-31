@@ -1137,6 +1137,7 @@ function createScenarios(seed) {
       label: "Workspace Teleprompt Theatre",
       open: openTelepromptTheatre,
       storageState: projectStorageState(seed.projectId, {
+        jobId: seed.epub.job.id,
         sourceMode: "text",
         stage: "review",
         text: workspaceText,
@@ -1171,8 +1172,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
   try {
     await gotoApp(page);
     await capture("workspace-stage-00-intake-before");
-    await page.getByRole("button", { exact: true, name: "Intake" }).click();
-    await page.getByText("Guided Intake").first().waitFor();
+    await openWorkspaceIntakeStage(page);
     await capture("workspace-stage-01-intake-after");
     await openIntakeDestination(page);
     await page.getByTestId("intake-wizard-open-book-cinema").waitFor();
@@ -1317,11 +1317,10 @@ async function openWorkspaceStage(page, label) {
       .getByText(/Revision Panel|Source Review|Block Review/i)
       .first()
       .waitFor();
+  } else if (label === "Preview") {
+    await page.getByTestId("workspace-stage-action-createAndListen").waitFor({ state: "visible" });
   } else {
-    await page
-      .getByText(/Spoken Form|Create & Listen/i)
-      .first()
-      .waitFor();
+    await page.getByText("Teleprompt Studio").first().waitFor();
   }
 }
 
@@ -1477,7 +1476,7 @@ async function openTeleprompt(page) {
   await waitForEnabledTestId(page, "workspace-stage-action-openTeleprompt");
   await page.getByTestId("workspace-stage-action-openTeleprompt").click();
   await page.getByText("Teleprompt Studio").first().waitFor();
-  await page.getByTestId("ui-action-teleprompt-previous-cue").waitFor({ state: "visible" });
+  await page.getByTestId("ui-action-teleprompt-local-previous-cue").waitFor({ state: "visible" });
   await page.getByTestId("teleprompt-status-message").waitFor({ state: "visible" });
 }
 
@@ -1512,7 +1511,7 @@ async function waitForEnabledTestId(page, testId) {
 
 async function openBookPanel(page, scope) {
   await gotoApp(page);
-  await page.getByRole("button", { exact: true, name: "Intake" }).click();
+  await openWorkspaceIntakeStage(page);
   await openIntakeDestination(page);
   await page.getByTestId("intake-wizard-open-book-cinema").waitFor();
   await selectBookScope(page, scope);
@@ -1763,13 +1762,29 @@ async function clickContextPanelTab(overlay, name) {
 
 async function openPreparedCinemaOverlay(page, expectedLabel) {
   await gotoApp(page);
-  await page.getByRole("button", { exact: true, name: "Intake" }).click();
+  await openWorkspaceIntakeStage(page);
   await openIntakeDestination(page);
   await page
     .getByRole("button", { name: new RegExp(`Open ${escapeRegex(expectedLabel)}`) })
     .first()
     .click();
   await cinemaOverlay(page).getByText(expectedLabel).first().waitFor();
+}
+
+async function openWorkspaceIntakeStage(page) {
+  const guidedIntake = page.getByText("Guided Intake").first();
+  if (!(await guidedIntake.isVisible().catch(() => false))) {
+    const exactIntakeButton = page.getByRole("button", { exact: true, name: "Intake" }).first();
+    if (await exactIntakeButton.isVisible().catch(() => false)) {
+      await exactIntakeButton.click();
+    } else {
+      await page
+        .getByRole("button", { name: /^Intake\b/ })
+        .first()
+        .click();
+    }
+  }
+  await guidedIntake.waitFor();
 }
 
 async function openIntakeDestination(page) {

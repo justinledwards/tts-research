@@ -7,6 +7,7 @@ describe("workspace rail summaries", () => {
     expect(railColumnWidth("collapsed", "left")).toBe("0px");
     expect(railColumnWidth("collapsed", "right")).toBe("0px");
     expect(railColumnWidth("compact", "left")).toBe("140px");
+    expect(railColumnWidth("compact", "right")).toContain("clamp");
   });
 
   it("renders compact rail summaries without local layout mode controls", () => {

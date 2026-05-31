@@ -83,7 +83,6 @@ import {
   formatLikenessLabel,
   formatPace,
   formatPercentage,
-  formatPercentageRatio,
   formatSegment,
   formatSimilarity,
   likenessBadgeClass,
@@ -225,7 +224,10 @@ import {
   normalizeTelepromptTheatreSettings,
   type TelepromptTheatreSettings,
 } from "./features/teleprompt/telepromptTheatreSettings";
-import { generatedAudioLifecycleFromJob } from "./features/playback/generatedAudioLifecycle";
+import {
+  generatedAudioLifecycleFromJob,
+  generatedAudioLifecycleLabel,
+} from "./features/playback/generatedAudioLifecycle";
 import {
   providerCapabilityGate,
   resolveProviderRuntimeCapabilities,
@@ -240,7 +242,6 @@ import {
 import {
   previewPlayerVariantForSurface,
   shouldShowGlobalPreviewPlayer,
-  shouldShowRailCinemaShortcut,
 } from "./features/playback/playbackSurfaceRules";
 import {
   playbackActionAriaLabel,
@@ -251,13 +252,26 @@ import {
   LocalizedPlaybackToolbar,
   type LocalizedPlaybackToolbarModel,
 } from "./features/playback/LocalizedPlaybackToolbar";
+import type {
+  ContextPanelDisplayState,
+  InspectorFact,
+  InspectorNote,
+  WorkspaceContextInspectorProps,
+} from "./features/context-panel";
 import { useAudioWaveformBars } from "./audioWaveform";
 import type { SourceCardModel } from "./features/sources";
 import type {
   SourceLifecycleEnvelope,
   SourceLifecycleSurface,
 } from "./features/source-lifecycle/sourceLifecycleCore";
-import { Button, Panel, StatusChip, compactHitTargetClassName, minInteractiveSize } from "./design";
+import {
+  Button,
+  Panel,
+  StatusChip,
+  compactHitTargetClassName,
+  minInteractiveSize,
+  type StatusChipTone,
+} from "./design";
 import {
   createWorkspaceContext,
   DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
@@ -491,12 +505,9 @@ const LazyRevisionPanel = lazy(() =>
     default: module.RevisionPanel,
   })),
 );
-const LazyReviewContextPanel = lazy(() =>
-  import("./features/context-panel").then((module) => ({ default: module.ReviewContextPanel })),
-);
-const LazyWorkspaceStageContextPanel = lazy(() =>
+const LazyWorkspaceContextInspector = lazy(() =>
   import("./features/context-panel").then((module) => ({
-    default: module.WorkspaceStageContextPanel,
+    default: module.WorkspaceContextInspector,
   })),
 );
 const VoiceSourceAnalysisPanel = lazy(() =>
@@ -2140,6 +2151,8 @@ export function App() {
   const [workspaceDisclosurePins, setWorkspaceDisclosurePins] = useState<WorkspaceDisclosurePins>(
     () => resolveWorkspaceDisclosurePins(uiMemory, activeProjectId),
   );
+  const [workspaceInspectorDisplayState, setWorkspaceInspectorDisplayState] =
+    useState<ContextPanelDisplayState>("expanded");
   const [activeReviewPane, setActiveReviewPane] = useState<ReviewPane>(() =>
     resolveReviewPane(uiMemory, activeProjectId),
   );
@@ -2287,6 +2300,11 @@ export function App() {
     workspaceContext.customLayout,
   );
   const contentMode = workspaceContext.stage;
+  useEffect(() => {
+    setWorkspaceInspectorDisplayState(
+      defaultWorkspaceInspectorDisplayState(contentMode, workspaceLayout.contextInspector),
+    );
+  }, [contentMode, workspaceLayout.contextInspector]);
   const runWorkspaceStageAction = useCallback(
     (actionId: WorkspaceStageActionId) => {
       if (actionId === "openTeleprompt" || actionId === "openTheatre") {
@@ -3154,10 +3172,52 @@ export function App() {
       workspaceDisclosure,
     ],
   );
+  const selectedInspectorBlock =
+    narrationPreviewBlocks.find((block) => block.id === workspaceContext.activeBlockId) ??
+    narrationPreviewBlocks[0];
+  const selectedInspectorBlockIndex = narrationPreviewBlocks.findIndex(
+    (block) => block.id === selectedInspectorBlock.id,
+  );
+  const nextInspectorBlockIndex = selectedInspectorBlockIndex + 1;
+  const nextInspectorBlockLabel =
+    nextInspectorBlockIndex < narrationPreviewBlocks.length
+      ? narrationPreviewBlocks[nextInspectorBlockIndex].label
+      : "End of script";
+  const workspaceInspectorSourceMetrics = workbenchSourceMetrics({
+    bookScopeContent,
+    job,
+    selectedBookScope: effectiveBookScope,
+    selectedBookSource: activeNarrationBookSource,
+    selectedPreparedSource: activeNarrationPreparedSource,
+    sourceMode,
+    text,
+  });
+  const workspaceInspectorPolicyNotes = narrationPreviewPolicyNotes({
+    bookScopeContent,
+    policyProfileLabel: speechPolicyProfileDisplayName(
+      speechPolicyProfile,
+      customSpeechPolicyProfiles,
+    ),
+    scopeTitle: activeNarrationScopeLabel,
+    selectedBookSource: activeNarrationBookSource,
+    selectedPreparedSource: activeNarrationPreparedSource,
+    sourceMode,
+    voiceProfileLabel: selectedVoiceProfileLabel,
+  });
+  const workspaceInspectorPinned = workspaceLayout.contextInspector === "pinned";
+  const effectiveWorkspaceInspectorDisplayState =
+    workspaceInspectorPinned || workspaceInspectorDisplayState === "pinned"
+      ? "pinned"
+      : workspaceInspectorDisplayState;
   const disclosureRails = workspaceDisclosureRails(baseWorkspaceRails, workspaceDisclosure);
   const activityFooterMode: ActivityFooterMode = disclosureRails.activityFooterMode;
   const leftRailMode = disclosureRails.leftRailMode;
   const rightRailMode = disclosureRails.rightRailMode;
+  const inspectorSummonedInTheatre =
+    workspaceInspectorPinned || effectiveWorkspaceInspectorDisplayState === "pinned";
+  const displayRightRailMode =
+    contentMode === "theatre" && !inspectorSummonedInTheatre ? "collapsed" : rightRailMode;
+  const workspaceInspectorDisplayVisible = displayRightRailMode !== "collapsed";
   const telepromptTheatreStageOpenSignal = theatreOpenSignalForWorkbenchStage({
     blocker: Boolean(activeWorkbenchStageStatus.blocker),
     signal: telepromptTheatreOpenSignal,
@@ -6163,9 +6223,10 @@ export function App() {
 
   const studioJobName = getStudioJobName(job);
   const studioProjectName = activeProject?.name ?? DEFAULT_PROJECT_NAME;
+  const studioRightRailMode = studioMode === "narration" ? displayRightRailMode : rightRailMode;
   const studioGridStyle = {
     "--studio-left-column": railColumnWidth(leftRailMode, "left"),
-    "--studio-right-column": railColumnWidth(rightRailMode, "right"),
+    "--studio-right-column": railColumnWidth(studioRightRailMode, "right"),
   } as CSSProperties;
   const preparedSourceCinemaSurfaceKind =
     preparedSourceCinemaSource && preparedSourceCinemaKind(preparedSourceCinemaSource) === "website"
@@ -7035,7 +7096,7 @@ export function App() {
           </section>
           <aside
             className={`vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto ${
-              rightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
+              displayRightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
             }`}
             {...overlayDataAttributes("right-rail", "right-rail")}
           >
@@ -7148,7 +7209,6 @@ export function App() {
             <SourceTextPanel
               activeReviewPane={activeReviewPane}
               activeReviewBlockId={workspaceContext.activeBlockId}
-              contextInspectorDensity={workspaceLayout.contextInspector}
               stageStatus={activeWorkbenchStageStatus}
               projectId={activeProjectId}
               bookSourceError={bookSourceError}
@@ -7320,55 +7380,110 @@ export function App() {
             }`}
             {...overlayDataAttributes("right-rail", "right-rail")}
           >
-            {rightRailMode === "full" ? (
-              <div className="grid gap-3 p-4 xl:p-5">
-                {job || isProcessing ? (
-                  <AudioPanel
-                    canOpenCinema={Boolean(job) || canOpenBookCinema}
-                    job={job}
-                    latestProgress={latestProgress}
-                    onOpenCinema={openReadingCinema}
-                    playbackCursorSec={playbackCursorSec}
-                    onResumeProgress={(progress) => {
-                      void handleResumeProgress(progress);
-                    }}
-                  />
-                ) : (
-                  <NarrationStageContextPanel
-                    policyProfile={speechPolicyProfileDisplayName(
+            {workspaceInspectorDisplayVisible ? (
+              <div className="grid gap-3 p-2 xl:p-4">
+                <WorkspaceInspectorPanel
+                  audio={{
+                    detail: narrationStatusModel.detail,
+                    eta: narrationStatusModel.eta,
+                    jobLabel: narrationStatusModel.activeJobLabel,
+                    lifecycleLabel: generatedAudioLifecycleLabel(generatedAudioLifecycle),
+                    queue: narrationStatusModel.queue,
+                    tone: audioLifecycleTone(generatedAudioLifecycle),
+                  }}
+                  diagnostics={{
+                    facts: workspaceInspectorDiagnosticsFacts({
+                      job,
+                      metrics: systemMetrics,
+                      metricsError: systemMetricsError,
+                      backendDetail:
+                        createAndListenCapabilityReason ??
+                        ttsEngineError ??
+                        systemMetricsError ??
+                        researchModuleError ??
+                        "Backend ready",
+                    }),
+                    notes: workspaceInspectorDiagnosticsNotes({
+                      profileError,
+                      profileSourceDiagnosticsMessage: profileSourceDiagnostics?.setupMessage,
+                      researchModuleError,
+                      ttsEngineError,
+                    }),
+                  }}
+                  displayState={effectiveWorkspaceInspectorDisplayState}
+                  history={{
+                    facts: [
+                      { label: "Stage", value: workspaceStageMeta(contentMode).label },
+                      { label: "Source", value: activeNarrationSourceLabel },
+                      { label: "Job", value: narrationStatusModel.activeJobLabel },
+                    ],
+                    notes: narrationStatusModel.activityItems.slice(0, 3).map((item) => ({
+                      detail: item.detail,
+                      label: item.title,
+                      tone: item.tone,
+                    })),
+                  }}
+                  pinned={workspaceInspectorPinned}
+                  policy={{
+                    notes: workspaceInspectorPolicyNotes,
+                    profileLabel: speechPolicyProfileDisplayName(
                       speechPolicyProfile,
                       customSpeechPolicyProfiles,
-                    )}
-                    sourceLabel={
-                      activeNarrationPreparedSource?.title ??
-                      activeNarrationPreparedSource?.sourceName ??
-                      (activeNarrationBookSource
-                        ? bookSourceName(activeNarrationBookSource)
-                        : "Draft text")
-                    }
-                    stage={contentMode}
-                  />
-                )}
-                {job || systemMetricsError ? (
-                  <RelevantMetricsPanel
-                    job={job}
-                    metrics={systemMetrics}
-                    metricsError={systemMetricsError}
-                  />
-                ) : null}
+                    ),
+                    scopeLabel: statusSourceLifecycle.policyScope,
+                  }}
+                  review={{
+                    activeBlockDetail: `${selectedInspectorBlock.index.toString()} of ${Math.max(1, narrationPreviewBlocks.length).toString()}`,
+                    activeBlockLabel: selectedInspectorBlock.label,
+                    diagnosticsContent: narrationReviewMathPanel(activeNarrationPreparedSource),
+                    policyContent: narrationReviewRulesPanel(
+                      activeNarrationPreparedSource,
+                      narrationPreviewBlocks,
+                      text,
+                    ),
+                  }}
+                  source={{
+                    detail: statusSourceLifecycle.selectedScope,
+                    importConfidence: workspaceInspectorImportConfidence({
+                      isImportingBookSource,
+                      isPreparingSource,
+                      selectedBookSource: activeNarrationBookSource,
+                      selectedPreparedSource: activeNarrationPreparedSource,
+                      sourcePrepError: sourcePrepError ?? bookSourceError,
+                    }),
+                    label: activeNarrationSourceLabel,
+                    metrics: workspaceInspectorSourceMetrics,
+                    scopeLabel: activeNarrationScopeLabel,
+                    stateLabel: statusSourceLifecycle.canonicalState,
+                    typeLabel: statusSourceLifecycle.sourceKind,
+                  }}
+                  stage={contentMode}
+                  status={activeWorkbenchStageStatus}
+                  teleprompt={{
+                    cueSyncLabel:
+                      playbackControls.isPlaying || isPlaybackActive ? "Following audio" : "Manual",
+                    cueTimingLabel: formatDuration(selectedInspectorBlock.estimatedDurationMs),
+                    currentBlockLabel: selectedInspectorBlock.label,
+                    nextBlockLabel: nextInspectorBlockLabel,
+                    returnTargetLabel: workspaceStageMeta(workspaceContext.telepromptReturnStage)
+                      .label,
+                  }}
+                  voice={{
+                    detail: selectedVoiceProfile
+                      ? formatLikenessLabel(selectedVoiceProfile)
+                      : "Provider voice",
+                    label: selectedVoiceProfileLabel,
+                    tone: createAndListenCapabilityReason ? "warning" : "success",
+                  }}
+                  onDisplayStateChange={setWorkspaceInspectorDisplayState}
+                  onPinnedChange={(pinned) => {
+                    setWorkspaceCustomLayout({
+                      ...workspaceContext.customLayout,
+                      contextInspector: pinned ? "pinned" : "summary",
+                    });
+                  }}
+                />
               </div>
-            ) : null}
-            {rightRailMode === "compact" ? (
-              <NarrationCompactRightRail
-                contentMode={contentMode}
-                isProcessing={isProcessing}
-                job={job}
-                sourceLabel={activeNarrationSourceLabel}
-                status={activeWorkbenchStageStatus}
-                onCreateAndListen={createAndListenFromCurrentSource}
-                onOpenCinema={openReadingCinema}
-                onStageAction={runWorkspaceStageAction}
-              />
             ) : null}
           </aside>
         </section>
@@ -7440,129 +7555,13 @@ function VoiceCloningRailMini({
   );
 }
 
-function NarrationCompactRightRail({
-  contentMode,
-  isProcessing,
-  job,
-  sourceLabel,
-  status,
-  onCreateAndListen,
-  onOpenCinema,
-  onStageAction,
-}: Readonly<{
-  contentMode: WorkspaceStage;
-  isProcessing: boolean;
-  job: VoiceJob | null;
-  sourceLabel: string;
-  status: WorkspaceStageStatus;
-  onCreateAndListen: () => void;
-  onOpenCinema: () => void;
-  onStageAction: (actionId: WorkspaceStageActionId) => void;
-}>) {
-  if (job || isProcessing) {
-    return (
-      <PlaybackRailMini
-        job={job}
-        onOpenCinema={onOpenCinema}
-        showCinemaAction={shouldShowRailCinemaShortcut(contentMode)}
-      />
-    );
-  }
+function WorkspaceInspectorPanel(props: Readonly<WorkspaceContextInspectorProps>) {
   return (
-    <WorkbenchStatusRailMini
-      sourceLabel={sourceLabel}
-      status={status}
-      onCreateAndListen={onCreateAndListen}
-      onOpenCinema={onOpenCinema}
-      onStageAction={onStageAction}
-    />
-  );
-}
-
-function PlaybackRailMini({
-  job,
-  onOpenCinema,
-  showCinemaAction = true,
-}: Readonly<{
-  job: VoiceJob | null;
-  onOpenCinema: () => void;
-  showCinemaAction?: boolean;
-}>) {
-  return (
-    <RailMiniStack
-      items={[
-        {
-          label: "Playback",
-          value: job ? "Controls" : "Waiting",
-          detail: job ? "Transport stays with the active stage" : "Create audio from the strip",
-        },
-        {
-          label: "Surface",
-          value: showCinemaAction ? "Cinema" : "Stage",
-          detail: showCinemaAction ? "Shortcut available" : "Use stage controls",
-        },
-      ]}
-      actionLabel={showCinemaAction ? "Cinema" : undefined}
-      actionSurface="Playback"
-      actionTestId="ui-action-rail-playback-open-cinema"
-      onAction={showCinemaAction ? onOpenCinema : undefined}
-    />
-  );
-}
-
-function WorkbenchStatusRailMini({
-  sourceLabel,
-  status,
-  onCreateAndListen,
-  onOpenCinema,
-  onStageAction,
-}: Readonly<{
-  sourceLabel: string;
-  status: WorkspaceStageStatus;
-  onCreateAndListen: () => void;
-  onOpenCinema: () => void;
-  onStageAction: (actionId: WorkspaceStageActionId) => void;
-}>) {
-  const action = status.nextAction;
-  const actionLabel = action ? workspaceStageActionLabel(action) : undefined;
-  return (
-    <RailMiniStack
-      items={[
-        {
-          label: "Task",
-          value: status.label,
-          detail: status.blocker?.title ?? status.description,
-        },
-        {
-          label: "Source",
-          value: sourceLabel,
-          detail: status.blocker?.id ?? "selected",
-        },
-        {
-          label: "Next",
-          value: status.primaryLabel,
-          detail: status.inspectorTabs.join(", "),
-        },
-      ]}
-      actionLabel={actionLabel}
-      actionSurface="Workspace"
-      actionTestId="ui-action-rail-workbench-next"
-      onAction={
-        action
-          ? () => {
-              if (action === "createAndListen" || action === "retryGeneration") {
-                onCreateAndListen();
-                return;
-              }
-              if (action === "openCinema") {
-                onOpenCinema();
-                return;
-              }
-              onStageAction(action);
-            }
-          : undefined
-      }
-    />
+    <Suspense
+      fallback={<LazySurfaceFallback label="Loading inspector..." surface="workspace-inspector" />}
+    >
+      <LazyWorkspaceContextInspector {...props} />
+    </Suspense>
   );
 }
 
@@ -7583,123 +7582,6 @@ function CloneReadinessRailMini({
       actionLabel={activity.actionLabel}
       onAction={onOpenVoiceCloning}
     />
-  );
-}
-
-function NarrationStageContextPanel({
-  policyProfile,
-  sourceLabel,
-  stage,
-}: Readonly<{ policyProfile: string; sourceLabel: string; stage: WorkspaceStage }>) {
-  return (
-    <Suspense
-      fallback={
-        <LazySurfaceFallback label="Loading context..." surface="workspace-context-panel" />
-      }
-    >
-      <LazyWorkspaceStageContextPanel
-        policyProfile={policyProfile}
-        sourceLabel={sourceLabel}
-        stage={stage}
-      />
-    </Suspense>
-  );
-}
-
-function RelevantMetricsPanel({
-  job,
-  metrics,
-  metricsError,
-}: Readonly<{
-  job: VoiceJob | null;
-  metrics: SystemMetrics | null;
-  metricsError: string | null;
-}>) {
-  const gpu = metrics?.gpus?.[0];
-  const gpuMemory = gpu ? formatPercentageRatio(gpu.memoryUsedMiB, gpu.memoryTotalMiB) : "n/a";
-  const gpuUtilization = gpu ? `${Math.round(gpu.utilizationGpuPct).toString()}%` : "n/a";
-  const hostMemory = metrics
-    ? formatPercentageRatio(
-        metrics.host.memTotalBytes - metrics.host.memAvailableBytes,
-        metrics.host.memTotalBytes,
-      )
-    : "n/a";
-  const processMemory = metrics ? formatBytes(metrics.process.rssBytes) : "n/a";
-
-  return (
-    <section className="rounded-lg border shadow-sm vs-border vs-raised">
-      <div className="border-b px-3 py-3 vs-border">
-        <h2 className="text-sm font-semibold text-[var(--vs-text)]">Runtime Metrics</h2>
-        <p className="vs-muted mt-1 truncate text-xs">
-          {metrics?.serviceVersion ?? metricsError ?? "Backend metrics load when available"}
-        </p>
-      </div>
-      <dl className="grid grid-cols-2">
-        <ProductMetric
-          label="Provider"
-          value={job?.provider ?? "n/a"}
-          detail={job?.ttsEngine ?? "No provider selected"}
-          tone="blue"
-        />
-        <ProductMetric
-          label="GPU Memory"
-          value={gpuMemory}
-          detail={gpu?.name ?? metricsError ?? "metrics unavailable"}
-          tone="orange"
-        />
-        <ProductMetric
-          label="GPU Utilization"
-          value={gpuUtilization}
-          detail={gpu ? `${Math.round(gpu.temperatureCelsius).toString()}C` : "metrics unavailable"}
-          tone="green"
-        />
-        <ProductMetric
-          label="Host Memory"
-          value={hostMemory}
-          detail={metrics ? metrics.host.hostname : (metricsError ?? "metrics unavailable")}
-          tone="orange"
-        />
-        <ProductMetric
-          label="Process RSS"
-          value={processMemory}
-          detail={metrics?.process.runtime ?? "runtime unavailable"}
-        />
-      </dl>
-    </section>
-  );
-}
-
-function ProductMetric({
-  detail,
-  label,
-  tone = "neutral",
-  value,
-}: Readonly<{
-  detail: string;
-  label: string;
-  tone?: "neutral" | "blue" | "green" | "orange";
-  value: string;
-}>) {
-  const barClassByTone: Record<"neutral" | "blue" | "green" | "orange", string> = {
-    neutral: "bg-blue-500",
-    blue: "bg-blue-500",
-    green: "bg-emerald-500",
-    orange: "bg-orange-500",
-  };
-  const barClass = barClassByTone[tone];
-  return (
-    <div className="min-w-0 border-b p-3 last:border-b-0 vs-border">
-      <dt className="vs-muted text-xs font-medium">{label}</dt>
-      <dd className="mt-2 break-words text-base font-semibold leading-tight text-[var(--vs-text)]">
-        {value}
-      </dd>
-      <p className="vs-muted mt-1 truncate text-xs" title={detail}>
-        {detail}
-      </p>
-      <div className="mt-3 h-1 rounded-full bg-[var(--vs-surface)]">
-        <div className={`h-1 w-2/5 rounded-full ${barClass}`} />
-      </div>
-    </div>
   );
 }
 
@@ -9589,6 +9471,19 @@ function createAndListenScopeForSource({
   return "whole-source";
 }
 
+function defaultWorkspaceInspectorDisplayState(
+  stage: WorkspaceStage,
+  density: WorkspaceLayoutSlotDensity,
+): ContextPanelDisplayState {
+  if (density === "pinned") {
+    return "pinned";
+  }
+  if (stage === "teleprompt" || stage === "theatre" || density === "summary") {
+    return "collapsed";
+  }
+  return "expanded";
+}
+
 function SourceTextPanel({
   activeReviewPane,
   activeReviewBlockId,
@@ -9601,7 +9496,6 @@ function SourceTextPanel({
   isPreparingSource,
   isProcessing,
   job,
-  contextInspectorDensity,
   stageStatus,
   optimizedText,
   preparedSources,
@@ -9654,7 +9548,6 @@ function SourceTextPanel({
   bookSourceError: string | null;
   bookSources: BookSource[];
   canSubmit: boolean;
-  contextInspectorDensity: WorkspaceLayoutSlotDensity;
   contentMode: WorkspaceStage;
   stageStatus: WorkspaceStageStatus;
   isImportingBookSource: boolean;
@@ -9825,17 +9718,14 @@ function SourceTextPanel({
             job={job}
             optimizedText={optimizedText}
             policyProfileLabel={speechPolicyProfileLabel}
-            projectId={projectId}
             runConfigurationLabel={runConfigurationLabel}
             selectedBookScope={selectedBookScope}
             selectedBookSource={activeBookSource}
             selectedPreparedSource={activePreparedSource}
-            contextInspectorDensity={contextInspectorDensity}
             isPlaybackActive={isPlaybackActive}
             sourceLifecycle={sourceLifecycle}
             text={text}
             voiceProfileLabel={voiceProfileLabel}
-            voiceProfileId={voiceProfileId}
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
             onInspectBookSource={onInspectBookSource}
@@ -9880,17 +9770,6 @@ function SourceTextPanel({
         />
       ) : null}
       {contentMode === "teleprompt" || contentMode === "theatre" ? telepromptStage : null}
-      {showSourceIntake && sourceMode !== "fileUrl" ? (
-        <SourceMetadataStrip
-          job={job}
-          selectedBookSource={activeBookSource}
-          selectedBookScope={selectedBookScope}
-          bookScopeContent={bookScopeContent}
-          selectedPreparedSource={activePreparedSource}
-          sourceMode={sourceMode}
-          text={text}
-        />
-      ) : null}
     </form>
   );
 }
@@ -10115,15 +9994,6 @@ function NarrationPreviewStage({
   const createDetail = job
     ? `${job.status} · ${estimateFirstAudioETA(job)}`
     : "Ready to create checked narration";
-  const policyNotes = narrationPreviewPolicyNotes({
-    bookScopeContent,
-    policyProfileLabel,
-    scopeTitle,
-    selectedBookSource,
-    selectedPreparedSource,
-    sourceMode,
-    voiceProfileLabel,
-  });
   const previewBlocks = useMemo(
     () =>
       buildNarrationReviewBlocks({
@@ -10349,11 +10219,6 @@ function NarrationPreviewStage({
       <div className="sticky top-3 z-10">
         <LocalizedPlaybackToolbar model={previewPlaybackToolbar} />
       </div>
-      <dl className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 text-xs sm:grid-cols-3 vs-border">
-        <PreviewFact label="Voice choice" value={voiceProfileLabel} />
-        <PreviewFact label="Speech policy" value={policyProfileLabel} />
-        <PreviewFact label="Scope" value={scopeTitle} />
-      </dl>
       <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)]">
         <div className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border">
           {previewContent}
@@ -10374,34 +10239,9 @@ function NarrationPreviewStage({
               selectedFallbackText={spokenText}
             />
           </Panel>
-          <Panel className="grid gap-2 p-4" variant="raised">
-            <h3 className="text-sm font-semibold">Policy Notes</h3>
-            <ul className="grid gap-2 text-xs leading-5 vs-muted">
-              {policyNotes.map((note) => (
-                <li
-                  className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 vs-border"
-                  key={note.label}
-                >
-                  <span className="font-semibold text-[var(--vs-text)]">{note.label}: </span>
-                  {note.detail}
-                </li>
-              ))}
-            </ul>
-          </Panel>
         </div>
       </div>
     </Panel>
-  );
-}
-
-function PreviewFact({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="min-w-0">
-      <dt className="font-semibold uppercase tracking-[0.14em] vs-muted">{label}</dt>
-      <dd className="mt-1 truncate text-sm font-semibold text-[var(--vs-text)]" title={value}>
-        {value}
-      </dd>
-    </div>
   );
 }
 
@@ -10711,7 +10551,7 @@ function isBookSourceURL(lowerURL: string): boolean {
   ].some((extension) => lowerURL.endsWith(extension));
 }
 
-function SourceMetadataStrip({
+function workbenchSourceMetrics({
   bookScopeContent,
   job,
   selectedBookScope,
@@ -10727,7 +10567,7 @@ function SourceMetadataStrip({
   selectedPreparedSource: PreparedSource | null;
   sourceMode: SourceMode;
   text: string;
-}>) {
+}>): InspectorFact[] {
   const metadataBookSource = sourceMode === "book" ? selectedBookSource : null;
   const metadataPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
   const preparedDurationMs =
@@ -10761,23 +10601,132 @@ function SourceMetadataStrip({
     selectedPreparedSource: metadataPreparedSource,
   });
 
-  return (
-    <dl className="grid gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 text-sm md:grid-cols-4 vs-border">
-      <Metric label="Source Text" value={sourceTextLabel} />
-      <Metric label="Total Segments" value={String(totalSegments)} />
-      <Metric label="Total Duration (est.)" value={formatDuration(durationMs)} />
-      <Metric label="Output Format" value={contentType} />
-    </dl>
-  );
+  return [
+    { label: "Text", value: sourceTextLabel },
+    { label: "Segments", value: String(totalSegments) },
+    { label: "Duration", value: formatDuration(durationMs) },
+    { label: "Format", value: contentType },
+  ];
 }
 
-function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="border-t pt-3 vs-border">
-      <dt className="text-xs uppercase tracking-[0.14em] vs-muted">{label}</dt>
-      <dd className="mt-1 break-words font-medium text-[var(--vs-text)]">{value}</dd>
-    </div>
-  );
+function workspaceInspectorImportConfidence({
+  isImportingBookSource,
+  isPreparingSource,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourcePrepError,
+}: Readonly<{
+  isImportingBookSource: boolean;
+  isPreparingSource: boolean;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourcePrepError: string | null;
+}>): InspectorFact {
+  if (sourcePrepError) {
+    return {
+      detail: sourcePrepError,
+      label: "Confidence",
+      tone: "warning",
+      value: "Needs review",
+    };
+  }
+  if (isImportingBookSource || isPreparingSource) {
+    return {
+      detail: "Import is still running.",
+      label: "Confidence",
+      tone: "info",
+      value: "Detecting",
+    };
+  }
+  if (selectedPreparedSource?.status === "ready" || selectedBookSource?.status === "ready") {
+    return {
+      detail: "Source metadata and speakable blocks are ready.",
+      label: "Confidence",
+      tone: "success",
+      value: "High",
+    };
+  }
+  return {
+    detail: "Draft text uses lightweight local metadata.",
+    label: "Confidence",
+    tone: "neutral",
+    value: "Draft",
+  };
+}
+
+function workspaceInspectorDiagnosticsFacts({
+  backendDetail,
+  job,
+  metrics,
+  metricsError,
+}: Readonly<{
+  backendDetail: string;
+  job: VoiceJob | null;
+  metrics: SystemMetrics | null;
+  metricsError: string | null;
+}>): InspectorFact[] {
+  const gpu = metrics?.gpus?.[0];
+  return [
+    {
+      detail: job?.ttsEngine ?? "Provider resolves when audio is created.",
+      label: "Provider",
+      value: job?.provider ?? "n/a",
+    },
+    {
+      detail: metricsError ?? metrics?.serviceVersion ?? backendDetail,
+      label: "Backend",
+      tone: metricsError ? "warning" : "success",
+      value: metricsError ? "Attention" : "Ready",
+    },
+    {
+      detail: gpu?.name ?? "GPU metrics load when available.",
+      label: "GPU",
+      value: gpu ? `${Math.round(gpu.utilizationGpuPct).toString()}%` : "n/a",
+    },
+    {
+      detail: metrics?.process.runtime ?? "Process metrics load when available.",
+      label: "Process",
+      value: metrics ? formatBytes(metrics.process.rssBytes) : "n/a",
+    },
+  ];
+}
+
+function workspaceInspectorDiagnosticsNotes({
+  profileError,
+  profileSourceDiagnosticsMessage,
+  researchModuleError,
+  ttsEngineError,
+}: Readonly<{
+  profileError: string | null;
+  profileSourceDiagnosticsMessage?: string;
+  researchModuleError: string | null;
+  ttsEngineError: string | null;
+}>): InspectorNote[] {
+  return [
+    profileError ? { detail: profileError, label: "Profile", tone: "warning" } : null,
+    ttsEngineError ? { detail: ttsEngineError, label: "TTS engine", tone: "warning" } : null,
+    researchModuleError
+      ? { detail: researchModuleError, label: "Research modules", tone: "warning" }
+      : null,
+    profileSourceDiagnosticsMessage
+      ? { detail: profileSourceDiagnosticsMessage, label: "Voice setup" }
+      : null,
+  ].filter(Boolean) as InspectorNote[];
+}
+
+function audioLifecycleTone(
+  state: ReturnType<typeof generatedAudioLifecycleFromJob>,
+): StatusChipTone {
+  if (state === "failed" || state === "degraded" || state === "stale") {
+    return "warning";
+  }
+  if (state === "ready") {
+    return "success";
+  }
+  if (state === "queued" || state === "generating") {
+    return "info";
+  }
+  return "neutral";
 }
 
 function sourceMetadataDurationMs({
@@ -12304,16 +12253,13 @@ function NarrationReviewWorkbench({
   playbackControls,
   playbackCursorSec,
   policyProfileLabel,
-  projectId,
   runConfigurationLabel,
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
-  contextInspectorDensity,
   sourceLifecycle,
   text,
   voiceProfileLabel,
-  voiceProfileId,
 }: Readonly<{
   activePane: ReviewPane;
   activeBlockId: string | null;
@@ -12329,16 +12275,13 @@ function NarrationReviewWorkbench({
   playbackControls: PlaybackController;
   playbackCursorSec: number;
   policyProfileLabel: string;
-  projectId: string;
   runConfigurationLabel: string;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
-  contextInspectorDensity: WorkspaceLayoutSlotDensity;
   sourceLifecycle: SourceLifecycleEnvelope;
   text: string;
   voiceProfileLabel: string;
-  voiceProfileId: string;
 }>) {
   const reviewBlocks = useMemo(
     () =>
@@ -12389,8 +12332,6 @@ function NarrationReviewWorkbench({
       ? "Validation was disabled for this run."
       : "Validation appears after synthesis.");
   const validationTranscript = job?.voiceCheck.transcript ?? "";
-  const mathPanel = narrationReviewMathPanel(selectedPreparedSource);
-  const rulesPanel = narrationReviewRulesPanel(selectedPreparedSource, reviewBlocks, text);
   const inspectStructure =
     selectedPreparedSource || selectedBookSource
       ? () => {
@@ -12580,16 +12521,6 @@ function NarrationReviewWorkbench({
           }}
         />
       </Suspense>
-
-      {contextInspectorDensity === "hidden" ? null : (
-        <ReviewContextPanels
-          mathPanel={mathPanel}
-          projectId={projectId}
-          rulesPanel={rulesPanel}
-          selectedPreparedSource={selectedPreparedSource}
-          voiceProfileId={voiceProfileId}
-        />
-      )}
     </Panel>
   );
 }
@@ -12887,34 +12818,6 @@ function narrationReviewRulesPanel(
     );
   }
   return <NarrationDraftRulesPanel blocks={reviewBlocks} text={text} />;
-}
-
-function ReviewContextPanels({
-  mathPanel,
-  projectId,
-  rulesPanel,
-  selectedPreparedSource,
-  voiceProfileId,
-}: Readonly<{
-  mathPanel: ReactNode;
-  projectId: string;
-  rulesPanel: ReactNode;
-  selectedPreparedSource: PreparedSource | null;
-  voiceProfileId: string;
-}>) {
-  return (
-    <Suspense
-      fallback={<LazySurfaceFallback label="Loading context..." surface="review-context-panel" />}
-    >
-      <LazyReviewContextPanel
-        mathPanel={mathPanel}
-        projectId={projectId}
-        rulesPanel={rulesPanel}
-        selectedPreparedSource={selectedPreparedSource}
-        voiceProfileId={voiceProfileId}
-      />
-    </Suspense>
-  );
 }
 
 function NarrationReviewEmptyState({ detail, title }: Readonly<{ detail: string; title: string }>) {
@@ -13221,109 +13124,6 @@ function PlaybackControllerHost({
         onPlaybackStateChange={onPlaybackStateChange}
         onResumeProgress={onResumeProgress}
       />
-    </div>
-  );
-}
-
-function AudioPanel({
-  canOpenCinema,
-  job,
-  latestProgress,
-  onOpenCinema,
-  playbackCursorSec,
-  onResumeProgress,
-}: Readonly<{
-  canOpenCinema: boolean;
-  job: VoiceJob | null;
-  latestProgress: PlaybackProgress | null;
-  onOpenCinema: () => void;
-  playbackCursorSec: number;
-  onResumeProgress: (progress: PlaybackProgress) => void;
-}>) {
-  if (!job) {
-    return (
-      <Panel className="p-3 shadow-sm" variant="raised">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">Audio Diagnostics</h2>
-          <Button disabled={!canOpenCinema} onClick={onOpenCinema} size="sm" variant="secondary">
-            Cinema
-          </Button>
-        </div>
-        <div className="mt-3 grid min-h-32 place-items-center rounded-md border border-dashed px-4 py-5 text-center vs-border">
-          <div>
-            <p className="text-sm font-semibold">No audio generated yet</p>
-            <p className="vs-muted mt-2 text-xs">
-              Choose a run mode, then create audio to start buffering playback.
-            </p>
-            {latestProgress ? (
-              <Button
-                className="mt-4"
-                onClick={() => {
-                  onResumeProgress(latestProgress);
-                }}
-                size="sm"
-                variant="soft"
-              >
-                Continue Listening · {formatPercentage(latestProgress.progress)}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </Panel>
-    );
-  }
-
-  const currentMode = job.status === "completed" ? "Completed" : "Arrival";
-
-  return (
-    <section
-      className="min-w-0 overflow-hidden rounded-lg border p-3 shadow-sm vs-raised"
-      data-testid="audio-diagnostics-panel"
-    >
-      <div className="grid gap-2.5">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold">Audio Diagnostics</h2>
-            <p className="vs-muted mt-1 truncate text-xs">
-              {job.voice ? kokoroVoicepackLabel(job.voice) : job.provider || "tts"} ·{" "}
-              {formatDuration(job.durationMs)}
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 rounded-md border bg-[var(--vs-surface)] p-2 text-xs vs-border">
-          <AudioDiagnosticFact label="Mode" value={currentMode} />
-          <AudioDiagnosticFact
-            label="Cursor"
-            value={formatPlaybackClockSeconds(playbackCursorSec)}
-          />
-          <AudioDiagnosticFact label="Duration" value={formatDuration(job.durationMs)} />
-        </div>
-        <Button
-          data-testid="ui-action-audio-diagnostics-open-cinema"
-          disabled={!canOpenCinema}
-          disabledReason={canOpenCinema ? undefined : "Create audio before opening Cinema."}
-          onClick={onOpenCinema}
-          size="sm"
-          variant="secondary"
-        >
-          Cinema
-        </Button>
-        {latestProgress ? (
-          <AudioResumeAction progress={latestProgress} onResumeProgress={onResumeProgress} />
-        ) : null}
-      </div>
-      <QueueBufferPanel currentTimeSec={playbackCursorSec} job={job} />
-    </section>
-  );
-}
-
-function AudioDiagnosticFact({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="min-w-0">
-      <p className="font-semibold uppercase tracking-[0.14em] vs-muted">{label}</p>
-      <p className="mt-1 truncate font-semibold text-[var(--vs-text)]" title={value}>
-        {value}
-      </p>
     </div>
   );
 }
