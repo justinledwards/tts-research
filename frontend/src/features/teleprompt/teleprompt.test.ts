@@ -6,9 +6,13 @@ import {
   telepromptPresetHighlightSettings,
 } from "./telepromptPresets";
 import {
+  DEFAULT_TELEPROMPT_THEATRE_SETTINGS,
   applyTelepromptTheatrePreset,
   normalizeTelepromptTheatreSettings,
 } from "./telepromptTheatreSettings";
+import { DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS } from "../../teleprompter";
+import { TelepromptStudio, type TelepromptStudioProps } from "./TelepromptStudio";
+import { buildTelepromptWorkModeModel } from "./telepromptStudioModel";
 import {
   clearTelepromptReturnMemory,
   normalizeTelepromptReturnTarget,
@@ -66,6 +70,83 @@ describe("teleprompt toolbar model", () => {
     expect(resolveTelepromptBlockIndex(blocks, "b")).toBe(1);
     expect(adjacentTelepromptBlockId(blocks, "b", 1)).toBe("c");
     expect(adjacentTelepromptBlockId(blocks, "a", -1)).toBe("a");
+  });
+});
+
+describe("teleprompt studio work modes", () => {
+  it("maps work modes onto cue-sync primitives", () => {
+    expect(
+      buildTelepromptWorkModeModel({
+        mode: "rehearsal",
+        playbackAvailable: false,
+        playbackPlaying: false,
+      }),
+    ).toMatchObject({
+      disabledReason: undefined,
+      label: "Rehearsal",
+      syncMode: "manual",
+      tone: "neutral",
+    });
+    expect(
+      buildTelepromptWorkModeModel({
+        mode: "recording",
+        playbackAvailable: false,
+        playbackPlaying: false,
+      }),
+    ).toMatchObject({
+      disabledReason: undefined,
+      label: "Recording",
+      syncMode: "manual",
+      tone: "danger",
+    });
+    expect(
+      buildTelepromptWorkModeModel({
+        mode: "audio-follow",
+        playbackAvailable: true,
+        playbackPlaying: false,
+      }),
+    ).toMatchObject({
+      detail: "Generated audio is ready. Play to follow cues automatically.",
+      label: "Audio-follow",
+      syncMode: "audio-follow",
+      tone: "info",
+    });
+  });
+
+  it("explains audio-dependent modes when generated audio is missing", () => {
+    const audioFollow = buildTelepromptWorkModeModel({
+      mode: "audio-follow",
+      playbackAvailable: false,
+      playbackPlaying: false,
+    });
+    const reviewPlayback = buildTelepromptWorkModeModel({
+      mode: "review-playback",
+      playbackAvailable: false,
+      playbackPlaying: false,
+    });
+
+    expect(audioFollow.disabledReason).toContain("Generated audio is missing");
+    expect(audioFollow.tone).toBe("warning");
+    expect(audioFollow.dataAttributes["data-teleprompt-work-mode"]).toBe("audio-follow");
+    expect(reviewPlayback.disabledReason).toContain("Generated audio is missing");
+    expect(reviewPlayback.syncMode).toBe("review-playback");
+  });
+});
+
+describe("teleprompt studio cue-first render", () => {
+  it("renders one Theatre entry, a dominant current cue, and drawer context", () => {
+    const markup = renderToStaticMarkup(createElement(TelepromptStudio, studioProps()));
+
+    expect(markup).toContain('data-testid="teleprompt-current-cue-stage"');
+    expect(markup).toContain('data-testid="teleprompt-current-cue"');
+    expect(markup).toContain('data-teleprompt-work-mode="audio-follow"');
+    expect(markup).toContain('data-testid="ui-action-teleprompt-cue-drawer"');
+    expect(markup).toContain('data-testid="ui-action-teleprompt-back-review"');
+    expect(markup).toContain('data-testid="teleprompt-script-scroll"');
+    expect(markup).toContain("Previous block");
+    expect(markup).toContain("Next block");
+    expect(markup.match(/ui-action-teleprompt-enter-theatre/g)).toHaveLength(1);
+    expect(markup).not.toContain("ui-action-teleprompt-workflow-theatre");
   });
 });
 
@@ -380,6 +461,53 @@ describe("teleprompt presets and return memory", () => {
     vi.unstubAllGlobals();
   });
 });
+
+function studioProps(overrides: Partial<TelepromptStudioProps> = {}): TelepromptStudioProps {
+  const studioBlocks = [
+    block({ id: "a", index: 1, label: "Opening", spokenText: "One two three." }),
+    block({ id: "b", index: 2, label: "Middle", spokenText: "Four five." }),
+    block({ id: "c", index: 3, label: "Close", spokenText: "Six." }),
+  ];
+  return {
+    activeBlockId: "b",
+    blocks: studioBlocks,
+    canCreate: true,
+    canOpenCinema: true,
+    contextInspectorDensity: "summary",
+    isPlaybackActive: false,
+    job: null,
+    playbackControls: {
+      isAvailable: true,
+      isPlaying: false,
+      pause: () => null,
+      play: vi.fn(),
+      playbackRate: 1,
+      restart: vi.fn(),
+      setPlaybackRate: () => null,
+    },
+    playbackCursorSec: 0,
+    policyProfile: "Technical",
+    projectId: "project-1",
+    rememberReturnMemory: false,
+    returnStage: "preview",
+    scopeLabel: "Chapter One",
+    settings: DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS,
+    sourceId: "source-1",
+    sourceLabel: "Demo Source",
+    sourceMeta: "3 blocks",
+    sourceType: "book",
+    theatreSettings: DEFAULT_TELEPROMPT_THEATRE_SETTINGS,
+    theatreSettingsMemoryEnabled: true,
+    voiceProfile: "Default voice",
+    onActiveBlockChange: () => null,
+    onBackToPreview: () => null,
+    onBackToReview: () => null,
+    onCreateAndListen: () => null,
+    onOpenCinema: () => null,
+    onTheatreSettingsChange: () => null,
+    ...overrides,
+  };
+}
 
 function block(overrides: Partial<RevisionBlock>): RevisionBlock {
   return {

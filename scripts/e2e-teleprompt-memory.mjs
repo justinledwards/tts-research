@@ -197,13 +197,13 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
     await page.getByTestId("teleprompt-theatre").waitFor({ state: "detached" });
     checks.push("Escape exits Theatre while preserving inline Teleprompt state.");
 
-    const nextCue = page.getByTestId("ui-action-teleprompt-next-cue");
+    const nextCue = page.getByTestId("ui-action-teleprompt-local-next-cue");
     if (await nextCue.isEnabled().catch(() => false)) {
       await nextCue.click();
       checks.push("Next cue can be selected before returning.");
     }
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
-    await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
+    await page.getByTestId("ui-action-teleprompt-cue-drawer").click();
     await page.getByTestId("ui-action-teleprompt-back-preview").click();
     await page.getByText("Spoken Form").first().waitFor();
     checks.push("Back to Preview returns to the Preview surface.");
@@ -264,7 +264,7 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
 
     await page.getByTestId("workspace-stage-action-openTeleprompt").click();
     await page.getByTestId("teleprompt-studio").waitFor();
-    await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
+    await page.getByTestId("ui-action-teleprompt-cue-drawer").click();
     await page.getByTestId("ui-action-teleprompt-back-review").click();
     await page.getByText("Revision Panel").first().waitFor();
     await capture("teleprompt-back-review");
@@ -376,9 +376,21 @@ async function closeWorkspaceLayoutMenu(page) {
 }
 
 async function openPreview(page) {
+  const spokenForm = page.getByText("Spoken Form").first();
+  if (await spokenForm.isVisible().catch(() => false)) {
+    await spokenForm.waitFor();
+    return;
+  }
   const previewAction = page.getByTestId("workspace-stage-action-previewSpeech");
   if (await previewAction.isVisible().catch(() => false)) {
     await previewAction.click();
+  } else if (
+    await page
+      .getByTestId("workspace-stage-preview")
+      .isVisible()
+      .catch(() => false)
+  ) {
+    await page.getByTestId("workspace-stage-preview").click();
   } else {
     await page.getByRole("button", { exact: true, name: "Preview" }).click();
   }

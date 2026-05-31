@@ -1,4 +1,4 @@
-import type { CSSProperties, RefObject } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import { HighlightRenderer } from "../readalong";
 import {
   buildTelepromptWordCuesFromIndex,
@@ -12,6 +12,132 @@ import type { ReadAlongCueRole, ReadAlongTimingState, ReadAlongWordRole } from "
 import type { TelepromptCueSyncMode } from "./telepromptCueTimeline";
 import { estimateTelepromptDurationMs, countTelepromptWords } from "./telepromptToolbar";
 import type { RevisionBlock } from "../revision";
+
+export function TelepromptCurrentCueStage({
+  activeRef,
+  audioStatusLabel,
+  audioStatusTone,
+  block,
+  cuePositionLabel,
+  cueProgressPercent,
+  cueText,
+  currentWordIndex,
+  highContrast,
+  mirrorMode,
+  settings,
+  textClassName,
+  timingState = "trusted",
+  wordSpacing,
+  workModeDetail,
+  workModeLabel,
+  workModeTone,
+  workModeDataAttributes,
+}: Readonly<{
+  activeRef?: RefObject<HTMLDivElement | null>;
+  audioStatusLabel: string;
+  audioStatusTone: "success" | "warning";
+  block: RevisionBlock | null;
+  cuePositionLabel: string;
+  cueProgressPercent: number;
+  cueText: string | null;
+  currentWordIndex?: number | null;
+  highContrast: boolean;
+  mirrorMode: boolean;
+  settings: TeleprompterHighlightSettings;
+  textClassName: string;
+  timingState?: ReadAlongTimingState;
+  wordSpacing: string;
+  workModeDataAttributes: Record<string, string | undefined>;
+  workModeDetail: string;
+  workModeLabel: string;
+  workModeTone: "neutral" | "accent" | "success" | "warning" | "danger" | "info" | "pinned";
+}>) {
+  const spokenText = block ? block.spokenText || block.text : "";
+  const shouldRenderCue =
+    Boolean(block) &&
+    ((typeof currentWordIndex === "number" && currentWordIndex >= 0) ||
+      Boolean(cueText && normalizeCueText(cueText) === normalizeCueText(spokenText)));
+  let cueContent: ReactNode = "No cue is selected.";
+  if (block) {
+    cueContent = shouldRenderCue ? (
+      <TelepromptCueWords
+        cueRole="current"
+        currentWordIndex={currentWordIndex}
+        settings={settings}
+        timingState={timingState}
+        text={spokenText}
+      />
+    ) : (
+      spokenText || "No spoken text is available for this cue."
+    );
+  }
+  return (
+    <section
+      aria-label="Current teleprompt cue"
+      className={cx(
+        "grid min-h-[24rem] gap-4 rounded-lg border p-4 shadow-sm sm:p-5",
+        highContrast
+          ? "border-zinc-700 bg-zinc-950 text-white"
+          : "border-[var(--vs-selected-border)] bg-[var(--vs-surface)]",
+      )}
+      data-testid="teleprompt-current-cue-stage"
+      {...workModeDataAttributes}
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <StatusChip tone={workModeTone}>{workModeLabel}</StatusChip>
+          <StatusChip tone={audioStatusTone}>{audioStatusLabel}</StatusChip>
+          <span
+            className={cx("text-xs font-semibold", highContrast ? "text-zinc-300" : "vs-muted")}
+          >
+            {cuePositionLabel}
+          </span>
+        </div>
+        <span className={cx("text-xs font-semibold", highContrast ? "text-zinc-300" : "vs-muted")}>
+          {cueProgressPercent.toString()}% script
+        </span>
+      </div>
+      <div className="grid gap-1">
+        <div
+          className={cx(
+            "h-2 overflow-hidden rounded-full",
+            highContrast ? "bg-white/15" : "bg-[var(--vs-border)]",
+          )}
+        >
+          <div
+            className={cx("h-full rounded-full", highContrast ? "bg-orange-300" : "bg-orange-500")}
+            style={{ width: `${cueProgressPercent.toString()}%` }}
+          />
+        </div>
+        <p className={cx("text-xs leading-5", highContrast ? "text-zinc-300" : "vs-muted")}>
+          {workModeDetail}
+        </p>
+      </div>
+      <div
+        className="grid min-h-0 flex-1 place-items-center rounded-md p-3 sm:p-5"
+        data-readalong-cue-role={block ? "current" : "unavailable"}
+        data-readalong-timing-state={timingState}
+        data-testid="teleprompt-current-cue"
+        ref={activeRef}
+        {...readingSurfaceDataAttributes({ active: Boolean(block), kind: "cue" })}
+        style={{
+          transform: mirrorMode ? "scaleX(-1)" : undefined,
+          wordSpacing,
+        }}
+      >
+        <p
+          className={cx(
+            "max-w-5xl whitespace-pre-wrap text-center",
+            readingSurfaceClassName("cue"),
+            textClassName,
+          )}
+        >
+          {cueContent}
+        </p>
+      </div>
+    </section>
+  );
+}
 
 export function TelepromptScriptBlock({
   activeRef,

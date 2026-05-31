@@ -224,10 +224,10 @@ export const STATIC_UI_ACTION_METADATA = [
     "menu-or-panel-opened",
   ),
   action(
-    "teleprompt-workflow-theatre",
-    "Open Theatre",
+    "teleprompt-cue-drawer",
+    "Inspector and cue list",
     "Teleprompt",
-    "navigation",
+    "settings",
     "menu-or-panel-opened",
   ),
   action("teleprompt-exit-theatre", "Exit theatre", "Teleprompt", "navigation", "state-changed"),

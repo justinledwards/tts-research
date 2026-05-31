@@ -68,6 +68,12 @@ export {
   type TelepromptTheatreViewMode,
 } from "./telepromptTheatreState";
 export {
+  TELEPROMPT_WORK_MODES,
+  buildTelepromptWorkModeModel,
+  type TelepromptWorkMode,
+  type TelepromptWorkModeModel,
+} from "./telepromptStudioModel";
+export {
   TELEPROMPT_SHORTCUTS,
   adjacentTelepromptBlockId,
   countTelepromptWords,

@@ -1214,10 +1214,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await capture("workspace-stage-04-preview-after");
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Studio").first().waitFor();
-    await page
-      .getByText(/Current block|Cue 1/i)
-      .first()
-      .waitFor();
+    await page.getByTestId("teleprompt-current-cue-stage").first().waitFor();
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
     await page.getByTestId("ui-action-teleprompt-mirror").check();
     await page.getByTestId("ui-action-teleprompt-preset-highContrast").click();
@@ -1226,7 +1223,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
       .first()
       .waitFor();
     await capture("workspace-stage-05-teleprompt-after");
-    await page.getByTestId("ui-action-teleprompt-workflow-menu").click();
+    await page.getByTestId("ui-action-teleprompt-cue-drawer").click();
     await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
     await page.getByText("Spoken Form").first().waitFor();
     await capture("workspace-stage-06-back-preview-after");

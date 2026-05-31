@@ -1,3 +1,14 @@
+## 2026-05-31 21:37 CEST - Cue-First Teleprompt Studio
+- [x] Add studio work-mode model and tests
+- [x] Rework Teleprompt layout around the current cue
+- [x] Move workflow and cue list context into inspector/drawer
+- [x] Update Teleprompt e2e selectors
+- [x] Run frontend typecheck and tests
+- [x] Run Teleprompt memory e2e
+- [ ] Resolve ui-actions quick fixture blocker
+- [x] Run project checks
+- [x] Commit work package
+
 ## 2026-05-31 20:01 CEST - Guided Intake Simplification
 - [x] Inspect current intake UI, helper model, and tests
 - [x] Refactor intake source candidate and readiness model

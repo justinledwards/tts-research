@@ -3300,7 +3300,7 @@ export function App() {
     contentMode === "theatre" && !inspectorSummonedInTheatre ? "collapsed" : rightRailMode;
   const workspaceInspectorDisplayVisible = displayRightRailMode !== "collapsed";
   const telepromptTheatreStageOpenSignal = theatreOpenSignalForWorkbenchStage({
-    blocker: Boolean(activeWorkbenchStageStatus.blocker),
+    blockerId: activeWorkbenchStageStatus.blocker?.id ?? null,
     signal: telepromptTheatreOpenSignal,
     stage: contentMode,
   });
@@ -9344,14 +9344,14 @@ function hasWorkbenchNarrationSource({
 }
 
 function theatreOpenSignalForWorkbenchStage({
-  blocker,
+  blockerId,
   signal,
   stage,
-}: Readonly<{ blocker: boolean; signal: number; stage: WorkspaceStage }>): number {
+}: Readonly<{ blockerId: string | null; signal: number; stage: WorkspaceStage }>): number {
   if (stage !== "theatre") {
     return signal;
   }
-  if (blocker) {
+  if (blockerId && blockerId !== "audioMissing" && blockerId !== "audioStale") {
     return 0;
   }
   return Math.max(1, signal);

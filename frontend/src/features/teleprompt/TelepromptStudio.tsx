@@ -63,7 +63,6 @@ import {
   type TelepromptTheatreMode,
   type TelepromptTheatreViewMode,
 } from "./telepromptTheatreState";
-import { TelepromptCueSync } from "./TelepromptCueSync";
 import {
   buildTelepromptCueTimeline,
   resolveTelepromptCueSync,
@@ -71,13 +70,17 @@ import {
   type TelepromptCueSyncMode,
 } from "./telepromptCueTimeline";
 import {
-  TelepromptMetric,
+  TelepromptCurrentCueStage,
   TelepromptScriptBlock,
   TelepromptBlockPreview,
   telepromptCueLiveLabel,
-  cueSyncModeLabel,
 } from "./telepromptStudioComponents";
 import { buildTelepromptContextTabs } from "./telepromptStudioHelpers";
+import {
+  buildTelepromptWorkModeModel,
+  TELEPROMPT_WORK_MODES,
+  type TelepromptWorkMode,
+} from "./telepromptStudioModel";
 import {
   adjacentTelepromptBlockId,
   countTelepromptWords,
@@ -227,13 +230,15 @@ export function TelepromptStudio({
   const [nativeFullscreenActive, setNativeFullscreenActive] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Teleprompt Studio ready.");
   const { announcePolite } = useLiveStatus();
-  const [workflowMenuOpen, setWorkflowMenuOpen] = useState(false);
+  const [cueDrawerOpen, setCueDrawerOpen] = useState(false);
+  const [workMode, setWorkMode] = useState<TelepromptWorkMode>("audio-follow");
   const [cueSyncMode, setCueSyncMode] = useState<TelepromptCueSyncMode>("audio-follow");
   const scriptScrollerRef = useRef<HTMLDivElement | null>(null);
   const activeBlockElementRef = useRef<HTMLDivElement | null>(null);
   const theatreRootRef = useRef<HTMLDivElement | null>(null);
   const theatreOpenSignalRef = useRef(0);
   const theatreReturnFocusRef = useRef<HTMLElement | null>(null);
+  const theatreUsesWorkspaceStageRef = useRef(false);
   const restoredMemoryRef = useRef(false);
   const sourceKey = useMemo(
     () => telepromptSourceKey({ scopeLabel, sourceId, sourceLabel, sourceType }),
@@ -324,6 +329,47 @@ export function TelepromptStudio({
     ? Math.round(cueSync.activeCue.cueProgress * 100)
     : Math.round((cue?.segmentProgress ?? 0) * 100);
   const waveformBars = useAudioWaveformBars(job ? audioSource(job, { partial: true }) : "", 56);
+  const workModeModel = useMemo(
+    () =>
+      buildTelepromptWorkModeModel({
+        audioProgressPercent,
+        mode: workMode,
+        playbackAvailable: playbackControls.isAvailable,
+        playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
+      }),
+    [
+      audioProgressPercent,
+      isPlaybackActive,
+      playbackControls.isAvailable,
+      playbackControls.isPlaying,
+      workMode,
+    ],
+  );
+  const workModeOptions = useMemo(
+    () =>
+      TELEPROMPT_WORK_MODES.map((mode) => {
+        const optionModel = buildTelepromptWorkModeModel({
+          audioProgressPercent,
+          mode,
+          playbackAvailable: playbackControls.isAvailable,
+          playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
+        });
+        return {
+          disabled: Boolean(optionModel.disabledReason && mode !== workMode),
+          disabledReason: optionModel.disabledReason,
+          label: optionModel.label,
+          testId: `ui-action-teleprompt-work-mode-${mode}`,
+          value: mode,
+        };
+      }),
+    [
+      audioProgressPercent,
+      isPlaybackActive,
+      playbackControls.isAvailable,
+      playbackControls.isPlaying,
+      workMode,
+    ],
+  );
   const activeCueCurrentSourceWordId: string | null =
     typeof cueSync.activeCue?.currentSourceWordId === "string"
       ? cueSync.activeCue.currentSourceWordId
@@ -467,14 +513,18 @@ export function TelepromptStudio({
   }, [announcePolite, persistSnapshot, returnTarget]);
 
   const openTheatre = useCallback(() => {
-    if (onOpenTheatreStage) {
+    if (onOpenTheatreStage && playbackControls.isAvailable) {
+      theatreUsesWorkspaceStageRef.current = true;
       onOpenTheatreStage();
       return;
     }
+    theatreUsesWorkspaceStageRef.current = false;
     activateTheatre();
-  }, [activateTheatre, onOpenTheatreStage]);
+  }, [activateTheatre, onOpenTheatreStage, playbackControls.isAvailable]);
 
   const handleExitTheatre = useCallback(() => {
+    const shouldExitWorkspaceStage = theatreUsesWorkspaceStageRef.current;
+    theatreUsesWorkspaceStageRef.current = false;
     void exitTelepromptFullscreen();
     setNativeFullscreenActive(false);
     setCountdownRemaining(null);
@@ -485,7 +535,9 @@ export function TelepromptStudio({
       theatreReturnFocusRef.current?.focus();
       theatreReturnFocusRef.current = null;
     });
-    onExitTheatreStage?.();
+    if (shouldExitWorkspaceStage) {
+      onExitTheatreStage?.();
+    }
   }, [announcePolite, onExitTheatreStage]);
 
   const handleRequestNativeFullscreen = useCallback(() => {
@@ -566,6 +618,7 @@ export function TelepromptStudio({
       return;
     }
     theatreOpenSignalRef.current = theatreOpenSignal;
+    theatreUsesWorkspaceStageRef.current = true;
     activateTheatre();
   }, [activateTheatre, theatreOpenSignal]);
 
@@ -592,6 +645,7 @@ export function TelepromptStudio({
 
   const moveCue = useCallback(
     (direction: -1 | 1) => {
+      setWorkMode("rehearsal");
       setCueSyncMode("manual");
       const nextId = adjacentTelepromptBlockId(blocks, activeBlock?.id ?? activeBlockId, direction);
       if (!nextId || nextId === activeBlock?.id) {
@@ -674,6 +728,7 @@ export function TelepromptStudio({
   }, [countdownRemaining, playbackControls]);
 
   const handleJumpToCurrentAudio = useCallback(() => {
+    setWorkMode("audio-follow");
     setCueSyncMode("audio-follow");
     const sourceBlockId = cueSync.activeCue?.sourceBlockId;
     if (!sourceBlockId) {
@@ -707,6 +762,30 @@ export function TelepromptStudio({
     [playbackControls],
   );
 
+  const selectWorkMode = useCallback(
+    (nextMode: TelepromptWorkMode) => {
+      const nextModel = buildTelepromptWorkModeModel({
+        audioProgressPercent,
+        mode: nextMode,
+        playbackAvailable: playbackControls.isAvailable,
+        playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
+      });
+      if (nextModel.disabledReason) {
+        setStatusMessage(nextModel.disabledReason);
+        return;
+      }
+      setWorkMode(nextMode);
+      setCueSyncMode(nextModel.syncMode);
+      setStatusMessage(`${nextModel.label} mode selected.`);
+    },
+    [
+      audioProgressPercent,
+      isPlaybackActive,
+      playbackControls.isAvailable,
+      playbackControls.isPlaying,
+    ],
+  );
+
   const handleReturn = useCallback(
     (target: TelepromptReturnTarget) => {
       persistSnapshot(target);
@@ -718,11 +797,11 @@ export function TelepromptStudio({
         announcePolite(liveStatusMessages.telepromptTheatreExited());
       }
       if (target === "preview") {
-        setWorkflowMenuOpen(false);
+        setCueDrawerOpen(false);
         onBackToPreview();
         return;
       }
-      setWorkflowMenuOpen(false);
+      setCueDrawerOpen(false);
       onBackToReview();
     },
     [announcePolite, onBackToPreview, onBackToReview, persistSnapshot, theatreMode],
@@ -741,7 +820,7 @@ export function TelepromptStudio({
     if (theatreMode !== "inline") {
       announcePolite(liveStatusMessages.telepromptTheatreExited());
     }
-    setWorkflowMenuOpen(false);
+    setCueDrawerOpen(false);
     onCreateAndListen();
   }, [announcePolite, canCreate, onCreateAndListen, persistSnapshot, returnTarget, theatreMode]);
 
@@ -766,7 +845,7 @@ export function TelepromptStudio({
     if (theatreMode !== "inline") {
       announcePolite(liveStatusMessages.telepromptTheatreExited());
     }
-    setWorkflowMenuOpen(false);
+    setCueDrawerOpen(false);
     onOpenCinema();
   }, [
     activeBlock?.id,
@@ -989,19 +1068,37 @@ export function TelepromptStudio({
     sourceMeta,
     voiceProfile,
   });
-  const showTelepromptCueSummary = contextInspectorDensity !== "hidden";
   const showTelepromptContextPanel = contextInspectorDensity === "pinned";
   const effectiveTheatreSettings = telepromptTheatreSettingsForWorkspaceLayout(
     theatreSettings,
     contextInspectorDensity,
   );
+  const cuePositionLabel = activeBlock
+    ? `Cue ${activeBlock.index.toString()} of ${Math.max(1, blocks.length).toString()}`
+    : "No cue selected";
+  const audioPlaying = playbackControls.isPlaying || isPlaybackActive;
+  let audioStatusLabel = "Audio missing";
+  if (playbackControls.isAvailable) {
+    audioStatusLabel = audioPlaying ? "Audio playing" : "Audio ready";
+  }
+  const audioStatusTone = playbackControls.isAvailable ? "success" : "warning";
 
   return (
     <>
-      <Panel className="grid gap-3 p-4" data-testid="teleprompt-studio" variant="raised">
-        <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <Panel
+        className="grid gap-3 p-4"
+        data-teleprompt-work-mode={workMode}
+        data-testid="teleprompt-studio"
+        variant="raised"
+      >
+        <section
+          className="flex min-w-0 flex-col gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border lg:flex-row lg:items-center lg:justify-between"
+          data-testid="teleprompt-source-strip"
+        >
           <HeaderContextSummary
             className="flex-1"
+            density="compact"
+            inlineSummary={false}
             metadata={[
               { label: "Policy", value: policyProfile },
               { label: "Voice", value: voiceProfile },
@@ -1013,68 +1110,48 @@ export function TelepromptStudio({
             sourceTitle={sourceLabel}
             stateLabel="Teleprompt"
             surfaceName="Teleprompt Studio"
+            variant="bar"
           />
-          <div className="grid gap-2 text-xs sm:grid-cols-3 lg:min-w-[24rem]">
-            <TelepromptMetric label="Words" value={totalWords.toLocaleString()} />
-            <TelepromptMetric
-              label="Estimate"
-              value={formatTelepromptDuration(estimatedDurationMs)}
-            />
-            <TelepromptMetric
-              label="Active cue"
-              value={
-                activeBlock
-                  ? `${String(activeBlock.index)} / ${String(Math.max(1, blocks.length))}`
-                  : "0 / 0"
-              }
-            />
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <StatusChip tone="neutral">{totalWords.toLocaleString()} words</StatusChip>
+            <StatusChip tone="neutral">{formatTelepromptDuration(estimatedDurationMs)}</StatusChip>
+            <StatusChip tone="pinned">{cuePositionLabel}</StatusChip>
           </div>
-        </div>
+        </section>
 
-        <div className="sticky top-3 z-10 grid gap-3">
-          <LocalizedPlaybackToolbar model={telepromptPlaybackToolbar} />
-          <div className="rounded-lg border bg-[var(--vs-surface)] p-3 shadow-sm vs-border">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="grid min-w-0 flex-1 gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusChip
-                    tone={playbackControls.isPlaying || isPlaybackActive ? "success" : "neutral"}
-                  >
-                    {playbackStatusLabel}
-                  </StatusChip>
-                  <StatusChip tone={playbackControls.isAvailable ? "success" : "warning"}>
-                    {playbackControls.isAvailable ? "Preview ready" : "Audio not generated"}
-                  </StatusChip>
-                  <span className="text-xs font-semibold vs-muted">
-                    Cue {activeBlock ? activeBlock.index.toString() : "0"} of{" "}
-                    {Math.max(1, blocks.length).toString()}
-                  </span>
-                </div>
-                <div className="grid gap-1">
-                  <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-border)]">
-                    <div
-                      className="h-full rounded-full bg-orange-500"
-                      style={{ width: `${cueProgressPercent.toString()}%` }}
-                    />
-                  </div>
-                  <p className="text-xs vs-muted">
-                    Script progress {cueProgressPercent.toString()}%
-                    {playbackControls.isAvailable
-                      ? ` · audio segment ${audioProgressPercent.toString()}%`
-                      : ""}
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
+          <TelepromptCurrentCueStage
+            activeRef={activeBlockElementRef}
+            audioStatusLabel={audioStatusLabel}
+            audioStatusTone={audioStatusTone}
+            block={activeBlock}
+            cuePositionLabel={cuePositionLabel}
+            cueProgressPercent={cueProgressPercent}
+            cueText={cue?.currentText ?? null}
+            currentWordIndex={cueSync.activeCue?.currentWordIndex ?? null}
+            highContrast={presetId === "highContrast"}
+            mirrorMode={theatreSettings.mirrorMode}
+            settings={effectiveSettings}
+            textClassName={telepromptStageTextClassName(presetId)}
+            timingState={activeCueTimingState}
+            wordSpacing={preset.wordSpacing}
+            workModeDataAttributes={workModeModel.dataAttributes}
+            workModeDetail={workModeModel.detail}
+            workModeLabel={workModeModel.label}
+            workModeTone={workModeModel.tone}
+          />
+          <aside className="sticky top-3 z-10 grid gap-3 self-start">
+            <LocalizedPlaybackToolbar
+              model={{ ...telepromptPlaybackToolbar, variant: "compact" }}
+            />
+            <div className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 shadow-sm vs-border">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+                    Performance
                   </p>
+                  <p className="mt-1 text-xs font-semibold">{workModeModel.label}</p>
                 </div>
-                <TelepromptCueSync
-                  mode={cueSyncMode}
-                  playbackAvailable={playbackControls.isAvailable}
-                  sync={cueSync}
-                  onModeChange={(nextMode) => {
-                    setCueSyncMode(nextMode);
-                    setStatusMessage(`${cueSyncModeLabel(nextMode)} selected.`);
-                  }}
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <Button
                   data-testid="ui-action-teleprompt-enter-theatre"
                   onClick={openTheatre}
@@ -1083,105 +1160,17 @@ export function TelepromptStudio({
                 >
                   Enter Theatre
                 </Button>
-                <details
-                  className="relative lg:justify-self-end"
-                  open={workflowMenuOpen}
-                  onToggle={(event) => {
-                    setWorkflowMenuOpen(event.currentTarget.open);
-                  }}
-                >
-                  <summary
-                    className="flex min-h-10 cursor-pointer list-none items-center justify-center rounded-md border px-3 text-sm font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-raised [&::-webkit-details-marker]:hidden"
-                    data-testid="ui-action-teleprompt-workflow-menu"
-                  >
-                    Workflow
-                  </summary>
-                  <div className="mt-2 grid gap-2 rounded-md border bg-[var(--vs-raised)] p-2 shadow-xl vs-border lg:absolute lg:right-0 lg:w-52">
-                    <Button
-                      data-testid="ui-action-teleprompt-workflow-theatre"
-                      onClick={() => {
-                        setWorkflowMenuOpen(false);
-                        openTheatre();
-                      }}
-                      size="sm"
-                      variant="primary"
-                    >
-                      Open Theatre
-                    </Button>
-                    <Button
-                      data-testid="ui-action-teleprompt-back-review"
-                      onClick={() => {
-                        handleReturn("review");
-                      }}
-                      size="sm"
-                      variant={returnTarget === "review" ? "pinned" : "secondary"}
-                    >
-                      Back to Review
-                    </Button>
-                    <Button
-                      data-testid="ui-action-teleprompt-back-preview"
-                      onClick={() => {
-                        handleReturn("preview");
-                      }}
-                      size="sm"
-                      variant={returnTarget === "preview" ? "pinned" : "secondary"}
-                    >
-                      Back to Preview
-                    </Button>
-                    <Button
-                      {...playbackActionDataAttributes("openCinema", playbackLifecycle)}
-                      data-testid={workspaceStageActionTestId("openCinema")}
-                      disabled={!canOpenCinema}
-                      disabledReason={openCinemaDisabledReason}
-                      onClick={handleOpenCinema}
-                      size="sm"
-                      variant={telepromptSecondaryActionVariant("open-cinema")}
-                    >
-                      {workspaceStageActionLabel("openCinema")}
-                    </Button>
-                    <Button
-                      {...playbackActionDataAttributes("createAndListen", playbackLifecycle)}
-                      {...providerCapabilityDataAttributes("tts", createAndListenCapabilityReason)}
-                      aria-label={playbackActionAriaLabel("createAndListen", {
-                        createScope: "current-scope",
-                      })}
-                      data-testid={workspaceStageActionTestId("createAndListen")}
-                      disabled={!canCreate}
-                      disabledReason={createAndListenDisabledReason}
-                      onClick={handleCreateAndListen}
-                      size="sm"
-                      variant={telepromptSecondaryActionVariant("create-and-listen")}
-                    >
-                      {workspaceStageActionLabel("createAndListen")}
-                    </Button>
-                  </div>
-                </details>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          className={
-            showTelepromptCueSummary
-              ? "grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]"
-              : "grid gap-3"
-          }
-        >
-          <section className="grid min-w-0 gap-3">
-            <div className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
-                  Presentation settings
-                </p>
-                <p className="mt-1 text-xs leading-5 vs-muted">
-                  Adjust the recording display without exposing timing internals.
-                </p>
-              </div>
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <SegmentedControl
+                ariaLabel="Teleprompt work mode"
+                columns={4}
+                options={workModeOptions}
+                value={workMode}
+                onChange={selectWorkMode}
+              />
+              <div className="grid gap-3">
                 <SegmentedControl
                   ariaLabel="Teleprompt accessibility preset"
-                  className="min-w-0 flex-1"
                   columns={2}
                   options={TELEPROMPT_PRESET_IDS.map((id) => ({
                     label: telepromptPreset(id).label,
@@ -1196,7 +1185,6 @@ export function TelepromptStudio({
                 />
                 <Toggle
                   checked={theatreSettings.mirrorMode}
-                  className="sm:min-w-48"
                   data-testid="ui-action-teleprompt-mirror"
                   detail="Flip the script for mirrored recording rigs."
                   label="Mirror mode"
@@ -1211,10 +1199,110 @@ export function TelepromptStudio({
                 .{` ${preset.description}`}
               </p>
             </div>
+          </aside>
+        </div>
 
+        <details
+          className="rounded-lg border bg-[var(--vs-surface)] vs-border"
+          data-testid="teleprompt-cue-drawer"
+          open={cueDrawerOpen}
+          onToggle={(event) => {
+            setCueDrawerOpen(event.currentTarget.open);
+          }}
+        >
+          <summary
+            className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold transition hover:text-orange-700 [&::-webkit-details-marker]:hidden"
+            data-testid="ui-action-teleprompt-cue-drawer"
+          >
+            <span>Inspector and cue list</span>
+            <span className="text-xs vs-muted">{cuePositionLabel}</span>
+          </summary>
+          <div className="grid gap-3 border-t p-3 vs-border xl:grid-cols-[18rem_minmax(0,1fr)]">
+            <div className="grid gap-3 self-start">
+              <section className="grid gap-2 rounded-md border bg-[var(--vs-raised)] p-3 vs-border">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+                  Workflow
+                </p>
+                <div className="grid gap-2">
+                  <Button
+                    data-testid="ui-action-teleprompt-back-review"
+                    onClick={() => {
+                      handleReturn("review");
+                    }}
+                    size="sm"
+                    variant={returnTarget === "review" ? "pinned" : "secondary"}
+                  >
+                    Back to Review
+                  </Button>
+                  <Button
+                    data-testid="ui-action-teleprompt-back-preview"
+                    onClick={() => {
+                      handleReturn("preview");
+                    }}
+                    size="sm"
+                    variant={returnTarget === "preview" ? "pinned" : "secondary"}
+                  >
+                    Back to Preview
+                  </Button>
+                  <Button
+                    {...playbackActionDataAttributes("openCinema", playbackLifecycle)}
+                    data-testid={workspaceStageActionTestId("openCinema")}
+                    disabled={!canOpenCinema}
+                    disabledReason={openCinemaDisabledReason}
+                    onClick={handleOpenCinema}
+                    size="sm"
+                    variant={telepromptSecondaryActionVariant("open-cinema")}
+                  >
+                    {workspaceStageActionLabel("openCinema")}
+                  </Button>
+                  <Button
+                    {...playbackActionDataAttributes("createAndListen", playbackLifecycle)}
+                    {...providerCapabilityDataAttributes("tts", createAndListenCapabilityReason)}
+                    aria-label={playbackActionAriaLabel("createAndListen", {
+                      createScope: "current-scope",
+                    })}
+                    data-testid={workspaceStageActionTestId("createAndListen")}
+                    disabled={!canCreate}
+                    disabledReason={createAndListenDisabledReason}
+                    onClick={handleCreateAndListen}
+                    size="sm"
+                    variant={telepromptSecondaryActionVariant("create-and-listen")}
+                  >
+                    {workspaceStageActionLabel("createAndListen")}
+                  </Button>
+                </div>
+              </section>
+              <TelepromptBlockPreview block={previousBlock} label="Previous block" />
+              <TelepromptBlockPreview
+                block={activeBlock}
+                label="Current block"
+                words={activeWords}
+              />
+              <TelepromptBlockPreview block={nextBlock} label="Next block" />
+              <section className="grid gap-2 rounded-md border bg-[var(--vs-raised)] p-3 text-xs vs-border">
+                <p className="font-semibold uppercase tracking-[0.14em] vs-muted">
+                  Cue diagnostics
+                </p>
+                <dl className="grid gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <dt className="vs-muted">Sync</dt>
+                    <dd className="font-semibold">{cueSync.statusLabel}</dd>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <dt className="vs-muted">Timing</dt>
+                    <dd className="font-semibold">{cueSync.source}</dd>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <dt className="vs-muted">Audio</dt>
+                    <dd className="font-semibold">{audioStatusLabel}</dd>
+                  </div>
+                </dl>
+                <p className="leading-5 vs-muted">{cueSync.detail}</p>
+              </section>
+            </div>
             <div
               className={cx(
-                "overflow-auto rounded-md bg-[var(--vs-surface)] p-4 sm:p-6",
+                "overflow-auto rounded-md bg-[var(--vs-surface)] p-3",
                 preset.shellClassName,
               )}
               data-testid="teleprompt-script-scroll"
@@ -1222,10 +1310,10 @@ export function TelepromptStudio({
                 persistSnapshot();
               }}
               ref={scriptScrollerRef}
-              style={{ maxHeight: "38rem" }}
+              style={{ maxHeight: "34rem" }}
             >
               <div
-                className="grid gap-5"
+                className="grid gap-4"
                 data-testid="teleprompt-script"
                 style={{
                   transform: theatreSettings.mirrorMode ? "scaleX(-1)" : undefined,
@@ -1250,10 +1338,10 @@ export function TelepromptStudio({
                     highContrast={presetId === "highContrast"}
                     key={block.id}
                     presetClassName={preset.scriptClassName}
-                    activeRef={block.id === activeBlock?.id ? activeBlockElementRef : undefined}
                     settings={effectiveSettings}
                     timingState={block.id === activeBlock?.id ? activeCueTimingState : "trusted"}
                     onSelect={() => {
+                      setWorkMode("rehearsal");
                       setCueSyncMode("manual");
                       onActiveBlockChange(block.id);
                       persistSnapshot(returnTarget, block.id);
@@ -1266,22 +1354,8 @@ export function TelepromptStudio({
                 ))}
               </div>
             </div>
-          </section>
-
-          {showTelepromptCueSummary ? (
-            <aside className="grid gap-3">
-              <TelepromptBlockPreview
-                block={activeBlock}
-                label="Current block"
-                words={activeWords}
-              />
-              <TelepromptBlockPreview block={nextBlock} label="Next block" />
-              {showTelepromptContextPanel ? (
-                <TelepromptBlockPreview block={previousBlock} label="Previous block" />
-              ) : null}
-            </aside>
-          ) : null}
-        </div>
+          </div>
+        </details>
 
         <output
           aria-live="polite"
@@ -1372,6 +1446,23 @@ export function TelepromptStudio({
       )}
     </>
   );
+}
+
+function telepromptStageTextClassName(presetId: TelepromptPresetId): string {
+  switch (presetId) {
+    case "dyslexicFriendly": {
+      return "text-3xl leading-[1.7] sm:text-4xl";
+    }
+    case "highContrast": {
+      return "text-3xl leading-[1.5] sm:text-4xl";
+    }
+    case "largeText": {
+      return "text-4xl leading-[1.35] sm:text-5xl";
+    }
+    case "standard": {
+      return "text-3xl leading-[1.5] sm:text-4xl";
+    }
+  }
 }
 
 function telepromptCueRoleForBlock({
