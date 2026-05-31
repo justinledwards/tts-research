@@ -7,6 +7,13 @@ import {
   readAlongPreferenceDataAttributes,
   readAlongVisualModeFromPreferences,
 } from "./readAlongPreferences";
+import {
+  applyReadAlongHighlightPreset,
+  readAlongHighlightPresetMatches,
+  readAlongShouldShowTimingUncertainty,
+  readAlongTimingStateFromRuntime,
+  readAlongWordRoleForIndex,
+} from "./highlightSemantics";
 
 describe("read-along preferences", () => {
   it("normalizes unknown preference values and clamps calibration offsets", () => {
@@ -87,5 +94,50 @@ describe("read-along preferences", () => {
       "data-readalong-highlight-style": "outline",
       "data-readalong-scroll-follow": "centerCurrentLine",
     });
+  });
+
+  it("applies semantic highlight presets without losing calibration scope", () => {
+    const preferences = applyReadAlongHighlightPreset("theatre", {
+      ...DEFAULT_READ_ALONG_PREFERENCES,
+      globalHighlightOffsetMs: 120,
+      providerOffsetsMs: { mock: -40 },
+      scope: "project",
+    });
+
+    expect(preferences.highlightGranularity).toBe("word");
+    expect(preferences.highlightStyle).toBe("outline");
+    expect(preferences.scrollFollow).toBe("telepromptContinuous");
+    expect(preferences.scope).toBe("project");
+    expect(preferences.providerOffsetsMs.mock).toBe(-40);
+    expect(readAlongHighlightPresetMatches("theatre", preferences)).toBe(true);
+  });
+
+  it("resolves word roles and contextual timing uncertainty", () => {
+    expect(
+      readAlongWordRoleForIndex({
+        active: false,
+        activeWordIndex: 8,
+        cueRole: "current",
+        phrase: false,
+        wordIndex: 7,
+      }),
+    ).toBe("recent");
+    expect(
+      readAlongWordRoleForIndex({
+        active: false,
+        activeWordIndex: 8,
+        cueRole: "next",
+        phrase: false,
+        wordIndex: 12,
+      }),
+    ).toBe("upcoming");
+    expect(
+      readAlongTimingStateFromRuntime({
+        confidence: 0.42,
+        timingSource: "provider-word",
+      }),
+    ).toBe("lowConfidence");
+    expect(readAlongShouldShowTimingUncertainty("lowConfidence")).toBe(true);
+    expect(readAlongShouldShowTimingUncertainty("trusted")).toBe(false);
   });
 });

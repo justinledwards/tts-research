@@ -104,6 +104,25 @@ export {
   type ReadAlongHighlightVisualMode,
 } from "./highlightVisualModes";
 export {
+  READ_ALONG_HIGHLIGHT_PRESET_IDS,
+  READ_ALONG_HIGHLIGHT_PRESETS,
+  applyReadAlongHighlightPreset,
+  readAlongHighlightPreset,
+  readAlongHighlightPresetMatches,
+  readAlongSemanticCueClassName,
+  readAlongSemanticDataAttributes,
+  readAlongSemanticWordClassName,
+  readAlongShouldShowTimingUncertainty,
+  readAlongTimingStateFromRuntime,
+  readAlongWordRoleForIndex,
+  type ReadAlongCueRole,
+  type ReadAlongHighlightPreset,
+  type ReadAlongHighlightPresetId,
+  type ReadAlongTimingState,
+  type ReadAlongWordRole,
+  type ReadAlongWordRoleInput,
+} from "./highlightSemantics";
+export {
   DEFAULT_READ_ALONG_PREFERENCES,
   GOLDEN_MINUTE_HIGHLIGHT_PREVIEW_TEXT,
   READ_ALONG_DEGRADED_SYNC_DISPLAY_OPTIONS,

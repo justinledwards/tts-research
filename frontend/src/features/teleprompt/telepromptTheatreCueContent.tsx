@@ -6,7 +6,7 @@ import {
   type TeleprompterHighlightSettings,
   type TeleprompterToken,
 } from "../../teleprompter";
-import { HighlightRenderer } from "../readalong";
+import { HighlightRenderer, type ReadAlongTimingState, type ReadAlongWordRole } from "../readalong";
 import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
 import type { TelepromptCueWordTiming } from "./telepromptCueTimeline";
 import {
@@ -29,6 +29,7 @@ export function TelepromptTheatreCueText({
   highlightSettings,
   mirrorMode,
   previewBlocks = [],
+  timingState = "trusted",
   text,
   textClassName,
   widthClassName,
@@ -43,6 +44,7 @@ export function TelepromptTheatreCueText({
   highlightSettings: TeleprompterHighlightSettings;
   mirrorMode: boolean;
   previewBlocks?: readonly RevisionBlock[];
+  timingState?: ReadAlongTimingState;
   text: string;
   textClassName: string;
   widthClassName: string;
@@ -214,10 +216,20 @@ export function TelepromptTheatreCueText({
                     cue?.state === "active" && "teleprompt-theatre-word--active",
                   );
                 }}
+                cueRole="current"
                 dataEffect={highlightSettings.effectStyle}
                 mode="word"
                 surface="teleprompt"
+                timingState={timingState}
                 tokens={section.tokens}
+                wordRoleForWord={({ token }) => {
+                  const cue = cueByIndex.get(token.wordIndex);
+                  return telepromptTheatreReadAlongWordRole(
+                    cue?.state,
+                    token.wordIndex,
+                    currentWordIndex,
+                  );
+                }}
                 wordStyle={({ token }) => {
                   const cue = cueByIndex.get(token.wordIndex);
                   return {
@@ -249,6 +261,25 @@ function telepromptTheatreActiveRow(activeWord: HTMLElement): TelepromptTheatreC
     return null;
   }
   return { height, top };
+}
+
+function telepromptTheatreReadAlongWordRole(
+  state: string | undefined,
+  wordIndex: number,
+  currentWordIndex?: number | null,
+): ReadAlongWordRole {
+  if (state === "active") {
+    return "active";
+  }
+  if (state === "upcoming") {
+    return "upcoming";
+  }
+  if (state === "spoken") {
+    return typeof currentWordIndex === "number" && currentWordIndex - wordIndex <= 2
+      ? "recent"
+      : "spoken";
+  }
+  return "idle";
 }
 
 function usePrefersReducedMotion(): boolean {

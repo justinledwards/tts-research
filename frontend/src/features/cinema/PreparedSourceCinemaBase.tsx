@@ -49,6 +49,7 @@ import {
   readAlongPreferenceDataAttributes,
   readAlongShouldHighlightBlock,
   readAlongShouldHighlightWord,
+  readAlongTimingStateFromRuntime,
   readAlongVisualModeFromRuntime,
   resolveReadAlongRuntimeSnapshot,
   scrollReadAlongAnchor,
@@ -59,6 +60,8 @@ import {
   type ReadAlongHighlightVisualMode,
   type ReadAlongPreferences,
   type ReadAlongScrollFollow,
+  type ReadAlongCueRole,
+  type ReadAlongTimingState,
   type SyncDebugSourceLocator,
 } from "../readalong";
 import {
@@ -476,6 +479,7 @@ export function PreparedSourceCinemaOverlay({
     surface: isWebsiteCinema ? "Website Cinema" : "Document Cinema",
   });
   const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime, effectiveReadAlong);
+  const readAlongTimingState = readAlongTimingStateFromRuntime({ runtime: readAlongRuntime });
   const readAlongReport = useMemo(
     () =>
       evaluatePreparedSourceReadAlongInvariant({
@@ -981,6 +985,7 @@ export function PreparedSourceCinemaOverlay({
           highlightStyle={effectiveReadAlong.highlightStyle}
           isFullscreen={isFullscreen || cinemaTheatre.fullscreenActive}
           readAlongVisualMode={readAlongVisualMode}
+          readAlongTimingState={readAlongTimingState}
           rendererLifecycle={rendererLifecycle}
           rendererRetryKey={rendererRetryKey}
           scrollFollow={effectiveReadAlong.scrollFollow}
@@ -1487,6 +1492,7 @@ function PreparedSourceCinemaReader({
   highlightStyle,
   isFullscreen,
   readAlongVisualMode,
+  readAlongTimingState,
   rendererLifecycle,
   rendererRetryKey,
   scrollFollow,
@@ -1506,6 +1512,7 @@ function PreparedSourceCinemaReader({
   highlightStyle: ReadAlongHighlightStyle;
   isFullscreen: boolean;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
+  readAlongTimingState: ReadAlongTimingState;
   rendererLifecycle: CinemaRendererLifecycleState;
   rendererRetryKey: number;
   scrollFollow: ReadAlongScrollFollow;
@@ -1542,8 +1549,10 @@ function PreparedSourceCinemaReader({
       ? {
           blockEndOffset: activeWord.blockEndOffset,
           blockStartOffset: activeWord.blockStartOffset,
+          cueRole: "current" as const,
           nodeId: activeWord.blockId,
           sourceId: source.id,
+          timingState: readAlongTimingState,
         }
       : undefined;
   const wordHighlight =
@@ -1553,14 +1562,17 @@ function PreparedSourceCinemaReader({
           activeWordIndex,
           blockEndOffset: activeWord.blockEndOffset,
           blockStartOffset: activeWord.blockStartOffset,
+          cueRole: "current" as const,
           nodeId: activeWord.blockId,
           sourceId: source.id,
+          timingState: readAlongTimingState,
         }
       : undefined;
   let readerContent: ReactNode;
   const rendererFallback = (
     <PreparedSourceRendererLoadingFallback onLifecycleChange={onRendererLifecycleChange} />
   );
+  const activeBlockIndex = blocks.findIndex((block) => block.id === activeBlockId);
 
   if (isMarkdownDocument && source.text) {
     readerContent = (
@@ -1601,7 +1613,7 @@ function PreparedSourceCinemaReader({
             "spoken",
           )} ${textClass} text-[var(--vs-text)]`}
         >
-          {blocks.map((block) => (
+          {blocks.map((block, blockIndex) => (
             <PreparedSourceCinemaBlock
               activeWordOffset={
                 activeWord?.blockId === block.id && shouldHighlightWord
@@ -1609,10 +1621,12 @@ function PreparedSourceCinemaReader({
                   : null
               }
               block={block}
+              cueRole={preparedSourceCueRole(block, blockIndex, activeBlockIndex)}
               highlightStyle={highlightStyle}
               isActive={block.id === activeBlockId}
               key={block.id}
               readAlongVisualMode={readAlongVisualMode}
+              readAlongTimingState={block.id === activeBlockId ? readAlongTimingState : "trusted"}
               scrollFollow={scrollFollow}
               sourceId={source.id}
               surface={preparedSourceCinemaKind(source) === "website" ? "website" : "document"}
@@ -2022,18 +2036,22 @@ function PreparedSourceCinemaMobileSheet({
 function PreparedSourceCinemaBlock({
   activeWordOffset,
   block,
+  cueRole,
   highlightStyle,
   isActive,
   readAlongVisualMode,
+  readAlongTimingState,
   scrollFollow,
   sourceId,
   surface,
 }: Readonly<{
   activeWordOffset: number | null;
   block: NarrationBlock;
+  cueRole: ReadAlongCueRole;
   highlightStyle: ReadAlongHighlightStyle;
   isActive: boolean;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
+  readAlongTimingState: ReadAlongTimingState;
   scrollFollow: ReadAlongScrollFollow;
   sourceId: string;
   surface: "document" | "website";
@@ -2050,9 +2068,11 @@ function PreparedSourceCinemaBlock({
   const content = renderPreparedSourceCinemaBlockContent({
     activeWordOffset,
     block,
+    cueRole,
     highlightStyle,
     isActive,
     readAlongVisualMode,
+    readAlongTimingState,
     sourceId,
     surface,
     text,
@@ -2063,9 +2083,11 @@ function PreparedSourceCinemaBlock({
         className={`mt-0 scroll-mt-20 text-3xl font-semibold leading-tight tracking-[-0.01em] first:mt-0 sm:text-[28px] ${
           highlightActiveBlock ? "prepared-source-cinema-active" : ""
         }`}
+        data-readalong-cue-role={cueRole}
         data-readalong-node-id={block.id}
         data-readalong-scroll-follow={scrollFollow}
         data-readalong-source-id={sourceId}
+        data-readalong-timing-state={readAlongTimingState}
         id={id}
         ref={ref as React.RefObject<HTMLHeadingElement>}
       >
@@ -2079,9 +2101,11 @@ function PreparedSourceCinemaBlock({
         className={`mt-8 scroll-mt-20 text-xl font-semibold leading-snug ${
           highlightActiveBlock ? "prepared-source-cinema-active" : ""
         }`}
+        data-readalong-cue-role={cueRole}
         data-readalong-node-id={block.id}
         data-readalong-scroll-follow={scrollFollow}
         data-readalong-source-id={sourceId}
+        data-readalong-timing-state={readAlongTimingState}
         id={id}
         ref={ref as React.RefObject<HTMLHeadingElement>}
       >
@@ -2094,9 +2118,11 @@ function PreparedSourceCinemaBlock({
       className={`my-5 scroll-mt-20 transition ${
         highlightActiveBlock ? "text-[var(--vs-text)]" : ""
       } ${highlightActiveBlock ? "prepared-source-cinema-active" : ""}`}
+      data-readalong-cue-role={cueRole}
       data-readalong-node-id={block.id}
       data-readalong-scroll-follow={scrollFollow}
       data-readalong-source-id={sourceId}
+      data-readalong-timing-state={readAlongTimingState}
       id={id}
       ref={ref}
     >
@@ -2105,21 +2131,48 @@ function PreparedSourceCinemaBlock({
   );
 }
 
+function preparedSourceCueRole(
+  block: NarrationBlock,
+  blockIndex: number,
+  activeBlockIndex: number,
+): ReadAlongCueRole {
+  if (block.speakMode.trim().toLowerCase() === "skip") {
+    return "skipped";
+  }
+  if (activeBlockIndex < 0) {
+    return "unavailable";
+  }
+  if (blockIndex === activeBlockIndex) {
+    return "current";
+  }
+  if (blockIndex === activeBlockIndex + 1) {
+    return "next";
+  }
+  if (blockIndex < activeBlockIndex) {
+    return "previous";
+  }
+  return "unavailable";
+}
+
 function renderPreparedSourceCinemaBlockContent({
   activeWordOffset,
   block,
+  cueRole,
   highlightStyle,
   isActive,
   readAlongVisualMode,
+  readAlongTimingState,
   sourceId,
   surface,
   text,
 }: Readonly<{
   activeWordOffset: number | null;
   block: NarrationBlock;
+  cueRole: ReadAlongCueRole;
   highlightStyle: ReadAlongHighlightStyle;
   isActive: boolean;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
+  readAlongTimingState: ReadAlongTimingState;
   sourceId: string;
   surface: "document" | "website";
   text: string;
@@ -2149,12 +2202,15 @@ function renderPreparedSourceCinemaBlockContent({
   const words = (
     <HighlightRenderer
       activeWordIndex={activeWordOffset}
+      cueRole={cueRole}
       highlightStyle={highlightStyle}
       mode={readAlongVisualMode}
       nodeId={block.id}
       sourceId={sourceId}
       surface={surface}
       text={text}
+      timingState={readAlongTimingState}
+      wordRole={cueRole === "skipped" ? "skipped" : undefined}
     />
   );
   if (block.kind === "heading" || block.kind === "subheading") {

@@ -1,5 +1,6 @@
 import { forwardRef, useMemo } from "react";
 import type { RevisionBlock } from "../revision";
+import type { ReadAlongTimingState } from "../readalong";
 import { Button, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
 import {
   LocalizedPlaybackToolbar,
@@ -52,6 +53,7 @@ export interface TelepromptTheatreProps {
   readonly currentCueText: string | null;
   readonly currentSourceWordId?: string | null;
   readonly currentWordIndex: number | null;
+  readonly currentTimingState?: ReadAlongTimingState;
   readonly fullscreenAvailability: TelepromptFullscreenAvailability;
   readonly fullscreenActive: boolean;
   readonly mode: TelepromptTheatreMode;
@@ -118,6 +120,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       cueSyncStatusLabel,
       currentCueText,
       currentSourceWordId,
+      currentTimingState = "trusted",
       currentWordIndex,
       countdownRemaining,
       fullscreenAvailability,
@@ -498,6 +501,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
                 highlightSettings={theatreHighlightSettings}
                 mirrorMode={settings.mirrorMode}
                 previewBlocks={previewBlocks}
+                timingState={currentTimingState}
                 text={currentCue}
                 textClassName={theatreTextSizeClassName(settings.cueFontSize, presetId)}
                 widthClassName={theatreCueWidthClassName(settings.cueWidth)}

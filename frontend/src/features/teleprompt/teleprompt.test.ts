@@ -186,6 +186,10 @@ describe("teleprompt theatre model", () => {
     expect(markup).toContain("teleprompter-word--active");
     expect(markup).toContain("teleprompter-word--upcoming");
     expect(markup).toContain('data-readalong-word-index="5"');
+    expect(markup).toContain('data-readalong-word-role="recent"');
+    expect(markup).toContain('data-readalong-word-role="active"');
+    expect(markup).toContain('data-readalong-word-role="upcoming"');
+    expect(markup).toContain('data-readalong-cue-role="current"');
   });
 
   it("renders theatre active words by source identity when available", () => {

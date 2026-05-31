@@ -12,6 +12,11 @@ import {
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { documentCinemaInlineArtifactPlugin } from "./features/document-cinema/rendering/inlineArtifacts";
+import type {
+  ReadAlongCueRole,
+  ReadAlongTimingState,
+  ReadAlongWordRole,
+} from "./features/readalong";
 import { buildUiActionId } from "./features/ui-audit/actionIds";
 export { looksLikeMermaidDiagram } from "./markdownModel";
 
@@ -328,15 +333,20 @@ export interface MarkdownWordHighlight {
   activeWordIndex?: number;
   blockEndOffset: number;
   blockStartOffset: number;
+  cueRole?: ReadAlongCueRole;
   nodeId?: string;
   sourceId?: string;
+  timingState?: ReadAlongTimingState;
+  wordRole?: ReadAlongWordRole;
 }
 
 export interface MarkdownBlockHighlight {
   blockEndOffset: number;
   blockStartOffset: number;
+  cueRole?: ReadAlongCueRole;
   nodeId?: string;
   sourceId?: string;
+  timingState?: ReadAlongTimingState;
 }
 
 interface HastPositionPoint {
@@ -382,23 +392,41 @@ function markHighlightedElements(node: HastNode, highlight: MarkdownBlockHighlig
   }
   if (node.type === "element" && overlaps && !childOverlaps) {
     const properties = node.properties ?? {};
-    const className = properties.className;
-    let classes: string[] = [];
-    if (Array.isArray(className)) {
-      classes = className.map(String);
-    } else if (typeof className === "string") {
-      classes = className.split(/\s+/);
-    }
-    properties.className = [...classes, "markdown-cinema-block-active"];
-    if (highlight.nodeId) {
-      properties["data-readalong-node-id"] = highlight.nodeId;
-    }
-    if (highlight.sourceId) {
-      properties["data-readalong-source-id"] = highlight.sourceId;
-    }
+    properties.className = [
+      ...markdownClassList(properties.className),
+      "markdown-cinema-block-active",
+      highlight.cueRole ? `readalong-cue-role--${highlight.cueRole}` : "",
+      highlight.timingState ? `readalong-timing-state--${highlight.timingState}` : "",
+    ].filter(Boolean);
+    applyMarkdownHighlightProperties(properties, highlight);
     node.properties = properties;
   }
   return overlaps || childOverlaps;
+}
+
+function markdownClassList(className: unknown): string[] {
+  if (Array.isArray(className)) {
+    return className.map(String);
+  }
+  return typeof className === "string" ? className.split(/\s+/) : [];
+}
+
+function applyMarkdownHighlightProperties(
+  properties: Record<string, unknown>,
+  highlight: Pick<MarkdownWordHighlight, "cueRole" | "nodeId" | "sourceId" | "timingState">,
+) {
+  if (highlight.cueRole) {
+    properties["data-readalong-cue-role"] = highlight.cueRole;
+  }
+  if (highlight.nodeId) {
+    properties["data-readalong-node-id"] = highlight.nodeId;
+  }
+  if (highlight.sourceId) {
+    properties["data-readalong-source-id"] = highlight.sourceId;
+  }
+  if (highlight.timingState) {
+    properties["data-readalong-timing-state"] = highlight.timingState;
+  }
 }
 
 function transformChildren(
@@ -465,11 +493,15 @@ function splitHighlightedTextNode(
 }
 
 function highlightedMarkdownWordNode(word: string, highlight: MarkdownWordHighlight): HastNode {
+  const wordRole = highlight.wordRole ?? "active";
   const properties: Record<string, unknown> = {
-    className: ["markdown-cinema-word-active"],
+    className: ["markdown-cinema-word-active", `readalong-word-role--${wordRole}`],
   };
   if (highlight.activeWordIndex !== undefined) {
     properties["data-readalong-word-index"] = String(highlight.activeWordIndex);
+  }
+  if (highlight.cueRole) {
+    properties["data-readalong-cue-role"] = highlight.cueRole;
   }
   if (highlight.nodeId) {
     properties["data-readalong-node-id"] = highlight.nodeId;
@@ -477,6 +509,10 @@ function highlightedMarkdownWordNode(word: string, highlight: MarkdownWordHighli
   if (highlight.sourceId) {
     properties["data-readalong-source-id"] = highlight.sourceId;
   }
+  if (highlight.timingState) {
+    properties["data-readalong-timing-state"] = highlight.timingState;
+  }
+  properties["data-readalong-word-role"] = wordRole;
   return {
     children: [{ type: "text", value: word }],
     properties,

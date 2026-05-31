@@ -5,7 +5,11 @@ import { audioSource } from "../../api";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { Button, Panel, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
 import { ContextPanel, type ContextPanelTabId } from "../context-panel";
-import type { HighlightMapV2 } from "../readalong";
+import {
+  readAlongTimingStateFromRuntime,
+  type HighlightMapV2,
+  type ReadAlongCueRole,
+} from "../readalong";
 import { liveStatusMessages, useLiveStatus } from "../accessibility";
 import { nextReaderPlaybackRate } from "../reader-accessibility";
 import type { RevisionBlock } from "../revision";
@@ -327,6 +331,11 @@ export function TelepromptStudio({
   const activeCueCurrentWordTiming = cueSync.activeCue?.wordTimings.find(
     (word) => word.wordIndex === cueSync.activeCue?.currentWordIndex,
   );
+  const activeCueTimingState = readAlongTimingStateFromRuntime({
+    confidence: activeCueCurrentWordTiming?.confidence ?? cueSync.activeCue?.confidence ?? null,
+    timingLevel: cueSync.activeCue?.timingLevel ?? null,
+    timingSource: cueSync.activeCue?.timingSource ?? cueTimeline.source,
+  });
   const telepromptTheatreSyncDebug = useMemo(
     () => ({
       activeCueId: cueSync.activeCue?.cueId ?? "",
@@ -1223,10 +1232,17 @@ export function TelepromptStudio({
                   wordSpacing: preset.wordSpacing,
                 }}
               >
-                {blocks.map((block) => (
+                {blocks.map((block, blockIndex) => (
                   <TelepromptScriptBlock
                     active={block.id === activeBlock?.id}
                     block={block}
+                    cueRole={telepromptCueRoleForBlock({
+                      activeBlockIndex,
+                      block,
+                      blockIndex,
+                      cueSyncNextBlockId: cueSync.nextCue?.sourceBlockId ?? null,
+                      cueSyncPreviousBlockId: cueSync.previousCue?.sourceBlockId ?? null,
+                    })}
                     cueText={cue?.currentText ?? null}
                     currentWordIndex={
                       block.id === activeBlock?.id ? cueSync.activeCue?.currentWordIndex : null
@@ -1236,6 +1252,7 @@ export function TelepromptStudio({
                     presetClassName={preset.scriptClassName}
                     activeRef={block.id === activeBlock?.id ? activeBlockElementRef : undefined}
                     settings={effectiveSettings}
+                    timingState={block.id === activeBlock?.id ? activeCueTimingState : "trusted"}
                     onSelect={() => {
                       setCueSyncMode("manual");
                       onActiveBlockChange(block.id);
@@ -1299,6 +1316,7 @@ export function TelepromptStudio({
           cueSyncStatusLabel={cueSync.statusLabel}
           currentCueText={cueSync.activeCue?.spokenText ?? cue?.currentText ?? null}
           currentSourceWordId={activeCueCurrentSourceWordId}
+          currentTimingState={activeCueTimingState}
           currentWordIndex={cueSync.activeCue?.currentWordIndex ?? null}
           fullscreenActive={nativeFullscreenActive}
           fullscreenAvailability={fullscreenAvailability}
@@ -1354,4 +1372,35 @@ export function TelepromptStudio({
       )}
     </>
   );
+}
+
+function telepromptCueRoleForBlock({
+  activeBlockIndex,
+  block,
+  blockIndex,
+  cueSyncNextBlockId,
+  cueSyncPreviousBlockId,
+}: Readonly<{
+  activeBlockIndex: number;
+  block: RevisionBlock;
+  blockIndex: number;
+  cueSyncNextBlockId: string | null;
+  cueSyncPreviousBlockId: string | null;
+}>): ReadAlongCueRole {
+  if (block.speakMode.trim().toLowerCase() === "skip" || block.status === "skipped") {
+    return "skipped";
+  }
+  if (activeBlockIndex < 0) {
+    return "unavailable";
+  }
+  if (blockIndex === activeBlockIndex) {
+    return "current";
+  }
+  if (block.id === cueSyncNextBlockId || blockIndex === activeBlockIndex + 1) {
+    return "next";
+  }
+  if (block.id === cueSyncPreviousBlockId || blockIndex < activeBlockIndex) {
+    return "previous";
+  }
+  return "unavailable";
 }

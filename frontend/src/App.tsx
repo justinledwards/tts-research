@@ -150,6 +150,7 @@ import {
   TELEPROMPTER_SETTINGS_STORAGE_KEY,
   buildTeleprompterCue,
   normalizeTeleprompterHighlightSettings,
+  pickTeleprompterWordIndex,
   type TeleprompterCue,
   type TeleprompterHighlightSettings,
 } from "./teleprompter";
@@ -210,11 +211,15 @@ import { liveStatusMessages, useLiveStatus } from "./features/accessibility";
 import { nextReaderPlaybackRate } from "./features/reader-accessibility";
 import {
   DEFAULT_READ_ALONG_PREFERENCES,
+  HighlightRenderer,
   clearStoredReadAlongPreferences,
   loadReadAlongPreferences,
+  readAlongWordRoleForIndex,
   saveReadAlongPreferences,
   type HighlightMapV2,
+  type ReadAlongCueRole,
   type ReadAlongPreferences,
+  type ReadAlongWordRole,
 } from "./features/readalong";
 import {
   normalizeTelepromptTheatreSettings,
@@ -1284,12 +1289,20 @@ function TeleprompterWords({
         const wordCue = token.wordIndex === null ? undefined : wordCueByIndex.get(token.wordIndex);
         const isActive = wordCue?.state === "active" || token.wordIndex === cue.activeWordIndex;
         const state = wordCue?.state ?? (isActive ? "active" : "idle");
+        const readAlongRole = teleprompterReadAlongRole(
+          state,
+          token.wordIndex ?? -1,
+          activeWordIndex,
+        );
         return (
           <span
-            className={`${wordClass} teleprompter-word teleprompter-word--${state} ${
+            className={`${wordClass} teleprompter-word teleprompter-word--${state} readalong-word-role--${readAlongRole} ${
               variant === "cinema" ? "teleprompter-word--cinema" : ""
             }`}
             data-effect={effectStyle}
+            data-readalong-cue-role="current"
+            data-readalong-timing-state="estimated"
+            data-readalong-word-role={readAlongRole}
             key={`${token.text}-${String(token.wordIndex)}-${String(tokenIndex)}`}
             ref={isActive && variant === "cinema" ? activeWordRef : undefined}
             style={
@@ -1305,6 +1318,23 @@ function TeleprompterWords({
       })}
     </p>
   );
+}
+
+function teleprompterReadAlongRole(
+  state: string,
+  wordIndex: number,
+  activeWordIndex: number,
+): ReadAlongWordRole {
+  if (state === "active") {
+    return "active";
+  }
+  if (state === "upcoming") {
+    return "upcoming";
+  }
+  if (state === "spoken") {
+    return activeWordIndex - wordIndex <= 2 ? "recent" : "spoken";
+  }
+  return "idle";
 }
 
 function renderTeleprompterTokenContent(text: string): ReactNode {
@@ -10336,9 +10366,13 @@ function NarrationPreviewStage({
                 This is the listener-ready text Create & Listen will turn into audio.
               </p>
             </div>
-            <p className="max-h-[20rem] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
-              {spokenText}
-            </p>
+            <PreviewSpokenCueList
+              blocks={previewBlocks}
+              job={job}
+              playbackCursorSec={playbackCursorSec}
+              selectedBlockIndex={selectedPreviewBlockIndex}
+              selectedFallbackText={spokenText}
+            />
           </Panel>
           <Panel className="grid gap-2 p-4" variant="raised">
             <h3 className="text-sm font-semibold">Policy Notes</h3>
@@ -12653,6 +12687,140 @@ function narrationReviewPreviewContent({
     );
   }
   return <p className="whitespace-pre-wrap break-words">{previewText}</p>;
+}
+
+function PreviewSpokenCueList({
+  blocks,
+  job,
+  playbackCursorSec,
+  selectedBlockIndex,
+  selectedFallbackText,
+}: Readonly<{
+  blocks: readonly RevisionBlock[];
+  job: VoiceJob | null;
+  playbackCursorSec: number;
+  selectedBlockIndex: number;
+  selectedFallbackText: string;
+}>) {
+  if (blocks.length === 0) {
+    return (
+      <p className="max-h-[20rem] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
+        {selectedFallbackText}
+      </p>
+    );
+  }
+  const activeIndex = Math.max(0, selectedBlockIndex);
+  return (
+    <div
+      className="max-h-[20rem] overflow-auto rounded-md border bg-[var(--vs-surface)] p-3 font-mono text-sm leading-7 vs-border"
+      data-readalong-timing-state="estimated"
+      data-testid="preview-spoken-cue-list"
+    >
+      {blocks.map((block, index) => {
+        const cueRole = previewCueRole(block, index, activeIndex);
+        const activeWordIndex =
+          cueRole === "current"
+            ? previewBlockActiveWordIndex(blocks, block, job, playbackCursorSec)
+            : null;
+        const text = block.spokenText || block.text;
+        return (
+          <section
+            className={`preview-spoken-cue ${cueRole === "current" ? "font-semibold" : ""}`}
+            data-readalong-cue-role={cueRole}
+            data-readalong-timing-state="estimated"
+            data-testid={`preview-spoken-cue-${block.id}`}
+            key={block.id}
+          >
+            <div className="mb-1 flex min-w-0 items-center justify-between gap-2 text-[0.68rem] uppercase tracking-[0.14em] vs-muted">
+              <span className="truncate">Cue {block.index.toString()}</span>
+              <span>{cueRole}</span>
+            </div>
+            <p className="m-0 whitespace-pre-wrap break-words">
+              <HighlightRenderer
+                activeWordIndex={activeWordIndex}
+                cueRole={cueRole}
+                mode="word"
+                surface="teleprompt"
+                text={text}
+                timingState="estimated"
+                wordRole={cueRole === "skipped" ? "skipped" : undefined}
+                wordRoleForWord={({ active, phrase, token }) =>
+                  previewCueWordRole({
+                    active,
+                    activeWordIndex,
+                    cueRole,
+                    phrase,
+                    wordIndex: token.wordIndex,
+                  })
+                }
+              />
+            </p>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function previewCueRole(
+  block: RevisionBlock,
+  index: number,
+  activeIndex: number,
+): ReadAlongCueRole {
+  if (block.speakMode.trim().toLowerCase() === "skip" || block.status === "skipped") {
+    return "skipped";
+  }
+  if (index === activeIndex) {
+    return "current";
+  }
+  if (index === activeIndex + 1) {
+    return "next";
+  }
+  if (index < activeIndex) {
+    return "previous";
+  }
+  return "unavailable";
+}
+
+function previewBlockActiveWordIndex(
+  blocks: readonly RevisionBlock[],
+  block: RevisionBlock,
+  job: VoiceJob | null,
+  playbackCursorSec: number,
+): number | null {
+  const text = block.spokenText || block.text;
+  if (!text.trim()) {
+    return null;
+  }
+  const startSec = playbackSeekSecondsForRevisionBlock(blocks, block.id, job);
+  const durationSec = Math.max(0.001, block.estimatedDurationMs / 1000);
+  const progress =
+    startSec === null ? 0 : Math.max(0, Math.min(1, (playbackCursorSec - startSec) / durationSec));
+  return pickTeleprompterWordIndex(text, progress);
+}
+
+function previewCueWordRole({
+  active,
+  activeWordIndex,
+  cueRole,
+  phrase,
+  wordIndex,
+}: Readonly<{
+  active: boolean;
+  activeWordIndex: number | null;
+  cueRole: ReadAlongCueRole;
+  phrase: boolean;
+  wordIndex: number;
+}>): ReadAlongWordRole {
+  return readAlongWordRoleForIndex({
+    active,
+    activeWordIndex,
+    cueRole,
+    phrase,
+    recentWindow: 2,
+    upcomingWindow: 3,
+    wordIndex,
+  });
 }
 
 function bookScopeLabelForReview(scope: BookScope): string {

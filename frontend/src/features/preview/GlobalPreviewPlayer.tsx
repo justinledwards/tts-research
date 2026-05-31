@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { Button, cx, fieldControlClassName, Toggle } from "../../design";
 import type { RunMode, TTSEngineDiagnostics, VoiceJob } from "../../types";
+import { pickTeleprompterWordIndex } from "../../teleprompter";
 import { overlayDataAttributes, type PreviewPlayerPlacement } from "../layout";
 import {
   generatedAudioLifecycleFromJob,
@@ -45,6 +46,7 @@ import {
   resolvePreviewQueueIndex,
 } from "./previewQueue";
 import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
+import { HighlightRenderer, readAlongWordRoleForIndex, type ReadAlongWordRole } from "../readalong";
 
 export interface GlobalPreviewPlaybackController {
   readonly isAvailable: boolean;
@@ -170,6 +172,7 @@ export function GlobalPreviewPlayer({
         lifecycle: playbackLifecycle,
       });
   const activeWords = countPreviewWords(activeItem?.spokenText ?? "");
+  const activePreviewWordIndex = previewActiveWordIndex(activeItem, playbackCursorSec);
   const statusLabel = previewPlaybackStatusLabel(playbackControls.isPlaying, isPlaybackActive);
   const previewPlayAriaLabel = playbackControls.isPlaying
     ? "Pause preview audition"
@@ -382,10 +385,22 @@ export function GlobalPreviewPlayer({
                 className={`mt-3 rounded-md bg-[var(--vs-raised)] px-3 py-2 ${readingSurfaceClassName(
                   "spoken",
                 )}`}
+                data-readalong-cue-role="current"
+                data-readalong-timing-state="estimated"
                 data-testid="preview-active-spoken-text"
                 {...readingSurfaceDataAttributes({ active: true, kind: "spoken" })}
               >
-                {activeItem.spokenText}
+                <HighlightRenderer
+                  activeWordIndex={activePreviewWordIndex}
+                  cueRole="current"
+                  mode="word"
+                  surface="teleprompt"
+                  text={activeItem.spokenText}
+                  timingState="estimated"
+                  wordRoleForWord={({ active, phrase, token }) =>
+                    previewWordRole(token.wordIndex, activePreviewWordIndex, active, phrase)
+                  }
+                />
               </p>
             ) : null}
             <p aria-live="polite" className="sr-only">
@@ -487,4 +502,36 @@ export function GlobalPreviewPlayer({
       </div>
     </aside>
   );
+}
+
+function previewActiveWordIndex(
+  activeItem: ReturnType<typeof activePreviewQueueItem>,
+  playbackCursorSec: number,
+): number | null {
+  if (!activeItem?.spokenText.trim()) {
+    return null;
+  }
+  const durationSec = Math.max(0.001, activeItem.endSec - activeItem.startSec);
+  const progress = Math.max(
+    0,
+    Math.min(1, (playbackCursorSec - activeItem.startSec) / durationSec),
+  );
+  return pickTeleprompterWordIndex(activeItem.spokenText, progress);
+}
+
+function previewWordRole(
+  wordIndex: number,
+  activeWordIndex: number | null,
+  active: boolean,
+  phrase: boolean,
+): ReadAlongWordRole {
+  return readAlongWordRoleForIndex({
+    active,
+    activeWordIndex,
+    cueRole: "current",
+    phrase,
+    recentWindow: 2,
+    upcomingWindow: 3,
+    wordIndex,
+  });
 }

@@ -4,12 +4,16 @@ import {
   HighlightRenderer,
   READ_ALONG_DEGRADED_SYNC_DISPLAY_OPTIONS,
   READ_ALONG_HIGHLIGHT_GRANULARITIES,
+  READ_ALONG_HIGHLIGHT_PRESET_IDS,
   READ_ALONG_HIGHLIGHT_STYLES,
   READ_ALONG_PREFERENCE_LABELS,
   READ_ALONG_PREFERENCE_SCOPES,
   READ_ALONG_SCROLL_FOLLOW_POLICIES,
   READ_ALONG_SYNC_STRICTNESS_OPTIONS,
+  applyReadAlongHighlightPreset,
   effectiveReadAlongPreferences,
+  readAlongHighlightPreset,
+  readAlongHighlightPresetMatches,
   readAlongVisualModeFromPreferences,
   type ReadAlongDegradedSyncDisplay,
   type ReadAlongHighlightGranularity,
@@ -139,6 +143,34 @@ export function ReadAlongSettingsControls({
               <span className="vs-muted text-xs leading-5">{scopeDescription(scope)}</span>
             </Button>
           ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="grid gap-2">
+        <legend className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+          Highlight preset
+        </legend>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {READ_ALONG_HIGHLIGHT_PRESET_IDS.map((id) => {
+            const preset = readAlongHighlightPreset(id);
+            return (
+              <Button
+                align="start"
+                className="grid gap-1 p-3"
+                data-testid={`ui-action-readalong-highlight-preset-${id}`}
+                data-ui-action-surface="Settings"
+                key={id}
+                onClick={() => {
+                  onChange(applyReadAlongHighlightPreset(id, preferences));
+                }}
+                selected={readAlongHighlightPresetMatches(id, displayPreferences)}
+                variant="mode"
+              >
+                <span className="font-semibold">{preset.label}</span>
+                <span className="vs-muted text-xs leading-5">{preset.description}</span>
+              </Button>
+            );
+          })}
         </div>
       </fieldset>
 

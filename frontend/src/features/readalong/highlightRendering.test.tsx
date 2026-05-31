@@ -13,9 +13,11 @@ describe("read-along highlight rendering", () => {
     const markup = renderToStaticMarkup(
       <HighlightRenderer
         activeWordIndex={4}
+        cueRole="current"
         mode="word"
         sourceId="book-1"
         surface="book"
+        timingState="trusted"
         tokens={[
           { text: "First", title: "Page 2", trailingText: " ", wordIndex: 3 },
           { text: "target", title: "Page 2", trailingText: " ", wordIndex: 4 },
@@ -29,23 +31,30 @@ describe("read-along highlight rendering", () => {
     expect(markup).toContain('data-readalong-word-index="4"');
     expect(markup).toContain("book-cinema-word-active");
     expect(markup).toContain('aria-current="true"');
+    expect(markup).toContain('data-readalong-word-role="active"');
+    expect(markup).toContain('data-readalong-cue-role="current"');
+    expect(markup).toContain('data-readalong-timing-state="trusted"');
   });
 
   it("renders phrase fallback as a range instead of pretending exact word sync", () => {
     const markup = renderToStaticMarkup(
       <HighlightRenderer
         activeWordIndex={9}
+        cueRole="current"
         mode="phrase"
         phraseWordEnd={3}
         phraseWordStart={2}
         surface="website"
+        timingState="lowConfidence"
         text="Before the active phrase continues calmly"
       />,
     );
 
     expect(markup).toContain('data-readalong-visual-mode="phrase"');
+    expect(markup).toContain('data-readalong-uncertainty="visible"');
     expect(markup).not.toContain('aria-current="true"');
     expect(markup).toContain("readalong-highlight--phrase");
+    expect(markup).toContain('data-readalong-word-role="activePhrase"');
   });
 
   it("normalizes stale and degraded runtime states into honest visual modes", () => {

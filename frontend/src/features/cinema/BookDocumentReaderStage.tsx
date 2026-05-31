@@ -176,8 +176,10 @@ export function BookDocumentReaderStage({
           canHighlightBlock && highlight.blockHighlight
             ? {
                 ...highlight.blockHighlight,
+                cueRole: "current",
                 nodeId: activeBlock?.id,
                 sourceId: book.id,
+                timingState: "trusted",
               }
             : undefined
         }
@@ -189,8 +191,10 @@ export function BookDocumentReaderStage({
             ? {
                 ...highlight.wordHighlight,
                 activeWordIndex,
+                cueRole: "current",
                 nodeId: activeBlock?.id,
                 sourceId: book.id,
+                timingState: "trusted",
               }
             : undefined
         }

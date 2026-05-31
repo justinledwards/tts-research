@@ -10,6 +10,15 @@ import {
   type ReadAlongHighlightVisualMode,
 } from "./highlightVisualModes";
 import type { ReadAlongHighlightStyle } from "./readAlongPreferences";
+import {
+  readAlongSemanticDataAttributes,
+  readAlongSemanticCueClassName,
+  readAlongSemanticWordClassName,
+  readAlongWordRoleForIndex,
+  type ReadAlongCueRole,
+  type ReadAlongTimingState,
+  type ReadAlongWordRole,
+} from "./highlightSemantics";
 
 export interface HighlightRendererToken {
   key?: string;
@@ -26,7 +35,10 @@ export interface HighlightRendererToken {
 
 export interface HighlightRendererWordState {
   active: boolean;
+  cueRole: ReadAlongCueRole;
   phrase: boolean;
+  role: ReadAlongWordRole;
+  timingState: ReadAlongTimingState;
   token: HighlightRendererToken;
   visualMode: ReadAlongHighlightVisualMode;
 }
@@ -35,6 +47,7 @@ export interface HighlightRendererProps {
   activeSourceWordId?: string | null;
   activeWordIndex?: number | null;
   classNameForWord?: (state: HighlightRendererWordState) => string | undefined;
+  cueRole?: ReadAlongCueRole;
   dataEffect?: string;
   highlightStyle?: ReadAlongHighlightStyle;
   mode: ReadAlongHighlightVisualMode;
@@ -44,7 +57,10 @@ export interface HighlightRendererProps {
   sourceId?: string;
   surface: ReadAlongHighlightSurface;
   text?: string;
+  timingState?: ReadAlongTimingState;
   tokens?: readonly HighlightRendererToken[];
+  wordRole?: ReadAlongWordRole;
+  wordRoleForWord?: (state: Omit<HighlightRendererWordState, "role">) => ReadAlongWordRole;
   wordStyle?: (state: HighlightRendererWordState) => CSSProperties | undefined;
 }
 
@@ -52,6 +68,7 @@ export function HighlightRenderer({
   activeSourceWordId,
   activeWordIndex,
   classNameForWord,
+  cueRole = "current",
   dataEffect,
   highlightStyle,
   mode,
@@ -61,7 +78,10 @@ export function HighlightRenderer({
   sourceId,
   surface,
   text,
+  timingState = "trusted",
   tokens,
+  wordRole,
+  wordRoleForWord,
   wordStyle,
 }: Readonly<HighlightRendererProps>) {
   const visualMode = normalizeReadAlongVisualMode(mode);
@@ -71,7 +91,9 @@ export function HighlightRenderer({
 
   return (
     <span
+      className={readAlongSemanticCueClassName(cueRole, timingState)}
       {...readAlongHighlightDataAttributes(visualMode, surface)}
+      {...readAlongSemanticDataAttributes({ cueRole, timingState })}
       data-readalong-highlight-style={highlightStyle}
     >
       {resolvedTokens.map((token, index) => {
@@ -89,12 +111,25 @@ export function HighlightRenderer({
           token.sourceWordId === activeSourceWordId;
         const active =
           canHighlightWord && (activeBySourceIdentity || token.wordIndex === activeWordIndex);
-        const state: HighlightRendererWordState = {
+        const baseState: Omit<HighlightRendererWordState, "role"> = {
           active,
+          cueRole,
           phrase,
+          timingState,
           token,
           visualMode,
         };
+        const role =
+          wordRole ??
+          wordRoleForWord?.(baseState) ??
+          readAlongWordRoleForIndex({
+            active,
+            activeWordIndex,
+            cueRole,
+            phrase,
+            wordIndex: token.wordIndex,
+          });
+        const state: HighlightRendererWordState = { ...baseState, role };
         const anchor = readAlongAnchorForWord({
           fallbackTextQuote: token.text,
           nodeId: token.nodeId ?? nodeId,
@@ -111,6 +146,7 @@ export function HighlightRenderer({
             phrase,
             surface,
           }),
+          readAlongSemanticWordClassName(role),
           classNameForWord?.(state),
         );
         return (
@@ -120,6 +156,7 @@ export function HighlightRenderer({
             data-book-word={surface === "book" ? String(token.wordIndex) : undefined}
             data-effect={dataEffect}
             data-readalong-anchor-id={anchor.anchorId}
+            data-readalong-cue-role={cueRole}
             data-readalong-node-id={token.nodeId ?? nodeId}
             data-readalong-page-index={
               token.pageIndex === undefined ? undefined : String(token.pageIndex)
@@ -129,7 +166,9 @@ export function HighlightRenderer({
             data-readalong-token-offset={
               token.tokenOffset === undefined ? undefined : String(token.tokenOffset)
             }
+            data-readalong-timing-state={timingState}
             data-readalong-word-index={String(token.wordIndex)}
+            data-readalong-word-role={role}
             key={token.key ?? `${token.wordIndex.toString()}:${token.text}:${index.toString()}`}
             style={wordStyle?.(state)}
             title={active ? "Current spoken word" : token.title}

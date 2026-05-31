@@ -1,3 +1,11 @@
+## 2026-05-31 18:28 CEST - Follow-Along Highlighting
+- [x] Add semantic highlight state model.
+- [x] Apply cue and word semantics across Preview, Teleprompt, Cinema, and Theatre.
+- [x] Add visual treatments and accessibility/high-contrast variants.
+- [x] Add timing uncertainty behavior.
+- [x] Add/update regression tests.
+- [x] Run project checks.
+
 ## 2026-05-30 17:28 CEST - Reading Surface Ergonomics
 - [x] Add shared reading surface design system.
 - [x] Apply typography and framing across reader surfaces.

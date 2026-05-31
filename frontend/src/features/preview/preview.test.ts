@@ -174,8 +174,13 @@ describe("preview A/B comparison", () => {
     );
 
     expect(markup).toContain('data-testid="preview-active-spoken-text"');
-    expect(markup).toContain("Hello world.");
+    expect(markup).toContain("Hello ");
+    expect(markup).toContain("world.");
     expect(markup).toContain('data-reading-active-emphasis="dominant"');
+    expect(markup).toContain('data-readalong-cue-role="current"');
+    expect(markup).toContain('data-readalong-timing-state="estimated"');
+    expect(markup).toContain('data-readalong-word-role="active"');
+    expect(markup).toContain('data-readalong-word-role="upcoming"');
   });
 });
 
