@@ -19,6 +19,13 @@ import {
   type ReaderMeasure,
   type ReaderTextScale,
 } from "../../features/reader-accessibility";
+import {
+  READING_TYPOGRAPHY_PRESET_IDS,
+  READING_TYPOGRAPHY_PRESET_LABELS,
+  applyReaderTypographyPreset,
+  readerTypographyPresetForSettings,
+  type ReadingTypographyPresetId,
+} from "../../features/reading-surface";
 
 export function ReaderAccessibilityControls({
   className = "",
@@ -58,6 +65,18 @@ export function ReaderAccessibilityControls({
           ))}
         </select>
       </label>
+      {variant === "panel" ? (
+        <ReaderSelect<ReadingTypographyPresetId>
+          label="Typography preset"
+          onChange={(presetId) => {
+            onChange(applyReaderTypographyPreset(presetId, normalized));
+          }}
+          options={READING_TYPOGRAPHY_PRESET_IDS}
+          testId="ui-action-reader-typography-preset"
+          value={readerTypographyPresetForSettings(normalized)}
+          valueLabels={READING_TYPOGRAPHY_PRESET_LABELS}
+        />
+      ) : null}
       <ReaderToggle
         checked={normalized.reducedMotion}
         label={uiString("accessibility.reducedMotion")}
@@ -130,7 +149,9 @@ function ReaderToggle({
   );
 }
 
-function ReaderSelect<T extends ReaderLineSpacing | ReaderMeasure | ReaderTextScale>({
+function ReaderSelect<
+  T extends ReaderLineSpacing | ReaderMeasure | ReaderTextScale | ReadingTypographyPresetId,
+>({
   label,
   options,
   testId,

@@ -33,6 +33,18 @@
   --book-muted: #776b58;
   --book-gutter: #d9ccb6;
   --book-shadow: 0 22px 56px rgb(74 48 25 / 0.18);
+  --reading-source-font-size: 15px;
+  --reading-source-line-height: 1.55;
+  --reading-source-measure: 82ch;
+  --reading-spoken-font-size: 20px;
+  --reading-spoken-line-height: 1.66;
+  --reading-spoken-measure: 66ch;
+  --reading-cue-font-size: 40px;
+  --reading-cue-line-height: 1.24;
+  --reading-cue-measure: 42ch;
+  --reading-theatre-font-size: clamp(42px, 6vw, 78px);
+  --reading-theatre-line-height: 1.16;
+  --reading-theatre-measure: 24ch;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -254,6 +266,103 @@ select {
   touch-action: manipulation;
 }
 
+.reading-surface {
+  max-width: min(100%, var(--reading-surface-measure, var(--reading-spoken-measure)));
+  color: var(--reading-surface-ink, var(--vs-text));
+  font-size: var(--reading-surface-font-size, var(--reading-spoken-font-size));
+  font-weight: var(--reading-surface-weight, 450);
+  letter-spacing: 0;
+  line-height: var(--reading-surface-line-height, var(--reading-spoken-line-height));
+  overflow-wrap: normal;
+  text-wrap: pretty;
+  word-break: normal;
+}
+
+.reading-surface--source {
+  --reading-surface-font-size: var(--reading-source-font-size);
+  --reading-surface-line-height: var(--reading-source-line-height);
+  --reading-surface-measure: var(--reading-source-measure);
+  --reading-surface-weight: 450;
+  color: color-mix(in srgb, var(--vs-text) 92%, var(--vs-muted));
+}
+
+.reading-surface--spoken {
+  --reading-surface-measure: var(--reading-spoken-measure);
+  --reading-surface-weight: 470;
+}
+
+[data-reader-text-scale="compact"] .reading-surface--spoken {
+  --reading-surface-font-size: 18px;
+}
+
+[data-reader-text-scale="comfortable"] .reading-surface--spoken {
+  --reading-surface-font-size: 20px;
+}
+
+[data-reader-text-scale="large"] .reading-surface--spoken {
+  --reading-surface-font-size: 24px;
+}
+
+[data-reader-text-scale="giant"] .reading-surface--spoken {
+  --reading-surface-font-size: 30px;
+}
+
+[data-reader-line-spacing="compact"] .reading-surface--spoken {
+  --reading-surface-line-height: 1.52;
+}
+
+[data-reader-line-spacing="comfortable"] .reading-surface--spoken {
+  --reading-surface-line-height: 1.66;
+}
+
+[data-reader-line-spacing="spacious"] .reading-surface--spoken {
+  --reading-surface-line-height: 1.9;
+}
+
+[data-reader-measure="narrow"] .reading-surface--spoken {
+  --reading-surface-measure: 58ch;
+}
+
+[data-reader-measure="comfortable"] .reading-surface--spoken {
+  --reading-surface-measure: var(--reading-spoken-measure);
+}
+
+[data-reader-measure="wide"] .reading-surface--spoken {
+  --reading-surface-measure: 78ch;
+}
+
+.reading-surface--cue {
+  --reading-surface-font-size: var(--reading-cue-font-size);
+  --reading-surface-line-height: var(--reading-cue-line-height);
+  --reading-surface-measure: var(--reading-cue-measure);
+  --reading-surface-weight: 620;
+}
+
+.reading-surface--theatre {
+  --reading-surface-font-size: var(--reading-theatre-font-size);
+  --reading-surface-line-height: var(--reading-theatre-line-height);
+  --reading-surface-measure: var(--reading-theatre-measure);
+  --reading-surface-weight: 680;
+  color: #f8fafc;
+}
+
+.reading-surface[data-reading-active-emphasis="dominant"] {
+  color: var(--reading-active-ink, currentColor);
+}
+
+.reading-surface--spoken[data-reading-active-emphasis="dominant"],
+.reading-surface--cue[data-reading-active-emphasis="dominant"] {
+  background: color-mix(in srgb, var(--vs-accent) 9%, transparent);
+  box-shadow: -0.18rem 0 0 var(--vs-accent);
+}
+
+.reading-surface--source :where(p, li, blockquote),
+.reading-surface--spoken :where(p, li, blockquote),
+.reading-surface--cue :where(p, li, blockquote),
+.reading-surface--theatre :where(p, li, blockquote) {
+  max-width: inherit;
+}
+
 .teleprompter-word {
   --teleprompter-accent: #f97316;
   --teleprompter-intensity: 0;
@@ -381,7 +490,7 @@ select {
 }
 
 .book-cinema-follow-copy {
-  max-width: min(100%, 74ch);
+  max-width: min(100%, var(--reading-spoken-measure));
   color: var(--book-ink);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -707,7 +816,7 @@ select {
 }
 
 .markdown-cinema {
-  max-width: 100%;
+  max-width: min(100%, var(--reading-surface-measure, 100%));
   overflow-wrap: anywhere;
 }
 
@@ -863,6 +972,16 @@ select {
     color-mix(in srgb, var(--vs-accent) 22%, transparent),
     transparent 72%
   );
+}
+
+.reading-surface--theatre .teleprompter-word--active,
+.reading-surface--theatre .book-cinema-word-active,
+.reading-surface--theatre .markdown-cinema-word-active,
+.reading-surface--theatre .prepared-source-cinema-active,
+.reading-surface--theatre .website-cinema-word-active {
+  text-shadow:
+    0 0 0.24em rgb(249 115 22 / 0.7),
+    0 0 0.08em rgb(255 255 255 / 0.52);
 }
 
 .book-cinema-word-phrase {

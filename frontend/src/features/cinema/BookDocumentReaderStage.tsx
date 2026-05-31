@@ -7,9 +7,11 @@ import {
   READER_LINE_SPACING_CLASS,
   READER_MEASURE_CLASS,
   READER_TEXT_SCALE_CLASS,
+  readerDataAttributes,
   readerScrollBehavior,
   type ReaderAccessibilitySettings,
 } from "../reader-accessibility";
+import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
 import {
   readAlongAnchorForBlock,
   readAlongAnchorForWord,
@@ -130,10 +132,13 @@ export function BookDocumentReaderStage({
       canvasFirst={canvasFirst}
       contentClassName="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
       contentDataAttributes={{
+        ...readerDataAttributes(accessibilitySettings),
+        ...readingSurfaceDataAttributes({ kind: "spoken" }),
         "data-readalong-highlight-style": highlightStyle,
         "data-readalong-scroll-follow": scrollFollow,
       }}
       contentRef={readerRef}
+      frameMode="reading"
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={
         <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
@@ -176,7 +181,9 @@ export function BookDocumentReaderStage({
               }
             : undefined
         }
-        className={`markdown-cinema prose-markdown readalong-markdown-renderer ${textClass} text-[var(--vs-text)]`}
+        className={`markdown-cinema prose-markdown readalong-markdown-renderer mx-auto ${readingSurfaceClassName(
+          "spoken",
+        )} ${textClass} text-[var(--vs-text)]`}
         wordHighlight={
           canHighlightWord && highlight.wordHighlight
             ? {

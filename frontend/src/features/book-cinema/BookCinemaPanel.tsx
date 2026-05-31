@@ -101,6 +101,7 @@ import {
   type ReaderKeyboardCommand,
   type ReaderTextScale,
 } from "../reader-accessibility";
+import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
 import {
   recordFrontendDegradedState,
   recordFrontendMetric,
@@ -3376,6 +3377,8 @@ function BookFollowReaderStage({
       canvasFirst={canvasFirst}
       contentClassName="book-cinema-follow-reader min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 lg:px-12"
       contentDataAttributes={{
+        ...readerDataAttributes(accessibilitySettings),
+        ...readingSurfaceDataAttributes({ kind: "spoken" }),
         "data-book-reader-presentation": "follow",
         "data-book-pages-per-spread": 1,
         "data-readalong-highlight-style": highlightStyle,
@@ -3383,6 +3386,7 @@ function BookFollowReaderStage({
         ...syncDataAttributes,
       }}
       contentRef={readerRef}
+      frameMode="reading"
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={
         <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
@@ -3417,7 +3421,9 @@ function BookFollowReaderStage({
         </div>
       }
     >
-      <div className={`book-cinema-follow-copy mx-auto ${textClass}`}>
+      <div
+        className={`book-cinema-follow-copy mx-auto ${readingSurfaceClassName("spoken")} ${textClass}`}
+      >
         {blocks.length > 0 ? (
           blocks.map((block) => (
             <BookFollowReaderBlock
@@ -3630,10 +3636,13 @@ function BookPagedReaderStage({
         pagesPerSpread === 2 ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"
       }`}
       contentDataAttributes={{
+        ...readerDataAttributes(accessibilitySettings),
+        ...readingSurfaceDataAttributes({ kind: "spoken" }),
         "data-book-pages-per-spread": pagesPerSpread,
         ...syncDataAttributes,
       }}
       contentRef={pageMetrics.ref}
+      frameMode="reading"
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={
         <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
@@ -3831,9 +3840,10 @@ function BookReaderPage({
         <span>{pageLabel}</span>
       </header>
       <div
-        className={`book-cinema-page-copy ${
+        className={`book-cinema-page-copy ${readingSurfaceClassName("spoken")} ${
           allowPageScroll ? "book-cinema-page-copy--fit-scroll" : ""
         }`}
+        {...readingSurfaceDataAttributes({ active: isActivePage, kind: "spoken" })}
         style={
           {
             "--book-page-font-size": `${String(fontSizePx)}px`,

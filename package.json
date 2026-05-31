@@ -58,6 +58,7 @@
     "e2e:workspace-flow": "E2E_WORKSPACE_FLOW=1 node scripts/e2e-book-cinema.mjs",
     "e2e:settings-ia": "E2E_SETTINGS_IA=1 node scripts/e2e-book-cinema.mjs",
     "e2e:reader-wayfinding": "E2E_READER_WAYFINDING=1 node scripts/e2e-book-cinema.mjs",
+    "e2e:reading-surface": "node scripts/e2e-reading-surface-comparison.mjs",
     "e2e:ui-actions": "node scripts/e2e-ui-action-audit.mjs",
     "build-accessibility-release-artifacts": "node scripts/build-accessibility-release-artifacts.mjs",
     "e2e:accessibility-audit": "node scripts/e2e-accessibility-audit.mjs",

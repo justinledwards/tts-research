@@ -7,6 +7,7 @@ import {
   type TeleprompterToken,
 } from "../../teleprompter";
 import { HighlightRenderer } from "../readalong";
+import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
 import type { TelepromptCueWordTiming } from "./telepromptCueTimeline";
 import {
   telepromptTheatreCrawlOffset,
@@ -157,10 +158,12 @@ export function TelepromptTheatreCueText({
       <pre
         className={cx(
           "mx-auto whitespace-pre-wrap text-left font-mono",
+          readingSurfaceClassName("theatre"),
           widthClassName,
           telepromptTheatreCueKindClassName(section.kind),
           textClassName,
         )}
+        {...readingSurfaceDataAttributes({ active: true, kind: "theatre" })}
         data-teleprompt-theatre-cue-kind={section.kind}
         style={{ transform: mirrorMode ? "scaleX(-1)" : undefined, wordSpacing }}
       >
@@ -177,7 +180,13 @@ export function TelepromptTheatreCueText({
       ref={viewportRef}
     >
       <div
-        className={cx("mx-auto grid gap-6 text-center", widthClassName, textClassName)}
+        className={cx(
+          "mx-auto grid gap-6 text-center",
+          readingSurfaceClassName("theatre"),
+          widthClassName,
+          textClassName,
+        )}
+        {...readingSurfaceDataAttributes({ active: true, kind: "theatre" })}
         data-teleprompt-theatre-crawl-content=""
         ref={contentRef}
         style={style}

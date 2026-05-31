@@ -44,6 +44,7 @@ import {
   previewQueueProgress,
   resolvePreviewQueueIndex,
 } from "./previewQueue";
+import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
 
 export interface GlobalPreviewPlaybackController {
   readonly isAvailable: boolean;
@@ -376,6 +377,17 @@ export function GlobalPreviewPlayer({
             <p aria-live="polite" className="mt-2 text-xs vs-muted">
               {previewActiveDetail(activeItem, activeWords, scopeLabel)}
             </p>
+            {activeItem?.spokenText ? (
+              <p
+                className={`mt-3 rounded-md bg-[var(--vs-raised)] px-3 py-2 ${readingSurfaceClassName(
+                  "spoken",
+                )}`}
+                data-testid="preview-active-spoken-text"
+                {...readingSurfaceDataAttributes({ active: true, kind: "spoken" })}
+              >
+                {activeItem.spokenText}
+              </p>
+            ) : null}
             <p aria-live="polite" className="sr-only">
               {statusMessage}
             </p>

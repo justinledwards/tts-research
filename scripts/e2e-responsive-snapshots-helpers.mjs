@@ -220,7 +220,12 @@ export async function seedWebsiteCalmReadFixture({ apiBaseUrl, appBaseUrl }) {
 export async function openPreparedCinemaOverlay(page, expectedLabel, appBaseUrl) {
   await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle").catch(() => {});
-  await page.getByRole("button", { exact: true, name: "Intake" }).click();
+  const intakeStage = page.getByTestId("workspace-stage-intake").first();
+  if (await intakeStage.isVisible().catch(() => false)) {
+    await intakeStage.click();
+  } else {
+    await page.getByRole("button", { name: /^Intake\b/ }).click();
+  }
   await page.getByText("Guided Intake").first().waitFor();
   await page.getByTestId("intake-step-destination").click();
   await page

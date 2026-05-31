@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, StatusChip, cx, fieldControlClassName } from "../../design";
+import {
+  readingSurfaceClassName,
+  readingSurfaceDataAttributes,
+  type ReadingSurfaceKind,
+} from "../reading-surface";
 import type { RevisionBlock } from "./revisionFilters";
 
 export function InlineSpeechEdit({
@@ -63,14 +68,17 @@ export function InlineSpeechEdit({
       </label>
 
       <div className="grid gap-2 md:grid-cols-2">
-        <SpeechComparePane label="Current" value={currentSpokenText} />
-        <SpeechComparePane label="Draft" value={draft} />
+        <SpeechComparePane label="Current" surfaceKind="spoken" value={currentSpokenText} />
+        <SpeechComparePane label="Draft" surfaceKind="spoken" value={draft} />
       </div>
 
       {isPreviewing ? (
         <output
-          className="rounded-md border bg-[var(--vs-raised)] p-3 text-sm leading-6 vs-border"
+          className={`block rounded-md bg-[var(--vs-raised)] p-3 ${readingSurfaceClassName(
+            "spoken",
+          )}`}
           data-testid="revision-inline-preview-output"
+          {...readingSurfaceDataAttributes({ active: true, kind: "spoken" })}
         >
           {previewText}
         </output>
@@ -114,11 +122,20 @@ export function InlineSpeechEdit({
   );
 }
 
-function SpeechComparePane({ label, value }: Readonly<{ label: string; value: string }>) {
+function SpeechComparePane({
+  label,
+  surfaceKind,
+  value,
+}: Readonly<{ label: string; surfaceKind: ReadingSurfaceKind; value: string }>) {
   return (
-    <div className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 vs-border">
+    <div className="min-w-0 rounded-md bg-[var(--vs-raised)] p-3">
       <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] vs-muted">{label}</p>
-      <p className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-[var(--vs-text)]">
+      <p
+        className={`mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words ${readingSurfaceClassName(
+          surfaceKind,
+        )}`}
+        {...readingSurfaceDataAttributes({ kind: surfaceKind })}
+      >
         {value || "No spoken text."}
       </p>
     </div>

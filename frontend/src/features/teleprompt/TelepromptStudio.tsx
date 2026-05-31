@@ -1205,7 +1205,7 @@ export function TelepromptStudio({
 
             <div
               className={cx(
-                "overflow-auto rounded-lg border p-4 shadow-sm vs-border sm:p-6",
+                "overflow-auto rounded-md bg-[var(--vs-surface)] p-4 sm:p-6",
                 preset.shellClassName,
               )}
               data-testid="teleprompt-script-scroll"

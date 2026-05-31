@@ -709,24 +709,6 @@ function QuickSettings({
         <QuickFact label="Voice" scope="session" value={selectedProfile?.name ?? "Default voice"} />
         <QuickFact label="Source" scope="source" value={activeSourceLabel} />
         <QuickSelect
-          testId="settings-quick-reader-scale"
-          label="Reader scale"
-          scope="machine"
-          value={readerAccessibilitySettings.textScale}
-          onChange={(value) => {
-            onReaderAccessibilitySettingsChange({
-              ...readerAccessibilitySettings,
-              textScale: value as ReaderAccessibilitySettings["textScale"],
-            });
-          }}
-        >
-          {(["compact", "comfortable", "large", "giant"] as const).map((scale) => (
-            <option key={scale} value={scale}>
-              {scale}
-            </option>
-          ))}
-        </QuickSelect>
-        <QuickSelect
           testId="settings-quick-theme"
           label="Theme"
           scope="machine"

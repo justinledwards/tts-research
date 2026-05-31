@@ -73,6 +73,7 @@ import {
   useReaderKeyboardControls,
   useReaderModalLifecycle,
 } from "../reader-accessibility";
+import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
 import {
   playbackProgressForBookmark,
   type ReaderBookmarkItem,
@@ -1577,7 +1578,9 @@ function PreparedSourceCinemaReader({
             <PreparedMarkdownRenderer
               artifactRendering="document-cinema"
               blockHighlight={blockHighlight}
-              className={`markdown-cinema prose-markdown readalong-markdown-renderer ${textClass} text-[var(--vs-text)]`}
+              className={`markdown-cinema prose-markdown readalong-markdown-renderer mx-auto ${readingSurfaceClassName(
+                "spoken",
+              )} ${textClass} text-[var(--vs-text)]`}
               wordHighlight={wordHighlight}
             >
               {source.text}
@@ -1593,7 +1596,11 @@ function PreparedSourceCinemaReader({
         key={`${source.id}:${String(rendererRetryKey)}:blocks`}
         onLifecycleChange={onRendererLifecycleChange}
       >
-        <div className={`website-cinema-article ${textClass} text-[var(--vs-text)]`}>
+        <div
+          className={`website-cinema-article mx-auto ${readingSurfaceClassName(
+            "spoken",
+          )} ${textClass} text-[var(--vs-text)]`}
+        >
           {blocks.map((block) => (
             <PreparedSourceCinemaBlock
               activeWordOffset={
@@ -1630,7 +1637,9 @@ function PreparedSourceCinemaReader({
             <PreparedMarkdownRenderer
               artifactRendering="document-cinema"
               blockHighlight={blockHighlight}
-              className={`markdown-cinema prose-markdown readalong-markdown-renderer ${textClass} text-[var(--vs-text)]`}
+              className={`markdown-cinema prose-markdown readalong-markdown-renderer mx-auto ${readingSurfaceClassName(
+                "spoken",
+              )} ${textClass} text-[var(--vs-text)]`}
               wordHighlight={wordHighlight}
             >
               {source.text ?? source.speechText ?? ""}
@@ -1722,7 +1731,12 @@ function PreparedSourceCinemaReader({
     <ReaderCanvasFrame
       canvasFirst={canvasFirst}
       contentClassName="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
+      contentDataAttributes={{
+        ...readerDataAttributes(accessibilitySettings),
+        ...readingSurfaceDataAttributes({ kind: "spoken" }),
+      }}
       contentRef={readerRef}
+      frameMode="reading"
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={
         <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">

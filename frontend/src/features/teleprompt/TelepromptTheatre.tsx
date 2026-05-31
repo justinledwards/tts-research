@@ -483,8 +483,8 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
 
             <div
               className={cx(
-                "grid min-h-0 overflow-auto rounded-lg border border-white/15 bg-black/35 p-5 shadow-2xl",
-                presetId === "highContrast" && "border-white bg-black",
+                "grid min-h-0 overflow-auto bg-black px-3 py-5 sm:px-6",
+                presetId === "highContrast" && "bg-black",
                 theatreCuePositionClassName(settings.verticalCuePosition),
               )}
               data-testid="teleprompt-theatre-current-cue"
@@ -562,10 +562,10 @@ function theatreCuePositionClassName(
 
 function theatreCueWidthClassName(value: TelepromptTheatreSettings["cueWidth"]): string {
   return {
-    balanced: "max-w-5xl",
-    full: "max-w-none",
-    narrow: "max-w-3xl",
-    wide: "max-w-7xl",
+    balanced: "max-w-5xl [--reading-theatre-measure:24ch]",
+    full: "max-w-none [--reading-theatre-measure:34ch]",
+    narrow: "max-w-3xl [--reading-theatre-measure:18ch]",
+    wide: "max-w-7xl [--reading-theatre-measure:30ch]",
   }[value];
 }
 
@@ -574,18 +574,18 @@ function theatreTextSizeClassName(
   presetId: TelepromptPresetId,
 ): string {
   if (size === "massive") {
-    return "text-6xl leading-[1.12] md:text-8xl";
+    return "[--reading-theatre-font-size:clamp(56px,8vw,104px)] [--reading-theatre-line-height:1.1]";
   }
   if (size === "giant") {
-    return "text-5xl leading-[1.18] md:text-7xl";
+    return "[--reading-theatre-font-size:clamp(48px,7vw,92px)] [--reading-theatre-line-height:1.12]";
   }
   if (size === "large" || presetId === "largeText" || presetId === "dyslexicFriendly") {
-    return "text-4xl leading-[1.25] md:text-6xl";
+    return "[--reading-theatre-font-size:clamp(42px,6vw,78px)] [--reading-theatre-line-height:1.16]";
   }
   if (presetId === "highContrast") {
-    return "text-3xl leading-[1.25] md:text-5xl";
+    return "[--reading-theatre-font-size:clamp(38px,5.4vw,68px)] [--reading-theatre-line-height:1.18]";
   }
-  return "text-3xl leading-[1.3] md:text-4xl";
+  return "[--reading-theatre-font-size:clamp(34px,4.8vw,58px)] [--reading-theatre-line-height:1.2]";
 }
 
 export {

@@ -7,6 +7,7 @@ import {
   type TeleprompterHighlightSettings,
 } from "../../teleprompter";
 import { Panel, StatusChip, cx } from "../../design";
+import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
 import type { TelepromptCueSyncMode } from "./telepromptCueTimeline";
 import { estimateTelepromptDurationMs, countTelepromptWords } from "./telepromptToolbar";
 import type { RevisionBlock } from "../revision";
@@ -40,14 +41,15 @@ export function TelepromptScriptBlock({
   return (
     <div
       className={cx(
-        "rounded-lg border p-3 transition vs-border",
+        "rounded-md px-3 py-4 transition",
         telepromptScriptBlockClassName({ active, highContrast }),
       )}
+      {...readingSurfaceDataAttributes({ active, kind: "cue" })}
       data-testid={`teleprompt-block-${block.id}`}
       ref={activeRef}
     >
       <button
-        className="mb-3 flex min-h-11 w-full items-center justify-between gap-3 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-left text-sm font-semibold vs-border"
+        className="mb-3 flex min-h-11 w-full items-center justify-between gap-3 rounded-md bg-transparent px-1 py-2 text-left text-sm font-semibold hover:bg-[var(--vs-selected)]"
         data-testid={`ui-action-teleprompt-cue-${String(block.index)}`}
         data-ui-noop-reason={active ? "Cue is already selected." : undefined}
         onClick={onSelect}
@@ -58,7 +60,7 @@ export function TelepromptScriptBlock({
         </span>
         {active ? <StatusChip tone="success">Selected</StatusChip> : null}
       </button>
-      <p className={cx("whitespace-pre-wrap", presetClassName)}>
+      <p className={cx("whitespace-pre-wrap", readingSurfaceClassName("cue"), presetClassName)}>
         {shouldRenderCue ? (
           <TelepromptCueWords
             currentWordIndex={currentWordIndex}
@@ -78,15 +80,15 @@ function telepromptScriptBlockClassName({
   highContrast,
 }: Readonly<{ active: boolean; highContrast: boolean }>): string {
   if (active && highContrast) {
-    return "border-zinc-100 bg-zinc-950 text-white ring-2 ring-orange-300";
+    return "bg-zinc-950 text-white shadow-[inset_0.28rem_0_0_#fb923c] ring-1 ring-orange-300";
   }
   if (active) {
-    return "border-orange-300 bg-orange-500/10 ring-1 ring-orange-300";
+    return "bg-orange-500/10 shadow-[inset_0.28rem_0_0_var(--vs-accent)] ring-1 ring-orange-300";
   }
   if (highContrast) {
-    return "border-zinc-100 bg-zinc-950 text-white";
+    return "bg-zinc-950 text-white";
   }
-  return "bg-[var(--vs-surface)]";
+  return "bg-transparent hover:bg-[var(--vs-raised)]";
 }
 
 export function TelepromptCueWords({

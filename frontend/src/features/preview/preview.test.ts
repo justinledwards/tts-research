@@ -134,6 +134,49 @@ describe("preview A/B comparison", () => {
     expect(markup).not.toContain("ui-action-preview-mini-play");
     expect(markup).toContain("ui-action-preview-mini-audition-a");
   });
+
+  it("renders the active spoken preview in full transport mode", () => {
+    const noop = vi.fn();
+    const markup = renderToStaticMarkup(
+      createElement(GlobalPreviewPlayer, {
+        activeBlockId: "a",
+        blocks,
+        canOpenCinema: true,
+        currentPolicyId: "Enterprise",
+        currentRunMode: "checkedMaster" as RunMode,
+        currentVoiceId: "default",
+        isPlaybackActive: false,
+        job: job(),
+        playbackControls: {
+          isAvailable: true,
+          isPlaying: false,
+          pause: noop,
+          play: noop,
+          playbackRate: 1,
+          restart: noop,
+        },
+        playbackCursorSec: 0,
+        placement: "inline",
+        policyOptions: [{ id: "Enterprise", label: "Enterprise" }],
+        policyProfileLabel: "Enterprise",
+        runConfigurationLabel: "Checked Master",
+        scopeLabel: "Current source",
+        sourceLabel: "Preview source",
+        variant: "full",
+        voiceOptions: [{ id: "default", label: "Default voice" }],
+        voiceProfileLabel: "Default voice",
+        onActiveBlockChange: noop,
+        onOpenCinema: noop,
+        onPolicyProfileChange: noop,
+        onRunModeChange: noop,
+        onVoiceProfileChange: noop,
+      }),
+    );
+
+    expect(markup).toContain('data-testid="preview-active-spoken-text"');
+    expect(markup).toContain("Hello world.");
+    expect(markup).toContain('data-reading-active-emphasis="dominant"');
+  });
 });
 
 function block(overrides: Partial<RevisionBlock>): RevisionBlock {

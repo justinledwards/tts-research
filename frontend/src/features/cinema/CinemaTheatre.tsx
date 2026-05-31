@@ -9,6 +9,7 @@ import {
   type TheatreFullscreenAvailability,
 } from "../theatre/fullscreen";
 import { READER_SEEK_SECONDS } from "../reader-accessibility";
+import { readingSurfaceDataAttributes } from "../reading-surface";
 import { LocalizedPlaybackToolbar, type LocalizedPlaybackToolbarModel } from "../playback";
 import type { CinemaTransportModel } from "./CinemaTransportBar";
 
@@ -208,6 +209,7 @@ export function CinemaTheatreChrome({
       <p
         className="line-clamp-2 max-w-5xl text-sm leading-6 text-zinc-200"
         data-testid="cinema-theatre-passage"
+        {...readingSurfaceDataAttributes({ kind: "source" })}
       >
         {activePassage || "Current passage will appear as playback or selection advances."}
       </p>

@@ -1,3 +1,10 @@
+## 2026-05-30 17:28 CEST - Reading Surface Ergonomics
+- [x] Add shared reading surface design system.
+- [x] Apply typography and framing across reader surfaces.
+- [x] Add preset controls and before/after evidence tooling.
+- [x] Add/update tests.
+- [x] Run project checks.
+
 ## 2026-05-30 13:11 CEST - Localized Playback Controls
 - [x] Add shared localized playback toolbar model and component.
 - [x] Move Review, Preview, Teleprompt, and Theatre primary controls near active text.

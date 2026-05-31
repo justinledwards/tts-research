@@ -5,6 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
+  apiJson,
   blockingPageIssues,
   collectPageIssues,
   createQaProject,
@@ -52,6 +53,8 @@ const viewports = [
   { height: 980, id: "desktop-1440", width: 1440 },
   { height: 1080, id: "desktop-1920-taskbar", width: 1920 },
 ];
+const telepromptTheatreFixtureText =
+  "Teleprompt Theatre responsive fixture. This presenter cue should remain readable in fullscreen fallback mode. The next cue verifies operator preview spacing and status.";
 
 main().catch(async (error) => {
   const message = error instanceof Error ? error.stack || error.message : String(error);
@@ -82,13 +85,18 @@ async function main() {
       apiBaseUrl,
       `Teleprompt Theatre Responsive QA ${new Date().toISOString()}`,
     );
+    const telepromptTheatreJob = await seedTelepromptTheatreJob(telepromptTheatreProject.id);
     const { chromium } = await loadPlaywright();
     const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
     const results = [];
     try {
       for (const viewport of viewports) {
         results.push(
-          await captureViewport(browser, viewport, websiteCalmFixture, telepromptTheatreProject.id),
+          await captureViewport(browser, viewport, websiteCalmFixture, {
+            job: telepromptTheatreJob,
+            projectId: telepromptTheatreProject.id,
+            text: telepromptTheatreFixtureText,
+          }),
         );
       }
     } finally {
@@ -163,7 +171,7 @@ async function main() {
   }
 }
 
-async function captureViewport(browser, viewport, websiteCalmFixture, telepromptTheatreProjectId) {
+async function captureViewport(browser, viewport, websiteCalmFixture, telepromptTheatreFixture) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
   instrumentScreenshotState(page, { records: screenshotStateRecords, rootDir });
@@ -192,7 +200,7 @@ async function captureViewport(browser, viewport, websiteCalmFixture, teleprompt
     const telepromptTheatre = await captureTelepromptTheatreScenario(
       browser,
       viewport,
-      telepromptTheatreProjectId,
+      telepromptTheatreFixture,
     );
     screenshots.push(telepromptTheatre.screenshot);
 
@@ -304,12 +312,13 @@ async function captureViewport(browser, viewport, websiteCalmFixture, teleprompt
   }
 }
 
-async function captureTelepromptTheatreScenario(browser, viewport, projectId) {
+async function captureTelepromptTheatreScenario(browser, viewport, fixture) {
   const context = await browser.newContext({
-    storageState: projectStorageState(appBaseUrl, projectId, {
+    storageState: projectStorageState(appBaseUrl, fixture.projectId, {
+      jobId: fixture.job.id,
       sourceMode: "text",
       stage: "preview",
-      text: "Teleprompt Theatre responsive fixture. This presenter cue should remain readable in fullscreen fallback mode. The next cue verifies operator preview spacing and status.",
+      text: fixture.text,
     }),
     viewport,
   });
@@ -322,9 +331,21 @@ async function captureTelepromptTheatreScenario(browser, viewport, projectId) {
     await page.waitForLoadState("networkidle").catch(() => {});
     await page.getByTestId("workspace-stage-action-openTeleprompt").click();
     await page.getByTestId("teleprompt-studio").waitFor();
+    await ensureTelepromptTheatreAudio(page);
     await pinWorkspaceInspector(page);
     await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
-    await page.getByTestId("teleprompt-theatre").waitFor();
+    await page
+      .getByTestId("teleprompt-theatre")
+      .waitFor({ timeout: 15_000 })
+      .catch(async () => {
+        const stageAction = page.getByTestId("workspace-stage-action-openTheatre").first();
+        if (await stageAction.isVisible().catch(() => false)) {
+          await stageAction.click();
+        } else {
+          await page.getByTestId("workspace-stage-theatre").click();
+        }
+        await page.getByTestId("teleprompt-theatre").waitFor();
+      });
     await page.getByTestId("ui-action-teleprompt-operator-preview").click();
     await page.getByTestId("ui-action-teleprompt-theatre-config-preset-lowVision").click();
     const screenshot = path.join(screenshotsDir, `${viewport.id}-teleprompt-theatre.png`);
@@ -414,6 +435,67 @@ async function openSettingsIfAvailable(page) {
     );
     return;
   }
+}
+
+async function ensureTelepromptTheatreAudio(page) {
+  const openTheatreAction = page.getByTestId("workspace-stage-action-openTheatre").first();
+  if (await openTheatreAction.isVisible().catch(() => false)) {
+    return;
+  }
+  const createButton = page.getByTestId("workspace-stage-action-createAndListen").first();
+  if (!(await createButton.isVisible().catch(() => false))) {
+    return;
+  }
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/voice-jobs") && response.request().method() === "POST",
+  );
+  await createButton.click();
+  const response = await responsePromise;
+  const createdJob = await response.json();
+  await waitForResponsiveVoiceJob(createdJob.id);
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(500);
+}
+
+async function seedTelepromptTheatreJob(projectId) {
+  const job = await apiJson(apiBaseUrl, "/api/voice-jobs", {
+    body: JSON.stringify({
+      performanceMode: "throughput",
+      pipelineOptions: {
+        arrivalPlayback: true,
+        asrCheck: false,
+        autoRetry: false,
+        qualityReport: false,
+        textPreprocess: false,
+        voiceClone: false,
+      },
+      projectId,
+      runMode: "draftPreview",
+      sourceKind: "text",
+      text: telepromptTheatreFixtureText,
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  return waitForResponsiveVoiceJob(job.id);
+}
+
+async function waitForResponsiveVoiceJob(jobId) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 60_000) {
+    const job = await apiJson(apiBaseUrl, `/api/voice-jobs/${jobId}`);
+    if (job.status === "completed") {
+      return job;
+    }
+    if (job.status === "failed" || job.status === "cancelled") {
+      throw new Error(`Job ${jobId} ended as ${job.status}: ${job.error ?? "no error"}`);
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 500);
+    });
+  }
+  throw new Error(`Timed out waiting for responsive snapshot job ${jobId}`);
 }
 
 async function captureWebsiteCalmReadScenario(browser, viewport, fixture) {

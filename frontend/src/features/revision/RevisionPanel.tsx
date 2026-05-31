@@ -42,6 +42,7 @@ import {
   RevisionMetric,
   RevisionStatusChip,
 } from "./revisionPanelHelpers";
+import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
 
 export interface RevisionPanelProps {
   activeBlockId: string | null;
@@ -659,7 +660,10 @@ function RevisionOverview({
           <RevisionFact label="Voice" value={voiceProfileLabel} />
         </dl>
         {activeBlock ? (
-          <div className="rounded-md border bg-[var(--vs-raised)] p-3 vs-border">
+          <div
+            className="rounded-md bg-[var(--vs-raised)] p-3"
+            {...readingSurfaceDataAttributes({ active: true, kind: "source" })}
+          >
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-semibold">Active block {activeBlock.index.toString()}</p>
               <RevisionStatusChip status={activeBlock.status} />
@@ -667,7 +671,9 @@ function RevisionOverview({
                 {activeBlock.needsAttention ? "Needs attention" : "No attention flag"}
               </StatusChip>
             </div>
-            <p className="mt-2 line-clamp-3 text-sm leading-6 vs-muted">{activeBlock.text}</p>
+            <p className={`mt-2 line-clamp-3 ${readingSurfaceClassName("source")}`}>
+              {activeBlock.text}
+            </p>
           </div>
         ) : null}
       </div>
@@ -730,7 +736,10 @@ function RevisionBlocksTab({
               <span className="block truncate text-sm font-semibold" title={block.label}>
                 {block.index.toString()}. {block.label}
               </span>
-              <span className="mt-1 block line-clamp-2 text-xs leading-5 vs-muted">
+              <span
+                className={`mt-1 block line-clamp-2 ${readingSurfaceClassName("source")}`}
+                {...readingSurfaceDataAttributes({ kind: "source" })}
+              >
                 {block.text}
               </span>
               <span className="mt-2 block text-xs vs-muted">
@@ -778,7 +787,15 @@ function RevisionPronunciationTab({ blocks }: Readonly<{ blocks: RevisionBlock[]
               </StatusChip>
             </div>
           </div>
-          <p className="mt-2 text-sm leading-6 vs-muted">{block.spokenText}</p>
+          <p
+            className={`mt-2 ${readingSurfaceClassName("spoken")}`}
+            {...readingSurfaceDataAttributes({
+              active: block.status === "needsReview",
+              kind: "spoken",
+            })}
+          >
+            {block.spokenText}
+          </p>
         </div>
       ))}
     </div>

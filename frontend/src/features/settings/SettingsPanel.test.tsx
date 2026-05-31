@@ -145,6 +145,21 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Cue font size");
   });
 
+  it("renders reader typography presets only inside Reader settings", () => {
+    const markup = renderSettingsPanel({
+      fieldId: "readerPreferences",
+      groupId: "reader",
+      layerId: "advanced",
+      scope: "machine",
+    });
+
+    expect(markup).toContain("Typography preset");
+    expect(markup).toContain("Teleprompt");
+    expect(markup).toContain("Theatre");
+    expect(markup).toContain('data-testid="ui-action-reader-typography-preset"');
+    expect(markup).not.toContain("settings-quick-reader-scale");
+  });
+
   it("renders custom golden-minute policy comparison when a user profile exists", () => {
     const markup = renderSettingsPanel(
       {
