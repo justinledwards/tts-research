@@ -152,6 +152,16 @@ export function resolveNarrationStatusModel(
   const sourceDescriptor = sourceLifecycleDescriptor(input.sourceLifecycle.canonicalState);
   const audioLabel = generatedAudioLifecycleLabel(input.generatedAudioLifecycle);
   const primaryCopy = resolvePrimaryCopy(input, state, queue, blocker);
+  const reviewNeedsRepair =
+    input.stageStatus.reviewState === "needsRepair" ||
+    input.stageStatus.blocker?.id === "reviewRequired";
+  let reviewChipValue = "Ready";
+  if (input.stageStatus.reviewWarningCount > 0) {
+    reviewChipValue = "Needs repair";
+  }
+  if (input.stageStatus.blocker?.id === "reviewRequired") {
+    reviewChipValue = "Needed";
+  }
   return {
     activeJobDetail: input.job ? jobDetail(input.job, input.now) : "No active job",
     activeJobLabel: input.job ? shortIdentifier(input.job.id) : "None",
@@ -167,8 +177,8 @@ export function resolveNarrationStatusModel(
       {
         id: "review",
         label: "Review",
-        tone: input.stageStatus.blocker?.id === "reviewRequired" ? "warning" : "success",
-        value: input.stageStatus.blocker?.id === "reviewRequired" ? "Needed" : "Ready",
+        tone: reviewNeedsRepair ? "warning" : "success",
+        value: reviewChipValue,
       },
       {
         id: "audio",

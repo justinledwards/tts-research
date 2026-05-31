@@ -121,6 +121,8 @@ function stageStatus(): WorkspaceStageStatus {
     nextAction: "previewSpeech",
     primaryAction: "previewSpeech",
     primaryLabel: "Preview speech",
+    reviewState: "ready",
+    reviewWarningCount: 0,
     stage: "review",
   };
 }

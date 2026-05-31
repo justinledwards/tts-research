@@ -11,12 +11,14 @@ export function InlineSpeechEdit({
   block,
   canRevert,
   currentSpokenText,
+  onDraftStateChange,
   onRevert,
   onSave,
 }: Readonly<{
   block: RevisionBlock;
   canRevert: boolean;
   currentSpokenText: string;
+  onDraftStateChange?: (blockId: string, dirty: boolean) => void;
   onRevert: () => void;
   onSave: (nextSpokenText: string) => void;
 }>) {
@@ -35,6 +37,13 @@ export function InlineSpeechEdit({
     () => trimmedDraft || currentSpokenText,
     [currentSpokenText, trimmedDraft],
   );
+
+  useEffect(() => {
+    onDraftStateChange?.(block.id, hasDraftChange);
+    return () => {
+      onDraftStateChange?.(block.id, false);
+    };
+  }, [block.id, hasDraftChange, onDraftStateChange]);
 
   return (
     <section

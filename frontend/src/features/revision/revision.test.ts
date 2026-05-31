@@ -2,10 +2,17 @@ import { describe, expect, it } from "vitest";
 import { applyRevisionBatchAction } from "./revisionBatchActions";
 import {
   DEFAULT_REVISION_FILTERS,
+  applyRevisionSessionState,
+  buildRevisionTriageItems,
+  composeReviewedSpeechText,
   deriveRevisionBlockStatus,
   filterRevisionBlocks,
+  groupRevisionTriageItems,
   normalizeRevisionPolicyNoteType,
+  revisionPreviewReadinessLabel,
   revisionFiltersAreDefault,
+  revisionNextActionLabel,
+  summarizeRevisionHealth,
   summarizeRevisionBlocks,
   type RevisionBlock,
 } from "./revisionFilters";
@@ -69,6 +76,94 @@ describe("revision filters", () => {
       skipped: 1,
       total: 3,
     });
+  });
+
+  it("derives repair queue severity and health from triage categories", () => {
+    const triageBlocks = [
+      block({
+        id: "empty",
+        index: 1,
+        spokenText: "",
+        status: "waiting",
+      }),
+      block({
+        id: "pronunciation",
+        index: 2,
+        normalisationCount: 1,
+        normalisations: [
+          {
+            endOffset: 4,
+            kind: "abbreviation",
+            original: "Dr.",
+            rule: "doctor-title",
+            spoken: "Doctor",
+            startOffset: 0,
+          },
+        ],
+        pronunciationCount: 1,
+        pronunciations: [
+          {
+            endOffset: 9,
+            originalText: "OpenAI",
+            source: "project",
+            spoken: "Open A I",
+            startOffset: 0,
+            term: "OpenAI",
+          },
+        ],
+      }),
+      block({
+        id: "policy",
+        index: 3,
+        policyNote: "Citation is summarized for speech.",
+        policyNoteType: "citation",
+      }),
+      block({
+        id: "clean",
+        index: 4,
+        status: "approved",
+      }),
+    ];
+
+    const items = buildRevisionTriageItems(triageBlocks);
+    const groups = groupRevisionTriageItems(items);
+    const summary = summarizeRevisionHealth(triageBlocks);
+
+    expect(items.map((item) => [item.block.id, item.category])).toEqual([
+      ["empty", "audioBlocker"],
+      ["pronunciation", "pronunciation"],
+      ["policy", "policyTransform"],
+      ["clean", "clean"],
+    ]);
+    expect(groups.map((group) => group.category)).toEqual([
+      "audioBlocker",
+      "pronunciation",
+      "policyTransform",
+      "clean",
+    ]);
+    expect(summary).toMatchObject({
+      audioBlockers: 1,
+      needsRepair: 2,
+      policyTransforms: 1,
+      previewReadiness: "warning",
+      previewWarnings: 3,
+      pronunciationBlocks: 1,
+      pronunciationItems: 2,
+      ready: 1,
+    });
+    expect(revisionPreviewReadinessLabel(summary)).toContain("blocker");
+    expect(revisionNextActionLabel(summary)).toBe("Repair blockers");
+  });
+
+  it("composes reviewed speech text from session edits and skipped decisions", () => {
+    const sessionBlocks = applyRevisionSessionState(blocks, {
+      editedTextByBlockId: { a: "Edited spoken intro." },
+      statusByBlockId: { b: "skipped" },
+    });
+
+    expect(sessionBlocks.find((item) => item.id === "a")?.spokenText).toBe("Edited spoken intro.");
+    expect(sessionBlocks.find((item) => item.id === "b")?.status).toBe("skipped");
+    expect(composeReviewedSpeechText(sessionBlocks)).toBe("Edited spoken intro.");
   });
 
   it("normalizes policy note types from source decisions", () => {

@@ -1,5 +1,20 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Button, SegmentedControl, StatusChip, cx, fieldControlClassName } from "../../design";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
+import {
+  Button,
+  SegmentedControl,
+  StatusChip,
+  cx,
+  fieldControlClassName,
+  type StatusChipTone,
+} from "../../design";
 import { InlineSpeechEdit } from "./InlineSpeechEdit";
 import {
   REVISION_BATCH_ACTIONS,
@@ -15,16 +30,29 @@ import {
   DEFAULT_REVISION_FILTERS,
   REVISION_POLICY_NOTE_LABELS,
   REVISION_STATUS_LABELS,
+  REVISION_TRIAGE_DESCRIPTIONS,
+  REVISION_TRIAGE_LABELS,
   buildRevisionFilterOptions,
+  buildRevisionTriageItems,
   filterRevisionBlocks,
+  groupRevisionTriageItems,
   normalizeRevisionTabId,
+  revisionBlockHasPolicyTransform,
+  revisionBlockIsSkipped,
+  revisionBlockTriageCategory,
   revisionFiltersAreDefault,
-  summarizeRevisionBlocks,
+  revisionNextActionLabel,
+  revisionPreviewReadinessLabel,
+  summarizeRevisionHealth,
   type RevisionBlock,
   type RevisionFilterState,
+  type RevisionHealthSummary,
   type RevisionPolicyNoteType,
   type RevisionStatus,
   type RevisionTabId,
+  type RevisionTriageCategory,
+  type RevisionTriageGroup,
+  type RevisionTriageItem,
 } from "./revisionFilters";
 import {
   generatedAudioStateLabel,
@@ -46,7 +74,9 @@ import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../readin
 
 export interface RevisionPanelProps {
   activeBlockId: string | null;
+  baseBlocks?: RevisionBlock[];
   blocks: RevisionBlock[];
+  historyEntries: RevisionHistoryEntry[];
   initialTabId?: RevisionTabId;
   policyProfileLabel: string;
   playbackToolbar?: ReactNode;
@@ -55,19 +85,25 @@ export interface RevisionPanelProps {
   sourceLifecycle?: SourceLifecycleEnvelope | null;
   sourceLabel: string;
   sourceMeta: string;
+  statusByBlockId: Record<string, RevisionStatus>;
   validationReason: string;
   validationSimilarity: number;
   validationTranscript: string;
   voiceProfileLabel: string;
   onActiveBlockChange: (blockId: string | null) => void;
+  onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
+  onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
   onInspectStructure?: () => void;
   onPreviewSpeech: () => void;
+  onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
   onTabChange?: (tabId: RevisionTabId) => void;
 }
 
 export function RevisionPanel({
   activeBlockId,
+  baseBlocks,
   blocks,
+  historyEntries,
   initialTabId = "overview",
   policyProfileLabel,
   playbackToolbar,
@@ -76,13 +112,17 @@ export function RevisionPanel({
   sourceLifecycle = null,
   sourceLabel,
   sourceMeta,
+  statusByBlockId,
   validationReason,
   validationSimilarity,
   validationTranscript,
   voiceProfileLabel,
   onActiveBlockChange,
+  onEditedTextByBlockIdChange,
+  onHistoryEntriesChange,
   onInspectStructure,
   onPreviewSpeech,
+  onStatusByBlockIdChange,
   onTabChange,
 }: Readonly<RevisionPanelProps>) {
   const [activeTabId, setActiveTabId] = useState<RevisionTabId>(() =>
@@ -90,9 +130,7 @@ export function RevisionPanel({
   );
   const [filters, setFilters] = useState<RevisionFilterState>(DEFAULT_REVISION_FILTERS);
   const [selectedBlockIds, setSelectedBlockIds] = useState<Set<string>>(() => new Set());
-  const [statusByBlockId, setStatusByBlockId] = useState<Record<string, RevisionStatus>>({});
-  const [editedTextByBlockId, setEditedTextByBlockId] = useState<Record<string, string>>({});
-  const [historyEntries, setHistoryEntries] = useState<RevisionHistoryEntry[]>([]);
+  const [dirtyDraftByBlockId, setDirtyDraftByBlockId] = useState<Record<string, boolean>>({});
   const [statusMessage, setStatusMessage] = useState("Revision workflow ready.");
   const [exportText, setExportText] = useState<string | null>(null);
 
@@ -100,15 +138,7 @@ export function RevisionPanel({
     setActiveTabId(normalizeRevisionTabId(initialTabId));
   }, [initialTabId]);
 
-  const blocksWithState = useMemo(
-    () =>
-      blocks.map((block) => ({
-        ...block,
-        spokenText: editedTextByBlockId[block.id] ?? block.spokenText,
-        status: statusByBlockId[block.id] ?? block.status,
-      })),
-    [blocks, editedTextByBlockId, statusByBlockId],
-  );
+  const blocksWithState = blocks;
   useEffect(() => {
     setSelectedBlockIds((current) => {
       const allowed = new Set(blocks.map((block) => block.id));
@@ -125,11 +155,15 @@ export function RevisionPanel({
     () => buildRevisionFilterOptions(blocksWithState),
     [blocksWithState],
   );
-  const summary = useMemo(() => summarizeRevisionBlocks(blocksWithState), [blocksWithState]);
+  const summary = useMemo(() => summarizeRevisionHealth(blocksWithState), [blocksWithState]);
+  const triageGroups = useMemo(
+    () => groupRevisionTriageItems(buildRevisionTriageItems(filteredBlocks)),
+    [filteredBlocks],
+  );
   const hasActiveFilters = useMemo(() => !revisionFiltersAreDefault(filters), [filters]);
   const { activeBaseBlock, activeBlock } = selectActiveRevisionBlocks(
     blocksWithState,
-    blocks,
+    baseBlocks ?? blocks,
     activeBlockId,
   );
   const lifecycleDescriptor = sourceLifecycle
@@ -145,6 +179,7 @@ export function RevisionPanel({
   ).length;
   const allVisibleSelected =
     filteredBlocks.length > 0 && selectedVisibleCount === filteredBlocks.length;
+  const activeDraftDirty = Boolean(activeBlock && dirtyDraftByBlockId[activeBlock.id]);
 
   const setActiveTab = (tabId: RevisionTabId) => {
     setActiveTabId(tabId);
@@ -188,6 +223,10 @@ export function RevisionPanel({
   };
 
   const runBatchAction = (actionId: RevisionBatchActionId) => {
+    if (actionId === "approveSelected" && activeDraftDirty) {
+      setStatusMessage("Save or discard the inline edit before approving blocks.");
+      return;
+    }
     const result = applyRevisionBatchAction({
       actionId,
       blocks: blocksWithState,
@@ -195,23 +234,23 @@ export function RevisionPanel({
       selectedBlockIds,
       statusByBlockId,
     });
-    setStatusByBlockId(result.statusByBlockId);
-    setHistoryEntries((current) => [...current, ...result.historyEntries]);
+    onStatusByBlockIdChange(result.statusByBlockId);
+    onHistoryEntriesChange((current) => [...current, ...result.historyEntries]);
     setStatusMessage(result.statusMessage);
     setExportText(result.exportText);
   };
 
   const saveInlineEdit = (block: RevisionBlock, nextSpokenText: string) => {
     const previousSpokenText = block.spokenText;
-    setEditedTextByBlockId((current) => ({
+    onEditedTextByBlockIdChange((current) => ({
       ...current,
       [block.id]: nextSpokenText,
     }));
-    setStatusByBlockId((current) => ({
+    onStatusByBlockIdChange((current) => ({
       ...current,
       [block.id]: "needsReview",
     }));
-    setHistoryEntries((current) => [
+    onHistoryEntriesChange((current) => [
       ...current,
       createRevisionHistoryEntry({
         block,
@@ -225,14 +264,14 @@ export function RevisionPanel({
   };
 
   const revertInlineEdit = (block: RevisionBlock, previousSpokenText: string) => {
-    setEditedTextByBlockId((current) =>
+    onEditedTextByBlockIdChange((current) =>
       Object.fromEntries(Object.entries(current).filter(([blockId]) => blockId !== block.id)),
     );
-    setStatusByBlockId((current) => ({
+    onStatusByBlockIdChange((current) => ({
       ...current,
       [block.id]: "needsReview",
     }));
-    setHistoryEntries((current) => [
+    onHistoryEntriesChange((current) => [
       ...current,
       createRevisionHistoryEntry({
         block,
@@ -244,6 +283,38 @@ export function RevisionPanel({
     ]);
     setStatusMessage(`Reverted block ${block.index.toString()} to the source spoken form.`);
   };
+
+  const setBlockStatus = (block: RevisionBlock, status: RevisionStatus, userAction: string) => {
+    onStatusByBlockIdChange((current) => ({
+      ...current,
+      [block.id]: status,
+    }));
+    onHistoryEntriesChange((current) => [
+      ...current,
+      createRevisionHistoryEntry({
+        block,
+        context,
+        newSpokenText: block.spokenText,
+        previousSpokenText: block.spokenText,
+        userAction,
+      }),
+    ]);
+    setStatusMessage(
+      `Block ${block.index.toString()} set to ${REVISION_STATUS_LABELS[status].toLowerCase()}.`,
+    );
+  };
+
+  const handleDraftStateChange = useCallback((blockId: string, dirty: boolean) => {
+    setDirtyDraftByBlockId((current) => {
+      if (current[blockId] === dirty) {
+        return current;
+      }
+      return {
+        ...current,
+        [blockId]: dirty,
+      };
+    });
+  }, []);
 
   return (
     <section aria-label="Revision Panel" className="grid gap-3" data-testid="revision-panel">
@@ -288,48 +359,7 @@ export function RevisionPanel({
         </div>
       </div>
 
-      <SegmentedControl
-        ariaLabel="Revision tabs"
-        columns={5}
-        options={[
-          { label: "Overview", testId: "revision-tab-overview", value: "overview" },
-          { label: "Blocks", testId: "revision-tab-blocks", value: "blocks" },
-          {
-            label: "Pronunciation",
-            testId: "revision-tab-pronunciation",
-            value: "pronunciation",
-          },
-          { label: "Diagnostics", testId: "revision-tab-diagnostics", value: "diagnostics" },
-          { label: "History", testId: "revision-tab-history", value: "history" },
-        ]}
-        value={activeTabId}
-        onChange={setActiveTab}
-      />
-
-      <RevisionFilterBar
-        filters={filters}
-        hasActiveFilters={hasActiveFilters}
-        options={filterOptions}
-        onFilterChange={updateFilter}
-        onReset={() => {
-          setFilters(DEFAULT_REVISION_FILTERS);
-          setStatusMessage("Showing all revision blocks.");
-        }}
-      />
-
-      <RevisionBatchBar
-        allVisibleSelected={allVisibleSelected}
-        selectedCount={selectedBlockIds.size}
-        selectedVisibleCount={selectedVisibleCount}
-        visibleCount={filteredBlocks.length}
-        onBatchAction={runBatchAction}
-        onClearSelection={() => {
-          setSelectedBlockIds(new Set());
-        }}
-        onToggleVisibleSelection={toggleVisibleSelection}
-      />
-
-      {playbackToolbar ? <div className="sticky top-3 z-10">{playbackToolbar}</div> : null}
+      <RevisionHealthBanner summary={summary} onPreviewSpeech={onPreviewSpeech} />
 
       <output
         className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs font-semibold vs-border"
@@ -338,64 +368,79 @@ export function RevisionPanel({
         {statusMessage}
       </output>
 
-      {activeTabId === "overview" ? (
-        <RevisionOverview
-          activeBlock={activeBlock}
-          policyProfileLabel={policyProfileLabel}
-          scopeLabel={scopeLabel}
-          summary={summary}
-          voiceProfileLabel={voiceProfileLabel}
-        />
-      ) : null}
+      <div className="grid gap-3 xl:grid-cols-[minmax(18rem,0.95fr)_minmax(0,1.45fr)] xl:items-start">
+        <div className="grid gap-3">
+          <RevisionFilterBar
+            filters={filters}
+            hasActiveFilters={hasActiveFilters}
+            options={filterOptions}
+            onFilterChange={updateFilter}
+            onReset={() => {
+              setFilters(DEFAULT_REVISION_FILTERS);
+              setStatusMessage("Showing all revision blocks.");
+            }}
+          />
 
-      {activeTabId === "blocks" ? (
-        <RevisionBlocksTab
-          activeBlockId={activeBlock?.id ?? null}
-          blocks={filteredBlocks}
-          selectedBlockIds={selectedBlockIds}
-          onActiveBlockChange={onActiveBlockChange}
-          onToggleBlockSelection={toggleBlockSelection}
-        />
-      ) : null}
-
-      {activeTabId === "pronunciation" ? (
-        <RevisionPronunciationTab blocks={filteredBlocks} />
-      ) : null}
-
-      {activeTabId === "diagnostics" ? (
-        <RevisionDiagnosticsTab
-          blocks={filteredBlocks}
-          validationReason={validationReason}
-          validationSimilarity={validationSimilarity}
-          validationTranscript={validationTranscript}
-        />
-      ) : null}
-
-      {activeTabId === "history" ? (
-        <RevisionHistoryTab
-          entries={historyEntries}
-          onRevertEntry={(entry) => {
-            const block = blocksWithState.find((candidate) => candidate.id === entry.blockId);
-            if (block) {
-              revertInlineEdit(block, entry.previousSpokenText);
+          <RevisionBatchBar
+            allVisibleSelected={allVisibleSelected}
+            approveDisabledReason={
+              activeDraftDirty ? "Save or discard the inline edit before approving." : undefined
             }
-          }}
-        />
-      ) : null}
+            selectedCount={selectedBlockIds.size}
+            selectedVisibleCount={selectedVisibleCount}
+            visibleCount={filteredBlocks.length}
+            onBatchAction={runBatchAction}
+            onClearSelection={() => {
+              setSelectedBlockIds(new Set());
+            }}
+            onToggleVisibleSelection={toggleVisibleSelection}
+          />
 
-      {activeBlock && activeBaseBlock ? (
-        <InlineSpeechEdit
-          block={activeBlock}
-          canRevert={activeBlock.spokenText !== activeBaseBlock.spokenText}
-          currentSpokenText={activeBlock.spokenText}
-          onRevert={() => {
-            revertInlineEdit(activeBlock, activeBaseBlock.spokenText);
-          }}
-          onSave={(nextSpokenText) => {
-            saveInlineEdit(activeBlock, nextSpokenText);
-          }}
-        />
-      ) : null}
+          <RevisionRepairQueue
+            activeBlockId={activeBlock?.id ?? null}
+            groups={triageGroups}
+            selectedBlockIds={selectedBlockIds}
+            onActiveBlockChange={onActiveBlockChange}
+            onToggleBlockSelection={toggleBlockSelection}
+          />
+        </div>
+
+        <div className="grid gap-3">
+          {playbackToolbar ? <div className="sticky top-3 z-10">{playbackToolbar}</div> : null}
+          <RevisionSelectedBlockEditor
+            activeBaseBlock={activeBaseBlock}
+            activeBlock={activeBlock}
+            activeDraftDirty={activeDraftDirty}
+            activeTabId={activeTabId}
+            blocks={filteredBlocks}
+            historyEntries={historyEntries}
+            policyProfileLabel={policyProfileLabel}
+            scopeLabel={scopeLabel}
+            summary={summary}
+            validationReason={validationReason}
+            validationSimilarity={validationSimilarity}
+            validationTranscript={validationTranscript}
+            voiceProfileLabel={voiceProfileLabel}
+            onDraftStateChange={handleDraftStateChange}
+            onInlineEditRevert={revertInlineEdit}
+            onInlineEditSave={saveInlineEdit}
+            onPreviewSpeech={() => {
+              if (activeBlock) {
+                onActiveBlockChange(activeBlock.id);
+              }
+              onPreviewSpeech();
+            }}
+            onRevertHistoryEntry={(entry) => {
+              const block = blocksWithState.find((candidate) => candidate.id === entry.blockId);
+              if (block) {
+                revertInlineEdit(block, entry.previousSpokenText);
+              }
+            }}
+            onSetActiveTab={setActiveTab}
+            onSetBlockStatus={setBlockStatus}
+          />
+        </div>
+      </div>
 
       {exportText ? (
         <details className="rounded-lg border bg-[var(--vs-surface)] p-3 text-xs vs-border">
@@ -571,6 +616,7 @@ function RevisionSelect({
 
 function RevisionBatchBar({
   allVisibleSelected,
+  approveDisabledReason,
   selectedCount,
   selectedVisibleCount,
   visibleCount,
@@ -579,6 +625,7 @@ function RevisionBatchBar({
   onToggleVisibleSelection,
 }: Readonly<{
   allVisibleSelected: boolean;
+  approveDisabledReason?: string;
   selectedCount: number;
   selectedVisibleCount: number;
   visibleCount: number;
@@ -612,23 +659,41 @@ function RevisionBatchBar({
         Clear selection
       </Button>
       <span className="text-xs font-semibold vs-muted">{selectedCount.toString()} selected</span>
-      {REVISION_BATCH_ACTIONS.map((action) => (
-        <Button
-          data-testid={action.testId}
-          disabled={!hasSelection}
-          disabledReason={hasSelection ? undefined : "Select one or more blocks first."}
-          key={action.actionId}
-          onClick={() => {
-            onBatchAction(action.actionId);
-          }}
-          size="sm"
-          variant="secondary"
-        >
-          {action.label}
-        </Button>
-      ))}
+      {REVISION_BATCH_ACTIONS.map((action) => {
+        const actionDisabledReason = revisionBatchActionDisabledReason(
+          action.actionId,
+          hasSelection,
+          approveDisabledReason,
+        );
+        return (
+          <Button
+            data-testid={action.testId}
+            disabled={Boolean(actionDisabledReason)}
+            disabledReason={actionDisabledReason}
+            key={action.actionId}
+            onClick={() => {
+              onBatchAction(action.actionId);
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            {action.label}
+          </Button>
+        );
+      })}
     </div>
   );
+}
+
+function revisionBatchActionDisabledReason(
+  actionId: RevisionBatchActionId,
+  hasSelection: boolean,
+  approveDisabledReason?: string,
+): string | undefined {
+  if (hasSelection) {
+    return actionId === "approveSelected" ? approveDisabledReason : undefined;
+  }
+  return "Select one or more blocks first.";
 }
 
 function RevisionOverview({
@@ -641,7 +706,7 @@ function RevisionOverview({
   activeBlock: RevisionBlock | null;
   policyProfileLabel: string;
   scopeLabel: string;
-  summary: ReturnType<typeof summarizeRevisionBlocks>;
+  summary: RevisionHealthSummary;
   voiceProfileLabel: string;
 }>) {
   return (
@@ -681,84 +746,552 @@ function RevisionOverview({
   );
 }
 
-function RevisionBlocksTab({
+function RevisionHealthBanner({
+  summary,
+  onPreviewSpeech,
+}: Readonly<{ summary: RevisionHealthSummary; onPreviewSpeech: () => void }>) {
+  const readinessTone = summary.previewReadiness === "ready" ? "success" : "warning";
+  return (
+    <div className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold">Review health</p>
+            <StatusChip tone={readinessTone}>{revisionPreviewReadinessLabel(summary)}</StatusChip>
+          </div>
+          <p className="mt-1 text-sm vs-muted">
+            Next action: {revisionNextActionLabel(summary)}. Preview Speech stays available while
+            warnings are resolved.
+          </p>
+        </div>
+        <Button
+          data-testid="workspace-stage-action-previewSpeech-selected"
+          onClick={onPreviewSpeech}
+          size="sm"
+          variant={summary.previewReadiness === "ready" ? "primary" : "soft"}
+        >
+          Preview Speech
+        </Button>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
+        <RevisionHealthStat label="Ready" value={summary.ready.toLocaleString()} />
+        <RevisionHealthStat label="Needs repair" value={summary.needsRepair.toLocaleString()} />
+        <RevisionHealthStat
+          label="Pronunciation"
+          value={summary.pronunciationItems.toLocaleString()}
+        />
+        <RevisionHealthStat label="Skipped" value={summary.skipped.toLocaleString()} />
+        <RevisionHealthStat label="Policy" value={summary.policyTransforms.toLocaleString()} />
+        <RevisionHealthStat label="Approved" value={summary.approved.toLocaleString()} />
+        <RevisionHealthStat label="Warnings" value={summary.previewWarnings.toLocaleString()} />
+      </div>
+    </div>
+  );
+}
+
+function RevisionHealthStat({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="min-w-0 rounded-md bg-[var(--vs-raised)] px-3 py-2">
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] vs-muted">{label}</p>
+      <p className="mt-1 text-base font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function RevisionRepairQueue({
   activeBlockId,
-  blocks,
+  groups,
   selectedBlockIds,
   onActiveBlockChange,
   onToggleBlockSelection,
 }: Readonly<{
   activeBlockId: string | null;
-  blocks: RevisionBlock[];
+  groups: RevisionTriageGroup[];
   selectedBlockIds: ReadonlySet<string>;
   onActiveBlockChange: (blockId: string | null) => void;
   onToggleBlockSelection: (blockId: string, selected: boolean) => void;
 }>) {
-  if (blocks.length === 0) {
+  if (groups.length === 0) {
     return <RevisionEmptyState detail="No blocks match the current search and filters." />;
   }
   return (
     <div
-      className="max-h-[32rem] overflow-auto rounded-lg border vs-border"
+      className="max-h-[42rem] overflow-auto rounded-lg border bg-[var(--vs-surface)] vs-border"
       data-testid="revision-block-list"
     >
-      {blocks.map((block) => (
-        <div
-          className={cx(
-            "grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)_auto] gap-2 border-b bg-[var(--vs-raised)] p-3 last:border-b-0 vs-border",
-            activeBlockId === block.id && "bg-[var(--vs-selected)]",
-          )}
-          key={block.id}
-        >
-          <label className="flex min-h-11 items-start justify-center pt-3">
-            <input
-              aria-label={`Select block ${block.index.toString()}`}
-              checked={selectedBlockIds.has(block.id)}
-              className="h-4 w-4"
-              data-testid={`revision-select-block-${block.id}`}
-              onChange={(event) => {
-                onToggleBlockSelection(block.id, event.target.checked);
-              }}
-              type="checkbox"
-            />
-          </label>
-          <Button
-            align="start"
-            className="min-w-0 border-transparent bg-transparent p-0 shadow-none hover:bg-transparent"
-            data-testid={`revision-block-${block.id}`}
-            onClick={() => {
-              onActiveBlockChange(block.id);
-            }}
-            selected={activeBlockId === block.id}
-            variant="ghost"
-          >
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold" title={block.label}>
-                {block.index.toString()}. {block.label}
-              </span>
-              <span
-                className={`mt-1 block line-clamp-2 ${readingSurfaceClassName("source")}`}
-                {...readingSurfaceDataAttributes({ kind: "source" })}
-              >
-                {block.text}
-              </span>
-              <span className="mt-2 block text-xs vs-muted">
-                {block.sourceSection} · {block.segmentCount.toString()} segment
-                {block.segmentCount === 1 ? "" : "s"} ·{" "}
-                {formatDurationLabel(block.estimatedDurationMs)}
-              </span>
-            </span>
-          </Button>
-          <div className="flex flex-col items-end gap-2">
-            <RevisionStatusChip status={block.status} />
-            <StatusChip tone={block.needsAttention ? "warning" : "neutral"}>
-              {formatConfidence(block.confidence)}
-            </StatusChip>
+      {groups.map((group) => (
+        <section className="border-b last:border-b-0 vs-border" key={group.category}>
+          <div className="sticky top-0 z-10 border-b bg-[var(--vs-surface)] px-3 py-2 vs-border">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold">{REVISION_TRIAGE_LABELS[group.category]}</p>
+              <StatusChip tone={triageTone(group.category)}>
+                {group.items.length.toLocaleString()}
+              </StatusChip>
+            </div>
+            <p className="mt-1 text-xs vs-muted">{REVISION_TRIAGE_DESCRIPTIONS[group.category]}</p>
           </div>
-        </div>
+          {group.items.map((item) => (
+            <RevisionRepairQueueRow
+              active={activeBlockId === item.block.id}
+              item={item}
+              key={item.block.id}
+              selected={selectedBlockIds.has(item.block.id)}
+              onActiveBlockChange={onActiveBlockChange}
+              onToggleBlockSelection={onToggleBlockSelection}
+            />
+          ))}
+        </section>
       ))}
     </div>
   );
+}
+
+function RevisionRepairQueueRow({
+  active,
+  item,
+  selected,
+  onActiveBlockChange,
+  onToggleBlockSelection,
+}: Readonly<{
+  active: boolean;
+  item: RevisionTriageItem;
+  selected: boolean;
+  onActiveBlockChange: (blockId: string | null) => void;
+  onToggleBlockSelection: (blockId: string, selected: boolean) => void;
+}>) {
+  const { block } = item;
+  return (
+    <div
+      className={cx(
+        "grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)_auto] gap-2 border-b bg-[var(--vs-raised)] p-3 last:border-b-0 vs-border",
+        active && "bg-[var(--vs-selected)]",
+      )}
+    >
+      <label className="flex min-h-11 items-start justify-center pt-3">
+        <input
+          aria-label={`Select block ${block.index.toString()}`}
+          checked={selected}
+          className="h-4 w-4"
+          data-testid={`revision-select-block-${block.id}`}
+          onChange={(event) => {
+            onToggleBlockSelection(block.id, event.target.checked);
+          }}
+          type="checkbox"
+        />
+      </label>
+      <Button
+        align="start"
+        className="min-w-0 border-transparent bg-transparent p-0 shadow-none hover:bg-transparent"
+        data-testid={`revision-block-${block.id}`}
+        onClick={() => {
+          onActiveBlockChange(block.id);
+        }}
+        selected={active}
+        variant="ghost"
+      >
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold" title={block.label}>
+            {block.index.toString()}. {block.label}
+          </span>
+          <span
+            className={`mt-1 block line-clamp-2 ${readingSurfaceClassName("source")}`}
+            {...readingSurfaceDataAttributes({ kind: "source" })}
+          >
+            {block.text}
+          </span>
+          <span className="mt-2 block text-xs vs-muted">
+            {item.reason} · {block.sourceSection} · {formatDurationLabel(block.estimatedDurationMs)}
+          </span>
+        </span>
+      </Button>
+      <div className="flex flex-col items-end gap-2">
+        <RevisionStatusChip status={block.status} />
+        <StatusChip tone={triageTone(item.category)}>
+          {formatConfidence(block.confidence)}
+        </StatusChip>
+      </div>
+    </div>
+  );
+}
+
+function RevisionSelectedBlockEditor({
+  activeBaseBlock,
+  activeBlock,
+  activeDraftDirty,
+  activeTabId,
+  blocks,
+  historyEntries,
+  policyProfileLabel,
+  scopeLabel,
+  summary,
+  validationReason,
+  validationSimilarity,
+  validationTranscript,
+  voiceProfileLabel,
+  onDraftStateChange,
+  onInlineEditRevert,
+  onInlineEditSave,
+  onPreviewSpeech,
+  onRevertHistoryEntry,
+  onSetActiveTab,
+  onSetBlockStatus,
+}: Readonly<{
+  activeBaseBlock: RevisionBlock | null;
+  activeBlock: RevisionBlock | null;
+  activeDraftDirty: boolean;
+  activeTabId: RevisionTabId;
+  blocks: RevisionBlock[];
+  historyEntries: RevisionHistoryEntry[];
+  policyProfileLabel: string;
+  scopeLabel: string;
+  summary: RevisionHealthSummary;
+  validationReason: string;
+  validationSimilarity: number;
+  validationTranscript: string;
+  voiceProfileLabel: string;
+  onDraftStateChange: (blockId: string, dirty: boolean) => void;
+  onInlineEditRevert: (block: RevisionBlock, previousSpokenText: string) => void;
+  onInlineEditSave: (block: RevisionBlock, nextSpokenText: string) => void;
+  onPreviewSpeech: () => void;
+  onRevertHistoryEntry: (entry: RevisionHistoryEntry) => void;
+  onSetActiveTab: (tabId: RevisionTabId) => void;
+  onSetBlockStatus: (block: RevisionBlock, status: RevisionStatus, userAction: string) => void;
+}>) {
+  if (!activeBlock || !activeBaseBlock) {
+    return <RevisionEmptyState detail="Select a block from the repair queue to review it." />;
+  }
+
+  const canApprove = !activeDraftDirty && activeBlock.spokenText.trim().length > 0;
+  const approveDisabledReason = revisionApprovalDisabledReason(canApprove, activeDraftDirty);
+
+  return (
+    <section
+      aria-label={`Selected block editor for ${activeBlock.label}`}
+      className="grid gap-3"
+      data-testid="revision-selected-block-editor"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+            Selected Block Editor
+          </p>
+          <h4 className="mt-1 truncate text-lg font-semibold" title={activeBlock.label}>
+            {activeBlock.index.toString()}. {activeBlock.label}
+          </h4>
+          <p className="mt-1 text-xs vs-muted">
+            {activeBlock.sourceSection} · {activeBlock.kind} ·{" "}
+            {formatDurationLabel(activeBlock.estimatedDurationMs)}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <RevisionStatusChip status={activeBlock.status} />
+          <StatusChip tone={triageTone(revisionBlockTriageCategory(activeBlock))}>
+            {REVISION_TRIAGE_LABELS[revisionBlockTriageCategory(activeBlock)]}
+          </StatusChip>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          data-testid="ui-action-revision-block-approve"
+          disabled={!canApprove}
+          disabledReason={approveDisabledReason}
+          onClick={() => {
+            onSetBlockStatus(activeBlock, "approved", "Block approved");
+          }}
+          size="sm"
+          variant="primary"
+        >
+          Approve
+        </Button>
+        <Button
+          data-testid="ui-action-revision-block-preview"
+          onClick={onPreviewSpeech}
+          size="sm"
+          variant="soft"
+        >
+          Preview Speech
+        </Button>
+        <Button
+          data-testid="ui-action-revision-block-needs-review"
+          onClick={() => {
+            onSetBlockStatus(activeBlock, "needsReview", "Marked needs review");
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Mark needs review
+        </Button>
+        <Button
+          data-testid="ui-action-revision-block-skip"
+          onClick={() => {
+            onSetBlockStatus(activeBlock, "skipped", "Block skipped");
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Skip
+        </Button>
+        <Button
+          data-testid="ui-action-revision-block-retry"
+          onClick={() => {
+            onSetBlockStatus(activeBlock, "retrying", "Retry requested");
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Retry
+        </Button>
+        <Button
+          data-testid="ui-action-revision-block-regenerate"
+          onClick={() => {
+            onSetBlockStatus(activeBlock, "regenerating", "Regeneration requested");
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Regenerate
+        </Button>
+      </div>
+
+      <RevisionSourceSpokenSurface block={activeBlock} />
+
+      <RevisionPronunciationRepair
+        block={activeBlock}
+        onRepair={() => {
+          onSetBlockStatus(activeBlock, "needsReview", "Pronunciation repair started");
+        }}
+      />
+
+      <InlineSpeechEdit
+        block={activeBlock}
+        canRevert={activeBlock.spokenText !== activeBaseBlock.spokenText}
+        currentSpokenText={activeBlock.spokenText}
+        onDraftStateChange={onDraftStateChange}
+        onRevert={() => {
+          onInlineEditRevert(activeBlock, activeBaseBlock.spokenText);
+        }}
+        onSave={(nextSpokenText) => {
+          onInlineEditSave(activeBlock, nextSpokenText);
+        }}
+      />
+
+      <div className="grid gap-3">
+        <SegmentedControl
+          ariaLabel="Revision details"
+          columns={5}
+          options={[
+            { label: "Overview", testId: "revision-tab-overview", value: "overview" },
+            { label: "Blocks", testId: "revision-tab-blocks", value: "blocks" },
+            {
+              label: "Pronunciation",
+              testId: "revision-tab-pronunciation",
+              value: "pronunciation",
+            },
+            { label: "Diagnostics", testId: "revision-tab-diagnostics", value: "diagnostics" },
+            { label: "History", testId: "revision-tab-history", value: "history" },
+          ]}
+          value={activeTabId}
+          onChange={onSetActiveTab}
+        />
+
+        {activeTabId === "overview" ? (
+          <RevisionOverview
+            activeBlock={activeBlock}
+            policyProfileLabel={policyProfileLabel}
+            scopeLabel={scopeLabel}
+            summary={summary}
+            voiceProfileLabel={voiceProfileLabel}
+          />
+        ) : null}
+        {activeTabId === "blocks" ? <RevisionSelectedBlockFacts block={activeBlock} /> : null}
+        {activeTabId === "pronunciation" ? <RevisionPronunciationTab blocks={blocks} /> : null}
+        {activeTabId === "diagnostics" ? (
+          <RevisionDiagnosticsTab
+            blocks={blocks}
+            validationReason={validationReason}
+            validationSimilarity={validationSimilarity}
+            validationTranscript={validationTranscript}
+          />
+        ) : null}
+        {activeTabId === "history" ? (
+          <RevisionHistoryTab entries={historyEntries} onRevertEntry={onRevertHistoryEntry} />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function revisionApprovalDisabledReason(
+  canApprove: boolean,
+  activeDraftDirty: boolean,
+): string | undefined {
+  if (canApprove) {
+    return undefined;
+  }
+  if (activeDraftDirty) {
+    return "Save or discard the inline edit before approving.";
+  }
+  return "A block needs spoken text before approval.";
+}
+
+function RevisionSelectedBlockFacts({ block }: Readonly<{ block: RevisionBlock }>) {
+  return (
+    <div className="grid gap-3">
+      <dl className="grid gap-3 sm:grid-cols-3">
+        <RevisionFact label="Segments" value={block.segmentCount.toLocaleString()} />
+        <RevisionFact label="Confidence" value={formatConfidence(block.confidence)} />
+        <RevisionFact label="Policy" value={REVISION_POLICY_NOTE_LABELS[block.policyNoteType]} />
+      </dl>
+      <DiagnosticList
+        emptyText="No warnings on this block."
+        items={block.warnings.map((warning, index) => ({
+          detail: warning,
+          id: `${block.id}-warning-${index.toString()}`,
+          label: `Block ${block.index.toString()}`,
+        }))}
+        title="Selected Block Warnings"
+      />
+      <DiagnosticList
+        emptyText="No policy note for this block."
+        items={[
+          {
+            detail: block.policyNote,
+            id: `${block.id}-policy`,
+            label: REVISION_POLICY_NOTE_LABELS[block.policyNoteType],
+          },
+        ].filter((item) => item.detail.trim().length > 0)}
+        title="Selected Block Policy"
+      />
+    </div>
+  );
+}
+
+function RevisionSourceSpokenSurface({ block }: Readonly<{ block: RevisionBlock }>) {
+  const shouldCompare =
+    block.text.trim() !== block.spokenText.trim() ||
+    revisionBlockIsSkipped(block) ||
+    revisionBlockHasPolicyTransform(block) ||
+    block.pronunciationCount + block.normalisationCount > 0;
+  if (!shouldCompare) {
+    return (
+      <RevisionReadingPane
+        label="Spoken form"
+        surfaceKind="spoken"
+        value={block.spokenText || "No spoken text."}
+      />
+    );
+  }
+  return (
+    <div className="grid gap-2 md:grid-cols-2">
+      <RevisionReadingPane label="Source text" surfaceKind="source" value={block.text} />
+      <RevisionReadingPane
+        label={revisionBlockIsSkipped(block) ? "Skipped spoken form" : "Spoken form"}
+        surfaceKind="spoken"
+        value={block.spokenText || "No spoken text."}
+      />
+    </div>
+  );
+}
+
+function RevisionReadingPane({
+  label,
+  surfaceKind,
+  value,
+}: Readonly<{ label: string; surfaceKind: "source" | "spoken"; value: string }>) {
+  return (
+    <div className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 vs-border">
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] vs-muted">{label}</p>
+      <p
+        className={`mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-words ${readingSurfaceClassName(
+          surfaceKind,
+        )}`}
+        {...readingSurfaceDataAttributes({ kind: surfaceKind })}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function RevisionPronunciationRepair({
+  block,
+  onRepair,
+}: Readonly<{ block: RevisionBlock; onRepair: () => void }>) {
+  const pronunciations = block.pronunciations ?? [];
+  const normalisations = block.normalisations ?? [];
+  if (pronunciations.length === 0 && normalisations.length === 0) {
+    return null;
+  }
+  return (
+    <div className="grid gap-2 rounded-lg border bg-[var(--vs-raised)] p-3 vs-border">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold">Pronunciation Repair</p>
+        <Button
+          data-testid="ui-action-revision-pronunciation-repair"
+          onClick={onRepair}
+          size="sm"
+          variant="secondary"
+        >
+          Edit spoken form
+        </Button>
+      </div>
+      <div className="grid gap-2">
+        {pronunciations.map((decision, index) => (
+          <RevisionRepairDecision
+            key={`${decision.entryId ?? decision.term}-${index.toString()}`}
+            label={decision.term || decision.originalText}
+            meta={decision.scope ?? decision.source}
+            spoken={decision.spoken}
+          />
+        ))}
+        {normalisations.map((decision, index) => (
+          <RevisionRepairDecision
+            key={`${decision.kind}-${decision.startOffset.toString()}-${index.toString()}`}
+            label={decision.original}
+            meta={decision.rule || decision.kind}
+            spoken={decision.spoken}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RevisionRepairDecision({
+  label,
+  meta,
+  spoken,
+}: Readonly<{ label: string; meta: string; spoken: string }>) {
+  return (
+    <div className="grid gap-1 rounded-md border bg-[var(--vs-surface)] p-3 text-sm vs-border">
+      <p className="font-semibold">
+        {label} {" -> "} {spoken}
+      </p>
+      <p className="text-xs vs-muted">{meta}</p>
+    </div>
+  );
+}
+
+function triageTone(category: RevisionTriageCategory): StatusChipTone {
+  switch (category) {
+    case "audioBlocker": {
+      return "danger";
+    }
+    case "pronunciation":
+    case "questionable": {
+      return "warning";
+    }
+    case "policyTransform": {
+      return "info";
+    }
+    case "clean": {
+      return "success";
+    }
+    case "skipped": {
+      return "neutral";
+    }
+  }
 }
 
 function RevisionPronunciationTab({ blocks }: Readonly<{ blocks: RevisionBlock[] }>) {

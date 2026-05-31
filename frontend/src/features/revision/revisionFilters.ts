@@ -1,3 +1,5 @@
+import type { NormalisationDecision, PronunciationDecision } from "../../types";
+
 export const REVISION_TAB_IDS = [
   "overview",
   "blocks",
@@ -33,6 +35,14 @@ export type RevisionPolicyNoteType =
 
 export type RevisionConfidenceFilter = "all" | "high" | "low" | "medium";
 export type RevisionAttentionFilter = "all" | "no" | "yes";
+export type RevisionTriageCategory =
+  | "audioBlocker"
+  | "clean"
+  | "policyTransform"
+  | "pronunciation"
+  | "questionable"
+  | "skipped";
+export type RevisionPreviewReadiness = "ready" | "warning";
 
 export interface RevisionBlock {
   confidence: number | null;
@@ -44,9 +54,11 @@ export interface RevisionBlock {
   mathSpeech?: string;
   needsAttention: boolean;
   normalisationCount: number;
+  normalisations?: readonly NormalisationDecision[];
   policyNote: string;
   policyNoteType: RevisionPolicyNoteType;
   pronunciationCount: number;
+  pronunciations?: readonly PronunciationDecision[];
   segmentCount: number;
   sourceSection: string;
   speakMode: string;
@@ -79,6 +91,35 @@ export interface RevisionSummary {
   pronunciationItems: number;
   skipped: number;
   total: number;
+}
+
+export interface RevisionTriageItem {
+  block: RevisionBlock;
+  category: RevisionTriageCategory;
+  reason: string;
+  severity: number;
+}
+
+export interface RevisionTriageGroup {
+  category: RevisionTriageCategory;
+  items: RevisionTriageItem[];
+}
+
+export interface RevisionHealthSummary extends RevisionSummary {
+  audioBlockers: number;
+  clean: number;
+  needsRepair: number;
+  policyTransforms: number;
+  pronunciationBlocks: number;
+  previewReadiness: RevisionPreviewReadiness;
+  previewWarnings: number;
+  questionable: number;
+  ready: number;
+}
+
+export interface RevisionSessionState {
+  editedTextByBlockId: Readonly<Record<string, string>>;
+  statusByBlockId: Readonly<Record<string, RevisionStatus>>;
 }
 
 export const DEFAULT_REVISION_FILTERS: RevisionFilterState = {
@@ -134,6 +175,24 @@ export const REVISION_TAB_LABELS: Record<RevisionTabId, string> = {
   pronunciation: "Pronunciation",
 };
 
+export const REVISION_TRIAGE_LABELS: Record<RevisionTriageCategory, string> = {
+  audioBlocker: "Audio blockers",
+  clean: "Clean blocks",
+  policyTransform: "Policy transformations",
+  pronunciation: "Pronunciation repair",
+  questionable: "Questionable blocks",
+  skipped: "Skipped content",
+};
+
+export const REVISION_TRIAGE_DESCRIPTIONS: Record<RevisionTriageCategory, string> = {
+  audioBlocker: "These blocks cannot move cleanly into generation until repaired or retried.",
+  clean: "These blocks have no detected review issues.",
+  policyTransform: "These blocks were changed by speech policy and may only need confirmation.",
+  pronunciation: "These blocks contain pronunciation or normalization decisions to verify.",
+  questionable: "These blocks have warnings, low confidence, or an attention flag.",
+  skipped: "These blocks are intentionally silent or excluded by policy.",
+};
+
 const REVISION_STATUS_ORDER: RevisionStatus[] = [
   "needsReview",
   "retrying",
@@ -158,6 +217,19 @@ const REVISION_POLICY_NOTE_ORDER: RevisionPolicyNoteType[] = [
   "admonition",
   "spoken",
 ];
+
+const REVISION_TRIAGE_ORDER: RevisionTriageCategory[] = [
+  "audioBlocker",
+  "pronunciation",
+  "questionable",
+  "policyTransform",
+  "skipped",
+  "clean",
+];
+
+const REVISION_TRIAGE_SEVERITY: Record<RevisionTriageCategory, number> = Object.fromEntries(
+  REVISION_TRIAGE_ORDER.map((category, index) => [category, index]),
+) as Record<RevisionTriageCategory, number>;
 
 export function normalizeRevisionTabId(
   value: unknown,
@@ -319,9 +391,187 @@ export function summarizeRevisionBlocks(blocks: readonly RevisionBlock[]): Revis
       (total, block) => total + block.pronunciationCount + block.normalisationCount,
       0,
     ),
-    skipped: blocks.filter((block) => block.status === "skipped").length,
+    skipped: blocks.filter((block) => revisionBlockIsSkipped(block)).length,
     total: blocks.length,
   };
+}
+
+export function applyRevisionSessionState(
+  blocks: readonly RevisionBlock[],
+  sessionState: RevisionSessionState,
+): RevisionBlock[] {
+  return blocks.map((block) => ({
+    ...block,
+    spokenText: sessionState.editedTextByBlockId[block.id] ?? block.spokenText,
+    status: sessionState.statusByBlockId[block.id] ?? block.status,
+  }));
+}
+
+export function composeReviewedSpeechText(blocks: readonly RevisionBlock[]): string {
+  return blocks
+    .filter((block) => !revisionBlockIsSkipped(block))
+    .map((block) => block.spokenText.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function revisionBlockTriageCategory(block: RevisionBlock): RevisionTriageCategory {
+  if (block.status === "retrying" || block.status === "regenerating") {
+    return "audioBlocker";
+  }
+  if (!revisionBlockIsSkipped(block) && block.spokenText.trim().length === 0) {
+    return "audioBlocker";
+  }
+  if (block.status === "needsReview") {
+    return "questionable";
+  }
+  if (revisionBlockIsSkipped(block)) {
+    return "skipped";
+  }
+  if (block.status === "approved") {
+    return "clean";
+  }
+  if (block.pronunciationCount > 0 || block.normalisationCount > 0) {
+    return "pronunciation";
+  }
+  if (
+    block.needsAttention ||
+    block.warnings.length > 0 ||
+    confidenceBand(block.confidence) === "low"
+  ) {
+    return "questionable";
+  }
+  if (revisionBlockHasPolicyTransform(block)) {
+    return "policyTransform";
+  }
+  return "clean";
+}
+
+export function revisionBlockTriageReason(block: RevisionBlock): string {
+  const category = revisionBlockTriageCategory(block);
+  switch (category) {
+    case "audioBlocker": {
+      if (block.status === "retrying") {
+        return "Retry is queued for this block.";
+      }
+      if (block.status === "regenerating") {
+        return "Regeneration is queued for this block.";
+      }
+      return "No spoken form is available for generation.";
+    }
+    case "pronunciation": {
+      const total = block.pronunciationCount + block.normalisationCount;
+      return `${total.toLocaleString()} pronunciation or normalization decision${total === 1 ? "" : "s"} to verify.`;
+    }
+    case "questionable": {
+      if (block.warnings.length > 0) {
+        return block.warnings[0];
+      }
+      if (confidenceBand(block.confidence) === "low") {
+        return `Low confidence: ${formatRevisionConfidence(block.confidence)}.`;
+      }
+      return "Marked as needing review.";
+    }
+    case "skipped": {
+      return block.policyNote || "Skipped by speech policy.";
+    }
+    case "policyTransform": {
+      return (
+        block.policyNote ||
+        `${REVISION_POLICY_NOTE_LABELS[block.policyNoteType]} policy changed this block.`
+      );
+    }
+    case "clean": {
+      return block.status === "approved" ? "Approved for preview." : "No detected review issues.";
+    }
+  }
+}
+
+export function buildRevisionTriageItems(blocks: readonly RevisionBlock[]): RevisionTriageItem[] {
+  const items: RevisionTriageItem[] = [];
+  for (const block of blocks) {
+    const category = revisionBlockTriageCategory(block);
+    const item = {
+      block,
+      category,
+      reason: revisionBlockTriageReason(block),
+      severity: REVISION_TRIAGE_SEVERITY[category],
+    };
+    const insertIndex = items.findIndex(
+      (candidate) => compareRevisionTriageItems(item, candidate) < 0,
+    );
+    if (insertIndex === -1) {
+      items.push(item);
+    } else {
+      items.splice(insertIndex, 0, item);
+    }
+  }
+  return items;
+}
+
+function compareRevisionTriageItems(left: RevisionTriageItem, right: RevisionTriageItem): number {
+  return left.severity - right.severity || left.block.index - right.block.index;
+}
+
+export function groupRevisionTriageItems(
+  items: readonly RevisionTriageItem[],
+): RevisionTriageGroup[] {
+  return REVISION_TRIAGE_ORDER.map((category) => ({
+    category,
+    items: items.filter((item) => item.category === category),
+  })).filter((group) => group.items.length > 0);
+}
+
+export function summarizeRevisionHealth(blocks: readonly RevisionBlock[]): RevisionHealthSummary {
+  const summary = summarizeRevisionBlocks(blocks);
+  const items = buildRevisionTriageItems(blocks);
+  const countCategory = (category: RevisionTriageCategory) =>
+    items.filter((item) => item.category === category).length;
+  const audioBlockers = countCategory("audioBlocker");
+  const clean = countCategory("clean");
+  const policyTransforms = countCategory("policyTransform");
+  const pronunciation = countCategory("pronunciation");
+  const questionable = countCategory("questionable");
+  const previewWarnings = audioBlockers + policyTransforms + pronunciation + questionable;
+  const ready = clean;
+  return {
+    ...summary,
+    audioBlockers,
+    clean,
+    needsRepair: audioBlockers + pronunciation + questionable,
+    policyTransforms,
+    pronunciationBlocks: pronunciation,
+    previewReadiness: previewWarnings > 0 ? "warning" : "ready",
+    previewWarnings,
+    questionable,
+    ready,
+  };
+}
+
+export function revisionPreviewReadinessLabel(summary: RevisionHealthSummary): string {
+  if (summary.previewReadiness === "ready") {
+    return "Preview ready";
+  }
+  if (summary.audioBlockers > 0) {
+    return `${summary.audioBlockers.toLocaleString()} blocker${summary.audioBlockers === 1 ? "" : "s"} before clean preview`;
+  }
+  return `${summary.previewWarnings.toLocaleString()} review warning${summary.previewWarnings === 1 ? "" : "s"} before clean preview`;
+}
+
+export function revisionNextActionLabel(summary: RevisionHealthSummary): string {
+  if (summary.audioBlockers > 0) {
+    return "Repair blockers";
+  }
+  if (summary.pronunciationBlocks > 0) {
+    return "Verify pronunciation";
+  }
+  if (summary.questionable > 0) {
+    return "Review flagged blocks";
+  }
+  if (summary.policyTransforms > 0) {
+    return "Confirm policy transforms";
+  }
+  return "Preview Speech";
 }
 
 export function confidenceBand(value: number | null): Exclude<RevisionConfidenceFilter, "all"> {
@@ -335,6 +585,23 @@ export function confidenceBand(value: number | null): Exclude<RevisionConfidence
     return "medium";
   }
   return "low";
+}
+
+export function revisionBlockIsSkipped(block: RevisionBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  return block.status === "skipped" || speakMode === "skip" || block.policyNoteType === "skipped";
+}
+
+export function revisionBlockHasPolicyTransform(block: RevisionBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  return block.policyNoteType !== "spoken" || (speakMode.length > 0 && speakMode !== "speak");
+}
+
+function formatRevisionConfidence(value: number | null): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return "waiting";
+  }
+  return `${Math.round(value * 100).toString()}%`;
 }
 
 function revisionBlockMatchesSearch(block: RevisionBlock, search: string): boolean {

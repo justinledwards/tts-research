@@ -44,6 +44,25 @@ describe("resolveNarrationStatusModel", () => {
     expect(model.primaryAction?.id).toBe("create");
   });
 
+  it("shows review repair warnings without blocking preview readiness", () => {
+    const model = resolveNarrationStatusModel(
+      input({
+        canCreate: true,
+        stageStatus: stageStatus({
+          reviewState: "needsRepair",
+          reviewWarningCount: 3,
+        }),
+      }),
+    );
+
+    expect(model.state).toBe("waiting");
+    expect(model.chips.find((chip) => chip.id === "review")).toMatchObject({
+      tone: "warning",
+      value: "Needs repair",
+    });
+    expect(model.primaryAction?.id).toBe("create");
+  });
+
   it("shows queued as the generating lane without segment inflation", () => {
     const model = resolveNarrationStatusModel(
       input({
@@ -278,6 +297,8 @@ function stageStatus(overrides: Partial<WorkspaceStageStatus> = {}): WorkspaceSt
     nextAction: null,
     primaryAction: "createAndListen",
     primaryLabel: "Create & Listen",
+    reviewState: "ready",
+    reviewWarningCount: 0,
     stage: "preview",
     ...overrides,
   };

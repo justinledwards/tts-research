@@ -246,4 +246,23 @@ describe("workspace stage model", () => {
     expect(theatre.primaryAction).toBe("playPauseTheatre");
     expect(theatre.nextAction).toBe("openCinema");
   });
+
+  it("tracks review repair warnings without blocking Preview Speech", () => {
+    const review = resolveWorkspaceStageStatus({
+      audioLifecycle: "missing",
+      canCreate: true,
+      canOpenCinema: false,
+      hasSource: true,
+      hasVoice: true,
+      reviewWarningCount: 4,
+      sourcePreparing: false,
+      stage: "review",
+    });
+
+    expect(review.blocker).toBeNull();
+    expect(review.nextAction).toBe("previewSpeech");
+    expect(review.primaryAction).toBe("previewSpeech");
+    expect(review.reviewState).toBe("needsRepair");
+    expect(review.reviewWarningCount).toBe(4);
+  });
 });

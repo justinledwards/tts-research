@@ -7,7 +7,9 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { type RequestState, type StudioMode, TopProductBar } from "./AppShell";
 import type { BundlePanelMode } from "./BundlePanels";
@@ -174,9 +176,15 @@ import {
 } from "./features/layout";
 import { normalizeReviewPane, selectReviewBlockId, type ReviewPane } from "./features/review/model";
 import {
+  applyRevisionSessionState,
+  composeReviewedSpeechText,
   deriveRevisionBlockStatus,
   normalizeRevisionPolicyNoteType,
+  revisionBlockIsSkipped,
+  summarizeRevisionHealth,
   type RevisionBlock,
+  type RevisionHistoryEntry,
+  type RevisionStatus,
   type RevisionTabId,
 } from "./features/revision";
 import {
@@ -2156,6 +2164,13 @@ export function App() {
   const [activeReviewPane, setActiveReviewPane] = useState<ReviewPane>(() =>
     resolveReviewPane(uiMemory, activeProjectId),
   );
+  const [revisionStatusByBlockId, setRevisionStatusByBlockId] = useState<
+    Record<string, RevisionStatus>
+  >({});
+  const [revisionEditedTextByBlockId, setRevisionEditedTextByBlockId] = useState<
+    Record<string, string>
+  >({});
+  const [revisionHistoryEntries, setRevisionHistoryEntries] = useState<RevisionHistoryEntry[]>([]);
   const uiMemoryRef = useRef(uiMemory);
   const rememberActiveProjectId = useCallback((projectId: string) => {
     if (uiMemoryRef.current.rememberLastProject) {
@@ -2633,7 +2648,46 @@ export function App() {
   } else if (activeNarrationBookSource) {
     activeNarrationSourceType = "book";
   }
-  const narrationPreviewBlocks = useMemo(
+  const revisionSessionSignature = useMemo(
+    () =>
+      [
+        activeProjectId,
+        sourceMode,
+        activeNarrationPreparedSource?.id ?? "",
+        activeNarrationBookSource?.id ?? "",
+        effectiveBookScope ? bookScopeKey(effectiveBookScope) : "",
+        sourceMode === "text" ? text : "",
+        speechPolicyProfile,
+        JSON.stringify(compactSpeechPolicyOverrides(speechPolicyOverrides)),
+        selectedVoiceProfileId,
+        runConfiguration.runMode,
+        runConfiguration.ttsEngine,
+      ].join("|"),
+    [
+      activeNarrationBookSource?.id,
+      activeNarrationPreparedSource?.id,
+      activeProjectId,
+      effectiveBookScope,
+      runConfiguration.runMode,
+      runConfiguration.ttsEngine,
+      selectedVoiceProfileId,
+      sourceMode,
+      speechPolicyOverrides,
+      speechPolicyProfile,
+      text,
+    ],
+  );
+  const previousRevisionSessionSignatureRef = useRef(revisionSessionSignature);
+  useEffect(() => {
+    if (previousRevisionSessionSignatureRef.current === revisionSessionSignature) {
+      return;
+    }
+    previousRevisionSessionSignatureRef.current = revisionSessionSignature;
+    setRevisionStatusByBlockId({});
+    setRevisionEditedTextByBlockId({});
+    setRevisionHistoryEntries([]);
+  }, [revisionSessionSignature]);
+  const baseNarrationPreviewBlocks = useMemo(
     () =>
       buildNarrationReviewBlocks({
         optimizedText: job?.optimizedText ?? "",
@@ -2651,6 +2705,25 @@ export function App() {
       job?.optimizedText,
       text,
     ],
+  );
+  const narrationPreviewBlocks = useMemo(
+    () =>
+      applyRevisionSessionState(baseNarrationPreviewBlocks, {
+        editedTextByBlockId: revisionEditedTextByBlockId,
+        statusByBlockId: revisionStatusByBlockId,
+      }),
+    [baseNarrationPreviewBlocks, revisionEditedTextByBlockId, revisionStatusByBlockId],
+  );
+  const hasRevisionSessionChanges =
+    Object.keys(revisionEditedTextByBlockId).length > 0 ||
+    Object.keys(revisionStatusByBlockId).length > 0;
+  const reviewedNarrationSpeechText = useMemo(
+    () => (hasRevisionSessionChanges ? composeReviewedSpeechText(narrationPreviewBlocks) : ""),
+    [hasRevisionSessionChanges, narrationPreviewBlocks],
+  );
+  const revisionHealthSummary = useMemo(
+    () => summarizeRevisionHealth(narrationPreviewBlocks),
+    [narrationPreviewBlocks],
   );
   const globalPreviewVoiceOptions = useMemo(
     () => [
@@ -2991,6 +3064,7 @@ export function App() {
     createDisabledReason: createAndListenDisabledReason,
     hasSource: hasNarrationSource,
     hasVoice: !createAndListenCapabilityReason,
+    reviewWarningCount: revisionHealthSummary.previewWarnings,
     sourceError: sourcePrepError ?? bookSourceError,
     sourcePreparing: isPreparingSource || isImportingBookSource,
     stage: contentMode,
@@ -5922,7 +5996,10 @@ export function App() {
   }
 
   async function submitVoiceJob() {
-    const request = buildVoiceJobRequest(text);
+    const request = buildVoiceJobRequest(reviewedNarrationSpeechText || text);
+    if (hasRevisionSessionChanges) {
+      request.speechRenderApplied = true;
+    }
 
     setRequestState("running");
     setError(null);
@@ -5976,10 +6053,14 @@ export function App() {
       return;
     }
     const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
+    const narrationText = reviewedNarrationSpeechText || scopedText;
     const request = {
-      ...buildVoiceJobRequest(scopedText),
+      ...buildVoiceJobRequest(narrationText),
       bookSourceId: book.id,
       bookScope: scope,
+      progressTargetId: progressTargetIdForBookScope(book.id, scope),
+      sourceKind: "book",
+      ...(hasRevisionSessionChanges ? { speechRenderApplied: true } : {}),
       ...(hasSpeechPolicyOverrides(sessionOverrides)
         ? { speechPolicyOverrides: sessionOverrides }
         : {}),
@@ -5995,7 +6076,9 @@ export function App() {
     announcePolite(liveStatusMessages.audioGenerationStarted());
 
     try {
-      const nextJob = await createBookNarrationJob(book.id, request);
+      const nextJob = hasRevisionSessionChanges
+        ? await createVoiceJob(request)
+        : await createBookNarrationJob(book.id, request);
       setActiveDemoProjectId(null);
       setJob(nextJob);
       setSelectedBookSourceId(nextJob.bookSourceId ?? book.id);
@@ -6018,7 +6101,10 @@ export function App() {
       setSourcePrepError(source.error ?? "Prepared source is not ready for narration.");
       return;
     }
-    const speechText = source.speechText ?? "";
+    const speechText =
+      hasRevisionSessionChanges && reviewedNarrationSpeechText.trim()
+        ? reviewedNarrationSpeechText
+        : (source.speechText ?? "");
     if (!speechText.trim()) {
       setSourcePrepError("Prepared source has no speakable blocks.");
       return;
@@ -6027,10 +6113,15 @@ export function App() {
     const request = {
       ...buildVoiceJobRequest(speechText, source),
       preparedSourceId: source.id,
-      selectedBlockIds:
-        source.blocks?.filter((block) => block.speakMode !== "skip").map((block) => block.id) ?? [],
+      selectedBlockIds: hasRevisionSessionChanges
+        ? narrationPreviewBlocks
+            .filter((block) => !revisionBlockIsSkipped(block))
+            .map((block) => block.id)
+        : (source.blocks?.filter((block) => block.speakMode !== "skip").map((block) => block.id) ??
+          []),
       sourceKind: source.kind,
       progressTargetId: `prepared:${source.id}`,
+      ...(hasRevisionSessionChanges ? { speechRenderApplied: true } : {}),
       ...(hasSpeechPolicyOverrides(sessionOverrides)
         ? { speechPolicyOverrides: sessionOverrides }
         : {}),
@@ -6045,7 +6136,9 @@ export function App() {
     announcePolite(liveStatusMessages.audioGenerationStarted());
 
     try {
-      const nextJob = await createPreparedSourceJob(source.id, request);
+      const nextJob = hasRevisionSessionChanges
+        ? await createVoiceJob(request)
+        : await createPreparedSourceJob(source.id, request);
       setActiveDemoProjectId(null);
       setJob(nextJob);
       setContentMode("preview");
@@ -7209,6 +7302,7 @@ export function App() {
             <SourceTextPanel
               activeReviewPane={activeReviewPane}
               activeReviewBlockId={workspaceContext.activeBlockId}
+              baseReviewBlocks={baseNarrationPreviewBlocks}
               stageStatus={activeWorkbenchStageStatus}
               projectId={activeProjectId}
               bookSourceError={bookSourceError}
@@ -7220,8 +7314,11 @@ export function App() {
               isProcessing={isProcessing}
               job={job}
               bookScopeContent={bookScopeContent}
+              historyEntries={revisionHistoryEntries}
               optimizedText={job?.optimizedText ?? ""}
               preparedSources={preparedSources}
+              reviewBlocks={narrationPreviewBlocks}
+              revisionStatusByBlockId={revisionStatusByBlockId}
               selectedBookScope={effectiveBookScope}
               selectedBookSource={selectedBookSource}
               selectedPreparedSource={selectedPreparedSource}
@@ -7360,7 +7457,10 @@ export function App() {
                   withWorkspaceActiveBlock(currentContext, blockId),
                 );
               }}
+              onEditedTextByBlockIdChange={setRevisionEditedTextByBlockId}
+              onHistoryEntriesChange={setRevisionHistoryEntries}
               onReviewPaneChange={handleReviewPaneChange}
+              onStatusByBlockIdChange={setRevisionStatusByBlockId}
               onSubmit={handleSubmit}
               onTextChange={setText}
               onUseBookSource={handleUseBookText}
@@ -9487,6 +9587,7 @@ function defaultWorkspaceInspectorDisplayState(
 function SourceTextPanel({
   activeReviewPane,
   activeReviewBlockId,
+  baseReviewBlocks,
   bookScopeContent,
   bookSourceError,
   bookSources,
@@ -9496,9 +9597,12 @@ function SourceTextPanel({
   isPreparingSource,
   isProcessing,
   job,
+  historyEntries,
   stageStatus,
   optimizedText,
   preparedSources,
+  reviewBlocks,
+  revisionStatusByBlockId,
   projectId,
   selectedBookScope,
   selectedBookSource,
@@ -9535,7 +9639,10 @@ function SourceTextPanel({
   onStageAction,
   onSpeechPolicyProfileChange,
   onReviewBlockChange,
+  onEditedTextByBlockIdChange,
+  onHistoryEntriesChange,
   onReviewPaneChange,
+  onStatusByBlockIdChange,
   onSubmit,
   onTextChange,
   onUseBookSource,
@@ -9544,6 +9651,7 @@ function SourceTextPanel({
 }: Readonly<{
   activeReviewPane: ReviewPane;
   activeReviewBlockId: string | null;
+  baseReviewBlocks: RevisionBlock[];
   bookScopeContent: BookSourceScopeContent | null;
   bookSourceError: string | null;
   bookSources: BookSource[];
@@ -9554,8 +9662,11 @@ function SourceTextPanel({
   isPreparingSource: boolean;
   isProcessing: boolean;
   job: VoiceJob | null;
+  historyEntries: RevisionHistoryEntry[];
   optimizedText: string;
   preparedSources: PreparedSource[];
+  reviewBlocks: RevisionBlock[];
+  revisionStatusByBlockId: Record<string, RevisionStatus>;
   projectId: string;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
@@ -9600,7 +9711,10 @@ function SourceTextPanel({
   onStageAction: (actionId: WorkspaceStageActionId) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onReviewBlockChange: (blockId: string | null) => void;
+  onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
+  onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
   onReviewPaneChange: (pane: ReviewPane) => void;
+  onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
   onSubmit: (event: React.SyntheticEvent<HTMLFormElement>) => void;
   onTextChange: (text: string) => void;
   onUseBookSource: (source: BookSource, scope: BookScope) => void;
@@ -9714,9 +9828,12 @@ function SourceTextPanel({
           <NarrationReviewWorkbench
             activePane={activeReviewPane}
             activeBlockId={activeReviewBlockId}
+            baseReviewBlocks={baseReviewBlocks}
             bookScopeContent={bookScopeContent}
+            historyEntries={historyEntries}
             job={job}
-            optimizedText={optimizedText}
+            reviewBlocks={reviewBlocks}
+            revisionStatusByBlockId={revisionStatusByBlockId}
             policyProfileLabel={speechPolicyProfileLabel}
             runConfigurationLabel={runConfigurationLabel}
             selectedBookScope={selectedBookScope}
@@ -9732,9 +9849,12 @@ function SourceTextPanel({
             onInspectPreparedSource={onInspectPreparedSource}
             onActiveBlockChange={onReviewBlockChange}
             onActivePaneChange={onReviewPaneChange}
+            onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
+            onHistoryEntriesChange={onHistoryEntriesChange}
             onPreviewSpeech={() => {
               onStageAction("previewSpeech");
             }}
+            onStatusByBlockIdChange={onStatusByBlockIdChange}
           />
         </div>
       ) : null}
@@ -9896,9 +10016,9 @@ function NarrationPreviewStage({
   canOpenCinema,
   job,
   isPlaybackActive,
-  optimizedText,
   playbackControls,
   playbackCursorSec,
+  optimizedText,
   policyProfileLabel,
   selectedBookScope,
   selectedBookSource,
@@ -9922,9 +10042,9 @@ function NarrationPreviewStage({
   canOpenCinema: boolean;
   job: VoiceJob | null;
   isPlaybackActive: boolean;
-  optimizedText: string;
   playbackControls: PlaybackController;
   playbackCursorSec: number;
+  optimizedText: string;
   policyProfileLabel: string;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
@@ -12241,18 +12361,24 @@ function VoiceProfileOption({
 function NarrationReviewWorkbench({
   activePane,
   activeBlockId,
+  baseReviewBlocks,
   bookScopeContent,
+  historyEntries,
   job,
   isPlaybackActive,
   onInspectBookSource,
   onInspectPreparedSource,
   onActiveBlockChange,
   onActivePaneChange,
+  onEditedTextByBlockIdChange,
+  onHistoryEntriesChange,
   onPreviewSpeech,
-  optimizedText,
+  onStatusByBlockIdChange,
   playbackControls,
   playbackCursorSec,
   policyProfileLabel,
+  reviewBlocks,
+  revisionStatusByBlockId,
   runConfigurationLabel,
   selectedBookScope,
   selectedBookSource,
@@ -12263,18 +12389,24 @@ function NarrationReviewWorkbench({
 }: Readonly<{
   activePane: ReviewPane;
   activeBlockId: string | null;
+  baseReviewBlocks: RevisionBlock[];
   bookScopeContent: BookSourceScopeContent | null;
+  historyEntries: RevisionHistoryEntry[];
   job: VoiceJob | null;
   isPlaybackActive: boolean;
   onActiveBlockChange: (blockId: string | null) => void;
   onActivePaneChange: (pane: ReviewPane) => void;
+  onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
+  onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onPreviewSpeech: () => void;
-  optimizedText: string;
+  onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
   playbackControls: PlaybackController;
   playbackCursorSec: number;
   policyProfileLabel: string;
+  reviewBlocks: RevisionBlock[];
+  revisionStatusByBlockId: Record<string, RevisionStatus>;
   runConfigurationLabel: string;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
@@ -12283,25 +12415,6 @@ function NarrationReviewWorkbench({
   text: string;
   voiceProfileLabel: string;
 }>) {
-  const reviewBlocks = useMemo(
-    () =>
-      buildNarrationReviewBlocks({
-        optimizedText,
-        bookScopeContent,
-        selectedBookScope,
-        selectedBookSource,
-        selectedPreparedSource,
-        text,
-      }),
-    [
-      bookScopeContent,
-      optimizedText,
-      selectedBookScope,
-      selectedBookSource,
-      selectedPreparedSource,
-      text,
-    ],
-  );
   const selectedBlockId = selectReviewBlockId(reviewBlocks, activeBlockId);
   const selectedBlock =
     reviewBlocks.find((block) => block.id === selectedBlockId) ??
@@ -12500,7 +12613,9 @@ function NarrationReviewWorkbench({
       >
         <LazyRevisionPanel
           activeBlockId={selectedBlock?.id ?? null}
+          baseBlocks={baseReviewBlocks}
           blocks={reviewBlocks}
+          historyEntries={historyEntries}
           initialTabId={revisionTabForReviewPane(activePane)}
           policyProfileLabel={policyProfileLabel}
           runConfigurationLabel={runConfigurationLabel}
@@ -12508,14 +12623,18 @@ function NarrationReviewWorkbench({
           sourceLifecycle={sourceLifecycle}
           sourceLabel={sourceLabel}
           sourceMeta={sourceMeta}
+          statusByBlockId={revisionStatusByBlockId}
           validationReason={validationReason}
           validationSimilarity={job?.voiceCheck.similarity ?? 0}
           validationTranscript={validationTranscript}
           voiceProfileLabel={voiceProfileLabel}
           playbackToolbar={<LocalizedPlaybackToolbar model={reviewPlaybackToolbar} />}
           onActiveBlockChange={onActiveBlockChange}
+          onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
+          onHistoryEntriesChange={onHistoryEntriesChange}
           onInspectStructure={inspectStructure}
           onPreviewSpeech={onPreviewSpeech}
+          onStatusByBlockIdChange={onStatusByBlockIdChange}
           onTabChange={(tabId) => {
             onActivePaneChange(reviewPaneForRevisionTab(tabId));
           }}
@@ -12939,11 +13058,13 @@ function narrationBlockToReviewBlock(block: NarrationBlock, index: number): Revi
     mathSpeech: block.mathPreview?.speech,
     needsAttention: status === "needsReview" || warnings.length > 0,
     normalisationCount: block.normalisations?.length ?? 0,
+    normalisations: block.normalisations ?? [],
     policyNote:
       block.speechPolicy.explanation ||
       `${block.speechPolicy.profile} policy rendered this block as ${block.speechPolicy.mode}.`,
     policyNoteType,
     pronunciationCount: block.pronunciations?.length ?? 0,
+    pronunciations: block.pronunciations ?? [],
     segmentCount: block.segments?.length ?? 0,
     sourceSection,
     speakMode: block.speakMode,

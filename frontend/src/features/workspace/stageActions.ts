@@ -63,10 +63,13 @@ export interface WorkspaceStageStatusInput {
   readonly hasSource: boolean;
   readonly hasVoice: boolean;
   readonly reviewRequired?: boolean;
+  readonly reviewWarningCount?: number;
   readonly sourceError?: string | null;
   readonly sourcePreparing: boolean;
   readonly stage: WorkspaceStage;
 }
+
+export type WorkspaceReviewState = "needsRepair" | "ready";
 
 export interface WorkspaceStageStatus {
   readonly blocker: WorkspaceStageBlocker | null;
@@ -76,6 +79,8 @@ export interface WorkspaceStageStatus {
   readonly nextAction: WorkspaceStageActionId | null;
   readonly primaryAction: WorkspaceStagePrimaryActionId;
   readonly primaryLabel: string;
+  readonly reviewState: WorkspaceReviewState;
+  readonly reviewWarningCount: number;
   readonly stage: WorkspaceStage;
 }
 
@@ -205,6 +210,7 @@ export function resolveWorkspaceStageStatus(
 ): WorkspaceStageStatus {
   const blocker = workspaceStageBlocker(input);
   const primaryAction = workspaceStagePrimaryActionForStatus(input, blocker);
+  const reviewWarningCount = Math.max(0, input.reviewWarningCount ?? 0);
   return {
     blocker,
     description: workspaceStageMeta(input.stage).description,
@@ -213,6 +219,8 @@ export function resolveWorkspaceStageStatus(
     nextAction: workspaceStageNextAction(input, blocker),
     primaryAction,
     primaryLabel: workspaceStagePrimaryActionDisplayLabel(primaryAction),
+    reviewState: reviewWarningCount > 0 ? "needsRepair" : "ready",
+    reviewWarningCount,
     stage: input.stage,
   };
 }

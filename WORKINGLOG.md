@@ -1195,3 +1195,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Commit work package
 - Validation: focused status tests, frontend typecheck/test, and `pnpm check` passed.
 - UI follow-up: responsive snapshots and UI-actions smoke were attempted but blocked by existing fixture/script assumptions outside the strip change.
+
+## 2026-05-31 20:28 CEST - Review Repair Queue Redesign
+- [x] Add review triage and health summary model
+- [x] Rework Review panel into queue and selected editor
+- [x] Lift session review state through the app
+- [x] Add focused regression tests
+- [x] Run project checks
