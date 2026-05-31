@@ -1,3 +1,10 @@
+## 2026-05-31 20:01 CEST - Guided Intake Simplification
+- [x] Inspect current intake UI, helper model, and tests
+- [x] Refactor intake source candidate and readiness model
+- [x] Simplify wizard screens and advanced import drawer
+- [x] Add/update intake tests
+- [x] Run targeted and project checks
+
 ## 2026-05-31 19:00 CEST - Contextual Inspector Consolidation
 - [x] Inspect current context panel, rails, footer, review, preview, intake, and teleprompt surfaces
 - [x] Extend context panel model into inspector contract

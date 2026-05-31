@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Panel, SegmentedControl, StatusChip, fieldControlClassName } from "../../design";
+import { Drawer } from "../../design/components/Drawer";
 import type {
   BookSource,
   BookSourceImportOptions,
@@ -60,9 +61,16 @@ import {
   initialSourceChoiceForSelection,
   type IntakeExistingSource,
   selectedSourceKeyForMode,
-  shouldImportFileAsBook,
-  shouldImportUrlAsBook,
 } from "./intakeWizardHelpers";
+import {
+  buildIntakeSourceCandidate,
+  resolveDetectedIntakeDefaults,
+  resolveIntakeReadiness,
+  shouldRouteFileAsBook,
+  shouldRouteUrlAsBook,
+  type IntakeReadinessState,
+  type IntakeSourceCandidate,
+} from "./intakeWizardModel";
 
 export type IntakeDestinationStage = "review" | "preview";
 
@@ -72,6 +80,10 @@ export interface IntakeWizardProps {
   bookScopeContent: BookSourceScopeContent | null;
   isImportingBookSource: boolean;
   isPreparingSource: boolean;
+  initialAdvancedOpen?: boolean;
+  initialSourceChoice?: IntakeSourceChoice;
+  initialSourceUrl?: string;
+  initialStep?: IntakeStepId;
   preparedSources: PreparedSource[];
   providerBackedGenerationBoundary?: boolean;
   selectedBookScope: BookScope | null;
@@ -192,6 +204,10 @@ export function IntakeWizard({
   bookScopeContent,
   isImportingBookSource,
   isPreparingSource,
+  initialAdvancedOpen = false,
+  initialSourceChoice,
+  initialSourceUrl = "",
+  initialStep = "intent",
   preparedSources,
   providerBackedGenerationBoundary = false,
   selectedBookScope,
@@ -226,14 +242,15 @@ export function IntakeWizard({
     selectedPreparedSource,
   );
   const initialTemplate = defaultTemplateForIntent(initialIntent);
-  const [activeStep, setActiveStep] = useState<IntakeStepId>("intent");
+  const [activeStep, setActiveStep] = useState<IntakeStepId>(initialStep);
   const [intentId, setIntentId] = useState<IntakeIntentId>(initialIntent);
   const [sourceChoice, setSourceChoice] = useState<IntakeSourceChoice>(
-    initialSourceChoiceForSelection(sourceMode, selectedBookSource, selectedPreparedSource, text),
+    initialSourceChoice ??
+      initialSourceChoiceForSelection(sourceMode, selectedBookSource, selectedPreparedSource, text),
   );
   const [templateId, setTemplateId] = useState(initialTemplate.id);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceUrl, setSourceUrl] = useState(initialSourceUrl);
   const [draftText, setDraftText] = useState(text);
   const [metadataTitle, setMetadataTitle] = useState("");
   const [language, setLanguage] = useState(initialTemplate.language);
@@ -241,10 +258,13 @@ export function IntakeWizard({
   const [markdownParseMode, setMarkdownParseMode] = useState<MarkdownParseMode>("strict");
   const [voiceStrategy, setVoiceStrategy] = useState<VoiceStrategy>(initialTemplate.voiceStrategy);
   const [presetVoiceProfileId, setPresetVoiceProfileId] = useState(selectedVoiceProfileId);
+  const [hasUserEditedLanguage, setHasUserEditedLanguage] = useState(false);
+  const [hasUserEditedSourceType, setHasUserEditedSourceType] = useState(false);
   const [existingSourceKey, setExistingSourceKey] = useState(() =>
     initialExistingSourceKey(sourceMode, selectedBookSource, selectedPreparedSource),
   );
   const [hasUserChosenSourceChoice, setHasUserChosenSourceChoice] = useState(false);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(initialAdvancedOpen);
   const [localError, setLocalError] = useState<string | null>(null);
   const selectedBookSourceIdForWizard = selectedBookSource?.id ?? "";
   const selectedPreparedSourceKindForWizard = selectedPreparedSource?.kind ?? null;
@@ -290,6 +310,37 @@ export function IntakeWizard({
   const scopeOptions = scopeBookSource ? bookScopeOptions(scopeBookSource) : [];
   const isWorking = isPreparingSource || isImportingBookSource;
   const intakeError = localError ?? sourcePrepError ?? bookSourceError;
+  const selectedExistingSourceForReadiness = selectedExistingSource
+    ? {
+        detail: selectedExistingSource.detail,
+        disabledReason: selectedExistingSource.envelope.disabledReason,
+        key: selectedExistingSource.key,
+        label: selectedExistingSource.label,
+        type: selectedExistingSource.type,
+      }
+    : undefined;
+  const candidate = buildIntakeSourceCandidate({
+    detected,
+    draftText,
+    existingSourceKey,
+    selectedExistingSource: selectedExistingSourceForReadiness,
+    selectedFile,
+    sourceChoice,
+    sourceType,
+    sourceTypeWasEdited: hasUserEditedSourceType,
+    sourceUrl,
+  });
+  const readiness = resolveIntakeReadiness({
+    backendError: intakeError,
+    candidate,
+    draftText,
+    intentId,
+    isWorking,
+    selectedExistingSource: selectedExistingSourceForReadiness,
+    selectedFile,
+    sourceUrl,
+  });
+  const canJumpBeyondSource = candidate.hasSourceInput;
 
   useEffect(() => {
     if (!selectedProjectSourceKey) {
@@ -317,6 +368,8 @@ export function IntakeWizard({
       if (sourceType !== nextTemplate.sourceType) {
         setSourceType(nextTemplate.sourceType);
       }
+      setHasUserEditedLanguage(false);
+      setHasUserEditedSourceType(false);
     }
   }, [
     existingSourceKey,
@@ -331,6 +384,30 @@ export function IntakeWizard({
     templateId,
   ]);
 
+  useEffect(() => {
+    const defaults = resolveDetectedIntakeDefaults({
+      currentLanguage: language,
+      currentSourceType: sourceType,
+      detectedLanguage: detected.language,
+      detectedSourceType: detected.sourceType,
+      languageWasEdited: hasUserEditedLanguage,
+      sourceTypeWasEdited: hasUserEditedSourceType,
+    });
+    if (language !== defaults.language) {
+      setLanguage(defaults.language);
+    }
+    if (sourceType !== defaults.sourceType) {
+      setSourceType(defaults.sourceType);
+    }
+  }, [
+    detected.language,
+    detected.sourceType,
+    hasUserEditedLanguage,
+    hasUserEditedSourceType,
+    language,
+    sourceType,
+  ]);
+
   function applyTemplate(nextTemplate: IntakeProjectTemplate) {
     setTemplateId(nextTemplate.id);
     setIntentId(nextTemplate.intentId);
@@ -338,6 +415,8 @@ export function IntakeWizard({
     setHasUserChosenSourceChoice(true);
     setLanguage(nextTemplate.language);
     setSourceType(nextTemplate.sourceType);
+    setHasUserEditedLanguage(false);
+    setHasUserEditedSourceType(false);
     setVoiceStrategy(nextTemplate.voiceStrategy);
     onSpeechPolicyProfileChange(nextTemplate.speechPolicyProfile);
   }
@@ -364,8 +443,18 @@ export function IntakeWizard({
   }
 
   async function openDestination(stage: IntakeDestinationStage) {
+    if (readiness.status !== "ready") {
+      setActiveStep(readiness.recoveryStep);
+      return;
+    }
     setLocalError(null);
-    applyVoiceChoice();
+    applyIntakeVoiceChoice({
+      language,
+      presetVoiceProfileId,
+      voiceProfiles,
+      voiceStrategy,
+      onVoiceProfileChange,
+    });
     onSpeechPolicyProfileChange(template.speechPolicyProfile);
 
     if (intentId === "voiceClone") {
@@ -378,7 +467,7 @@ export function IntakeWizard({
         rejectSourceStep("Choose a file before opening the next stage.");
         return;
       }
-      await (shouldImportFileAsBook(selectedFile, sourceType)
+      await (shouldRouteFileAsBook(selectedFile, sourceType, hasUserEditedSourceType)
         ? onImportBookFiles([selectedFile], bookImportOptionsForTemplate(template))
         : onPrepareFile(selectedFile, markdownParseMode, "prepared"));
       onStageChange(stage);
@@ -393,7 +482,9 @@ export function IntakeWizard({
       await onPrepareUrl(
         sourceUrl.trim(),
         markdownParseMode,
-        shouldImportUrlAsBook(sourceUrl.trim(), sourceType) ? "book" : "prepared",
+        shouldRouteUrlAsBook(sourceUrl.trim(), sourceType, hasUserEditedSourceType)
+          ? "book"
+          : "prepared",
       );
       onStageChange(stage);
       return;
@@ -412,21 +503,143 @@ export function IntakeWizard({
     await openExistingSourceDestination(stage);
   }
 
-  function applyVoiceChoice() {
-    if (voiceStrategy === "profile" && presetVoiceProfileId) {
-      onVoiceProfileChange(presetVoiceProfileId);
+  function advanceWizard() {
+    if (activeStep === "destination") {
       return;
     }
-    if (voiceStrategy === "language") {
-      const prefix = language.slice(0, 2).toLowerCase();
-      const match = voiceProfiles.find((profile) =>
-        profile.language.toLowerCase().startsWith(prefix),
-      );
-      if (match) {
-        onVoiceProfileChange(match.id);
-      }
+    if (
+      readiness.status !== "ready" &&
+      (readiness.recoveryStep === activeStep || activeStep === "source")
+    ) {
+      setActiveStep(readiness.recoveryStep);
+      return;
     }
+    setLocalError(null);
+    setActiveStep(nextIntakeStep(activeStep));
   }
+
+  const stepContentById: Record<IntakeStepId, ReactNode> = {
+    destination: (
+      <IntakeDestinationStep
+        candidate={candidate}
+        currentBookScope={currentBookScope}
+        bookScopeContent={bookScopeContent}
+        detected={detected}
+        effectiveTitle={effectiveTitle}
+        existingSource={selectedExistingSource}
+        intakeError={intakeError}
+        isWorking={isWorking}
+        policyProfile={template.speechPolicyProfile}
+        providerBackedGenerationBoundary={providerBackedGenerationBoundary}
+        readiness={readiness}
+        scopeOptions={scopeOptions}
+        selectedBookSource={scopeBookSource}
+        selectedPreparedSource={selectedPreparedSource}
+        sourceType={sourceType}
+        voiceProfileLabel={voiceProfileLabel}
+        onInspectBookSource={onInspectBookSource}
+        onInspectPreparedSource={onInspectPreparedSource}
+        onOpenBookCinema={onOpenBookCinema}
+        onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
+        onOpenReview={() => {
+          void openDestination("review");
+        }}
+        onOpenPreview={() => {
+          void openDestination("preview");
+        }}
+        onRecover={(step) => {
+          setActiveStep(step);
+        }}
+        onScopeChange={onScopeChange}
+      />
+    ),
+    intent: (
+      <IntakeIntentStep
+        intentId={intentId}
+        template={template}
+        onIntentChange={(nextIntent) => {
+          applyTemplate(defaultTemplateForIntent(nextIntent));
+        }}
+      />
+    ),
+    metadata: (
+      <IntakeMetadataStep
+        candidate={candidate}
+        detected={detected}
+        effectiveTitle={effectiveTitle}
+        language={language}
+        sourceType={sourceType}
+        title={metadataTitle}
+        onLanguageChange={(value) => {
+          setLanguage(value);
+          setHasUserEditedLanguage(true);
+          setLocalError(null);
+        }}
+        onSourceTypeChange={(value) => {
+          setSourceType(value);
+          setHasUserEditedSourceType(true);
+          setLocalError(null);
+        }}
+        onTitleChange={setMetadataTitle}
+      />
+    ),
+    source: (
+      <IntakeSourceStep
+        candidate={candidate}
+        draftText={draftText}
+        existingSourceKey={existingSourceKey}
+        existingSources={existingSources}
+        isWorking={isWorking}
+        readiness={readiness}
+        selectedFile={selectedFile}
+        sourceChoice={sourceChoice}
+        sourceUrl={sourceUrl}
+        onAdvancedOpen={() => {
+          setIsAdvancedOpen(true);
+        }}
+        onBrowse={() => {
+          fileInputRef.current?.click();
+        }}
+        onDraftTextChange={(value) => {
+          setDraftText(value);
+          setLocalError(null);
+          setHasUserEditedLanguage(false);
+          setHasUserEditedSourceType(false);
+        }}
+        onExistingSourceChange={(key) => {
+          setExistingSourceKey(key);
+          setLocalError(null);
+          setHasUserEditedLanguage(false);
+          setHasUserEditedSourceType(false);
+        }}
+        onSourceChoiceChange={(choice) => {
+          setHasUserChosenSourceChoice(true);
+          setSourceChoice(choice);
+          setLocalError(null);
+          setHasUserEditedLanguage(false);
+          setHasUserEditedSourceType(false);
+        }}
+        onSourceUrlChange={(value) => {
+          setSourceUrl(value);
+          setLocalError(null);
+          setHasUserEditedLanguage(false);
+          setHasUserEditedSourceType(false);
+        }}
+      />
+    ),
+    voice: (
+      <IntakeVoiceStep
+        language={language}
+        presetVoiceProfileId={presetVoiceProfileId}
+        selectedVoiceProfileId={selectedVoiceProfileId}
+        voiceProfileLabel={voiceProfileLabel}
+        voiceProfiles={voiceProfiles}
+        voiceStrategy={voiceStrategy}
+        onPresetVoiceProfileChange={setPresetVoiceProfileId}
+        onVoiceStrategyChange={setVoiceStrategy}
+      />
+    ),
+  };
 
   return (
     <Panel className="grid gap-4 p-4" variant="raised">
@@ -443,17 +656,32 @@ export function IntakeWizard({
             choices underneath this flow.
           </p>
         </div>
-        <StatusChip tone={isWorking ? "info" : "neutral"}>
-          {isWorking
-            ? "Preparing source"
-            : `${sourceTypeLabel(sourceType)} · ${languageLabel(language)}`}
-        </StatusChip>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusChip tone={readiness.tone}>
+            {readiness.status === "ready" ? "Ready" : readiness.title}
+          </StatusChip>
+          <StatusChip tone="neutral">
+            {sourceTypeLabel(sourceType)} · {languageLabel(language)}
+          </StatusChip>
+          <Button
+            data-testid="intake-advanced-open"
+            onClick={() => {
+              setIsAdvancedOpen(true);
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            Advanced import
+          </Button>
+        </div>
       </div>
 
       <SegmentedControl
         ariaLabel="Intake wizard step"
         columns={5}
         options={INTAKE_STEPS.map((step) => ({
+          disabled: !canJumpBeyondSource && step.id !== "intent" && step.id !== "source",
+          disabledReason: "Choose a source before jumping ahead.",
           label: step.label,
           testId: `intake-step-${step.id}`,
           value: step.id,
@@ -464,104 +692,11 @@ export function IntakeWizard({
         }}
       />
 
-      {activeStep === "intent" ? (
-        <IntakeIntentStep
-          intentId={intentId}
-          template={template}
-          templateId={templateId}
-          onIntentChange={(nextIntent) => {
-            applyTemplate(defaultTemplateForIntent(nextIntent));
-          }}
-          onTemplateChange={(id) => {
-            applyTemplate(intakeTemplateById(id));
-          }}
-        />
-      ) : null}
+      {stepContentById[activeStep]}
 
-      {activeStep === "source" ? (
-        <IntakeSourceStep
-          draftText={draftText}
-          existingSourceKey={existingSourceKey}
-          existingSources={existingSources}
-          isWorking={isWorking}
-          markdownParseMode={markdownParseMode}
-          selectedFile={selectedFile}
-          sourceChoice={sourceChoice}
-          sourcePrepError={sourcePrepError}
-          sourceUrl={sourceUrl}
-          onBrowse={() => {
-            fileInputRef.current?.click();
-          }}
-          onDraftTextChange={setDraftText}
-          onExistingSourceChange={setExistingSourceKey}
-          onMarkdownParseModeChange={setMarkdownParseMode}
-          onSourceChoiceChange={(choice) => {
-            setHasUserChosenSourceChoice(true);
-            setSourceChoice(choice);
-          }}
-          onSourceUrlChange={setSourceUrl}
-        />
-      ) : null}
-
-      {activeStep === "metadata" ? (
-        <IntakeMetadataStep
-          detected={detected}
-          effectiveTitle={effectiveTitle}
-          language={language}
-          sourceType={sourceType}
-          title={metadataTitle}
-          onLanguageChange={setLanguage}
-          onSourceTypeChange={setSourceType}
-          onTitleChange={setMetadataTitle}
-        />
-      ) : null}
-
-      {activeStep === "voice" ? (
-        <IntakeVoiceStep
-          language={language}
-          presetVoiceProfileId={presetVoiceProfileId}
-          selectedVoiceProfileId={selectedVoiceProfileId}
-          voiceProfileLabel={voiceProfileLabel}
-          voiceProfiles={voiceProfiles}
-          voiceStrategy={voiceStrategy}
-          onPresetVoiceProfileChange={setPresetVoiceProfileId}
-          onVoiceStrategyChange={setVoiceStrategy}
-        />
-      ) : null}
-
-      {activeStep === "destination" ? (
-        <IntakeDestinationStep
-          currentBookScope={currentBookScope}
-          bookScopeContent={bookScopeContent}
-          detected={detected}
-          effectiveTitle={effectiveTitle}
-          existingSource={selectedExistingSource}
-          intakeError={intakeError}
-          isWorking={isWorking}
-          policyProfile={template.speechPolicyProfile}
-          providerBackedGenerationBoundary={providerBackedGenerationBoundary}
-          scopeOptions={scopeOptions}
-          selectedBookSource={scopeBookSource}
-          selectedPreparedSource={selectedPreparedSource}
-          sourceType={sourceType}
-          voiceProfileLabel={voiceProfileLabel}
-          onInspectBookSource={onInspectBookSource}
-          onInspectPreparedSource={onInspectPreparedSource}
-          onOpenBookCinema={onOpenBookCinema}
-          onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
-          onOpenReview={() => {
-            void openDestination("review");
-          }}
-          onOpenPreview={() => {
-            void openDestination("preview");
-          }}
-          onScopeChange={onScopeChange}
-        />
-      ) : null}
-
-      {intakeError && activeStep !== "destination" ? (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          {intakeError}
+      {readiness.status !== "ready" && activeStep !== "destination" && activeStep !== "source" ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {readiness.detail}
         </p>
       ) : null}
 
@@ -593,15 +728,35 @@ export function IntakeWizard({
             disabledReason={
               activeStep === "destination" ? "Choose Review or Preview from this step." : undefined
             }
-            onClick={() => {
-              setActiveStep(nextIntakeStep(activeStep));
-            }}
+            onClick={advanceWizard}
             variant="primary"
           >
             Next
           </Button>
         </div>
       </div>
+
+      {isAdvancedOpen ? (
+        <AdvancedImportDrawer
+          candidate={candidate}
+          detected={detected}
+          intakeError={intakeError}
+          markdownParseMode={markdownParseMode}
+          policyProfile={template.speechPolicyProfile}
+          providerBackedGenerationBoundary={providerBackedGenerationBoundary}
+          sourceChoice={sourceChoice}
+          sourceUrl={sourceUrl}
+          template={template}
+          templateId={templateId}
+          onClose={() => {
+            setIsAdvancedOpen(false);
+          }}
+          onMarkdownParseModeChange={setMarkdownParseMode}
+          onTemplateChange={(id) => {
+            applyTemplate(intakeTemplateById(id));
+          }}
+        />
+      ) : null}
 
       <input
         ref={fileInputRef}
@@ -615,6 +770,12 @@ export function IntakeWizard({
           const file = event.currentTarget.files?.item(0) ?? null;
           setSelectedFile(file);
           setLocalError(null);
+          if (file) {
+            setHasUserChosenSourceChoice(true);
+            setSourceChoice("file");
+            setHasUserEditedLanguage(false);
+            setHasUserEditedSourceType(false);
+          }
           event.currentTarget.value = "";
         }}
       />
@@ -622,26 +783,49 @@ export function IntakeWizard({
   );
 }
 
+function applyIntakeVoiceChoice({
+  language,
+  presetVoiceProfileId,
+  voiceProfiles,
+  voiceStrategy,
+  onVoiceProfileChange,
+}: Readonly<{
+  language: string;
+  presetVoiceProfileId: string;
+  voiceProfiles: VoiceProfile[];
+  voiceStrategy: VoiceStrategy;
+  onVoiceProfileChange: (profileId: string) => void;
+}>) {
+  if (voiceStrategy === "profile" && presetVoiceProfileId) {
+    onVoiceProfileChange(presetVoiceProfileId);
+    return;
+  }
+  if (voiceStrategy !== "language") {
+    return;
+  }
+  const prefix = language.slice(0, 2).toLowerCase();
+  const match = voiceProfiles.find((profile) => profile.language.toLowerCase().startsWith(prefix));
+  if (match) {
+    onVoiceProfileChange(match.id);
+  }
+}
+
 function IntakeIntentStep({
   intentId,
   template,
-  templateId,
   onIntentChange,
-  onTemplateChange,
 }: Readonly<{
   intentId: IntakeIntentId;
   template: IntakeProjectTemplate;
-  templateId: string;
   onIntentChange: (intent: IntakeIntentId) => void;
-  onTemplateChange: (templateId: string) => void;
 }>) {
   return (
-    <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
-      <div className="grid gap-2 sm:grid-cols-2">
+    <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.15fr)_minmax(16rem,0.85fr)]">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {INTAKE_INTENT_OPTIONS.map((option) => (
           <Button
             align="start"
-            className="h-auto min-h-[5.75rem] flex-col gap-1 p-3"
+            className="h-auto min-h-[4.75rem] flex-col gap-1 p-3"
             data-testid={`intake-intent-${option.id}`}
             key={option.id}
             onClick={() => {
@@ -656,180 +840,313 @@ function IntakeIntentStep({
         ))}
       </div>
       <Panel className="grid gap-3 p-3" variant="surface">
-        <label className="grid gap-1 text-xs font-semibold">
-          <span className="vs-muted">Template defaults</span>
-          <select
-            className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
-            data-testid="intake-template-select"
-            onChange={(event) => {
-              onTemplateChange(event.currentTarget.value);
-            }}
-            value={templateId}
-          >
-            {INTAKE_PROJECT_TEMPLATES.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold text-[var(--vs-text)]">Default path</h3>
+          <StatusChip tone="neutral">{template.label}</StatusChip>
+        </div>
         <p className="text-sm leading-6 vs-muted">{template.description}</p>
         <dl className="grid gap-2 text-xs">
           <SummaryRow label="Policy" value={template.speechPolicyProfile} />
           <SummaryRow label="Source" value={sourceTypeLabel(template.sourceType)} />
-          <SummaryRow label="Voice" value={template.voiceStrategy} />
+          <SummaryRow label="Voice default" value={template.voiceStrategy} />
         </dl>
+        <p className="rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-muted">
+          Template and import adapter details are available in Advanced import.
+        </p>
       </Panel>
     </div>
   );
 }
 
 function IntakeSourceStep({
+  candidate,
   draftText,
   existingSourceKey,
   existingSources,
   isWorking,
-  markdownParseMode,
+  readiness,
   selectedFile,
   sourceChoice,
-  sourcePrepError,
   sourceUrl,
+  onAdvancedOpen,
   onBrowse,
   onDraftTextChange,
   onExistingSourceChange,
-  onMarkdownParseModeChange,
   onSourceChoiceChange,
   onSourceUrlChange,
 }: Readonly<{
+  candidate: IntakeSourceCandidate;
   draftText: string;
   existingSourceKey: string;
   existingSources: IntakeExistingSource[];
   isWorking: boolean;
-  markdownParseMode: MarkdownParseMode;
+  readiness: IntakeReadinessState;
   selectedFile: File | null;
   sourceChoice: IntakeSourceChoice;
-  sourcePrepError: string | null;
   sourceUrl: string;
+  onAdvancedOpen: () => void;
   onBrowse: () => void;
   onDraftTextChange: (text: string) => void;
   onExistingSourceChange: (key: string) => void;
-  onMarkdownParseModeChange: (mode: MarkdownParseMode) => void;
   onSourceChoiceChange: (choice: IntakeSourceChoice) => void;
   onSourceUrlChange: (url: string) => void;
 }>) {
   return (
     <div className="grid gap-4">
-      <div className="grid gap-2 xl:grid-cols-2 2xl:grid-cols-4">
-        {INTAKE_SOURCE_CHOICE_OPTIONS.map((option) => (
-          <Button
-            align="start"
-            className="h-auto min-h-[5.25rem] flex-col gap-1 p-3"
-            data-testid={`intake-source-${option.id}`}
-            key={option.id}
-            onClick={() => {
-              onSourceChoiceChange(option.id);
-            }}
-            selected={option.id === sourceChoice}
-            variant="mode"
-          >
-            <span className="text-sm">{option.label}</span>
-            <span className="text-xs font-medium leading-5 vs-muted">{option.description}</span>
-          </Button>
-        ))}
+      <div className="grid gap-2">
+        <p className="text-sm font-semibold text-[var(--vs-text)]">Where is the source?</p>
+        <SegmentedControl
+          ariaLabel="Intake source path"
+          columns={4}
+          options={INTAKE_SOURCE_CHOICE_OPTIONS.map((option) => ({
+            label: option.label,
+            testId: `intake-source-${option.id}`,
+            value: option.id,
+          }))}
+          value={sourceChoice}
+          onChange={onSourceChoiceChange}
+        />
       </div>
 
-      {sourceChoice === "file" ? (
-        <Panel className="grid gap-3 p-3" variant="surface">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-[var(--vs-text)]">Source file</p>
-              <p className="mt-1 truncate text-xs vs-muted" title={selectedFile?.name}>
-                {selectedFile
-                  ? `${selectedFile.name} · ${selectedFile.size.toLocaleString()} bytes`
-                  : "PDF, EPUB, DOCX, Markdown, HTML, image, text, CSV, JSON, or logs"}
-              </p>
-            </div>
-            <Button
-              data-testid="intake-wizard-browse-file"
-              disabled={isWorking}
-              disabledReason={isWorking ? "Source preparation is already running." : undefined}
-              onClick={onBrowse}
-              variant="secondary"
-            >
-              Browse File
-            </Button>
-          </div>
-          <PrivacyNoticeCallout notice={PRIVACY_NOTICES.fileIntake} />
-          <MarkdownModeSelect mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
-        </Panel>
-      ) : null}
-
-      {sourceChoice === "url" ? (
-        <Panel className="grid gap-3 p-3" variant="surface">
-          <label className="grid gap-1 text-xs font-semibold">
-            <span className="vs-muted">URL</span>
-            <input
-              className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
-              data-testid="intake-wizard-url"
-              onChange={(event) => {
-                onSourceUrlChange(event.currentTarget.value);
-              }}
-              placeholder="https://example.com/article"
-              type="url"
-              value={sourceUrl}
-            />
-          </label>
-          <PrivacyNoticeCallout notice={urlIntakeNotice(sourceUrl)} />
-          {sourcePrepError ? (
-            <PrivacyNoticeCallout notice={sourcePrepFailureNotice(sourcePrepError)} />
-          ) : null}
-          <MarkdownModeSelect mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
-        </Panel>
-      ) : null}
-
-      {sourceChoice === "pastedText" ? (
-        <textarea
-          aria-label="Pasted intake text"
-          className={`${fieldControlClassName} min-h-[18rem] resize-y bg-[var(--vs-raised)] p-4 font-mono leading-6`}
-          data-testid="intake-wizard-pasted-text"
-          onChange={(event) => {
-            onDraftTextChange(event.currentTarget.value);
-          }}
-          placeholder="Paste the text you want to listen to."
-          spellCheck={false}
-          value={draftText}
-        />
-      ) : null}
-
-      {sourceChoice === "existing" ? (
-        <Panel className="grid gap-3 p-3" variant="surface">
-          <label className="grid gap-1 text-xs font-semibold">
-            <span className="vs-muted">Existing source</span>
-            <select
-              aria-label="Existing source"
-              className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
-              data-testid="intake-wizard-existing-source"
-              onChange={(event) => {
-                onExistingSourceChange(event.currentTarget.value);
-              }}
-              value={existingSourceKey}
-            >
-              <option value="">Choose a project source</option>
-              {existingSources.map((source) => (
-                <option key={source.key} value={source.key}>
-                  {source.optionLabel}
-                </option>
-              ))}
-            </select>
-          </label>
-          {existingSources.length === 0 ? (
-            <p className="rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-muted">
-              Prepared files, URLs, books, and reusable sources will appear here after import.
+      <Panel className="grid gap-4 p-4" variant="surface">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-[var(--vs-text)]">{candidate.sourceLabel}</h3>
+            <p className="mt-1 truncate text-xs vs-muted" title={candidate.inputSummary}>
+              {candidate.inputSummary}
             </p>
-          ) : null}
-        </Panel>
-      ) : null}
+          </div>
+          <StatusChip tone={readiness.tone}>
+            {readiness.status === "ready" ? "Source selected" : readiness.title}
+          </StatusChip>
+        </div>
+
+        <IntakeSourceInput
+          candidate={candidate}
+          draftText={draftText}
+          existingSourceKey={existingSourceKey}
+          existingSources={existingSources}
+          isWorking={isWorking}
+          selectedFile={selectedFile}
+          sourceChoice={sourceChoice}
+          sourceUrl={sourceUrl}
+          onBrowse={onBrowse}
+          onDraftTextChange={onDraftTextChange}
+          onExistingSourceChange={onExistingSourceChange}
+          onSourceUrlChange={onSourceUrlChange}
+        />
+
+        <SourceReadinessNotice readiness={readiness} />
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 vs-border">
+          <p className="text-xs leading-5 vs-muted">{candidate.adapterRouteLabel}</p>
+          <Button data-testid="intake-source-advanced" onClick={onAdvancedOpen} variant="ghost">
+            Advanced import
+          </Button>
+        </div>
+      </Panel>
     </div>
+  );
+}
+
+function IntakeSourceInput({
+  candidate,
+  draftText,
+  existingSourceKey,
+  existingSources,
+  isWorking,
+  selectedFile,
+  sourceChoice,
+  sourceUrl,
+  onBrowse,
+  onDraftTextChange,
+  onExistingSourceChange,
+  onSourceUrlChange,
+}: Readonly<{
+  candidate: IntakeSourceCandidate;
+  draftText: string;
+  existingSourceKey: string;
+  existingSources: IntakeExistingSource[];
+  isWorking: boolean;
+  selectedFile: File | null;
+  sourceChoice: IntakeSourceChoice;
+  sourceUrl: string;
+  onBrowse: () => void;
+  onDraftTextChange: (text: string) => void;
+  onExistingSourceChange: (key: string) => void;
+  onSourceUrlChange: (url: string) => void;
+}>) {
+  switch (sourceChoice) {
+    case "url": {
+      return (
+        <UrlSourceInput
+          candidate={candidate}
+          sourceUrl={sourceUrl}
+          onSourceUrlChange={onSourceUrlChange}
+        />
+      );
+    }
+    case "pastedText": {
+      return <PastedTextSourceInput draftText={draftText} onDraftTextChange={onDraftTextChange} />;
+    }
+    case "existing": {
+      return (
+        <ExistingSourceInput
+          existingSourceKey={existingSourceKey}
+          existingSources={existingSources}
+          onExistingSourceChange={onExistingSourceChange}
+        />
+      );
+    }
+    default: {
+      return (
+        <FileSourceInput isWorking={isWorking} selectedFile={selectedFile} onBrowse={onBrowse} />
+      );
+    }
+  }
+}
+
+function FileSourceInput({
+  isWorking,
+  selectedFile,
+  onBrowse,
+}: Readonly<{ isWorking: boolean; selectedFile: File | null; onBrowse: () => void }>) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed p-4 vs-border">
+      <p className="min-w-0 text-sm leading-6 vs-muted">
+        {selectedFile
+          ? "This file is ready for metadata confirmation."
+          : "Choose one local file to import or prepare."}
+      </p>
+      <Button
+        data-testid="intake-wizard-browse-file"
+        disabled={isWorking}
+        disabledReason={isWorking ? "Source preparation is already running." : undefined}
+        onClick={onBrowse}
+        variant="secondary"
+      >
+        {selectedFile ? "Change File" : "Browse File"}
+      </Button>
+    </div>
+  );
+}
+
+function UrlSourceInput({
+  candidate,
+  sourceUrl,
+  onSourceUrlChange,
+}: Readonly<{
+  candidate: IntakeSourceCandidate;
+  sourceUrl: string;
+  onSourceUrlChange: (url: string) => void;
+}>) {
+  return (
+    <label className="grid gap-2 text-xs font-semibold">
+      <span className="vs-muted">URL</span>
+      <input
+        className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
+        data-testid="intake-wizard-url"
+        onChange={(event) => {
+          onSourceUrlChange(event.currentTarget.value);
+        }}
+        placeholder="https://example.com/article"
+        type="url"
+        value={sourceUrl}
+      />
+      {candidate.urlSafety && !candidate.urlSafety.allowedByDefault ? (
+        <span className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          {candidate.urlSafety.detail}
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+function PastedTextSourceInput({
+  draftText,
+  onDraftTextChange,
+}: Readonly<{ draftText: string; onDraftTextChange: (text: string) => void }>) {
+  return (
+    <textarea
+      aria-label="Pasted intake text"
+      className={`${fieldControlClassName} min-h-[16rem] resize-y bg-[var(--vs-raised)] p-4 font-mono leading-6`}
+      data-testid="intake-wizard-pasted-text"
+      onChange={(event) => {
+        onDraftTextChange(event.currentTarget.value);
+      }}
+      placeholder="Paste the text you want to listen to."
+      spellCheck={false}
+      value={draftText}
+    />
+  );
+}
+
+function ExistingSourceInput({
+  existingSourceKey,
+  existingSources,
+  onExistingSourceChange,
+}: Readonly<{
+  existingSourceKey: string;
+  existingSources: IntakeExistingSource[];
+  onExistingSourceChange: (key: string) => void;
+}>) {
+  return (
+    <div className="grid gap-3">
+      {existingSources.length > 0 ? (
+        <div className="grid gap-2 lg:grid-cols-2">
+          {existingSources.map((source) => (
+            <Button
+              align="start"
+              className="h-auto min-h-[4.5rem] flex-col gap-1 p-3"
+              data-testid={`intake-existing-source-${source.key}`}
+              key={source.key}
+              onClick={() => {
+                onExistingSourceChange(source.key);
+              }}
+              selected={existingSourceKey === source.key}
+              variant="mode"
+            >
+              <span className="text-sm">{source.label}</span>
+              <span className="text-xs font-medium leading-5 vs-muted">{source.detail}</span>
+            </Button>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-muted">
+          Prepared files, URLs, books, and reusable sources will appear here after import.
+        </p>
+      )}
+      <label className="grid gap-1 text-xs font-semibold sm:max-w-md">
+        <span className="vs-muted">Existing source list</span>
+        <select
+          aria-label="Existing source"
+          className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
+          data-testid="intake-wizard-existing-source"
+          onChange={(event) => {
+            onExistingSourceChange(event.currentTarget.value);
+          }}
+          value={existingSourceKey}
+        >
+          <option value="">Choose a project source</option>
+          {existingSources.map((source) => (
+            <option key={source.key} value={source.key}>
+              {source.optionLabel}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function SourceReadinessNotice({ readiness }: Readonly<{ readiness: IntakeReadinessState }>) {
+  if (readiness.status === "ready" || readiness.recoveryStep !== "source") {
+    return null;
+  }
+  return (
+    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+      {readiness.detail}
+    </p>
   );
 }
 
@@ -849,6 +1166,7 @@ function PrivacyNoticeCallout({ notice }: Readonly<{ notice: PrivacyNotice }>) {
 }
 
 function IntakeMetadataStep({
+  candidate,
   detected,
   effectiveTitle,
   language,
@@ -858,6 +1176,7 @@ function IntakeMetadataStep({
   onSourceTypeChange,
   onTitleChange,
 }: Readonly<{
+  candidate: IntakeSourceCandidate;
   detected: ReturnType<typeof detectIntakeSource>;
   effectiveTitle: string;
   language: string;
@@ -867,66 +1186,96 @@ function IntakeMetadataStep({
   onSourceTypeChange: (sourceType: IntakeSourceType) => void;
   onTitleChange: (title: string) => void;
 }>) {
+  const [isEditing, setIsEditing] = useState(false);
   return (
-    <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
-      <Panel className="grid gap-3 p-3" variant="surface">
-        <label className="grid gap-1 text-xs font-semibold">
-          <span className="vs-muted">Title</span>
-          <input
-            className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
-            data-testid="intake-wizard-title"
-            onChange={(event) => {
-              onTitleChange(event.currentTarget.value);
+    <div className="grid gap-4">
+      <Panel className="grid gap-4 p-4" variant="surface">
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-[var(--vs-text)]">Confirm what we found</h3>
+            <p className="mt-1 text-xs leading-5 vs-muted">
+              Check the detected details before Review opens.
+            </p>
+          </div>
+          <Button
+            data-testid="intake-metadata-edit"
+            onClick={() => {
+              setIsEditing((current) => !current);
             }}
-            placeholder={detected.title}
-            value={title}
-          />
-        </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-xs font-semibold">
-            <span className="vs-muted">Language</span>
-            <select
-              className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
-              data-testid="intake-wizard-language"
-              onChange={(event) => {
-                onLanguageChange(event.currentTarget.value);
-              }}
-              value={language}
-            >
-              {LANGUAGE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs font-semibold">
-            <span className="vs-muted">Source type</span>
-            <select
-              className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
-              data-testid="intake-wizard-source-type"
-              onChange={(event) => {
-                onSourceTypeChange(event.currentTarget.value as IntakeSourceType);
-              }}
-              value={sourceType}
-            >
-              {SOURCE_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+            variant="secondary"
+          >
+            {isEditing ? "Hide Edits" : "Edit Details"}
+          </Button>
         </div>
-      </Panel>
-      <Panel className="grid gap-2 p-3" variant="raised">
-        <SummaryRow label="Detected title" value={effectiveTitle} />
-        <SummaryRow label="Detected type" value={sourceTypeLabel(detected.sourceType)} />
-        <SummaryRow label="Detected structure" value={detected.structureLabel} />
-        <SummaryRow label="Confidence" value={detected.confidence} />
-        <p className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs leading-5 vs-border vs-muted">
-          {detected.reason}
-        </p>
+
+        <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <SummaryRow label="Title" value={effectiveTitle} />
+          <SummaryRow label="Type" value={sourceTypeLabel(sourceType)} />
+          <SummaryRow label="Structure" value={detected.structureLabel} />
+          <SummaryRow label="Language" value={languageLabel(language)} />
+          <SummaryRow label="Confidence" value={detected.confidence} />
+        </dl>
+
+        {candidate.confidencePrompt ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+            {candidate.confidencePrompt}
+          </p>
+        ) : (
+          <p className="rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs leading-5 vs-border vs-muted">
+            {detected.reason}
+          </p>
+        )}
+
+        {isEditing ? (
+          <div className="grid gap-3 border-t pt-3 vs-border lg:grid-cols-3">
+            <label className="grid gap-1 text-xs font-semibold">
+              <span className="vs-muted">Title</span>
+              <input
+                className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
+                data-testid="intake-wizard-title"
+                onChange={(event) => {
+                  onTitleChange(event.currentTarget.value);
+                }}
+                placeholder={detected.title}
+                value={title}
+              />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold">
+              <span className="vs-muted">Language</span>
+              <select
+                className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
+                data-testid="intake-wizard-language"
+                onChange={(event) => {
+                  onLanguageChange(event.currentTarget.value);
+                }}
+                value={language}
+              >
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs font-semibold">
+              <span className="vs-muted">Source type</span>
+              <select
+                className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
+                data-testid="intake-wizard-source-type"
+                onChange={(event) => {
+                  onSourceTypeChange(event.currentTarget.value as IntakeSourceType);
+                }}
+                value={sourceType}
+              >
+                {SOURCE_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
       </Panel>
     </div>
   );
@@ -1027,6 +1376,7 @@ function IntakeVoiceStep({
 
 function IntakeDestinationStep({
   bookScopeContent,
+  candidate,
   currentBookScope,
   detected,
   effectiveTitle,
@@ -1035,6 +1385,7 @@ function IntakeDestinationStep({
   isWorking,
   policyProfile,
   providerBackedGenerationBoundary,
+  readiness,
   scopeOptions,
   selectedBookSource,
   selectedPreparedSource,
@@ -1046,9 +1397,11 @@ function IntakeDestinationStep({
   onOpenPreparedSourceCinema,
   onOpenPreview,
   onOpenReview,
+  onRecover,
   onScopeChange,
 }: Readonly<{
   bookScopeContent: BookSourceScopeContent | null;
+  candidate: IntakeSourceCandidate;
   currentBookScope: BookScope | null;
   detected: ReturnType<typeof detectIntakeSource>;
   effectiveTitle: string;
@@ -1057,6 +1410,7 @@ function IntakeDestinationStep({
   isWorking: boolean;
   policyProfile: string;
   providerBackedGenerationBoundary: boolean;
+  readiness: IntakeReadinessState;
   scopeOptions: ReturnType<typeof bookScopeOptions>;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
@@ -1068,6 +1422,7 @@ function IntakeDestinationStep({
   onOpenPreparedSourceCinema: (source: PreparedSource) => void;
   onOpenPreview: () => void;
   onOpenReview: () => void;
+  onRecover: (step: IntakeStepId) => void;
   onScopeChange: (scope: BookScope) => void;
 }>) {
   const activeBook = activeDestinationBook(existingSource, selectedBookSource);
@@ -1079,13 +1434,24 @@ function IntakeDestinationStep({
   );
   return (
     <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
-      <Panel className="grid gap-3 p-3" variant="surface">
+      <Panel className="grid gap-4 p-4" variant="surface">
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-[var(--vs-text)]">{readiness.title}</h3>
+            <p className="mt-1 text-sm leading-6 vs-muted">{readiness.detail}</p>
+          </div>
+          <StatusChip tone={readiness.tone}>
+            {readiness.status === "ready" ? "Complete" : readiness.status}
+          </StatusChip>
+        </div>
+
         <dl className="grid gap-2 text-xs xl:grid-cols-2">
           <SummaryRow label="Title" value={effectiveTitle} />
           <SummaryRow label="Type" value={sourceTypeLabel(sourceType)} />
           <SummaryRow label="Structure" value={structureLabel} />
           <SummaryRow label="Policy" value={policyProfile} />
           <SummaryRow label="Voice" value={voiceProfileLabel} />
+          <SummaryRow label="Source" value={candidate.inputSummary} />
         </dl>
         {currentBookScope && selectedBookSource ? (
           <label className="grid gap-1 text-xs font-semibold">
@@ -1112,7 +1478,7 @@ function IntakeDestinationStep({
             </select>
           </label>
         ) : null}
-        {intakeError ? (
+        {intakeError && readiness.status === "ready" ? (
           <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
             {intakeError}
           </p>
@@ -1120,101 +1486,316 @@ function IntakeDestinationStep({
         {providerBackedGenerationBoundary ? (
           <PrivacyNoticeCallout notice={PRIVACY_NOTICES.providerBackedGeneration} />
         ) : null}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            data-testid="intake-wizard-open-review"
-            disabled={isWorking}
-            disabledReason={isWorking ? "Source preparation is already running." : undefined}
-            onClick={onOpenReview}
-            variant="primary"
-          >
-            Open Review
-          </Button>
-          <Button
-            data-testid="intake-wizard-open-preview"
-            disabled={isWorking}
-            disabledReason={isWorking ? "Source preparation is already running." : undefined}
-            onClick={onOpenPreview}
-            variant="soft"
-          >
-            Open Preview
-          </Button>
-        </div>
+        <DestinationActions
+          isWorking={isWorking}
+          readiness={readiness}
+          onOpenPreview={onOpenPreview}
+          onOpenReview={onOpenReview}
+          onRecover={onRecover}
+        />
       </Panel>
-      <Panel className="grid gap-3 p-3" variant="raised">
-        <h3 className="text-sm font-semibold text-[var(--vs-text)]">Active source</h3>
-        {activeBook ? (
-          <div className="grid gap-2">
-            <SummaryRow label="Book" value={bookSourceName(activeBook)} />
-            <SummaryRow
-              label="Structure"
-              value={`${activeBook.chapterCount.toLocaleString()} chapters · ${activeBook.wordCount.toLocaleString()} words`}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button
-                data-testid="intake-wizard-open-book-cinema"
-                onClick={() => {
-                  onOpenBookCinema(
-                    activeBook,
-                    currentBookScope ?? resolveDefaultBookScope(activeBook),
-                  );
-                }}
-                size="sm"
-                variant="secondary"
-              >
-                Open Book Cinema
-              </Button>
-              <Button
-                data-testid="intake-wizard-inspect-book"
-                onClick={() => {
-                  onInspectBookSource(activeBook);
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                Content Structure
-              </Button>
-            </div>
-          </div>
-        ) : null}
-        {activePrepared ? (
-          <div className="grid gap-2">
-            <SummaryRow label="Source" value={activePrepared.title ?? activePrepared.sourceName} />
-            <SummaryRow
-              label="Structure"
-              value={`${activePrepared.blockCount.toLocaleString()} blocks · ${activePrepared.wordCount.toLocaleString()} words`}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button
-                data-testid="intake-wizard-open-prepared-cinema"
-                onClick={() => {
-                  onOpenPreparedSourceCinema(activePrepared);
-                }}
-                size="sm"
-                variant="secondary"
-              >
-                {activePrepared.kind === "url" ? "Open Website Cinema" : "Open Document Cinema"}
-              </Button>
-              <Button
-                data-testid="intake-wizard-inspect-prepared"
-                onClick={() => {
-                  onInspectPreparedSource(activePrepared);
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                Content Structure
-              </Button>
-            </div>
-          </div>
-        ) : null}
-        {!activeBook && !activePrepared ? (
-          <p className="rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-muted">
-            Source metadata will appear here after import or when you choose an existing source.
-          </p>
-        ) : null}
-      </Panel>
+      <DestinationActiveSourcePanel
+        activeBook={activeBook}
+        activePrepared={activePrepared}
+        currentBookScope={currentBookScope}
+        onInspectBookSource={onInspectBookSource}
+        onInspectPreparedSource={onInspectPreparedSource}
+        onOpenBookCinema={onOpenBookCinema}
+        onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
+      />
     </div>
+  );
+}
+
+function DestinationActions({
+  isWorking,
+  readiness,
+  onOpenPreview,
+  onOpenReview,
+  onRecover,
+}: Readonly<{
+  isWorking: boolean;
+  readiness: IntakeReadinessState;
+  onOpenPreview: () => void;
+  onOpenReview: () => void;
+  onRecover: (step: IntakeStepId) => void;
+}>) {
+  if (readiness.status !== "ready") {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Button
+          data-testid="intake-wizard-recover"
+          onClick={() => {
+            onRecover(readiness.recoveryStep);
+          }}
+          variant="primary"
+        >
+          {readiness.actionLabel}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        data-testid="intake-wizard-open-review"
+        disabled={isWorking}
+        disabledReason={isWorking ? "Source preparation is already running." : undefined}
+        onClick={onOpenReview}
+        variant="primary"
+      >
+        Open Review
+      </Button>
+      <Button
+        data-testid="intake-wizard-open-preview"
+        disabled={isWorking}
+        disabledReason={isWorking ? "Source preparation is already running." : undefined}
+        onClick={onOpenPreview}
+        variant="soft"
+      >
+        Open Preview
+      </Button>
+    </div>
+  );
+}
+
+function DestinationActiveSourcePanel({
+  activeBook,
+  activePrepared,
+  currentBookScope,
+  onInspectBookSource,
+  onInspectPreparedSource,
+  onOpenBookCinema,
+  onOpenPreparedSourceCinema,
+}: Readonly<{
+  activeBook: BookSource | null;
+  activePrepared: PreparedSource | null;
+  currentBookScope: BookScope | null;
+  onInspectBookSource: (source: BookSource) => void;
+  onInspectPreparedSource: (source: PreparedSource) => void;
+  onOpenBookCinema: (source?: BookSource, scope?: BookScope) => void;
+  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
+}>) {
+  return (
+    <Panel className="grid gap-3 p-3" variant="raised">
+      <h3 className="text-sm font-semibold text-[var(--vs-text)]">Active source</h3>
+      <BookActiveSource
+        activeBook={activeBook}
+        currentBookScope={currentBookScope}
+        onInspectBookSource={onInspectBookSource}
+        onOpenBookCinema={onOpenBookCinema}
+      />
+      <PreparedActiveSource
+        activePrepared={activePrepared}
+        onInspectPreparedSource={onInspectPreparedSource}
+        onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
+      />
+      {!activeBook && !activePrepared ? (
+        <p className="rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-muted">
+          Source metadata will appear here after import or when you choose an existing source.
+        </p>
+      ) : null}
+    </Panel>
+  );
+}
+
+function BookActiveSource({
+  activeBook,
+  currentBookScope,
+  onInspectBookSource,
+  onOpenBookCinema,
+}: Readonly<{
+  activeBook: BookSource | null;
+  currentBookScope: BookScope | null;
+  onInspectBookSource: (source: BookSource) => void;
+  onOpenBookCinema: (source?: BookSource, scope?: BookScope) => void;
+}>) {
+  if (!activeBook) {
+    return null;
+  }
+  return (
+    <div className="grid gap-2">
+      <SummaryRow label="Book" value={bookSourceName(activeBook)} />
+      <SummaryRow
+        label="Structure"
+        value={`${activeBook.chapterCount.toLocaleString()} chapters · ${activeBook.wordCount.toLocaleString()} words`}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          data-testid="intake-wizard-open-book-cinema"
+          onClick={() => {
+            onOpenBookCinema(activeBook, currentBookScope ?? resolveDefaultBookScope(activeBook));
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Open Book Cinema
+        </Button>
+        <Button
+          data-testid="intake-wizard-inspect-book"
+          onClick={() => {
+            onInspectBookSource(activeBook);
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          Content Structure
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PreparedActiveSource({
+  activePrepared,
+  onInspectPreparedSource,
+  onOpenPreparedSourceCinema,
+}: Readonly<{
+  activePrepared: PreparedSource | null;
+  onInspectPreparedSource: (source: PreparedSource) => void;
+  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
+}>) {
+  if (!activePrepared) {
+    return null;
+  }
+  return (
+    <div className="grid gap-2">
+      <SummaryRow label="Source" value={activePrepared.title ?? activePrepared.sourceName} />
+      <SummaryRow
+        label="Structure"
+        value={`${activePrepared.blockCount.toLocaleString()} blocks · ${activePrepared.wordCount.toLocaleString()} words`}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          data-testid="intake-wizard-open-prepared-cinema"
+          onClick={() => {
+            onOpenPreparedSourceCinema(activePrepared);
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          {activePrepared.kind === "url" ? "Open Website Cinema" : "Open Document Cinema"}
+        </Button>
+        <Button
+          data-testid="intake-wizard-inspect-prepared"
+          onClick={() => {
+            onInspectPreparedSource(activePrepared);
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          Content Structure
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AdvancedImportDrawer({
+  candidate,
+  detected,
+  intakeError,
+  markdownParseMode,
+  policyProfile,
+  providerBackedGenerationBoundary,
+  sourceChoice,
+  sourceUrl,
+  template,
+  templateId,
+  onClose,
+  onMarkdownParseModeChange,
+  onTemplateChange,
+}: Readonly<{
+  candidate: IntakeSourceCandidate;
+  detected: ReturnType<typeof detectIntakeSource>;
+  intakeError: string | null;
+  markdownParseMode: MarkdownParseMode;
+  policyProfile: string;
+  providerBackedGenerationBoundary: boolean;
+  sourceChoice: IntakeSourceChoice;
+  sourceUrl: string;
+  template: IntakeProjectTemplate;
+  templateId: string;
+  onClose: () => void;
+  onMarkdownParseModeChange: (mode: MarkdownParseMode) => void;
+  onTemplateChange: (templateId: string) => void;
+}>) {
+  const importOptions = bookImportOptionsForTemplate(template);
+  return (
+    <Drawer
+      label="Advanced import"
+      metadata={[
+        { label: "Route", value: candidate.adapterRouteLabel },
+        { label: "Confidence", value: detected.confidence },
+      ]}
+      title="Advanced import settings"
+      onClose={onClose}
+    >
+      <div className="grid gap-4">
+        <Panel className="grid gap-3 p-3" variant="surface">
+          <h3 className="text-sm font-semibold text-[var(--vs-text)]">Defaults</h3>
+          <label className="grid gap-1 text-xs font-semibold">
+            <span className="vs-muted">Template defaults</span>
+            <select
+              className={`${fieldControlClassName} bg-[var(--vs-raised)]`}
+              data-testid="intake-template-select"
+              onChange={(event) => {
+                onTemplateChange(event.currentTarget.value);
+              }}
+              value={templateId}
+            >
+              {INTAKE_PROJECT_TEMPLATES.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <dl className="grid gap-2 text-xs sm:grid-cols-2">
+            <SummaryRow label="Policy" value={policyProfile} />
+            <SummaryRow label="Default type" value={sourceTypeLabel(template.sourceType)} />
+            <SummaryRow label="Import profile" value={importOptions.importProfile ?? "auto"} />
+            <SummaryRow label="PDF tables" value={importOptions.pdfTableMode ?? "auto"} />
+          </dl>
+        </Panel>
+
+        <Panel className="grid gap-3 p-3" variant="surface">
+          <h3 className="text-sm font-semibold text-[var(--vs-text)]">Adapter route</h3>
+          <dl className="grid gap-2 text-xs sm:grid-cols-2">
+            <SummaryRow label="Detected type" value={sourceTypeLabel(detected.sourceType)} />
+            <SummaryRow label="Detected mode" value={detected.sourceMode} />
+            <SummaryRow label="Detected structure" value={detected.structureLabel} />
+            <SummaryRow label="Route" value={candidate.adapterRouteLabel} />
+          </dl>
+          <p className="rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs leading-5 vs-border vs-muted">
+            {detected.reason}
+          </p>
+          <MarkdownModeSelect mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
+        </Panel>
+
+        <Panel className="grid gap-3 p-3" variant="surface">
+          <h3 className="text-sm font-semibold text-[var(--vs-text)]">Privacy and diagnostics</h3>
+          {sourceChoice === "file" ? (
+            <PrivacyNoticeCallout notice={PRIVACY_NOTICES.fileIntake} />
+          ) : null}
+          {sourceChoice === "url" ? (
+            <PrivacyNoticeCallout notice={urlIntakeNotice(sourceUrl)} />
+          ) : null}
+          {providerBackedGenerationBoundary ? (
+            <PrivacyNoticeCallout notice={PRIVACY_NOTICES.providerBackedGeneration} />
+          ) : null}
+          {intakeError ? (
+            <PrivacyNoticeCallout notice={sourcePrepFailureNotice(intakeError)} />
+          ) : null}
+          {!intakeError && sourceChoice !== "file" && sourceChoice !== "url" ? (
+            <p className="rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-muted">
+              No external import boundary is active for this source path.
+            </p>
+          ) : null}
+        </Panel>
+      </div>
+    </Drawer>
   );
 }
 
