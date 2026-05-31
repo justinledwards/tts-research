@@ -82,6 +82,34 @@ describe("NarrationStatusStrip disclosure rendering", () => {
     expect(markup).not.toContain("Recent Jobs");
   });
 
+  it("offers a compact Command Center activity route for active work", () => {
+    const markup = renderToStaticMarkup(
+      <NarrationStatusStrip
+        canCancel
+        canCreate={false}
+        canOpenCinema={false}
+        mode="compact"
+        model={model({
+          primaryAction: { id: "cancel", label: "Cancel Run", tone: "danger" },
+          primaryLabel: "Generating",
+          primaryMessage: "Generating segment 1 of 4.",
+          state: "generating",
+          tone: "warning",
+        })}
+        onCancel={() => null}
+        onCreate={() => null}
+        onOpenActivity={() => null}
+        onOpenCinema={() => null}
+        onOpenVoiceCloning={() => null}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="ui-action-status-strip-activity"');
+    expect(markup).toContain("Activity");
+    expect(markup).not.toContain('data-testid="narration-activity-drawer"');
+    expect(markup).not.toContain("Stage Timeline");
+  });
+
   it("makes cancellation visible", () => {
     const markup = renderToStaticMarkup(
       <NarrationStatusStrip

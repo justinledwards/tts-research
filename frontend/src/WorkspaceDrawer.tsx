@@ -23,24 +23,27 @@ import {
   WorkspaceDashboardSummary,
   WorkspaceSection,
   buildWorkspaceActivitySummaries,
+  commandCenterSectionDescription,
+  commandCenterSectionHeadline,
   formatBytes,
-  type WorkspaceSectionId,
-  workspaceSectionDescription,
-  workspaceSectionHeadline,
+  formatDate,
+  resolveProjectQualityScore,
+  type CommandCenterSectionId,
 } from "./WorkspaceDrawerHelpers";
 
-const WORKSPACE_SECTIONS = [
-  { id: "projects", label: "Projects", detail: "Project library and chapter sets" },
+const COMMAND_CENTER_SECTIONS = [
+  { id: "overview", label: "Overview", detail: "Current project and quick routes" },
+  { id: "projects", label: "Projects", detail: "Project library and generated audio" },
+  { id: "assets", label: "Assets", detail: "Sources, voices, and speech policy" },
   { id: "activity", label: "Activity", detail: "Live work and cancellation" },
-  { id: "voices", label: "Voices", detail: "Saved profiles and selection" },
-  { id: "sources", label: "Sources", detail: "Books, URLs, and media" },
-  { id: "imports", label: "Imports", detail: "Portable bundles" },
+  { id: "importsExports", label: "Import/Export", detail: "Portable bundles" },
   { id: "reports", label: "Reports", detail: "Health and diagnostics" },
 ] as const;
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function WorkspaceDrawer({
   activeProjectId,
+  activeSection,
   bookSources,
   isOpen,
   job,
@@ -69,14 +72,15 @@ export function WorkspaceDrawer({
   onExportOpen,
   onImportOpen,
   onOpenSettings,
-  onOpenProjectDashboard,
   onOpenVoiceDashboard,
   onRenameProject,
+  onSectionChange,
   onSelectProject,
   onSelectProfile,
   onSpeechPolicyProfileChange,
 }: Readonly<{
   activeProjectId: string;
+  activeSection?: CommandCenterSectionId;
   bookSources: BookSource[];
   isOpen: boolean;
   job: VoiceJob | null;
@@ -105,17 +109,18 @@ export function WorkspaceDrawer({
   onExportOpen: () => void;
   onImportOpen: () => void;
   onOpenSettings: () => void;
-  onOpenProjectDashboard: () => void;
   onOpenVoiceDashboard: () => void;
   onRenameProject: (id: string, name: string) => Promise<void>;
+  onSectionChange?: (section: CommandCenterSectionId) => void;
   onSelectProject: (id: string) => void;
   onSelectProfile: (profileId: string) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
 }>) {
   const drawerRef = useRef<HTMLElement | null>(null);
   useReaderModalLifecycle(drawerRef, { closeOnEscape: true, isOpen, onClose });
-  const [activeSection, setActiveSection] = useState<WorkspaceSectionId>("projects");
+  const [localActiveSection, setLocalActiveSection] = useState<CommandCenterSectionId>("overview");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const effectiveActiveSection = activeSection ?? localActiveSection;
   const visibleJobs = useMemo(() => {
     if (!job) {
       return projectJobs;
@@ -159,51 +164,69 @@ export function WorkspaceDrawer({
     : (metricsError ?? "Provider status pending");
   const activeProject = projects.find((project) => project.id === activeProjectId);
   const activeSectionLabel =
-    WORKSPACE_SECTIONS.find((section) => section.id === activeSection)?.label ?? "Projects";
-  const sectionCounts: Record<WorkspaceSectionId, string> = {
-    activity: activitySummaries.length.toString(),
-    imports: "",
+    COMMAND_CENTER_SECTIONS.find((section) => section.id === effectiveActiveSection)?.label ??
+    "Overview";
+  const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) ?? null;
+  const totalSources = bookSources.length + preparedSources.length;
+  const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
+  const sectionCounts: Record<CommandCenterSectionId, string> = {
+    activity: activitySummaries.length > 0 ? activitySummaries.length.toString() : "",
+    assets: (totalSources + profiles.length + (profileSource ? 1 : 0)).toString(),
+    importsExports: "",
+    overview: "",
     projects: projects.length.toString(),
-    reports: metrics || metricsError ? "1" : "",
-    sources: (bookSources.length + preparedSources.length + (profileSource ? 1 : 0)).toString(),
-    voices: profiles.length.toString(),
+    reports: metrics || metricsError || projectStorage || projectStorageError ? "1" : "",
+  };
+
+  const setActiveSection = (section: CommandCenterSectionId) => {
+    setLocalActiveSection(section);
+    onSectionChange?.(section);
   };
 
   return (
     <div className="fixed inset-0 z-40 bg-zinc-950/25" role="presentation">
       <aside
-        aria-label="Workspace"
+        aria-label="Command Center"
         aria-modal="true"
-        className="vs-app flex h-full w-full max-w-[920px] flex-col border-r shadow-2xl md:w-[86vw] xl:w-[920px]"
+        className="vs-app mx-auto flex h-full w-full max-w-6xl flex-col border-r shadow-2xl md:w-[92vw] xl:w-[1120px]"
         ref={drawerRef}
         role="dialog"
         tabIndex={-1}
       >
-        <header className="flex items-center justify-between border-b px-5 py-4 vs-border">
+        <header className="flex items-center justify-between gap-4 border-b px-5 py-4 vs-border">
           <div className="min-w-0">
             <p className="vs-muted text-xs font-medium uppercase tracking-wide">
-              Workspace & Activity
+              Project and activity management
             </p>
-            <h2 className="truncate text-lg font-semibold">Voice Studio</h2>
+            <h2 className="truncate text-lg font-semibold">Command Center</h2>
           </div>
           <button
-            aria-label="Close workspace"
+            aria-label="Return to Narration Workbench"
             className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-surface)] vs-border"
+            data-testid="ui-action-command-center-return"
             onClick={onClose}
             type="button"
           >
-            Close
+            Return to Workbench
           </button>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[230px_minmax(0,1fr)]">
           <nav className="border-b p-4 vs-border md:border-r md:border-b-0">
             <div className="grid gap-3 rounded-md border p-3 vs-border vs-surface">
               <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
-                Command Center
+                Current work
               </p>
               <div className="grid gap-2">
                 <DrawerStat label="Project" value={activeProject?.name ?? "Draft"} />
+                <DrawerStat
+                  label="Generated audio"
+                  value={
+                    visibleJobs.length > 0
+                      ? `${visibleJobs.length.toString()} chapters`
+                      : "No chapters"
+                  }
+                />
                 <DrawerStat
                   label="Background work"
                   value={
@@ -216,13 +239,14 @@ export function WorkspaceDrawer({
               </div>
             </div>
             <div className="mt-4 grid gap-1.5">
-              {WORKSPACE_SECTIONS.map((section) => (
+              {COMMAND_CENTER_SECTIONS.map((section) => (
                 <button
                   className={`grid min-w-0 gap-1 rounded-md border px-3 py-2 text-left transition ${
-                    activeSection === section.id
+                    effectiveActiveSection === section.id
                       ? "border-orange-300 bg-orange-500 text-white shadow-sm"
                       : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
                   }`}
+                  data-testid={`ui-action-command-center-section-${section.id}`}
                   key={section.id}
                   onClick={() => {
                     setActiveSection(section.id);
@@ -234,7 +258,7 @@ export function WorkspaceDrawer({
                     {sectionCounts[section.id] ? (
                       <span
                         className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] ${
-                          activeSection === section.id
+                          effectiveActiveSection === section.id
                             ? "border-white/35 text-white"
                             : "vs-border vs-muted"
                         }`}
@@ -245,7 +269,7 @@ export function WorkspaceDrawer({
                   </span>
                   <span
                     className={`truncate text-[0.68rem] ${
-                      activeSection === section.id ? "text-white/80" : "vs-muted"
+                      effectiveActiveSection === section.id ? "text-white/80" : "vs-muted"
                     }`}
                   >
                     {section.detail}
@@ -260,25 +284,47 @@ export function WorkspaceDrawer({
               <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
                 {activeSectionLabel}
               </p>
-              <h3 className="text-xl font-semibold">{workspaceSectionHeadline(activeSection)}</h3>
+              <h3 className="text-xl font-semibold">
+                {commandCenterSectionHeadline(effectiveActiveSection)}
+              </h3>
               <p className="vs-muted text-sm leading-6">
-                {workspaceSectionDescription(activeSection)}
+                {commandCenterSectionDescription(effectiveActiveSection)}
               </p>
             </div>
 
-            {activeSection === "projects" ? (
+            {effectiveActiveSection === "overview" ? (
+              <CommandCenterOverview
+                activityCount={activitySummaries.length}
+                activeProjectName={activeProject?.name ?? "Draft"}
+                generatedDurationMs={generatedDurationMs}
+                projectStorage={projectStorage}
+                projectStorageError={projectStorageError}
+                projectsCount={projects.length}
+                providerStatus={providerStatus}
+                selectedProfile={selectedProfile}
+                sourceCount={totalSources}
+                visibleJobs={visibleJobs}
+                onExportOpen={onExportOpen}
+                onImportOpen={onImportOpen}
+                onOpenActivity={() => {
+                  setActiveSection("activity");
+                }}
+                onOpenAssets={() => {
+                  setActiveSection("assets");
+                }}
+                onOpenProjects={() => {
+                  setActiveSection("projects");
+                }}
+                onOpenReports={() => {
+                  setActiveSection("reports");
+                }}
+              />
+            ) : null}
+
+            {effectiveActiveSection === "projects" ? (
               <WorkspaceSection
                 actions={
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
-                      data-testid="ui-action-project-dashboard-open-drawer"
-                      data-ui-action-surface="Workspace"
-                      onClick={onOpenProjectDashboard}
-                      type="button"
-                    >
-                      Project Dashboard
-                    </button>
                     <button
                       className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
                       disabled={isCreatingProject}
@@ -291,56 +337,95 @@ export function WorkspaceDrawer({
                     </button>
                   </div>
                 }
-                id="workspace-projects"
+                id="command-center-projects"
                 title={`Projects (${projects.length.toString()})`}
               >
-                <div className="grid gap-3">
-                  {isCreatingProject ? (
-                    <CreateProjectRow
-                      onCancel={() => {
-                        setIsCreatingProject(false);
-                      }}
-                      onCreateProject={onCreateProject}
-                      onCreated={() => {
-                        setIsCreatingProject(false);
-                      }}
-                    />
-                  ) : null}
-                  {projectError ? (
-                    <p className="break-words rounded-md border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-700">
-                      {projectError}
-                    </p>
-                  ) : null}
-                  <WorkspaceDashboardSummary
-                    detail={
-                      projectStorageError ??
-                      `${formatBytes(projectStorage?.totalBytes ?? 0)} in current project storage`
-                    }
-                    label={activeProject?.name ?? "Draft"}
-                    value={`${(preparedSources.length + bookSources.length).toString()} sources`}
-                  />
-                  {projects.length > 0 ? (
-                    projects.map((project) => (
-                      <ProjectLibraryRow
-                        activeProjectId={activeProjectId}
-                        key={project.id}
-                        project={project}
-                        visibleJobs={project.id === activeProjectId ? visibleJobs : []}
-                        onDeleteProject={onDeleteProject}
-                        onExportProject={onExportOpen}
-                        onRenameProject={onRenameProject}
-                        onSelectProject={onSelectProject}
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(17rem,0.42fr)]">
+                  <div className="grid gap-3">
+                    {isCreatingProject ? (
+                      <CreateProjectRow
+                        onCancel={() => {
+                          setIsCreatingProject(false);
+                        }}
+                        onCreateProject={onCreateProject}
+                        onCreated={() => {
+                          setIsCreatingProject(false);
+                        }}
                       />
-                    ))
-                  ) : (
-                    <EmptyDrawerText>No projects yet. Create one to start fresh.</EmptyDrawerText>
-                  )}
+                    ) : null}
+                    {projectError ? (
+                      <p className="break-words rounded-md border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-700">
+                        {projectError}
+                      </p>
+                    ) : null}
+                    <WorkspaceDashboardSummary
+                      detail={
+                        projectStorageError ??
+                        `${formatBytes(projectStorage?.totalBytes ?? 0)} in current project storage`
+                      }
+                      label={activeProject?.name ?? "Draft"}
+                      value={`${totalSources.toString()} sources`}
+                    />
+                    {projects.length > 0 ? (
+                      projects.map((project) => (
+                        <ProjectLibraryRow
+                          activeProjectId={activeProjectId}
+                          key={project.id}
+                          project={project}
+                          visibleJobs={project.id === activeProjectId ? visibleJobs : []}
+                          onDeleteProject={onDeleteProject}
+                          onExportProject={onExportOpen}
+                          onRenameProject={onRenameProject}
+                          onSelectProject={onSelectProject}
+                        />
+                      ))
+                    ) : (
+                      <EmptyDrawerText>No projects yet. Create one to start fresh.</EmptyDrawerText>
+                    )}
+                  </div>
+                  <GeneratedAudioList visibleJobs={visibleJobs} />
                 </div>
               </WorkspaceSection>
             ) : null}
 
-            {activeSection === "activity" ? (
-              <WorkspaceSection id="workspace-activity" title="Activity">
+            {effectiveActiveSection === "assets" ? (
+              <WorkspaceSection
+                actions={
+                  <button
+                    className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                    data-testid="ui-action-voice-dashboard-open-drawer"
+                    data-ui-action-surface="Command Center"
+                    onClick={onOpenVoiceDashboard}
+                    type="button"
+                  >
+                    Voice Asset Detail
+                  </button>
+                }
+                id="command-center-assets"
+                title="Assets"
+              >
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <SourceAssetList
+                    bookSources={bookSources}
+                    preparedSources={preparedSources}
+                    profileSource={profileSource}
+                  />
+                  <VoiceAssetList
+                    customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+                    profiles={profiles}
+                    selectedProfileId={selectedProfileId}
+                    speechPolicyProfile={speechPolicyProfile}
+                    speechPolicyProfiles={speechPolicyProfiles}
+                    onClose={onClose}
+                    onSelectProfile={onSelectProfile}
+                    onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+                  />
+                </div>
+              </WorkspaceSection>
+            ) : null}
+
+            {effectiveActiveSection === "activity" ? (
+              <WorkspaceSection id="command-center-activity" title="Activity">
                 <div className="grid gap-3">
                   {activitySummaries.length > 0 ? (
                     activitySummaries.map((activity) => (
@@ -356,177 +441,8 @@ export function WorkspaceDrawer({
               </WorkspaceSection>
             ) : null}
 
-            {activeSection === "voices" ? (
-              <>
-                <WorkspaceSection
-                  actions={
-                    <button
-                      className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
-                      data-testid="ui-action-voice-dashboard-open-drawer"
-                      data-ui-action-surface="Workspace"
-                      onClick={onOpenVoiceDashboard}
-                      type="button"
-                    >
-                      Voice Dashboard
-                    </button>
-                  }
-                  id="workspace-voices"
-                  title="Voices"
-                >
-                  <WorkspaceDashboardSummary
-                    detail={
-                      selectedProfileId
-                        ? "Selected profile is active for narration and preview."
-                        : "Default voice is active until a profile is selected."
-                    }
-                    label={
-                      profiles.find((profile) => profile.id === selectedProfileId)?.name ??
-                      "Default voice"
-                    }
-                    value={`${profiles.length.toString()} saved`}
-                  />
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {profiles.length > 0 ? (
-                      profiles.slice(0, 8).map((profile) => (
-                        <button
-                          className={`min-w-0 rounded-md border p-3 text-left text-sm transition ${
-                            profile.id === selectedProfileId
-                              ? "border-orange-300 bg-orange-500/10"
-                              : "vs-raised hover:bg-[var(--vs-surface)]"
-                          }`}
-                          key={profile.id}
-                          onClick={() => {
-                            onSelectProfile(profile.id);
-                            onClose();
-                          }}
-                          type="button"
-                        >
-                          <span className="block truncate font-semibold" title={profile.name}>
-                            {profile.name}
-                          </span>
-                          <span className="vs-muted mt-1 block truncate text-xs">
-                            {profile.language} ·{" "}
-                            {formatDuration(profile.referenceDurationMs ?? profile.durationMs)}
-                          </span>
-                        </button>
-                      ))
-                    ) : (
-                      <EmptyDrawerText>No saved voice profiles yet.</EmptyDrawerText>
-                    )}
-                  </div>
-                </WorkspaceSection>
-
-                <WorkspaceSection id="workspace-speech" title="Speech Policy">
-                  <div className="grid gap-2 rounded-md border p-4 vs-surface">
-                    <label className="grid gap-1 text-sm font-semibold">
-                      <span>Market profile</span>
-                      <select
-                        className="h-10 rounded-md border bg-[var(--vs-raised)] px-3 text-sm outline-none vs-border"
-                        onChange={(event) => {
-                          onSpeechPolicyProfileChange(event.currentTarget.value);
-                        }}
-                        value={speechPolicyProfile}
-                      >
-                        {(speechPolicyProfiles.length > 0
-                          ? speechPolicyProfiles.map((profile) => profile.name)
-                          : SPEECH_POLICY_PROFILE_OPTIONS
-                        ).map((profile) => (
-                          <option key={profile} value={profile}>
-                            {speechPolicyProfileLabel(profile)}
-                          </option>
-                        ))}
-                        {customSpeechPolicyProfiles.length > 0 ? (
-                          <optgroup label="Custom profiles">
-                            {customSpeechPolicyProfiles.map((profile) => (
-                              <option key={profile.id} value={profile.id}>
-                                {profile.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ) : null}
-                      </select>
-                    </label>
-                  </div>
-                </WorkspaceSection>
-              </>
-            ) : null}
-
-            {activeSection === "sources" ? (
-              <WorkspaceSection id="workspace-sources" title="Sources">
-                <div className="grid gap-3">
-                  {profileSource ? (
-                    <div className="rounded-md border p-4 vs-raised">
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <p
-                          className="min-w-0 truncate text-sm font-semibold"
-                          title={profileSource.sourceFile}
-                        >
-                          {profileSource.sourceFile}
-                        </p>
-                        <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs vs-border">
-                          {profileSource.status}
-                        </span>
-                      </div>
-                      <p className="vs-muted mt-2 text-xs">
-                        {profileSource.candidates.length} detected voice
-                        {profileSource.candidates.length === 1 ? "" : "s"} ·{" "}
-                        {profileSource.progressMessage}
-                      </p>
-                    </div>
-                  ) : null}
-                  {bookSources.length > 0 ? (
-                    <div className="grid gap-2">
-                      {bookSources.slice(0, 5).map((book) => (
-                        <div className="min-w-0 rounded-md border p-3 vs-raised" key={book.id}>
-                          <div className="flex min-w-0 items-center justify-between gap-3">
-                            <p
-                              className="min-w-0 truncate text-sm font-semibold"
-                              title={book.title ?? book.sourceFile}
-                            >
-                              {book.title ?? book.sourceFile}
-                            </p>
-                            <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
-                              {book.kind}
-                            </span>
-                          </div>
-                          <p className="vs-muted mt-1 truncate text-xs" title={book.sourceFile}>
-                            {book.wordCount.toLocaleString()} words · {book.status}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  {preparedSources.length > 0 ? (
-                    <div className="grid gap-2">
-                      {preparedSources.slice(0, 5).map((source) => (
-                        <div className="min-w-0 rounded-md border p-3 vs-raised" key={source.id}>
-                          <div className="flex min-w-0 items-center justify-between gap-3">
-                            <p
-                              className="min-w-0 truncate text-sm font-semibold"
-                              title={source.title ?? source.sourceName}
-                            >
-                              {source.title ?? source.sourceName}
-                            </p>
-                            <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
-                              {source.kind}
-                            </span>
-                          </div>
-                          <p className="vs-muted mt-1 truncate text-xs" title={source.sourceName}>
-                            {source.wordCount.toLocaleString()} words · {source.status}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  {!profileSource && bookSources.length === 0 && preparedSources.length === 0 ? (
-                    <EmptyDrawerText>No source analysis or book source staged.</EmptyDrawerText>
-                  ) : null}
-                </div>
-              </WorkspaceSection>
-            ) : null}
-
-            {activeSection === "imports" ? (
-              <WorkspaceSection id="workspace-imports" title="Imports">
+            {effectiveActiveSection === "importsExports" ? (
+              <WorkspaceSection id="command-center-imports-exports" title="Imports and Exports">
                 <div className="grid gap-3 rounded-md border p-4 vs-surface">
                   <p className="text-sm font-semibold">Shareable project bundles</p>
                   <p className="vs-muted text-sm leading-6">
@@ -536,6 +452,7 @@ export function WorkspaceDrawer({
                   <div className="flex flex-wrap gap-2">
                     <button
                       className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                      data-testid="ui-action-command-center-import"
                       onClick={onImportOpen}
                       type="button"
                     >
@@ -543,6 +460,7 @@ export function WorkspaceDrawer({
                     </button>
                     <button
                       className="h-9 rounded-md px-3 text-xs font-semibold text-white vs-accent-bg"
+                      data-testid="ui-action-command-center-export"
                       onClick={onExportOpen}
                       type="button"
                     >
@@ -553,15 +471,19 @@ export function WorkspaceDrawer({
               </WorkspaceSection>
             ) : null}
 
-            {activeSection === "reports" ? (
-              <WorkspaceSection id="workspace-reports" title="Reports">
+            {effectiveActiveSection === "reports" ? (
+              <WorkspaceSection id="command-center-reports" title="Reports">
                 <div className="grid gap-3 rounded-md border p-4 vs-surface">
                   <p className="font-semibold">{providerStatus}</p>
                   <p className="vs-muted text-xs">
                     {gpu
-                      ? `${gpu.name} · ${String(gpu.memoryUsedMiB)}/${String(gpu.memoryTotalMiB)} MiB`
+                      ? `${gpu.name} - ${String(gpu.memoryUsedMiB)}/${String(gpu.memoryTotalMiB)} MiB`
                       : "GPU telemetry unavailable"}
                   </p>
+                  <StorageBreakdown
+                    projectStorage={projectStorage}
+                    projectStorageError={projectStorageError}
+                  />
                   <button
                     className="h-9 rounded-md border px-3 text-sm font-semibold hover:bg-[var(--vs-raised)] vs-border"
                     onClick={onOpenSettings}
@@ -575,6 +497,396 @@ export function WorkspaceDrawer({
           </div>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function CommandCenterOverview({
+  activityCount,
+  activeProjectName,
+  generatedDurationMs,
+  projectStorage,
+  projectStorageError,
+  projectsCount,
+  providerStatus,
+  selectedProfile,
+  sourceCount,
+  visibleJobs,
+  onExportOpen,
+  onImportOpen,
+  onOpenActivity,
+  onOpenAssets,
+  onOpenProjects,
+  onOpenReports,
+}: Readonly<{
+  activityCount: number;
+  activeProjectName: string;
+  generatedDurationMs: number;
+  projectStorage: ProjectStorageSummary | null;
+  projectStorageError: string | null;
+  projectsCount: number;
+  providerStatus: string;
+  selectedProfile: VoiceProfile | null;
+  sourceCount: number;
+  visibleJobs: VoiceJob[];
+  onExportOpen: () => void;
+  onImportOpen: () => void;
+  onOpenActivity: () => void;
+  onOpenAssets: () => void;
+  onOpenProjects: () => void;
+  onOpenReports: () => void;
+}>) {
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewStat
+          detail={`${projectsCount.toString()} total projects`}
+          label="Current project"
+          value={activeProjectName}
+        />
+        <OverviewStat detail={`${sourceCount.toString()} managed`} label="Sources" value="Assets" />
+        <OverviewStat
+          detail={formatDuration(generatedDurationMs)}
+          label="Generated audio"
+          value={`${visibleJobs.length.toString()} chapters`}
+        />
+        <OverviewStat
+          detail={selectedProfile?.status ?? "provider voice"}
+          label="Voice"
+          value={selectedProfile?.name ?? "Default"}
+        />
+      </div>
+      <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
+        <p className="text-sm font-semibold">Management routes</p>
+        <div className="grid gap-2 md:grid-cols-3">
+          <OverviewRouteButton
+            detail="Open, rename, export, or protect projects."
+            onClick={onOpenProjects}
+          >
+            Projects
+          </OverviewRouteButton>
+          <OverviewRouteButton
+            detail="Manage sources, voice assets, and policy."
+            onClick={onOpenAssets}
+          >
+            Assets
+          </OverviewRouteButton>
+          <OverviewRouteButton
+            detail={
+              activityCount > 0
+                ? `${activityCount.toString()} active item(s).`
+                : "No active background work."
+            }
+            onClick={onOpenActivity}
+          >
+            Activity
+          </OverviewRouteButton>
+          <OverviewRouteButton
+            detail="Preview import and export project bundles."
+            onClick={onImportOpen}
+          >
+            Import Bundle
+          </OverviewRouteButton>
+          <OverviewRouteButton detail="Export the active project bundle." onClick={onExportOpen}>
+            Export Current
+          </OverviewRouteButton>
+          <OverviewRouteButton detail={providerStatus} onClick={onOpenReports}>
+            Reports
+          </OverviewRouteButton>
+        </div>
+      </div>
+      <StorageBreakdown projectStorage={projectStorage} projectStorageError={projectStorageError} />
+    </div>
+  );
+}
+
+function OverviewStat({
+  detail,
+  label,
+  value,
+}: Readonly<{ detail: string; label: string; value: string }>) {
+  return (
+    <div className="min-w-0 rounded-md border p-4 vs-border vs-raised">
+      <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">{label}</p>
+      <p className="mt-2 truncate text-lg font-semibold" title={value}>
+        {value}
+      </p>
+      <p className="vs-muted mt-1 truncate text-xs" title={detail}>
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function OverviewRouteButton({
+  children,
+  detail,
+  onClick,
+}: Readonly<{ children: string; detail: string; onClick: () => void }>) {
+  return (
+    <button
+      className="grid min-h-24 min-w-0 content-start gap-2 rounded-md border p-3 text-left transition hover:border-orange-300 hover:text-orange-700 vs-border vs-raised"
+      onClick={onClick}
+      type="button"
+    >
+      <span className="text-sm font-semibold">{children}</span>
+      <span className="vs-muted text-xs leading-5">{detail}</span>
+    </button>
+  );
+}
+
+function SourceAssetList({
+  bookSources,
+  preparedSources,
+  profileSource,
+}: Readonly<{
+  bookSources: BookSource[];
+  preparedSources: PreparedSource[];
+  profileSource: VoiceProfileSource | null;
+}>) {
+  return (
+    <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
+      <p className="text-sm font-semibold">Sources</p>
+      {profileSource ? (
+        <div className="rounded-md border p-3 vs-raised">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <p className="min-w-0 truncate text-sm font-semibold" title={profileSource.sourceFile}>
+              {profileSource.sourceFile}
+            </p>
+            <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs vs-border">
+              {profileSource.status}
+            </span>
+          </div>
+          <p className="vs-muted mt-2 text-xs">
+            {profileSource.candidates.length} detected voice
+            {profileSource.candidates.length === 1 ? "" : "s"} - {profileSource.progressMessage}
+          </p>
+        </div>
+      ) : null}
+      {bookSources.map((book) => (
+        <SourceAssetRow
+          detail={`${book.wordCount.toLocaleString()} words - ${book.status}`}
+          key={book.id}
+          kind={book.kind}
+          title={book.title ?? book.sourceFile}
+        />
+      ))}
+      {preparedSources.map((source) => (
+        <SourceAssetRow
+          detail={`${source.wordCount.toLocaleString()} words - ${source.status}`}
+          key={source.id}
+          kind={source.kind}
+          title={source.title ?? source.sourceName}
+        />
+      ))}
+      {!profileSource && bookSources.length === 0 && preparedSources.length === 0 ? (
+        <EmptyDrawerText>No source analysis or book source staged.</EmptyDrawerText>
+      ) : null}
+    </div>
+  );
+}
+
+function SourceAssetRow({
+  detail,
+  kind,
+  title,
+}: Readonly<{ detail: string; kind: string; title: string }>) {
+  return (
+    <div className="min-w-0 rounded-md border p-3 vs-raised">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-sm font-semibold" title={title}>
+          {title}
+        </p>
+        <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
+          {kind}
+        </span>
+      </div>
+      <p className="vs-muted mt-1 truncate text-xs" title={detail}>
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function VoiceAssetList({
+  customSpeechPolicyProfiles,
+  profiles,
+  selectedProfileId,
+  speechPolicyProfile,
+  speechPolicyProfiles,
+  onClose,
+  onSelectProfile,
+  onSpeechPolicyProfileChange,
+}: Readonly<{
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  profiles: VoiceProfile[];
+  selectedProfileId: string;
+  speechPolicyProfile: string;
+  speechPolicyProfiles: SpeechPolicyProfile[];
+  onClose: () => void;
+  onSelectProfile: (profileId: string) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
+}>) {
+  return (
+    <div className="grid content-start gap-4">
+      <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
+        <p className="text-sm font-semibold">Voice profiles</p>
+        <WorkspaceDashboardSummary
+          detail={
+            selectedProfileId
+              ? "Selected profile is active for narration and preview."
+              : "Default voice is active until a profile is selected."
+          }
+          label={
+            profiles.find((profile) => profile.id === selectedProfileId)?.name ?? "Default voice"
+          }
+          value={`${profiles.length.toString()} saved`}
+        />
+        <div className="grid gap-2">
+          {profiles.length > 0 ? (
+            profiles.map((profile) => (
+              <button
+                className={`min-w-0 rounded-md border p-3 text-left text-sm transition ${
+                  profile.id === selectedProfileId
+                    ? "border-orange-300 bg-orange-500/10"
+                    : "vs-raised hover:bg-[var(--vs-surface)]"
+                }`}
+                key={profile.id}
+                onClick={() => {
+                  onSelectProfile(profile.id);
+                  onClose();
+                }}
+                type="button"
+              >
+                <span className="block truncate font-semibold" title={profile.name}>
+                  {profile.name}
+                </span>
+                <span className="vs-muted mt-1 block truncate text-xs">
+                  {profile.language} -{" "}
+                  {formatDuration(profile.referenceDurationMs ?? profile.durationMs)}
+                </span>
+              </button>
+            ))
+          ) : (
+            <EmptyDrawerText>No saved voice profiles yet.</EmptyDrawerText>
+          )}
+        </div>
+      </div>
+      <div className="grid gap-2 rounded-md border p-4 vs-border vs-surface">
+        <p className="text-sm font-semibold">Speech Policy</p>
+        <label className="grid gap-1 text-sm font-semibold">
+          <span>Market profile</span>
+          <select
+            className="h-10 rounded-md border bg-[var(--vs-raised)] px-3 text-sm outline-none vs-border"
+            onChange={(event) => {
+              onSpeechPolicyProfileChange(event.currentTarget.value);
+            }}
+            value={speechPolicyProfile}
+          >
+            {(speechPolicyProfiles.length > 0
+              ? speechPolicyProfiles.map((profile) => profile.name)
+              : SPEECH_POLICY_PROFILE_OPTIONS
+            ).map((profile) => (
+              <option key={profile} value={profile}>
+                {speechPolicyProfileLabel(profile)}
+              </option>
+            ))}
+            {customSpeechPolicyProfiles.length > 0 ? (
+              <optgroup label="Custom profiles">
+                {customSpeechPolicyProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+          </select>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function GeneratedAudioList({ visibleJobs }: Readonly<{ visibleJobs: VoiceJob[] }>) {
+  return (
+    <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
+      <p className="text-sm font-semibold">Generated Audio</p>
+      {visibleJobs.length > 0 ? (
+        visibleJobs.slice(0, 8).map((item) => (
+          <div className="grid gap-1 rounded-md border p-3 vs-raised" key={item.id}>
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <p className="min-w-0 truncate text-sm font-semibold" title={item.inputText}>
+                {generatedAudioTitle(item)}
+              </p>
+              <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
+                {item.status}
+              </span>
+            </div>
+            <p className="vs-muted truncate text-xs">
+              {formatDuration(item.durationMs)} - {resolveProjectQualityScore([item])} check -{" "}
+              {formatDate(item.createdAt)}
+            </p>
+          </div>
+        ))
+      ) : (
+        <EmptyDrawerText>
+          No generated audio is attached to the current project yet.
+        </EmptyDrawerText>
+      )}
+    </div>
+  );
+}
+
+function generatedAudioTitle(item: VoiceJob): string {
+  const inputText = item.inputText.trim();
+  if (inputText.length > 0) {
+    return inputText;
+  }
+  return item.voiceProfileName ?? item.voice;
+}
+
+function StorageBreakdown({
+  projectStorage,
+  projectStorageError,
+}: Readonly<{
+  projectStorage: ProjectStorageSummary | null;
+  projectStorageError: string | null;
+}>) {
+  return (
+    <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <p className="text-sm font-semibold">Storage</p>
+        <span className="rounded-full border px-2.5 py-1 text-xs font-semibold vs-border">
+          {formatBytes(projectStorage?.totalBytes ?? 0)}
+        </span>
+      </div>
+      {projectStorageError ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          {projectStorageError}
+        </p>
+      ) : null}
+      <div className="grid gap-2 text-sm">
+        <StorageFact
+          label="Generated audio"
+          value={formatBytes(projectStorage?.generatedAudioBytes ?? 0)}
+        />
+        <StorageFact label="Jobs" value={formatBytes(projectStorage?.jobBytes ?? 0)} />
+        <StorageFact
+          label="Sources"
+          value={formatBytes(
+            (projectStorage?.bookSourceBytes ?? 0) + (projectStorage?.preparedSourceBytes ?? 0),
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+function StorageFact({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border px-3 py-2 vs-border">
+      <span className="vs-muted min-w-0 truncate text-xs font-semibold">{label}</span>
+      <span className="shrink-0 text-xs font-semibold">{value}</span>
     </div>
   );
 }

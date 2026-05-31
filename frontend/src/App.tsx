@@ -142,6 +142,7 @@ import {
   migrateLegacyWorkspaceState,
   saveProjectWorkspaceState,
 } from "./projectState";
+import type { CommandCenterSectionId } from "./WorkspaceDrawerHelpers";
 import {
   SUPERTONIC_LANGUAGE_CODES,
   SUPERTONIC_LANGUAGE_OPTIONS,
@@ -274,7 +275,6 @@ import type {
   WorkspaceContextInspectorProps,
 } from "./features/context-panel";
 import { useAudioWaveformBars } from "./audioWaveform";
-import type { SourceCardModel } from "./features/sources";
 import type {
   SourceLifecycleEnvelope,
   SourceLifecycleSurface,
@@ -532,9 +532,6 @@ const VoiceSourceAnalysisPanel = lazy(() =>
 );
 const WorkspaceDrawer = lazy(() =>
   import("./WorkspaceDrawer").then((module) => ({ default: module.WorkspaceDrawer })),
-);
-const ProjectDashboard = lazy(() =>
-  import("./features/dashboard").then((module) => ({ default: module.ProjectDashboard })),
 );
 const VoiceProfileDashboard = lazy(() =>
   import("./features/voices").then((module) => ({ default: module.VoiceProfileDashboard })),
@@ -2186,8 +2183,12 @@ export function App() {
     }
     localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
   }, []);
-  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
-  const [isProjectDashboardOpen, setIsProjectDashboardOpen] = useState(false);
+  const [isCommandCenterOpen, setIsCommandCenterOpen] = useState(false);
+  const [commandCenterSection, setCommandCenterSection] =
+    useState<CommandCenterSectionId>("overview");
+  const [bundleReturnSection, setBundleReturnSection] = useState<CommandCenterSectionId | null>(
+    null,
+  );
   const [isVoiceDashboardOpen, setIsVoiceDashboardOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [activeDemoProjectId, setActiveDemoProjectId] = useState<string | null>(null);
@@ -2256,6 +2257,10 @@ export function App() {
   }, [commandMetadata, isCommandPaletteOpen]);
   const [bundlePanelMode, setBundlePanelMode] = useState<BundlePanelMode>("export");
   const [isBundlePanelOpen, setIsBundlePanelOpen] = useState(false);
+  const openCommandCenter = useCallback((section: CommandCenterSectionId = "overview") => {
+    setCommandCenterSection(section);
+    setIsCommandCenterOpen(true);
+  }, []);
   const [isContentIROpen, setIsContentIROpen] = useState(false);
   const [contentIRDocument, setContentIRDocument] = useState<ContentIRDocument | null>(null);
   const [contentIRError, setContentIRError] = useState<string | null>(null);
@@ -3136,7 +3141,7 @@ export function App() {
           activeWorkbenchStageStatus.blocker?.id === "generationFailed",
       },
       backendState: {
-        active: isSettingsOpen || isWorkspaceOpen,
+        active: isSettingsOpen || isCommandCenterOpen,
         blocking: Boolean(createAndListenCapabilityReason && hasNarrationSource),
         detail:
           createAndListenCapabilityReason ??
@@ -3160,7 +3165,7 @@ export function App() {
       exportImport: {
         active: isBundlePanelOpen,
         blocking: false,
-        detail: isBundlePanelOpen ? "Bundle flow is open." : "Bundle tools are in Workspace.",
+        detail: isBundlePanelOpen ? "Bundle flow is open." : "Bundle tools are in Command Center.",
         warning: false,
       },
       pins: workspaceDisclosurePins,
@@ -3199,7 +3204,7 @@ export function App() {
     isImportingBookSource,
     isPreparingSource,
     isSettingsOpen,
-    isWorkspaceOpen,
+    isCommandCenterOpen,
     profileError,
     profileSource,
     profileSourceDiagnostics,
@@ -4967,60 +4972,6 @@ export function App() {
     [bookCinemaOpenTiming, openSelectedBookCinema, selectedBookSource, setContentMode, themeName],
   );
 
-  const handleReviewSourceCard = useCallback(
-    (model: SourceCardModel) => {
-      if (model.owner === "book") {
-        const book = bookSources.find((source) => source.id === model.id);
-        if (book) {
-          handleUseBookText(book, resolveDefaultBookScope(book));
-        }
-        return;
-      }
-      const source = preparedSources.find((item) => item.id === model.id);
-      if (source) {
-        void handleUsePreparedSource(source);
-      }
-    },
-    [bookSources, handleUseBookText, handleUsePreparedSource, preparedSources],
-  );
-
-  const handlePreviewSourceCard = useCallback(
-    (model: SourceCardModel) => {
-      if (model.owner === "book") {
-        const book = bookSources.find((source) => source.id === model.id);
-        if (book) {
-          handleUseBookText(book, resolveDefaultBookScope(book));
-          setContentMode("preview");
-        }
-        return;
-      }
-      const source = preparedSources.find((item) => item.id === model.id);
-      if (source) {
-        void handleUsePreparedSource(source).then(() => {
-          setContentMode("preview");
-        });
-      }
-    },
-    [bookSources, handleUseBookText, handleUsePreparedSource, preparedSources, setContentMode],
-  );
-
-  const handleOpenSourceCardCinema = useCallback(
-    (model: SourceCardModel) => {
-      if (model.owner === "book") {
-        const book = bookSources.find((source) => source.id === model.id);
-        if (book) {
-          openBookCinemaFromIntake(book, resolveDefaultBookScope(book));
-        }
-        return;
-      }
-      const source = preparedSources.find((item) => item.id === model.id);
-      if (source) {
-        openPreparedSourceCinema(source);
-      }
-    },
-    [bookSources, openBookCinemaFromIntake, openPreparedSourceCinema, preparedSources],
-  );
-
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
     setPlaybackControls(controls ?? DISABLED_PLAYBACK_CONTROLLER);
   }, []);
@@ -5899,7 +5850,7 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!isProcessing && !isSettingsOpen && !isWorkspaceOpen) {
+    if (!isProcessing && !isSettingsOpen && !isCommandCenterOpen) {
       return;
     }
     if (systemMetricsUnavailable) {
@@ -5947,7 +5898,7 @@ export function App() {
       isCancelled = true;
       globalThis.clearInterval(interval);
     };
-  }, [isProcessing, isSettingsOpen, isWorkspaceOpen, systemMetricsUnavailable]);
+  }, [isCommandCenterOpen, isProcessing, isSettingsOpen, systemMetricsUnavailable]);
 
   function handleSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -6435,7 +6386,7 @@ export function App() {
       },
       setHelpCommandTarget,
       setIsHelpOpen,
-      setIsWorkspaceOpen,
+      setIsWorkspaceOpen: setIsCommandCenterOpen,
       setSettingsCommandTarget,
       setIsSettingsOpen,
       setContentMode,
@@ -6535,14 +6486,6 @@ export function App() {
           void handleCancelVoiceJob();
         }}
         onCommandPaletteOpen={openCommandPalette}
-        onExportOpen={() => {
-          setBundlePanelMode("export");
-          setIsBundlePanelOpen(true);
-        }}
-        onImportOpen={() => {
-          setBundlePanelMode("import");
-          setIsBundlePanelOpen(true);
-        }}
         onJobSelect={(jobId) => {
           void handleSelectJob(jobId);
         }}
@@ -6558,8 +6501,8 @@ export function App() {
         onWorkspaceCustomLayoutChange={setWorkspaceCustomLayout}
         onWorkspaceDisclosurePinChange={setWorkspaceDisclosurePin}
         onWorkspaceLayoutModeChange={setWorkspaceLayoutMode}
-        onWorkspaceOpen={() => {
-          setIsWorkspaceOpen(true);
+        onCommandCenterOpen={() => {
+          openCommandCenter("overview");
         }}
         runConfiguration={runConfiguration}
         workspaceCustomLayout={workspaceContext.customLayout}
@@ -6614,12 +6557,13 @@ export function App() {
         </Suspense>
       ) : null}
 
-      {isWorkspaceOpen ? (
-        <Suspense fallback={<LazySurfaceFallback label="Loading workspace..." />}>
+      {isCommandCenterOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading Command Center..." />}>
           <WorkspaceDrawer
             activeProjectId={activeProjectId}
+            activeSection={commandCenterSection}
             bookSources={bookSources}
-            isOpen={isWorkspaceOpen}
+            isOpen={isCommandCenterOpen}
             job={job}
             metrics={systemMetrics}
             metricsError={systemMetricsError}
@@ -6643,74 +6587,38 @@ export function App() {
             onDeleteProject={handleDeleteProject}
             onCreateProject={handleCreateProject}
             onClose={() => {
-              setIsWorkspaceOpen(false);
+              setIsCommandCenterOpen(false);
             }}
             onExportOpen={() => {
-              setIsWorkspaceOpen(false);
+              setCommandCenterSection("importsExports");
+              setBundleReturnSection("importsExports");
+              setIsCommandCenterOpen(false);
               setBundlePanelMode("export");
               setIsBundlePanelOpen(true);
             }}
             onImportOpen={() => {
-              setIsWorkspaceOpen(false);
+              setCommandCenterSection("importsExports");
+              setBundleReturnSection("importsExports");
+              setIsCommandCenterOpen(false);
               setBundlePanelMode("import");
               setIsBundlePanelOpen(true);
             }}
             onOpenSettings={() => {
-              setIsWorkspaceOpen(false);
+              setIsCommandCenterOpen(false);
               setSettingsCommandTarget(null);
               setIsSettingsOpen(true);
             }}
-            onOpenProjectDashboard={() => {
-              setIsWorkspaceOpen(false);
-              setIsProjectDashboardOpen(true);
-            }}
             onOpenVoiceDashboard={() => {
-              setIsWorkspaceOpen(false);
+              setIsCommandCenterOpen(false);
               setIsVoiceDashboardOpen(true);
             }}
             onRenameProject={handleRenameProject}
+            onSectionChange={setCommandCenterSection}
             onSelectProject={selectProject}
             onSelectProfile={selectVoiceProfile}
             onSpeechPolicyProfileChange={(profile) => {
               void handleSpeechPolicyProfileChange(profile);
             }}
-          />
-        </Suspense>
-      ) : null}
-      {isProjectDashboardOpen ? (
-        <Suspense fallback={<LazySurfaceFallback label="Loading project dashboard..." />}>
-          <ProjectDashboard
-            activeProjectId={activeProjectId}
-            bookSources={bookSources}
-            job={job}
-            preparedSources={preparedSources}
-            projectError={projectError}
-            projectJobs={projectJobs}
-            projectStorage={projectStorage}
-            projectStorageError={projectStorageError}
-            projects={projects}
-            onClose={() => {
-              setIsProjectDashboardOpen(false);
-            }}
-            onCreateProject={handleCreateProject}
-            onDeleteProject={handleDeleteProject}
-            onExportOpen={() => {
-              setIsProjectDashboardOpen(false);
-              setBundlePanelMode("export");
-              setIsBundlePanelOpen(true);
-            }}
-            onImportOpen={() => {
-              setIsProjectDashboardOpen(false);
-              setBundlePanelMode("import");
-              setIsBundlePanelOpen(true);
-            }}
-            onOpenSourceCinema={handleOpenSourceCardCinema}
-            onPreviewSource={handlePreviewSourceCard}
-            onRenameProject={handleRenameProject}
-            onReviewSource={handleReviewSourceCard}
-            onSelectProject={selectProject}
-            selectedBookSourceId={selectedBookSourceId}
-            selectedPreparedSourceId={selectedPreparedSourceId}
           />
         </Suspense>
       ) : null}
@@ -6856,6 +6764,10 @@ export function App() {
             projects={projects}
             onClose={() => {
               setIsBundlePanelOpen(false);
+              if (bundleReturnSection) {
+                openCommandCenter(bundleReturnSection);
+                setBundleReturnSection(null);
+              }
             }}
             onImported={handleBundleImported}
           />
@@ -7283,10 +7195,10 @@ export function App() {
                   setSourceMode("text");
                 }}
                 onOpenProjectDashboard={() => {
-                  setIsProjectDashboardOpen(true);
+                  openCommandCenter("assets");
                 }}
                 onOpenVoiceDashboard={() => {
-                  setIsVoiceDashboardOpen(true);
+                  openCommandCenter("assets");
                 }}
                 onSelectProfile={selectVoiceProfile}
                 onSpeechPolicyProfileChange={(profile) => {
@@ -7615,6 +7527,9 @@ export function App() {
           createAndListenFromCurrentSource();
         }}
         onOpenCinema={openReadingCinema}
+        onOpenActivity={() => {
+          openCommandCenter("activity");
+        }}
         onOpenVoiceCloning={() => {
           handleStudioModeChange("voiceCloning");
         }}
@@ -7784,11 +7699,11 @@ function NarrationSidebar({
             <button
               className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
               data-testid="ui-action-project-dashboard-open-rail"
-              data-ui-action-surface="Workspace"
+              data-ui-action-surface="Command Center"
               onClick={onOpenProjectDashboard}
               type="button"
             >
-              Manage Sources
+              Command Center
             </button>
             <button
               className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
@@ -7843,11 +7758,11 @@ function NarrationSidebar({
             <button
               className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
               data-testid="ui-action-voice-dashboard-open-rail"
-              data-ui-action-surface="Workspace"
+              data-ui-action-surface="Command Center"
               onClick={onOpenVoiceDashboard}
               type="button"
             >
-              Manage Voices
+              Voice Assets
             </button>
             <button
               className="min-h-9 min-w-0 rounded-md border border-orange-300 bg-orange-500/10 px-2 py-1.5 text-xs font-semibold leading-tight text-orange-700 transition hover:bg-orange-500/15"

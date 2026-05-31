@@ -3,12 +3,12 @@ import { formatDuration } from "./format";
 import type { VoiceJob, VoiceProfile, VoiceProfileSource, VoiceProject } from "./types";
 import type { CancellableActivitySummary } from "./voiceStudioViewModels";
 
-export type WorkspaceSectionId =
+export type CommandCenterSectionId =
+  | "overview"
   | "projects"
+  | "assets"
   | "activity"
-  | "voices"
-  | "sources"
-  | "imports"
+  | "importsExports"
   | "reports";
 
 export type WorkspaceActivitySummary = CancellableActivitySummary & {
@@ -59,32 +59,32 @@ export function DrawerStat({ label, value }: DrawerStatProps) {
   );
 }
 
-export function workspaceSectionHeadline(section: WorkspaceSectionId): string {
-  const headlines: Record<WorkspaceSectionId, string> = {
+export function commandCenterSectionHeadline(section: CommandCenterSectionId): string {
+  const headlines: Record<CommandCenterSectionId, string> = {
     activity: "Background work that can be understood and stopped",
-    imports: "Move projects in and out without leaving the studio",
+    assets: "Source and voice assets outside the narration stage",
+    importsExports: "Portable project movement and review",
+    overview: "Project operations without cluttering narration",
     projects: "Project library and current chapter context",
     reports: "System health, diagnostics, and provider readiness",
-    sources: "Reusable source material and voice reference media",
-    voices: "Saved voice profiles and speech policy",
   };
   return headlines[section];
 }
 
-export function workspaceSectionDescription(section: WorkspaceSectionId): string {
-  const descriptions: Record<WorkspaceSectionId, string> = {
+export function commandCenterSectionDescription(section: CommandCenterSectionId): string {
+  const descriptions: Record<CommandCenterSectionId, string> = {
     activity:
       "Every long-running task belongs here with plain status, last-known detail, and a cancellation path when the backend supports it.",
-    imports:
+    assets:
+      "Books, prepared files, URLs, voice profiles, and speech policy are grouped here as reusable project material.",
+    importsExports:
       "Bundle operations are grouped here so the header can stay compact and the workbench can stay focused on source and review.",
+    overview:
+      "Use this surface for project-level actions, assets, activity, imports, exports, and reports. Closing returns to the current narration task.",
     projects:
       "Open, rename, export, or protect projects from one stable command surface without disturbing the current workbench.",
     reports:
       "A short operational view for backend status, GPU telemetry, and the route into deeper diagnostics.",
-    sources:
-      "Books, prepared files, URLs, and reference media are collected here as reusable project material.",
-    voices:
-      "Voice selection and speech policy live together because they shape how narration is produced.",
   };
   return descriptions[section];
 }

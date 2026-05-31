@@ -1234,3 +1234,12 @@ duplicating every implementation detail from commits, PR text, or generated revi
 ## 2026-05-31 22:31 CEST - Commit Theatre Cinema Follow-Along Package
 - [x] Stage Theatre/Cinema follow-along files
 - [x] Commit staged work package
+
+## 2026-05-31 22:35 CEST - Command Center Separation
+- [x] Inspect current workspace, dashboard, and status surfaces
+- [x] Implement consolidated Command Center overlay
+- [x] Simplify narration header and workbench management entry points
+- [x] Add activity routing from narration status
+- [x] Update focused frontend tests
+- [x] Run project checks
+- Validation: focused header/Command Center/status tests passed; frontend typecheck passed; frontend test suite passed; `pnpm check` passed with existing unrelated Biome lint warnings.

@@ -10,6 +10,7 @@ export interface NarrationStatusStripProps {
   readonly initialDrawerOpen?: boolean;
   readonly mode: ActivityFooterMode;
   readonly model: NarrationStatusModel;
+  readonly onOpenActivity?: () => void;
   readonly onCancel: () => void;
   readonly onCreate: () => void;
   readonly onOpenCinema: () => void;
@@ -22,6 +23,7 @@ export function NarrationStatusStrip({
   canOpenCinema,
   mode,
   model,
+  onOpenActivity,
   onCancel,
   onCreate,
   onOpenCinema,
@@ -35,6 +37,14 @@ export function NarrationStatusStrip({
     canCreate,
     canOpenCinema,
   });
+  const showActivityRoute =
+    Boolean(onOpenActivity) &&
+    (model.state === "generating" ||
+      model.state === "blocked" ||
+      model.state === "failed" ||
+      model.state === "cancelled" ||
+      model.voiceCloning.status === "running" ||
+      model.voiceCloning.status === "attention");
   return (
     <footer
       className={cx(
@@ -85,6 +95,16 @@ export function NarrationStatusStrip({
           </div>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
+          {showActivityRoute ? (
+            <Button
+              data-testid="ui-action-status-strip-activity"
+              onClick={onOpenActivity}
+              size="sm"
+              variant="secondary"
+            >
+              Activity
+            </Button>
+          ) : null}
           {model.primaryAction ? (
             <Button
               data-testid={`ui-action-status-strip-${model.primaryAction.id}`}

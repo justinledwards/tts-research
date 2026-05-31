@@ -46,8 +46,6 @@ export function TopProductBar({
   workspaceLayoutMode,
   onCancel,
   onCommandPaletteOpen,
-  onExportOpen,
-  onImportOpen,
   onJobSelect,
   onProjectSelect,
   onSettingsOpen,
@@ -56,7 +54,7 @@ export function TopProductBar({
   onWorkspaceCustomLayoutChange,
   onWorkspaceDisclosurePinChange,
   onWorkspaceLayoutModeChange,
-  onWorkspaceOpen,
+  onCommandCenterOpen,
 }: Readonly<{
   activeJobId: string | null;
   activeProjectId: string;
@@ -78,8 +76,6 @@ export function TopProductBar({
   workspaceLayoutMode: WorkspaceLayoutMode;
   onCancel: () => void;
   onCommandPaletteOpen: () => void;
-  onExportOpen: () => void;
-  onImportOpen: () => void;
   onJobSelect: (jobId: string) => void;
   onProjectSelect: (projectId: string) => void;
   onSettingsOpen: () => void;
@@ -88,7 +84,7 @@ export function TopProductBar({
   onWorkspaceCustomLayoutChange: (layout: WorkspaceCustomLayout) => void;
   onWorkspaceDisclosurePinChange: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
   onWorkspaceLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
-  onWorkspaceOpen: () => void;
+  onCommandCenterOpen: () => void;
 }>) {
   const primaryButtonLabel = isProcessing ? "Cancel Job" : "Create & Listen";
 
@@ -96,9 +92,9 @@ export function TopProductBar({
     <header className="vs-raised grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 lg:px-4 2xl:grid-cols-[minmax(205px,auto)_minmax(330px,0.9fr)_auto]">
       <div className="flex min-w-0 items-center gap-2.5">
         <Button
-          aria-label="Open workspace"
+          aria-label="Open Command Center"
           data-testid="ui-action-workspace-open-menu"
-          onClick={onWorkspaceOpen}
+          onClick={onCommandCenterOpen}
           size="icon"
           variant="ghost"
         >
@@ -116,11 +112,11 @@ export function TopProductBar({
           align="start"
           className="hidden grid-cols-[auto_auto] items-center gap-2 2xl:grid"
           data-testid="ui-action-workspace-open"
-          onClick={onWorkspaceOpen}
+          onClick={onCommandCenterOpen}
           size="md"
           variant="secondary"
         >
-          <span>Workspace</span>
+          <span>Command Center</span>
           <StatusChip className="rounded-full py-0.5 text-[0.65rem] capitalize">
             {requestState}
           </StatusChip>
@@ -192,24 +188,6 @@ export function TopProductBar({
         >
           <SettingsIcon />
         </Button>
-        <div className="hidden h-10 shrink-0 overflow-hidden rounded-md border text-sm font-semibold shadow-sm vs-raised 2xl:inline-flex">
-          <Button
-            className="rounded-none border-0 shadow-none"
-            onClick={onImportOpen}
-            size="md"
-            variant="ghost"
-          >
-            Import
-          </Button>
-          <Button
-            className="rounded-none border-y-0 border-r-0 shadow-none"
-            onClick={onExportOpen}
-            size="md"
-            variant="ghost"
-          >
-            Export
-          </Button>
-        </div>
         <TopProductBarPrimaryAction
           activeJobId={activeJobId}
           canSubmit={canSubmit}
