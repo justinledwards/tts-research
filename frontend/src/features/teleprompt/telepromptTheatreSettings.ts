@@ -62,12 +62,12 @@ export interface TelepromptTheatrePreset {
 export const DEFAULT_TELEPROMPT_THEATRE_SETTINGS: TelepromptTheatreSettings = {
   countdownSeconds: 0,
   cueFontSize: "large",
-  cuePreviewCount: 1,
+  cuePreviewCount: 0,
   cueWidth: "balanced",
   fullscreenPreference: "theatre",
   metronomeEnabled: false,
   mirrorMode: false,
-  nextCuePlacement: "below",
+  nextCuePlacement: "hidden",
   operatorPanelPosition: "right",
   operatorPanelVisible: false,
   presetId: "laptopPresenter",
@@ -81,7 +81,7 @@ export const TELEPROMPT_THEATRE_PRESETS: Record<
   TelepromptTheatrePreset
 > = {
   laptopPresenter: {
-    description: "Balanced laptop view with a clean presenter script and one next cue.",
+    description: "Balanced laptop view with a clean presenter script and minimal chrome.",
     id: "laptopPresenter",
     label: "Laptop presenter",
     settings: DEFAULT_TELEPROMPT_THEATRE_SETTINGS,

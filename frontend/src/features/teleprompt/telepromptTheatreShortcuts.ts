@@ -10,6 +10,7 @@ export type TelepromptTheatreShortcutAction =
   | "jumpCurrentAudio"
   | "largeText"
   | "operatorPreview"
+  | "toggleControls"
   | "toggleHighContrast"
   | "toggleMirror"
   | "toggleNativeFullscreen";
@@ -32,6 +33,9 @@ export function resolveTelepromptTheatreShortcut(
   }
   if (key === "o") {
     return "operatorPreview";
+  }
+  if (key === "t") {
+    return "toggleControls";
   }
   if (key === "j") {
     return "jumpCurrentAudio";

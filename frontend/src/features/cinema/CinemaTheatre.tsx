@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Button, StatusChip } from "../../design";
 import {
   exitTheatreFullscreen,
   isTheatreFullscreenActive,
@@ -8,8 +7,12 @@ import {
   theatreFullscreenAvailability,
   type TheatreFullscreenAvailability,
 } from "../theatre/fullscreen";
+import {
+  FocusedTheatreChrome,
+  useFocusedTheatreControls,
+  type FocusedTheatreProgress,
+} from "../theatre/FocusedTheatreShell";
 import { READER_SEEK_SECONDS } from "../reader-accessibility";
-import { readingSurfaceDataAttributes } from "../reading-surface";
 import { LocalizedPlaybackToolbar, type LocalizedPlaybackToolbarModel } from "../playback";
 import type { CinemaTransportModel } from "./CinemaTransportBar";
 
@@ -22,8 +25,10 @@ export interface CinemaTheatreController {
   readonly fullscreenActive: boolean;
   readonly fullscreenAvailability: TheatreFullscreenAvailability;
   readonly exit: () => void;
+  readonly hideControls: () => void;
   readonly open: () => void;
   readonly requestFullscreen: () => void;
+  readonly revealControls: () => void;
   readonly toggleControls: () => void;
 }
 
@@ -31,19 +36,18 @@ export function useCinemaTheatreController(
   rootRef: RefObject<HTMLElement | null>,
 ): CinemaTheatreController {
   const [active, setActive] = useState(false);
-  const [controlsVisible, setControlsVisible] = useState(true);
   const [fullscreenActive, setFullscreenActive] = useState(false);
   const [fullscreenAvailability, setFullscreenAvailability] =
     useState<TheatreFullscreenAvailability>(() =>
       theatreFullscreenAvailability(globalThis.document, CINEMA_THEATRE_FULLSCREEN_FALLBACK),
     );
+  const focusedControls = useFocusedTheatreControls({ active, initialVisible: false });
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const exit = useCallback(() => {
     const ownerDocument = rootRef.current?.ownerDocument ?? globalThis.document;
     void exitTheatreFullscreen(ownerDocument);
     setActive(false);
-    setControlsVisible(true);
     setFullscreenActive(false);
     if (typeof globalThis.requestAnimationFrame === "function") {
       globalThis.requestAnimationFrame(() => {
@@ -67,7 +71,6 @@ export function useCinemaTheatreController(
       theatreFullscreenAvailability(ownerDocument, CINEMA_THEATRE_FULLSCREEN_FALLBACK),
     );
     setActive(true);
-    setControlsVisible(true);
     if (typeof globalThis.requestAnimationFrame === "function") {
       globalThis.requestAnimationFrame(() => {
         rootRef.current?.focus({ preventScroll: true });
@@ -103,30 +106,56 @@ export function useCinemaTheatreController(
     });
   }, [rootRef]);
 
-  const toggleControls = useCallback(() => {
-    setControlsVisible((current) => !current);
-  }, []);
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const root = rootRef.current;
+    if (!root) {
+      return;
+    }
+    const revealControls = () => {
+      focusedControls.revealControls();
+    };
+    const focusControls = () => {
+      focusedControls.focusControls();
+    };
+    const blurControls = () => {
+      focusedControls.blurControls();
+    };
+    root.addEventListener("pointermove", revealControls);
+    root.addEventListener("pointerdown", revealControls);
+    root.addEventListener("focusin", focusControls);
+    root.addEventListener("focusout", blurControls);
+    return () => {
+      root.removeEventListener("pointermove", revealControls);
+      root.removeEventListener("pointerdown", revealControls);
+      root.removeEventListener("focusin", focusControls);
+      root.removeEventListener("focusout", blurControls);
+    };
+  }, [active, focusedControls, rootRef]);
 
   return useMemo(
     () => ({
       active,
-      controlsVisible,
+      controlsVisible: focusedControls.controlsVisible,
       exit,
       fullscreenActive,
       fullscreenAvailability,
+      hideControls: focusedControls.hideControls,
       open,
+      revealControls: focusedControls.revealControls,
       requestFullscreen,
-      toggleControls,
+      toggleControls: focusedControls.toggleControls,
     }),
     [
       active,
-      controlsVisible,
       exit,
+      focusedControls,
       fullscreenActive,
       fullscreenAvailability,
       open,
       requestFullscreen,
-      toggleControls,
     ],
   );
 }
@@ -137,6 +166,7 @@ export function CinemaTheatreChrome({
   fullscreenActive,
   fullscreenAvailability,
   highContrast,
+  progress,
   scopeLabel,
   sourceLabel,
   surfaceName,
@@ -149,6 +179,7 @@ export function CinemaTheatreChrome({
   fullscreenActive: boolean;
   fullscreenAvailability: TheatreFullscreenAvailability;
   highContrast: boolean;
+  progress?: FocusedTheatreProgress | null;
   scopeLabel: string;
   sourceLabel: string;
   surfaceName: string;
@@ -157,63 +188,34 @@ export function CinemaTheatreChrome({
   onToggleControls: () => void;
 }>) {
   return (
-    <header
-      className={`grid gap-2 border-b bg-zinc-950 px-4 py-3 text-white ${
-        highContrast ? "border-white" : "border-white/15"
-      }`}
-      data-testid="cinema-theatre-chrome"
-    >
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <StatusChip tone="success">
-            {fullscreenActive ? "Native fullscreen" : "Cinema Theatre"}
-          </StatusChip>
-          <span className="truncate text-sm font-semibold">{surfaceName}</span>
-          <span className="truncate text-xs text-zinc-300">
-            {sourceLabel} · {scopeLabel}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            className="border-white/20 bg-white/10 text-white hover:bg-white/15"
-            data-testid="ui-action-cinema-theatre-toggle-controls"
-            onClick={onToggleControls}
-            selected={controlsVisible}
-            size="sm"
-            variant="secondary"
-          >
-            {controlsVisible ? "Hide controls" : "Show controls"}
-          </Button>
-          <Button
-            className="border-white/20 bg-white/10 text-white hover:bg-white/15"
-            data-testid="ui-action-cinema-theatre-native-fullscreen"
-            disabled={!fullscreenAvailability.supported}
-            disabledReason={fullscreenAvailability.reason ?? undefined}
-            onClick={onRequestFullscreen}
-            size="sm"
-            variant="secondary"
-          >
-            {fullscreenActive ? "Fullscreen active" : "Native fullscreen"}
-          </Button>
-          <Button
-            className="border-white/25 bg-white text-zinc-950 hover:bg-zinc-200"
-            data-testid="ui-action-cinema-theatre-exit"
-            onClick={onExit}
-            size="sm"
-            variant="primary"
-          >
-            Exit Theatre
-          </Button>
-        </div>
-      </div>
-      <p
-        className="line-clamp-2 max-w-5xl text-sm leading-6 text-zinc-200"
-        data-testid="cinema-theatre-passage"
-        {...readingSurfaceDataAttributes({ kind: "source" })}
-      >
-        {activePassage || "Current passage will appear as playback or selection advances."}
-      </p>
-    </header>
+    <FocusedTheatreChrome
+      actions={[
+        {
+          disabled: !fullscreenAvailability.supported,
+          disabledReason: fullscreenAvailability.reason ?? undefined,
+          label: fullscreenActive ? "Fullscreen active" : "Native fullscreen",
+          testId: "ui-action-cinema-theatre-native-fullscreen",
+          onClick: onRequestFullscreen,
+        },
+      ]}
+      activeLabel={surfaceName}
+      activeText={activePassage || "Current passage will appear as playback or selection advances."}
+      confidenceLabel={highContrast ? "High contrast" : null}
+      controlsVisible={controlsVisible}
+      persistentAction={{
+        label: "Exit Theatre",
+        testId: "ui-action-cinema-theatre-exit",
+        onClick: onExit,
+      }}
+      progress={progress}
+      scopeLabel={scopeLabel}
+      sourceLabel={sourceLabel}
+      statusLabel={fullscreenActive ? "Native fullscreen" : "Cinema Theatre"}
+      surfaceLabel="Cinema Theatre"
+      testId="cinema-theatre-chrome"
+      toggleControlsTestId="ui-action-cinema-theatre-toggle-controls"
+      onToggleControls={onToggleControls}
+    />
   );
 }
 
@@ -291,6 +293,7 @@ export function CinemaTheatreTransport({
     testId: "localized-cinema-theatre-playback-toolbar",
     variant: "theatre",
   };
+  const progressRatio = clampTheatreProgress(model.progress.ratio);
   return (
     <footer
       className="relative shrink-0 border-t border-white/15 bg-zinc-950 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-white shadow-[0_-10px_30px_rgba(0,0,0,0.35)] lg:px-7"
@@ -300,14 +303,27 @@ export function CinemaTheatreTransport({
       data-testid="cinema-theatre-transport"
     >
       <div className="grid gap-2">
-        {controlsVisible ? (
-          <LocalizedPlaybackToolbar model={theatreToolbarModel} />
-        ) : (
-          <p className="text-center text-xs font-semibold text-zinc-400">
-            Theatre controls hidden. Use Toggle Theatre controls or the top bar to show them.
-          </p>
-        )}
+        <div className="grid gap-1" data-cinema-theatre-mini-progress="">
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/12">
+            <div
+              className="h-full rounded-full bg-orange-300"
+              style={{ width: `${Math.round(progressRatio * 100).toString()}%` }}
+            />
+          </div>
+          <div className="flex justify-between gap-3 text-xs tabular-nums text-zinc-400">
+            <span>{model.progress.currentLabel}</span>
+            <span>{model.progress.durationLabel}</span>
+          </div>
+        </div>
+        {controlsVisible ? <LocalizedPlaybackToolbar model={theatreToolbarModel} /> : null}
       </div>
     </footer>
   );
+}
+
+function clampTheatreProgress(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, value));
 }

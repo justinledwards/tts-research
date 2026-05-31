@@ -156,6 +156,7 @@ describe("teleprompt theatre model", () => {
     expect(resolveTelepromptTheatreShortcut({ key: "f" })).toBe("toggleNativeFullscreen");
     expect(resolveTelepromptTheatreShortcut({ key: "m" })).toBe("toggleMirror");
     expect(resolveTelepromptTheatreShortcut({ key: "j" })).toBe("jumpCurrentAudio");
+    expect(resolveTelepromptTheatreShortcut({ key: "t" })).toBe("toggleControls");
     expect(resolveTelepromptTheatreShortcut({ key: "ArrowRight" })).toBe("nextCue");
   });
 
@@ -373,6 +374,11 @@ describe("teleprompt presets and return memory", () => {
   });
 
   it("applies reversible Theatre presets and normalizes invalid settings", () => {
+    expect(DEFAULT_TELEPROMPT_THEATRE_SETTINGS).toMatchObject({
+      cuePreviewCount: 0,
+      nextCuePlacement: "hidden",
+      operatorPanelVisible: false,
+    });
     expect(applyTelepromptTheatrePreset("mirrorRig")).toMatchObject({
       mirrorMode: true,
       presetId: "mirrorRig",

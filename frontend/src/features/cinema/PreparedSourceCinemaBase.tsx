@@ -76,7 +76,11 @@ import {
   useReaderKeyboardControls,
   useReaderModalLifecycle,
 } from "../reader-accessibility";
-import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
+import {
+  applyReaderTypographyPreset,
+  readingSurfaceClassName,
+  readingSurfaceDataAttributes,
+} from "../reading-surface";
 import {
   playbackProgressForBookmark,
   type ReaderBookmarkItem,
@@ -849,6 +853,9 @@ export function PreparedSourceCinemaOverlay({
     resetSignal: uiMemoryResetSignal,
   });
   const cinemaTheatre = useCinemaTheatreController(dialogRef);
+  const focusedAccessibilitySettings = cinemaTheatre.active
+    ? applyReaderTypographyPreset("theatre", normalizedAccessibility)
+    : normalizedAccessibility;
   const theatreOpenSignalRef = useRef(theatreOpenSignal);
   const theatreExitSignalRef = useRef(theatreExitSignal);
   const theatreControlsSignalRef = useRef(theatreControlsSignal);
@@ -895,6 +902,7 @@ export function PreparedSourceCinemaOverlay({
     onPlayPause,
     onRestart,
     onSkip,
+    onToggleTheatreControls: cinemaTheatre.active ? cinemaTheatre.toggleControls : undefined,
     playbackControls,
   });
 
@@ -980,7 +988,7 @@ export function PreparedSourceCinemaOverlay({
           activeBlockId={displayBlock?.id ?? null}
           activeWordIndex={effectiveActiveWordIndex}
           autoFollow={autoFollow}
-          accessibilitySettings={normalizedAccessibility}
+          accessibilitySettings={focusedAccessibilitySettings}
           canvasFirst={cinemaTheatre.active || cinemaFocus.layoutState.canvasFirst}
           highlightStyle={effectiveReadAlong.highlightStyle}
           isFullscreen={isFullscreen || cinemaTheatre.fullscreenActive}
@@ -990,6 +998,7 @@ export function PreparedSourceCinemaOverlay({
           rendererRetryKey={rendererRetryKey}
           scrollFollow={effectiveReadAlong.scrollFollow}
           source={source}
+          theatreActive={cinemaTheatre.active}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           onAutoFollowChange={setAutoFollow}
           onFullscreenToggle={handleFullscreenToggle}
@@ -1035,7 +1044,7 @@ export function PreparedSourceCinemaOverlay({
             controlsVisible={cinemaTheatre.controlsVisible}
             fullscreenActive={cinemaTheatre.fullscreenActive}
             fullscreenAvailability={cinemaTheatre.fullscreenAvailability}
-            highContrast={normalizedAccessibility.highContrast}
+            highContrast={focusedAccessibilitySettings.highContrast}
             scopeLabel="Full source"
             sourceLabel={title}
             surfaceName={cinemaLabel}
@@ -1222,7 +1231,7 @@ export function PreparedSourceCinemaOverlay({
         )
       }
       readerAttributes={{
-        ...readerDataAttributes(normalizedAccessibility),
+        ...readerDataAttributes(focusedAccessibilitySettings),
         ...readAlongPreferenceDataAttributes(effectiveReadAlong),
       }}
       rootRef={dialogRef}
@@ -1497,6 +1506,7 @@ function PreparedSourceCinemaReader({
   rendererRetryKey,
   scrollFollow,
   source,
+  theatreActive,
   onAccessibilitySettingsChange,
   onAutoFollowChange,
   onFullscreenToggle,
@@ -1517,6 +1527,7 @@ function PreparedSourceCinemaReader({
   rendererRetryKey: number;
   scrollFollow: ReadAlongScrollFollow;
   source: PreparedSource;
+  theatreActive: boolean;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onAutoFollowChange: (enabled: boolean) => void;
   onFullscreenToggle: () => void;
@@ -1753,66 +1764,72 @@ function PreparedSourceCinemaReader({
       frameMode="reading"
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={
-        <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
-          <div className="flex items-center gap-1">
-            <Button
-              aria-label="Decrease text size"
-              className="grid place-items-center text-lg font-medium"
-              onClick={() => {
-                onAccessibilitySettingsChange({
-                  ...accessibilitySettings,
-                  textScale: decreasePreparedSourceCinemaTextSize(accessibilitySettings.textScale),
-                });
-              }}
-              size="icon"
-              variant="ghost"
-            >
-              A-
-            </Button>
-            <Button
-              aria-label="Increase text size"
-              className="grid place-items-center text-lg font-medium"
-              onClick={() => {
-                onAccessibilitySettingsChange({
-                  ...accessibilitySettings,
-                  textScale: increasePreparedSourceCinemaTextSize(accessibilitySettings.textScale),
-                });
-              }}
-              size="icon"
-              variant="ghost"
-            >
-              A+
-            </Button>
-            <Button
-              aria-label="Content Structure"
-              className="grid place-items-center"
-              onClick={() => {
-                onInspectStructure(source);
-              }}
-              size="icon"
-              variant="ghost"
-            >
-              <ListIcon />
-            </Button>
+        theatreActive ? null : (
+          <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
+            <div className="flex items-center gap-1">
+              <Button
+                aria-label="Decrease text size"
+                className="grid place-items-center text-lg font-medium"
+                onClick={() => {
+                  onAccessibilitySettingsChange({
+                    ...accessibilitySettings,
+                    textScale: decreasePreparedSourceCinemaTextSize(
+                      accessibilitySettings.textScale,
+                    ),
+                  });
+                }}
+                size="icon"
+                variant="ghost"
+              >
+                A-
+              </Button>
+              <Button
+                aria-label="Increase text size"
+                className="grid place-items-center text-lg font-medium"
+                onClick={() => {
+                  onAccessibilitySettingsChange({
+                    ...accessibilitySettings,
+                    textScale: increasePreparedSourceCinemaTextSize(
+                      accessibilitySettings.textScale,
+                    ),
+                  });
+                }}
+                size="icon"
+                variant="ghost"
+              >
+                A+
+              </Button>
+              <Button
+                aria-label="Content Structure"
+                className="grid place-items-center"
+                onClick={() => {
+                  onInspectStructure(source);
+                }}
+                size="icon"
+                variant="ghost"
+              >
+                <ListIcon />
+              </Button>
+            </div>
+            <div className="hidden items-center gap-3 text-sm sm:flex">
+              <Toggle
+                checked={autoFollow}
+                className="border-0 bg-transparent px-2 py-1"
+                label="Auto-follow"
+                onChange={onAutoFollowChange}
+              />
+              <Button
+                aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                className="grid place-items-center"
+                onClick={onFullscreenToggle}
+                size="icon"
+                variant="ghost"
+              >
+                <FullscreenIcon />
+              </Button>
+            </div>
           </div>
-          <div className="hidden items-center gap-3 text-sm sm:flex">
-            <Toggle
-              checked={autoFollow}
-              className="border-0 bg-transparent px-2 py-1"
-              label="Auto-follow"
-              onChange={onAutoFollowChange}
-            />
-            <Button
-              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              className="grid place-items-center"
-              onClick={onFullscreenToggle}
-              size="icon"
-              variant="ghost"
-            >
-              <FullscreenIcon />
-            </Button>
-          </div>
-        </div>
+        )
       }
     >
       {readerContent}

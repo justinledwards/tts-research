@@ -1,3 +1,11 @@
+## 2026-05-31 22:10 CEST - Theatre Cinema Follow-Along Mode
+- [x] Inspect relevant Theatre, Cinema, read-along, and accessibility code paths
+- [x] Add shared focused Theatre shell behavior
+- [x] Update Teleprompt Theatre defaults, layout, highlights, and shortcuts
+- [x] Update Cinema Theatre reader shell, chrome, controls, and keyboard behavior
+- [x] Add/update regression tests
+- [x] Run frontend and project checks
+
 ## 2026-05-31 21:37 CEST - Cue-First Teleprompt Studio
 - [x] Add studio work-mode model and tests
 - [x] Rework Teleprompt layout around the current cue
@@ -1222,3 +1230,7 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Lift session review state through the app
 - [x] Add focused regression tests
 - [x] Run project checks
+
+## 2026-05-31 22:31 CEST - Commit Theatre Cinema Follow-Along Package
+- [x] Stage Theatre/Cinema follow-along files
+- [x] Commit staged work package

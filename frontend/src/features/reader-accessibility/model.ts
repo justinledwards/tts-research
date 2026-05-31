@@ -16,6 +16,7 @@ export type ReaderKeyboardCommand =
   | "seekForward"
   | "speedDown"
   | "speedUp"
+  | "toggleTheatreControls"
   | "togglePlayback";
 
 export interface ReaderAccessibilitySettings {
@@ -149,6 +150,9 @@ export function readerKeyboardCommandForKey(key: string): ReaderKeyboardCommand 
   }
   if (normalized === "b") {
     return "bookmark";
+  }
+  if (normalized === "t") {
+    return "toggleTheatreControls";
   }
   if (normalized === "Escape") {
     return "close";

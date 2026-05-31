@@ -1,7 +1,8 @@
 import { forwardRef, useMemo } from "react";
 import type { RevisionBlock } from "../revision";
 import type { ReadAlongTimingState } from "../readalong";
-import { Button, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
+import { Button, SegmentedControl, Toggle, cx } from "../../design";
+import { FocusedTheatreChrome } from "../theatre/FocusedTheatreShell";
 import {
   LocalizedPlaybackToolbar,
   playbackActionAriaLabel,
@@ -34,7 +35,6 @@ import {
   CuePreviewList,
   OperatorFact,
   TelepromptTheatreCueText,
-  telepromptTheatreCueSyncTone,
   telepromptTheatreWordLabel,
 } from "./telepromptTheatreCueContent";
 
@@ -66,6 +66,7 @@ export interface TelepromptTheatreProps {
   readonly playbackRate: number;
   readonly presetId: TelepromptPresetId;
   readonly countdownRemaining: number | null;
+  readonly controlsVisible: boolean;
   readonly previewBlocks: RevisionBlock[];
   readonly settings: TelepromptTheatreSettings;
   readonly settingsMemoryEnabled: boolean;
@@ -81,10 +82,14 @@ export interface TelepromptTheatreProps {
   readonly onMoveCue: (direction: -1 | 1) => void;
   readonly onOpenCinema: () => void;
   readonly onPlaybackRateChange?: (rate: number) => void;
+  readonly onBlurControls: () => void;
+  readonly onFocusControls: () => void;
   readonly onPresetChange: (presetId: TelepromptPresetId) => void;
   readonly onRequestNativeFullscreen: () => void;
   readonly onRestart: () => void;
+  readonly onRevealControls: () => void;
   readonly onSettingsChange: (settings: TelepromptTheatreSettings) => void;
+  readonly onToggleControls: () => void;
   readonly onToggleMirror: (checked: boolean) => void;
   readonly onToggleOperatorPreview: () => void;
   readonly onTogglePlayback: () => void;
@@ -123,6 +128,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       currentTimingState = "trusted",
       currentWordIndex,
       countdownRemaining,
+      controlsVisible,
       fullscreenAvailability,
       fullscreenActive,
       mode,
@@ -149,10 +155,14 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       onMoveCue,
       onOpenCinema,
       onPlaybackRateChange,
+      onBlurControls,
+      onFocusControls,
       onPresetChange,
       onRequestNativeFullscreen,
       onRestart,
+      onRevealControls,
       onSettingsChange,
+      onToggleControls,
       onToggleMirror,
       onToggleOperatorPreview,
       onTogglePlayback,
@@ -166,7 +176,6 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     );
     const theatrePreset = telepromptTheatrePreset(settings.presetId);
     const currentCue = currentCueText ?? activeBlock?.spokenText ?? activeBlock?.text ?? "";
-    const cueSyncTone = telepromptTheatreCueSyncTone(cueSyncMode);
     const currentWordLabel = telepromptTheatreWordLabel(currentWordIndex);
     const theatrePlaybackToolbar: LocalizedPlaybackToolbarModel = {
       activeDetail: `${summary.cuePositionLabel} · ${summary.syncStatusLabel}`,
@@ -242,6 +251,37 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       testId: "localized-theatre-playback-toolbar",
       variant: "theatre",
     };
+    const exitAction = {
+      label: "Exit Theatre",
+      testId: "ui-action-teleprompt-exit-theatre",
+      onClick: onExitTheatre,
+    };
+    const theatreChromeActions = [
+      {
+        label: settings.operatorPanelVisible ? "Hide operator" : "Operator",
+        selected: settings.operatorPanelVisible,
+        testId: "ui-action-teleprompt-operator-preview",
+        onClick: onToggleOperatorPreview,
+      },
+      {
+        label: "Back to Review",
+        testId: "ui-action-teleprompt-theatre-back-review",
+        onClick: onBackToReview,
+      },
+      {
+        label: "Back to Preview",
+        testId: "ui-action-teleprompt-theatre-back-preview",
+        onClick: onBackToPreview,
+      },
+      {
+        disabled: !fullscreenAvailability.supported,
+        disabledReason:
+          nativeFullscreenDisabledReason ?? fullscreenAvailability.reason ?? undefined,
+        label: fullscreenActive ? "Fullscreen active" : "Native fullscreen",
+        testId: "ui-action-teleprompt-native-fullscreen",
+        onClick: onRequestNativeFullscreen,
+      },
+    ];
     const operatorPanel = (
       <aside className="grid min-h-0 gap-3 overflow-auto" data-testid="teleprompt-operator-panel">
         <TelepromptTheatreSettingsControls
@@ -354,6 +394,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         data-teleprompt-theatre-preset={settings.presetId}
         data-teleprompt-theatre-mode={mode}
         data-teleprompt-theatre-scroll-mode={settings.scrollMode}
+        data-teleprompt-theatre-cue-sync-mode={cueSyncMode}
         data-teleprompt-sync-active-cue-id={syncDebug?.activeCueId ?? ""}
         data-teleprompt-sync-active-source-word-id={syncDebug?.activeSourceWordId ?? ""}
         data-teleprompt-sync-active-word-index={String(syncDebug?.activeWordIndex ?? -1)}
@@ -370,119 +411,81 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         ref={ref}
         role="dialog"
         tabIndex={-1}
+        onBlurCapture={onBlurControls}
+        onFocusCapture={onFocusControls}
+        onPointerDown={onRevealControls}
+        onPointerMove={onRevealControls}
       >
-        <div
-          className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-white/15 bg-black/80 px-4 py-3 backdrop-blur"
-          data-testid="teleprompt-theatre-escape-bar"
-        >
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <StatusChip tone="success">
-              {fullscreenActive ? "Native fullscreen" : "Theatre mode"}
-            </StatusChip>
-            <StatusChip tone={playbackControlsPlaying ? "success" : "neutral"}>
-              {summary.playbackStatusLabel}
-            </StatusChip>
-            {settings.syncOverlayVisible ? (
-              <StatusChip tone={cueSyncTone}>{cueSyncStatusLabel}</StatusChip>
-            ) : null}
-            {settings.metronomeEnabled ? <StatusChip tone="info">Tick</StatusChip> : null}
-            <span className="truncate text-sm font-semibold text-zinc-200">
-              {summary.sourceScopeLabel}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              className="border-white/20 bg-white/10 text-white hover:bg-white/15"
-              data-testid="ui-action-teleprompt-operator-preview"
-              onClick={onToggleOperatorPreview}
-              selected={settings.operatorPanelVisible}
-              size="sm"
-              variant="secondary"
-            >
-              {settings.operatorPanelVisible ? "Hide operator" : "Show operator"}
-            </Button>
-            <Button
-              className="border-white/20 bg-white/10 text-white hover:bg-white/15"
-              data-testid="ui-action-teleprompt-theatre-back-review"
-              onClick={onBackToReview}
-              size="sm"
-              variant="secondary"
-            >
-              Back to Review
-            </Button>
-            <Button
-              className="border-white/20 bg-white/10 text-white hover:bg-white/15"
-              data-testid="ui-action-teleprompt-theatre-back-preview"
-              onClick={onBackToPreview}
-              size="sm"
-              variant="secondary"
-            >
-              Back to Preview
-            </Button>
-            <Button
-              className="border-white/20 bg-white/10 text-white hover:bg-white/15"
-              data-testid="ui-action-teleprompt-native-fullscreen"
-              disabled={!fullscreenAvailability.supported}
-              disabledReason={
-                nativeFullscreenDisabledReason ?? fullscreenAvailability.reason ?? undefined
-              }
-              onClick={onRequestNativeFullscreen}
-              size="sm"
-              variant="secondary"
-            >
-              {fullscreenActive ? "Fullscreen active" : "Native fullscreen"}
-            </Button>
-            <Button
-              className="border-white/25 bg-white text-zinc-950 hover:bg-zinc-200"
-              data-testid="ui-action-teleprompt-exit-theatre"
-              onClick={onExitTheatre}
-              size="sm"
-              variant="primary"
-            >
-              Exit theatre
-            </Button>
-          </div>
-        </div>
+        <FocusedTheatreChrome
+          actions={theatreChromeActions}
+          activeLabel={activeBlock?.label ?? "No active cue"}
+          activeText={currentCue}
+          confidenceLabel={settings.syncOverlayVisible ? summary.confidenceLabel : null}
+          controlsVisible={controlsVisible}
+          persistentAction={exitAction}
+          progress={{
+            currentLabel: `${Math.max(0, Math.min(100, audioProgressPercent)).toString()}%`,
+            durationLabel: summary.estimatedRemainingLabel,
+            ratio: audioProgressPercent / 100,
+          }}
+          scopeLabel={summary.cuePositionLabel}
+          sourceLabel={summary.sourceScopeLabel}
+          statusLabel={summary.playbackStatusLabel}
+          surfaceLabel={fullscreenActive ? "Native fullscreen" : "Theatre"}
+          syncStatusLabel={settings.syncOverlayVisible ? cueSyncStatusLabel : null}
+          testId="teleprompt-theatre-escape-bar"
+          toggleControlsTestId="ui-action-teleprompt-theatre-toggle-controls"
+          onToggleControls={onToggleControls}
+        />
 
-        <div className={theatreLayoutClassName(settings)}>
-          {settings.operatorPanelVisible && settings.operatorPanelPosition === "left"
+        <div className={theatreLayoutClassName(settings, controlsVisible)}>
+          {controlsVisible &&
+          settings.operatorPanelVisible &&
+          settings.operatorPanelPosition === "left"
             ? operatorPanel
             : null}
-          <main className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-4">
-            <div className="grid gap-2">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold uppercase text-orange-300">
-                    {summary.cuePositionLabel}
-                  </p>
-                  <h2 className="mt-1 text-2xl font-semibold text-white">
-                    {activeBlock?.label ?? "No active cue"}
-                  </h2>
-                </div>
-                {settings.syncOverlayVisible ? (
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-300">
-                    <span>{summary.totalWordsLabel}</span>
-                    <span>{summary.estimatedRemainingLabel}</span>
-                    <span>{summary.confidenceLabel}</span>
+          <main
+            className={cx(
+              "grid min-h-0 gap-4",
+              controlsVisible ? "grid-rows-[auto_minmax(0,1fr)_auto]" : "grid-rows-[minmax(0,1fr)]",
+            )}
+          >
+            {controlsVisible ? (
+              <div className="grid gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold uppercase text-orange-300">
+                      {summary.cuePositionLabel}
+                    </p>
+                    <h2 className="mt-1 text-2xl font-semibold text-white">
+                      {activeBlock?.label ?? "No active cue"}
+                    </h2>
                   </div>
-                ) : null}
+                  {settings.syncOverlayVisible ? (
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+                      <span>{summary.totalWordsLabel}</span>
+                      <span>{summary.estimatedRemainingLabel}</span>
+                      <span>{summary.confidenceLabel}</span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                  <span>{theatrePreset.label}</span>
+                  <span>{settings.fullscreenPreference} fullscreen preference</span>
+                  {countdownRemaining === null ? null : (
+                    <span className="font-semibold text-orange-200">
+                      Starting in {countdownRemaining.toString()}
+                    </span>
+                  )}
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white/15">
+                  <div
+                    className="h-full rounded-full bg-orange-400"
+                    style={{ width: `${summary.progressPercent.toString()}%` }}
+                  />
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-                <span>{theatrePreset.label}</span>
-                <span>{settings.fullscreenPreference} fullscreen preference</span>
-                {countdownRemaining === null ? null : (
-                  <span className="font-semibold text-orange-200">
-                    Starting in {countdownRemaining.toString()}
-                  </span>
-                )}
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/15">
-                <div
-                  className="h-full rounded-full bg-orange-400"
-                  style={{ width: `${summary.progressPercent.toString()}%` }}
-                />
-              </div>
-            </div>
+            ) : null}
 
             <div
               className={cx(
@@ -510,26 +513,31 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
               />
             </div>
 
-            <div className="grid gap-3 rounded-lg border border-white/15 bg-white/5 p-3">
-              {settings.nextCuePlacement === "below" ? (
-                <CuePreviewList blocks={previewBlocks} />
-              ) : null}
-              <LocalizedPlaybackToolbar model={theatrePlaybackToolbar} />
-              <p className="text-xs text-zinc-400">
-                {cueSyncDetail || summary.syncStatusLabel}
-                {playbackControlsAvailable
-                  ? ` · audio segment ${audioProgressPercent.toString()}%`
-                  : ""}
-              </p>
-            </div>
+            {controlsVisible ? (
+              <div className="grid gap-3 rounded-lg border border-white/15 bg-white/5 p-3">
+                {settings.nextCuePlacement === "below" ? (
+                  <CuePreviewList blocks={previewBlocks} />
+                ) : null}
+                <LocalizedPlaybackToolbar model={theatrePlaybackToolbar} />
+                <p className="text-xs text-zinc-400">
+                  {cueSyncDetail || summary.syncStatusLabel}
+                  {playbackControlsAvailable
+                    ? ` · audio segment ${audioProgressPercent.toString()}%`
+                    : ""}
+                </p>
+              </div>
+            ) : null}
           </main>
 
-          {settings.operatorPanelVisible &&
+          {controlsVisible &&
+          settings.operatorPanelVisible &&
           (settings.operatorPanelPosition === "right" ||
             settings.operatorPanelPosition === "bottom")
             ? operatorPanel
             : null}
-          {settings.nextCuePlacement === "side" && !settings.operatorPanelVisible ? (
+          {controlsVisible &&
+          settings.nextCuePlacement === "side" &&
+          !settings.operatorPanelVisible ? (
             <aside className="grid min-h-0 gap-3 overflow-auto rounded-lg border border-white/15 bg-white/5 p-3">
               <CuePreviewList blocks={previewBlocks} />
             </aside>
@@ -540,8 +548,14 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
   },
 );
 
-function theatreLayoutClassName(settings: TelepromptTheatreSettings): string {
+function theatreLayoutClassName(
+  settings: TelepromptTheatreSettings,
+  controlsVisible: boolean,
+): string {
   const base = "grid min-h-0 flex-1 gap-4 p-4";
+  if (!controlsVisible) {
+    return `${base} lg:grid-cols-1`;
+  }
   if (!settings.operatorPanelVisible && settings.nextCuePlacement !== "side") {
     return `${base} lg:grid-cols-1`;
   }
@@ -578,18 +592,18 @@ function theatreTextSizeClassName(
   presetId: TelepromptPresetId,
 ): string {
   if (size === "massive") {
-    return "[--reading-theatre-font-size:clamp(56px,8vw,104px)] [--reading-theatre-line-height:1.1]";
+    return "[--reading-theatre-font-size:64px] [--reading-theatre-line-height:1.1] sm:[--reading-theatre-font-size:88px] lg:[--reading-theatre-font-size:100px]";
   }
   if (size === "giant") {
-    return "[--reading-theatre-font-size:clamp(48px,7vw,92px)] [--reading-theatre-line-height:1.12]";
+    return "[--reading-theatre-font-size:52px] [--reading-theatre-line-height:1.12] sm:[--reading-theatre-font-size:76px] lg:[--reading-theatre-font-size:92px]";
   }
   if (size === "large" || presetId === "largeText" || presetId === "dyslexicFriendly") {
-    return "[--reading-theatre-font-size:clamp(42px,6vw,78px)] [--reading-theatre-line-height:1.16]";
+    return "[--reading-theatre-font-size:44px] [--reading-theatre-line-height:1.16] sm:[--reading-theatre-font-size:64px] lg:[--reading-theatre-font-size:78px]";
   }
   if (presetId === "highContrast") {
-    return "[--reading-theatre-font-size:clamp(38px,5.4vw,68px)] [--reading-theatre-line-height:1.18]";
+    return "[--reading-theatre-font-size:40px] [--reading-theatre-line-height:1.18] sm:[--reading-theatre-font-size:56px] lg:[--reading-theatre-font-size:68px]";
   }
-  return "[--reading-theatre-font-size:clamp(34px,4.8vw,58px)] [--reading-theatre-line-height:1.2]";
+  return "[--reading-theatre-font-size:36px] [--reading-theatre-line-height:1.2] sm:[--reading-theatre-font-size:52px] lg:[--reading-theatre-font-size:60px]";
 }
 
 export {

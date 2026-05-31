@@ -101,7 +101,11 @@ import {
   type ReaderKeyboardCommand,
   type ReaderTextScale,
 } from "../reader-accessibility";
-import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
+import {
+  applyReaderTypographyPreset,
+  readingSurfaceClassName,
+  readingSurfaceDataAttributes,
+} from "../reading-surface";
 import {
   recordFrontendDegradedState,
   recordFrontendMetric,
@@ -1566,6 +1570,9 @@ export function BookCinemaOverlay({
     resetSignal: uiMemoryResetSignal,
   });
   const cinemaTheatre = useCinemaTheatreController(dialogRef);
+  const focusedAccessibilitySettings = cinemaTheatre.active
+    ? applyReaderTypographyPreset("theatre", normalizedAccessibility)
+    : normalizedAccessibility;
   const theatreOpenSignalRef = useRef(theatreOpenSignal);
   const theatreExitSignalRef = useRef(theatreExitSignal);
   const theatreControlsSignalRef = useRef(theatreControlsSignal);
@@ -1583,6 +1590,7 @@ export function BookCinemaOverlay({
     onPlayPause,
     onRestart,
     onSkip,
+    onToggleTheatreControls: cinemaTheatre.active ? cinemaTheatre.toggleControls : undefined,
     playbackControls,
   });
 
@@ -1796,7 +1804,7 @@ export function BookCinemaOverlay({
           scopedSpans={scopedSpans}
           scopedText={scopedText}
           scopeContent={scopeContent}
-          accessibilitySettings={normalizedAccessibility}
+          accessibilitySettings={focusedAccessibilitySettings}
           canvasFirst={cinemaTheatre.active || cinemaFocus.layoutState.canvasFirst}
           pointerLabel={pointerOption?.label ?? null}
           phraseWordEnd={phraseRange.end}
@@ -1805,6 +1813,7 @@ export function BookCinemaOverlay({
           scrollFollow={effectiveReadAlong.scrollFollow}
           syncDataAttributes={readerSyncDataAttributes}
           readAlongVisualMode={readAlongVisualMode}
+          theatreActive={cinemaTheatre.active}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
         />
       }
@@ -1835,7 +1844,8 @@ export function BookCinemaOverlay({
             controlsVisible={cinemaTheatre.controlsVisible}
             fullscreenActive={cinemaTheatre.fullscreenActive}
             fullscreenAvailability={cinemaTheatre.fullscreenAvailability}
-            highContrast={normalizedAccessibility.highContrast}
+            highContrast={focusedAccessibilitySettings.highContrast}
+            progress={bookTransportModel.progress}
             scopeLabel={bookScopeLabel(normalizedScope)}
             sourceLabel={bookSourceName(book)}
             surfaceName={book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}
@@ -2036,7 +2046,7 @@ export function BookCinemaOverlay({
         )
       }
       readerAttributes={{
-        ...readerDataAttributes(normalizedAccessibility),
+        ...readerDataAttributes(focusedAccessibilitySettings),
         ...readAlongPreferenceDataAttributes(effectiveReadAlong),
       }}
       rootRef={dialogRef}
@@ -3161,6 +3171,7 @@ function BookCinemaReaderStage({
   readAlongVisualMode,
   scrollFollow,
   syncDataAttributes,
+  theatreActive,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -3178,6 +3189,7 @@ function BookCinemaReaderStage({
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   scrollFollow: ReadAlongScrollFollow;
   syncDataAttributes: Record<string, string | number>;
+  theatreActive: boolean;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const presentation = bookCinemaReaderPresentation();
@@ -3200,6 +3212,7 @@ function BookCinemaReaderStage({
           phraseWordStart={phraseWordStart}
           readAlongVisualMode={readAlongVisualMode}
           scrollFollow={scrollFollow}
+          theatreActive={theatreActive}
         />
       </Suspense>
     );
@@ -3222,6 +3235,7 @@ function BookCinemaReaderStage({
         readAlongVisualMode={readAlongVisualMode}
         scrollFollow={scrollFollow}
         syncDataAttributes={syncDataAttributes}
+        theatreActive={theatreActive}
         onAccessibilitySettingsChange={onAccessibilitySettingsChange}
       />
     );
@@ -3242,6 +3256,7 @@ function BookCinemaReaderStage({
       readAlongVisualMode={readAlongVisualMode}
       scrollFollow={scrollFollow}
       syncDataAttributes={syncDataAttributes}
+      theatreActive={theatreActive}
       onAccessibilitySettingsChange={onAccessibilitySettingsChange}
     />
   );
@@ -3269,6 +3284,7 @@ function BookFollowReaderStage({
   readAlongVisualMode,
   scrollFollow,
   syncDataAttributes,
+  theatreActive,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -3286,6 +3302,7 @@ function BookFollowReaderStage({
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   scrollFollow: ReadAlongScrollFollow;
   syncDataAttributes: Record<string, string | number>;
+  theatreActive: boolean;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const readerRef = useRef<HTMLDivElement | null>(null);
@@ -3389,36 +3406,38 @@ function BookFollowReaderStage({
       frameMode="reading"
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={
-        <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
-          <BookPageHeading book={book} scope={scope} />
-          <div className="flex items-center gap-2 text-sm">
-            <span className="vs-muted hidden text-xs font-semibold uppercase tracking-[0.16em] sm:inline">
-              Follow
-            </span>
-            <BookReaderTextButton
-              label="Decrease text size"
-              onClick={() => {
-                onAccessibilitySettingsChange({
-                  ...accessibilitySettings,
-                  textScale: decreaseBookTextSize(accessibilitySettings.textScale),
-                });
-              }}
-            >
-              A-
-            </BookReaderTextButton>
-            <BookReaderTextButton
-              label="Increase text size"
-              onClick={() => {
-                onAccessibilitySettingsChange({
-                  ...accessibilitySettings,
-                  textScale: increaseBookTextSize(accessibilitySettings.textScale),
-                });
-              }}
-            >
-              A+
-            </BookReaderTextButton>
+        theatreActive ? null : (
+          <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
+            <BookPageHeading book={book} scope={scope} />
+            <div className="flex items-center gap-2 text-sm">
+              <span className="vs-muted hidden text-xs font-semibold uppercase tracking-[0.16em] sm:inline">
+                Follow
+              </span>
+              <BookReaderTextButton
+                label="Decrease text size"
+                onClick={() => {
+                  onAccessibilitySettingsChange({
+                    ...accessibilitySettings,
+                    textScale: decreaseBookTextSize(accessibilitySettings.textScale),
+                  });
+                }}
+              >
+                A-
+              </BookReaderTextButton>
+              <BookReaderTextButton
+                label="Increase text size"
+                onClick={() => {
+                  onAccessibilitySettingsChange({
+                    ...accessibilitySettings,
+                    textScale: increaseBookTextSize(accessibilitySettings.textScale),
+                  });
+                }}
+              >
+                A+
+              </BookReaderTextButton>
+            </div>
           </div>
-        </div>
+        )
       }
     >
       <div
@@ -3524,6 +3543,7 @@ function BookPagedReaderStage({
   readAlongVisualMode,
   scrollFollow,
   syncDataAttributes,
+  theatreActive,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -3540,6 +3560,7 @@ function BookPagedReaderStage({
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   scrollFollow: ReadAlongScrollFollow;
   syncDataAttributes: Record<string, string | number>;
+  theatreActive: boolean;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const pageMetrics = useBookPageMetrics(accessibilitySettings);
@@ -3645,14 +3666,16 @@ function BookPagedReaderStage({
       frameMode="reading"
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={
-        <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
-          <BookPageHeading book={book} scope={scope} />
-          <BookPaginationControls
-            accessibilitySettings={accessibilitySettings}
-            pagination={pagination}
-            onAccessibilitySettingsChange={onAccessibilitySettingsChange}
-          />
-        </div>
+        theatreActive ? null : (
+          <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
+            <BookPageHeading book={book} scope={scope} />
+            <BookPaginationControls
+              accessibilitySettings={accessibilitySettings}
+              pagination={pagination}
+              onAccessibilitySettingsChange={onAccessibilitySettingsChange}
+            />
+          </div>
+        )
       }
     >
       {displayedPages.map((page, index) => (

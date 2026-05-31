@@ -12,6 +12,7 @@ import {
 } from "../readalong";
 import { liveStatusMessages, useLiveStatus } from "../accessibility";
 import { nextReaderPlaybackRate } from "../reader-accessibility";
+import { useFocusedTheatreControls } from "../theatre/FocusedTheatreShell";
 import type { RevisionBlock } from "../revision";
 import { HeaderContextSummary } from "../header";
 import {
@@ -154,30 +155,8 @@ function findTelepromptBlockById(
 
 function telepromptTheatreSettingsForWorkspaceLayout(
   settings: TelepromptTheatreSettings,
-  density: WorkspaceLayoutSlotDensity,
 ): TelepromptTheatreSettings {
-  if (density === "pinned") {
-    return {
-      ...settings,
-      cuePreviewCount: settings.cuePreviewCount === 0 ? 2 : settings.cuePreviewCount,
-      operatorPanelVisible: true,
-      syncOverlayVisible: true,
-    };
-  }
-  if (density === "summary") {
-    return {
-      ...settings,
-      cuePreviewCount: settings.cuePreviewCount === 0 ? 1 : settings.cuePreviewCount,
-      operatorPanelVisible: false,
-      syncOverlayVisible: true,
-    };
-  }
-  return {
-    ...settings,
-    cuePreviewCount: 0,
-    operatorPanelVisible: false,
-    syncOverlayVisible: false,
-  };
+  return settings;
 }
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -224,6 +203,10 @@ export function TelepromptStudio({
   const [theatreMode, setTheatreMode] = useState<TelepromptTheatreMode>("inline");
   const [theatreViewMode, setTheatreViewMode] = useState<TelepromptTheatreViewMode>("manual");
   const [countdownRemaining, setCountdownRemaining] = useState<number | null>(null);
+  const theatreControls = useFocusedTheatreControls({
+    active: theatreMode !== "inline",
+    initialVisible: false,
+  });
   const [fullscreenAvailability, setFullscreenAvailability] = useState(() =>
     telepromptFullscreenAvailability(),
   );
@@ -966,6 +949,16 @@ export function TelepromptStudio({
         }
         case "operatorPreview": {
           toggleOperatorPanel();
+          theatreControls.revealControls();
+          break;
+        }
+        case "toggleControls": {
+          theatreControls.toggleControls();
+          setStatusMessage(
+            theatreControls.controlsVisible
+              ? "Theatre controls hidden."
+              : "Theatre controls shown.",
+          );
           break;
         }
         case "jumpCurrentAudio": {
@@ -1049,6 +1042,7 @@ export function TelepromptStudio({
     adjustPlaybackRate,
     theatreSettings.mirrorMode,
     theatreMode,
+    theatreControls,
     toggleOperatorPanel,
     updateTheatreSettings,
   ]);
@@ -1069,10 +1063,8 @@ export function TelepromptStudio({
     voiceProfile,
   });
   const showTelepromptContextPanel = contextInspectorDensity === "pinned";
-  const effectiveTheatreSettings = telepromptTheatreSettingsForWorkspaceLayout(
-    theatreSettings,
-    contextInspectorDensity,
-  );
+  const effectiveTheatreSettings = telepromptTheatreSettingsForWorkspaceLayout(theatreSettings);
+  const theatrePresetId = presetId === "standard" ? "highContrast" : presetId;
   const cuePositionLabel = activeBlock
     ? `Cue ${activeBlock.index.toString()} of ${Math.max(1, blocks.length).toString()}`
     : "No cue selected";
@@ -1402,7 +1394,7 @@ export function TelepromptStudio({
           playbackControlsPlaying={playbackControls.isPlaying}
           playbackLifecycle={playbackLifecycle}
           playbackRate={playbackControls.playbackRate}
-          presetId={presetId}
+          presetId={theatrePresetId}
           countdownRemaining={countdownRemaining}
           previewBlocks={blocks.slice(
             Math.max(0, activeBlockIndex + 1),
@@ -1414,6 +1406,7 @@ export function TelepromptStudio({
           summary={theatreSummary}
           syncDebug={telepromptTheatreSyncDebug}
           theatreViewMode={theatreViewMode}
+          controlsVisible={theatreControls.controlsVisible}
           wordTimings={cueSync.activeCue?.wordTimings ?? []}
           onBackToPreview={() => {
             handleReturn("preview");
@@ -1426,6 +1419,8 @@ export function TelepromptStudio({
           onMoveCue={moveCue}
           onOpenCinema={handleOpenCinema}
           onPlaybackRateChange={playbackControls.setPlaybackRate}
+          onBlurControls={theatreControls.blurControls}
+          onFocusControls={theatreControls.focusControls}
           onJumpToCurrentAudio={handleJumpToCurrentAudio}
           onPresetChange={(id) => {
             setPresetId(id);
@@ -1433,6 +1428,8 @@ export function TelepromptStudio({
           }}
           onRequestNativeFullscreen={handleRequestNativeFullscreen}
           onRestart={handleRestart}
+          onRevealControls={theatreControls.revealControls}
+          onToggleControls={theatreControls.toggleControls}
           onSettingsChange={onTheatreSettingsChange}
           onToggleMirror={(checked) => {
             updateTheatreSettings({ mirrorMode: checked });

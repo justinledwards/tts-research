@@ -21,6 +21,7 @@ export interface ReaderKeyboardControlOptions {
   onPlayPause: () => void;
   onRestart: () => void;
   onSkip: (seconds: number) => void;
+  onToggleTheatreControls?: () => void;
   playbackControls: ReaderPlaybackKeyboardControls;
 }
 
@@ -31,6 +32,7 @@ export function useReaderKeyboardControls({
   onPlayPause,
   onRestart,
   onSkip,
+  onToggleTheatreControls,
   playbackControls,
 }: ReaderKeyboardControlOptions) {
   useEffect(() => {
@@ -41,6 +43,7 @@ export function useReaderKeyboardControls({
       onPlayPause,
       onRestart,
       onSkip,
+      onToggleTheatreControls,
       playbackControls,
     });
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -62,7 +65,16 @@ export function useReaderKeyboardControls({
     return () => {
       globalThis.removeEventListener("keydown", handleKeyDown);
     };
-  }, [canBookmark, onBookmark, onClose, onPlayPause, onRestart, onSkip, playbackControls]);
+  }, [
+    canBookmark,
+    onBookmark,
+    onClose,
+    onPlayPause,
+    onRestart,
+    onSkip,
+    onToggleTheatreControls,
+    playbackControls,
+  ]);
 }
 
 export function readerKeyboardActions({
@@ -72,6 +84,7 @@ export function readerKeyboardActions({
   onPlayPause,
   onRestart,
   onSkip,
+  onToggleTheatreControls,
   playbackControls,
 }: ReaderKeyboardControlOptions): Partial<Record<ReaderKeyboardCommand, () => void>> {
   const actions: Partial<Record<ReaderKeyboardCommand, () => void>> = {
@@ -79,6 +92,9 @@ export function readerKeyboardActions({
   };
   if (canBookmark && onBookmark) {
     actions.bookmark = onBookmark;
+  }
+  if (onToggleTheatreControls) {
+    actions.toggleTheatreControls = onToggleTheatreControls;
   }
   if (playbackControls.isAvailable) {
     actions.restart = onRestart;

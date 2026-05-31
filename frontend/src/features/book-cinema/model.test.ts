@@ -301,6 +301,7 @@ describe("Book Cinema helpers", () => {
     expect(bookCinemaKeyboardCommandForKey("[")).toBe("speedDown");
     expect(bookCinemaKeyboardCommandForKey("]")).toBe("speedUp");
     expect(bookCinemaKeyboardCommandForKey("b")).toBe("bookmark");
+    expect(bookCinemaKeyboardCommandForKey("t")).toBe("toggleTheatreControls");
     expect(bookCinemaKeyboardCommandForKey("Escape")).toBe("close");
     expect(bookCinemaKeyboardCommandForKey("x")).toBeNull();
   });

@@ -45,6 +45,7 @@ export function BookDocumentReaderStage({
   phraseWordStart,
   readAlongVisualMode = "word",
   scrollFollow,
+  theatreActive = false,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -61,6 +62,7 @@ export function BookDocumentReaderStage({
   phraseWordStart?: number;
   readAlongVisualMode?: ReadAlongHighlightVisualMode;
   scrollFollow: ReadAlongScrollFollow;
+  theatreActive?: boolean;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const readerRef = useRef<HTMLDivElement | null>(null);
@@ -141,33 +143,35 @@ export function BookDocumentReaderStage({
       frameMode="reading"
       measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
       toolbar={
-        <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
-          <BookDocumentHeading book={book} scope={scope} />
-          <div className="flex items-center gap-1">
-            <BookDocumentTextButton
-              label="Decrease text size"
-              onClick={() => {
-                onAccessibilitySettingsChange({
-                  ...accessibilitySettings,
-                  textScale: decreaseBookTextSize(accessibilitySettings.textScale),
-                });
-              }}
-            >
-              A-
-            </BookDocumentTextButton>
-            <BookDocumentTextButton
-              label="Increase text size"
-              onClick={() => {
-                onAccessibilitySettingsChange({
-                  ...accessibilitySettings,
-                  textScale: increaseBookTextSize(accessibilitySettings.textScale),
-                });
-              }}
-            >
-              A+
-            </BookDocumentTextButton>
+        theatreActive ? null : (
+          <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
+            <BookDocumentHeading book={book} scope={scope} />
+            <div className="flex items-center gap-1">
+              <BookDocumentTextButton
+                label="Decrease text size"
+                onClick={() => {
+                  onAccessibilitySettingsChange({
+                    ...accessibilitySettings,
+                    textScale: decreaseBookTextSize(accessibilitySettings.textScale),
+                  });
+                }}
+              >
+                A-
+              </BookDocumentTextButton>
+              <BookDocumentTextButton
+                label="Increase text size"
+                onClick={() => {
+                  onAccessibilitySettingsChange({
+                    ...accessibilitySettings,
+                    textScale: increaseBookTextSize(accessibilitySettings.textScale),
+                  });
+                }}
+              >
+                A+
+              </BookDocumentTextButton>
+            </div>
           </div>
-        </div>
+        )
       }
     >
       <MarkdownRenderer

@@ -61,6 +61,18 @@ body {
   color: var(--vs-text);
 }
 
+[data-cinema-theatre-mode="true"],
+[data-teleprompt-theatre-mode] {
+  --vs-bg: #020617;
+  --vs-surface: #09090b;
+  --vs-raised: #111827;
+  --vs-text: #f8fafc;
+  --vs-muted: #cbd5e1;
+  --vs-border: rgb(255 255 255 / 0.16);
+  --vs-accent: #f59e0b;
+  color-scheme: dark;
+}
+
 button,
 textarea,
 select {
@@ -979,9 +991,20 @@ select {
 .reading-surface--theatre .markdown-cinema-word-active,
 .reading-surface--theatre .prepared-source-cinema-active,
 .reading-surface--theatre .website-cinema-word-active {
-  text-shadow:
-    0 0 0.24em rgb(249 115 22 / 0.7),
-    0 0 0.08em rgb(255 255 255 / 0.52);
+  border-radius: 0.2em;
+  background: #fff24a;
+  box-shadow:
+    0 0 0 0.1em #111827,
+    0 0 0 0.22em #fff24a;
+  color: #111827;
+  text-decoration: none;
+  text-shadow: none;
+  -webkit-text-stroke-width: 0;
+}
+
+.reading-surface--theatre .teleprompter-word--active::after,
+.reading-surface--theatre .book-cinema-word-active::after {
+  display: none;
 }
 
 .book-cinema-word-phrase {
@@ -1184,11 +1207,12 @@ select {
 }
 
 .reading-surface--theatre .readalong-word-role--active {
-  background: rgb(251 146 60 / 0.32);
+  background: #fff24a;
   box-shadow:
-    0 0 0 0.1em rgb(251 146 60 / 0.58),
-    0 0.1em 0.34em rgb(0 0 0 / 0.4);
-  color: #fff7ed;
+    0 0 0 0.1em #111827,
+    0 0 0 0.22em #fff24a;
+  color: #111827;
+  text-decoration: none;
   text-shadow: none;
 }
 
@@ -1204,6 +1228,10 @@ select {
 .reading-surface--theatre .readalong-word-role--upcoming {
   color: #fed7aa;
   text-decoration-color: rgb(251 146 60 / 0.46);
+}
+
+[data-cinema-theatre-mode="true"] .reading-surface--spoken {
+  color: #f8fafc;
 }
 
 .preview-spoken-cue {
