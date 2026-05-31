@@ -47,7 +47,7 @@ export function RailMiniStack({
       ))}
       {actionLabel && onAction ? (
         <button
-          className={`${compactHitTargetClassName} min-h-8 rounded-md border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50`}
+          className={`${compactHitTargetClassName} min-h-8 rounded-md border border-[var(--vs-selected-border)] px-2 text-[0.68rem] font-semibold text-[var(--vs-selected-text)] transition hover:bg-[var(--vs-selected)]`}
           data-hit-target-min={minInteractiveSize}
           data-testid={actionTestId}
           data-ui-action-surface={actionSurface}

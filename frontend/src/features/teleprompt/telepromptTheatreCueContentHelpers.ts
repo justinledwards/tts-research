@@ -307,18 +307,18 @@ export function telepromptTheatreCueKindClassName(
   kind: ReturnType<typeof telepromptTheatreCuePresentationKind>,
 ): string {
   if (kind === "heading") {
-    return "teleprompt-theatre-cue--heading font-bold text-white";
+    return "teleprompt-theatre-cue--heading font-bold text-[var(--vs-theatre-text)]";
   }
   if (kind === "subheading") {
-    return "teleprompt-theatre-cue--subheading font-semibold text-zinc-100";
+    return "teleprompt-theatre-cue--subheading font-semibold text-[var(--vs-text-primary)]";
   }
   if (kind === "quote") {
-    return "teleprompt-theatre-cue--quote border-l-4 border-orange-300/70 pl-6 text-left font-semibold italic text-zinc-100";
+    return "teleprompt-theatre-cue--quote border-l-4 border-[var(--vs-theatre-accent)] pl-6 text-left font-semibold italic text-[var(--vs-text-primary)]";
   }
   if (kind === "code" || kind === "table") {
-    return "teleprompt-theatre-cue--technical rounded-md border border-white/15 bg-white/5 p-5 font-medium text-zinc-100";
+    return "teleprompt-theatre-cue--technical rounded-md border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-5 font-medium text-[var(--vs-text-primary)]";
   }
-  return "teleprompt-theatre-cue--body font-semibold text-white";
+  return "teleprompt-theatre-cue--body font-semibold text-[var(--vs-theatre-text)]";
 }
 
 export function telepromptTheatreCrawlOffset({
@@ -367,20 +367,28 @@ export function CuePreviewList({ blocks }: Readonly<{ blocks: RevisionBlock[] }>
       null,
       createElement(
         "p",
-        { className: "text-xs font-semibold uppercase text-zinc-400" },
+        { className: "text-xs font-semibold uppercase text-[var(--vs-text-muted)]" },
         "Next cue",
       ),
-      createElement("p", { className: "mt-1 text-sm text-zinc-200" }, "Final cue."),
+      createElement(
+        "p",
+        { className: "mt-1 text-sm text-[var(--vs-text-secondary)]" },
+        "Final cue.",
+      ),
     );
   }
   return createElement(
     "div",
     { className: "grid gap-2" },
-    createElement("p", { className: "text-xs font-semibold uppercase text-zinc-400" }, "Next cue"),
+    createElement(
+      "p",
+      { className: "text-xs font-semibold uppercase text-[var(--vs-text-muted)]" },
+      "Next cue",
+    ),
     ...blocks.map((block) =>
       createElement(
         "p",
-        { className: "line-clamp-2 text-sm text-zinc-200", key: block.id },
+        { className: "line-clamp-2 text-sm text-[var(--vs-text-secondary)]", key: block.id },
         block.spokenText,
       ),
     ),
@@ -394,8 +402,12 @@ export function OperatorFact({
   return createElement(
     "div",
     { className: "flex items-center justify-between gap-3" },
-    createElement("dt", { className: "text-orange-200" }, label),
-    createElement("dd", { className: "text-right font-semibold text-white" }, value),
+    createElement("dt", { className: "text-[var(--vs-theatre-accent)]" }, label),
+    createElement(
+      "dd",
+      { className: "text-right font-semibold text-[var(--vs-theatre-text)]" },
+      value,
+    ),
   );
 }
 

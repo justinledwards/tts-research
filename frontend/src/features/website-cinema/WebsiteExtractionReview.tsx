@@ -24,7 +24,7 @@ export function WebsiteExtractionReview({
   return (
     <div className="grid gap-4 text-sm" data-testid="website-extraction-review">
       {quality.articleUncertain ? (
-        <div className="rounded-md border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-amber-600">
+        <div className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-[var(--vs-status-warning)]">
           Article uncertain. Review the selected container before generating long-form audio.
         </div>
       ) : null}

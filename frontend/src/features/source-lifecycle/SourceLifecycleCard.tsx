@@ -39,7 +39,9 @@ export function SourceLifecycleCard({
     <Component
       aria-label={ariaLabel}
       className={`grid gap-3 rounded-md border ${
-        selected ? "border-orange-300 bg-orange-500/5" : "vs-border vs-surface"
+        selected
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+          : "vs-border vs-surface"
       } ${isCompact ? "p-3" : "p-4"} ${className}`}
       data-generated-audio-state={envelope.generatedAudioState}
       data-policy-scope={envelope.policyScope}

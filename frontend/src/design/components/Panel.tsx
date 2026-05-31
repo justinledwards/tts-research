@@ -1,7 +1,14 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { cx } from "../tokens";
 
-export type PanelVariant = "raised" | "surface" | "subtle" | "dashed";
+export type PanelVariant =
+  | "primary"
+  | "secondary"
+  | "inspector"
+  | "raised"
+  | "surface"
+  | "subtle"
+  | "dashed";
 export type PanelElement = "aside" | "div" | "li" | "nav" | "section";
 
 export function Panel({
@@ -32,11 +39,13 @@ export function Panel({
     <Component
       {...sectionProps}
       className={cx(
-        "min-w-0 rounded-lg border transition vs-border",
-        variant === "raised" && "bg-[var(--vs-raised)] shadow-sm",
-        variant === "surface" && "bg-[var(--vs-surface)]",
+        "min-w-0 rounded-lg border border-[var(--vs-border-subtle)] transition",
+        (variant === "primary" || variant === "raised") &&
+          "bg-[var(--vs-surface-primary)] shadow-sm",
+        (variant === "secondary" || variant === "surface") && "bg-[var(--vs-surface-secondary)]",
+        variant === "inspector" && "bg-[var(--vs-surface-inspector)]",
         variant === "subtle" && "bg-transparent",
-        variant === "dashed" && "border-dashed bg-[var(--vs-raised)]",
+        variant === "dashed" && "border-dashed bg-[var(--vs-surface-primary)]",
         highlighted &&
           "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] ring-2 ring-[var(--vs-focus-ring-soft)]",
         pinned && "border-[var(--vs-pinned-border)] bg-[var(--vs-pinned)]",
@@ -44,7 +53,7 @@ export function Panel({
       )}
     >
       {title || eyebrow || actions ? (
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b p-3 vs-border">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--vs-border-subtle)] p-3">
           <div className="min-w-0">
             {eyebrow ? (
               <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">

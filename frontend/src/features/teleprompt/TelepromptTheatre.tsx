@@ -291,14 +291,16 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           onChange={onSettingsChange}
         />
 
-        <div className="grid gap-3 rounded-lg border border-white/15 bg-white/5 p-3">
+        <div className="grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3">
           <div>
-            <p className="text-xs font-semibold uppercase text-zinc-400">Inline text preset</p>
-            <p className="mt-1 text-xs text-zinc-400">{preset.description}</p>
+            <p className="text-xs font-semibold uppercase text-[var(--vs-text-muted)]">
+              Inline text preset
+            </p>
+            <p className="mt-1 text-xs text-[var(--vs-text-muted)]">{preset.description}</p>
           </div>
           <SegmentedControl
             ariaLabel="Teleprompt inline presenter preset"
-            className="text-zinc-950"
+            className="text-[var(--vs-text-primary)]"
             columns={2}
             options={TELEPROMPT_PRESET_IDS.map((id) => ({
               label: telepromptPreset(id).label,
@@ -310,7 +312,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           />
           <Toggle
             checked={settings.mirrorMode}
-            className="text-zinc-100"
+            className="text-[var(--vs-text-primary)]"
             data-testid="ui-action-teleprompt-theatre-mirror"
             detail="Flip the presenter script for mirrored recording rigs."
             label="Mirror mode"
@@ -318,16 +320,18 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           />
         </div>
 
-        <div className="grid gap-3 rounded-lg border border-white/15 bg-white/5 p-3">
+        <div className="grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3">
           <div>
-            <p className="text-xs font-semibold uppercase text-zinc-400">Exit paths</p>
-            <p className="mt-1 text-xs text-zinc-400">
+            <p className="text-xs font-semibold uppercase text-[var(--vs-text-muted)]">
+              Exit paths
+            </p>
+            <p className="mt-1 text-xs text-[var(--vs-text-muted)]">
               Leaving theatre preserves source, cue, voice, policy, and return target.
             </p>
           </div>
           <Button
             {...playbackActionDataAttributes("openCinema", playbackLifecycle)}
-            className="border-white/20 bg-white/10 text-white hover:bg-white/15"
+            className="border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]"
             data-testid="ui-action-teleprompt-theatre-open-cinema"
             disabled={!canOpenCinema}
             disabledReason={openCinemaDisabledReason}
@@ -343,7 +347,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
             aria-label={playbackActionAriaLabel("createAndListen", {
               createScope: "current-scope",
             })}
-            className="border-orange-400 bg-orange-500 text-white hover:bg-orange-600"
+            className="border-[var(--vs-selected-border)] bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)] hover:bg-[var(--vs-action-primary-hover)]"
             data-testid="ui-action-teleprompt-theatre-create-listen"
             disabled={!canCreate}
             disabledReason={createAndListenDisabledReason}
@@ -357,16 +361,18 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
 
         {theatreViewMode === "operator-preview" || settings.syncOverlayVisible ? (
           <div
-            className="grid gap-3 rounded-lg border border-orange-300/40 bg-orange-500/10 p-3"
+            className="grid gap-3 rounded-lg border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] p-3"
             data-testid="teleprompt-operator-preview"
           >
             <div>
-              <p className="text-xs font-semibold uppercase text-orange-200">Operator Preview</p>
-              <p className="mt-1 text-xs text-orange-100">
+              <p className="text-xs font-semibold uppercase text-[var(--vs-theatre-accent)]">
+                Operator Preview
+              </p>
+              <p className="mt-1 text-xs text-[var(--vs-theatre-text)]">
                 {summary.activeWordsLabel} · {summary.playbackStatusLabel}
               </p>
             </div>
-            <dl className="grid gap-2 text-xs text-orange-50">
+            <dl className="grid gap-2 text-xs text-[var(--vs-theatre-text)]">
               <OperatorFact label="Sync" value={summary.syncStatusLabel} />
               <OperatorFact label="Word" value={currentWordLabel} />
               <OperatorFact label="Confidence" value={summary.confidenceLabel} />
@@ -376,7 +382,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         ) : null}
 
         {fullscreenAvailability.supported ? null : (
-          <p className="rounded-lg border border-white/15 bg-white/5 p-3 text-xs leading-5 text-zinc-300">
+          <p className="rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3 text-xs leading-5 text-[var(--vs-text-secondary)]">
             {fullscreenAvailability.reason}
           </p>
         )}
@@ -386,10 +392,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       <section
         aria-label="Teleprompt Theatre"
         aria-modal="true"
-        className={cx(
-          "fixed inset-0 z-[80] flex flex-col overflow-hidden bg-zinc-950 text-white",
-          presetId === "highContrast" ? "text-white" : "text-zinc-50",
-        )}
+        className="fixed inset-0 z-[80] flex flex-col overflow-hidden bg-[var(--vs-theatre-bg)] text-[var(--vs-theatre-text)]"
         data-testid="teleprompt-theatre"
         data-teleprompt-theatre-preset={settings.presetId}
         data-teleprompt-theatre-mode={mode}
@@ -454,33 +457,33 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
               <div className="grid gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold uppercase text-orange-300">
+                    <p className="text-sm font-semibold uppercase text-[var(--vs-theatre-accent)]">
                       {summary.cuePositionLabel}
                     </p>
-                    <h2 className="mt-1 text-2xl font-semibold text-white">
+                    <h2 className="mt-1 text-2xl font-semibold text-[var(--vs-theatre-text)]">
                       {activeBlock?.label ?? "No active cue"}
                     </h2>
                   </div>
                   {settings.syncOverlayVisible ? (
-                    <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--vs-text-secondary)]">
                       <span>{summary.totalWordsLabel}</span>
                       <span>{summary.estimatedRemainingLabel}</span>
                       <span>{summary.confidenceLabel}</span>
                     </div>
                   ) : null}
                 </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--vs-text-muted)]">
                   <span>{theatrePreset.label}</span>
                   <span>{settings.fullscreenPreference} fullscreen preference</span>
                   {countdownRemaining === null ? null : (
-                    <span className="font-semibold text-orange-200">
+                    <span className="font-semibold text-[var(--vs-theatre-accent)]">
                       Starting in {countdownRemaining.toString()}
                     </span>
                   )}
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-white/15">
+                <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-theatre-panel)]">
                   <div
-                    className="h-full rounded-full bg-orange-400"
+                    className="h-full rounded-full bg-[var(--vs-theatre-accent)]"
                     style={{ width: `${summary.progressPercent.toString()}%` }}
                   />
                 </div>
@@ -489,8 +492,8 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
 
             <div
               className={cx(
-                "grid min-h-0 overflow-auto bg-black px-3 py-5 sm:px-6",
-                presetId === "highContrast" && "bg-black",
+                "grid min-h-0 overflow-auto bg-[var(--vs-theatre-bg)] px-3 py-5 sm:px-6",
+                presetId === "highContrast" && "bg-[var(--vs-theatre-bg)]",
                 theatreCuePositionClassName(settings.verticalCuePosition),
               )}
               data-testid="teleprompt-theatre-current-cue"
@@ -514,12 +517,12 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
             </div>
 
             {controlsVisible ? (
-              <div className="grid gap-3 rounded-lg border border-white/15 bg-white/5 p-3">
+              <div className="grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3">
                 {settings.nextCuePlacement === "below" ? (
                   <CuePreviewList blocks={previewBlocks} />
                 ) : null}
                 <LocalizedPlaybackToolbar model={theatrePlaybackToolbar} />
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-[var(--vs-text-muted)]">
                   {cueSyncDetail || summary.syncStatusLabel}
                   {playbackControlsAvailable
                     ? ` · audio segment ${audioProgressPercent.toString()}%`
@@ -538,7 +541,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           {controlsVisible &&
           settings.nextCuePlacement === "side" &&
           !settings.operatorPanelVisible ? (
-            <aside className="grid min-h-0 gap-3 overflow-auto rounded-lg border border-white/15 bg-white/5 p-3">
+            <aside className="grid min-h-0 gap-3 overflow-auto rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3">
               <CuePreviewList blocks={previewBlocks} />
             </aside>
           ) : null}

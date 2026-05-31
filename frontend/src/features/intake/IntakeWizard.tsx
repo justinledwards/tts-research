@@ -695,7 +695,7 @@ export function IntakeWizard({
       {stepContentById[activeStep]}
 
       {readiness.status !== "ready" && activeStep !== "destination" && activeStep !== "source" ? (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-xs text-[var(--vs-status-warning)]">
           {readiness.detail}
         </p>
       ) : null}
@@ -1054,7 +1054,7 @@ function UrlSourceInput({
         value={sourceUrl}
       />
       {candidate.urlSafety && !candidate.urlSafety.allowedByDefault ? (
-        <span className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+        <span className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-xs font-medium text-[var(--vs-status-warning)]">
           {candidate.urlSafety.detail}
         </span>
       ) : null}
@@ -1144,7 +1144,7 @@ function SourceReadinessNotice({ readiness }: Readonly<{ readiness: IntakeReadin
     return null;
   }
   return (
-    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+    <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-xs leading-5 text-[var(--vs-status-warning)]">
       {readiness.detail}
     </p>
   );
@@ -1217,7 +1217,7 @@ function IntakeMetadataStep({
         </dl>
 
         {candidate.confidencePrompt ? (
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+          <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-xs leading-5 text-[var(--vs-status-warning)]">
             {candidate.confidencePrompt}
           </p>
         ) : (
@@ -1479,7 +1479,7 @@ function IntakeDestinationStep({
           </label>
         ) : null}
         {intakeError && readiness.status === "ready" ? (
-          <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          <p className="rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] px-3 py-2 text-xs text-[var(--vs-status-danger)]">
             {intakeError}
           </p>
         ) : null}

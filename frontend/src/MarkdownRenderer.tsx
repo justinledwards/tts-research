@@ -131,7 +131,7 @@ export function MermaidDiagram({ chart }: Readonly<{ chart: string }>) {
   return (
     <div
       aria-busy={!svg}
-      className="mermaid-diagram rounded-lg border bg-white p-4 text-center vs-border"
+      className="mermaid-diagram rounded-lg border bg-[var(--vs-surface-primary)] p-4 text-center vs-border"
     >
       {svg ? (
         <div ref={outputRef} />

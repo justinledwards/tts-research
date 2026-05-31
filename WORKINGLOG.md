@@ -1,3 +1,17 @@
+## 2026-05-31 23:26 CEST - Commit Visual Design System Package
+- [x] Inspect visual design system worktree
+- [x] Stage visual design system package
+- [x] Commit staged package
+
+## 2026-05-31 22:56 CEST - Visual Design System Refresh
+- [x] Audit current visual tokens, raw palette classes, and shared components
+- [x] Expand semantic color, surface, action, status, and Theatre tokens
+- [x] Migrate hard-coded UI styling across frontend surfaces
+- [x] Add visual design system documentation
+- [x] Add contrast and raw-palette guard coverage
+- [x] Run frontend, accessibility, responsive, UI action, and project checks
+- [ ] Resolve UI action quick Preview Intake update-depth failure
+
 ## 2026-05-31 22:10 CEST - Theatre Cinema Follow-Along Mode
 - [x] Inspect relevant Theatre, Cinema, read-along, and accessibility code paths
 - [x] Add shared focused Theatre shell behavior

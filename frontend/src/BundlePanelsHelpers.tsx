@@ -27,7 +27,7 @@ export function PanelNote({ children }: Readonly<{ children: ReactNode }>) {
 
 export function PanelError({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <p className="mt-5 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+    <p className="mt-5 rounded-lg border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-4 text-sm text-[var(--vs-status-danger)]">
       {children}
     </p>
   );
@@ -71,7 +71,7 @@ export function StepRail({
 function stepRailButtonClass(step: string, activeStep: string, isEnabled: boolean): string {
   const base = "h-full w-full px-3 py-2 text-center transition";
   if (step === activeStep) {
-    return `${base} bg-orange-500 text-white`;
+    return `${base} bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)]`;
   }
   if (isEnabled) {
     return `${base} vs-surface hover:bg-[var(--vs-raised)]`;
@@ -95,7 +95,9 @@ export function BundleContentRow({
     <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md border p-3 vs-raised">
       <span
         className={`grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${
-          item.included ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"
+          item.included
+            ? "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]"
+            : "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]"
         }`}
       >
         {item.included ? "✓" : "·"}
@@ -173,7 +175,7 @@ export function ExportWarnings({ warnings }: Readonly<{ warnings: string[] }>) {
     return null;
   }
   return (
-    <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+    <section className="rounded-lg border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-4 text-sm text-[var(--vs-status-warning)]">
       <p className="font-semibold">Review before sharing</p>
       <ul className="mt-2 grid gap-1">
         {warnings.map((warning) => (
@@ -191,7 +193,7 @@ export function ImportResult({ result }: Readonly<{ result: ProjectBundleImportR
     return null;
   }
   return (
-    <section className="mt-5 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900">
+    <section className="mt-5 rounded-lg border border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] p-4 text-sm text-[var(--vs-status-success)]">
       <p className="font-semibold">Imported {result.project.name}</p>
       <p className="mt-1">
         {result.jobs.length.toString()} chapter{result.jobs.length === 1 ? "" : "s"} and{" "}
@@ -220,8 +222,8 @@ export function BundlePreviewCard({ preview }: Readonly<{ preview: ProjectBundle
         <span
           className={`rounded-full border px-3 py-1 text-xs font-semibold ${
             preview.valid
-              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-              : "border-red-300 bg-red-50 text-red-700"
+              ? "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]"
+              : "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]"
           }`}
         >
           {preview.valid ? "Valid" : "Blocked"}
@@ -246,7 +248,7 @@ export function BundlePreviewCard({ preview }: Readonly<{ preview: ProjectBundle
         ))}
       </div>
       {preview.warnings && preview.warnings.length > 0 ? (
-        <ul className="grid gap-1 text-sm text-amber-700">
+        <ul className="grid gap-1 text-sm text-[var(--vs-status-warning)]">
           {preview.warnings.map((warning) => (
             <li className="break-words" key={warning}>
               {warning}

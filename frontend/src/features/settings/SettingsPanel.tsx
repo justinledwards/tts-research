@@ -1995,7 +1995,9 @@ function DiagnosticsSettingsGroup({
           }
         />
       </div>
-      {ttsEngineError ? <p className="text-sm leading-6 text-red-700">{ttsEngineError}</p> : null}
+      {ttsEngineError ? (
+        <p className="text-sm leading-6 text-[var(--vs-status-danger)]">{ttsEngineError}</p>
+      ) : null}
       <ProjectStorageSummaryPanel
         job={job}
         profileSource={profileSource}
@@ -2028,7 +2030,7 @@ function ProjectStorageSummaryPanel({
         <ScopeBadge scope="machine" />
       </div>
       {projectStorageError ? (
-        <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <p className="rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-3 text-sm text-[var(--vs-status-danger)]">
           {projectStorageError}
         </p>
       ) : null}
@@ -2118,7 +2120,7 @@ function TTSEngineDiagnosticsList({
   onSelectEngine: (engineId: string) => void;
 }>) {
   if (error) {
-    return <p className="text-sm leading-6 text-red-700">{error}</p>;
+    return <p className="text-sm leading-6 text-[var(--vs-status-danger)]">{error}</p>;
   }
   return (
     <Panel className="grid gap-3 p-3 text-xs" variant="surface">

@@ -151,13 +151,13 @@ function sourceLifecycleToneClassName(tone: SourceLifecycleTone): string {
   switch (tone) {
     case "accent":
     case "pinned": {
-      return "border-orange-300 bg-orange-500/10 text-orange-700";
+      return "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]";
     }
     case "danger": {
       return "border-[var(--vs-danger-border)] bg-[var(--vs-danger-soft)] text-[var(--vs-danger)]";
     }
     case "info": {
-      return "border-blue-300 bg-blue-500/10 text-blue-700";
+      return "border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] text-[var(--vs-status-info)]";
     }
     case "success": {
       return "border-[var(--vs-success-border)] bg-[var(--vs-success-soft)] text-[var(--vs-success)]";
@@ -190,7 +190,7 @@ function HeaderContextPopover({
     <details className="group relative shrink-0">
       <summary
         aria-label={`Show full ${surfaceName} context`}
-        className="grid h-7 w-7 cursor-pointer list-none place-items-center rounded-md border text-[0.68rem] font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-raised [&::-webkit-details-marker]:hidden"
+        className="grid h-7 w-7 cursor-pointer list-none place-items-center rounded-md border text-[0.68rem] font-semibold transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-raised [&::-webkit-details-marker]:hidden"
         title="Show full source and scope"
       >
         <InfoIcon />

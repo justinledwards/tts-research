@@ -52,7 +52,7 @@ describe("LocalizedPlaybackToolbar", () => {
     );
 
     expect(markup).toContain("Theatre cue");
-    expect(markup).toContain("bg-white/5");
+    expect(markup).toContain("bg-[var(--vs-theatre-panel)]");
     expect(localizedPlaybackStageLabel("cinema-theatre")).toBe("Cinema Theatre");
   });
 });

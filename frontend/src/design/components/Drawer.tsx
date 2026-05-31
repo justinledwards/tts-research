@@ -30,7 +30,7 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
 ) {
   return (
     <div
-      className="fixed inset-0 z-[60] bg-zinc-950/25"
+      className="fixed inset-0 z-[60] bg-[var(--vs-surface-overlay)]"
       data-overlay-owner={overlayOwner}
       data-overlay-zone={overlayZone}
       role="presentation"
@@ -39,14 +39,14 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
         aria-label={label}
         aria-modal="true"
         className={cx(
-          "vs-app ml-auto flex h-full w-full max-w-[860px] flex-col border-l shadow-2xl md:w-[820px] vs-border",
+          "vs-app ml-auto flex h-full w-full max-w-[860px] flex-col border-l border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] shadow-2xl md:w-[820px]",
           className,
         )}
         ref={ref}
         role="dialog"
         tabIndex={-1}
       >
-        <header className="flex items-center justify-between gap-3 border-b px-5 py-4 vs-border">
+        <header className="flex items-center justify-between gap-3 border-b border-[var(--vs-border-subtle)] px-5 py-4">
           <DrawerTitleSummary
             label={label}
             metadata={metadata}

@@ -1056,7 +1056,7 @@ function TeleprompterPanel({
             Restart
           </button>
           <button
-            className="h-8 rounded-md px-3 text-xs font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40 vs-accent-bg"
+            className="h-8 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40 vs-accent-bg"
             disabled={!playbackControls.isAvailable}
             onClick={handlePlayPause}
             type="button"
@@ -1065,7 +1065,7 @@ function TeleprompterPanel({
           </button>
           {showCinemaAction ? (
             <button
-              className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
+              className="h-8 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 text-xs font-semibold text-[var(--vs-action-primary)] transition hover:bg-[var(--vs-selected)]"
               onClick={handleOpenCinema}
               type="button"
             >
@@ -1075,10 +1075,10 @@ function TeleprompterPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 rounded-xl border border-orange-500/20 bg-orange-500/[0.055] p-5 sm:p-7">
+      <div className="mt-4 grid gap-4 rounded-xl border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] p-5 sm:p-7">
         {isContextVisible ? <TeleprompterContext cue={cue} /> : null}
         <TeleprompterWords cue={cue} settings={effectiveSettings} variant="panel" />
-        <div className="h-1.5 overflow-hidden rounded-full bg-orange-500/15">
+        <div className="h-1.5 overflow-hidden rounded-full bg-[var(--vs-selected)]">
           <div
             className="h-full rounded-full transition-[width] vs-accent-bg"
             style={{ width: `${String(Math.round(cue.segmentProgress * 100))}%` }}
@@ -1120,7 +1120,7 @@ function TeleprompterPanel({
 function teleprompterToggleClass(isActive: boolean): string {
   return `h-8 rounded-md border px-3 text-xs font-semibold transition vs-border ${
     isActive
-      ? "border-orange-300 bg-orange-500/10 text-orange-600"
+      ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-action-primary)]"
       : "vs-muted hover:bg-[var(--vs-surface)]"
   }`;
 }
@@ -1537,7 +1537,7 @@ function CinemaTeleprompterOverlay({
     >
       <header className="flex flex-col gap-4 border-b px-5 py-4 vs-border sm:px-8 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--vs-action-primary)]">
             Cinema Teleprompter
           </p>
           <h2 className="mt-1 text-lg font-semibold sm:text-xl">
@@ -1574,7 +1574,7 @@ function CinemaTeleprompterOverlay({
           <span
             className={`rounded-full border px-3 py-1 text-xs font-semibold ${
               isPlaybackActive
-                ? "border-orange-400 bg-orange-500 text-white"
+                ? "border-[var(--vs-selected-border)] bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)]"
                 : "vs-muted bg-[var(--vs-surface)] vs-border"
             }`}
           >
@@ -1655,7 +1655,7 @@ function CinemaTeleprompterOverlay({
           </button>
           {resumeProgress ? (
             <button
-              className="h-10 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-sm font-semibold text-orange-600 transition hover:bg-orange-500/15"
+              className="h-10 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 text-sm font-semibold text-[var(--vs-action-primary)] transition hover:bg-[var(--vs-selected)]"
               onClick={() => {
                 onResumeProgress(resumeProgress);
               }}
@@ -1683,7 +1683,7 @@ function CinemaTeleprompterOverlay({
             -10s
           </button>
           <button
-            className="h-12 min-w-28 rounded-full px-6 text-base font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 vs-accent-bg"
+            className="h-12 min-w-28 rounded-full px-6 text-base font-semibold text-[var(--vs-action-primary-text)] shadow-lg shadow-[var(--vs-shadow)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 vs-accent-bg"
             disabled={!playbackControls.isAvailable}
             onClick={onPlayPause}
             type="button"
@@ -1758,7 +1758,7 @@ function CinemaTeleprompterOverlay({
             A+
           </button>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-orange-500/15">
+        <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-selected)]">
           <div
             className="h-full rounded-full transition-[width] vs-accent-bg"
             style={{ width: `${String(Math.round(cue.segmentProgress * 100))}%` }}
@@ -1894,7 +1894,7 @@ function MarkdownCinemaBlock({
     <section
       className={`markdown-cinema-block rounded-lg border px-4 py-3 transition ${
         isActive
-          ? "border-orange-300 bg-orange-500/10 shadow-[0_0_0_1px_rgba(249,115,22,0.25)]"
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] shadow-[0_0_0_1px_rgba(249,115,22,0.25)]"
           : "border-transparent"
       }`}
       data-active={isActive ? "true" : "false"}
@@ -1935,7 +1935,7 @@ function renderMarkdownCinemaBlockContent(
 function cinemaViewModeClass(isActive: boolean): string {
   return `h-8 rounded px-3 text-xs font-semibold transition ${
     isActive
-      ? "bg-orange-500 text-white shadow-sm"
+      ? "bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)] shadow-sm"
       : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
   }`;
 }
@@ -1943,7 +1943,7 @@ function cinemaViewModeClass(isActive: boolean): string {
 function cinemaToggleClass(isActive: boolean): string {
   return `h-10 rounded-md border px-3 text-sm font-semibold transition vs-border ${
     isActive
-      ? "border-orange-300 bg-orange-500/10 text-orange-600"
+      ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-action-primary)]"
       : "vs-muted hover:bg-[var(--vs-surface)]"
   }`;
 }
@@ -7037,7 +7037,7 @@ export function App() {
           style={studioGridStyle}
         >
           <aside
-            className={`vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+            className={`vs-raised order-3 flex min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:min-h-0 lg:overflow-y-auto ${
               leftRailMode === "collapsed" ? "lg:border-r-0" : "lg:border-r"
             }`}
             {...overlayDataAttributes("left-rail", "left-rail")}
@@ -7113,7 +7113,7 @@ export function App() {
             />
           </section>
           <aside
-            className={`vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+            className={`vs-raised order-2 flex min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:min-h-0 lg:overflow-y-auto ${
               displayRightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
             }`}
             {...overlayDataAttributes("right-rail", "right-rail")}
@@ -7149,7 +7149,7 @@ export function App() {
           style={studioGridStyle}
         >
           <aside
-            className={`vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+            className={`vs-raised order-3 flex min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:min-h-0 lg:overflow-y-auto ${
               leftRailMode === "collapsed" ? "lg:border-r-0" : "lg:border-r"
             }`}
             {...overlayDataAttributes("left-rail", "left-rail")}
@@ -7394,14 +7394,14 @@ export function App() {
               runConfigurationLabel={getRunModePreset(runConfiguration.runMode).label}
             />
             {error ? (
-              <section className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900">
+              <section className="rounded-lg border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-4 text-sm text-[var(--vs-status-danger)]">
                 {error}
               </section>
             ) : null}
           </section>
 
           <aside
-            className={`vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+            className={`vs-raised order-2 flex min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:min-h-0 lg:overflow-y-auto ${
               rightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
             }`}
             {...overlayDataAttributes("right-rail", "right-rail")}
@@ -7697,7 +7697,7 @@ function NarrationSidebar({
           </div>
           <div className="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-2">
             <button
-              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-surface"
               data-testid="ui-action-project-dashboard-open-rail"
               data-ui-action-surface="Command Center"
               onClick={onOpenProjectDashboard}
@@ -7706,7 +7706,7 @@ function NarrationSidebar({
               Command Center
             </button>
             <button
-              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-surface"
               onClick={onCreateSource}
               type="button"
             >
@@ -7756,7 +7756,7 @@ function NarrationSidebar({
           </label>
           <div className="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-2">
             <button
-              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-surface"
               data-testid="ui-action-voice-dashboard-open-rail"
               data-ui-action-surface="Command Center"
               onClick={onOpenVoiceDashboard}
@@ -7765,7 +7765,7 @@ function NarrationSidebar({
               Voice Assets
             </button>
             <button
-              className="min-h-9 min-w-0 rounded-md border border-orange-300 bg-orange-500/10 px-2 py-1.5 text-xs font-semibold leading-tight text-orange-700 transition hover:bg-orange-500/15"
+              className="min-h-9 min-w-0 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-2 py-1.5 text-xs font-semibold leading-tight text-[var(--vs-selected-text)] transition hover:bg-[var(--vs-selected)]"
               onClick={onCloneVoice}
               type="button"
             >
@@ -7784,7 +7784,7 @@ function NarrationSidebar({
               Run / Policy Summary
             </h2>
             <button
-              className="min-h-8 shrink-0 rounded border px-2 py-1 font-semibold leading-tight transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              className="min-h-8 shrink-0 rounded border px-2 py-1 font-semibold leading-tight transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-surface"
               onClick={onInspectSelectedSource}
               type="button"
             >
@@ -7921,18 +7921,33 @@ function VoiceCloningVoiceRail({
 
 function voiceLibraryProfileStatus(profile: VoiceProfile): { label: string; className: string } {
   if (profileHasActiveTarget(profile)) {
-    return { label: "Building", className: "bg-amber-100 text-amber-800" };
+    return {
+      label: "Building",
+      className: "bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]",
+    };
   }
   if (profileHasTargetAttention(profile)) {
-    return { label: "Issue", className: "bg-red-100 text-red-700" };
+    return {
+      label: "Issue",
+      className: "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]",
+    };
   }
   if (profileHasReadyCloneTarget(profile)) {
-    return { label: "Ready", className: "bg-emerald-100 text-emerald-700" };
+    return {
+      label: "Ready",
+      className: "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]",
+    };
   }
   if (profile.status === "error") {
-    return { label: "Issue", className: "bg-red-100 text-red-700" };
+    return {
+      label: "Issue",
+      className: "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]",
+    };
   }
-  return { label: profile.status, className: "bg-zinc-100 text-zinc-600" };
+  return {
+    label: profile.status,
+    className: "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]",
+  };
 }
 
 function VoiceCloningWorkspace({
@@ -8037,19 +8052,23 @@ function VoiceCloningActivityPanel({
   const progress = formatPercentage(voiceCloningProgressRatio(activity.stages));
   const canCancelSource = isVoiceProfileSourceActive(source);
   return (
-    <section className="grid gap-4 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section className="grid gap-4 rounded-lg border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-5 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--vs-text-muted)]">
             Voice Cloning Workbench
           </p>
-          <h2 className="mt-2 text-xl font-semibold text-zinc-950">Build a reusable voice</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">{activity.message}</p>
+          <h2 className="mt-2 text-xl font-semibold text-[var(--vs-text-primary)]">
+            Build a reusable voice
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--vs-text-muted)]">
+            {activity.message}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {canCancelSource && source ? (
             <button
-              className="h-9 rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              className="h-9 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:opacity-50"
               disabled={isCancelingSource}
               onClick={() => {
                 void onCancelSource(source.id);
@@ -8062,7 +8081,7 @@ function VoiceCloningActivityPanel({
           <ActivityStatusBadge status={activity.status} label={activity.statusLabel} />
         </div>
       </div>
-      <div className="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+      <div className="grid gap-3 rounded-lg border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] p-3">
         <div className="grid gap-2 md:grid-cols-4">
           <ActivityFact label="Elapsed" value={activity.elapsed} detail={activity.eta} />
           <ActivityFact label="Last Update" value={activity.lastUpdate} detail={activity.eta} />
@@ -8073,8 +8092,11 @@ function VoiceCloningActivityPanel({
           />
           <ActivityFact label="Progress" value={progress} detail={activity.detail} />
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-white">
-          <div className="h-full rounded-full bg-orange-500" style={{ width: progress }} />
+        <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-surface-primary)]">
+          <div
+            className="h-full rounded-full bg-[var(--vs-action-primary)]"
+            style={{ width: progress }}
+          />
         </div>
       </div>
       <ol className="grid gap-2 md:grid-cols-4">
@@ -8082,19 +8104,21 @@ function VoiceCloningActivityPanel({
           <li
             className={`rounded-md border p-3 ${
               stage.status === "running"
-                ? "border-orange-300 bg-orange-50"
-                : "border-zinc-200 bg-zinc-50"
+                ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+                : "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)]"
             }`}
             key={stage.label}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="grid h-6 w-6 place-items-center rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-600">
+              <span className="grid h-6 w-6 place-items-center rounded-full border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] text-xs font-semibold text-[var(--vs-text-muted)]">
                 {String(index + 1)}
               </span>
               <PipelineFooterStage label={stageStatusLabel(stage.status)} status={stage.status} />
             </div>
-            <p className="mt-3 text-sm font-semibold text-zinc-950">{stage.label}</p>
-            <p className="mt-1 min-h-10 break-words text-xs leading-5 text-zinc-500">
+            <p className="mt-3 text-sm font-semibold text-[var(--vs-text-primary)]">
+              {stage.label}
+            </p>
+            <p className="mt-1 min-h-10 break-words text-xs leading-5 text-[var(--vs-text-muted)]">
               {stage.detail}
             </p>
           </li>
@@ -8118,7 +8142,7 @@ function ArtifactBuildTimeoutInput({
       <span className="font-semibold text-[var(--vs-text)]">Artifact build timeout (seconds)</span>
       <input
         aria-invalid={error ? "true" : "false"}
-        className="h-9 min-w-0 rounded-md border px-2 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 vs-border vs-surface"
+        className="h-9 min-w-0 rounded-md border px-2 text-sm outline-none focus:border-[var(--vs-selected-border)] focus:ring-2 focus:ring-[var(--vs-focus-ring-soft)] vs-border vs-surface"
         inputMode="numeric"
         onChange={(event) => {
           onInputChange(event.currentTarget.value);
@@ -8127,7 +8151,7 @@ function ArtifactBuildTimeoutInput({
         type="number"
         value={input}
       />
-      <span className={error ? "text-red-700" : "vs-muted"}>
+      <span className={error ? "text-[var(--vs-status-danger)]" : "vs-muted"}>
         {error ?? "Blank uses the server default for this build."}
       </span>
     </label>
@@ -8222,7 +8246,7 @@ function CloneReadinessDiagnostics({
     <div className="grid gap-2 rounded-md border p-3 text-xs vs-border vs-surface">
       <div className="flex items-center justify-between gap-2">
         <p className="font-semibold text-[var(--vs-text)]">Diagnostics</p>
-        <span className="rounded bg-amber-100 px-2 py-1 font-semibold text-amber-800">
+        <span className="rounded bg-[var(--vs-status-warning-bg)] px-2 py-1 font-semibold text-[var(--vs-status-warning)]">
           {issues.length.toString()}
         </span>
       </div>
@@ -8230,8 +8254,8 @@ function CloneReadinessDiagnostics({
         <div
           className={`rounded-md border p-2 ${
             issue.severity === "error"
-              ? "border-red-200 bg-red-50 text-red-800"
-              : "border-amber-200 bg-amber-50 text-amber-900"
+              ? "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]"
+              : "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]"
           }`}
           key={issue.key}
         >
@@ -8349,7 +8373,7 @@ function BackendContractReviewPanel({
                 <tr
                   className={
                     contract.engineId === activeEngineId
-                      ? "bg-orange-500/10"
+                      ? "bg-[var(--vs-selected)]"
                       : "bg-[var(--vs-surface)] hover:bg-[var(--vs-raised)]"
                   }
                   key={contract.engineId}
@@ -8596,44 +8620,44 @@ function backendContractReadinessLabel(status: BackendContractStatus): string {
 
 function backendContractStatusClass(status: BackendContractStatus): string {
   if (status === "ready") {
-    return "bg-emerald-100 text-emerald-700";
+    return "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (status === "running") {
-    return "bg-orange-100 text-orange-800";
+    return "bg-[var(--vs-selected)] text-[var(--vs-selected-text)]";
   }
   if (status === "failed") {
-    return "bg-red-100 text-red-700";
+    return "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   }
   if (status === "setup") {
-    return "bg-amber-100 text-amber-800";
+    return "bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]";
   }
-  return "bg-zinc-100 text-zinc-600";
+  return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
 }
 
 function backendContractDotClass(status: BackendContractStatus): string {
   if (status === "ready") {
-    return "bg-emerald-500";
+    return "bg-[var(--vs-status-success)]";
   }
   if (status === "running") {
-    return "bg-orange-500";
+    return "bg-[var(--vs-action-primary)]";
   }
   if (status === "failed") {
-    return "bg-red-500";
+    return "bg-[var(--vs-status-danger)]";
   }
   if (status === "setup") {
-    return "bg-amber-500";
+    return "bg-[var(--vs-status-warning)]";
   }
-  return "bg-zinc-300";
+  return "bg-[var(--vs-action-disabled-bg)]";
 }
 
 function backendContractActionButtonClass(status: BackendContractStatus): string {
   if (status === "failed") {
-    return "border-red-200 bg-white text-red-700 hover:bg-red-50";
+    return "border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)]";
   }
   if (status === "running") {
-    return "border-orange-300 bg-white text-orange-800 hover:bg-orange-50";
+    return "border-[var(--vs-selected-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-selected-text)] hover:bg-[var(--vs-selected)]";
   }
-  return "border-zinc-200 bg-white text-zinc-800 hover:border-orange-200 hover:bg-orange-50";
+  return "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] text-[var(--vs-text-secondary)] hover:border-[var(--vs-selected-border)] hover:bg-[var(--vs-selected)]";
 }
 
 function handleBackendContractAction({
@@ -8907,12 +8931,12 @@ function cloneReadinessTargetOrder(profile: VoiceProfile): string[] {
 
 function cloneTargetActionButtonClass(isBusy: boolean, isReady: boolean): string {
   if (isBusy) {
-    return "border-red-200 bg-white text-red-600 hover:bg-red-50";
+    return "border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)]";
   }
   if (isReady) {
-    return "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50";
+    return "border-[var(--vs-status-success-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-status-success)] hover:bg-[var(--vs-status-success-bg)]";
   }
-  return "border-orange-200 bg-white text-orange-800 hover:bg-orange-50";
+  return "border-[var(--vs-selected-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-selected-text)] hover:bg-[var(--vs-selected)]";
 }
 
 export function handleCloneTargetReadinessAction({
@@ -9057,34 +9081,34 @@ function cloneTargetActionLabel({
 
 function cloneTargetReadinessCardClass(isBusy: boolean, status: string): string {
   if (isBusy) {
-    return "border-orange-300 bg-orange-50";
+    return "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]";
   }
   if (status === "failed") {
-    return "border-red-200 bg-red-50";
+    return "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)]";
   }
   if (status === "cancelled") {
-    return "border-zinc-300 bg-zinc-50";
+    return "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)]";
   }
   if (status === "ready") {
-    return "border-emerald-200 bg-emerald-50";
+    return "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)]";
   }
   return "vs-border vs-raised";
 }
 
 function targetStatusClass(status: string): string {
   if (status === "ready") {
-    return "bg-emerald-100 text-emerald-700";
+    return "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (status === "failed") {
-    return "bg-red-100 text-red-700";
+    return "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   }
   if (status === "cancelled") {
-    return "bg-zinc-100 text-zinc-600";
+    return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
   }
   if (["queued", "building", "validating"].includes(status)) {
-    return "bg-orange-100 text-orange-700";
+    return "bg-[var(--vs-selected)] text-[var(--vs-selected-text)]";
   }
-  return "bg-zinc-100 text-zinc-600";
+  return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
 }
 
 function ActivityStatusBadge({
@@ -9092,11 +9116,15 @@ function ActivityStatusBadge({
   status,
 }: Readonly<{ label: string; status: ActivityStatus }>) {
   const classNameByStatus: Record<ActivityStatus, string> = {
-    attention: "border-amber-300 bg-amber-50 text-amber-800",
-    cancelled: "border-zinc-300 bg-zinc-50 text-zinc-600",
-    complete: "border-emerald-300 bg-emerald-50 text-emerald-700",
-    idle: "border-zinc-200 bg-zinc-50 text-zinc-600",
-    running: "border-orange-300 bg-orange-50 text-orange-700",
+    attention:
+      "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]",
+    cancelled:
+      "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-muted)]",
+    complete:
+      "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]",
+    idle: "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-muted)]",
+    running:
+      "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]",
   };
   return (
     <span
@@ -9108,18 +9136,22 @@ function ActivityStatusBadge({
 }
 
 function PipelineFooterStage({ label, status }: Readonly<{ label: string; status: StageStatus }>) {
-  let tone = "border-zinc-200 bg-zinc-50 text-zinc-500";
+  let tone =
+    "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-muted)]";
   switch (status) {
     case "done": {
-      tone = "border-emerald-300 bg-emerald-50 text-emerald-700";
+      tone =
+        "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
       break;
     }
     case "running": {
-      tone = "border-orange-300 bg-orange-500/10 text-orange-700";
+      tone =
+        "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]";
       break;
     }
     case "failed": {
-      tone = "border-red-300 bg-red-50 text-red-700";
+      tone =
+        "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
       break;
     }
     default: {
@@ -9177,16 +9209,16 @@ function stageStatusLabel(status: StageStatus): string {
 function stageDotClass(status: StageStatus): string {
   switch (status) {
     case "done": {
-      return "bg-emerald-500";
+      return "bg-[var(--vs-status-success)]";
     }
     case "failed": {
-      return "bg-red-500";
+      return "bg-[var(--vs-status-danger)]";
     }
     case "running": {
-      return "bg-orange-500";
+      return "bg-[var(--vs-action-primary)]";
     }
     default: {
-      return "bg-zinc-300";
+      return "bg-[var(--vs-action-disabled-bg)]";
     }
   }
 }
@@ -9912,7 +9944,7 @@ function WorkbenchBlockedBanner({
   return (
     <section
       aria-label="Current stage blocker"
-      className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100 lg:flex-row lg:items-center lg:justify-between"
+      className="flex flex-col gap-3 rounded-lg border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-4 text-[var(--vs-status-warning)] dark:border-[var(--vs-status-warning-border)] dark:bg-[var(--vs-status-warning-bg)] dark:text-[var(--vs-status-warning)] lg:flex-row lg:items-center lg:justify-between"
       data-testid="workspace-stage-blocker"
       data-workspace-stage-blocker={status.blocker.id}
     >
@@ -10275,7 +10307,7 @@ function NarrationPreviewStage({
             {workspaceStageActionLabel("openTheatre")}
           </Button>
           {!readiness.canOpenTheatre && readiness.openTheatreDisabledReason ? (
-            <p className="text-xs leading-5 text-orange-700">
+            <p className="text-xs leading-5 text-[var(--vs-selected-text)]">
               {readiness.openTheatreDisabledReason}
             </p>
           ) : null}
@@ -10341,7 +10373,9 @@ function NarrationPreviewStage({
           )}
         </div>
         {!readiness.canOpenCinema && openCinemaDisabledReason ? (
-          <p className="text-xs text-orange-700 lg:col-span-2">{openCinemaDisabledReason}</p>
+          <p className="text-xs text-[var(--vs-selected-text)] lg:col-span-2">
+            {openCinemaDisabledReason}
+          </p>
         ) : null}
       </section>
       <div className="grid gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
@@ -10714,7 +10748,7 @@ function SourcePrepMathPanel({ source }: Readonly<{ source: PreparedSource | nul
   }
   if (mathBlocks.length === 0) {
     return (
-      <div className="p-4 text-sm text-zinc-600">
+      <div className="p-4 text-sm text-[var(--vs-text-muted)]">
         <p>No maths blocks were detected in this source.</p>
       </div>
     );
@@ -10723,34 +10757,34 @@ function SourcePrepMathPanel({ source }: Readonly<{ source: PreparedSource | nul
     <div className="grid max-h-[28rem] gap-3 overflow-y-auto p-4 text-sm">
       {mathBlocks.map((block) => (
         <article
-          className="grid gap-3 rounded-md border border-zinc-200 bg-white p-3"
+          className="grid gap-3 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-3"
           key={block.id}
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--vs-text-muted)]">
               {block.kind} · block {block.index.toLocaleString()}
             </p>
             <span
               className={`rounded-full border px-2 py-1 text-[0.68rem] font-semibold ${
                 block.mathPreview?.source === "fallback"
-                  ? "border-amber-200 bg-amber-50 text-amber-700"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  ? "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]"
+                  : "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]"
               }`}
             >
               {block.mathPreview?.source ?? "speech policy"}
             </span>
           </div>
-          <div className="rounded-md border border-zinc-100 bg-zinc-50 p-3 font-mono text-xs leading-5 text-zinc-800">
+          <div className="rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] p-3 font-mono text-xs leading-5 text-[var(--vs-text-secondary)]">
             {block.text ?? block.label}
           </div>
-          <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+          <div className="rounded-md border border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] p-3 text-sm leading-6 text-[var(--vs-status-info)]">
             {block.mathPreview?.speech ?? block.spokenText ?? "No maths speech available"}
           </div>
           {block.mathPreview?.warnings && block.mathPreview.warnings.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {block.mathPreview.warnings.map((warning) => (
                 <span
-                  className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700"
+                  className="rounded-full bg-[var(--vs-status-warning-bg)] px-2 py-1 text-xs font-semibold text-[var(--vs-status-warning)]"
                   key={warning}
                 >
                   {warning}
@@ -10770,7 +10804,7 @@ function SourcePrepRulesPanel({ source }: Readonly<{ source: PreparedSource | nu
   }
   return (
     <div className="grid gap-4 p-4 text-sm">
-      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-zinc-200 bg-zinc-200 sm:grid-cols-3">
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-border-subtle)] sm:grid-cols-3">
         <SourcePrepMetric label="Headings" value={String(source.summary.headingCount)} />
         <SourcePrepMetric label="Skipped Blocks" value={String(source.summary.skippedBlockCount)} />
         <SourcePrepMetric label="Notes" value={String(source.warnings?.length ?? 0)} />
@@ -10779,7 +10813,7 @@ function SourcePrepRulesPanel({ source }: Readonly<{ source: PreparedSource | nu
         <div className="flex flex-wrap gap-2">
           {source.warnings.map((warning) => (
             <span
-              className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700"
+              className="rounded-full border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-2 py-1 text-xs font-semibold text-[var(--vs-status-warning)]"
               key={warning}
             >
               {warning}
@@ -10788,13 +10822,19 @@ function SourcePrepRulesPanel({ source }: Readonly<{ source: PreparedSource | nu
         </div>
       ) : null}
       {source.skippedItems && source.skippedItems.length > 0 ? (
-        <div className="max-h-56 overflow-y-auto border-t border-zinc-200">
+        <div className="max-h-56 overflow-y-auto border-t border-[var(--vs-border-subtle)]">
           {source.skippedItems.slice(0, 12).map((item) => (
-            <div className="border-b border-zinc-100 py-3 last:border-b-0" key={item.id}>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+            <div
+              className="border-b border-[var(--vs-border-subtle)] py-3 last:border-b-0"
+              key={item.id}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--vs-text-muted)]">
                 {item.kind}
               </p>
-              <p className="mt-1 truncate font-medium text-zinc-900" title={item.reason}>
+              <p
+                className="mt-1 truncate font-medium text-[var(--vs-text-primary)]"
+                title={item.reason}
+              >
                 {item.reason}
               </p>
             </div>
@@ -11091,20 +11131,22 @@ function ResearchModulesSetupCard({
     return null;
   }
   return (
-    <section className="border-t border-zinc-200 bg-amber-50 px-5 py-3 text-sm text-amber-950">
+    <section className="border-t border-[var(--vs-border-subtle)] bg-[var(--vs-status-warning-bg)] px-5 py-3 text-sm text-[var(--vs-status-warning)]">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="font-semibold">Optional local research modules are available.</p>
-          <p className="mt-1 break-words text-xs leading-5 text-amber-900">
+          <p className="mt-1 break-words text-xs leading-5 text-[var(--vs-status-warning)]">
             Clone upstreams into ignored .upstreams paths only when you want profile-specific embed
             artifacts. Current Kokoro Clone and Supertonic preset rendering stay available.
           </p>
-          {error ? <p className="mt-2 text-xs font-semibold text-red-700">{error}</p> : null}
+          {error ? (
+            <p className="mt-2 text-xs font-semibold text-[var(--vs-status-danger)]">{error}</p>
+          ) : null}
           {setupModules.length > 0 ? (
             <div className="mt-2 grid gap-2">
               {setupModules.map((module) => (
                 <div
-                  className="rounded border border-amber-200 bg-amber-100/40 p-2 text-xs text-amber-950"
+                  className="rounded border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-2 text-xs text-[var(--vs-status-warning)]"
                   key={module.id}
                 >
                   <p className="font-semibold">{module.label} runtime setup needed</p>
@@ -11112,12 +11154,12 @@ function ResearchModulesSetupCard({
                     {module.reason ?? "Install missing runtime dependencies and rerun checks."}
                   </p>
                   {module.setup ? (
-                    <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-white/80 p-2 font-mono text-[11px]">
+                    <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-[color-mix(in_srgb,var(--vs-surface-primary)_80%,transparent)] p-2 font-mono text-[11px]">
                       {module.setup}
                     </code>
                   ) : null}
                   {module.setupCommand ? (
-                    <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-white/80 p-2 font-mono text-[11px]">
+                    <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-[color-mix(in_srgb,var(--vs-surface-primary)_80%,transparent)] p-2 font-mono text-[11px]">
                       {module.setupCommand}
                     </code>
                   ) : null}
@@ -11129,7 +11171,7 @@ function ResearchModulesSetupCard({
         <div className="flex flex-wrap items-center gap-2">
           {cloneModules.map((module) => (
             <button
-              className="rounded-md border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
+              className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-surface-primary)] px-3 py-2 text-xs font-semibold text-[var(--vs-status-warning)] hover:bg-[var(--vs-status-warning-bg)] disabled:cursor-wait disabled:opacity-60"
               disabled={!module.cloneAllowed || cloningModuleId === module.id}
               key={module.id}
               onClick={() => {
@@ -11141,7 +11183,7 @@ function ResearchModulesSetupCard({
             </button>
           ))}
           <button
-            className="rounded-md border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            className="rounded-md border border-[var(--vs-status-warning-border)] px-3 py-2 text-xs font-semibold text-[var(--vs-status-warning)] hover:bg-[var(--vs-status-warning-bg)]"
             onClick={onHide}
             type="button"
           >
@@ -11312,7 +11354,7 @@ function VoiceProfileDropdown({
           <span className="vs-muted text-xs">{String(profiles.length + 1)} voices</span>
           {onOpenVoiceDashboard ? (
             <button
-              className="h-8 rounded-md border px-2 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              className="h-8 rounded-md border px-2 text-xs font-semibold transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-surface"
               data-testid="ui-action-voice-dashboard-open-cloning-rail"
               data-ui-action-surface="Workspace"
               onClick={onOpenVoiceDashboard}
@@ -11342,7 +11384,7 @@ function VoiceProfileDropdown({
               {activeDetail}
             </p>
           </div>
-          <span className="shrink-0 rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">
+          <span className="shrink-0 rounded bg-[var(--vs-status-success-bg)] px-2 py-1 text-xs font-medium text-[var(--vs-status-success)]">
             Ready
           </span>
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded border vs-border vs-surface vs-muted">
@@ -11394,7 +11436,7 @@ function VoiceProfileDropdown({
                 ))}
               </select>
               {selectedEngineBlocked ? (
-                <span className="break-words text-xs leading-5 text-amber-700">
+                <span className="break-words text-xs leading-5 text-[var(--vs-status-warning)]">
                   {voiceProfileTargetReadinessText(selectedProfile, runConfiguration.ttsEngine)}
                 </span>
               ) : null}
@@ -11497,7 +11539,7 @@ function VoiceProfileDropdown({
       )}
       {isLoading ? <p className="vs-muted text-sm">Loading profiles...</p> : null}
       {isOpen ? (
-        <ul className="max-h-80 min-w-0 overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-sm">
+        <ul className="max-h-80 min-w-0 overflow-y-auto rounded-lg border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] shadow-sm">
           <VoiceProfileOption
             detail="Kokoro voicepacks · non-cloned · ready"
             isActive={selectedProfileId === ""}
@@ -11559,7 +11601,7 @@ function VoiceBackendSummary({
     <section className="grid min-w-0 gap-3 rounded-md border p-3 text-xs vs-border vs-raised">
       <div className="flex min-w-0 items-center justify-between gap-3">
         <span className="font-semibold text-[var(--vs-text)]">Backend Summary</span>
-        <span className="rounded px-2 py-1 text-[0.65rem] font-semibold bg-emerald-100 text-emerald-700">
+        <span className="rounded px-2 py-1 text-[0.65rem] font-semibold bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]">
           {selectedEngine?.status ?? "ready"}
         </span>
       </div>
@@ -11598,7 +11640,7 @@ function KokoroRenderModeSelector({
 }>) {
   return (
     <div className="grid min-w-0 gap-2">
-      <span className="font-semibold text-zinc-800">Kokoro render mode</span>
+      <span className="font-semibold text-[var(--vs-text-secondary)]">Kokoro render mode</span>
       <div className="grid gap-2">
         {KOKORO_RENDER_MODE_OPTIONS.map((option) => {
           const readiness = kokoroRenderModeReadiness(option.id, profile, modules);
@@ -11617,7 +11659,9 @@ function KokoroRenderModeSelector({
           return (
             <div
               className={`rounded-md border p-2 ${
-                selected ? "border-orange-300 bg-orange-50" : "border-zinc-200 bg-white"
+                selected
+                  ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+                  : "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)]"
               }`}
               key={option.id}
             >
@@ -11630,7 +11674,7 @@ function KokoroRenderModeSelector({
                 type="button"
               >
                 <span className="flex min-w-0 items-center justify-between gap-2">
-                  <span className="truncate text-sm font-semibold text-zinc-950">
+                  <span className="truncate text-sm font-semibold text-[var(--vs-text-primary)]">
                     {option.label}
                   </span>
                   <span
@@ -11642,12 +11686,16 @@ function KokoroRenderModeSelector({
                     {readiness.status}
                   </span>
                 </span>
-                <span className="text-xs leading-5 text-zinc-600">{option.detail}</span>
-                <span className="text-xs leading-5 text-zinc-500">{readiness.detail}</span>
+                <span className="text-xs leading-5 text-[var(--vs-text-muted)]">
+                  {option.detail}
+                </span>
+                <span className="text-xs leading-5 text-[var(--vs-text-muted)]">
+                  {readiness.detail}
+                </span>
               </button>
               {canPrepare && profile && targetId ? (
                 <button
-                  className="mt-2 rounded border border-orange-200 bg-white px-2 py-1 text-xs font-semibold text-orange-800 hover:bg-orange-100"
+                  className="mt-2 rounded border border-[var(--vs-selected-border)] bg-[var(--vs-surface-primary)] px-2 py-1 text-xs font-semibold text-[var(--vs-selected-text)] hover:bg-[var(--vs-selected)]"
                   disabled={timeoutBlocksAction}
                   onClick={() => {
                     void onBuildArtifact(profile.id, targetId, artifactBuildTimeout.timeoutSeconds);
@@ -11803,15 +11851,15 @@ function kokoroRenderModeActionLabel(status: string, isBusy: boolean): string {
 
 function kokoroRenderModeStatusClass(status: string, ready: boolean): string {
   if (status === "failed") {
-    return "bg-red-100 text-red-700";
+    return "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   }
   if (ready && status !== "check needed") {
-    return "bg-emerald-100 text-emerald-700";
+    return "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (status === "check needed") {
-    return "bg-amber-100 text-amber-800";
+    return "bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]";
   }
-  return "bg-zinc-100 text-zinc-600";
+  return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
 }
 
 function VoiceProfileArtifactControls({
@@ -11849,7 +11897,7 @@ function VoiceProfileArtifactControls({
     await onBuildArtifact(profile.id, moduleId, artifactBuildTimeout.timeoutSeconds);
   };
   return (
-    <div className="grid gap-2 rounded-md border border-zinc-200 bg-white p-2">
+    <div className="grid gap-2 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-2">
       <div className="flex flex-wrap gap-1">
         <ArtifactChip profile={profile} moduleId="kokoro-clone" label="KokoClone" />
         {PROFILE_ARTIFACT_MODULE_ORDER.map((moduleId) => {
@@ -11918,7 +11966,7 @@ function VoiceProfileArtifactControls({
             const artifactBuildButtonTitle = resolveArtifactBuildButtonTitle();
             return (
               <button
-                className="rounded-md border border-zinc-200 px-2 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
+                className="rounded-md border border-[var(--vs-border-subtle)] px-2 py-2 text-left text-xs font-semibold text-[var(--vs-text-secondary)] hover:bg-[var(--vs-action-secondary-hover)] disabled:cursor-not-allowed disabled:bg-[var(--vs-action-disabled-bg)] disabled:text-[var(--vs-action-disabled-text)]"
                 disabled={!artifactBuildTimeout.canBuild || !canPrepare || isBusy}
                 key={moduleId}
                 onClick={() => {
@@ -11939,8 +11987,8 @@ function VoiceProfileArtifactControls({
             <div
               className={`rounded-md border px-3 py-2 text-xs leading-5 ${
                 issue.severity === "error"
-                  ? "border-red-200 bg-red-50 text-red-800"
-                  : "border-amber-200 bg-amber-50 text-amber-900"
+                  ? "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]"
+                  : "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]"
               }`}
               key={issue.key}
             >
@@ -11949,7 +11997,7 @@ function VoiceProfileArtifactControls({
               </p>
               <p>{issue.detail}</p>
               {issue.command ? (
-                <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-white/70 px-2 py-1 font-mono text-[11px]">
+                <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-[color-mix(in_srgb,var(--vs-surface-primary)_70%,transparent)] px-2 py-1 font-mono text-[11px]">
                   {issue.command}
                 </code>
               ) : null}
@@ -11995,15 +12043,15 @@ function HuggingFaceTokenPrompt({
   const sourceLabel = huggingFaceCredentialSourceLabel(source);
   const saveLabel = hasConfiguredToken ? "Update token & re-validate" : "Save token & re-validate";
   return (
-    <div className="mt-3 grid gap-2 rounded-md border border-amber-200 bg-white/80 p-2">
-      <p className="text-xs font-semibold text-amber-950">
+    <div className="mt-3 grid gap-2 rounded-md border border-[var(--vs-status-warning-border)] bg-[color-mix(in_srgb,var(--vs-surface-primary)_80%,transparent)] p-2">
+      <p className="text-xs font-semibold text-[var(--vs-status-warning)]">
         Hugging Face access:{" "}
         {hasConfiguredToken ? `Token configured from ${sourceLabel}` : "Token not configured"}
       </p>
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <input
           autoComplete="off"
-          className="min-w-0 rounded-md border border-amber-200 bg-white px-2 py-2 text-xs text-zinc-950 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+          className="min-w-0 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-surface-primary)] px-2 py-2 text-xs text-[var(--vs-text-primary)] outline-none focus:border-[var(--vs-selected-border)] focus:ring-2 focus:ring-[var(--vs-focus-ring-soft)]"
           onChange={(event) => {
             setToken(event.currentTarget.value);
           }}
@@ -12012,7 +12060,7 @@ function HuggingFaceTokenPrompt({
           value={token}
         />
         <button
-          className="rounded-md bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          className="rounded-md bg-[var(--vs-action-primary)] px-3 py-2 text-xs font-semibold text-[var(--vs-action-primary-text)] hover:bg-[var(--vs-action-primary-hover)] disabled:cursor-not-allowed disabled:bg-[var(--vs-action-disabled-bg)]"
           disabled={isSaving || token.trim().length === 0}
           onClick={() => {
             const clean = token.trim();
@@ -12031,7 +12079,7 @@ function HuggingFaceTokenPrompt({
       <div className="flex flex-wrap items-center gap-2">
         {hasConfiguredToken ? (
           <button
-            className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            className="rounded border border-[var(--vs-status-warning-border)] bg-[var(--vs-surface-primary)] px-2 py-1 text-xs font-semibold text-[var(--vs-status-warning)] hover:bg-[var(--vs-status-warning-bg)]"
             disabled={isSaving}
             onClick={() => {
               void onRevalidate();
@@ -12043,7 +12091,7 @@ function HuggingFaceTokenPrompt({
         ) : null}
         {source === "local" ? (
           <button
-            className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
+            className="rounded border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] px-2 py-1 text-xs font-semibold text-[var(--vs-text-secondary)] hover:bg-[var(--vs-action-secondary-hover)] disabled:cursor-not-allowed disabled:text-[var(--vs-action-disabled-text)]"
             disabled={isClearing || isSaving}
             onClick={onClear}
             type="button"
@@ -12052,7 +12100,9 @@ function HuggingFaceTokenPrompt({
           </button>
         ) : null}
       </div>
-      {credentialError ? <p className="text-xs text-red-700">{credentialError}</p> : null}
+      {credentialError ? (
+        <p className="text-xs text-[var(--vs-status-danger)]">{credentialError}</p>
+      ) : null}
     </div>
   );
 }
@@ -12332,15 +12382,15 @@ function artifactChipStatus(
 
 function artifactChipClass(ready: boolean, failed: boolean, cancelled: boolean): string {
   if (ready) {
-    return "border-emerald-300 bg-emerald-50 text-emerald-700";
+    return "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (failed) {
-    return "border-red-300 bg-red-50 text-red-700";
+    return "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   }
   if (cancelled) {
-    return "border-zinc-300 bg-zinc-50 text-zinc-600";
+    return "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-muted)]";
   }
-  return "border-amber-300 bg-amber-50 text-amber-800";
+  return "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]";
 }
 
 function voicePanelEngineOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiagnostics[] {
@@ -12474,17 +12524,22 @@ function VoiceProfileOption({
   onSelect: () => void;
 }>) {
   return (
-    <li className={`border-b border-zinc-200 last:border-b-0 ${isActive ? "bg-orange-50" : ""}`}>
+    <li
+      className={`border-b border-[var(--vs-border-subtle)] last:border-b-0 ${isActive ? "bg-[var(--vs-selected)]" : ""}`}
+    >
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 p-3">
         <button className="min-w-0 text-left" onClick={onSelect} type="button">
-          <span className="block truncate text-sm font-semibold text-zinc-950" title={name}>
+          <span
+            className="block truncate text-sm font-semibold text-[var(--vs-text-primary)]"
+            title={name}
+          >
             {name}
           </span>
-          <span className="mt-1 block truncate text-xs text-zinc-500" title={detail}>
+          <span className="mt-1 block truncate text-xs text-[var(--vs-text-muted)]" title={detail}>
             {detail}
           </span>
           {languageMatched ? (
-            <span className="mt-1 inline-flex rounded bg-sky-50 px-2 py-1 text-[0.65rem] font-semibold text-sky-700">
+            <span className="mt-1 inline-flex rounded bg-[var(--vs-status-info-bg)] px-2 py-1 text-[0.65rem] font-semibold text-[var(--vs-status-info)]">
               Language match
             </span>
           ) : null}
@@ -12500,12 +12555,12 @@ function VoiceProfileOption({
             </span>
           ) : null}
           {score ? (
-            <span className="rounded bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-700">
+            <span className="rounded bg-[var(--vs-surface-muted)] px-2 py-1 text-xs font-semibold text-[var(--vs-text-secondary)]">
               {formatSimilarity(score)}
             </span>
           ) : null}
           <button
-            className="h-8 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:bg-zinc-100 disabled:text-zinc-400"
+            className="h-8 rounded-md border border-[var(--vs-border-subtle)] px-3 text-xs font-semibold text-[var(--vs-text-secondary)] hover:bg-[var(--vs-action-secondary-hover)] disabled:bg-[var(--vs-action-disabled-bg)] disabled:text-[var(--vs-action-disabled-text)]"
             disabled={isActive}
             onClick={onSelect}
             type="button"
@@ -12514,7 +12569,7 @@ function VoiceProfileOption({
           </button>
           {onDelete ? (
             <button
-              className="h-8 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-600 hover:bg-red-50"
+              className="h-8 rounded-md border border-[var(--vs-status-danger-border)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)]"
               onClick={onDelete}
               type="button"
             >
@@ -13463,7 +13518,7 @@ function StreamingAudioPanel({
   const modeButtonClass = useCallback(
     (mode: AudioPlaybackMode, isAvailable: boolean) => {
       if (playMode === mode) {
-        return "inline-flex h-7 min-w-0 items-center justify-center rounded border border-orange-500 bg-orange-500/10 px-2 text-xs font-semibold text-orange-600";
+        return "inline-flex h-7 min-w-0 items-center justify-center rounded border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-2 text-xs font-semibold text-[var(--vs-action-primary)]";
       }
 
       if (!isAvailable) {
@@ -13529,7 +13584,7 @@ function StreamingAudioPanel({
           </p>
           <div className="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-[auto_minmax(0,1fr)]">
             <button
-              className="min-h-8 min-w-0 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
+              className="min-h-8 min-w-0 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 text-xs font-semibold text-[var(--vs-action-primary)] transition hover:bg-[var(--vs-selected)]"
               onClick={onOpenCinema}
               type="button"
             >
@@ -13596,7 +13651,7 @@ function AudioResumeAction({
 }>) {
   return (
     <button
-      className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-orange-500/10 px-3 py-2 text-left text-xs text-orange-700 transition hover:bg-orange-500/15"
+      className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-[var(--vs-selected)] px-3 py-2 text-left text-xs text-[var(--vs-selected-text)] transition hover:bg-[var(--vs-selected)]"
       onClick={() => {
         onResumeProgress(progress);
       }}
@@ -13634,10 +13689,10 @@ function queueBlockClass(
   playing: number,
 ): string {
   if (segmentIndex === playing) {
-    return "bg-orange-600 ring-2 ring-orange-200";
+    return "bg-[var(--vs-action-primary-hover)] ring-2 ring-[var(--vs-focus-ring-soft)]";
   }
   if (segmentIndex <= ready) {
-    return "bg-orange-400";
+    return "bg-[var(--vs-theatre-accent)]";
   }
   if (segmentIndex === generating) {
     return "bg-[var(--vs-generating)]";
@@ -13697,11 +13752,11 @@ function QueueBufferPanel({
       </div>
       <div className="vs-muted mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs">
         <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-orange-600" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--vs-action-primary-hover)]" />
           Playing
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-orange-400" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--vs-theatre-accent)]" />
           Buffered
         </span>
         <span className="inline-flex items-center gap-2">
@@ -13757,7 +13812,7 @@ function WaveformDisplay({
       {displayBars.map((height, index) => (
         <span
           aria-hidden="true"
-          className={`w-full rounded-full ${index < activeIndex ? "bg-orange-500" : "bg-[var(--vs-border)]"}`}
+          className={`w-full rounded-full ${index < activeIndex ? "bg-[var(--vs-action-primary)]" : "bg-[var(--vs-border)]"}`}
           data-waveform-bar={index}
           data-waveform-value={height.toFixed(4)}
           key={`waveform-${String(index)}`}
@@ -13892,8 +13947,8 @@ function PlayerStatusLine({
 }>) {
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 overflow-hidden text-xs">
-      <span className="inline-flex min-w-0 items-center gap-2 font-medium text-orange-600">
-        <span className="h-2.5 w-2.5 rounded-sm bg-orange-500" />
+      <span className="inline-flex min-w-0 items-center gap-2 font-medium text-[var(--vs-action-primary)]">
+        <span className="h-2.5 w-2.5 rounded-sm bg-[var(--vs-action-primary)]" />
         {isLive ? "Playing (live)" : "Ready"}
       </span>
       <span className="vs-muted">
@@ -14685,13 +14740,13 @@ function CompletedAudioPending({
 }>) {
   return (
     <div className="grid gap-4">
-      <p className="text-sm leading-6 text-zinc-600">
+      <p className="text-sm leading-6 text-[var(--vs-text-muted)]">
         Final audio will appear after every generated segment passes voice checking.
         {job.durationMs > 0
           ? ` Current generated duration: ${formatDuration(job.durationMs)}.`
           : ""}
       </p>
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {error ? <p className="text-sm text-[var(--vs-status-danger)]">{error}</p> : null}
     </div>
   );
 }
@@ -14807,7 +14862,7 @@ function CompletedAudioReadyView({
       >
         <track kind="captions" />
       </audio>
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {error ? <p className="text-sm text-[var(--vs-status-danger)]">{error}</p> : null}
       <div className="grid grid-cols-3 gap-2 rounded-md border p-2 text-[0.7rem] vs-surface">
         <span className="truncate" title={formatDuration(durationMs)}>
           {formatDuration(durationMs)}
@@ -14853,7 +14908,7 @@ function CompletedTransportControls({
       </TransportButton>
       <button
         aria-label={isPlaying ? "Pause" : "Play"}
-        className="grid h-11 w-11 place-items-center rounded-full text-lg font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 vs-accent-bg"
+        className="grid h-11 w-11 place-items-center rounded-full text-lg font-semibold text-[var(--vs-action-primary-text)] shadow-lg shadow-[var(--vs-shadow)] transition hover:brightness-95 vs-accent-bg"
         onClick={() => {
           void onPlayToggle();
         }}
@@ -15823,7 +15878,7 @@ function ArrivalAudioPlayerQueue({
           </TransportButton>
           <button
             aria-label={isPlaying ? "Pause" : "Play"}
-            className="grid h-11 w-11 place-items-center rounded-full text-lg font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 vs-accent-bg"
+            className="grid h-11 w-11 place-items-center rounded-full text-lg font-semibold text-[var(--vs-action-primary-text)] shadow-lg shadow-[var(--vs-shadow)] transition hover:brightness-95 vs-accent-bg"
             onClick={() => {
               void handlePlayToggle();
             }}
@@ -15869,12 +15924,12 @@ function ArrivalAudioPlayerQueue({
         </p>
       ) : null}
       {isQueued ? (
-        <p className="text-xs text-zinc-600">
+        <p className="text-xs text-[var(--vs-text-muted)]">
           Playback queued. It will continue as segments arrive.
         </p>
       ) : null}
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
-      <div className="grid grid-cols-3 gap-3 rounded-md bg-zinc-50 p-3 text-xs text-zinc-600">
+      {error ? <p className="text-sm text-[var(--vs-status-danger)]">{error}</p> : null}
+      <div className="grid grid-cols-3 gap-3 rounded-md bg-[var(--vs-surface-secondary)] p-3 text-xs text-[var(--vs-text-muted)]">
         <span>
           {formatDuration(Math.max(job.durationMs, Math.round(bufferedDurationSec * 1000)))} buffer
         </span>

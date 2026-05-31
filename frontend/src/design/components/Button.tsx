@@ -5,6 +5,7 @@ import { cx, disabledStateClassName, focusRingClassName, touchTargetClassName } 
 export type ButtonVariant =
   | "primary"
   | "secondary"
+  | "tertiary"
   | "soft"
   | "ghost"
   | "destructive"
@@ -25,21 +26,23 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClassName: Record<ButtonVariant, string> = {
   primary:
-    "border-transparent bg-[var(--vs-accent)] text-white shadow-sm shadow-orange-500/20 hover:brightness-95",
+    "border-transparent bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)] shadow-sm hover:bg-[var(--vs-action-primary-hover)]",
   secondary:
-    "border-[var(--vs-border)] bg-[var(--vs-raised)] text-[var(--vs-text)] shadow-sm hover:bg-[var(--vs-surface)]",
-  soft: "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-orange-700 hover:bg-orange-500/15",
+    "border-[var(--vs-action-secondary-border)] bg-[var(--vs-action-secondary-bg)] text-[var(--vs-action-secondary-text)] shadow-sm hover:bg-[var(--vs-action-secondary-hover)]",
+  tertiary:
+    "border-transparent bg-[var(--vs-action-tertiary-bg)] text-[var(--vs-action-tertiary-text)] hover:bg-[var(--vs-action-tertiary-hover)] hover:text-[var(--vs-text-primary)]",
+  soft: "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)] hover:bg-[color-mix(in_srgb,var(--vs-action-primary)_16%,transparent)]",
   ghost:
-    "border-transparent bg-transparent text-[var(--vs-muted)] hover:border-[var(--vs-border)] hover:bg-[var(--vs-surface)] hover:text-[var(--vs-text)]",
+    "border-transparent bg-transparent text-[var(--vs-text-muted)] hover:border-[var(--vs-border-subtle)] hover:bg-[var(--vs-action-tertiary-hover)] hover:text-[var(--vs-text-primary)]",
   destructive:
-    "border-[var(--vs-danger-border)] bg-[var(--vs-danger-soft)] text-[var(--vs-danger)] hover:bg-red-500/15",
-  mode: "border-[var(--vs-border)] bg-[var(--vs-raised)] text-[var(--vs-text)] shadow-sm hover:bg-[var(--vs-surface)]",
+    "border-[var(--vs-action-destructive-border)] bg-[var(--vs-action-destructive-bg)] text-[var(--vs-action-destructive)] hover:bg-[var(--vs-action-destructive-hover)]",
+  mode: "border-transparent bg-transparent text-[var(--vs-text-secondary)] hover:bg-[var(--vs-action-tertiary-hover)] hover:text-[var(--vs-text-primary)]",
   pinned:
-    "border-[var(--vs-pinned-border)] bg-[var(--vs-pinned)] text-orange-700 hover:bg-orange-500/15",
+    "border-[var(--vs-pinned-border)] bg-[var(--vs-pinned)] text-[var(--vs-selected-text)] hover:bg-[color-mix(in_srgb,var(--vs-action-primary)_16%,transparent)]",
 };
 
 const selectedClassName =
-  "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-orange-700 shadow-sm ring-1 ring-[var(--vs-selected-border)]";
+  "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)] shadow-sm ring-1 ring-[var(--vs-selected-border)]";
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
@@ -52,6 +55,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     selected = false,
     size = "md",
     style,
+    title,
     type = "button",
     variant = "secondary",
     ...buttonProps
@@ -71,7 +75,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         touchTargetClassName,
         focusRingClassName,
         disabledStateClassName,
-        "inline-flex shrink-0 rounded-md border font-semibold transition",
+        "inline-flex shrink-0 rounded-md border font-semibold transition-colors",
         align === "start" ? "items-start justify-start text-left" : "items-center justify-center",
         controlSizeClassName[size],
         variantClassName[variant],
@@ -84,6 +88,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       data-ui-noop-reason={selected ? "Already selected." : undefined}
       ref={ref}
       style={scrollSafeStyle}
+      title={title ?? (buttonProps.disabled && disabledReason ? disabledReason : undefined)}
       type={type}
     >
       {icon}

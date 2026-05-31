@@ -103,7 +103,7 @@ export function AlignmentRepairEditor({
       </div>
 
       {staleness.stale ? (
-        <p className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-900 dark:text-amber-200">
+        <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-xs leading-5 text-[var(--vs-status-warning)] dark:text-[var(--vs-status-warning)]">
           {staleness.reason}
         </p>
       ) : null}

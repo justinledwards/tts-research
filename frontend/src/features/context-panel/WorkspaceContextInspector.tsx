@@ -498,10 +498,10 @@ function queueBlockClassName({
   ready: boolean;
 }>): string {
   if (active) {
-    return "bg-orange-600";
+    return "bg-[var(--vs-action-primary-hover)]";
   }
   if (ready) {
-    return "bg-orange-400";
+    return "bg-[var(--vs-theatre-accent)]";
   }
   if (generating) {
     return "bg-[var(--vs-generating)]";

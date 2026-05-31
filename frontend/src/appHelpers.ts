@@ -212,19 +212,19 @@ export function formatLikenessBadge(likeness: NonNullable<VoiceProfile["likeness
 
 export function likenessBadgeClass(likeness: NonNullable<VoiceProfile["likeness"]>): string {
   if (likeness.status === "pending") {
-    return "bg-zinc-100 text-zinc-600";
+    return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
   }
   if (likeness.status === "failed") {
-    return "bg-amber-100 text-amber-800";
+    return "bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]";
   }
   const score = likeness.score ?? likeness.speakerSimilarity ?? 0;
   if (score >= 0.82) {
-    return "bg-emerald-100 text-emerald-700";
+    return "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (score >= 0.68) {
-    return "bg-blue-100 text-blue-700";
+    return "bg-[var(--vs-status-info-bg)] text-[var(--vs-status-info)]";
   }
-  return "bg-red-100 text-red-700";
+  return "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
 }
 
 export function formatBytes(value: number): string {

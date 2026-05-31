@@ -281,8 +281,8 @@ export function LazyPanelFallback({
     createElement(
       "div",
       { "aria-hidden": "true", className: "grid gap-2" },
-      createElement("span", { className: "h-3 w-11/12 rounded bg-zinc-500/15" }),
-      createElement("span", { className: "h-3 w-3/4 rounded bg-zinc-500/10" }),
+      createElement("span", { className: "h-3 w-11/12 rounded bg-[var(--vs-surface-muted)]" }),
+      createElement("span", { className: "h-3 w-3/4 rounded bg-[var(--vs-surface-muted)]" }),
       createElement("span", { className: "h-10 rounded-md border border-dashed vs-border" }),
     ),
   );

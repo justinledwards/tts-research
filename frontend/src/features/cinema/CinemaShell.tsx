@@ -52,7 +52,9 @@ export function CinemaShell({
       aria-labelledby={ariaLabelledBy}
       aria-modal="true"
       className={`vs-app fixed inset-0 z-50 flex flex-col pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] ${
-        theatreActive ? "bg-zinc-950 text-white" : "bg-[var(--vs-bg)] text-[var(--vs-text)]"
+        theatreActive
+          ? "bg-[var(--vs-theatre-bg)] text-[var(--vs-theatre-text)]"
+          : "bg-[var(--vs-bg)] text-[var(--vs-text)]"
       }`}
       {...readerAttributes}
       {...cinemaCanvasBudgetDataAttributes(canvasBudget)}

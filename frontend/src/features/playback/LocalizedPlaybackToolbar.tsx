@@ -82,13 +82,17 @@ export function LocalizedPlaybackToolbar({
             <p
               className={cx(
                 "text-xs font-semibold uppercase",
-                highContrast ? "text-orange-200" : "tracking-[0.14em] vs-muted",
+                highContrast ? "text-[var(--vs-theatre-accent)]" : "tracking-[0.14em] vs-muted",
               )}
             >
               {localizedPlaybackStageLabel(model.stage)}
             </p>
             <h3
-              className={cx("truncate font-semibold", compact ? "text-sm" : "text-base")}
+              className={cx(
+                "truncate font-semibold",
+                compact ? "text-sm" : "text-base",
+                highContrast && "text-[var(--vs-theatre-text)]",
+              )}
               title={model.activeLabel}
             >
               {model.activeLabel}
@@ -97,7 +101,7 @@ export function LocalizedPlaybackToolbar({
               <p
                 className={cx(
                   "mt-0.5 truncate text-xs",
-                  highContrast ? "text-zinc-300" : "vs-muted",
+                  highContrast ? "text-[var(--vs-text-secondary)]" : "vs-muted",
                 )}
                 title={model.activeDetail}
               >
@@ -109,7 +113,9 @@ export function LocalizedPlaybackToolbar({
             <span
               className={cx(
                 "shrink-0 rounded-full border px-2 py-1 text-xs font-semibold",
-                highContrast ? "border-white/20 bg-white/10 text-white" : "vs-border",
+                highContrast
+                  ? "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)]"
+                  : "vs-border",
               )}
             >
               {model.statusLabel}
@@ -121,7 +127,7 @@ export function LocalizedPlaybackToolbar({
           <div
             className={cx(
               "flex items-center justify-between gap-3 text-xs tabular-nums",
-              highContrast ? "text-zinc-300" : "vs-muted",
+              highContrast ? "text-[var(--vs-text-secondary)]" : "vs-muted",
             )}
           >
             <span>{model.progress.currentLabel ?? "0:00"}</span>
@@ -144,7 +150,7 @@ export function LocalizedPlaybackToolbar({
           <p
             className={cx(
               "basis-full text-xs",
-              highContrast ? "text-orange-100" : "text-orange-700",
+              highContrast ? "text-[var(--vs-theatre-text)]" : "text-[var(--vs-selected-text)]",
             )}
             data-testid={`${toolbarTestId}-disabled-reasons`}
           >
@@ -190,7 +196,7 @@ function ToolbarProgress({
         aria-label="Playback waveform"
         className={cx(
           "grid h-9 min-w-0 items-center gap-px rounded-md py-1",
-          highContrast ? "bg-white/10" : "bg-[var(--vs-surface)]",
+          highContrast ? "bg-[var(--vs-theatre-panel)]" : "bg-[var(--vs-surface)]",
         )}
         role="img"
         style={{
@@ -215,11 +221,14 @@ function ToolbarProgress({
     <div
       className={cx(
         "h-2 overflow-hidden rounded-full",
-        highContrast ? "bg-white/15" : "bg-[var(--vs-border)]",
+        highContrast ? "bg-[var(--vs-theatre-panel)]" : "bg-[var(--vs-border)]",
       )}
     >
       <div
-        className={cx("h-full rounded-full", highContrast ? "bg-orange-300" : "bg-orange-500")}
+        className={cx(
+          "h-full rounded-full",
+          highContrast ? "bg-[var(--vs-theatre-accent)]" : "bg-[var(--vs-action-primary)]",
+        )}
         style={{ width: `${Math.round(clampProgress(progress.ratio) * 100).toString()}%` }}
       />
     </div>
@@ -239,8 +248,8 @@ function ToolbarButton({
         action.primary ? "min-w-32 gap-2" : "gap-2",
         highContrast &&
           (action.primary
-            ? "border-orange-400 bg-orange-500 text-white hover:bg-orange-600"
-            : "border-white/20 bg-white/10 text-white hover:bg-white/15"),
+            ? "border-[var(--vs-selected-border)] bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)] hover:bg-[var(--vs-action-primary-hover)]"
+            : "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]"),
       )}
       data-testid={action.testId}
       disabled={action.disabled}
@@ -262,7 +271,10 @@ function ToolbarSpeedSelect({
   const rates = speed.rates ?? READER_PLAYBACK_RATES;
   return (
     <label
-      className={cx("grid min-w-28 gap-1 text-xs font-semibold", highContrast && "text-white")}
+      className={cx(
+        "grid min-w-28 gap-1 text-xs font-semibold",
+        highContrast && "text-[var(--vs-theatre-text)]",
+      )}
     >
       <span className="sr-only">Playback speed</span>
       <select
@@ -271,7 +283,8 @@ function ToolbarSpeedSelect({
         className={cx(
           fieldControlClassName,
           "h-11 text-xs font-semibold",
-          highContrast && "border-white/20 bg-white/10 text-white",
+          highContrast &&
+            "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)]",
         )}
         data-disabled-reason={speed.disabledReason}
         data-testid={speed.testId}
@@ -282,7 +295,11 @@ function ToolbarSpeedSelect({
         value={String(speed.value)}
       >
         {rates.map((rate) => (
-          <option className={highContrast ? "text-zinc-950" : undefined} key={rate} value={rate}>
+          <option
+            className={highContrast ? "text-[var(--vs-text-primary)]" : undefined}
+            key={rate}
+            value={rate}
+          >
             {rate.toFixed(rate === 1 ? 0 : 2)}x
           </option>
         ))}
@@ -293,7 +310,7 @@ function ToolbarSpeedSelect({
 
 function localizedPlaybackToolbarClassName(variant: LocalizedPlaybackToolbarVariant): string {
   if (variant === "theatre") {
-    return "grid gap-3 rounded-lg border border-white/15 bg-white/5 p-3 text-white shadow-2xl";
+    return "grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3 text-[var(--vs-theatre-text)] shadow-2xl";
   }
   if (variant === "compact") {
     return "grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 shadow-sm vs-border";
@@ -351,7 +368,7 @@ function localizedPlaybackDisabledReasons(
 
 function waveformBarClassName(index: number, activeIndex: number, highContrast: boolean): string {
   if (index <= activeIndex) {
-    return highContrast ? "bg-orange-300" : "bg-orange-500";
+    return highContrast ? "bg-[var(--vs-theatre-accent)]" : "bg-[var(--vs-action-primary)]";
   }
-  return highContrast ? "bg-white/20" : "bg-[var(--vs-border)]";
+  return highContrast ? "bg-[var(--vs-theatre-panel)]" : "bg-[var(--vs-border)]";
 }

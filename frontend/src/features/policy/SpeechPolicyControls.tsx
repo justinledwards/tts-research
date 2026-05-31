@@ -85,7 +85,7 @@ export function SpeechPolicyControls({
             <ScopeBadge scope="project" />
           </span>
           <select
-            className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
+            className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-medium outline-none focus:border-[var(--vs-selected-border)] focus:ring-2 focus:ring-[var(--vs-focus-ring-soft)] vs-border"
             onChange={(event) => {
               onProfileChange(normalizeSpeechPolicyProfile(event.currentTarget.value));
             }}
@@ -109,12 +109,12 @@ export function SpeechPolicyControls({
         </label>
         <div className="flex flex-wrap items-center gap-2 md:justify-end">
           {isPreviewing ? (
-            <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+            <span className="rounded-full border border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] px-2 py-1 text-xs font-semibold text-[var(--vs-status-info)]">
               Updating preview
             </span>
           ) : null}
           <button
-            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border"
+            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border"
             onClick={() => {
               setIsAdvancedOpen((current) => !current);
             }}
@@ -123,7 +123,7 @@ export function SpeechPolicyControls({
             Advanced
           </button>
           <button
-            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border"
+            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border"
             onClick={() => {
               setIsDefaultsOpen((current) => !current);
             }}
@@ -132,7 +132,7 @@ export function SpeechPolicyControls({
             Defaults
           </button>
           <button
-            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border"
+            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border"
             onClick={() => {
               setIsCustomFormOpen((current) => !current);
             }}
@@ -142,7 +142,7 @@ export function SpeechPolicyControls({
           </button>
           {hasSpeechPolicyOverrides(overrides) ? (
             <button
-              className="h-9 rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-800"
+              className="h-9 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 text-xs font-semibold text-[var(--vs-status-warning)]"
               onClick={onClearOverrides}
               type="button"
             >
@@ -153,7 +153,7 @@ export function SpeechPolicyControls({
       </div>
       <p className="vs-muted text-xs leading-5">{settingsScopeAppliesTo("project")}</p>
       {error ? (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <p className="rounded border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] px-3 py-2 text-xs text-[var(--vs-status-danger)]">
           {error}
         </p>
       ) : null}
@@ -180,7 +180,7 @@ export function SpeechPolicyControls({
           <label className="grid gap-1 text-xs font-semibold">
             <span>Profile name</span>
             <input
-              className="h-9 rounded-md border bg-[var(--vs-surface)] px-3 text-sm outline-none focus:border-orange-400 vs-border"
+              className="h-9 rounded-md border bg-[var(--vs-surface)] px-3 text-sm outline-none focus:border-[var(--vs-selected-border)] vs-border"
               onChange={(event) => {
                 setCustomProfileName(event.currentTarget.value);
               }}
@@ -189,7 +189,7 @@ export function SpeechPolicyControls({
           </label>
           <div className="flex flex-wrap gap-2">
             <button
-              className="h-9 rounded-md bg-zinc-950 px-3 text-xs font-semibold text-white"
+              className="h-9 rounded-md bg-[var(--vs-theatre-bg)] px-3 text-xs font-semibold text-[var(--vs-action-primary-text)]"
               onClick={() => {
                 void onCreateCustomProfile(customProfileName, effectiveSettings, baseProfile);
               }}
@@ -214,7 +214,7 @@ export function SpeechPolicyControls({
                   Update selected
                 </button>
                 <button
-                  className="h-9 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-700"
+                  className="h-9 rounded-md border border-[var(--vs-status-danger-border)] px-3 text-xs font-semibold text-[var(--vs-status-danger)]"
                   onClick={() => {
                     void onDeleteCustomProfile(activeCustomProfile.id);
                   }}
@@ -322,7 +322,7 @@ function PolicyModeSelect({
         <ScopeBadge scope="session" />
       </span>
       <select
-        className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-xs outline-none focus:border-orange-400 vs-border"
+        className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-xs outline-none focus:border-[var(--vs-selected-border)] vs-border"
         onChange={(event) => {
           onChange(event.currentTarget.value || undefined);
         }}

@@ -44,7 +44,8 @@ export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
     state: "archived",
     summary: "Audio exists only as an archived asset.",
     tone: "muted",
-    visualClassName: "border-zinc-300 bg-zinc-50 text-zinc-600",
+    visualClassName:
+      "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-muted)]",
   }),
   degraded: lifecycleDescriptor({
     disabledReason: "Audio degraded. Rebuild before playback.",
@@ -70,7 +71,8 @@ export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
     state: "generating",
     summary: "Audio is being optimized, synthesized, checked, or retried.",
     tone: "info",
-    visualClassName: "border-blue-300 bg-blue-500/10 text-blue-700",
+    visualClassName:
+      "border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] text-[var(--vs-status-info)]",
   }),
   missing: lifecycleDescriptor({
     disabledReason: "Generated audio is missing. Create & Listen before playback.",
@@ -78,7 +80,8 @@ export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
     state: "missing",
     summary: "No generated audio exists for this source and scope yet.",
     tone: "neutral",
-    visualClassName: "border-zinc-300 bg-zinc-50 text-zinc-700",
+    visualClassName:
+      "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-secondary)]",
   }),
   queued: lifecycleDescriptor({
     disabledReason: "Audio queued. Playback unlocks when ready.",
@@ -86,7 +89,8 @@ export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
     state: "queued",
     summary: "Audio generation is queued.",
     tone: "info",
-    visualClassName: "border-blue-300 bg-blue-500/10 text-blue-700",
+    visualClassName:
+      "border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] text-[var(--vs-status-info)]",
   }),
   ready: lifecycleDescriptor({
     disabledReason: "Audio ready.",

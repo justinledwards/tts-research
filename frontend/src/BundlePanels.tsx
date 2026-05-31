@@ -59,7 +59,10 @@ export function BundleFlowPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 p-0 sm:p-4" role="presentation">
+    <div
+      className="fixed inset-0 z-50 bg-[var(--vs-surface-overlay)] p-0 sm:p-4"
+      role="presentation"
+    >
       <section
         aria-label={mode === "export" ? "Export project bundle" : "Import project bundle"}
         aria-modal="true"
@@ -282,7 +285,7 @@ function ExportFlowFooter({
       ) : null}
       {showDownload ? (
         <a
-          className={`inline-flex h-10 items-center rounded-md px-4 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 vs-accent-bg ${
+          className={`inline-flex h-10 items-center rounded-md px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] shadow-sm shadow-[var(--vs-shadow)] vs-accent-bg ${
             summary ? "" : "pointer-events-none opacity-50"
           }`}
           download={summary?.fileName ?? "voice-studio.voice-studio.zip"}
@@ -292,7 +295,7 @@ function ExportFlowFooter({
         </a>
       ) : (
         <button
-          className="h-10 rounded-md px-4 text-sm font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          className="h-10 rounded-md px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
           disabled={!summary}
           onClick={() => {
             onStepChange(nextStep);
@@ -498,7 +501,9 @@ function ImportChooseStep({
       <section
         aria-label="Drop or choose a Voice Studio bundle"
         className={`grid min-h-48 place-items-center rounded-xl border border-dashed p-6 text-center transition ${
-          isDragActive ? "border-orange-400 bg-orange-500/10" : "vs-border vs-surface"
+          isDragActive
+            ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+            : "vs-border vs-surface"
         }`}
         onDragLeave={() => {
           onDragActiveChange(false);
@@ -659,7 +664,7 @@ function ImportFlowFooter({
       ) : null}
       {activeStep === "Choose Bundle" ? (
         <button
-          className="h-10 rounded-md px-4 text-sm font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          className="h-10 rounded-md px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
           disabled={!preview}
           onClick={() => {
             onStepChange("Review");
@@ -671,7 +676,7 @@ function ImportFlowFooter({
       ) : null}
       {activeStep === "Review" ? (
         <button
-          className="h-10 rounded-md px-4 text-sm font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          className="h-10 rounded-md px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
           disabled={!preview?.valid}
           onClick={() => {
             onStepChange("Import");
@@ -721,7 +726,7 @@ function ImportButton({
 }>) {
   return (
     <button
-      className="h-10 rounded-md px-4 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 disabled:opacity-50 vs-accent-bg"
+      className="h-10 rounded-md px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] shadow-sm shadow-[var(--vs-shadow)] disabled:opacity-50 vs-accent-bg"
       disabled={!canImport}
       onClick={() => {
         if (!file) {

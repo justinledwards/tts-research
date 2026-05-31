@@ -64,7 +64,7 @@ export function ReaderWayfindingPanel<TOutlineTarget = unknown>({
           <button
             className={`cinema-touch-target rounded px-2 transition ${
               tab === item
-                ? "bg-orange-500/10 text-orange-600"
+                ? "bg-[var(--vs-selected)] text-[var(--vs-action-primary)]"
                 : "vs-muted hover:text-[var(--vs-text)]"
             }`}
             key={item}
@@ -108,7 +108,7 @@ function ReaderOutlineList<TOutlineTarget>({
         <button
           className={`cinema-touch-target min-w-0 rounded-md border px-3 py-2 text-left text-sm transition vs-border ${
             item.isActive
-              ? "border-orange-400 bg-orange-500/10 text-orange-600"
+              ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-action-primary)]"
               : "hover:bg-[var(--vs-surface)]"
           }`}
           key={`${item.id}:${String(index)}`}
@@ -190,7 +190,7 @@ function ReaderRecentList({
             <span className="truncate font-semibold" title={item.label}>
               {item.label}
             </span>
-            <span className="shrink-0 text-xs font-semibold text-orange-600">
+            <span className="shrink-0 text-xs font-semibold text-[var(--vs-action-primary)]">
               {formatProgressPercent(item.progress)}
             </span>
           </span>

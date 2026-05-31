@@ -262,7 +262,7 @@ export function MiniWaveform({
           aria-hidden="true"
           className={cx(
             "w-full rounded-full",
-            index <= activeIndex ? "bg-orange-500" : "bg-[var(--vs-border)]",
+            index <= activeIndex ? "bg-[var(--vs-action-primary)]" : "bg-[var(--vs-border)]",
           )}
           key={`preview-waveform-${index.toString()}`}
           style={{ height: `${Math.round(4 + Math.max(0, Math.min(1, bar)) * 24).toString()}px` }}

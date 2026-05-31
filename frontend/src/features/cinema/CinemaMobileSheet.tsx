@@ -40,7 +40,7 @@ export function CinemaMobileSheet<TPanelId extends string>({
       {...overlayDataAttributes("bottom-sheet", "mobile-bottom-sheet")}
       id={id}
     >
-      <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-zinc-500/50" />
+      <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-[var(--vs-border-strong)]" />
       <div
         className="mb-4 grid border-b text-sm font-semibold vs-border"
         style={{ gridTemplateColumns: `repeat(${panels.length.toString()}, minmax(0, 1fr))` }}

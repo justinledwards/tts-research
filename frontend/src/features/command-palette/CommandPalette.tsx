@@ -80,7 +80,7 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-[70] bg-zinc-950/35 px-3 py-6 sm:px-6"
+      className="fixed inset-0 z-[70] bg-[var(--vs-surface-overlay)] px-3 py-6 sm:px-6"
       role="presentation"
       {...overlayDataAttributes("command-palette", "command-palette")}
     >
@@ -97,7 +97,7 @@ export function CommandPalette({
                 aria-pressed={view === "commands"}
                 className={`h-9 rounded px-3 text-xs font-semibold transition ${
                   view === "commands"
-                    ? "bg-orange-500 text-white"
+                    ? "bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)]"
                     : "vs-muted hover:bg-[var(--vs-raised)]"
                 }`}
                 data-testid="ui-action-command-palette-view-commands"
@@ -112,7 +112,7 @@ export function CommandPalette({
                 aria-pressed={view === "shortcuts"}
                 className={`h-9 rounded px-3 text-xs font-semibold transition ${
                   view === "shortcuts"
-                    ? "bg-orange-500 text-white"
+                    ? "bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)]"
                     : "vs-muted hover:bg-[var(--vs-raised)]"
                 }`}
                 data-testid="ui-action-command-palette-view-shortcuts"
@@ -137,7 +137,7 @@ export function CommandPalette({
                 aria-autocomplete="list"
                 aria-controls="command-palette-results"
                 aria-expanded="true"
-                className="h-12 w-full rounded-md border bg-[var(--vs-surface)] px-4 text-base font-semibold outline-none transition placeholder:text-[var(--vs-muted)] focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
+                className="h-12 w-full rounded-md border bg-[var(--vs-surface)] px-4 text-base font-semibold outline-none transition placeholder:text-[var(--vs-muted)] focus:border-[var(--vs-selected-border)] focus:ring-2 focus:ring-[var(--vs-focus-ring-soft)] vs-border"
                 data-ui-noop-reason="Search input is already focused when the command palette opens; typing filters commands."
                 id="command-palette-search"
                 onChange={(event) => {
@@ -286,7 +286,7 @@ function CommandButton({
       aria-selected={active}
       className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2.5 text-left transition ${
         active
-          ? "border-orange-300 bg-orange-500/10"
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
           : "border-transparent hover:border-[var(--vs-border)] hover:bg-[var(--vs-surface)]"
       } ${entry.disabled ? "opacity-55" : ""}`}
       data-capability-gated={entry.capabilityGated ? "true" : undefined}

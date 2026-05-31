@@ -77,7 +77,7 @@ export function TelepromptCurrentCueStage({
       className={cx(
         "grid min-h-[24rem] gap-4 rounded-lg border p-4 shadow-sm sm:p-5",
         highContrast
-          ? "border-zinc-700 bg-zinc-950 text-white"
+          ? "border-[var(--vs-border-strong)] bg-[var(--vs-theatre-bg)] text-[var(--vs-theatre-text)]"
           : "border-[var(--vs-selected-border)] bg-[var(--vs-surface)]",
       )}
       data-testid="teleprompt-current-cue-stage"
@@ -88,12 +88,20 @@ export function TelepromptCurrentCueStage({
           <StatusChip tone={workModeTone}>{workModeLabel}</StatusChip>
           <StatusChip tone={audioStatusTone}>{audioStatusLabel}</StatusChip>
           <span
-            className={cx("text-xs font-semibold", highContrast ? "text-zinc-300" : "vs-muted")}
+            className={cx(
+              "text-xs font-semibold",
+              highContrast ? "text-[var(--vs-text-secondary)]" : "vs-muted",
+            )}
           >
             {cuePositionLabel}
           </span>
         </div>
-        <span className={cx("text-xs font-semibold", highContrast ? "text-zinc-300" : "vs-muted")}>
+        <span
+          className={cx(
+            "text-xs font-semibold",
+            highContrast ? "text-[var(--vs-text-secondary)]" : "vs-muted",
+          )}
+        >
           {cueProgressPercent.toString()}% script
         </span>
       </div>
@@ -101,15 +109,23 @@ export function TelepromptCurrentCueStage({
         <div
           className={cx(
             "h-2 overflow-hidden rounded-full",
-            highContrast ? "bg-white/15" : "bg-[var(--vs-border)]",
+            highContrast ? "bg-[var(--vs-theatre-panel)]" : "bg-[var(--vs-border)]",
           )}
         >
           <div
-            className={cx("h-full rounded-full", highContrast ? "bg-orange-300" : "bg-orange-500")}
+            className={cx(
+              "h-full rounded-full",
+              highContrast ? "bg-[var(--vs-theatre-accent)]" : "bg-[var(--vs-action-primary)]",
+            )}
             style={{ width: `${cueProgressPercent.toString()}%` }}
           />
         </div>
-        <p className={cx("text-xs leading-5", highContrast ? "text-zinc-300" : "vs-muted")}>
+        <p
+          className={cx(
+            "text-xs leading-5",
+            highContrast ? "text-[var(--vs-text-secondary)]" : "vs-muted",
+          )}
+        >
           {workModeDetail}
         </p>
       </div>
@@ -215,13 +231,13 @@ function telepromptScriptBlockClassName({
   highContrast,
 }: Readonly<{ active: boolean; highContrast: boolean }>): string {
   if (active && highContrast) {
-    return "bg-zinc-950 text-white shadow-[inset_0.28rem_0_0_#fb923c] ring-1 ring-orange-300";
+    return "bg-[var(--vs-theatre-bg)] text-[var(--vs-theatre-text)] shadow-[inset_0.28rem_0_0_var(--vs-theatre-accent)] ring-1 ring-[var(--vs-selected-border)]";
   }
   if (active) {
-    return "bg-orange-500/10 shadow-[inset_0.28rem_0_0_var(--vs-accent)] ring-1 ring-orange-300";
+    return "bg-[var(--vs-selected)] shadow-[inset_0.28rem_0_0_var(--vs-accent)] ring-1 ring-[var(--vs-selected-border)]";
   }
   if (highContrast) {
-    return "bg-zinc-950 text-white";
+    return "bg-[var(--vs-theatre-bg)] text-[var(--vs-theatre-text)]";
   }
   return "bg-transparent hover:bg-[var(--vs-raised)]";
 }

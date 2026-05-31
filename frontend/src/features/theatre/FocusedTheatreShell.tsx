@@ -164,7 +164,7 @@ export function FocusedTheatreChrome({
   const chromeActions = actions ?? [];
   return (
     <header
-      className="focused-theatre-chrome shrink-0 border-b border-white/10 bg-zinc-950/96 px-3 pt-[calc(0.45rem+env(safe-area-inset-top))] pb-2 text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur sm:px-4"
+      className="focused-theatre-chrome shrink-0 border-b border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-chrome)] px-3 pt-[calc(0.45rem+env(safe-area-inset-top))] pb-2 text-[var(--vs-theatre-text)] shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur sm:px-4"
       data-focused-theatre-chrome=""
       data-focused-theatre-controls={controlsVisible ? "visible" : "hidden"}
       data-testid={testId}
@@ -225,22 +225,25 @@ function FocusedTheatreTitleRow({
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <StatusChip tone="success">{surfaceLabel}</StatusChip>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-white" title={activeLabel}>
+          <p
+            className="truncate text-sm font-semibold text-[var(--vs-theatre-text)]"
+            title={activeLabel}
+          >
             {activeLabel}
           </p>
-          <p className="truncate text-xs text-zinc-400" title={contextLabel}>
+          <p className="truncate text-xs text-[var(--vs-text-muted)]" title={contextLabel}>
             {contextLabel}
           </p>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {statusLabel ? (
-          <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-xs font-semibold text-zinc-100">
+          <span className="rounded-full border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] px-2 py-1 text-xs font-semibold text-[var(--vs-text-primary)]">
             {statusLabel}
           </span>
         ) : null}
         <Button
-          className="border-white/20 bg-white/10 text-white hover:bg-white/15"
+          className="border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]"
           data-testid={toggleControlsTestId ?? `${testId}-toggle-controls`}
           onClick={onToggleControls}
           selected={controlsVisible}
@@ -264,13 +267,13 @@ function FocusedTheatreProgressBar({
   const normalizedProgress = clampProgress(progress.ratio);
   return (
     <div className="grid gap-1" data-focused-theatre-progress="">
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/12">
+      <div className="h-1.5 overflow-hidden rounded-full bg-[var(--vs-surface-muted)]">
         <div
-          className="h-full rounded-full bg-orange-300"
+          className="h-full rounded-full bg-[var(--vs-theatre-accent)]"
           style={{ width: `${Math.round(normalizedProgress * 100).toString()}%` }}
         />
       </div>
-      <div className="flex justify-between gap-3 text-xs tabular-nums text-zinc-400">
+      <div className="flex justify-between gap-3 text-xs tabular-nums text-[var(--vs-text-muted)]">
         <span>{progress.currentLabel ?? "0:00"}</span>
         <span>{progress.durationLabel ?? "--:--"}</span>
       </div>
@@ -286,7 +289,7 @@ function FocusedTheatreMeta({
     return null;
   }
   return (
-    <div className="flex min-w-0 flex-wrap gap-2 text-xs text-zinc-300">
+    <div className="flex min-w-0 flex-wrap gap-2 text-xs text-[var(--vs-text-secondary)]">
       {syncStatusLabel ? <span>{syncStatusLabel}</span> : null}
       {confidenceLabel ? <span>{confidenceLabel}</span> : null}
     </div>
@@ -312,7 +315,7 @@ function FocusedTheatreDetail({
     <div className="grid gap-2" data-focused-theatre-detail="">
       {activeText?.trim() ? (
         <p
-          className="line-clamp-2 max-w-5xl text-sm leading-6 text-zinc-200"
+          className="line-clamp-2 max-w-5xl text-sm leading-6 text-[var(--vs-text-secondary)]"
           data-focused-theatre-active-text=""
         >
           {activeText}
@@ -338,8 +341,8 @@ function FocusedTheatreButton({
     <Button
       className={cx(
         action.primary || persistent
-          ? "border-white/25 bg-white text-zinc-950 hover:bg-zinc-200"
-          : "border-white/20 bg-white/10 text-white hover:bg-white/15",
+          ? "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-text-primary)] hover:bg-[var(--vs-border-subtle)]"
+          : "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]",
       )}
       data-testid={action.testId}
       disabled={action.disabled}

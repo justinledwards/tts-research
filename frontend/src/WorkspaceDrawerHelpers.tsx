@@ -112,7 +112,7 @@ export function WorkspaceActivityRow({ activity }: WorkspaceActivityRowProps) {
         </div>
         {activity.canCancel && activity.onCancel ? (
           <button
-            className="h-9 rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+            className="h-9 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:opacity-50"
             onClick={() => {
               activity.onCancel?.();
             }}
@@ -216,18 +216,18 @@ function isActiveProfileSource(source: VoiceProfileSource): boolean {
 
 function workspaceActivityStatusClass(status: WorkspaceActivitySummary["status"]): string {
   if (status === "running") {
-    return "bg-orange-100 text-orange-700";
+    return "bg-[var(--vs-selected)] text-[var(--vs-selected-text)]";
   }
   if (status === "attention") {
-    return "bg-amber-100 text-amber-800";
+    return "bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]";
   }
   if (status === "complete") {
-    return "bg-emerald-100 text-emerald-700";
+    return "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (status === "cancelled") {
-    return "bg-zinc-100 text-zinc-600";
+    return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
   }
-  return "bg-zinc-100 text-zinc-600";
+  return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
 }
 
 type CreateProjectRowProps = Readonly<{
@@ -263,7 +263,7 @@ export function CreateProjectRow({ onCancel, onCreateProject, onCreated }: Creat
 
   return (
     <form
-      className="grid min-w-0 gap-3 rounded-md border border-orange-200 bg-orange-500/5 p-3"
+      className="grid min-w-0 gap-3 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] p-3"
       onSubmit={(event) => {
         event.preventDefault();
         submitCreate();
@@ -289,7 +289,7 @@ export function CreateProjectRow({ onCancel, onCreateProject, onCreated }: Creat
           value={name}
         />
         <button
-          className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
           disabled={name.trim().length === 0 || isSaving}
           type="submit"
         >
@@ -379,10 +379,14 @@ export function ProjectLibraryRow({
   return (
     <div
       className={`relative grid min-w-0 gap-3 overflow-hidden rounded-md border p-3 pl-4 text-left transition ${
-        isActive ? "border-orange-300 bg-orange-500/5" : "vs-raised hover:bg-[var(--vs-surface)]"
+        isActive
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+          : "vs-raised hover:bg-[var(--vs-surface)]"
       }`}
     >
-      {isActive ? <span className="absolute inset-y-0 left-0 w-1 bg-orange-500" /> : null}
+      {isActive ? (
+        <span className="absolute inset-y-0 left-0 w-1 bg-[var(--vs-action-primary)]" />
+      ) : null}
       <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div className="min-w-0">
           {isEditingName ? (
@@ -412,7 +416,7 @@ export function ProjectLibraryRow({
                 value={draftName}
               />
               <button
-                className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
+                className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
                 disabled={draftName.trim().length === 0 || isSavingName}
                 type="submit"
               >
@@ -433,7 +437,7 @@ export function ProjectLibraryRow({
           ) : (
             <div className="flex min-w-0 items-center gap-2">
               <button
-                className="min-w-0 truncate text-left text-base font-semibold hover:text-orange-700"
+                className="min-w-0 truncate text-left text-base font-semibold hover:text-[var(--vs-selected-text)]"
                 onClick={() => {
                   onSelectProject(project.id);
                 }}
@@ -501,7 +505,7 @@ export function ProjectLibraryRow({
           </button>
           <button
             aria-label={`Delete ${project.name}`}
-            className="h-8 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45"
+            className="h-8 rounded-md border border-[var(--vs-status-danger-border)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:cursor-not-allowed disabled:opacity-45"
             disabled={isDefault || isDeleting}
             onClick={() => {
               setIsConfirmingDelete(true);
@@ -518,7 +522,7 @@ export function ProjectLibraryRow({
         </div>
       </div>
       {isConfirmingDelete ? (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+        <div className="rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-3 text-sm text-[var(--vs-status-danger)]">
           <p className="font-semibold">Delete “{project.name}”?</p>
           <p className="mt-1 text-xs leading-5">
             This removes this project’s jobs, generated audio, books, prepared sources, and
@@ -526,7 +530,7 @@ export function ProjectLibraryRow({
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
-              className="h-8 rounded-md bg-red-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
+              className="h-8 rounded-md bg-[var(--vs-status-danger)] px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50"
               disabled={isDeleting}
               onClick={() => {
                 setIsDeleting(true);
@@ -540,7 +544,7 @@ export function ProjectLibraryRow({
               {isDeleting ? "Deleting..." : "Delete project"}
             </button>
             <button
-              className="h-8 rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-700"
+              className="h-8 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)]"
               disabled={isDeleting}
               onClick={() => {
                 setIsConfirmingDelete(false);

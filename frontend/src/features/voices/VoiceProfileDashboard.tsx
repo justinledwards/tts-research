@@ -87,7 +87,10 @@ export function VoiceProfileDashboard({
   const selectedArtifacts = Object.entries(selectedProfile?.cloneArtifacts ?? {});
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/35 p-3 md:p-6" role="presentation">
+    <div
+      className="fixed inset-0 z-50 bg-[var(--vs-surface-overlay)] p-3 md:p-6"
+      role="presentation"
+    >
       <aside
         aria-label="Voice Profile Dashboard"
         aria-modal="true"

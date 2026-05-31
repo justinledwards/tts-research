@@ -61,14 +61,16 @@ export function VoiceProfileRow({
   return (
     <div
       className={`grid gap-3 rounded-md border p-3 ${
-        selected ? "border-orange-300 bg-orange-500/5" : "vs-border vs-surface"
+        selected
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+          : "vs-border vs-surface"
       }`}
     >
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <button
-              className="min-w-0 truncate text-left text-base font-semibold hover:text-orange-700"
+              className="min-w-0 truncate text-left text-base font-semibold hover:text-[var(--vs-selected-text)]"
               data-testid={`ui-action-voice-dashboard-select-${profile.id}`}
               data-ui-action-surface="Workspace"
               onClick={() => {
@@ -122,7 +124,7 @@ export function VoiceProfileRow({
         </div>
       </div>
       {isConfirming ? (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+        <div className="rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-3 text-sm text-[var(--vs-status-danger)]">
           <p className="font-semibold">Delete “{profile.name}”?</p>
           <p className="mt-1 text-xs leading-5">
             This removes the saved voice profile and its clone target metadata.

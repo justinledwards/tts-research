@@ -169,7 +169,7 @@ export function ContextPanel({
         ) : null}
         {activeAdvancedReason ? (
           <div
-            className="mt-3 rounded-md border border-amber-400/40 bg-amber-400/10 p-2 text-xs leading-5 text-amber-900 dark:text-amber-200"
+            className="mt-3 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-2 text-xs leading-5 text-[var(--vs-status-warning)] dark:text-[var(--vs-status-warning)]"
             data-context-panel-advanced-reason={activeAdvancedReason}
           >
             <span className="font-semibold">Advanced: </span>
@@ -203,7 +203,7 @@ export function ContextPanel({
               </div>
               {sectionAdvancedReason ? (
                 <p
-                  className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-xs leading-5 text-amber-900 dark:text-amber-200"
+                  className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-2 py-1 text-xs leading-5 text-[var(--vs-status-warning)] dark:text-[var(--vs-status-warning)]"
                   data-context-section-advanced-reason-visible="true"
                 >
                   Advanced: {sectionAdvancedReason}

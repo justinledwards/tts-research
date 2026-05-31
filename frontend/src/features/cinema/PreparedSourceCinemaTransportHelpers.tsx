@@ -34,7 +34,7 @@ export function Waveform({
         const active = index / bars.length <= progressRatio;
         return (
           <span
-            className={`w-[2px] rounded-full ${active ? "bg-orange-600" : "bg-zinc-300"}`}
+            className={`w-[2px] rounded-full ${active ? "bg-[var(--vs-action-primary-hover)]" : "bg-[var(--vs-action-disabled-bg)]"}`}
             key={`${audioUrl}-${index.toString()}`}
             style={{ height: `${String(5 + Math.round(amplitude * 20))}px` }}
           />

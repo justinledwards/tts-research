@@ -36,7 +36,8 @@ export const TELEPROMPT_PRESETS: Record<TelepromptPresetId, TelepromptPreset> = 
     id: "highContrast",
     label: "High contrast",
     scriptClassName: "text-2xl leading-10 sm:text-3xl",
-    shellClassName: "border-zinc-100 bg-zinc-950 text-white",
+    shellClassName:
+      "border-[var(--vs-border-subtle)] bg-[var(--vs-theatre-bg)] text-[var(--vs-theatre-text)]",
     wordSpacing: "0.08em",
   },
   largeText: {

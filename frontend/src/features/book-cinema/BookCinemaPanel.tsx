@@ -267,7 +267,7 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
   return (
     <fieldset
       className={`grid gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 ${
-        isDragActive ? "border-orange-300 bg-orange-500/10" : "vs-border"
+        isDragActive ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]" : "vs-border"
       }`}
       onDragLeave={() => {
         setIsDragActive(false);
@@ -355,8 +355,8 @@ export function BookCinemaPanel(props: Readonly<BookCinemaControlsProps>) {
         <p
           className={`rounded-md border p-3 text-xs leading-5 ${
             (error ?? localError)
-              ? "border-red-200 bg-red-50 text-red-700"
-              : "border-amber-200 bg-amber-50 text-amber-800"
+              ? "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]"
+              : "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]"
           }`}
         >
           {error ?? localError ?? diagnostics?.pdfSetup}
@@ -504,7 +504,7 @@ function BookSourceListButton({
     <button
       className={`min-w-0 rounded-md border p-3 text-left transition ${
         isSelected
-          ? "border-orange-300 bg-orange-500/10"
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
           : "bg-[var(--vs-raised)] hover:bg-[var(--vs-surface)] vs-border"
       }`}
       onClick={() => {
@@ -533,8 +533,8 @@ function BookSourceListButton({
 function BookStatusBadge({ status }: Readonly<{ status: BookSource["status"] }>) {
   const badgeClass =
     status === "ready"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : "border-red-200 bg-red-50 text-red-700";
+      ? "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]"
+      : "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   return (
     <span
       className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold ${badgeClass}`}
@@ -590,7 +590,7 @@ function BookIngestionDiagnostics({ book }: Readonly<{ book: BookSource }>) {
         <div className="flex flex-wrap gap-1">
           {[...new Set(warnings)].map((warning) => (
             <span
-              className="rounded-full bg-amber-50 px-2 py-1 font-semibold text-amber-700"
+              className="rounded-full bg-[var(--vs-status-warning-bg)] px-2 py-1 font-semibold text-[var(--vs-status-warning)]"
               key={warning}
             >
               {warning}
@@ -683,7 +683,7 @@ function BookScopeActionHeader({
           Use Text
         </button>
         <button
-          className={`${compactHitTargetClassName} h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 disabled:opacity-50`}
+          className={`${compactHitTargetClassName} h-8 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 text-xs font-semibold text-[var(--vs-action-primary)] disabled:opacity-50`}
           data-disabled-reason={cinemaDisabledReason}
           data-hit-target-min={minInteractiveSize}
           data-testid="ui-action-book-source-open-cinema"
@@ -694,7 +694,7 @@ function BookScopeActionHeader({
           Cinema
         </button>
         <button
-          className={`${compactHitTargetClassName} h-8 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg`}
+          className={`${compactHitTargetClassName} h-8 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg`}
           data-disabled-reason={createAudioDisabledReason}
           data-hit-target-min={minInteractiveSize}
           data-testid="ui-action-book-source-create-audio"
@@ -779,7 +779,7 @@ function BookReadingPreview({
 
   if (book.status === "failed") {
     return (
-      <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+      <p className="mt-3 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-3 text-xs leading-5 text-[var(--vs-status-warning)]">
         {book.error ??
           "This source could not be imported. For PDFs, use a text-layer PDF or try EPUB."}
       </p>
@@ -1218,8 +1218,8 @@ export function BookCinemaOverlay({
   });
   const primaryTransportStyle =
     playbackState === "preAudio"
-      ? "bg-amber-400 text-zinc-950 shadow-amber-500/20"
-      : "text-white shadow-orange-500/25 vs-accent-bg";
+      ? "bg-[var(--vs-status-warning)] text-[var(--vs-text-primary)] shadow-[var(--vs-shadow)]"
+      : "text-[var(--vs-action-primary-text)] shadow-[var(--vs-shadow)] vs-accent-bg";
   let primaryTransportDisabled = !canCreateAudio || isProcessing || book.status !== "ready";
   if (isPlaybackTransport) {
     primaryTransportDisabled = !playbackControls.isAvailable;
@@ -1472,7 +1472,7 @@ export function BookCinemaOverlay({
             <div className="grid gap-2">
               {structuralWarnings.slice(0, 4).map((warning) => (
                 <p
-                  className="rounded border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-amber-500"
+                  className="rounded border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-[var(--vs-status-warning)]"
                   key={warning}
                 >
                   {warning}
@@ -1859,7 +1859,7 @@ export function BookCinemaOverlay({
               className="flex-1 lg:max-w-[min(36rem,42vw)]"
               density="compact"
               icon={
-                <span className="grid h-9 w-9 place-items-center rounded-md border border-orange-400/30 bg-orange-500/10 text-orange-400">
+                <span className="grid h-9 w-9 place-items-center rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-theatre-accent)]">
                   <CinemaFilmIcon />
                 </span>
               }
@@ -2298,7 +2298,7 @@ function BookCinemaResumeButton({
 }>) {
   return (
     <button
-      className="mt-4 flex w-full min-w-0 items-center justify-between gap-3 rounded-md bg-orange-500/10 px-3 py-2 text-left text-xs text-orange-500 transition hover:bg-orange-500/15"
+      className="mt-4 flex w-full min-w-0 items-center justify-between gap-3 rounded-md bg-[var(--vs-selected)] px-3 py-2 text-left text-xs text-[var(--vs-action-primary)] transition hover:bg-[var(--vs-selected)]"
       onClick={() => {
         onResumeProgress(progress);
       }}
@@ -2403,7 +2403,7 @@ function BookCinemaSourceLibrary({
         />
       </div>
       {importError ? (
-        <p className="rounded border border-amber-400/30 bg-amber-500/10 px-2 py-1.5 text-xs leading-5 text-amber-500">
+        <p className="rounded border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-2 py-1.5 text-xs leading-5 text-[var(--vs-status-warning)]">
           {importError}
         </p>
       ) : null}
@@ -2430,7 +2430,7 @@ function BookCinemaHealthRow({ label, value }: Readonly<{ label: string; value: 
         <CheckTinyIcon />
         <span className="truncate">{label}</span>
       </span>
-      <span className="text-right font-medium text-emerald-500">{value}</span>
+      <span className="text-right font-medium text-[var(--vs-status-success)]">{value}</span>
     </div>
   );
 }
@@ -2460,7 +2460,7 @@ function BookCinemaScopeQueue({
           <li key={option.key}>
             <button
               className={`grid w-full grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left transition hover:bg-[var(--vs-surface)] ${
-                active ? "bg-orange-500/10 text-orange-500" : ""
+                active ? "bg-[var(--vs-selected)] text-[var(--vs-action-primary)]" : ""
               }`}
               onClick={() => {
                 onNavigate(option);
@@ -2518,7 +2518,9 @@ function BookCinemaWaveform({
       {bars.map((amplitude, index) => (
         <span
           className={`w-[2px] rounded-full ${
-            index / bars.length <= clampedProgress ? "bg-orange-500" : "bg-zinc-500/35"
+            index / bars.length <= clampedProgress
+              ? "bg-[var(--vs-action-primary)]"
+              : "bg-[var(--vs-surface-muted)]"
           }`}
           key={`${audioUrl}-${index.toString()}`}
           style={{ height: `${String(5 + Math.round(amplitude * 20))}px` }}
@@ -2622,7 +2624,7 @@ function BookCinemaMobileSheet({
             Switch to the reader-first Theatre layout for focused follow-along.
           </p>
           <button
-            className="cinema-touch-target rounded-md border border-orange-300 bg-orange-500/10 px-3 font-semibold text-orange-500"
+            className="cinema-touch-target rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 font-semibold text-[var(--vs-action-primary)]"
             data-testid="ui-action-book-cinema-mobile-theatre"
             onClick={() => {
               onTheatreMode();
@@ -2714,7 +2716,7 @@ function BookCinemaMobileSheet({
           </p>
           {progress ? (
             <button
-              className="cinema-touch-target rounded-md border border-orange-300 bg-orange-500/10 px-3 font-semibold text-orange-500"
+              className="cinema-touch-target rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 font-semibold text-[var(--vs-action-primary)]"
               onClick={() => {
                 handleResumeProgress(progress);
               }}
@@ -2830,7 +2832,9 @@ export function BookCinemaReaderNoticeList({
       {notices.map((notice) => (
         <p
           className={`px-4 py-2 text-center text-xs leading-5 ${
-            notice.tone === "warning" ? "text-amber-600" : "text-sky-600"
+            notice.tone === "warning"
+              ? "text-[var(--vs-status-warning)]"
+              : "text-[var(--vs-status-info)]"
           }`}
           key={`${notice.label}:${notice.text}`}
         >
@@ -2852,8 +2856,8 @@ export function BookCinemaStatusChip({
     <span
       className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium sm:gap-2 sm:px-3 sm:py-1.5 sm:text-sm ${
         isReady
-          ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-500"
-          : "border-amber-400/40 bg-amber-500/10 text-amber-500"
+          ? "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]"
+          : "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]"
       }`}
     >
       {label}
@@ -2892,7 +2896,7 @@ export function BookCinemaTimingStatusChip({
   onClick,
 }: Readonly<{ display: ReturnType<typeof resolveTimingConfidenceDisplay>; onClick?: () => void }>) {
   const className =
-    "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-amber-400/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-500 sm:px-3 sm:py-1.5 sm:text-sm";
+    "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-2 py-1 text-xs font-medium text-[var(--vs-status-warning)] sm:px-3 sm:py-1.5 sm:text-sm";
   if (onClick) {
     return (
       <button className={className} onClick={onClick} title={display.detail} type="button">
@@ -2925,7 +2929,7 @@ function BookCinemaHighlightConfidence({
 
 function BookCinemaResumeChip() {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-xs font-medium text-sky-500 sm:px-3 sm:py-1.5 sm:text-sm">
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] px-2 py-1 text-xs font-medium text-[var(--vs-status-info)] sm:px-3 sm:py-1.5 sm:text-sm">
       Restoring saved point
     </span>
   );
@@ -2952,7 +2956,7 @@ function BookCinemaTimingDebug({
     <div className="mt-4 rounded-lg border p-4 text-xs vs-border">
       <div className="flex items-center justify-between gap-3">
         <p className="vs-muted font-semibold uppercase tracking-[0.2em]">Timing</p>
-        <span className="font-semibold text-orange-500">{summary.mode}</span>
+        <span className="font-semibold text-[var(--vs-action-primary)]">{summary.mode}</span>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
         <dt className="vs-muted">Clock</dt>
@@ -3003,7 +3007,9 @@ function BookCinemaPolicyNotes({ notes }: Readonly<{ notes: BookCinemaPolicyNote
         <p className="vs-muted text-xs font-semibold uppercase tracking-[0.2em]" id={headingId}>
           Policy Notes
         </p>
-        <span className="text-xs font-semibold text-orange-500">{String(notes.length)}</span>
+        <span className="text-xs font-semibold text-[var(--vs-action-primary)]">
+          {String(notes.length)}
+        </span>
       </div>
       <div className="mt-3 grid gap-2">
         {notes.slice(0, 6).map((note) => (
@@ -3046,7 +3052,7 @@ function CheckTinyIcon() {
   return (
     <svg
       aria-hidden="true"
-      className="h-4 w-4 shrink-0 text-emerald-500"
+      className="h-4 w-4 shrink-0 text-[var(--vs-status-success)]"
       fill="currentColor"
       viewBox="0 0 20 20"
     >
@@ -3787,10 +3793,10 @@ function BookDocumentReaderSkeleton({
           <div className="h-9 w-24 rounded-md border border-dashed vs-border" />
         </div>
         <div className="grid min-h-0 flex-1 content-start gap-4 overflow-hidden px-8 py-8 sm:px-12 lg:px-10 xl:px-12">
-          <div className="h-7 w-3/4 rounded bg-zinc-500/15" />
-          <div className="h-4 w-full rounded bg-zinc-500/10" />
-          <div className="h-4 w-11/12 rounded bg-zinc-500/10" />
-          <div className="h-4 w-5/6 rounded bg-zinc-500/10" />
+          <div className="h-7 w-3/4 rounded bg-[var(--vs-surface-muted)]" />
+          <div className="h-4 w-full rounded bg-[var(--vs-surface-muted)]" />
+          <div className="h-4 w-11/12 rounded bg-[var(--vs-surface-muted)]" />
+          <div className="h-4 w-5/6 rounded bg-[var(--vs-surface-muted)]" />
           <div className="h-32 rounded-md border border-dashed vs-border" />
         </div>
       </div>

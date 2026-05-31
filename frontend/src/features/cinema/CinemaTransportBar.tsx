@@ -122,7 +122,7 @@ function GeneratingTransport({ model }: Readonly<{ model: CinemaTransportModel }
       <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
         {showPreparingStatus ? (
           <div
-            className="flex h-12 min-w-40 items-center justify-center gap-2 rounded-md border border-orange-300/60 bg-orange-500/10 px-4 text-sm font-semibold text-orange-600 shadow-sm sm:h-14 sm:min-w-44 sm:px-5"
+            className="flex h-12 min-w-40 items-center justify-center gap-2 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-4 text-sm font-semibold text-[var(--vs-action-primary)] shadow-sm sm:h-14 sm:min-w-44 sm:px-5"
             data-cinema-generation-preparing=""
           >
             {model.primary.icon}

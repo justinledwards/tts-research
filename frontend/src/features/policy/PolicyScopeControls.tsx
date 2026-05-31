@@ -33,8 +33,8 @@ export function PolicyScopeChips({ state }: Readonly<{ state: PolicyScopeState }
         <span
           className={`inline-flex min-w-0 items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold ${
             chip.isActive
-              ? "border-orange-300 bg-orange-500/10 text-orange-700"
-              : "border-zinc-200 bg-[var(--vs-surface)] vs-muted"
+              ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]"
+              : "border-[var(--vs-border-subtle)] bg-[var(--vs-surface)] vs-muted"
           }`}
           key={chip.id}
           title={`${chip.label}: ${chip.detail}`}
@@ -55,7 +55,7 @@ export function PolicyScopeSummary({
   if (display === "compact") {
     return (
       <span
-        className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold border-orange-300 bg-orange-500/10 text-orange-700"
+        className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]"
         title={summary.description}
       >
         <span className="sr-only">{summary.description}</span>
@@ -148,7 +148,9 @@ export function SourcePolicyPinEditor({
         </h4>
         <span
           className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
-            hasPin ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "vs-border vs-muted"
+            hasPin
+              ? "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]"
+              : "vs-border vs-muted"
           }`}
         >
           {hasPin ? "Pinned" : "Project default"}
@@ -185,7 +187,7 @@ export function SourcePolicyPinEditor({
         </select>
       </label>
       <details className="group">
-        <summary className="cursor-pointer text-xs font-semibold text-orange-600">
+        <summary className="cursor-pointer text-xs font-semibold text-[var(--vs-action-primary)]">
           Pin field overrides
         </summary>
         <div className="mt-3 grid gap-2">
@@ -207,13 +209,13 @@ export function SourcePolicyPinEditor({
         </div>
       </details>
       {error ? (
-        <p className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+        <p className="rounded border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] px-2 py-1.5 text-xs text-[var(--vs-status-danger)]">
           {error}
         </p>
       ) : null}
       <div className="grid grid-cols-2 gap-2">
         <button
-          className="h-9 rounded-md bg-orange-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
+          className="h-9 rounded-md bg-[var(--vs-action-primary-hover)] px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50"
           data-testid="source-policy-save-pin"
           disabled={disabled || isSaving}
           data-disabled-reason={savingDisabledReason}

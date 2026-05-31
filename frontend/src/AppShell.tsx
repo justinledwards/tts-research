@@ -200,7 +200,7 @@ export function TopProductBar({
       </nav>
       <nav aria-label="Primary workspace actions" className="flex items-center gap-1.5 md:hidden">
         <Button
-          className="px-2 text-orange-600"
+          className="px-2 text-[var(--vs-action-primary)]"
           onClick={() => {
             onStudioModeChange(studioMode === "narration" ? "voiceCloning" : "narration");
           }}
@@ -220,7 +220,7 @@ export function TopProductBar({
         />
         <Button
           aria-label="Open command palette"
-          className="text-orange-600"
+          className="text-[var(--vs-action-primary)]"
           data-command-id="command.palette"
           data-shortcut-command-id="command.palette"
           data-testid="ui-action-command-palette-open"
@@ -236,7 +236,7 @@ export function TopProductBar({
         </Button>
         <Button
           aria-label="Open settings"
-          className="text-orange-600"
+          className="text-[var(--vs-action-primary)]"
           data-command-id="settings:open"
           data-shortcut-command-id="settings.open"
           data-testid="ui-action-settings-open"
@@ -290,7 +290,7 @@ export function WorkspaceLayoutControl({
         aria-label={`Workspace layout: ${activeMeta.label}`}
         className={cx(
           "flex min-h-10 cursor-pointer list-none items-center justify-center rounded-md border bg-[var(--vs-raised)] px-3 text-sm font-semibold shadow-sm transition hover:bg-[var(--vs-surface)] vs-border [&::-webkit-details-marker]:hidden",
-          compact ? "min-w-11 px-2 text-orange-600" : "min-w-36 gap-2",
+          compact ? "min-w-11 px-2 text-[var(--vs-action-primary)]" : "min-w-36 gap-2",
         )}
       >
         <span>Layout</span>

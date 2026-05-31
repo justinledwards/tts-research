@@ -18,15 +18,15 @@ type CandidatePreviewKind = "clean" | "raw";
 
 export function sourceStatusClass(source: VoiceProfileSource): string {
   if (source.status === "failed") {
-    return "bg-red-100 text-red-700";
+    return "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   }
   if (source.status === "cancelled") {
-    return "bg-zinc-100 text-zinc-600";
+    return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
   }
   if (source.status === "ready") {
-    return "bg-emerald-100 text-emerald-700";
+    return "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
-  return "bg-blue-100 text-blue-700";
+  return "bg-[var(--vs-status-info-bg)] text-[var(--vs-status-info)]";
 }
 
 export function isSetupError(
@@ -54,14 +54,16 @@ export function SourceAnalysisSetupCard({
   error: string | null;
 }>) {
   return (
-    <section className="min-w-0 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+    <section className="min-w-0 rounded-lg border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-3 text-sm text-[var(--vs-status-warning)]">
       <p className="font-semibold">Speaker analysis needs local pyannote setup</p>
-      <p className="mt-2 break-words text-xs leading-5 text-amber-900">
+      <p className="mt-2 break-words text-xs leading-5 text-[var(--vs-status-warning)]">
         {diagnostics?.setupMessage ??
           "Accept pyannote Community-1 terms, download or clone the model locally, then set VOICE_PROFILE_DIARIZATION_MODEL_PATH. A token is only needed for first-time model access."}
       </p>
-      {error ? <p className="mt-2 break-words text-xs leading-5 text-red-800">{error}</p> : null}
-      <dl className="mt-3 grid gap-2 rounded-md border border-amber-200 bg-white/60 p-2 text-xs">
+      {error ? (
+        <p className="mt-2 break-words text-xs leading-5 text-[var(--vs-status-danger)]">{error}</p>
+      ) : null}
+      <dl className="mt-3 grid gap-2 rounded-md border border-[var(--vs-status-warning-border)] bg-[color-mix(in_srgb,var(--vs-surface-primary)_60%,transparent)] p-2 text-xs">
         <SetupLine label="Mode" value={diagnostics?.mode ?? "unconfigured"} />
         <SetupLine
           label="Model"
@@ -76,7 +78,7 @@ export function SourceAnalysisSetupCard({
       </dl>
       <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
         <a
-          className="rounded border border-amber-300 bg-white px-2 py-1 text-amber-900 hover:bg-amber-100"
+          className="rounded border border-[var(--vs-status-warning-border)] bg-[var(--vs-surface-primary)] px-2 py-1 text-[var(--vs-status-warning)] hover:bg-[var(--vs-status-warning-bg)]"
           href="https://huggingface.co/pyannote/speaker-diarization-community-1"
           rel="noreferrer"
           target="_blank"
@@ -84,7 +86,7 @@ export function SourceAnalysisSetupCard({
           Model terms
         </a>
         <a
-          className="rounded border border-amber-300 bg-white px-2 py-1 text-amber-900 hover:bg-amber-100"
+          className="rounded border border-[var(--vs-status-warning-border)] bg-[var(--vs-surface-primary)] px-2 py-1 text-[var(--vs-status-warning)] hover:bg-[var(--vs-status-warning-bg)]"
           href="https://github.com/pyannote/pyannote-audio/releases"
           rel="noreferrer"
           target="_blank"
@@ -99,8 +101,8 @@ export function SourceAnalysisSetupCard({
 function SetupLine({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="grid min-w-0 grid-cols-[6rem_minmax(0,1fr)] gap-2">
-      <dt className="text-amber-800">{label}</dt>
-      <dd className="min-w-0 truncate font-medium text-amber-950" title={value}>
+      <dt className="text-[var(--vs-status-warning)]">{label}</dt>
+      <dd className="min-w-0 truncate font-medium text-[var(--vs-status-warning)]" title={value}>
         {value}
       </dd>
     </div>
@@ -121,29 +123,39 @@ export function SourceProgress({
   const readyCount = candidates.filter((candidate) => candidate.status === "ready").length;
 
   return (
-    <section className="min-w-0 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+    <section className="min-w-0 rounded-lg border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-zinc-950" title={source.sourceFile}>
+          <p
+            className="truncate text-sm font-semibold text-[var(--vs-text-primary)]"
+            title={source.sourceFile}
+          >
             {source.sourceFile}
           </p>
-          <p className="mt-1 text-xs text-zinc-500">
+          <p className="mt-1 text-xs text-[var(--vs-text-muted)]">
             {formatBytes(source.sourceBytes)} ·{" "}
             {source.sourceDurationMs ? formatDuration(source.sourceDurationMs) : "duration pending"}
           </p>
         </div>
-        <span className="text-xs text-zinc-500">{String(readyCount)} voices</span>
+        <span className="text-xs text-[var(--vs-text-muted)]">{String(readyCount)} voices</span>
       </div>
-      <p className="mt-3 break-words text-sm font-medium text-zinc-800">{source.progressMessage}</p>
+      <p className="mt-3 break-words text-sm font-medium text-[var(--vs-text-secondary)]">
+        {source.progressMessage}
+      </p>
       {source.progressDetail ? (
-        <p className="mt-1 break-words text-xs leading-5 text-zinc-500">{source.progressDetail}</p>
+        <p className="mt-1 break-words text-xs leading-5 text-[var(--vs-text-muted)]">
+          {source.progressDetail}
+        </p>
       ) : null}
       <ol className="mt-3 grid gap-2">
         {stages.map((stage) => (
-          <li className="flex min-w-0 items-center gap-2 text-xs text-zinc-600" key={stage.name}>
+          <li
+            className="flex min-w-0 items-center gap-2 text-xs text-[var(--vs-text-muted)]"
+            key={stage.name}
+          >
             <span className={`h-2 w-2 rounded-full ${sourceStageClass(stage.status)}`} />
             <span className="shrink-0 capitalize">{stage.name}</span>
-            <span className="min-w-0 truncate text-zinc-400">{stage.detail}</span>
+            <span className="min-w-0 truncate text-[var(--vs-text-muted)]">{stage.detail}</span>
           </li>
         ))}
       </ol>
@@ -162,15 +174,15 @@ export function SourceProgress({
 
 function sourceStageClass(status: string): string {
   if (status === "done") {
-    return "bg-emerald-500";
+    return "bg-[var(--vs-status-success)]";
   }
   if (status === "running") {
-    return "bg-blue-500";
+    return "bg-[var(--vs-status-info)]";
   }
   if (status === "failed") {
-    return "bg-red-500";
+    return "bg-[var(--vs-status-danger)]";
   }
-  return "bg-zinc-300";
+  return "bg-[var(--vs-action-disabled-bg)]";
 }
 
 export function ReadyCandidateList({
@@ -209,8 +221,10 @@ export function ReadyCandidateList({
   return (
     <div className="grid gap-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-zinc-950">Detected Voices</h3>
-        <span className="text-xs text-zinc-500">{String(candidates.length)} ready</span>
+        <h3 className="text-sm font-semibold text-[var(--vs-text-primary)]">Detected Voices</h3>
+        <span className="text-xs text-[var(--vs-text-muted)]">
+          {String(candidates.length)} ready
+        </span>
       </div>
       <div className="grid gap-2">
         {candidates.map((candidate) => (
@@ -252,8 +266,8 @@ export function RejectedCandidateList({
   }
 
   return (
-    <details className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
-      <summary className="cursor-pointer font-medium text-zinc-700">
+    <details className="rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] p-3 text-xs text-[var(--vs-text-muted)]">
+      <summary className="cursor-pointer font-medium text-[var(--vs-text-secondary)]">
         {String(candidates.length)} rejected candidate{candidates.length === 1 ? "" : "s"}
       </summary>
       <ul className="mt-2 grid gap-1">
@@ -300,28 +314,33 @@ function CandidateCard({
   const canCreate = selectedTargets.length > 0 && !isCreating;
   const [previewKind, setPreviewKind] = useState<CandidatePreviewKind>("clean");
   return (
-    <article className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3">
+    <article className="grid gap-3 rounded-lg border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-3">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <p className="font-semibold text-zinc-950">{candidateQualityLabel(candidate)}</p>
+            <p className="font-semibold text-[var(--vs-text-primary)]">
+              {candidateQualityLabel(candidate)}
+            </p>
             {candidate.recommended ? (
-              <span className="rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+              <span className="rounded bg-[var(--vs-status-success-bg)] px-2 py-0.5 text-[11px] font-semibold text-[var(--vs-status-success)]">
                 Recommended
               </span>
             ) : null}
             {candidate.suitability === "short_reference" ? (
-              <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+              <span className="rounded bg-[var(--vs-status-warning-bg)] px-2 py-0.5 text-[11px] font-semibold text-[var(--vs-status-warning)]">
                 Short reference
               </span>
             ) : null}
           </div>
-          <p className="mt-1 truncate text-xs text-zinc-500" title={candidate.speakerId}>
+          <p
+            className="mt-1 truncate text-xs text-[var(--vs-text-muted)]"
+            title={candidate.speakerId}
+          >
             {candidate.rank ? `#${String(candidate.rank)} · ` : ""}
             {candidate.speakerId} · {formatDuration(candidate.referenceDurationMs)} reference
           </p>
         </div>
-        <span className="rounded bg-orange-100 px-2 py-1 text-xs font-semibold text-orange-700">
+        <span className="rounded bg-[var(--vs-selected)] px-2 py-1 text-xs font-semibold text-[var(--vs-selected-text)]">
           {formatPercent(candidate.score)}
         </span>
       </div>
@@ -340,11 +359,11 @@ function CandidateCard({
         transcriptModel={candidate.transcriptModel}
         onRefresh={onTranscriptRefresh}
       />
-      <p className="break-words text-xs leading-5 text-zinc-500">
+      <p className="break-words text-xs leading-5 text-[var(--vs-text-muted)]">
         {summarizeCandidateMetrics(candidate)}
       </p>
       {candidate.denoise ? (
-        <div className="grid grid-cols-2 gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-600">
+        <div className="grid grid-cols-2 gap-2 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] p-2 text-xs text-[var(--vs-text-muted)]">
           <MetricPill
             label="Noise before"
             value={formatPercent(
@@ -365,7 +384,7 @@ function CandidateCard({
         </div>
       ) : null}
       {candidate.warnings && candidate.warnings.length > 0 ? (
-        <ul className="grid gap-1 rounded-md bg-amber-50 p-2 text-xs leading-5 text-amber-800">
+        <ul className="grid gap-1 rounded-md bg-[var(--vs-status-warning-bg)] p-2 text-xs leading-5 text-[var(--vs-status-warning)]">
           {candidate.warnings.map((warning) => (
             <li className="break-words" key={warning}>
               {warning}
@@ -375,7 +394,7 @@ function CandidateCard({
       ) : null}
       <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-2">
         <input
-          className="min-w-0 rounded-md border border-zinc-200 px-3 py-2 text-sm"
+          className="min-w-0 rounded-md border border-[var(--vs-border-subtle)] px-3 py-2 text-sm"
           maxLength={80}
           onChange={(event) => {
             onNameChange(event.currentTarget.value);
@@ -385,7 +404,7 @@ function CandidateCard({
           value={name}
         />
         <input
-          className="rounded-md border border-zinc-200 px-3 py-2 text-sm"
+          className="rounded-md border border-[var(--vs-border-subtle)] px-3 py-2 text-sm"
           maxLength={12}
           onChange={(event) => {
             onLanguageChange(event.currentTarget.value);
@@ -401,7 +420,7 @@ function CandidateCard({
         onToggle={onTargetToggle}
       />
       <button
-        className="inline-flex h-9 items-center justify-center rounded-md bg-orange-500 px-3 text-sm font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
+        className="inline-flex h-9 items-center justify-center rounded-md bg-[var(--vs-action-primary)] px-3 text-sm font-semibold text-[var(--vs-action-primary-text)] hover:bg-[var(--vs-action-primary-hover)] disabled:cursor-not-allowed disabled:bg-[var(--vs-action-disabled-bg)]"
         disabled={!canCreate}
         onClick={onCreate}
         type="button"
@@ -430,15 +449,17 @@ function CandidatePreview({
     : "raw normalized";
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-xs text-zinc-600">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] px-2 py-2 text-xs text-[var(--vs-text-muted)]">
         <span className="min-w-0 truncate" title={candidate.denoise?.reason ?? denoiseLabel}>
           Preview: {previewKind === "clean" ? "Cleaned" : "Raw"} · {denoiseLabel}
         </span>
-        <div className="inline-flex overflow-hidden rounded border border-zinc-200 bg-white">
+        <div className="inline-flex overflow-hidden rounded border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)]">
           {(["clean", "raw"] as const).map((kind) => (
             <button
               className={`px-2 py-1 font-semibold ${
-                previewKind === kind ? "bg-orange-50 text-orange-700" : "text-zinc-500"
+                previewKind === kind
+                  ? "bg-[var(--vs-selected)] text-[var(--vs-selected-text)]"
+                  : "text-[var(--vs-text-muted)]"
               }`}
               disabled={kind === "raw" && !hasRawPreview}
               key={kind}
@@ -480,26 +501,28 @@ function TranscriptBlock({
   let transcriptBody: ReactNode = null;
   if (transcript) {
     transcriptBody = (
-      <p className="max-h-36 overflow-y-auto whitespace-pre-wrap break-words rounded bg-zinc-50 p-2 leading-5 text-zinc-700">
+      <p className="max-h-36 overflow-y-auto whitespace-pre-wrap break-words rounded bg-[var(--vs-surface-secondary)] p-2 leading-5 text-[var(--vs-text-secondary)]">
         {transcript}
       </p>
     );
   } else if (!transcriptError) {
     transcriptBody = (
-      <p className="rounded bg-zinc-50 p-2 leading-5 text-zinc-500">Transcript pending.</p>
+      <p className="rounded bg-[var(--vs-surface-secondary)] p-2 leading-5 text-[var(--vs-text-muted)]">
+        Transcript pending.
+      </p>
     );
   }
   return (
-    <section className="grid gap-2 rounded-md border border-zinc-200 bg-white p-2 text-xs">
+    <section className="grid gap-2 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-2 text-xs">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-semibold text-zinc-800">{label}</p>
-          <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+          <p className="font-semibold text-[var(--vs-text-secondary)]">{label}</p>
+          <p className="mt-0.5 truncate text-[11px] text-[var(--vs-text-muted)]">
             {[transcriptModel, generatedLabel].filter(Boolean).join(" · ") || "Pending"}
           </p>
         </div>
         <button
-          className="shrink-0 rounded border border-zinc-200 bg-zinc-50 px-2 py-1 font-semibold text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+          className="shrink-0 rounded border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] px-2 py-1 font-semibold text-[var(--vs-text-secondary)] hover:bg-[var(--vs-action-secondary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           disabled={isRefreshing}
           onClick={onRefresh}
           type="button"
@@ -508,7 +531,7 @@ function TranscriptBlock({
         </button>
       </div>
       {transcriptError ? (
-        <p className="break-words rounded bg-red-50 p-2 leading-5 text-red-700">
+        <p className="break-words rounded bg-[var(--vs-status-danger-bg)] p-2 leading-5 text-[var(--vs-status-danger)]">
           {transcriptError}
         </p>
       ) : null}
@@ -545,10 +568,12 @@ function ProfileTargetPicker({
   onToggle: (targetId: string) => void;
 }>) {
   return (
-    <div className="grid gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-2">
+    <div className="grid gap-2 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] p-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-zinc-800">Prepare for</p>
-        <span className="text-[11px] text-zinc-500">{String(selectedTargets.length)} selected</span>
+        <p className="text-xs font-semibold text-[var(--vs-text-secondary)]">Prepare for</p>
+        <span className="text-[11px] text-[var(--vs-text-muted)]">
+          {String(selectedTargets.length)} selected
+        </span>
       </div>
       <div className="grid gap-2">
         {options.map((option) => {
@@ -557,8 +582,8 @@ function ProfileTargetPicker({
             <label
               className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-md border px-2 py-2 text-xs ${
                 option.available
-                  ? "cursor-pointer border-zinc-200 bg-white text-zinc-700"
-                  : "border-zinc-200 bg-zinc-100 text-zinc-400"
+                  ? "cursor-pointer border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] text-[var(--vs-text-secondary)]"
+                  : "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]"
               }`}
               key={option.id}
             >
@@ -572,7 +597,9 @@ function ProfileTargetPicker({
                 type="checkbox"
               />
               <span className="min-w-0">
-                <span className="block truncate font-semibold text-zinc-900">{option.label}</span>
+                <span className="block truncate font-semibold text-[var(--vs-text-primary)]">
+                  {option.label}
+                </span>
                 <span className="mt-0.5 block truncate" title={option.detail}>
                   {option.detail}
                 </span>
@@ -582,7 +609,9 @@ function ProfileTargetPicker({
         })}
       </div>
       {selectedTargets.length === 0 ? (
-        <p className="text-xs leading-5 text-red-600">Select at least one backend target.</p>
+        <p className="text-xs leading-5 text-[var(--vs-status-danger)]">
+          Select at least one backend target.
+        </p>
       ) : null}
     </div>
   );
@@ -671,8 +700,8 @@ function researchModuleBuildReady(module: ResearchModuleDiagnostics | undefined)
 function MetricPill({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="min-w-0">
-      <p className="truncate text-[11px] text-zinc-400">{label}</p>
-      <p className="truncate font-semibold text-zinc-800" title={value}>
+      <p className="truncate text-[11px] text-[var(--vs-text-muted)]">{label}</p>
+      <p className="truncate font-semibold text-[var(--vs-text-secondary)]" title={value}>
         {value}
       </p>
     </div>

@@ -594,7 +594,7 @@ export function PreparedSourceCinemaOverlay({
             {href ? (
               <div className="grid min-w-0 grid-cols-[5.6rem_minmax(0,1fr)] gap-3">
                 <dt className="vs-muted">URL</dt>
-                <dd className="min-w-0 truncate text-blue-600" title={href}>
+                <dd className="min-w-0 truncate text-[var(--vs-status-info)]" title={href}>
                   <a href={href} rel="noreferrer" target="_blank">
                     {href}
                   </a>
@@ -1062,7 +1062,7 @@ export function PreparedSourceCinemaOverlay({
               className="min-w-0 flex-1 basis-[18rem] sm:min-w-[16rem] sm:basis-[26rem] lg:max-w-[min(36rem,42vw)]"
               density="compact"
               icon={
-                <span className="grid h-9 w-9 place-items-center rounded-md border border-orange-200 text-orange-600 sm:border-zinc-900 sm:bg-zinc-950 sm:text-white">
+                <span className="grid h-9 w-9 place-items-center rounded-md border border-[var(--vs-selected-border)] text-[var(--vs-action-primary)] sm:border-[var(--vs-border-strong)] sm:bg-[var(--vs-theatre-bg)] sm:text-[var(--vs-theatre-text)]">
                   <CinemaFilmIcon />
                 </span>
               }
@@ -1304,7 +1304,7 @@ function PreparedSourceCinemaSourceLibrary({
         type="file"
       />
       {importError ? (
-        <p className="rounded border border-amber-400/30 bg-amber-500/10 px-2 py-1.5 text-xs leading-5 text-amber-600">
+        <p className="rounded border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-2 py-1.5 text-xs leading-5 text-[var(--vs-status-warning)]">
           {importError}
         </p>
       ) : null}
@@ -1917,7 +1917,7 @@ function PreparedSourceCinemaMobileSheet({
             Switch to the reader-first Theatre layout for focused follow-along.
           </p>
           <Button
-            className="border-orange-300 bg-orange-500/10 text-orange-500"
+            className="border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-action-primary)]"
             data-testid="ui-action-prepared-cinema-mobile-theatre"
             onClick={onTheatreMode}
             size="md"
@@ -1950,7 +1950,7 @@ function PreparedSourceCinemaMobileSheet({
               <p className="line-clamp-2 font-medium">{preparedSourceCinemaTitle(source)}</p>
               {href ? (
                 <a
-                  className="mt-1 block truncate text-blue-600"
+                  className="mt-1 block truncate text-[var(--vs-status-info)]"
                   href={href}
                   rel="noreferrer"
                   target="_blank"
@@ -2236,7 +2236,7 @@ function renderPreparedSourceCinemaBlockContent({
   if (isActive && readAlongVisualMode !== "none") {
     return (
       <p className="m-0">
-        <span className="rounded-md bg-orange-100/80 px-1 py-0.5 box-decoration-clone">
+        <span className="rounded-md bg-[var(--vs-highlight-current-word)] px-1 py-0.5 box-decoration-clone">
           {words}
         </span>
       </p>
@@ -2252,7 +2252,7 @@ function HealthRow({ label, value }: Readonly<{ label: string; value: string }>)
         <CheckIcon />
         <span className="truncate">{label}</span>
       </span>
-      <span className="text-right font-medium text-emerald-700">{value}</span>
+      <span className="text-right font-medium text-[var(--vs-status-success)]">{value}</span>
     </div>
   );
 }
@@ -2264,7 +2264,7 @@ function PolicyMetric({
 }: Readonly<{ icon: ReactNode; label: string; value: string }>) {
   return (
     <div className="grid min-w-0 justify-items-center gap-1">
-      <span className="text-zinc-600">{icon}</span>
+      <span className="text-[var(--vs-text-muted)]">{icon}</span>
       <span className="max-w-full truncate font-medium leading-none">{label}</span>
       <span className="max-w-full truncate leading-none vs-muted">{value}</span>
     </div>
@@ -2277,10 +2277,12 @@ function MobileMetric({
   value,
 }: Readonly<{ label: string; tone: "blue" | "green" | "neutral" | "orange"; value: number }>) {
   const toneClass = {
-    blue: "border-blue-200 bg-blue-50 text-blue-700",
-    green: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    blue: "border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] text-[var(--vs-status-info)]",
+    green:
+      "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]",
     neutral: "vs-border bg-[var(--vs-surface)] text-[var(--vs-text)]",
-    orange: "border-orange-200 bg-orange-50 text-orange-700",
+    orange:
+      "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]",
   }[tone];
   return (
     <div className={`rounded-lg border p-3 ${toneClass}`}>
@@ -2300,7 +2302,7 @@ function MetadataRow({
       <dt className="vs-muted">{label}</dt>
       <dd
         className={`min-w-0 truncate text-right font-medium leading-5 ${
-          valueTone === "success" ? "text-emerald-700" : ""
+          valueTone === "success" ? "text-[var(--vs-status-success)]" : ""
         }`}
         title={value}
       >
@@ -2497,7 +2499,7 @@ function CheckIcon() {
   return (
     <svg
       aria-hidden="true"
-      className="h-4 w-4 shrink-0 text-emerald-600"
+      className="h-4 w-4 shrink-0 text-[var(--vs-status-success)]"
       fill="currentColor"
       viewBox="0 0 20 20"
     >

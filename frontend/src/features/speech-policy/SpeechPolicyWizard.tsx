@@ -513,17 +513,19 @@ export function SpeechPolicyWizard({
               </div>
             ) : null}
             {importError ? (
-              <p className="text-xs font-semibold text-red-700">{importError}</p>
+              <p className="text-xs font-semibold text-[var(--vs-status-danger)]">{importError}</p>
             ) : null}
             {importStatus ? (
-              <p className="text-xs font-semibold text-emerald-700">{importStatus}</p>
+              <p className="text-xs font-semibold text-[var(--vs-status-success)]">
+                {importStatus}
+              </p>
             ) : null}
           </div>
         </div>
       </section>
 
       {error ? (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] px-3 py-2 text-sm text-[var(--vs-status-danger)]">
           {error}
         </p>
       ) : null}

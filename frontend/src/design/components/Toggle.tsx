@@ -22,8 +22,9 @@ export function Toggle({
     <label
       className={cx(
         touchTargetClassName,
-        "flex cursor-pointer items-start justify-between gap-4 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm transition hover:bg-[var(--vs-surface)] vs-border",
-        disabled && "cursor-not-allowed opacity-50",
+        "flex cursor-pointer items-start justify-between gap-4 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] px-3 py-2 text-sm transition hover:bg-[var(--vs-action-secondary-hover)]",
+        disabled &&
+          "cursor-not-allowed border-[var(--vs-action-disabled-border)] bg-[var(--vs-action-disabled-bg)] text-[var(--vs-action-disabled-text)]",
         className,
       )}
     >
@@ -34,7 +35,7 @@ export function Toggle({
       <input
         {...inputProps}
         checked={checked}
-        className={cx("mt-1 h-5 w-5 accent-orange-500", focusRingClassName)}
+        className={cx("mt-1 h-5 w-5 accent-[var(--vs-action-primary)]", focusRingClassName)}
         disabled={disabled}
         onChange={(event) => {
           onChange(event.currentTarget.checked);

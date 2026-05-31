@@ -273,7 +273,7 @@ describe("CinemaTransportBar", () => {
           ...makeTransportModel(),
           playbackState: "playable",
           primary: {
-            className: "bg-orange-600 text-white",
+            className: "bg-[var(--vs-action-primary-hover)] text-[var(--vs-action-primary-text)]",
             disabled: true,
             label: "Play",
             onClick: () => null,
@@ -294,7 +294,7 @@ describe("CinemaTransportBar", () => {
           generationSettings: <span>Chapter 1</span>,
           playbackState: "preAudio",
           primary: {
-            className: "bg-amber-400 text-zinc-950",
+            className: "bg-[var(--vs-status-warning)] text-[var(--vs-text-primary)]",
             disabled: false,
             label: "Create audio",
             onClick: () => null,
@@ -323,7 +323,7 @@ describe("CinemaTransportBar", () => {
           ...makeTransportModel(),
           playbackState: "generating",
           primary: {
-            className: "bg-orange-600 text-white",
+            className: "bg-[var(--vs-action-primary-hover)] text-[var(--vs-action-primary-text)]",
             disabled: true,
             label: "Preparing first segment",
             onClick: () => null,
@@ -358,7 +358,7 @@ describe("CinemaTransportBar", () => {
           },
           playbackState: "degraded",
           primary: {
-            className: "bg-orange-600 text-white",
+            className: "bg-[var(--vs-action-primary-hover)] text-[var(--vs-action-primary-text)]",
             disabled: false,
             label: "Try again",
             onClick: () => null,
@@ -551,7 +551,7 @@ function makeTransportModel(): CinemaTransportModel {
     },
     playbackState: "playing",
     primary: {
-      className: "bg-orange-600 text-white",
+      className: "bg-[var(--vs-action-primary-hover)] text-[var(--vs-action-primary-text)]",
       disabled: false,
       label: "Play",
       onClick: () => null,

@@ -84,7 +84,9 @@ export function VoiceSourceAnalysisPanel({
   if (isSetupError(displayError, diagnostics)) {
     sourceNotice = <SourceAnalysisSetupCard diagnostics={diagnostics} error={displayError} />;
   } else if (displayError) {
-    sourceNotice = <p className="break-words text-sm leading-5 text-red-700">{displayError}</p>;
+    sourceNotice = (
+      <p className="break-words text-sm leading-5 text-[var(--vs-status-danger)]">{displayError}</p>
+    );
   }
 
   const handleCreate = useCallback(
@@ -112,8 +114,10 @@ export function VoiceSourceAnalysisPanel({
     <section className="grid min-w-0 gap-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-950">Reference / Source Media</h2>
-          <p className="mt-1 text-xs text-zinc-500">
+          <h2 className="text-sm font-semibold text-[var(--vs-text-primary)]">
+            Reference / Source Media
+          </h2>
+          <p className="mt-1 text-xs text-[var(--vs-text-muted)]">
             Review detected voices before creating profiles.
           </p>
         </div>
@@ -125,7 +129,7 @@ export function VoiceSourceAnalysisPanel({
       </div>
 
       <form
-        className="grid min-w-0 gap-3 rounded-lg border border-dashed border-zinc-300 bg-white p-4"
+        className="grid min-w-0 gap-3 rounded-lg border border-dashed border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-4"
         onSubmit={(event) => {
           void handleAnalyze(event);
         }}
@@ -142,24 +146,24 @@ export function VoiceSourceAnalysisPanel({
           type="file"
         />
         <label
-          className="inline-flex cursor-pointer items-center justify-center rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50"
+          className="inline-flex cursor-pointer items-center justify-center rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] px-4 py-2 text-sm font-medium text-[var(--vs-text-primary)] shadow-sm hover:bg-[var(--vs-action-secondary-hover)]"
           htmlFor="voice-source-file-input"
         >
           {file ? "Replace Source" : "Browse Source"}
         </label>
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] px-3 py-2 text-xs text-[var(--vs-text-muted)]">
           <span className="min-w-0 truncate" title={file?.name ?? "Audio/video source"}>
             {file?.name ?? "Audio/video source"}
           </span>
-          <span className="shrink-0 whitespace-nowrap text-zinc-500">
+          <span className="shrink-0 whitespace-nowrap text-[var(--vs-text-muted)]">
             {file ? formatBytes(file.size) : "No file selected"}
           </span>
         </div>
-        <p className="-mt-1 min-w-0 text-xs leading-5 text-zinc-500">
+        <p className="-mt-1 min-w-0 text-xs leading-5 text-[var(--vs-text-muted)]">
           Local uploads are limited by available disk/runtime, not a fixed app cap.
         </p>
         <button
-          className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-zinc-300"
+          className="inline-flex h-10 items-center justify-center rounded-md bg-[var(--vs-theatre-bg)] px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] disabled:cursor-not-allowed disabled:bg-[var(--vs-action-disabled-bg)]"
           disabled={!file || isAnalyzing}
           type="submit"
         >

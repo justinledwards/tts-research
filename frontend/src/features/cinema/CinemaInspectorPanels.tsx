@@ -174,12 +174,12 @@ export function ReadAlongInvariantDebugPanel({
 
 function readAlongStatusClassName(report: ReadAlongInvariantReport): string {
   if (report.status === "failed") {
-    return "text-orange-500";
+    return "text-[var(--vs-action-primary)]";
   }
   if (report.status === "degraded") {
-    return "text-amber-500";
+    return "text-[var(--vs-status-warning)]";
   }
-  return "text-emerald-500";
+  return "text-[var(--vs-status-success)]";
 }
 
 export function buildCinemaInspectorPanels(

@@ -154,8 +154,8 @@ export function PreparedSourceCinemaTransport({
     primary: {
       className:
         playbackState === "preAudio"
-          ? "bg-amber-400 text-zinc-950 shadow-amber-500/20"
-          : "bg-orange-600 text-white shadow-orange-500/25",
+          ? "bg-[var(--vs-status-warning)] text-[var(--vs-text-primary)] shadow-[var(--vs-shadow)]"
+          : "bg-[var(--vs-action-primary-hover)] text-[var(--vs-action-primary-text)] shadow-[var(--vs-shadow)]",
       disabled: primaryDisabled,
       disabledReason: primaryDisabled ? primaryDisabledReason : undefined,
       icon: primaryIcon,

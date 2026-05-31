@@ -36,7 +36,7 @@ export function RunConfigDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-zinc-950/25" role="presentation">
+    <div className="fixed inset-0 z-40 bg-[var(--vs-surface-overlay)]" role="presentation">
       <aside
         aria-label="Run configuration"
         aria-modal="true"

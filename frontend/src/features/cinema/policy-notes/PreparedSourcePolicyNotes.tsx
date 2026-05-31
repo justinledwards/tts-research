@@ -19,7 +19,9 @@ export function PreparedSourcePolicyNotes({
         <p className="vs-muted text-xs font-semibold uppercase tracking-[0.2em]" id={headingId}>
           Policy Notes
         </p>
-        <span className="text-xs font-semibold text-orange-500">{notes.length.toString()}</span>
+        <span className="text-xs font-semibold text-[var(--vs-action-primary)]">
+          {notes.length.toString()}
+        </span>
       </div>
       <div className="grid gap-2">
         {notes.slice(0, 8).map((note) => (

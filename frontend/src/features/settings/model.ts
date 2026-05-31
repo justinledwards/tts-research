@@ -45,7 +45,8 @@ export interface SettingsCommandTarget {
 export const SETTINGS_SCOPE_META: Record<SettingsScope, SettingsScopeMeta> = {
   machine: {
     appliesTo: "Applies to this browser or local runtime.",
-    badgeClassName: "border-sky-200 bg-sky-50 text-sky-700",
+    badgeClassName:
+      "border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] text-[var(--vs-status-info)]",
     description:
       "Local reader preferences, theme, engine readiness, model paths, and machine diagnostics.",
     label: "Machine",
@@ -53,21 +54,24 @@ export const SETTINGS_SCOPE_META: Record<SettingsScope, SettingsScopeMeta> = {
   },
   project: {
     appliesTo: "Applies to this project by default.",
-    badgeClassName: "border-violet-200 bg-violet-50 text-violet-700",
+    badgeClassName:
+      "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]",
     description: "Durable project defaults used by unpinned sources.",
     label: "Project",
     shortLabel: "Project",
   },
   session: {
     appliesTo: "Applies to the current browser session or next run.",
-    badgeClassName: "border-orange-300 bg-orange-500/10 text-orange-700",
+    badgeClassName:
+      "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]",
     description: "Temporary choices for the current preview, run, or in-browser session.",
     label: "Session",
     shortLabel: "Session",
   },
   source: {
     appliesTo: "Applies to the selected source until cleared.",
-    badgeClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    badgeClassName:
+      "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]",
     description: "Durable source-level pins for prepared sources and book sources.",
     label: "Source",
     shortLabel: "Source",

@@ -296,10 +296,10 @@ function TelepromptTheatreSettingsPreview({
 }: Readonly<{ settings: TelepromptTheatreSettings }>) {
   return (
     <div
-      className="grid min-h-48 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-white"
+      className="grid min-h-48 overflow-hidden rounded-lg border border-[var(--vs-border-strong)] bg-[var(--vs-theatre-bg)] p-3 text-[var(--vs-theatre-text)]"
       data-testid="teleprompt-theatre-settings-preview"
     >
-      <div className="flex items-center justify-between gap-3 text-[0.68rem] font-semibold uppercase text-orange-200">
+      <div className="flex items-center justify-between gap-3 text-[0.68rem] font-semibold uppercase text-[var(--vs-theatre-accent)]">
         <span>{telepromptTheatrePreset(settings.presetId).label}</span>
         <span>{settings.operatorPanelVisible ? "Operator panel" : "Presenter clean"}</span>
       </div>
@@ -313,7 +313,7 @@ function TelepromptTheatreSettingsPreview({
           Take a breath. Follow the current phrase and let the next cue wait in the margin.
         </p>
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-300">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--vs-text-secondary)]">
         <span>{settings.cuePreviewCount.toString()} cue preview</span>
         <span>{scrollModeLabel(settings.scrollMode)}</span>
         <span>

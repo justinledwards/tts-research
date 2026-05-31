@@ -1203,7 +1203,7 @@ export function TelepromptStudio({
           }}
         >
           <summary
-            className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold transition hover:text-orange-700 [&::-webkit-details-marker]:hidden"
+            className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold transition hover:text-[var(--vs-selected-text)] [&::-webkit-details-marker]:hidden"
             data-testid="ui-action-teleprompt-cue-drawer"
           >
             <span>Inspector and cue list</span>

@@ -164,7 +164,7 @@ export function RunConfigurationControls({
             <button
               className={`rounded-md border p-4 text-left transition ${
                 item.mode === runConfiguration.runMode
-                  ? "border-orange-300 bg-orange-500/10 text-[var(--vs-text)]"
+                  ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-text)]"
                   : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
               }`}
               key={item.mode}
@@ -186,7 +186,7 @@ export function RunConfigurationControls({
       <section className="grid gap-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide vs-muted">Narration Engine</h3>
         <select
-          className="w-full rounded-md border px-3 py-3 text-sm font-semibold outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 vs-border vs-raised"
+          className="w-full rounded-md border px-3 py-3 text-sm font-semibold outline-none focus:border-[var(--vs-selected-border)] focus:ring-2 focus:ring-[var(--vs-focus-ring-soft)] vs-border vs-raised"
           onChange={(event) => {
             updateTTSEngine(event.currentTarget.value);
           }}
@@ -239,7 +239,7 @@ export function RunConfigurationControls({
             <button
               className={`rounded-md border px-3 py-3 text-sm font-semibold capitalize transition ${
                 mode === runConfiguration.performanceMode
-                  ? "border-orange-300 bg-orange-500/10 text-[var(--vs-text)]"
+                  ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-text)]"
                   : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
               }`}
               key={mode}
@@ -299,7 +299,7 @@ export function RunConfigurationControls({
 
       {onSubmit ? (
         <button
-          className="h-11 w-full rounded-md px-5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none vs-accent-bg hover:brightness-95"
+          className="h-11 w-full rounded-md px-5 text-sm font-semibold text-[var(--vs-action-primary-text)] shadow-sm shadow-[var(--vs-shadow)] transition disabled:cursor-not-allowed disabled:bg-[var(--vs-action-disabled-bg)] disabled:shadow-none vs-accent-bg hover:brightness-95"
           disabled={!canSubmit}
           onClick={onSubmit}
           type="button"
@@ -341,12 +341,14 @@ function EngineDiagnosticsCard({
 }>) {
   if (error) {
     return (
-      <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>
+      <p className="rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-3 text-sm text-[var(--vs-status-danger)]">
+        {error}
+      </p>
     );
   }
   if (!engine) {
     return (
-      <p className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+      <p className="rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] p-3 text-sm text-[var(--vs-text-muted)]">
         Engine diagnostics are loading.
       </p>
     );
@@ -368,14 +370,14 @@ function EngineDiagnosticsCard({
         <div
           className={`rounded border px-2 py-1 text-xs ${
             profileReadiness.ready
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-amber-200 bg-amber-50 text-amber-800"
+              ? "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]"
+              : "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]"
           }`}
         >
           <p>{profileReadiness.message}</p>
           {canPrepareTarget && selectedProfile && targetId ? (
             <button
-              className="mt-2 rounded border border-amber-300 px-2 py-1 font-semibold text-amber-900 hover:bg-amber-100 vs-raised"
+              className="mt-2 rounded border border-[var(--vs-status-warning-border)] px-2 py-1 font-semibold text-[var(--vs-status-warning)] hover:bg-[var(--vs-status-warning-bg)] vs-raised"
               onClick={() => {
                 void onPrepareProfileTarget(selectedProfile.id, targetId);
               }}
@@ -419,7 +421,9 @@ function DrawerKokoroRenderModeSelector({
           return (
             <div
               className={`rounded-md border p-3 ${
-                selected ? "border-orange-300 bg-orange-500/10" : "vs-border vs-surface"
+                selected
+                  ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+                  : "vs-border vs-surface"
               }`}
               key={option.id}
             >
@@ -447,7 +451,7 @@ function DrawerKokoroRenderModeSelector({
               </button>
               {canPrepare && profile && targetId ? (
                 <button
-                  className="mt-2 rounded border border-orange-200 px-2 py-1 text-xs font-semibold text-orange-800 hover:bg-orange-100 vs-raised"
+                  className="mt-2 rounded border border-[var(--vs-selected-border)] px-2 py-1 text-xs font-semibold text-[var(--vs-selected-text)] hover:bg-[var(--vs-selected)] vs-raised"
                   onClick={() => {
                     void onPrepareProfileTarget(profile.id, targetId);
                   }}
@@ -575,18 +579,18 @@ function drawerKokoroModeActionLabel(status: string): string {
 
 function drawerKokoroModeStatusClass(ready: boolean, status: string): string {
   if (status === "failed") {
-    return "bg-red-100 text-red-700";
+    return "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   }
   if (status === "cancelled") {
-    return "bg-zinc-100 text-zinc-600";
+    return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
   }
   if (ready && status !== "check needed") {
-    return "bg-emerald-100 text-emerald-700";
+    return "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (status === "check needed") {
-    return "bg-amber-100 text-amber-800";
+    return "bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]";
   }
-  return "bg-zinc-100 text-zinc-600";
+  return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
 }
 
 function profileReadinessForEngine(
@@ -621,11 +625,11 @@ function SupertonicOptions({
   const voices = engine?.voices ?? fallbackSupertonicVoices();
   const languages = languageOptionsForEngine(engine);
   return (
-    <div className="grid gap-3 rounded-md border border-orange-200 bg-orange-500/10 p-3">
+    <div className="grid gap-3 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] p-3">
       <label className="grid gap-1 text-sm font-semibold">
         Voice style
         <select
-          className="rounded-md border border-orange-200 px-3 py-2 vs-raised"
+          className="rounded-md border border-[var(--vs-selected-border)] px-3 py-2 vs-raised"
           onChange={(event) => {
             onOptionChange("voiceStyle", event.currentTarget.value);
           }}
@@ -641,7 +645,7 @@ function SupertonicOptions({
       <label className="grid gap-1 text-sm font-semibold">
         Language
         <select
-          className="rounded-md border border-orange-200 px-3 py-2 vs-raised"
+          className="rounded-md border border-[var(--vs-selected-border)] px-3 py-2 vs-raised"
           onChange={(event) => {
             onOptionChange("lang", event.currentTarget.value);
           }}
@@ -654,7 +658,7 @@ function SupertonicOptions({
           ))}
         </select>
       </label>
-      <p className="text-xs leading-5 text-orange-900">
+      <p className="text-xs leading-5 text-[var(--vs-selected-text)]">
         Selected before audio: {voiceStyle} · {supertonicLanguageLabel(language)} ·{" "}
         {engine?.supportsSSML ? "SSML" : "plain text fallback"}
       </p>

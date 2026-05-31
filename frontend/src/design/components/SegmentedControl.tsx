@@ -39,7 +39,7 @@ export function SegmentedControl<T extends string>({
   return (
     <fieldset
       className={cx(
-        "grid rounded-md border bg-[var(--vs-surface)] p-1 text-xs font-semibold shadow-sm vs-border",
+        "grid rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-muted)] p-1 text-xs font-semibold shadow-sm",
         columnClassName,
         className,
       )}

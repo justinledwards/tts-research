@@ -46,14 +46,14 @@ export function HelpPanel({
   const runPreset = getRunModePreset(context.runConfiguration.runMode);
   return (
     <PanelShell label="Help" title="Context Guide" onClose={onClose}>
-      <section className="grid gap-3 rounded-md border border-orange-200 bg-orange-50 p-4">
+      <section className="grid gap-3 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-orange-950">Right now</h3>
-          <span className="rounded-full border border-orange-300 bg-white px-2 py-0.5 text-xs font-semibold text-orange-700">
+          <h3 className="text-sm font-semibold text-[var(--vs-selected-text)]">Right now</h3>
+          <span className="rounded-full border border-[var(--vs-selected-border)] bg-[var(--vs-surface-primary)] px-2 py-0.5 text-xs font-semibold text-[var(--vs-selected-text)]">
             {HELP_ANCHORS.find((anchor) => anchor.id === activeAnchor)?.label}
           </span>
         </div>
-        <p className="text-sm leading-6 text-orange-900">{currentExplanation}</p>
+        <p className="text-sm leading-6 text-[var(--vs-selected-text)]">{currentExplanation}</p>
       </section>
 
       <section className="mt-4 grid gap-2 rounded-md border p-4 vs-border vs-surface">
@@ -71,7 +71,7 @@ export function HelpPanel({
             <a
               className={`rounded-md border p-3 text-left transition ${
                 activeAnchor === anchor.id
-                  ? "border-orange-300 bg-orange-500/10"
+                  ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
                   : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
               }`}
               href={`#help-${anchor.id}`}
@@ -150,7 +150,7 @@ function PanelShell({
   useReaderModalLifecycle(panelRef, { closeOnEscape: true, onClose });
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/25" role="presentation">
+    <div className="fixed inset-0 z-50 bg-[var(--vs-surface-overlay)]" role="presentation">
       <aside
         aria-label={label}
         aria-modal="true"

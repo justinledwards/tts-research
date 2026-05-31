@@ -69,7 +69,7 @@ export function AlignmentDiagnosticsPanel({
       </div>
 
       {staleReason ? (
-        <p className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-900 dark:text-amber-200">
+        <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-xs leading-5 text-[var(--vs-status-warning)] dark:text-[var(--vs-status-warning)]">
           {staleReason}
         </p>
       ) : null}
@@ -92,7 +92,9 @@ export function AlignmentDiagnosticsPanel({
                 <span
                   aria-hidden="true"
                   className={`block min-w-[0.4rem] rounded-sm ${
-                    active ? "bg-orange-500" : "bg-zinc-300 dark:bg-zinc-700"
+                    active
+                      ? "bg-[var(--vs-action-primary)]"
+                      : "bg-[var(--vs-action-disabled-bg)] dark:bg-[var(--vs-action-disabled-bg)]"
                   }`}
                   key={`${String(fragment.index)}:${String(fragment.startMs)}`}
                   style={{ width: `${width.toFixed(2)}%` }}
@@ -125,13 +127,17 @@ export function AlignmentDiagnosticsPanel({
         <BarMetric
           label="Mean"
           max={350}
-          tone="bg-emerald-500"
+          tone="bg-[var(--vs-status-success)]"
           value={drift?.meanAbsoluteMs ?? 0}
         />
         <BarMetric
           label="Max"
           max={350}
-          tone={(drift?.maxAbsoluteMs ?? 0) > 150 ? "bg-amber-500" : "bg-emerald-500"}
+          tone={
+            (drift?.maxAbsoluteMs ?? 0) > 150
+              ? "bg-[var(--vs-status-warning)]"
+              : "bg-[var(--vs-status-success)]"
+          }
           value={drift?.maxAbsoluteMs ?? 0}
         />
       </div>
@@ -140,9 +146,24 @@ export function AlignmentDiagnosticsPanel({
         <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
           Confidence chart
         </p>
-        <BarMetric label="Overall" max={1} tone="bg-blue-500" value={confidence?.overall ?? 0} />
-        <BarMetric label="Segment" max={1} tone="bg-blue-500" value={confidence?.segment ?? 0} />
-        <BarMetric label="Token" max={1} tone="bg-blue-500" value={confidence?.token ?? 0} />
+        <BarMetric
+          label="Overall"
+          max={1}
+          tone="bg-[var(--vs-status-info)]"
+          value={confidence?.overall ?? 0}
+        />
+        <BarMetric
+          label="Segment"
+          max={1}
+          tone="bg-[var(--vs-status-info)]"
+          value={confidence?.segment ?? 0}
+        />
+        <BarMetric
+          label="Token"
+          max={1}
+          tone="bg-[var(--vs-status-info)]"
+          value={confidence?.token ?? 0}
+        />
       </div>
 
       <div className="grid gap-2">
@@ -270,7 +291,7 @@ function BarMetric({
         <span>{label}</span>
         <span className="vs-muted">{max === 1 ? formatPercent(value) : formatMs(value)}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+      <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-border-subtle)] dark:bg-[var(--vs-surface-muted)]">
         <span
           className={`block h-full ${tone}`}
           style={{ width: `${(ratio * 100).toFixed(1)}%` }}

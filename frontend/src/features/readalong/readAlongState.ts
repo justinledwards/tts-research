@@ -76,12 +76,12 @@ export function readAlongRuntimeDebugRows(
 
 export function readAlongRuntimeStatusClassName(snapshot: ReadAlongRuntimeSnapshot): string {
   if (snapshot.state === "synced-word" || snapshot.state === "synced-phrase") {
-    return "text-emerald-500";
+    return "text-[var(--vs-status-success)]";
   }
   if (snapshot.state === "stale-audio" || snapshot.state === "degraded") {
-    return "text-orange-500";
+    return "text-[var(--vs-action-primary)]";
   }
-  return "text-amber-500";
+  return "text-[var(--vs-status-warning)]";
 }
 
 function formatNullableNumber(value: number | null): string {

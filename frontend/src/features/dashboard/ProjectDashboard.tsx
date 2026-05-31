@@ -127,7 +127,10 @@ export function ProjectDashboard({
     : undefined;
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/35 p-3 md:p-6" role="presentation">
+    <div
+      className="fixed inset-0 z-50 bg-[var(--vs-surface-overlay)] p-3 md:p-6"
+      role="presentation"
+    >
       <aside
         aria-label="Project Dashboard"
         aria-modal="true"
@@ -189,7 +192,7 @@ export function ProjectDashboard({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
           {projectError ? (
-            <p className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <p className="mb-4 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-3 text-sm text-[var(--vs-status-danger)]">
               {projectError}
             </p>
           ) : null}
@@ -332,7 +335,7 @@ export function ProjectDashboard({
               <Panel title="Storage">
                 <div className="grid gap-2 p-3 text-sm">
                   {projectStorageError ? (
-                    <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-3 text-xs text-[var(--vs-status-warning)]">
                       {projectStorageError}
                     </p>
                   ) : null}
@@ -413,7 +416,9 @@ function ProjectDashboardRow({
   return (
     <div
       className={`grid min-w-0 gap-3 rounded-md border p-3 ${
-        isActive ? "border-orange-300 bg-orange-500/5" : "vs-border vs-surface"
+        isActive
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+          : "vs-border vs-surface"
       }`}
     >
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">

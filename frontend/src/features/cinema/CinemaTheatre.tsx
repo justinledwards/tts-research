@@ -296,7 +296,7 @@ export function CinemaTheatreTransport({
   const progressRatio = clampTheatreProgress(model.progress.ratio);
   return (
     <footer
-      className="relative shrink-0 border-t border-white/15 bg-zinc-950 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-white shadow-[0_-10px_30px_rgba(0,0,0,0.35)] lg:px-7"
+      className="relative shrink-0 border-t border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-bg)] px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-[var(--vs-theatre-text)] shadow-[0_-10px_30px_rgba(0,0,0,0.35)] lg:px-7"
       data-cinema-theatre-controls={controlsVisible ? "visible" : "hidden"}
       data-cinema-theatre-transport=""
       data-cinema-transport-footer=""
@@ -304,13 +304,13 @@ export function CinemaTheatreTransport({
     >
       <div className="grid gap-2">
         <div className="grid gap-1" data-cinema-theatre-mini-progress="">
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/12">
+          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--vs-surface-muted)]">
             <div
-              className="h-full rounded-full bg-orange-300"
+              className="h-full rounded-full bg-[var(--vs-theatre-accent)]"
               style={{ width: `${Math.round(progressRatio * 100).toString()}%` }}
             />
           </div>
-          <div className="flex justify-between gap-3 text-xs tabular-nums text-zinc-400">
+          <div className="flex justify-between gap-3 text-xs tabular-nums text-[var(--vs-text-muted)]">
             <span>{model.progress.currentLabel}</span>
             <span>{model.progress.durationLabel}</span>
           </div>

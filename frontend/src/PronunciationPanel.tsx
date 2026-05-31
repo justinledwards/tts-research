@@ -165,7 +165,7 @@ export function PronunciationPanel({
   return (
     <div className="grid gap-4 p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex overflow-hidden rounded-md border border-zinc-200 bg-white">
+        <div className="inline-flex overflow-hidden rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)]">
           <ScopeButton
             active={scope === "project"}
             label="Project"
@@ -186,7 +186,7 @@ export function PronunciationPanel({
         </div>
         <div className="flex flex-wrap gap-2">
           <button
-            className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800 hover:border-orange-300"
+            className="h-9 rounded-md border border-[var(--vs-border-subtle)] px-3 text-xs font-semibold text-[var(--vs-text-secondary)] hover:border-[var(--vs-selected-border)]"
             onClick={() => {
               fileInputRef.current?.click();
             }}
@@ -195,7 +195,7 @@ export function PronunciationPanel({
             Import PLS
           </button>
           <a
-            className="inline-flex h-9 items-center rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800 hover:border-orange-300"
+            className="inline-flex h-9 items-center rounded-md border border-[var(--vs-border-subtle)] px-3 text-xs font-semibold text-[var(--vs-text-secondary)] hover:border-[var(--vs-selected-border)]"
             href={lexiconExportUrl(scope, projectId, voiceProfileId)}
           >
             Export PLS
@@ -214,36 +214,36 @@ export function PronunciationPanel({
       </div>
 
       {error ? (
-        <p className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+        <p className="rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-3 text-xs text-[var(--vs-status-danger)]">
           {error}
         </p>
       ) : null}
 
-      <div className="grid gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7rem_auto] md:items-end">
-        <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">
+      <div className="grid gap-2 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7rem_auto] md:items-end">
+        <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--vs-text-muted)]">
           Term
           <input
-            className="h-9 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-zinc-900"
+            className="h-9 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] px-3 text-sm font-medium normal-case tracking-normal text-[var(--vs-text-primary)]"
             onChange={(event) => {
               setTerm(event.currentTarget.value);
             }}
             value={term}
           />
         </label>
-        <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">
+        <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--vs-text-muted)]">
           Spoken As
           <input
-            className="h-9 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-zinc-900"
+            className="h-9 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] px-3 text-sm font-medium normal-case tracking-normal text-[var(--vs-text-primary)]"
             onChange={(event) => {
               setReplacement(event.currentTarget.value);
             }}
             value={replacement}
           />
         </label>
-        <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">
+        <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--vs-text-muted)]">
           Lang
           <input
-            className="h-9 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-zinc-900"
+            className="h-9 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] px-3 text-sm font-medium normal-case tracking-normal text-[var(--vs-text-primary)]"
             onChange={(event) => {
               setLang(event.currentTarget.value);
             }}
@@ -251,7 +251,7 @@ export function PronunciationPanel({
             value={lang}
           />
         </label>
-        <label className="flex h-9 items-center gap-2 text-xs font-semibold text-zinc-700">
+        <label className="flex h-9 items-center gap-2 text-xs font-semibold text-[var(--vs-text-secondary)]">
           <input
             checked={isProtected}
             className="h-4 w-4 accent-orange-500"
@@ -263,7 +263,7 @@ export function PronunciationPanel({
           Protected
         </label>
         <button
-          className="h-9 rounded-md bg-orange-600 px-3 text-xs font-semibold text-white disabled:opacity-50 md:col-start-4"
+          className="h-9 rounded-md bg-[var(--vs-action-primary-hover)] px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 md:col-start-4"
           disabled={
             !term.trim() || !replacement.trim() || (scope === "voiceProfile" && !canUseProfile)
           }
@@ -276,7 +276,7 @@ export function PronunciationPanel({
         </button>
         {editingEntryId ? (
           <button
-            className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 md:col-start-3"
+            className="h-9 rounded-md border border-[var(--vs-border-subtle)] px-3 text-xs font-semibold text-[var(--vs-text-secondary)] md:col-start-3"
             onClick={resetForm}
             type="button"
           >
@@ -288,14 +288,14 @@ export function PronunciationPanel({
       <div className="grid gap-2">
         {activeLexicon.entries.map((entry) => (
           <div
-            className="grid gap-2 rounded-md border border-zinc-200 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+            className="grid gap-2 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
             key={entry.id}
           >
             <div className="min-w-0">
-              <p className="truncate font-semibold text-zinc-950">
+              <p className="truncate font-semibold text-[var(--vs-text-primary)]">
                 {entry.term} → {entry.replacement ?? entry.phoneme}
               </p>
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-xs text-[var(--vs-text-muted)]">
                 {entry.scope === "voiceProfile" ? "Voice profile" : "Project"}
                 {entry.lang ? ` · ${entry.lang}` : ""}
                 {entry.protected ? " · protected" : ""}
@@ -303,7 +303,7 @@ export function PronunciationPanel({
             </div>
             <div className="flex gap-2 sm:justify-end">
               <button
-                className="h-8 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 hover:border-orange-300 hover:text-orange-700"
+                className="h-8 rounded-md border border-[var(--vs-border-subtle)] px-3 text-xs font-semibold text-[var(--vs-text-secondary)] hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)]"
                 onClick={() => {
                   editEntry(entry);
                 }}
@@ -312,7 +312,7 @@ export function PronunciationPanel({
                 Edit
               </button>
               <button
-                className="h-8 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 hover:border-red-300 hover:text-red-700"
+                className="h-8 rounded-md border border-[var(--vs-border-subtle)] px-3 text-xs font-semibold text-[var(--vs-text-secondary)] hover:border-[var(--vs-status-danger-border)] hover:text-[var(--vs-status-danger)]"
                 onClick={() => {
                   void deleteEntry(entry);
                 }}
@@ -324,21 +324,21 @@ export function PronunciationPanel({
           </div>
         ))}
         {activeLexicon.entries.length === 0 ? (
-          <p className="rounded-md border border-dashed border-zinc-200 bg-white p-4 text-sm text-zinc-500">
+          <p className="rounded-md border border-dashed border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-4 text-sm text-[var(--vs-text-muted)]">
             No pronunciations in this scope yet.
           </p>
         ) : null}
       </div>
 
       {decisions.length > 0 ? (
-        <div className="grid gap-2 border-t border-zinc-200 pt-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+        <div className="grid gap-2 border-t border-[var(--vs-border-subtle)] pt-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--vs-text-muted)]">
             Applied in preview
           </p>
           <div className="flex flex-wrap gap-2">
             {decisions.slice(0, 10).map((decision) => (
               <span
-                className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700"
+                className="rounded-full border border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] px-2 py-1 text-xs font-semibold text-[var(--vs-status-info)]"
                 key={`${decision.entryId ?? decision.originalText}-${decision.startOffset.toString()}`}
               >
                 {decision.originalText} → {decision.spoken}
@@ -359,7 +359,7 @@ function ScopeButton({
 }: Readonly<{ active: boolean; disabled?: boolean; label: string; onClick: () => void }>) {
   return (
     <button
-      className={`h-9 px-3 text-xs font-semibold transition ${active ? "bg-zinc-950 text-white" : "text-zinc-700 hover:bg-zinc-50"} disabled:opacity-40`}
+      className={`h-9 px-3 text-xs font-semibold transition ${active ? "bg-[var(--vs-theatre-bg)] text-[var(--vs-action-primary-text)]" : "text-[var(--vs-text-secondary)] hover:bg-[var(--vs-action-secondary-hover)]"} disabled:opacity-40`}
       disabled={disabled}
       onClick={onClick}
       type="button"

@@ -136,7 +136,7 @@ export function ProjectDashboardTitle({
     <div className="flex min-w-0 flex-wrap items-center gap-2">
       <button
         aria-current={isActive ? "page" : undefined}
-        className="min-w-0 truncate text-left text-base font-semibold hover:text-orange-700"
+        className="min-w-0 truncate text-left text-base font-semibold hover:text-[var(--vs-selected-text)]"
         data-testid={`ui-action-project-dashboard-open-${project.id}`}
         data-ui-focus-target={isActive ? "project-dashboard-status-message" : undefined}
         data-ui-action-surface="Workspace"
@@ -220,7 +220,7 @@ export function ProjectDeleteConfirmation({
 }>) {
   const deletionReason = isDeleting ? "Project deletion is in progress." : undefined;
   return (
-    <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+    <div className="rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-3 text-sm text-[var(--vs-status-danger)]">
       <p className="font-semibold">Delete “{project.name}”?</p>
       <p className="mt-1 text-xs leading-5">
         This removes the project, generated audio, books, prepared sources, and listening progress.
@@ -318,7 +318,7 @@ export function ProjectCreateForm({
 
   return (
     <form
-      className="grid gap-2 rounded-md border border-orange-200 bg-orange-500/5 p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
+      className="grid gap-2 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
       onSubmit={(event) => {
         event.preventDefault();
         const nextName = name.trim();
