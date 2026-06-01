@@ -11,7 +11,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
-import { type RequestState, type StudioMode, TopProductBar } from "./AppShell";
+import { type StudioMode, TopProductBar } from "./AppShell";
 import type { BundlePanelMode } from "./BundlePanels";
 import {
   apiBaseUrl,
@@ -78,6 +78,7 @@ import {
   updatePreparedSourceSpeechPolicy,
   type VoicePreviewAudio,
 } from "./api";
+
 import { formatDuration } from "./format";
 import {
   activeWordIndexForProgress,
@@ -432,6 +433,8 @@ import {
   orderedKokoroVoicepacksForLanguage,
   voiceProfileMatchesLanguage,
 } from "./features/i18n/languageVoiceMapping";
+
+type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 
 type VoiceProfileArtifactBuildAction = (
   profileId: string,
@@ -4154,7 +4157,7 @@ export function App() {
     }
     if (nextJob.status === "cancelled") {
       setRequestState("cancelled");
-      setError(nextJob.error ?? "Voice job cancelled");
+      setError(null);
       return;
     }
     setRequestState("running");
@@ -5713,7 +5716,6 @@ export function App() {
 
         if (nextJob.status === "cancelled") {
           setRequestState("cancelled");
-          setError(nextJob.error ?? "Voice job cancelled");
           void refreshProjectJobs(nextJob.projectId || activeProjectId);
         }
       },
@@ -6832,40 +6834,25 @@ export function App() {
       style={workspaceOverlayStyle}
     >
       <TopProductBar
-        activeJobId={activeJobId}
-        activeProjectId={activeProjectId}
-        canSubmit={canCreateCurrentSource}
         commandPaletteShortcutLabel={
           shortcutLabelForCommand("command.palette", shortcutPreferences) ?? "Ctrl+K / Cmd+K"
         }
-        isProcessing={isProcessing}
-        job={job}
-        jobName={studioJobName}
-        projectJobs={projectJobs}
-        projectName={studioProjectName}
-        projects={projects}
-        requestState={requestState}
         settingsShortcutLabel={
           shortcutLabelForCommand("settings.open", shortcutPreferences) ?? "Ctrl+, / Cmd+,"
         }
         studioMode={studioMode}
-        showSubmitAction={false}
-        onCancel={() => {
-          void handleCancelVoiceJob();
+        workContext={{
+          chapterName: studioJobName,
+          projectName: studioProjectName,
+          workspaceLabel:
+            studioMode === "narration" ? "Narration Workbench" : "Voice Cloning Workbench",
         }}
         onCommandPaletteOpen={openCommandPalette}
-        onJobSelect={(jobId) => {
-          void handleSelectJob(jobId);
-        }}
-        onProjectSelect={selectProject}
         onSettingsOpen={() => {
           setSettingsCommandTarget(null);
           setIsSettingsOpen(true);
         }}
         onStudioModeChange={handleStudioModeChange}
-        onSubmit={() => {
-          createAndListenFromCurrentSource();
-        }}
         onWorkspaceCustomLayoutChange={setWorkspaceCustomLayout}
         onWorkspaceDisclosurePinChange={setWorkspaceDisclosurePin}
         onWorkspaceLayoutModeChange={setWorkspaceLayoutMode}
@@ -6948,6 +6935,9 @@ export function App() {
             projects={projects}
             profileSource={profileSource}
             profiles={voiceProfiles}
+            returnWorkspaceLabel={
+              studioMode === "narration" ? "Narration Workbench" : "Voice Cloning Workbench"
+            }
             customSpeechPolicyProfiles={customSpeechPolicyProfiles}
             speechPolicyProfile={speechPolicyProfile}
             speechPolicyProfiles={speechPolicyProfiles}

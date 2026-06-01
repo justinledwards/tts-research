@@ -17,13 +17,27 @@ describe("Command Center", () => {
 
     expect(markup).toContain('aria-label="Command Center"');
     expect(markup).toContain("Command Center");
-    expect(markup).toContain("Return to Workbench");
+    expect(markup).toContain("Return to Narration Workbench");
+    expect(markup).toContain('aria-label="Return to Narration Workbench"');
     expect(markup).toContain("Projects");
     expect(markup).toContain("Assets");
     expect(markup).toContain("Activity");
     expect(markup).toContain("Import/Export");
     expect(markup).not.toContain("Workspace &amp; Activity");
     expect(markup).not.toContain("Project Dashboard");
+  });
+
+  it("labels return behavior for the active major workbench", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="overview"
+        returnWorkspaceLabel="Voice Cloning Workbench"
+      />,
+    );
+
+    expect(markup).toContain("Return to Voice Cloning Workbench");
+    expect(markup).toContain('aria-label="Return to Voice Cloning Workbench"');
   });
 
   it("keeps project library and generated audio in the projects section", () => {
@@ -90,6 +104,7 @@ function props(): Parameters<typeof WorkspaceDrawer>[0] {
     projectStorage: storage(),
     projectStorageError: null,
     projects: [project()],
+    returnWorkspaceLabel: "Narration Workbench",
     selectedProfileId: "profile-1",
     speechPolicyProfile: "general",
     speechPolicyProfiles: [],

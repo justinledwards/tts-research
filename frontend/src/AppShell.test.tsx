@@ -6,7 +6,6 @@ import {
 } from "./features/workspace";
 import { TopProductBar, WorkspaceLayoutControl } from "./AppShell";
 import { createRunConfiguration } from "./runConfig";
-import type { VoiceJob, VoiceProject } from "./types";
 
 describe("WorkspaceLayoutControl", () => {
   it("centralizes preset and custom pin controls in one menu", () => {
@@ -39,32 +38,22 @@ describe("TopProductBar", () => {
   it("keeps project and chapter switching while routing management to Command Center", () => {
     const markup = renderToStaticMarkup(
       <TopProductBar
-        activeJobId="job-1"
-        activeProjectId="project-1"
-        canSubmit
         commandPaletteShortcutLabel="Ctrl+K"
-        isProcessing={false}
-        job={topBarJob()}
-        jobName="Current chapter"
-        projectJobs={[topBarJob()]}
-        projectName="Novel"
-        projects={[topBarProject()]}
-        requestState="idle"
         runConfiguration={createRunConfiguration("checkedMaster")}
         settingsShortcutLabel="Ctrl+,"
-        showSubmitAction={false}
         studioMode="narration"
+        workContext={{
+          chapterName: "Current chapter",
+          projectName: "Novel",
+          workspaceLabel: "Narration Workbench",
+        }}
         workspaceCustomLayout={DEFAULT_WORKSPACE_CUSTOM_LAYOUT}
         workspaceDisclosurePins={DEFAULT_WORKSPACE_DISCLOSURE_PINS}
         workspaceLayoutMode="balanced"
-        onCancel={() => null}
         onCommandCenterOpen={() => null}
         onCommandPaletteOpen={() => null}
-        onJobSelect={() => null}
-        onProjectSelect={() => null}
         onSettingsOpen={() => null}
         onStudioModeChange={() => null}
-        onSubmit={() => null}
         onWorkspaceCustomLayoutChange={() => null}
         onWorkspaceDisclosurePinChange={() => null}
         onWorkspaceLayoutModeChange={() => null}
@@ -73,27 +62,23 @@ describe("TopProductBar", () => {
 
     expect(markup).toContain("Command Center");
     expect(markup).toContain('aria-label="Open Command Center"');
-    expect(markup).toContain('aria-label="Select project"');
-    expect(markup).toContain('aria-label="Select chapter"');
+    expect(markup).toContain('data-testid="ui-action-shell-context-summary"');
+    expect(markup).toContain("Narration Workbench");
+    expect(markup).toContain("Novel");
+    expect(markup).toContain("Current chapter");
+    expect(markup).toContain('data-segmented-control="Studio mode"');
+    expect(markup).toContain("Layout");
+    expect(markup).toContain('aria-label="Open settings"');
+    expect(markup).not.toContain('aria-label="Select project"');
+    expect(markup).not.toContain('aria-label="Select chapter"');
     expect(markup).not.toContain(">Import</button>");
     expect(markup).not.toContain(">Export</button>");
+    expect(markup).not.toContain("Cancel Job");
+    expect(markup).not.toContain("Create &amp; Listen");
+    expect(markup).not.toContain(">Run</button>");
+    expect(markup).not.toContain("Cancelled");
+    expect(markup).not.toContain("Failed");
+    expect(markup).not.toContain("Generating");
+    expect(markup).not.toContain(">idle</");
   });
 });
-
-function topBarProject(): VoiceProject {
-  return {
-    createdAt: "2026-05-31T20:00:00Z",
-    id: "project-1",
-    name: "Novel",
-    updatedAt: "2026-05-31T21:00:00Z",
-  } as VoiceProject;
-}
-
-function topBarJob(): VoiceJob {
-  return {
-    id: "job-1",
-    inputText: "Opening chapter text",
-    voice: "default",
-    voiceProfileName: "Narrator",
-  } as VoiceJob;
-}

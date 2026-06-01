@@ -20,74 +20,48 @@ import {
 } from "./features/workspace/disclosure";
 import type { RunConfiguration } from "./runConfig";
 import { describePerformanceMode } from "./runConfig";
-import type { VoiceJob, VoiceProject } from "./types";
 
-export type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 export type StudioMode = "narration" | "voiceCloning";
 
+export interface ShellWorkContext {
+  readonly chapterName: string;
+  readonly projectName: string;
+  readonly workspaceLabel: string;
+}
+
 export function TopProductBar({
-  activeJobId,
-  activeProjectId,
-  canSubmit,
   commandPaletteShortcutLabel,
-  isProcessing,
-  jobName,
-  job,
-  projectJobs,
-  projectName,
-  projects,
-  requestState,
   runConfiguration,
   settingsShortcutLabel,
-  showSubmitAction = true,
   studioMode,
+  workContext,
   workspaceCustomLayout,
   workspaceDisclosurePins,
   workspaceLayoutMode,
-  onCancel,
   onCommandPaletteOpen,
-  onJobSelect,
-  onProjectSelect,
   onSettingsOpen,
   onStudioModeChange,
-  onSubmit,
   onWorkspaceCustomLayoutChange,
   onWorkspaceDisclosurePinChange,
   onWorkspaceLayoutModeChange,
   onCommandCenterOpen,
 }: Readonly<{
-  activeJobId: string | null;
-  activeProjectId: string;
-  canSubmit: boolean;
   commandPaletteShortcutLabel: string;
-  isProcessing: boolean;
-  jobName: string;
-  job: VoiceJob | null;
-  projectJobs: VoiceJob[];
-  projectName: string;
-  projects: VoiceProject[];
-  requestState: RequestState;
   runConfiguration: RunConfiguration;
   settingsShortcutLabel: string;
-  showSubmitAction?: boolean;
   studioMode: StudioMode;
+  workContext: ShellWorkContext;
   workspaceCustomLayout: WorkspaceCustomLayout;
   workspaceDisclosurePins: WorkspaceDisclosurePins;
   workspaceLayoutMode: WorkspaceLayoutMode;
-  onCancel: () => void;
   onCommandPaletteOpen: () => void;
-  onJobSelect: (jobId: string) => void;
-  onProjectSelect: (projectId: string) => void;
   onSettingsOpen: () => void;
   onStudioModeChange: (mode: StudioMode) => void;
-  onSubmit: () => void;
   onWorkspaceCustomLayoutChange: (layout: WorkspaceCustomLayout) => void;
   onWorkspaceDisclosurePinChange: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
   onWorkspaceLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
   onCommandCenterOpen: () => void;
 }>) {
-  const primaryButtonLabel = isProcessing ? "Cancel Job" : "Create & Listen";
-
   return (
     <header className="vs-raised grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 lg:px-4 2xl:grid-cols-[minmax(205px,auto)_minmax(330px,0.9fr)_auto]">
       <div className="flex min-w-0 items-center gap-2.5">
@@ -110,27 +84,18 @@ export function TopProductBar({
         </div>
         <Button
           align="start"
-          className="hidden grid-cols-[auto_auto] items-center gap-2 2xl:grid"
+          className="hidden items-center gap-2 2xl:flex"
           data-testid="ui-action-workspace-open"
           onClick={onCommandCenterOpen}
           size="md"
           variant="secondary"
         >
           <span>Command Center</span>
-          <StatusChip className="rounded-full py-0.5 text-[0.65rem] capitalize">
-            {requestState}
-          </StatusChip>
         </Button>
       </div>
-      <TopProductBarProjectSelectors
-        activeProjectId={activeProjectId}
-        job={job}
-        jobName={jobName}
-        projectJobs={projectJobs}
-        projectName={projectName}
-        projects={projects}
-        onJobSelect={onJobSelect}
-        onProjectSelect={onProjectSelect}
+      <TopProductBarContextSummary
+        context={workContext}
+        onOpenCommandCenter={onCommandCenterOpen}
       />
       <nav
         aria-label="Primary workspace actions"
@@ -188,15 +153,6 @@ export function TopProductBar({
         >
           <SettingsIcon />
         </Button>
-        <TopProductBarPrimaryAction
-          activeJobId={activeJobId}
-          canSubmit={canSubmit}
-          isProcessing={isProcessing}
-          label={primaryButtonLabel}
-          showSubmitAction={showSubmitAction}
-          onCancel={onCancel}
-          onSubmit={onSubmit}
-        />
       </nav>
       <nav aria-label="Primary workspace actions" className="flex items-center gap-1.5 md:hidden">
         <Button
@@ -248,16 +204,6 @@ export function TopProductBar({
         >
           <SettingsIcon />
         </Button>
-        {showSubmitAction ? (
-          <Button
-            disabled={!canSubmit || isProcessing}
-            onClick={onSubmit}
-            size="sm"
-            variant="primary"
-          >
-            Run
-          </Button>
-        ) : null}
       </nav>
     </header>
   );
@@ -460,135 +406,46 @@ function WorkspaceDisclosurePinControl({
   );
 }
 
-function TopProductBarProjectSelectors({
-  activeProjectId,
-  job,
-  jobName,
-  projectJobs,
-  projectName,
-  projects,
-  onJobSelect,
-  onProjectSelect,
+function TopProductBarContextSummary({
+  context,
+  onOpenCommandCenter,
 }: Readonly<{
-  activeProjectId: string;
-  job: VoiceJob | null;
-  jobName: string;
-  projectJobs: VoiceJob[];
-  projectName: string;
-  projects: VoiceProject[];
-  onJobSelect: (jobId: string) => void;
-  onProjectSelect: (projectId: string) => void;
+  context: ShellWorkContext;
+  onOpenCommandCenter: () => void;
 }>) {
-  const visibleJobs =
-    job && !projectJobs.some((projectJob) => projectJob.id === job.id)
-      ? [job, ...projectJobs]
-      : projectJobs;
-  const selectedJobId = job?.id ?? "";
-
   return (
-    <div className="hidden min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 vs-surface 2xl:flex">
-      <label className="grid min-w-0 flex-1 gap-0.5">
+    <button
+      className="hidden min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 text-left transition hover:bg-[var(--vs-surface)] vs-surface 2xl:grid"
+      data-testid="ui-action-shell-context-summary"
+      onClick={onOpenCommandCenter}
+      title={`${context.workspaceLabel} · ${context.projectName} · ${context.chapterName}`}
+      type="button"
+    >
+      <span className="grid min-w-0 gap-0.5">
+        <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
+          Workbench
+        </span>
+        <span className="min-w-0 truncate px-1 py-0.5 text-sm font-semibold">
+          {context.workspaceLabel}
+        </span>
+      </span>
+      <span className="grid min-w-0 gap-0.5 border-l pl-3 vs-border">
         <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
           Project
         </span>
-        <select
-          aria-label="Select project"
-          className="min-w-0 truncate rounded-md border-0 bg-transparent px-1 py-0.5 text-sm font-semibold outline-none"
-          onChange={(event) => {
-            onProjectSelect(event.currentTarget.value);
-          }}
-          value={activeProjectId}
-        >
-          {projects.length > 0 ? (
-            projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))
-          ) : (
-            <option value={activeProjectId}>{projectName}</option>
-          )}
-        </select>
-      </label>
-      <label className="grid min-w-0 flex-1 gap-0.5 border-l pl-3 vs-border">
+        <span className="min-w-0 truncate px-1 py-0.5 text-sm font-semibold">
+          {context.projectName}
+        </span>
+      </span>
+      <span className="grid min-w-0 gap-0.5 border-l pl-3 vs-border">
         <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
           Chapter
         </span>
-        <select
-          aria-label="Select chapter"
-          className="min-w-0 truncate rounded-md border-0 bg-transparent px-1 py-0.5 text-sm font-semibold outline-none"
-          data-disabled-reason={
-            visibleJobs.length === 0
-              ? "Create audio before selecting a generated chapter."
-              : undefined
-          }
-          disabled={visibleJobs.length === 0}
-          onChange={(event) => {
-            onJobSelect(event.currentTarget.value);
-          }}
-          value={selectedJobId}
-        >
-          {visibleJobs.length > 0 ? (
-            visibleJobs.map((item, index) => (
-              <option key={item.id} value={item.id}>
-                {`Chapter ${String(index + 1)} · ${chapterLabel(item)}`}
-              </option>
-            ))
-          ) : (
-            <option value="">Draft chapter · {jobName}</option>
-          )}
-        </select>
-      </label>
-    </div>
-  );
-}
-
-function TopProductBarPrimaryAction({
-  activeJobId,
-  canSubmit,
-  isProcessing,
-  label,
-  showSubmitAction,
-  onCancel,
-  onSubmit,
-}: Readonly<{
-  activeJobId: string | null;
-  canSubmit: boolean;
-  isProcessing: boolean;
-  label: string;
-  showSubmitAction: boolean;
-  onCancel: () => void;
-  onSubmit: () => void;
-}>) {
-  if (isProcessing) {
-    return (
-      <Button
-        className="gap-2"
-        disabled={!activeJobId}
-        onClick={onCancel}
-        size="md"
-        variant="destructive"
-      >
-        <StopIcon />
-        Cancel Job
-      </Button>
-    );
-  }
-
-  if (!showSubmitAction) {
-    return null;
-  }
-
-  return (
-    <Button
-      className="whitespace-nowrap"
-      disabled={!canSubmit}
-      onClick={onSubmit}
-      size="md"
-      variant="primary"
-    >
-      {label}
-    </Button>
+        <span className="min-w-0 truncate px-1 py-0.5 text-sm font-semibold">
+          {context.chapterName}
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -603,27 +460,4 @@ function MenuIcon() {
       />
     </svg>
   );
-}
-
-function StopIcon() {
-  return (
-    <svg aria-hidden="true" className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 16 16">
-      <rect height="9" rx="1.5" width="9" x="3.5" y="3.5" />
-    </svg>
-  );
-}
-
-function chapterLabel(job: VoiceJob): string {
-  const text = job.inputText.trim();
-  let voice = "Default voice";
-  if (job.voice.length > 0) {
-    voice = job.voice;
-  }
-  if (job.voiceProfileName && job.voiceProfileName.length > 0) {
-    voice = job.voiceProfileName;
-  }
-  if (text.length > 0) {
-    return `${text.slice(0, 64)}${text.length > 64 ? "..." : ""}`;
-  }
-  return voice;
 }

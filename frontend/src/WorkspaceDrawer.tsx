@@ -57,6 +57,7 @@ export function WorkspaceDrawer({
   projects,
   profileSource,
   profiles,
+  returnWorkspaceLabel,
   customSpeechPolicyProfiles,
   speechPolicyProfile,
   speechPolicyProfiles,
@@ -94,6 +95,7 @@ export function WorkspaceDrawer({
   projects: VoiceProject[];
   profileSource: VoiceProfileSource | null;
   profiles: VoiceProfile[];
+  returnWorkspaceLabel: string;
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
@@ -201,13 +203,13 @@ export function WorkspaceDrawer({
             <h2 className="truncate text-lg font-semibold">Command Center</h2>
           </div>
           <button
-            aria-label="Return to Narration Workbench"
+            aria-label={`Return to ${returnWorkspaceLabel}`}
             className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-surface)] vs-border"
             data-testid="ui-action-command-center-return"
             onClick={onClose}
             type="button"
           >
-            Return to Workbench
+            Return to {returnWorkspaceLabel}
           </button>
         </header>
 

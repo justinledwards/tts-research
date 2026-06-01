@@ -1295,3 +1295,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 ## 2026-06-01 19:53 CEST - Commit Try Studio Tutorial UX
 - [x] Stage tutorial UX work package
 - [x] Create commit
+## 2026-06-01 22:48 CEST - App Shell Navigation Contract
+- [x] Document app shell and navigation ownership
+- [x] Remove operational state from global shell
+- [x] Preserve cancellation and recovery state in status surfaces
+- [x] Update shell and Command Center tests
+- [x] Run project checks
+- Validation: focused shell/status tests passed; frontend typecheck passed; frontend test suite passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome lint warnings.
