@@ -4,6 +4,8 @@ Audience: frontend engineers and reviewers working on Voice Studio workspace chr
 
 Purpose: keep the global shell stable while narration, voice cloning, project management, settings, and operational recovery evolve independently.
 
+Layout and density behavior is governed by `docs/workbench-layout.md`.
+
 ## Shell Contract
 
 The global shell is the user's anchor. It answers where the user is, which major workbench is active, how to change layout or settings, and how to reach project management.

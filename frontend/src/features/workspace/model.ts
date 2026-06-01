@@ -122,27 +122,27 @@ export const WORKSPACE_STAGE_META: Record<WorkspaceStage, WorkspaceStageMeta> = 
 
 export const WORKSPACE_LAYOUT_MODE_META: Record<WorkspaceLayoutMode, WorkspaceLayoutModeMeta> = {
   balanced: {
-    description: "Keep rails and the footer compact around the main stage.",
+    description: "Show compact context and status around the production stage.",
     id: "balanced",
-    keywords: ["default", "compact", "rails"],
+    keywords: ["default", "compact", "production"],
     label: "Balanced",
   },
   focus: {
-    description: "Collapse rails and footer for the most stage-dominant workspace.",
+    description: "Protect the active stage with only essential recovery status.",
     id: "focus",
-    keywords: ["collapse", "minimal", "stage"],
+    keywords: ["attention", "essential", "minimal", "stage"],
     label: "Focus",
   },
   full: {
-    description: "Expand rails and footer for operators who need all controls visible.",
+    description: "Expose source context, inspector detail, status, and diagnostics.",
     id: "full",
-    keywords: ["expanded", "rails", "operator"],
+    keywords: ["diagnostics", "expanded", "operator"],
     label: "Full",
   },
   custom: {
-    description: "Use the saved workspace panel pins from the layout menu.",
+    description: "Use the panel densities and pins managed from this menu.",
     id: "custom",
-    keywords: ["custom", "pins", "advanced"],
+    keywords: ["advanced", "custom", "density", "pins"],
     label: "Custom",
   },
 };
@@ -170,9 +170,9 @@ export const WORKSPACE_LAYOUT_SLOT_DENSITY_META: Record<
   WorkspaceLayoutSlotDensityMeta
 > = {
   hidden: {
-    description: "Keep the slot out of the workspace. System status keeps an essential strip.",
+    description: "Keep this slot out of the persistent workspace chrome.",
     id: "hidden",
-    label: "Hidden",
+    label: "Off",
   },
   pinned: {
     description: "Keep the full panel visible.",
@@ -188,8 +188,8 @@ export const WORKSPACE_LAYOUT_SLOT_DENSITY_META: Record<
 
 export const DEFAULT_WORKSPACE_CUSTOM_LAYOUT: WorkspaceCustomLayout = {
   contextInspector: "summary",
-  sourceContext: "hidden",
-  systemStatus: "hidden",
+  sourceContext: "summary",
+  systemStatus: "summary",
 };
 
 export function defaultWorkspaceLayoutMode(): WorkspaceLayoutMode {
@@ -302,8 +302,8 @@ export function workspaceResolvedLayout(
   return {
     contextInspector: "summary",
     layoutMode: "balanced",
-    sourceContext: "hidden",
-    systemStatus: "hidden",
+    sourceContext: "summary",
+    systemStatus: "summary",
   };
 }
 

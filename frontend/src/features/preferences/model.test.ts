@@ -277,7 +277,7 @@ describe("UI memory model", () => {
     expect(resolveWorkspaceCustomLayout(memory, "gamma")).toEqual({
       contextInspector: "summary",
       sourceContext: "summary",
-      systemStatus: "hidden",
+      systemStatus: "summary",
     });
     expect(resolveWorkspaceDisclosurePins(memory, "alpha").audioGeneration).toBe(true);
     expect(resolveWorkspaceDisclosurePins(memory, "gamma").diagnostics).toBe(true);

@@ -3,11 +3,13 @@
 UI memory is the machine-local preference layer for presentation state. It is separate from project
 content, generated audio, provider credentials, model paths, and source text.
 
+Workbench layout semantics and responsive rules are defined in `docs/workbench-layout.md`.
+
 ## Remembered State
 
 Users can control these categories from Settings > Reader > UI memory:
 
-- `Remember layout`: Workspace rail layout and active review pane.
+- `Remember layout`: Workspace layout mode, Custom source/inspector/status density, and active review pane.
 - `Remember theme`: the selected Studio theme for this browser.
 - `Remember last project`: the project id used to reopen the last active project.
 - `Remember reader preferences`: typography, spacing, contrast, and motion preferences.
@@ -15,14 +17,15 @@ Users can control these categories from Settings > Reader > UI memory:
   presentation memory.
 - `Remember panel pins`: Cinema focus panel state and pinned context panels.
 
-Cinema focus mode, active panel, and pinned panel state remain session-only by default. They only
-become machine-local when `Remember panel pins` is enabled.
+Advanced disclosure pins, Cinema focus mode, active panel, and pinned panel state remain
+session-only by default. They only become machine-local when `Remember panel pins` is enabled.
 
 ## Reset Scopes
 
 UI memory supports three reset scopes:
 
-- `Reset workspace layout`: clears Workspace layout and review pane memory.
+- `Reset workspace layout`: clears Workspace layout mode, Custom density, advanced panel pins,
+  and review pane memory.
 - `Reset reader preferences`: restores reader accessibility preferences to defaults.
 - `Reset all UI memory`: clears layout, theme, last project, reader preferences, Teleprompt return
   memory, and panel pin memory.

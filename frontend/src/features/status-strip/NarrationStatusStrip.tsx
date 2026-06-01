@@ -51,6 +51,7 @@ export function NarrationStatusStrip({
         "z-30 shrink-0 border-t px-3 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised",
         mode === "full" && "py-3",
       )}
+      data-status-strip-density={statusStripDensityLabel(mode)}
       data-pipeline-state={model.state}
       data-testid="narration-status-strip"
       {...overlayDataAttributes("activity-footer", "bottom-activity-footer")}
@@ -127,6 +128,16 @@ export function NarrationStatusStrip({
       </div>
     </footer>
   );
+}
+
+function statusStripDensityLabel(mode: ActivityFooterMode): "compact" | "essential" | "expanded" {
+  if (mode === "collapsed") {
+    return "essential";
+  }
+  if (mode === "full") {
+    return "expanded";
+  }
+  return "compact";
 }
 
 function runStatusAction(

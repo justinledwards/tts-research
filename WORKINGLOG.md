@@ -1,3 +1,12 @@
+## 2026-06-01 23:01 CEST - Global Layout Contract
+- [x] Inspect current layout, disclosure, docs, and tests
+- [x] Add layout contract documentation and cross-links
+- [x] Update layout model behavior and visible copy
+- [x] Update focused unit/render tests
+- [x] Update workspace-flow E2E expectations for Command Center and Preview playback
+- [x] Run project checks
+- Validation: focused layout/status/preferences tests passed; `pnpm check` passed with existing unrelated lint warnings; `pnpm e2e:workspace-flow`, `pnpm e2e:responsive-snapshots`, and `pnpm e2e:teleprompt-memory` passed; full `pnpm e2e:ui-actions` completed with no failed activations and existing duplicate burn-down findings; filtered settings UI-memory inventory confirmed `Custom density` copy.
+
 ## 2026-06-01 08:49 CEST - PR3 Ergonomics Hardening
 - [x] Harden final UX/review evidence gates
 - [x] Add mobile overlap and scroll-padding validation

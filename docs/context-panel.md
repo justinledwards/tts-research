@@ -4,6 +4,8 @@ The contextual inspector is the single secondary information area for workspace 
 
 The shared rendering primitive is still `ContextPanel`, but the user-facing label is `Inspector`.
 
+Workbench inspector visibility is governed by `docs/workbench-layout.md`; this document defines inspector content, ownership, and display states.
+
 ## Information Architecture
 
 - `Overview`: source, provenance, import confidence, current passage, and readiness summary.

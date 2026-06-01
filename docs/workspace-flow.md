@@ -9,14 +9,18 @@ Voice Studio uses a stage-based narration workspace:
 
 Workspace density is controlled by one shell mode:
 
-- `Focus` collapses both workspace rails and the activity footer.
-- `Balanced` is the default and keeps rails/footer compact.
-- `Full` expands both rails and the activity footer for operators who need all controls visible.
+- `Focus` protects attention with no persistent rails or inspector and only essential status.
+- `Balanced` is the default production posture with compact source context, inspector, and status.
+- `Full` expands source context, inspector, status, and diagnostics entry points for operators.
+- `Custom` uses the panel densities and advanced pins managed from the global Layout menu.
+
+The full layout, panel visibility, Theatre exception, and responsive rules live in `docs/workbench-layout.md`.
 
 UI memory is opt-in from Studio Settings:
 
 - `Remember my layout` is off by default. With it off, reopening the app uses the documented shell default: `Balanced`.
 - With it on, shell mode is remembered on this browser. The active project can override the browser default, so restore order is project shell mode, browser shell mode, then `Balanced`.
+- Custom source context, inspector, and system status density persists with `Remember my layout`. Advanced system pins persist only with `Remember panel pins`.
 - The last active `Review` pane is remembered per project. Resetting UI memory returns Review to `Block Review`.
 - Teleprompt return targets are remembered per project only for `Review` and `Preview`. Reopening into Teleprompt restores the valid return target, otherwise it falls back to `Review`.
 - `Reset UI memory` clears remembered layout while preserving whether `Remember my layout` is on. It does not clear source text, selected sources, bookmarks, progress, source pins, voice profiles, speech policy, or playback transport.

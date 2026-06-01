@@ -39,8 +39,8 @@ describe("workspace stage model", () => {
     expect(normalizeWorkspaceLayoutMode(null)).toBe("balanced");
     expect(defaultWorkspaceLayoutMode()).toBe("balanced");
     expect(workspaceLayoutRails("balanced")).toEqual({
-      activityFooterMode: "collapsed",
-      leftRailMode: "collapsed",
+      activityFooterMode: "compact",
+      leftRailMode: "compact",
       rightRailMode: "compact",
     });
     expect(workspaceLayoutRails("focus")).toEqual({
@@ -59,8 +59,8 @@ describe("workspace stage model", () => {
     expect(workspaceResolvedLayout("balanced")).toEqual({
       contextInspector: "summary",
       layoutMode: "balanced",
-      sourceContext: "hidden",
-      systemStatus: "hidden",
+      sourceContext: "summary",
+      systemStatus: "summary",
     });
     expect(workspaceResolvedLayout("custom", DEFAULT_WORKSPACE_CUSTOM_LAYOUT)).toEqual({
       ...DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
@@ -158,7 +158,7 @@ describe("workspace stage model", () => {
   it("exposes searchable metadata for stages and layouts", () => {
     expect(workspaceStageMeta("teleprompt").keywords).toContain("script");
     expect(workspaceStageMeta("theatre").keywords).toContain("immersive");
-    expect(workspaceLayoutModeMeta("focus").description).toContain("Collapse");
+    expect(workspaceLayoutModeMeta("focus").description).toContain("essential");
     expect(workspaceLayoutModeMeta("custom").keywords).toContain("pins");
   });
 

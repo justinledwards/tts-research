@@ -541,11 +541,13 @@ async function runWorkspaceFlowUX(browser, projectId) {
       screenshots.push(screenshot);
     }
     await page.getByTestId("ui-action-project-dashboard-open-rail").click();
-    await page.getByText("Project Dashboard").first().waitFor();
-    await page.getByTestId("ui-action-project-dashboard-close").click();
+    await page.getByRole("dialog", { name: "Command Center" }).waitFor();
+    await page.getByText("Source and voice assets outside the narration stage").first().waitFor();
+    await page.getByTestId("ui-action-command-center-return").click();
     await page.getByTestId("ui-action-voice-dashboard-open-rail").click();
-    await page.getByText("Voice Profile Dashboard").first().waitFor();
-    await page.getByTestId("ui-action-voice-dashboard-close").click();
+    await page.getByRole("dialog", { name: "Command Center" }).waitFor();
+    await page.getByText("Source and voice assets outside the narration stage").first().waitFor();
+    await page.getByTestId("ui-action-command-center-return").click();
     await runCommandPaletteAction(page, "focus layout", /Focus workspace layout/);
     await assertWorkspaceLayoutSelected(page, "Focus");
     await runCommandPaletteAction(page, "balanced layout", /Balanced workspace layout/);
@@ -557,12 +559,8 @@ async function runWorkspaceFlowUX(browser, projectId) {
 
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
-    await page.getByTestId("global-preview-player").waitFor();
-    await page.getByTestId("ui-action-preview-mini-next").click();
-    await page.getByTestId("ui-action-preview-mini-previous").click();
-    await page.getByTestId("ui-action-preview-mini-skip-silence").click();
-    await page.getByTestId("ui-action-preview-mini-run-b").selectOption("draftPreview");
-    await page.getByTestId("ui-action-preview-mini-apply-b").click();
+    await page.getByText("Generated audio playback").first().waitFor();
+    await page.getByTestId("localized-preview-playback-toolbar").waitFor();
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Studio").first().waitFor();
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();

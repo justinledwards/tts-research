@@ -27,10 +27,17 @@ describe("WorkspaceLayoutControl", () => {
       'data-testid="ui-action-workspace-layout-custom-sourceContext-hidden"',
     );
     expect(markup).toContain(">Essential</button>");
+    expect(markup).toContain(">Compact</button>");
+    expect(markup).toContain(">Expanded</button>");
     expect(markup).toContain('data-testid="ui-action-workspace-disclosure-pin-diagnostics"');
     expect(markup).toContain(">Auto</span>");
+    expect(markup).toContain("Custom layout");
     expect(markup).not.toContain('data-segmented-control="Workspace layout"');
     expect(markup).not.toContain('data-segmented-control="rail-mode"');
+    expect(markup).not.toContain(">Hidden</button>");
+    expect(markup).not.toContain(">Hide</button>");
+    expect(markup).not.toContain(">Slim</button>");
+    expect(markup).not.toContain(">Less</button>");
   });
 });
 

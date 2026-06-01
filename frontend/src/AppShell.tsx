@@ -277,10 +277,10 @@ export function WorkspaceLayoutControl({
         <div className="grid gap-2 border-t pt-3 vs-border">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
-              Custom pins
+              Custom layout
             </p>
             <p className="mt-1 text-xs vs-muted">
-              Pin advanced panels here without adding controls to every panel.
+              Set panel density here without adding controls to every panel.
             </p>
           </div>
           {WORKSPACE_LAYOUT_SLOTS.map((slot) => (
@@ -352,9 +352,7 @@ function WorkspaceLayoutSlotControl({
               }}
               selected={density === item}
               size="sm"
-              title={
-                slot === "systemStatus" && item === "hidden" ? "Essential status" : meta.description
-              }
+              title={workspaceLayoutDensityDescription(slot, item, meta.description)}
               variant={density === item ? "pinned" : "secondary"}
             >
               {label}
@@ -373,7 +371,30 @@ function workspaceLayoutDensityLabel(
   if (slot === "systemStatus" && density === "hidden") {
     return "Essential";
   }
+  if (slot === "systemStatus" && density === "summary") {
+    return "Compact";
+  }
+  if (slot === "systemStatus" && density === "pinned") {
+    return "Expanded";
+  }
   return workspaceLayoutSlotDensityMeta(density).label;
+}
+
+function workspaceLayoutDensityDescription(
+  slot: WorkspaceLayoutSlot,
+  density: WorkspaceLayoutSlotDensity,
+  fallback: string,
+): string {
+  if (slot !== "systemStatus") {
+    return fallback;
+  }
+  if (density === "hidden") {
+    return "Keep the essential status strip only.";
+  }
+  if (density === "summary") {
+    return "Show the compact production status strip.";
+  }
+  return "Show expanded status and diagnostics entry points.";
 }
 
 function WorkspaceDisclosurePinControl({

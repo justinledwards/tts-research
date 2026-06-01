@@ -2463,9 +2463,21 @@ export function App() {
         ...currentPins,
         [panelId]: pinned,
       }));
-      setUiMemory((currentMemory) =>
-        rememberWorkspaceDisclosurePin(currentMemory, activeProjectId, panelId, pinned),
-      );
+      setWorkspaceContext((currentContext) => ({
+        ...currentContext,
+        layoutMode: "custom",
+      }));
+      setUiMemory((currentMemory) => {
+        const nextMemory = rememberWorkspaceDisclosurePin(
+          currentMemory,
+          activeProjectId,
+          panelId,
+          pinned,
+        );
+        return currentMemory.rememberPanelPins
+          ? rememberWorkspaceLayoutMode(nextMemory, activeProjectId, "custom")
+          : nextMemory;
+      });
     },
     [activeProjectId],
   );
@@ -7400,7 +7412,7 @@ export function App() {
           style={studioGridStyle}
         >
           <aside
-            className={`vs-raised order-3 flex min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+            className={`vs-raised order-3 hidden min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:flex lg:min-h-0 lg:overflow-y-auto ${
               leftRailMode === "collapsed" ? "lg:border-r-0" : "lg:border-r"
             }`}
             {...overlayDataAttributes("left-rail", "left-rail")}
@@ -7476,7 +7488,7 @@ export function App() {
             />
           </section>
           <aside
-            className={`vs-raised order-2 flex min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+            className={`vs-raised order-2 hidden min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:flex lg:min-h-0 lg:overflow-y-auto ${
               displayRightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
             }`}
             {...overlayDataAttributes("right-rail", "right-rail")}
@@ -7512,7 +7524,7 @@ export function App() {
           style={studioGridStyle}
         >
           <aside
-            className={`vs-raised order-3 flex min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+            className={`vs-raised order-3 hidden min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:flex lg:min-h-0 lg:overflow-y-auto ${
               leftRailMode === "collapsed" ? "lg:border-r-0" : "lg:border-r"
             }`}
             {...overlayDataAttributes("left-rail", "left-rail")}
@@ -7765,7 +7777,7 @@ export function App() {
           </section>
 
           <aside
-            className={`vs-raised order-2 flex min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:min-h-0 lg:overflow-y-auto ${
+            className={`vs-raised order-2 hidden min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:flex lg:min-h-0 lg:overflow-y-auto ${
               rightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
             }`}
             {...overlayDataAttributes("right-rail", "right-rail")}

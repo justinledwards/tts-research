@@ -20,6 +20,7 @@ describe("NarrationStatusStrip disclosure rendering", () => {
     );
 
     expect(markup).toContain('data-testid="narration-status-strip"');
+    expect(markup).toContain('data-status-strip-density="compact"');
     expect(markup).toContain("Audio ready");
     expect(markup).toContain("Queue");
     expect(markup).not.toContain("Activity Footer");
@@ -54,6 +55,7 @@ describe("NarrationStatusStrip disclosure rendering", () => {
     );
 
     expect(markup).toContain('data-pipeline-state="failed"');
+    expect(markup).toContain('data-status-strip-density="essential"');
     expect(markup).toContain("Retry audio");
     expect(markup).toContain("Generation failed");
   });
@@ -74,6 +76,7 @@ describe("NarrationStatusStrip disclosure rendering", () => {
       />,
     );
 
+    expect(markup).toContain('data-status-strip-density="expanded"');
     expect(markup).not.toContain('data-testid="ui-action-status-strip-activity"');
     expect(markup).not.toContain('data-testid="narration-activity-drawer"');
     expect(markup).not.toContain("Stage Timeline");
