@@ -535,8 +535,17 @@ function renderObservationRow(row, timings) {
       ]
         .filter(Boolean)
         .join(" ");
+      const sourceId = row.fixtureId ?? row.observationId ?? "readalong-fixture";
       return `<span class="${className}" data-sync-node-id="${escapeHtml(
         word.nodeId,
+      )}" data-readalong-source-id="${escapeHtml(sourceId)}" data-readalong-node-id="${escapeHtml(
+        word.nodeId,
+      )}" data-readalong-word-index="${String(
+        word.wordIndex,
+      )}" data-readalong-timing-state="${escapeHtml(
+        row.runtimeState,
+      )}" data-source-word-id="${escapeHtml(
+        `${sourceId}:${word.nodeId}:${String(word.wordIndex)}`,
       )}" data-sync-word-index="${String(word.wordIndex)}" data-sync-active="${
         active ? "true" : "false"
       }">${escapeHtml(word.text)}</span>`;

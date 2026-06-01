@@ -241,12 +241,19 @@ export function WorkspaceDrawer({
             <div className="mt-4 grid gap-1.5">
               {COMMAND_CENTER_SECTIONS.map((section) => (
                 <button
+                  aria-current={effectiveActiveSection === section.id ? "page" : undefined}
                   className={`grid min-w-0 gap-1 rounded-md border px-3 py-2 text-left transition ${
                     effectiveActiveSection === section.id
                       ? "border-[var(--vs-selected-border)] bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)] shadow-sm"
                       : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
                   }`}
                   data-testid={`ui-action-command-center-section-${section.id}`}
+                  data-ui-action-owner="command-center"
+                  data-ui-noop-reason={
+                    effectiveActiveSection === section.id
+                      ? "Command Center section is already selected."
+                      : undefined
+                  }
                   key={section.id}
                   onClick={() => {
                     setActiveSection(section.id);

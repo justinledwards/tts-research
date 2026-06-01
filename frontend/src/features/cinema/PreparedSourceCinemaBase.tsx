@@ -1620,9 +1620,10 @@ function PreparedSourceCinemaReader({
         onLifecycleChange={onRendererLifecycleChange}
       >
         <div
-          className={`website-cinema-article mx-auto ${readingSurfaceClassName(
+          className={`website-cinema-article mx-auto w-full ${readingSurfaceClassName(
             "spoken",
           )} ${textClass} text-[var(--vs-text)]`}
+          data-testid="website-cinema-article"
         >
           {blocks.map((block, blockIndex) => (
             <PreparedSourceCinemaBlock
@@ -1755,10 +1756,11 @@ function PreparedSourceCinemaReader({
   return (
     <ReaderCanvasFrame
       canvasFirst={canvasFirst}
-      contentClassName="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
+      contentClassName="min-h-0 flex-1 overflow-y-auto scroll-pb-[calc(var(--cinema-footer-max-height)+4rem)] px-6 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-12 sm:py-8 lg:px-10 lg:pb-8 xl:px-12"
       contentDataAttributes={{
         ...readerDataAttributes(accessibilitySettings),
         ...readingSurfaceDataAttributes({ kind: "spoken" }),
+        "data-cinema-reader-scroll-padding": "transport-safe",
       }}
       contentRef={readerRef}
       frameMode="reading"

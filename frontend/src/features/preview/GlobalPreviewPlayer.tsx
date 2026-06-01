@@ -22,6 +22,7 @@ import {
   buildPreviewComparisonModel,
   normalizePreviewComparisonChoice,
   PREVIEW_RUN_COMPARISON_OPTIONS,
+  previewComparisonChoicesEqual,
   type PreviewComparisonChoice,
   type PreviewComparisonOption,
   previewComparisonSummary,
@@ -149,7 +150,10 @@ export function GlobalPreviewPlayer({
   );
 
   useEffect(() => {
-    setChoiceB((current) => normalizePreviewComparisonChoice(current, choiceA, comparisonOptions));
+    setChoiceB((current) => {
+      const normalized = normalizePreviewComparisonChoice(current, choiceA, comparisonOptions);
+      return previewComparisonChoicesEqual(current, normalized) ? current : normalized;
+    });
   }, [choiceA, comparisonOptions]);
 
   const comparison = useMemo(

@@ -7,6 +7,7 @@ import {
   countIssues,
   evaluateFixture,
   normalizeFixture,
+  renderReadAlongSyncSummary,
 } from "./readalong-sync-evidence-helpers.mjs";
 
 export {

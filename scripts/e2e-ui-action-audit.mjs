@@ -29,6 +29,11 @@ import {
   renderCommandMoreCrossAuditMarkdown,
 } from "./command-more-cross-audit.mjs";
 import {
+  complexityActionsFor,
+  isPrimaryComplexityAction,
+  isReachableDrawerSheetAction,
+} from "./e2e-surface-complexity-budget-helpers.mjs";
+import {
   CINEMA_MORE_ACTION_BUDGETS,
   CINEMA_MORE_PRIMARY_LABELS,
   CINEMA_MORE_REQUIRED_SECTIONS,
@@ -676,24 +681,21 @@ async function collectSurfaceComplexity(page, scenario, actions) {
     };
   });
   const overlayCollision = await collectOverlayCollisionReport(page);
+  const complexityActions = complexityActionsFor(actions);
   const labels = new Map();
   let labelLength = 0;
   let reachableDrawersSheets = 0;
-  for (const action of actions) {
+  for (const action of complexityActions) {
     const label = action.visibleLabel || action.label || "";
     if (label) {
       labels.set(label, (labels.get(label) ?? 0) + 1);
     }
     labelLength += String(action.accessibleName || action.label || "").length;
-    if (
-      action.ariaHasPopup ||
-      action.ariaControls ||
-      /\b(more|settings|drawer|sheet|palette|help|guide|shortcuts|open)\b/i.test(action.label)
-    ) {
+    if (isReachableDrawerSheetAction(action)) {
       reachableDrawersSheets += 1;
     }
   }
-  const visibleActions = actions.length;
+  const visibleActions = complexityActions.length;
   return {
     budgetKey: scenario.id,
     description: scenario.description,
@@ -704,8 +706,8 @@ async function collectSurfaceComplexity(page, scenario, actions) {
       averageAccessibleLabelLength:
         visibleActions > 0 ? Math.round(labelLength / visibleActions) : 0,
       chipsBadges: domMetrics.chipsBadges,
-      destructiveActions: actions.filter((action) => action.destructive).length,
-      disabledActions: actions.filter((action) => action.disabled).length,
+      destructiveActions: complexityActions.filter((action) => action.destructive).length,
+      disabledActions: complexityActions.filter((action) => action.disabled).length,
       duplicatedVisibleLabels: [...labels.values()].filter((count) => count > 1).length,
       expandedPolicySourceDetails: domMetrics.expandedPolicySourceDetails,
       footerRows: domMetrics.footerRows,
@@ -717,12 +719,7 @@ async function collectSurfaceComplexity(page, scenario, actions) {
       panelsOpenByDefault: domMetrics.panelsOpenByDefault,
       panelCount: domMetrics.panelCount,
       primaryPlaybackGroups: domMetrics.primaryPlaybackGroups,
-      primaryActions: actions.filter(
-        (action) =>
-          action.playbackPrimary ||
-          action.actionClass === "generation" ||
-          action.actionClass === "preview",
-      ).length,
+      primaryActions: complexityActions.filter(isPrimaryComplexityAction).length,
       reachableDrawersSheets,
       sourceIdentitySummaries: domMetrics.sourceIdentitySummaries,
       visibleBadges: domMetrics.visibleBadges,
@@ -1178,17 +1175,19 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await page.getByTestId("intake-wizard-open-book-cinema").waitFor();
     await selectBookScope(page, seed.pdf.scope);
     await capture("workspace-stage-02-source-selected");
-    await page.getByRole("button", { exact: true, name: "Review" }).click();
+    await page.getByTestId("workspace-stage-review").click();
     await page.getByText("Revision Panel").first().waitFor();
     await selectWorkspaceLayout(page, "Full");
     await page.getByTestId("ui-action-project-dashboard-open-rail").click();
-    await page.getByText("Project Dashboard").first().waitFor();
-    await capture("workspace-stage-03-project-dashboard");
-    await page.getByTestId("ui-action-project-dashboard-close").click();
+    await page.getByRole("dialog", { name: "Command Center" }).waitFor();
+    await capture("workspace-stage-03-project-command-center");
+    await page.getByTestId("ui-action-command-center-return").click();
+    await page.getByRole("dialog", { name: "Command Center" }).waitFor({ state: "detached" });
     await page.getByTestId("ui-action-voice-dashboard-open-rail").click();
-    await page.getByText("Voice Profile Dashboard").first().waitFor();
-    await capture("workspace-stage-03-voice-dashboard");
-    await page.getByTestId("ui-action-voice-dashboard-close").click();
+    await page.getByRole("dialog", { name: "Command Center" }).waitFor();
+    await capture("workspace-stage-03-voice-command-center");
+    await page.getByTestId("ui-action-command-center-return").click();
+    await page.getByRole("dialog", { name: "Command Center" }).waitFor({ state: "detached" });
     await page.getByTestId("revision-tab-blocks").click();
     await page.getByTestId("revision-select-visible").check();
     await page.getByTestId("ui-action-revision-batch-approve").click();
@@ -1205,12 +1204,10 @@ async function runWorkspaceStageTraversal(browser, seed) {
       .getByText(/Default voice|Default mock narrator/)
       .first()
       .waitFor();
-    await page.getByTestId("global-preview-player").waitFor();
-    await page.getByTestId("ui-action-preview-mini-next").click();
-    await page.getByTestId("ui-action-preview-mini-previous").click();
-    await page.getByTestId("ui-action-preview-mini-skip-silence").click();
-    await page.getByTestId("ui-action-preview-mini-run-b").selectOption("draftPreview");
-    await page.getByTestId("ui-action-preview-mini-apply-b").click();
+    await clickPreviewMiniPlayerIfReady(page);
+    await clickIfEnabledTestId(page, "ui-action-preview-local-next");
+    await clickIfEnabledTestId(page, "ui-action-preview-local-previous");
+    await selectIfEnabledTestId(page, "ui-action-preview-local-speed", "1.25");
     await capture("workspace-stage-04-preview-after");
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Studio").first().waitFor();
@@ -1299,8 +1296,10 @@ async function openWorkspaceStage(page, label) {
   await gotoApp(page);
   const button =
     label === "Preview"
-      ? page.getByTestId("workspace-stage-action-previewSpeech")
-      : page.getByRole("button", { exact: true, name: label }).first();
+      ? page.getByTestId("workspace-stage-preview")
+      : label === "Review"
+        ? page.getByTestId("workspace-stage-review")
+        : page.getByRole("button", { exact: true, name: label }).first();
   if (await button.isVisible().catch(() => false)) {
     await button.click();
   }
@@ -1315,7 +1314,11 @@ async function openWorkspaceStage(page, label) {
       .first()
       .waitFor();
   } else if (label === "Preview") {
-    await page.getByTestId("workspace-stage-action-createAndListen").waitFor({ state: "visible" });
+    await Promise.race([
+      page.getByTestId("workspace-stage-action-createAndListen").waitFor({ state: "visible" }),
+      page.getByTestId("workspace-stage-action-openTeleprompt").waitFor({ state: "visible" }),
+      page.getByTestId("ui-action-preview-local-play").waitFor({ state: "visible" }),
+    ]);
   } else {
     await page.getByText("Teleprompt Studio").first().waitFor();
   }
@@ -1329,14 +1332,32 @@ async function selectWorkspaceLayout(page, label) {
 
 async function clickPreviewMiniPlayerIfReady(page) {
   const player = page.getByTestId("global-preview-player");
-  await player.waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
-  const segment = page.getByTestId("ui-action-preview-mini-segment");
-  if (await segment.isEnabled().catch(() => false)) {
-    await segment.click();
+  if (await player.isVisible().catch(() => false)) {
+    await clickIfEnabledTestId(page, "ui-action-preview-mini-segment");
+    await selectIfEnabledTestId(page, "ui-action-preview-mini-speed", "1.25");
+    return;
   }
-  const speed = page.getByTestId("ui-action-preview-mini-speed");
-  if (await speed.isEnabled().catch(() => false)) {
-    await speed.selectOption("1.25");
+  await clickIfEnabledTestId(page, "ui-action-preview-local-play");
+  await selectIfEnabledTestId(page, "ui-action-preview-local-speed", "1.25");
+}
+
+async function clickIfEnabledTestId(page, testId) {
+  const control = page.getByTestId(testId).first();
+  if (
+    (await control.isVisible().catch(() => false)) &&
+    (await control.isEnabled().catch(() => false))
+  ) {
+    await control.click();
+  }
+}
+
+async function selectIfEnabledTestId(page, testId, value) {
+  const control = page.getByTestId(testId).first();
+  if (
+    (await control.isVisible().catch(() => false)) &&
+    (await control.isEnabled().catch(() => false))
+  ) {
+    await control.selectOption(value);
   }
 }
 
@@ -1379,20 +1400,23 @@ async function openProjectDashboard(page) {
   await openWorkspaceStage(page, "Review");
   await selectWorkspaceLayout(page, "Full");
   await page.getByTestId("ui-action-project-dashboard-open-rail").click();
-  await page.getByRole("dialog", { name: "Project Dashboard" }).waitFor();
+  await page.getByRole("dialog", { name: "Command Center" }).waitFor();
 }
 
 async function openVoiceDashboard(page) {
   await openWorkspaceStage(page, "Review");
   await selectWorkspaceLayout(page, "Full");
   await page.getByTestId("ui-action-voice-dashboard-open-rail").click();
-  await page.getByText("Voice Profile Dashboard").first().waitFor();
+  await page.getByRole("dialog", { name: "Command Center" }).waitFor();
 }
 
 async function openPreviewMiniPlayer(page) {
   await openWorkspaceStage(page, "Preview");
+  await Promise.race([
+    page.getByTestId("global-preview-player").waitFor({ state: "visible", timeout: 10_000 }),
+    page.getByTestId("ui-action-preview-local-play").waitFor({ state: "visible", timeout: 10_000 }),
+  ]);
   await clickPreviewMiniPlayerIfReady(page);
-  await page.getByTestId("global-preview-player").waitFor({ state: "visible" });
 }
 
 async function openMobileMoreSheet(page, scope) {
@@ -1771,14 +1795,19 @@ async function openPreparedCinemaOverlay(page, expectedLabel) {
 async function openWorkspaceIntakeStage(page) {
   const guidedIntake = page.getByText("Guided Intake").first();
   if (!(await guidedIntake.isVisible().catch(() => false))) {
-    const exactIntakeButton = page.getByRole("button", { exact: true, name: "Intake" }).first();
-    if (await exactIntakeButton.isVisible().catch(() => false)) {
-      await exactIntakeButton.click();
+    const intakeStageButton = page.getByTestId("workspace-stage-intake");
+    if (await intakeStageButton.isVisible({ timeout: 15_000 }).catch(() => false)) {
+      await intakeStageButton.click();
     } else {
-      await page
-        .getByRole("button", { name: /^Intake\b/ })
-        .first()
-        .click();
+      const exactIntakeButton = page.getByRole("button", { exact: true, name: "Intake" }).first();
+      if (await exactIntakeButton.isVisible({ timeout: 15_000 }).catch(() => false)) {
+        await exactIntakeButton.click();
+      } else {
+        await page
+          .getByRole("button", { name: /^Intake\b/ })
+          .first()
+          .click();
+      }
     }
   }
   await guidedIntake.waitFor();
@@ -2289,6 +2318,45 @@ function scopeKey(scope) {
 
 function collectPageIssues(page) {
   const issues = [];
+  const issueSet = new Set();
+  const addIssue = (issue) => {
+    if (issueSet.has(issue)) {
+      return;
+    }
+    issueSet.add(issue);
+    issues.push(issue);
+  };
+  void page
+    .context()
+    .newCDPSession(page)
+    .then(async (client) => {
+      await client.send("Runtime.enable");
+      client.on("Runtime.consoleAPICalled", (event) => {
+        const text = event.args.map((argument) => argument.value ?? "").join(" ");
+        if (!/Maximum update depth exceeded/i.test(text)) {
+          return;
+        }
+        const frames = event.stackTrace?.callFrames ?? [];
+        const appFrames = frames.filter(
+          (frame) =>
+            frame.url.includes("/src/") ||
+            frame.url.includes("/frontend/src/") ||
+            frame.url.includes("/scripts/"),
+        );
+        const stackFrames = (appFrames.length > 0 ? appFrames : frames)
+          .slice(0, 8)
+          .map(
+            (frame) =>
+              `${frame.functionName || "<anonymous>"} (${frame.url}:${String(
+                frame.lineNumber + 1,
+              )}:${String(frame.columnNumber + 1)})`,
+          );
+        if (stackFrames.length > 0) {
+          addIssue(`react-update-depth-stack:\n${stackFrames.join("\n")}`);
+        }
+      });
+    })
+    .catch(() => {});
   page.on("console", (message) => {
     if (message.type() === "error" || message.type() === "warning") {
       const location = message.location();
@@ -2300,15 +2368,28 @@ function collectPageIssues(page) {
       if (/^Failed to load resource:/i.test(text)) {
         return;
       }
-      issues.push(`${message.type()}: ${text}`);
+      addIssue(`${message.type()}: ${text}`);
+      if (/Maximum update depth exceeded/i.test(text)) {
+        void Promise.all(message.args().map((argument) => argument.jsonValue().catch(() => null)))
+          .then((values) => {
+            const details = values
+              .filter((value) => typeof value === "string" && value.trim())
+              .map((value) => value.trim())
+              .filter((value) => value !== message.text());
+            for (const detail of details) {
+              addIssue(`react-update-depth-detail: ${detail}`);
+            }
+          })
+          .catch(() => {});
+      }
     }
   });
   page.on("pageerror", (error) => {
-    issues.push(`pageerror: ${error.message}`);
+    addIssue(`pageerror: ${error.message}`);
   });
   page.on("response", (response) => {
     if (response.status() >= 400) {
-      issues.push(`response ${String(response.status())}: ${response.url()}`);
+      addIssue(`response ${String(response.status())}: ${response.url()}`);
     }
   });
   return issues;

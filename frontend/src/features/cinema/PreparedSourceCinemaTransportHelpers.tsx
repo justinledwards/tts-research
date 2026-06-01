@@ -47,12 +47,13 @@ export function Waveform({
 export function TransportWaveformPlaceholder({
   label = "Audio waveform appears after generation.",
 }: Readonly<{ label?: string }>) {
+  const showVisualLabel = !/unavailable/i.test(label);
   return (
     <div
       className="flex h-7 min-w-0 flex-1 items-center overflow-hidden rounded-md border border-dashed px-2 text-xs font-medium vs-border vs-muted"
       title={label}
     >
-      <span className="min-w-0 truncate">{label}</span>
+      <span className={showVisualLabel ? "min-w-0 truncate" : "sr-only"}>{label}</span>
     </div>
   );
 }

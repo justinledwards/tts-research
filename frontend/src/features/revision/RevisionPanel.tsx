@@ -467,7 +467,7 @@ export function RevisionPanel({
         {statusMessage}
       </output>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(18rem,0.95fr)_minmax(0,1.45fr)] xl:items-start">
+      <div className="grid gap-3 2xl:grid-cols-[minmax(18rem,0.95fr)_minmax(0,1.45fr)] 2xl:items-start">
         <div className="grid gap-3">
           <RevisionFilterBar
             filters={filters}
@@ -1127,6 +1127,7 @@ function RevisionSelectedBlockEditor({
         <Button
           {...editShortcut}
           data-testid="ui-action-revision-block-edit-focus"
+          data-ui-focus-target="revision-inline-edit-textarea"
           onClick={() => {
             document
               .querySelector<HTMLTextAreaElement>('[data-testid="revision-inline-edit-textarea"]')

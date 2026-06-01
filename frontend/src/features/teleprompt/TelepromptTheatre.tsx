@@ -293,8 +293,8 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         onClick: onRequestNativeFullscreen,
       },
     ];
-    const operatorPanel = (
-      <aside className="grid min-h-0 gap-3 overflow-auto" data-testid="teleprompt-operator-panel">
+    const operatorPanelContent = (
+      <>
         <TelepromptTheatreSettingsControls
           memoryEnabled={settingsMemoryEnabled}
           settings={settings}
@@ -397,6 +397,19 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
             {fullscreenAvailability.reason}
           </p>
         )}
+      </>
+    );
+    const operatorPanelClassName = cx(
+      "max-h-[min(34vh,22rem)] rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-chrome)] p-2 lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0",
+      settings.operatorPanelPosition === "left" ? "lg:order-first" : "",
+    );
+    const renderOperatorPanel = (className = "") => (
+      <aside
+        className={cx("grid min-h-0 gap-3 overflow-auto", className)}
+        data-teleprompt-theatre-control-zone="operator"
+        data-testid="teleprompt-operator-panel"
+      >
+        {operatorPanelContent}
       </aside>
     );
     return (
@@ -427,6 +440,14 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         tabIndex={-1}
         onBlurCapture={onBlurControls}
         onFocusCapture={onFocusControls}
+        onKeyDownCapture={(event) => {
+          if (event.key !== "Escape") {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          onExitTheatre();
+        }}
         onPointerDown={onRevealControls}
         onPointerMove={onRevealControls}
       >
@@ -453,11 +474,6 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         />
 
         <div className={theatreLayoutClassName(settings, controlsVisible)}>
-          {controlsVisible &&
-          settings.operatorPanelVisible &&
-          settings.operatorPanelPosition === "left"
-            ? operatorPanel
-            : null}
           <main
             className={cx(
               "grid min-h-0 gap-4",
@@ -465,7 +481,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
             )}
           >
             {controlsVisible ? (
-              <div className="grid gap-2">
+              <div className="hidden gap-2 xl:grid" data-teleprompt-theatre-control-zone="cue-meta">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold uppercase text-[var(--vs-theatre-accent)]">
@@ -528,12 +544,15 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
             </div>
 
             {controlsVisible ? (
-              <div className="grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3">
+              <div
+                className="grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3"
+                data-teleprompt-theatre-control-zone="transport"
+              >
                 {settings.nextCuePlacement === "below" ? (
                   <CuePreviewList blocks={previewBlocks} />
                 ) : null}
                 <LocalizedPlaybackToolbar model={theatrePlaybackToolbar} />
-                <p className="text-xs text-[var(--vs-text-muted)]">
+                <p className="hidden text-xs text-[var(--vs-text-muted)] sm:block">
                   {cueSyncDetail || summary.syncStatusLabel}
                   {playbackControlsAvailable
                     ? ` · audio segment ${audioProgressPercent.toString()}%`
@@ -543,16 +562,16 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
             ) : null}
           </main>
 
-          {controlsVisible &&
-          settings.operatorPanelVisible &&
-          (settings.operatorPanelPosition === "right" ||
-            settings.operatorPanelPosition === "bottom")
-            ? operatorPanel
+          {controlsVisible && settings.operatorPanelVisible
+            ? renderOperatorPanel(operatorPanelClassName)
             : null}
           {controlsVisible &&
           settings.nextCuePlacement === "side" &&
           !settings.operatorPanelVisible ? (
-            <aside className="grid min-h-0 gap-3 overflow-auto rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3">
+            <aside
+              className="hidden min-h-0 gap-3 overflow-auto rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3 lg:grid"
+              data-teleprompt-theatre-control-zone="next-cue"
+            >
               <CuePreviewList blocks={previewBlocks} />
             </aside>
           ) : null}
@@ -566,7 +585,7 @@ function theatreLayoutClassName(
   settings: TelepromptTheatreSettings,
   controlsVisible: boolean,
 ): string {
-  const base = "grid min-h-0 flex-1 gap-4 p-4";
+  const base = "grid min-h-0 flex-1 gap-3 p-3 sm:gap-4 sm:p-4";
   if (!controlsVisible) {
     return `${base} lg:grid-cols-1`;
   }
@@ -574,12 +593,12 @@ function theatreLayoutClassName(
     return `${base} lg:grid-cols-1`;
   }
   if (settings.operatorPanelPosition === "bottom") {
-    return `${base} lg:grid-cols-1`;
+    return `${base} grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-1`;
   }
   if (settings.operatorPanelPosition === "left") {
-    return `${base} lg:grid-cols-[22rem_minmax(0,1fr)]`;
+    return `${base} grid-rows-[minmax(0,1fr)_auto] lg:grid-rows-none lg:grid-cols-[22rem_minmax(0,1fr)]`;
   }
-  return `${base} lg:grid-cols-[minmax(0,1fr)_22rem]`;
+  return `${base} grid-rows-[minmax(0,1fr)_auto] lg:grid-rows-none lg:grid-cols-[minmax(0,1fr)_22rem]`;
 }
 
 function theatreCuePositionClassName(
@@ -606,18 +625,18 @@ function theatreTextSizeClassName(
   presetId: TelepromptPresetId,
 ): string {
   if (size === "massive") {
-    return "[--reading-theatre-font-size:64px] [--reading-theatre-line-height:1.1] sm:[--reading-theatre-font-size:88px] lg:[--reading-theatre-font-size:100px]";
+    return "[--reading-theatre-font-size:44px] [--reading-theatre-line-height:1.1] sm:[--reading-theatre-font-size:88px] lg:[--reading-theatre-font-size:100px]";
   }
   if (size === "giant") {
-    return "[--reading-theatre-font-size:52px] [--reading-theatre-line-height:1.12] sm:[--reading-theatre-font-size:76px] lg:[--reading-theatre-font-size:92px]";
+    return "[--reading-theatre-font-size:40px] [--reading-theatre-line-height:1.12] sm:[--reading-theatre-font-size:76px] lg:[--reading-theatre-font-size:92px]";
   }
   if (size === "large" || presetId === "largeText" || presetId === "dyslexicFriendly") {
-    return "[--reading-theatre-font-size:44px] [--reading-theatre-line-height:1.16] sm:[--reading-theatre-font-size:64px] lg:[--reading-theatre-font-size:78px]";
+    return "[--reading-theatre-font-size:36px] [--reading-theatre-line-height:1.16] sm:[--reading-theatre-font-size:64px] lg:[--reading-theatre-font-size:78px]";
   }
   if (presetId === "highContrast") {
-    return "[--reading-theatre-font-size:40px] [--reading-theatre-line-height:1.18] sm:[--reading-theatre-font-size:56px] lg:[--reading-theatre-font-size:68px]";
+    return "[--reading-theatre-font-size:34px] [--reading-theatre-line-height:1.18] sm:[--reading-theatre-font-size:56px] lg:[--reading-theatre-font-size:68px]";
   }
-  return "[--reading-theatre-font-size:36px] [--reading-theatre-line-height:1.2] sm:[--reading-theatre-font-size:52px] lg:[--reading-theatre-font-size:60px]";
+  return "[--reading-theatre-font-size:32px] [--reading-theatre-line-height:1.2] sm:[--reading-theatre-font-size:52px] lg:[--reading-theatre-font-size:60px]";
 }
 
 export {

@@ -26,7 +26,8 @@ test("passes final UX gates from composed local evidence", () => {
   });
 
   assert.equal(result.status, "passed");
-  assert.equal(result.summary.total, 12);
+  assert.equal(result.mergeReadiness.status, "ready");
+  assert.equal(result.summary.total, 13);
   assert.equal(result.summary.failed, 0);
   assert.match(renderFinalUxSummary(result), /More menu is useful/);
   assert.match(renderFinalUxSummary(result), /Command palette, More menu/);
@@ -87,6 +88,7 @@ test("fails when UI action audit is completed with unwaived findings", () => {
   const markdown = renderFinalUxSummary(result);
 
   assert.equal(result.status, "failed");
+  assert.equal(result.mergeReadiness.status, "blocked");
   assert.equal(actionGate.status, "failed");
   assert.match(markdown, /Unresolved Findings/);
   assert.match(markdown, /Owner: project-dashboard/);
@@ -139,11 +141,13 @@ test("reports passed-with-findings when UI action findings are explicitly waived
         category: "no-op-controls",
         owner: "project-dashboard",
         reason: "Tracked in WP follow-up for project dashboard generated source rows.",
+        reviewDate: "2026-06-30",
       },
       {
         category: "classified-duplicate-waivers",
         owner: "design-systems",
         reason: "Known repeated project actions are covered by the WP46 duplicate registry.",
+        reviewDate: "2026-06-30",
       },
     ],
   };
@@ -158,6 +162,7 @@ test("reports passed-with-findings when UI action findings are explicitly waived
   const markdown = renderFinalUxSummary(result);
 
   assert.equal(result.status, "passed-with-findings");
+  assert.equal(result.mergeReadiness.status, "ready with waivers");
   assert.equal(result.summary.passedWithFindings, 1);
   assert.match(markdown, /Why Final Still Passes/);
   assert.match(markdown, /Waived Findings/);
@@ -376,6 +381,49 @@ test("fails when a keyboard shortcut points at a different command action", () =
     crossGate.failures.join("\n"),
     /shortcut playback\.createListen maps to settings:open/,
   );
+});
+
+test("fails when responsive evidence reports mobile cue or reader occlusion", () => {
+  const documents = passingDocuments();
+  documents.responsiveResults = {
+    results: [
+      {
+        id: "phone-390",
+        telepromptTheatre: {
+          failures: ["Teleprompt Theatre cue/control overlap: transport overlaps cue by 72px."],
+        },
+        websiteCalmRead: {
+          failures: [
+            {
+              actual: 0,
+              budget: 96,
+              metric: "readerScrollPaddingBottomPx",
+              reason: "Mobile reader canvas needs scroll padding above transport controls",
+            },
+          ],
+        },
+      },
+    ],
+    status: "failed",
+    summary: {
+      overlayCollisionFailures: 0,
+      telepromptTheatreFailures: 1,
+      websiteCalmReadFailures: 1,
+    },
+  };
+  const result = evaluateFinalUxGates({
+    artifactPaths,
+    commandSteps: [],
+    documents,
+    outputDir: "/tmp/final",
+    rootDir: "/repo",
+  });
+
+  const responsiveGate = result.gates.find((gate) => gate.id === "responsive-no-control-occlusion");
+  assert.equal(result.status, "failed");
+  assert.equal(responsiveGate.status, "failed");
+  assert.match(responsiveGate.failures.join("\n"), /cue\/control overlap/);
+  assert.match(responsiveGate.failures.join("\n"), /readerScrollPaddingBottomPx/);
 });
 
 function passingDocuments() {

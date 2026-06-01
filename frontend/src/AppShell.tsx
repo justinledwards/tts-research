@@ -314,8 +314,9 @@ export function WorkspaceLayoutControl({
                 className="min-w-0 flex-col gap-1 px-3 py-2"
                 data-testid={`ui-action-workspace-layout-${mode}`}
                 key={mode}
-                onClick={() => {
+                onClick={(event) => {
                   onLayoutModeChange(mode);
+                  event.currentTarget.closest("details")?.removeAttribute("open");
                 }}
                 selected={layoutMode === mode}
                 size="sm"

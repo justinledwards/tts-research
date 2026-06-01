@@ -34,6 +34,51 @@ export async function collectWebsiteCalmReadMetrics(page) {
     const root = document.querySelector("[data-cinema-surface='website']");
     const queryVisible = (selector) =>
       root ? Array.from(root.querySelectorAll(selector)).filter(visible) : [];
+    const rectFor = (element) => {
+      const rect = element?.getBoundingClientRect();
+      if (!rect) {
+        return null;
+      }
+      return {
+        bottom: Math.round(rect.bottom),
+        height: Math.round(rect.height),
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        top: Math.round(rect.top),
+        width: Math.round(rect.width),
+      };
+    };
+    const overlapArea = (left, right) => {
+      if (!left || !right) {
+        return 0;
+      }
+      const width = Math.max(
+        0,
+        Math.min(left.right, right.right) - Math.max(left.left, right.left),
+      );
+      const height = Math.max(
+        0,
+        Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top),
+      );
+      return width * height;
+    };
+    const readerCanvas = queryVisible("[data-cinema-reader-canvas]")[0] ?? null;
+    const article = queryVisible("[data-testid='website-cinema-article']")[0] ?? null;
+    const transportFooter = queryVisible("[data-cinema-transport-footer]")[0] ?? null;
+    const readerRect = rectFor(readerCanvas);
+    const articleRect = rectFor(article);
+    const transportFooterRect = rectFor(transportFooter);
+    const readerStyle =
+      readerCanvas instanceof HTMLElement ? window.getComputedStyle(readerCanvas) : null;
+    const readerScrollPaddingBottomPx = Number.parseFloat(readerStyle?.scrollPaddingBottom ?? "0");
+    const articleCenterOffsetPx =
+      readerRect && articleRect
+        ? Math.round(
+            Math.abs(
+              articleRect.left + articleRect.width / 2 - (readerRect.left + readerRect.width / 2),
+            ),
+          )
+        : null;
     const actionSelector = [
       "button:not([aria-hidden='true'])",
       "select:not([aria-hidden='true'])",
@@ -44,13 +89,19 @@ export async function collectWebsiteCalmReadMetrics(page) {
       expandedPolicySourceDetails: queryVisible("[data-cinema-expanded-source-detail]").length,
       focusMode: root?.getAttribute("data-cinema-focus-mode") ?? "unknown",
       footerRows: queryVisible("[data-cinema-footer-row]").length,
+      footerOverlapsReaderCanvas: overlapArea(readerRect, transportFooterRect) > 0,
       headerLines: queryVisible("[data-cinema-header-line]").length,
       inlineDisplaySettings: queryVisible("[data-cinema-display-popover]").length,
       modeControlGroups: queryVisible("[data-cinema-mode-control-group]").length,
       panelCount: queryVisible("[data-cinema-inspector-dock], [data-cinema-mobile-sheet]").length,
       primaryPlaybackGroups: queryVisible("[data-cinema-primary-playback-group]").length,
+      articleCenterOffsetPx,
+      readerScrollPaddingBottomPx: Number.isFinite(readerScrollPaddingBottomPx)
+        ? Math.round(readerScrollPaddingBottomPx)
+        : 0,
       sourceIdentitySummaries: queryVisible("[data-source-identity-summary]").length,
       surface: root?.getAttribute("data-cinema-surface") ?? "unknown",
+      transportFooterHeightPx: transportFooterRect?.height ?? 0,
       visibleActions: queryVisible(actionSelector).filter(
         (element) =>
           normalize(element.textContent) || normalize(element.getAttribute("aria-label")),
@@ -128,6 +179,40 @@ export function evaluateWebsiteCalmReadMetrics(metrics) {
       budget: 1,
       metric: "modeControlGroups",
       reason: "Desktop Website read mode should expose exactly one mode control group",
+    });
+  }
+  if (metrics.viewportWidth < 1024) {
+    if (metrics.footerOverlapsReaderCanvas) {
+      failures.push({
+        actual: true,
+        budget: false,
+        metric: "footerOverlapsReaderCanvas",
+        reason: "Website reader content must not sit under the transport footer",
+      });
+    }
+    const requiredScrollPadding = Math.max(72, Math.min(180, metrics.transportFooterHeightPx));
+    if (metrics.readerScrollPaddingBottomPx < requiredScrollPadding) {
+      failures.push({
+        actual: metrics.readerScrollPaddingBottomPx,
+        budget: requiredScrollPadding,
+        metric: "readerScrollPaddingBottomPx",
+        reason: "Mobile reader canvas needs scroll padding above transport controls",
+      });
+    }
+  }
+  if (metrics.articleCenterOffsetPx === null) {
+    failures.push({
+      actual: "missing",
+      budget: "article center metrics",
+      metric: "articleCenterOffsetPx",
+      reason: "Website article column was not measurable",
+    });
+  } else if (metrics.articleCenterOffsetPx > Math.max(40, metrics.viewportWidth * 0.08)) {
+    failures.push({
+      actual: metrics.articleCenterOffsetPx,
+      budget: Math.round(Math.max(40, metrics.viewportWidth * 0.08)),
+      metric: "articleCenterOffsetPx",
+      reason: "Website article column should stay centered in read mode",
     });
   }
   return failures;

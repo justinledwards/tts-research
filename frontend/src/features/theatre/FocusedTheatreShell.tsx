@@ -332,7 +332,7 @@ function FocusedTheatreDetail({
     <div className="grid gap-2" data-focused-theatre-detail="">
       {activeText?.trim() ? (
         <p
-          className="line-clamp-2 max-w-5xl text-sm leading-6 text-[var(--vs-text-secondary)]"
+          className="line-clamp-2 hidden max-w-5xl text-sm leading-6 text-[var(--vs-text-secondary)] sm:block"
           data-focused-theatre-active-text=""
         >
           {activeText}

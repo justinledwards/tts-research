@@ -351,13 +351,71 @@ async function captureTelepromptTheatreScenario(browser, viewport, fixture) {
     const screenshot = path.join(screenshotsDir, `${viewport.id}-teleprompt-theatre.png`);
     await page.screenshot({ fullPage: false, path: screenshot });
     const metrics = await page.evaluate(() => {
+      const visible = (element) =>
+        element instanceof HTMLElement &&
+        element.getAttribute("aria-hidden") !== "true" &&
+        !element.closest("[aria-hidden='true']") &&
+        element.offsetParent !== null &&
+        element.getClientRects().length > 0;
+      const rectFor = (element) => {
+        const rect = element?.getBoundingClientRect();
+        if (!rect) {
+          return null;
+        }
+        return {
+          bottom: Math.round(rect.bottom),
+          height: Math.round(rect.height),
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          top: Math.round(rect.top),
+          width: Math.round(rect.width),
+        };
+      };
+      const overlapArea = (left, right) => {
+        if (!left || !right) {
+          return 0;
+        }
+        const width = Math.max(
+          0,
+          Math.min(left.right, right.right) - Math.max(left.left, right.left),
+        );
+        const height = Math.max(
+          0,
+          Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top),
+        );
+        return width * height;
+      };
       const theatre = document.querySelector("[data-testid='teleprompt-theatre']");
       const cue = document.querySelector("[data-testid='teleprompt-theatre-current-cue']");
+      const cueRect = rectFor(cue);
+      const controlZones = [
+        ...document.querySelectorAll(
+          "[data-focused-theatre-chrome], [data-teleprompt-theatre-control-zone]",
+        ),
+      ]
+        .filter(visible)
+        .map((element) => ({
+          label:
+            element.getAttribute("data-teleprompt-theatre-control-zone") ??
+            element.getAttribute("data-testid") ??
+            "theatre-chrome",
+          rect: rectFor(element),
+        }));
+      const overlapFailures = controlZones
+        .map((zone) => ({
+          area: overlapArea(cueRect, zone.rect),
+          label: zone.label,
+        }))
+        .filter((zone) => zone.area > 8)
+        .map((zone) => `${zone.label} overlaps cue by ${String(zone.area)}px`);
       const text = cue?.textContent?.replace(/\s+/g, " ").trim() ?? "";
       return {
+        cueRect,
         hasTheatre: theatre !== null,
         horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 4,
+        overlapFailures,
         textLength: text.length,
+        viewportHeight: window.innerHeight,
       };
     });
     const failures = [
@@ -365,6 +423,12 @@ async function captureTelepromptTheatreScenario(browser, viewport, fixture) {
       ...(metrics.hasTheatre ? [] : ["Teleprompt Theatre did not render."]),
       ...(metrics.textLength > 0 ? [] : ["Teleprompt Theatre current cue was empty."]),
       ...(metrics.horizontalOverflow ? ["Teleprompt Theatre created horizontal overflow."] : []),
+      ...(metrics.overlapFailures ?? []).map(
+        (failure) => `Teleprompt Theatre cue/control overlap: ${failure}.`,
+      ),
+      ...(metrics.cueRect && metrics.cueRect.height >= metrics.viewportHeight * 0.28
+        ? []
+        : ["Teleprompt Theatre cue area was too small for presenter readability."]),
     ];
     return {
       failures,

@@ -1,3 +1,11 @@
+## 2026-06-01 08:49 CEST - PR3 Ergonomics Hardening
+- [x] Harden final UX/review evidence gates
+- [x] Add mobile overlap and scroll-padding validation
+- [x] Rework Teleprompt Theatre presenter-first mobile layout
+- [x] Calm Website Cinema read mode and transport placeholder
+- [x] Strengthen highlight/read-along evidence attributes
+- [x] Run targeted and project checks
+
 ## 2026-05-31 23:26 CEST - Commit Visual Design System Package
 - [x] Inspect visual design system worktree
 - [x] Stage visual design system package

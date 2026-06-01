@@ -112,7 +112,13 @@ export function selectedSourceKeyForMode(
   selectedBookSource: BookSource | null,
   selectedPreparedSource: PreparedSource | null,
 ): string {
-  return initialExistingSourceKey(sourceMode, selectedBookSource, selectedPreparedSource);
+  if (sourceMode === "fileUrl" && selectedPreparedSource) {
+    return `prepared:${selectedPreparedSource.id}`;
+  }
+  if (sourceMode === "book" && selectedBookSource) {
+    return `book:${selectedBookSource.id}`;
+  }
+  return "";
 }
 
 export function bookScopeForWizard(source: BookSource | null, selectedScope: BookScope | null) {

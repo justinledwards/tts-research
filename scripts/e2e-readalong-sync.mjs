@@ -54,6 +54,11 @@ async function main() {
           const active = row.querySelector('[data-sync-active="true"]');
           return {
             activeNodeId: active?.getAttribute("data-sync-node-id") ?? null,
+            activeReadAlongNodeId: active?.getAttribute("data-readalong-node-id") ?? null,
+            activeReadAlongSourceId: active?.getAttribute("data-readalong-source-id") ?? null,
+            activeReadAlongTimingState: active?.getAttribute("data-readalong-timing-state") ?? null,
+            activeReadAlongWordIndex: active?.getAttribute("data-readalong-word-index") ?? null,
+            activeSourceWordId: active?.getAttribute("data-source-word-id") ?? null,
             activeWordIndex: active?.getAttribute("data-sync-word-index") ?? null,
             expectedNodeId: row.getAttribute("data-sync-expected-node") || null,
             highlightedNodeId: row.getAttribute("data-sync-highlighted-node") || null,
@@ -72,6 +77,25 @@ async function main() {
           browserFailures.push(
             `${check.observationId} DOM active node ${check.activeNodeId} did not match evidence ${check.highlightedNodeId}.`,
           );
+        }
+        if (check.activeNodeId && check.activeReadAlongNodeId !== check.activeNodeId) {
+          browserFailures.push(
+            `${check.observationId} active read-along node ${check.activeReadAlongNodeId} did not match DOM sync node ${check.activeNodeId}.`,
+          );
+        }
+        if (check.activeWordIndex && check.activeReadAlongWordIndex !== check.activeWordIndex) {
+          browserFailures.push(
+            `${check.observationId} active read-along word ${check.activeReadAlongWordIndex} did not match DOM sync word ${check.activeWordIndex}.`,
+          );
+        }
+        if (check.activeNodeId && !check.activeReadAlongSourceId) {
+          browserFailures.push(`${check.observationId} active highlight had no source id.`);
+        }
+        if (check.activeNodeId && !check.activeSourceWordId) {
+          browserFailures.push(`${check.observationId} active highlight had no source word id.`);
+        }
+        if (check.activeNodeId && !check.activeReadAlongTimingState) {
+          browserFailures.push(`${check.observationId} active highlight had no timing state.`);
         }
       }
       const screenshot = path.join(screenshotsDir, `${fixture.id}.png`);

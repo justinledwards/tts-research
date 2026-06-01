@@ -85,6 +85,17 @@ export function normalizePreviewComparisonChoice(
   };
 }
 
+export function previewComparisonChoicesEqual(
+  left: PreviewComparisonChoice,
+  right: PreviewComparisonChoice,
+): boolean {
+  return (
+    left.policyId === right.policyId &&
+    left.runMode === right.runMode &&
+    left.voiceId === right.voiceId
+  );
+}
+
 export function previewComparisonDifferences(
   choiceA: PreviewComparisonChoice,
   choiceB: PreviewComparisonChoice,

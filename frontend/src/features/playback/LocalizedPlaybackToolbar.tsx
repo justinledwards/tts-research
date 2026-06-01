@@ -157,7 +157,7 @@ export function LocalizedPlaybackToolbar({
         {disabledReasons.length > 0 ? (
           <p
             className={cx(
-              "basis-full text-xs",
+              "pointer-events-none basis-full text-xs",
               highContrast ? "text-[var(--vs-theatre-text)]" : "text-[var(--vs-selected-text)]",
             )}
             data-testid={`${toolbarTestId}-disabled-reasons`}

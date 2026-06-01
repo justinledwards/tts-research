@@ -24,6 +24,7 @@ const ALL_REVIEW_SURFACES = [
     ...CINEMA_SURFACES,
     ...SETTINGS_SURFACES,
     "Command Palette",
+    "Command Center",
     "Mobile/narrow More sheet",
     "Project dashboard",
     "Teleprompt Theatre",
@@ -129,6 +130,34 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
+    acceptedSurfaces: [...WORKSPACE_STAGE_SURFACES, "Workspace"],
+    category: "allowed-surface-parity",
+    id: "wp46-command-center-shell-parity",
+    labelPatterns: ["^Command Center", "^Open Command Center$"],
+    owner: "command-center",
+    reason:
+      "Command Center is global shell chrome and remains reachable from first-class workspace stages.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: ["Project dashboard", "Voice dashboard"],
+    category: "allowed-surface-parity",
+    id: "wp46-command-center-section-parity",
+    labelPatterns: [
+      "^ActivityLive work",
+      "^Assets\\d*Sources",
+      "^Import/ExportPortable",
+      "^OverviewCurrent project",
+      "^Projects\\d*Project",
+      "^Reports\\d*Health",
+      "^Return to Narration Workbench$",
+    ],
+    owner: "command-center",
+    reason:
+      "Project and voice dashboards share the Command Center section rail while their content panes differ.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
     acceptedSurfaces: [
       "BookCinema",
       "DocumentCinema",
@@ -219,6 +248,48 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     owner: "settings-ia",
     reason:
       "Settings, UI Memory, and Speech Policy expose the same settings-mode controls for parity across settings entry points.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: ["BookCinema", "Intake"],
+    category: "allowed-surface-parity",
+    id: "wp46-advanced-import-parity",
+    labels: ["Advanced import"],
+    owner: "intake",
+    reason:
+      "Advanced import is the same intake disclosure reached from the guided source flow and Book Cinema setup path.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: ["Project dashboard", "Voice dashboard"],
+    category: "allowed-surface-parity",
+    id: "wp46-dashboard-market-profile-parity",
+    labelPatterns: ["^Market profile"],
+    owner: "voice-workflow",
+    reason:
+      "The market profile picker is shared between project and voice dashboard context panels for source/voice alignment.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: ["Review"],
+    burnDownIssue: "WP46-BD-REVIEW-PREVIEW-SPEECH",
+    category: "needs-consolidation",
+    id: "wp46-review-preview-speech",
+    labels: ["Preview Speech"],
+    owner: "review-workflow",
+    reason:
+      "Review exposes global, selected, and block-level preview actions; labels need clearer scope in the next Review IA pass.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: ["Review"],
+    burnDownIssue: "WP46-BD-REVIEW-MARK-NEEDS-REVIEW",
+    category: "needs-consolidation",
+    id: "wp46-review-mark-needs-review",
+    labels: ["Mark needs review"],
+    owner: "review-workflow",
+    reason:
+      "Batch and block-level needs-review actions are intentionally separate but need clearer labels or grouping.",
     reviewDate: REVIEW_DATE,
   },
   {
@@ -368,6 +439,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
   },
   {
     acceptedSurfaces: ALL_REVIEW_SURFACES,
+    burnDownIssue: "WP46-BD-GENERIC-NAV-IA",
     category: "needs-consolidation",
     id: "wp46-generic-navigation-labels",
     labels: [

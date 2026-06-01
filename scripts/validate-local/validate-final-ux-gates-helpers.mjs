@@ -38,6 +38,7 @@ export function evaluateFinalUxGates({
     evaluateMoreMenuGate(documents),
     evaluateTelepromptEntryGate(documents),
     evaluateFullscreenFallbackGate(documents),
+    evaluateResponsiveOcclusionGate(documents),
     evaluateTelepromptReturnMemoryGate(documents),
     evaluateReadAlongBudgetGate(documents),
     evaluateWrongNodeGate(documents),
@@ -67,9 +68,18 @@ export function evaluateFinalUxGates({
       : passedWithFindingsGates.length > 0
         ? "passed-with-findings"
         : "passed";
+  const mergeReadiness = finalUxMergeReadiness({
+    commandFailures,
+    failedGates,
+    status,
+    unresolvedFindings,
+    waivedFindings,
+    waivers,
+  });
   const summary = {
     commandsFailed: commandFailures.length,
     failed: failedGates.length,
+    mergeReadiness: mergeReadiness.status,
     passed: gates.filter((gate) => gate.status === "passed").length,
     passedWithFindings: passedWithFindingsGates.length,
     total: gates.length,
@@ -91,6 +101,7 @@ export function evaluateFinalUxGates({
     },
     gates,
     generatedAt,
+    mergeReadiness,
     outputDir,
     rootDir,
     schemaVersion: "final-ux-gates.v1",
@@ -342,6 +353,51 @@ function evaluateFullscreenFallbackGate(documents) {
     failures,
     id: "teleprompt-fullscreen-fallback",
     title: "Native fullscreen and Theatre fallback are verified",
+  });
+}
+
+function evaluateResponsiveOcclusionGate(documents) {
+  const responsive = documents.responsiveResults;
+  const results = responsive?.results ?? [];
+  const failures = [];
+  const evidence = [
+    `Responsive status ${responsive?.status ?? "missing"}.`,
+    `Teleprompt Theatre failures ${String(
+      responsive?.summary?.telepromptTheatreFailures ?? "missing",
+    )}.`,
+    `Website calm-read failures ${String(
+      responsive?.summary?.websiteCalmReadFailures ?? "missing",
+    )}.`,
+  ];
+  for (const result of results) {
+    for (const failure of result.telepromptTheatre?.failures ?? []) {
+      if (/overlap|cue area|readability/i.test(failure)) {
+        failures.push(`${result.id}: ${failure}`);
+      }
+    }
+    for (const failure of result.websiteCalmRead?.failures ?? []) {
+      if (
+        /footerOverlapsReaderCanvas|readerScrollPaddingBottomPx|articleCenterOffsetPx/i.test(
+          failure.metric ?? failure.reason ?? "",
+        )
+      ) {
+        failures.push(`${result.id}: ${failure.metric} ${String(failure.actual)}.`);
+      }
+    }
+  }
+  if (Number(responsive?.summary?.overlayCollisionFailures ?? 0) > 0) {
+    failures.push(
+      `Responsive overlay audit reported ${String(
+        responsive.summary.overlayCollisionFailures,
+      )} collision failure(s).`,
+    );
+  }
+  return gate({
+    artifactKeys: ["responsiveResults"],
+    evidence,
+    failures,
+    id: "responsive-no-control-occlusion",
+    title: "Mobile reader and Theatre controls do not occlude content",
   });
 }
 
@@ -726,6 +782,9 @@ function collectUiActionAuditFindings(documents, auditStatus) {
 
   if (duplicateClassification.overexposed > 0) {
     const overexposed = duplicatesByCategory("overexposed");
+    const missingCarryMetadata = overexposed.filter(
+      (duplicate) => !duplicateHasCarryMetadata(duplicate),
+    );
     findings.push(
       uiActionFinding({
         category: "overexposed-duplicate-groups",
@@ -740,10 +799,29 @@ function collectUiActionAuditFindings(documents, auditStatus) {
         waiverRequired: false,
       }),
     );
+    if (missingCarryMetadata.length > 0) {
+      findings.push(
+        uiActionFinding({
+          category: "uncarried-overexposed-duplicate-groups",
+          count: missingCarryMetadata.length,
+          message: `${String(
+            missingCarryMetadata.length,
+          )} overexposed duplicate action group(s) lack owner, reason, review date, or burn-down issue.`,
+          owner: ownersForDuplicates(missingCarryMetadata),
+          samples: missingCarryMetadata.slice(0, 5).map(formatDuplicateSample),
+          severity: "blocking",
+          threshold: 0,
+          waiverRequired: false,
+        }),
+      );
+    }
   }
 
   if (duplicateClassification.needsConsolidation > 0) {
     const needsConsolidation = duplicatesByCategory("needs-consolidation");
+    const missingCarryMetadata = needsConsolidation.filter(
+      (duplicate) => !duplicateHasCarryMetadata(duplicate),
+    );
     findings.push(
       uiActionFinding({
         category: "needs-consolidation-duplicate-groups",
@@ -758,6 +836,22 @@ function collectUiActionAuditFindings(documents, auditStatus) {
         waiverRequired: false,
       }),
     );
+    if (missingCarryMetadata.length > 0) {
+      findings.push(
+        uiActionFinding({
+          category: "uncarried-needs-consolidation-duplicate-groups",
+          count: missingCarryMetadata.length,
+          message: `${String(
+            missingCarryMetadata.length,
+          )} IA duplicate action group(s) lack owner, reason, review date, or burn-down issue.`,
+          owner: ownersForDuplicates(missingCarryMetadata),
+          samples: missingCarryMetadata.slice(0, 5).map(formatDuplicateSample),
+          severity: "blocking",
+          threshold: 0,
+          waiverRequired: false,
+        }),
+      );
+    }
   }
 
   if (duplicateClassification.waived > 0) {
@@ -824,6 +918,7 @@ function collectUiActionAuditFindings(documents, auditStatus) {
     );
   }
 
+  reconcileCompletedWithFindingsStatus(findings, auditStatus);
   return findings;
 }
 
@@ -883,7 +978,39 @@ function waiverMatchesFinding(waiver, finding) {
 }
 
 function validWaiver(waiver) {
-  return Boolean(String(waiver?.owner ?? "").trim() && String(waiver?.reason ?? "").trim());
+  return Boolean(
+    String(waiver?.owner ?? "").trim() &&
+      String(waiver?.reason ?? "").trim() &&
+      validReviewDate(waiver?.reviewDate),
+  );
+}
+
+function reconcileCompletedWithFindingsStatus(findings, auditStatus) {
+  if (auditStatus !== "completed-with-findings") {
+    return;
+  }
+  const statusFinding = findings.find((finding) => finding.category === "ui-action-audit-status");
+  if (!statusFinding) {
+    return;
+  }
+  const concreteFindings = findings.filter((finding) => finding !== statusFinding);
+  const unresolvedConcrete = concreteFindings.filter((finding) =>
+    ["blocking", "needs-review"].includes(finding.severity),
+  );
+  const waivedConcrete = concreteFindings.find((finding) => finding.severity === "waived");
+  if (unresolvedConcrete.length > 0 || !waivedConcrete) {
+    return;
+  }
+  statusFinding.severity = "waived";
+  statusFinding.waived = true;
+  statusFinding.waiver = {
+    id: "ui-action-audit:completed-with-waived-findings",
+    owner: waivedConcrete.waiver?.owner ?? waivedConcrete.owner ?? "UX QA owner",
+    reason:
+      "UI action audit remains completed-with-findings because the concrete review findings are explicitly waived.",
+    reviewDate: waivedConcrete.waiver?.reviewDate ?? null,
+    source: "ui-action-audit",
+  };
 }
 
 function collectUiActionAuditWaivers(documents) {
@@ -933,6 +1060,57 @@ function worstSeverity(findings) {
     return "waived";
   }
   return "informational";
+}
+
+function duplicateHasCarryMetadata(duplicate) {
+  const classification = duplicate.classification ?? {};
+  return Boolean(
+    String(classification.owner ?? "").trim() &&
+      String(classification.reason ?? "").trim() &&
+      validReviewDate(classification.reviewDate ?? classification.expiresAt) &&
+      String(classification.burnDownIssue ?? "").trim(),
+  );
+}
+
+function validReviewDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ""));
+}
+
+function finalUxMergeReadiness({
+  commandFailures,
+  failedGates,
+  status,
+  unresolvedFindings,
+  waivedFindings,
+  waivers,
+}) {
+  if (commandFailures.length > 0 || failedGates.length > 0) {
+    return {
+      reasons: [
+        ...commandFailures.slice(0, 3).map((step) => `${step.title} command failed.`),
+        ...failedGates.slice(0, 3).map((gateResult) => `${gateResult.title} failed.`),
+      ].slice(0, 4),
+      status: "blocked",
+    };
+  }
+  if (unresolvedFindings.length > 0) {
+    return {
+      reasons: unresolvedFindings
+        .slice(0, 4)
+        .map((finding) => finding.message ?? finding.category ?? "Unresolved UX finding."),
+      status: "not ready",
+    };
+  }
+  if (status === "passed-with-findings" || waivedFindings.length > 0 || waivers.length > 0) {
+    return {
+      reasons: ["No blocking findings remain, but explicit waivers are still active."],
+      status: "ready with waivers",
+    };
+  }
+  return {
+    reasons: ["No blocking, needs-review, or waived findings were detected."],
+    status: "ready",
+  };
 }
 
 export function finalUxGateThresholds(gates) {
@@ -1077,6 +1255,7 @@ export function renderFinalUxSummary(result) {
     "",
     `Status: **${result.status.toUpperCase()}**`,
     `Generated: ${result.generatedAt}`,
+    `Merge readiness: **${(result.mergeReadiness?.status ?? "unknown").toUpperCase()}**`,
     "",
     "## Summary",
     "",
@@ -1084,6 +1263,7 @@ export function renderFinalUxSummary(result) {
     `- Passed with findings: ${String(result.summary.passedWithFindings)}`,
     `- Failed gates: ${String(result.summary.failed)}`,
     `- Command failures: ${String(result.summary.commandsFailed)}`,
+    `- Merge readiness: ${result.summary.mergeReadiness ?? "unknown"}`,
     `- Unresolved findings: ${String(result.summary.unresolvedFindings)}`,
     `- Waived findings: ${String(result.summary.waivedFindings)}`,
     `- Waivers: ${String(result.summary.waivers)}`,
@@ -1109,6 +1289,12 @@ export function renderFinalUxSummary(result) {
     lines.push("", "## Why Final Still Passes", "");
     for (const explanation of passExplanations) {
       lines.push(`- ${explanation}`);
+    }
+  }
+  if (result.mergeReadiness) {
+    lines.push("", "## Merge Readiness", "");
+    for (const reason of result.mergeReadiness.reasons ?? []) {
+      lines.push(`- ${reason}`);
     }
   }
   if (result.unresolvedFindings.length > 0) {

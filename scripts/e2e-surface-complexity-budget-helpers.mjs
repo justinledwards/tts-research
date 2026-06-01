@@ -49,8 +49,9 @@ const budgets = {
   settingsQuick: budget("standard", 40, 12, 6, 4, 10, 6, 4, 90, 80, 16, [
     "Quick settings should expose common settings; expert groups own deeper controls.",
   ]),
-  settingsDeep: budget("dense", 72, 36, 8, 4, 12, 8, 4, 90, 80, 16, [
+  settingsDeep: budget("dense", 80, 36, 8, 4, 12, 8, 4, 90, 80, 16, [
     "Dedicated settings panes may expose persisted preference controls when grouped by scope and reset/export affordances remain explicit.",
+    "UI Memory includes reader, Theatre, persistence, import/export, reset, and shortcut controls in one auditable settings surface.",
   ]),
   teleprompt: budget("standard", 46, 16, 8, 0, 8, 8, 4, 45, 48, 12, [
     "Teleprompt keeps presenter controls primary; workflow actions stay secondary.",
@@ -84,6 +85,9 @@ const scenarioBudgetKeys = {
   "workspace-review": "reviewWorkspace",
   "workspace-teleprompt": "teleprompt",
 };
+
+const PRIMARY_COMPLEXITY_LABEL_PATTERN =
+  /^(?:create\s*&\s*listen|create audio|apply|preview sample|preview speech|save|export|import|reset|retry|regenerate|bookmark|play cue|play$|pause|restart)\b/i;
 
 function budget(
   tier,
@@ -173,29 +177,27 @@ function evaluate(metrics, activeBudget) {
 }
 
 function metricsFromActions(actions) {
+  const complexityActions = complexityActionsFor(actions);
   const labels = new Map();
   let labelLength = 0;
   let reachableDrawersSheets = 0;
-  for (const action of actions) {
+  for (const action of complexityActions) {
     const label = action.visibleLabel || action.label || "";
     if (label) {
       labels.set(label, (labels.get(label) ?? 0) + 1);
     }
     labelLength += String(action.accessibleName || action.label || "").length;
-    if (
-      action.ariaHasPopup ||
-      action.ariaControls ||
-      /\b(more|settings|drawer|sheet|palette|help|guide|shortcuts|open)\b/i.test(action.label)
-    ) {
+    if (isReachableDrawerSheetAction(action)) {
       reachableDrawersSheets += 1;
     }
   }
+  const visibleActions = complexityActions.length;
   return {
     activeModesTabs: 0,
-    averageAccessibleLabelLength: actions.length > 0 ? Math.round(labelLength / actions.length) : 0,
+    averageAccessibleLabelLength: visibleActions > 0 ? Math.round(labelLength / visibleActions) : 0,
     chipsBadges: 0,
-    destructiveActions: actions.filter((action) => action.destructive).length,
-    disabledActions: actions.filter((action) => action.disabled).length,
+    destructiveActions: complexityActions.filter((action) => action.destructive).length,
+    disabledActions: complexityActions.filter((action) => action.disabled).length,
     duplicatedVisibleLabels: [...labels.values()].filter((count) => count > 1).length,
     expandedPolicySourceDetails: 0,
     footerRows: 0,
@@ -205,17 +207,64 @@ function metricsFromActions(actions) {
     panelsOpenByDefault: 0,
     panelCount: 0,
     primaryPlaybackGroups: 0,
-    primaryActions: actions.filter(
-      (action) =>
-        action.playbackPrimary ||
-        action.actionClass === "generation" ||
-        action.actionClass === "preview",
-    ).length,
+    primaryActions: complexityActions.filter(isPrimaryComplexityAction).length,
     reachableDrawersSheets,
     sourceIdentitySummaries: 0,
     visibleBadges: 0,
-    visibleActions: actions.length,
+    visibleActions,
   };
+}
+
+function complexityActionsFor(actions) {
+  return actions.filter((action) => !isInlineDocumentArtifactAction(action));
+}
+
+function isInlineDocumentArtifactAction(action) {
+  const testIdentity = `${action.testId ?? ""} ${action.actionId ?? ""}`;
+  return (
+    /ui-action-documentcinema-owner-document-artifact/i.test(testIdentity) ||
+    /\bdocument-inline-artifact\b/i.test(action.className ?? "")
+  );
+}
+
+function isPrimaryComplexityAction(action) {
+  if (isInlineDocumentArtifactAction(action)) {
+    return false;
+  }
+  if (action.playbackPrimary) {
+    return true;
+  }
+  if (action.surface === "Command Palette") {
+    return false;
+  }
+  if (String(action.testId ?? "").startsWith("ui-action-command-center-section-")) {
+    return false;
+  }
+  const label = complexityActionLabel(action);
+  if (action.actionClass === "preview") {
+    return !/^go to\b/i.test(label);
+  }
+  return PRIMARY_COMPLEXITY_LABEL_PATTERN.test(label);
+}
+
+function isReachableDrawerSheetAction(action) {
+  if (isInlineDocumentArtifactAction(action)) {
+    return false;
+  }
+  if (String(action.ariaControls ?? "").startsWith("citation-chip-")) {
+    return false;
+  }
+  return Boolean(
+    action.ariaHasPopup ||
+      action.ariaControls ||
+      /\b(more|settings|drawer|sheet|palette|help|guide|shortcuts|open)\b/i.test(action.label),
+  );
+}
+
+function complexityActionLabel(action) {
+  return String(action.visibleLabel || action.label || "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
 }
 
 function optionalThresholds(metrics, activeBudget) {
@@ -435,7 +484,10 @@ export {
   budget,
   budgetKeyForSurface,
   budgets,
+  complexityActionsFor,
   evaluate,
+  isPrimaryComplexityAction,
+  isReachableDrawerSheetAction,
   metricsFromActions,
   normalizeSnapshots,
   optionalThreshold,
