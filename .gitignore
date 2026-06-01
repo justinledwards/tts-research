@@ -61,6 +61,8 @@ backend/model-cache/
 backend/output/
 backend/tmp/
 demo/
+!frontend/src/features/demo/
+!frontend/src/features/demo/**
 model/
 voice/
 frontend/.vercel/

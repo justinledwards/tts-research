@@ -58,6 +58,7 @@ describe("UI memory model", () => {
     expect(memory.rememberReaderPreferences).toBe(true);
     expect(memory.rememberTelepromptReturnTarget).toBe(true);
     expect(memory.rememberTheme).toBe(true);
+    expect(memory.showTutorialLauncher).toBe(true);
     expect(resolveWorkspaceLayoutMode(memory, "alpha")).toBe("balanced");
     expect(resolveWorkspaceCustomLayout(memory, "alpha")).toEqual(DEFAULT_WORKSPACE_CUSTOM_LAYOUT);
     expect(resolveWorkspaceDisclosurePins(memory, "alpha")).toEqual(
@@ -163,6 +164,25 @@ describe("UI memory model", () => {
     expect(resolveWorkspaceLayoutMode(memory, "alpha")).toBe("balanced");
     expect(resolveWorkspaceLayoutMode({ ...memory, rememberLayout: true }, "alpha")).toBe("focus");
     expect(localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY)).toBeNull();
+  });
+
+  it("normalizes and persists Studio tutorial launcher visibility", () => {
+    localStorage.setItem(
+      UI_MEMORY_STORAGE_KEY,
+      JSON.stringify({
+        rememberTheme: false,
+        version: 1,
+      }),
+    );
+
+    expect(loadUiMemory().showTutorialLauncher).toBe(true);
+
+    saveUiMemory({
+      ...defaultUiMemoryState(),
+      showTutorialLauncher: false,
+    });
+
+    expect(loadUiMemory().showTutorialLauncher).toBe(false);
   });
 
   it("resets remembered values while preserving the remember toggle", () => {

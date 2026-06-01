@@ -160,6 +160,18 @@ describe("SettingsPanel", () => {
     expect(markup).not.toContain("settings-quick-reader-scale");
   });
 
+  it("renders the Studio tutorial launcher preference in UI memory settings", () => {
+    const markup = renderSettingsPanel({
+      fieldId: "uiMemory",
+      groupId: "reader",
+      layerId: "advanced",
+      scope: "machine",
+    });
+
+    expect(markup).toContain("Show Studio tutorial launcher");
+    expect(markup).toContain('data-testid="ui-action-ui-memory-show-tutorial-launcher"');
+  });
+
   it("renders custom golden-minute policy comparison when a user profile exists", () => {
     const markup = renderSettingsPanel(
       {

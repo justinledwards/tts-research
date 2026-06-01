@@ -53,6 +53,13 @@ export const UI_MEMORY_PREFERENCE_META: readonly UiMemoryPreferenceMeta[] = [
     label: "Remember panel pins",
     testId: "ui-action-ui-memory-remember-panel-pins",
   },
+  {
+    detail:
+      "Show the Try the Studio launcher until the tutorial is hidden or completed; turn this back on to restore it.",
+    id: "showTutorialLauncher",
+    label: "Show Studio tutorial launcher",
+    testId: "ui-action-ui-memory-show-tutorial-launcher",
+  },
 ];
 
 export const UI_MEMORY_RESET_LABELS: Record<UiMemoryResetScope, string> = {
@@ -62,7 +69,7 @@ export const UI_MEMORY_RESET_LABELS: Record<UiMemoryResetScope, string> = {
 };
 
 export const UI_MEMORY_RESET_CONFIRMATION: Record<UiMemoryResetScope, string> = {
-  all: "Reset all UI memory on this machine? This clears remembered layout, theme, reader preferences, last project, Teleprompt return memory, Theatre settings, and panel pins.",
+  all: "Reset all UI memory on this machine? This clears remembered layout, theme, reader preferences, last project, Teleprompt return memory, Theatre settings, panel pins, and tutorial launcher visibility.",
   reader:
     "Reset reader preferences on this machine? Typography, spacing, contrast, and motion preferences will return to defaults.",
   workspace:

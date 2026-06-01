@@ -5,9 +5,16 @@ import type { UiActionMetadata } from "./actionMetadata";
 export const STATIC_UI_ACTION_METADATA = [
   action("workspace-open", "Open workspace", "Workspace", "navigation", "menu-or-panel-opened"),
   action("demo-open", "Try the Studio", "Workspace", "navigation", "menu-or-panel-opened"),
-  action("demo-collapse", "Hide demo mode", "Workspace", "navigation", "state-changed", false, [
-    "Hide",
-  ]),
+  action(
+    "demo-collapse",
+    "Hide Studio tutorial",
+    "Workspace",
+    "navigation",
+    "state-changed",
+    false,
+    ["Hide tutorial"],
+  ),
+  action("demo-finish", "Finish Studio tutorial", "Workspace", "navigation", "state-changed"),
   action(
     "demo-tour-intake",
     "Demo tour: Intake",

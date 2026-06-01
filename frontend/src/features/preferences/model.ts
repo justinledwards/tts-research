@@ -55,7 +55,8 @@ export type UiMemoryPreferenceId =
   | "rememberReaderPreferences"
   | "rememberTelepromptTheatreSettings"
   | "rememberTelepromptReturnTarget"
-  | "rememberTheme";
+  | "rememberTheme"
+  | "showTutorialLauncher";
 
 export const UI_MEMORY_PREFERENCE_IDS: readonly UiMemoryPreferenceId[] = [
   "rememberLayout",
@@ -65,6 +66,7 @@ export const UI_MEMORY_PREFERENCE_IDS: readonly UiMemoryPreferenceId[] = [
   "rememberTelepromptReturnTarget",
   "rememberTelepromptTheatreSettings",
   "rememberPanelPins",
+  "showTutorialLauncher",
 ];
 
 type UiMemoryPreferenceValues = Pick<UiMemoryState, UiMemoryPreferenceId>;
@@ -84,6 +86,7 @@ export interface UiMemoryState {
   rememberTelepromptTheatreSettings: boolean;
   rememberTelepromptReturnTarget: boolean;
   rememberTheme: boolean;
+  showTutorialLauncher: boolean;
   version: typeof UI_MEMORY_VERSION;
   workspace: {
     customLayout: WorkspaceCustomLayout;
@@ -106,6 +109,7 @@ export const DEFAULT_UI_MEMORY_PREFERENCES: UiMemoryPreferenceValues = {
   rememberTelepromptTheatreSettings: true,
   rememberTelepromptReturnTarget: true,
   rememberTheme: true,
+  showTutorialLauncher: true,
 };
 
 export function defaultUiMemoryState(

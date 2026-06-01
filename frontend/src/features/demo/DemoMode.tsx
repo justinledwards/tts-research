@@ -1,4 +1,4 @@
-import { Button, Panel, StatusChip } from "../../design";
+import { Button, Drawer, StatusChip } from "../../design";
 import type { TTSEngineDiagnostics } from "../../types";
 import { resolveProviderRuntimeCapabilities } from "../provider-capabilities";
 import type { WorkspaceStage } from "../workspace/model";
@@ -11,8 +11,10 @@ export function DemoMode({
   canOpenCinema,
   currentStage,
   hasGeneratedAudio,
-  onCollapse,
+  onClose,
+  onCompleteTutorial,
   onCreateAndListen,
+  onHideTutorial,
   onOpenCinema,
   onOpenDemoProject,
   onStageSelect,
@@ -24,8 +26,10 @@ export function DemoMode({
   canOpenCinema: boolean;
   currentStage: WorkspaceStage;
   hasGeneratedAudio: boolean;
-  onCollapse: (collapsed: boolean) => void;
+  onClose: () => void;
+  onCompleteTutorial: () => void;
   onCreateAndListen: () => void;
+  onHideTutorial: () => void;
   onOpenCinema: () => void;
   onOpenDemoProject: (project: DemoProject) => void;
   onStageSelect: (stage: WorkspaceStage) => void;
@@ -40,11 +44,21 @@ export function DemoMode({
     : `${runtime.providerLabel} · provider-backed`;
 
   return (
-    <section
-      className="border-b px-3 py-3 vs-border vs-surface lg:px-4"
-      data-ui-action-surface="Workspace"
+    <Drawer
+      label="Studio tutorial"
+      metadata={[
+        { label: "Runtime", value: runtime.capabilities.mockTts ? "Mock" : "Provider-backed" },
+        { label: "Fixtures", value: "Local" },
+      ]}
+      modal={false}
+      onClose={onClose}
+      title="Try the Studio"
     >
-      <Panel className="grid gap-4 p-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+      <section
+        className="grid gap-4"
+        data-testid="studio-tutorial-drawer"
+        data-ui-action-surface="Workspace"
+      >
         <div className="grid gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -56,7 +70,7 @@ export function DemoMode({
                 <StatusChip>Unsaved demo</StatusChip>
                 <StatusChip>Local fixtures</StatusChip>
               </div>
-              <p className="vs-muted mt-1 max-w-3xl text-sm leading-6">
+              <p className="vs-muted mt-1 max-w-2xl text-sm leading-6">
                 Load a sample source, walk Intake to Cinema, and create audio only when you
                 explicitly choose Create & Listen.
               </p>
@@ -64,17 +78,15 @@ export function DemoMode({
             <Button
               data-testid="ui-action-demo-collapse"
               data-ui-action-surface="Workspace"
-              onClick={() => {
-                onCollapse(true);
-              }}
+              onClick={onHideTutorial}
               size="sm"
-              variant="ghost"
+              variant="secondary"
             >
-              Hide
+              Hide tutorial
             </Button>
           </div>
 
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid max-h-[34vh] gap-2 overflow-y-auto overscroll-contain pr-1 sm:grid-cols-2">
             {demoProjects.map((project) => (
               <button
                 aria-pressed={project.id === activeDemoProjectId}
@@ -150,6 +162,7 @@ export function DemoMode({
                       onCreateAndListen();
                     } else if (step.action === "openCinema") {
                       onOpenCinema();
+                      onCompleteTutorial();
                     }
                   }}
                   selected={isActive}
@@ -166,9 +179,20 @@ export function DemoMode({
               );
             })}
           </div>
+          <div className="flex flex-wrap justify-end gap-2 border-t pt-3 vs-border">
+            <Button
+              data-testid="ui-action-demo-finish"
+              data-ui-action-surface="Workspace"
+              onClick={onCompleteTutorial}
+              size="sm"
+              variant="primary"
+            >
+              Finish tutorial
+            </Button>
+          </div>
         </div>
-      </Panel>
-    </section>
+      </section>
+    </Drawer>
   );
 }
 

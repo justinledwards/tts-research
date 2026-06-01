@@ -33,6 +33,7 @@ export interface UiMemoryPreferenceValues {
   rememberTelepromptTheatreSettings: boolean;
   rememberTelepromptReturnTarget: boolean;
   rememberTheme: boolean;
+  showTutorialLauncher: boolean;
 }
 
 export function cleanProjectId(projectId: string): string {
@@ -72,6 +73,10 @@ export function normalizeUiMemoryPreferences(
       fallback.rememberTelepromptReturnTarget,
     ),
     rememberTheme: normalizeBooleanPreference(candidate.rememberTheme, fallback.rememberTheme),
+    showTutorialLauncher: normalizeBooleanPreference(
+      candidate.showTutorialLauncher,
+      fallback.showTutorialLauncher,
+    ),
   };
 }
 
@@ -84,6 +89,7 @@ export function uiMemoryPreferenceValues(memory: UiMemoryState): UiMemoryPrefere
     rememberTelepromptTheatreSettings: memory.rememberTelepromptTheatreSettings,
     rememberTelepromptReturnTarget: memory.rememberTelepromptReturnTarget,
     rememberTheme: memory.rememberTheme,
+    showTutorialLauncher: memory.showTutorialLauncher,
   };
 }
 

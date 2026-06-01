@@ -1283,3 +1283,15 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Inspect branch and remote status
 - [x] Push branch to PR remote
 - [x] Confirm PR update
+
+## 2026-06-01 19:03 CEST - Try Studio Tutorial UX
+- [x] Rework tutorial into drawer
+- [x] Keep tutorial drawer non-modal for workspace access
+- [x] Contain tutorial drawer scrolling
+- [x] Add remembered launcher setting
+- [x] Update tests and audit metadata
+- [x] Run checks and Playwright QA
+
+## 2026-06-01 19:53 CEST - Commit Try Studio Tutorial UX
+- [x] Stage tutorial UX work package
+- [x] Create commit

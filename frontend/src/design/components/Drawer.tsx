@@ -7,6 +7,7 @@ export interface DrawerProps {
   className?: string;
   label: string;
   metadata?: { label: string; value: string }[];
+  modal?: boolean;
   onClose: () => void;
   overlayOwner?: string;
   overlayZone?: string;
@@ -20,6 +21,7 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
     className,
     label,
     metadata = [],
+    modal = true,
     onClose,
     overlayOwner,
     overlayZone,
@@ -30,16 +32,19 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
 ) {
   return (
     <div
-      className="fixed inset-0 z-[60] bg-[var(--vs-surface-overlay)]"
+      className={cx(
+        "fixed inset-0 z-[60] overflow-hidden",
+        modal ? "bg-[var(--vs-surface-overlay)]" : "pointer-events-none bg-transparent",
+      )}
       data-overlay-owner={overlayOwner}
       data-overlay-zone={overlayZone}
       role="presentation"
     >
       <aside
         aria-label={label}
-        aria-modal="true"
+        aria-modal={modal ? true : undefined}
         className={cx(
-          "vs-app ml-auto flex h-full w-full max-w-[860px] flex-col border-l border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] shadow-2xl md:w-[820px]",
+          "pointer-events-auto vs-app ml-auto flex h-full w-full max-w-[860px] flex-col border-l border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] shadow-2xl md:w-[820px]",
           className,
         )}
         ref={ref}
@@ -57,7 +62,7 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
             Close
           </Button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">{children}</div>
       </aside>
     </div>
   );

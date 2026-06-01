@@ -2222,7 +2222,7 @@ export function App() {
   const [isVoiceDashboardOpen, setIsVoiceDashboardOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [activeDemoProjectId, setActiveDemoProjectId] = useState<string | null>(null);
-  const [isDemoModeCollapsed, setIsDemoModeCollapsed] = useState(true);
+  const [isDemoModeOpen, setIsDemoModeOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteView, setCommandPaletteView] = useState<CommandPaletteView>("commands");
@@ -2391,7 +2391,7 @@ export function App() {
   );
   function openDemoProject(project: DemoProject) {
     setActiveDemoProjectId(project.id);
-    setIsDemoModeCollapsed(false);
+    setIsDemoModeOpen(true);
     setProjectStateReadyId(null);
     setText(project.sampleText);
     setSourceMode("text");
@@ -2502,9 +2502,30 @@ export function App() {
       if (preferenceId === "rememberPanelPins") {
         setWorkspaceDisclosurePins(DEFAULT_WORKSPACE_DISCLOSURE_PINS);
       }
+      if (preferenceId === "showTutorialLauncher") {
+        setIsDemoModeOpen(false);
+      }
     },
     [activeProjectId],
   );
+  const hideStudioTutorial = useCallback(() => {
+    setIsDemoModeOpen(false);
+    setUiMemory((currentMemory) => {
+      const nextMemory = updateUiMemoryPreference(currentMemory, "showTutorialLauncher", false);
+      uiMemoryRef.current = nextMemory;
+      return nextMemory;
+    });
+    announcePolite("Studio tutorial hidden. Restore it from Reader settings.");
+  }, [announcePolite]);
+  const completeStudioTutorial = useCallback(() => {
+    setIsDemoModeOpen(false);
+    setUiMemory((currentMemory) => {
+      const nextMemory = updateUiMemoryPreference(currentMemory, "showTutorialLauncher", false);
+      uiMemoryRef.current = nextMemory;
+      return nextMemory;
+    });
+    announcePolite("Studio tutorial complete. Restore it from Reader settings.");
+  }, [announcePolite]);
   const handleUiMemoryReset = useCallback(
     (scope: UiMemoryResetScope) => {
       if (scope === "reader") {
@@ -6856,14 +6877,14 @@ export function App() {
         workspaceDisclosurePins={workspaceDisclosurePins}
         workspaceLayoutMode={workspaceContext.layoutMode}
       />
-      {isDemoModeCollapsed ? (
+      {uiMemory.showTutorialLauncher && !isDemoModeOpen ? (
         <div className="border-b px-3 py-2 vs-border vs-surface lg:px-4">
           <Button
             className="gap-2"
             data-testid="ui-action-demo-open"
             data-ui-action-surface="Workspace"
             onClick={() => {
-              setIsDemoModeCollapsed(false);
+              setIsDemoModeOpen(true);
             }}
             size="sm"
             variant="secondary"
@@ -6872,7 +6893,8 @@ export function App() {
             {activeDemoProjectId ? <StatusChip className="py-0.5">Demo loaded</StatusChip> : null}
           </Button>
         </div>
-      ) : (
+      ) : null}
+      {isDemoModeOpen ? (
         <Suspense fallback={null}>
           <LazyDemoMode
             activeDemoProjectId={activeDemoProjectId}
@@ -6880,8 +6902,12 @@ export function App() {
             canOpenCinema={canOpenCurrentCinema}
             currentStage={contentMode}
             hasGeneratedAudio={Boolean(job)}
-            onCollapse={setIsDemoModeCollapsed}
+            onClose={() => {
+              setIsDemoModeOpen(false);
+            }}
+            onCompleteTutorial={completeStudioTutorial}
             onCreateAndListen={createAndListenFromCurrentSource}
+            onHideTutorial={hideStudioTutorial}
             onOpenCinema={openReadingCinema}
             onOpenDemoProject={openDemoProject}
             onStageSelect={setContentMode}
@@ -6889,7 +6915,7 @@ export function App() {
             providerEngines={ttsEngines}
           />
         </Suspense>
-      )}
+      ) : null}
       {isCommandPaletteOpen ? (
         <Suspense fallback={null}>
           <CommandPalette
