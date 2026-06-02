@@ -84,7 +84,7 @@ describe("Book Cinema degraded-state UI", () => {
       terminalReason: "provider_failed",
     } as VoiceJob;
 
-    expect(bookTransportStateTitle("degraded", job)).toBe("Audio generation failed");
+    expect(bookTransportStateTitle("degraded", job)).toBe("Generation failed");
     expect(
       bookTransportStateDetail({
         activeBookJob: job,
@@ -97,7 +97,7 @@ describe("Book Cinema degraded-state UI", () => {
       renderToStaticMarkup(
         <BookCinemaStatusChip hasPlayableAudio={false} isPlaying={false} job={job} />,
       ),
-    ).toContain("Try again");
+    ).toContain("Generation failed");
   });
 
   it("maps provider timeouts to timeout-specific retry copy", () => {
@@ -109,7 +109,7 @@ describe("Book Cinema degraded-state UI", () => {
       terminalReason: "provider_timeout",
     } as VoiceJob;
 
-    expect(bookTransportStateTitle("degraded", job)).toBe("Audio generation timed out");
+    expect(bookTransportStateTitle("degraded", job)).toBe("Generation failed");
     expect(
       bookTransportStateDetail({
         activeBookJob: job,
@@ -122,7 +122,7 @@ describe("Book Cinema degraded-state UI", () => {
       renderToStaticMarkup(
         <BookCinemaStatusChip hasPlayableAudio={false} isPlaying={false} job={job} />,
       ),
-    ).toContain("Try again");
+    ).toContain("Generation failed");
   });
 
   it("explains generated audio that is not playable yet", () => {

@@ -11,7 +11,7 @@ describe("live status accessibility", () => {
   it("renders polite and assertive live regions with atomic status semantics", () => {
     const markup = renderToStaticMarkup(
       <LiveStatusRegions
-        assertiveMessage="Audio generation failed."
+        assertiveMessage="Generation failed."
         politeMessage="Audio generation started."
       />,
     );
@@ -22,7 +22,7 @@ describe("live status accessibility", () => {
     expect(markup).toContain('role="alert"');
     expect(markup).toContain('aria-live="assertive"');
     expect(markup).toContain("Audio generation started.");
-    expect(markup).toContain("Audio generation failed.");
+    expect(markup).toContain("Generation failed.");
   });
 
   it("names the key async reader and generation updates without word-level playback chatter", () => {
@@ -62,7 +62,7 @@ describe("live status accessibility", () => {
     ).toBe(true);
     expect(
       shouldSuppressLiveStatusAnnouncement(previous, {
-        message: "Audio generation failed.",
+        message: "Generation failed.",
         priority: "assertive",
         timestampMs: 1500,
       }),

@@ -1,4 +1,8 @@
 import type { VoiceJob } from "../../types";
+import {
+  operationalGeneratedAudioLifecycleLabel,
+  operationalGeneratedAudioLifecycleReason,
+} from "../operational-status";
 
 export const GENERATED_AUDIO_LIFECYCLE_STATES = [
   "missing",
@@ -39,7 +43,7 @@ export interface GeneratedAudioLifecycleInput {
 
 export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
   archived: lifecycleDescriptor({
-    disabledReason: "Audio archived. Restore or rebuild before playback.",
+    disabledReason: operationalGeneratedAudioLifecycleReason("archived"),
     label: "Archived",
     state: "archived",
     summary: "Audio exists only as an archived asset.",
@@ -48,8 +52,8 @@ export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
       "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-muted)]",
   }),
   degraded: lifecycleDescriptor({
-    disabledReason: "Audio degraded. Rebuild before playback.",
-    label: "Degraded",
+    disabledReason: operationalGeneratedAudioLifecycleReason("degraded"),
+    label: "Needs rebuild",
     state: "degraded",
     summary: "Audio metadata exists, but playback is not currently reliable.",
     tone: "warning",
@@ -57,16 +61,16 @@ export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
       "border-[var(--vs-warning-border)] bg-[var(--vs-warning-soft)] text-[var(--vs-warning)]",
   }),
   failed: lifecycleDescriptor({
-    disabledReason: "Audio failed. Retry generation before playback.",
+    disabledReason: operationalGeneratedAudioLifecycleReason("failed"),
     label: "Failed",
     state: "failed",
-    summary: "The last generation attempt failed or was cancelled.",
+    summary: "The last generation attempt failed before playable audio was ready.",
     tone: "danger",
     visualClassName:
       "border-[var(--vs-danger-border)] bg-[var(--vs-danger-soft)] text-[var(--vs-danger)]",
   }),
   generating: lifecycleDescriptor({
-    disabledReason: "Audio is generating. Playback unlocks when ready.",
+    disabledReason: operationalGeneratedAudioLifecycleReason("generating"),
     label: "Generating",
     state: "generating",
     summary: "Audio is being optimized, synthesized, checked, or retried.",
@@ -75,7 +79,7 @@ export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
       "border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] text-[var(--vs-status-info)]",
   }),
   missing: lifecycleDescriptor({
-    disabledReason: "Generated audio is missing. Create & Listen before playback.",
+    disabledReason: operationalGeneratedAudioLifecycleReason("missing"),
     label: "Missing",
     state: "missing",
     summary: "No generated audio exists for this source and scope yet.",
@@ -84,7 +88,7 @@ export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
       "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-secondary)]",
   }),
   queued: lifecycleDescriptor({
-    disabledReason: "Audio queued. Playback unlocks when ready.",
+    disabledReason: operationalGeneratedAudioLifecycleReason("queued"),
     label: "Queued",
     state: "queued",
     summary: "Audio generation is queued.",
@@ -93,7 +97,7 @@ export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
       "border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] text-[var(--vs-status-info)]",
   }),
   ready: lifecycleDescriptor({
-    disabledReason: "Audio ready.",
+    disabledReason: operationalGeneratedAudioLifecycleReason("ready"),
     label: "Ready",
     state: "ready",
     summary: "Audio is ready for playback.",
@@ -102,8 +106,8 @@ export const GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS = {
       "border-[var(--vs-success-border)] bg-[var(--vs-success-soft)] text-[var(--vs-success)]",
   }),
   stale: lifecycleDescriptor({
-    disabledReason: "Audio stale. Rebuild before treating it as current.",
-    label: "Stale",
+    disabledReason: operationalGeneratedAudioLifecycleReason("stale"),
+    label: "Needs rebuild",
     state: "stale",
     summary: "Audio was generated for an older source, scope, voice, or policy.",
     tone: "warning",
@@ -176,61 +180,11 @@ export function generatedAudioLifecycleFromPlaybackState(
 }
 
 export function generatedAudioLifecycleReason(state: GeneratedAudioLifecycleState): string {
-  switch (state) {
-    case "archived": {
-      return "Audio archived. Restore or rebuild before playback.";
-    }
-    case "degraded": {
-      return "Audio degraded. Rebuild before playback.";
-    }
-    case "failed": {
-      return "Audio failed. Retry generation before playback.";
-    }
-    case "generating": {
-      return "Audio is generating. Playback unlocks when ready.";
-    }
-    case "queued": {
-      return "Audio queued. Playback unlocks when ready.";
-    }
-    case "ready": {
-      return "Audio ready.";
-    }
-    case "stale": {
-      return "Audio stale. Rebuild before treating it as current.";
-    }
-    case "missing": {
-      return "Generated audio is missing. Create & Listen before playback.";
-    }
-  }
+  return operationalGeneratedAudioLifecycleReason(state);
 }
 
 export function generatedAudioLifecycleLabel(state: GeneratedAudioLifecycleState): string {
-  switch (state) {
-    case "archived": {
-      return "Archived";
-    }
-    case "degraded": {
-      return "Degraded";
-    }
-    case "failed": {
-      return "Failed";
-    }
-    case "generating": {
-      return "Generating";
-    }
-    case "queued": {
-      return "Queued";
-    }
-    case "ready": {
-      return "Ready";
-    }
-    case "stale": {
-      return "Stale";
-    }
-    case "missing": {
-      return "Missing";
-    }
-  }
+  return operationalGeneratedAudioLifecycleLabel(state);
 }
 
 export function generatedAudioLifecycleVisualClassName(

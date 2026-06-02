@@ -28,7 +28,7 @@ describe("HeaderContextSummary", () => {
     expect(markup).toContain("Policy");
   });
 
-  it("uses one normalized lifecycle summary instead of Lifecycle and Audio metadata chips", () => {
+  it("keeps ordinary lifecycle status out of the visible header badge", () => {
     const markup = renderToStaticMarkup(
       <HeaderContextSummary
         metadata={[
@@ -44,9 +44,7 @@ describe("HeaderContextSummary", () => {
       />,
     );
 
-    expect(markup).toContain("Audio ready");
-    expect(markup).toContain("Policy Enterprise");
-    expect(markup).toContain("Voice Narrator Alpha");
+    expect(markup).not.toContain('data-status-chip=""');
     expect(markup).not.toContain(">Lifecycle<");
   });
 

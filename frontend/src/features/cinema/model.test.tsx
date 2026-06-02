@@ -360,21 +360,21 @@ describe("CinemaTransportBar", () => {
           primary: {
             className: "bg-[var(--vs-action-primary-hover)] text-[var(--vs-action-primary-text)]",
             disabled: false,
-            label: "Try again",
+            label: "Retry generation",
             onClick: () => null,
           },
           stateSummary: {
             detail: "Provider failed while creating audio.",
-            title: "Audio generation failed",
+            title: "Generation failed",
           },
         }}
       />,
     );
 
-    expect(markup).toContain("Audio generation failed");
+    expect(markup).toContain("Generation failed");
     expect(markup).toContain("Provider failed while creating audio.");
     expect(markup).toContain("View details");
-    expect(markup).toContain("Try again");
+    expect(markup).toContain("Retry generation");
     expect(markup).not.toContain("Theatre");
   });
 });

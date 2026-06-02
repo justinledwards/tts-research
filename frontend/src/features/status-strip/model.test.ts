@@ -148,7 +148,8 @@ describe("resolveNarrationStatusModel", () => {
     expect(failed.state).toBe("failed");
     expect(failed.blocker?.detail).toBe("Provider failed");
     expect(cancelled.state).toBe("cancelled");
-    expect(cancelled.primaryMessage).toBe("Job cancelled. Retry when ready.");
+    expect(cancelled.primaryLabel).toBe("Generation cancelled");
+    expect(cancelled.primaryMessage).toBe("Generation cancelled. Retry generation");
   });
 
   it("blocks stale or degraded audio before ready playback", () => {
@@ -166,7 +167,7 @@ describe("resolveNarrationStatusModel", () => {
     );
 
     expect(stale.state).toBe("blocked");
-    expect(stale.blocker?.title).toBe("Audio stale");
+    expect(stale.blocker?.title).toBe("Audio needs rebuild");
     expect(degraded.state).toBe("blocked");
   });
 

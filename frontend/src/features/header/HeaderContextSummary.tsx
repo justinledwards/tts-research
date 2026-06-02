@@ -73,6 +73,7 @@ export function HeaderContextSummary({
     surfaceName,
   });
   const isBar = variant === "bar";
+  const showEmergencyState = lifecycleSentence.primaryTone === "danger";
   let textSizeClass = "text-lg";
   if (density === "compact") {
     textSizeClass = "text-sm sm:text-base";
@@ -92,7 +93,7 @@ export function HeaderContextSummary({
           <p className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
             {surfaceName}
           </p>
-          {lifecycleSentence.primaryLabel ? (
+          {showEmergencyState && lifecycleSentence.primaryLabel ? (
             <span
               className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${sourceLifecycleToneClassName(
                 lifecycleSentence.primaryTone,
@@ -124,7 +125,7 @@ export function HeaderContextSummary({
             <span className="shrink-0 font-semibold">Scope</span>
             {normalizedScopeTitle}
           </span>
-          {inlineSummary && lifecycleSentence.visibleSummary ? (
+          {inlineSummary && showEmergencyState && lifecycleSentence.visibleSummary ? (
             <span
               className="inline-flex min-w-0 max-w-full items-center gap-1 before:text-[var(--vs-muted)] before:content-['·'] sm:max-w-[30rem]"
               title={lifecycleSentence.visibleSummary}

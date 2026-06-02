@@ -15,6 +15,7 @@ import { compactHitTargetClassName, minInteractiveSize } from "../../design";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
 import { generatedAudioLifecycleFromJob, playbackActionLabel } from "../playback";
+import { OPERATIONAL_RECOVERY_LABELS } from "../operational-status";
 import {
   CinemaFocusModeToolbar,
   CinemaInspectorDock,
@@ -2076,16 +2077,16 @@ export function bookPrimaryTransportLabel({
   }
   if (playbackState === "degraded") {
     if (activeBookJob?.terminalReason === "provider_timeout") {
-      return "Try again";
+      return OPERATIONAL_RECOVERY_LABELS.retryGeneration;
     }
     if (activeBookJob?.terminalReason === "provider_failed") {
-      return "Try again";
+      return OPERATIONAL_RECOVERY_LABELS.retryGeneration;
     }
     if (activeBookJob?.terminalReason === "validation_failed") {
-      return "Try again";
+      return OPERATIONAL_RECOVERY_LABELS.retryGeneration;
     }
     if (activeBookJob?.terminalReason === "system_cancelled") {
-      return "Try again";
+      return OPERATIONAL_RECOVERY_LABELS.retryGeneration;
     }
     return playbackActionLabel("rebuildAudio");
   }
@@ -2107,15 +2108,10 @@ export function bookTransportStateTitle(
   }
   if (playbackState === "degraded") {
     if (activeBookJob?.status === "cancelled") {
-      return activeBookJob.terminalReason === "user_cancelled"
-        ? "Generation cancelled"
-        : "Generation stopped";
+      return "Generation cancelled";
     }
     if (activeBookJob?.status === "failed") {
-      if (activeBookJob.terminalReason === "provider_timeout") {
-        return "Audio generation timed out";
-      }
-      return "Audio generation failed";
+      return "Generation failed";
     }
     return "Audio needs attention";
   }
@@ -2157,22 +2153,22 @@ function degradedBookTransportStateDetail(job: VoiceJob | null, scopeLabel: stri
     if (job.terminalReason === "provider_timeout") {
       return (
         job.error ??
-        `${scopeLabel} generation timed out before completion. Try again with the same scope and voice.`
+        `${scopeLabel} generation timed out before completion. Retry generation with the same scope and voice.`
       );
     }
     if (job.terminalReason === "validation_failed") {
       return (
         job.error ??
-        `${scopeLabel} audio did not pass validation. Try again or inspect timing details.`
+        `${scopeLabel} audio did not pass validation. Retry generation or inspect timing details.`
       );
     }
-    return job.error ?? `${scopeLabel} generation failed. Try again when ready.`;
+    return job.error ?? `${scopeLabel} generation failed. Retry generation when ready.`;
   }
   if (job?.status === "cancelled") {
     if (job.terminalReason === "user_cancelled") {
-      return `${scopeLabel} generation was cancelled by request. Rebuild audio when ready.`;
+      return `${scopeLabel} generation was cancelled by request. Retry generation when ready.`;
     }
-    return `${scopeLabel} generation stopped before audio was ready. Try again when ready.`;
+    return `${scopeLabel} generation was cancelled before audio was ready. Retry generation when ready.`;
   }
   return `${scopeLabel} has audio metadata, but playback is not available yet. Rebuild if it does not recover.`;
 }
@@ -2886,7 +2882,7 @@ function bookCinemaStatusLabel({
     return job.terminalReason === "user_cancelled" ? "Cancelled" : "Stopped";
   }
   if (job.status === "failed") {
-    return "Try again";
+    return "Generation failed";
   }
   return job.status;
 }

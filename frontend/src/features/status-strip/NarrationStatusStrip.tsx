@@ -13,7 +13,10 @@ export interface NarrationStatusStripProps {
   readonly onOpenActivity?: () => void;
   readonly onCancel: () => void;
   readonly onCreate: () => void;
+  readonly onOpenDiagnostics?: () => void;
   readonly onOpenCinema: () => void;
+  readonly onOpenIntake?: () => void;
+  readonly onOpenReview?: () => void;
   readonly onOpenVoiceCloning: () => void;
 }
 
@@ -26,7 +29,10 @@ export function NarrationStatusStrip({
   onOpenActivity,
   onCancel,
   onCreate,
+  onOpenDiagnostics,
   onOpenCinema,
+  onOpenIntake,
+  onOpenReview,
   onOpenVoiceCloning,
 }: NarrationStatusStripProps) {
   const isAttention =
@@ -114,7 +120,10 @@ export function NarrationStatusStrip({
                 runStatusAction(model.primaryAction?.id ?? null, {
                   onCancel,
                   onCreate,
+                  onOpenDiagnostics,
                   onOpenCinema,
+                  onOpenIntake,
+                  onOpenReview,
                   onOpenVoiceCloning,
                 });
               }}
@@ -145,7 +154,10 @@ function runStatusAction(
   handlers: Readonly<{
     onCancel: () => void;
     onCreate: () => void;
+    onOpenDiagnostics?: () => void;
     onOpenCinema: () => void;
+    onOpenIntake?: () => void;
+    onOpenReview?: () => void;
     onOpenVoiceCloning: () => void;
   }>,
 ) {
@@ -161,6 +173,18 @@ function runStatusAction(
     }
     case "openCinema": {
       handlers.onOpenCinema();
+      break;
+    }
+    case "openDiagnostics": {
+      handlers.onOpenDiagnostics?.();
+      break;
+    }
+    case "openIntake": {
+      handlers.onOpenIntake?.();
+      break;
+    }
+    case "openReview": {
+      handlers.onOpenReview?.();
       break;
     }
     case "openVoiceCloning": {

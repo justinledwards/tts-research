@@ -252,7 +252,7 @@ export function generatedAudioStateLabel(state: GeneratedAudioLifecycleState): s
       return "Degraded audio";
     }
     case "failed": {
-      return "Audio failed";
+      return "Generation failed";
     }
     case "generating": {
       return "Generating audio";

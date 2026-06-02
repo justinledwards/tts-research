@@ -230,10 +230,28 @@ function criticalBlockerSection(
 ): ContextPanelSectionInput {
   return {
     children: (
-      <p className="rounded-md border border-[var(--vs-warning-border)] bg-[var(--vs-warning-soft)] p-3 text-xs leading-5 text-[var(--vs-text)]">
-        <span className="font-semibold">{blocker.title}: </span>
-        {blocker.detail}
-      </p>
+      <div className="grid gap-2 rounded-md border border-[var(--vs-warning-border)] bg-[var(--vs-warning-soft)] p-3 text-xs leading-5 text-[var(--vs-text)]">
+        <p>
+          <span className="font-semibold">{blocker.title}: </span>
+          {blocker.detail}
+        </p>
+        <dl className="grid gap-1">
+          <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
+            <dt className="font-semibold">Recovery</dt>
+            <dd className="min-w-0">
+              {blocker.recovery?.available
+                ? blocker.recovery.label
+                : (blocker.recovery?.unavailableReason ?? "No action available")}
+            </dd>
+          </div>
+          {blocker.technicalDetail ? (
+            <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
+              <dt className="font-semibold">Detail</dt>
+              <dd className="min-w-0 break-words">{blocker.technicalDetail}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </div>
     ),
     detail: blocker.detail,
     id: "workspace-critical-blocker",

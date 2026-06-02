@@ -58,7 +58,7 @@ describe("playback ownership model", () => {
     );
     const state = buildPlaybackState({ lifecycle: "stale", owner: "cinema" });
     expect(state.canPlay).toBe(false);
-    expect(state.disabledReason).toContain("stale");
+    expect(state.disabledReason).toContain("Audio needs rebuild");
     expect(state.state).toBe("stale");
   });
 
@@ -76,7 +76,7 @@ describe("playback ownership model", () => {
 
   it("uses lifecycle reasons for disabled playback actions", () => {
     expect(playbackActionDisabledReason({ action: "audition", lifecycle: "missing" })).toContain(
-      "Generated audio is missing",
+      "Audio missing",
     );
     expect(
       playbackActionDisabledReason({ action: "telepromptPlay", lifecycle: "generating" }),

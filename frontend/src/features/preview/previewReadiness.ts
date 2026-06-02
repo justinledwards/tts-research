@@ -2,6 +2,7 @@ import {
   generatedAudioLifecycleDescriptor,
   type GeneratedAudioLifecycleState,
 } from "../playback/generatedAudioLifecycle";
+import { OPERATIONAL_RECOVERY_LABELS } from "../operational-status";
 
 export type PreviewReadinessRowId = "audition" | "audio" | "policy" | "source" | "spoken" | "voice";
 
@@ -239,7 +240,7 @@ function createHelperForAudioLifecycle(
     return "Audio is ready. Recreate only if the source, voice, policy, or scope changed.";
   }
   if (lifecycle === "failed") {
-    return "Retry generation with the current source, voice, policy, and scope.";
+    return `${OPERATIONAL_RECOVERY_LABELS.retryGeneration} with the current source, voice, policy, and scope.`;
   }
   return "Generates current-scope audio, enables Preview playback, and unlocks Cinema.";
 }
@@ -256,7 +257,7 @@ function previewPrimaryLabel(
   canOpenAudioSurface: boolean,
 ): string {
   if (lifecycle === "failed") {
-    return "Retry generation";
+    return OPERATIONAL_RECOVERY_LABELS.retryGeneration;
   }
   if (canOpenAudioSurface) {
     return "Create Again";

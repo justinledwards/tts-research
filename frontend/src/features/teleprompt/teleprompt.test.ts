@@ -133,16 +133,12 @@ describe("teleprompt studio work modes", () => {
       playbackPlaying: false,
     });
 
-    expect(audioFollow.disabledReason).toBe(
-      "Generated audio is missing. Create & Listen before playback.",
-    );
+    expect(audioFollow.disabledReason).toBe("Audio missing. Create & Listen before playback.");
     expect(audioFollow.tone).toBe("warning");
     expect(audioFollow.dataAttributes["data-teleprompt-work-mode"]).toBe("audio-follow");
-    expect(reviewPlayback.disabledReason).toBe(
-      "Generated audio is missing. Create & Listen before playback.",
-    );
+    expect(reviewPlayback.disabledReason).toBe("Audio missing. Create & Listen before playback.");
     expect(reviewPlayback.syncMode).toBe("review-playback");
-    expect(failed.disabledReason).toBe("Audio failed. Retry generation before playback.");
+    expect(failed.disabledReason).toBe("Generation failed. Retry generation before playback.");
   });
 });
 

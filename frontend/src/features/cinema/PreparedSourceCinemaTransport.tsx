@@ -320,10 +320,10 @@ function preparedSourceTransportDetail(
   }
   if (playbackState === "degraded") {
     if (job?.status === "failed") {
-      return job.error ?? "Generation failed for this source. Rebuild audio when ready.";
+      return job.error ?? "Generation failed for this source. Retry generation when ready.";
     }
     if (job?.status === "cancelled") {
-      return "Generation was cancelled. Rebuild audio for this source when ready.";
+      return "Generation was cancelled. Retry generation for this source when ready.";
     }
     return "Generated audio is not playable yet. Rebuild audio if the controls do not recover.";
   }

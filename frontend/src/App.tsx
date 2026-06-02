@@ -7913,7 +7913,16 @@ export function App() {
         onCreate={() => {
           createAndListenFromCurrentSource();
         }}
+        onOpenDiagnostics={() => {
+          openCommandCenter("reports");
+        }}
+        onOpenIntake={() => {
+          runWorkspaceStageAction("intakeSource");
+        }}
         onOpenCinema={openReadingCinema}
+        onOpenReview={() => {
+          runWorkspaceStageAction("reviewBlocks");
+        }}
         onOpenActivity={() => {
           openCommandCenter("activity");
         }}

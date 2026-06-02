@@ -1324,3 +1324,17 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Review worktree scope
 - [x] Stage work package
 - [x] Create commit
+
+## 2026-06-02 21:29 CEST - Unified Operational Status Model
+- [x] Add canonical operational status model
+- [x] Wire status strip, workbench, inspector, and playback surfaces
+- [x] Align recovery copy and cancellation semantics
+- [x] Add regression tests for status taxonomy and copy
+- [x] Run focused and project checks
+- Validation: frontend typecheck passed; focused operational/status/workspace/preview/teleprompt/book-cinema/accessibility/header/cinema tests passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome lint warnings/infos.
+
+## 2026-06-02 22:24 CEST - Commit Unified Operational Status Model
+- [x] Review worktree scope
+- [x] Stage work package
+- [x] Stabilize raw palette guard timeout
+- [x] Create commit

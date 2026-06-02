@@ -301,11 +301,11 @@ describe("workspace stage model", () => {
     expect(status.blocker).toMatchObject({
       correctiveAction: "retryGeneration",
       id: "generationFailed",
-      title: "Audio generation failed",
+      title: "Generation failed",
     });
     expect(status.currentTask).toMatchObject({
       primaryAction: "retryGeneration",
-      title: "Audio generation failed",
+      title: "Generation failed",
     });
     expect(status.readinessByStage.preview).toMatchObject({
       action: "retryGeneration",

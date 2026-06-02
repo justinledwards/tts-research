@@ -1,7 +1,10 @@
+import type { GeneratedAudioLifecycleState } from "../playback/generatedAudioLifecycle";
 import {
-  generatedAudioLifecycleDescriptor,
-  type GeneratedAudioLifecycleState,
-} from "../playback/generatedAudioLifecycle";
+  operationalGeneratedAudioLifecycleReason,
+  OPERATIONAL_RECOVERY_LABELS,
+  operationalRecovery,
+  type OperationalRecoveryAction,
+} from "../operational-status";
 import { workspacePlaybackActionLabel } from "../playback/workspacePlaybackActions";
 import {
   WORKSPACE_STAGES,
@@ -77,6 +80,8 @@ export interface WorkspaceStageBlocker {
   readonly detail: string;
   readonly disabledReason?: string;
   readonly id: WorkspaceStageBlockerId;
+  readonly recovery?: OperationalRecoveryAction;
+  readonly technicalDetail?: string;
   readonly title: string;
 }
 
@@ -297,6 +302,7 @@ function workspaceStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStage
       correctiveAction: "intakeSource",
       detail: input.sourceError,
       id: "sourceFailed",
+      recovery: operationalRecovery("openIntake", true),
       title: "Source needs attention",
     };
   }
@@ -306,6 +312,7 @@ function workspaceStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStage
       detail: "Import, extraction, or source preparation is still running.",
       disabledReason: "Source preparation is still running.",
       id: "sourcePreparing",
+      recovery: operationalRecovery("none", false, "Wait for source preparation to finish."),
       title: "Waiting for source",
     };
   }
@@ -314,6 +321,7 @@ function workspaceStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStage
       correctiveAction: "intakeSource",
       detail: "Choose draft text, a book, a prepared file, or a URL before continuing.",
       id: "waitingForSource",
+      recovery: operationalRecovery("openIntake", true),
       title: "No narration source selected",
     };
   }
@@ -322,6 +330,7 @@ function workspaceStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStage
       correctiveAction: "reviewBlocks",
       detail: "Review the active source before moving into generated-audio or read-along stages.",
       id: "reviewRequired",
+      recovery: operationalRecovery("openReview", true),
       title: "Review required",
     };
   }
@@ -330,6 +339,7 @@ function workspaceStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStage
       correctiveAction: "reviewBlocks",
       detail: "Prepare listener-ready text in Review before using this stage.",
       id: "listenerTextMissing",
+      recovery: operationalRecovery("openReview", true),
       title: "Spoken form needs review",
     };
   }
@@ -340,6 +350,11 @@ function workspaceStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStage
       disabledReason:
         input.createDisabledReason ?? "Select a voice or resolve provider setup first.",
       id: "voiceMissing",
+      recovery: operationalRecovery(
+        "none",
+        false,
+        "Select a voice or resolve provider setup first.",
+      ),
       title: "Voice unavailable",
     };
   }
@@ -355,9 +370,10 @@ function workspaceAudioStageBlocker(
   if (input.audioLifecycle === "failed") {
     return {
       correctiveAction: "retryGeneration",
-      detail: "The last generation attempt failed or was cancelled.",
+      detail: operationalGeneratedAudioLifecycleReason("failed"),
       id: "generationFailed",
-      title: "Audio generation failed",
+      recovery: operationalRecovery("retryGeneration", input.canCreate),
+      title: "Generation failed",
     };
   }
   if (
@@ -385,6 +401,11 @@ function workspaceAudioStageBlocker(
       ? "Generated audio is not ready yet."
       : "Create audio before Theatre can play the source.",
     id: "audioMissing",
+    recovery: operationalRecovery(
+      audioWorking ? "none" : "createAndListen",
+      !audioWorking && input.canCreate,
+      audioMissingDisabledReason(input, audioWorking),
+    ),
     title: "Audio missing",
   };
 }
@@ -629,8 +650,8 @@ function previewStageReadiness(input: WorkspaceStageStatusInput): WorkspaceStage
   if (input.audioLifecycle === "failed") {
     return stageReadiness({
       action: "retryGeneration",
-      detail: "The last generation attempt failed or was cancelled.",
-      label: "Retry generation",
+      detail: operationalGeneratedAudioLifecycleReason("failed"),
+      label: OPERATIONAL_RECOVERY_LABELS.retryGeneration,
       stage: "preview",
       state: "failed",
       tone: "danger",
@@ -657,11 +678,10 @@ function previewStageReadiness(input: WorkspaceStageStatusInput): WorkspaceStage
     });
   }
   if (isAudioRecoveryLifecycle(input.audioLifecycle)) {
-    const descriptor = generatedAudioLifecycleDescriptor(input.audioLifecycle);
     return stageReadiness({
       action: "previewSpeech",
-      detail: descriptor.disabledReason,
-      label: "Rebuild audio",
+      detail: operationalGeneratedAudioLifecycleReason(input.audioLifecycle),
+      label: OPERATIONAL_RECOVERY_LABELS.rebuildAudio,
       stage: "preview",
       state: "warning",
       tone: "warning",
@@ -682,8 +702,8 @@ function telepromptStageReadiness(input: WorkspaceStageStatusInput): WorkspaceSt
     return stageReadiness({
       action: "retryGeneration",
       detail:
-        "The last generation attempt failed or was cancelled. Manual rehearsal remains available inside Teleprompt.",
-      label: "Retry generation",
+        "Generation failed. Manual rehearsal remains available inside Teleprompt. Retry generation to unlock audio-follow.",
+      label: OPERATIONAL_RECOVERY_LABELS.retryGeneration,
       stage: "teleprompt",
       state: "failed",
       tone: "danger",
@@ -723,8 +743,8 @@ function theatreStageReadiness(input: WorkspaceStageStatusInput): WorkspaceStage
   if (input.audioLifecycle === "failed") {
     return stageReadiness({
       action: "retryGeneration",
-      detail: "The last generation attempt failed or was cancelled.",
-      label: "Retry generation",
+      detail: operationalGeneratedAudioLifecycleReason("failed"),
+      label: OPERATIONAL_RECOVERY_LABELS.retryGeneration,
       stage: "theatre",
       state: "failed",
       tone: "danger",
@@ -742,14 +762,12 @@ function theatreStageReadiness(input: WorkspaceStageStatusInput): WorkspaceStage
     });
   }
   if (isAudioRecoveryLifecycle(input.audioLifecycle)) {
-    const descriptor = generatedAudioLifecycleDescriptor(input.audioLifecycle);
+    const detail = operationalGeneratedAudioLifecycleReason(input.audioLifecycle);
     return stageReadiness({
       action: input.canCreate ? "createAndListen" : null,
-      detail: descriptor.disabledReason,
-      disabledReason: input.canCreate
-        ? undefined
-        : (input.createDisabledReason ?? descriptor.disabledReason),
-      label: "Rebuild audio",
+      detail,
+      disabledReason: input.canCreate ? undefined : (input.createDisabledReason ?? detail),
+      label: OPERATIONAL_RECOVERY_LABELS.rebuildAudio,
       stage: "theatre",
       state: "blocked",
       tone: "warning",
@@ -869,15 +887,18 @@ function workspaceStageCurrentTaskTitle(
 }
 
 function audioRecoveryBlocker(input: WorkspaceStageStatusInput): WorkspaceStageBlocker {
-  const descriptor = generatedAudioLifecycleDescriptor(input.audioLifecycle);
   const id = audioRecoveryBlockerId(input.audioLifecycle);
+  const detail = operationalGeneratedAudioLifecycleReason(input.audioLifecycle);
   return {
     correctiveAction: input.canCreate ? "createAndListen" : null,
-    detail: descriptor.disabledReason,
-    disabledReason: input.canCreate
-      ? undefined
-      : (input.createDisabledReason ?? descriptor.disabledReason),
+    detail,
+    disabledReason: input.canCreate ? undefined : (input.createDisabledReason ?? detail),
     id,
+    recovery: operationalRecovery(
+      "rebuildAudio",
+      input.canCreate,
+      input.canCreate ? undefined : (input.createDisabledReason ?? detail),
+    ),
     title: audioRecoveryTitle(input.audioLifecycle),
   };
 }
@@ -894,12 +915,12 @@ function audioRecoveryBlockerId(lifecycle: GeneratedAudioLifecycleState): Worksp
 
 function audioRecoveryTitle(lifecycle: GeneratedAudioLifecycleState): string {
   if (lifecycle === "degraded") {
-    return "Audio degraded";
+    return "Audio needs rebuild";
   }
   if (lifecycle === "archived") {
     return "Audio archived";
   }
-  return "Audio is stale";
+  return "Audio needs rebuild";
 }
 
 function isAudioRecoveryLifecycle(lifecycle: GeneratedAudioLifecycleState): boolean {

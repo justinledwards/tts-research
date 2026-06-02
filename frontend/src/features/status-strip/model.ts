@@ -10,14 +10,28 @@ import {
 } from "../../appHelpers";
 import type { StatusChipTone } from "../../design";
 import type { StageStatus, VoiceJob } from "../../types";
+import type { GeneratedAudioLifecycleState } from "../playback/generatedAudioLifecycle";
 import {
-  generatedAudioLifecycleLabel,
-  type GeneratedAudioLifecycleState,
-} from "../playback/generatedAudioLifecycle";
+  operationalGeneratedAudioLifecycleReason,
+  operationalIssueTone,
+  operationalRecovery,
+  resolveOperationalAudioIssue,
+  resolveOperationalCloningIssue,
+  resolveOperationalReviewIssue,
+  resolveOperationalSourceIssue,
+  resolveOperationalSystemIssue,
+  selectPrimaryOperationalIssue,
+  type OperationalRecoveryAction,
+  type OperationalStatusIssue,
+  type OperationalStatusOwner,
+  type OperationalStatusSeverity,
+} from "../operational-status";
 import {
   sourceLifecycleDescriptor,
   type SourceLifecycleEnvelope,
+  type SourceLifecycleTone,
 } from "../source-lifecycle/sourceLifecycle";
+import type { DisclosurePanelState } from "../workspace/disclosure";
 import type { WorkspaceDisclosureModel } from "../workspace/disclosure";
 import {
   workspaceStageActionLabel,
@@ -39,6 +53,9 @@ export type NarrationStatusActionId =
   | "cancel"
   | "create"
   | "openCinema"
+  | "openDiagnostics"
+  | "openIntake"
+  | "openReview"
   | "openVoiceCloning"
   | "retry";
 
@@ -58,6 +75,8 @@ export interface NarrationStatusChip {
 export interface NarrationStatusBlocker {
   readonly actionLabel: string | null;
   readonly detail: string;
+  readonly recovery?: OperationalRecoveryAction;
+  readonly technicalDetail?: string;
   readonly title: string;
 }
 
@@ -147,74 +166,28 @@ export function resolveNarrationStatusModel(
 ): NarrationStatusModel {
   const queue = narrationQueueSnapshot(input.job);
   const state = resolveNarrationPipelineState(input, queue);
-  const blocker = resolveNarrationBlocker(input, state);
   const stages = resolveNarrationStages(input.job);
-  const primaryAction = resolvePrimaryAction(input, state, blocker);
   const confidenceLabel = input.job ? formatSimilarity(input.job.voiceCheck.similarity) : "Waiting";
   const confidenceDetail = confidenceDetailForJob(input.job);
   const eta = estimateFirstAudioETA(input.job);
   const sourceDescriptor = sourceLifecycleDescriptor(input.sourceLifecycle.canonicalState);
-  const audioLabel = generatedAudioLifecycleLabel(input.generatedAudioLifecycle);
+  const operationalIssues = resolveNarrationOperationalIssues({
+    confidenceLabel,
+    input,
+    queue,
+    sourceDescriptor,
+  });
+  const primaryIssue = selectPrimaryOperationalIssue(operationalIssues);
+  const audioIssue = operationalIssues.find((issue) => issue.owner === "audio");
+  const blocker = resolveNarrationBlocker(input, state, primaryIssue);
+  const primaryAction = resolvePrimaryAction(input, state, blocker, primaryIssue);
   const primaryCopy = resolvePrimaryCopy(input, state, queue, blocker);
-  const reviewNeedsRepair =
-    input.stageStatus.reviewState === "needsRepair" ||
-    input.stageStatus.blocker?.id === "reviewRequired";
-  let reviewChipValue = "Ready";
-  if (input.stageStatus.reviewWarningCount > 0) {
-    reviewChipValue = "Needs repair";
-  }
-  if (input.stageStatus.blocker?.id === "reviewRequired") {
-    reviewChipValue = "Needed";
-  }
   return {
     activeJobDetail: input.job ? jobDetail(input.job, input.now) : "No active job",
     activeJobLabel: input.job ? shortIdentifier(input.job.id) : "None",
     activityItems: buildActivityItems(input, state, stages, queue, blocker),
     blocker,
-    chips: [
-      {
-        id: "source",
-        label: "Source",
-        tone: sourceDescriptor.tone,
-        value: sourceDescriptor.label,
-      },
-      {
-        id: "review",
-        label: "Review",
-        tone: reviewNeedsRepair ? "warning" : "success",
-        value: reviewChipValue,
-      },
-      {
-        id: "audio",
-        label: "Audio",
-        tone: toneForAudioLifecycle(input.generatedAudioLifecycle),
-        value: audioLabel,
-      },
-      {
-        id: "queue",
-        label: "Queue",
-        tone: queueTone(queue, state),
-        value:
-          queue.totalSegments > 0
-            ? `${queue.readyCount.toString()}/${queue.totalSegments.toString()} ready`
-            : "Waiting",
-      },
-      {
-        id: "check",
-        label: "Check",
-        tone: checkTone(input.job),
-        value: confidenceLabel,
-      },
-      {
-        id: "system",
-        label: "System",
-        tone: input.disclosure.attentionCount > 0 ? "warning" : "success",
-        value:
-          input.disclosure.attentionCount > 0
-            ? `${input.disclosure.attentionCount.toString()} attention`
-            : "Healthy",
-      },
-    ],
+    chips: narrationStatusChips(operationalIssues),
     confidenceDetail,
     confidenceLabel,
     detail: primaryCopy.detail,
@@ -228,7 +201,7 @@ export function resolveNarrationStatusModel(
     stageLabel: input.stageStatus.label,
     stages,
     state,
-    tone: toneForState(state),
+    tone: audioIssue && state === "failed" ? operationalIssueTone(audioIssue) : toneForState(state),
     voiceCloning: input.voiceCloningActivity,
   };
 }
@@ -283,13 +256,258 @@ function resolveNarrationPipelineState(
   return "idle";
 }
 
+function resolveNarrationOperationalIssues({
+  confidenceLabel,
+  input,
+  queue,
+  sourceDescriptor,
+}: Readonly<{
+  confidenceLabel: string;
+  input: NarrationStatusModelInput;
+  queue: NarrationQueueSnapshot;
+  sourceDescriptor: ReturnType<typeof sourceLifecycleDescriptor>;
+}>): OperationalStatusIssue[] {
+  const blocker = input.stageStatus.blocker;
+  const audioIssue = resolveOperationalAudioIssue({
+    canCancel: Boolean(input.job && !isTerminalJob(input.job) && input.isProcessing),
+    canCreate: input.canCreate,
+    canOpenCinema: input.canOpenCinema,
+    job: input.job,
+    lifecycle: input.generatedAudioLifecycle,
+    requiresAudio: audioBlocksCurrentStage(input),
+  });
+  return [
+    resolveOperationalSourceIssue({
+      descriptorLabel: sourceDescriptor.label,
+      descriptorSeverity: severityForLifecycleTone(sourceDescriptor.tone),
+      detail: sourceDescriptor.detail,
+      hasSource: blocker?.id !== "waitingForSource",
+      sourceError: blocker?.id === "sourceFailed" ? blocker.detail : null,
+      sourcePreparing: blocker?.id === "sourcePreparing",
+    }),
+    resolveOperationalReviewIssue({
+      required: blocker?.id === "reviewRequired",
+      warningCount: input.stageStatus.reviewWarningCount,
+    }),
+    audioIssue,
+    resolveQueueIssue(queue),
+    resolveCheckIssue(input.job, confidenceLabel),
+    resolveOperationalSystemIssue({
+      attentionCount: input.disclosure.attentionCount,
+      critical: input.disclosure.highestPriorityPanel?.status === "blocking",
+      detail: input.disclosure.highestPriorityPanel?.detail,
+    }),
+    resolveOperationalCloningIssue(input.voiceCloningActivity),
+    ...resolveAttentionDisclosureIssues(input.disclosure),
+  ];
+}
+
+function narrationStatusChips(issues: readonly OperationalStatusIssue[]): NarrationStatusChip[] {
+  const issueByOwner = new Map<OperationalStatusOwner, OperationalStatusIssue>(
+    issues.map((issue) => [issue.owner, issue]),
+  );
+  const coreOwners: OperationalStatusOwner[] = [
+    "source",
+    "review",
+    "audio",
+    "queue",
+    "check",
+    "system",
+  ];
+  const chips = coreOwners.flatMap((owner) => {
+    const issue = issueByOwner.get(owner);
+    if (!issue) {
+      return [];
+    }
+    return [chipForIssue(issue)];
+  });
+  const attentionOwners: OperationalStatusOwner[] = ["cloning", "diagnostics", "importExport"];
+  for (const owner of attentionOwners) {
+    const issue = issueByOwner.get(owner);
+    if (issue && issue.severity !== "ok") {
+      chips.push(chipForIssue(issue));
+    }
+  }
+  return chips;
+}
+
+function chipForIssue(issue: OperationalStatusIssue): NarrationStatusChip {
+  return {
+    id: issue.owner,
+    label: chipOwnerLabel(issue.owner),
+    tone: operationalIssueTone(issue),
+    value: issue.chipValue,
+  };
+}
+
+function chipOwnerLabel(owner: OperationalStatusOwner): string {
+  switch (owner) {
+    case "importExport": {
+      return "Import/export";
+    }
+    case "cloning": {
+      return "Cloning";
+    }
+    default: {
+      return owner.charAt(0).toUpperCase() + owner.slice(1);
+    }
+  }
+}
+
+function resolveQueueIssue(queue: NarrationQueueSnapshot): OperationalStatusIssue {
+  if (queue.totalSegments > 0 && queue.readyCount >= queue.totalSegments) {
+    return operationalStaticIssue({
+      chipValue: `${queue.readyCount.toString()}/${queue.totalSegments.toString()} ready`,
+      condition: "ready",
+      detail: queueDetail(queue),
+      id: "queue-ready",
+      label: "Queue ready",
+      owner: "queue",
+      severity: "ok",
+    });
+  }
+  if (queue.generatingCount > 0) {
+    return operationalStaticIssue({
+      chipValue: `${queue.readyCount.toString()}/${queue.totalSegments.toString()} ready`,
+      condition: "working",
+      detail: queueDetail(queue),
+      id: "queue-working",
+      label: "Queue working",
+      owner: "queue",
+      recovery: operationalRecovery("cancelRun", true),
+      severity: "info",
+    });
+  }
+  return operationalStaticIssue({
+    chipValue:
+      queue.totalSegments > 0
+        ? `${queue.readyCount.toString()}/${queue.totalSegments.toString()} ready`
+        : "Waiting",
+    condition: "waiting",
+    detail: queue.totalSegments > 0 ? queueDetail(queue) : "No segment queue yet.",
+    id: "queue-waiting",
+    label: "Queue waiting",
+    owner: "queue",
+    severity: "ok",
+  });
+}
+
+function resolveCheckIssue(job: VoiceJob | null, confidenceLabel: string): OperationalStatusIssue {
+  if (!job) {
+    return operationalStaticIssue({
+      chipValue: "Waiting",
+      condition: "waiting",
+      detail: "No check yet.",
+      id: "check-waiting",
+      label: "Check waiting",
+      owner: "check",
+      severity: "ok",
+    });
+  }
+  if (job.voiceCheck.complete) {
+    return operationalStaticIssue({
+      chipValue: confidenceLabel,
+      condition: job.voiceCheck.needsResume ? "attention" : "ready",
+      detail: job.voiceCheck.reason.trim() || "Voice check completed.",
+      id: job.voiceCheck.needsResume ? "check-needs-review" : "check-ready",
+      label: job.voiceCheck.needsResume ? "Check needs review" : "Check ready",
+      owner: "check",
+      severity: job.voiceCheck.needsResume ? "warning" : "ok",
+    });
+  }
+  if (job.status === "checking" || job.status === "retrying") {
+    return operationalStaticIssue({
+      chipValue: "Checking",
+      condition: "working",
+      detail: "Audio check is running.",
+      id: "check-working",
+      label: "Check working",
+      owner: "check",
+      severity: "info",
+    });
+  }
+  return operationalStaticIssue({
+    chipValue: confidenceLabel,
+    condition: "waiting",
+    detail: "Audio check is waiting.",
+    id: "check-waiting",
+    label: "Check waiting",
+    owner: "check",
+    severity: "ok",
+  });
+}
+
+function resolveAttentionDisclosureIssues(
+  disclosure: WorkspaceDisclosureModel,
+): OperationalStatusIssue[] {
+  return [
+    disclosurePanelIssue("diagnostics", disclosure.panels.diagnostics),
+    disclosurePanelIssue("importExport", disclosure.panels.exportImport),
+  ].filter((issue): issue is OperationalStatusIssue => issue !== null);
+}
+
+function disclosurePanelIssue(
+  owner: Extract<OperationalStatusOwner, "diagnostics" | "importExport">,
+  panel: DisclosurePanelState,
+): OperationalStatusIssue | null {
+  if (panel.status !== "warning" && panel.status !== "blocking") {
+    return null;
+  }
+  const critical = panel.status === "blocking";
+  return operationalStaticIssue({
+    blocksCurrentStage: critical,
+    chipValue: critical ? "Blocking" : "Attention",
+    condition: critical ? "blocked" : "attention",
+    detail: panel.detail,
+    id: `${owner}-${panel.status}`,
+    label: panel.title,
+    owner,
+    recovery: operationalRecovery("openDiagnostics", true),
+    severity: critical ? "critical" : "warning",
+  });
+}
+
+function operationalStaticIssue(
+  issue: Omit<OperationalStatusIssue, "blocksCurrentStage" | "recovery"> &
+    Partial<Pick<OperationalStatusIssue, "blocksCurrentStage" | "recovery">>,
+): OperationalStatusIssue {
+  return {
+    blocksCurrentStage: false,
+    recovery: operationalRecovery("none", false, "No recovery action is needed."),
+    ...issue,
+  };
+}
+
+function audioBlocksCurrentStage(input: NarrationStatusModelInput): boolean {
+  return (
+    input.stageStatus.blocker?.id === "audioMissing" ||
+    input.stageStatus.blocker?.id === "audioStale" ||
+    input.stageStatus.blocker?.id === "audioDegraded" ||
+    input.stageStatus.blocker?.id === "audioArchived" ||
+    input.stageStatus.blocker?.id === "generationFailed"
+  );
+}
+
+function severityForLifecycleTone(tone: SourceLifecycleTone): OperationalStatusSeverity {
+  if (tone === "danger") {
+    return "error";
+  }
+  if (tone === "warning") {
+    return "warning";
+  }
+  if (tone === "info") {
+    return "info";
+  }
+  return "ok";
+}
+
 function resolveNarrationBlocker(
   input: NarrationStatusModelInput,
   state: NarrationPipelineState,
+  primaryIssue: OperationalStatusIssue | null,
 ): NarrationStatusBlocker | null {
   return (
-    jobFailureBlocker(input) ??
-    jobCancelledBlocker(input) ??
+    operationalIssueBlocker(primaryIssue) ??
     stageStatusBlocker(input) ??
     audioLifecycleBlocker(input) ??
     voiceCloningBlocker(input) ??
@@ -297,28 +515,25 @@ function resolveNarrationBlocker(
   );
 }
 
-function jobFailureBlocker(input: NarrationStatusModelInput): NarrationStatusBlocker | null {
-  if (input.job?.status === "failed") {
-    return {
-      actionLabel: input.canCreate ? "Retry generation" : null,
-      detail:
-        input.job.error ??
-        (input.job.progress.detail.trim() ? input.job.progress.detail : "Generation failed."),
-      title: "Generation failed",
-    };
+function operationalIssueBlocker(
+  issue: OperationalStatusIssue | null,
+): NarrationStatusBlocker | null {
+  if (
+    !issue ||
+    (issue.severity !== "critical" &&
+      issue.severity !== "error" &&
+      !issue.blocksCurrentStage &&
+      issue.condition !== "cancelled")
+  ) {
+    return null;
   }
-  return null;
-}
-
-function jobCancelledBlocker(input: NarrationStatusModelInput): NarrationStatusBlocker | null {
-  if (input.job?.status === "cancelled") {
-    return {
-      actionLabel: input.canCreate ? "Retry generation" : null,
-      detail: input.job.error ?? "The active narration job was cancelled.",
-      title: "Job cancelled",
-    };
-  }
-  return null;
+  return {
+    actionLabel: issue.recovery.available ? issue.recovery.label : null,
+    detail: issue.detail,
+    recovery: issue.recovery,
+    technicalDetail: issue.technicalDetail,
+    title: issue.label,
+  };
 }
 
 function stageStatusBlocker(input: NarrationStatusModelInput): NarrationStatusBlocker | null {
@@ -326,6 +541,8 @@ function stageStatusBlocker(input: NarrationStatusModelInput): NarrationStatusBl
     return {
       actionLabel: actionLabelForStageBlocker(input.stageStatus.blocker.correctiveAction),
       detail: input.stageStatus.blocker.detail,
+      recovery: input.stageStatus.blocker.recovery,
+      technicalDetail: input.stageStatus.blocker.technicalDetail,
       title: input.stageStatus.blocker.title,
     };
   }
@@ -335,16 +552,16 @@ function stageStatusBlocker(input: NarrationStatusModelInput): NarrationStatusBl
 function audioLifecycleBlocker(input: NarrationStatusModelInput): NarrationStatusBlocker | null {
   if (input.generatedAudioLifecycle === "stale") {
     return {
-      actionLabel: input.canCreate ? "Regenerate audio" : null,
-      detail: "Generated audio does not match the current source, voice, policy, or scope.",
-      title: "Audio stale",
+      actionLabel: input.canCreate ? "Rebuild audio" : null,
+      detail: operationalGeneratedAudioLifecycleReason("stale"),
+      title: "Audio needs rebuild",
     };
   }
   if (input.generatedAudioLifecycle === "degraded") {
     return {
       actionLabel: input.canCreate ? "Rebuild audio" : null,
-      detail: "Generated audio exists, but playback is not reliable yet.",
-      title: "Audio needs review",
+      detail: operationalGeneratedAudioLifecycleReason("degraded"),
+      title: "Audio needs rebuild",
     };
   }
   return null;
@@ -378,6 +595,7 @@ function resolvePrimaryAction(
   input: NarrationStatusModelInput,
   state: NarrationPipelineState,
   blocker: NarrationStatusBlocker | null,
+  primaryIssue: OperationalStatusIssue | null,
 ): NarrationStatusAction | null {
   if (input.isProcessing && input.job && !isTerminalJob(input.job)) {
     return { id: "cancel", label: "Cancel Run", tone: "danger" };
@@ -389,12 +607,8 @@ function resolvePrimaryAction(
       tone: "warning",
     };
   }
-  if ((state === "failed" || state === "cancelled" || state === "blocked") && input.canCreate) {
-    return {
-      id: "retry",
-      label: blocker?.actionLabel ?? "Retry generation",
-      tone: state === "failed" ? "danger" : "warning",
-    };
+  if (state === "failed" || state === "cancelled" || state === "blocked") {
+    return primaryActionForRecovery(primaryIssue?.recovery ?? blocker?.recovery ?? null, state);
   }
   if ((state === "ready" || state === "playing") && input.canOpenCinema) {
     return { id: "openCinema", label: "Open Cinema", tone: "secondary" };
@@ -405,6 +619,46 @@ function resolvePrimaryAction(
   return null;
 }
 
+function primaryActionForRecovery(
+  recovery: OperationalRecoveryAction | null,
+  state: NarrationPipelineState,
+): NarrationStatusAction | null {
+  if (!recovery?.available) {
+    return null;
+  }
+  const failureTone = state === "failed" ? "danger" : "warning";
+  switch (recovery.id) {
+    case "retryGeneration": {
+      return { id: "retry", label: recovery.label, tone: failureTone };
+    }
+    case "rebuildAudio": {
+      return { id: "retry", label: recovery.label, tone: "warning" };
+    }
+    case "createAndListen": {
+      return { id: "create", label: recovery.label, tone: "primary" };
+    }
+    case "openCinema": {
+      return { id: "openCinema", label: recovery.label, tone: "secondary" };
+    }
+    case "openDiagnostics": {
+      return { id: "openDiagnostics", label: recovery.label, tone: failureTone };
+    }
+    case "openIntake": {
+      return { id: "openIntake", label: recovery.label, tone: failureTone };
+    }
+    case "openReview": {
+      return { id: "openReview", label: recovery.label, tone: "warning" };
+    }
+    case "openVoiceCloning": {
+      return { id: "openVoiceCloning", label: recovery.label, tone: "warning" };
+    }
+    case "cancelRun":
+    case "none": {
+      return null;
+    }
+  }
+}
+
 function resolvePrimaryCopy(
   input: NarrationStatusModelInput,
   state: NarrationPipelineState,
@@ -412,24 +666,27 @@ function resolvePrimaryCopy(
   blocker: NarrationStatusBlocker | null,
 ): { detail: string; label: string; message: string } {
   if (state === "failed") {
+    const label = blocker?.title ?? "Generation failed";
     return {
       detail: blocker?.detail ?? "Retry generation when the source and voice are ready.",
-      label: "Generation failed",
-      message: `${blocker?.title ?? "Generation failed"}. ${blocker?.actionLabel ?? "Retry generation."}`,
+      label,
+      message: `${label}. ${blocker?.actionLabel ?? blocker?.recovery?.unavailableReason ?? "Retry generation."}`,
     };
   }
   if (state === "blocked") {
+    const label = blocker?.title ?? "Blocked";
     return {
       detail: blocker?.detail ?? "Resolve the blocker before continuing.",
-      label: "Blocked",
-      message: `${blocker?.title ?? "Narration blocked"}. ${blocker?.actionLabel ?? "Review the issue."}`,
+      label,
+      message: `${label}. ${blocker?.actionLabel ?? blocker?.recovery?.unavailableReason ?? "Review the issue."}`,
     };
   }
   if (state === "cancelled") {
+    const label = blocker?.title ?? "Generation cancelled";
     return {
       detail: blocker?.detail ?? "Retry when you are ready.",
-      label: "Cancelled",
-      message: "Job cancelled. Retry when ready.",
+      label,
+      message: `${label}. ${blocker?.actionLabel ?? "Retry generation when ready."}`,
     };
   }
   if (state === "playing") {
@@ -646,29 +903,6 @@ function actionLabelForStageBlocker(actionId: WorkspaceStageActionId | null): st
   return workspaceStageActionLabel(actionId);
 }
 
-function toneForAudioLifecycle(lifecycle: GeneratedAudioLifecycleState): StatusChipTone {
-  switch (lifecycle) {
-    case "ready": {
-      return "success";
-    }
-    case "queued":
-    case "generating": {
-      return "info";
-    }
-    case "stale":
-    case "degraded":
-    case "archived": {
-      return "warning";
-    }
-    case "failed": {
-      return "danger";
-    }
-    default: {
-      return "neutral";
-    }
-  }
-}
-
 function toneForState(state: NarrationPipelineState): StatusChipTone {
   switch (state) {
     case "blocked":
@@ -692,32 +926,13 @@ function toneForState(state: NarrationPipelineState): StatusChipTone {
 }
 
 function queueTone(queue: NarrationQueueSnapshot, state: NarrationPipelineState): StatusChipTone {
-  if (state === "failed") {
-    return "danger";
-  }
-  if (state === "blocked" || state === "cancelled") {
+  if (state === "failed" || state === "blocked" || state === "cancelled") {
     return "warning";
   }
   if (queue.totalSegments > 0 && queue.readyCount >= queue.totalSegments) {
     return "success";
   }
   if (queue.generatingCount > 0) {
-    return "info";
-  }
-  return "neutral";
-}
-
-function checkTone(job: VoiceJob | null): StatusChipTone {
-  if (!job) {
-    return "neutral";
-  }
-  if (job.status === "failed") {
-    return "danger";
-  }
-  if (job.voiceCheck.complete) {
-    return job.voiceCheck.needsResume ? "warning" : "success";
-  }
-  if (job.status === "checking" || job.status === "retrying") {
     return "info";
   }
   return "neutral";

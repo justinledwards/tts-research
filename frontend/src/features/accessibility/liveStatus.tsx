@@ -48,7 +48,7 @@ const LiveStatusContext = createContext<LiveStatusApi>({
 
 export const liveStatusMessages = {
   audioGenerationCompleted: () => "Audio generation completed.",
-  audioGenerationFailed: () => "Audio generation failed.",
+  audioGenerationFailed: () => "Generation failed.",
   audioGenerationStarted: () => "Audio generation started.",
   bookmarkSaved: () => "Bookmark saved.",
   cueChanged: (cueLabel: string) => `Cue changed to ${cueLabel}.`,

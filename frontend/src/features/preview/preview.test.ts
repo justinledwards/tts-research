@@ -244,7 +244,7 @@ describe("preview readiness model", () => {
     );
 
     expect(missing.generatedPlaybackDisabledReason).toBe(
-      "Generated audio is missing. Create & Listen before playback.",
+      "Audio missing. Create & Listen before playback.",
     );
     expect(missing.openTelepromptDetail).toBe(
       "Rehearsal only. Audio-follow unlocks after Create & Listen.",
@@ -254,12 +254,12 @@ describe("preview readiness model", () => {
     expect(generating.cinemaDisabledReason).toBe(
       "Audio is generating. Playback unlocks when ready.",
     );
-    expect(failed.cinemaDisabledReason).toContain("Audio failed");
+    expect(failed.cinemaDisabledReason).toContain("Generation failed");
     expect(failed.openTelepromptDetail).toBe(
       "Rehearsal only. Retry generation unlocks audio-follow.",
     );
     expect(failed.primaryLabel).toBe("Retry generation");
-    expect(stale.cinemaDisabledReason).toContain("Audio stale");
+    expect(stale.cinemaDisabledReason).toContain("Audio needs rebuild");
     expect(ready.canOpenCinema).toBe(true);
     expect(ready.openTelepromptDetail).toBe("Teleprompt opens with generated cue playback ready.");
     expect(ready.primaryLabel).toBe("Create Again");

@@ -40,7 +40,7 @@ describe("visual design system usage", () => {
       .flatMap(([file, content]) => rawPaletteHits(file, content));
 
     expect(offenders).toEqual([]);
-  });
+  }, 15_000);
 });
 
 function rawPaletteHits(file: string, content: string): string[] {

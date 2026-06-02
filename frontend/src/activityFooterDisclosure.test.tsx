@@ -37,13 +37,13 @@ describe("NarrationStatusStrip disclosure rendering", () => {
         mode="collapsed"
         model={model({
           blocker: {
-            actionLabel: "Retry audio",
+            actionLabel: "Retry generation",
             detail: "Provider failed before checked audio was ready.",
             title: "Generation failed",
           },
-          primaryAction: { id: "retry", label: "Retry audio", tone: "danger" },
+          primaryAction: { id: "retry", label: "Retry generation", tone: "danger" },
           primaryLabel: "Generation failed",
-          primaryMessage: "Generation failed. Retry audio",
+          primaryMessage: "Generation failed. Retry generation",
           state: "failed",
           tone: "danger",
         })}
@@ -56,7 +56,7 @@ describe("NarrationStatusStrip disclosure rendering", () => {
 
     expect(markup).toContain('data-pipeline-state="failed"');
     expect(markup).toContain('data-status-strip-density="essential"');
-    expect(markup).toContain("Retry audio");
+    expect(markup).toContain("Retry generation");
     expect(markup).toContain("Generation failed");
   });
 
@@ -122,13 +122,13 @@ describe("NarrationStatusStrip disclosure rendering", () => {
         mode="compact"
         model={model({
           blocker: {
-            actionLabel: "Retry audio",
-            detail: "The active narration job was cancelled.",
-            title: "Job cancelled",
+            actionLabel: "Retry generation",
+            detail: "Generation was cancelled by request. Retry generation when audio is needed.",
+            title: "Generation cancelled",
           },
-          primaryAction: { id: "retry", label: "Retry audio", tone: "warning" },
-          primaryLabel: "Cancelled",
-          primaryMessage: "Job cancelled. Retry when ready.",
+          primaryAction: { id: "retry", label: "Retry generation", tone: "warning" },
+          primaryLabel: "Generation cancelled",
+          primaryMessage: "Generation cancelled. Retry generation",
           state: "cancelled",
           tone: "warning",
         })}
@@ -139,8 +139,8 @@ describe("NarrationStatusStrip disclosure rendering", () => {
       />,
     );
 
-    expect(markup).toContain("Cancelled");
-    expect(markup).toContain("Job cancelled. Retry when ready.");
+    expect(markup).toContain("Generation cancelled");
+    expect(markup).toContain("Generation cancelled. Retry generation");
   });
 });
 
