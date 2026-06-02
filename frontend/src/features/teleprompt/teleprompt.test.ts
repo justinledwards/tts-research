@@ -115,21 +115,34 @@ describe("teleprompt studio work modes", () => {
 
   it("explains audio-dependent modes when generated audio is missing", () => {
     const audioFollow = buildTelepromptWorkModeModel({
+      generatedAudioLifecycle: "missing",
       mode: "audio-follow",
       playbackAvailable: false,
       playbackPlaying: false,
     });
     const reviewPlayback = buildTelepromptWorkModeModel({
+      generatedAudioLifecycle: "missing",
       mode: "review-playback",
       playbackAvailable: false,
       playbackPlaying: false,
     });
+    const failed = buildTelepromptWorkModeModel({
+      generatedAudioLifecycle: "failed",
+      mode: "audio-follow",
+      playbackAvailable: false,
+      playbackPlaying: false,
+    });
 
-    expect(audioFollow.disabledReason).toContain("Generated audio is missing");
+    expect(audioFollow.disabledReason).toBe(
+      "Generated audio is missing. Create & Listen before playback.",
+    );
     expect(audioFollow.tone).toBe("warning");
     expect(audioFollow.dataAttributes["data-teleprompt-work-mode"]).toBe("audio-follow");
-    expect(reviewPlayback.disabledReason).toContain("Generated audio is missing");
+    expect(reviewPlayback.disabledReason).toBe(
+      "Generated audio is missing. Create & Listen before playback.",
+    );
     expect(reviewPlayback.syncMode).toBe("review-playback");
+    expect(failed.disabledReason).toBe("Audio failed. Retry generation before playback.");
   });
 });
 

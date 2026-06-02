@@ -3,6 +3,7 @@ import type { RevisionBlock } from "../revision";
 import type { ReadAlongTimingState } from "../readalong";
 import { Button, SegmentedControl, Toggle, cx } from "../../design";
 import { FocusedTheatreChrome } from "../theatre/FocusedTheatreShell";
+import { nextReaderPlaybackRate } from "../reader-accessibility";
 import {
   LocalizedPlaybackToolbar,
   playbackActionAriaLabel,
@@ -177,81 +178,101 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     const theatrePreset = telepromptTheatrePreset(settings.presetId);
     const currentCue = currentCueText ?? activeBlock?.spokenText ?? activeBlock?.text ?? "";
     const currentWordLabel = telepromptTheatreWordLabel(currentWordIndex);
+    const theatrePlayPauseAction = {
+      ariaKeyShortcuts: "Space K",
+      shortcutCommandId: "theatre.playPause" as const,
+      ariaLabel: playbackControlsPlaying
+        ? "Pause Cue"
+        : playbackActionAriaLabel("telepromptPlay", { lifecycle: playbackLifecycle }),
+      dataAttributes: playbackActionDataAttributes("telepromptPlay", playbackLifecycle, {
+        primary: true,
+      }),
+      disabled: !playbackControlsAvailable,
+      disabledReason: cuePlaybackDisabledReason,
+      label: playbackControlsPlaying ? "Pause Cue" : playbackActionLabel("telepromptPlay"),
+      primary: true,
+      onClick: onTogglePlayback,
+      testId: "ui-action-teleprompt-theatre-play-pause",
+    };
+    const theatreJumpToAudioAction = {
+      ariaKeyShortcuts: "J",
+      shortcutCommandId: "theatre.jumpCurrentAudio" as const,
+      disabled: !playbackControlsAvailable,
+      disabledReason: cuePlaybackDisabledReason,
+      label: "Jump to Audio",
+      onClick: onJumpToCurrentAudio,
+      testId: "ui-action-teleprompt-theatre-jump-current-audio",
+    };
+    const theatrePreviousAction = {
+      ariaKeyShortcuts: "ArrowLeft ArrowUp",
+      shortcutCommandId: "theatre.previousCue" as const,
+      disabled: activeBlockIndex <= 0,
+      disabledReason: activeBlockIndex > 0 ? undefined : "Already at the first cue.",
+      label: "Previous",
+      onClick: () => {
+        onMoveCue(-1);
+      },
+      testId: "ui-action-teleprompt-theatre-previous-cue",
+    };
+    const theatreNextAction = {
+      ariaKeyShortcuts: "ArrowRight ArrowDown",
+      shortcutCommandId: "theatre.nextCue" as const,
+      disabled: !nextBlock,
+      disabledReason: nextBlock ? undefined : "Already at the final cue.",
+      label: "Next",
+      onClick: () => {
+        onMoveCue(1);
+      },
+      testId: "ui-action-teleprompt-theatre-next-cue",
+    };
+    const theatreRestartAction = {
+      ariaKeyShortcuts: "Home",
+      shortcutCommandId: "theatre.restart" as const,
+      disabled: !playbackControlsAvailable,
+      disabledReason: cuePlaybackDisabledReason,
+      label: "Restart",
+      onClick: onRestart,
+      testId: "ui-action-teleprompt-theatre-restart",
+    };
+    const theatreSpeedLabel = `${playbackRate.toFixed(playbackRate === 1 ? 0 : 2)}x`;
+    const theatreSpeedAction = {
+      ariaLabel: "Playback speed",
+      disabled: !onPlaybackRateChange,
+      disabledReason: onPlaybackRateChange
+        ? undefined
+        : "Playback speed is available after generated audio is loaded.",
+      label: `Playback speed ${theatreSpeedLabel}`,
+      shortcutCommandId: "theatre.speed" as const,
+      testId: "ui-action-teleprompt-theatre-speed",
+      onClick: () => {
+        onPlaybackRateChange?.(nextReaderPlaybackRate(playbackRate, 1));
+      },
+    };
+    const backToReviewAction = {
+      label: "Back to Review",
+      shortcutCommandId: "teleprompt.returnReview" as const,
+      testId: "ui-action-teleprompt-theatre-back-review",
+      onClick: onBackToReview,
+    };
+    const backToPreviewAction = {
+      label: "Back to Preview",
+      shortcutCommandId: "teleprompt.returnPreview" as const,
+      testId: "ui-action-teleprompt-theatre-back-preview",
+      onClick: onBackToPreview,
+    };
     const theatrePlaybackToolbar: LocalizedPlaybackToolbarModel = {
       activeDetail: `${summary.cuePositionLabel} · ${summary.syncStatusLabel}`,
       activeLabel: activeBlock?.label ?? "No active cue",
-      jumpToAudio: {
-        ariaKeyShortcuts: "J",
-        shortcutCommandId: "theatre.jumpCurrentAudio",
-        disabled: !playbackControlsAvailable,
-        disabledReason: cuePlaybackDisabledReason,
-        label: "Jump to Audio",
-        onClick: onJumpToCurrentAudio,
-        testId: "ui-action-teleprompt-theatre-jump-current-audio",
-      },
-      next: {
-        ariaKeyShortcuts: "ArrowRight ArrowDown",
-        shortcutCommandId: "theatre.nextCue",
-        disabled: !nextBlock,
-        disabledReason: nextBlock ? undefined : "Already at the final cue.",
-        label: "Next",
-        onClick: () => {
-          onMoveCue(1);
-        },
-        testId: "ui-action-teleprompt-theatre-next-cue",
-      },
-      playPause: {
-        ariaKeyShortcuts: "Space K",
-        shortcutCommandId: "theatre.playPause",
-        ariaLabel: playbackControlsPlaying
-          ? "Pause Cue"
-          : playbackActionAriaLabel("telepromptPlay", { lifecycle: playbackLifecycle }),
-        dataAttributes: playbackActionDataAttributes("telepromptPlay", playbackLifecycle, {
-          primary: true,
-        }),
-        disabled: !playbackControlsAvailable,
-        disabledReason: cuePlaybackDisabledReason,
-        label: playbackControlsPlaying ? "Pause Cue" : playbackActionLabel("telepromptPlay"),
-        primary: true,
-        onClick: onTogglePlayback,
-        testId: "ui-action-teleprompt-theatre-play-pause",
-      },
-      previous: {
-        ariaKeyShortcuts: "ArrowLeft ArrowUp",
-        shortcutCommandId: "theatre.previousCue",
-        disabled: activeBlockIndex <= 0,
-        disabledReason: activeBlockIndex > 0 ? undefined : "Already at the first cue.",
-        label: "Previous",
-        onClick: () => {
-          onMoveCue(-1);
-        },
-        testId: "ui-action-teleprompt-theatre-previous-cue",
-      },
+      jumpToAudio: { ...theatreJumpToAudioAction, visible: false },
+      next: { ...theatreNextAction, visible: false },
+      playPause: { ...theatrePlayPauseAction, visible: false },
+      previous: { ...theatrePreviousAction, visible: false },
       progress: {
         currentLabel: `${Math.max(0, Math.min(100, audioProgressPercent)).toString()}%`,
         durationLabel: summary.estimatedRemainingLabel,
         ratio: audioProgressPercent / 100,
       },
-      restart: {
-        ariaKeyShortcuts: "Home",
-        shortcutCommandId: "theatre.restart",
-        disabled: !playbackControlsAvailable,
-        disabledReason: cuePlaybackDisabledReason,
-        label: "Restart",
-        onClick: onRestart,
-        testId: "ui-action-teleprompt-theatre-restart",
-      },
-      speed: {
-        ariaKeyShortcuts: "[ ]",
-        shortcutCommandId: "theatre.speed",
-        disabled: !onPlaybackRateChange,
-        disabledReason: onPlaybackRateChange
-          ? undefined
-          : "Playback speed is available after generated audio is loaded.",
-        testId: "ui-action-teleprompt-theatre-speed",
-        value: playbackRate,
-        onChange: onPlaybackRateChange,
-      },
+      restart: { ...theatreRestartAction, visible: false },
       stage: "theatre",
       statusLabel: summary.playbackStatusLabel,
       testId: "localized-theatre-playback-toolbar",
@@ -263,26 +284,14 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       testId: "ui-action-teleprompt-exit-theatre",
       onClick: onExitTheatre,
     };
+    const operatorAction = {
+      label: settings.operatorPanelVisible ? "Hide operator" : "Operator",
+      selected: settings.operatorPanelVisible,
+      shortcutCommandId: "theatre.operator" as const,
+      testId: "ui-action-teleprompt-operator-preview",
+      onClick: onToggleOperatorPreview,
+    };
     const theatreChromeActions = [
-      {
-        label: settings.operatorPanelVisible ? "Hide operator" : "Operator",
-        selected: settings.operatorPanelVisible,
-        shortcutCommandId: "theatre.operator" as const,
-        testId: "ui-action-teleprompt-operator-preview",
-        onClick: onToggleOperatorPreview,
-      },
-      {
-        label: "Back to Review",
-        shortcutCommandId: "teleprompt.returnReview" as const,
-        testId: "ui-action-teleprompt-theatre-back-review",
-        onClick: onBackToReview,
-      },
-      {
-        label: "Back to Preview",
-        shortcutCommandId: "teleprompt.returnPreview" as const,
-        testId: "ui-action-teleprompt-theatre-back-preview",
-        onClick: onBackToPreview,
-      },
       {
         disabled: !fullscreenAvailability.supported,
         disabledReason:
@@ -458,6 +467,18 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           confidenceLabel={settings.syncOverlayVisible ? summary.confidenceLabel : null}
           controlsVisible={controlsVisible}
           persistentAction={exitAction}
+          persistentActions={[
+            backToReviewAction,
+            backToPreviewAction,
+            theatrePreviousAction,
+            theatrePlayPauseAction,
+            theatreJumpToAudioAction,
+            theatreNextAction,
+            theatreRestartAction,
+            theatreSpeedAction,
+            operatorAction,
+            exitAction,
+          ]}
           progress={{
             currentLabel: `${Math.max(0, Math.min(100, audioProgressPercent)).toString()}%`,
             durationLabel: summary.estimatedRemainingLabel,

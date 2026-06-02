@@ -1,6 +1,10 @@
-import type { GeneratedAudioLifecycleState } from "../playback/generatedAudioLifecycle";
+import {
+  generatedAudioLifecycleDescriptor,
+  type GeneratedAudioLifecycleState,
+} from "../playback/generatedAudioLifecycle";
 import { workspacePlaybackActionLabel } from "../playback/workspacePlaybackActions";
 import {
+  WORKSPACE_STAGES,
   transitionWorkspaceStage,
   workspaceStageMeta,
   type WorkspaceContext,
@@ -34,11 +38,31 @@ export type WorkspaceStageBlockerId =
   | "waitingForSource"
   | "sourcePreparing"
   | "sourceFailed"
+  | "listenerTextMissing"
   | "reviewRequired"
   | "voiceMissing"
   | "audioMissing"
   | "audioStale"
+  | "audioDegraded"
+  | "audioArchived"
   | "generationFailed";
+
+export type WorkspaceStageReadinessState =
+  | "ready"
+  | "blocked"
+  | "working"
+  | "failed"
+  | "warning"
+  | "manual"
+  | "complete";
+
+export type WorkspaceStageReadinessTone =
+  | "danger"
+  | "info"
+  | "neutral"
+  | "pinned"
+  | "success"
+  | "warning";
 
 export interface WorkspaceStageAction {
   readonly description: string;
@@ -51,6 +75,7 @@ export interface WorkspaceStageAction {
 export interface WorkspaceStageBlocker {
   readonly correctiveAction: WorkspaceStageActionId | null;
   readonly detail: string;
+  readonly disabledReason?: string;
   readonly id: WorkspaceStageBlockerId;
   readonly title: string;
 }
@@ -60,6 +85,7 @@ export interface WorkspaceStageStatusInput {
   readonly canCreate: boolean;
   readonly canOpenCinema: boolean;
   readonly createDisabledReason?: string;
+  readonly hasListenerText: boolean;
   readonly hasSource: boolean;
   readonly hasVoice: boolean;
   readonly reviewRequired?: boolean;
@@ -71,14 +97,35 @@ export interface WorkspaceStageStatusInput {
 
 export type WorkspaceReviewState = "needsRepair" | "ready";
 
+export interface WorkspaceStageCurrentTask {
+  readonly detail: string;
+  readonly disabledReason?: string;
+  readonly primaryAction: WorkspaceStageActionId | null;
+  readonly primaryLabel: string | null;
+  readonly title: string;
+  readonly tone: WorkspaceStageReadinessTone;
+}
+
+export interface WorkspaceStageReadiness {
+  readonly action: WorkspaceStageActionId | null;
+  readonly detail: string;
+  readonly disabledReason?: string;
+  readonly label: string;
+  readonly stage: WorkspaceStage;
+  readonly state: WorkspaceStageReadinessState;
+  readonly tone: WorkspaceStageReadinessTone;
+}
+
 export interface WorkspaceStageStatus {
   readonly blocker: WorkspaceStageBlocker | null;
+  readonly currentTask: WorkspaceStageCurrentTask;
   readonly description: string;
   readonly inspectorTabs: readonly WorkspaceStageInspectorTabId[];
   readonly label: string;
   readonly nextAction: WorkspaceStageActionId | null;
   readonly primaryAction: WorkspaceStagePrimaryActionId;
   readonly primaryLabel: string;
+  readonly readinessByStage: Record<WorkspaceStage, WorkspaceStageReadiness>;
   readonly reviewState: WorkspaceReviewState;
   readonly reviewWarningCount: number;
   readonly stage: WorkspaceStage;
@@ -209,17 +256,25 @@ export function resolveWorkspaceStageStatus(
   input: WorkspaceStageStatusInput,
 ): WorkspaceStageStatus {
   const blocker = workspaceStageBlocker(input);
-  const primaryAction = workspaceStagePrimaryActionForStatus(input, blocker);
   const reviewWarningCount = Math.max(0, input.reviewWarningCount ?? 0);
+  const reviewState = reviewWarningCount > 0 ? "needsRepair" : "ready";
+  const readinessByStage = workspaceStageReadinessByStage(input, reviewWarningCount);
+  const primaryAction = workspaceStagePrimaryActionForStatus(
+    input,
+    blocker,
+    readinessByStage[input.stage],
+  );
   return {
     blocker,
+    currentTask: workspaceStageCurrentTask(input, blocker, readinessByStage[input.stage]),
     description: workspaceStageMeta(input.stage).description,
     inspectorTabs: workspaceStageInspectorTabs(input.stage, blocker),
     label: workspaceStageMeta(input.stage).label,
     nextAction: workspaceStageNextAction(input, blocker),
     primaryAction,
     primaryLabel: workspaceStagePrimaryActionDisplayLabel(primaryAction),
-    reviewState: reviewWarningCount > 0 ? "needsRepair" : "ready",
+    readinessByStage,
+    reviewState,
     reviewWarningCount,
     stage: input.stage,
   };
@@ -249,6 +304,7 @@ function workspaceStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStage
     return {
       correctiveAction: null,
       detail: "Import, extraction, or source preparation is still running.",
+      disabledReason: "Source preparation is still running.",
       id: "sourcePreparing",
       title: "Waiting for source",
     };
@@ -269,10 +325,20 @@ function workspaceStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStage
       title: "Review required",
     };
   }
-  if (!input.hasVoice && input.stage !== "intake" && input.stage !== "review") {
+  if (!input.hasListenerText && input.stage !== "intake" && input.stage !== "review") {
+    return {
+      correctiveAction: "reviewBlocks",
+      detail: "Prepare listener-ready text in Review before using this stage.",
+      id: "listenerTextMissing",
+      title: "Spoken form needs review",
+    };
+  }
+  if (!input.hasVoice && input.stage === "preview") {
     return {
       correctiveAction: null,
       detail: input.createDisabledReason ?? "Select a voice or resolve provider setup first.",
+      disabledReason:
+        input.createDisabledReason ?? "Select a voice or resolve provider setup first.",
       id: "voiceMissing",
       title: "Voice unavailable",
     };
@@ -294,31 +360,52 @@ function workspaceAudioStageBlocker(
       title: "Audio generation failed",
     };
   }
-  if (input.audioLifecycle === "stale" && input.stage === "theatre") {
-    return {
-      correctiveAction: "createAndListen",
-      detail: "Audio exists, but it does not match the current source, voice, policy, or scope.",
-      id: "audioStale",
-      title: "Audio is stale",
-    };
+  if (
+    input.audioLifecycle === "stale" ||
+    input.audioLifecycle === "degraded" ||
+    input.audioLifecycle === "archived"
+  ) {
+    if (input.stage === "teleprompt") {
+      return null;
+    }
+    return audioRecoveryBlocker(input);
+  }
+  if (input.stage === "preview") {
+    return null;
   }
   if (input.stage !== "theatre" || input.audioLifecycle === "ready") {
     return null;
   }
+  const audioWorking = input.audioLifecycle === "generating" || input.audioLifecycle === "queued";
+  const correctiveAction = !audioWorking && input.canCreate ? "createAndListen" : null;
   return {
-    correctiveAction: input.canCreate ? "createAndListen" : null,
-    detail:
-      input.audioLifecycle === "generating" || input.audioLifecycle === "queued"
-        ? "Generated audio is not ready yet."
-        : "Create audio before Theatre can play the source.",
+    correctiveAction,
+    disabledReason: audioMissingDisabledReason(input, audioWorking),
+    detail: audioWorking
+      ? "Generated audio is not ready yet."
+      : "Create audio before Theatre can play the source.",
     id: "audioMissing",
     title: "Audio missing",
   };
 }
 
+function audioMissingDisabledReason(
+  input: WorkspaceStageStatusInput,
+  audioWorking: boolean,
+): string | undefined {
+  if (!audioWorking && input.canCreate) {
+    return undefined;
+  }
+  if (audioWorking) {
+    return "Generated audio is not ready yet.";
+  }
+  return input.createDisabledReason ?? "Create & Listen is not available yet.";
+}
+
 function workspaceStagePrimaryActionForStatus(
   input: WorkspaceStageStatusInput,
   blocker: WorkspaceStageBlocker | null,
+  readiness: WorkspaceStageReadiness,
 ): WorkspaceStagePrimaryActionId {
   if (blocker?.correctiveAction) {
     return blocker.correctiveAction;
@@ -331,6 +418,15 @@ function workspaceStagePrimaryActionForStatus(
   }
   if (input.stage === "theatre" && input.audioLifecycle === "failed") {
     return "retryGeneration";
+  }
+  if (input.stage === "review") {
+    return workspaceStagePrimaryAction(input.stage);
+  }
+  if (input.stage === "preview") {
+    return workspaceStagePrimaryAction(input.stage);
+  }
+  if (readiness.action) {
+    return readiness.action;
   }
   return workspaceStagePrimaryAction(input.stage);
 }
@@ -377,4 +473,443 @@ function workspaceStageInspectorTabs(
     return ["overview", "review", "history"];
   }
   return ["overview", "diagnostics", "history"];
+}
+
+function workspaceStageReadinessByStage(
+  input: WorkspaceStageStatusInput,
+  reviewWarningCount: number,
+): Record<WorkspaceStage, WorkspaceStageReadiness> {
+  return Object.fromEntries(
+    WORKSPACE_STAGES.map((stage) => [
+      stage,
+      workspaceStageReadiness(input, stage, reviewWarningCount),
+    ]),
+  ) as Record<WorkspaceStage, WorkspaceStageReadiness>;
+}
+
+function workspaceStageReadiness(
+  input: WorkspaceStageStatusInput,
+  stage: WorkspaceStage,
+  reviewWarningCount: number,
+): WorkspaceStageReadiness {
+  const sourceReadiness = sourceGateReadiness(input, stage);
+  if (sourceReadiness) {
+    return sourceReadiness;
+  }
+  if (stage === "intake") {
+    return stageReadiness({
+      action: "intakeSource",
+      detail: "A narratable source is selected and ready for Review.",
+      label: "Complete",
+      stage,
+      state: "complete",
+      tone: "success",
+    });
+  }
+  if (stage === "review") {
+    return reviewStageReadiness(input, reviewWarningCount);
+  }
+  if (input.reviewRequired) {
+    return stageReadiness({
+      action: "reviewBlocks",
+      detail: "Review the active source before moving into generated-audio or read-along stages.",
+      label: "Review first",
+      stage,
+      state: "blocked",
+      tone: "warning",
+    });
+  }
+  if (!input.hasListenerText) {
+    return listenerTextReadiness(stage);
+  }
+  if (stage === "preview") {
+    return previewStageReadiness(input);
+  }
+  if (stage === "teleprompt") {
+    return telepromptStageReadiness(input);
+  }
+  return theatreStageReadiness(input);
+}
+
+function sourceGateReadiness(
+  input: WorkspaceStageStatusInput,
+  stage: WorkspaceStage,
+): WorkspaceStageReadiness | null {
+  if (input.sourceError) {
+    return stageReadiness({
+      action: "intakeSource",
+      detail: input.sourceError,
+      label: stage === "intake" ? "Source issue" : "Blocked",
+      stage,
+      state: "failed",
+      tone: "danger",
+    });
+  }
+  if (input.sourcePreparing) {
+    return stageReadiness({
+      action: null,
+      detail: "Import, extraction, or source preparation is still running.",
+      disabledReason: "Source preparation is still running.",
+      label: "Preparing",
+      stage,
+      state: "working",
+      tone: "info",
+    });
+  }
+  if (!input.hasSource) {
+    return stageReadiness({
+      action: "intakeSource",
+      detail: "Choose draft text, a book, a prepared file, or a URL before continuing.",
+      label: stage === "intake" ? "Choose source" : "Blocked",
+      stage,
+      state: stage === "intake" ? "ready" : "blocked",
+      tone: stage === "intake" ? "neutral" : "warning",
+    });
+  }
+  return null;
+}
+
+function reviewStageReadiness(
+  input: WorkspaceStageStatusInput,
+  reviewWarningCount: number,
+): WorkspaceStageReadiness {
+  if (input.reviewRequired) {
+    return stageReadiness({
+      action: "reviewBlocks",
+      detail: "Review the active source before moving into generated-audio or read-along stages.",
+      label: "Review required",
+      stage: "review",
+      state: "warning",
+      tone: "warning",
+    });
+  }
+  if (reviewWarningCount > 0) {
+    return stageReadiness({
+      action: "reviewBlocks",
+      detail: `${reviewWarningCount.toString()} review ${reviewWarningCount === 1 ? "warning needs" : "warnings need"} attention.`,
+      label: "Needs repair",
+      stage: "review",
+      state: "warning",
+      tone: "warning",
+    });
+  }
+  if (!input.hasListenerText) {
+    return stageReadiness({
+      action: "reviewBlocks",
+      detail: "Prepare listener-ready text before Preview, Teleprompt, or Theatre.",
+      label: "Review text",
+      stage: "review",
+      state: "ready",
+      tone: "neutral",
+    });
+  }
+  return stageReadiness({
+    action: "reviewBlocks",
+    detail: "Listener-ready text is available for Preview.",
+    label: "Complete",
+    stage: "review",
+    state: "complete",
+    tone: "success",
+  });
+}
+
+function previewStageReadiness(input: WorkspaceStageStatusInput): WorkspaceStageReadiness {
+  if (!input.hasVoice) {
+    return stageReadiness({
+      action: null,
+      detail: input.createDisabledReason ?? "Select a voice or resolve provider setup first.",
+      disabledReason:
+        input.createDisabledReason ?? "Select a voice or resolve provider setup first.",
+      label: "Voice unavailable",
+      stage: "preview",
+      state: "blocked",
+      tone: "warning",
+    });
+  }
+  if (input.audioLifecycle === "failed") {
+    return stageReadiness({
+      action: "retryGeneration",
+      detail: "The last generation attempt failed or was cancelled.",
+      label: "Retry generation",
+      stage: "preview",
+      state: "failed",
+      tone: "danger",
+    });
+  }
+  if (input.audioLifecycle === "queued" || input.audioLifecycle === "generating") {
+    return stageReadiness({
+      action: "previewSpeech",
+      detail: "Audio is generating. Playback unlocks when ready.",
+      label: "Generating",
+      stage: "preview",
+      state: "working",
+      tone: "info",
+    });
+  }
+  if (input.audioLifecycle === "ready") {
+    return stageReadiness({
+      action: "previewSpeech",
+      detail: "Audio is ready for Preview playback, Teleprompt audio-follow, and Theatre.",
+      label: "Complete",
+      stage: "preview",
+      state: "complete",
+      tone: "success",
+    });
+  }
+  if (isAudioRecoveryLifecycle(input.audioLifecycle)) {
+    const descriptor = generatedAudioLifecycleDescriptor(input.audioLifecycle);
+    return stageReadiness({
+      action: "previewSpeech",
+      detail: descriptor.disabledReason,
+      label: "Rebuild audio",
+      stage: "preview",
+      state: "warning",
+      tone: "warning",
+    });
+  }
+  return stageReadiness({
+    action: "previewSpeech",
+    detail: "Create & Listen will generate audio for the current source, voice, policy, and scope.",
+    label: "Create audio",
+    stage: "preview",
+    state: "ready",
+    tone: "neutral",
+  });
+}
+
+function telepromptStageReadiness(input: WorkspaceStageStatusInput): WorkspaceStageReadiness {
+  if (input.audioLifecycle === "failed") {
+    return stageReadiness({
+      action: "retryGeneration",
+      detail:
+        "The last generation attempt failed or was cancelled. Manual rehearsal remains available inside Teleprompt.",
+      label: "Retry generation",
+      stage: "teleprompt",
+      state: "failed",
+      tone: "danger",
+    });
+  }
+  if (input.audioLifecycle === "ready") {
+    return stageReadiness({
+      action: "openTeleprompt",
+      detail: "Cue rehearsal, recording, and audio-follow are available.",
+      label: "Ready",
+      stage: "teleprompt",
+      state: "ready",
+      tone: "success",
+    });
+  }
+  return stageReadiness({
+    action: "openTeleprompt",
+    detail: "Manual cue rehearsal is available. Create & Listen unlocks audio-follow and Theatre.",
+    label: "Rehearsal only",
+    stage: "teleprompt",
+    state: "manual",
+    tone: "info",
+  });
+}
+
+function theatreStageReadiness(input: WorkspaceStageStatusInput): WorkspaceStageReadiness {
+  if (input.audioLifecycle === "ready") {
+    return stageReadiness({
+      action: "openTheatre",
+      detail: "Generated audio is ready for distraction-light playback and follow-along reading.",
+      label: "Ready",
+      stage: "theatre",
+      state: "ready",
+      tone: "success",
+    });
+  }
+  if (input.audioLifecycle === "failed") {
+    return stageReadiness({
+      action: "retryGeneration",
+      detail: "The last generation attempt failed or was cancelled.",
+      label: "Retry generation",
+      stage: "theatre",
+      state: "failed",
+      tone: "danger",
+    });
+  }
+  if (input.audioLifecycle === "queued" || input.audioLifecycle === "generating") {
+    return stageReadiness({
+      action: null,
+      detail: "Audio is generating. Theatre unlocks when generated audio is ready.",
+      disabledReason: "Audio is generating. Theatre unlocks when generated audio is ready.",
+      label: "Generating",
+      stage: "theatre",
+      state: "working",
+      tone: "info",
+    });
+  }
+  if (isAudioRecoveryLifecycle(input.audioLifecycle)) {
+    const descriptor = generatedAudioLifecycleDescriptor(input.audioLifecycle);
+    return stageReadiness({
+      action: input.canCreate ? "createAndListen" : null,
+      detail: descriptor.disabledReason,
+      disabledReason: input.canCreate
+        ? undefined
+        : (input.createDisabledReason ?? descriptor.disabledReason),
+      label: "Rebuild audio",
+      stage: "theatre",
+      state: "blocked",
+      tone: "warning",
+    });
+  }
+  return stageReadiness({
+    action: input.canCreate ? "createAndListen" : null,
+    detail: "Create audio before Theatre can play the source.",
+    disabledReason: input.canCreate
+      ? undefined
+      : (input.createDisabledReason ?? "Create & Listen is not available yet."),
+    label: "Create audio",
+    stage: "theatre",
+    state: "blocked",
+    tone: "warning",
+  });
+}
+
+function listenerTextReadiness(stage: WorkspaceStage): WorkspaceStageReadiness {
+  return stageReadiness({
+    action: "reviewBlocks",
+    detail: "Prepare listener-ready text in Review before using this stage.",
+    label: "Review text",
+    stage,
+    state: "blocked",
+    tone: "warning",
+  });
+}
+
+function workspaceStageCurrentTask(
+  input: WorkspaceStageStatusInput,
+  blocker: WorkspaceStageBlocker | null,
+  readiness: WorkspaceStageReadiness,
+): WorkspaceStageCurrentTask {
+  const primaryAction = workspaceStageCurrentTaskAction(input, readiness, blocker);
+  return {
+    detail: blocker?.detail ?? readiness.detail,
+    disabledReason:
+      blocker?.disabledReason ??
+      readiness.disabledReason ??
+      (primaryAction === null ? readiness.detail : undefined),
+    primaryAction,
+    primaryLabel: primaryAction ? workspaceStageActionLabel(primaryAction) : null,
+    title: blocker?.title ?? workspaceStageCurrentTaskTitle(input, readiness),
+    tone: blocker ? blockerTone(blocker) : readiness.tone,
+  };
+}
+
+function workspaceStageCurrentTaskAction(
+  input: WorkspaceStageStatusInput,
+  readiness: WorkspaceStageReadiness,
+  blocker: WorkspaceStageBlocker | null,
+): WorkspaceStageActionId | null {
+  if (blocker?.correctiveAction) {
+    return blocker.correctiveAction;
+  }
+  if (input.stage === "theatre" && input.audioLifecycle === "ready" && input.canOpenCinema) {
+    return "openCinema";
+  }
+  if (input.stage === "preview") {
+    return previewCurrentTaskAction(input);
+  }
+  if (input.stage === "review") {
+    if (input.reviewRequired || !input.hasListenerText || readiness.state === "warning") {
+      return null;
+    }
+    return "previewSpeech";
+  }
+  if (input.stage === "teleprompt" && readiness.state === "manual" && input.canCreate) {
+    return "createAndListen";
+  }
+  if (input.stage === "teleprompt") {
+    return input.audioLifecycle === "ready" ? "openTheatre" : null;
+  }
+  if (input.stage === "intake" && input.hasSource) {
+    return "reviewBlocks";
+  }
+  return null;
+}
+
+function previewCurrentTaskAction(input: WorkspaceStageStatusInput): WorkspaceStageActionId | null {
+  if (input.audioLifecycle === "ready") {
+    return "openTheatre";
+  }
+  if (input.audioLifecycle === "queued" || input.audioLifecycle === "generating") {
+    return null;
+  }
+  if (input.canCreate) {
+    return "createAndListen";
+  }
+  return null;
+}
+
+function workspaceStageCurrentTaskTitle(
+  input: WorkspaceStageStatusInput,
+  readiness: WorkspaceStageReadiness,
+): string {
+  if (input.stage === "review" && readiness.state === "warning") {
+    return "Review needs repair";
+  }
+  if (input.stage === "preview" && input.audioLifecycle === "missing") {
+    return "Ready to create";
+  }
+  if (input.stage === "preview" && input.audioLifecycle === "ready") {
+    return "Audio ready";
+  }
+  if (input.stage === "teleprompt" && readiness.state === "manual") {
+    return "Rehearsal only";
+  }
+  if (input.stage === "theatre" && input.audioLifecycle === "ready") {
+    return "Theatre ready";
+  }
+  if (input.stage === "intake" && input.hasSource) {
+    return "Source ready";
+  }
+  return readiness.label;
+}
+
+function audioRecoveryBlocker(input: WorkspaceStageStatusInput): WorkspaceStageBlocker {
+  const descriptor = generatedAudioLifecycleDescriptor(input.audioLifecycle);
+  const id = audioRecoveryBlockerId(input.audioLifecycle);
+  return {
+    correctiveAction: input.canCreate ? "createAndListen" : null,
+    detail: descriptor.disabledReason,
+    disabledReason: input.canCreate
+      ? undefined
+      : (input.createDisabledReason ?? descriptor.disabledReason),
+    id,
+    title: audioRecoveryTitle(input.audioLifecycle),
+  };
+}
+
+function audioRecoveryBlockerId(lifecycle: GeneratedAudioLifecycleState): WorkspaceStageBlockerId {
+  if (lifecycle === "degraded") {
+    return "audioDegraded";
+  }
+  if (lifecycle === "archived") {
+    return "audioArchived";
+  }
+  return "audioStale";
+}
+
+function audioRecoveryTitle(lifecycle: GeneratedAudioLifecycleState): string {
+  if (lifecycle === "degraded") {
+    return "Audio degraded";
+  }
+  if (lifecycle === "archived") {
+    return "Audio archived";
+  }
+  return "Audio is stale";
+}
+
+function isAudioRecoveryLifecycle(lifecycle: GeneratedAudioLifecycleState): boolean {
+  return lifecycle === "stale" || lifecycle === "degraded" || lifecycle === "archived";
+}
+
+function blockerTone(blocker: WorkspaceStageBlocker): WorkspaceStageReadinessTone {
+  return blocker.id === "generationFailed" || blocker.id === "sourceFailed" ? "danger" : "warning";
+}
+
+function stageReadiness(readiness: WorkspaceStageReadiness): WorkspaceStageReadiness {
+  return readiness;
 }

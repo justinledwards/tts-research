@@ -1311,3 +1311,16 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update shell and Command Center tests
 - [x] Run project checks
 - Validation: focused shell/status tests passed; frontend typecheck passed; frontend test suite passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome lint warnings.
+
+## 2026-06-01 23:50 CEST - Narration Workbench Stage Model
+- [x] Extend canonical workspace stage readiness model
+- [x] Wire Current Task and stage card rendering
+- [x] Align Preview, Teleprompt, and status strip copy
+- [x] Add regression tests for readiness states
+- [x] Run project checks
+- Validation: focused workspace/status/preview/teleprompt/context/Theatre tests passed; frontend typecheck passed; `node --test scripts/ui-action-duplicate-waivers.test.mjs` passed; `pnpm check` passed with existing unrelated Biome lint warnings/infos; `pnpm e2e:workspace-flow` passed; `pnpm e2e:ui-actions` completed with findings and exit 0, with 0 failed activations, 0 no-ops, and 0 unclassified duplicate groups.
+
+## 2026-06-02 02:39 CEST - Commit Narration Workbench Stage Model
+- [x] Review worktree scope
+- [x] Stage work package
+- [x] Create commit

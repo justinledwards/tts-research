@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { WorkspaceStageStatus } from "../workspace";
+import { resolveWorkspaceStageStatus, type WorkspaceStageStatus } from "../workspace";
 import { ContextPanel } from "./ContextPanel";
 import { buildContextPanelTabs } from "./contextPanelModel";
 import { WorkspaceContextInspector } from "./WorkspaceContextInspector";
@@ -113,16 +113,14 @@ describe("context panel inspector contract", () => {
 });
 
 function stageStatus(): WorkspaceStageStatus {
-  return {
-    blocker: null,
-    description: "Review blocks before preview.",
-    inspectorTabs: ["review", "policy"],
-    label: "Review blocks",
-    nextAction: "previewSpeech",
-    primaryAction: "previewSpeech",
-    primaryLabel: "Preview speech",
-    reviewState: "ready",
-    reviewWarningCount: 0,
+  return resolveWorkspaceStageStatus({
+    audioLifecycle: "missing",
+    canCreate: true,
+    canOpenCinema: false,
+    hasListenerText: true,
+    hasSource: true,
+    hasVoice: true,
+    sourcePreparing: false,
     stage: "review",
-  };
+  });
 }

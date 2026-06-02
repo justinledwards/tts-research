@@ -65,17 +65,21 @@ export function resolvePreviewReadinessModel(
   const audio = resolveGeneratedAudioReadiness(input.generatedAudioLifecycle);
   const canOpenAudioSurface = input.generatedAudioLifecycle === "ready";
   const canCreate = input.canCreate && canAudition;
+  const canOpenTeleprompt = source.status === "ready" && spoken.status === "ready";
   const createDisabledReason = canCreate
     ? undefined
     : (firstBlockingDetail([source, spoken, voice]) ??
       input.createDisabledReason ??
       "Select a ready source or wait for the current run.");
+  const openTelepromptDisabledReason = canOpenTeleprompt
+    ? undefined
+    : firstBlockingDetail([source, spoken]);
 
   return {
     canAudition,
     canCreate,
     canOpenCinema: canOpenAudioSurface,
-    canOpenTeleprompt: source.status === "ready" && spoken.status === "ready",
+    canOpenTeleprompt,
     canOpenTheatre: canOpenAudioSurface,
     cinemaDisabledReason: canOpenAudioSurface ? undefined : audio.detail,
     confirmations: [
@@ -87,19 +91,14 @@ export function resolvePreviewReadinessModel(
       { label: "Format", value: input.outputFormat },
     ],
     createDisabledReason,
-    createHelper: canOpenAudioSurface
-      ? "Audio is ready. Recreate only if the source, voice, policy, or scope changed."
-      : "Generates current-scope audio, enables Preview playback, and unlocks Cinema.",
+    createHelper: createHelperForAudioLifecycle(input.generatedAudioLifecycle, canOpenAudioSurface),
     generatedPlaybackDisabledReason: canOpenAudioSurface ? undefined : audio.detail,
     openTelepromptDetail: canOpenAudioSurface
       ? "Teleprompt opens with generated cue playback ready."
-      : "Script-only now. Cue playback unlocks after audio.",
-    openTelepromptDisabledReason:
-      source.status === "ready" && spoken.status === "ready"
-        ? undefined
-        : firstBlockingDetail([source, spoken]),
+      : telepromptDetailForAudioLifecycle(input.generatedAudioLifecycle),
+    openTelepromptDisabledReason,
     openTheatreDisabledReason: canOpenAudioSurface ? undefined : audio.detail,
-    primaryLabel: canOpenAudioSurface ? "Create Again" : "Create & Listen",
+    primaryLabel: previewPrimaryLabel(input.generatedAudioLifecycle, canOpenAudioSurface),
     rows: [
       source,
       spoken,
@@ -199,6 +198,7 @@ function resolveVoiceReadiness(input: PreviewReadinessModelInput): PreviewReadin
 function resolveGeneratedAudioReadiness(
   lifecycle: GeneratedAudioLifecycleState,
 ): PreviewReadinessRow {
+  const descriptor = generatedAudioLifecycleDescriptor(lifecycle);
   if (lifecycle === "ready") {
     return {
       detail: "Audio ready. Preview playback and Cinema are available.",
@@ -209,7 +209,7 @@ function resolveGeneratedAudioReadiness(
   }
   if (lifecycle === "queued" || lifecycle === "generating") {
     return {
-      detail: "Audio is generating. Playback and Cinema unlock when ready.",
+      detail: descriptor.disabledReason,
       id: "audio",
       label: "Generated audio",
       status: "working",
@@ -217,19 +217,51 @@ function resolveGeneratedAudioReadiness(
   }
   if (lifecycle === "missing") {
     return {
-      detail: "Create & Listen before playing the full narration.",
+      detail: descriptor.disabledReason,
       id: "audio",
       label: "Generated audio",
       status: "waiting",
     };
   }
-  const descriptor = generatedAudioLifecycleDescriptor(lifecycle);
   return {
     detail: descriptor.disabledReason,
     id: "audio",
     label: "Generated audio",
     status: "blocked",
   };
+}
+
+function createHelperForAudioLifecycle(
+  lifecycle: GeneratedAudioLifecycleState,
+  canOpenAudioSurface: boolean,
+): string {
+  if (canOpenAudioSurface) {
+    return "Audio is ready. Recreate only if the source, voice, policy, or scope changed.";
+  }
+  if (lifecycle === "failed") {
+    return "Retry generation with the current source, voice, policy, and scope.";
+  }
+  return "Generates current-scope audio, enables Preview playback, and unlocks Cinema.";
+}
+
+function telepromptDetailForAudioLifecycle(lifecycle: GeneratedAudioLifecycleState): string {
+  if (lifecycle === "failed") {
+    return "Rehearsal only. Retry generation unlocks audio-follow.";
+  }
+  return "Rehearsal only. Audio-follow unlocks after Create & Listen.";
+}
+
+function previewPrimaryLabel(
+  lifecycle: GeneratedAudioLifecycleState,
+  canOpenAudioSurface: boolean,
+): string {
+  if (lifecycle === "failed") {
+    return "Retry generation";
+  }
+  if (canOpenAudioSurface) {
+    return "Create Again";
+  }
+  return "Create & Listen";
 }
 
 function firstBlockingDetail(rows: readonly PreviewReadinessRow[]): string | undefined {

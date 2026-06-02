@@ -103,6 +103,22 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
+    acceptedSurfaces: WORKSPACE_STAGE_SURFACES,
+    category: "allowed-surface-parity",
+    id: "wp67-workspace-stage-readiness-card-parity",
+    labelPatterns: [
+      "^IntakeComplete",
+      "^PreviewCreate audio",
+      "^ReviewComplete",
+      "^TelepromptRehearsal only",
+      "^TheatreCreate audio",
+    ],
+    owner: "workspace-ia",
+    reason:
+      "Canonical stage readiness cards intentionally repeat the same blocker and readiness copy across first-class workspace scenarios.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
     acceptedSurfaces: [
       "BookCinema",
       "Preview mini-player",
@@ -449,6 +465,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
       "Metadata",
       "Next",
       "Open",
+      "Open Review",
       "Rename",
       "Try the Studio",
       "Voice",

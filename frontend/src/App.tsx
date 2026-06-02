@@ -286,6 +286,7 @@ import {
   StatusChip,
   compactHitTargetClassName,
   minInteractiveSize,
+  type ButtonVariant,
   type StatusChipTone,
 } from "./design";
 import {
@@ -323,7 +324,6 @@ import {
   workspaceStageActionLabel,
   workspaceStageActionTestId,
   workspaceStageNavigationAction,
-  workspaceStagePrimaryActionDisplayLabel,
   type WorkspaceStageStatus,
   type WorkspaceStageActionId,
 } from "./features/workspace/stageActions";
@@ -3135,11 +3135,22 @@ export function App() {
     sourceMode,
     text,
   });
+  let hasListenerReadyText = false;
+  if (sourceMode === "book") {
+    hasListenerReadyText = selectedBookSource?.status === "ready" && Boolean(effectiveBookScope);
+  } else if (sourceMode === "fileUrl") {
+    hasListenerReadyText =
+      selectedPreparedSource?.status === "ready" &&
+      Boolean((selectedPreparedSource.speechText ?? selectedPreparedSource.text ?? "").trim());
+  } else {
+    hasListenerReadyText = text.trim().length > 0;
+  }
   const activeWorkbenchStageStatus = resolveWorkspaceStageStatus({
     audioLifecycle: generatedAudioLifecycle,
     canCreate: canCreateCurrentSource,
     canOpenCinema: canOpenCurrentCinema,
     createDisabledReason: createAndListenDisabledReason,
+    hasListenerText: hasListenerReadyText,
     hasSource: hasNarrationSource,
     hasVoice: !createAndListenCapabilityReason,
     reviewWarningCount: revisionHealthSummary.previewWarnings,
@@ -10100,7 +10111,10 @@ function SourceTextPanel({
         metadata={[
           { label: "Policy", value: speechPolicyProfileLabel },
           { label: "Voice", value: voiceProfileLabel },
-          { label: "Next", value: stageStatus.primaryLabel },
+          {
+            label: "Next",
+            value: stageStatus.currentTask.primaryLabel ?? stageStatus.currentTask.title,
+          },
         ]}
         scopeTitle={scopeTitle}
         sourceLifecycle={sourceLifecycle}
@@ -10112,16 +10126,10 @@ function SourceTextPanel({
       <WorkbenchStageStepper
         activeStage={contentMode}
         status={stageStatus}
+        onCreateAndListen={onCreateAndListen}
+        onOpenCinema={onOpenCinema}
         onStageAction={onStageAction}
       />
-
-      {stageStatus.blocker ? (
-        <WorkbenchBlockedBanner
-          status={stageStatus}
-          onCreateAndListen={onCreateAndListen}
-          onStageAction={onStageAction}
-        />
-      ) : null}
 
       {showSourceIntake ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading intake wizard..." />}>
@@ -10242,15 +10250,31 @@ function SourceTextPanel({
 function WorkbenchStageStepper({
   activeStage,
   status,
+  onCreateAndListen,
+  onOpenCinema,
   onStageAction,
 }: Readonly<{
   activeStage: WorkspaceStage;
   status: WorkspaceStageStatus;
+  onCreateAndListen: () => void;
+  onOpenCinema: () => void;
   onStageAction: (actionId: WorkspaceStageActionId) => void;
 }>) {
-  const nextActionLabel = status.nextAction
-    ? workspaceStageActionLabel(status.nextAction)
-    : workspaceStagePrimaryActionDisplayLabel(status.primaryAction);
+  const runTaskAction = (actionId: WorkspaceStageActionId | null) => {
+    if (!actionId) {
+      return;
+    }
+    if (actionId === "createAndListen" || actionId === "retryGeneration") {
+      onCreateAndListen();
+      return;
+    }
+    if (actionId === "openCinema") {
+      onOpenCinema();
+      return;
+    }
+    onStageAction(actionId);
+  };
+  const currentTaskActionDisabled = !status.currentTask.primaryAction;
   return (
     <section
       aria-label="Narration stage map"
@@ -10260,95 +10284,72 @@ function WorkbenchStageStepper({
       <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
-            Current task
+            Current task · {status.label}
           </p>
-          <h3 className="mt-1 text-base font-semibold text-[var(--vs-text)]">{status.label}</h3>
-          <p className="mt-1 max-w-3xl text-sm leading-6 vs-muted">{status.description}</p>
+          <h3 className="mt-1 text-base font-semibold text-[var(--vs-text)]">
+            {status.currentTask.title}
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 vs-muted">{status.currentTask.detail}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <StatusChip tone={status.blocker ? "warning" : "success"}>
-            {status.blocker ? status.blocker.title : "Ready"}
-          </StatusChip>
-          <StatusChip tone="info">Next: {nextActionLabel}</StatusChip>
+          <StatusChip tone={status.currentTask.tone}>{status.currentTask.title}</StatusChip>
+          {status.currentTask.primaryLabel ? (
+            <Button
+              disabled={currentTaskActionDisabled}
+              disabledReason={
+                currentTaskActionDisabled ? status.currentTask.disabledReason : undefined
+              }
+              onClick={() => {
+                runTaskAction(status.currentTask.primaryAction);
+              }}
+              size="sm"
+              variant={status.currentTask.tone === "danger" ? "destructive" : "primary"}
+            >
+              {status.currentTask.primaryLabel}
+            </Button>
+          ) : null}
         </div>
       </div>
       <div className="grid gap-2 sm:grid-cols-5" role="tablist" aria-label="Workbench stages">
         {WORKSPACE_STAGES.map((stage) => {
           const meta = workspaceStageMeta(stage);
+          const readiness = status.readinessByStage[stage];
           const selected = stage === activeStage;
+          const disabled = !readiness.action;
+          let stageButtonVariant: ButtonVariant = "secondary";
+          if (readiness.state === "failed") {
+            stageButtonVariant = "destructive";
+          }
+          if (selected) {
+            stageButtonVariant = "pinned";
+          }
           return (
             <Button
               align="start"
               aria-selected={selected}
               className="min-w-0 flex-col gap-1 px-3 py-2"
+              data-workspace-stage-readiness={readiness.state}
               data-testid={`workspace-stage-${stage}`}
+              disabled={disabled}
+              disabledReason={readiness.disabledReason ?? readiness.detail}
               key={stage}
               onClick={() => {
-                onStageAction(workspaceStageNavigationAction(stage));
+                runTaskAction(readiness.action);
               }}
               role="tab"
               selected={selected}
               size="sm"
-              variant={selected ? "pinned" : "secondary"}
+              variant={stageButtonVariant}
             >
-              <span className="truncate text-sm font-semibold">{meta.label}</span>
-              <span className="line-clamp-2 text-xs font-normal vs-muted">
-                {selected && status.blocker ? status.blocker.title : meta.description}
+              <span className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="truncate text-sm font-semibold">{meta.label}</span>
+                <StatusChip tone={readiness.tone}>{readiness.label}</StatusChip>
               </span>
+              <span className="line-clamp-2 text-xs font-normal vs-muted">{readiness.detail}</span>
             </Button>
           );
         })}
       </div>
-    </section>
-  );
-}
-
-function WorkbenchBlockedBanner({
-  status,
-  onCreateAndListen,
-  onStageAction,
-}: Readonly<{
-  status: WorkspaceStageStatus;
-  onCreateAndListen: () => void;
-  onStageAction: (actionId: WorkspaceStageActionId) => void;
-}>) {
-  if (!status.blocker) {
-    return null;
-  }
-  const correctiveAction = status.blocker.correctiveAction;
-  const actionLabel = correctiveAction
-    ? workspaceStageActionLabel(correctiveAction)
-    : status.primaryLabel;
-  const actionDisabled = correctiveAction === null;
-  return (
-    <section
-      aria-label="Current stage blocker"
-      className="flex flex-col gap-3 rounded-lg border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-4 text-[var(--vs-status-warning)] dark:border-[var(--vs-status-warning-border)] dark:bg-[var(--vs-status-warning-bg)] dark:text-[var(--vs-status-warning)] lg:flex-row lg:items-center lg:justify-between"
-      data-testid="workspace-stage-blocker"
-      data-workspace-stage-blocker={status.blocker.id}
-    >
-      <div className="min-w-0">
-        <p className="text-sm font-semibold">{status.blocker.title}</p>
-        <p className="mt-1 text-sm leading-6">{status.blocker.detail}</p>
-      </div>
-      <Button
-        disabled={actionDisabled}
-        disabledReason={actionDisabled ? "This state is waiting on the current task." : undefined}
-        onClick={() => {
-          if (!correctiveAction) {
-            return;
-          }
-          if (correctiveAction === "createAndListen" || correctiveAction === "retryGeneration") {
-            onCreateAndListen();
-            return;
-          }
-          onStageAction(correctiveAction);
-        }}
-        size="sm"
-        variant="primary"
-      >
-        {actionLabel}
-      </Button>
     </section>
   );
 }
@@ -10534,6 +10535,8 @@ function NarrationPreviewStage({
       previewSeekTargetSec !== null &&
       (playbackControls.seekTo ?? playbackControls.skipBy),
   );
+  const previewJumpAlreadyAtTarget =
+    previewSeekTargetSec !== null && Math.abs(previewSeekTargetSec - playbackCursorSec) < 0.25;
   const movePreviewBlock = (direction: -1 | 1) => {
     if (previewBlocks.length === 0 || selectedPreviewBlockIndex < 0) {
       return;
@@ -10553,6 +10556,9 @@ function NarrationPreviewStage({
     jumpToAudio: {
       ariaKeyShortcuts: "Alt+J",
       shortcutCommandId: "review.jumpToAudio",
+      dataAttributes: previewJumpAlreadyAtTarget
+        ? { "data-ui-noop-reason": "Already at the selected audio cue." }
+        : undefined,
       disabled: !canPreviewJump,
       disabledReason:
         previewPlaybackDisabledReason ??
@@ -13091,6 +13097,8 @@ function NarrationReviewWorkbench({
       reviewSeekTargetSec !== null &&
       (playbackControls.seekTo ?? playbackControls.skipBy),
   );
+  const reviewJumpAlreadyAtTarget =
+    reviewSeekTargetSec !== null && Math.abs(reviewSeekTargetSec - playbackCursorSec) < 0.25;
   const moveReviewBlock = (direction: -1 | 1) => {
     if (reviewBlocks.length === 0 || selectedBlockIndex < 0) {
       return;
@@ -13110,6 +13118,9 @@ function NarrationReviewWorkbench({
     jumpToAudio: {
       ariaKeyShortcuts: "Alt+J",
       shortcutCommandId: "review.jumpToAudio",
+      dataAttributes: reviewJumpAlreadyAtTarget
+        ? { "data-ui-noop-reason": "Already at the selected audio cue." }
+        : undefined,
       disabled: !canReviewJump,
       disabledReason:
         reviewPlaybackDisabledReason ??

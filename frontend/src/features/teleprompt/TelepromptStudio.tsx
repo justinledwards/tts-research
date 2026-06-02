@@ -316,6 +316,7 @@ export function TelepromptStudio({
     () =>
       buildTelepromptWorkModeModel({
         audioProgressPercent,
+        generatedAudioLifecycle: playbackLifecycle,
         mode: workMode,
         playbackAvailable: playbackControls.isAvailable,
         playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
@@ -325,6 +326,7 @@ export function TelepromptStudio({
       isPlaybackActive,
       playbackControls.isAvailable,
       playbackControls.isPlaying,
+      playbackLifecycle,
       workMode,
     ],
   );
@@ -333,6 +335,7 @@ export function TelepromptStudio({
       TELEPROMPT_WORK_MODES.map((mode) => {
         const optionModel = buildTelepromptWorkModeModel({
           audioProgressPercent,
+          generatedAudioLifecycle: playbackLifecycle,
           mode,
           playbackAvailable: playbackControls.isAvailable,
           playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
@@ -350,6 +353,7 @@ export function TelepromptStudio({
       isPlaybackActive,
       playbackControls.isAvailable,
       playbackControls.isPlaying,
+      playbackLifecycle,
       workMode,
     ],
   );
@@ -749,6 +753,7 @@ export function TelepromptStudio({
     (nextMode: TelepromptWorkMode) => {
       const nextModel = buildTelepromptWorkModeModel({
         audioProgressPercent,
+        generatedAudioLifecycle: playbackLifecycle,
         mode: nextMode,
         playbackAvailable: playbackControls.isAvailable,
         playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
@@ -766,6 +771,7 @@ export function TelepromptStudio({
       isPlaybackActive,
       playbackControls.isAvailable,
       playbackControls.isPlaying,
+      playbackLifecycle,
     ],
   );
 

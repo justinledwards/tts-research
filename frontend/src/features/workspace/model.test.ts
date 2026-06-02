@@ -24,6 +24,7 @@ import {
   workspaceStageActionLabel,
   workspaceStageNavigationAction,
   workspaceStagePrimaryAction,
+  type WorkspaceStageStatusInput,
 } from "./stageActions";
 
 describe("workspace stage model", () => {
@@ -215,15 +216,15 @@ describe("workspace stage model", () => {
   });
 
   it("derives task-first stage status, blockers, and inspector tabs", () => {
-    const waiting = resolveWorkspaceStageStatus({
-      audioLifecycle: "missing",
-      canCreate: false,
-      canOpenCinema: false,
-      hasSource: false,
-      hasVoice: true,
-      sourcePreparing: false,
-      stage: "preview",
-    });
+    const waiting = resolveWorkspaceStageStatus(
+      stageStatusInput({
+        canCreate: false,
+        canOpenCinema: false,
+        hasListenerText: false,
+        hasSource: false,
+        stage: "preview",
+      }),
+    );
 
     expect(waiting.blocker).toMatchObject({
       correctiveAction: "intakeSource",
@@ -232,15 +233,13 @@ describe("workspace stage model", () => {
     expect(waiting.primaryAction).toBe("intakeSource");
     expect(waiting.inspectorTabs).toContain("diagnostics");
 
-    const theatre = resolveWorkspaceStageStatus({
-      audioLifecycle: "ready",
-      canCreate: true,
-      canOpenCinema: true,
-      hasSource: true,
-      hasVoice: true,
-      sourcePreparing: false,
-      stage: "theatre",
-    });
+    const theatre = resolveWorkspaceStageStatus(
+      stageStatusInput({
+        audioLifecycle: "ready",
+        canOpenCinema: true,
+        stage: "theatre",
+      }),
+    );
 
     expect(theatre.blocker).toBeNull();
     expect(theatre.primaryAction).toBe("playPauseTheatre");
@@ -248,21 +247,150 @@ describe("workspace stage model", () => {
   });
 
   it("tracks review repair warnings without blocking Preview Speech", () => {
-    const review = resolveWorkspaceStageStatus({
-      audioLifecycle: "missing",
-      canCreate: true,
-      canOpenCinema: false,
-      hasSource: true,
-      hasVoice: true,
-      reviewWarningCount: 4,
-      sourcePreparing: false,
-      stage: "review",
-    });
+    const review = resolveWorkspaceStageStatus(
+      stageStatusInput({
+        reviewWarningCount: 4,
+        stage: "review",
+      }),
+    );
 
     expect(review.blocker).toBeNull();
     expect(review.nextAction).toBe("previewSpeech");
     expect(review.primaryAction).toBe("previewSpeech");
+    expect(review.currentTask).toMatchObject({
+      primaryAction: null,
+      title: "Review needs repair",
+    });
+    expect(review.readinessByStage.review).toMatchObject({
+      label: "Needs repair",
+      state: "warning",
+    });
     expect(review.reviewState).toBe("needsRepair");
     expect(review.reviewWarningCount).toBe(4);
   });
+
+  it("models missing audio as Preview creation, Teleprompt rehearsal, and Theatre blocked", () => {
+    const status = resolveWorkspaceStageStatus(stageStatusInput({ stage: "preview" }));
+
+    expect(status.currentTask).toMatchObject({
+      primaryAction: "createAndListen",
+      title: "Ready to create",
+    });
+    expect(status.readinessByStage.preview).toMatchObject({
+      action: "previewSpeech",
+      label: "Create audio",
+      state: "ready",
+    });
+    expect(status.readinessByStage.teleprompt).toMatchObject({
+      action: "openTeleprompt",
+      label: "Rehearsal only",
+      state: "manual",
+    });
+    expect(status.readinessByStage.theatre).toMatchObject({
+      action: "createAndListen",
+      label: "Create audio",
+      state: "blocked",
+    });
+  });
+
+  it("routes failed generation to retry without creating a separate stage", () => {
+    const status = resolveWorkspaceStageStatus(
+      stageStatusInput({ audioLifecycle: "failed", stage: "preview" }),
+    );
+
+    expect(status.blocker).toMatchObject({
+      correctiveAction: "retryGeneration",
+      id: "generationFailed",
+      title: "Audio generation failed",
+    });
+    expect(status.currentTask).toMatchObject({
+      primaryAction: "retryGeneration",
+      title: "Audio generation failed",
+    });
+    expect(status.readinessByStage.preview).toMatchObject({
+      action: "retryGeneration",
+      label: "Retry generation",
+      state: "failed",
+    });
+    expect(status.readinessByStage.theatre).toMatchObject({
+      action: "retryGeneration",
+      label: "Retry generation",
+      state: "failed",
+    });
+  });
+
+  it("blocks later stages when listener-ready text is missing", () => {
+    const status = resolveWorkspaceStageStatus(
+      stageStatusInput({ hasListenerText: false, stage: "preview" }),
+    );
+
+    expect(status.blocker).toMatchObject({
+      correctiveAction: "reviewBlocks",
+      id: "listenerTextMissing",
+    });
+    expect(status.readinessByStage.review).toMatchObject({
+      action: "reviewBlocks",
+      label: "Review text",
+      state: "ready",
+    });
+    expect(status.readinessByStage.preview).toMatchObject({
+      action: "reviewBlocks",
+      label: "Review text",
+      state: "blocked",
+    });
+    expect(status.readinessByStage.teleprompt).toMatchObject({
+      action: "reviewBlocks",
+      label: "Review text",
+      state: "blocked",
+    });
+    expect(status.readinessByStage.theatre).toMatchObject({
+      action: "reviewBlocks",
+      label: "Review text",
+      state: "blocked",
+    });
+  });
+
+  it("keeps Theatre blocked for stale or unavailable generated audio", () => {
+    const stale = resolveWorkspaceStageStatus(
+      stageStatusInput({ audioLifecycle: "stale", stage: "theatre" }),
+    );
+    const generating = resolveWorkspaceStageStatus(
+      stageStatusInput({ audioLifecycle: "generating", stage: "theatre" }),
+    );
+
+    expect(stale.blocker).toMatchObject({
+      correctiveAction: "createAndListen",
+      id: "audioStale",
+    });
+    expect(stale.readinessByStage.theatre).toMatchObject({
+      action: "createAndListen",
+      label: "Rebuild audio",
+      state: "blocked",
+    });
+    expect(generating.blocker).toMatchObject({
+      correctiveAction: null,
+      id: "audioMissing",
+    });
+    expect(generating.readinessByStage.theatre).toMatchObject({
+      action: null,
+      label: "Generating",
+      state: "working",
+    });
+  });
 });
+
+function stageStatusInput(
+  overrides: Partial<WorkspaceStageStatusInput> = {},
+): WorkspaceStageStatusInput {
+  return {
+    audioLifecycle: "missing",
+    canCreate: true,
+    canOpenCinema: false,
+    hasListenerText: true,
+    hasSource: true,
+    hasVoice: true,
+    sourcePreparing: false,
+    stage: "preview",
+    ...overrides,
+  };
+}

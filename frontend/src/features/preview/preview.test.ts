@@ -244,15 +244,21 @@ describe("preview readiness model", () => {
     );
 
     expect(missing.generatedPlaybackDisabledReason).toBe(
-      "Create & Listen before playing the full narration.",
+      "Generated audio is missing. Create & Listen before playback.",
     );
-    expect(missing.openTelepromptDetail).toBe("Script-only now. Cue playback unlocks after audio.");
+    expect(missing.openTelepromptDetail).toBe(
+      "Rehearsal only. Audio-follow unlocks after Create & Listen.",
+    );
     expect(missing.canOpenCinema).toBe(false);
     expect(generating.canOpenCinema).toBe(false);
     expect(generating.cinemaDisabledReason).toBe(
-      "Audio is generating. Playback and Cinema unlock when ready.",
+      "Audio is generating. Playback unlocks when ready.",
     );
     expect(failed.cinemaDisabledReason).toContain("Audio failed");
+    expect(failed.openTelepromptDetail).toBe(
+      "Rehearsal only. Retry generation unlocks audio-follow.",
+    );
+    expect(failed.primaryLabel).toBe("Retry generation");
     expect(stale.cinemaDisabledReason).toContain("Audio stale");
     expect(ready.canOpenCinema).toBe(true);
     expect(ready.openTelepromptDetail).toBe("Teleprompt opens with generated cue playback ready.");

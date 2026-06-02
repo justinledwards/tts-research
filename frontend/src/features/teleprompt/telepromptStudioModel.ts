@@ -1,4 +1,8 @@
 import type { StatusChipTone } from "../../design";
+import {
+  generatedAudioLifecycleDescriptor,
+  type GeneratedAudioLifecycleState,
+} from "../playback/generatedAudioLifecycle";
 import type { TelepromptCueSyncMode } from "./telepromptCueTimeline";
 
 export const TELEPROMPT_WORK_MODES = [
@@ -22,6 +26,7 @@ export interface TelepromptWorkModeModel {
 
 export interface BuildTelepromptWorkModeModelInput {
   readonly audioProgressPercent?: number;
+  readonly generatedAudioLifecycle?: GeneratedAudioLifecycleState;
   readonly mode: TelepromptWorkMode;
   readonly playbackAvailable: boolean;
   readonly playbackPlaying: boolean;
@@ -32,9 +37,10 @@ export function buildTelepromptWorkModeModel({
   mode,
   playbackAvailable,
   playbackPlaying,
+  generatedAudioLifecycle = playbackAvailable ? "ready" : "missing",
 }: BuildTelepromptWorkModeModelInput): TelepromptWorkModeModel {
   const base = workModeBase(mode);
-  const disabledReason = workModeDisabledReason(mode, playbackAvailable);
+  const disabledReason = workModeDisabledReason(mode, playbackAvailable, generatedAudioLifecycle);
   const detail = workModeDetail({
     audioProgressPercent,
     disabledReason,
@@ -81,9 +87,10 @@ function workModeBase(mode: TelepromptWorkMode): {
 function workModeDisabledReason(
   mode: TelepromptWorkMode,
   playbackAvailable: boolean,
+  generatedAudioLifecycle: GeneratedAudioLifecycleState,
 ): string | undefined {
   if ((mode === "audio-follow" || mode === "review-playback") && !playbackAvailable) {
-    return "Generated audio is missing. Create & Listen before using this mode.";
+    return generatedAudioLifecycleDescriptor(generatedAudioLifecycle).disabledReason;
   }
   return undefined;
 }

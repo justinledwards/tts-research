@@ -3,7 +3,7 @@ import type { VoiceCloningActivitySummary } from "../../appVoiceCloningHelpers";
 import type { VoiceJob } from "../../types";
 import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
 import { resolveWorkspaceDisclosure, type WorkspaceDisclosureModel } from "../workspace/disclosure";
-import type { WorkspaceStageStatus } from "../workspace/stageActions";
+import { resolveWorkspaceStageStatus, type WorkspaceStageStatus } from "../workspace/stageActions";
 import {
   compareNarrationPipelineState,
   resolveNarrationStatusModel,
@@ -290,16 +290,16 @@ function sourceLifecycle(
 
 function stageStatus(overrides: Partial<WorkspaceStageStatus> = {}): WorkspaceStageStatus {
   return {
-    blocker: null,
-    description: "Confirm the spoken form before creating audio.",
-    inspectorTabs: ["overview"],
-    label: "Preview",
-    nextAction: null,
-    primaryAction: "createAndListen",
-    primaryLabel: "Create & Listen",
-    reviewState: "ready",
-    reviewWarningCount: 0,
-    stage: "preview",
+    ...resolveWorkspaceStageStatus({
+      audioLifecycle: "missing",
+      canCreate: true,
+      canOpenCinema: false,
+      hasListenerText: true,
+      hasSource: true,
+      hasVoice: true,
+      sourcePreparing: false,
+      stage: "preview",
+    }),
     ...overrides,
   };
 }

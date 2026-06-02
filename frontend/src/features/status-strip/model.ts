@@ -19,7 +19,11 @@ import {
   type SourceLifecycleEnvelope,
 } from "../source-lifecycle/sourceLifecycle";
 import type { WorkspaceDisclosureModel } from "../workspace/disclosure";
-import type { WorkspaceStageStatus } from "../workspace/stageActions";
+import {
+  workspaceStageActionLabel,
+  type WorkspaceStageActionId,
+  type WorkspaceStageStatus,
+} from "../workspace/stageActions";
 
 export type NarrationPipelineState =
   | "blocked"
@@ -296,7 +300,7 @@ function resolveNarrationBlocker(
 function jobFailureBlocker(input: NarrationStatusModelInput): NarrationStatusBlocker | null {
   if (input.job?.status === "failed") {
     return {
-      actionLabel: input.canCreate ? "Retry audio" : null,
+      actionLabel: input.canCreate ? "Retry generation" : null,
       detail:
         input.job.error ??
         (input.job.progress.detail.trim() ? input.job.progress.detail : "Generation failed."),
@@ -309,7 +313,7 @@ function jobFailureBlocker(input: NarrationStatusModelInput): NarrationStatusBlo
 function jobCancelledBlocker(input: NarrationStatusModelInput): NarrationStatusBlocker | null {
   if (input.job?.status === "cancelled") {
     return {
-      actionLabel: input.canCreate ? "Retry audio" : null,
+      actionLabel: input.canCreate ? "Retry generation" : null,
       detail: input.job.error ?? "The active narration job was cancelled.",
       title: "Job cancelled",
     };
@@ -388,7 +392,7 @@ function resolvePrimaryAction(
   if ((state === "failed" || state === "cancelled" || state === "blocked") && input.canCreate) {
     return {
       id: "retry",
-      label: blocker?.actionLabel ?? "Retry audio",
+      label: blocker?.actionLabel ?? "Retry generation",
       tone: state === "failed" ? "danger" : "warning",
     };
   }
@@ -411,7 +415,7 @@ function resolvePrimaryCopy(
     return {
       detail: blocker?.detail ?? "Retry generation when the source and voice are ready.",
       label: "Generation failed",
-      message: `${blocker?.title ?? "Generation failed"}. ${blocker?.actionLabel ?? "Retry audio."}`,
+      message: `${blocker?.title ?? "Generation failed"}. ${blocker?.actionLabel ?? "Retry generation."}`,
     };
   }
   if (state === "blocked") {
@@ -635,28 +639,11 @@ function queueDetail(queue: NarrationQueueSnapshot): string {
   return `${queue.readyCount.toString()} ready, ${queue.generatingCount.toString()} generating, ${queue.totalSegments.toString()} total`;
 }
 
-function actionLabelForStageBlocker(actionId: string | null): string | null {
+function actionLabelForStageBlocker(actionId: WorkspaceStageActionId | null): string | null {
   if (!actionId) {
     return null;
   }
-  switch (actionId) {
-    case "createAndListen":
-    case "retryGeneration": {
-      return "Retry audio";
-    }
-    case "intakeSource": {
-      return "Choose source";
-    }
-    case "openCinema": {
-      return "Open Cinema";
-    }
-    case "reviewBlocks": {
-      return "Open Review";
-    }
-    default: {
-      return "Review next action";
-    }
-  }
+  return workspaceStageActionLabel(actionId);
 }
 
 function toneForAudioLifecycle(lifecycle: GeneratedAudioLifecycleState): StatusChipTone {

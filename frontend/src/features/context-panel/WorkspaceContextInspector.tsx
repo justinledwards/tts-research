@@ -316,7 +316,10 @@ function reviewSection(
                   value: review.activeBlockLabel,
                   detail: review.activeBlockDetail,
                 },
-                { label: "Next", value: status.primaryLabel },
+                {
+                  label: "Next",
+                  value: status.currentTask.primaryLabel ?? status.currentTask.title,
+                },
               ]
         }
       />

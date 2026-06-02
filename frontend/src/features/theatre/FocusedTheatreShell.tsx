@@ -17,6 +17,8 @@ export interface FocusedTheatreControls {
 }
 
 export interface FocusedTheatreAction {
+  readonly ariaLabel?: string;
+  readonly dataAttributes?: Record<string, string | undefined>;
   readonly disabled?: boolean;
   readonly disabledReason?: string;
   readonly label: string;
@@ -141,6 +143,7 @@ export function FocusedTheatreChrome({
   confidenceLabel,
   controlsVisible,
   persistentAction,
+  persistentActions,
   progress,
   scopeLabel,
   sourceLabel,
@@ -158,6 +161,7 @@ export function FocusedTheatreChrome({
   confidenceLabel?: string | null;
   controlsVisible: boolean;
   persistentAction?: FocusedTheatreAction;
+  persistentActions?: readonly FocusedTheatreAction[];
   progress?: FocusedTheatreProgress | null;
   scopeLabel?: string | null;
   sourceLabel?: string | null;
@@ -181,6 +185,7 @@ export function FocusedTheatreChrome({
           activeLabel={activeLabel}
           controlsVisible={controlsVisible}
           persistentAction={persistentAction}
+          persistentActions={persistentActions}
           scopeLabel={scopeLabel}
           sourceLabel={sourceLabel}
           statusLabel={statusLabel}
@@ -207,6 +212,7 @@ function FocusedTheatreTitleRow({
   activeLabel,
   controlsVisible,
   persistentAction,
+  persistentActions,
   scopeLabel,
   sourceLabel,
   statusLabel,
@@ -218,6 +224,7 @@ function FocusedTheatreTitleRow({
   activeLabel: string;
   controlsVisible: boolean;
   persistentAction?: FocusedTheatreAction;
+  persistentActions?: readonly FocusedTheatreAction[];
   scopeLabel?: string | null;
   sourceLabel?: string | null;
   statusLabel?: string | null;
@@ -227,6 +234,7 @@ function FocusedTheatreTitleRow({
   onToggleControls: () => void;
 }>) {
   const contextLabel = [sourceLabel, scopeLabel].filter(Boolean).join(" · ");
+  const titleActions = persistentActions ?? (persistentAction ? [persistentAction] : []);
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -269,7 +277,9 @@ function FocusedTheatreTitleRow({
         >
           {controlsVisible ? "Hide controls" : "Controls"}
         </Button>
-        {persistentAction ? <FocusedTheatreButton action={persistentAction} persistent /> : null}
+        {titleActions.map((action) => (
+          <FocusedTheatreButton action={action} key={action.testId ?? action.label} persistent />
+        ))}
       </div>
     </div>
   );
@@ -356,6 +366,7 @@ function FocusedTheatreButton({
 }: Readonly<{ action: FocusedTheatreAction; persistent?: boolean }>) {
   return (
     <Button
+      {...action.dataAttributes}
       aria-keyshortcuts={
         action.shortcutCommandId
           ? shortcutAriaKeyShortcutsForCommand(
@@ -364,6 +375,7 @@ function FocusedTheatreButton({
             )
           : undefined
       }
+      aria-label={action.ariaLabel}
       className={cx(
         action.primary || persistent
           ? "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-text-primary)] hover:bg-[var(--vs-border-subtle)]"
