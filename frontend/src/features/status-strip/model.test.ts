@@ -194,6 +194,74 @@ describe("resolveNarrationStatusModel", () => {
     expect(model.confidenceLabel).toBe("Waiting");
     expect(model.confidenceDetail).toBe("No check yet");
   });
+
+  it("keeps source readiness separate from stale generated audio", () => {
+    const model = resolveNarrationStatusModel(
+      input({
+        canCreate: true,
+        generatedAudioLifecycle: "stale",
+        sourceLifecycle: sourceLifecycle({
+          canonicalState: "narratable",
+          generatedAudioState: "stale",
+          sourceReadiness: {
+            detail: "Source metadata and structure are confirmed for Review.",
+            state: "ready",
+            title: "Existing source",
+          },
+        }),
+      }),
+    );
+
+    expect(model.chips.find((chip) => chip.id === "source")).toMatchObject({
+      tone: "success",
+      value: "Narratable",
+    });
+    expect(model.chips.find((chip) => chip.id === "audio")).toMatchObject({
+      tone: "warning",
+      value: "Needs rebuild",
+    });
+    expect(model.blocker).toMatchObject({
+      title: "Audio needs rebuild",
+    });
+  });
+
+  it("explains failed source readiness even when a managed source is selected", () => {
+    const model = resolveNarrationStatusModel(
+      input({
+        sourceLifecycle: sourceLifecycle({
+          canonicalState: "failed",
+          sourceId: "prepared-1",
+          sourceReadiness: {
+            detail: "Extraction failed after import.",
+            failureStage: "extraction",
+            state: "failed",
+            title: "Existing source",
+          },
+          title: "Existing source",
+        }),
+        stageStatus: stageStatus({
+          blocker: {
+            correctiveAction: "intakeSource",
+            detail: "Extraction failed after import.",
+            id: "sourceFailed",
+            technicalDetail: "Failure stage: extraction",
+            title: "Source needs attention",
+          },
+        }),
+      }),
+    );
+
+    expect(model.sourceTitle).toBe("Existing source");
+    expect(model.chips.find((chip) => chip.id === "source")).toMatchObject({
+      tone: "danger",
+      value: "extraction",
+    });
+    expect(model.blocker).toMatchObject({
+      detail: "Extraction failed after import.",
+      technicalDetail: "Failure stage: extraction",
+      title: "Source failed",
+    });
+  });
 });
 
 function input(overrides: Partial<NarrationStatusModelInput> = {}): NarrationStatusModelInput {
@@ -284,6 +352,11 @@ function sourceLifecycle(
     selectedScope: "Draft text",
     sourceId: "draft",
     sourceKind: "draft",
+    sourceReadiness: {
+      detail: "Source is ready for Review.",
+      state: "ready",
+      title: "Draft text",
+    },
     title: "Draft text",
     ...overrides,
   };

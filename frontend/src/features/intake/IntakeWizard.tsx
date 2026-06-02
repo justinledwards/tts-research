@@ -8,6 +8,7 @@ import type {
   BookScope,
   MarkdownParseMode,
   PreparedSource,
+  SourceReadinessConfirmationRequest,
   VoiceProfile,
 } from "../../types";
 import {
@@ -73,6 +74,9 @@ import {
 } from "./intakeWizardModel";
 
 export type IntakeDestinationStage = "review" | "preview";
+type IntakeBookImportResult = BookSource | undefined;
+type IntakePreparationResult = BookSource | PreparedSource | undefined;
+type IntakeDraftPreparationResult = PreparedSource | undefined;
 
 export interface IntakeWizardProps {
   bookSourceError: string | null;
@@ -95,27 +99,41 @@ export interface IntakeWizardProps {
   text: string;
   voiceProfileLabel: string;
   voiceProfiles: VoiceProfile[];
-  onImportBookFiles: (files: File[], options?: BookSourceImportOptions) => Promise<void>;
+  onImportBookFiles: (
+    files: File[],
+    options?: BookSourceImportOptions,
+  ) => Promise<IntakeBookImportResult>;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onOpenBookCinema: (source?: BookSource, scope?: BookScope) => void;
   onOpenPreparedSourceCinema: (source: PreparedSource) => void;
   onOpenVoiceCloning: () => void;
+  onConfirmBookSourceReadiness: (
+    source: BookSource,
+    request: SourceReadinessConfirmationRequest,
+  ) => Promise<BookSource>;
+  onConfirmPreparedSourceReadiness: (
+    source: PreparedSource,
+    request: SourceReadinessConfirmationRequest,
+  ) => Promise<PreparedSource>;
   onPrepareFile: (
     file: File,
     markdownParseMode: MarkdownParseMode,
     preparationTarget?: IntakePreparationTarget,
-  ) => Promise<void>;
+  ) => Promise<IntakePreparationResult>;
+  onPrepareDraftText: (
+    text: string,
+    markdownParseMode: MarkdownParseMode,
+  ) => Promise<IntakeDraftPreparationResult>;
   onPrepareUrl: (
     url: string,
     markdownParseMode: MarkdownParseMode,
     preparationTarget?: IntakePreparationTarget,
-  ) => Promise<void>;
+  ) => Promise<IntakePreparationResult>;
   onScopeChange: (scope: BookScope) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onStageChange: (stage: IntakeDestinationStage) => void;
   onUseBookSource: (source: BookSource, scope: BookScope) => void;
-  onUseDraftText: (text: string) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
   onVoiceProfileChange: (profileId: string) => void;
 }
@@ -153,6 +171,10 @@ type ExistingSourcesForIntakeInput = Readonly<{
   selectedBookSourceId: string | undefined;
   selectedPreparedSourceId: string | undefined;
 }>;
+
+type PreparedIntakeSource =
+  | { source: BookSource; type: "book" }
+  | { source: PreparedSource; type: "prepared" };
 
 function existingSourcesForIntake({
   bookSources,
@@ -225,13 +247,15 @@ export function IntakeWizard({
   onOpenBookCinema,
   onOpenPreparedSourceCinema,
   onOpenVoiceCloning,
+  onConfirmBookSourceReadiness,
+  onConfirmPreparedSourceReadiness,
+  onPrepareDraftText,
   onPrepareFile,
   onPrepareUrl,
   onScopeChange,
   onSpeechPolicyProfileChange,
   onStageChange,
   onUseBookSource,
-  onUseDraftText,
   onUsePreparedSource,
   onVoiceProfileChange,
 }: Readonly<IntakeWizardProps>) {
@@ -426,20 +450,99 @@ export function IntakeWizard({
     setActiveStep("source");
   }
 
-  async function openExistingSourceDestination(stage: IntakeDestinationStage) {
-    if (!selectedExistingSource) {
-      rejectSourceStep("Choose an existing source before opening the next stage.");
-      return;
+  function selectedPreparedIntakeSource(): PreparedIntakeSource | null {
+    if (selectedExistingSource) {
+      return selectedExistingSource.type === "book"
+        ? { source: selectedExistingSource.source, type: "book" }
+        : { source: selectedExistingSource.source, type: "prepared" };
     }
-    if (selectedExistingSource.type === "book") {
-      onUseBookSource(
-        selectedExistingSource.source,
-        currentBookScope ?? resolveDefaultBookScope(selectedExistingSource.source),
-      );
-    } else {
-      await onUsePreparedSource(selectedExistingSource.source);
+    if (selectedBookSource) {
+      return { source: selectedBookSource, type: "book" };
     }
-    onStageChange(stage);
+    if (selectedPreparedSource) {
+      return { source: selectedPreparedSource, type: "prepared" };
+    }
+    return null;
+  }
+
+  async function prepareSelectedSource(): Promise<PreparedIntakeSource | null> {
+    switch (sourceChoice) {
+      case "existing": {
+        const selected = selectedPreparedIntakeSource();
+        if (!selected) {
+          rejectSourceStep("Choose an existing source before continuing.");
+        }
+        return selected;
+      }
+      case "file": {
+        return prepareSelectedFile();
+      }
+      case "url": {
+        return prepareSelectedUrl();
+      }
+      case "pastedText": {
+        return preparePastedText();
+      }
+    }
+  }
+
+  async function prepareSelectedFile(): Promise<PreparedIntakeSource | null> {
+    if (!selectedFile) {
+      rejectSourceStep("Choose a file before continuing.");
+      return null;
+    }
+    const prepared = await (shouldRouteFileAsBook(selectedFile, sourceType, hasUserEditedSourceType)
+      ? onImportBookFiles([selectedFile], bookImportOptionsForTemplate(template))
+      : onPrepareFile(selectedFile, markdownParseMode, "prepared"));
+    return normalizePreparedIntakeSource(prepared) ?? selectedPreparedIntakeSource();
+  }
+
+  async function prepareSelectedUrl(): Promise<PreparedIntakeSource | null> {
+    const trimmedUrl = sourceUrl.trim();
+    if (!trimmedUrl) {
+      rejectSourceStep("Paste a URL before continuing.");
+      return null;
+    }
+    const prepared = await onPrepareUrl(
+      trimmedUrl,
+      markdownParseMode,
+      shouldRouteUrlAsBook(trimmedUrl, sourceType, hasUserEditedSourceType) ? "book" : "prepared",
+    );
+    return normalizePreparedIntakeSource(prepared) ?? selectedPreparedIntakeSource();
+  }
+
+  async function preparePastedText(): Promise<PreparedIntakeSource | null> {
+    if (!draftText.trim()) {
+      rejectSourceStep("Paste text before continuing.");
+      return null;
+    }
+    const prepared = await onPrepareDraftText(draftText, markdownParseMode);
+    return normalizePreparedIntakeSource(prepared) ?? selectedPreparedIntakeSource();
+  }
+
+  async function confirmPreparedSourceForReview(
+    prepared: PreparedIntakeSource,
+  ): Promise<PreparedIntakeSource | null> {
+    const request = sourceReadinessConfirmationRequest({
+      currentBookScope,
+      detected,
+      effectiveTitle,
+      language,
+      policyProfile: template.speechPolicyProfile,
+      prepared,
+      selectedVoiceProfileId,
+      sourceType,
+    });
+    if (prepared.type === "book") {
+      const confirmed = await onConfirmBookSourceReadiness(prepared.source, request);
+      return confirmed.sourceReadiness?.state === "ready"
+        ? { source: confirmed, type: "book" }
+        : null;
+    }
+    const confirmed = await onConfirmPreparedSourceReadiness(prepared.source, request);
+    return confirmed.sourceReadiness?.state === "ready"
+      ? { source: confirmed, type: "prepared" }
+      : null;
   }
 
   async function openDestination(stage: IntakeDestinationStage) {
@@ -462,48 +565,28 @@ export function IntakeWizard({
       return;
     }
 
-    if (sourceChoice === "file") {
-      if (!selectedFile) {
-        rejectSourceStep("Choose a file before opening the next stage.");
-        return;
-      }
-      await (shouldRouteFileAsBook(selectedFile, sourceType, hasUserEditedSourceType)
-        ? onImportBookFiles([selectedFile], bookImportOptionsForTemplate(template))
-        : onPrepareFile(selectedFile, markdownParseMode, "prepared"));
-      onStageChange(stage);
+    const prepared = await prepareSelectedSource();
+    if (!prepared) {
       return;
     }
-
-    if (sourceChoice === "url") {
-      if (!sourceUrl.trim()) {
-        rejectSourceStep("Paste a URL before opening the next stage.");
-        return;
-      }
-      await onPrepareUrl(
-        sourceUrl.trim(),
-        markdownParseMode,
-        shouldRouteUrlAsBook(sourceUrl.trim(), sourceType, hasUserEditedSourceType)
-          ? "book"
-          : "prepared",
+    const confirmed = await confirmPreparedSourceForReview(prepared);
+    if (!confirmed) {
+      setLocalError("Confirm source readiness before opening Review.");
+      setActiveStep("metadata");
+      return;
+    }
+    if (confirmed.type === "book") {
+      onUseBookSource(
+        confirmed.source,
+        currentBookScope ?? resolveDefaultBookScope(confirmed.source),
       );
-      onStageChange(stage);
-      return;
+    } else {
+      await onUsePreparedSource(confirmed.source);
     }
-
-    if (sourceChoice === "pastedText") {
-      if (!draftText.trim()) {
-        rejectSourceStep("Paste text before opening the next stage.");
-        return;
-      }
-      onUseDraftText(draftText);
-      onStageChange(stage);
-      return;
-    }
-
-    await openExistingSourceDestination(stage);
+    onStageChange(stage);
   }
 
-  function advanceWizard() {
+  async function advanceWizard() {
     if (activeStep === "destination") {
       return;
     }
@@ -513,6 +596,12 @@ export function IntakeWizard({
     ) {
       setActiveStep(readiness.recoveryStep);
       return;
+    }
+    if (activeStep === "source") {
+      const prepared = await prepareSelectedSource();
+      if (!prepared) {
+        return;
+      }
     }
     setLocalError(null);
     setActiveStep(nextIntakeStep(activeStep));
@@ -728,7 +817,9 @@ export function IntakeWizard({
             disabledReason={
               activeStep === "destination" ? "Choose Review or Preview from this step." : undefined
             }
-            onClick={advanceWizard}
+            onClick={() => {
+              void advanceWizard();
+            }}
             variant="primary"
           >
             Next
@@ -808,6 +899,50 @@ function applyIntakeVoiceChoice({
   if (match) {
     onVoiceProfileChange(match.id);
   }
+}
+
+function normalizePreparedIntakeSource(
+  value: BookSource | PreparedSource | undefined,
+): PreparedIntakeSource | null {
+  if (!value) {
+    return null;
+  }
+  return "sourceFile" in value
+    ? { source: value, type: "book" }
+    : { source: value, type: "prepared" };
+}
+
+function sourceReadinessConfirmationRequest({
+  currentBookScope,
+  detected,
+  effectiveTitle,
+  language,
+  policyProfile,
+  prepared,
+  selectedVoiceProfileId,
+  sourceType,
+}: Readonly<{
+  currentBookScope: BookScope | null;
+  detected: ReturnType<typeof detectIntakeSource>;
+  effectiveTitle: string;
+  language: string;
+  policyProfile: string;
+  prepared: PreparedIntakeSource;
+  selectedVoiceProfileId: string;
+  sourceType: IntakeSourceType;
+}>): SourceReadinessConfirmationRequest {
+  return {
+    language,
+    scope:
+      prepared.type === "book"
+        ? (currentBookScope ?? resolveDefaultBookScope(prepared.source))
+        : undefined,
+    sourceType,
+    speechPolicyProfile: policyProfile,
+    structureLabel: detected.structureLabel,
+    title: effectiveTitle,
+    voiceProfileId: selectedVoiceProfileId,
+  };
 }
 
 function IntakeIntentStep({

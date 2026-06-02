@@ -45,6 +45,29 @@ describe("source lifecycle model", () => {
     expect(failed.enabledDisabledReason).toBe("OCR failed");
   });
 
+  it("gates routes on source readiness before Review opens", () => {
+    const model = preparedSourceLifecycleModel({
+      ...preparedSourceFixture,
+      sourceReadiness: {
+        detail: "Confirm title, source type, language, and structure before Review opens.",
+        state: "needsMetadata",
+        title: "Example article",
+      },
+    });
+
+    expect(model.routeState).toMatchObject({
+      canCinema: false,
+      canPreview: false,
+      canReview: false,
+      reviewDisabledReason:
+        "Needs metadata: Confirm title, source type, language, and structure before Review opens.",
+    });
+    expect(model.envelope.sourceReadiness.state).toBe("needsMetadata");
+    expect(model.enabledDisabledReason).toBe(
+      "Needs metadata: Confirm title, source type, language, and structure before Review opens.",
+    );
+  });
+
   it("sorts mixed source cards by recency and marks generated audio", () => {
     const job: VoiceJob = {
       audioReadySegments: 1,

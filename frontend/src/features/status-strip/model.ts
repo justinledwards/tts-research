@@ -285,7 +285,11 @@ function resolveNarrationOperationalIssues({
       descriptorSeverity: severityForLifecycleTone(sourceDescriptor.tone),
       detail: sourceDescriptor.detail,
       hasSource: blocker?.id !== "waitingForSource",
-      sourceError: blocker?.id === "sourceFailed" ? blocker.detail : null,
+      sourceReadiness: input.sourceLifecycle.sourceReadiness,
+      sourceError:
+        blocker?.id === "sourceFailed" && input.sourceLifecycle.sourceReadiness.state !== "failed"
+          ? blocker.detail
+          : null,
       sourcePreparing: blocker?.id === "sourcePreparing",
     }),
     resolveOperationalReviewIssue({

@@ -1,4 +1,5 @@
 import type { GeneratedAudioLifecycleState } from "../playback/generatedAudioLifecycle";
+import { sourceReadinessLabel } from "./sourceLifecycleCore";
 import type {
   SourceAdapterKind,
   SourceKind,
@@ -13,9 +14,16 @@ import type {
 
 export {
   canonicalSourceLifecycleState,
+  fallbackBookSourceReadiness,
+  fallbackPreparedSourceReadiness,
   generatedAudioIsStale,
   hasSourcePolicyPinValues,
   SOURCE_LIFECYCLE_STATES,
+  sourceReadinessDetail,
+  sourceReadinessIsReady,
+  sourceReadinessLabel,
+  sourceReadinessState,
+  sourceReadinessTone,
 } from "./sourceLifecycleCore";
 export type {
   SourceAdapterKind,
@@ -279,13 +287,17 @@ export function sourcePolicyScopeLabel(scope: SourcePolicyScope): string {
 export function sourceLifecycleOptionLabel(envelope: SourceLifecycleEnvelope): string {
   return `${envelope.title} · ${sourceKindLabel(envelope.sourceKind)} · ${
     envelope.selectedScope
-  } · ${sourceLifecycleLabel(envelope.canonicalState)}`;
+  } · ${sourceReadinessLabel(envelope.sourceReadiness)} · ${sourceLifecycleLabel(
+    envelope.canonicalState,
+  )}`;
 }
 
 export function sourceLifecycleAriaLabel(envelope: SourceLifecycleEnvelope): string {
   return `${envelope.title}, ${sourceKindLabel(envelope.sourceKind)}, ${
     envelope.selectedScope
-  }, ${sourceLifecycleLabel(envelope.canonicalState)}, ${generatedAudioStateLabel(
+  }, ${sourceReadinessLabel(envelope.sourceReadiness)}, ${sourceLifecycleLabel(
+    envelope.canonicalState,
+  )}, ${generatedAudioStateLabel(
     envelope.generatedAudioState,
   )}, ${sourcePolicyScopeLabel(envelope.policyScope)}`;
 }

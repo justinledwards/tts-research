@@ -5,6 +5,9 @@ import {
   sourceKindLabel,
   sourceLifecycleDescriptor,
   sourcePolicyScopeLabel,
+  sourceReadinessDetail,
+  sourceReadinessLabel,
+  sourceReadinessTone,
   type SourceLifecycleEnvelope,
 } from "./sourceLifecycle";
 import type { ReactNode } from "react";
@@ -58,6 +61,9 @@ export function SourceLifecycleCard({
             >
               {envelope.title}
             </h4>
+            <StatusChip tone={sourceLifecycleTone(sourceReadinessTone(envelope.sourceReadiness))}>
+              {sourceReadinessLabel(envelope.sourceReadiness)}
+            </StatusChip>
             <StatusChip tone={sourceLifecycleTone(descriptor.tone)}>{descriptor.label}</StatusChip>
             <StatusChip tone={audioTone(envelope.generatedAudioState)}>
               {generatedAudioStateLabel(envelope.generatedAudioState)}
@@ -71,7 +77,17 @@ export function SourceLifecycleCard({
             {sourceKindLabel(envelope.sourceKind)} · {sourceAdapterLabel(envelope.adapterKind)} ·{" "}
             {envelope.selectedScope}
           </p>
-          <p className="vs-muted mt-1 text-xs leading-5">{descriptor.detail}</p>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            {sourceReadinessDetail(envelope.sourceReadiness)} {descriptor.detail}
+          </p>
+          {envelope.sourceReadiness.failureStage ? (
+            <p className="mt-2 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] px-3 py-2 text-xs leading-5 text-[var(--vs-status-danger)]">
+              Failure stage: {envelope.sourceReadiness.failureStage}.{" "}
+              {envelope.sourceReadiness.retryAction
+                ? `Recovery: ${envelope.sourceReadiness.retryAction}.`
+                : null}
+            </p>
+          ) : null}
         </div>
         {actions ? <div className="flex flex-wrap gap-2 sm:justify-end">{actions}</div> : null}
       </div>

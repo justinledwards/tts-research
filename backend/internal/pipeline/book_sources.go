@@ -129,8 +129,12 @@ func (service *Service) CreateBookSourceWithOptions(
 	if extractErr != nil {
 		book.Status = BookSourceStatusFailed
 		book.Error = extractErr.Error()
+		readiness := bookSourceFailedReadiness(book, SourceReadinessFailureExtraction, extractErr.Error())
+		book.SourceReadiness = &readiness
 	} else {
 		book = BookSourceFromIR(document, book)
+		readiness := bookSourceNeedsMetadataReadiness(book)
+		book.SourceReadiness = &readiness
 	}
 
 	service.updateBookSource(storedBookSource{BookSource: book})
@@ -169,6 +173,7 @@ func (service *Service) listProjectBookSources(projectID string, summary bool) (
 		if book.ProjectID == project.ID {
 			nextBook := book.BookSource
 			ensureBookStructureMetadata(&nextBook)
+			nextBook = ensureBookSourceReadiness(nextBook)
 			if summary {
 				nextBook = summarizeBookSource(nextBook)
 			}
@@ -192,6 +197,7 @@ func (service *Service) GetBookSource(id string) (BookSource, error) {
 	}
 	nextBook := book.BookSource
 	ensureBookStructureMetadata(&nextBook)
+	nextBook = ensureBookSourceReadiness(nextBook)
 	return nextBook, nil
 }
 
@@ -234,6 +240,38 @@ func (service *Service) UpdateBookSourceSpeechPolicy(id string, request SourceSp
 	}
 	book.UpdatedAt = time.Now().UTC()
 	ensureBookStructureMetadata(&book)
+	book = ensureBookSourceReadiness(book)
+	service.updateBookSource(storedBookSource{BookSource: book})
+	if err := service.writeBookSourceMetadata(book); err != nil {
+		return BookSource{}, err
+	}
+	return book, nil
+}
+
+func (service *Service) ConfirmBookSourceReadiness(id string, request SourceReadinessConfirmationRequest) (BookSource, error) {
+	service.mu.RLock()
+	stored, ok := service.books[strings.TrimSpace(id)]
+	service.mu.RUnlock()
+	if !ok {
+		return BookSource{}, ErrBookSourceNotFound
+	}
+	book := stored.BookSource
+	ensureBookStructureMetadata(&book)
+	if book.Status != BookSourceStatusReady {
+		readiness := bookSourceFailedReadiness(book, SourceReadinessFailureExtraction, book.Error)
+		book.SourceReadiness = &readiness
+		return book, nil
+	}
+	now := time.Now().UTC()
+	if title := strings.TrimSpace(request.Title); title != "" {
+		book.Title = title
+	}
+	if profile := strings.TrimSpace(request.SpeechPolicyProfile); profile != "" {
+		book.SourceSpeechPolicyProfile = profile
+	}
+	readiness := confirmedBookSourceReadiness(book, request, now)
+	book.SourceReadiness = &readiness
+	book.UpdatedAt = now
 	service.updateBookSource(storedBookSource{BookSource: book})
 	if err := service.writeBookSourceMetadata(book); err != nil {
 		return BookSource{}, err

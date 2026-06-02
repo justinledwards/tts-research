@@ -338,6 +338,21 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(source)
 	})
 
+	app.Post("/api/source-preps/:id/readiness/confirm", func(ctx fiber.Ctx) error {
+		var request pipeline.SourceReadinessConfirmationRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		source, err := service.ConfirmPreparedSourceReadiness(ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(source)
+	})
+
 	app.Post("/api/source-preps/:id/transcript", func(ctx fiber.Ctx) error {
 		source, err := service.RefreshPreparedSourceTranscript(ctx.Context(), ctx.Params("id"))
 		if err != nil {
@@ -415,6 +430,21 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		book, err := service.GetBookSource(ctx.Params("id"))
 		if err != nil {
 			return notFound(ctx, err)
+		}
+		return ctx.JSON(book)
+	})
+
+	app.Post("/api/book-sources/:id/readiness/confirm", func(ctx fiber.Ctx) error {
+		var request pipeline.SourceReadinessConfirmationRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		book, err := service.ConfirmBookSourceReadiness(ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrBookSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
 		}
 		return ctx.JSON(book)
 	})

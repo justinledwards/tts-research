@@ -1,4 +1,5 @@
 import type { GeneratedAudioLifecycleState } from "../playback/generatedAudioLifecycle";
+import type { SourceReadiness } from "../../types";
 import {
   operationalGeneratedAudioLifecycleReason,
   OPERATIONAL_RECOVERY_LABELS,
@@ -41,6 +42,9 @@ export type WorkspaceStageBlockerId =
   | "waitingForSource"
   | "sourcePreparing"
   | "sourceFailed"
+  | "sourceNeedsMetadata"
+  | "sourceStale"
+  | "sourceUnsupported"
   | "listenerTextMissing"
   | "reviewRequired"
   | "voiceMissing"
@@ -96,6 +100,7 @@ export interface WorkspaceStageStatusInput {
   readonly reviewRequired?: boolean;
   readonly reviewWarningCount?: number;
   readonly sourceError?: string | null;
+  readonly sourceReadiness?: SourceReadiness | null;
   readonly sourcePreparing: boolean;
   readonly stage: WorkspaceStage;
 }
@@ -325,6 +330,10 @@ function workspaceStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStage
       title: "No narration source selected",
     };
   }
+  const sourceReadinessBlocker = workspaceSourceReadinessBlocker(input);
+  if (sourceReadinessBlocker) {
+    return sourceReadinessBlocker;
+  }
   if (input.reviewRequired) {
     return {
       correctiveAction: "reviewBlocks",
@@ -359,6 +368,58 @@ function workspaceStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStage
     };
   }
   return workspaceAudioStageBlocker(input);
+}
+
+function workspaceSourceReadinessBlocker(
+  input: WorkspaceStageStatusInput,
+): WorkspaceStageBlocker | null {
+  if (
+    input.stage === "intake" ||
+    !input.sourceReadiness ||
+    input.sourceReadiness.state === "ready"
+  ) {
+    return null;
+  }
+  if (input.sourceReadiness.state === "needsMetadata") {
+    return {
+      correctiveAction: "intakeSource",
+      detail: input.sourceReadiness.detail,
+      id: "sourceNeedsMetadata",
+      recovery: operationalRecovery("openIntake", true),
+      title: "Source metadata needs confirmation",
+    };
+  }
+  if (input.sourceReadiness.state === "stale") {
+    return {
+      correctiveAction: "intakeSource",
+      detail: input.sourceReadiness.staleReason ?? input.sourceReadiness.detail,
+      id: "sourceStale",
+      recovery: operationalRecovery("openIntake", true),
+      title: "Source readiness is stale",
+    };
+  }
+  if (input.sourceReadiness.state === "unsupported") {
+    return {
+      correctiveAction: "intakeSource",
+      detail: input.sourceReadiness.detail,
+      id: "sourceUnsupported",
+      recovery: operationalRecovery("openIntake", true),
+      title: "Source is unsupported",
+    };
+  }
+  if (input.sourceReadiness.state === "failed") {
+    return {
+      correctiveAction: "intakeSource",
+      detail: input.sourceReadiness.detail,
+      id: "sourceFailed",
+      recovery: operationalRecovery("openIntake", true),
+      technicalDetail: input.sourceReadiness.failureStage
+        ? `Failure stage: ${input.sourceReadiness.failureStage}`
+        : undefined,
+      title: "Source needs attention",
+    };
+  }
+  return null;
 }
 
 function workspaceAudioStageBlocker(
@@ -587,7 +648,44 @@ function sourceGateReadiness(
       tone: stage === "intake" ? "neutral" : "warning",
     });
   }
-  return null;
+  return sourceReadinessGateReadiness(input.sourceReadiness, stage);
+}
+
+function sourceReadinessGateReadiness(
+  readiness: SourceReadiness | null | undefined,
+  stage: WorkspaceStage,
+): WorkspaceStageReadiness | null {
+  if (!readiness || readiness.state === "ready") {
+    return null;
+  }
+  if (readiness.state === "needsMetadata") {
+    return stageReadiness({
+      action: "intakeSource",
+      detail: readiness.detail,
+      label: stage === "intake" ? "Confirm metadata" : "Blocked",
+      stage,
+      state: stage === "intake" ? "ready" : "blocked",
+      tone: "warning",
+    });
+  }
+  if (readiness.state === "stale") {
+    return stageReadiness({
+      action: "intakeSource",
+      detail: readiness.staleReason ?? readiness.detail,
+      label: "Source stale",
+      stage,
+      state: "blocked",
+      tone: "warning",
+    });
+  }
+  return stageReadiness({
+    action: "intakeSource",
+    detail: readiness.detail,
+    label: readiness.state === "unsupported" ? "Unsupported" : "Source issue",
+    stage,
+    state: "failed",
+    tone: "danger",
+  });
 }
 
 function reviewStageReadiness(

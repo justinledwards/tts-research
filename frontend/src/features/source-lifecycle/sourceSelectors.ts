@@ -7,8 +7,10 @@ import {
   sourceKindLabel,
   sourceLifecycleAriaLabel,
   sourceLifecycleDescriptor,
-  sourceLifecycleLabel,
   sourceLifecycleOptionLabel,
+  sourceReadinessDetail,
+  sourceReadinessIsReady,
+  sourceReadinessLabel,
   sourceLifecycleTypeLabel,
   type SourceAdapterKind,
   type SourceExtractionState,
@@ -160,7 +162,7 @@ export function bookSourceLifecycleModel(
   } = {},
 ): SourceCardModel {
   const envelope = bookSourceLifecycleEnvelope(source, options);
-  const routeState = readyRouteState(source.status === "ready", source.error, "Book source");
+  const routeState = readyRouteState(envelope, source.error);
   const narratableScopeCount = envelope.narratableUnitCount ?? 0;
   return sourceCardModelFromEnvelope(envelope, {
     appliesToCopy: sourceAppliesToCopy(envelope),
@@ -190,7 +192,7 @@ export function preparedSourceLifecycleModel(
   } = {},
 ): SourceCardModel {
   const envelope = preparedSourceLifecycleEnvelope(source, options);
-  const routeState = readyRouteState(source.status === "ready", source.error, "Prepared source");
+  const routeState = readyRouteState(envelope, source.error);
   const narratableScopeCount = source.summary.spokenBlockCount;
   return sourceCardModelFromEnvelope(envelope, {
     appliesToCopy: sourceAppliesToCopy(envelope),
@@ -214,7 +216,7 @@ export function sourceSelectorOption(
   owner: SourceSelectorOwner,
 ): SourceLifecycleSelectorOption {
   return {
-    badgeLabel: sourceLifecycleLabel(envelope.canonicalState),
+    badgeLabel: sourceReadinessLabel(envelope.sourceReadiness),
     detail: `${sourceAdapterLabel(envelope.adapterKind)} · ${envelope.selectedScope} · ${
       envelope.wordCount === undefined
         ? "size unknown"
@@ -296,11 +298,14 @@ function sourceCardModelFromEnvelope(
 }
 
 function readyRouteState(
-  isReady: boolean,
+  envelope: SourceLifecycleEnvelope,
   error: string | undefined,
-  noun: string,
 ): SourceLifecycleRouteState {
-  const disabledReason = isReady ? undefined : (error ?? `${noun} is not ready yet.`);
+  const isReady = sourceReadinessIsReady(envelope.sourceReadiness);
+  const disabledReason = isReady
+    ? undefined
+    : (error ??
+      `${sourceReadinessLabel(envelope.sourceReadiness)}: ${sourceReadinessDetail(envelope.sourceReadiness)}`);
   return {
     canCinema: isReady,
     canPreview: isReady,

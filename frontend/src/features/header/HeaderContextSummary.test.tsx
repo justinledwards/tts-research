@@ -105,6 +105,11 @@ function sourceLifecycleFixture(
     selectedScope: "Full source",
     sourceId: "source-1",
     sourceKind: "document",
+    sourceReadiness: {
+      detail: "Source is ready for Review.",
+      state: "ready",
+      title: "Long source title",
+    },
     title: "Long source title",
   };
 }

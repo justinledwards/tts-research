@@ -7,8 +7,9 @@ const noop = () => {
   // Test callback.
 };
 
-const asyncNoop = async () => {
+const asyncNoop = (): Promise<undefined> => {
   // Test callback.
+  return Promise.resolve(void 0);
 };
 
 describe("IntakeWizard", () => {
@@ -56,6 +57,30 @@ describe("IntakeWizard", () => {
     expect(markup).toContain("Existing source");
     expect(markup).toContain("Example article");
     expect(markup).toContain("Full source");
+  });
+
+  it("shows existing source readiness and blocks reuse until metadata is confirmed", () => {
+    const prepared = makePreparedSource({
+      sourceReadiness: {
+        detail: "Confirm title, source type, language, and structure before Review opens.",
+        state: "needsMetadata",
+        title: "Example article",
+      },
+    });
+    const markup = renderIntake({
+      initialSourceChoice: "existing",
+      initialStep: "destination",
+      preparedSources: [prepared],
+      selectedPreparedSource: prepared,
+      sourceMode: "fileUrl",
+    });
+
+    expect(markup).toContain("Existing source is not ready");
+    expect(markup).toContain(
+      "Needs metadata: Confirm title, source type, language, and structure before Review opens.",
+    );
+    expect(markup).toContain("Choose a ready source");
+    expect(markup).not.toContain('data-testid="intake-wizard-open-review"');
   });
 
   it("shows metadata as confirmation first", () => {
@@ -130,13 +155,15 @@ function renderIntake(overrides: Partial<IntakeWizardProps> = {}): string {
     onOpenBookCinema: noop,
     onOpenPreparedSourceCinema: noop,
     onOpenVoiceCloning: noop,
+    onConfirmBookSourceReadiness: (source) => Promise.resolve(source),
+    onConfirmPreparedSourceReadiness: (source) => Promise.resolve(source),
+    onPrepareDraftText: asyncNoop,
     onPrepareFile: asyncNoop,
     onPrepareUrl: asyncNoop,
     onScopeChange: noop,
     onSpeechPolicyProfileChange: noop,
     onStageChange: noop,
     onUseBookSource: noop,
-    onUseDraftText: noop,
     onUsePreparedSource: asyncNoop,
     onVoiceProfileChange: noop,
     ...overrides,

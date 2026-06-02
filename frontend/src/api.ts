@@ -32,6 +32,7 @@ import type {
   SpeechPolicyDefinition,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
+  SourceReadinessConfirmationRequest,
   SourceSpeechPolicyUpdateRequest,
   UpsertSpeechPolicyProfileRequest,
   SystemMetrics,
@@ -569,6 +570,21 @@ export async function getBookSourceScope(
   return response.json() as Promise<BookSourceScopeContent>;
 }
 
+export async function confirmBookSourceReadiness(
+  bookSourceId: string,
+  request: SourceReadinessConfirmationRequest,
+): Promise<BookSource> {
+  const response = await fetch(`${apiBaseUrl}/api/book-sources/${bookSourceId}/readiness/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<BookSource>;
+}
+
 export async function createBookSource(
   projectId: string,
   files: File | File[],
@@ -665,6 +681,24 @@ export async function createPreparedSourceJob(
 
 export async function getPreparedSource(id: string): Promise<PreparedSource> {
   const response = await fetch(`${apiBaseUrl}/api/source-preps/${id}`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return normalizePreparedSource((await response.json()) as PreparedSource);
+}
+
+export async function confirmPreparedSourceReadiness(
+  preparedSourceId: string,
+  request: SourceReadinessConfirmationRequest,
+): Promise<PreparedSource> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/source-preps/${preparedSourceId}/readiness/confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
   if (!response.ok) {
     throw await apiError(response);
   }

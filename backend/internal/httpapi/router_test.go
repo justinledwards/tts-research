@@ -851,6 +851,55 @@ func TestPreparedSourceMultipartMarkdownParseMode(t *testing.T) {
 	}
 }
 
+func TestPreparedSourceReadinessConfirmationEndpoint(t *testing.T) {
+	t.Parallel()
+
+	service, _, _ := newServiceWithContentIRDirs(t)
+	app := httpapi.NewRouter(service)
+	source, err := service.CreatePreparedSource(t.Context(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		SourceName: "endpoint.txt",
+		Text:       "Endpoint readiness confirmation text.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if source.SourceReadiness == nil || source.SourceReadiness.State != pipeline.SourceReadinessStateNeedsMetadata {
+		t.Fatalf("initial readiness = %#v, want needsMetadata", source.SourceReadiness)
+	}
+
+	request, err := http.NewRequest(
+		http.MethodPost,
+		"/api/source-preps/"+source.ID+"/readiness/confirm",
+		bytes.NewBufferString(`{"title":"Endpoint source","sourceType":"document","language":"en-US","structureChoice":"full","structureLabel":"1 spoken block","speechPolicyProfile":"Enterprise"}`),
+	)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusOK, payload)
+	}
+	var confirmed pipeline.PreparedSource
+	if err := json.NewDecoder(response.Body).Decode(&confirmed); err != nil {
+		t.Fatalf("Decode returned error: %v", err)
+	}
+	if confirmed.SourceReadiness == nil || confirmed.SourceReadiness.State != pipeline.SourceReadinessStateReady {
+		t.Fatalf("confirmed readiness = %#v, want ready", confirmed.SourceReadiness)
+	}
+	if confirmed.SourceReadiness.Title != "Endpoint source" ||
+		confirmed.SourceReadiness.Language != "en-US" ||
+		confirmed.SourceReadiness.SourceType != "document" {
+		t.Fatalf("confirmed readiness facts = %#v, want confirmed metadata", confirmed.SourceReadiness)
+	}
+}
+
 func TestVoiceProfileTranscriptRefreshEndpoints(t *testing.T) {
 	t.Parallel()
 

@@ -1,4 +1,4 @@
-import type { BookScope, BookSource, PreparedSource, VoiceJob } from "../../types";
+import type { BookScope, BookSource, PreparedSource, SourceReadiness, VoiceJob } from "../../types";
 import { bookScopeLabel, bookSourceName } from "../book-cinema/model";
 import {
   generatedAudioLifecycleFromJob,
@@ -6,8 +6,12 @@ import {
 } from "../playback/generatedAudioLifecycle";
 import {
   canonicalSourceLifecycleState,
+  fallbackBookSourceReadiness,
+  fallbackPreparedSourceReadiness,
   generatedAudioIsStale,
   hasSourcePolicyPinValues,
+  sourceReadinessDetail,
+  sourceReadinessLabel,
   type SourceAdapterKind,
   type SourceExtractionState,
   type SourceKind,
@@ -35,6 +39,7 @@ export function bookSourceLifecycleEnvelope(
   });
   const narratableScopeCount = bookNarratableScopeCount(source);
   const extractionState = extractionStateForStatus(source.status, bookHasExtractedContent(source));
+  const sourceReadiness = fallbackBookSourceReadiness(source);
   const narrationState = narrationStateForSource({
     generatedAudioState,
     narratableScopeCount,
@@ -50,7 +55,7 @@ export function bookSourceLifecycleEnvelope(
     activeBlockId: options.activeBlockId ?? null,
     adapterKind: bookAdapterKind(source.kind),
     canonicalState,
-    disabledReason: source.status === "ready" ? undefined : source.error,
+    disabledReason: sourceReadinessDisabledReason(sourceReadiness, source.error),
     extractionState,
     generatedAudioState,
     isActive: Boolean(options.isActive),
@@ -63,6 +68,7 @@ export function bookSourceLifecycleEnvelope(
     selectedScope: options.selectedScope ? bookScopeLabel(options.selectedScope) : "Default scope",
     sourceId: source.id,
     sourceKind: source.kind === "html" ? "website" : "book",
+    sourceReadiness,
     title: bookSourceName(source),
     updatedAt: source.updatedAt,
     wordCount: source.wordCount,
@@ -89,6 +95,7 @@ export function preparedSourceLifecycleEnvelope(
     source.status,
     source.blockCount > 0 || source.wordCount > 0 || Boolean(source.text),
   );
+  const sourceReadiness = fallbackPreparedSourceReadiness(source);
   const narrationState = narrationStateForSource({
     generatedAudioState,
     narratableScopeCount: source.summary.spokenBlockCount,
@@ -104,7 +111,7 @@ export function preparedSourceLifecycleEnvelope(
     activeBlockId: options.activeBlockId ?? null,
     adapterKind: preparedSourceAdapterKind(source),
     canonicalState,
-    disabledReason: source.status === "ready" ? undefined : source.error,
+    disabledReason: sourceReadinessDisabledReason(sourceReadiness, source.error),
     extractionState,
     generatedAudioState,
     isActive: Boolean(options.isActive),
@@ -117,6 +124,7 @@ export function preparedSourceLifecycleEnvelope(
     selectedScope: "Full source",
     sourceId: source.id,
     sourceKind: preparedSourceKind(source),
+    sourceReadiness,
     title: source.title ?? source.sourceName,
     updatedAt: source.updatedAt,
     wordCount: source.wordCount,
@@ -157,9 +165,31 @@ export function draftSourceLifecycleEnvelope({
     selectedScope: "Draft text",
     sourceId: "draft",
     sourceKind: "draft",
+    sourceReadiness: {
+      confidence: hasText ? "medium" : "low",
+      detail: hasText
+        ? "Draft text is available locally."
+        : "Choose, paste, or prepare a source before continuing.",
+      sourceType: "draft",
+      state: hasText ? "ready" : "noSource",
+      title: "Draft text",
+    },
     title: "Draft text",
     wordCount: hasText ? text.trim().split(/\s+/).length : 0,
   };
+}
+
+function sourceReadinessDisabledReason(
+  readiness: SourceReadiness,
+  legacyError: string | undefined,
+): string | undefined {
+  if (readiness.state === "ready") {
+    return undefined;
+  }
+  if (legacyError) {
+    return legacyError;
+  }
+  return `${sourceReadinessLabel(readiness)}: ${sourceReadinessDetail(readiness)}`;
 }
 
 function sourceGeneratedAudioState({

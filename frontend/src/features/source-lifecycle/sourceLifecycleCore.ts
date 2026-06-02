@@ -1,4 +1,10 @@
 import type { GeneratedAudioLifecycleState } from "../playback/generatedAudioLifecycle";
+import type {
+  BookSource,
+  PreparedSource,
+  SourceReadiness,
+  SourceReadinessState,
+} from "../../types";
 
 export const SOURCE_LIFECYCLE_STATES = [
   "new",
@@ -101,6 +107,7 @@ export interface SourceLifecycleEnvelope {
   sourceId: string;
   sourceKind: SourceKind;
   adapterKind: SourceAdapterKind;
+  sourceReadiness: SourceReadiness;
   title: string;
   language: string;
   selectedScope: string;
@@ -198,6 +205,118 @@ export function canonicalSourceLifecycleState({
   return "new";
 }
 
+export function sourceReadinessIsReady(readiness: SourceReadiness | null | undefined): boolean {
+  return sourceReadinessState(readiness) === "ready";
+}
+
+export function sourceReadinessState(
+  readiness: SourceReadiness | null | undefined,
+): SourceReadinessState {
+  return readiness?.state ?? "ready";
+}
+
+export function sourceReadinessLabel(readiness: SourceReadiness | null | undefined): string {
+  switch (sourceReadinessState(readiness)) {
+    case "failed": {
+      return "Source failed";
+    }
+    case "importing": {
+      return "Importing";
+    }
+    case "needsMetadata": {
+      return "Needs metadata";
+    }
+    case "noSource": {
+      return "No source";
+    }
+    case "ready": {
+      return "Source ready";
+    }
+    case "stale": {
+      return "Source stale";
+    }
+    case "unsupported": {
+      return "Unsupported";
+    }
+  }
+}
+
+export function sourceReadinessDetail(readiness: SourceReadiness | null | undefined): string {
+  return readiness?.detail ?? "Source is ready for Review.";
+}
+
+export function sourceReadinessTone(
+  readiness: SourceReadiness | null | undefined,
+): SourceLifecycleTone {
+  switch (sourceReadinessState(readiness)) {
+    case "failed":
+    case "unsupported": {
+      return "danger";
+    }
+    case "importing": {
+      return "info";
+    }
+    case "needsMetadata":
+    case "stale": {
+      return "warning";
+    }
+    case "ready": {
+      return "success";
+    }
+    case "noSource": {
+      return "neutral";
+    }
+  }
+}
+
+export function fallbackPreparedSourceReadiness(source: PreparedSource): SourceReadiness {
+  if (source.sourceReadiness) {
+    return source.sourceReadiness;
+  }
+  if (source.status === "failed") {
+    return {
+      confidence: "low",
+      detail: source.error ?? "Source preparation failed.",
+      failureStage: "structure",
+      retryAction: "retryImport",
+      sourceType: preparedSourceReadinessType(source),
+      state: "failed",
+      title: source.title ?? source.sourceName,
+    };
+  }
+  return {
+    confidence: "high",
+    detail: "Source is ready for Review.",
+    sourceType: preparedSourceReadinessType(source),
+    state: "ready",
+    title: source.title ?? source.sourceName,
+  };
+}
+
+export function fallbackBookSourceReadiness(source: BookSource): SourceReadiness {
+  if (source.sourceReadiness) {
+    return source.sourceReadiness;
+  }
+  if (source.status === "failed") {
+    return {
+      confidence: "low",
+      detail: source.error ?? "Source extraction failed.",
+      failureStage: "extraction",
+      retryAction: "retryImport",
+      sourceType: source.kind === "html" ? "webpage" : "book",
+      state: "failed",
+      title: source.title ?? source.sourceFile,
+    };
+  }
+  return {
+    confidence: "high",
+    detail: "Source is ready for Review.",
+    sourceType: source.kind === "html" ? "webpage" : "book",
+    state: "ready",
+    title: source.title ?? source.sourceFile,
+  };
+}
+
 export function hasSourcePolicyPinValues({
   profile,
   overrides = {},
@@ -230,4 +349,17 @@ function parseTime(timestamp: string | null | undefined): number | null {
   }
   const value = Date.parse(timestamp);
   return Number.isFinite(value) ? value : null;
+}
+
+function preparedSourceReadinessType(source: PreparedSource): string {
+  if (source.kind === "url") {
+    return "webpage";
+  }
+  if (source.kind === "text") {
+    return "draft";
+  }
+  if (source.kind === "book") {
+    return "book";
+  }
+  return "document";
 }

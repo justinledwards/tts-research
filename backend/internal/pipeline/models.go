@@ -133,6 +133,53 @@ const (
 	PreparedSourceStatusFailed PreparedSourceStatus = "failed"
 )
 
+type SourceReadinessState string
+
+const (
+	SourceReadinessStateNoSource      SourceReadinessState = "noSource"
+	SourceReadinessStateImporting     SourceReadinessState = "importing"
+	SourceReadinessStateNeedsMetadata SourceReadinessState = "needsMetadata"
+	SourceReadinessStateReady         SourceReadinessState = "ready"
+	SourceReadinessStateFailed        SourceReadinessState = "failed"
+	SourceReadinessStateUnsupported   SourceReadinessState = "unsupported"
+	SourceReadinessStateStale         SourceReadinessState = "stale"
+)
+
+type SourceReadinessFailureStage string
+
+const (
+	SourceReadinessFailureFile              SourceReadinessFailureStage = "file"
+	SourceReadinessFailureExtraction        SourceReadinessFailureStage = "extraction"
+	SourceReadinessFailureStructure         SourceReadinessFailureStage = "structure"
+	SourceReadinessFailurePolicyPreparation SourceReadinessFailureStage = "policyPreparation"
+)
+
+type SourceReadiness struct {
+	State           SourceReadinessState        `json:"state"`
+	Title           string                      `json:"title,omitempty"`
+	SourceType      string                      `json:"sourceType,omitempty"`
+	Language        string                      `json:"language,omitempty"`
+	StructureLabel  string                      `json:"structureLabel,omitempty"`
+	Confidence      string                      `json:"confidence,omitempty"`
+	ConfirmedFields []string                    `json:"confirmedFields,omitempty"`
+	PreparedAt      *time.Time                  `json:"preparedAt,omitempty"`
+	StaleReason     string                      `json:"staleReason,omitempty"`
+	FailureStage    SourceReadinessFailureStage `json:"failureStage,omitempty"`
+	RetryAction     string                      `json:"retryAction,omitempty"`
+	Detail          string                      `json:"detail"`
+}
+
+type SourceReadinessConfirmationRequest struct {
+	Title               string     `json:"title,omitempty"`
+	SourceType          string     `json:"sourceType,omitempty"`
+	Language            string     `json:"language,omitempty"`
+	StructureChoice     string     `json:"structureChoice,omitempty"`
+	StructureLabel      string     `json:"structureLabel,omitempty"`
+	Scope               *BookScope `json:"scope,omitempty"`
+	SpeechPolicyProfile string     `json:"speechPolicyProfile,omitempty"`
+	VoiceProfileID      string     `json:"voiceProfileId,omitempty"`
+}
+
 type NarrationBlockKind string
 
 const (
@@ -228,6 +275,7 @@ type PreparedSource struct {
 	ID                          string                `json:"id"`
 	ProjectID                   string                `json:"projectId"`
 	Status                      PreparedSourceStatus  `json:"status"`
+	SourceReadiness             *SourceReadiness      `json:"sourceReadiness,omitempty"`
 	Kind                        PreparedSourceKind    `json:"kind"`
 	SourceName                  string                `json:"sourceName"`
 	SourceURL                   string                `json:"sourceUrl,omitempty"`
@@ -426,6 +474,7 @@ type BookSource struct {
 	ID                          string                `json:"id"`
 	ProjectID                   string                `json:"projectId"`
 	Status                      BookSourceStatus      `json:"status"`
+	SourceReadiness             *SourceReadiness      `json:"sourceReadiness,omitempty"`
 	Kind                        BookSourceKind        `json:"kind"`
 	SourceFile                  string                `json:"sourceFile"`
 	SourceBytes                 int64                 `json:"sourceBytes"`

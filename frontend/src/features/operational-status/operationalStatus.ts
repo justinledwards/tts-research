@@ -1,5 +1,5 @@
 import type { StatusChipTone } from "../../design";
-import type { JobTerminalReason, VoiceJob } from "../../types";
+import type { JobTerminalReason, SourceReadiness, VoiceJob } from "../../types";
 import type { GeneratedAudioLifecycleState } from "../playback/generatedAudioLifecycle";
 
 export const OPERATIONAL_STATUS_OWNERS = [
@@ -266,6 +266,7 @@ export function resolveOperationalSourceIssue({
   descriptorSeverity = "ok",
   detail,
   hasSource = true,
+  sourceReadiness,
   sourceError,
   sourcePreparing = false,
 }: Readonly<{
@@ -273,6 +274,7 @@ export function resolveOperationalSourceIssue({
   descriptorSeverity?: OperationalStatusSeverity;
   detail: string;
   hasSource?: boolean;
+  sourceReadiness?: SourceReadiness | null;
   sourceError?: string | null;
   sourcePreparing?: boolean;
 }>): OperationalStatusIssue {
@@ -315,6 +317,9 @@ export function resolveOperationalSourceIssue({
       severity: "warning",
     };
   }
+  if (sourceReadiness && sourceReadiness.state !== "ready") {
+    return resolveOperationalSourceReadinessIssue(sourceReadiness);
+  }
   return {
     blocksCurrentStage: false,
     chipValue: descriptorLabel,
@@ -325,6 +330,77 @@ export function resolveOperationalSourceIssue({
     owner: "source",
     recovery: operationalRecovery("none", false, "No source recovery is needed."),
     severity: descriptorSeverity,
+  };
+}
+
+function resolveOperationalSourceReadinessIssue(
+  readiness: SourceReadiness,
+): OperationalStatusIssue {
+  if (readiness.state === "needsMetadata") {
+    return {
+      blocksCurrentStage: true,
+      chipValue: "Needs metadata",
+      condition: "attention",
+      detail: readiness.detail,
+      id: "source-needs-metadata",
+      label: "Source needs metadata",
+      owner: "source",
+      recovery: operationalRecovery("openIntake", true),
+      severity: "warning",
+    };
+  }
+  if (readiness.state === "stale") {
+    return {
+      blocksCurrentStage: true,
+      chipValue: "Stale",
+      condition: "stale",
+      detail: readiness.staleReason ?? readiness.detail,
+      id: "source-stale",
+      label: "Source stale",
+      owner: "source",
+      recovery: operationalRecovery("openIntake", true),
+      severity: "warning",
+    };
+  }
+  if (readiness.state === "unsupported") {
+    return {
+      blocksCurrentStage: true,
+      chipValue: "Unsupported",
+      condition: "blocked",
+      detail: readiness.detail,
+      id: "source-unsupported",
+      label: "Source unsupported",
+      owner: "source",
+      recovery: operationalRecovery("openIntake", true),
+      severity: "error",
+    };
+  }
+  if (readiness.state === "failed") {
+    return {
+      blocksCurrentStage: true,
+      chipValue: readiness.failureStage ?? "Failed",
+      condition: "failed",
+      detail: readiness.detail,
+      id: "source-failed",
+      label: "Source failed",
+      owner: "source",
+      recovery: operationalRecovery("openIntake", true),
+      severity: "error",
+      technicalDetail: readiness.failureStage
+        ? `Failure stage: ${readiness.failureStage}`
+        : undefined,
+    };
+  }
+  return {
+    blocksCurrentStage: true,
+    chipValue: "Importing",
+    condition: "working",
+    detail: readiness.detail,
+    id: "source-importing",
+    label: "Source importing",
+    owner: "source",
+    recovery: operationalRecovery("none", false, "Wait for source import to finish."),
+    severity: "info",
   };
 }
 

@@ -111,6 +111,43 @@ export interface ProjectStorageSummary {
 
 export type BookSourceStatus = "ready" | "failed";
 
+export type SourceReadinessState =
+  | "noSource"
+  | "importing"
+  | "needsMetadata"
+  | "ready"
+  | "failed"
+  | "unsupported"
+  | "stale";
+
+export type SourceReadinessFailureStage = "file" | "extraction" | "structure" | "policyPreparation";
+
+export interface SourceReadiness {
+  state: SourceReadinessState;
+  title?: string;
+  sourceType?: string;
+  language?: string;
+  structureLabel?: string;
+  confidence?: string;
+  confirmedFields?: string[];
+  preparedAt?: string;
+  staleReason?: string;
+  failureStage?: SourceReadinessFailureStage;
+  retryAction?: string;
+  detail: string;
+}
+
+export interface SourceReadinessConfirmationRequest {
+  title?: string;
+  sourceType?: string;
+  language?: string;
+  structureChoice?: string;
+  structureLabel?: string;
+  scope?: BookScope;
+  speechPolicyProfile?: string;
+  voiceProfileId?: string;
+}
+
 export type BookSourceKind = "pdf" | "epub" | "docx" | "html" | "markdown" | "image";
 
 export type BookImportProfile = "auto" | "scholarly";
@@ -175,6 +212,7 @@ export interface BookSource {
   id: string;
   projectId: string;
   status: BookSourceStatus;
+  sourceReadiness?: SourceReadiness;
   kind: BookSourceKind;
   sourceFile: string;
   sourceBytes: number;
@@ -407,6 +445,7 @@ export interface PreparedSource {
   id: string;
   projectId: string;
   status: PreparedSourceStatus;
+  sourceReadiness?: SourceReadiness;
   kind: PreparedSourceKind;
   sourceName: string;
   sourceUrl?: string;

@@ -19,6 +19,8 @@ import {
   cancelVoiceJob,
   cancelVoiceProfileSource,
   cancelVoiceProfileTarget,
+  confirmBookSourceReadiness,
+  confirmPreparedSourceReadiness,
   clearHuggingFaceToken,
   cloneResearchModule,
   closePlaybackSession,
@@ -360,6 +362,8 @@ import type {
   SpeechPolicyProfile,
   SpeechPolicySettings,
   SourceSpeechPolicyUpdateRequest,
+  SourceReadiness,
+  SourceReadinessConfirmationRequest,
   StageStatus,
   SystemMetrics,
   ThemeName,
@@ -2730,6 +2734,13 @@ export function App() {
   );
   const activeNarrationBookSource = sourceMode === "book" ? selectedBookSource : null;
   const activeNarrationPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
+  const activeSourceReadiness = sourceReadinessForWorkbench({
+    selectedBookSource: activeNarrationBookSource,
+    selectedPreparedSource: activeNarrationPreparedSource,
+    sourceMode,
+    text,
+  });
+  const isActiveSourceReady = activeSourceReadiness.state === "ready";
   let activeNarrationSourceType: WorkspaceSourceType = "draft";
   if (activeNarrationPreparedSource) {
     activeNarrationSourceType = "prepared";
@@ -3121,10 +3132,11 @@ export function App() {
   let hasCreatableCurrentSource = false;
   if (!isProcessing && sourceMode === "book") {
     hasCreatableCurrentSource =
-      selectedBookSource?.status === "ready" && Boolean(effectiveBookScope);
+      selectedBookSource?.status === "ready" && Boolean(effectiveBookScope) && isActiveSourceReady;
   } else if (!isProcessing && sourceMode === "fileUrl") {
     hasCreatableCurrentSource =
       selectedPreparedSource?.status === "ready" &&
+      isActiveSourceReady &&
       Boolean((selectedPreparedSource.speechText ?? selectedPreparedSource.text ?? "").trim());
   } else if (!isProcessing) {
     hasCreatableCurrentSource = text.trim().length > 0;
@@ -3147,10 +3159,12 @@ export function App() {
   });
   let hasListenerReadyText = false;
   if (sourceMode === "book") {
-    hasListenerReadyText = selectedBookSource?.status === "ready" && Boolean(effectiveBookScope);
+    hasListenerReadyText =
+      selectedBookSource?.status === "ready" && Boolean(effectiveBookScope) && isActiveSourceReady;
   } else if (sourceMode === "fileUrl") {
     hasListenerReadyText =
       selectedPreparedSource?.status === "ready" &&
+      isActiveSourceReady &&
       Boolean((selectedPreparedSource.speechText ?? selectedPreparedSource.text ?? "").trim());
   } else {
     hasListenerReadyText = text.trim().length > 0;
@@ -3165,6 +3179,7 @@ export function App() {
     hasVoice: !createAndListenCapabilityReason,
     reviewWarningCount: revisionHealthSummary.previewWarnings,
     sourceError: sourcePrepError ?? bookSourceError,
+    sourceReadiness: activeSourceReadiness,
     sourcePreparing: isPreparingSource || isImportingBookSource,
     stage: contentMode,
   });
@@ -4810,7 +4825,9 @@ export function App() {
         const defaultScope = resolveDefaultBookScope(book);
         setSelectedBookScope(defaultScope);
         setSourceMode("book");
-        setContentMode("review");
+        if (contentMode !== "intake") {
+          setContentMode("review");
+        }
         selectWorkspaceInspectorTarget({
           id: book.id,
           kind: "source",
@@ -4820,6 +4837,7 @@ export function App() {
           setText(bookScopeText(book, defaultScope));
         }
         announceSourceExtractionResult(book);
+        return book;
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setBookSourceError(
@@ -4842,6 +4860,7 @@ export function App() {
       announceAssertive,
       announcePolite,
       announceSourceExtractionResult,
+      contentMode,
       refreshProjects,
       selectWorkspaceInspectorTarget,
       setContentMode,
@@ -4871,14 +4890,16 @@ export function App() {
           setSelectedBookSourceId(book.id);
           setSelectedBookScope(resolveDefaultBookScope(book));
           setSourceMode("book");
-          setContentMode("review");
+          if (contentMode !== "intake") {
+            setContentMode("review");
+          }
           selectWorkspaceInspectorTarget({
             id: book.id,
             kind: "source",
             label: bookSourceName(book),
           });
           announceSourceExtractionResult(book);
-          return;
+          return book;
         }
         const source = await createPreparedSource(activeProjectId, file, { markdownParseMode });
         setPreparedSources((currentSources) => [
@@ -4887,7 +4908,9 @@ export function App() {
         ]);
         setSelectedPreparedSourceId(source.id);
         setSourceMode("fileUrl");
-        setContentMode("review");
+        if (contentMode !== "intake") {
+          setContentMode("review");
+        }
         selectWorkspaceInspectorTarget({
           id: source.id,
           kind: "source",
@@ -4897,6 +4920,7 @@ export function App() {
           setText(source.speechText);
         }
         announceSourceExtractionResult(source);
+        return source;
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setSourcePrepError(
@@ -4919,6 +4943,7 @@ export function App() {
       announceAssertive,
       announcePolite,
       announceSourceExtractionResult,
+      contentMode,
       refreshProjects,
       selectWorkspaceInspectorTarget,
       setContentMode,
@@ -5013,14 +5038,16 @@ export function App() {
           setSelectedBookSourceId(book.id);
           setSelectedBookScope(resolveDefaultBookScope(book));
           setSourceMode("book");
-          setContentMode("review");
+          if (contentMode !== "intake") {
+            setContentMode("review");
+          }
           selectWorkspaceInspectorTarget({
             id: book.id,
             kind: "source",
             label: bookSourceName(book),
           });
           announceSourceExtractionResult(book);
-          return;
+          return book;
         }
         const source = await createPreparedSource(activeProjectId, {
           htmlContainerSelector,
@@ -5035,7 +5062,9 @@ export function App() {
         ]);
         setSelectedPreparedSourceId(source.id);
         setSourceMode("fileUrl");
-        setContentMode("review");
+        if (contentMode !== "intake") {
+          setContentMode("review");
+        }
         selectWorkspaceInspectorTarget({
           id: source.id,
           kind: "source",
@@ -5045,6 +5074,7 @@ export function App() {
           setText(source.speechText);
         }
         announceSourceExtractionResult(source);
+        return source;
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setSourcePrepError(
@@ -5067,6 +5097,7 @@ export function App() {
       announceAssertive,
       announcePolite,
       announceSourceExtractionResult,
+      contentMode,
       refreshProjects,
       selectWorkspaceInspectorTarget,
       setContentMode,
@@ -5086,6 +5117,58 @@ export function App() {
       );
     },
     [handlePrepareSourceUrl],
+  );
+
+  const handlePrepareDraftText = useCallback(
+    async (draftText: string, markdownParseMode: MarkdownParseMode = "strict") => {
+      setIsPreparingSource(true);
+      setSourcePrepError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
+      try {
+        const source = await createPreparedSource(activeProjectId, {
+          kind: "text",
+          markdownParseMode,
+          sourceName: "Pasted text",
+          text: draftText,
+        });
+        setPreparedSources((currentSources) => [
+          source,
+          ...currentSources.filter((item) => item.id !== source.id),
+        ]);
+        setSelectedPreparedSourceId(source.id);
+        setSourceMode("fileUrl");
+        if (contentMode !== "intake") {
+          setContentMode("review");
+        }
+        selectWorkspaceInspectorTarget({
+          id: source.id,
+          kind: "source",
+          label: source.title ?? source.sourceName,
+        });
+        if (source.speechText) {
+          setText(source.speechText);
+        }
+        announceSourceExtractionResult(source);
+        return source;
+      } catch (caughtError) {
+        setSourcePrepError(
+          caughtError instanceof Error ? caughtError.message : "Unable to prepare pasted text",
+        );
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
+        return;
+      } finally {
+        setIsPreparingSource(false);
+      }
+    },
+    [
+      activeProjectId,
+      announceAssertive,
+      announcePolite,
+      announceSourceExtractionResult,
+      contentMode,
+      selectWorkspaceInspectorTarget,
+      setContentMode,
+    ],
   );
 
   const handleUsePreparedSource = useCallback(
@@ -5118,6 +5201,42 @@ export function App() {
       }
     },
     [selectWorkspaceInspectorTarget, setContentMode],
+  );
+
+  const handleConfirmPreparedReadiness = useCallback(
+    async (source: PreparedSource, request: SourceReadinessConfirmationRequest) => {
+      const confirmed = await confirmPreparedSourceReadiness(source.id, request);
+      setPreparedSources((currentSources) => [
+        confirmed,
+        ...currentSources.filter((item) => item.id !== confirmed.id),
+      ]);
+      setSelectedPreparedSourceId(confirmed.id);
+      setSourceMode("fileUrl");
+      if (confirmed.speechText) {
+        setText(confirmed.speechText);
+      }
+      return confirmed;
+    },
+    [],
+  );
+
+  const handleConfirmBookReadiness = useCallback(
+    async (book: BookSource, request: SourceReadinessConfirmationRequest) => {
+      const confirmed = await confirmBookSourceReadiness(book.id, request);
+      setBookSources((currentBooks) => [
+        confirmed,
+        ...currentBooks.filter((item) => item.id !== confirmed.id),
+      ]);
+      setSelectedBookSourceId(confirmed.id);
+      const nextScope = request.scope ?? selectedBookScope ?? resolveDefaultBookScope(confirmed);
+      setSelectedBookScope(nextScope);
+      setSourceMode("book");
+      if (confirmed.status === "ready") {
+        setText(bookScopeText(confirmed, nextScope));
+      }
+      return confirmed;
+    },
+    [selectedBookScope],
   );
 
   const handleInspectContentIR = useCallback(
@@ -7461,7 +7580,9 @@ export function App() {
             onCreateAudio={(book, scope) => {
               void submitBookNarrationJob(book, scope);
             }}
-            onImport={handleImportBookSource}
+            onImport={async (files, options) => {
+              await handleImportBookSource(files, options);
+            }}
             onInspectStructure={(book) => {
               void handleInspectContentIR(book.id, bookSourceName(book));
             }}
@@ -7928,11 +8049,13 @@ export function App() {
               onOpenPreparedSourceCinema={openPreparedSourceCinema}
               onImportBookSource={handleImportBookSource}
               onBookScopeChange={setSelectedBookScope}
+              onConfirmBookSourceReadiness={handleConfirmBookReadiness}
+              onConfirmPreparedSourceReadiness={handleConfirmPreparedReadiness}
+              onPrepareDraftText={handlePrepareDraftText}
               onPrepareFile={handlePrepareSourceFile}
               onPrepareUrl={handlePrepareSourceUrl}
               providerBackedGenerationBoundary={providerBackedGenerationBoundary}
               onSelectVoiceProfile={selectVoiceProfile}
-              onSourceModeChange={setSourceMode}
               onStageAction={runWorkspaceStageAction}
               onSpeechPolicyProfileChange={(profile) => {
                 void handleSpeechPolicyProfileChange(profile);
@@ -7948,7 +8071,6 @@ export function App() {
               onReviewPaneChange={handleReviewPaneChange}
               onStatusByBlockIdChange={setRevisionStatusByBlockId}
               onSubmit={handleSubmit}
-              onTextChange={setText}
               onUseBookSource={handleUseBookText}
               onUsePreparedSource={handleUsePreparedSource}
               runConfigurationLabel={getRunModePreset(runConfiguration.runMode).label}
@@ -9891,6 +10013,80 @@ function theatreOpenSignalForWorkbenchStage({
 }
 
 /* eslint-disable sonarjs/cognitive-complexity, sonarjs/no-nested-conditional, unicorn/no-nested-ternary, unicorn/prefer-switch */
+function sourceReadinessForWorkbench({
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  text,
+}: Readonly<{
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  text: string;
+}>): SourceReadiness {
+  if (sourceMode === "book" && selectedBookSource) {
+    return selectedBookSource.sourceReadiness ?? legacyBookSourceReadiness(selectedBookSource);
+  }
+  if (sourceMode === "fileUrl" && selectedPreparedSource) {
+    return (
+      selectedPreparedSource.sourceReadiness ??
+      legacyPreparedSourceReadiness(selectedPreparedSource)
+    );
+  }
+  const hasText = text.trim().length > 0;
+  return {
+    confidence: hasText ? "medium" : "low",
+    detail: hasText
+      ? "Draft text is available locally."
+      : "Choose, paste, or prepare a source before continuing.",
+    sourceType: "draft",
+    state: hasText ? "ready" : "noSource",
+    title: "Draft text",
+  };
+}
+
+function legacyPreparedSourceReadiness(source: PreparedSource): SourceReadiness {
+  if (source.status === "failed") {
+    return {
+      confidence: "low",
+      detail: source.error ?? "Source preparation failed.",
+      failureStage: "structure",
+      retryAction: "retryImport",
+      sourceType: source.kind === "url" ? "webpage" : source.kind === "text" ? "draft" : "document",
+      state: "failed",
+      title: source.title ?? source.sourceName,
+    };
+  }
+  return {
+    confidence: "high",
+    detail: "Source is ready for Review.",
+    sourceType: source.kind === "url" ? "webpage" : source.kind === "text" ? "draft" : "document",
+    state: "ready",
+    title: source.title ?? source.sourceName,
+  };
+}
+
+function legacyBookSourceReadiness(source: BookSource): SourceReadiness {
+  if (source.status === "failed") {
+    return {
+      confidence: "low",
+      detail: source.error ?? "Source extraction failed.",
+      failureStage: "extraction",
+      retryAction: "retryImport",
+      sourceType: source.kind === "html" ? "webpage" : "book",
+      state: "failed",
+      title: source.title ?? source.sourceFile,
+    };
+  }
+  return {
+    confidence: "high",
+    detail: "Source is ready for Review.",
+    sourceType: source.kind === "html" ? "webpage" : "book",
+    state: "ready",
+    title: source.title ?? source.sourceFile,
+  };
+}
+
 function workbenchSourceLifecycleEnvelope({
   job,
   projectId,
@@ -9959,6 +10155,12 @@ function workbenchSourceLifecycleEnvelope({
             : selectedPreparedSource.kind === "book"
               ? "book"
               : "document",
+      sourceReadiness: sourceReadinessForWorkbench({
+        selectedBookSource: null,
+        selectedPreparedSource,
+        sourceMode,
+        text: "",
+      }),
       title: selectedPreparedSource.title ?? selectedPreparedSource.sourceName,
     };
   }
@@ -10004,6 +10206,12 @@ function workbenchSourceLifecycleEnvelope({
       selectedScope: selectedScopeLabel,
       sourceId: selectedBookSource.id,
       sourceKind: selectedBookSource.kind === "html" ? "website" : "book",
+      sourceReadiness: sourceReadinessForWorkbench({
+        selectedBookSource,
+        selectedPreparedSource: null,
+        sourceMode,
+        text: "",
+      }),
       title: bookSourceName(selectedBookSource),
     };
   }
@@ -10029,6 +10237,12 @@ function workbenchSourceLifecycleEnvelope({
     selectedScope: "Draft text",
     sourceId: "draft",
     sourceKind: "draft",
+    sourceReadiness: sourceReadinessForWorkbench({
+      selectedBookSource: null,
+      selectedPreparedSource: null,
+      sourceMode,
+      text,
+    }),
     title: "Draft text",
   };
 }
@@ -10131,6 +10345,9 @@ function defaultWorkspaceInspectorDisplayState(
   return "expanded";
 }
 
+type SourceTextPanelBookImportResult = BookSource | undefined;
+type SourceTextPanelPreparationResult = BookSource | PreparedSource | undefined;
+
 function SourceTextPanel({
   activeReviewPane,
   activeReviewBlockId,
@@ -10180,11 +10397,13 @@ function SourceTextPanel({
   onOpenPreparedSourceCinema,
   onImportBookSource,
   onBookScopeChange,
+  onConfirmBookSourceReadiness,
+  onConfirmPreparedSourceReadiness,
+  onPrepareDraftText,
   onPrepareFile,
   onPrepareUrl,
   providerBackedGenerationBoundary,
   onSelectVoiceProfile,
-  onSourceModeChange,
   onStageAction,
   onSpeechPolicyProfileChange,
   onReviewBlockChange,
@@ -10193,7 +10412,6 @@ function SourceTextPanel({
   onReviewPaneChange,
   onStatusByBlockIdChange,
   onSubmit,
-  onTextChange,
   onUseBookSource,
   onUsePreparedSource,
   runConfigurationLabel,
@@ -10244,21 +10462,35 @@ function SourceTextPanel({
   onOpenBookCinema: (source?: BookSource, scope?: BookScope) => void;
   onOpenVoiceCloning: () => void;
   onOpenPreparedSourceCinema: (source: PreparedSource) => void;
-  onImportBookSource: (files: File[], options?: BookSourceImportOptions) => Promise<void>;
+  onImportBookSource: (
+    files: File[],
+    options?: BookSourceImportOptions,
+  ) => Promise<SourceTextPanelBookImportResult>;
   onBookScopeChange: (scope: BookScope) => void;
+  onConfirmBookSourceReadiness: (
+    source: BookSource,
+    request: SourceReadinessConfirmationRequest,
+  ) => Promise<BookSource>;
+  onConfirmPreparedSourceReadiness: (
+    source: PreparedSource,
+    request: SourceReadinessConfirmationRequest,
+  ) => Promise<PreparedSource>;
+  onPrepareDraftText: (
+    text: string,
+    markdownParseMode: MarkdownParseMode,
+  ) => Promise<PreparedSource | undefined>;
   onPrepareFile: (
     file: File,
     markdownParseMode: MarkdownParseMode,
     preparationTarget?: IntakePreparationTarget,
-  ) => Promise<void>;
+  ) => Promise<SourceTextPanelPreparationResult>;
   onPrepareUrl: (
     url: string,
     markdownParseMode: MarkdownParseMode,
     preparationTarget?: IntakePreparationTarget,
-  ) => Promise<void>;
+  ) => Promise<SourceTextPanelPreparationResult>;
   providerBackedGenerationBoundary?: boolean;
   onSelectVoiceProfile: (profileId: string) => void;
-  onSourceModeChange: (mode: SourceMode) => void;
   onStageAction: (actionId: WorkspaceStageActionId) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onReviewBlockChange: (blockId: string | null) => void;
@@ -10267,7 +10499,6 @@ function SourceTextPanel({
   onReviewPaneChange: (pane: ReviewPane) => void;
   onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
   onSubmit: (event: React.SyntheticEvent<HTMLFormElement>) => void;
-  onTextChange: (text: string) => void;
   onUseBookSource: (source: BookSource, scope: BookScope) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
   runConfigurationLabel: string;
@@ -10354,6 +10585,9 @@ function SourceTextPanel({
             onOpenBookCinema={onOpenBookCinema}
             onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
             onOpenVoiceCloning={onOpenVoiceCloning}
+            onConfirmBookSourceReadiness={onConfirmBookSourceReadiness}
+            onConfirmPreparedSourceReadiness={onConfirmPreparedSourceReadiness}
+            onPrepareDraftText={onPrepareDraftText}
             onPrepareFile={onPrepareFile}
             onPrepareUrl={onPrepareUrl}
             providerBackedGenerationBoundary={providerBackedGenerationBoundary}
@@ -10363,10 +10597,6 @@ function SourceTextPanel({
               onStageAction(stage === "review" ? "reviewBlocks" : "previewSpeech");
             }}
             onUseBookSource={onUseBookSource}
-            onUseDraftText={(nextText) => {
-              onSourceModeChange("text");
-              onTextChange(nextText);
-            }}
             onUsePreparedSource={onUsePreparedSource}
             onVoiceProfileChange={onSelectVoiceProfile}
           />

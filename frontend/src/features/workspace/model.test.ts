@@ -269,6 +269,35 @@ describe("workspace stage model", () => {
     expect(review.reviewWarningCount).toBe(4);
   });
 
+  it("blocks Review and later stages until source metadata is confirmed", () => {
+    const status = resolveWorkspaceStageStatus(
+      stageStatusInput({
+        sourceReadiness: {
+          detail: "Confirm title, source type, language, and structure before Review opens.",
+          state: "needsMetadata",
+          title: "Draft text",
+        },
+        stage: "preview",
+      }),
+    );
+
+    expect(status.blocker).toMatchObject({
+      correctiveAction: "intakeSource",
+      id: "sourceNeedsMetadata",
+      title: "Source metadata needs confirmation",
+    });
+    expect(status.primaryAction).toBe("intakeSource");
+    expect(status.readinessByStage.intake).toMatchObject({
+      action: "intakeSource",
+      label: "Confirm metadata",
+      state: "ready",
+    });
+    expect(status.readinessByStage.review).toMatchObject({
+      label: "Blocked",
+      state: "blocked",
+    });
+  });
+
   it("models missing audio as Preview creation, Teleprompt rehearsal, and Theatre blocked", () => {
     const status = resolveWorkspaceStageStatus(stageStatusInput({ stage: "preview" }));
 

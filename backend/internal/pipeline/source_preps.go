@@ -189,6 +189,8 @@ func (service *Service) CreatePreparedSource(
 	prepared = service.applySpeechRenderToPreparedSource(prepared, SpeechRenderOptions{
 		ProjectID: project.ID,
 	})
+	readiness := preparedSourceNeedsMetadataReadiness(prepared)
+	prepared.SourceReadiness = &readiness
 
 	service.updatePreparedSource(prepared)
 	if err := service.writePreparedSourceMetadata(prepared); err != nil {
@@ -275,6 +277,7 @@ func (service *Service) ListProjectPreparedSources(projectID string) ([]Prepared
 	service.mu.RUnlock()
 	for index, source := range sources {
 		source = service.applyCurrentSpeechPolicy(source, policy.Overrides{})
+		source = ensurePreparedSourceReadiness(source)
 		sources[index] = summarizePreparedSourcePayload(service.sanitizePreparedSourceWarnings(source))
 	}
 	sort.SliceStable(sources, func(left int, right int) bool {
@@ -291,7 +294,8 @@ func (service *Service) GetPreparedSource(id string) (PreparedSource, error) {
 		return PreparedSource{}, ErrPreparedSourceNotFound
 	}
 	source = clonePreparedSource(source)
-	return service.sanitizePreparedSourceWarnings(service.applyCurrentSpeechPolicy(source, policy.Overrides{})), nil
+	source = ensurePreparedSourceReadiness(service.applyCurrentSpeechPolicy(source, policy.Overrides{}))
+	return service.sanitizePreparedSourceWarnings(source), nil
 }
 
 func (service *Service) PreviewPreparedSourceSpeechPolicy(sourceID string, request SpeechPolicyPreviewRequest) (PreparedSource, error) {
@@ -364,11 +368,58 @@ func (service *Service) UpdatePreparedSourceSpeechPolicy(sourceID string, reques
 	source = service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{
 		ProjectID: source.ProjectID,
 	})
+	source.UpdatedAt = time.Now().UTC()
+	source = ensurePreparedSourceReadiness(source)
 	service.updatePreparedSource(source)
 	if err := service.writePreparedSourceMetadata(source); err != nil {
 		return PreparedSource{}, err
 	}
 	return source, nil
+}
+
+func (service *Service) ConfirmPreparedSourceReadiness(id string, request SourceReadinessConfirmationRequest) (PreparedSource, error) {
+	service.mu.RLock()
+	source, ok := service.sourcePreps[strings.TrimSpace(id)]
+	service.mu.RUnlock()
+	if !ok {
+		return PreparedSource{}, ErrPreparedSourceNotFound
+	}
+	source = clonePreparedSource(source)
+	if source.Status != PreparedSourceStatusReady {
+		readiness := preparedSourceFailedReadiness(source, SourceReadinessFailureStructure, source.Error)
+		source.SourceReadiness = &readiness
+		return source, nil
+	}
+	now := time.Now().UTC()
+	if title := strings.TrimSpace(request.Title); title != "" {
+		source.Title = title
+	}
+	if profile := strings.TrimSpace(request.SpeechPolicyProfile); profile != "" {
+		source.SourceSpeechPolicyProfile = profile
+	}
+	if source.Metadata == nil {
+		source.Metadata = map[string]any{}
+	}
+	if language := strings.TrimSpace(request.Language); language != "" {
+		source.Metadata["language"] = language
+	}
+	if sourceType := strings.TrimSpace(request.SourceType); sourceType != "" {
+		source.Metadata["sourceType"] = sourceType
+	}
+	if structureChoice := strings.TrimSpace(request.StructureChoice); structureChoice != "" {
+		source.Metadata["structureChoice"] = structureChoice
+	}
+	if voiceProfileID := strings.TrimSpace(request.VoiceProfileID); voiceProfileID != "" {
+		source.Metadata["voiceProfileId"] = voiceProfileID
+	}
+	readiness := confirmedPreparedSourceReadiness(source, request, now)
+	source.SourceReadiness = &readiness
+	source.UpdatedAt = now
+	service.updatePreparedSource(source)
+	if err := service.writePreparedSourceMetadata(source); err != nil {
+		return PreparedSource{}, err
+	}
+	return service.sanitizePreparedSourceWarnings(source), nil
 }
 
 func (service *Service) applyCurrentSpeechPolicy(source PreparedSource, overrides policy.Overrides) PreparedSource {

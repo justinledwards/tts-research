@@ -1346,3 +1346,17 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add focused regression tests
 - [x] Run project checks
 - Validation: focused context/status tests passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome lint warnings/infos.
+
+## 2026-06-02 23:26 CEST - Guided Intake Source Readiness
+- [x] Add shared source readiness contract
+- [x] Persist and expose readiness on backend sources
+- [x] Wire Intake prepare-first gating and confirmation
+- [x] Separate source readiness from audio lifecycle in status and Assets
+- [x] Add regression tests
+- [x] Run project checks
+- Validation: backend readiness/http tests passed; frontend typecheck passed; focused Intake/source/workspace/status tests passed; `pnpm check` passed with existing unrelated Biome lint warnings.
+
+## 2026-06-03 00:03 CEST - Commit Guided Intake Source Readiness
+- [x] Review staged readiness work package
+- [x] Stage readiness work package
+- [x] Create commit
