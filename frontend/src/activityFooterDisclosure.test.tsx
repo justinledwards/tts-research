@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { VoiceCloningActivitySummary } from "./appVoiceCloningHelpers";
+import type { OperationalStatusIssue } from "./features/operational-status";
 import { NarrationStatusStrip, type NarrationStatusModel } from "./features/status-strip";
 
 describe("NarrationStatusStrip disclosure rendering", () => {
@@ -142,6 +143,30 @@ describe("NarrationStatusStrip disclosure rendering", () => {
     expect(markup).toContain("Generation cancelled");
     expect(markup).toContain("Generation cancelled. Retry generation");
   });
+
+  it("renders status chips as selectable inspector controls when a handler is provided", () => {
+    const statusModel = model();
+    const selectedIssueId = statusModel.chips.find((chip) => chip.id === "audio")?.issue.id;
+    const markup = renderToStaticMarkup(
+      <NarrationStatusStrip
+        canCancel={false}
+        canCreate
+        canOpenCinema
+        mode="compact"
+        model={statusModel}
+        selectedIssueId={selectedIssueId}
+        onCancel={() => null}
+        onCreate={() => null}
+        onOpenCinema={() => null}
+        onOpenVoiceCloning={() => null}
+        onStatusChipSelect={() => null}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="ui-action-status-chip-audio"');
+    expect(markup).toContain('aria-label="Inspect Audio: Ready"');
+    expect(markup).toContain('aria-pressed="true"');
+  });
 });
 
 function model(overrides: Partial<NarrationStatusModel> = {}): NarrationStatusModel {
@@ -166,17 +191,25 @@ function model(overrides: Partial<NarrationStatusModel> = {}): NarrationStatusMo
     ],
     blocker: null,
     chips: [
-      { id: "source", label: "Source", tone: "success", value: "Narratable" },
-      { id: "review", label: "Review", tone: "success", value: "Ready" },
-      { id: "audio", label: "Audio", tone: "success", value: "Ready" },
-      { id: "queue", label: "Queue", tone: "success", value: "4/4 ready" },
-      { id: "check", label: "Check", tone: "success", value: "99%" },
-      { id: "system", label: "System", tone: "success", value: "Healthy" },
+      chip("source", "Source", "Narratable"),
+      chip("review", "Review", "Ready"),
+      chip("audio", "Audio", "Ready"),
+      chip("queue", "Queue", "4/4 ready"),
+      chip("check", "Check", "99%"),
+      chip("system", "System", "Healthy"),
     ],
     confidenceDetail: "ASR check passed",
     confidenceLabel: "99%",
     detail: "4 ready, 0 generating, 4 total",
     eta: "Ready",
+    issues: [
+      issue("source", "Source", "Narratable"),
+      issue("review", "Review", "Ready"),
+      issue("audio", "Audio", "Ready"),
+      issue("queue", "Queue", "4/4 ready"),
+      issue("check", "Check", "99%"),
+      issue("system", "System", "Healthy"),
+    ],
     primaryAction: { id: "openCinema", label: "Open Cinema", tone: "secondary" },
     primaryLabel: "Audio ready",
     primaryMessage: "Audio ready.",
@@ -206,6 +239,39 @@ function model(overrides: Partial<NarrationStatusModel> = {}): NarrationStatusMo
     tone: "success",
     voiceCloning: idleVoiceCloningActivity,
     ...overrides,
+  };
+}
+
+function chip(owner: OperationalStatusIssue["owner"], label: string, value: string) {
+  return {
+    id: owner,
+    issue: issue(owner, label, value),
+    label,
+    tone: "success" as const,
+    value,
+  };
+}
+
+function issue(
+  owner: OperationalStatusIssue["owner"],
+  label: string,
+  chipValue: string,
+): OperationalStatusIssue {
+  return {
+    blocksCurrentStage: false,
+    chipValue,
+    condition: "ready",
+    detail: `${label} ready.`,
+    id: `${owner}-ready`,
+    label: `${label} ready`,
+    owner,
+    recovery: {
+      available: false,
+      id: "none",
+      label: "No action available",
+      unavailableReason: "No action needed.",
+    },
+    severity: "ok",
   };
 }
 

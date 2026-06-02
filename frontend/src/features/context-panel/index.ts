@@ -24,6 +24,19 @@ export {
   type WorkspaceInspectorTelepromptModel,
   type WorkspaceInspectorVoiceModel,
 } from "./WorkspaceContextInspector";
+export {
+  contextPanelTabForWorkspaceInspectorTarget,
+  resolveWorkspaceInspectorTarget,
+  stageInspectorTarget,
+  workspaceInspectorTargetAvailable,
+  workspaceInspectorTargetEqual,
+  type WorkspaceInspectorContextTargets,
+  type WorkspaceInspectorCueDetail,
+  type WorkspaceInspectorJobDetail,
+  type WorkspaceInspectorResolvedTarget,
+  type WorkspaceInspectorTarget,
+  type WorkspaceInspectorTargetKind,
+} from "./workspaceInspectorTarget";
 export { WorkspaceStageContextPanel } from "./WorkspaceStageContextPanel";
 export {
   buildContextPanelTabs,

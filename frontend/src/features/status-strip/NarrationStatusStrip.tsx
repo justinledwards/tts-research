@@ -1,7 +1,7 @@
 import type { ActivityFooterMode } from "../../activityFooter";
 import { Button, StatusChip, cx, type ButtonVariant } from "../../design";
 import { overlayDataAttributes } from "../layout";
-import type { NarrationStatusActionId, NarrationStatusModel } from "./model";
+import type { NarrationStatusActionId, NarrationStatusChip, NarrationStatusModel } from "./model";
 
 export interface NarrationStatusStripProps {
   readonly canCancel: boolean;
@@ -10,6 +10,7 @@ export interface NarrationStatusStripProps {
   readonly initialDrawerOpen?: boolean;
   readonly mode: ActivityFooterMode;
   readonly model: NarrationStatusModel;
+  readonly selectedIssueId?: string | null;
   readonly onOpenActivity?: () => void;
   readonly onCancel: () => void;
   readonly onCreate: () => void;
@@ -18,6 +19,7 @@ export interface NarrationStatusStripProps {
   readonly onOpenIntake?: () => void;
   readonly onOpenReview?: () => void;
   readonly onOpenVoiceCloning: () => void;
+  readonly onStatusChipSelect?: (chip: NarrationStatusChip) => void;
 }
 
 export function NarrationStatusStrip({
@@ -26,6 +28,7 @@ export function NarrationStatusStrip({
   canOpenCinema,
   mode,
   model,
+  selectedIssueId = null,
   onOpenActivity,
   onCancel,
   onCreate,
@@ -34,6 +37,7 @@ export function NarrationStatusStrip({
   onOpenIntake,
   onOpenReview,
   onOpenVoiceCloning,
+  onStatusChipSelect,
 }: NarrationStatusStripProps) {
   const isAttention =
     model.state === "blocked" || model.state === "failed" || model.state === "cancelled";
@@ -85,16 +89,12 @@ export function NarrationStatusStrip({
           </div>
           <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
             {visibleChips.map((chip) => (
-              <StatusChip
-                className="max-w-full rounded-full py-0.5 text-[0.65rem]"
+              <NarrationStatusSelectableChip
+                chip={chip}
                 key={chip.id}
-                tone={chip.tone}
-              >
-                <span className="shrink-0">{chip.label}</span>
-                <span className="min-w-0 truncate before:px-1 before:content-['·']">
-                  {chip.value}
-                </span>
-              </StatusChip>
+                selected={selectedIssueId === chip.issue.id}
+                onSelect={onStatusChipSelect}
+              />
             ))}
             <span className="vs-muted text-xs">
               ETA {model.eta} · Job {model.activeJobLabel}
@@ -136,6 +136,46 @@ export function NarrationStatusStrip({
         </div>
       </div>
     </footer>
+  );
+}
+
+function NarrationStatusSelectableChip({
+  chip,
+  selected,
+  onSelect,
+}: Readonly<{
+  chip: NarrationStatusChip;
+  selected: boolean;
+  onSelect?: (chip: NarrationStatusChip) => void;
+}>) {
+  const content = (
+    <StatusChip
+      className={cx(
+        "max-w-full rounded-full py-0.5 text-[0.65rem]",
+        selected && "ring-2 ring-[var(--vs-focus-ring)]",
+      )}
+      tone={chip.tone}
+    >
+      <span className="shrink-0">{chip.label}</span>
+      <span className="min-w-0 truncate before:px-1 before:content-['·']">{chip.value}</span>
+    </StatusChip>
+  );
+  if (!onSelect) {
+    return content;
+  }
+  return (
+    <button
+      aria-label={`Inspect ${chip.label}: ${chip.value}`}
+      aria-pressed={selected}
+      className="max-w-full rounded-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--vs-focus-ring)]"
+      data-testid={`ui-action-status-chip-${chip.id}`}
+      onClick={() => {
+        onSelect(chip);
+      }}
+      type="button"
+    >
+      {content}
+    </button>
   );
 }
 

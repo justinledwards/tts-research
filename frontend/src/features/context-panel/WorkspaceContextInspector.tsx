@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { StatusChipTone } from "../../design";
+import { operationalIssueTone, type OperationalStatusIssue } from "../operational-status";
 import type { WorkspaceStage, WorkspaceStageStatus } from "../workspace";
 import { ContextPanel } from "./ContextPanel";
 import {
@@ -18,6 +19,15 @@ import {
   SourceInspectorSection,
   VoiceInspectorSection,
 } from "./InspectorSections";
+import {
+  contextPanelTabForWorkspaceInspectorTarget,
+  resolveWorkspaceInspectorTarget,
+  type WorkspaceInspectorContextTargets,
+  type WorkspaceInspectorCueDetail,
+  type WorkspaceInspectorJobDetail,
+  type WorkspaceInspectorResolvedTarget,
+  type WorkspaceInspectorTarget,
+} from "./workspaceInspectorTarget";
 
 export interface WorkspaceInspectorSourceModel {
   readonly detail: string;
@@ -88,24 +98,20 @@ export interface WorkspaceContextInspectorProps {
   readonly displayState: ContextPanelDisplayState;
   readonly history: WorkspaceInspectorHistoryModel;
   readonly pinned?: boolean;
+  readonly pinnedTarget?: WorkspaceInspectorTarget | null;
   readonly policy: WorkspaceInspectorPolicyModel;
   readonly review: WorkspaceInspectorReviewModel;
+  readonly selectedTarget?: WorkspaceInspectorTarget | null;
   readonly source: WorkspaceInspectorSourceModel;
   readonly stage: WorkspaceStage;
   readonly status: WorkspaceStageStatus;
+  readonly targets?: WorkspaceInspectorContextTargets;
   readonly teleprompt: WorkspaceInspectorTelepromptModel;
   readonly voice: WorkspaceInspectorVoiceModel;
   readonly onDisplayStateChange?: (state: ContextPanelDisplayState) => void;
   readonly onPinnedChange?: (pinned: boolean) => void;
+  readonly onPinnedTargetChange?: (target: WorkspaceInspectorTarget | null) => void;
 }
-
-const WORKSPACE_INSPECTOR_STAGE_TAB: Record<WorkspaceStage, ContextPanelTabId> = {
-  intake: "overview",
-  preview: "overview",
-  review: "review",
-  teleprompt: "review",
-  theatre: "review",
-};
 
 const STAGE_LABEL: Record<WorkspaceStage, string> = {
   intake: "Intake",
@@ -121,35 +127,61 @@ export function WorkspaceContextInspector({
   displayState,
   history,
   pinned = false,
+  pinnedTarget,
   policy,
   review,
+  selectedTarget,
   source,
   stage,
   status,
+  targets,
   teleprompt,
   voice,
   onDisplayStateChange,
   onPinnedChange,
+  onPinnedTargetChange,
 }: Readonly<WorkspaceContextInspectorProps>) {
-  const [activeContextTab, setActiveContextTab] = useState<ContextPanelTabId>(
-    WORKSPACE_INSPECTOR_STAGE_TAB[stage],
+  const contextTargets = useMemo(
+    () =>
+      targets ??
+      defaultWorkspaceInspectorTargets({
+        audio,
+        review,
+        source,
+        voice,
+      }),
+    [audio, review, source, targets, voice],
   );
+  const resolvedTarget = useMemo(
+    () =>
+      resolveWorkspaceInspectorTarget({
+        pinnedTarget: pinned ? pinnedTarget : null,
+        selectedTarget,
+        stage,
+        targets: contextTargets,
+      }),
+    [contextTargets, pinned, pinnedTarget, selectedTarget, stage],
+  );
+  const resolvedTargetTab = contextPanelTabForWorkspaceInspectorTarget(resolvedTarget.target);
+  const [activeContextTab, setActiveContextTab] = useState<ContextPanelTabId>(resolvedTargetTab);
 
   useEffect(() => {
     if (!pinned) {
-      setActiveContextTab(WORKSPACE_INSPECTOR_STAGE_TAB[stage]);
+      setActiveContextTab(resolvedTargetTab);
     }
-  }, [pinned, stage]);
+  }, [pinned, resolvedTargetTab]);
 
   const tabs = useMemo(
     () =>
       buildContextPanelTabs(
         workspaceInspectorSections({
           audio,
+          contextTargets,
           diagnostics,
           history,
           policy,
           review,
+          resolvedTarget,
           source,
           stage,
           status,
@@ -158,8 +190,22 @@ export function WorkspaceContextInspector({
         }),
         { allowedSurfaces: ["Workspace"], owner: "workspace" },
       ),
-    [audio, diagnostics, history, policy, review, source, stage, status, teleprompt, voice],
+    [
+      audio,
+      contextTargets,
+      diagnostics,
+      history,
+      policy,
+      resolvedTarget,
+      review,
+      source,
+      stage,
+      status,
+      teleprompt,
+      voice,
+    ],
   );
+  const heading = workspaceInspectorHeading(resolvedTarget, contextTargets, stage);
 
   if (stage === "theatre" && displayState !== "pinned" && !pinned) {
     return null;
@@ -169,21 +215,118 @@ export function WorkspaceContextInspector({
     <ContextPanel
       activeTabId={activeContextTab}
       collapsedSummary={
-        <WorkspaceInspectorCollapsedSummary audio={audio} source={source} status={status} />
+        <WorkspaceInspectorCollapsedSummary
+          audio={audio}
+          contextTargets={contextTargets}
+          resolvedTarget={resolvedTarget}
+          source={source}
+          status={status}
+          teleprompt={teleprompt}
+        />
       }
       displayState={displayState}
+      headingDetail={heading.detail}
+      headingTitle={heading.title}
       label={`${STAGE_LABEL[stage]} inspector`}
       pinned={pinned}
       surface="Workspace"
       tabs={tabs}
       onDisplayStateChange={onDisplayStateChange}
-      onPinnedChange={onPinnedChange}
+      onPinnedChange={(nextPinned) => {
+        onPinnedTargetChange?.(nextPinned ? resolvedTarget.target : null);
+        onPinnedChange?.(nextPinned);
+      }}
       onTabChange={setActiveContextTab}
     />
   );
 }
 
 function workspaceInspectorSections({
+  audio,
+  contextTargets,
+  diagnostics,
+  history,
+  policy,
+  review,
+  resolvedTarget,
+  source,
+  stage,
+  status,
+  teleprompt,
+  voice,
+}: Readonly<
+  Pick<
+    WorkspaceContextInspectorProps,
+    | "audio"
+    | "diagnostics"
+    | "history"
+    | "policy"
+    | "review"
+    | "source"
+    | "stage"
+    | "status"
+    | "teleprompt"
+    | "voice"
+  > & {
+    contextTargets: WorkspaceInspectorContextTargets;
+    resolvedTarget: WorkspaceInspectorResolvedTarget;
+  }
+>): readonly ContextPanelSectionInput[] {
+  const stageSections = () =>
+    workspaceInspectorStageSections({
+      audio,
+      diagnostics,
+      history,
+      policy,
+      review,
+      source,
+      stage,
+      status,
+      teleprompt,
+      voice,
+    });
+  if (resolvedTarget.invalidPinnedTarget) {
+    return [invalidPinnedTargetSection(resolvedTarget.invalidPinnedTarget), ...stageSections()];
+  }
+  switch (resolvedTarget.target.kind) {
+    case "cue": {
+      const cue = contextTargets.cues.find((item) => item.id === resolvedTarget.target.id);
+      return cue
+        ? [cueDetailSection(cue), policySection(policy, review.policyContent)]
+        : stageSections();
+    }
+    case "issue": {
+      const issue = contextTargets.issues.find((item) => item.id === resolvedTarget.target.id);
+      return issue ? [issueDetailSection(issue)] : stageSections();
+    }
+    case "job": {
+      const job = contextTargets.jobs.find((item) => item.id === resolvedTarget.target.id);
+      return job
+        ? [
+            jobDetailSection(job),
+            queueSection(audio),
+            diagnosticsSection(diagnostics, review.diagnosticsContent),
+          ]
+        : stageSections();
+    }
+    case "source": {
+      return [
+        sourceSection(source, stage),
+        ...(source.importConfidence ? [importConfidenceSection(source.importConfidence)] : []),
+      ];
+    }
+    case "stage": {
+      return stageSections();
+    }
+    case "voice": {
+      return [voiceSection(voice), policySection(policy, review.policyContent)];
+    }
+  }
+  const exhaustive: never = resolvedTarget.target;
+  return exhaustive;
+}
+
+function workspaceInspectorStageSections({
   audio,
   diagnostics,
   history,
@@ -209,19 +352,44 @@ function workspaceInspectorSections({
     | "voice"
   >
 >): readonly ContextPanelSectionInput[] {
+  const blockerSections = status.blocker ? [criticalBlockerSection(status.blocker)] : [];
+  if (stage === "intake") {
+    return [
+      ...blockerSections,
+      sourceSection(source, stage),
+      ...(source.importConfidence ? [importConfidenceSection(source.importConfidence)] : []),
+      policySection(policy, review.policyContent),
+      historySection(history, teleprompt, stage),
+    ];
+  }
+  if (stage === "preview") {
+    return [
+      ...blockerSections,
+      audioReadinessSection(audio),
+      voiceSection(voice),
+      policySection(policy, review.policyContent),
+      ...(diagnosticsHasContent(diagnostics, review.diagnosticsContent)
+        ? [diagnosticsSection(diagnostics, review.diagnosticsContent)]
+        : []),
+    ];
+  }
+  if (stage === "review") {
+    return [
+      ...blockerSections,
+      reviewSection(review, stage, status, teleprompt),
+      policySection(policy, review.policyContent),
+      ...(diagnosticsHasContent(diagnostics, review.diagnosticsContent)
+        ? [diagnosticsSection(diagnostics, review.diagnosticsContent)]
+        : []),
+    ];
+  }
   return [
-    ...(status.blocker ? [criticalBlockerSection(status.blocker)] : []),
-    ...(stage === "preview" ? [audioReadinessSection(audio)] : []),
-    sourceSection(source, stage),
-    ...(stage === "intake" && source.importConfidence
-      ? [importConfidenceSection(source.importConfidence)]
-      : []),
+    ...blockerSections,
     reviewSection(review, stage, status, teleprompt),
-    voiceSection(voice),
-    policySection(policy, review.policyContent),
-    queueSection(audio),
-    diagnosticsSection(diagnostics, review.diagnosticsContent),
     historySection(history, teleprompt, stage),
+    ...(stage === "theatre" && diagnosticsHasContent(diagnostics, review.diagnosticsContent)
+      ? [diagnosticsSection(diagnostics, review.diagnosticsContent)]
+      : []),
   ];
 }
 
@@ -259,6 +427,103 @@ function criticalBlockerSection(
     priority: "critical",
     tabId: "overview",
     title: blocker.title,
+  };
+}
+
+function issueDetailSection(issue: OperationalStatusIssue): ContextPanelSectionInput {
+  return {
+    children: (
+      <SourceInspectorSection
+        facts={[
+          { label: "What happened", tone: operationalIssueTone(issue), value: issue.label },
+          {
+            label: "Why it matters",
+            value: issueImpactLabel(issue),
+          },
+          {
+            label: "Next step",
+            value: issue.recovery.available
+              ? issue.recovery.label
+              : (issue.recovery.unavailableReason ?? "No action available"),
+          },
+          ...(issue.technicalDetail
+            ? [{ label: "Technical detail", value: issue.technicalDetail }]
+            : []),
+        ]}
+        notes={[{ detail: issue.detail, label: "Explanation", tone: operationalIssueTone(issue) }]}
+      />
+    ),
+    detail: issue.detail,
+    id: `workspace-inspector-issue-${issue.id}`,
+    kind: "narration-block-status",
+    priority: issue.blocksCurrentStage ? "critical" : "primary",
+    tabId: "overview",
+    title: issue.label,
+  };
+}
+
+function issueImpactLabel(issue: OperationalStatusIssue): string {
+  if (issue.blocksCurrentStage) {
+    return "Blocks the current stage";
+  }
+  if (issue.severity === "ok") {
+    return "No action needed";
+  }
+  return "Affects quality or readiness";
+}
+
+function cueDetailSection(cue: WorkspaceInspectorCueDetail): ContextPanelSectionInput {
+  return {
+    children: <SourceInspectorSection facts={cue.facts} notes={cue.notes ?? []} />,
+    detail: cue.detail,
+    id: `workspace-inspector-cue-${cue.id}`,
+    kind: "current-passage",
+    priority: "primary",
+    tabId: "review",
+    title: cue.label,
+  };
+}
+
+function jobDetailSection(job: WorkspaceInspectorJobDetail): ContextPanelSectionInput {
+  return {
+    children: (
+      <QueueInspectorSection
+        facts={job.facts}
+        notes={job.notes ?? [{ detail: job.detail, label: "Job" }]}
+      />
+    ),
+    detail: job.detail,
+    id: `workspace-inspector-job-${job.id}`,
+    kind: "generated-audio-health",
+    priority: "primary",
+    tabId: "diagnostics",
+    title: job.label,
+  };
+}
+
+function invalidPinnedTargetSection(target: WorkspaceInspectorTarget): ContextPanelSectionInput {
+  return {
+    children: (
+      <SourceInspectorSection
+        facts={[
+          { label: "Pinned item", value: `${targetKindLabel(target.kind)} · ${target.label}` },
+          { label: "State", tone: "warning", value: "No longer available" },
+        ]}
+        notes={[
+          {
+            detail: "The active stage summary is still shown below so work can continue.",
+            label: "Fallback",
+            tone: "warning",
+          },
+        ]}
+      />
+    ),
+    detail: "Pinned item is no longer available.",
+    id: `workspace-inspector-invalid-${target.kind}-${target.id}`,
+    kind: "wayfinding",
+    priority: "critical",
+    tabId: "overview",
+    title: "Pinned item unavailable",
   };
 }
 
@@ -530,18 +795,225 @@ function queueBlockClassName({
   return "bg-[var(--vs-border)]";
 }
 
-function WorkspaceInspectorCollapsedSummary({
+function defaultWorkspaceInspectorTargets({
   audio,
+  review,
   source,
-  status,
+  voice,
 }: Readonly<{
   audio: WorkspaceInspectorAudioModel;
+  review: WorkspaceInspectorReviewModel;
+  source: WorkspaceInspectorSourceModel;
+  voice: WorkspaceInspectorVoiceModel;
+}>): WorkspaceInspectorContextTargets {
+  return {
+    cues: [
+      {
+        detail: review.activeBlockDetail,
+        facts: [
+          { label: "Cue", value: review.activeBlockLabel },
+          { label: "Position", value: review.activeBlockDetail },
+        ],
+        id: review.activeBlockLabel,
+        label: review.activeBlockLabel,
+        timingLabel: review.activeBlockDetail,
+      },
+    ],
+    issues: [],
+    jobs:
+      audio.jobLabel === "None"
+        ? []
+        : [
+            {
+              detail: audio.detail,
+              facts: [
+                { label: "Job", value: audio.jobLabel },
+                { label: "Audio", tone: audio.tone, value: audio.lifecycleLabel },
+              ],
+              id: audio.jobLabel,
+              label: audio.jobLabel,
+              tone: audio.tone,
+            },
+          ],
+    source: source.label
+      ? {
+          id: source.label,
+          kind: "source",
+          label: source.label,
+        }
+      : null,
+    voice: voice.label
+      ? {
+          id: voice.label,
+          kind: "voice",
+          label: voice.label,
+        }
+      : null,
+  };
+}
+
+function workspaceInspectorHeading(
+  resolvedTarget: WorkspaceInspectorResolvedTarget,
+  targets: WorkspaceInspectorContextTargets,
+  stage: WorkspaceStage,
+): Readonly<{ detail: string; title: string }> {
+  if (resolvedTarget.invalidPinnedTarget) {
+    return {
+      detail: "Pinned item is no longer available. Active stage context remains below.",
+      title: "Pinned item unavailable",
+    };
+  }
+  const target = resolvedTarget.target;
+  if (target.kind === "stage") {
+    return {
+      detail: stageTargetDetail(stage),
+      title: `Stage · ${STAGE_LABEL[stage]}`,
+    };
+  }
+  return {
+    detail: targetDetail(target, targets),
+    title: `${targetKindLabel(target.kind)} · ${target.label}`,
+  };
+}
+
+function targetDetail(
+  target: WorkspaceInspectorTarget,
+  targets: WorkspaceInspectorContextTargets,
+): string {
+  if (target.kind === "cue") {
+    return targets.cues.find((cue) => cue.id === target.id)?.detail ?? target.label;
+  }
+  if (target.kind === "issue") {
+    return targets.issues.find((issue) => issue.id === target.id)?.detail ?? target.label;
+  }
+  if (target.kind === "job") {
+    return targets.jobs.find((job) => job.id === target.id)?.detail ?? target.label;
+  }
+  if (target.kind === "source") {
+    return "Source metadata, lifecycle, scope, and policy pin.";
+  }
+  if (target.kind === "voice") {
+    return "Voice profile, provider readiness, and policy context.";
+  }
+  return stageTargetDetail(target.stage);
+}
+
+function stageTargetDetail(stage: WorkspaceStage): string {
+  switch (stage) {
+    case "intake": {
+      return "Active source, preparation state, import confidence, and policy scope.";
+    }
+    case "preview": {
+      return "Generation prerequisites, voice readiness, policy, and audio lifecycle.";
+    }
+    case "review": {
+      return "Selected block, review state, next action, and policy effects.";
+    }
+    case "teleprompt": {
+      return "Current cue, next cue, sync mode, timing, and return target.";
+    }
+    case "theatre": {
+      return "Current playback and cue context while the inspector is pinned.";
+    }
+  }
+  const exhaustive: never = stage;
+  return exhaustive;
+}
+
+function targetKindLabel(kind: WorkspaceInspectorTarget["kind"]): string {
+  switch (kind) {
+    case "cue": {
+      return "Cue";
+    }
+    case "issue": {
+      return "Issue";
+    }
+    case "job": {
+      return "Job";
+    }
+    case "source": {
+      return "Source";
+    }
+    case "stage": {
+      return "Stage";
+    }
+    case "voice": {
+      return "Voice";
+    }
+  }
+  const exhaustive: never = kind;
+  return exhaustive;
+}
+
+function diagnosticsHasContent(
+  diagnostics: WorkspaceInspectorDiagnosticsModel,
+  diagnosticsContent: ReactNode,
+): boolean {
+  return (
+    diagnostics.facts.length > 0 || diagnostics.notes.length > 0 || Boolean(diagnosticsContent)
+  );
+}
+
+function WorkspaceInspectorCollapsedSummary({
+  audio,
+  contextTargets,
+  resolvedTarget,
+  source,
+  status,
+  teleprompt,
+}: Readonly<{
+  audio: WorkspaceInspectorAudioModel;
+  contextTargets: WorkspaceInspectorContextTargets;
+  resolvedTarget: WorkspaceInspectorResolvedTarget;
   source: WorkspaceInspectorSourceModel;
   status: WorkspaceStageStatus;
+  teleprompt: WorkspaceInspectorTelepromptModel;
 }>) {
+  if (resolvedTarget.invalidPinnedTarget) {
+    return (
+      <p className="text-xs leading-5 vs-muted">
+        Pinned item is no longer available · {resolvedTarget.invalidPinnedTarget.label}
+      </p>
+    );
+  }
+  const target = resolvedTarget.target;
+  if (target.kind === "cue") {
+    const cue = contextTargets.cues.find((item) => item.id === target.id);
+    return (
+      <p className="text-xs leading-5 vs-muted">
+        Cue · {cue?.label ?? target.label} · {cue?.timingLabel ?? teleprompt.cueTimingLabel}
+      </p>
+    );
+  }
+  if (target.kind === "issue") {
+    const issue = contextTargets.issues.find((item) => item.id === target.id);
+    return (
+      <p className="text-xs leading-5 vs-muted">
+        Issue · {issue?.label ?? target.label} · {issue?.recovery.label ?? "Review"}
+      </p>
+    );
+  }
+  if (target.kind === "job") {
+    const job = contextTargets.jobs.find((item) => item.id === target.id);
+    return (
+      <p className="text-xs leading-5 vs-muted">
+        Job · {job?.label ?? target.label} · {audio.lifecycleLabel}
+      </p>
+    );
+  }
+  if (target.kind === "source") {
+    return (
+      <p className="text-xs leading-5 vs-muted">
+        Source · {source.label} · {source.stateLabel}
+      </p>
+    );
+  }
+  if (target.kind === "voice") {
+    return <p className="text-xs leading-5 vs-muted">Voice · {target.label}</p>;
+  }
   const message = status.blocker
-    ? `${status.blocker.title}: ${status.blocker.detail}`
-    : `${source.label} - ${audio.lifecycleLabel}`;
+    ? `${STAGE_LABEL[target.stage]} · ${status.blocker.title}`
+    : `${STAGE_LABEL[target.stage]} · ${source.label} · ${audio.lifecycleLabel}`;
   return <p className="text-xs leading-5 vs-muted">{message}</p>;
 }
 

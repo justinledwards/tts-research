@@ -1338,3 +1338,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Stage work package
 - [x] Stabilize raw palette guard timeout
 - [x] Create commit
+
+## 2026-06-02 22:41 CEST - Contextual Inspector Contract
+- [x] Inspect inspector, status strip, and selection wiring
+- [x] Add contextual inspector target model and resolver
+- [x] Wire selectable status chips and inspector selections
+- [x] Add focused regression tests
+- [x] Run project checks
+- Validation: focused context/status tests passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome lint warnings/infos.

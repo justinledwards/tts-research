@@ -67,6 +67,7 @@ export interface NarrationStatusAction {
 
 export interface NarrationStatusChip {
   readonly id: string;
+  readonly issue: OperationalStatusIssue;
   readonly label: string;
   readonly tone: StatusChipTone;
   readonly value: string;
@@ -113,6 +114,7 @@ export interface NarrationStatusModel {
   readonly confidenceLabel: string;
   readonly detail: string;
   readonly eta: string;
+  readonly issues: readonly OperationalStatusIssue[];
   readonly primaryAction: NarrationStatusAction | null;
   readonly primaryLabel: string;
   readonly primaryMessage: string;
@@ -192,6 +194,7 @@ export function resolveNarrationStatusModel(
     confidenceLabel,
     detail: primaryCopy.detail,
     eta,
+    issues: operationalIssues,
     primaryAction,
     primaryLabel: primaryCopy.label,
     primaryMessage: primaryCopy.message,
@@ -334,6 +337,7 @@ function narrationStatusChips(issues: readonly OperationalStatusIssue[]): Narrat
 function chipForIssue(issue: OperationalStatusIssue): NarrationStatusChip {
   return {
     id: issue.owner,
+    issue,
     label: chipOwnerLabel(issue.owner),
     tone: operationalIssueTone(issue),
     value: issue.chipValue,

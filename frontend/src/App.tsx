@@ -97,6 +97,7 @@ import {
   progressTargetIdForJob,
   replaceBookCinemaHash,
   scopeFromBookScopeKey,
+  shortIdentifier,
 } from "./appHelpers";
 import {
   type ActivityStatus,
@@ -184,6 +185,7 @@ import {
   composeReviewedSpeechText,
   deriveRevisionBlockStatus,
   normalizeRevisionPolicyNoteType,
+  REVISION_STATUS_LABELS,
   revisionBlockIsSkipped,
   summarizeRevisionHealth,
   type RevisionBlock,
@@ -274,6 +276,10 @@ import type {
   InspectorFact,
   InspectorNote,
   WorkspaceContextInspectorProps,
+  WorkspaceInspectorContextTargets,
+  WorkspaceInspectorCueDetail,
+  WorkspaceInspectorJobDetail,
+  WorkspaceInspectorTarget,
 } from "./features/context-panel";
 import { useAudioWaveformBars } from "./audioWaveform";
 import type {
@@ -2198,6 +2204,10 @@ export function App() {
   );
   const [workspaceInspectorDisplayState, setWorkspaceInspectorDisplayState] =
     useState<ContextPanelDisplayState>("expanded");
+  const [selectedWorkspaceInspectorTarget, setSelectedWorkspaceInspectorTarget] =
+    useState<WorkspaceInspectorTarget | null>(null);
+  const [pinnedWorkspaceInspectorTarget, setPinnedWorkspaceInspectorTarget] =
+    useState<WorkspaceInspectorTarget | null>(null);
   const [activeReviewPane, setActiveReviewPane] = useState<ReviewPane>(() =>
     resolveReviewPane(uiMemory, activeProjectId),
   );
@@ -3367,7 +3377,83 @@ export function App() {
     sourceMode,
     voiceProfileLabel: selectedVoiceProfileLabel,
   });
+  const workspaceInspectorTargets = useMemo<WorkspaceInspectorContextTargets>(
+    () => ({
+      cues: narrationPreviewBlocks.map((block) =>
+        workspaceInspectorCueDetail(block, narrationPreviewBlocks.length),
+      ),
+      issues: narrationStatusModel.issues,
+      jobs: job
+        ? [
+            workspaceInspectorJobDetail({
+              audioLifecycleLabel: generatedAudioLifecycleLabel(generatedAudioLifecycle),
+              job,
+              queue: narrationStatusModel.queue,
+            }),
+          ]
+        : [],
+      source: statusSourceLifecycle.sourceId
+        ? {
+            id: statusSourceLifecycle.sourceId,
+            kind: "source",
+            label: activeNarrationSourceLabel,
+          }
+        : null,
+      voice: {
+        id: selectedVoiceProfileId || "provider",
+        kind: "voice",
+        label: selectedVoiceProfileLabel,
+      },
+    }),
+    [
+      activeNarrationSourceLabel,
+      generatedAudioLifecycle,
+      job,
+      narrationPreviewBlocks,
+      narrationStatusModel.issues,
+      narrationStatusModel.queue,
+      selectedVoiceProfileId,
+      selectedVoiceProfileLabel,
+      statusSourceLifecycle.sourceId,
+    ],
+  );
+  const selectWorkspaceInspectorTarget = useCallback((target: WorkspaceInspectorTarget | null) => {
+    setSelectedWorkspaceInspectorTarget(target);
+    if (target) {
+      setWorkspaceInspectorDisplayState("expanded");
+    }
+  }, []);
+  const inspectWorkspaceCue = useCallback(
+    (blockId: string | null) => {
+      if (!blockId) {
+        return;
+      }
+      const cue = workspaceInspectorTargets.cues.find((item) => item.id === blockId);
+      if (cue) {
+        selectWorkspaceInspectorTarget({ id: cue.id, kind: "cue", label: cue.label });
+      }
+    },
+    [selectWorkspaceInspectorTarget, workspaceInspectorTargets.cues],
+  );
+  const inspectWorkspaceSource = useCallback(() => {
+    selectWorkspaceInspectorTarget(workspaceInspectorTargets.source);
+  }, [selectWorkspaceInspectorTarget, workspaceInspectorTargets.source]);
+  const inspectWorkspaceJob = useCallback(() => {
+    const activeInspectorJob = workspaceInspectorTargets.jobs.at(0);
+    if (activeInspectorJob) {
+      selectWorkspaceInspectorTarget({
+        id: activeInspectorJob.id,
+        kind: "job",
+        label: activeInspectorJob.label,
+      });
+    }
+  }, [selectWorkspaceInspectorTarget, workspaceInspectorTargets.jobs]);
   const workspaceInspectorPinned = workspaceLayout.contextInspector === "pinned";
+  useEffect(() => {
+    if (!workspaceInspectorPinned && pinnedWorkspaceInspectorTarget) {
+      setPinnedWorkspaceInspectorTarget(null);
+    }
+  }, [pinnedWorkspaceInspectorTarget, workspaceInspectorPinned]);
   const effectiveWorkspaceInspectorDisplayState =
     workspaceInspectorPinned || workspaceInspectorDisplayState === "pinned"
       ? "pinned"
@@ -3934,15 +4020,29 @@ export function App() {
     }
   }, []);
 
-  const selectVoiceProfile = useCallback((profileId: string) => {
-    setSelectedVoiceProfileId(profileId);
-    localStorage.setItem(VOICE_PROFILE_ID_STORAGE_KEY, profileId);
-  }, []);
+  const selectVoiceProfile = useCallback(
+    (profileId: string) => {
+      const profile = voiceProfiles.find((item) => item.id === profileId);
+      setSelectedVoiceProfileId(profileId);
+      localStorage.setItem(VOICE_PROFILE_ID_STORAGE_KEY, profileId);
+      selectWorkspaceInspectorTarget({
+        id: profileId || "provider",
+        kind: "voice",
+        label: profile?.name ?? "Selected voice",
+      });
+    },
+    [selectWorkspaceInspectorTarget, voiceProfiles],
+  );
 
   const clearVoiceProfileSelection = useCallback(() => {
     setSelectedVoiceProfileId("");
     localStorage.removeItem(VOICE_PROFILE_ID_STORAGE_KEY);
-  }, []);
+    selectWorkspaceInspectorTarget({
+      id: "provider",
+      kind: "voice",
+      label: "Default voice",
+    });
+  }, [selectWorkspaceInspectorTarget]);
 
   const handleSpeechPolicyProfileChange = useCallback(
     async (profile: string) => {
@@ -4711,6 +4811,11 @@ export function App() {
         setSelectedBookScope(defaultScope);
         setSourceMode("book");
         setContentMode("review");
+        selectWorkspaceInspectorTarget({
+          id: book.id,
+          kind: "source",
+          label: bookSourceName(book),
+        });
         if (book.status === "ready") {
           setText(bookScopeText(book, defaultScope));
         }
@@ -4738,6 +4843,7 @@ export function App() {
       announcePolite,
       announceSourceExtractionResult,
       refreshProjects,
+      selectWorkspaceInspectorTarget,
       setContentMode,
     ],
   );
@@ -4766,6 +4872,11 @@ export function App() {
           setSelectedBookScope(resolveDefaultBookScope(book));
           setSourceMode("book");
           setContentMode("review");
+          selectWorkspaceInspectorTarget({
+            id: book.id,
+            kind: "source",
+            label: bookSourceName(book),
+          });
           announceSourceExtractionResult(book);
           return;
         }
@@ -4777,6 +4888,11 @@ export function App() {
         setSelectedPreparedSourceId(source.id);
         setSourceMode("fileUrl");
         setContentMode("review");
+        selectWorkspaceInspectorTarget({
+          id: source.id,
+          kind: "source",
+          label: source.title ?? source.sourceName,
+        });
         if (source.speechText) {
           setText(source.speechText);
         }
@@ -4804,6 +4920,7 @@ export function App() {
       announcePolite,
       announceSourceExtractionResult,
       refreshProjects,
+      selectWorkspaceInspectorTarget,
       setContentMode,
     ],
   );
@@ -4824,6 +4941,11 @@ export function App() {
         setPreparedSourceCinemaSourceId(source.id);
         setSourceMode("fileUrl");
         setContentMode("review");
+        selectWorkspaceInspectorTarget({
+          id: source.id,
+          kind: "source",
+          label: source.title ?? source.sourceName,
+        });
         if (source.speechText) {
           setText(source.speechText);
         }
@@ -4851,6 +4973,7 @@ export function App() {
       announcePolite,
       announceSourceExtractionResult,
       refreshProjects,
+      selectWorkspaceInspectorTarget,
       setContentMode,
     ],
   );
@@ -4891,6 +5014,11 @@ export function App() {
           setSelectedBookScope(resolveDefaultBookScope(book));
           setSourceMode("book");
           setContentMode("review");
+          selectWorkspaceInspectorTarget({
+            id: book.id,
+            kind: "source",
+            label: bookSourceName(book),
+          });
           announceSourceExtractionResult(book);
           return;
         }
@@ -4908,6 +5036,11 @@ export function App() {
         setSelectedPreparedSourceId(source.id);
         setSourceMode("fileUrl");
         setContentMode("review");
+        selectWorkspaceInspectorTarget({
+          id: source.id,
+          kind: "source",
+          label: source.title ?? source.sourceName,
+        });
         if (source.speechText) {
           setText(source.speechText);
         }
@@ -4935,6 +5068,7 @@ export function App() {
       announcePolite,
       announceSourceExtractionResult,
       refreshProjects,
+      selectWorkspaceInspectorTarget,
       setContentMode,
     ],
   );
@@ -4959,6 +5093,11 @@ export function App() {
       setSelectedPreparedSourceId(source.id);
       setSourceMode("fileUrl");
       setContentMode("review");
+      selectWorkspaceInspectorTarget({
+        id: source.id,
+        kind: "source",
+        label: source.title ?? source.sourceName,
+      });
       let nextSource = source;
       if (isPreparedSourceDisplayIncomplete(source)) {
         try {
@@ -4978,7 +5117,7 @@ export function App() {
         setText(nextSource.speechText);
       }
     },
-    [setContentMode],
+    [selectWorkspaceInspectorTarget, setContentMode],
   );
 
   const handleInspectContentIR = useCallback(
@@ -5023,10 +5162,15 @@ export function App() {
       setSelectedBookScope(scope);
       setSourceMode("book");
       setContentMode("review");
+      selectWorkspaceInspectorTarget({
+        id: book.id,
+        kind: "source",
+        label: bookSourceName(book),
+      });
       setText(scopedText);
       setBookSourceError(null);
     },
-    [bookScopeContent, setContentMode],
+    [bookScopeContent, selectWorkspaceInspectorTarget, setContentMode],
   );
   const openBookCinemaFromIntake = useCallback(
     (book?: BookSource, scope?: BookScope) => {
@@ -5037,6 +5181,11 @@ export function App() {
         setSelectedBookScope(nextScope);
         setSourceMode("book");
         setContentMode("review");
+        selectWorkspaceInspectorTarget({
+          id: nextBook.id,
+          kind: "source",
+          label: bookSourceName(nextBook),
+        });
         setText(bookScopeText(nextBook, nextScope));
         setBookSourceError(null);
         bookCinemaOpenTiming.start({ target: "intake-book" });
@@ -5046,7 +5195,14 @@ export function App() {
       }
       openSelectedBookCinema();
     },
-    [bookCinemaOpenTiming, openSelectedBookCinema, selectedBookSource, setContentMode, themeName],
+    [
+      bookCinemaOpenTiming,
+      openSelectedBookCinema,
+      selectWorkspaceInspectorTarget,
+      selectedBookSource,
+      setContentMode,
+      themeName,
+    ],
   );
 
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
@@ -6337,6 +6493,7 @@ export function App() {
       setWorkspaceContext((currentContext) =>
         withWorkspaceActiveBlock(currentContext, nextBlock.id),
       );
+      inspectWorkspaceCue(nextBlock.id);
     };
     globalThis.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -6347,6 +6504,7 @@ export function App() {
     isCommandPaletteOpen,
     isHelpOpen,
     isSettingsOpen,
+    inspectWorkspaceCue,
     job,
     narrationPreviewBlocks,
     playbackControls,
@@ -6545,6 +6703,7 @@ export function App() {
     );
     const nextBlock = narrationPreviewBlocks[nextIndex];
     setWorkspaceContext((currentContext) => withWorkspaceActiveBlock(currentContext, nextBlock.id));
+    inspectWorkspaceCue(nextBlock.id);
   };
   const jumpNarrationCommandAudio = () => {
     const seekTargetSec = playbackSeekSecondsForRevisionBlock(
@@ -7218,6 +7377,7 @@ export function App() {
               setWorkspaceContext((currentContext) =>
                 withWorkspaceActiveBlock(currentContext, blockId),
               );
+              inspectWorkspaceCue(blockId);
             }}
             onOpenCinema={openReadingCinema}
             onPolicyProfileChange={handleSpeechPolicyProfileChange}
@@ -7561,6 +7721,7 @@ export function App() {
                   handleStudioModeChange("voiceCloning");
                 }}
                 onInspectSelectedSource={() => {
+                  inspectWorkspaceSource();
                   if (selectedPreparedSource) {
                     void handleInspectContentIR(
                       selectedPreparedSource.id,
@@ -7708,6 +7869,7 @@ export function App() {
                       setWorkspaceContext((currentContext) =>
                         withWorkspaceActiveBlock(currentContext, blockId),
                       );
+                      inspectWorkspaceCue(blockId);
                     }}
                     onBackToPreview={() => {
                       runWorkspaceStageAction("previewSpeech");
@@ -7742,9 +7904,19 @@ export function App() {
               playbackCursorSec={playbackCursorSec}
               onAuditionVoice={auditionVoicePreviewFromCurrentConfig}
               onInspectBookSource={(book) => {
+                selectWorkspaceInspectorTarget({
+                  id: book.id,
+                  kind: "source",
+                  label: bookSourceName(book),
+                });
                 void handleInspectContentIR(book.id, bookSourceName(book));
               }}
               onInspectPreparedSource={(source) => {
+                selectWorkspaceInspectorTarget({
+                  id: source.id,
+                  kind: "source",
+                  label: source.title ?? source.sourceName,
+                });
                 void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
               }}
               onOpenCinema={openReadingCinema}
@@ -7769,6 +7941,7 @@ export function App() {
                 setWorkspaceContext((currentContext) =>
                   withWorkspaceActiveBlock(currentContext, blockId),
                 );
+                inspectWorkspaceCue(blockId);
               }}
               onEditedTextByBlockIdChange={setRevisionEditedTextByBlockId}
               onHistoryEntriesChange={setRevisionHistoryEntries}
@@ -7837,6 +8010,7 @@ export function App() {
                     })),
                   }}
                   pinned={workspaceInspectorPinned}
+                  pinnedTarget={pinnedWorkspaceInspectorTarget}
                   policy={{
                     notes: workspaceInspectorPolicyNotes,
                     profileLabel: speechPolicyProfileDisplayName(
@@ -7855,6 +8029,7 @@ export function App() {
                       text,
                     ),
                   }}
+                  selectedTarget={selectedWorkspaceInspectorTarget}
                   source={{
                     detail: statusSourceLifecycle.selectedScope,
                     importConfidence: workspaceInspectorImportConfidence({
@@ -7872,6 +8047,7 @@ export function App() {
                   }}
                   stage={contentMode}
                   status={activeWorkbenchStageStatus}
+                  targets={workspaceInspectorTargets}
                   teleprompt={{
                     cueSyncLabel:
                       playbackControls.isPlaying || isPlaybackActive ? "Following audio" : "Manual",
@@ -7895,6 +8071,7 @@ export function App() {
                       contextInspector: pinned ? "pinned" : "summary",
                     });
                   }}
+                  onPinnedTargetChange={setPinnedWorkspaceInspectorTarget}
                 />
               </div>
             ) : null}
@@ -7907,6 +8084,11 @@ export function App() {
         canOpenCinema={canOpenCurrentCinema}
         mode={activityFooterMode}
         model={narrationStatusModel}
+        selectedIssueId={
+          selectedWorkspaceInspectorTarget?.kind === "issue"
+            ? selectedWorkspaceInspectorTarget.id
+            : null
+        }
         onCancel={() => {
           void handleCancelVoiceJob();
         }}
@@ -7924,10 +8106,18 @@ export function App() {
           runWorkspaceStageAction("reviewBlocks");
         }}
         onOpenActivity={() => {
+          inspectWorkspaceJob();
           openCommandCenter("activity");
         }}
         onOpenVoiceCloning={() => {
           handleStudioModeChange("voiceCloning");
+        }}
+        onStatusChipSelect={(chip) => {
+          selectWorkspaceInspectorTarget({
+            id: chip.issue.id,
+            kind: "issue",
+            label: chip.issue.label,
+          });
         }}
       />
     </main>
@@ -11339,6 +11529,90 @@ function workbenchSourceMetrics({
   ];
 }
 
+function workspaceInspectorCueDetail(
+  block: RevisionBlock,
+  totalBlocks: number,
+): WorkspaceInspectorCueDetail {
+  const notes: InspectorNote[] = [
+    block.policyNote
+      ? {
+          detail: block.policyNote,
+          label: "Policy",
+          tone: block.needsAttention ? "warning" : undefined,
+        }
+      : null,
+    ...block.warnings.map((warning) => ({
+      detail: warning,
+      label: "Warning",
+      tone: "warning",
+    })),
+  ].filter(Boolean) as InspectorNote[];
+  return {
+    detail: `${block.index.toString()} of ${Math.max(1, totalBlocks).toString()} · ${formatDuration(block.estimatedDurationMs)}`,
+    facts: [
+      { label: "Cue", value: block.label },
+      {
+        label: "Position",
+        value: `${block.index.toString()} of ${Math.max(1, totalBlocks).toString()}`,
+      },
+      { label: "Source block", value: block.id },
+      { label: "Status", value: REVISION_STATUS_LABELS[block.status] },
+      { label: "Duration", value: formatDuration(block.estimatedDurationMs) },
+      { label: "Source text", value: inspectorTextExcerpt(block.text) },
+      { label: "Spoken form", value: inspectorTextExcerpt(block.spokenText || "No spoken text.") },
+    ],
+    id: block.id,
+    label: block.label,
+    notes,
+    timingLabel: formatDuration(block.estimatedDurationMs),
+  };
+}
+
+function workspaceInspectorJobDetail({
+  audioLifecycleLabel,
+  job,
+  queue,
+}: Readonly<{
+  audioLifecycleLabel: string;
+  job: VoiceJob;
+  queue: {
+    currentSegment: number;
+    generatingCount: number;
+    readyCount: number;
+    totalSegments: number;
+  };
+}>): WorkspaceInspectorJobDetail {
+  return {
+    detail: firstNonEmptyString(job.error, job.progress.message, job.status) ?? job.status,
+    facts: [
+      { label: "Job", value: shortIdentifier(job.id) },
+      { label: "Status", value: job.status },
+      { label: "Lifecycle", value: audioLifecycleLabel },
+      { label: "Current", value: queue.currentSegment > 0 ? String(queue.currentSegment) : "n/a" },
+      { label: "Ready", value: queue.readyCount.toString() },
+      { label: "Generating", value: queue.generatingCount.toString() },
+      { label: "Total", value: queue.totalSegments.toString() },
+      { label: "Voice", value: job.voiceProfileName ?? job.voice },
+      { label: "Provider", value: job.provider },
+    ],
+    id: job.id,
+    label: shortIdentifier(job.id),
+    notes: [
+      job.error ? { detail: job.error, label: "Error", tone: "warning" } : null,
+      job.progress.detail ? { detail: job.progress.detail, label: "Progress" } : null,
+    ].filter(Boolean) as InspectorNote[],
+    tone: toneForJobStatus(job.status),
+  };
+}
+
+function inspectorTextExcerpt(value: string): string {
+  const normalized = value.replaceAll(/\s+/g, " ").trim();
+  if (normalized.length <= 96) {
+    return normalized || "n/a";
+  }
+  return `${normalized.slice(0, 93)}...`;
+}
+
 function workspaceInspectorImportConfidence({
   isImportingBookSource,
   isPreparingSource,
@@ -11454,6 +11728,22 @@ function audioLifecycleTone(
     return "success";
   }
   if (state === "queued" || state === "generating") {
+    return "info";
+  }
+  return "neutral";
+}
+
+function toneForJobStatus(status: VoiceJob["status"]): StatusChipTone {
+  if (status === "failed") {
+    return "danger";
+  }
+  if (status === "cancelled") {
+    return "warning";
+  }
+  if (status === "completed") {
+    return "success";
+  }
+  if (status === "queued" || status === "optimizing" || status === "synthesizing") {
     return "info";
   }
   return "neutral";

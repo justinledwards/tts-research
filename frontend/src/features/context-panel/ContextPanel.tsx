@@ -14,6 +14,8 @@ export function ContextPanel({
   className = "",
   collapsedSummary,
   displayState = "expanded",
+  headingDetail,
+  headingTitle,
   label = "Inspector",
   pinned = false,
   surface,
@@ -26,6 +28,8 @@ export function ContextPanel({
   className?: string;
   collapsedSummary?: ReactNode;
   displayState?: ContextPanelDisplayState;
+  headingDetail?: string;
+  headingTitle?: string;
   label?: string;
   pinned?: boolean;
   surface: ContextPanelSurface;
@@ -45,6 +49,8 @@ export function ContextPanel({
     ? `${activeTab.title} is an operator-facing panel for diagnostics and internals. It stays hidden from Read mode unless selected or pinned intentionally.`
     : null;
   const resolvedDisplayState: ContextPanelDisplayState = pinned ? "pinned" : displayState;
+  const visibleHeadingTitle = headingTitle ?? activeTab.title;
+  const visibleHeadingDetail = headingDetail ?? activeTab.detail;
   if (resolvedDisplayState === "collapsed") {
     return (
       <Panel
@@ -62,8 +68,8 @@ export function ContextPanel({
               <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
                 Inspector
               </p>
-              <h3 className="mt-1 truncate text-sm font-semibold">{activeTab.title}</h3>
-              <p className="mt-1 line-clamp-2 text-xs vs-muted">{activeTab.detail}</p>
+              <h3 className="mt-1 truncate text-sm font-semibold">{visibleHeadingTitle}</h3>
+              <p className="mt-1 line-clamp-2 text-xs vs-muted">{visibleHeadingDetail}</p>
             </div>
             <Button
               className="shrink-0"
@@ -102,8 +108,8 @@ export function ContextPanel({
             <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
               Inspector
             </p>
-            <h3 className="mt-1 truncate text-sm font-semibold">{activeTab.title}</h3>
-            <p className="mt-1 line-clamp-2 text-xs vs-muted">{activeTab.detail}</p>
+            <h3 className="mt-1 truncate text-sm font-semibold">{visibleHeadingTitle}</h3>
+            <p className="mt-1 line-clamp-2 text-xs vs-muted">{visibleHeadingDetail}</p>
           </div>
           {onPinnedChange ? (
             <Button
