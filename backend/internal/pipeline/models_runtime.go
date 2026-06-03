@@ -56,14 +56,15 @@ type JobQualityReport struct {
 }
 
 type JobSegment struct {
-	Index      int     `json:"index"`
-	Text       string  `json:"text"`
-	Status     string  `json:"status,omitempty"`
-	Attempts   int     `json:"attempts,omitempty"`
-	DurationMS int     `json:"durationMs,omitempty"`
-	LatencyMS  int     `json:"latencyMs,omitempty"`
-	Similarity float64 `json:"similarity,omitempty"`
-	Reason     string  `json:"reason,omitempty"`
+	Index           int     `json:"index"`
+	Text            string  `json:"text"`
+	Status          string  `json:"status,omitempty"`
+	Attempts        int     `json:"attempts,omitempty"`
+	DurationMS      int     `json:"durationMs,omitempty"`
+	LatencyMS       int     `json:"latencyMs,omitempty"`
+	Similarity      float64 `json:"similarity,omitempty"`
+	Reason          string  `json:"reason,omitempty"`
+	ReusedFromJobID string  `json:"reusedFromJobId,omitempty"`
 }
 
 type VoiceProfileStatus string
@@ -415,7 +416,10 @@ type VoiceJob struct {
 	Progress                JobProgress       `json:"progress"`
 	Error                   string            `json:"error,omitempty"`
 	TerminalReason          JobTerminalReason `json:"terminalReason,omitempty"`
+	FailureKind             JobFailureKind    `json:"failureKind,omitempty"`
 	Retriable               bool              `json:"retriable,omitempty"`
+	RetryOfJobID            string            `json:"retryOfJobId,omitempty"`
+	ReusedReadySegments     int               `json:"reusedReadySegments,omitempty"`
 	CreatedAt               time.Time         `json:"createdAt"`
 	UpdatedAt               time.Time         `json:"updatedAt"`
 	CompletedAt             *time.Time        `json:"completedAt,omitempty"`

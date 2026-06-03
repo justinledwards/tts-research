@@ -214,8 +214,8 @@ export function TelepromptStudio({
   const [statusMessage, setStatusMessage] = useState("Teleprompt Studio ready.");
   const { announcePolite } = useLiveStatus();
   const [cueDrawerOpen, setCueDrawerOpen] = useState(false);
-  const [workMode, setWorkMode] = useState<TelepromptWorkMode>("audio-follow");
-  const [cueSyncMode, setCueSyncMode] = useState<TelepromptCueSyncMode>("audio-follow");
+  const [workMode, setWorkMode] = useState<TelepromptWorkMode>("rehearsal");
+  const [cueSyncMode, setCueSyncMode] = useState<TelepromptCueSyncMode>("manual");
   const scriptScrollerRef = useRef<HTMLDivElement | null>(null);
   const activeBlockElementRef = useRef<HTMLDivElement | null>(null);
   const theatreRootRef = useRef<HTMLDivElement | null>(null);
@@ -232,22 +232,24 @@ export function TelepromptStudio({
     () => buildTelepromptCueTimeline({ blocks, highlightMap, highlightMapV2, job }),
     [blocks, highlightMap, highlightMapV2, job],
   );
+  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
+  const audioFollowAvailable = playbackControls.isAvailable && job?.status === "completed";
   const cueSync = useMemo(
     () =>
       resolveTelepromptCueSync({
         activeBlockId,
         mode: cueSyncMode,
-        playbackAvailable: playbackControls.isAvailable,
+        playbackAvailable: audioFollowAvailable,
         playbackCursorSec,
         playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
         timeline: cueTimeline,
       }),
     [
       activeBlockId,
+      audioFollowAvailable,
       cueSyncMode,
       cueTimeline,
       isPlaybackActive,
-      playbackControls.isAvailable,
       playbackControls.isPlaying,
       playbackCursorSec,
     ],
@@ -283,9 +285,8 @@ export function TelepromptStudio({
   const preset = telepromptPreset(presetId);
   const playbackStatusLabel =
     playbackControls.isPlaying || isPlaybackActive ? "Recording playback" : "Ready to record";
-  const playbackLifecycle = playbackControls.isAvailable
-    ? "ready"
-    : generatedAudioLifecycleFromJob({ job });
+  const playbackLifecycle = playbackControls.isAvailable ? "ready" : generatedAudioLifecycle;
+  const audioFollowLifecycle = audioFollowAvailable ? "ready" : generatedAudioLifecycle;
   const cuePlaybackDisabledReason = playbackControls.isAvailable
     ? undefined
     : playbackActionDisabledReason({ action: "telepromptPlay", lifecycle: playbackLifecycle });
@@ -316,17 +317,17 @@ export function TelepromptStudio({
     () =>
       buildTelepromptWorkModeModel({
         audioProgressPercent,
-        generatedAudioLifecycle: playbackLifecycle,
+        generatedAudioLifecycle: audioFollowLifecycle,
         mode: workMode,
-        playbackAvailable: playbackControls.isAvailable,
+        playbackAvailable: audioFollowAvailable,
         playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
       }),
     [
       audioProgressPercent,
+      audioFollowAvailable,
+      audioFollowLifecycle,
       isPlaybackActive,
-      playbackControls.isAvailable,
       playbackControls.isPlaying,
-      playbackLifecycle,
       workMode,
     ],
   );
@@ -335,9 +336,9 @@ export function TelepromptStudio({
       TELEPROMPT_WORK_MODES.map((mode) => {
         const optionModel = buildTelepromptWorkModeModel({
           audioProgressPercent,
-          generatedAudioLifecycle: playbackLifecycle,
+          generatedAudioLifecycle: audioFollowLifecycle,
           mode,
-          playbackAvailable: playbackControls.isAvailable,
+          playbackAvailable: audioFollowAvailable,
           playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
         });
         return {
@@ -350,13 +351,20 @@ export function TelepromptStudio({
       }),
     [
       audioProgressPercent,
+      audioFollowAvailable,
+      audioFollowLifecycle,
       isPlaybackActive,
-      playbackControls.isAvailable,
       playbackControls.isPlaying,
-      playbackLifecycle,
       workMode,
     ],
   );
+  useEffect(() => {
+    if (audioFollowAvailable || (workMode !== "audio-follow" && workMode !== "review-playback")) {
+      return;
+    }
+    setWorkMode("rehearsal");
+    setCueSyncMode("manual");
+  }, [audioFollowAvailable, workMode]);
   const activeCueCurrentSourceWordId: string | null =
     typeof cueSync.activeCue?.currentSourceWordId === "string"
       ? cueSync.activeCue.currentSourceWordId
@@ -500,14 +508,14 @@ export function TelepromptStudio({
   }, [announcePolite, persistSnapshot, returnTarget]);
 
   const openTheatre = useCallback(() => {
-    if (onOpenTheatreStage && playbackControls.isAvailable) {
+    if (onOpenTheatreStage) {
       theatreUsesWorkspaceStageRef.current = true;
       onOpenTheatreStage();
       return;
     }
     theatreUsesWorkspaceStageRef.current = false;
     activateTheatre();
-  }, [activateTheatre, onOpenTheatreStage, playbackControls.isAvailable]);
+  }, [activateTheatre, onOpenTheatreStage]);
 
   const handleExitTheatre = useCallback(() => {
     const shouldExitWorkspaceStage = theatreUsesWorkspaceStageRef.current;
@@ -715,6 +723,10 @@ export function TelepromptStudio({
   }, [countdownRemaining, playbackControls]);
 
   const handleJumpToCurrentAudio = useCallback(() => {
+    if (!audioFollowAvailable) {
+      setStatusMessage("Audio-follow unlocks when generated audio and timing are ready.");
+      return;
+    }
     setWorkMode("audio-follow");
     setCueSyncMode("audio-follow");
     const sourceBlockId = cueSync.activeCue?.sourceBlockId;
@@ -725,7 +737,13 @@ export function TelepromptStudio({
     onActiveBlockChange(sourceBlockId);
     persistSnapshot(returnTarget, sourceBlockId);
     setStatusMessage("Jumped to the current audio cue.");
-  }, [cueSync.activeCue?.sourceBlockId, onActiveBlockChange, persistSnapshot, returnTarget]);
+  }, [
+    cueSync.activeCue?.sourceBlockId,
+    onActiveBlockChange,
+    persistSnapshot,
+    audioFollowAvailable,
+    returnTarget,
+  ]);
 
   const handleRestart = useCallback(() => {
     if (!playbackControls.isAvailable) {

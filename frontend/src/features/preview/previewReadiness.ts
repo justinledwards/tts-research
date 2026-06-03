@@ -2,6 +2,7 @@ import {
   generatedAudioLifecycleDescriptor,
   type GeneratedAudioLifecycleState,
 } from "../playback/generatedAudioLifecycle";
+import type { AudioGenerationPipelineModel } from "../playback/audioGenerationPipeline";
 import { OPERATIONAL_RECOVERY_LABELS } from "../operational-status";
 
 export type PreviewReadinessRowId =
@@ -9,6 +10,7 @@ export type PreviewReadinessRowId =
   | "audio"
   | "policy"
   | "review"
+  | "runtime"
   | "source"
   | "spoken"
   | "voice";
@@ -30,6 +32,7 @@ export interface PreviewReadinessConfirmation {
 export interface PreviewReadinessModelInput {
   readonly canCreate: boolean;
   readonly createDisabledReason?: string;
+  readonly audioPipeline?: AudioGenerationPipelineModel;
   readonly generatedAudioLifecycle: GeneratedAudioLifecycleState;
   readonly hasSource: boolean;
   readonly hasSpokenText: boolean;
@@ -70,15 +73,18 @@ export function resolvePreviewReadinessModel(
   const spoken = resolveSpokenReadiness(input, source.status === "ready");
   const voice = resolveVoiceReadiness(input);
   const review = resolveReviewReadiness(input, source.status === "ready");
+  const runtime = resolveRuntimeReadiness(input, source, spoken, voice, review);
   const canAudition =
     source.status === "ready" && spoken.status === "ready" && voice.status === "ready";
-  const audio = resolveGeneratedAudioReadiness(input.generatedAudioLifecycle);
+  const audio = resolveGeneratedAudioReadiness(input.generatedAudioLifecycle, input.audioPipeline);
   const canOpenAudioSurface = input.generatedAudioLifecycle === "ready";
-  const canCreate = input.canCreate && canAudition;
+  const canCreate = input.canCreate && canAudition && review.status === "ready";
   const canOpenTeleprompt = source.status === "ready" && spoken.status === "ready";
+  const canOpenTheatre = canOpenTeleprompt;
   const createDisabledReason = canCreate
     ? undefined
-    : (firstBlockingDetail([source, spoken, voice]) ??
+    : (firstBlockingDetail([source, spoken, review, voice, runtime]) ??
+      firstWarningDetail([review]) ??
       input.createDisabledReason ??
       "Select a ready source or wait for the current run.");
   const openTelepromptDisabledReason = canOpenTeleprompt
@@ -90,7 +96,7 @@ export function resolvePreviewReadinessModel(
     canCreate,
     canOpenCinema: canOpenAudioSurface,
     canOpenTeleprompt,
-    canOpenTheatre: canOpenAudioSurface,
+    canOpenTheatre,
     cinemaDisabledReason: canOpenAudioSurface ? undefined : audio.detail,
     confirmations: [
       { label: "Source", value: input.sourceLabel },
@@ -101,14 +107,22 @@ export function resolvePreviewReadinessModel(
       { label: "Format", value: input.outputFormat },
     ],
     createDisabledReason,
-    createHelper: createHelperForAudioLifecycle(input.generatedAudioLifecycle, canOpenAudioSurface),
+    createHelper: createHelperForAudioLifecycle(
+      input.generatedAudioLifecycle,
+      canOpenAudioSurface,
+      input.audioPipeline,
+    ),
     generatedPlaybackDisabledReason: canOpenAudioSurface ? undefined : audio.detail,
     openTelepromptDetail: canOpenAudioSurface
       ? "Teleprompt opens with generated cue playback ready."
       : telepromptDetailForAudioLifecycle(input.generatedAudioLifecycle),
     openTelepromptDisabledReason,
-    openTheatreDisabledReason: canOpenAudioSurface ? undefined : audio.detail,
-    primaryLabel: previewPrimaryLabel(input.generatedAudioLifecycle, canOpenAudioSurface),
+    openTheatreDisabledReason: canOpenTheatre ? undefined : openTelepromptDisabledReason,
+    primaryLabel: previewPrimaryLabel(
+      input.generatedAudioLifecycle,
+      canOpenAudioSurface,
+      input.audioPipeline,
+    ),
     rows: [
       source,
       spoken,
@@ -120,6 +134,7 @@ export function resolvePreviewReadinessModel(
         label: "Policy & scope",
         status: source.status === "ready" ? "ready" : "waiting",
       },
+      runtime,
       {
         detail: canAudition
           ? "Selected spoken block can be auditioned before full generation."
@@ -237,9 +252,73 @@ function resolveVoiceReadiness(input: PreviewReadinessModelInput): PreviewReadin
   };
 }
 
+function resolveRuntimeReadiness(
+  input: PreviewReadinessModelInput,
+  source: PreviewReadinessRow,
+  spoken: PreviewReadinessRow,
+  voice: PreviewReadinessRow,
+  review: PreviewReadinessRow,
+): PreviewReadinessRow {
+  if (input.audioPipeline?.state === "queued" || input.generatedAudioLifecycle === "queued") {
+    return {
+      detail: input.audioPipeline?.detail ?? "Audio generation is queued.",
+      id: "runtime",
+      label: "Runtime/queue",
+      status: "working",
+    };
+  }
+  if (
+    input.audioPipeline?.state === "generating" ||
+    input.audioPipeline?.state === "partialReady" ||
+    input.generatedAudioLifecycle === "generating"
+  ) {
+    return {
+      detail:
+        input.audioPipeline?.detail ??
+        "Audio generation is running. Playback unlocks as segments become ready.",
+      id: "runtime",
+      label: "Runtime/queue",
+      status: "working",
+    };
+  }
+  const prerequisiteBlocker = firstBlockingDetail([source, spoken, review, voice]);
+  if (prerequisiteBlocker) {
+    return {
+      detail:
+        "Runtime and queue checks run after source, review, spoken form, and voice are ready.",
+      id: "runtime",
+      label: "Runtime/queue",
+      status: "waiting",
+    };
+  }
+  if (input.createDisabledReason && !input.voiceCapabilityReason) {
+    return {
+      detail: input.createDisabledReason,
+      id: "runtime",
+      label: "Runtime/queue",
+      status: "blocked",
+    };
+  }
+  return {
+    detail: "Runtime is available and no active generation is blocking the queue.",
+    id: "runtime",
+    label: "Runtime/queue",
+    status: "ready",
+  };
+}
+
 function resolveGeneratedAudioReadiness(
   lifecycle: GeneratedAudioLifecycleState,
+  pipeline?: AudioGenerationPipelineModel,
 ): PreviewReadinessRow {
+  if (pipeline?.state === "partialReady") {
+    return {
+      detail: pipeline.detail,
+      id: "audio",
+      label: "Generated audio",
+      status: "working",
+    };
+  }
   const descriptor = generatedAudioLifecycleDescriptor(lifecycle);
   if (lifecycle === "ready") {
     return {
@@ -259,7 +338,9 @@ function resolveGeneratedAudioReadiness(
   }
   if (lifecycle === "missing") {
     return {
-      detail: descriptor.disabledReason,
+      detail:
+        pipeline?.detail ??
+        "Preview shows the listener-ready text. No generated audio exists yet. Create & Listen to generate audio for this scope.",
       id: "audio",
       label: "Generated audio",
       status: "waiting",
@@ -276,7 +357,11 @@ function resolveGeneratedAudioReadiness(
 function createHelperForAudioLifecycle(
   lifecycle: GeneratedAudioLifecycleState,
   canOpenAudioSurface: boolean,
+  pipeline?: AudioGenerationPipelineModel,
 ): string {
+  if (pipeline?.detail) {
+    return pipeline.detail;
+  }
   if (canOpenAudioSurface) {
     return "Audio is ready. Recreate only if the source, voice, policy, or scope changed.";
   }
@@ -290,14 +375,19 @@ function telepromptDetailForAudioLifecycle(lifecycle: GeneratedAudioLifecycleSta
   if (lifecycle === "failed") {
     return "Rehearsal only. Retry generation unlocks audio-follow.";
   }
-  return "Rehearsal only. Audio-follow unlocks after Create & Listen.";
+  return "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.";
 }
 
 function previewPrimaryLabel(
   lifecycle: GeneratedAudioLifecycleState,
   canOpenAudioSurface: boolean,
+  pipeline?: AudioGenerationPipelineModel,
 ): string {
-  if (lifecycle === "failed") {
+  if (
+    ((pipeline?.state === "failed" || pipeline?.state === "cancelled") &&
+      pipeline.canRetryGeneration) ||
+    (!pipeline && lifecycle === "failed")
+  ) {
     return OPERATIONAL_RECOVERY_LABELS.retryGeneration;
   }
   if (canOpenAudioSurface) {
@@ -308,4 +398,8 @@ function previewPrimaryLabel(
 
 function firstBlockingDetail(rows: readonly PreviewReadinessRow[]): string | undefined {
   return rows.find((row) => row.status === "blocked" || row.status === "working")?.detail;
+}
+
+function firstWarningDetail(rows: readonly PreviewReadinessRow[]): string | undefined {
+  return rows.find((row) => row.status === "warning")?.detail;
 }

@@ -47,7 +47,12 @@ export function buildPreviewQueue(
   job: VoiceJob | null,
 ): PreviewQueue {
   const durations = previewSegmentDurations(job);
-  const hasGeneratedAudio = Boolean(job?.audioUrl) && job?.status === "completed";
+  const readySegments = readyAudioSegmentCount(job);
+  const hasGeneratedAudio = Boolean(
+    job &&
+      ((job.status === "completed" && job.audioUrl) ||
+        (readySegments > 0 && (job.audioPartialUrl ?? job.audioUrl))),
+  );
   let segmentCursor = 0;
   let estimatedCursorMs = 0;
 
@@ -57,7 +62,10 @@ export function buildPreviewQueue(
     const startSec = estimatedCursorMs / 1000;
     const endSec = (estimatedCursorMs + durationMs) / 1000;
     const status = previewQueueItemStatus(block, job, segmentCursor, segmentCount);
-    const audioReady = hasGeneratedAudio && status !== "failed" && status !== "skipped";
+    const audioReady =
+      hasGeneratedAudio &&
+      status === "ready" &&
+      (job?.status === "completed" || segmentCursor + segmentCount <= readySegments);
     const canPreview = audioReady && block.spokenText.trim().length > 0;
     const disabledReason = canPreview
       ? null
@@ -217,6 +225,8 @@ function previewQueueItemStatus(
   if (!job) {
     return "waiting";
   }
+  const readySegments = readyAudioSegmentCount(job);
+  const segmentEndIndex = segmentCursor + segmentCount;
   const segmentStatuses = (job.segments ?? [])
     .slice(segmentCursor, segmentCursor + segmentCount)
     .map((segment) => segment.status)
@@ -227,7 +237,10 @@ function previewQueueItemStatus(
   if (segmentStatuses.some((status) => status === "running" || status === "checking")) {
     return "generating";
   }
-  if (job.status === "completed" || segmentStatuses.every((status) => status === "ready")) {
+  if (
+    job.status === "completed" ||
+    (segmentEndIndex <= readySegments && segmentStatuses.every((status) => status === "ready"))
+  ) {
     return "ready";
   }
   if (job.status === "failed" || job.status === "cancelled") {
@@ -275,6 +288,16 @@ function previewQueueDurationMs(items: readonly PreviewQueueItem[], job: VoiceJo
     return job.durationMs;
   }
   return items.reduce((total, item) => total + item.durationMs, 0);
+}
+
+function readyAudioSegmentCount(job: VoiceJob | null): number {
+  if (!job) {
+    return 0;
+  }
+  const readyBySegments = (job.segments ?? []).filter(
+    (segment) => segment.status === "ready",
+  ).length;
+  return Math.max(0, job.audioReadySegments ?? 0, readyBySegments);
 }
 
 function normalizeQueueIndex(index: number, length: number): number {

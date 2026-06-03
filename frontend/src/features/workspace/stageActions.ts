@@ -429,6 +429,9 @@ function workspaceAudioStageBlocker(
     return null;
   }
   if (input.audioLifecycle === "failed") {
+    if (input.stage !== "preview") {
+      return null;
+    }
     return {
       correctiveAction: "retryGeneration",
       detail: operationalGeneratedAudioLifecycleReason("failed"),
@@ -437,51 +440,13 @@ function workspaceAudioStageBlocker(
       title: "Generation failed",
     };
   }
-  if (
-    input.audioLifecycle === "stale" ||
-    input.audioLifecycle === "degraded" ||
-    input.audioLifecycle === "archived"
-  ) {
-    if (input.stage === "teleprompt") {
+  if (isAudioRecoveryLifecycle(input.audioLifecycle)) {
+    if (input.stage === "teleprompt" || input.stage === "theatre") {
       return null;
     }
     return audioRecoveryBlocker(input);
   }
-  if (input.stage === "preview") {
-    return null;
-  }
-  if (input.stage !== "theatre" || input.audioLifecycle === "ready") {
-    return null;
-  }
-  const audioWorking = input.audioLifecycle === "generating" || input.audioLifecycle === "queued";
-  const correctiveAction = !audioWorking && input.canCreate ? "createAndListen" : null;
-  return {
-    correctiveAction,
-    disabledReason: audioMissingDisabledReason(input, audioWorking),
-    detail: audioWorking
-      ? "Generated audio is not ready yet."
-      : "Create audio before Theatre can play the source.",
-    id: "audioMissing",
-    recovery: operationalRecovery(
-      audioWorking ? "none" : "createAndListen",
-      !audioWorking && input.canCreate,
-      audioMissingDisabledReason(input, audioWorking),
-    ),
-    title: "Audio missing",
-  };
-}
-
-function audioMissingDisabledReason(
-  input: WorkspaceStageStatusInput,
-  audioWorking: boolean,
-): string | undefined {
-  if (!audioWorking && input.canCreate) {
-    return undefined;
-  }
-  if (audioWorking) {
-    return "Generated audio is not ready yet.";
-  }
-  return input.createDisabledReason ?? "Create & Listen is not available yet.";
+  return null;
 }
 
 function workspaceStagePrimaryActionForStatus(
@@ -497,9 +462,6 @@ function workspaceStagePrimaryActionForStatus(
   }
   if (input.stage === "theatre" && input.audioLifecycle === "ready") {
     return "playPauseTheatre";
-  }
-  if (input.stage === "theatre" && input.audioLifecycle === "failed") {
-    return "retryGeneration";
   }
   if (input.stage === "review") {
     return workspaceStagePrimaryAction(input.stage);
@@ -819,7 +781,8 @@ function telepromptStageReadiness(input: WorkspaceStageStatusInput): WorkspaceSt
   }
   return stageReadiness({
     action: "openTeleprompt",
-    detail: "Manual cue rehearsal is available. Create & Listen unlocks audio-follow and Theatre.",
+    detail:
+      "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.",
     label: "Rehearsal only",
     stage: "teleprompt",
     state: "manual",
@@ -840,47 +803,45 @@ function theatreStageReadiness(input: WorkspaceStageStatusInput): WorkspaceStage
   }
   if (input.audioLifecycle === "failed") {
     return stageReadiness({
-      action: "retryGeneration",
-      detail: operationalGeneratedAudioLifecycleReason("failed"),
-      label: OPERATIONAL_RECOVERY_LABELS.retryGeneration,
+      action: "openTheatre",
+      detail:
+        "Reading-only mode. Audio-follow and playback are unavailable because generation failed. Use Retry generation from Preview to recover.",
+      label: "Reading-only",
       stage: "theatre",
-      state: "failed",
-      tone: "danger",
+      state: "manual",
+      tone: "warning",
     });
   }
   if (input.audioLifecycle === "queued" || input.audioLifecycle === "generating") {
     return stageReadiness({
-      action: null,
-      detail: "Audio is generating. Theatre unlocks when generated audio is ready.",
-      disabledReason: "Audio is generating. Theatre unlocks when generated audio is ready.",
-      label: "Generating",
+      action: "openTheatre",
+      detail:
+        "Reading-only mode. Audio generation is running; playback and audio-follow unlock when timing is ready.",
+      label: "Reading-only",
       stage: "theatre",
-      state: "working",
+      state: "manual",
       tone: "info",
     });
   }
   if (isAudioRecoveryLifecycle(input.audioLifecycle)) {
     const detail = operationalGeneratedAudioLifecycleReason(input.audioLifecycle);
     return stageReadiness({
-      action: input.canCreate ? "createAndListen" : null,
-      detail,
-      disabledReason: input.canCreate ? undefined : (input.createDisabledReason ?? detail),
-      label: OPERATIONAL_RECOVERY_LABELS.rebuildAudio,
+      action: "openTheatre",
+      detail: `${detail} Theatre opens in reading-only mode until audio is rebuilt from Preview.`,
+      label: "Reading-only",
       stage: "theatre",
-      state: "blocked",
+      state: "manual",
       tone: "warning",
     });
   }
   return stageReadiness({
-    action: input.canCreate ? "createAndListen" : null,
-    detail: "Create audio before Theatre can play the source.",
-    disabledReason: input.canCreate
-      ? undefined
-      : (input.createDisabledReason ?? "Create & Listen is not available yet."),
-    label: "Create audio",
+    action: "openTheatre",
+    detail:
+      "Reading-only mode. Audio-follow and playback are unavailable because generated audio is missing. Use Create & Listen from Preview to generate audio.",
+    label: "Reading-only",
     stage: "theatre",
-    state: "blocked",
-    tone: "warning",
+    state: "manual",
+    tone: "info",
   });
 }
 
@@ -922,28 +883,23 @@ function workspaceStageCurrentTaskAction(
   if (blocker?.correctiveAction) {
     return blocker.correctiveAction;
   }
-  if (input.stage === "theatre" && input.audioLifecycle === "ready" && input.canOpenCinema) {
-    return "openCinema";
-  }
-  if (input.stage === "preview") {
-    return previewCurrentTaskAction(input);
-  }
-  if (input.stage === "review") {
-    if (input.reviewRequired || !input.hasListenerText || readiness.state === "warning") {
-      return null;
+  switch (input.stage) {
+    case "intake": {
+      return input.hasSource ? "reviewBlocks" : null;
     }
-    return "previewSpeech";
+    case "preview": {
+      return previewCurrentTaskAction(input);
+    }
+    case "review": {
+      return reviewCurrentTaskAction(input, readiness);
+    }
+    case "teleprompt": {
+      return telepromptCurrentTaskAction(input, readiness);
+    }
+    case "theatre": {
+      return theatreCurrentTaskAction(input);
+    }
   }
-  if (input.stage === "teleprompt" && readiness.state === "manual" && input.canCreate) {
-    return "createAndListen";
-  }
-  if (input.stage === "teleprompt") {
-    return input.audioLifecycle === "ready" ? "openTheatre" : null;
-  }
-  if (input.stage === "intake" && input.hasSource) {
-    return "reviewBlocks";
-  }
-  return null;
 }
 
 function previewCurrentTaskAction(input: WorkspaceStageStatusInput): WorkspaceStageActionId | null {
@@ -955,6 +911,39 @@ function previewCurrentTaskAction(input: WorkspaceStageStatusInput): WorkspaceSt
   }
   if (input.canCreate) {
     return "createAndListen";
+  }
+  return null;
+}
+
+function reviewCurrentTaskAction(
+  input: WorkspaceStageStatusInput,
+  readiness: WorkspaceStageReadiness,
+): WorkspaceStageActionId | null {
+  if (input.reviewRequired || !input.hasListenerText || readiness.state === "warning") {
+    return null;
+  }
+  return "previewSpeech";
+}
+
+function telepromptCurrentTaskAction(
+  input: WorkspaceStageStatusInput,
+  readiness: WorkspaceStageReadiness,
+): WorkspaceStageActionId | null {
+  if (readiness.state === "manual" && input.canCreate) {
+    return "createAndListen";
+  }
+  return input.audioLifecycle === "ready" ? "openTheatre" : null;
+}
+
+function theatreCurrentTaskAction(input: WorkspaceStageStatusInput): WorkspaceStageActionId | null {
+  if (input.audioLifecycle === "ready") {
+    return input.canOpenCinema ? "openCinema" : null;
+  }
+  if (input.audioLifecycle === "failed") {
+    return "retryGeneration";
+  }
+  if (input.audioLifecycle === "missing" || isAudioRecoveryLifecycle(input.audioLifecycle)) {
+    return input.canCreate ? "createAndListen" : null;
   }
   return null;
 }
@@ -977,6 +966,9 @@ function workspaceStageCurrentTaskTitle(
   }
   if (input.stage === "theatre" && input.audioLifecycle === "ready") {
     return "Theatre ready";
+  }
+  if (input.stage === "theatre") {
+    return "Reading-only mode";
   }
   if (input.stage === "intake" && input.hasSource) {
     return "Source ready";

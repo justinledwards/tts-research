@@ -170,6 +170,24 @@ func registerVoiceJobRoutes(app *fiber.App, service *pipeline.Service) {
 		return ctx.SendStatus(fiber.StatusNoContent)
 	})
 
+	app.Post("/api/voice-jobs/:id/retry", func(ctx fiber.Ctx) error {
+		job, err := service.RetryJob(ctx.Context(), ctx.Params("id"))
+		if err != nil {
+			if errors.Is(err, pipeline.ErrJobNotRetriable) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			if errors.Is(err, pipeline.ErrProjectNotFound) ||
+				errors.Is(err, pipeline.ErrVoiceNotFound) ||
+				errors.Is(err, pipeline.ErrEmptyText) ||
+				strings.Contains(err.Error(), "tts engine") {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+			}
+			return notFound(ctx, err)
+		}
+
+		return ctx.Status(fiber.StatusCreated).JSON(job)
+	})
+
 	app.Get("/api/voice-jobs/:id/audio", func(ctx fiber.Ctx) error {
 		audio, contentType, err := service.GetAudio(ctx.Params("id"))
 		if err != nil {

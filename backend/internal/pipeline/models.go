@@ -38,6 +38,17 @@ const (
 	JobTerminalReasonConfigurationFailed JobTerminalReason = "configuration_failed"
 )
 
+type JobFailureKind string
+
+const (
+	JobFailureKindSource       JobFailureKind = "source"
+	JobFailureKindVoice        JobFailureKind = "voice"
+	JobFailureKindEngine       JobFailureKind = "engine"
+	JobFailureKindBackend      JobFailureKind = "backend"
+	JobFailureKindCancellation JobFailureKind = "cancellation"
+	JobFailureKindQueue        JobFailureKind = "queue"
+)
+
 type StageStatus string
 
 const (

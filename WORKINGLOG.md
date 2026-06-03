@@ -1,3 +1,11 @@
+## 2026-06-03 12:34 CEST - Unified Audio Generation Lifecycle
+- [x] Add durable backend partial audio and retry-resume
+- [x] Add canonical frontend audio pipeline model
+- [x] Wire Preview, Teleprompt, Theatre, and status copy
+- [x] Add regression tests
+- [x] Run project checks
+- Validation: `pnpm --filter @tts-research/backend test`, `pnpm --filter @tts-research/frontend test`, `pnpm typecheck`, and `pnpm check` passed; `pnpm check` reported existing Biome warnings outside this work.
+
 ## 2026-06-03 07:19 CEST - Review Repair Workspace
 - [x] Add Review repair focus routing
 - [x] Strengthen Review repair queue and selected-block editor

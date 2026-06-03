@@ -2326,6 +2326,93 @@ func TestGetAudioSegmentReturnsOnlyWhenReady(t *testing.T) {
 	}
 }
 
+func TestRetryJobReusesPersistedReadySegments(t *testing.T) {
+	t.Parallel()
+
+	jobDataDir := t.TempDir()
+	projectDataDir := t.TempDir()
+	checker := &rejectSecondChecker{}
+	options := pipeline.Options{
+		JobDataDir:      jobDataDir,
+		MaxRetries:      1,
+		ProjectDataDir:  projectDataDir,
+		SegmentMaxRunes: 18,
+		SegmentWorkers:  1,
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		checker,
+		options,
+	)
+
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:            "first short sentence. second short sentence. third short sentence.",
+		PerformanceMode: pipeline.PerformanceModeQuality,
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			AutoRetry: boolPtr(false),
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	failed := waitForFailedJob(t, service, job.ID)
+	if failed.AudioReadySegments != 1 {
+		t.Fatalf("failed job ready segments = %d, want 1", failed.AudioReadySegments)
+	}
+	if failed.Retriable != true {
+		t.Fatal("failed job should remain retriable")
+	}
+	if failed.FailureKind == "" {
+		t.Fatal("failed job should identify a failure kind")
+	}
+	if _, _, err := service.GetPartialAudio(failed.ID); err != nil {
+		t.Fatalf("GetPartialAudio after failure returned error: %v", err)
+	}
+	if _, _, err := service.GetAudioSegment(failed.ID, 1); err != nil {
+		t.Fatalf("GetAudioSegment after failure returned error: %v", err)
+	}
+
+	reloaded := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	reloadedJob, err := reloaded.GetJob(failed.ID)
+	if err != nil {
+		t.Fatalf("GetJob after reload returned error: %v", err)
+	}
+	if reloadedJob.AudioReadySegments != 1 {
+		t.Fatalf("reloaded ready segments = %d, want 1", reloadedJob.AudioReadySegments)
+	}
+	if _, _, err := reloaded.GetPartialAudio(failed.ID); err != nil {
+		t.Fatalf("reloaded GetPartialAudio returned error: %v", err)
+	}
+	if _, _, err := reloaded.GetAudioSegment(failed.ID, 1); err != nil {
+		t.Fatalf("reloaded GetAudioSegment returned error: %v", err)
+	}
+
+	retry, err := service.RetryJob(context.Background(), failed.ID)
+	if err != nil {
+		t.Fatalf("RetryJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, retry.ID, pipeline.JobStatusCompleted)
+	if completed.RetryOfJobID != failed.ID {
+		t.Fatalf("retryOfJobId = %q, want %q", completed.RetryOfJobID, failed.ID)
+	}
+	if completed.ReusedReadySegments != 1 {
+		t.Fatalf("reusedReadySegments = %d, want 1", completed.ReusedReadySegments)
+	}
+	if len(completed.Segments) == 0 || completed.Segments[0].ReusedFromJobID != failed.ID {
+		t.Fatalf("first segment reuse marker = %+v, want source job %s", completed.Segments, failed.ID)
+	}
+	if completed.AudioReadySegments != completed.Retries.TotalSegments {
+		t.Fatalf("completed ready segments = %d, want %d", completed.AudioReadySegments, completed.Retries.TotalSegments)
+	}
+}
+
 func TestCreateVoiceProfileTrimsLongPCM16WAVReference(t *testing.T) {
 	t.Parallel()
 
@@ -5646,6 +5733,36 @@ func (checker *alwaysRejectChecker) Check(_ context.Context, _ string, _ []byte)
 		Reason:      "test rejected attempt",
 		Provider:    "test",
 		Similarity:  0.1,
+	}, nil
+}
+
+type rejectSecondChecker struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (checker *rejectSecondChecker) Check(_ context.Context, optimizedText string, _ []byte) (agents.VoiceCheckResult, error) {
+	checker.mu.Lock()
+	checker.calls++
+	call := checker.calls
+	checker.mu.Unlock()
+	if call == 2 {
+		return agents.VoiceCheckResult{
+			Complete:    false,
+			Transcript:  "rejected",
+			NeedsResume: false,
+			Reason:      "test rejected second segment",
+			Provider:    "test",
+			Similarity:  0.1,
+		}, nil
+	}
+	return agents.VoiceCheckResult{
+		Complete:    true,
+		Transcript:  optimizedText,
+		NeedsResume: false,
+		Reason:      "test complete",
+		Provider:    "test",
+		Similarity:  1,
 	}, nil
 }
 

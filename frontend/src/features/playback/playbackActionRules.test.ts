@@ -11,6 +11,7 @@ import {
   playbackActionLabel,
   playbackOwnerCanOwnPlaybackControls,
   playbackOwnerCanRequestGeneration,
+  resolveAudioGenerationPipelineModel,
   validatePlaybackSurfaceOwnership,
 } from "./index";
 
@@ -81,6 +82,71 @@ describe("playback ownership model", () => {
     expect(
       playbackActionDisabledReason({ action: "telepromptPlay", lifecycle: "generating" }),
     ).toContain("Teleprompt cue playback");
+  });
+
+  it("resolves the canonical audio generation pipeline states", () => {
+    const ready = resolveAudioGenerationPipelineModel({
+      canCreate: true,
+      generatedAudioLifecycle: "missing",
+      hasSource: true,
+      hasSpokenText: true,
+      reviewComplete: true,
+      runtimeReady: true,
+      voiceReady: true,
+    });
+    const partial = resolveAudioGenerationPipelineModel({
+      canCreate: false,
+      generatedAudioLifecycle: "generating",
+      hasSource: true,
+      hasSpokenText: true,
+      job: {
+        audioPartialUrl: "/jobs/job-1/partial.wav",
+        audioReadySegments: 2,
+        retries: { totalSegments: 5 },
+        segments: [
+          { index: 1, status: "ready", text: "One" },
+          { index: 2, status: "ready", text: "Two" },
+          { index: 3, status: "running", text: "Three" },
+        ],
+        status: "synthesizing",
+      } as VoiceJob,
+      reviewComplete: true,
+      runtimeReady: true,
+      voiceReady: true,
+    });
+    const failed = resolveAudioGenerationPipelineModel({
+      canCreate: true,
+      generatedAudioLifecycle: "failed",
+      hasSource: true,
+      hasSpokenText: true,
+      job: {
+        audioReadySegments: 1,
+        failureKind: "engine",
+        retriable: true,
+        status: "failed",
+      } as VoiceJob,
+      reviewComplete: true,
+      runtimeReady: true,
+      voiceReady: true,
+    });
+
+    expect(ready).toMatchObject({
+      canCreateAndListen: true,
+      state: "readyToGenerate",
+    });
+    expect(partial).toMatchObject({
+      canUsePartialAudio: true,
+      pendingSegments: 3,
+      readySegments: 2,
+      state: "partialReady",
+    });
+    expect(partial.detail).toContain("Partially ready. 2/5 segments can play");
+    expect(failed).toMatchObject({
+      canRetryGeneration: true,
+      failedKind: "engine",
+      state: "failed",
+    });
+    expect(failed.detail).toContain("Retry generation");
   });
 
   it("flags duplicate primary playback ownership on one surface", () => {

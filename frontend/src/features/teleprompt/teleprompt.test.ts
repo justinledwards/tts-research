@@ -39,6 +39,7 @@ import {
   telepromptTheatreCuePresentationKind,
   telepromptTheatreRenderedCueSections,
   telepromptTheatreCueSections,
+  theatreReadingOnlyDetail,
 } from "./TelepromptTheatre";
 import { resolveTelepromptTheatreShortcut } from "./telepromptTheatreShortcuts";
 import type { TelepromptCueWordTiming } from "./telepromptCueTimeline";
@@ -133,12 +134,16 @@ describe("teleprompt studio work modes", () => {
       playbackPlaying: false,
     });
 
-    expect(audioFollow.disabledReason).toBe("Audio missing. Create & Listen before playback.");
+    expect(audioFollow.disabledReason).toBe(
+      "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.",
+    );
     expect(audioFollow.tone).toBe("warning");
     expect(audioFollow.dataAttributes["data-teleprompt-work-mode"]).toBe("audio-follow");
     expect(reviewPlayback.disabledReason).toBe("Audio missing. Create & Listen before playback.");
     expect(reviewPlayback.syncMode).toBe("review-playback");
-    expect(failed.disabledReason).toBe("Generation failed. Retry generation before playback.");
+    expect(failed.disabledReason).toBe(
+      "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.",
+    );
   });
 });
 
@@ -148,7 +153,7 @@ describe("teleprompt studio cue-first render", () => {
 
     expect(markup).toContain('data-testid="teleprompt-current-cue-stage"');
     expect(markup).toContain('data-testid="teleprompt-current-cue"');
-    expect(markup).toContain('data-teleprompt-work-mode="audio-follow"');
+    expect(markup).toContain('data-teleprompt-work-mode="rehearsal"');
     expect(markup).toContain('data-testid="ui-action-teleprompt-cue-drawer"');
     expect(markup).toContain('data-testid="ui-action-teleprompt-back-review"');
     expect(markup).toContain('data-testid="teleprompt-script-scroll"');
@@ -191,6 +196,12 @@ describe("teleprompt theatre model", () => {
     expect(telepromptFullscreenAvailability(null)).toMatchObject({
       supported: false,
     });
+  });
+
+  it("labels Theatre as reading-only when generated audio is missing", () => {
+    expect(theatreReadingOnlyDetail("missing")).toBe(
+      "Reading-only mode. Audio-follow and playback are unavailable because generated audio is missing. Use Create & Listen from Preview to generate audio.",
+    );
   });
 
   it("keeps theatre cue paragraphs instead of flattening multiline text", () => {

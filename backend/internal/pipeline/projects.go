@@ -240,7 +240,9 @@ func (service *Service) reloadJobs() {
 		if job.UpdatedAt.IsZero() {
 			job.UpdatedAt = job.CreatedAt
 		}
-		jobs[job.ID] = storedJob{VoiceJob: job}
+		stored := storedJob{VoiceJob: job}
+		service.hydratePersistedSegmentAudio(&stored)
+		jobs[job.ID] = stored
 	}
 
 	service.mu.Lock()

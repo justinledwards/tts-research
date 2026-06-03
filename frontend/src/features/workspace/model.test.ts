@@ -298,7 +298,7 @@ describe("workspace stage model", () => {
     });
   });
 
-  it("models missing audio as Preview creation, Teleprompt rehearsal, and Theatre blocked", () => {
+  it("models missing audio as Preview creation with Teleprompt and Theatre reading modes", () => {
     const status = resolveWorkspaceStageStatus(stageStatusInput({ stage: "preview" }));
 
     expect(status.currentTask).toMatchObject({
@@ -316,9 +316,9 @@ describe("workspace stage model", () => {
       state: "manual",
     });
     expect(status.readinessByStage.theatre).toMatchObject({
-      action: "createAndListen",
-      label: "Create audio",
-      state: "blocked",
+      action: "openTheatre",
+      label: "Reading-only",
+      state: "manual",
     });
   });
 
@@ -342,9 +342,9 @@ describe("workspace stage model", () => {
       state: "failed",
     });
     expect(status.readinessByStage.theatre).toMatchObject({
-      action: "retryGeneration",
-      label: "Retry generation",
-      state: "failed",
+      action: "openTheatre",
+      label: "Reading-only",
+      state: "manual",
     });
   });
 
@@ -379,7 +379,7 @@ describe("workspace stage model", () => {
     });
   });
 
-  it("keeps Theatre blocked for stale or unavailable generated audio", () => {
+  it("keeps Theatre open as reading-only for stale or unavailable generated audio", () => {
     const stale = resolveWorkspaceStageStatus(
       stageStatusInput({ audioLifecycle: "stale", stage: "theatre" }),
     );
@@ -387,23 +387,17 @@ describe("workspace stage model", () => {
       stageStatusInput({ audioLifecycle: "generating", stage: "theatre" }),
     );
 
-    expect(stale.blocker).toMatchObject({
-      correctiveAction: "createAndListen",
-      id: "audioStale",
-    });
+    expect(stale.blocker).toBeNull();
     expect(stale.readinessByStage.theatre).toMatchObject({
-      action: "createAndListen",
-      label: "Rebuild audio",
-      state: "blocked",
+      action: "openTheatre",
+      label: "Reading-only",
+      state: "manual",
     });
-    expect(generating.blocker).toMatchObject({
-      correctiveAction: null,
-      id: "audioMissing",
-    });
+    expect(generating.blocker).toBeNull();
     expect(generating.readinessByStage.theatre).toMatchObject({
-      action: null,
-      label: "Generating",
-      state: "working",
+      action: "openTheatre",
+      label: "Reading-only",
+      state: "manual",
     });
   });
 });

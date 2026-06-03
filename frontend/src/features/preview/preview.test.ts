@@ -59,6 +59,32 @@ describe("preview queue", () => {
     expect(findAdjacentPreviewQueueItem(queue, 2, -1, { skipSilence: true })?.id).toBe("a");
     expect(formatPreviewClock(65_400)).toBe("1:05");
   });
+
+  it("makes ready partial segments playable while pending segments wait", () => {
+    const partialJob = {
+      ...job(),
+      audioPartialUrl: "/audio/job-1-partial.wav",
+      audioReadySegments: 1,
+      audioUrl: "",
+      status: "synthesizing",
+      segments: [
+        { index: 1, status: "ready", text: "Hello world." },
+        { index: 2, status: "running", text: "" },
+        { index: 3, status: "pending", text: "Next" },
+        { index: 4, status: "pending", text: "block" },
+      ],
+    } satisfies VoiceJob;
+    const queue = buildPreviewQueue(blocks, partialJob);
+
+    expect(queue.hasGeneratedAudio).toBe(true);
+    expect(queue.readyCount).toBe(1);
+    expect(queue.items.map((item) => [item.id, item.audioReady, item.status])).toEqual([
+      ["a", true, "ready"],
+      ["b", false, "skipped"],
+      ["c", false, "generating"],
+    ]);
+    expect(queue.items[2].disabledReason).toBe("Generated audio is not ready for this block yet.");
+  });
 });
 
 describe("preview A/B comparison", () => {
@@ -226,10 +252,13 @@ describe("preview readiness model", () => {
     expect(model.createDisabledReason).toBe("Select a ready voice or TTS engine.");
   });
 
-  it("surfaces Review warnings without blocking create readiness", () => {
+  it("surfaces Review warnings as Preview preflight blockers for generation", () => {
     const model = resolvePreviewReadinessModel(readinessInput({ reviewWarningCount: 3 }));
 
-    expect(model.canCreate).toBe(true);
+    expect(model.canCreate).toBe(false);
+    expect(model.createDisabledReason).toBe(
+      "3 review warnings need repair. Preview remains available while repairs continue.",
+    );
     expect(model.rows.find((row) => row.id === "review")).toMatchObject({
       detail: "3 review warnings need repair. Preview remains available while repairs continue.",
       status: "warning",
@@ -254,12 +283,13 @@ describe("preview readiness model", () => {
     );
 
     expect(missing.generatedPlaybackDisabledReason).toBe(
-      "Audio missing. Create & Listen before playback.",
+      "Preview shows the listener-ready text. No generated audio exists yet. Create & Listen to generate audio for this scope.",
     );
     expect(missing.openTelepromptDetail).toBe(
-      "Rehearsal only. Audio-follow unlocks after Create & Listen.",
+      "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.",
     );
     expect(missing.canOpenCinema).toBe(false);
+    expect(missing.canOpenTheatre).toBe(true);
     expect(generating.canOpenCinema).toBe(false);
     expect(generating.cinemaDisabledReason).toBe(
       "Audio is generating. Playback unlocks when ready.",
@@ -293,6 +323,7 @@ describe("preview readiness UI", () => {
     expect(markup).toContain("Ready to create");
     expect(markup).toContain("Spoken form");
     expect(markup).toContain("Voice/provider");
+    expect(markup).toContain("Runtime/queue");
     expect(markup).toContain('data-testid="preview-confirmation-strip"');
     expect(markup).toContain("Preview source");
     expect(markup).toContain("Default voice");

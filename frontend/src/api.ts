@@ -111,6 +111,18 @@ export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<Vo
   return response.json() as Promise<VoiceJob>;
 }
 
+export async function retryVoiceJob(id: string): Promise<VoiceJob> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/retry`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceJob>;
+}
+
 export interface VoicePreviewAudio {
   readonly audio: Blob;
   readonly contentType: string;

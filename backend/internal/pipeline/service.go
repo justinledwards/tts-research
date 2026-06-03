@@ -21,6 +21,7 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/agents"
 	"github.com/justinedwards/tts-research/backend/internal/alignment"
 	"github.com/justinedwards/tts-research/backend/internal/audio"
+	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
 
 var (
@@ -30,6 +31,7 @@ var (
 	ErrInvalidVoice                = errors.New("voice upload is invalid")
 	ErrProfileNotFound             = errors.New("voice profile not found")
 	ErrAudioNotReady               = errors.New("voice job audio is not ready")
+	ErrJobNotRetriable             = errors.New("voice job is not retryable")
 	ErrRetryExhaust                = errors.New("voice checker did not confirm complete audio before retry limit")
 	ErrProfileTooLarge             = errors.New("voice profile upload exceeds allowed size")
 	ErrProfileExtractionFailed     = errors.New("unable to extract voice profile audio")
@@ -601,6 +603,34 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 	return job.VoiceJob, nil
 }
 
+func (service *Service) RetryJob(ctx context.Context, id string) (VoiceJob, error) {
+	sourceJob, err := service.GetJob(id)
+	if err != nil {
+		return VoiceJob{}, err
+	}
+	if sourceJob.Status != JobStatusFailed && sourceJob.Status != JobStatusCancelled {
+		return VoiceJob{}, ErrJobNotRetriable
+	}
+	if sourceJob.Retriable == false && sourceJob.Status != JobStatusCancelled {
+		return VoiceJob{}, ErrJobNotRetriable
+	}
+
+	job, err := service.prepareCreateJob(createRetryJobRequest(sourceJob))
+	if err != nil {
+		return VoiceJob{}, err
+	}
+	job.RetryOfJobID = sourceJob.ID
+	job.Progress.Message = "Queued retry"
+	job.Progress.Detail = "Waiting to resume generation from reusable ready segments."
+
+	service.save(job)
+	runCtx, cancel := context.WithCancel(context.Background())
+	service.registerJobCancel(job.ID, cancel)
+	go service.runJob(runCtx, job.ID)
+
+	return job.VoiceJob, nil
+}
+
 func (service *Service) CancelJob(id string) error {
 	service.mu.Lock()
 	job, ok := service.jobs[id]
@@ -628,13 +658,9 @@ func (service *Service) CancelJob(id string) error {
 	if job.Stages.Checker == StageStatusRunning {
 		job.Stages.Checker = StageStatusFailed
 	}
-	job.audioPartialPCM = nil
-	job.audioPartialReady = false
-	job.audioSegments = nil
-	job.AudioSegmentDurationsMS = nil
-	job.AudioSegmentLatenciesMS = nil
 	job.Error = "cancelled by request"
 	job.TerminalReason = JobTerminalReasonUserCancelled
+	job.FailureKind = JobFailureKindCancellation
 	job.Retriable = true
 	job.CompletedAt = &now
 	setProgress(&job, string(JobStatusCancelled), "Job cancelled", "Processing was cancelled by user request.", job.Retries.CurrentSegment, job.Retries.TotalSegments)
@@ -645,8 +671,52 @@ func (service *Service) CancelJob(id string) error {
 		cancel()
 	}
 	service.waitForJobRuntime(id, 2*time.Second)
+	_ = service.persistJobMetadata(id)
 
 	return nil
+}
+
+func createRetryJobRequest(job VoiceJob) CreateJobRequest {
+	return CreateJobRequest{
+		Text:                  job.InputText,
+		VoiceID:               job.VoiceID,
+		ProjectID:             job.ProjectID,
+		BookSourceID:          job.BookSourceID,
+		BookScope:             cloneBookScope(job.BookScope),
+		PreparedSourceID:      job.PreparedSourceID,
+		SelectedBlockIDs:      append([]string(nil), job.SelectedBlockIDs...),
+		SourceKind:            job.SourceKind,
+		ProgressTargetID:      job.ProgressTargetID,
+		VoiceProfileID:        job.VoiceProfileID,
+		VoiceLanguage:         job.VoiceProfileLanguage,
+		TTSEngine:             job.TTSEngine,
+		EngineOptions:         sanitizeEngineOptions(job.EngineOptions),
+		TTSVoice:              job.TTSVoice,
+		TTSLanguage:           job.TTSLanguage,
+		AdaptiveMode:          job.AdaptiveMode,
+		RunMode:               job.RunMode,
+		PerformanceMode:       job.PerformanceMode,
+		PipelineOptions:       createJobPipelineOptionsFromResolved(job.PipelineOptions),
+		SpeechPolicyProfile:   job.SpeechPolicyProfile,
+		SpeechPolicyOverrides: policy.NormalizeOverrides(job.SpeechPolicyOverrides),
+		Locale:                job.Locale,
+		SpeechRenderApplied:   job.SpeechRenderApplied,
+	}
+}
+
+func createJobPipelineOptionsFromResolved(options PipelineOptions) CreateJobPipelineOptions {
+	return CreateJobPipelineOptions{
+		TextPreprocess:  boolOptionPointer(options.TextPreprocess),
+		VoiceClone:      boolOptionPointer(options.VoiceClone),
+		ASRCheck:        boolOptionPointer(options.ASRCheck),
+		AutoRetry:       boolOptionPointer(options.AutoRetry),
+		ArrivalPlayback: boolOptionPointer(options.ArrivalPlayback),
+		QualityReport:   boolOptionPointer(options.QualityReport),
+	}
+}
+
+func boolOptionPointer(value bool) *bool {
+	return &value
 }
 
 func (service *Service) registerJobCancel(id string, cancel context.CancelFunc) {
@@ -1072,12 +1142,20 @@ func (service *Service) GetAudioSegment(id string, index int) ([]byte, string, e
 		return nil, "", ErrAudioNotReady
 	}
 	if index > len(job.audioSegments) {
-		return nil, "", ErrAudioNotReady
+		segmentAudio, err := service.readJobSegmentAudio(id, index)
+		if err != nil {
+			return nil, "", ErrAudioNotReady
+		}
+		return segmentAudio, contentType, nil
 	}
 
 	segment := job.audioSegments[index-1]
 	if len(segment) == 0 {
-		return nil, "", ErrAudioNotReady
+		segmentAudio, err := service.readJobSegmentAudio(id, index)
+		if err != nil {
+			return nil, "", ErrAudioNotReady
+		}
+		return segmentAudio, contentType, nil
 	}
 
 	segmentAudio := make([]byte, len(segment))
@@ -1338,7 +1416,57 @@ func (service *Service) loadPersistedJob(id string) (storedJob, error) {
 		job.UpdatedAt = job.CreatedAt
 	}
 
-	return storedJob{VoiceJob: job}, nil
+	stored := storedJob{VoiceJob: job}
+	service.hydratePersistedSegmentAudio(&stored)
+	return stored, nil
+}
+
+func (service *Service) hydratePersistedSegmentAudio(job *storedJob) {
+	if job == nil || job.AudioReadySegments <= 0 {
+		return
+	}
+
+	readyCount := min(job.AudioReadySegments, len(job.Segments))
+	if readyCount <= 0 {
+		return
+	}
+
+	pcmBytes := make([]byte, 0)
+	var partialSpec audio.WAVSpec
+	specSet := false
+	job.audioSegments = make([][]byte, 0, readyCount)
+	for index := 1; index <= readyCount; index += 1 {
+		segmentAudio, err := service.readJobSegmentAudio(job.ID, index)
+		if err != nil {
+			break
+		}
+		job.audioSegments = append(job.audioSegments, segmentAudio)
+		segmentSpec, segmentPCM, err := audio.ParsePCM16WAV(segmentAudio)
+		if err != nil {
+			break
+		}
+		if !specSet {
+			partialSpec = segmentSpec
+			specSet = true
+		}
+		if segmentSpec != partialSpec {
+			break
+		}
+		pcmBytes = append(pcmBytes, segmentPCM...)
+	}
+
+	if len(job.audioSegments) == 0 {
+		return
+	}
+	job.AudioReadySegments = len(job.audioSegments)
+	if len(pcmBytes) > 0 && specSet {
+		job.audioPartialPCM = pcmBytes
+		job.audioPartialSpec = partialSpec
+		job.audioPartialReady = true
+		if strings.TrimSpace(job.AudioPartialURL) == "" {
+			job.AudioPartialURL = fmt.Sprintf("/api/voice-jobs/%s/audio/partial", job.ID)
+		}
+	}
 }
 
 func (service *Service) optimizeText(ctx context.Context, id string, inputText string) (string, error) {
@@ -1374,6 +1502,118 @@ func (service *Service) optimizeText(ctx context.Context, id string, inputText s
 	}
 
 	return strings.TrimSpace(optimizedText), nil
+}
+
+type reusableAudioSegment struct {
+	index       int
+	audio       []byte
+	audioPCM    []byte
+	audioSpec   audio.WAVSpec
+	durationMS  int
+	attempts    int
+	check       agents.VoiceCheckResult
+	latencyMS   int
+	contentType string
+	provider    string
+	voice       string
+	transcript  string
+	similarity  float64
+	reason      string
+}
+
+func (service *Service) reusableAudioPrefix(sourceJobID string, targetSegments []string) []reusableAudioSegment {
+	sourceJob, err := service.resolveStoredJob(sourceJobID)
+	if err != nil || sourceJob.AudioReadySegments <= 0 {
+		return nil
+	}
+
+	readyCount := min(sourceJob.AudioReadySegments, len(sourceJob.Segments), len(targetSegments))
+	if readyCount <= 0 {
+		return nil
+	}
+
+	reused := make([]reusableAudioSegment, 0, readyCount)
+	var expectedSpec audio.WAVSpec
+	specSet := false
+	for index := 1; index <= readyCount; index += 1 {
+		sourceSegment := sourceJob.Segments[index-1]
+		if strings.TrimSpace(sourceSegment.Text) != strings.TrimSpace(targetSegments[index-1]) {
+			break
+		}
+		segmentAudio, err := service.readySegmentAudio(sourceJob, index)
+		if err != nil {
+			break
+		}
+		segmentSpec, segmentPCM, err := audio.ParsePCM16WAV(segmentAudio)
+		if err != nil {
+			break
+		}
+		if !specSet {
+			expectedSpec = segmentSpec
+			specSet = true
+		}
+		if segmentSpec != expectedSpec {
+			break
+		}
+		durationMS := sourceSegment.DurationMS
+		if index-1 < len(sourceJob.AudioSegmentDurationsMS) && sourceJob.AudioSegmentDurationsMS[index-1] > 0 {
+			durationMS = sourceJob.AudioSegmentDurationsMS[index-1]
+		}
+		if durationMS <= 0 {
+			durationMS = max(900, len(strings.Fields(sourceSegment.Text))*320)
+		}
+		latencyMS := sourceSegment.LatencyMS
+		if index-1 < len(sourceJob.AudioSegmentLatenciesMS) {
+			latencyMS = sourceJob.AudioSegmentLatenciesMS[index-1]
+		}
+		contentType := sourceJob.ContentType
+		if contentType == "" {
+			contentType = "audio/wav"
+		}
+		check := agents.VoiceCheckResult{
+			Complete:    true,
+			Transcript:  sourceSegment.Text,
+			NeedsResume: false,
+			Reason:      "Reused compatible ready segment from previous generation.",
+			Provider:    sourceJob.VoiceCheck.Provider,
+			Similarity:  sourceSegment.Similarity,
+		}
+		if check.Provider == "" {
+			check.Provider = "reused"
+		}
+		reused = append(reused, reusableAudioSegment{
+			index:       index,
+			audio:       segmentAudio,
+			audioPCM:    segmentPCM,
+			audioSpec:   segmentSpec,
+			durationMS:  durationMS,
+			attempts:    sourceSegment.Attempts,
+			check:       check,
+			latencyMS:   latencyMS,
+			contentType: contentType,
+			provider:    sourceJob.Provider,
+			voice:       sourceJob.Voice,
+			transcript:  sourceSegment.Text,
+			similarity:  sourceSegment.Similarity,
+			reason:      check.Reason,
+		})
+	}
+	return reused
+}
+
+func (service *Service) readySegmentAudio(job storedJob, index int) ([]byte, error) {
+	if index <= 0 || index > job.AudioReadySegments {
+		return nil, ErrAudioNotReady
+	}
+	if index <= len(job.audioSegments) {
+		segmentAudio := job.audioSegments[index-1]
+		if len(segmentAudio) > 0 {
+			copied := make([]byte, len(segmentAudio))
+			copy(copied, segmentAudio)
+			return copied, nil
+		}
+	}
+	return service.readJobSegmentAudio(job.ID, index)
 }
 
 func (service *Service) synthesizeUntilComplete(
@@ -1477,6 +1717,15 @@ func (service *Service) synthesizeUntilComplete(
 
 	pipelineCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	pending := make(map[int]segmentResult, totalSegments)
+	nextSegment := 1
+	var failureErr error
+	failedSegment := 0
+	totalDurationMS := 0
+	contentType := "audio/wav"
+	provider := ""
+	voice := ""
 
 	processSegment := func(segmentIndex int) segmentResult {
 		output := segmentResult{
@@ -1674,6 +1923,74 @@ func (service *Service) synthesizeUntilComplete(
 		return output
 	}
 
+	if currentJob, err := service.snapshot(id); err == nil && strings.TrimSpace(currentJob.RetryOfJobID) != "" {
+		reusableSegments := service.reusableAudioPrefix(currentJob.RetryOfJobID, segments)
+		for _, reusable := range reusableSegments {
+			if _, err := service.writeJobSegmentAudio(id, reusable.index, reusable.audio); err != nil {
+				failureErr = fmt.Errorf("save reused segment %d audio: %w", reusable.index, err)
+				failedSegment = reusable.index
+				break
+			}
+
+			mergedSegmentsPCM = append(mergedSegmentsPCM, reusable.audioPCM...)
+			totalDurationMS += reusable.durationMS
+			transcripts = append(transcripts, reusable.transcript)
+			similarities = append(similarities, reusable.similarity)
+			contentType = reusable.contentType
+			provider = reusable.provider
+			voice = reusable.voice
+			lastCheck = reusable.check
+			if !segmentAudioSpecSet {
+				segmentAudioSpec = reusable.audioSpec
+				segmentAudioSpecSet = true
+			}
+			service.updateJob(id, func(job *storedJob) {
+				job.AudioReadySegments = reusable.index
+				job.ReusedReadySegments = reusable.index
+				job.audioSegments = append(job.audioSegments, reusable.audio)
+				job.audioPartialPCM = append(job.audioPartialPCM, reusable.audioPCM...)
+				job.audioPartialSpec = reusable.audioSpec
+				job.audioPartialReady = true
+				job.AudioPartialURL = fmt.Sprintf("/api/voice-jobs/%s/audio/partial", job.ID)
+				job.AudioSegmentDurationsMS = append(job.AudioSegmentDurationsMS, reusable.durationMS)
+				job.AudioSegmentLatenciesMS = append(job.AudioSegmentLatenciesMS, reusable.latencyMS)
+				job.ContentType = reusable.contentType
+				job.DurationMS = totalDurationMS
+				job.Provider = reusable.provider
+				job.Voice = reusable.voice
+				job.Retries.CurrentSegment = reusable.index
+				job.Retries.TotalSegments = totalSegments
+				job.VoiceCheck = toVoiceCheck(reusable.check)
+				updateJobSegment(job, reusable.index, func(segment *JobSegment) {
+					segment.Status = "ready"
+					segment.Attempts = reusable.attempts
+					segment.DurationMS = reusable.durationMS
+					segment.LatencyMS = reusable.latencyMS
+					segment.Similarity = reusable.similarity
+					segment.Reason = reusable.reason
+					segment.ReusedFromJobID = currentJob.RetryOfJobID
+				})
+				setProgress(
+					job,
+					string(JobStatusSynthesizing),
+					fmt.Sprintf("Reused segment %d of %d", reusable.index, totalSegments),
+					"Retry reused compatible ready audio from the previous generation.",
+					reusable.index,
+					totalSegments,
+				)
+			})
+			if err := service.persistJobMetadata(id); err != nil {
+				failureErr = fmt.Errorf("save partial job metadata: %w", err)
+				failedSegment = reusable.index
+				break
+			}
+			nextSegment = reusable.index + 1
+		}
+	}
+	if failureErr != nil {
+		return mergedResult, lastCheck, failureErr
+	}
+
 	jobs := make(chan int, segmentWorkers)
 	results := make(chan segmentResult, segmentWorkers)
 
@@ -1698,7 +2015,8 @@ func (service *Service) synthesizeUntilComplete(
 
 	go func() {
 		defer close(jobs)
-		for segmentIndex := 1; segmentIndex <= totalSegments; segmentIndex += 1 {
+		startSegment := nextSegment
+		for segmentIndex := startSegment; segmentIndex <= totalSegments; segmentIndex += 1 {
 			select {
 			case <-pipelineCtx.Done():
 				return
@@ -1711,15 +2029,6 @@ func (service *Service) synthesizeUntilComplete(
 		workerWg.Wait()
 		close(results)
 	}()
-
-	pending := make(map[int]segmentResult, totalSegments)
-	nextSegment := 1
-	var failureErr error
-	failedSegment := 0
-	totalDurationMS := 0
-	contentType := "audio/wav"
-	provider := ""
-	voice := ""
 
 	for result := range results {
 		if errors.Is(pipelineCtx.Err(), context.Canceled) {
@@ -1769,6 +2078,25 @@ func (service *Service) synthesizeUntilComplete(
 			}
 
 			delete(pending, nextSegment)
+
+			if _, err := service.writeJobSegmentAudio(id, nextSegment, nextResult.audio); err != nil {
+				failureErr = fmt.Errorf("save segment %d audio: %w", nextSegment, err)
+				failedSegment = nextSegment
+				service.updateJob(id, func(job *storedJob) {
+					job.Retries.CurrentSegment = nextSegment
+					job.Retries.TotalSegments = totalSegments
+					updateJobSegment(job, nextSegment, func(segment *JobSegment) {
+						segment.Status = "failed"
+						segment.Attempts = nextResult.attempts
+						segment.DurationMS = nextResult.audioDurationMS
+						segment.LatencyMS = nextResult.latencyMS
+						segment.Similarity = nextResult.similarity
+						segment.Reason = failureErr.Error()
+					})
+				})
+				cancel()
+				break
+			}
 
 			segmentStartMS := totalDurationMS
 			mergedSegmentsPCM = append(mergedSegmentsPCM, nextResult.audioPCM...)
@@ -1834,6 +2162,12 @@ func (service *Service) synthesizeUntilComplete(
 					totalSegments,
 				)
 			})
+			if err := service.persistJobMetadata(id); err != nil {
+				failureErr = fmt.Errorf("save partial job metadata: %w", err)
+				failedSegment = nextSegment
+				cancel()
+				break
+			}
 			if _, err := service.refreshTimingArtifacts(pipelineCtx, id, false); err != nil && !errors.Is(err, alignment.ErrNoTimingInput) {
 				service.updateJob(id, func(job *storedJob) {
 					job.SegmentationWarnings = uniqueStrings(append(job.SegmentationWarnings, "partial timing unavailable: "+err.Error()))
@@ -1886,6 +2220,13 @@ func (service *Service) writeJobAudio(id string, audioBytes []byte) (string, err
 	return service.writeJobAudioFile(id, "audio.wav", audioBytes)
 }
 
+func (service *Service) writeJobSegmentAudio(id string, index int, audioBytes []byte) (string, error) {
+	if index <= 0 {
+		return "", ErrAudioNotReady
+	}
+	return service.writeJobAudioFile(id, jobSegmentAudioFilename(index), audioBytes)
+}
+
 func (service *Service) writeJobAudioFile(id string, filename string, audioBytes []byte) (string, error) {
 	if len(audioBytes) == 0 {
 		return "", ErrAudioNotReady
@@ -1933,12 +2274,59 @@ func (service *Service) writeJobAudioFile(id string, filename string, audioBytes
 	return audioPath, nil
 }
 
+func jobSegmentAudioFilename(index int) string {
+	return fmt.Sprintf("segment-%06d.wav", index)
+}
+
+func (service *Service) readJobSegmentAudio(id string, index int) ([]byte, error) {
+	if index <= 0 {
+		return nil, ErrAudioNotReady
+	}
+	audioPath, err := filepath.Abs(filepath.Join(service.options.JobDataDir, id, jobSegmentAudioFilename(index)))
+	if err != nil {
+		return nil, err
+	}
+	audioBytes, err := os.ReadFile(audioPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, ErrAudioNotReady
+		}
+		return nil, err
+	}
+	if len(audioBytes) <= 0 {
+		return nil, ErrAudioNotReady
+	}
+	return audioBytes, nil
+}
+
+func (service *Service) persistJobMetadata(id string) error {
+	job, err := service.snapshot(id)
+	if err != nil {
+		return err
+	}
+	return service.writeJobMetadata(job)
+}
+
 func (service *Service) writeJobMetadata(job VoiceJob) error {
-	if job.AudioPath == "" {
-		return nil
+	if strings.TrimSpace(job.ID) == "" {
+		return ErrJobNotFound
 	}
 
-	metadataPath := filepath.Join(filepath.Dir(job.AudioPath), "metadata.json")
+	outputDir := ""
+	if strings.TrimSpace(job.AudioPath) != "" {
+		outputDir = filepath.Dir(job.AudioPath)
+	} else {
+		var err error
+		outputDir, err = filepath.Abs(filepath.Join(service.options.JobDataDir, job.ID))
+		if err != nil {
+			return err
+		}
+	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return err
+	}
+
+	metadataPath := filepath.Join(outputDir, "metadata.json")
 	payload, err := json.MarshalIndent(job, "", "  ")
 	if err != nil {
 		return err
@@ -2564,14 +2952,9 @@ func (service *Service) snapshot(id string) (VoiceJob, error) {
 
 func (service *Service) failJobByID(id string, err error) {
 	reason, retriable := classifyJobFailure(err)
+	failureKind := classifyJobFailureKind(err, reason)
 	service.updateJob(id, func(job *storedJob) {
 		job.Status = JobStatusFailed
-		job.audioPartialPCM = nil
-		job.audioPartialReady = false
-		job.audioSegments = nil
-		job.nativeTimingEvents = nil
-		job.AudioSegmentDurationsMS = nil
-		job.AudioSegmentLatenciesMS = nil
 		job.Error = err.Error()
 		if job.Stages.Optimization == StageStatusRunning {
 			job.Stages.Optimization = StageStatusFailed
@@ -2585,20 +2968,16 @@ func (service *Service) failJobByID(id string, err error) {
 		now := time.Now().UTC()
 		job.CompletedAt = &now
 		job.TerminalReason = reason
+		job.FailureKind = failureKind
 		job.Retriable = retriable
 		setProgress(job, string(JobStatusFailed), "Job failed", err.Error(), job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	})
+	_ = service.persistJobMetadata(id)
 }
 
 func (service *Service) cancelJobByID(id string) {
 	service.updateJob(id, func(job *storedJob) {
 		job.Status = JobStatusCancelled
-		job.audioPartialPCM = nil
-		job.audioPartialReady = false
-		job.audioSegments = nil
-		job.nativeTimingEvents = nil
-		job.AudioSegmentDurationsMS = nil
-		job.AudioSegmentLatenciesMS = nil
 		job.Error = "cancelled by request"
 		if job.Stages.Optimization == StageStatusRunning {
 			job.Stages.Optimization = StageStatusFailed
@@ -2612,9 +2991,11 @@ func (service *Service) cancelJobByID(id string) {
 		now := time.Now().UTC()
 		job.CompletedAt = &now
 		job.TerminalReason = JobTerminalReasonUserCancelled
+		job.FailureKind = JobFailureKindCancellation
 		job.Retriable = true
 		setProgress(job, string(JobStatusCancelled), "Job cancelled", "Processing was cancelled by user request.", job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	})
+	_ = service.persistJobMetadata(id)
 }
 
 func classifyJobFailure(err error) (JobTerminalReason, bool) {
@@ -2623,6 +3004,9 @@ func classifyJobFailure(err error) (JobTerminalReason, bool) {
 	}
 	message := err.Error()
 	lowerMessage := strings.ToLower(message)
+	if strings.Contains(lowerMessage, "metadata") {
+		return JobTerminalReasonMetadataFailed, false
+	}
 	if errors.Is(err, context.DeadlineExceeded) ||
 		strings.Contains(lowerMessage, "timed out") ||
 		strings.Contains(lowerMessage, "timeout") ||
@@ -2653,6 +3037,47 @@ func classifyJobFailure(err error) (JobTerminalReason, bool) {
 		return JobTerminalReasonConfigurationFailed, false
 	}
 	return JobTerminalReasonProviderFailed, true
+}
+
+func classifyJobFailureKind(err error, reason JobTerminalReason) JobFailureKind {
+	if reason == JobTerminalReasonUserCancelled || reason == JobTerminalReasonSystemCancelled {
+		return JobFailureKindCancellation
+	}
+	if err == nil {
+		return JobFailureKindBackend
+	}
+
+	message := strings.ToLower(err.Error())
+	switch {
+	case errors.Is(err, ErrEmptyText) ||
+		errors.Is(err, ErrBookSourceNotFound) ||
+		errors.Is(err, ErrPreparedSourceNotFound) ||
+		errors.Is(err, ErrContentIRNotFound):
+		return JobFailureKindSource
+	case errors.Is(err, ErrVoiceNotFound) ||
+		errors.Is(err, ErrProfileNotFound) ||
+		errors.Is(err, ErrProfileMissingAudio) ||
+		errors.Is(err, ErrProfileUnsupported) ||
+		errors.Is(err, ErrProfileArtifactMissing) ||
+		errors.Is(err, ErrProfileArtifactUnsupported) ||
+		strings.Contains(message, "voice profile") ||
+		strings.Contains(message, "voice not found"):
+		return JobFailureKindVoice
+	case strings.Contains(message, "queue"):
+		return JobFailureKindQueue
+	case strings.Contains(message, "tts engine") ||
+		strings.Contains(message, "synthesize") ||
+		strings.Contains(message, "provider") ||
+		reason == JobTerminalReasonProviderFailed ||
+		reason == JobTerminalReasonProviderTimeout:
+		return JobFailureKindEngine
+	case strings.Contains(message, "metadata") ||
+		strings.Contains(message, "save") ||
+		strings.Contains(message, "read"):
+		return JobFailureKindBackend
+	default:
+		return JobFailureKindBackend
+	}
 }
 
 func (service *Service) save(job storedJob) {

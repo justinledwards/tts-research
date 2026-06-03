@@ -1,4 +1,12 @@
 export {
+  AUDIO_GENERATION_PIPELINE_STATES,
+  isAudioGenerationWorking,
+  resolveAudioGenerationPipelineModel,
+  type AudioGenerationPipelineInput,
+  type AudioGenerationPipelineModel,
+  type AudioGenerationPipelineState,
+} from "./audioGenerationPipeline";
+export {
   PLAYBACK_OWNER_DEFINITIONS,
   PLAYBACK_OWNERS,
   playbackOwnerCanOwnPlaybackControls,

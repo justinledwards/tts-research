@@ -90,6 +90,9 @@ function workModeDisabledReason(
   generatedAudioLifecycle: GeneratedAudioLifecycleState,
 ): string | undefined {
   if ((mode === "audio-follow" || mode === "review-playback") && !playbackAvailable) {
+    if (mode === "audio-follow") {
+      return "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.";
+    }
     return generatedAudioLifecycleDescriptor(generatedAudioLifecycle).disabledReason;
   }
   return undefined;
@@ -121,7 +124,7 @@ function workModeDetail({
       : "Generated audio is ready for review playback.";
   }
   if (!playbackAvailable) {
-    return "Generated audio is missing. Create & Listen before using audio-follow.";
+    return "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.";
   }
   return playbackPlaying
     ? `Following generated audio at ${audioProgressPercent.toString()}%.`

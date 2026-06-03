@@ -178,6 +178,9 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     const theatrePreset = telepromptTheatrePreset(settings.presetId);
     const currentCue = currentCueText ?? activeBlock?.spokenText ?? activeBlock?.text ?? "";
     const currentWordLabel = telepromptTheatreWordLabel(currentWordIndex);
+    const readingOnlyDetail = playbackControlsAvailable
+      ? null
+      : theatreReadingOnlyDetail(playbackLifecycle);
     const theatrePlayPauseAction = {
       ariaKeyShortcuts: "Space K",
       shortcutCommandId: "theatre.playPause" as const,
@@ -304,6 +307,12 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     ];
     const operatorPanelContent = (
       <>
+        {readingOnlyDetail ? (
+          <p className="rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3 text-xs leading-5 text-[var(--vs-text-secondary)]">
+            {readingOnlyDetail}
+          </p>
+        ) : null}
+
         <TelepromptTheatreSettingsControls
           memoryEnabled={settingsMemoryEnabled}
           settings={settings}
@@ -574,7 +583,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
                 ) : null}
                 <LocalizedPlaybackToolbar model={theatrePlaybackToolbar} />
                 <p className="hidden text-xs text-[var(--vs-text-muted)] sm:block">
-                  {cueSyncDetail || summary.syncStatusLabel}
+                  {readingOnlyDetail ?? cueSyncDetail}
                   {playbackControlsAvailable
                     ? ` · audio segment ${audioProgressPercent.toString()}%`
                     : ""}
@@ -658,6 +667,19 @@ function theatreTextSizeClassName(
     return "[--reading-theatre-font-size:34px] [--reading-theatre-line-height:1.18] sm:[--reading-theatre-font-size:56px] lg:[--reading-theatre-font-size:68px]";
   }
   return "[--reading-theatre-font-size:32px] [--reading-theatre-line-height:1.2] sm:[--reading-theatre-font-size:52px] lg:[--reading-theatre-font-size:60px]";
+}
+
+export function theatreReadingOnlyDetail(lifecycle: GeneratedAudioLifecycleState): string {
+  if (lifecycle === "queued" || lifecycle === "generating") {
+    return "Reading-only mode. Audio-follow and playback are unavailable while generated audio is still being prepared.";
+  }
+  if (lifecycle === "failed") {
+    return "Reading-only mode. Audio-follow and playback are unavailable because generation failed. Use Retry generation from Preview to recover.";
+  }
+  if (lifecycle === "stale" || lifecycle === "degraded" || lifecycle === "archived") {
+    return "Reading-only mode. Audio-follow and playback are unavailable until generated audio is rebuilt from Preview.";
+  }
+  return "Reading-only mode. Audio-follow and playback are unavailable because generated audio is missing. Use Create & Listen from Preview to generate audio.";
 }
 
 export {

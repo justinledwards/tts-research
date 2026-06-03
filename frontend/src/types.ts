@@ -27,6 +27,8 @@ export type JobTerminalReason =
   | "metadata_failed"
   | "configuration_failed";
 
+export type JobFailureKind = "source" | "voice" | "engine" | "backend" | "cancellation" | "queue";
+
 export type StageStatus = "waiting" | "running" | "done" | "failed";
 
 export interface CreateVoiceJobRequest {
@@ -809,6 +811,7 @@ export interface JobSegment {
   latencyMs?: number;
   similarity?: number;
   reason?: string;
+  reusedFromJobId?: string;
 }
 
 export type VoiceProfileStatus = "ready" | "error" | "pending";
@@ -1367,7 +1370,10 @@ export interface VoiceJob {
   progress: JobProgress;
   error?: string;
   terminalReason?: JobTerminalReason;
+  failureKind?: JobFailureKind;
   retriable?: boolean;
+  retryOfJobId?: string;
+  reusedReadySegments?: number;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
