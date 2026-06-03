@@ -435,18 +435,6 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
       title: workspaceStageActionLabel("openTeleprompt"),
     },
     {
-      category: "Teleprompt",
-      detail: "Open the presenter-first Theatre teleprompter with fullscreen fallback.",
-      id: "teleprompt:theatre",
-      keywords: ["fullscreen", "presenter", "cinematic", "recording"],
-      owner: "teleprompt",
-      perform: () => {
-        handlers.openTelepromptTheatreStage();
-      },
-      section: "Teleprompt",
-      title: "Open Teleprompt Theatre",
-    },
-    {
       category: "Voice",
       detail: "Open saved voices, candidates, targets, and voice diagnostics.",
       id: "voice:dashboard",

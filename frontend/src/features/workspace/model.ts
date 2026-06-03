@@ -61,6 +61,10 @@ export const WORKSPACE_LAYOUT_SLOT_DENSITIES: readonly WorkspaceLayoutSlotDensit
   "pinned",
 ];
 
+export function workspaceStageShowsGlobalChrome(stage: WorkspaceStage): boolean {
+  return stage !== "teleprompt" && stage !== "theatre";
+}
+
 export interface WorkspaceStageMeta {
   description: string;
   id: WorkspaceStage;

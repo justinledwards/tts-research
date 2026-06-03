@@ -8,16 +8,29 @@ speech policy profile attached to the session.
 
 - The primary presenter path is **Enter Theatre**, which opens a full-window cinematic Teleprompt
   overlay while preserving the inline Studio underneath for editing and recovery.
-- The sticky toolbar keeps one presenter-first action cluster visible: previous cue, play or pause,
-  restart, next cue, current cue progress, and recording/preview status.
-- Secondary workflow actions, Back to Review, Back to Preview, Open Cinema, and Create & Listen,
-  live behind the compact Workflow menu so generation and navigation do not compete with recording.
-- The header repeats source, scope, policy, voice, block, word count, estimated time, and active cue
-  position so the operator does not need the side rails open.
+- Teleprompt hides the global workbench header and stage stepper while active; the inline Studio owns
+  a compact source/scope strip and keeps the current cue as the dominant first-viewport object.
+- The nearby playback panel keeps one presenter-first action cluster visible: previous cue, play or
+  pause, restart, next cue, jump to audio, current cue progress, and recording/preview status.
+- Performance mode stays separate from playback. Rehearsal and recording modes remain manual; audio
+  follow and review playback are enabled only when current generated audio and timing are ready.
+- Display presets are available through a secondary disclosure so typography and mirror settings do
+  not compete with cue progression.
+- Secondary workflow actions, source/session facts, cue diagnostics, previous/current/next previews,
+  and the full cue list live in the expandable inspector drawer.
 - The script area restores the last Teleprompt scroll position for the same project and source.
 - Selecting a cue updates the shared workspace active block, so Review, Preview, and Teleprompt
   keep the same block selection.
-- Current, next, and previous block previews stay visible beside the script.
+
+## Audio Readiness
+
+Teleprompt defaults to Audio-follow only when current generated audio is ready and playback controls
+are available. Missing, queued, generating, stale, degraded, failed, archived, or controller-loading
+audio defaults to Rehearsal so the selected cue remains readable and manually navigable.
+
+Failed audio shows compact recovery beside the playback/mode controls with **Retry generation** wired
+to the existing generation action. Missing or stale audio keeps rehearsal useful and presents Create &
+Listen or rebuild recovery without crowding the current cue.
 
 ## Theatre and Fullscreen
 
@@ -25,6 +38,9 @@ Theatre Mode is the dedicated presenter layout for recording, rehearsal, and lon
 It hides normal app chrome behind a fixed full-window overlay and shows the current cue at presenter
 scale, next cue preview, script progress, word count, estimated remaining time, source/scope,
 playback status, sync/confidence status, and a minimal escape bar.
+
+The inline **Enter Theatre** action is the only route into Teleprompt Theatre. Command search may open
+Teleprompt Studio, but it must not bypass the inline Theatre transition.
 
 Native fullscreen is requested only from an explicit user action. When the browser or runtime does
 not support native fullscreen, the same Theatre layout remains available as the fallback and the

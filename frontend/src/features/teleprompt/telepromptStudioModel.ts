@@ -32,6 +32,28 @@ export interface BuildTelepromptWorkModeModelInput {
   readonly playbackPlaying: boolean;
 }
 
+export interface TelepromptGeneratedAudioModeInput {
+  readonly generatedAudioLifecycle: GeneratedAudioLifecycleState;
+  readonly playbackAvailable: boolean;
+}
+
+export function telepromptGeneratedAudioReady({
+  generatedAudioLifecycle,
+  playbackAvailable,
+}: TelepromptGeneratedAudioModeInput): boolean {
+  return playbackAvailable && generatedAudioLifecycle === "ready";
+}
+
+export function defaultTelepromptWorkMode(
+  input: TelepromptGeneratedAudioModeInput,
+): TelepromptWorkMode {
+  return telepromptGeneratedAudioReady(input) ? "audio-follow" : "rehearsal";
+}
+
+export function telepromptCueSyncModeForWorkMode(mode: TelepromptWorkMode): TelepromptCueSyncMode {
+  return workModeBase(mode).syncMode;
+}
+
 export function buildTelepromptWorkModeModel({
   audioProgressPercent = 0,
   mode,
@@ -90,10 +112,14 @@ function workModeDisabledReason(
   generatedAudioLifecycle: GeneratedAudioLifecycleState,
 ): string | undefined {
   if ((mode === "audio-follow" || mode === "review-playback") && !playbackAvailable) {
+    const lifecycleReason =
+      generatedAudioLifecycle === "ready"
+        ? "Generated audio is ready, but playback controls are still loading."
+        : generatedAudioLifecycleDescriptor(generatedAudioLifecycle).disabledReason;
     if (mode === "audio-follow") {
-      return "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.";
+      return `${lifecycleReason} Rehearsal remains available.`;
     }
-    return generatedAudioLifecycleDescriptor(generatedAudioLifecycle).disabledReason;
+    return lifecycleReason;
   }
   return undefined;
 }
@@ -124,7 +150,7 @@ function workModeDetail({
       : "Generated audio is ready for review playback.";
   }
   if (!playbackAvailable) {
-    return "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.";
+    return "Generated audio and timing are required for audio-follow. Rehearsal remains available.";
   }
   return playbackPlaying
     ? `Following generated audio at ${audioProgressPercent.toString()}%.`

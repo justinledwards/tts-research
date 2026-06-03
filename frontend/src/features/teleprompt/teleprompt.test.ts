@@ -12,7 +12,12 @@ import {
 } from "./telepromptTheatreSettings";
 import { DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS } from "../../teleprompter";
 import { TelepromptStudio, type TelepromptStudioProps } from "./TelepromptStudio";
-import { buildTelepromptWorkModeModel } from "./telepromptStudioModel";
+import {
+  buildTelepromptWorkModeModel,
+  defaultTelepromptWorkMode,
+  telepromptCueSyncModeForWorkMode,
+  telepromptGeneratedAudioReady,
+} from "./telepromptStudioModel";
 import {
   clearTelepromptReturnMemory,
   normalizeTelepromptReturnTarget,
@@ -44,7 +49,9 @@ import {
 import { resolveTelepromptTheatreShortcut } from "./telepromptTheatreShortcuts";
 import type { TelepromptCueWordTiming } from "./telepromptCueTimeline";
 import { buildTelepromptTheatreSummary } from "./telepromptTheatreState";
+import type { GeneratedAudioLifecycleState } from "../playback";
 import type { RevisionBlock } from "../revision";
+import type { VoiceJob } from "../../types";
 
 const blocks: RevisionBlock[] = [
   block({ id: "a", spokenText: "One two three." }),
@@ -75,6 +82,46 @@ describe("teleprompt toolbar model", () => {
 });
 
 describe("teleprompt studio work modes", () => {
+  it("defaults to audio-follow only when current generated audio is ready", () => {
+    expect(
+      defaultTelepromptWorkMode({
+        generatedAudioLifecycle: "ready",
+        playbackAvailable: true,
+      }),
+    ).toBe("audio-follow");
+    expect(telepromptCueSyncModeForWorkMode("audio-follow")).toBe("audio-follow");
+    expect(
+      telepromptGeneratedAudioReady({
+        generatedAudioLifecycle: "ready",
+        playbackAvailable: true,
+      }),
+    ).toBe(true);
+
+    const nonReadyStates: GeneratedAudioLifecycleState[] = [
+      "missing",
+      "queued",
+      "generating",
+      "stale",
+      "degraded",
+      "failed",
+      "archived",
+    ];
+    for (const generatedAudioLifecycle of nonReadyStates) {
+      expect(
+        defaultTelepromptWorkMode({
+          generatedAudioLifecycle,
+          playbackAvailable: true,
+        }),
+      ).toBe("rehearsal");
+      expect(
+        telepromptGeneratedAudioReady({
+          generatedAudioLifecycle,
+          playbackAvailable: true,
+        }),
+      ).toBe(false);
+    }
+  });
+
   it("maps work modes onto cue-sync primitives", () => {
     expect(
       buildTelepromptWorkModeModel({
@@ -135,14 +182,14 @@ describe("teleprompt studio work modes", () => {
     });
 
     expect(audioFollow.disabledReason).toBe(
-      "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.",
+      "Audio missing. Create & Listen before playback. Rehearsal remains available.",
     );
     expect(audioFollow.tone).toBe("warning");
     expect(audioFollow.dataAttributes["data-teleprompt-work-mode"]).toBe("audio-follow");
     expect(reviewPlayback.disabledReason).toBe("Audio missing. Create & Listen before playback.");
     expect(reviewPlayback.syncMode).toBe("review-playback");
     expect(failed.disabledReason).toBe(
-      "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.",
+      "Generation failed. Retry generation before playback. Rehearsal remains available.",
     );
   });
 });
@@ -152,15 +199,46 @@ describe("teleprompt studio cue-first render", () => {
     const markup = renderToStaticMarkup(createElement(TelepromptStudio, studioProps()));
 
     expect(markup).toContain('data-testid="teleprompt-current-cue-stage"');
+    expect(markup).toContain('data-teleprompt-cue-priority="primary"');
     expect(markup).toContain('data-testid="teleprompt-current-cue"');
     expect(markup).toContain('data-teleprompt-work-mode="rehearsal"');
     expect(markup).toContain('data-testid="ui-action-teleprompt-cue-drawer"');
+    expect(markup).toMatch(/<details[^>]*data-testid="teleprompt-cue-drawer"(?![^>]* open)/);
+    expect(markup).toContain('data-testid="teleprompt-session-context"');
+    expect(markup).toContain('data-testid="ui-action-teleprompt-display-presets"');
     expect(markup).toContain('data-testid="ui-action-teleprompt-back-review"');
     expect(markup).toContain('data-testid="teleprompt-script-scroll"');
     expect(markup).toContain("Previous block");
     expect(markup).toContain("Next block");
     expect(markup.match(/ui-action-teleprompt-enter-theatre/g)).toHaveLength(1);
     expect(markup).not.toContain("ui-action-teleprompt-workflow-theatre");
+  });
+
+  it("defaults to audio-follow when current generated audio is ready", () => {
+    const markup = renderToStaticMarkup(
+      createElement(TelepromptStudio, studioProps({ job: voiceJob() })),
+    );
+
+    expect(markup).toContain('data-teleprompt-work-mode="audio-follow"');
+    expect(markup).not.toContain('data-testid="ui-action-teleprompt-audio-recovery"');
+  });
+
+  it("keeps failed audio recovery compact and labels retry generation", () => {
+    const base = studioProps();
+    const markup = renderToStaticMarkup(
+      createElement(
+        TelepromptStudio,
+        studioProps({
+          job: voiceJob({ audioUrl: "", status: "failed" }),
+          playbackControls: { ...base.playbackControls, isAvailable: false },
+        }),
+      ),
+    );
+
+    expect(markup).toContain('data-teleprompt-work-mode="rehearsal"');
+    expect(markup).toContain('data-testid="ui-action-teleprompt-audio-recovery"');
+    expect(markup).toContain("Retry generation");
+    expect(markup).toContain("Generation failed. Retry generation before playback.");
   });
 });
 
@@ -533,6 +611,17 @@ function studioProps(overrides: Partial<TelepromptStudioProps> = {}): Teleprompt
     onTheatreSettingsChange: () => null,
     ...overrides,
   };
+}
+
+function voiceJob(overrides: Partial<VoiceJob> = {}): VoiceJob {
+  return {
+    audioUrl: "/audio/test.wav",
+    durationMs: 6000,
+    id: "job-1",
+    segments: [],
+    status: "completed",
+    ...overrides,
+  } as VoiceJob;
 }
 
 function block(overrides: Partial<RevisionBlock>): RevisionBlock {

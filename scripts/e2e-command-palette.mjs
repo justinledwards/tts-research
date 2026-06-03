@@ -189,17 +189,16 @@ async function runCommandPaletteAudit(browser, projectId, screenshots) {
     ) {
       failures.push("Command palette did not expose Cinema Advanced/Diagnostics commands.");
     }
-    const telepromptTheatreInventory = await searchPalette(page, dialog, "teleprompt theatre");
-    commandsObserved.push(...telepromptTheatreInventory.commands);
-    disabledCommands.push(
-      ...telepromptTheatreInventory.commands.filter((command) => command.disabled),
-    );
+    const telepromptInventory = await searchPalette(page, dialog, "teleprompt");
+    commandsObserved.push(...telepromptInventory.commands);
+    disabledCommands.push(...telepromptInventory.commands.filter((command) => command.disabled));
+    if (!telepromptInventory.commands.some((command) => /Open Teleprompt/i.test(command.title))) {
+      failures.push("Command palette did not expose Open Teleprompt.");
+    }
     if (
-      !telepromptTheatreInventory.commands.some((command) =>
-        /Open Teleprompt Theatre/i.test(command.title),
-      )
+      telepromptInventory.commands.some((command) => /Open Teleprompt Theatre/i.test(command.title))
     ) {
-      failures.push("Command palette did not expose Open Teleprompt Theatre.");
+      failures.push("Command palette exposed direct Open Teleprompt Theatre route.");
     }
 
     for (const { commandId, query } of contractCommandSearchQueries()) {

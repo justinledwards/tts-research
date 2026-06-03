@@ -314,6 +314,7 @@ import {
   withWorkspaceSpeechPolicyProfile,
   withWorkspaceVoiceProfile,
   workspaceStageMeta,
+  workspaceStageShowsGlobalChrome,
   workspaceLayoutRails,
   workspaceResolvedLayout,
   type WorkspaceContext,
@@ -10598,35 +10599,40 @@ function SourceTextPanel({
   });
   const canOpenCinema = generatedAudioLifecycleFromJob({ job }) === "ready";
   const stageLabel = workspaceStageMeta(contentMode).label;
+  const showWorkbenchChrome = workspaceStageShowsGlobalChrome(contentMode);
 
   return (
     <form
       className="grid min-w-0 gap-4 rounded-xl border bg-[var(--vs-raised)] p-4 xl:p-5 vs-border"
       onSubmit={onSubmit}
     >
-      <HeaderContextSummary
-        metadata={[
-          { label: "Policy", value: speechPolicyProfileLabel },
-          { label: "Voice", value: voiceProfileLabel },
-          {
-            label: "Next",
-            value: stageStatus.currentTask.primaryLabel ?? stageStatus.currentTask.title,
-          },
-        ]}
-        scopeTitle={scopeTitle}
-        sourceLifecycle={sourceLifecycle}
-        sourceTitle={sourceIdentity.label}
-        stateLabel={stageLabel}
-        surfaceName="Narration Workbench"
-      />
+      {showWorkbenchChrome ? (
+        <>
+          <HeaderContextSummary
+            metadata={[
+              { label: "Policy", value: speechPolicyProfileLabel },
+              { label: "Voice", value: voiceProfileLabel },
+              {
+                label: "Next",
+                value: stageStatus.currentTask.primaryLabel ?? stageStatus.currentTask.title,
+              },
+            ]}
+            scopeTitle={scopeTitle}
+            sourceLifecycle={sourceLifecycle}
+            sourceTitle={sourceIdentity.label}
+            stateLabel={stageLabel}
+            surfaceName="Narration Workbench"
+          />
 
-      <WorkbenchStageStepper
-        activeStage={contentMode}
-        status={stageStatus}
-        onCreateAndListen={onCreateAndListen}
-        onOpenCinema={onOpenCinema}
-        onStageAction={onStageAction}
-      />
+          <WorkbenchStageStepper
+            activeStage={contentMode}
+            status={stageStatus}
+            onCreateAndListen={onCreateAndListen}
+            onOpenCinema={onOpenCinema}
+            onStageAction={onStageAction}
+          />
+        </>
+      ) : null}
 
       {showSourceIntake ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading intake wizard..." />}>

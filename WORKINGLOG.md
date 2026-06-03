@@ -1,3 +1,18 @@
+## 2026-06-03 14:03 CEST - Commit Cue-First Teleprompt Refinement
+- [x] Review worktree scope
+- [x] Stage Teleprompt refinement package
+- [x] Create commit
+
+## 2026-06-03 13:31 CEST - Cue-First Teleprompt Workspace Refinement
+- [x] Add cue-first Teleprompt work log and inspect current seams
+- [x] Derive Teleprompt default mode from audio lifecycle
+- [x] Refine Teleprompt Studio layout around cue, playback, mode, and secondary display controls
+- [x] Consolidate Teleprompt inspector, cue list, and audio recovery
+- [x] Remove duplicate Theatre entry routes
+- [x] Update focused tests and E2E expectations
+- [x] Run focused and project checks
+- Validation: focused Teleprompt/workspace tests passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `pnpm e2e:teleprompt-memory`, `pnpm e2e:responsive-snapshots`, and `pnpm e2e:command-palette` passed; `pnpm e2e:surface-complexity` still fails existing UI-action review gates, with no Teleprompt action failures or overlay collisions reported; packaged `pnpm e2e:ui-actions:quick` failed existing-server seed setup, while a managed rerun reached the existing review gate with 48 action replays passed and 0 failed.
+
 ## 2026-06-03 12:34 CEST - Unified Audio Generation Lifecycle
 - [x] Add durable backend partial audio and retry-resume
 - [x] Add canonical frontend audio pipeline model

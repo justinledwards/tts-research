@@ -3,7 +3,15 @@ import { buildTeleprompterCue, type TeleprompterHighlightSettings } from "../../
 import type { HighlightMap, VoiceJob } from "../../types";
 import { audioSource } from "../../api";
 import { useAudioWaveformBars } from "../../audioWaveform";
-import { Button, Panel, SegmentedControl, StatusChip, Toggle, cx } from "../../design";
+import {
+  Button,
+  Panel,
+  SegmentedControl,
+  StatusChip,
+  Toggle,
+  cx,
+  type StatusChipTone,
+} from "../../design";
 import { ContextPanel, type ContextPanelTabId } from "../context-panel";
 import {
   readAlongTimingStateFromRuntime,
@@ -14,8 +22,8 @@ import { liveStatusMessages, useLiveStatus } from "../accessibility";
 import { nextReaderPlaybackRate } from "../reader-accessibility";
 import { useFocusedTheatreControls } from "../theatre/FocusedTheatreShell";
 import type { RevisionBlock } from "../revision";
-import { HeaderContextSummary } from "../header";
 import {
+  generatedAudioLifecycleDescriptor,
   generatedAudioLifecycleFromJob,
   LocalizedPlaybackToolbar,
   playbackActionAriaLabel,
@@ -79,7 +87,10 @@ import {
 import { buildTelepromptContextTabs } from "./telepromptStudioHelpers";
 import {
   buildTelepromptWorkModeModel,
+  defaultTelepromptWorkMode,
   TELEPROMPT_WORK_MODES,
+  telepromptCueSyncModeForWorkMode,
+  telepromptGeneratedAudioReady,
   type TelepromptWorkMode,
 } from "./telepromptStudioModel";
 import {
@@ -198,6 +209,16 @@ export function TelepromptStudio({
   onOpenTheatreStage,
   onTheatreSettingsChange,
 }: Readonly<TelepromptStudioProps>) {
+  const generatedAudioLifecycle =
+    sourceLifecycle?.generatedAudioState ?? generatedAudioLifecycleFromJob({ job });
+  const audioFollowAvailable = telepromptGeneratedAudioReady({
+    generatedAudioLifecycle,
+    playbackAvailable: playbackControls.isAvailable,
+  });
+  const defaultWorkMode = defaultTelepromptWorkMode({
+    generatedAudioLifecycle,
+    playbackAvailable: playbackControls.isAvailable,
+  });
   const [activeContextTab, setActiveContextTab] = useState<ContextPanelTabId>("overview");
   const [presetId, setPresetId] = useState<TelepromptPresetId>("standard");
   const [theatreMode, setTheatreMode] = useState<TelepromptTheatreMode>("inline");
@@ -214,8 +235,10 @@ export function TelepromptStudio({
   const [statusMessage, setStatusMessage] = useState("Teleprompt Studio ready.");
   const { announcePolite } = useLiveStatus();
   const [cueDrawerOpen, setCueDrawerOpen] = useState(false);
-  const [workMode, setWorkMode] = useState<TelepromptWorkMode>("rehearsal");
-  const [cueSyncMode, setCueSyncMode] = useState<TelepromptCueSyncMode>("manual");
+  const [workMode, setWorkMode] = useState<TelepromptWorkMode>(() => defaultWorkMode);
+  const [cueSyncMode, setCueSyncMode] = useState<TelepromptCueSyncMode>(() =>
+    telepromptCueSyncModeForWorkMode(defaultWorkMode),
+  );
   const scriptScrollerRef = useRef<HTMLDivElement | null>(null);
   const activeBlockElementRef = useRef<HTMLDivElement | null>(null);
   const theatreRootRef = useRef<HTMLDivElement | null>(null);
@@ -227,13 +250,12 @@ export function TelepromptStudio({
     () => telepromptSourceKey({ scopeLabel, sourceId, sourceLabel, sourceType }),
     [scopeLabel, sourceId, sourceLabel, sourceType],
   );
+  const workModeSourceKeyRef = useRef(sourceKey);
   const returnTarget = workspaceStageToTelepromptReturnTarget(returnStage);
   const cueTimeline = useMemo(
     () => buildTelepromptCueTimeline({ blocks, highlightMap, highlightMapV2, job }),
     [blocks, highlightMap, highlightMapV2, job],
   );
-  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
-  const audioFollowAvailable = playbackControls.isAvailable && job?.status === "completed";
   const cueSync = useMemo(
     () =>
       resolveTelepromptCueSync({
@@ -285,11 +307,14 @@ export function TelepromptStudio({
   const preset = telepromptPreset(presetId);
   const playbackStatusLabel =
     playbackControls.isPlaying || isPlaybackActive ? "Recording playback" : "Ready to record";
-  const playbackLifecycle = playbackControls.isAvailable ? "ready" : generatedAudioLifecycle;
+  const playbackLifecycle = audioFollowAvailable ? "ready" : generatedAudioLifecycle;
   const audioFollowLifecycle = audioFollowAvailable ? "ready" : generatedAudioLifecycle;
-  const cuePlaybackDisabledReason = playbackControls.isAvailable
-    ? undefined
-    : playbackActionDisabledReason({ action: "telepromptPlay", lifecycle: playbackLifecycle });
+  const generatedAudioDescriptor = generatedAudioLifecycleDescriptor(generatedAudioLifecycle);
+  const audioFollowUnavailableReason =
+    generatedAudioLifecycle === "ready" && !playbackControls.isAvailable
+      ? "Generated audio is ready, but playback controls are still loading."
+      : generatedAudioDescriptor.disabledReason;
+  const cuePlaybackDisabledReason = audioFollowAvailable ? undefined : audioFollowUnavailableReason;
   const openCinemaDisabledReason = canOpenCinema
     ? undefined
     : playbackActionDisabledReason({
@@ -305,6 +330,16 @@ export function TelepromptStudio({
         fallbackReason: "Select a ready source before creating audio.",
         lifecycle: playbackLifecycle,
       }));
+  const audioRecoveryActionId: "createAndListen" | "retryGeneration" =
+    generatedAudioLifecycle === "failed" ? "retryGeneration" : "createAndListen";
+  const audioRecoveryActionLabel = workspaceStageActionLabel(audioRecoveryActionId);
+  const audioRecoveryWorking =
+    generatedAudioLifecycle === "queued" ||
+    generatedAudioLifecycle === "generating" ||
+    (generatedAudioLifecycle === "ready" && !playbackControls.isAvailable);
+  const audioRecoveryDisabledReason = audioRecoveryWorking
+    ? audioFollowUnavailableReason
+    : createAndListenDisabledReason;
   const cueProgressPercent =
     activeBlockIndex >= 0 && blocks.length > 0
       ? Math.round(((activeBlockIndex + 1) / blocks.length) * 100)
@@ -359,12 +394,18 @@ export function TelepromptStudio({
     ],
   );
   useEffect(() => {
+    if (workModeSourceKeyRef.current !== sourceKey) {
+      workModeSourceKeyRef.current = sourceKey;
+      setWorkMode(defaultWorkMode);
+      setCueSyncMode(telepromptCueSyncModeForWorkMode(defaultWorkMode));
+      return;
+    }
     if (audioFollowAvailable || (workMode !== "audio-follow" && workMode !== "review-playback")) {
       return;
     }
     setWorkMode("rehearsal");
     setCueSyncMode("manual");
-  }, [audioFollowAvailable, workMode]);
+  }, [audioFollowAvailable, defaultWorkMode, sourceKey, workMode]);
   const activeCueCurrentSourceWordId: string | null =
     typeof cueSync.activeCue?.currentSourceWordId === "string"
       ? cueSync.activeCue.currentSourceWordId
@@ -413,7 +454,7 @@ export function TelepromptStudio({
         blocks,
         estimatedDurationMs,
         isPlaybackActive: playbackControls.isPlaying || isPlaybackActive,
-        playbackAvailable: playbackControls.isAvailable,
+        playbackAvailable: audioFollowAvailable,
         scopeLabel,
         sourceLabel,
       }),
@@ -425,8 +466,8 @@ export function TelepromptStudio({
       blocks,
       cueSync.statusLabel,
       estimatedDurationMs,
+      audioFollowAvailable,
       isPlaybackActive,
-      playbackControls.isAvailable,
       playbackControls.isPlaying,
       scopeLabel,
       sourceLabel,
@@ -508,14 +549,14 @@ export function TelepromptStudio({
   }, [announcePolite, persistSnapshot, returnTarget]);
 
   const openTheatre = useCallback(() => {
-    if (onOpenTheatreStage) {
+    if (onOpenTheatreStage && audioFollowAvailable) {
       theatreUsesWorkspaceStageRef.current = true;
       onOpenTheatreStage();
       return;
     }
     theatreUsesWorkspaceStageRef.current = false;
     activateTheatre();
-  }, [activateTheatre, onOpenTheatreStage]);
+  }, [activateTheatre, audioFollowAvailable, onOpenTheatreStage]);
 
   const handleExitTheatre = useCallback(() => {
     const shouldExitWorkspaceStage = theatreUsesWorkspaceStageRef.current;
@@ -668,7 +709,7 @@ export function TelepromptStudio({
   );
 
   const handlePlayPause = useCallback(() => {
-    if (!playbackControls.isAvailable) {
+    if (!audioFollowAvailable) {
       setStatusMessage("Playback controls are available after Create & Listen.");
       return;
     }
@@ -679,12 +720,12 @@ export function TelepromptStudio({
     }
     void playbackControls.play();
     setStatusMessage("Playback started.");
-  }, [playbackControls]);
+  }, [audioFollowAvailable, playbackControls]);
 
   const handleTheatrePlayPause = useCallback(() => {
     if (
       playbackControls.isPlaying ||
-      !playbackControls.isAvailable ||
+      !audioFollowAvailable ||
       theatreSettings.countdownSeconds === 0
     ) {
       setCountdownRemaining(null);
@@ -696,8 +737,8 @@ export function TelepromptStudio({
       `Playback countdown started: ${theatreSettings.countdownSeconds.toString()} seconds.`,
     );
   }, [
+    audioFollowAvailable,
     handlePlayPause,
-    playbackControls.isAvailable,
     playbackControls.isPlaying,
     theatreSettings.countdownSeconds,
   ]);
@@ -708,7 +749,7 @@ export function TelepromptStudio({
     }
     if (countdownRemaining <= 0) {
       setCountdownRemaining(null);
-      if (playbackControls.isAvailable && !playbackControls.isPlaying) {
+      if (audioFollowAvailable && !playbackControls.isPlaying) {
         void playbackControls.play();
         setStatusMessage("Playback started.");
       }
@@ -720,11 +761,11 @@ export function TelepromptStudio({
     return () => {
       globalThis.clearTimeout(timerId);
     };
-  }, [countdownRemaining, playbackControls]);
+  }, [audioFollowAvailable, countdownRemaining, playbackControls]);
 
   const handleJumpToCurrentAudio = useCallback(() => {
     if (!audioFollowAvailable) {
-      setStatusMessage("Audio-follow unlocks when generated audio and timing are ready.");
+      setStatusMessage(workModeModel.disabledReason ?? workModeModel.detail);
       return;
     }
     setWorkMode("audio-follow");
@@ -743,16 +784,18 @@ export function TelepromptStudio({
     persistSnapshot,
     audioFollowAvailable,
     returnTarget,
+    workModeModel.detail,
+    workModeModel.disabledReason,
   ]);
 
   const handleRestart = useCallback(() => {
-    if (!playbackControls.isAvailable) {
+    if (!audioFollowAvailable) {
       setStatusMessage("Playback controls are available after Create & Listen.");
       return;
     }
     void playbackControls.restart();
     setStatusMessage("Playback restarted.");
-  }, [playbackControls]);
+  }, [audioFollowAvailable, playbackControls]);
 
   const adjustPlaybackRate = useCallback(
     (direction: -1 | 1) => {
@@ -773,7 +816,7 @@ export function TelepromptStudio({
         audioProgressPercent,
         generatedAudioLifecycle: playbackLifecycle,
         mode: nextMode,
-        playbackAvailable: playbackControls.isAvailable,
+        playbackAvailable: audioFollowAvailable,
         playbackPlaying: playbackControls.isPlaying || isPlaybackActive,
       });
       if (nextModel.disabledReason) {
@@ -786,8 +829,8 @@ export function TelepromptStudio({
     },
     [
       audioProgressPercent,
+      audioFollowAvailable,
       isPlaybackActive,
-      playbackControls.isAvailable,
       playbackControls.isPlaying,
       playbackLifecycle,
     ],
@@ -875,7 +918,7 @@ export function TelepromptStudio({
     jumpToAudio: {
       ariaKeyShortcuts: "Alt+J",
       shortcutCommandId: "teleprompt.jumpCurrentAudio",
-      disabled: !playbackControls.isAvailable || !cueSync.activeCue,
+      disabled: !audioFollowAvailable || !cueSync.activeCue,
       disabledReason:
         cuePlaybackDisabledReason ??
         (cueSync.activeCue ? undefined : "Current audio cue is not available yet."),
@@ -903,7 +946,7 @@ export function TelepromptStudio({
       dataAttributes: playbackActionDataAttributes("telepromptPlay", playbackLifecycle, {
         primary: true,
       }),
-      disabled: !playbackControls.isAvailable,
+      disabled: !audioFollowAvailable,
       disabledReason: cuePlaybackDisabledReason,
       label: playbackControls.isPlaying ? "Pause Cue" : playbackActionLabel("telepromptPlay"),
       primary: true,
@@ -935,7 +978,7 @@ export function TelepromptStudio({
       ariaKeyShortcuts: "Home",
       shortcutCommandId: "teleprompt.restart",
       dataAttributes: playbackActionDataAttributes("telepromptPlay", playbackLifecycle),
-      disabled: !playbackControls.isAvailable,
+      disabled: !audioFollowAvailable,
       disabledReason: cuePlaybackDisabledReason,
       label: "Restart",
       onClick: handleRestart,
@@ -944,10 +987,12 @@ export function TelepromptStudio({
     speed: {
       ariaKeyShortcuts: "[ ]",
       shortcutCommandId: "teleprompt.speed",
-      disabled: !playbackControls.setPlaybackRate,
-      disabledReason: playbackControls.setPlaybackRate
-        ? undefined
-        : "Playback speed is available after generated audio is loaded.",
+      disabled: !audioFollowAvailable || !playbackControls.setPlaybackRate,
+      disabledReason:
+        audioFollowAvailable && playbackControls.setPlaybackRate
+          ? undefined
+          : (cuePlaybackDisabledReason ??
+            "Playback speed is available after generated audio is loaded."),
       testId: "ui-action-teleprompt-local-speed",
       value: playbackControls.playbackRate,
       onChange: playbackControls.setPlaybackRate,
@@ -1083,7 +1128,7 @@ export function TelepromptStudio({
     cueSegmentIndex: cue?.segmentIndex ?? null,
     cueSync,
     cueSyncStatusLabel: cueSync.statusLabel,
-    playbackAvailable: playbackControls.isAvailable,
+    playbackAvailable: audioFollowAvailable,
     playbackStatusLabel,
     policyProfile,
     returnTarget,
@@ -1099,11 +1144,19 @@ export function TelepromptStudio({
     ? `Cue ${activeBlock.index.toString()} of ${Math.max(1, blocks.length).toString()}`
     : "No cue selected";
   const audioPlaying = playbackControls.isPlaying || isPlaybackActive;
-  let audioStatusLabel = "Audio missing";
-  if (playbackControls.isAvailable) {
+  let audioStatusLabel = `Audio ${generatedAudioDescriptor.label.toLowerCase()}`;
+  if (audioFollowAvailable) {
     audioStatusLabel = audioPlaying ? "Audio playing" : "Audio ready";
   }
-  const audioStatusTone = playbackControls.isAvailable ? "success" : "warning";
+  let audioStatusTone: StatusChipTone = "warning";
+  if (generatedAudioLifecycle === "failed") {
+    audioStatusTone = "danger";
+  } else if (audioFollowAvailable) {
+    audioStatusTone = "success";
+  } else if (generatedAudioLifecycle === "queued" || generatedAudioLifecycle === "generating") {
+    audioStatusTone = "info";
+  }
+  const showAudioFollowRecovery = !audioFollowAvailable;
 
   return (
     <>
@@ -1114,30 +1167,24 @@ export function TelepromptStudio({
         variant="raised"
       >
         <section
-          className="flex min-w-0 flex-col gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border lg:flex-row lg:items-center lg:justify-between"
+          className="flex min-w-0 flex-col gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border lg:flex-row lg:items-center lg:justify-between"
           data-testid="teleprompt-source-strip"
         >
-          <HeaderContextSummary
-            className="flex-1"
-            density="compact"
-            inlineSummary={false}
-            metadata={[
-              { label: "Policy", value: policyProfile },
-              { label: "Voice", value: voiceProfile },
-              { label: "Block", value: activeBlock?.label ?? "No active block" },
-              { label: "Size", value: sourceMeta },
-            ]}
-            scopeTitle={scopeLabel}
-            sourceLifecycle={sourceLifecycle}
-            sourceTitle={sourceLabel}
-            stateLabel="Teleprompt"
-            surfaceName="Teleprompt Studio"
-            variant="bar"
-          />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+              Teleprompt Studio
+            </p>
+            <h2 className="mt-1 truncate text-lg font-semibold text-[var(--vs-text)]">
+              {cuePositionLabel}
+            </h2>
+            <p className="mt-1 truncate text-xs vs-muted" title={`${sourceLabel} - ${scopeLabel}`}>
+              {sourceLabel} · {scopeLabel}
+            </p>
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <StatusChip tone="neutral">{totalWords.toLocaleString()} words</StatusChip>
             <StatusChip tone="neutral">{formatTelepromptDuration(estimatedDurationMs)}</StatusChip>
-            <StatusChip tone="pinned">{cuePositionLabel}</StatusChip>
+            <StatusChip tone={audioStatusTone}>{audioStatusLabel}</StatusChip>
           </div>
         </section>
 
@@ -1185,12 +1232,61 @@ export function TelepromptStudio({
               </div>
               <SegmentedControl
                 ariaLabel="Teleprompt work mode"
-                columns={4}
+                columns={2}
                 options={workModeOptions}
                 value={workMode}
                 onChange={selectWorkMode}
               />
-              <div className="grid gap-3">
+              <p className="text-xs leading-5 vs-muted">{workModeModel.detail}</p>
+            </div>
+
+            {showAudioFollowRecovery ? (
+              <section className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 shadow-sm vs-border">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+                      Audio-follow
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">{audioStatusLabel}</p>
+                  </div>
+                  <StatusChip tone={audioStatusTone}>{generatedAudioDescriptor.label}</StatusChip>
+                </div>
+                <p className="text-xs leading-5 vs-muted">
+                  {audioFollowUnavailableReason} Rehearsal and recording modes remain available.
+                </p>
+                {audioRecoveryWorking ? null : (
+                  <Button
+                    {...playbackActionDataAttributes(
+                      audioRecoveryActionId,
+                      generatedAudioLifecycle,
+                    )}
+                    {...providerCapabilityDataAttributes("tts", createAndListenCapabilityReason)}
+                    aria-label={playbackActionAriaLabel(audioRecoveryActionId, {
+                      createScope: "current-scope",
+                      lifecycle: generatedAudioLifecycle,
+                    })}
+                    data-testid="ui-action-teleprompt-audio-recovery"
+                    disabled={!canCreate}
+                    disabledReason={audioRecoveryDisabledReason}
+                    onClick={handleCreateAndListen}
+                    size="sm"
+                    variant={generatedAudioLifecycle === "failed" ? "destructive" : "soft"}
+                  >
+                    {audioRecoveryActionLabel}
+                  </Button>
+                )}
+              </section>
+            ) : null}
+
+            <details className="rounded-lg border bg-[var(--vs-surface)] shadow-sm vs-border">
+              <summary
+                className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold transition hover:text-[var(--vs-selected-text)] [&::-webkit-details-marker]:hidden"
+                data-testid="ui-action-teleprompt-display-presets"
+              >
+                <span>Display preset</span>
+                <span className="text-xs vs-muted">{preset.label}</span>
+              </summary>
+              <div className="grid gap-3 border-t p-3 vs-border">
                 <SegmentedControl
                   ariaLabel="Teleprompt accessibility preset"
                   columns={2}
@@ -1216,11 +1312,11 @@ export function TelepromptStudio({
                   }}
                 />
               </div>
-              <p className="text-xs leading-5 vs-muted">
+              <p className="px-3 pb-3 text-xs leading-5 vs-muted">
                 Cue highlight style: {effectiveSettings.effectStyle === "spark" ? "Guided" : "Bold"}
                 .{` ${preset.description}`}
               </p>
-            </div>
+            </details>
           </aside>
         </div>
 
@@ -1241,6 +1337,44 @@ export function TelepromptStudio({
           </summary>
           <div className="grid gap-3 border-t p-3 vs-border xl:grid-cols-[18rem_minmax(0,1fr)]">
             <div className="grid gap-3 self-start">
+              <section
+                className="grid gap-2 rounded-md border bg-[var(--vs-raised)] p-3 text-xs vs-border"
+                data-testid="teleprompt-session-context"
+              >
+                <p className="font-semibold uppercase tracking-[0.14em] vs-muted">Session</p>
+                <dl className="grid gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <dt className="vs-muted">Source</dt>
+                    <dd className="truncate font-semibold" title={sourceLabel}>
+                      {sourceLabel}
+                    </dd>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <dt className="vs-muted">Scope</dt>
+                    <dd className="truncate font-semibold" title={scopeLabel}>
+                      {scopeLabel}
+                    </dd>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <dt className="vs-muted">Policy</dt>
+                    <dd className="truncate font-semibold" title={policyProfile}>
+                      {policyProfile}
+                    </dd>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <dt className="vs-muted">Voice</dt>
+                    <dd className="truncate font-semibold" title={voiceProfile}>
+                      {voiceProfile}
+                    </dd>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <dt className="vs-muted">Size</dt>
+                    <dd className="truncate font-semibold" title={sourceMeta}>
+                      {sourceMeta}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
               <section className="grid gap-2 rounded-md border bg-[var(--vs-raised)] p-3 vs-border">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
                   Workflow
@@ -1278,19 +1412,24 @@ export function TelepromptStudio({
                     {workspaceStageActionLabel("openCinema")}
                   </Button>
                   <Button
-                    {...playbackActionDataAttributes("createAndListen", playbackLifecycle)}
+                    {...playbackActionDataAttributes(audioRecoveryActionId, playbackLifecycle)}
                     {...providerCapabilityDataAttributes("tts", createAndListenCapabilityReason)}
-                    aria-label={playbackActionAriaLabel("createAndListen", {
+                    aria-label={playbackActionAriaLabel(audioRecoveryActionId, {
                       createScope: "current-scope",
+                      lifecycle: generatedAudioLifecycle,
                     })}
-                    data-testid={workspaceStageActionTestId("createAndListen")}
+                    data-testid={workspaceStageActionTestId(audioRecoveryActionId)}
                     disabled={!canCreate}
-                    disabledReason={createAndListenDisabledReason}
+                    disabledReason={audioRecoveryDisabledReason}
                     onClick={handleCreateAndListen}
                     size="sm"
-                    variant={telepromptSecondaryActionVariant("create-and-listen")}
+                    variant={
+                      generatedAudioLifecycle === "failed"
+                        ? "destructive"
+                        : telepromptSecondaryActionVariant("create-and-listen")
+                    }
                   >
-                    {workspaceStageActionLabel("createAndListen")}
+                    {audioRecoveryActionLabel}
                   </Button>
                 </div>
               </section>
@@ -1321,6 +1460,15 @@ export function TelepromptStudio({
                 </dl>
                 <p className="leading-5 vs-muted">{cueSync.detail}</p>
               </section>
+              {showTelepromptContextPanel ? (
+                <ContextPanel
+                  activeTabId={activeContextTab}
+                  label="Teleprompt context"
+                  surface="Teleprompt"
+                  tabs={contextTabs}
+                  onTabChange={setActiveContextTab}
+                />
+              ) : null}
             </div>
             <div
               className={cx(
@@ -1386,16 +1534,6 @@ export function TelepromptStudio({
         >
           {statusMessage}
         </output>
-
-        {showTelepromptContextPanel ? (
-          <ContextPanel
-            activeTabId={activeContextTab}
-            label="Teleprompt context"
-            surface="Teleprompt"
-            tabs={contextTabs}
-            onTabChange={setActiveContextTab}
-          />
-        ) : null}
       </Panel>
       {theatreMode === "inline" ? null : (
         <TelepromptTheatre
@@ -1420,7 +1558,7 @@ export function TelepromptStudio({
           nativeFullscreenDisabledReason={fullscreenAvailability.reason ?? undefined}
           nextBlock={nextBlock}
           openCinemaDisabledReason={openCinemaDisabledReason}
-          playbackControlsAvailable={playbackControls.isAvailable}
+          playbackControlsAvailable={audioFollowAvailable}
           playbackControlsPlaying={playbackControls.isPlaying}
           playbackLifecycle={playbackLifecycle}
           playbackRate={playbackControls.playbackRate}

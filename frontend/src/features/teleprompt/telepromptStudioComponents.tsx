@@ -6,7 +6,7 @@ import {
   splitTeleprompterTokens,
   type TeleprompterHighlightSettings,
 } from "../../teleprompter";
-import { Panel, StatusChip, cx } from "../../design";
+import { Panel, StatusChip, cx, type StatusChipTone } from "../../design";
 import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
 import type { ReadAlongCueRole, ReadAlongTimingState, ReadAlongWordRole } from "../readalong";
 import type { TelepromptCueSyncMode } from "./telepromptCueTimeline";
@@ -35,7 +35,7 @@ export function TelepromptCurrentCueStage({
 }: Readonly<{
   activeRef?: RefObject<HTMLDivElement | null>;
   audioStatusLabel: string;
-  audioStatusTone: "success" | "warning";
+  audioStatusTone: StatusChipTone;
   block: RevisionBlock | null;
   cuePositionLabel: string;
   cueProgressPercent: number;
@@ -75,12 +75,13 @@ export function TelepromptCurrentCueStage({
     <section
       aria-label="Current teleprompt cue"
       className={cx(
-        "grid min-h-[24rem] gap-4 rounded-lg border p-4 shadow-sm sm:p-5",
+        "grid min-h-[30rem] gap-4 rounded-lg border p-4 shadow-sm sm:min-h-[34rem] sm:p-5 xl:min-h-[40rem]",
         highContrast
           ? "border-[var(--vs-border-strong)] bg-[var(--vs-theatre-bg)] text-[var(--vs-theatre-text)]"
           : "border-[var(--vs-selected-border)] bg-[var(--vs-surface)]",
       )}
       data-testid="teleprompt-current-cue-stage"
+      data-teleprompt-cue-priority="primary"
       {...workModeDataAttributes}
     >
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">

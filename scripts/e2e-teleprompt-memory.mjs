@@ -142,15 +142,18 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
     await page.getByTestId("workspace-stage-action-openTeleprompt").click();
     await page.getByTestId("teleprompt-studio").waitFor();
     await capture("teleprompt-from-preview");
-    await page
+    await page.getByTestId("ui-action-teleprompt-cue-drawer").click();
+    const sessionContext = page.getByTestId("teleprompt-session-context");
+    await sessionContext
       .getByText(/Default voice|Default mock narrator/)
       .first()
       .waitFor();
-    await page
+    await sessionContext
       .getByText(/Policy/i)
       .first()
       .waitFor();
-    checks.push("Teleprompt shows voice and policy context.");
+    await page.getByTestId("ui-action-teleprompt-cue-drawer").click();
+    checks.push("Teleprompt keeps voice and policy context in the inspector drawer.");
 
     await pinWorkspaceInspector(page);
     await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
@@ -202,6 +205,7 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
       await nextCue.click();
       checks.push("Next cue can be selected before returning.");
     }
+    await page.getByTestId("ui-action-teleprompt-display-presets").click();
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
     await page.getByTestId("ui-action-teleprompt-cue-drawer").click();
     await page.getByTestId("ui-action-teleprompt-back-preview").click();
@@ -248,19 +252,19 @@ async function runTelepromptMemoryAudit(browser, projectId, screenshots) {
     await page.keyboard.press("Control+K");
     const commandDialog = page.getByRole("dialog", { name: "Command palette" });
     await commandDialog.waitFor();
+    await commandDialog.getByRole("combobox", { name: "Search commands" }).fill("teleprompt");
     await commandDialog
-      .getByRole("combobox", { name: "Search commands" })
-      .fill("teleprompt theatre");
-    await commandDialog
-      .getByRole("option", { name: /Open Teleprompt Theatre/i })
+      .getByRole("option", { name: /Open Teleprompt/i })
       .first()
       .click();
+    await page.getByTestId("teleprompt-studio").waitFor();
+    await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
     await page.getByTestId("teleprompt-theatre").waitFor();
     await capture("teleprompt-theatre-command-palette");
     await page.getByTestId("ui-action-teleprompt-theatre-back-preview").click();
     await page.getByTestId("teleprompt-theatre").waitFor({ state: "detached" });
     await page.getByText("Spoken Form").first().waitFor();
-    checks.push("Command palette opens Teleprompt Theatre and can return to Preview.");
+    checks.push("Command palette opens Teleprompt; Enter Theatre remains the Theatre transition.");
 
     await page.getByTestId("workspace-stage-action-openTeleprompt").click();
     await page.getByTestId("teleprompt-studio").waitFor();

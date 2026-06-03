@@ -17,6 +17,7 @@ import {
   workspaceLayoutRails,
   workspaceResolvedLayout,
   workspaceStageMeta,
+  workspaceStageShowsGlobalChrome,
 } from "./model";
 import {
   transitionWorkspaceContextForStageAction,
@@ -54,6 +55,14 @@ describe("workspace stage model", () => {
       leftRailMode: "full",
       rightRailMode: "full",
     });
+  });
+
+  it("hides global workbench chrome for cue-first stages", () => {
+    expect(workspaceStageShowsGlobalChrome("intake")).toBe(true);
+    expect(workspaceStageShowsGlobalChrome("review")).toBe(true);
+    expect(workspaceStageShowsGlobalChrome("preview")).toBe(true);
+    expect(workspaceStageShowsGlobalChrome("teleprompt")).toBe(false);
+    expect(workspaceStageShowsGlobalChrome("theatre")).toBe(false);
   });
 
   it("maps custom layout pins through the global workspace layout", () => {

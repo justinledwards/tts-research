@@ -70,6 +70,9 @@ export {
 export {
   TELEPROMPT_WORK_MODES,
   buildTelepromptWorkModeModel,
+  defaultTelepromptWorkMode,
+  telepromptCueSyncModeForWorkMode,
+  telepromptGeneratedAudioReady,
   type TelepromptWorkMode,
   type TelepromptWorkModeModel,
 } from "./telepromptStudioModel";
