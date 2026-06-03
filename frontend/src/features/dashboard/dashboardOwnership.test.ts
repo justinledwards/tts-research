@@ -6,10 +6,10 @@ import {
 } from "./dashboardOwnership";
 
 describe("dashboardOwnership", () => {
-  it("keeps project asset actions owned by the Project Dashboard", () => {
-    expect(dashboardOwnerForAction("project.open")).toBe("project-dashboard");
-    expect(dashboardOwnerForAction("project.export")).toBe("project-dashboard");
-    expect(dashboardOwnerForAction("source.list")).toBe("project-dashboard");
+  it("keeps project asset actions owned by Command Center", () => {
+    expect(dashboardOwnerForAction("project.open")).toBe("command-center");
+    expect(dashboardOwnerForAction("project.export")).toBe("command-center");
+    expect(dashboardOwnerForAction("source.list")).toBe("command-center");
   });
 
   it("keeps reusable voice asset actions owned by the Voice Dashboard", () => {

@@ -98,7 +98,7 @@ export function sourceLifecycleModelsFromSources({
       preparedSourceLifecycleModel(source, {
         isActive: source.id === activePreparedSourceId,
         job: latestJobForSource(jobs, { owner: "prepared", sourceId: source.id }),
-        lastOpenedSurface: "Project Dashboard",
+        lastOpenedSurface: "Command Center",
         projectId,
       }),
     ),
@@ -106,7 +106,7 @@ export function sourceLifecycleModelsFromSources({
       bookSourceLifecycleModel(source, {
         isActive: source.id === activeBookSourceId,
         job: latestJobForSource(jobs, { owner: "book", sourceId: source.id }),
-        lastOpenedSurface: "Project Dashboard",
+        lastOpenedSurface: "Command Center",
         projectId,
         selectedScope: source.id === activeBookSourceId ? selectedBookScope : null,
       }),

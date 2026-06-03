@@ -41,7 +41,7 @@ export function SourceCard({
         <>
           <Button
             data-testid={`ui-action-source-review-${model.owner}-${model.id}`}
-            data-ui-action-surface="Project dashboard"
+            data-ui-action-surface="Command Center"
             disabled={Boolean(reviewDisabledReason)}
             disabledReason={reviewDisabledReason}
             onClick={() => {
@@ -54,7 +54,7 @@ export function SourceCard({
           </Button>
           <Button
             data-testid={`ui-action-source-preview-${model.owner}-${model.id}`}
-            data-ui-action-surface="Project dashboard"
+            data-ui-action-surface="Command Center"
             disabled={Boolean(previewDisabledReason)}
             disabledReason={previewDisabledReason}
             onClick={() => {
@@ -67,7 +67,7 @@ export function SourceCard({
           </Button>
           <Button
             data-testid={`ui-action-source-cinema-${model.owner}-${model.id}`}
-            data-ui-action-surface="Project dashboard"
+            data-ui-action-surface="Command Center"
             disabled={Boolean(cinemaDisabledReason)}
             disabledReason={cinemaDisabledReason}
             onClick={() => {

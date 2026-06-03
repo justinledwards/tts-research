@@ -38,7 +38,7 @@ test("summarizes required review surfaces from UI action inventory aliases", () 
         Intake: 2,
         Preview: 4,
         "Preview mini-player": 1,
-        "Project Dashboard": 10,
+        "Command Center": 10,
         Review: 3,
         Settings: 8,
         Teleprompt: 1,

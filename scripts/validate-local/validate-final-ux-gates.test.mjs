@@ -42,7 +42,7 @@ test("fails when UI action audit is completed with unwaived findings", () => {
     outcome: "no observable result",
     passed: false,
     scenarioId: "project-dashboard",
-    surface: "Project dashboard",
+    surface: "Command Center",
   };
   documents.actionResults = {
     results: [...documents.actionResults.results, failedResult],
@@ -53,9 +53,9 @@ test("fails when UI action audit is completed with unwaived findings", () => {
     hasStableTestId: true,
     label: "Open project",
     metadataIssues: [],
-    owner: "project-dashboard",
+    owner: "command-center",
     scenarioId: "project-dashboard",
-    surface: "Project dashboard",
+    surface: "Command Center",
   });
   documents.actionInventory.duplicates = [
     {
@@ -63,7 +63,7 @@ test("fails when UI action audit is completed with unwaived findings", () => {
       count: 2,
       label: "Open project",
       scenarios: ["project-dashboard"],
-      surface: "Project dashboard",
+      surface: "Command Center",
     },
   ];
   documents.uiActionSummary = {
@@ -91,7 +91,7 @@ test("fails when UI action audit is completed with unwaived findings", () => {
   assert.equal(result.mergeReadiness.status, "blocked");
   assert.equal(actionGate.status, "failed");
   assert.match(markdown, /Unresolved Findings/);
-  assert.match(markdown, /Owner: project-dashboard/);
+  assert.match(markdown, /Owner: command-center/);
   assert.match(markdown, /duplicate action group/);
 });
 
@@ -104,7 +104,7 @@ test("reports passed-with-findings when UI action findings are explicitly waived
     outcome: "no observable result",
     passed: false,
     scenarioId: "project-dashboard",
-    surface: "Project dashboard",
+    surface: "Command Center",
   };
   documents.actionResults.status = "completed-with-findings";
   documents.actionResults.results = [...documents.actionResults.results, failedResult];
@@ -113,9 +113,9 @@ test("reports passed-with-findings when UI action findings are explicitly waived
     hasStableTestId: true,
     label: "Open project",
     metadataIssues: [],
-    owner: "project-dashboard",
+    owner: "command-center",
     scenarioId: "project-dashboard",
-    surface: "Project dashboard",
+    surface: "Command Center",
   });
   documents.actionInventory.duplicates = [
     {
@@ -123,8 +123,8 @@ test("reports passed-with-findings when UI action findings are explicitly waived
       count: 2,
       label: "Review",
       scenarios: ["project-dashboard"],
-      surface: "Project dashboard",
-      surfaces: ["Project dashboard"],
+      surface: "Command Center",
+      surfaces: ["Command Center"],
     },
   ];
   documents.uiActionSummary = {
@@ -139,8 +139,8 @@ test("reports passed-with-findings when UI action findings are explicitly waived
     waivers: [
       {
         category: "no-op-controls",
-        owner: "project-dashboard",
-        reason: "Tracked in WP follow-up for project dashboard generated source rows.",
+        owner: "command-center",
+        reason: "Tracked in WP follow-up for Command Center generated source rows.",
         reviewDate: "2026-06-30",
       },
       {

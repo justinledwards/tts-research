@@ -534,7 +534,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     disabledReason: project.id === activeProjectId ? "Already selected." : undefined,
     id: `project:${project.id}`,
     keywords: ["project", project.name],
-    owner: "project-dashboard",
+    owner: "command-center",
     perform: () => {
       handlers.openProject(project.id);
     },

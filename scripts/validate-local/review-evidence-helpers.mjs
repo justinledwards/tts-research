@@ -12,7 +12,7 @@ export const REQUIRED_REVIEW_SURFACES = [
   "Website Cinema",
   "Settings",
   "Command Palette",
-  "Project Dashboard",
+  "Command Center",
   "Voice Dashboard",
   "UI Memory",
 ];
@@ -23,7 +23,7 @@ const surfaceAliases = {
   "Document Cinema": ["DocumentCinema"],
   Intake: ["Intake"],
   Preview: ["Preview", "Preview mini-player"],
-  "Project Dashboard": ["Project Dashboard"],
+  "Command Center": ["Command Center"],
   Review: ["Review"],
   Settings: ["Settings"],
   Teleprompt: ["Teleprompt"],

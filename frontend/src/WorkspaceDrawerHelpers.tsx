@@ -1,15 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatDuration } from "./format";
+import { commandCenterRouteDefinition, type CommandCenterRouteId } from "./features/command-center";
 import type { VoiceJob, VoiceProfile, VoiceProfileSource, VoiceProject } from "./types";
 import type { CancellableActivitySummary } from "./voiceStudioViewModels";
 
-export type CommandCenterSectionId =
-  | "overview"
-  | "projects"
-  | "assets"
-  | "activity"
-  | "importsExports"
-  | "reports";
+export type CommandCenterSectionId = CommandCenterRouteId;
 
 export type WorkspaceActivitySummary = CancellableActivitySummary & {
   onCancel?: () => void;
@@ -60,33 +55,11 @@ export function DrawerStat({ label, value }: DrawerStatProps) {
 }
 
 export function commandCenterSectionHeadline(section: CommandCenterSectionId): string {
-  const headlines: Record<CommandCenterSectionId, string> = {
-    activity: "Background work that can be understood and stopped",
-    assets: "Source and voice assets outside the narration stage",
-    importsExports: "Portable project movement and review",
-    overview: "Project operations without cluttering narration",
-    projects: "Project library and current chapter context",
-    reports: "System health, diagnostics, and provider readiness",
-  };
-  return headlines[section];
+  return commandCenterRouteDefinition(section).headline;
 }
 
 export function commandCenterSectionDescription(section: CommandCenterSectionId): string {
-  const descriptions: Record<CommandCenterSectionId, string> = {
-    activity:
-      "Every long-running task belongs here with plain status, last-known detail, and a cancellation path when the backend supports it.",
-    assets:
-      "Books, prepared files, URLs, voice profiles, and speech policy are grouped here as reusable project material.",
-    importsExports:
-      "Bundle operations are grouped here so the header can stay compact and the workbench can stay focused on source and review.",
-    overview:
-      "Use this surface for project-level actions, assets, activity, imports, exports, and reports. Closing returns to the current narration task.",
-    projects:
-      "Open, rename, export, or protect projects from one stable command surface without disturbing the current workbench.",
-    reports:
-      "A short operational view for backend status, GPU telemetry, and the route into deeper diagnostics.",
-  };
-  return descriptions[section];
+  return commandCenterRouteDefinition(section).description;
 }
 
 type WorkspaceActivityRowProps = Readonly<{

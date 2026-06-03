@@ -115,6 +115,9 @@ describe("source lifecycle model", () => {
     expect(models.map((model) => model.id)).toEqual(["book-1", "prepared-1"]);
     expect(models.find((model) => model.id === "prepared-1")).toMatchObject({
       activeStateLabel: "Active source",
+      envelope: {
+        lastOpenedSurface: "Command Center",
+      },
       lifecycleState: "audioReady",
     });
   });

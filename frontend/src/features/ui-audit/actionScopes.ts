@@ -5,6 +5,7 @@ export const UI_ACTION_SURFACES = [
   "WebsiteCinema",
   "Teleprompt",
   "Settings",
+  "Command Center",
   "Intake",
   "Review",
   "Preview",

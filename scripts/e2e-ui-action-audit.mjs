@@ -1061,16 +1061,16 @@ function createScenarios(seed) {
         ]
       : []),
     {
-      description: "Project dashboard opened from the workspace rail.",
+      description: "Command Center opened from the workspace rail.",
       id: "project-dashboard",
-      label: "Project dashboard",
+      label: "Command Center",
       open: openProjectDashboard,
       storageState: projectStorageState(seed.projectId, {
         sourceMode: "text",
         stage: "review",
         text: workspaceText,
       }),
-      surface: "Project Dashboard",
+      surface: "Command Center",
     },
     {
       description: "Voice dashboard opened from the workspace rail.",
@@ -2495,7 +2495,7 @@ function summarizeGateFindings({
     "UI Memory",
     "Speech Policy",
     "Preview mini-player",
-    "Project dashboard",
+    "Command Center",
     "Voice dashboard",
     "Command palette",
     "Mobile/narrow More sheet",

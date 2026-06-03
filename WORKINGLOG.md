@@ -1419,3 +1419,17 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Stage review repair work package
 - [x] Create commit
 - Validation: `pnpm check` passed with existing unrelated Biome lint warnings/infos.
+
+## 2026-06-03 16:50 CEST - Command Center Project Activity
+- [x] Formalize Command Center route contract
+- [x] Refine Current Work, projects, generated audio, and idle states
+- [x] Align ownership, commands, and audit labels
+- [x] Update regression tests
+- [x] Fix format check findings
+- [x] Run project checks
+- Validation: focused Command Center/status/audit tests passed; frontend typecheck passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome lint warnings.
+
+## 2026-06-03 17:06 CEST - Commit Command Center Project Activity
+- [x] Review worktree scope
+- [x] Stage Command Center work package
+- [x] Create commit

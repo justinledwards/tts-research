@@ -26,7 +26,6 @@ const ALL_REVIEW_SURFACES = [
     "Command Palette",
     "Command Center",
     "Mobile/narrow More sheet",
-    "Project dashboard",
     "Teleprompt Theatre",
     "Voice dashboard",
     "Workspace",
@@ -52,7 +51,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
       "Playback",
       "Preview",
       "Preview mini-player",
-      "Project dashboard",
+      "Command Center",
       "Teleprompt Theatre",
     ],
     burnDownIssue: "WP46-BD-CINEMA-NAV",
@@ -156,7 +155,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
-    acceptedSurfaces: ["Project dashboard", "Voice dashboard"],
+    acceptedSurfaces: ["Command Center", "Voice dashboard"],
     category: "allowed-surface-parity",
     id: "wp46-command-center-section-parity",
     labelPatterns: [
@@ -170,7 +169,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     ],
     owner: "command-center",
     reason:
-      "Project and voice dashboards share the Command Center section rail while their content panes differ.",
+      "Command Center and voice dashboard panes share the section rail while their content panes differ.",
     reviewDate: REVIEW_DATE,
   },
   {
@@ -277,13 +276,13 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
-    acceptedSurfaces: ["Project dashboard", "Voice dashboard"],
+    acceptedSurfaces: ["Command Center", "Voice dashboard"],
     category: "allowed-surface-parity",
     id: "wp46-dashboard-market-profile-parity",
     labelPatterns: ["^Market profile"],
     owner: "voice-workflow",
     reason:
-      "The market profile picker is shared between project and voice dashboard context panels for source/voice alignment.",
+      "The market profile picker is shared between Command Center and voice dashboard context panels for source/voice alignment.",
     reviewDate: REVIEW_DATE,
   },
   {

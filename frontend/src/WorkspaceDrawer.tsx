@@ -13,6 +13,12 @@ import type {
   VoiceProfileSource,
   VoiceProject,
 } from "./types";
+import {
+  COMMAND_CENTER_ROUTES,
+  commandCenterGeneratedAudioState,
+  sortCommandCenterProjects,
+  visibleCommandCenterJobs,
+} from "./features/command-center";
 import { SPEECH_POLICY_PROFILE_OPTIONS, speechPolicyProfileLabel } from "./speechPolicy";
 import {
   CreateProjectRow,
@@ -31,19 +37,12 @@ import {
   type CommandCenterSectionId,
 } from "./WorkspaceDrawerHelpers";
 
-const COMMAND_CENTER_SECTIONS = [
-  { id: "overview", label: "Overview", detail: "Current project and quick routes" },
-  { id: "projects", label: "Projects", detail: "Project library and generated audio" },
-  { id: "assets", label: "Assets", detail: "Sources, voices, and speech policy" },
-  { id: "activity", label: "Activity", detail: "Live work and cancellation" },
-  { id: "importsExports", label: "Import/Export", detail: "Portable bundles" },
-  { id: "reports", label: "Reports", detail: "Health and diagnostics" },
-] as const;
-
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function WorkspaceDrawer({
   activeProjectId,
+  activeScopeLabel,
   activeSection,
+  activeSourceLabel,
   bookSources,
   isOpen,
   job,
@@ -81,7 +80,9 @@ export function WorkspaceDrawer({
   onSpeechPolicyProfileChange,
 }: Readonly<{
   activeProjectId: string;
+  activeScopeLabel: string;
   activeSection?: CommandCenterSectionId;
+  activeSourceLabel: string;
   bookSources: BookSource[];
   isOpen: boolean;
   job: VoiceJob | null;
@@ -123,15 +124,14 @@ export function WorkspaceDrawer({
   const [localActiveSection, setLocalActiveSection] = useState<CommandCenterSectionId>("overview");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const effectiveActiveSection = activeSection ?? localActiveSection;
-  const visibleJobs = useMemo(() => {
-    if (!job) {
-      return projectJobs;
-    }
-    if (projectJobs.some((item) => item.id === job.id)) {
-      return projectJobs;
-    }
-    return [job, ...projectJobs];
-  }, [job, projectJobs]);
+  const visibleJobs = useMemo(
+    () => visibleCommandCenterJobs({ activeProjectId, job, projectJobs }),
+    [activeProjectId, job, projectJobs],
+  );
+  const sortedProjects = useMemo(
+    () => sortCommandCenterProjects(projects, activeProjectId),
+    [activeProjectId, projects],
+  );
   const activitySummaries = useMemo(
     () =>
       buildWorkspaceActivitySummaries({
@@ -166,11 +166,14 @@ export function WorkspaceDrawer({
     : (metricsError ?? "Provider status pending");
   const activeProject = projects.find((project) => project.id === activeProjectId);
   const activeSectionLabel =
-    COMMAND_CENTER_SECTIONS.find((section) => section.id === effectiveActiveSection)?.label ??
+    COMMAND_CENTER_ROUTES.find((section) => section.id === effectiveActiveSection)?.label ??
     "Overview";
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) ?? null;
   const totalSources = bookSources.length + preparedSources.length;
   const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
+  const generatedAudioState = commandCenterGeneratedAudioState(visibleJobs);
+  const currentWorkSource = `${activeSourceLabel} · ${activeScopeLabel}`;
+  const selectedVoiceLabel = selectedProfile?.name ?? "Default";
   const sectionCounts: Record<CommandCenterSectionId, string> = {
     activity: activitySummaries.length > 0 ? activitySummaries.length.toString() : "",
     assets: (totalSources + profiles.length + (profileSource ? 1 : 0)).toString(),
@@ -221,14 +224,9 @@ export function WorkspaceDrawer({
               </p>
               <div className="grid gap-2">
                 <DrawerStat label="Project" value={activeProject?.name ?? "Draft"} />
-                <DrawerStat
-                  label="Generated audio"
-                  value={
-                    visibleJobs.length > 0
-                      ? `${visibleJobs.length.toString()} chapters`
-                      : "No chapters"
-                  }
-                />
+                <DrawerStat label="Source / scope" value={currentWorkSource} />
+                <DrawerStat label="Voice" value={selectedVoiceLabel} />
+                <DrawerStat label="Generated audio" value={generatedAudioState} />
                 <DrawerStat
                   label="Background work"
                   value={
@@ -237,11 +235,10 @@ export function WorkspaceDrawer({
                       : "Idle"
                   }
                 />
-                <DrawerStat label="Backend" value={metrics ? "Online" : "Pending"} />
               </div>
             </div>
             <div className="mt-4 grid gap-1.5">
-              {COMMAND_CENTER_SECTIONS.map((section) => (
+              {COMMAND_CENTER_ROUTES.map((section) => (
                 <button
                   aria-current={effectiveActiveSection === section.id ? "page" : undefined}
                   className={`grid min-w-0 gap-1 rounded-md border px-3 py-2 text-left transition ${
@@ -307,14 +304,15 @@ export function WorkspaceDrawer({
               <CommandCenterOverview
                 activityCount={activitySummaries.length}
                 activeProjectName={activeProject?.name ?? "Draft"}
+                activeScopeLabel={activeScopeLabel}
+                activeSourceLabel={activeSourceLabel}
+                generatedAudioState={generatedAudioState}
                 generatedDurationMs={generatedDurationMs}
                 projectStorage={projectStorage}
                 projectStorageError={projectStorageError}
                 projectsCount={projects.length}
                 providerStatus={providerStatus}
                 selectedProfile={selectedProfile}
-                sourceCount={totalSources}
-                visibleJobs={visibleJobs}
                 onExportOpen={onExportOpen}
                 onImportOpen={onImportOpen}
                 onOpenActivity={() => {
@@ -377,8 +375,8 @@ export function WorkspaceDrawer({
                       label={activeProject?.name ?? "Draft"}
                       value={`${totalSources.toString()} sources`}
                     />
-                    {projects.length > 0 ? (
-                      projects.map((project) => (
+                    {sortedProjects.length > 0 ? (
+                      sortedProjects.map((project) => (
                         <ProjectLibraryRow
                           activeProjectId={activeProjectId}
                           key={project.id}
@@ -391,7 +389,10 @@ export function WorkspaceDrawer({
                         />
                       ))
                     ) : (
-                      <EmptyDrawerText>No projects yet. Create one to start fresh.</EmptyDrawerText>
+                      <EmptyDrawerText>
+                        No saved projects yet. Create a project when you want a separate library, or
+                        keep using the draft workspace.
+                      </EmptyDrawerText>
                     )}
                   </div>
                   <GeneratedAudioList visibleJobs={visibleJobs} />
@@ -515,14 +516,15 @@ export function WorkspaceDrawer({
 function CommandCenterOverview({
   activityCount,
   activeProjectName,
+  activeScopeLabel,
+  activeSourceLabel,
+  generatedAudioState,
   generatedDurationMs,
   projectStorage,
   projectStorageError,
   projectsCount,
   providerStatus,
   selectedProfile,
-  sourceCount,
-  visibleJobs,
   onExportOpen,
   onImportOpen,
   onOpenActivity,
@@ -532,14 +534,15 @@ function CommandCenterOverview({
 }: Readonly<{
   activityCount: number;
   activeProjectName: string;
+  activeScopeLabel: string;
+  activeSourceLabel: string;
+  generatedAudioState: string;
   generatedDurationMs: number;
   projectStorage: ProjectStorageSummary | null;
   projectStorageError: string | null;
   projectsCount: number;
   providerStatus: string;
   selectedProfile: VoiceProfile | null;
-  sourceCount: number;
-  visibleJobs: VoiceJob[];
   onExportOpen: () => void;
   onImportOpen: () => void;
   onOpenActivity: () => void;
@@ -555,11 +558,11 @@ function CommandCenterOverview({
           label="Current project"
           value={activeProjectName}
         />
-        <OverviewStat detail={`${sourceCount.toString()} managed`} label="Sources" value="Assets" />
+        <OverviewStat detail={activeScopeLabel} label="Active source" value={activeSourceLabel} />
         <OverviewStat
           detail={formatDuration(generatedDurationMs)}
           label="Generated audio"
-          value={`${visibleJobs.length.toString()} chapters`}
+          value={generatedAudioState}
         />
         <OverviewStat
           detail={selectedProfile?.status ?? "provider voice"}
@@ -833,9 +836,8 @@ function GeneratedAudioList({ visibleJobs }: Readonly<{ visibleJobs: VoiceJob[] 
                 {item.status}
               </span>
             </div>
-            <p className="vs-muted truncate text-xs">
-              {formatDuration(item.durationMs)} - {resolveProjectQualityScore([item])} check -{" "}
-              {formatDate(item.createdAt)}
+            <p className="vs-muted truncate text-xs" title={generatedAudioDetail(item)}>
+              {generatedAudioDetail(item)}
             </p>
           </div>
         ))
@@ -854,6 +856,44 @@ function generatedAudioTitle(item: VoiceJob): string {
     return inputText;
   }
   return item.voiceProfileName ?? item.voice;
+}
+
+function generatedAudioDetail(item: VoiceJob): string {
+  return [
+    generatedAudioSourceLabel(item),
+    generatedAudioSegmentProgress(item),
+    formatDuration(item.durationMs),
+    generatedAudioVoiceLabel(item),
+    `${resolveProjectQualityScore([item])} check`,
+    `Updated ${formatDate(item.updatedAt || item.createdAt)}`,
+  ].join(" - ");
+}
+
+function generatedAudioSourceLabel(item: VoiceJob): string {
+  if (item.bookSourceId) {
+    return item.bookScope ? `Book source ${item.bookScope.type}` : "Book source";
+  }
+  if (item.preparedSourceId) {
+    return "Prepared source";
+  }
+  if (item.progressTargetId) {
+    return item.progressTargetId;
+  }
+  return item.sourceKind ?? "Draft source";
+}
+
+function generatedAudioSegmentProgress(item: VoiceJob): string {
+  const ready = item.audioReadySegments ?? 0;
+  const total =
+    item.retries.totalSegments > 0 ? item.retries.totalSegments : (item.segments?.length ?? 0);
+  if (total <= 0) {
+    return "segments pending";
+  }
+  return `${ready.toString()} of ${total.toString()} segments ready`;
+}
+
+function generatedAudioVoiceLabel(item: VoiceJob): string {
+  return item.voiceProfileName ?? item.ttsVoice ?? item.voice;
 }
 
 function StorageBreakdown({

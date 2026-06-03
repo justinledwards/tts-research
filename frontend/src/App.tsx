@@ -7282,7 +7282,9 @@ export function App() {
         <Suspense fallback={<LazySurfaceFallback label="Loading Command Center..." />}>
           <WorkspaceDrawer
             activeProjectId={activeProjectId}
+            activeScopeLabel={activeNarrationScopeLabel}
             activeSection={commandCenterSection}
+            activeSourceLabel={activeNarrationSourceLabel}
             bookSources={bookSources}
             isOpen={isCommandCenterOpen}
             job={job}

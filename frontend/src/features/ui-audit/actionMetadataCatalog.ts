@@ -80,16 +80,16 @@ export const STATIC_UI_ACTION_METADATA = [
   action("settings-open", "Open settings", "Settings", "settings", "menu-or-panel-opened"),
   action(
     "project-dashboard-open-rail",
-    "Manage Sources",
+    "Command Center",
     "Workspace",
     "navigation",
     "menu-or-panel-opened",
     false,
-    ["Project Dashboard", "Manage projects"],
+    ["Manage projects", "Manage Sources"],
   ),
   action(
     "project-dashboard-open-drawer",
-    "Project Dashboard",
+    "Command Center",
     "Workspace",
     "navigation",
     "menu-or-panel-opened",
@@ -663,7 +663,10 @@ function playbackOwnerForAction(
 
 function isDashboardPlaybackOwnerAction(id: string, surface: UiActionSurface): boolean {
   return (
-    surface === "Project Dashboard" || surface === "Voice Dashboard" || id.includes("dashboard")
+    surface === "Command Center" ||
+    surface === "Project Dashboard" ||
+    surface === "Voice Dashboard" ||
+    id.includes("dashboard")
   );
 }
 

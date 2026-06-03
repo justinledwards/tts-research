@@ -19,6 +19,11 @@ describe("Command Center", () => {
     expect(markup).toContain("Command Center");
     expect(markup).toContain("Return to Narration Workbench");
     expect(markup).toContain('aria-label="Return to Narration Workbench"');
+    expect(markup).toContain("Current work");
+    expect(markup).toContain("Source / scope");
+    expect(markup).toContain("Book One · Chapter 1");
+    expect(markup).toContain("Generated audio");
+    expect(markup).toContain("Working");
     expect(markup).toContain("Projects");
     expect(markup).toContain("Assets");
     expect(markup).toContain("Activity");
@@ -47,7 +52,35 @@ describe("Command Center", () => {
     expect(markup).toContain("Current Novel");
     expect(markup).toContain("Generated Audio");
     expect(markup).toContain("Opening chapter");
+    expect(markup).toContain("Prepared source");
+    expect(markup).toContain("1 of 2 segments ready");
+    expect(markup).toContain("Narrator");
     expect(markup).toContain("Export");
+  });
+
+  it("sorts projects active-first and generated audio newest-first", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="projects"
+        job={job({ id: "job-new", inputText: "Newest chapter", updatedAt: "2026-06-03T12:00:00Z" })}
+        projectJobs={[
+          job({
+            id: "job-old",
+            inputText: "Older chapter",
+            status: "completed",
+            updatedAt: "2026-06-01T12:00:00Z",
+          }),
+        ]}
+        projects={[
+          otherProject({ updatedAt: "2026-06-03T12:00:00Z" }),
+          project({ updatedAt: "2026-05-31T21:00:00Z" }),
+        ]}
+      />,
+    );
+
+    expect(markup.indexOf("Current Novel")).toBeLessThan(markup.indexOf("Later Project"));
+    expect(markup.indexOf("Newest chapter")).toBeLessThan(markup.indexOf("Older chapter"));
   });
 
   it("groups source and voice assets together", () => {
@@ -82,12 +115,53 @@ describe("Command Center", () => {
     expect(markup).toContain("Test GPU");
     expect(markup).toContain("Storage");
     expect(markup).toContain("Open diagnostics");
+    expect(markup).toContain("deeper Settings diagnostics");
+    expect(markup).not.toContain("Inspector");
+  });
+
+  it("keeps empty and idle states quiet", () => {
+    const emptyProps = {
+      ...props(),
+      bookSources: [],
+      job: null,
+      metrics: null,
+      preparedSources: [],
+      profiles: [],
+      projectJobs: [],
+      projectStorage: null,
+      projects: [],
+      selectedProfileId: "",
+    };
+    const projectsMarkup = renderToStaticMarkup(
+      <WorkspaceDrawer {...emptyProps} activeSection="projects" />,
+    );
+    const assetsMarkup = renderToStaticMarkup(
+      <WorkspaceDrawer {...emptyProps} activeSection="assets" />,
+    );
+    const activityMarkup = renderToStaticMarkup(
+      <WorkspaceDrawer {...emptyProps} activeSection="activity" />,
+    );
+    const reportsMarkup = renderToStaticMarkup(
+      <WorkspaceDrawer {...emptyProps} activeSection="reports" />,
+    );
+
+    expect(projectsMarkup).toContain("No saved projects yet");
+    expect(projectsMarkup).toContain("No generated audio is attached to the current project yet.");
+    expect(assetsMarkup).toContain("No source analysis or book source staged.");
+    expect(assetsMarkup).toContain("No saved voice profiles yet.");
+    expect(activityMarkup).toContain("No active background work.");
+    expect(activityMarkup).toContain("Idle");
+    expect(reportsMarkup).toContain("Provider status pending");
+    expect(reportsMarkup).toContain("GPU telemetry unavailable");
+    expect(reportsMarkup).toContain("Open diagnostics");
   });
 });
 
 function props(): Parameters<typeof WorkspaceDrawer>[0] {
   return {
     activeProjectId: "project-1",
+    activeScopeLabel: "Chapter 1",
+    activeSourceLabel: "Book One",
     bookSources: [bookSource()],
     cancelingProfileSourceId: null,
     cancelingTargetKey: null,
@@ -125,17 +199,29 @@ function props(): Parameters<typeof WorkspaceDrawer>[0] {
   };
 }
 
-function project(): VoiceProject {
+function project(overrides: Partial<VoiceProject> = {}): VoiceProject {
   return {
     createdAt: "2026-05-31T20:00:00Z",
     id: "project-1",
     name: "Current Novel",
     speechPolicyProfile: "general",
     updatedAt: "2026-05-31T21:00:00Z",
+    ...overrides,
   };
 }
 
-function job(): VoiceJob {
+function otherProject(overrides: Partial<VoiceProject> = {}): VoiceProject {
+  return {
+    createdAt: "2026-06-03T10:00:00Z",
+    id: "project-2",
+    name: "Later Project",
+    speechPolicyProfile: "general",
+    updatedAt: "2026-06-03T10:00:00Z",
+    ...overrides,
+  };
+}
+
+function job(overrides: Partial<VoiceJob> = {}): VoiceJob {
   return {
     audioReadySegments: 1,
     audioUrl: "/audio.wav",
@@ -153,6 +239,7 @@ function job(): VoiceJob {
       message: "Generating audio.",
       totalSegments: 2,
     },
+    preparedSourceId: "prepared-1",
     projectId: "project-1",
     provider: "mock",
     retries: { currentSegment: 1, totalSegments: 2 },
@@ -169,6 +256,7 @@ function job(): VoiceJob {
       transcript: "Opening chapter",
     },
     voiceProfileName: "Narrator",
+    ...overrides,
   } as unknown as VoiceJob;
 }
 

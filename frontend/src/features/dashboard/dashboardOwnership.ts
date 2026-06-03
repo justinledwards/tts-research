@@ -1,7 +1,7 @@
 export type DashboardActionOwner =
   | "cinema"
+  | "command-center"
   | "preview"
-  | "project-dashboard"
   | "runtime-diagnostics"
   | "settings"
   | "voice-dashboard";
@@ -13,19 +13,15 @@ export interface DashboardActionOwnership {
 }
 
 export const DASHBOARD_ACTION_OWNERSHIP: readonly DashboardActionOwnership[] = [
-  ownership("project.open", "project-dashboard", "Open an existing project asset workspace."),
-  ownership("project.create", "project-dashboard", "Create a reusable project asset container."),
-  ownership("project.rename", "project-dashboard", "Rename a project asset."),
-  ownership("project.delete", "project-dashboard", "Delete a project after confirmation."),
-  ownership("project.import", "project-dashboard", "Import a project bundle."),
-  ownership("project.export", "project-dashboard", "Export the current project bundle."),
-  ownership("project.protect", "project-dashboard", "Explain protected project state."),
-  ownership("source.list", "project-dashboard", "List imported and prepared source assets."),
-  ownership(
-    "project.status",
-    "project-dashboard",
-    "Summarize project storage and generated assets.",
-  ),
+  ownership("project.open", "command-center", "Open an existing project asset workspace."),
+  ownership("project.create", "command-center", "Create a reusable project asset container."),
+  ownership("project.rename", "command-center", "Rename a project asset."),
+  ownership("project.delete", "command-center", "Delete a project after confirmation."),
+  ownership("project.import", "command-center", "Import a project bundle."),
+  ownership("project.export", "command-center", "Export the current project bundle."),
+  ownership("project.protect", "command-center", "Explain protected project state."),
+  ownership("source.list", "command-center", "List imported and prepared source assets."),
+  ownership("project.status", "command-center", "Summarize project storage and generated assets."),
   ownership("voice.select", "voice-dashboard", "Select the reusable voice asset for future runs."),
   ownership("voice.create", "voice-dashboard", "Start the voice asset creation workflow."),
   ownership("voice.clone", "voice-dashboard", "Manage cloned voice targets and artifacts."),

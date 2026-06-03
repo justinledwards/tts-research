@@ -114,6 +114,39 @@ describe("NarrationStatusStrip disclosure rendering", () => {
     expect(markup).not.toContain("Stage Timeline");
   });
 
+  it("offers a compact reports route for diagnostic blockers", () => {
+    const markup = renderToStaticMarkup(
+      <NarrationStatusStrip
+        canCancel={false}
+        canCreate={false}
+        canOpenCinema={false}
+        mode="compact"
+        model={model({
+          blocker: {
+            actionLabel: "Open diagnostics",
+            detail: "Provider readiness needs review.",
+            title: "System attention",
+          },
+          primaryAction: { id: "openDiagnostics", label: "Open diagnostics", tone: "warning" },
+          primaryLabel: "System attention",
+          primaryMessage: "System attention. Open diagnostics",
+          state: "blocked",
+          tone: "warning",
+        })}
+        onCancel={() => null}
+        onCreate={() => null}
+        onOpenDiagnostics={() => null}
+        onOpenCinema={() => null}
+        onOpenVoiceCloning={() => null}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="ui-action-status-strip-openDiagnostics"');
+    expect(markup).toContain("Open diagnostics");
+    expect(markup).not.toContain("Backend Contract");
+    expect(markup).not.toContain("GPU telemetry");
+  });
+
   it("makes cancellation visible", () => {
     const markup = renderToStaticMarkup(
       <NarrationStatusStrip

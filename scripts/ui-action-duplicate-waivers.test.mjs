@@ -131,8 +131,8 @@ test("summarizes waiver, needs-review, and unclassified duplicate categories", (
       kind: "same-label-different-behavior",
       label: "Review",
       scenarios: ["project-dashboard"],
-      surface: "Project dashboard",
-      surfaces: ["Project dashboard"],
+      surface: "Command Center",
+      surfaces: ["Command Center"],
     },
     {
       actionClass: "generation",
