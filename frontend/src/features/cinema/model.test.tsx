@@ -9,6 +9,7 @@ import {
   buildCinemaWayfindingSection,
 } from "./CinemaInspectorPanels";
 import { CinemaMobileSheet } from "./CinemaMobileSheet";
+import { CinemaTheatreChrome } from "./CinemaTheatre";
 import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 import { cinemaCanvasBudgetFor } from "./canvasBudget";
 import {
@@ -448,6 +449,55 @@ describe("CinemaFocusModeToolbar", () => {
     expect(activeCinemaMoreAction({ activePanelId: "diagnostics", mode: "debug" })?.label).toBe(
       "Diagnostics",
     );
+  });
+});
+
+describe("CinemaTheatreChrome", () => {
+  it("keeps fullscreen out of hidden controls while surfacing degraded runtime state", () => {
+    const hiddenMarkup = renderToStaticMarkup(
+      <CinemaTheatreChrome
+        activePassage="Current passage"
+        controlsVisible={false}
+        fullscreenActive={false}
+        fullscreenAvailability={{ reason: null, supported: true }}
+        highContrast={false}
+        playbackState="degraded"
+        progress={{ currentLabel: "0:10", durationLabel: "1:00", ratio: 0.2 }}
+        rendererLifecycle="ready"
+        scopeLabel="Full source"
+        sourceLabel="Demo book"
+        surfaceName="Book Cinema"
+        onExit={() => null}
+        onRequestFullscreen={() => null}
+        onToggleControls={() => null}
+      />,
+    );
+    const visibleMarkup = renderToStaticMarkup(
+      <CinemaTheatreChrome
+        activePassage="Current passage"
+        controlsVisible
+        fullscreenActive={false}
+        fullscreenAvailability={{ reason: null, supported: true }}
+        highContrast={false}
+        playbackState="playable"
+        progress={{ currentLabel: "0:10", durationLabel: "1:00", ratio: 0.2 }}
+        rendererLifecycle="ready"
+        scopeLabel="Full source"
+        sourceLabel="Demo book"
+        surfaceName="Book Cinema"
+        onExit={() => null}
+        onRequestFullscreen={() => null}
+        onToggleControls={() => null}
+      />,
+    );
+
+    expect(hiddenMarkup).toContain('data-theatre-runtime-mode="reading-only"');
+    expect(hiddenMarkup).toContain('data-theatre-availability-state="generation-failed"');
+    expect(hiddenMarkup).toContain("Generation failed");
+    expect(hiddenMarkup).toContain("Exit Theatre");
+    expect(hiddenMarkup).not.toContain("Native fullscreen");
+    expect(visibleMarkup).toContain('data-focused-theatre-action-group="environment"');
+    expect(visibleMarkup).toContain("Native fullscreen");
   });
 });
 

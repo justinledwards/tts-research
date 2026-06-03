@@ -37,6 +37,7 @@ import {
 } from "./telepromptToolbar";
 import { telepromptFullscreenAvailability } from "./telepromptFullscreen";
 import {
+  TelepromptTheatre,
   TelepromptTheatreCueText,
   telepromptTheatreCrawlOffset,
   telepromptTheatreCrawlRowKey,
@@ -45,6 +46,7 @@ import {
   telepromptTheatreRenderedCueSections,
   telepromptTheatreCueSections,
   theatreReadingOnlyDetail,
+  type TelepromptTheatreProps,
 } from "./TelepromptTheatre";
 import { resolveTelepromptTheatreShortcut } from "./telepromptTheatreShortcuts";
 import type { TelepromptCueWordTiming } from "./telepromptCueTimeline";
@@ -249,6 +251,8 @@ describe("teleprompt theatre model", () => {
     expect(resolveTelepromptTheatreShortcut({ key: "m" })).toBe("toggleMirror");
     expect(resolveTelepromptTheatreShortcut({ key: "j" })).toBe("jumpCurrentAudio");
     expect(resolveTelepromptTheatreShortcut({ key: "t" })).toBe("toggleControls");
+    expect(resolveTelepromptTheatreShortcut({ key: "r" })).toBe("returnReview");
+    expect(resolveTelepromptTheatreShortcut({ key: "v" })).toBe("returnPreview");
     expect(resolveTelepromptTheatreShortcut({ key: "ArrowRight" })).toBe("nextCue");
   });
 
@@ -280,6 +284,59 @@ describe("teleprompt theatre model", () => {
     expect(theatreReadingOnlyDetail("missing")).toBe(
       "Reading-only mode. Audio-follow and playback are unavailable because generated audio is missing. Use Create & Listen from Preview to generate audio.",
     );
+  });
+
+  it("keeps return, operator, and fullscreen controls out of hidden Theatre chrome", () => {
+    const hiddenMarkup = renderToStaticMarkup(
+      createElement(TelepromptTheatre, telepromptTheatreProps({ controlsVisible: false })),
+    );
+    const visibleMarkup = renderToStaticMarkup(
+      createElement(TelepromptTheatre, telepromptTheatreProps({ controlsVisible: true })),
+    );
+
+    expect(hiddenMarkup).toContain('data-theatre-runtime-mode="audio-follow"');
+    expect(hiddenMarkup).toContain('data-theatre-availability-state="ready"');
+    expect(hiddenMarkup).toContain("Exit Theatre");
+    expect(hiddenMarkup).toContain("Controls");
+    expect(hiddenMarkup).not.toContain("Back to Review");
+    expect(hiddenMarkup).not.toContain("Back to Preview");
+    expect(hiddenMarkup).not.toContain("Native fullscreen");
+    expect(hiddenMarkup).not.toContain("Operator");
+    expect(visibleMarkup).toContain('data-focused-theatre-action-group="return"');
+    expect(visibleMarkup).toContain('data-focused-theatre-action-group="operator"');
+    expect(visibleMarkup).toContain('data-focused-theatre-action-group="environment"');
+    expect(visibleMarkup).toContain("Back to Review");
+    expect(visibleMarkup).toContain("Back to Preview");
+    expect(visibleMarkup).toContain("Native fullscreen");
+    expect(visibleMarkup).toContain("Operator");
+  });
+
+  it("surfaces low-confidence timing without treating confidence as ambient chrome", () => {
+    const trustedMarkup = renderToStaticMarkup(
+      createElement(
+        TelepromptTheatre,
+        telepromptTheatreProps({
+          controlsVisible: false,
+          currentTimingState: "trusted",
+          summary: theatreSummary({ confidenceLabel: "92% confidence" }),
+        }),
+      ),
+    );
+    const lowConfidenceMarkup = renderToStaticMarkup(
+      createElement(
+        TelepromptTheatre,
+        telepromptTheatreProps({
+          controlsVisible: false,
+          currentTimingState: "lowConfidence",
+          summary: theatreSummary({ confidenceLabel: "42% confidence" }),
+        }),
+      ),
+    );
+
+    expect(trustedMarkup).not.toContain("92% confidence");
+    expect(lowConfidenceMarkup).toContain('data-theatre-availability-state="low-confidence"');
+    expect(lowConfidenceMarkup).toContain("Low-confidence sync");
+    expect(lowConfidenceMarkup).toContain("42% confidence");
   });
 
   it("keeps theatre cue paragraphs instead of flattening multiline text", () => {
@@ -609,6 +666,81 @@ function studioProps(overrides: Partial<TelepromptStudioProps> = {}): Teleprompt
     onCreateAndListen: () => null,
     onOpenCinema: () => null,
     onTheatreSettingsChange: () => null,
+    ...overrides,
+  };
+}
+
+function telepromptTheatreProps(
+  overrides: Partial<TelepromptTheatreProps> = {},
+): TelepromptTheatreProps {
+  const activeBlock = blocks[1] ?? null;
+  return {
+    activeBlock,
+    activeBlockIndex: 1,
+    audioProgressPercent: 42,
+    canCreate: true,
+    canOpenCinema: true,
+    cueSyncDetail: "Audio-follow cue sync ready.",
+    cueSyncMode: "audio-follow",
+    cueSyncStatusLabel: "Audio-follow cue sync ready",
+    currentCueText: null,
+    currentTimingState: "trusted",
+    currentWordIndex: null,
+    fullscreenActive: false,
+    fullscreenAvailability: {
+      reason: null,
+      supported: true,
+    },
+    mode: "theatre",
+    nextBlock: blocks[2] ?? null,
+    playbackControlsAvailable: true,
+    playbackControlsPlaying: false,
+    playbackLifecycle: "ready",
+    playbackRate: 1,
+    presetId: "standard",
+    countdownRemaining: null,
+    controlsVisible: false,
+    previewBlocks: blocks.slice(2),
+    settings: DEFAULT_TELEPROMPT_THEATRE_SETTINGS,
+    settingsMemoryEnabled: true,
+    summary: theatreSummary(),
+    theatreViewMode: "manual",
+    onBackToPreview: vi.fn(),
+    onBackToReview: vi.fn(),
+    onBlurControls: vi.fn(),
+    onCreateAndListen: vi.fn(),
+    onExitTheatre: vi.fn(),
+    onFocusControls: vi.fn(),
+    onJumpToCurrentAudio: vi.fn(),
+    onMoveCue: vi.fn(),
+    onOpenCinema: vi.fn(),
+    onPlaybackRateChange: vi.fn(),
+    onPresetChange: vi.fn(),
+    onRequestNativeFullscreen: vi.fn(),
+    onRestart: vi.fn(),
+    onRevealControls: vi.fn(),
+    onSettingsChange: vi.fn(),
+    onToggleControls: vi.fn(),
+    onToggleMirror: vi.fn(),
+    onToggleOperatorPreview: vi.fn(),
+    onTogglePlayback: vi.fn(),
+    ...overrides,
+  };
+}
+
+function theatreSummary(
+  overrides: Partial<ReturnType<typeof buildTelepromptTheatreSummary>> = {},
+): ReturnType<typeof buildTelepromptTheatreSummary> {
+  return {
+    ...buildTelepromptTheatreSummary({
+      activeBlockId: "b",
+      blocks,
+      estimatedDurationMs: estimateTelepromptDurationMs(totalTelepromptWords(blocks)),
+      isPlaybackActive: false,
+      playbackAvailable: true,
+      scopeLabel: "Chapter One",
+      sourceLabel: "Demo Source",
+    }),
     ...overrides,
   };
 }

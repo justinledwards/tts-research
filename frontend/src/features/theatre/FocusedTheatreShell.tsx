@@ -6,6 +6,12 @@ import {
   shortcutTooltip,
   type ShortcutCommandId,
 } from "../shortcuts/shortcutRegistry";
+import {
+  THEATRE_REVEALED_CONTROL_ZONE_ORDER,
+  type TheatreAvailabilityState,
+  type TheatreControlZone,
+  type TheatreRuntimeMode,
+} from "./model";
 
 export interface FocusedTheatreControls {
   readonly blurControls: () => void;
@@ -18,6 +24,7 @@ export interface FocusedTheatreControls {
 
 export interface FocusedTheatreAction {
   readonly ariaLabel?: string;
+  readonly controlZone?: TheatreControlZone;
   readonly dataAttributes?: Record<string, string | undefined>;
   readonly disabled?: boolean;
   readonly disabledReason?: string;
@@ -139,12 +146,13 @@ export function FocusedTheatreChrome({
   actions,
   activeLabel,
   activeText,
+  availabilityState,
   children,
   confidenceLabel,
   controlsVisible,
   persistentAction,
-  persistentActions,
   progress,
+  runtimeMode,
   scopeLabel,
   sourceLabel,
   statusLabel,
@@ -157,12 +165,13 @@ export function FocusedTheatreChrome({
   actions?: readonly FocusedTheatreAction[];
   activeLabel: string;
   activeText?: string | null;
+  availabilityState?: TheatreAvailabilityState | null;
   children?: ReactNode;
   confidenceLabel?: string | null;
   controlsVisible: boolean;
   persistentAction?: FocusedTheatreAction;
-  persistentActions?: readonly FocusedTheatreAction[];
   progress?: FocusedTheatreProgress | null;
+  runtimeMode?: TheatreRuntimeMode | null;
   scopeLabel?: string | null;
   sourceLabel?: string | null;
   statusLabel?: string | null;
@@ -178,6 +187,8 @@ export function FocusedTheatreChrome({
       className="focused-theatre-chrome shrink-0 border-b border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-chrome)] px-3 pt-[calc(0.45rem+env(safe-area-inset-top))] pb-2 text-[var(--vs-theatre-text)] shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur sm:px-4"
       data-focused-theatre-chrome=""
       data-focused-theatre-controls={controlsVisible ? "visible" : "hidden"}
+      data-theatre-availability-state={availabilityState ?? undefined}
+      data-theatre-runtime-mode={runtimeMode ?? undefined}
       data-testid={testId}
     >
       <div className="grid min-w-0 gap-2">
@@ -185,7 +196,6 @@ export function FocusedTheatreChrome({
           activeLabel={activeLabel}
           controlsVisible={controlsVisible}
           persistentAction={persistentAction}
-          persistentActions={persistentActions}
           scopeLabel={scopeLabel}
           sourceLabel={sourceLabel}
           statusLabel={statusLabel}
@@ -212,7 +222,6 @@ function FocusedTheatreTitleRow({
   activeLabel,
   controlsVisible,
   persistentAction,
-  persistentActions,
   scopeLabel,
   sourceLabel,
   statusLabel,
@@ -224,7 +233,6 @@ function FocusedTheatreTitleRow({
   activeLabel: string;
   controlsVisible: boolean;
   persistentAction?: FocusedTheatreAction;
-  persistentActions?: readonly FocusedTheatreAction[];
   scopeLabel?: string | null;
   sourceLabel?: string | null;
   statusLabel?: string | null;
@@ -234,9 +242,12 @@ function FocusedTheatreTitleRow({
   onToggleControls: () => void;
 }>) {
   const contextLabel = [sourceLabel, scopeLabel].filter(Boolean).join(" · ");
-  const titleActions = persistentActions ?? (persistentAction ? [persistentAction] : []);
+  const titleActions = persistentAction ? [persistentAction] : [];
   return (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+    <div
+      className="flex min-w-0 flex-wrap items-center justify-between gap-2"
+      data-theatre-control-zone="persistent"
+    >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <StatusChip tone="success">{surfaceLabel}</StatusChip>
         <div className="min-w-0">
@@ -335,6 +346,7 @@ function FocusedTheatreDetail({
   controlsVisible: boolean;
 }>) {
   const hasDetail = Boolean(activeText?.trim()) || actions.length > 0 || Boolean(children);
+  const actionGroups = groupFocusedTheatreActions(actions);
   if (!controlsVisible || !hasDetail) {
     return null;
   }
@@ -348,10 +360,19 @@ function FocusedTheatreDetail({
           {activeText}
         </p>
       ) : null}
-      {actions.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2" data-focused-theatre-actions="">
-          {actions.map((action) => (
-            <FocusedTheatreButton action={action} key={action.testId ?? action.label} />
+      {actionGroups.length > 0 ? (
+        <div className="grid gap-2" data-focused-theatre-actions="">
+          {actionGroups.map((group) => (
+            <div
+              className={theatreActionGroupClassName(group.zone)}
+              data-focused-theatre-action-group={group.zone}
+              data-theatre-control-zone={group.zone}
+              key={group.zone}
+            >
+              {group.actions.map((action) => (
+                <FocusedTheatreButton action={action} key={action.testId ?? action.label} />
+              ))}
+            </div>
           ))}
         </div>
       ) : null}
@@ -381,6 +402,7 @@ function FocusedTheatreButton({
           ? "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-text-primary)] hover:bg-[var(--vs-border-subtle)]"
           : "border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]",
       )}
+      data-theatre-control-zone={action.controlZone ?? (persistent ? "emergency" : "listener")}
       data-testid={action.testId}
       data-shortcut-command-id={action.shortcutCommandId}
       disabled={action.disabled}
@@ -399,6 +421,36 @@ function FocusedTheatreButton({
       {action.label}
     </Button>
   );
+}
+
+function groupFocusedTheatreActions(
+  actions: readonly FocusedTheatreAction[],
+): { actions: FocusedTheatreAction[]; zone: TheatreControlZone }[] {
+  const byZone = new Map<TheatreControlZone, FocusedTheatreAction[]>();
+  for (const action of actions) {
+    const zone = action.controlZone ?? "listener";
+    const existing = byZone.get(zone);
+    if (existing) {
+      existing.push(action);
+      continue;
+    }
+    byZone.set(zone, [action]);
+  }
+  return THEATRE_REVEALED_CONTROL_ZONE_ORDER.flatMap((zone) => {
+    const zoneActions = byZone.get(zone);
+    return zoneActions ? [{ actions: zoneActions, zone }] : [];
+  });
+}
+
+function theatreActionGroupClassName(zone: TheatreControlZone): string {
+  const base = "flex flex-wrap items-center gap-2";
+  if (zone === "listener") {
+    return base;
+  }
+  if (zone === "emergency") {
+    return `${base} border-t border-[var(--vs-theatre-panel-border)] pt-2`;
+  }
+  return `${base} border-t border-[var(--vs-theatre-panel-border)] pt-2`;
 }
 
 function clampProgress(value: number): number {

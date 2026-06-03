@@ -3,7 +3,7 @@ import type { RevisionBlock } from "../revision";
 import type { ReadAlongTimingState } from "../readalong";
 import { Button, SegmentedControl, Toggle, cx } from "../../design";
 import { FocusedTheatreChrome } from "../theatre/FocusedTheatreShell";
-import { nextReaderPlaybackRate } from "../reader-accessibility";
+import { theatreRuntimeShellState } from "../theatre/model";
 import {
   LocalizedPlaybackToolbar,
   playbackActionAriaLabel,
@@ -178,11 +178,26 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     const theatrePreset = telepromptTheatrePreset(settings.presetId);
     const currentCue = currentCueText ?? activeBlock?.spokenText ?? activeBlock?.text ?? "";
     const currentWordLabel = telepromptTheatreWordLabel(currentWordIndex);
+    const runtimeShellState = theatreRuntimeShellState({
+      audioLifecycle: playbackLifecycle,
+      playbackAvailable: playbackControlsAvailable,
+      playbackPlaying: playbackControlsPlaying,
+      requestedMode: cueSyncMode === "manual" ? "recording-rehearsal" : "audio-follow",
+      timingState: currentTimingState,
+    });
     const readingOnlyDetail = playbackControlsAvailable
       ? null
       : theatreReadingOnlyDetail(playbackLifecycle);
+    const runtimeDegradedDetail =
+      runtimeShellState.availabilityState === "ready" ? null : runtimeShellState.detail;
+    const theatreStateDetail = readingOnlyDetail ?? runtimeDegradedDetail ?? cueSyncDetail;
+    const theatreChromeStateDetail =
+      runtimeShellState.availabilityState === "ready" ? null : runtimeShellState.detail;
+    const theatreConfidenceLabel =
+      runtimeShellState.availabilityState === "low-confidence" ? summary.confidenceLabel : null;
     const theatrePlayPauseAction = {
       ariaKeyShortcuts: "Space K",
+      controlZone: "listener" as const,
       shortcutCommandId: "theatre.playPause" as const,
       ariaLabel: playbackControlsPlaying
         ? "Pause Cue"
@@ -199,6 +214,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     };
     const theatreJumpToAudioAction = {
       ariaKeyShortcuts: "J",
+      controlZone: "listener" as const,
       shortcutCommandId: "theatre.jumpCurrentAudio" as const,
       disabled: !playbackControlsAvailable,
       disabledReason: cuePlaybackDisabledReason,
@@ -208,6 +224,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     };
     const theatrePreviousAction = {
       ariaKeyShortcuts: "ArrowLeft ArrowUp",
+      controlZone: "listener" as const,
       shortcutCommandId: "theatre.previousCue" as const,
       disabled: activeBlockIndex <= 0,
       disabledReason: activeBlockIndex > 0 ? undefined : "Already at the first cue.",
@@ -219,6 +236,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     };
     const theatreNextAction = {
       ariaKeyShortcuts: "ArrowRight ArrowDown",
+      controlZone: "listener" as const,
       shortcutCommandId: "theatre.nextCue" as const,
       disabled: !nextBlock,
       disabledReason: nextBlock ? undefined : "Already at the final cue.",
@@ -230,6 +248,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     };
     const theatreRestartAction = {
       ariaKeyShortcuts: "Home",
+      controlZone: "listener" as const,
       shortcutCommandId: "theatre.restart" as const,
       disabled: !playbackControlsAvailable,
       disabledReason: cuePlaybackDisabledReason,
@@ -237,34 +256,37 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       onClick: onRestart,
       testId: "ui-action-teleprompt-theatre-restart",
     };
-    const theatreSpeedLabel = `${playbackRate.toFixed(playbackRate === 1 ? 0 : 2)}x`;
-    const theatreSpeedAction = {
-      ariaLabel: "Playback speed",
+    const theatreSpeedControl = {
+      ariaKeyShortcuts: "[ ]",
+      shortcutCommandId: "theatre.speed" as const,
       disabled: !onPlaybackRateChange,
       disabledReason: onPlaybackRateChange
         ? undefined
         : "Playback speed is available after generated audio is loaded.",
-      label: `Playback speed ${theatreSpeedLabel}`,
-      shortcutCommandId: "theatre.speed" as const,
       testId: "ui-action-teleprompt-theatre-speed",
-      onClick: () => {
-        onPlaybackRateChange?.(nextReaderPlaybackRate(playbackRate, 1));
-      },
+      value: playbackRate,
+      onChange: onPlaybackRateChange,
     };
     const backToReviewAction = {
+      controlZone: "return" as const,
       label: "Back to Review",
       shortcutCommandId: "teleprompt.returnReview" as const,
       testId: "ui-action-teleprompt-theatre-back-review",
       onClick: onBackToReview,
     };
     const backToPreviewAction = {
+      controlZone: "return" as const,
       label: "Back to Preview",
       shortcutCommandId: "teleprompt.returnPreview" as const,
       testId: "ui-action-teleprompt-theatre-back-preview",
       onClick: onBackToPreview,
     };
     const theatrePlaybackToolbar: LocalizedPlaybackToolbarModel = {
-      activeDetail: `${summary.cuePositionLabel} · ${summary.syncStatusLabel}`,
+      activeDetail: `${summary.cuePositionLabel} · ${
+        runtimeShellState.availabilityState === "ready"
+          ? cueSyncStatusLabel
+          : runtimeShellState.detail
+      }`,
       activeLabel: activeBlock?.label ?? "No active cue",
       jumpToAudio: { ...theatreJumpToAudioAction, visible: false },
       next: { ...theatreNextAction, visible: false },
@@ -276,18 +298,21 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         ratio: audioProgressPercent / 100,
       },
       restart: { ...theatreRestartAction, visible: false },
+      speed: theatreSpeedControl,
       stage: "theatre",
-      statusLabel: summary.playbackStatusLabel,
+      statusLabel: runtimeShellState.statusLabel,
       testId: "localized-theatre-playback-toolbar",
       variant: "theatre",
     };
     const exitAction = {
+      controlZone: "emergency" as const,
       label: "Exit Theatre",
       shortcutCommandId: "theatre.exit" as const,
       testId: "ui-action-teleprompt-exit-theatre",
       onClick: onExitTheatre,
     };
     const operatorAction = {
+      controlZone: "operator" as const,
       label: settings.operatorPanelVisible ? "Hide operator" : "Operator",
       selected: settings.operatorPanelVisible,
       shortcutCommandId: "theatre.operator" as const,
@@ -295,7 +320,11 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       onClick: onToggleOperatorPreview,
     };
     const theatreChromeActions = [
+      backToReviewAction,
+      backToPreviewAction,
+      operatorAction,
       {
+        controlZone: "environment" as const,
         disabled: !fullscreenAvailability.supported,
         disabledReason:
           nativeFullscreenDisabledReason ?? fullscreenAvailability.reason ?? undefined,
@@ -388,6 +417,30 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           </Button>
         </div>
 
+        <div className="grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3">
+          <div>
+            <p className="text-xs font-semibold uppercase text-[var(--vs-text-muted)]">
+              Environment
+            </p>
+            <p className="mt-1 text-xs text-[var(--vs-text-muted)]">
+              Theatre stays available in the browser window when native fullscreen is unavailable.
+            </p>
+          </div>
+          <Button
+            className="border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]"
+            data-testid="ui-action-teleprompt-theatre-operator-native-fullscreen"
+            disabled={!fullscreenAvailability.supported}
+            disabledReason={
+              nativeFullscreenDisabledReason ?? fullscreenAvailability.reason ?? undefined
+            }
+            onClick={onRequestNativeFullscreen}
+            size="sm"
+            variant="secondary"
+          >
+            {fullscreenActive ? "Fullscreen active" : "Native fullscreen"}
+          </Button>
+        </div>
+
         {theatreViewMode === "operator-preview" || settings.syncOverlayVisible ? (
           <div
             className="grid gap-3 rounded-lg border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] p-3"
@@ -440,6 +493,8 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         data-teleprompt-theatre-mode={mode}
         data-teleprompt-theatre-scroll-mode={settings.scrollMode}
         data-teleprompt-theatre-cue-sync-mode={cueSyncMode}
+        data-theatre-availability-state={runtimeShellState.availabilityState}
+        data-theatre-runtime-mode={runtimeShellState.mode}
         data-teleprompt-sync-active-cue-id={syncDebug?.activeCueId ?? ""}
         data-teleprompt-sync-active-source-word-id={syncDebug?.activeSourceWordId ?? ""}
         data-teleprompt-sync-active-word-index={String(syncDebug?.activeWordIndex ?? -1)}
@@ -470,24 +525,13 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         onPointerMove={onRevealControls}
       >
         <FocusedTheatreChrome
+          availabilityState={runtimeShellState.availabilityState}
           actions={theatreChromeActions}
           activeLabel={activeBlock?.label ?? "No active cue"}
           activeText={currentCue}
-          confidenceLabel={settings.syncOverlayVisible ? summary.confidenceLabel : null}
+          confidenceLabel={theatreConfidenceLabel}
           controlsVisible={controlsVisible}
           persistentAction={exitAction}
-          persistentActions={[
-            backToReviewAction,
-            backToPreviewAction,
-            theatrePreviousAction,
-            theatrePlayPauseAction,
-            theatreJumpToAudioAction,
-            theatreNextAction,
-            theatreRestartAction,
-            theatreSpeedAction,
-            operatorAction,
-            exitAction,
-          ]}
           progress={{
             currentLabel: `${Math.max(0, Math.min(100, audioProgressPercent)).toString()}%`,
             durationLabel: summary.estimatedRemainingLabel,
@@ -495,9 +539,10 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           }}
           scopeLabel={summary.cuePositionLabel}
           sourceLabel={summary.sourceScopeLabel}
-          statusLabel={summary.playbackStatusLabel}
+          runtimeMode={runtimeShellState.mode}
+          statusLabel={runtimeShellState.statusLabel}
           surfaceLabel={fullscreenActive ? "Native fullscreen" : "Theatre"}
-          syncStatusLabel={settings.syncOverlayVisible ? cueSyncStatusLabel : null}
+          syncStatusLabel={theatreChromeStateDetail ?? null}
           testId="teleprompt-theatre-escape-bar"
           toggleControlsTestId="ui-action-teleprompt-theatre-toggle-controls"
           onToggleControls={onToggleControls}
@@ -583,7 +628,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
                 ) : null}
                 <LocalizedPlaybackToolbar model={theatrePlaybackToolbar} />
                 <p className="hidden text-xs text-[var(--vs-text-muted)] sm:block">
-                  {readingOnlyDetail ?? cueSyncDetail}
+                  {theatreStateDetail}
                   {playbackControlsAvailable
                     ? ` · audio segment ${audioProgressPercent.toString()}%`
                     : ""}

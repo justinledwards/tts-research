@@ -1846,7 +1846,9 @@ export function BookCinemaOverlay({
             fullscreenActive={cinemaTheatre.fullscreenActive}
             fullscreenAvailability={cinemaTheatre.fullscreenAvailability}
             highContrast={focusedAccessibilitySettings.highContrast}
+            playbackState={playbackState}
             progress={bookTransportModel.progress}
+            rendererLifecycle="ready"
             scopeLabel={bookScopeLabel(normalizedScope)}
             sourceLabel={bookSourceName(book)}
             surfaceName={book.kind === "markdown" ? "Document Cinema" : "Book Cinema"}

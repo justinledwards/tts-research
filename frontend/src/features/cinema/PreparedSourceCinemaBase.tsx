@@ -1045,7 +1045,9 @@ export function PreparedSourceCinemaOverlay({
             fullscreenActive={cinemaTheatre.fullscreenActive}
             fullscreenAvailability={cinemaTheatre.fullscreenAvailability}
             highContrast={focusedAccessibilitySettings.highContrast}
+            playbackState={playbackState}
             scopeLabel="Full source"
+            rendererLifecycle={rendererLifecycle}
             sourceLabel={title}
             surfaceName={cinemaLabel}
             onExit={cinemaTheatre.exit}

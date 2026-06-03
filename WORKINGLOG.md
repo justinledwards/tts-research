@@ -1,3 +1,14 @@
+## 2026-06-03 14:09 CEST - Theatre Cinema Runtime Shell
+- [x] Add runtime-shell work log entry
+- [x] Add shared Theatre runtime model and docs
+- [x] Refactor Theatre chrome control tiers
+- [x] Update Teleprompt Theatre state, controls, and shortcuts
+- [x] Update Cinema Theatre shell and keyboard behavior
+- [x] Add focused regression tests
+- [x] Run focused and project checks
+- [ ] Resolve Book Cinema e2e Intake navigation timeout
+- Validation: focused Theatre/Teleprompt/Cinema/Book tests passed; frontend tests passed; `pnpm typecheck` passed; `pnpm e2e:teleprompt-memory` passed; `pnpm e2e:reading-surface` passed; `pnpm check` passed with existing unrelated lint warnings. `pnpm e2e:book-cinema` passed markdown and website flows, then failed twice waiting for the Intake button in `openBookCinemaOverlay`.
+
 ## 2026-06-03 14:03 CEST - Commit Cue-First Teleprompt Refinement
 - [x] Review worktree scope
 - [x] Stage Teleprompt refinement package

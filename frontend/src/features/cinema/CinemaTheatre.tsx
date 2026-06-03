@@ -12,9 +12,11 @@ import {
   useFocusedTheatreControls,
   type FocusedTheatreProgress,
 } from "../theatre/FocusedTheatreShell";
+import { theatreRuntimeShellState, type TheatreAvailabilityState } from "../theatre/model";
 import { READER_SEEK_SECONDS } from "../reader-accessibility";
 import { LocalizedPlaybackToolbar, type LocalizedPlaybackToolbarModel } from "../playback";
 import type { CinemaTransportModel } from "./CinemaTransportBar";
+import type { CinemaPlaybackState, CinemaRendererLifecycleState } from "./model";
 
 const CINEMA_THEATRE_FULLSCREEN_FALLBACK =
   "Cinema Theatre keeps the reader-first listening view in the browser window.";
@@ -166,7 +168,9 @@ export function CinemaTheatreChrome({
   fullscreenActive,
   fullscreenAvailability,
   highContrast,
+  playbackState,
   progress,
+  rendererLifecycle,
   scopeLabel,
   sourceLabel,
   surfaceName,
@@ -179,7 +183,9 @@ export function CinemaTheatreChrome({
   fullscreenActive: boolean;
   fullscreenAvailability: TheatreFullscreenAvailability;
   highContrast: boolean;
+  playbackState: CinemaPlaybackState;
   progress?: FocusedTheatreProgress | null;
+  rendererLifecycle: CinemaRendererLifecycleState;
   scopeLabel: string;
   sourceLabel: string;
   surfaceName: string;
@@ -187,10 +193,24 @@ export function CinemaTheatreChrome({
   onRequestFullscreen: () => void;
   onToggleControls: () => void;
 }>) {
+  const runtimeShellState = theatreRuntimeShellState({
+    availabilityState: theatreAvailabilityStateForCinema(playbackState, rendererLifecycle),
+    playbackAvailable: cinemaPlaybackStateHasAudio(playbackState),
+    playbackPlaying: playbackState === "playing",
+    requestedMode: "audio-follow",
+  });
+  let chromeSyncStatusLabel: string | null = null;
+  if (runtimeShellState.availabilityState !== "ready") {
+    chromeSyncStatusLabel = runtimeShellState.detail;
+  } else if (highContrast) {
+    chromeSyncStatusLabel = "High contrast";
+  }
   return (
     <FocusedTheatreChrome
+      availabilityState={runtimeShellState.availabilityState}
       actions={[
         {
+          controlZone: "environment",
           disabled: !fullscreenAvailability.supported,
           disabledReason: fullscreenAvailability.reason ?? undefined,
           label: fullscreenActive ? "Fullscreen active" : "Native fullscreen",
@@ -200,22 +220,49 @@ export function CinemaTheatreChrome({
       ]}
       activeLabel={surfaceName}
       activeText={activePassage || "Current passage will appear as playback or selection advances."}
-      confidenceLabel={highContrast ? "High contrast" : null}
       controlsVisible={controlsVisible}
       persistentAction={{
+        controlZone: "emergency",
         label: "Exit Theatre",
         testId: "ui-action-cinema-theatre-exit",
         onClick: onExit,
       }}
       progress={progress}
+      runtimeMode={runtimeShellState.mode}
       scopeLabel={scopeLabel}
       sourceLabel={sourceLabel}
-      statusLabel={fullscreenActive ? "Native fullscreen" : "Cinema Theatre"}
+      statusLabel={fullscreenActive ? "Native fullscreen" : runtimeShellState.statusLabel}
       surfaceLabel="Cinema Theatre"
+      syncStatusLabel={chromeSyncStatusLabel}
       testId="cinema-theatre-chrome"
       toggleControlsTestId="ui-action-cinema-theatre-toggle-controls"
       onToggleControls={onToggleControls}
     />
+  );
+}
+
+function theatreAvailabilityStateForCinema(
+  playbackState: CinemaPlaybackState,
+  rendererLifecycle: CinemaRendererLifecycleState,
+): TheatreAvailabilityState {
+  if (rendererLifecycle === "failed") {
+    return "renderer-failed";
+  }
+  if (playbackState === "degraded") {
+    return "generation-failed";
+  }
+  if (playbackState === "generating" || playbackState === "preAudio") {
+    return "waiting-audio";
+  }
+  return "ready";
+}
+
+function cinemaPlaybackStateHasAudio(playbackState: CinemaPlaybackState): boolean {
+  return (
+    playbackState === "completed" ||
+    playbackState === "paused" ||
+    playbackState === "playable" ||
+    playbackState === "playing"
   );
 }
 
