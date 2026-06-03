@@ -20,16 +20,28 @@ import {
   type ReadAlongWordRole,
 } from "./highlightSemantics";
 
+export type HighlightRendererTokenTransformation =
+  | "normal"
+  | "expanded"
+  | "skipped"
+  | "transformed"
+  | "generated"
+  | "unknown";
+
 export interface HighlightRendererToken {
   key?: string;
   nodeId?: string;
   pageIndex?: number;
   sourceId?: string;
   sourceWordId?: string;
+  sourceWordIndex?: number;
+  spokenTokenId?: string;
   text: string;
   title?: string;
+  timingConfidence?: number;
   tokenOffset?: number;
   trailingText?: string;
+  transformation?: HighlightRendererTokenTransformation;
   wordIndex: number;
 }
 
@@ -162,10 +174,18 @@ export function HighlightRenderer({
               token.pageIndex === undefined ? undefined : String(token.pageIndex)
             }
             data-readalong-source-id={token.sourceId ?? sourceId}
+            data-readalong-source-word-index={
+              token.sourceWordIndex === undefined ? undefined : String(token.sourceWordIndex)
+            }
+            data-readalong-spoken-token-id={token.spokenTokenId}
             data-source-word-id={token.sourceWordId}
             data-readalong-token-offset={
               token.tokenOffset === undefined ? undefined : String(token.tokenOffset)
             }
+            data-readalong-token-confidence={
+              token.timingConfidence === undefined ? undefined : String(token.timingConfidence)
+            }
+            data-readalong-token-transformation={token.transformation}
             data-readalong-timing-state={timingState}
             data-readalong-word-index={String(token.wordIndex)}
             data-readalong-word-role={role}

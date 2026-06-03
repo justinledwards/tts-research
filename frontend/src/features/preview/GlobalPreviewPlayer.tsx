@@ -46,8 +46,11 @@ import {
   previewQueueProgress,
   resolvePreviewQueueIndex,
 } from "./previewQueue";
-import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
-import { HighlightRenderer, readAlongWordRoleForIndex, type ReadAlongWordRole } from "../readalong";
+import {
+  ReadingFollowAlongRenderer,
+  readingSurfaceClassName,
+  readingSurfaceDataAttributes,
+} from "../reading-surface";
 
 export interface GlobalPreviewPlaybackController {
   readonly isAvailable: boolean;
@@ -394,16 +397,19 @@ export function GlobalPreviewPlayer({
                 data-testid="preview-active-spoken-text"
                 {...readingSurfaceDataAttributes({ active: true, kind: "spoken" })}
               >
-                <HighlightRenderer
+                <ReadingFollowAlongRenderer
                   activeWordIndex={activePreviewWordIndex}
+                  cue={{
+                    cueText: activeItem.spokenText,
+                    spokenText: activeItem.spokenText,
+                  }}
                   cueRole="current"
-                  mode="word"
+                  exactWordTiming={false}
+                  mode={playbackAvailable ? "audio-follow" : "reading-only"}
                   surface="teleprompt"
-                  text={activeItem.spokenText}
+                  surfaceKind="spoken"
                   timingState="estimated"
-                  wordRoleForWord={({ active, phrase, token }) =>
-                    previewWordRole(token.wordIndex, activePreviewWordIndex, active, phrase)
-                  }
+                  upcomingWindow={3}
                 />
               </p>
             ) : null}
@@ -521,21 +527,4 @@ function previewActiveWordIndex(
     Math.min(1, (playbackCursorSec - activeItem.startSec) / durationSec),
   );
   return pickTeleprompterWordIndex(activeItem.spokenText, progress);
-}
-
-function previewWordRole(
-  wordIndex: number,
-  activeWordIndex: number | null,
-  active: boolean,
-  phrase: boolean,
-): ReadAlongWordRole {
-  return readAlongWordRoleForIndex({
-    active,
-    activeWordIndex,
-    cueRole: "current",
-    phrase,
-    recentWindow: 2,
-    upcomingWindow: 3,
-    wordIndex,
-  });
 }

@@ -44,6 +44,7 @@ export {
   splitHighlightText,
   type HighlightRendererProps,
   type HighlightRendererToken,
+  type HighlightRendererTokenTransformation,
   type HighlightRendererWordState,
 } from "./HighlightRenderer";
 export {

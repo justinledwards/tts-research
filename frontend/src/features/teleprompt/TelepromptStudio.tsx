@@ -1197,12 +1197,14 @@ export function TelepromptStudio({
             cuePositionLabel={cuePositionLabel}
             cueProgressPercent={cueProgressPercent}
             cueText={cue?.currentText ?? null}
+            currentSourceWordId={activeCueCurrentSourceWordId}
             currentWordIndex={cueSync.activeCue?.currentWordIndex ?? null}
             highContrast={presetId === "highContrast"}
             mirrorMode={theatreSettings.mirrorMode}
             settings={effectiveSettings}
             textClassName={telepromptStageTextClassName(presetId)}
             timingState={activeCueTimingState}
+            wordTimings={cueSync.activeCue?.wordTimings ?? []}
             wordSpacing={preset.wordSpacing}
             workModeDataAttributes={workModeModel.dataAttributes}
             workModeDetail={workModeModel.detail}
@@ -1505,11 +1507,17 @@ export function TelepromptStudio({
                     currentWordIndex={
                       block.id === activeBlock?.id ? cueSync.activeCue?.currentWordIndex : null
                     }
+                    currentSourceWordId={
+                      block.id === activeBlock?.id ? activeCueCurrentSourceWordId : null
+                    }
                     highContrast={presetId === "highContrast"}
                     key={block.id}
                     presetClassName={preset.scriptClassName}
                     settings={effectiveSettings}
                     timingState={block.id === activeBlock?.id ? activeCueTimingState : "trusted"}
+                    wordTimings={
+                      block.id === activeBlock?.id ? (cueSync.activeCue?.wordTimings ?? []) : []
+                    }
                     onSelect={() => {
                       setWorkMode("rehearsal");
                       setCueSyncMode("manual");

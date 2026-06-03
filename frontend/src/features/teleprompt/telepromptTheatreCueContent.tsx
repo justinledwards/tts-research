@@ -6,8 +6,12 @@ import {
   type TeleprompterHighlightSettings,
   type TeleprompterToken,
 } from "../../teleprompter";
-import { HighlightRenderer, type ReadAlongTimingState, type ReadAlongWordRole } from "../readalong";
-import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
+import type { ReadAlongTimingState, ReadAlongWordRole } from "../readalong";
+import {
+  ReadingFollowAlongRenderer,
+  readingSurfaceClassName,
+  readingSurfaceDataAttributes,
+} from "../reading-surface";
 import type { TelepromptCueWordTiming } from "./telepromptCueTimeline";
 import {
   telepromptTheatreCrawlOffset,
@@ -205,36 +209,35 @@ export function TelepromptTheatreCueText({
               data-teleprompt-theatre-section-kind={section.kind}
               key={section.id}
             >
-              <HighlightRenderer
+              <ReadingFollowAlongRenderer
                 activeSourceWordId={currentSourceWordId}
                 activeWordIndex={currentWordIndex}
-                classNameForWord={({ token }) => {
+                classNameForWord={({ role, token }) => {
                   const cue = cueByIndex.get(token.wordIndex);
                   return cx(
                     "teleprompter-word rounded px-1 py-0.5",
-                    `teleprompter-word--${cue?.state ?? "idle"}`,
-                    cue?.state === "active" && "teleprompt-theatre-word--active",
+                    `teleprompter-word--${telepromptTheatreVisualWordState(cue?.state, role)}`,
+                    role === "active" && "teleprompt-theatre-word--active",
                   );
+                }}
+                cue={{
+                  cueText: section.text,
+                  spokenText: section.text,
+                  tokens: section.tokens,
                 }}
                 cueRole="current"
                 dataEffect={highlightSettings.effectStyle}
-                mode="word"
+                mode="audio-follow"
                 surface="teleprompt"
+                surfaceKind="theatre"
                 timingState={timingState}
-                tokens={section.tokens}
-                wordRoleForWord={({ token }) => {
-                  const cue = cueByIndex.get(token.wordIndex);
-                  return telepromptTheatreReadAlongWordRole(
-                    cue?.state,
-                    token.wordIndex,
-                    currentWordIndex,
-                  );
-                }}
-                wordStyle={({ token }) => {
+                wordStyle={({ role, token }) => {
                   const cue = cueByIndex.get(token.wordIndex);
                   return {
                     "--teleprompter-accent": "#f97316",
-                    "--teleprompter-intensity": String(cue?.intensity ?? 0),
+                    "--teleprompter-intensity": String(
+                      telepromptTheatreVisualWordIntensity(cue?.intensity, role),
+                    ),
                   } as CSSProperties;
                 }}
               />
@@ -263,23 +266,23 @@ function telepromptTheatreActiveRow(activeWord: HTMLElement): TelepromptTheatreC
   return { height, top };
 }
 
-function telepromptTheatreReadAlongWordRole(
-  state: string | undefined,
-  wordIndex: number,
-  currentWordIndex?: number | null,
-): ReadAlongWordRole {
-  if (state === "active") {
-    return "active";
-  }
-  if (state === "upcoming") {
-    return "upcoming";
-  }
-  if (state === "spoken") {
-    return typeof currentWordIndex === "number" && currentWordIndex - wordIndex <= 2
-      ? "recent"
-      : "spoken";
+function telepromptTheatreVisualWordState(
+  cueState: string | undefined,
+  role: ReadAlongWordRole,
+): string {
+  if (role === "active" || role === "recent" || role === "spoken" || role === "upcoming") {
+    return cueState ?? "idle";
   }
   return "idle";
+}
+
+function telepromptTheatreVisualWordIntensity(
+  intensity: number | undefined,
+  role: ReadAlongWordRole,
+): number {
+  return role === "active" || role === "recent" || role === "spoken" || role === "upcoming"
+    ? (intensity ?? 0)
+    : 0;
 }
 
 function usePrefersReducedMotion(): boolean {

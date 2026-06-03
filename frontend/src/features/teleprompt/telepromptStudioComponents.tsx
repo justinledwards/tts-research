@@ -1,5 +1,4 @@
 import type { CSSProperties, ReactNode, RefObject } from "react";
-import { HighlightRenderer } from "../readalong";
 import {
   buildTelepromptWordCuesFromIndex,
   buildTeleprompterWordCues,
@@ -7,9 +6,14 @@ import {
   type TeleprompterHighlightSettings,
 } from "../../teleprompter";
 import { Panel, StatusChip, cx, type StatusChipTone } from "../../design";
-import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
+import {
+  buildReadingFollowAlongTokensFromText,
+  ReadingFollowAlongRenderer,
+  readingSurfaceClassName,
+  readingSurfaceDataAttributes,
+} from "../reading-surface";
 import type { ReadAlongCueRole, ReadAlongTimingState, ReadAlongWordRole } from "../readalong";
-import type { TelepromptCueSyncMode } from "./telepromptCueTimeline";
+import type { TelepromptCueSyncMode, TelepromptCueWordTiming } from "./telepromptCueTimeline";
 import { estimateTelepromptDurationMs, countTelepromptWords } from "./telepromptToolbar";
 import type { RevisionBlock } from "../revision";
 
@@ -21,12 +25,14 @@ export function TelepromptCurrentCueStage({
   cuePositionLabel,
   cueProgressPercent,
   cueText,
+  currentSourceWordId,
   currentWordIndex,
   highContrast,
   mirrorMode,
   settings,
   textClassName,
   timingState = "trusted",
+  wordTimings = [],
   wordSpacing,
   workModeDetail,
   workModeLabel,
@@ -40,12 +46,14 @@ export function TelepromptCurrentCueStage({
   cuePositionLabel: string;
   cueProgressPercent: number;
   cueText: string | null;
+  currentSourceWordId?: string | null;
   currentWordIndex?: number | null;
   highContrast: boolean;
   mirrorMode: boolean;
   settings: TeleprompterHighlightSettings;
   textClassName: string;
   timingState?: ReadAlongTimingState;
+  wordTimings?: readonly TelepromptCueWordTiming[];
   wordSpacing: string;
   workModeDataAttributes: Record<string, string | undefined>;
   workModeDetail: string;
@@ -62,10 +70,12 @@ export function TelepromptCurrentCueStage({
     cueContent = shouldRenderCue ? (
       <TelepromptCueWords
         cueRole="current"
+        currentSourceWordId={currentSourceWordId}
         currentWordIndex={currentWordIndex}
         settings={settings}
         timingState={timingState}
         text={spokenText}
+        wordTimings={wordTimings}
       />
     ) : (
       spokenText || "No spoken text is available for this cue."
@@ -162,11 +172,13 @@ export function TelepromptScriptBlock({
   block,
   cueText,
   cueRole = active ? "current" : "unavailable",
+  currentSourceWordId,
   currentWordIndex,
   highContrast,
   presetClassName,
   settings,
   timingState = "trusted",
+  wordTimings = [],
   onSelect,
 }: Readonly<{
   activeRef?: RefObject<HTMLDivElement | null>;
@@ -174,11 +186,13 @@ export function TelepromptScriptBlock({
   block: RevisionBlock;
   cueText: string | null;
   cueRole?: ReadAlongCueRole;
+  currentSourceWordId?: string | null;
   currentWordIndex?: number | null;
   highContrast: boolean;
   presetClassName: string;
   settings: TeleprompterHighlightSettings;
   timingState?: ReadAlongTimingState;
+  wordTimings?: readonly TelepromptCueWordTiming[];
   onSelect: () => void;
 }>) {
   const spokenText = block.spokenText || block.text;
@@ -214,10 +228,12 @@ export function TelepromptScriptBlock({
         {shouldRenderCue ? (
           <TelepromptCueWords
             cueRole={cueRole}
+            currentSourceWordId={currentSourceWordId}
             currentWordIndex={currentWordIndex}
             settings={settings}
             timingState={timingState}
             text={spokenText}
+            wordTimings={wordTimings}
           />
         ) : (
           spokenText || "No spoken text is available for this cue."
@@ -245,16 +261,20 @@ function telepromptScriptBlockClassName({
 
 export function TelepromptCueWords({
   cueRole = "current",
+  currentSourceWordId,
   currentWordIndex,
   settings,
   timingState = "trusted",
   text,
+  wordTimings = [],
 }: Readonly<{
   cueRole?: ReadAlongCueRole;
+  currentSourceWordId?: string | null;
   currentWordIndex?: number | null;
   settings: TeleprompterHighlightSettings;
   timingState?: ReadAlongTimingState;
   text: string;
+  wordTimings?: readonly TelepromptCueWordTiming[];
 }>) {
   const tokens = splitTeleprompterTokens(text);
   const cues =
@@ -267,51 +287,81 @@ export function TelepromptCueWords({
           settings,
         );
   const cueByIndex = new Map(cues.map((cue) => [cue.wordIndex, cue]));
+  const timingMaps = telepromptWordTimingMaps(wordTimings);
   return (
-    <HighlightRenderer
+    <ReadingFollowAlongRenderer
+      activeSourceWordId={currentSourceWordId}
       activeWordIndex={currentWordIndex}
-      classNameForWord={({ token }) => {
+      classNameForWord={({ role, token }) => {
         const cue = cueByIndex.get(token.wordIndex);
-        return `teleprompter-word teleprompter-word--${cue?.state ?? "idle"} rounded px-1 py-0.5`;
+        return `teleprompter-word teleprompter-word--${telepromptVisualWordState(
+          cue?.state,
+          role,
+        )} rounded px-1 py-0.5`;
+      }}
+      cue={{
+        cueText: text,
+        spokenText: text,
+        tokens: buildReadingFollowAlongTokensFromText(text, timingMaps),
       }}
       cueRole={cueRole}
       dataEffect="classic"
-      mode="word"
+      mode="audio-follow"
       surface="teleprompt"
+      surfaceKind="cue"
       timingState={timingState}
-      text={text}
-      wordRoleForWord={({ token }) => {
-        const cue = cueByIndex.get(token.wordIndex);
-        return telepromptReadAlongWordRole(cue?.state, token.wordIndex, currentWordIndex);
-      }}
-      wordStyle={({ token }) => {
+      wordStyle={({ role, token }) => {
         const cue = cueByIndex.get(token.wordIndex);
         return {
           "--teleprompter-accent": "#f97316",
-          "--teleprompter-intensity": String(cue?.intensity ?? 0),
+          "--teleprompter-intensity": String(telepromptVisualWordIntensity(cue?.intensity, role)),
         } as CSSProperties;
       }}
     />
   );
 }
 
-function telepromptReadAlongWordRole(
-  state: string | undefined,
-  wordIndex: number,
-  currentWordIndex?: number | null,
-): ReadAlongWordRole {
-  if (state === "active") {
-    return "active";
-  }
-  if (state === "upcoming") {
-    return "upcoming";
-  }
-  if (state === "spoken") {
-    return typeof currentWordIndex === "number" && currentWordIndex - wordIndex <= 2
-      ? "recent"
-      : "spoken";
+function telepromptVisualWordState(cueState: string | undefined, role: ReadAlongWordRole): string {
+  if (role === "active" || role === "recent" || role === "spoken" || role === "upcoming") {
+    return cueState ?? "idle";
   }
   return "idle";
+}
+
+function telepromptVisualWordIntensity(
+  intensity: number | undefined,
+  role: ReadAlongWordRole,
+): number {
+  return role === "active" || role === "recent" || role === "spoken" || role === "upcoming"
+    ? (intensity ?? 0)
+    : 0;
+}
+
+function telepromptWordTimingMaps(
+  wordTimings: readonly TelepromptCueWordTiming[],
+): Parameters<typeof buildReadingFollowAlongTokensFromText>[1] {
+  const sourceWordIdByWordIndex = new Map<number, string>();
+  const sourceWordIndexByWordIndex = new Map<number, number>();
+  const spokenTokenIdByWordIndex = new Map<number, string>();
+  const timingConfidenceByWordIndex = new Map<number, number>();
+  for (const timing of wordTimings) {
+    if (timing.sourceWordId) {
+      sourceWordIdByWordIndex.set(timing.wordIndex, timing.sourceWordId);
+    }
+    if (typeof timing.sourceWordIndex === "number") {
+      sourceWordIndexByWordIndex.set(timing.wordIndex, timing.sourceWordIndex);
+    }
+    if (timing.spokenTokenId) {
+      spokenTokenIdByWordIndex.set(timing.wordIndex, timing.spokenTokenId);
+    }
+    timingConfidenceByWordIndex.set(timing.wordIndex, timing.confidence);
+  }
+  return {
+    sourceWordIdByWordIndex,
+    sourceWordIndexByWordIndex,
+    spokenTokenIdByWordIndex,
+    timingConfidenceByWordIndex,
+  };
 }
 
 export function TelepromptBlockPreview({

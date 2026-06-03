@@ -52,6 +52,7 @@ import { resolveTelepromptTheatreShortcut } from "./telepromptTheatreShortcuts";
 import type { TelepromptCueWordTiming } from "./telepromptCueTimeline";
 import { buildTelepromptTheatreSummary } from "./telepromptTheatreState";
 import type { GeneratedAudioLifecycleState } from "../playback";
+import type { ReadAlongTimingState } from "../readalong";
 import type { RevisionBlock } from "../revision";
 import type { VoiceJob } from "../../types";
 
@@ -464,6 +465,30 @@ describe("teleprompt theatre model", () => {
     expect(markup).toContain('data-source-word-id="book-1:book:word:106"');
   });
 
+  it("falls low-confidence theatre timing back to phrase emphasis", () => {
+    const activeBlock = block({
+      id: "title",
+      kind: "heading",
+      spokenText: "Cache and Cache Coherency",
+    });
+    const previewBlocks = [
+      block({ id: "summary", kind: "subheading", spokenText: "Executive summary" }),
+      block({ id: "body", kind: "body", spokenText: "A cache follows audio." }),
+    ];
+    const text = "Cache and Cache Coherency Executive summary A cache follows audio.";
+    const markup = renderCueWithBlocks({
+      activeBlock,
+      currentWordIndex: 6,
+      previewBlocks,
+      text,
+      timingState: "lowConfidence",
+    });
+
+    expect(markup).toContain('data-reading-followalong-visual-mode="phrase"');
+    expect(markup).not.toContain('aria-current="true"');
+    expect(markup).toContain('data-readalong-word-role="activePhrase"');
+  });
+
   it("computes a cinematic theatre crawl offset with a reduced-motion fallback", () => {
     expect(
       telepromptTheatreCrawlOffset({
@@ -801,6 +826,7 @@ function renderCueWithBlocks({
   currentWordIndex,
   previewBlocks,
   text,
+  timingState,
   wordTimings,
 }: Readonly<{
   activeBlock: RevisionBlock;
@@ -808,6 +834,7 @@ function renderCueWithBlocks({
   currentWordIndex?: number | null;
   previewBlocks: RevisionBlock[];
   text: string;
+  timingState?: ReadAlongTimingState;
   wordTimings?: readonly TelepromptCueWordTiming[];
 }>): string {
   return renderToStaticMarkup(
@@ -822,6 +849,7 @@ function renderCueWithBlocks({
       previewBlocks,
       text,
       textClassName: "text-xl",
+      timingState,
       widthClassName: "max-w-3xl",
       wordTimings,
       wordSpacing: "0",

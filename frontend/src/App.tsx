@@ -232,16 +232,15 @@ import { liveStatusMessages, useLiveStatus } from "./features/accessibility";
 import { nextReaderPlaybackRate } from "./features/reader-accessibility";
 import {
   DEFAULT_READ_ALONG_PREFERENCES,
-  HighlightRenderer,
   clearStoredReadAlongPreferences,
   loadReadAlongPreferences,
-  readAlongWordRoleForIndex,
   saveReadAlongPreferences,
   type HighlightMapV2,
   type ReadAlongCueRole,
   type ReadAlongPreferences,
   type ReadAlongWordRole,
 } from "./features/readalong";
+import { ReadingFollowAlongRenderer } from "./features/reading-surface";
 import {
   normalizeTelepromptTheatreSettings,
   type TelepromptTheatreSettings,
@@ -14045,23 +14044,20 @@ function PreviewSpokenCueList({
               <span>{cueRole}</span>
             </div>
             <p className="m-0 whitespace-pre-wrap break-words">
-              <HighlightRenderer
+              <ReadingFollowAlongRenderer
                 activeWordIndex={activeWordIndex}
+                cue={{
+                  cueText: text,
+                  spokenText: block.spokenText,
+                  sourceText: block.text,
+                }}
                 cueRole={cueRole}
-                mode="word"
+                exactWordTiming={false}
+                mode={job ? "audio-follow" : "reading-only"}
                 surface="teleprompt"
-                text={text}
+                surfaceKind="spoken"
                 timingState="estimated"
-                wordRole={cueRole === "skipped" ? "skipped" : undefined}
-                wordRoleForWord={({ active, phrase, token }) =>
-                  previewCueWordRole({
-                    active,
-                    activeWordIndex,
-                    cueRole,
-                    phrase,
-                    wordIndex: token.wordIndex,
-                  })
-                }
+                upcomingWindow={3}
               />
             </p>
           </section>
@@ -14106,30 +14102,6 @@ function previewBlockActiveWordIndex(
   const progress =
     startSec === null ? 0 : Math.max(0, Math.min(1, (playbackCursorSec - startSec) / durationSec));
   return pickTeleprompterWordIndex(text, progress);
-}
-
-function previewCueWordRole({
-  active,
-  activeWordIndex,
-  cueRole,
-  phrase,
-  wordIndex,
-}: Readonly<{
-  active: boolean;
-  activeWordIndex: number | null;
-  cueRole: ReadAlongCueRole;
-  phrase: boolean;
-  wordIndex: number;
-}>): ReadAlongWordRole {
-  return readAlongWordRoleForIndex({
-    active,
-    activeWordIndex,
-    cueRole,
-    phrase,
-    recentWindow: 2,
-    upcomingWindow: 3,
-    wordIndex,
-  });
 }
 
 function bookScopeLabelForReview(scope: BookScope): string {

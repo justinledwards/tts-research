@@ -1,3 +1,11 @@
+## 2026-06-03 16:28 CEST - Shared Reading Follow-Along Renderer
+- [x] Add shared renderer spec and model
+- [x] Implement ReadingFollowAlongRenderer
+- [x] Migrate Preview, Teleprompt, and Theatre cue surfaces
+- [x] Add focused renderer and accessibility regressions
+- [x] Run focused and project checks
+- Validation: focused Preview/Teleprompt/reading-surface tests passed; frontend typecheck passed; frontend tests passed; `pnpm e2e:reading-surface`, `pnpm e2e:teleprompt-memory`, and `pnpm e2e:accessibility-audit` passed; `pnpm check` passed with existing unrelated Biome lint warnings.
+
 ## 2026-06-03 14:09 CEST - Theatre Cinema Runtime Shell
 - [x] Add runtime-shell work log entry
 - [x] Add shared Theatre runtime model and docs

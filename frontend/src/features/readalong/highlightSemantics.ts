@@ -14,7 +14,8 @@ export type ReadAlongWordRole =
   | "active"
   | "activePhrase"
   | "upcoming"
-  | "skipped";
+  | "skipped"
+  | "transformed";
 
 export type ReadAlongCueRole = "previous" | "current" | "next" | "skipped" | "unavailable";
 

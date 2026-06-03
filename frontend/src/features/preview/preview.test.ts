@@ -209,8 +209,9 @@ describe("preview A/B comparison", () => {
     expect(markup).toContain('data-reading-active-emphasis="dominant"');
     expect(markup).toContain('data-readalong-cue-role="current"');
     expect(markup).toContain('data-readalong-timing-state="estimated"');
-    expect(markup).toContain('data-readalong-word-role="active"');
-    expect(markup).toContain('data-readalong-word-role="upcoming"');
+    expect(markup).toContain('data-reading-followalong-visual-mode="phrase"');
+    expect(markup).not.toContain('aria-current="true"');
+    expect(markup).toContain('data-readalong-word-role="activePhrase"');
   });
 });
 
