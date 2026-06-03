@@ -1,3 +1,13 @@
+## 2026-06-03 07:19 CEST - Review Repair Workspace
+- [x] Add Review repair focus routing
+- [x] Strengthen Review repair queue and selected-block editor
+- [x] Add pronunciation repair and clean-block bulk approval
+- [x] Add non-blocking Preview review readiness
+- [x] Update docs and tests
+- [x] Refresh workspace-flow voice assertion
+- [x] Run project checks
+- Validation: focused frontend tests passed; `pnpm check` passed with existing non-fatal Biome warnings outside this work; `pnpm e2e:workspace-flow` passed after refreshing the visible voice-label assertion.
+
 ## 2026-06-01 23:01 CEST - Global Layout Contract
 - [x] Inspect current layout, disclosure, docs, and tests
 - [x] Add layout contract documentation and cross-links
@@ -1360,3 +1370,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Review staged readiness work package
 - [x] Stage readiness work package
 - [x] Create commit
+
+## 2026-06-03 07:42 CEST - Commit Review Repair Workspace
+- [x] Review worktree scope
+- [x] Run project checks
+- [x] Stage review repair work package
+- [x] Create commit
+- Validation: `pnpm check` passed with existing unrelated Biome lint warnings/infos.

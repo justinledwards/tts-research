@@ -1,4 +1,10 @@
 export type ReviewPane = "blocks" | "script" | "validation";
+export type ReviewOpenFocus = "needsRepair" | "normal";
+
+export interface ReviewOpenFocusRequest {
+  focus: ReviewOpenFocus;
+  requestId: number;
+}
 
 export interface ReviewBlockLike {
   id: string;

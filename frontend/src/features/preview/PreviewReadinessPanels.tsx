@@ -129,6 +129,9 @@ export function previewReadinessTone(status: PreviewReadinessRowStatus): StatusC
   if (status === "working") {
     return "info";
   }
+  if (status === "warning") {
+    return "warning";
+  }
   if (status === "blocked") {
     return "warning";
   }
@@ -144,6 +147,9 @@ export function previewReadinessStatusLabel(status: PreviewReadinessRowStatus): 
   }
   if (status === "blocked") {
     return "Blocked";
+  }
+  if (status === "warning") {
+    return "Review";
   }
   return "Waiting";
 }

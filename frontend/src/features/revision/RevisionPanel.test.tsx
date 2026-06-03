@@ -23,7 +23,11 @@ describe("RevisionPanel", () => {
     expect(markup).toContain("Selected Block Editor");
     expect(markup).toContain("Source text");
     expect(markup).toContain("Spoken form");
+    expect(markup).toContain("Repair Notes");
     expect(markup).toContain("Pronunciation Repair");
+    expect(markup).toContain("Apply repair");
+    expect(markup).toContain('data-testid="ui-action-revision-batch-approve-clean"');
+    expect(markup).toContain("Approve clean blocks (1)");
     expect(markup).toContain("OpenAI");
     expect(markup).toContain("Open A I");
     expect(markup).toContain("Preview Speech");
@@ -43,12 +47,22 @@ describe("RevisionPanel", () => {
     expect(renderRevisionPanel("diagnostics")).toContain("Validation Transcript");
     expect(renderRevisionPanel("history")).toContain("Inline edit saved");
   });
+
+  it("explains skipped content in the selected-block repair notes", () => {
+    const markup = renderRevisionPanel("overview", "skipped");
+
+    expect(markup).toContain("Skipped content");
+    expect(markup).toContain("Footnote skipped for narration.");
+  });
 });
 
-function renderRevisionPanel(initialTabId: "diagnostics" | "history" | "overview" = "overview") {
+function renderRevisionPanel(
+  initialTabId: "diagnostics" | "history" | "overview" = "overview",
+  activeBlockId = "pronunciation",
+) {
   return renderToStaticMarkup(
     <RevisionPanel
-      activeBlockId="pronunciation"
+      activeBlockId={activeBlockId}
       baseBlocks={baseBlocks}
       blocks={blocks}
       historyEntries={historyEntries}
@@ -118,6 +132,21 @@ const blocks: RevisionBlock[] = [
     index: 3,
     label: "Approved",
     status: "approved",
+  }),
+  block({
+    id: "clean",
+    index: 4,
+    label: "Clean",
+    status: "waiting",
+  }),
+  block({
+    id: "skipped",
+    index: 5,
+    label: "Footnote",
+    policyNote: "Footnote skipped for narration.",
+    policyNoteType: "skipped",
+    speakMode: "skip",
+    status: "skipped",
   }),
 ];
 

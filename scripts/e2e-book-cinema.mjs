@@ -565,10 +565,11 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.getByText("Teleprompt Studio").first().waitFor();
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
     await page.getByTestId("ui-action-teleprompt-mirror").check();
-    await page
-      .getByText(/Default voice|Default mock narrator/)
-      .first()
-      .waitFor();
+    await page.waitForFunction(() =>
+      /Default voice|Default mock narrator|Default Kokoro|Heart \(af_heart\)/i.test(
+        document.body.innerText ?? "",
+      ),
+    );
     await page.getByTestId("ui-action-teleprompt-cue-drawer").click();
     await page.getByRole("button", { exact: true, name: "Back to Review" }).click();
     await page.getByText("Revision Panel").first().waitFor();

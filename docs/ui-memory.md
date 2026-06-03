@@ -9,7 +9,7 @@ Workbench layout semantics and responsive rules are defined in `docs/workbench-l
 
 Users can control these categories from Settings > Reader > UI memory:
 
-- `Remember layout`: Workspace layout mode, Custom source/inspector/status density, and active review pane.
+- `Remember layout`: Workspace layout mode, Custom source/inspector/status density, and active Review detail tab.
 - `Remember theme`: the selected Studio theme for this browser.
 - `Remember last project`: the project id used to reopen the last active project.
 - `Remember reader preferences`: typography, spacing, contrast, and motion preferences.
@@ -25,7 +25,7 @@ session-only by default. They only become machine-local when `Remember panel pin
 UI memory supports three reset scopes:
 
 - `Reset workspace layout`: clears Workspace layout mode, Custom density, advanced panel pins,
-  and review pane memory.
+  and Review detail-tab memory.
 - `Reset reader preferences`: restores reader accessibility preferences to defaults.
 - `Reset all UI memory`: clears layout, theme, last project, reader preferences, Teleprompt return
   memory, and panel pin memory.

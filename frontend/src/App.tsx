@@ -181,7 +181,12 @@ import {
   railColumnWidth,
   workspaceOverlayState,
 } from "./features/layout";
-import { normalizeReviewPane, selectReviewBlockId, type ReviewPane } from "./features/review/model";
+import {
+  normalizeReviewPane,
+  selectReviewBlockId,
+  type ReviewOpenFocusRequest,
+  type ReviewPane,
+} from "./features/review/model";
 import {
   applyRevisionSessionState,
   composeReviewedSpeechText,
@@ -2215,6 +2220,8 @@ export function App() {
   const [activeReviewPane, setActiveReviewPane] = useState<ReviewPane>(() =>
     resolveReviewPane(uiMemory, activeProjectId),
   );
+  const [reviewOpenFocusRequest, setReviewOpenFocusRequest] =
+    useState<ReviewOpenFocusRequest | null>(null);
   const [revisionStatusByBlockId, setRevisionStatusByBlockId] = useState<
     Record<string, RevisionStatus>
   >({});
@@ -2406,6 +2413,14 @@ export function App() {
     },
     [runWorkspaceStageAction],
   );
+  const openReviewRepairQueue = useCallback(() => {
+    setActiveReviewPane("blocks");
+    setReviewOpenFocusRequest((current) => ({
+      focus: "needsRepair",
+      requestId: (current?.requestId ?? 0) + 1,
+    }));
+    runWorkspaceStageAction("reviewBlocks");
+  }, [runWorkspaceStageAction]);
   function openDemoProject(project: DemoProject) {
     setActiveDemoProjectId(project.id);
     setIsDemoModeOpen(true);
@@ -7896,6 +7911,7 @@ export function App() {
               activeReviewPane={activeReviewPane}
               activeReviewBlockId={workspaceContext.activeBlockId}
               baseReviewBlocks={baseNarrationPreviewBlocks}
+              reviewOpenFocusRequest={reviewOpenFocusRequest}
               stageStatus={activeWorkbenchStageStatus}
               projectId={activeProjectId}
               bookSourceError={bookSourceError}
@@ -8225,7 +8241,7 @@ export function App() {
         }}
         onOpenCinema={openReadingCinema}
         onOpenReview={() => {
-          runWorkspaceStageAction("reviewBlocks");
+          openReviewRepairQueue();
         }}
         onOpenActivity={() => {
           inspectWorkspaceJob();
@@ -8235,6 +8251,10 @@ export function App() {
           handleStudioModeChange("voiceCloning");
         }}
         onStatusChipSelect={(chip) => {
+          if (chip.issue.id === "review-needs-repair" || chip.issue.id === "review-required") {
+            openReviewRepairQueue();
+            return;
+          }
           selectWorkspaceInspectorTarget({
             id: chip.issue.id,
             kind: "issue",
@@ -10352,6 +10372,7 @@ function SourceTextPanel({
   activeReviewPane,
   activeReviewBlockId,
   baseReviewBlocks,
+  reviewOpenFocusRequest,
   bookScopeContent,
   bookSourceError,
   bookSources,
@@ -10419,6 +10440,7 @@ function SourceTextPanel({
   activeReviewPane: ReviewPane;
   activeReviewBlockId: string | null;
   baseReviewBlocks: RevisionBlock[];
+  reviewOpenFocusRequest: ReviewOpenFocusRequest | null;
   bookScopeContent: BookSourceScopeContent | null;
   bookSourceError: string | null;
   bookSources: BookSource[];
@@ -10608,6 +10630,7 @@ function SourceTextPanel({
             activePane={activeReviewPane}
             activeBlockId={activeReviewBlockId}
             baseReviewBlocks={baseReviewBlocks}
+            reviewOpenFocusRequest={reviewOpenFocusRequest}
             bookScopeContent={bookScopeContent}
             historyEntries={historyEntries}
             job={job}
@@ -10646,6 +10669,7 @@ function SourceTextPanel({
           job={job}
           optimizedText={optimizedText}
           policyProfileLabel={speechPolicyProfileLabel}
+          reviewWarningCount={stageStatus.reviewWarningCount}
           selectedBookScope={selectedBookScope}
           selectedBookSource={activeBookSource}
           selectedPreparedSource={activePreparedSource}
@@ -10795,6 +10819,7 @@ function NarrationPreviewStage({
   playbackCursorSec,
   optimizedText,
   policyProfileLabel,
+  reviewWarningCount,
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
@@ -10823,6 +10848,7 @@ function NarrationPreviewStage({
   playbackCursorSec: number;
   optimizedText: string;
   policyProfileLabel: string;
+  reviewWarningCount: number;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
@@ -10924,6 +10950,7 @@ function NarrationPreviewStage({
     hasSpokenText: hasSpokenPreviewText,
     outputFormat,
     policyLabel: policyProfileLabel,
+    reviewWarningCount,
     runLabel: runConfigurationLabel,
     scopeLabel: scopeTitle,
     sourceError,
@@ -13507,6 +13534,7 @@ function NarrationReviewWorkbench({
   activePane,
   activeBlockId,
   baseReviewBlocks,
+  reviewOpenFocusRequest,
   bookScopeContent,
   historyEntries,
   job,
@@ -13536,6 +13564,7 @@ function NarrationReviewWorkbench({
   activePane: ReviewPane;
   activeBlockId: string | null;
   baseReviewBlocks: RevisionBlock[];
+  reviewOpenFocusRequest: ReviewOpenFocusRequest | null;
   bookScopeContent: BookSourceScopeContent | null;
   historyEntries: RevisionHistoryEntry[];
   job: VoiceJob | null;
@@ -13773,6 +13802,7 @@ function NarrationReviewWorkbench({
           activeBlockId={selectedBlock?.id ?? null}
           baseBlocks={baseReviewBlocks}
           blocks={reviewBlocks}
+          reviewOpenFocusRequest={reviewOpenFocusRequest}
           historyEntries={historyEntries}
           initialTabId={revisionTabForReviewPane(activePane)}
           policyProfileLabel={policyProfileLabel}

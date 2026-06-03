@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -32,11 +33,14 @@ import {
   REVISION_STATUS_LABELS,
   REVISION_TRIAGE_DESCRIPTIONS,
   REVISION_TRIAGE_LABELS,
+  applyRevisionSpokenRepair,
   buildRevisionFilterOptions,
   buildRevisionTriageItems,
+  firstRevisionRepairBlockId,
   filterRevisionBlocks,
   groupRevisionTriageItems,
   normalizeRevisionTabId,
+  revisionBlockIsCleanApprovable,
   revisionBlockHasPolicyTransform,
   revisionBlockIsSkipped,
   revisionBlockTriageCategory,
@@ -54,6 +58,7 @@ import {
   type RevisionTriageGroup,
   type RevisionTriageItem,
 } from "./revisionFilters";
+import type { ReviewOpenFocusRequest } from "../review/model";
 import {
   generatedAudioStateLabel,
   sourceLifecycleDescriptor,
@@ -89,6 +94,7 @@ export interface RevisionPanelProps {
   initialTabId?: RevisionTabId;
   policyProfileLabel: string;
   playbackToolbar?: ReactNode;
+  reviewOpenFocusRequest?: ReviewOpenFocusRequest | null;
   runConfigurationLabel: string;
   scopeLabel: string;
   sourceLifecycle?: SourceLifecycleEnvelope | null;
@@ -117,6 +123,7 @@ export function RevisionPanel({
   initialTabId = "overview",
   policyProfileLabel,
   playbackToolbar,
+  reviewOpenFocusRequest = null,
   runConfigurationLabel,
   scopeLabel,
   sourceLifecycle = null,
@@ -144,6 +151,7 @@ export function RevisionPanel({
   const [dirtyDraftByBlockId, setDirtyDraftByBlockId] = useState<Record<string, boolean>>({});
   const [statusMessage, setStatusMessage] = useState("Revision workflow ready.");
   const [exportText, setExportText] = useState<string | null>(null);
+  const handledReviewFocusRequestIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     setActiveTabId(normalizeRevisionTabId(initialTabId));
@@ -169,6 +177,10 @@ export function RevisionPanel({
   const summary = useMemo(() => summarizeRevisionHealth(blocksWithState), [blocksWithState]);
   const triageGroups = useMemo(
     () => groupRevisionTriageItems(buildRevisionTriageItems(filteredBlocks)),
+    [filteredBlocks],
+  );
+  const cleanVisibleBlocks = useMemo(
+    () => filteredBlocks.filter(revisionBlockIsCleanApprovable),
     [filteredBlocks],
   );
   const hasActiveFilters = useMemo(() => !revisionFiltersAreDefault(filters), [filters]);
@@ -199,6 +211,32 @@ export function RevisionPanel({
     setActiveTabId(tabId);
     onTabChange?.(tabId);
   };
+
+  useEffect(() => {
+    if (reviewOpenFocusRequest?.focus !== "needsRepair") {
+      return;
+    }
+    if (handledReviewFocusRequestIdRef.current === reviewOpenFocusRequest.requestId) {
+      return;
+    }
+    handledReviewFocusRequestIdRef.current = reviewOpenFocusRequest.requestId;
+    setFilters(DEFAULT_REVISION_FILTERS);
+    setActiveTabId("blocks");
+    onTabChange?.("blocks");
+    const nextBlockId = firstRevisionRepairBlockId(blocksWithState);
+    onActiveBlockChange(nextBlockId);
+    setStatusMessage(
+      nextBlockId
+        ? "Opened the first Review repair item from status."
+        : "Review opened, but no repair items were found.",
+    );
+  }, [
+    blocksWithState,
+    onActiveBlockChange,
+    onTabChange,
+    reviewOpenFocusRequest?.focus,
+    reviewOpenFocusRequest?.requestId,
+  ]);
 
   const updateFilter = <K extends keyof RevisionFilterState>(
     key: K,
@@ -252,6 +290,41 @@ export function RevisionPanel({
     onHistoryEntriesChange((current) => [...current, ...result.historyEntries]);
     setStatusMessage(result.statusMessage);
     setExportText(result.exportText);
+  };
+
+  const approveCleanVisibleBlocks = () => {
+    if (activeDraftDirty) {
+      setStatusMessage("Save or discard the inline edit before approving clean blocks.");
+      return;
+    }
+    if (cleanVisibleBlocks.length === 0) {
+      setStatusMessage("No low-risk clean blocks are visible for approval.");
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    const nextStatusByBlockId = { ...statusByBlockId };
+    for (const block of cleanVisibleBlocks) {
+      nextStatusByBlockId[block.id] = "approved";
+    }
+    onStatusByBlockIdChange(nextStatusByBlockId);
+    onHistoryEntriesChange((current) => [
+      ...current,
+      ...cleanVisibleBlocks.map((block) =>
+        createRevisionHistoryEntry({
+          block,
+          context,
+          newSpokenText: block.spokenText,
+          previousSpokenText: block.spokenText,
+          timestamp,
+          userAction: "Clean block bulk approved",
+        }),
+      ),
+    ]);
+    setStatusMessage(
+      `${cleanVisibleBlocks.length.toLocaleString()} clean block${
+        cleanVisibleBlocks.length === 1 ? "" : "s"
+      } approved for Preview.`,
+    );
   };
 
   const saveInlineEdit = (block: RevisionBlock, nextSpokenText: string) => {
@@ -485,9 +558,11 @@ export function RevisionPanel({
             approveDisabledReason={
               activeDraftDirty ? "Save or discard the inline edit before approving." : undefined
             }
+            cleanVisibleCount={cleanVisibleBlocks.length}
             selectedCount={selectedBlockIds.size}
             selectedVisibleCount={selectedVisibleCount}
             visibleCount={filteredBlocks.length}
+            onApproveCleanVisible={approveCleanVisibleBlocks}
             onBatchAction={runBatchAction}
             onClearSelection={() => {
               setSelectedBlockIds(new Set());
@@ -717,23 +792,31 @@ function RevisionSelect({
 function RevisionBatchBar({
   allVisibleSelected,
   approveDisabledReason,
+  cleanVisibleCount,
   selectedCount,
   selectedVisibleCount,
   visibleCount,
+  onApproveCleanVisible,
   onBatchAction,
   onClearSelection,
   onToggleVisibleSelection,
 }: Readonly<{
   allVisibleSelected: boolean;
   approveDisabledReason?: string;
+  cleanVisibleCount: number;
   selectedCount: number;
   selectedVisibleCount: number;
   visibleCount: number;
+  onApproveCleanVisible: () => void;
   onBatchAction: (actionId: RevisionBatchActionId) => void;
   onClearSelection: () => void;
   onToggleVisibleSelection: (selected: boolean) => void;
 }>) {
   const hasSelection = selectedCount > 0;
+  const approveCleanDisabledReason =
+    cleanVisibleCount > 0
+      ? approveDisabledReason
+      : "No visible clean blocks are waiting for approval.";
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
       <label className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-[var(--vs-raised)] px-3 text-sm font-semibold vs-border">
@@ -757,6 +840,16 @@ function RevisionBatchBar({
         variant="secondary"
       >
         Clear selection
+      </Button>
+      <Button
+        data-testid="ui-action-revision-batch-approve-clean"
+        disabled={Boolean(approveCleanDisabledReason)}
+        disabledReason={approveCleanDisabledReason}
+        onClick={onApproveCleanVisible}
+        size="sm"
+        variant="soft"
+      >
+        Approve clean blocks ({cleanVisibleCount.toLocaleString()})
       </Button>
       <span className="text-xs font-semibold vs-muted">{selectedCount.toString()} selected</span>
       {REVISION_BATCH_ACTIONS.map((action) => {
@@ -1192,8 +1285,13 @@ function RevisionSelectedBlockEditor({
 
       <RevisionSourceSpokenSurface block={activeBlock} />
 
+      <RevisionRepairNotesPanel block={activeBlock} />
+
       <RevisionPronunciationRepair
         block={activeBlock}
+        onApplyRepair={(nextSpokenText) => {
+          onInlineEditSave(activeBlock, nextSpokenText);
+        }}
         onRepair={() => {
           onSetBlockStatus(activeBlock, "needsReview", "Pronunciation repair started");
         }}
@@ -1363,15 +1461,114 @@ function RevisionReadingPane({
   );
 }
 
+function RevisionRepairNotesPanel({ block }: Readonly<{ block: RevisionBlock }>) {
+  const notes: { detail: string; id: string; label: string; tone: StatusChipTone }[] = [];
+  if (revisionBlockIsSkipped(block)) {
+    notes.push({
+      detail: block.policyNote || "This content is intentionally silent for the generated audio.",
+      id: "skipped",
+      label: "Skipped content",
+      tone: "neutral",
+    });
+  }
+  if (revisionBlockHasPolicyTransform(block)) {
+    notes.push({
+      detail:
+        block.policyNote ||
+        `${REVISION_POLICY_NOTE_LABELS[block.policyNoteType]} speech policy changed this block.`,
+      id: "policy",
+      label: "Policy transformation",
+      tone: "info",
+    });
+  }
+  if (block.warnings.length > 0) {
+    notes.push({
+      detail: block.warnings.join(" "),
+      id: "warnings",
+      label: "Warnings",
+      tone: "warning",
+    });
+  }
+  if (notes.length === 0) {
+    notes.push({
+      detail: "No policy, skipped-content, or diagnostic repair notes are attached to this block.",
+      id: "clean",
+      label: "Repair notes",
+      tone: "success",
+    });
+  }
+
+  return (
+    <div
+      className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
+      data-testid="revision-selected-block-repair-notes"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold">Repair Notes</p>
+        <StatusChip tone={triageTone(revisionBlockTriageCategory(block))}>
+          {REVISION_TRIAGE_LABELS[revisionBlockTriageCategory(block)]}
+        </StatusChip>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {notes.map((note) => (
+          <div className="rounded-md border bg-[var(--vs-raised)] p-3 vs-border" key={note.id}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold">{note.label}</p>
+              <StatusChip tone={note.tone}>{note.id === "clean" ? "Clear" : "Review"}</StatusChip>
+            </div>
+            <p className="mt-2 text-xs leading-5 vs-muted">{note.detail}</p>
+          </div>
+        ))}
+        <div className="rounded-md border bg-[var(--vs-raised)] p-3 vs-border">
+          <p className="text-sm font-semibold">Audio Check</p>
+          <p className="mt-2 text-xs leading-5 vs-muted">
+            {block.spokenText.trim()
+              ? `${formatConfidence(block.confidence)} confidence · ${formatDurationLabel(
+                  block.estimatedDurationMs,
+                )} estimated.`
+              : "No spoken form is available, so this block blocks audio generation."}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RevisionPronunciationRepair({
   block,
+  onApplyRepair,
   onRepair,
-}: Readonly<{ block: RevisionBlock; onRepair: () => void }>) {
+}: Readonly<{
+  block: RevisionBlock;
+  onApplyRepair: (nextSpokenText: string) => void;
+  onRepair: () => void;
+}>) {
   const pronunciations = block.pronunciations ?? [];
   const normalisations = block.normalisations ?? [];
+  const [replacementByKey, setReplacementByKey] = useState<Record<string, string>>({});
+
   if (pronunciations.length === 0 && normalisations.length === 0) {
     return null;
   }
+  const decisions = [
+    ...pronunciations.map((decision, index) => ({
+      currentSpoken: decision.spoken,
+      key: `${block.id}-pronunciation-${index.toString()}-${decision.entryId ?? decision.term}`,
+      label: decision.term || decision.originalText,
+      meta: decision.scope ?? decision.source,
+      original: decision.originalText || decision.term,
+      type: "Pronunciation",
+    })),
+    ...normalisations.map((decision, index) => ({
+      currentSpoken: decision.spoken,
+      key: `${block.id}-normalisation-${index.toString()}-${decision.kind}-${decision.startOffset.toString()}`,
+      label: decision.original,
+      meta: decision.rule || decision.kind,
+      original: decision.original,
+      type: "Normalization",
+    })),
+  ];
+
   return (
     <div className="grid gap-2 rounded-lg border bg-[var(--vs-raised)] p-3 vs-border">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1386,38 +1583,95 @@ function RevisionPronunciationRepair({
         </Button>
       </div>
       <div className="grid gap-2">
-        {pronunciations.map((decision, index) => (
-          <RevisionRepairDecision
-            key={`${decision.entryId ?? decision.term}-${index.toString()}`}
-            label={decision.term || decision.originalText}
-            meta={decision.scope ?? decision.source}
-            spoken={decision.spoken}
-          />
-        ))}
-        {normalisations.map((decision, index) => (
-          <RevisionRepairDecision
-            key={`${decision.kind}-${decision.startOffset.toString()}-${index.toString()}`}
-            label={decision.original}
-            meta={decision.rule || decision.kind}
-            spoken={decision.spoken}
-          />
-        ))}
+        {decisions.map((decision) => {
+          const replacement = replacementByKey[decision.key] ?? decision.currentSpoken;
+          const repairedText = applyRevisionSpokenRepair(block.spokenText, {
+            currentSpoken: decision.currentSpoken,
+            original: decision.original,
+            replacement,
+          });
+          const canApply =
+            replacement.trim().length > 0 && repairedText.trim() !== block.spokenText.trim();
+          return (
+            <RevisionRepairDecision
+              canApply={canApply}
+              key={decision.key}
+              label={decision.label}
+              meta={`${decision.type} · ${decision.meta}`}
+              replacement={replacement}
+              spoken={decision.currentSpoken}
+              onApply={() => {
+                if (!canApply) {
+                  return;
+                }
+                onApplyRepair(repairedText);
+              }}
+              onReplacementChange={(nextValue) => {
+                setReplacementByKey((current) => ({
+                  ...current,
+                  [decision.key]: nextValue,
+                }));
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );
 }
 
 function RevisionRepairDecision({
+  canApply,
   label,
   meta,
+  onApply,
+  onReplacementChange,
+  replacement,
   spoken,
-}: Readonly<{ label: string; meta: string; spoken: string }>) {
+}: Readonly<{
+  canApply: boolean;
+  label: string;
+  meta: string;
+  onApply: () => void;
+  onReplacementChange: (value: string) => void;
+  replacement: string;
+  spoken: string;
+}>) {
   return (
     <div className="grid gap-1 rounded-md border bg-[var(--vs-surface)] p-3 text-sm vs-border">
       <p className="font-semibold">
         {label} {" -> "} {spoken}
       </p>
       <p className="text-xs vs-muted">{meta}</p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <label className="grid gap-1 text-xs font-semibold">
+          Repair spoken form
+          <input
+            className={fieldControlClassName}
+            data-testid="revision-pronunciation-repair-input"
+            onChange={(event) => {
+              onReplacementChange(event.target.value);
+            }}
+            value={replacement}
+          />
+        </label>
+        <div className="flex items-end">
+          <Button
+            data-testid="ui-action-revision-pronunciation-apply"
+            disabled={!canApply}
+            disabledReason={
+              canApply
+                ? undefined
+                : "Change the repair text or edit the spoken form manually if no phrase matches."
+            }
+            onClick={onApply}
+            size="sm"
+            variant="soft"
+          >
+            Apply repair
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

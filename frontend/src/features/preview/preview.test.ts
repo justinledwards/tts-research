@@ -226,6 +226,16 @@ describe("preview readiness model", () => {
     expect(model.createDisabledReason).toBe("Select a ready voice or TTS engine.");
   });
 
+  it("surfaces Review warnings without blocking create readiness", () => {
+    const model = resolvePreviewReadinessModel(readinessInput({ reviewWarningCount: 3 }));
+
+    expect(model.canCreate).toBe(true);
+    expect(model.rows.find((row) => row.id === "review")).toMatchObject({
+      detail: "3 review warnings need repair. Preview remains available while repairs continue.",
+      status: "warning",
+    });
+  });
+
   it("distinguishes missing, generating, failed, stale, and ready audio transitions", () => {
     const missing = resolvePreviewReadinessModel(
       readinessInput({ generatedAudioLifecycle: "missing" }),

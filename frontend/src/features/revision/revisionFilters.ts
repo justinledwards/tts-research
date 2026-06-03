@@ -105,6 +105,12 @@ export interface RevisionTriageGroup {
   items: RevisionTriageItem[];
 }
 
+export interface RevisionSpokenRepairReplacement {
+  currentSpoken: string;
+  original: string;
+  replacement: string;
+}
+
 export interface RevisionHealthSummary extends RevisionSummary {
   audioBlockers: number;
   clean: number;
@@ -415,6 +421,42 @@ export function composeReviewedSpeechText(blocks: readonly RevisionBlock[]): str
     .join("\n\n");
 }
 
+export function firstRevisionRepairBlockId(blocks: readonly RevisionBlock[]): string | null {
+  const firstRepairItem = buildRevisionTriageItems(blocks).find(
+    (item) => item.category !== "clean",
+  );
+  if (firstRepairItem) {
+    return firstRepairItem.block.id;
+  }
+  return blocks[0]?.id ?? null;
+}
+
+export function revisionBlockIsCleanApprovable(block: RevisionBlock): boolean {
+  return (
+    revisionBlockTriageCategory(block) === "clean" &&
+    block.status !== "approved" &&
+    block.spokenText.trim().length > 0
+  );
+}
+
+export function applyRevisionSpokenRepair(
+  spokenText: string,
+  repair: RevisionSpokenRepairReplacement,
+): string {
+  const replacement = repair.replacement.trim();
+  if (!replacement) {
+    return spokenText;
+  }
+  const candidates = uniqueRepairCandidates([repair.currentSpoken, repair.original]);
+  for (const candidate of candidates) {
+    const nextText = replaceFirstCaseInsensitive(spokenText, candidate, replacement);
+    if (nextText !== spokenText) {
+      return nextText;
+    }
+  }
+  return spokenText.trim() ? spokenText : replacement;
+}
+
 export function revisionBlockTriageCategory(block: RevisionBlock): RevisionTriageCategory {
   if (block.status === "retrying" || block.status === "regenerating") {
     return "audioBlocker";
@@ -619,4 +661,24 @@ function revisionBlockMatchesSearch(block: RevisionBlock, search: string): boole
     .join(" ")
     .toLowerCase()
     .includes(search);
+}
+
+function uniqueRepairCandidates(values: readonly string[]): string[] {
+  const candidates: string[] = [];
+  for (const value of values) {
+    const candidate = value.trim();
+    if (!candidate || candidates.some((item) => item.toLowerCase() === candidate.toLowerCase())) {
+      continue;
+    }
+    candidates.push(candidate);
+  }
+  return candidates;
+}
+
+function replaceFirstCaseInsensitive(text: string, search: string, replacement: string): string {
+  const index = text.toLowerCase().indexOf(search.toLowerCase());
+  if (index === -1) {
+    return text;
+  }
+  return `${text.slice(0, index)}${replacement}${text.slice(index + search.length)}`;
 }

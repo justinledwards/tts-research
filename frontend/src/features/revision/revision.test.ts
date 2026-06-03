@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import { applyRevisionBatchAction } from "./revisionBatchActions";
 import {
   DEFAULT_REVISION_FILTERS,
+  applyRevisionSpokenRepair,
   applyRevisionSessionState,
   buildRevisionTriageItems,
   composeReviewedSpeechText,
   deriveRevisionBlockStatus,
   filterRevisionBlocks,
+  firstRevisionRepairBlockId,
   groupRevisionTriageItems,
   normalizeRevisionPolicyNoteType,
+  revisionBlockIsCleanApprovable,
   revisionPreviewReadinessLabel,
   revisionFiltersAreDefault,
   revisionNextActionLabel,
@@ -153,6 +156,40 @@ describe("revision filters", () => {
     });
     expect(revisionPreviewReadinessLabel(summary)).toContain("blocker");
     expect(revisionNextActionLabel(summary)).toBe("Repair blockers");
+    expect(firstRevisionRepairBlockId(triageBlocks)).toBe("empty");
+    expect(revisionBlockIsCleanApprovable(triageBlocks[3])).toBe(false);
+    expect(
+      revisionBlockIsCleanApprovable(
+        block({
+          id: "clean-waiting",
+          status: "waiting",
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("applies pronunciation and normalization repairs into spoken text", () => {
+    expect(
+      applyRevisionSpokenRepair("Open A I builds tools.", {
+        currentSpoken: "Open A I",
+        original: "OpenAI",
+        replacement: "OpenAI",
+      }),
+    ).toBe("OpenAI builds tools.");
+    expect(
+      applyRevisionSpokenRepair("Dr. Rivera reads.", {
+        currentSpoken: "Doctor",
+        original: "Dr.",
+        replacement: "Doctor",
+      }),
+    ).toBe("Doctor Rivera reads.");
+    expect(
+      applyRevisionSpokenRepair("", {
+        currentSpoken: "A S R",
+        original: "ASR",
+        replacement: "A S R",
+      }),
+    ).toBe("A S R");
   });
 
   it("composes reviewed speech text from session edits and skipped decisions", () => {

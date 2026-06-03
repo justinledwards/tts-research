@@ -4,9 +4,16 @@ import {
 } from "../playback/generatedAudioLifecycle";
 import { OPERATIONAL_RECOVERY_LABELS } from "../operational-status";
 
-export type PreviewReadinessRowId = "audition" | "audio" | "policy" | "source" | "spoken" | "voice";
+export type PreviewReadinessRowId =
+  | "audition"
+  | "audio"
+  | "policy"
+  | "review"
+  | "source"
+  | "spoken"
+  | "voice";
 
-export type PreviewReadinessRowStatus = "blocked" | "ready" | "waiting" | "working";
+export type PreviewReadinessRowStatus = "blocked" | "ready" | "waiting" | "warning" | "working";
 
 export interface PreviewReadinessRow {
   readonly detail: string;
@@ -28,6 +35,7 @@ export interface PreviewReadinessModelInput {
   readonly hasSpokenText: boolean;
   readonly outputFormat: string;
   readonly policyLabel: string;
+  readonly reviewWarningCount?: number;
   readonly runLabel: string;
   readonly scopeLabel: string;
   readonly sourceError?: string | null;
@@ -61,6 +69,7 @@ export function resolvePreviewReadinessModel(
   const source = resolveSourceReadiness(input);
   const spoken = resolveSpokenReadiness(input, source.status === "ready");
   const voice = resolveVoiceReadiness(input);
+  const review = resolveReviewReadiness(input, source.status === "ready");
   const canAudition =
     source.status === "ready" && spoken.status === "ready" && voice.status === "ready";
   const audio = resolveGeneratedAudioReadiness(input.generatedAudioLifecycle);
@@ -103,6 +112,7 @@ export function resolvePreviewReadinessModel(
     rows: [
       source,
       spoken,
+      review,
       voice,
       {
         detail: `${input.policyLabel} applied to ${input.scopeLabel}.`,
@@ -175,6 +185,37 @@ function resolveSpokenReadiness(
     detail: "Listener-ready text is available for preview and generation.",
     id: "spoken",
     label: "Spoken form",
+    status: "ready",
+  };
+}
+
+function resolveReviewReadiness(
+  input: PreviewReadinessModelInput,
+  sourceReady: boolean,
+): PreviewReadinessRow {
+  const warningCount = Math.max(0, input.reviewWarningCount ?? 0);
+  if (!sourceReady) {
+    return {
+      detail: "Review unlocks after a source is ready.",
+      id: "review",
+      label: "Review",
+      status: "waiting",
+    };
+  }
+  if (warningCount > 0) {
+    return {
+      detail: `${warningCount.toString()} review ${
+        warningCount === 1 ? "warning needs" : "warnings need"
+      } repair. Preview remains available while repairs continue.`,
+      id: "review",
+      label: "Review",
+      status: "warning",
+    };
+  }
+  return {
+    detail: "No Review repair warnings are attached to this source.",
+    id: "review",
+    label: "Review",
     status: "ready",
   };
 }
