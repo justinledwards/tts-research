@@ -941,16 +941,30 @@ export async function getProjectStorageSummary(id: string): Promise<ProjectStora
   return response.json() as Promise<ProjectStorageSummary>;
 }
 
-export async function getProjectBundleSummary(id: string): Promise<ProjectBundleSummary> {
-  const response = await fetch(`${apiBaseUrl}/api/projects/${id}/bundle/summary`);
+export async function getProjectBundleSummary(
+  id: string,
+  options: { includeGeneratedAudio?: boolean } = {},
+): Promise<ProjectBundleSummary> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${id}/bundle/summary${bundleAudioQuery(options.includeGeneratedAudio)}`,
+  );
   if (!response.ok) {
     throw new Error(await readError(response));
   }
   return response.json() as Promise<ProjectBundleSummary>;
 }
 
-export function projectBundleDownloadUrl(id: string): string {
-  return `${apiBaseUrl}/api/projects/${id}/bundle`;
+export function projectBundleDownloadUrl(
+  id: string,
+  options: { includeGeneratedAudio?: boolean } = {},
+): string {
+  return `${apiBaseUrl}/api/projects/${id}/bundle${bundleAudioQuery(options.includeGeneratedAudio)}`;
+}
+
+function bundleAudioQuery(includeGeneratedAudio: boolean | undefined): string {
+  return typeof includeGeneratedAudio === "boolean"
+    ? `?includeGeneratedAudio=${String(includeGeneratedAudio)}`
+    : "";
 }
 
 export async function previewProjectBundle(file: File): Promise<ProjectBundlePreview> {

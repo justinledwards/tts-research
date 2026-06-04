@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { StatusChip } from "./design";
+import type { BundleOperationReport } from "./BundlePanels";
 import { useReaderModalLifecycle } from "./features/reader-accessibility";
 import { formatDuration } from "./format";
 import type {
@@ -56,6 +57,7 @@ import {
   formatDate,
   resolveProjectQualityScore,
   type CommandCenterSectionId,
+  type WorkspaceActivitySummary,
 } from "./WorkspaceDrawerHelpers";
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -67,6 +69,8 @@ export function WorkspaceDrawer({
   adapterDiagnostics,
   adapterDiagnosticsError,
   bookSources,
+  bundleActivity,
+  bundleReport,
   canCreate,
   isOpen,
   job,
@@ -130,6 +134,8 @@ export function WorkspaceDrawer({
   adapterDiagnostics: Record<string, AdapterDiagnostics> | null;
   adapterDiagnosticsError: string | null;
   bookSources: BookSource[];
+  bundleActivity: WorkspaceActivitySummary | null;
+  bundleReport: BundleOperationReport | null;
   canCreate: boolean;
   isOpen: boolean;
   job: VoiceJob | null;
@@ -303,19 +309,8 @@ export function WorkspaceDrawer({
     () => sortCommandCenterProjects(projects, activeProjectId),
     [activeProjectId, projects],
   );
-  const activitySummaries = useMemo(
-    () =>
-      buildWorkspaceActivitySummaries({
-        cancelingProfileSourceId,
-        cancelingTargetKey,
-        job,
-        onCancelJob,
-        onCancelProfileSource,
-        onCancelProfileTarget,
-        profileSource,
-        profiles,
-      }),
-    [
+  const activitySummaries = useMemo(() => {
+    const baseActivities = buildWorkspaceActivitySummaries({
       cancelingProfileSourceId,
       cancelingTargetKey,
       job,
@@ -324,8 +319,25 @@ export function WorkspaceDrawer({
       onCancelProfileTarget,
       profileSource,
       profiles,
-    ],
-  );
+    });
+    if (!bundleActivity) {
+      return baseActivities;
+    }
+    return [
+      bundleActivity,
+      ...baseActivities.filter((activity) => activity.id !== bundleActivity.id),
+    ];
+  }, [
+    bundleActivity,
+    cancelingProfileSourceId,
+    cancelingTargetKey,
+    job,
+    onCancelJob,
+    onCancelProfileSource,
+    onCancelProfileTarget,
+    profileSource,
+    profiles,
+  ]);
 
   if (!isOpen) {
     return null;
@@ -355,7 +367,8 @@ export function WorkspaceDrawer({
     importsExports: "",
     overview: "",
     projects: projects.length.toString(),
-    reports: metrics || metricsError || projectStorage || projectStorageError ? "1" : "",
+    reports:
+      metrics || metricsError || projectStorage || projectStorageError || bundleReport ? "1" : "",
   };
 
   const setActiveSection = (section: CommandCenterSectionId) => {
@@ -685,6 +698,7 @@ export function WorkspaceDrawer({
             {effectiveActiveSection === "reports" ? (
               <WorkspaceSection id="command-center-reports" title="Reports">
                 <HealthReportsPanel
+                  bundleReport={bundleReport}
                   report={healthReport}
                   onOpenDiagnostics={() => {
                     onOpenSettings({ groupId: "diagnostics", layerId: "expert", scope: "machine" });
@@ -1692,9 +1706,11 @@ function generatedAudioVoiceLabel(item: VoiceJob): string {
 }
 
 function HealthReportsPanel({
+  bundleReport,
   report,
   onOpenDiagnostics,
 }: Readonly<{
+  bundleReport: BundleOperationReport | null;
   report: HealthReport;
   onOpenDiagnostics: () => void;
 }>) {
@@ -1758,6 +1774,7 @@ function HealthReportsPanel({
           <HealthReportCardRow card={card} key={card.label} />
         ))}
       </div>
+      {bundleReport ? <BundleOperationReportCard report={bundleReport} /> : null}
       {report.statusChips.length > 0 ? (
         <div className="rounded-md border p-4 vs-border vs-surface">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
@@ -1794,6 +1811,61 @@ function HealthReportsPanel({
         </button>
       </div>
     </div>
+  );
+}
+
+function BundleOperationReportCard({ report }: Readonly<{ report: BundleOperationReport }>) {
+  const validationCount = report.validation?.length ?? 0;
+  const dependencyCount = report.dependencies?.length ?? 0;
+  const conflictCount = report.conflicts?.length ?? 0;
+  const excludedCount = report.excluded?.length ?? 0;
+  const warnings = report.warnings ?? [];
+  let statusTone: "danger" | "warning" | "success" = "success";
+  if (report.status === "blocked") {
+    statusTone = "danger";
+  } else if (report.status === "warning") {
+    statusTone = "warning";
+  }
+
+  return (
+    <article className="rounded-md border p-4 vs-border vs-surface">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="vs-muted text-xs font-semibold uppercase tracking-wide">
+            Latest bundle report
+          </p>
+          <h3 className="mt-1 truncate text-base font-semibold" title={report.title}>
+            {report.title}
+          </h3>
+          <p className="vs-muted mt-1 break-words text-sm leading-6">{report.detail}</p>
+        </div>
+        <StatusChip tone={statusTone}>{report.status}</StatusChip>
+      </div>
+      <DetailGrid
+        rows={[
+          ["Generated audio", report.generatedAudioIncluded === false ? "Excluded" : "Included"],
+          ["Audio files", String(report.generatedAudio ?? 0)],
+          ["Omitted audio", String(report.omittedGeneratedAudio ?? 0)],
+          ["Validation", validationCount.toLocaleString()],
+          ["Dependencies", dependencyCount.toLocaleString()],
+          ["Conflicts", conflictCount.toLocaleString()],
+          ["Exclusions", excludedCount.toLocaleString()],
+          ["Updated", formatDate(report.updatedAt)],
+        ]}
+      />
+      {warnings.length > 0 ? (
+        <div className="mt-3 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-3 text-xs text-[var(--vs-status-warning)]">
+          <p className="font-semibold">Bundle warnings</p>
+          <ul className="mt-2 grid gap-1">
+            {warnings.slice(0, 5).map((warning) => (
+              <li className="break-words" key={warning}>
+                {warning}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </article>
   );
 }
 

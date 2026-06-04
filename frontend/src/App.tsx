@@ -12,7 +12,11 @@ import {
   type SetStateAction,
 } from "react";
 import { type StudioMode, TopProductBar } from "./AppShell";
-import type { BundlePanelMode } from "./BundlePanels";
+import type {
+  BundleOperationActivity,
+  BundleOperationReport,
+  BundlePanelMode,
+} from "./BundlePanels";
 import {
   apiBaseUrl,
   audioSource,
@@ -2327,6 +2331,11 @@ export function App() {
   }, [commandMetadata, isCommandPaletteOpen]);
   const [bundlePanelMode, setBundlePanelMode] = useState<BundlePanelMode>("export");
   const [isBundlePanelOpen, setIsBundlePanelOpen] = useState(false);
+  const [bundleOperationActivity, setBundleOperationActivity] =
+    useState<BundleOperationActivity | null>(null);
+  const [bundleOperationReport, setBundleOperationReport] = useState<BundleOperationReport | null>(
+    null,
+  );
   const openCommandCenter = useCallback((section: CommandCenterSectionId = "overview") => {
     setCommandCenterSection(section);
     setIsCommandCenterOpen(true);
@@ -7437,6 +7446,8 @@ export function App() {
             adapterDiagnostics={adapterDiagnostics}
             adapterDiagnosticsError={adapterDiagnosticsError}
             bookSources={bookSources}
+            bundleActivity={bundleOperationActivity}
+            bundleReport={bundleOperationReport}
             canCreate={canCreateCurrentSource}
             isOpen={isCommandCenterOpen}
             job={job}
@@ -7681,6 +7692,8 @@ export function App() {
                 setBundleReturnSection(null);
               }
             }}
+            onOperationActivityChange={setBundleOperationActivity}
+            onOperationReportChange={setBundleOperationReport}
             onImported={handleBundleImported}
           />
         </Suspense>

@@ -1,3 +1,12 @@
+## 2026-06-04 12:44 CEST - Safe Portable Bundle Import Export
+- [x] Inspect existing bundle APIs and staged Command Center changes
+- [x] Add backend export options, sanitization, preview validation, and safer import staging
+- [x] Update Command Center bundle UI for generated-audio export and import conflict reports
+- [x] Add backend and frontend regression coverage
+- [x] Run focused and project checks
+- Validation: focused backend bundle/httpapi tests passed; focused frontend Command Center/Reports tests passed; frontend typecheck passed; backend tests passed; frontend tests passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome lint warnings.
+- [x] Commit work package
+
 ## 2026-06-04 10:31 CEST - Studio Settings Scoped Defaults
 - [x] Add scoped settings contract and audit model
 - [x] Update preset preview, apply, confirmation, and reset flows

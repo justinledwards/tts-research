@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -10,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -1585,6 +1587,212 @@ func TestProjectBundleImportCopyAndReplace(t *testing.T) {
 	if len(targetJobs) != 1 || targetJobs[0].ID == oldJob.ID {
 		t.Fatalf("replaced project jobs = %#v, want old job removed and bundle job imported", targetJobs)
 	}
+}
+
+func TestProjectBundleExportCanOmitGeneratedAudio(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("No Audio Bundle")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		ProjectID: project.ID,
+		Text:      "Generated audio can be intentionally omitted.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+
+	options := pipeline.ProjectBundleExportOptions{IncludeGeneratedAudio: false}
+	summary, err := service.GetProjectBundleSummary(project.ID, options)
+	if err != nil {
+		t.Fatalf("GetProjectBundleSummary returned error: %v", err)
+	}
+	if summary.GeneratedAudio != 0 || summary.OmittedGeneratedAudio != 1 || summary.OmittedGeneratedBytes <= 0 {
+		t.Fatalf("summary audio fields = %#v, want generated audio omitted", summary)
+	}
+	if !bundleContentIncluded(summary.Contents, "generatedAudio", false) {
+		t.Fatalf("summary contents = %#v, want generatedAudio marked excluded", summary.Contents)
+	}
+
+	bundle, filename, err := service.ExportProjectBundle(project.ID, options)
+	if err != nil {
+		t.Fatalf("ExportProjectBundle returned error: %v", err)
+	}
+	bundlePath := writeBundle(t, filename, bundle)
+	preview, err := service.PreviewProjectBundle(bundlePath)
+	if err != nil {
+		t.Fatalf("PreviewProjectBundle returned error: %v", err)
+	}
+	if !preview.Valid || preview.GeneratedAudio != 0 || preview.Manifest == nil {
+		t.Fatalf("preview = %#v, want valid bundle without generated audio", preview)
+	}
+	if preview.Manifest.GeneratedAudioIncluded || preview.Manifest.OmittedGeneratedAudio != 1 {
+		t.Fatalf("manifest audio fields = %#v, want omitted audio recorded", preview.Manifest)
+	}
+	for _, file := range preview.Manifest.Files {
+		if file.Role == "job_audio" {
+			t.Fatalf("manifest files = %#v, want no job audio file", preview.Manifest.Files)
+		}
+	}
+	imported, err := service.ImportProjectBundle(
+		bundlePath,
+		pipeline.ProjectBundleImportRequest{Mode: pipeline.BundleImportModeCopy},
+	)
+	if err != nil {
+		t.Fatalf("ImportProjectBundle returned error: %v", err)
+	}
+	if len(imported.Jobs) != 1 || imported.Jobs[0].Status != pipeline.JobStatusFailed || !imported.Jobs[0].Retriable {
+		t.Fatalf("imported jobs = %#v, want retriable audio regeneration state", imported.Jobs)
+	}
+}
+
+func TestProjectBundleManifestSanitizesRuntimeFields(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("Sanitized Bundle")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		EngineOptions: map[string]string{
+			"apiKey":    "do-not-export",
+			"lang":      "en",
+			"modelPath": "/models/private",
+		},
+		ProjectID: project.ID,
+		Text:      "Sensitive runtime fields stay out of manifests.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+
+	bundle, filename, err := service.ExportProjectBundle(project.ID)
+	if err != nil {
+		t.Fatalf("ExportProjectBundle returned error: %v", err)
+	}
+	preview, err := service.PreviewProjectBundle(writeBundle(t, filename, bundle))
+	if err != nil {
+		t.Fatalf("PreviewProjectBundle returned error: %v", err)
+	}
+	if preview.Manifest == nil || len(preview.Manifest.Jobs) != 1 {
+		t.Fatalf("preview manifest = %#v, want one job", preview.Manifest)
+	}
+	exportedJob := preview.Manifest.Jobs[0]
+	if exportedJob.AudioPath != "" || exportedJob.AudioURL != "" || exportedJob.AudioPartialURL != "" {
+		t.Fatalf("exported job audio fields = %#v, want portable manifest paths", exportedJob)
+	}
+	if exportedJob.EngineOptions["apiKey"] != "" || exportedJob.EngineOptions["modelPath"] != "" {
+		t.Fatalf("engine options = %#v, want secret/path options omitted", exportedJob.EngineOptions)
+	}
+	if exportedJob.EngineOptions["lang"] != "en" {
+		t.Fatalf("engine options = %#v, want non-sensitive option preserved", exportedJob.EngineOptions)
+	}
+	if !bundleContentIncluded(preview.Excluded, "providerSecrets", false) ||
+		!bundleContentIncluded(preview.Excluded, "modelPaths", false) {
+		t.Fatalf("excluded = %#v, want sensitive-data exclusions", preview.Excluded)
+	}
+}
+
+func TestProjectBundlePreviewBlocksInvalidHashesWithoutMutation(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("Tampered Bundle")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		ProjectID: project.ID,
+		Text:      "Checksum validation catches tampered bundles.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	bundle, filename, err := service.ExportProjectBundle(project.ID)
+	if err != nil {
+		t.Fatalf("ExportProjectBundle returned error: %v", err)
+	}
+	bundlePath := writeBundle(t, filename, tamperFirstBundleHash(t, bundle))
+	beforeProjects := service.ListProjects()
+
+	preview, err := service.PreviewProjectBundle(bundlePath)
+	if err != nil {
+		t.Fatalf("PreviewProjectBundle returned error: %v", err)
+	}
+	if preview.Valid || len(preview.Errors) == 0 {
+		t.Fatalf("preview = %#v, want invalid checksum report", preview)
+	}
+	projects := service.ListProjects()
+	if len(projects) != len(beforeProjects) {
+		t.Fatalf("projects = %#v, preview should not mutate state from %#v", projects, beforeProjects)
+	}
+}
+
+func bundleContentIncluded(
+	items []pipeline.ProjectBundleContentItem,
+	key string,
+	included bool,
+) bool {
+	for _, item := range items {
+		if item.Key == key && item.Included == included {
+			return true
+		}
+	}
+	return false
+}
+
+func writeBundle(t *testing.T, filename string, bundle []byte) string {
+	t.Helper()
+	bundlePath := filepath.Join(t.TempDir(), filename)
+	if err := os.WriteFile(bundlePath, bundle, 0o644); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	return bundlePath
+}
+
+func tamperFirstBundleHash(t *testing.T, bundle []byte) []byte {
+	t.Helper()
+	reader, err := zip.NewReader(bytes.NewReader(bundle), int64(len(bundle)))
+	if err != nil {
+		t.Fatalf("open bundle reader: %v", err)
+	}
+	var output bytes.Buffer
+	writer := zip.NewWriter(&output)
+	hashPattern := regexp.MustCompile(`"sha256":\s*"[a-f0-9]{64}"`)
+	for _, file := range reader.File {
+		handle, err := file.Open()
+		if err != nil {
+			t.Fatalf("open zip file %s: %v", file.Name, err)
+		}
+		var payload bytes.Buffer
+		if _, err := payload.ReadFrom(handle); err != nil {
+			_ = handle.Close()
+			t.Fatalf("read zip file %s: %v", file.Name, err)
+		}
+		_ = handle.Close()
+		data := payload.Bytes()
+		if file.Name == "manifest.json" {
+			data = hashPattern.ReplaceAll(data, []byte(`"sha256": "0000000000000000000000000000000000000000000000000000000000000000"`))
+		}
+		entry, err := writer.Create(file.Name)
+		if err != nil {
+			t.Fatalf("create zip file %s: %v", file.Name, err)
+		}
+		if _, err := entry.Write(data); err != nil {
+			t.Fatalf("write zip file %s: %v", file.Name, err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close tampered bundle: %v", err)
+	}
+	return output.Bytes()
 }
 
 func TestCreateBookSourceImportsEPUBWordSpans(t *testing.T) {

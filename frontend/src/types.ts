@@ -724,9 +724,37 @@ export type ThemeName = "light" | "dark" | "dawn" | "night" | "papery";
 export interface ProjectBundleContentItem {
   key: string;
   label: string;
+  detail?: string;
   included: boolean;
   required: boolean;
   estimatedBytes?: number;
+}
+
+export interface ProjectBundleConflict {
+  key: string;
+  label: string;
+  detail: string;
+  severity: string;
+  blocking: boolean;
+  resolutions?: BundleImportMode[];
+}
+
+export interface ProjectBundleDependency {
+  key: string;
+  label: string;
+  detail: string;
+  status: string;
+  currentVersion?: string;
+  requiredVersion?: string;
+  missing?: boolean;
+}
+
+export interface ProjectBundleValidationItem {
+  key: string;
+  label: string;
+  detail: string;
+  status: string;
+  blocking?: boolean;
 }
 
 export interface ProjectBundleQuality {
@@ -756,6 +784,11 @@ export interface ProjectBundleManifest {
   providerVersions?: Record<string, string>;
   quality: ProjectBundleQuality;
   hashes?: Record<string, string>;
+  contents?: ProjectBundleContentItem[];
+  excluded?: ProjectBundleContentItem[];
+  generatedAudioIncluded?: boolean;
+  omittedGeneratedAudio?: number;
+  omittedGeneratedBytes?: number;
 }
 
 export interface ProjectBundleSummary {
@@ -767,8 +800,12 @@ export interface ProjectBundleSummary {
   chapterCount: number;
   profileCount: number;
   generatedAudio: number;
+  generatedAudioIncluded: boolean;
+  omittedGeneratedAudio?: number;
+  omittedGeneratedBytes?: number;
   durationMs: number;
   contents: ProjectBundleContentItem[];
+  excluded?: ProjectBundleContentItem[];
   warnings?: string[];
   createdAt: string;
 }
@@ -786,6 +823,13 @@ export interface ProjectBundlePreview {
   warnings?: string[];
   errors?: string[];
   manifest?: ProjectBundleManifest;
+  contents?: ProjectBundleContentItem[];
+  excluded?: ProjectBundleContentItem[];
+  conflicts?: ProjectBundleConflict[];
+  dependencies?: ProjectBundleDependency[];
+  validation?: ProjectBundleValidationItem[];
+  availableImportModes?: BundleImportMode[];
+  recommendedMode?: BundleImportMode;
 }
 
 export type BundleImportMode = "copy" | "merge" | "replace";

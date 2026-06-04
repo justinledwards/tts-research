@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { formatDuration } from "./format";
 import type {
@@ -106,7 +106,10 @@ export function BundleContentRow({
         <p className="truncate text-sm font-semibold" title={item.label}>
           {item.label}
         </p>
-        <p className="vs-muted text-xs">{item.required ? "Required" : "Optional"}</p>
+        <p className="vs-muted text-xs">
+          {item.required ? "Required" : "Optional"}
+          {item.detail ? ` · ${item.detail}` : ""}
+        </p>
       </div>
       <span className="vs-muted shrink-0 text-xs">
         {item.estimatedBytes ? formatBytes(item.estimatedBytes) : ""}
@@ -147,7 +150,10 @@ export function ExportReviewSummary({ summary }: Readonly<{ summary: ProjectBund
       <div className="grid gap-2 sm:grid-cols-3">
         <BundleStat label="Generated audio" value={summary.generatedAudio.toString()} />
         <BundleStat label="Manifest" value={summary.version.replace("voice-studio.", "")} />
-        <BundleStat label="Compatibility" value="Portable v1" />
+        <BundleStat
+          label="Audio policy"
+          value={summary.generatedAudioIncluded ? "Included" : "Excluded"}
+        />
       </div>
     </section>
   );
@@ -232,7 +238,7 @@ export function BundlePreviewCard({ preview }: Readonly<{ preview: ProjectBundle
       <div className="grid gap-2 sm:grid-cols-3">
         <BundleStat
           label="Quality"
-          value={`${String(Math.round(preview.quality.overallScore * 100))}%`}
+          value={`${String(Math.round(preview.quality.overallScore))}%`}
         />
         <BundleStat label="Duration" value={formatDuration(preview.quality.generatedDurationMs)} />
         <BundleStat label="Generated audio" value={String(preview.generatedAudio ?? 0)} />
@@ -247,6 +253,26 @@ export function BundlePreviewCard({ preview }: Readonly<{ preview: ProjectBundle
           </span>
         ))}
       </div>
+      <PreviewReportList
+        emptyLabel="Bundle files validated."
+        items={preview.validation ?? []}
+        title="Validation"
+      />
+      <PreviewReportList
+        emptyLabel="No missing provider or model dependencies reported."
+        items={preview.dependencies ?? []}
+        title="Dependencies"
+      />
+      <PreviewReportList
+        emptyLabel="No local project conflicts detected."
+        items={preview.conflicts ?? []}
+        title="Conflicts"
+      />
+      <PreviewContentList
+        emptyLabel="No exclusion manifest was supplied."
+        items={preview.excluded ?? preview.manifest?.excluded ?? []}
+        title="Excluded from bundle"
+      />
       {preview.warnings && preview.warnings.length > 0 ? (
         <ul className="grid gap-1 text-sm text-[var(--vs-status-warning)]">
           {preview.warnings.map((warning) => (
@@ -257,5 +283,69 @@ export function BundlePreviewCard({ preview }: Readonly<{ preview: ProjectBundle
         </ul>
       ) : null}
     </section>
+  );
+}
+
+type PreviewReportItem = Readonly<{
+  blocking?: boolean;
+  detail: string;
+  key: string;
+  label: string;
+  missing?: boolean;
+  severity?: string;
+  status?: string;
+}>;
+
+function PreviewReportList({
+  emptyLabel,
+  items,
+  title,
+}: Readonly<{ emptyLabel: string; items: readonly PreviewReportItem[]; title: string }>) {
+  return (
+    <div className="grid gap-2 rounded-md border p-3 vs-raised">
+      <p className="text-xs font-semibold uppercase tracking-wide">{title}</p>
+      {items.length === 0 ? (
+        <p className="vs-muted text-xs">{emptyLabel}</p>
+      ) : (
+        <ul className="grid gap-2">
+          {items.map((item) => (
+            <li className="grid gap-1 rounded-md border p-2 text-xs vs-border" key={item.key}>
+              <span className="font-semibold">
+                {item.label} ·{" "}
+                {item.blocking || item.missing
+                  ? "Blocked"
+                  : (item.status ?? item.severity ?? "Review")}
+              </span>
+              <span className="vs-muted break-words">{item.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PreviewContentList({
+  emptyLabel,
+  items,
+  title,
+}: Readonly<{
+  emptyLabel: string;
+  items: readonly ProjectBundleSummary["contents"][number][];
+  title: string;
+}>) {
+  return (
+    <div className="grid gap-2 rounded-md border p-3 vs-raised">
+      <p className="text-xs font-semibold uppercase tracking-wide">{title}</p>
+      {items.length === 0 ? (
+        <p className="vs-muted text-xs">{emptyLabel}</p>
+      ) : (
+        <div className="grid gap-2">
+          {items.map((item) => (
+            <BundleContentRow item={item} key={item.key} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

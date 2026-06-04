@@ -122,6 +122,66 @@ describe("Command Center", () => {
     expect(bundleMarkup).toContain("Export Current");
   });
 
+  it("surfaces bundle operation activity and latest bundle report", () => {
+    const activityMarkup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="activity"
+        bundleActivity={{
+          cancelLabel: "Cancel",
+          canCancel: false,
+          detail: "Import preview found blocking validation issues.",
+          id: "bundle:import",
+          label: "Bundle import",
+          status: "attention",
+        }}
+      />,
+    );
+    const reportMarkup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="reports"
+        bundleReport={{
+          detail: "portable.voice-studio.zip · generated audio excluded.",
+          excluded: [
+            {
+              detail: "Provider tokens are never exported.",
+              included: false,
+              key: "providerSecrets",
+              label: "Provider secrets",
+              required: false,
+            },
+          ],
+          generatedAudio: 0,
+          generatedAudioIncluded: false,
+          kind: "import",
+          omittedGeneratedAudio: 2,
+          status: "blocked",
+          title: "Import preview for Portable",
+          updatedAt: "2026-06-04T10:00:00.000Z",
+          validation: [
+            {
+              blocking: true,
+              detail: "jobs/audio.wav did not match its manifest checksum.",
+              key: "hash",
+              label: "Hash mismatch",
+              status: "error",
+            },
+          ],
+          warnings: ["Generated audio is not included."],
+        }}
+      />,
+    );
+
+    expect(activityMarkup).toContain("Bundle import");
+    expect(activityMarkup).toContain("Import preview found blocking validation issues.");
+    expect(reportMarkup).toContain("Latest bundle report");
+    expect(reportMarkup).toContain("Import preview for Portable");
+    expect(reportMarkup).toContain("Generated audio");
+    expect(reportMarkup).toContain("Excluded");
+    expect(reportMarkup).toContain("Bundle warnings");
+  });
+
   it("shows reports and storage summary", () => {
     const markup = renderToStaticMarkup(<WorkspaceDrawer {...props()} activeSection="reports" />);
 
@@ -231,6 +291,8 @@ function props(): Parameters<typeof WorkspaceDrawer>[0] {
     adapterDiagnostics: adapterDiagnostics(),
     adapterDiagnosticsError: null,
     bookSources: [bookSource()],
+    bundleActivity: null,
+    bundleReport: null,
     cancelingProfileSourceId: null,
     cancelingTargetKey: null,
     canCreate: true,

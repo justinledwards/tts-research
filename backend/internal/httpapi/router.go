@@ -577,7 +577,11 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Get("/api/projects/:id/bundle/summary", func(ctx fiber.Ctx) error {
-		summary, err := service.GetProjectBundleSummary(ctx.Params("id"))
+		options, err := bundleExportOptionsFromQuery(ctx)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		summary, err := service.GetProjectBundleSummary(ctx.Params("id"), options)
 		if err != nil {
 			return notFound(ctx, err)
 		}
@@ -585,7 +589,11 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Get("/api/projects/:id/bundle", func(ctx fiber.Ctx) error {
-		bundle, filename, err := service.ExportProjectBundle(ctx.Params("id"))
+		options, err := bundleExportOptionsFromQuery(ctx)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		bundle, filename, err := service.ExportProjectBundle(ctx.Params("id"), options)
 		if err != nil {
 			return notFound(ctx, err)
 		}
@@ -1359,6 +1367,20 @@ func saveUploadedBundle(ctx fiber.Ctx) (string, func(), error) {
 		return "", nil, ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize uploaded bundle"))
 	}
 	return tempPath, cleanup, nil
+}
+
+func bundleExportOptionsFromQuery(ctx fiber.Ctx) (pipeline.ProjectBundleExportOptions, error) {
+	options := pipeline.ProjectBundleExportOptions{IncludeGeneratedAudio: true}
+	raw := strings.TrimSpace(ctx.Query("includeGeneratedAudio"))
+	if raw == "" {
+		return options, nil
+	}
+	includeGeneratedAudio, err := strconv.ParseBool(raw)
+	if err != nil {
+		return options, fmt.Errorf("invalid includeGeneratedAudio value")
+	}
+	options.IncludeGeneratedAudio = includeGeneratedAudio
+	return options, nil
 }
 
 func saveUploadedBooks(ctx fiber.Ctx) ([]pipeline.BookSourceUpload, pipeline.BookSourceImportOptions, func(), error) {

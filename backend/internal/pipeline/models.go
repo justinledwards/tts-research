@@ -645,24 +645,56 @@ type ResearchModuleDiagnostics struct {
 type ProjectBundleContentItem struct {
 	Key            string `json:"key"`
 	Label          string `json:"label"`
+	Detail         string `json:"detail,omitempty"`
 	Included       bool   `json:"included"`
 	Required       bool   `json:"required"`
 	EstimatedBytes int64  `json:"estimatedBytes,omitempty"`
 }
 
+type ProjectBundleConflict struct {
+	Key         string             `json:"key"`
+	Label       string             `json:"label"`
+	Detail      string             `json:"detail"`
+	Severity    string             `json:"severity"`
+	Blocking    bool               `json:"blocking"`
+	Resolutions []BundleImportMode `json:"resolutions,omitempty"`
+}
+
+type ProjectBundleDependency struct {
+	Key             string `json:"key"`
+	Label           string `json:"label"`
+	Detail          string `json:"detail"`
+	Status          string `json:"status"`
+	CurrentVersion  string `json:"currentVersion,omitempty"`
+	RequiredVersion string `json:"requiredVersion,omitempty"`
+	Missing         bool   `json:"missing,omitempty"`
+}
+
+type ProjectBundleValidationItem struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Detail   string `json:"detail"`
+	Status   string `json:"status"`
+	Blocking bool   `json:"blocking,omitempty"`
+}
+
 type ProjectBundleSummary struct {
-	ProjectID      string                     `json:"projectId"`
-	ProjectName    string                     `json:"projectName"`
-	Version        string                     `json:"version"`
-	FileName       string                     `json:"fileName"`
-	EstimatedBytes int64                      `json:"estimatedBytes"`
-	ChapterCount   int                        `json:"chapterCount"`
-	ProfileCount   int                        `json:"profileCount"`
-	GeneratedAudio int                        `json:"generatedAudio"`
-	DurationMS     int                        `json:"durationMs"`
-	Contents       []ProjectBundleContentItem `json:"contents"`
-	Warnings       []string                   `json:"warnings,omitempty"`
-	CreatedAt      time.Time                  `json:"createdAt"`
+	ProjectID              string                     `json:"projectId"`
+	ProjectName            string                     `json:"projectName"`
+	Version                string                     `json:"version"`
+	FileName               string                     `json:"fileName"`
+	EstimatedBytes         int64                      `json:"estimatedBytes"`
+	ChapterCount           int                        `json:"chapterCount"`
+	ProfileCount           int                        `json:"profileCount"`
+	GeneratedAudio         int                        `json:"generatedAudio"`
+	GeneratedAudioIncluded bool                       `json:"generatedAudioIncluded"`
+	OmittedGeneratedAudio  int                        `json:"omittedGeneratedAudio,omitempty"`
+	OmittedGeneratedBytes  int64                      `json:"omittedGeneratedBytes,omitempty"`
+	DurationMS             int                        `json:"durationMs"`
+	Contents               []ProjectBundleContentItem `json:"contents"`
+	Excluded               []ProjectBundleContentItem `json:"excluded,omitempty"`
+	Warnings               []string                   `json:"warnings,omitempty"`
+	CreatedAt              time.Time                  `json:"createdAt"`
 }
 
 type ProjectBundleFile struct {
@@ -673,17 +705,22 @@ type ProjectBundleFile struct {
 }
 
 type ProjectBundleManifest struct {
-	Version          string               `json:"version"`
-	CreatedAt        time.Time            `json:"createdAt"`
-	AppVersion       string               `json:"appVersion"`
-	Project          VoiceProject         `json:"project"`
-	Jobs             []VoiceJob           `json:"jobs"`
-	Profiles         []VoiceProfile       `json:"profiles"`
-	Books            []BookSource         `json:"books,omitempty"`
-	Files            []ProjectBundleFile  `json:"files"`
-	ProviderVersions map[string]string    `json:"providerVersions,omitempty"`
-	Quality          ProjectBundleQuality `json:"quality"`
-	Hashes           map[string]string    `json:"hashes,omitempty"`
+	Version                string                     `json:"version"`
+	CreatedAt              time.Time                  `json:"createdAt"`
+	AppVersion             string                     `json:"appVersion"`
+	Project                VoiceProject               `json:"project"`
+	Jobs                   []VoiceJob                 `json:"jobs"`
+	Profiles               []VoiceProfile             `json:"profiles"`
+	Books                  []BookSource               `json:"books,omitempty"`
+	Files                  []ProjectBundleFile        `json:"files"`
+	ProviderVersions       map[string]string          `json:"providerVersions,omitempty"`
+	Quality                ProjectBundleQuality       `json:"quality"`
+	Hashes                 map[string]string          `json:"hashes,omitempty"`
+	Contents               []ProjectBundleContentItem `json:"contents,omitempty"`
+	Excluded               []ProjectBundleContentItem `json:"excluded,omitempty"`
+	GeneratedAudioIncluded bool                       `json:"generatedAudioIncluded"`
+	OmittedGeneratedAudio  int                        `json:"omittedGeneratedAudio,omitempty"`
+	OmittedGeneratedBytes  int64                      `json:"omittedGeneratedBytes,omitempty"`
 }
 
 type ProjectBundleQuality struct {
@@ -695,18 +732,25 @@ type ProjectBundleQuality struct {
 }
 
 type ProjectBundlePreview struct {
-	Valid          bool                   `json:"valid"`
-	Version        string                 `json:"version,omitempty"`
-	ProjectName    string                 `json:"projectName,omitempty"`
-	ChapterCount   int                    `json:"chapterCount,omitempty"`
-	ProfileCount   int                    `json:"profileCount,omitempty"`
-	GeneratedAudio int                    `json:"generatedAudio,omitempty"`
-	EstimatedBytes int64                  `json:"estimatedBytes,omitempty"`
-	Quality        ProjectBundleQuality   `json:"quality"`
-	Compatibility  []string               `json:"compatibility"`
-	Warnings       []string               `json:"warnings,omitempty"`
-	Errors         []string               `json:"errors,omitempty"`
-	Manifest       *ProjectBundleManifest `json:"manifest,omitempty"`
+	Valid                bool                          `json:"valid"`
+	Version              string                        `json:"version,omitempty"`
+	ProjectName          string                        `json:"projectName,omitempty"`
+	ChapterCount         int                           `json:"chapterCount,omitempty"`
+	ProfileCount         int                           `json:"profileCount,omitempty"`
+	GeneratedAudio       int                           `json:"generatedAudio,omitempty"`
+	EstimatedBytes       int64                         `json:"estimatedBytes,omitempty"`
+	Quality              ProjectBundleQuality          `json:"quality"`
+	Compatibility        []string                      `json:"compatibility"`
+	Warnings             []string                      `json:"warnings,omitempty"`
+	Errors               []string                      `json:"errors,omitempty"`
+	Manifest             *ProjectBundleManifest        `json:"manifest,omitempty"`
+	Contents             []ProjectBundleContentItem    `json:"contents,omitempty"`
+	Excluded             []ProjectBundleContentItem    `json:"excluded,omitempty"`
+	Conflicts            []ProjectBundleConflict       `json:"conflicts,omitempty"`
+	Dependencies         []ProjectBundleDependency     `json:"dependencies,omitempty"`
+	Validation           []ProjectBundleValidationItem `json:"validation,omitempty"`
+	AvailableImportModes []BundleImportMode            `json:"availableImportModes,omitempty"`
+	RecommendedMode      BundleImportMode              `json:"recommendedMode,omitempty"`
 }
 
 type BundleImportMode string

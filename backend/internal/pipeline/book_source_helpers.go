@@ -394,7 +394,7 @@ func (service *Service) writeBookSourceMetadata(book BookSource) error {
 	return writeJSON(filepath.Join(outputDir, bookSourceMetadataFilename), book)
 }
 
-func (service *Service) importBundleBookSource(book BookSource, projectID string) error {
+func (service *Service) importBundleBookSource(book BookSource, projectID string) (BookSource, error) {
 	now := time.Now().UTC()
 	book.ID = newID()
 	book.ProjectID = projectID
@@ -405,9 +405,12 @@ func (service *Service) importBundleBookSource(book BookSource, projectID string
 	}
 	service.updateBookSource(storedBookSource{BookSource: book})
 	if err := service.writeBookSourceMetadata(book); err != nil {
-		return err
+		return BookSource{}, err
 	}
-	return service.writeBookSourceContentIR(book)
+	if err := service.writeBookSourceContentIR(book); err != nil {
+		return BookSource{}, err
+	}
+	return book, nil
 }
 
 func (service *Service) removeProjectBookSources(projectID string) error {

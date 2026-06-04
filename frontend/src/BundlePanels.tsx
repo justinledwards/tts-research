@@ -35,6 +35,31 @@ import {
 
 export type BundlePanelMode = "export" | "import";
 
+export interface BundleOperationActivity {
+  cancelLabel: string;
+  canCancel: boolean;
+  detail: string;
+  id: string;
+  label: string;
+  status: "idle" | "running" | "attention" | "complete" | "cancelled";
+}
+
+export interface BundleOperationReport {
+  conflicts?: ProjectBundlePreview["conflicts"];
+  dependencies?: ProjectBundlePreview["dependencies"];
+  detail: string;
+  excluded?: ProjectBundleSummary["excluded"];
+  generatedAudio?: number;
+  generatedAudioIncluded?: boolean;
+  kind: BundlePanelMode;
+  omittedGeneratedAudio?: number;
+  status: "blocked" | "ready" | "running" | "warning";
+  title: string;
+  updatedAt: string;
+  validation?: ProjectBundlePreview["validation"];
+  warnings?: string[];
+}
+
 export function BundleFlowPanel({
   activeProjectId,
   activeProjectName,
@@ -42,6 +67,8 @@ export function BundleFlowPanel({
   mode,
   projects,
   onClose,
+  onOperationActivityChange,
+  onOperationReportChange,
   onImported,
 }: Readonly<{
   activeProjectId: string;
@@ -50,6 +77,8 @@ export function BundleFlowPanel({
   mode: BundlePanelMode;
   projects: VoiceProject[];
   onClose: () => void;
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
+  onOperationReportChange?: (report: BundleOperationReport) => void;
   onImported: (result: ProjectBundleImportResult) => Promise<void> | void;
 }>) {
   const panelRef = useRef<HTMLElement | null>(null);
@@ -90,11 +119,18 @@ export function BundleFlowPanel({
           </button>
         </header>
         {mode === "export" ? (
-          <ExportBundleFlow activeProjectId={activeProjectId} onClose={onClose} />
+          <ExportBundleFlow
+            activeProjectId={activeProjectId}
+            onClose={onClose}
+            onOperationActivityChange={onOperationActivityChange}
+            onOperationReportChange={onOperationReportChange}
+          />
         ) : (
           <ImportBundleFlow
             activeProjectId={activeProjectId}
             projects={projects}
+            onOperationActivityChange={onOperationActivityChange}
+            onOperationReportChange={onOperationReportChange}
             onImported={onImported}
           />
         )}
@@ -106,27 +142,41 @@ export function BundleFlowPanel({
 function ExportBundleFlow({
   activeProjectId,
   onClose,
-}: Readonly<{ activeProjectId: string; onClose: () => void }>) {
+  onOperationActivityChange,
+  onOperationReportChange,
+}: Readonly<{
+  activeProjectId: string;
+  onClose: () => void;
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
+  onOperationReportChange?: (report: BundleOperationReport) => void;
+}>) {
   const [activeStep, setActiveStep] = useState<ExportBundleStep>("Contents");
   const [summary, setSummary] = useState<ProjectBundleSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [includeGeneratedAudio, setIncludeGeneratedAudio] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
     setIsLoading(true);
     setError(null);
-    void getProjectBundleSummary(activeProjectId)
+    onOperationActivityChange?.(bundleActivity("export", "running", "Preparing export manifest."));
+    void getProjectBundleSummary(activeProjectId, { includeGeneratedAudio })
       .then((nextSummary) => {
         if (!isCancelled) {
           setSummary(nextSummary);
+          onOperationActivityChange?.(
+            bundleActivity("export", "complete", "Export manifest is ready for review."),
+          );
+          onOperationReportChange?.(bundleReportFromSummary(nextSummary));
         }
       })
       .catch((caughtError: unknown) => {
         if (!isCancelled) {
-          setError(
-            caughtError instanceof Error ? caughtError.message : "Unable to summarize bundle",
-          );
+          const message =
+            caughtError instanceof Error ? caughtError.message : "Unable to summarize bundle";
+          setError(message);
+          onOperationActivityChange?.(bundleActivity("export", "attention", message));
         }
       })
       .finally(() => {
@@ -137,7 +187,7 @@ function ExportBundleFlow({
     return () => {
       isCancelled = true;
     };
-  }, [activeProjectId]);
+  }, [activeProjectId, includeGeneratedAudio, onOperationActivityChange, onOperationReportChange]);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -151,12 +201,19 @@ function ExportBundleFlow({
       />
       {isLoading ? <PanelNote>Preparing bundle summary...</PanelNote> : null}
       {error ? <PanelError>{error}</PanelError> : null}
-      <ExportStepContent activeStep={activeStep} summary={summary} />
+      <ExportStepContent
+        activeStep={activeStep}
+        includeGeneratedAudio={includeGeneratedAudio}
+        summary={summary}
+        onIncludeGeneratedAudioChange={setIncludeGeneratedAudio}
+      />
       <ExportFlowFooter
         activeProjectId={activeProjectId}
         activeStep={activeStep}
+        includeGeneratedAudio={includeGeneratedAudio}
         summary={summary}
         onClose={onClose}
+        onOperationActivityChange={onOperationActivityChange}
         onStepChange={setActiveStep}
       />
     </div>
@@ -181,8 +238,15 @@ function splitExportBundleContents(
 
 function ExportStepContent({
   activeStep,
+  includeGeneratedAudio,
   summary,
-}: Readonly<{ activeStep: ExportBundleStep; summary: ProjectBundleSummary | null }>) {
+  onIncludeGeneratedAudioChange,
+}: Readonly<{
+  activeStep: ExportBundleStep;
+  includeGeneratedAudio: boolean;
+  summary: ProjectBundleSummary | null;
+  onIncludeGeneratedAudioChange: (includeGeneratedAudio: boolean) => void;
+}>) {
   if (!summary) {
     return null;
   }
@@ -195,6 +259,11 @@ function ExportStepContent({
           <SectionHeading
             subtitle="Default bundles include the portable assets needed to evaluate this project on another machine."
             title="Bundle contents"
+          />
+          <GeneratedAudioExportToggle
+            includeGeneratedAudio={includeGeneratedAudio}
+            summary={summary}
+            onChange={onIncludeGeneratedAudioChange}
           />
           <div className="grid gap-2">
             {[...includedItems, ...optionalItems].map((item) => (
@@ -215,6 +284,11 @@ function ExportStepContent({
           compact
           title="Bundle data boundary"
         />
+        <GeneratedAudioExportToggle
+          includeGeneratedAudio={includeGeneratedAudio}
+          summary={summary}
+          onChange={onIncludeGeneratedAudioChange}
+        />
         <section className="grid gap-3">
           <SectionHeading
             subtitle="Default bundles are portable: script, normalized text, generated audio, references, waveform peaks, telemetry, reports, run config, and reading settings."
@@ -227,6 +301,7 @@ function ExportStepContent({
           </div>
         </section>
         <ExportOptionalContent optionalItems={optionalItems} />
+        <ExportExcludedContent excludedItems={summary.excluded ?? []} />
         <ExportWarnings warnings={summary.warnings ?? []} />
       </div>
     );
@@ -242,22 +317,84 @@ function ExportStepContent({
         <p className="vs-muted text-sm">
           {summary.fileName} · {formatBytes(summary.estimatedBytes)}
         </p>
+        <p className="vs-muted text-xs">
+          Generated audio {summary.generatedAudioIncluded ? "included" : "excluded"} for this
+          download.
+        </p>
       </section>
     </div>
+  );
+}
+
+function ExportExcludedContent({
+  excludedItems,
+}: Readonly<{ excludedItems: ProjectBundleSummary["contents"] }>) {
+  if (excludedItems.length === 0) {
+    return null;
+  }
+  return (
+    <section className="grid gap-3 rounded-lg border p-4 vs-surface">
+      <SectionHeading
+        subtitle="Sensitive runtime details and machine-local artifacts are kept out of portable bundles."
+        title="Excluded from bundle"
+      />
+      <div className="grid gap-2">
+        {excludedItems.map((item) => (
+          <BundleContentRow item={item} key={item.key} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function GeneratedAudioExportToggle({
+  includeGeneratedAudio,
+  summary,
+  onChange,
+}: Readonly<{
+  includeGeneratedAudio: boolean;
+  summary: ProjectBundleSummary;
+  onChange: (includeGeneratedAudio: boolean) => void;
+}>) {
+  const omittedCount = summary.omittedGeneratedAudio ?? 0;
+  const omittedBytes = summary.omittedGeneratedBytes ?? 0;
+  return (
+    <label className="flex items-start gap-3 rounded-md border p-3 text-sm vs-border vs-raised">
+      <input
+        checked={includeGeneratedAudio}
+        className="mt-1"
+        type="checkbox"
+        onChange={(event) => {
+          onChange(event.currentTarget.checked);
+        }}
+      />
+      <span className="grid gap-1">
+        <span className="font-semibold">Include generated audio</span>
+        <span className="vs-muted text-xs leading-5">
+          {includeGeneratedAudio
+            ? `${summary.generatedAudio.toString()} audio file(s) are included for offline playback.`
+            : `${omittedCount.toString()} audio file(s), ${formatBytes(omittedBytes)}, will be omitted and can be regenerated after import.`}
+        </span>
+      </span>
+    </label>
   );
 }
 
 function ExportFlowFooter({
   activeProjectId,
   activeStep,
+  includeGeneratedAudio,
   summary,
   onClose,
+  onOperationActivityChange,
   onStepChange,
 }: Readonly<{
   activeProjectId: string;
   activeStep: ExportBundleStep;
+  includeGeneratedAudio: boolean;
   summary: ProjectBundleSummary | null;
   onClose: () => void;
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
   onStepChange: (step: ExportBundleStep) => void;
 }>) {
   const showBack = activeStep === "Review" || activeStep === "Export";
@@ -289,7 +426,14 @@ function ExportFlowFooter({
             summary ? "" : "pointer-events-none opacity-50"
           }`}
           download={summary?.fileName ?? "voice-studio.voice-studio.zip"}
-          href={projectBundleDownloadUrl(activeProjectId)}
+          href={projectBundleDownloadUrl(activeProjectId, { includeGeneratedAudio })}
+          onClick={() => {
+            if (summary) {
+              onOperationActivityChange?.(
+                bundleActivity("export", "complete", "Bundle download started."),
+              );
+            }
+          }}
         >
           Download Bundle
         </a>
@@ -312,10 +456,14 @@ function ExportFlowFooter({
 function ImportBundleFlow({
   activeProjectId,
   projects,
+  onOperationActivityChange,
+  onOperationReportChange,
   onImported,
 }: Readonly<{
   activeProjectId: string;
   projects: VoiceProject[];
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
+  onOperationReportChange?: (report: BundleOperationReport) => void;
   onImported: (result: ProjectBundleImportResult) => Promise<void> | void;
 }>) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -347,19 +495,36 @@ function ImportBundleFlow({
     let isCancelled = false;
     setIsPreviewing(true);
     setError(null);
+    onOperationActivityChange?.(
+      bundleActivity("import", "running", "Previewing bundle before import."),
+    );
     void previewProjectBundle(file)
       .then((nextPreview) => {
         if (!isCancelled) {
           setPreview(nextPreview);
           setActiveStep("Review");
+          setMode(nextPreview.recommendedMode ?? "copy");
           if (nextPreview.errors && nextPreview.errors.length > 0) {
             setError(nextPreview.errors.join(" "));
           }
+          onOperationActivityChange?.(
+            bundleActivity(
+              "import",
+              nextPreview.valid ? "complete" : "attention",
+              nextPreview.valid
+                ? "Import preview is ready for conflict review."
+                : "Import preview found blocking validation issues.",
+            ),
+          );
+          onOperationReportChange?.(bundleReportFromPreview(nextPreview));
         }
       })
       .catch((caughtError: unknown) => {
         if (!isCancelled) {
-          setError(caughtError instanceof Error ? caughtError.message : "Unable to preview bundle");
+          const message =
+            caughtError instanceof Error ? caughtError.message : "Unable to preview bundle";
+          setError(message);
+          onOperationActivityChange?.(bundleActivity("import", "attention", message));
         }
       })
       .finally(() => {
@@ -370,9 +535,11 @@ function ImportBundleFlow({
     return () => {
       isCancelled = true;
     };
-  }, [file]);
+  }, [file, onOperationActivityChange, onOperationReportChange]);
 
-  const canImport = Boolean(file && preview?.valid && !isImporting);
+  const canImport = Boolean(
+    file && preview?.valid && !isImporting && importModeResolvesPreview(preview, mode),
+  );
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -410,6 +577,8 @@ function ImportBundleFlow({
         preview={preview}
         targetProjectId={targetProjectId}
         onError={setError}
+        onOperationActivityChange={onOperationActivityChange}
+        onOperationReportChange={onOperationReportChange}
         onImported={onImported}
         onImportingChange={setIsImporting}
         onResult={setResult}
@@ -475,6 +644,7 @@ function ImportStepContent({
   return (
     <ImportModeStep
       mode={mode}
+      preview={preview}
       projects={projects}
       targetProjectId={targetProjectId}
       onModeChange={onModeChange}
@@ -566,12 +736,14 @@ function ImportChooseStep({
 
 function ImportModeStep({
   mode,
+  preview,
   projects,
   targetProjectId,
   onModeChange,
   onTargetProjectChange,
 }: Readonly<{
   mode: BundleImportMode;
+  preview: ProjectBundlePreview | null;
   projects: VoiceProject[];
   targetProjectId: string;
   onModeChange: (mode: BundleImportMode) => void;
@@ -583,6 +755,11 @@ function ImportModeStep({
         subtitle="The safe default keeps imported work separate so it can be evaluated independently."
         title="Conflict handling"
       />
+      <p className="vs-muted rounded-md border p-3 text-xs leading-5 vs-border">
+        {importModeResolvesPreview(preview, mode)
+          ? "Selected resolution covers the previewed conflicts."
+          : "Select a resolution supported by the blocking conflicts before import."}
+      </p>
       <label className="grid gap-1 text-sm">
         <span className="vs-muted text-xs font-semibold uppercase tracking-wide">Import mode</span>
         <select
@@ -592,9 +769,15 @@ function ImportModeStep({
           }}
           value={mode}
         >
-          <option value="copy">Import as new project</option>
-          <option value="merge">Merge into selected project</option>
-          <option value="replace">Replace selected project</option>
+          <option disabled={!importModeAvailable(preview, "copy")} value="copy">
+            Duplicate as new project
+          </option>
+          <option disabled={!importModeAvailable(preview, "merge")} value="merge">
+            Merge into selected project
+          </option>
+          <option disabled={!importModeAvailable(preview, "replace")} value="replace">
+            Replace selected project
+          </option>
         </select>
       </label>
       {mode === "copy" ? null : (
@@ -621,6 +804,28 @@ function ImportModeStep({
   );
 }
 
+function importModeAvailable(
+  preview: ProjectBundlePreview | null,
+  mode: BundleImportMode,
+): boolean {
+  return !preview?.availableImportModes || preview.availableImportModes.includes(mode);
+}
+
+function importModeResolvesPreview(
+  preview: ProjectBundlePreview | null,
+  mode: BundleImportMode,
+): boolean {
+  if (!preview) {
+    return false;
+  }
+  return (preview.conflicts ?? []).every((conflict) => {
+    if (!conflict.blocking) {
+      return true;
+    }
+    return !conflict.resolutions || conflict.resolutions.includes(mode);
+  });
+}
+
 function ImportFlowFooter({
   activeStep,
   canImport,
@@ -630,6 +835,8 @@ function ImportFlowFooter({
   preview,
   targetProjectId,
   onError,
+  onOperationActivityChange,
+  onOperationReportChange,
   onImported,
   onImportingChange,
   onResult,
@@ -643,6 +850,8 @@ function ImportFlowFooter({
   preview: ProjectBundlePreview | null;
   targetProjectId: string;
   onError: (error: string | null) => void;
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
+  onOperationReportChange?: (report: BundleOperationReport) => void;
   onImported: (result: ProjectBundleImportResult) => Promise<void> | void;
   onImportingChange: (isImporting: boolean) => void;
   onResult: (result: ProjectBundleImportResult) => void;
@@ -692,8 +901,11 @@ function ImportFlowFooter({
           file={file}
           isImporting={isImporting}
           mode={mode}
+          preview={preview}
           targetProjectId={targetProjectId}
           onError={onError}
+          onOperationActivityChange={onOperationActivityChange}
+          onOperationReportChange={onOperationReportChange}
           onImported={onImported}
           onImportingChange={onImportingChange}
           onResult={onResult}
@@ -708,8 +920,11 @@ function ImportButton({
   file,
   isImporting,
   mode,
+  preview,
   targetProjectId,
   onError,
+  onOperationActivityChange,
+  onOperationReportChange,
   onImported,
   onImportingChange,
   onResult,
@@ -718,8 +933,11 @@ function ImportButton({
   file: File | null;
   isImporting: boolean;
   mode: BundleImportMode;
+  preview: ProjectBundlePreview | null;
   targetProjectId: string;
   onError: (error: string | null) => void;
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
+  onOperationReportChange?: (report: BundleOperationReport) => void;
   onImported: (result: ProjectBundleImportResult) => Promise<void> | void;
   onImportingChange: (isImporting: boolean) => void;
   onResult: (result: ProjectBundleImportResult) => void;
@@ -734,13 +952,25 @@ function ImportButton({
         }
         onImportingChange(true);
         onError(null);
+        onOperationActivityChange?.(
+          bundleActivity("import", "running", "Importing bundle into local storage."),
+        );
         void importProjectBundle(file, mode, mode === "copy" ? undefined : targetProjectId)
           .then(async (nextResult) => {
             onResult(nextResult);
             await onImported(nextResult);
+            onOperationActivityChange?.(
+              bundleActivity("import", "complete", `Imported ${nextResult.project.name}.`),
+            );
+            if (preview) {
+              onOperationReportChange?.(bundleReportFromPreview(preview, "ready"));
+            }
           })
           .catch((caughtError: unknown) => {
-            onError(caughtError instanceof Error ? caughtError.message : "Unable to import bundle");
+            const message =
+              caughtError instanceof Error ? caughtError.message : "Unable to import bundle";
+            onError(message);
+            onOperationActivityChange?.(bundleActivity("import", "attention", message));
           })
           .finally(() => {
             onImportingChange(false);
@@ -751,4 +981,59 @@ function ImportButton({
       {isImporting ? "Importing..." : "Import Bundle"}
     </button>
   );
+}
+
+function bundleActivity(
+  kind: BundlePanelMode,
+  status: BundleOperationActivity["status"],
+  detail: string,
+): BundleOperationActivity {
+  return {
+    cancelLabel: "Cancel",
+    canCancel: false,
+    detail,
+    id: `bundle:${kind}`,
+    label: kind === "export" ? "Bundle export" : "Bundle import",
+    status,
+  };
+}
+
+function bundleReportFromSummary(summary: ProjectBundleSummary): BundleOperationReport {
+  return {
+    detail: `${summary.fileName} · ${formatBytes(summary.estimatedBytes)} · generated audio ${
+      summary.generatedAudioIncluded ? "included" : "excluded"
+    }.`,
+    excluded: summary.excluded,
+    generatedAudio: summary.generatedAudio,
+    generatedAudioIncluded: summary.generatedAudioIncluded,
+    kind: "export",
+    omittedGeneratedAudio: summary.omittedGeneratedAudio,
+    status: summary.warnings && summary.warnings.length > 0 ? "warning" : "ready",
+    title: `Export manifest for ${summary.projectName}`,
+    updatedAt: summary.createdAt,
+    warnings: summary.warnings,
+  };
+}
+
+function bundleReportFromPreview(
+  preview: ProjectBundlePreview,
+  status: BundleOperationReport["status"] = preview.valid ? "ready" : "blocked",
+): BundleOperationReport {
+  return {
+    conflicts: preview.conflicts,
+    dependencies: preview.dependencies,
+    detail: `${preview.projectName ?? "Unnamed bundle"} · ${String(preview.chapterCount ?? 0)} chapter(s) · ${formatBytes(
+      preview.estimatedBytes ?? 0,
+    )}.`,
+    excluded: preview.excluded ?? preview.manifest?.excluded,
+    generatedAudio: preview.generatedAudio,
+    generatedAudioIncluded: preview.manifest?.generatedAudioIncluded,
+    kind: "import",
+    omittedGeneratedAudio: preview.manifest?.omittedGeneratedAudio,
+    status,
+    title: `Import preview for ${preview.projectName ?? "bundle"}`,
+    updatedAt: new Date().toISOString(),
+    validation: preview.validation,
+    warnings: preview.warnings,
+  };
 }
