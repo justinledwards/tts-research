@@ -3460,6 +3460,86 @@ func TestCreateVoiceProfileFromCandidateCopiesCompatibleReference(t *testing.T) 
 	}
 }
 
+func TestVoiceProfileSourceProvenancePersistsAndCopiesToProfile(t *testing.T) {
+	t.Parallel()
+
+	sourcePath := writeToneWAV(t, 30_000, 10_000)
+	analyzer := mockProfileSourceAnalyzer{
+		result: pipeline.VoiceProfileSourceAnalysisResult{
+			ModelVersion: "mock-diarizer",
+			Spans: []pipeline.DetectedSpeakerSpan{
+				{SpeakerID: "SPEAKER_00", StartMS: 0, EndMS: 30_000, Confidence: 0.94},
+			},
+		},
+	}
+	options := profileSourceOptions(t, analyzer)
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	provenance := pipeline.VoiceProfileProvenance{
+		SourceType:           "provided-recording",
+		RightsBasis:          "speaker-consent",
+		ConsentStatus:        "confirmed",
+		AllowedUse:           "narration-profile",
+		RetentionPolicy:      "keep-profile",
+		SpeakerName:          "Narrator",
+		SourceOwner:          "Studio",
+		ConsentDocumentLabel: "release-42",
+		Notes:                "Approved for local narration profile work.",
+	}
+
+	source, err := service.CreateVoiceProfileSourceWithOptions(
+		context.Background(),
+		sourcePath,
+		"narrator.wav",
+		0,
+		pipeline.CreateVoiceProfileSourceOptions{Provenance: &provenance},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSourceWithOptions returned error: %v", err)
+	}
+	ready := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusReady)
+	if ready.Provenance == nil || ready.Provenance.ConsentStatus != "confirmed" {
+		t.Fatalf("ready provenance = %#v, want persisted consent metadata", ready.Provenance)
+	}
+
+	reloaded := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	reloadedSource, err := reloaded.GetVoiceProfileSource(source.ID)
+	if err != nil {
+		t.Fatalf("GetVoiceProfileSource after reload returned error: %v", err)
+	}
+	if reloadedSource.Provenance == nil || reloadedSource.Provenance.SourceOwner != "Studio" {
+		t.Fatalf("reloaded provenance = %#v, want source owner", reloadedSource.Provenance)
+	}
+
+	autoValidate := false
+	profile, err := service.CreateVoiceProfileFromCandidateWithOptions(
+		context.Background(),
+		ready.ID,
+		ready.Candidates[0].ID,
+		"Narrator",
+		"en",
+		pipeline.VoiceProfileCreationOptions{
+			AutoValidate: &autoValidate,
+			Targets:      []string{pipeline.VoiceProfileTargetKokoroClone},
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileFromCandidateWithOptions returned error: %v", err)
+	}
+	if profile.Provenance == nil || profile.Provenance.ConsentDocumentLabel != "release-42" {
+		t.Fatalf("profile provenance = %#v, want copied consent document", profile.Provenance)
+	}
+}
+
 func TestCreateVoiceProfileFromCandidateStoresScoredLikeness(t *testing.T) {
 	t.Parallel()
 

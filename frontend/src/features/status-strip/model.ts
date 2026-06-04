@@ -279,6 +279,7 @@ function resolveNarrationOperationalIssues({
     lifecycle: input.generatedAudioLifecycle,
     requiresAudio: audioBlocksCurrentStage(input),
   });
+  const cloningIssue = resolveOperationalCloningIssue(input.voiceCloningActivity);
   return [
     resolveOperationalSourceIssue({
       descriptorLabel: sourceDescriptor.label,
@@ -304,7 +305,7 @@ function resolveNarrationOperationalIssues({
       critical: input.disclosure.highestPriorityPanel?.status === "blocking",
       detail: input.disclosure.highestPriorityPanel?.detail,
     }),
-    resolveOperationalCloningIssue(input.voiceCloningActivity),
+    ...(cloningIssue ? [cloningIssue] : []),
     ...resolveAttentionDisclosureIssues(input.disclosure),
   ];
 }
@@ -848,7 +849,11 @@ function buildActivityItems(
       tone: toneForStageStatus(stage.status),
     });
   }
-  if (input.voiceCloningActivity.status !== "idle") {
+  if (
+    input.voiceCloningActivity.status === "running" ||
+    input.voiceCloningActivity.status === "attention" ||
+    input.voiceCloningActivity.status === "cancelled"
+  ) {
     items.push({
       detail: input.voiceCloningActivity.message,
       id: "voice-cloning",

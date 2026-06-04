@@ -161,6 +161,23 @@ describe("operational status model", () => {
     });
   });
 
+  it("suppresses idle and complete voice cloning from operational status", () => {
+    expect(
+      resolveOperationalCloningIssue({
+        actionLabel: "Create Clone",
+        message: "No source analysis is running.",
+        status: "idle",
+      }),
+    ).toBeNull();
+    expect(
+      resolveOperationalCloningIssue({
+        actionLabel: "View Profile",
+        message: "Kokoro Clone is ready.",
+        status: "complete",
+      }),
+    ).toBeNull();
+  });
+
   it("selects the most urgent blocking issue", () => {
     const source = resolveOperationalSourceIssue({
       descriptorLabel: "Narratable",

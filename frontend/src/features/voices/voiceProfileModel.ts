@@ -17,6 +17,7 @@ export interface VoiceProfileSummary {
   id: string;
   language: string;
   name: string;
+  provenanceSummary: string;
   readiness: VoiceReadiness;
   sourceDurationMs: number;
   status: string;
@@ -55,6 +56,7 @@ export interface VoiceSourceSummary {
   fileName: string;
   id: string;
   progress: string;
+  provenanceSummary: string;
   status: string;
 }
 
@@ -102,6 +104,7 @@ export function buildVoiceProfileDashboardModel({
           fileName: source.sourceFile,
           id: source.id,
           progress: source.progressMessage,
+          provenanceSummary: formatVoiceProvenanceSummary(source.provenance),
           status: source.status,
         }
       : null,
@@ -159,12 +162,27 @@ function mapProfileSummary(profile: VoiceProfile): VoiceProfileSummary {
     id: profile.id,
     language: profile.language || "unknown",
     name: profile.name,
+    provenanceSummary: formatVoiceProvenanceSummary(profile.provenance),
     readiness: resolveProfileReadiness(profile, targets),
     sourceDurationMs: profile.referenceDurationMs ?? profile.durationMs,
     status: profile.status,
     targetCount: targets.length,
     updatedAt: profile.updatedAt,
   };
+}
+
+export function formatVoiceProvenanceSummary(provenance: VoiceProfile["provenance"]): string {
+  if (!provenance) {
+    return "Legacy profile: provenance not recorded";
+  }
+  return [
+    provenance.sourceType,
+    provenance.consentStatus,
+    provenance.rightsBasis,
+    provenance.allowedUse,
+  ]
+    .filter((value) => value.trim().length > 0)
+    .join(" · ");
 }
 
 function mapProfileTargets(

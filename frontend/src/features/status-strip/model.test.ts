@@ -188,6 +188,24 @@ describe("resolveNarrationStatusModel", () => {
     expect(model.primaryAction?.id).toBe("openVoiceCloning");
   });
 
+  it("does not add idle or complete voice cloning to status activity", () => {
+    const idle = resolveNarrationStatusModel(input());
+    const complete = resolveNarrationStatusModel(
+      input({
+        voiceCloningActivity: voiceActivity({
+          actionLabel: "View Profile",
+          message: "Kokoro Clone is ready.",
+          status: "complete",
+          statusLabel: "Ready",
+        }),
+      }),
+    );
+
+    expect(idle.activityItems.some((item) => item.id === "voice-cloning")).toBe(false);
+    expect(complete.activityItems.some((item) => item.id === "voice-cloning")).toBe(false);
+    expect(complete.chips.some((chip) => chip.id === "cloning")).toBe(false);
+  });
+
   it("keeps missing confidence explicit", () => {
     const model = resolveNarrationStatusModel(input({ job: null }));
 

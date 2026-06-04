@@ -770,6 +770,10 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		if err != nil {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid multipart form data"))
 		}
+		provenance, err := voiceProfileSourceProvenanceFromMultipart(form)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
 
 		fileHeaders := form.File["file"]
 		if len(fileHeaders) == 0 {
@@ -834,11 +838,12 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize upload temp file"))
 		}
 
-		source, err := service.CreateVoiceProfileSource(
+		source, err := service.CreateVoiceProfileSourceWithOptions(
 			ctx.Context(),
 			tempPath,
 			file.Filename,
 			copied,
+			pipeline.CreateVoiceProfileSourceOptions{Provenance: provenance},
 		)
 		if err != nil {
 			if errors.Is(err, pipeline.ErrProfileTooLarge) {
@@ -1422,6 +1427,20 @@ func firstFormValue(values []string) string {
 		return ""
 	}
 	return values[0]
+}
+
+func voiceProfileSourceProvenanceFromMultipart(
+	form *multipart.Form,
+) (*pipeline.VoiceProfileProvenance, error) {
+	raw := strings.TrimSpace(firstFormValue(form.Value["provenance"]))
+	if raw == "" {
+		return nil, errors.New("missing voice profile provenance")
+	}
+	var provenance pipeline.VoiceProfileProvenance
+	if err := json.Unmarshal([]byte(raw), &provenance); err != nil {
+		return nil, fmt.Errorf("invalid voice profile provenance JSON: %w", err)
+	}
+	return pipeline.NormalizeVoiceProfileProvenance(&provenance)
 }
 
 func openLexiconUpload(ctx fiber.Ctx) (io.ReadCloser, error) {

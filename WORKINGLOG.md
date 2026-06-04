@@ -1442,3 +1442,16 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add regression tests
 - [x] Run focused and project checks
 - Validation: focused backend asset guard/router tests passed; focused frontend asset model and Command Center tests passed; frontend typecheck passed; frontend and backend package tests passed; `pnpm check` passed with existing unrelated lint warnings.
+
+## 2026-06-04 10:03 CEST - Voice Cloning Guided Pipeline
+- [x] Add provenance contract and persistence
+- [x] Rework cloning workbench workflow and backend contract table
+- [x] Integrate provenance into voice assets and status behavior
+- [x] Add frontend and backend regression tests
+- [x] Run focused and project checks
+- Validation: focused frontend and backend checks passed; frontend typecheck passed; frontend and backend package tests passed; `pnpm check` passed with existing unrelated lint warnings/infos.
+
+## 2026-06-04 10:24 CEST - Commit Voice Cloning Guided Pipeline
+- [x] Review worktree scope
+- [x] Stage voice cloning work package
+- [x] Create commit

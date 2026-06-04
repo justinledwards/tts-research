@@ -357,6 +357,7 @@ import type {
   BookSourceScopeContent,
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
+  CreateVoiceProfileSourceRequest,
   CustomSpeechPolicyProfile,
   HighlightMap,
   MarkdownParseMode,
@@ -5752,12 +5753,12 @@ export function App() {
   }, [clearVoiceProfileSelection, selectedVoiceProfileId, voiceProfiles]);
 
   const handleAnalyzeVoiceSource = useCallback(
-    async (file: File) => {
+    async (request: CreateVoiceProfileSourceRequest) => {
       setIsAnalyzingProfileSource(true);
       setProfileError(null);
       try {
         void refreshProfileSourceDiagnostics();
-        const source = await createVoiceProfileSource({ file });
+        const source = await createVoiceProfileSource(request);
         setProfileSource(source);
       } catch (caughtError) {
         void refreshProfileSourceDiagnostics();
@@ -8889,7 +8890,7 @@ function VoiceCloningWorkspace({
   runConfiguration: RunConfiguration;
   source: VoiceProfileSource | null;
   ttsEngines: TTSEngineDiagnostics[];
-  onAnalyze: (file: File) => Promise<void>;
+  onAnalyze: (request: CreateVoiceProfileSourceRequest) => Promise<void>;
   onBuildArtifact: VoiceProfileArtifactBuildAction;
   onCancelSource: (sourceId: string) => Promise<void>;
   onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
@@ -8909,18 +8910,6 @@ function VoiceCloningWorkspace({
         source={source}
         onCancelSource={onCancelSource}
       />
-      <BackendContractReviewPanel
-        activeEngineId={runConfiguration.ttsEngine}
-        buildingArtifactKey={buildingArtifactKey}
-        cancelingTargetKey={cancelingTargetKey}
-        modules={researchModules}
-        profile={activity.activeProfile}
-        runConfiguration={runConfiguration}
-        ttsEngines={ttsEngines}
-        onBuildArtifact={onBuildArtifact}
-        onCancelTarget={onCancelTarget}
-        onRunConfigurationChange={onRunConfigurationChange}
-      />
       <Suspense fallback={<LazySurfaceFallback label="Loading source diagnostics..." />}>
         <VoiceSourceAnalysisPanel
           createCandidateId={createCandidateId}
@@ -8937,6 +8926,18 @@ function VoiceCloningWorkspace({
           onRefreshSourceTranscript={onRefreshSourceTranscript}
         />
       </Suspense>
+      <BackendContractReviewPanel
+        activeEngineId={runConfiguration.ttsEngine}
+        buildingArtifactKey={buildingArtifactKey}
+        cancelingTargetKey={cancelingTargetKey}
+        modules={researchModules}
+        profile={activity.activeProfile}
+        runConfiguration={runConfiguration}
+        ttsEngines={ttsEngines}
+        onBuildArtifact={onBuildArtifact}
+        onCancelTarget={onCancelTarget}
+        onRunConfigurationChange={onRunConfigurationChange}
+      />
     </section>
   );
 }
@@ -9177,7 +9178,7 @@ function CloneReadinessDiagnostics({
 
 const BACKEND_CONTRACTS = [
   {
-    artifact: "Reference clone",
+    artifact: "Reference WAV + validation sample",
     engineId: "kokoro-clone",
     label: "Kokoro Clone",
     targetId: "kokoro-clone",
@@ -9225,121 +9226,148 @@ function BackendContractReviewPanel({
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
   const artifactBuildTimeout = useArtifactBuildTimeoutState();
+  const contractRows = BACKEND_CONTRACTS.map((contract) => ({
+    contract,
+    summary: backendContractSummary({
+      activeEngineId,
+      buildingArtifactKey,
+      cancelingTargetKey,
+      contract,
+      modules,
+      profile,
+      ttsEngines,
+    }),
+  }));
+  const contractReviewAutoOpen = contractRows.some(({ summary }) =>
+    ["failed", "running", "setup"].includes(summary.status),
+  );
   return (
-    <section className="grid gap-3 rounded-lg border p-4 shadow-sm vs-border vs-surface">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
-            Backend Contract Review
+    <details
+      className="grid gap-3 rounded-lg border p-4 shadow-sm vs-border vs-surface"
+      open={contractReviewAutoOpen || undefined}
+    >
+      <summary className="cursor-pointer list-none">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+              Backend Contract Review
+            </p>
+            <h3 className="mt-1 text-base font-semibold text-[var(--vs-text)]">
+              Profile targets by narration backend
+            </h3>
+          </div>
+          <p className="max-w-lg text-xs leading-5 vs-muted">
+            Advanced target and artifact readiness for each narration backend.
           </p>
-          <h3 className="mt-1 text-base font-semibold text-[var(--vs-text)]">
-            Profile targets by narration backend
-          </h3>
         </div>
-        <p className="max-w-lg text-xs leading-5 vs-muted">
+      </summary>
+      <div className="mt-3 grid gap-3">
+        <p className="max-w-3xl text-xs leading-5 vs-muted">
           One row per backend. The required target, artifact, readiness, and next action stay
           visible so adding another backend remains a descriptor-level change.
         </p>
-      </div>
-      <ArtifactBuildTimeoutInput
-        error={artifactBuildTimeout.error}
-        input={artifactBuildTimeout.input}
-        onInputChange={artifactBuildTimeout.setInput}
-      />
-      <div className="overflow-x-auto rounded-md border vs-border">
-        <table className="w-full min-w-[720px] border-collapse text-left text-xs">
-          <thead className="bg-[var(--vs-raised)] text-[0.65rem] uppercase tracking-[0.14em] vs-muted">
-            <tr>
-              <th className="px-3 py-2 font-semibold">Backend</th>
-              <th className="px-3 py-2 font-semibold">Voice Source</th>
-              <th className="px-3 py-2 font-semibold">Required Target</th>
-              <th className="px-3 py-2 font-semibold">Artifact</th>
-              <th className="px-3 py-2 font-semibold">Readiness</th>
-              <th className="px-3 py-2 font-semibold">Validation</th>
-              <th className="px-3 py-2 font-semibold">User Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--vs-border)]">
-            {BACKEND_CONTRACTS.map((contract) => {
-              const summary = backendContractSummary({
-                activeEngineId,
-                buildingArtifactKey,
-                cancelingTargetKey,
-                contract,
-                modules,
-                profile,
-                ttsEngines,
-              });
-              const actionBuildsArtifact = backendContractActionBuildsArtifact(summary.status);
-              const timeoutBlocksAction = actionBuildsArtifact && !artifactBuildTimeout.canBuild;
-              return (
-                <tr
-                  className={
-                    contract.engineId === activeEngineId
-                      ? "bg-[var(--vs-selected)]"
-                      : "bg-[var(--vs-surface)] hover:bg-[var(--vs-raised)]"
-                  }
-                  key={contract.engineId}
-                >
-                  <td className="px-3 py-3 align-middle">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span
-                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${backendContractDotClass(summary.status)}`}
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-[var(--vs-text)]">
-                          {contract.label}
-                        </p>
-                        <p className="truncate text-[0.68rem] vs-muted">{summary.engineLabel}</p>
+        <ArtifactBuildTimeoutInput
+          error={artifactBuildTimeout.error}
+          input={artifactBuildTimeout.input}
+          onInputChange={artifactBuildTimeout.setInput}
+        />
+        <div className="overflow-x-auto rounded-md border vs-border">
+          <table className="w-full min-w-[920px] border-collapse text-left text-xs">
+            <thead className="bg-[var(--vs-raised)] text-[0.65rem] uppercase tracking-[0.14em] vs-muted">
+              <tr>
+                <th className="px-3 py-2 font-semibold">Backend</th>
+                <th className="px-3 py-2 font-semibold">Prerequisite</th>
+                <th className="px-3 py-2 font-semibold">Voice Source</th>
+                <th className="px-3 py-2 font-semibold">Required Target</th>
+                <th className="px-3 py-2 font-semibold">Artifact</th>
+                <th className="px-3 py-2 font-semibold">Readiness</th>
+                <th className="px-3 py-2 font-semibold">Validation</th>
+                <th className="px-3 py-2 font-semibold">User Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--vs-border)]">
+              {contractRows.map(({ contract, summary }) => {
+                const actionBuildsArtifact = backendContractActionBuildsArtifact(summary.status);
+                const timeoutBlocksAction = actionBuildsArtifact && !artifactBuildTimeout.canBuild;
+                const disabledReason = timeoutBlocksAction
+                  ? (artifactBuildTimeout.error ??
+                    "Set a valid timeout before preparing this target.")
+                  : summary.disabledReason;
+                return (
+                  <tr
+                    className={
+                      contract.engineId === activeEngineId
+                        ? "bg-[var(--vs-selected)]"
+                        : "bg-[var(--vs-surface)] hover:bg-[var(--vs-raised)]"
+                    }
+                    key={contract.engineId}
+                  >
+                    <td className="px-3 py-3 align-middle">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${backendContractDotClass(summary.status)}`}
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-[var(--vs-text)]">
+                            {contract.label}
+                          </p>
+                          <p className="truncate text-[0.68rem] vs-muted">{summary.engineLabel}</p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 vs-muted">{contract.voiceSource}</td>
-                  <td className="px-3 py-3 vs-muted">{moduleLabel(contract.targetId)}</td>
-                  <td className="px-3 py-3 vs-muted">{summary.artifact}</td>
-                  <td className="px-3 py-3">
-                    <span
-                      className={`inline-flex rounded-md px-2 py-1 font-semibold ${backendContractStatusClass(summary.status)}`}
-                    >
-                      {summary.label}
-                    </span>
-                    <p className="mt-1 max-w-[14rem] truncate text-[0.68rem] vs-muted">
-                      {summary.detail}
-                    </p>
-                  </td>
-                  <td className="px-3 py-3 text-[0.68rem] vs-muted">{summary.validationPercent}</td>
-                  <td className="px-3 py-3">
-                    <button
-                      className={`h-8 min-w-28 rounded-md border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${backendContractActionButtonClass(summary.status)}`}
-                      disabled={!summary.canAct || timeoutBlocksAction}
-                      onClick={() => {
-                        handleBackendContractAction({
-                          contract,
-                          profile,
-                          runConfiguration,
-                          summary,
-                          timeoutSeconds: artifactBuildTimeout.timeoutSeconds,
-                          ttsEngines,
-                          onBuildArtifact,
-                          onCancelTarget,
-                          onRunConfigurationChange,
-                        });
-                      }}
-                      title={
-                        timeoutBlocksAction ? (artifactBuildTimeout.error ?? undefined) : undefined
-                      }
-                      type="button"
-                    >
-                      {summary.actionLabel}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                    <td className="px-3 py-3 vs-muted">{summary.prerequisite}</td>
+                    <td className="px-3 py-3 vs-muted">{contract.voiceSource}</td>
+                    <td className="px-3 py-3 vs-muted">{moduleLabel(contract.targetId)}</td>
+                    <td className="px-3 py-3 vs-muted">{summary.artifact}</td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={`inline-flex rounded-md px-2 py-1 font-semibold ${backendContractStatusClass(summary.status)}`}
+                      >
+                        {summary.label}
+                      </span>
+                      <p className="mt-1 max-w-[14rem] truncate text-[0.68rem] vs-muted">
+                        {summary.detail}
+                      </p>
+                    </td>
+                    <td className="px-3 py-3 text-[0.68rem] vs-muted">
+                      {summary.validationPercent}
+                    </td>
+                    <td className="px-3 py-3">
+                      <button
+                        className={`h-8 min-w-28 rounded-md border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${backendContractActionButtonClass(summary.status)}`}
+                        disabled={!summary.canAct || timeoutBlocksAction}
+                        onClick={() => {
+                          handleBackendContractAction({
+                            contract,
+                            profile,
+                            runConfiguration,
+                            summary,
+                            timeoutSeconds: artifactBuildTimeout.timeoutSeconds,
+                            ttsEngines,
+                            onBuildArtifact,
+                            onCancelTarget,
+                            onRunConfigurationChange,
+                          });
+                        }}
+                        title={disabledReason ?? undefined}
+                        type="button"
+                      >
+                        {summary.actionLabel}
+                      </button>
+                      {disabledReason ? (
+                        <p className="mt-1 max-w-[12rem] text-[0.68rem] leading-4 vs-muted">
+                          {disabledReason}
+                        </p>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </section>
+    </details>
   );
 }
 
@@ -9350,10 +9378,12 @@ interface BackendContractSummary {
   artifact: string;
   canAct: boolean;
   detail: string;
+  disabledReason: string | null;
   engineLabel: string;
-  validationPercent: string;
   label: string;
+  prerequisite: string;
   status: BackendContractStatus;
+  validationPercent: string;
 }
 
 function backendContractSummary({
@@ -9388,13 +9418,13 @@ function backendContractSummary({
   const moduleReady =
     contract.targetId === "kokoro-clone" ||
     (module?.installed === true && researchModuleRuntimeReady(module));
+  const validationFailed = target?.validation?.status === "failed";
   const ready =
     profile !== null &&
+    !validationFailed &&
     (target?.status === "ready" ||
       artifact?.status === "ready" ||
       (contract.targetId === "kokoro-clone" && !target));
-  const validationPercent =
-    typeof target?.validation?.score === "number" ? formatSimilarity(target.validation.score) : "—";
   const status = backendContractReadinessStatus({
     artifactStatus: artifact?.status,
     isBusy,
@@ -9402,6 +9432,7 @@ function backendContractSummary({
     profile,
     ready,
     targetStatus: target?.status,
+    validationFailed,
   });
   return {
     actionLabel: backendContractActionLabel({
@@ -9410,18 +9441,104 @@ function backendContractSummary({
       isCanceling,
       status,
     }),
-    artifact: artifact?.status ?? contract.artifact,
+    artifact: artifact?.status ? `${contract.artifact} · ${artifact.status}` : contract.artifact,
     canAct: backendContractCanAct(status, profile),
     detail:
       target?.error ??
       artifact?.error ??
       target?.validation?.error ??
       (profile ? voiceProfileTargetReadinessText(profile, contract.engineId) : "Select a profile"),
+    disabledReason: backendContractDisabledReason(status, profile),
     engineLabel,
-    validationPercent,
     label: backendContractReadinessLabel(status),
+    prerequisite: backendContractPrerequisite({
+      moduleReady,
+      profile,
+      targetStatus: target?.status,
+      validationFailed,
+    }),
     status,
+    validationPercent: backendContractValidationLabel(target),
   };
+}
+
+function backendContractPrerequisite({
+  moduleReady,
+  profile,
+  targetStatus,
+  validationFailed,
+}: Readonly<{
+  moduleReady: boolean;
+  profile: VoiceProfile | null;
+  targetStatus?: string;
+  validationFailed: boolean;
+}>): string {
+  if (!profile) {
+    return "Create a cloned voice profile";
+  }
+  if (!moduleReady) {
+    return "Complete backend setup";
+  }
+  if (!targetStatus) {
+    return "Prepare target";
+  }
+  if (["queued", "building", "validating"].includes(targetStatus)) {
+    return "Target is working";
+  }
+  if (validationFailed) {
+    return "Review validation";
+  }
+  if (targetStatus === "ready") {
+    return "Target is validated";
+  }
+  if (targetStatus === "failed") {
+    return "Review target issue";
+  }
+  return "Target selected";
+}
+
+function backendContractDisabledReason(
+  status: BackendContractStatus,
+  profile: VoiceProfile | null,
+): string | null {
+  if (!profile) {
+    return "Create a cloned voice profile before preparing backend targets.";
+  }
+  if (status === "setup") {
+    return "Complete backend setup in Settings before preparing this target.";
+  }
+  return null;
+}
+
+function backendContractValidationLabel(
+  target: NonNullable<VoiceProfile["cloneTargets"]>[string] | undefined,
+): string {
+  const validation = target?.validation;
+  if (!validation) {
+    return target?.status === "ready" ? "Ready, no validation detail" : "Waiting";
+  }
+  if (validation.status === "failed") {
+    return typeof validation.score === "number"
+      ? `Failed · ${formatSimilarity(validation.score)}`
+      : "Failed";
+  }
+  if (validation.status === "validating") {
+    return "Validating";
+  }
+  if (validation.status === "cancelled") {
+    return "Cancelled";
+  }
+  const parts = [];
+  if (typeof validation.score === "number") {
+    parts.push(formatSimilarity(validation.score));
+  }
+  if (typeof validation.speakerSimilarity === "number") {
+    parts.push(`speaker ${formatSimilarity(validation.speakerSimilarity)}`);
+  }
+  if (typeof validation.transcriptSimilarity === "number") {
+    parts.push(`transcript ${formatSimilarity(validation.transcriptSimilarity)}`);
+  }
+  return parts.length > 0 ? `Passed · ${parts.join(" · ")}` : validation.status;
 }
 
 function backendContractCanAct(
@@ -9445,6 +9562,7 @@ function backendContractReadinessStatus({
   profile,
   ready,
   targetStatus,
+  validationFailed,
 }: Readonly<{
   artifactStatus?: string;
   isBusy: boolean;
@@ -9452,6 +9570,7 @@ function backendContractReadinessStatus({
   profile: VoiceProfile | null;
   ready: boolean;
   targetStatus?: string;
+  validationFailed: boolean;
 }>): BackendContractStatus {
   if (isBusy) {
     return "running";
@@ -9461,6 +9580,9 @@ function backendContractReadinessStatus({
   }
   if (!moduleReady) {
     return "setup";
+  }
+  if (validationFailed) {
+    return "failed";
   }
   if (ready) {
     return "ready";

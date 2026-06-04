@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Button, StatusChip } from "../../design";
 import { formatLocaleNumber, languageDisplayName } from "../i18n";
 import { providerCapabilityDataAttributes } from "../provider-capabilities";
@@ -82,6 +82,7 @@ export function VoiceProfileRow({
               {profile.name}
             </button>
             {selected ? <StatusChip tone="accent">Selected</StatusChip> : null}
+            <StatusChip tone="neutral">Cloned</StatusChip>
             <StatusChip tone={voiceReadinessTone(profile.readiness)}>
               {voiceReadinessLabel(profile.readiness)}
             </StatusChip>
@@ -95,6 +96,9 @@ export function VoiceProfileRow({
           </p>
           <p className="vs-muted mt-1 truncate text-xs" title={profile.candidateSource}>
             {profile.candidateSource}
+          </p>
+          <p className="vs-muted mt-1 truncate text-xs" title={profile.provenanceSummary}>
+            {profile.provenanceSummary}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 md:justify-end">

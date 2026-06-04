@@ -63,6 +63,79 @@ type VoiceProfileSourceDiagnostics struct {
 	SetupMessage        string `json:"setupMessage"`
 }
 
+type CreateVoiceProfileSourceOptions struct {
+	Provenance *VoiceProfileProvenance
+}
+
+func NormalizeVoiceProfileProvenance(
+	provenance *VoiceProfileProvenance,
+) (*VoiceProfileProvenance, error) {
+	if provenance == nil {
+		return nil, nil
+	}
+	normalized := &VoiceProfileProvenance{
+		SourceType:           strings.TrimSpace(provenance.SourceType),
+		RightsBasis:          strings.TrimSpace(provenance.RightsBasis),
+		ConsentStatus:        strings.TrimSpace(provenance.ConsentStatus),
+		AllowedUse:           strings.TrimSpace(provenance.AllowedUse),
+		RetentionPolicy:      strings.TrimSpace(provenance.RetentionPolicy),
+		SpeakerName:          strings.TrimSpace(provenance.SpeakerName),
+		SourceOwner:          strings.TrimSpace(provenance.SourceOwner),
+		SourceURI:            strings.TrimSpace(provenance.SourceURI),
+		ConsentDocumentLabel: strings.TrimSpace(provenance.ConsentDocumentLabel),
+		Notes:                strings.TrimSpace(provenance.Notes),
+		CollectedAt:          strings.TrimSpace(provenance.CollectedAt),
+	}
+	missing := []string{}
+	if normalized.SourceType == "" {
+		missing = append(missing, "sourceType")
+	}
+	if normalized.RightsBasis == "" {
+		missing = append(missing, "rightsBasis")
+	}
+	if normalized.ConsentStatus == "" {
+		missing = append(missing, "consentStatus")
+	}
+	if normalized.AllowedUse == "" {
+		missing = append(missing, "allowedUse")
+	}
+	if normalized.RetentionPolicy == "" {
+		missing = append(missing, "retentionPolicy")
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("voice profile provenance missing required field(s): %s", strings.Join(missing, ", "))
+	}
+	if normalized.Notes == "" && voiceProfileProvenanceNeedsNotes(normalized) {
+		return nil, errors.New("voice profile provenance notes are required for other, unknown, or pending selections")
+	}
+	return normalized, nil
+}
+
+func voiceProfileProvenanceNeedsNotes(provenance *VoiceProfileProvenance) bool {
+	return provenanceSelectionNeedsNotes(provenance.SourceType) ||
+		provenanceSelectionNeedsNotes(provenance.RightsBasis) ||
+		provenanceSelectionNeedsNotes(provenance.ConsentStatus) ||
+		provenanceSelectionNeedsNotes(provenance.AllowedUse) ||
+		provenanceSelectionNeedsNotes(provenance.RetentionPolicy)
+}
+
+func provenanceSelectionNeedsNotes(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "other", "unknown", "pending":
+		return true
+	default:
+		return false
+	}
+}
+
+func cloneVoiceProfileProvenance(provenance *VoiceProfileProvenance) *VoiceProfileProvenance {
+	if provenance == nil {
+		return nil
+	}
+	cloned := *provenance
+	return &cloned
+}
+
 type storedVoiceProfileSource struct {
 	VoiceProfileSource
 }
@@ -261,8 +334,28 @@ func (service *Service) CreateVoiceProfileSource(
 	sourceFileName string,
 	sourceBytes int64,
 ) (VoiceProfileSource, error) {
+	return service.CreateVoiceProfileSourceWithOptions(
+		ctx,
+		sourcePath,
+		sourceFileName,
+		sourceBytes,
+		CreateVoiceProfileSourceOptions{},
+	)
+}
+
+func (service *Service) CreateVoiceProfileSourceWithOptions(
+	ctx context.Context,
+	sourcePath string,
+	sourceFileName string,
+	sourceBytes int64,
+	options CreateVoiceProfileSourceOptions,
+) (VoiceProfileSource, error) {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	provenance, err := NormalizeVoiceProfileProvenance(options.Provenance)
+	if err != nil {
+		return VoiceProfileSource{}, err
 	}
 	if service.options.MaxProfileBytes > 0 && sourceBytes > service.options.MaxProfileBytes {
 		return VoiceProfileSource{}, fmt.Errorf("%w", ErrProfileTooLarge)
@@ -312,6 +405,7 @@ func (service *Service) CreateVoiceProfileSource(
 			ProgressDetail:   "Waiting to normalize uploaded media.",
 			Stages:           initialVoiceProfileSourceStages(),
 			Candidates:       []VoiceProfileCandidate{},
+			Provenance:       provenance,
 			StrategyVersion:  service.options.VoiceProfileAnalysisStrategyVersion,
 			CreatedAt:        now,
 			UpdatedAt:        now,
@@ -475,6 +569,7 @@ func (service *Service) CreateVoiceProfileFromCandidateWithOptions(
 			ReferenceSpans:          candidate.Spans,
 			QualityMetrics:          &qualityMetrics,
 			Denoise:                 candidate.Denoise,
+			Provenance:              cloneVoiceProfileProvenance(source.Provenance),
 			AudioFormat:             "audio/wav",
 			Status:                  VoiceProfileStatusReady,
 			DurationMS:              referenceDurationMS,

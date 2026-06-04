@@ -311,7 +311,12 @@ function CandidateCard({
   onTranscriptRefresh: () => void;
 }>) {
   const isCreating = createCandidateId === candidate.id;
-  const canCreate = selectedTargets.length > 0 && !isCreating;
+  const createDisabledReason = cloneCandidateCreateDisabledReason({
+    isCreating,
+    language,
+    name,
+    selectedTargets,
+  });
   const [previewKind, setPreviewKind] = useState<CandidatePreviewKind>("clean");
   return (
     <article className="grid gap-3 rounded-lg border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-3">
@@ -421,14 +426,46 @@ function CandidateCard({
       />
       <button
         className="inline-flex h-9 items-center justify-center rounded-md bg-[var(--vs-action-primary)] px-3 text-sm font-semibold text-[var(--vs-action-primary-text)] hover:bg-[var(--vs-action-primary-hover)] disabled:cursor-not-allowed disabled:bg-[var(--vs-action-disabled-bg)]"
-        disabled={!canCreate}
+        disabled={Boolean(createDisabledReason)}
         onClick={onCreate}
+        title={createDisabledReason ?? undefined}
         type="button"
       >
-        {isCreating ? "Creating..." : "Create Profile"}
+        {isCreating ? "Creating..." : "Create Clone"}
       </button>
+      {createDisabledReason ? (
+        <p className="-mt-1 text-xs leading-5 text-[var(--vs-text-muted)]">
+          {createDisabledReason}
+        </p>
+      ) : null}
     </article>
   );
+}
+
+function cloneCandidateCreateDisabledReason({
+  isCreating,
+  language,
+  name,
+  selectedTargets,
+}: Readonly<{
+  isCreating: boolean;
+  language: string;
+  name: string;
+  selectedTargets: string[];
+}>): string | null {
+  if (isCreating) {
+    return "Clone creation is already running.";
+  }
+  if (!name.trim()) {
+    return "Name this cloned voice first.";
+  }
+  if (!language.trim()) {
+    return "Set the language code first.";
+  }
+  if (selectedTargets.length === 0) {
+    return "Select at least one backend target first.";
+  }
+  return null;
 }
 
 function CandidatePreview({

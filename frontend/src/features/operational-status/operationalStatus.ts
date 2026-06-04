@@ -490,7 +490,7 @@ export function resolveOperationalCloningIssue({
   actionLabel: string;
   message: string;
   status: "idle" | "running" | "attention" | "complete" | "cancelled";
-}>): OperationalStatusIssue {
+}>): OperationalStatusIssue | null {
   if (status === "attention") {
     return {
       blocksCurrentStage: false,
@@ -530,17 +530,7 @@ export function resolveOperationalCloningIssue({
       severity: "info",
     };
   }
-  return {
-    blocksCurrentStage: false,
-    chipValue: status === "complete" ? "Ready" : "Idle",
-    condition: status === "complete" ? "ready" : "waiting",
-    detail: message,
-    id: status === "complete" ? "cloning-ready" : "cloning-idle",
-    label: status === "complete" ? "Voice cloning ready" : "Voice cloning idle",
-    owner: "cloning",
-    recovery: operationalRecovery("none", false, "No voice cloning recovery is needed."),
-    severity: "ok",
-  };
+  return null;
 }
 
 function resolveFailedGenerationIssue(

@@ -1097,3 +1097,84 @@ func TestVoiceProfileTranscriptRefreshEndpoints(t *testing.T) {
 		t.Fatalf("candidate transcript = %q/%q, want endpoint payload", updatedCandidate.Transcript, updatedCandidate.TranscriptModel)
 	}
 }
+
+func TestVoiceProfileSourceUploadRequiresValidProvenance(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:            t.TempDir(),
+			ProjectDataDir:        t.TempDir(),
+			VoiceProfileDir:       t.TempDir(),
+			VoiceProfileSourceDir: t.TempDir(),
+			VoiceProfileSourceAnalyzer: routerProfileSourceAnalyzer{
+				result: pipeline.VoiceProfileSourceAnalysisResult{},
+			},
+			VoiceProfileDenoiseProvider:  "none",
+			VoiceProfileDiarizationToken: "test-token",
+		},
+	)
+	app := httpapi.NewRouter(service)
+	sourcePath := writeToneWAV(t, 1000, 9000)
+
+	missingRequest := newVoiceProfileSourceUploadRequest(t, sourcePath, "")
+	missingResponse, err := app.Test(missingRequest)
+	if err != nil {
+		t.Fatalf("app.Test missing provenance returned error: %v", err)
+	}
+	defer missingResponse.Body.Close()
+	if missingResponse.StatusCode != http.StatusBadRequest {
+		payload, _ := io.ReadAll(missingResponse.Body)
+		t.Fatalf("missing provenance status = %d, want %d, body = %s", missingResponse.StatusCode, http.StatusBadRequest, payload)
+	}
+
+	malformedRequest := newVoiceProfileSourceUploadRequest(t, sourcePath, "{")
+	malformedResponse, err := app.Test(malformedRequest)
+	if err != nil {
+		t.Fatalf("app.Test malformed provenance returned error: %v", err)
+	}
+	defer malformedResponse.Body.Close()
+	if malformedResponse.StatusCode != http.StatusBadRequest {
+		payload, _ := io.ReadAll(malformedResponse.Body)
+		t.Fatalf("malformed provenance status = %d, want %d, body = %s", malformedResponse.StatusCode, http.StatusBadRequest, payload)
+	}
+}
+
+func newVoiceProfileSourceUploadRequest(
+	t *testing.T,
+	sourcePath string,
+	provenanceJSON string,
+) *http.Request {
+	t.Helper()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if provenanceJSON != "" {
+		if err := writer.WriteField("provenance", provenanceJSON); err != nil {
+			t.Fatalf("WriteField provenance returned error: %v", err)
+		}
+	}
+	part, err := writer.CreateFormFile("file", filepath.Base(sourcePath))
+	if err != nil {
+		t.Fatalf("CreateFormFile returned error: %v", err)
+	}
+	data, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatalf("Write file returned error: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("Close writer returned error: %v", err)
+	}
+	request, err := http.NewRequest(http.MethodPost, "/api/voice-profile-sources", &body)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	return request
+}

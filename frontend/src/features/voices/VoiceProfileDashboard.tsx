@@ -154,7 +154,10 @@ export function VoiceProfileDashboard({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
           <DashboardStatGrid>
-            <DashboardStat label="Saved Voices" value={formatLocaleNumber(model.totals.profiles)} />
+            <DashboardStat
+              label="Cloned Voices"
+              value={formatLocaleNumber(model.totals.profiles)}
+            />
             <DashboardStat
               label="Ready Voices"
               value={formatLocaleNumber(model.totals.readyProfiles)}
@@ -247,6 +250,7 @@ export function VoiceProfileDashboard({
                       <StatusChip tone={selectedProfile.status === "ready" ? "success" : "warning"}>
                         {selectedProfile.status}
                       </StatusChip>
+                      <DetailFact label="Asset type" value="Cloned voice profile" />
                       <DetailFact
                         label="Source"
                         value={selectedProfile.speakerName ?? selectedProfile.sourceFile}
@@ -258,6 +262,13 @@ export function VoiceProfileDashboard({
                       <DetailFact
                         label="Clone artifacts"
                         value={formatLocaleNumber(selectedArtifacts.length)}
+                      />
+                      <DetailFact
+                        label="Provenance"
+                        value={
+                          model.profiles.find((profile) => profile.id === selectedProfile.id)
+                            ?.provenanceSummary ?? "Legacy profile: provenance not recorded"
+                        }
                       />
                     </>
                   ) : (
@@ -274,6 +285,7 @@ export function VoiceProfileDashboard({
                     <>
                       <DetailFact label="File" value={model.source.fileName} />
                       <DetailFact label="Status" value={model.source.status} />
+                      <DetailFact label="Provenance" value={model.source.provenanceSummary} />
                       <DetailFact
                         label="Candidates"
                         value={formatLocaleNumber(model.source.candidateCount)}

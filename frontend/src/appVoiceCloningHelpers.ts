@@ -250,17 +250,17 @@ function resolveValidateStageStatus(
     return "waiting";
   }
   const targets = scopedCloneTargets(profile, targetIds);
-  if (
-    targets.some((target) => target.status === "ready") ||
-    (engineId ? isVoiceProfileTargetReadyForEngine(profile, engineId) : false)
-  ) {
-    return "done";
-  }
   if (targets.some((target) => target.validation?.status === "failed")) {
     return "failed";
   }
   if (targets.some((target) => target.validation?.status === "cancelled")) {
     return "failed";
+  }
+  if (
+    targets.some((target) => target.status === "ready") ||
+    (engineId ? isVoiceProfileTargetReadyForEngine(profile, engineId) : false)
+  ) {
+    return "done";
   }
   if (targets.some((target) => target.status === "validating")) {
     return "running";

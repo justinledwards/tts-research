@@ -1268,6 +1268,9 @@ export async function createVoiceProfileSource(
 ): Promise<VoiceProfileSource> {
   const formData = new FormData();
   formData.append("file", request.file);
+  if (request.provenance) {
+    formData.append("provenance", JSON.stringify(request.provenance));
+  }
 
   const response = await fetch(`${apiBaseUrl}/api/voice-profile-sources`, {
     method: "POST",

@@ -841,6 +841,7 @@ export interface VoiceProfile {
   qualityMetrics?: VoiceProfileQualityMetrics;
   denoise?: VoiceProfileDenoiseMetadata;
   likeness?: VoiceProfileLikeness;
+  provenance?: VoiceProfileProvenance;
   cloneTargets?: Record<string, VoiceProfileTarget>;
   cloneArtifacts?: Record<string, VoiceProfileCloneArtifact>;
   audioFormat: string;
@@ -967,6 +968,20 @@ export interface VoiceProfileDenoiseMetadata {
   reason?: string;
 }
 
+export interface VoiceProfileProvenance {
+  sourceType: string;
+  rightsBasis: string;
+  consentStatus: string;
+  allowedUse: string;
+  retentionPolicy: string;
+  speakerName?: string;
+  sourceOwner?: string;
+  sourceUri?: string;
+  consentDocumentLabel?: string;
+  notes?: string;
+  collectedAt?: string;
+}
+
 export interface VoiceProfileLikeness {
   status: "pending" | "ready" | "failed";
   score?: number;
@@ -1039,6 +1054,7 @@ export interface VoiceProfileSource {
   transcriptModel?: string;
   transcriptError?: string;
   transcriptConfidence?: number;
+  provenance?: VoiceProfileProvenance;
   strategyVersion: string;
   modelVersion?: string;
   createdAt: string;
@@ -1059,6 +1075,7 @@ export interface VoiceProfileSourceDiagnostics {
 
 export interface CreateVoiceProfileSourceRequest {
   file: File;
+  provenance?: VoiceProfileProvenance;
 }
 
 export interface CreateVoiceProfileFromCandidateRequest {

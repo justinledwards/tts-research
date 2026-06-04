@@ -122,6 +122,20 @@ type VoiceProfileDenoiseMetadata struct {
 	Reason          string   `json:"reason,omitempty"`
 }
 
+type VoiceProfileProvenance struct {
+	SourceType           string `json:"sourceType"`
+	RightsBasis          string `json:"rightsBasis"`
+	ConsentStatus        string `json:"consentStatus"`
+	AllowedUse           string `json:"allowedUse"`
+	RetentionPolicy      string `json:"retentionPolicy"`
+	SpeakerName          string `json:"speakerName,omitempty"`
+	SourceOwner          string `json:"sourceOwner,omitempty"`
+	SourceURI            string `json:"sourceUri,omitempty"`
+	ConsentDocumentLabel string `json:"consentDocumentLabel,omitempty"`
+	Notes                string `json:"notes,omitempty"`
+	CollectedAt          string `json:"collectedAt,omitempty"`
+}
+
 type VoiceProfileLikeness struct {
 	Status            string     `json:"status"`
 	Score             float64    `json:"score,omitempty"`
@@ -270,6 +284,7 @@ type VoiceProfileSource struct {
 	TranscriptModel       string                       `json:"transcriptModel,omitempty"`
 	TranscriptError       string                       `json:"transcriptError,omitempty"`
 	TranscriptConfidence  float64                      `json:"transcriptConfidence,omitempty"`
+	Provenance            *VoiceProfileProvenance      `json:"provenance,omitempty"`
 	StrategyVersion       string                       `json:"strategyVersion"`
 	ModelVersion          string                       `json:"modelVersion,omitempty"`
 	CreatedAt             time.Time                    `json:"createdAt"`
@@ -297,6 +312,7 @@ type VoiceProfile struct {
 	QualityMetrics          *VoiceProfileQualityMetrics          `json:"qualityMetrics,omitempty"`
 	Denoise                 *VoiceProfileDenoiseMetadata         `json:"denoise,omitempty"`
 	Likeness                *VoiceProfileLikeness                `json:"likeness,omitempty"`
+	Provenance              *VoiceProfileProvenance              `json:"provenance,omitempty"`
 	CloneTargets            map[string]VoiceProfileTarget        `json:"cloneTargets,omitempty"`
 	CloneArtifacts          map[string]VoiceProfileCloneArtifact `json:"cloneArtifacts,omitempty"`
 	AudioFormat             string                               `json:"audioFormat"`
