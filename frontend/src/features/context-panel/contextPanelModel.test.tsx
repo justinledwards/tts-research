@@ -40,6 +40,14 @@ describe("context panel inspector contract", () => {
     ).toEqual(issueTarget);
     expect(
       resolveWorkspaceInspectorTarget({
+        fallbackTarget: issueTarget,
+        selectedTarget: { id: "missing", kind: "cue", label: "Missing cue" },
+        stage: "preview",
+        targets,
+      }).target,
+    ).toEqual(issueTarget);
+    expect(
+      resolveWorkspaceInspectorTarget({
         selectedTarget: { id: "missing", kind: "cue", label: "Missing cue" },
         stage: "preview",
         targets,
@@ -194,6 +202,71 @@ describe("context panel inspector contract", () => {
     expect(markup).toContain("Why it matters");
     expect(markup).toContain("Next step");
     expect(markup).toContain("Provider failed.");
+  });
+
+  it("defaults Preview inspector to audio recovery instead of cue text", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceContextInspector
+        {...workspaceInspectorProps({
+          audio: {
+            detail:
+              "12/70 segments are ready. Retry generation to create the full narration track.",
+            eta: "Ready",
+            jobLabel: "job-123456",
+            lifecycleLabel: "Generation failed",
+            queue: {
+              currentSegment: 12,
+              generatingCount: 0,
+              readyCount: 12,
+              totalSegments: 70,
+            },
+            tone: "warning",
+          },
+          stage: "preview",
+          status: stageStatus({ stage: "preview" }),
+        })}
+        fallbackTarget={{ id: "audio-failed", kind: "issue", label: "Generation failed" }}
+        targets={inspectorTargets({
+          jobs: [
+            {
+              detail: "status=failed | terminalReason=provider_failed",
+              facts: [
+                { label: "Job", value: "job-123456" },
+                { label: "Audio", tone: "warning", value: "Generation failed" },
+              ],
+              id: "job-123456",
+              label: "job-123456",
+              tone: "warning",
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(markup).toContain('data-context-panel-active-tab="overview"');
+    expect(markup).toContain("Issue · Generation failed");
+    expect(markup).toContain("What happened");
+    expect(markup).toContain("Preview readiness");
+    expect(markup).toContain("Queue");
+    expect(markup).not.toContain("Cue · Block 1");
+  });
+
+  it("keeps explicit cue selection available in Preview", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceContextInspector
+        {...workspaceInspectorProps({
+          stage: "preview",
+          status: stageStatus({ stage: "preview" }),
+        })}
+        fallbackTarget={{ id: "audio-failed", kind: "issue", label: "Generation failed" }}
+        selectedTarget={{ id: "cue-1", kind: "cue", label: "Block 1" }}
+        targets={inspectorTargets()}
+      />,
+    );
+
+    expect(markup).toContain('data-context-panel-active-tab="review"');
+    expect(markup).toContain("Cue detail");
+    expect(markup).not.toContain("What happened");
   });
 
   it("keeps stage blockers visible when pinned to another object", () => {

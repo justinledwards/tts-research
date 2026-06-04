@@ -808,7 +808,8 @@ async function seedAuditData(fixtures) {
     (await createBookNarrationJob(project.id, epubBook.id, epubScope)).id,
   );
 
-  const markdownSource = await uploadPreparedSource(project.id, fixtures.markdown);
+  let markdownSource = await uploadPreparedSource(project.id, fixtures.markdown);
+  markdownSource = await confirmPreparedSourceReadinessForAudit(markdownSource, "Citations");
   const markdownBlockIds = selectedPreparedBlockIds(markdownSource);
   const markdownJob = await waitForJob(
     (await createPreparedNarrationJob(project.id, markdownSource.id, markdownBlockIds)).id,
@@ -824,6 +825,7 @@ async function seedAuditData(fixtures) {
       method: "POST",
     });
     assertWebsiteExtractionQuality(websiteSource);
+    websiteSource = await confirmPreparedSourceReadinessForAudit(websiteSource, "Website Fixture");
     websiteJob = await waitForJob(
       (
         await createPreparedNarrationJob(
@@ -1117,6 +1119,34 @@ function createScenarios(seed) {
     workspaceScenario(seed.projectId, "workspace-review", "Review", "Review", workspaceText),
     workspaceScenario(seed.projectId, "workspace-preview", "Preview", "Preview", workspaceText),
     {
+      description: "Workspace Preview with a retryable full-audio generation failure.",
+      id: "workspace-preview-generation-failed",
+      label: "Workspace Preview generation failed",
+      open: (page) =>
+        openPreviewGenerationFailedRecovery(page, seed.website.job, seed.website.source),
+      storageState: projectStorageState(seed.projectId, {
+        jobId: seed.website.job.id,
+        preparedSourceId: seed.website.source.id,
+        sourceMode: "fileUrl",
+        sourceType: "prepared",
+        stage: "preview",
+        text: seed.website.source.speechText ?? seed.website.source.text ?? "",
+      }),
+      surface: "Preview",
+    },
+    {
+      description: "Workspace Preview audition 404 recovery.",
+      id: "workspace-preview-audition-404",
+      label: "Workspace Preview audition recovery",
+      open: openPreviewAudition404Recovery,
+      storageState: projectStorageState(seed.projectId, {
+        sourceMode: "text",
+        stage: "preview",
+        text: workspaceText,
+      }),
+      surface: "Preview",
+    },
+    {
       description: "Teleprompt stage reached from workspace review.",
       id: "workspace-teleprompt",
       label: "Workspace Teleprompt",
@@ -1303,7 +1333,10 @@ async function openWorkspaceStage(page, label) {
       : label === "Review"
         ? page.getByTestId("workspace-stage-review")
         : page.getByRole("button", { exact: true, name: label }).first();
-  if (await button.isVisible().catch(() => false)) {
+  if (
+    (await button.isVisible().catch(() => false)) &&
+    (await button.isEnabled().catch(() => false))
+  ) {
     await button.click();
   }
   if (label === "Intake") {
@@ -1400,7 +1433,9 @@ async function assertWorkspaceReviewRepairLayout(page) {
 }
 
 async function assertWorkspacePreviewEmptyLayout(page) {
-  await page.getByTestId("preview-generated-audio-empty-state").waitFor({ state: "visible" });
+  const generatedAudioEmptyState = page.getByTestId("preview-generated-audio-empty-state");
+  await generatedAudioEmptyState.scrollIntoViewIfNeeded();
+  await generatedAudioEmptyState.waitFor({ state: "visible" });
   await waitForEnabledTestId(page, "workspace-stage-action-createAndListen");
   const report = await page.evaluate(() => {
     const failures = [];
@@ -1466,6 +1501,100 @@ async function assertWorkspacePreviewEmptyLayout(page) {
   }
 }
 
+async function assertWorkspacePreviewGenerationFailedRecoveryLayout(page) {
+  const generatedAudioEmptyState = page.getByTestId("preview-generated-audio-empty-state");
+  await generatedAudioEmptyState.scrollIntoViewIfNeeded();
+  await generatedAudioEmptyState.waitFor({ state: "visible" });
+  await page
+    .getByRole("button", { name: /Retry generation/i })
+    .first()
+    .waitFor();
+  const retryReachable = await page
+    .getByRole("button", { name: /Retry generation/i })
+    .evaluateAll((buttons) =>
+      buttons.some(
+        (button) =>
+          button instanceof HTMLButtonElement &&
+          !button.disabled &&
+          button.getAttribute("aria-disabled") !== "true",
+      ),
+    );
+  if (!retryReachable) {
+    throw new Error("Retry generation is not reachable in Preview failed-generation recovery.");
+  }
+  const generatedAudioPlaceholderText =
+    (await page.getByTestId("preview-generated-audio-empty-state").textContent()) ?? "";
+  if (!/Audio needs retry|Retry generation/i.test(generatedAudioPlaceholderText)) {
+    throw new Error("Preview generated-audio placeholder does not describe retry recovery.");
+  }
+  await page
+    .getByText(/Issue · Generation failed/i)
+    .first()
+    .waitFor();
+  const report = await page.evaluate(() => {
+    const failures = [];
+    const visible = (element) =>
+      element instanceof HTMLElement &&
+      element.offsetParent !== null &&
+      element.getClientRects().length > 0 &&
+      !element.closest("[aria-hidden='true']");
+    const rectFor = (selector) => {
+      const element = document.querySelector(selector);
+      if (!visible(element)) {
+        failures.push(`${selector} is not visible`);
+        return null;
+      }
+      const rect = element.getBoundingClientRect();
+      return {
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        width: rect.width,
+      };
+    };
+    const overlapArea = (left, right) =>
+      Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left)) *
+      Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top));
+    const audition = rectFor("[data-testid='preview-audition-panel']");
+    const generated = rectFor("[data-testid='preview-generated-audio-panel']");
+    const placeholder = rectFor("[data-testid='preview-generated-audio-empty-state']");
+    const inspector = rectFor("[data-context-panel-surface='Workspace']");
+    const footerElement = document.querySelector("[data-testid='narration-status-strip']");
+    const footer = visible(footerElement) ? footerElement.getBoundingClientRect() : null;
+    const inspectorText =
+      document.querySelector("[data-context-panel-surface='Workspace']")?.textContent ?? "";
+    if (!/Issue · Generation failed/i.test(inspectorText)) {
+      failures.push("Preview inspector does not show generation failure context");
+    }
+    if (!/Queue/i.test(inspectorText)) {
+      failures.push("Preview inspector is missing recovery issue or queue context");
+    }
+    if (/Cue ·|Cue detail/i.test(inspectorText)) {
+      failures.push("Preview inspector still defaults to cue text in failed generation state");
+    }
+    if (audition && generated && overlapArea(audition, generated) > 64) {
+      failures.push("Preview audition panel overlaps generated-audio recovery placeholder");
+    }
+    if (footer && inspector && overlapArea(inspector, footer) > 64) {
+      failures.push("Preview recovery inspector overlaps the status strip");
+    }
+    if (footer && placeholder && overlapArea(placeholder, footer) > 0) {
+      failures.push("Generated-audio recovery placeholder overlaps the status strip");
+    }
+    if (visible(document.querySelector("[data-testid='localized-preview-playback-toolbar']"))) {
+      failures.push("Preview playback toolbar is visible while generated audio failed");
+    }
+    return failures;
+  });
+  if (report.length > 0) {
+    throw new Error(
+      `Workspace preview failed-generation recovery layout failed: ${report.join("; ")}`,
+    );
+  }
+}
+
 async function clickPreviewMiniPlayerIfReady(page) {
   const player = page.getByTestId("global-preview-player");
   if (await player.isVisible().catch(() => false)) {
@@ -1475,6 +1604,147 @@ async function clickPreviewMiniPlayerIfReady(page) {
   }
   await clickIfEnabledTestId(page, "ui-action-preview-local-play");
   await selectIfEnabledTestId(page, "ui-action-preview-local-speed", "1.25");
+}
+
+async function openPreviewGenerationFailedRecovery(page, job, source) {
+  const failedJob = failedPreviewGenerationJob(job);
+  const cleanSource = cleanPreparedSourceForGenerationFailedFixture(source);
+  await page.route("**/api/voice-jobs/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === "GET" && url.pathname === `/api/voice-jobs/${failedJob.id}`) {
+      await route.fulfill({
+        body: JSON.stringify(failedJob),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (
+      route.request().method() === "POST" &&
+      url.pathname === `/api/voice-jobs/${failedJob.id}/retry`
+    ) {
+      await route.fulfill({
+        body: JSON.stringify(failedJob),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route("**/api/source-preps/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() === "GET" &&
+      url.pathname === `/api/source-preps/${cleanSource.id}`
+    ) {
+      await route.fulfill({
+        body: JSON.stringify(cleanSource),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route("**/api/projects/*/source-preps", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    const response = await route.fetch();
+    const sources = await response.json();
+    const patchedSources = Array.isArray(sources)
+      ? sources.map((item) => (item.id === cleanSource.id ? cleanSource : item))
+      : sources;
+    await route.fulfill({
+      body: JSON.stringify(patchedSources),
+      contentType: "application/json",
+      status: response.status(),
+    });
+  });
+  await gotoApp(page);
+  await assertWorkspacePreviewGenerationFailedRecoveryLayout(page);
+}
+
+async function openPreviewAudition404Recovery(page) {
+  await openWorkspaceStage(page, "Preview");
+  await page.route("**/api/voice-previews", async (route) => {
+    await route.fulfill({
+      body: "Cannot POST /api/voice-previews",
+      contentType: "text/plain",
+      headers: { "x-e2e-expected-error": "preview-audition-404" },
+      status: 404,
+    });
+  });
+  await waitForEnabledTestId(page, "ui-action-preview-audition-voice");
+  await page.getByTestId("ui-action-preview-audition-voice").click();
+  await page.getByText(/Audition could not find the current project or preview route/i).waitFor();
+  await assertWorkspacePreviewEmptyLayout(page);
+}
+
+function failedPreviewGenerationJob(job) {
+  const totalSegments = Math.max(
+    70,
+    job.retries?.totalSegments ?? 0,
+    job.progress?.totalSegments ?? 0,
+    job.segments?.length ?? 0,
+  );
+  const readySegments = Math.min(12, totalSegments);
+  return {
+    ...job,
+    audioReadySegments: readySegments,
+    error: "Provider failed while creating audio.",
+    failureKind: "engine",
+    progress: {
+      ...job.progress,
+      activeStage: "failed",
+      currentSegment: readySegments + 1,
+      detail: "Provider failed while creating audio.",
+      message: "Generation failed",
+      totalSegments,
+    },
+    retries: {
+      ...job.retries,
+      currentSegment: readySegments + 1,
+      totalSegments,
+    },
+    retriable: true,
+    status: "failed",
+    terminalReason: "provider_failed",
+  };
+}
+
+function cleanPreparedSourceForGenerationFailedFixture(source) {
+  return {
+    ...source,
+    blocks: (source.blocks ?? []).map((block) => ({
+      ...block,
+      confidence: 1,
+      normalisations: [],
+      pronunciations: [],
+      speakMode: "speak",
+      speechPolicy: {
+        ...block.speechPolicy,
+        element: "spoken",
+        explanation: "",
+        mode: "speak",
+      },
+      warnings: [],
+    })),
+    sourceReadiness: {
+      ...(source.sourceReadiness ?? {}),
+      confirmedFields: ["title", "sourceType", "language", "structure"],
+      detail: "Source metadata and structure are confirmed for Preview.",
+      language: "en",
+      sourceType: "document",
+      state: "ready",
+      structureLabel: "Document",
+      title: source.title ?? source.sourceName ?? "Website Fixture",
+    },
+    status: "ready",
+    warnings: [],
+  };
 }
 
 async function clickIfEnabledTestId(page, testId) {
@@ -2233,6 +2503,21 @@ async function uploadPreparedSource(projectId, filePath) {
   return source;
 }
 
+async function confirmPreparedSourceReadinessForAudit(source, fallbackTitle) {
+  return apiJson(`/api/source-preps/${source.id}/readiness/confirm`, {
+    body: JSON.stringify({
+      language: "en",
+      sourceType: "document",
+      speechPolicyProfile: "balanced",
+      structureLabel: "Document",
+      title: source.title ?? fallbackTitle,
+      voiceProfileId: "default",
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+}
+
 async function createBookNarrationJob(projectId, bookSourceId, bookScope) {
   return apiJson(`/api/book-sources/${bookSourceId}/voice-jobs`, {
     body: JSON.stringify({
@@ -2525,6 +2810,9 @@ function collectPageIssues(page) {
   });
   page.on("response", (response) => {
     if (response.status() >= 400) {
+      if (response.headers()["x-e2e-expected-error"] === "preview-audition-404") {
+        return;
+      }
       addIssue(`response ${String(response.status())}: ${response.url()}`);
     }
   });

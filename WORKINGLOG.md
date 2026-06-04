@@ -1532,3 +1532,22 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Run focused and project checks
 - [x] Commit work package
 - Validation: focused frontend Preview tests passed; frontend typecheck passed; responsive snapshots passed; `pnpm check` passed with existing unrelated Biome warnings. Managed `e2e:ui-actions:quick` replay passed 48/48 activations with 0 overlay collisions, but the filtered run still exits non-zero for existing review-gate coverage and duplicate-control backlog.
+
+## 2026-06-04 16:18 CEST - Preview Audition 404 Recovery
+- [x] Preserve audition preview error status
+- [x] Add friendly Preview audition 404 recovery
+- [x] Update focused regression coverage
+- [x] Run focused and project checks
+- Validation: focused Preview/API tests passed; frontend typecheck passed; responsive snapshots passed; `git diff --check` passed; `pnpm check` passed on rerun after a transient backend pipeline test failure passed in isolation. Managed `e2e:ui-actions:quick` replay passed 64/64 activations with 0 overlay collisions and 0 disabled-without-reason findings, but the filtered run still exits non-zero for the existing review gate. The packaged existing-server quick run still fails during seed on the local/private URL guard before UI replay.
+
+## 2026-06-04 17:38 CEST - Preview Full-Audio Recovery
+- [x] Model retryable generation failure as recoverable
+- [x] Retarget Preview Inspector to audio recovery
+- [x] Update regression coverage
+- [x] Run focused and project checks
+- Validation: focused frontend workspace/Preview/status/Inspector/API tests passed; frontend typecheck passed; responsive snapshots passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome warnings/infos. Packaged existing-server `e2e:ui-actions:quick` still fails the local/private URL seed guard; managed quick replay had 0 action failures but still exits non-zero for the existing review gate.
+
+## 2026-06-04 21:53 CEST - Commit Preview Recovery Package
+- [x] Review worktree scope
+- [x] Stage Preview recovery work package
+- [x] Create commit

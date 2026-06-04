@@ -26,11 +26,11 @@ describe("operational status model", () => {
     });
 
     expect(issue).toMatchObject({
-      chipValue: "Failed",
+      chipValue: "Retry",
       condition: "failed",
       label: "Generation failed",
       recovery: { id: "retryGeneration", label: "Retry generation" },
-      severity: "error",
+      severity: "warning",
     });
     expect(issue.detail).toBe("Provider failed while creating audio.");
     expect(issue.technicalDetail).toContain("terminalReason=provider_failed");

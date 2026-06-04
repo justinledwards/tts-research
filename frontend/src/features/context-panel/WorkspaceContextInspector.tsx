@@ -96,6 +96,7 @@ export interface WorkspaceContextInspectorProps {
   readonly audio: WorkspaceInspectorAudioModel;
   readonly diagnostics: WorkspaceInspectorDiagnosticsModel;
   readonly displayState: ContextPanelDisplayState;
+  readonly fallbackTarget?: WorkspaceInspectorTarget | null;
   readonly history: WorkspaceInspectorHistoryModel;
   readonly pinned?: boolean;
   readonly pinnedTarget?: WorkspaceInspectorTarget | null;
@@ -125,6 +126,7 @@ export function WorkspaceContextInspector({
   audio,
   diagnostics,
   displayState,
+  fallbackTarget,
   history,
   pinned = false,
   pinnedTarget,
@@ -156,11 +158,12 @@ export function WorkspaceContextInspector({
     () =>
       resolveWorkspaceInspectorTarget({
         pinnedTarget: pinned ? pinnedTarget : null,
+        fallbackTarget,
         selectedTarget,
         stage,
         targets: contextTargets,
       }),
-    [contextTargets, pinned, pinnedTarget, selectedTarget, stage],
+    [contextTargets, fallbackTarget, pinned, pinnedTarget, selectedTarget, stage],
   );
   const resolvedTargetTab = contextPanelTabForWorkspaceInspectorTarget(resolvedTarget.target);
   const [activeContextTab, setActiveContextTab] = useState<ContextPanelTabId>(resolvedTargetTab);
@@ -297,7 +300,15 @@ function workspaceInspectorSections({
     }
     case "issue": {
       const issue = contextTargets.issues.find((item) => item.id === resolvedTarget.target.id);
-      return issue ? [issueDetailSection(issue)] : stageSections();
+      return issue
+        ? issueInspectorSections({
+            audio,
+            diagnostics,
+            diagnosticsContent: review.diagnosticsContent,
+            issue,
+            stage,
+          })
+        : stageSections();
     }
     case "job": {
       const job = contextTargets.jobs.find((item) => item.id === resolvedTarget.target.id);
@@ -324,6 +335,32 @@ function workspaceInspectorSections({
   }
   const exhaustive: never = resolvedTarget.target;
   return exhaustive;
+}
+
+function issueInspectorSections({
+  audio,
+  diagnostics,
+  diagnosticsContent,
+  issue,
+  stage,
+}: Readonly<{
+  audio: WorkspaceInspectorAudioModel;
+  diagnostics: WorkspaceInspectorDiagnosticsModel;
+  diagnosticsContent: ReactNode;
+  issue: OperationalStatusIssue;
+  stage: WorkspaceStage;
+}>): readonly ContextPanelSectionInput[] {
+  if (issue.owner !== "audio" || stage !== "preview") {
+    return [issueDetailSection(issue)];
+  }
+  return [
+    issueDetailSection(issue),
+    audioReadinessSection(audio),
+    queueSection(audio, "overview"),
+    ...(diagnosticsHasContent(diagnostics, diagnosticsContent)
+      ? [diagnosticsSection(diagnostics, diagnosticsContent)]
+      : []),
+  ];
 }
 
 function workspaceInspectorStageSections({
@@ -680,7 +717,10 @@ function policySection(
   };
 }
 
-function queueSection(audio: WorkspaceInspectorAudioModel): ContextPanelSectionInput {
+function queueSection(
+  audio: WorkspaceInspectorAudioModel,
+  tabId: ContextPanelTabId = "review",
+): ContextPanelSectionInput {
   return {
     children: (
       <QueueInspectorSection
@@ -700,7 +740,7 @@ function queueSection(audio: WorkspaceInspectorAudioModel): ContextPanelSectionI
     id: "workspace-inspector-queue",
     kind: "generation-queue",
     priority: "primary",
-    tabId: "review",
+    tabId,
     title: "Queue",
   };
 }
@@ -987,6 +1027,15 @@ function WorkspaceInspectorCollapsedSummary({
   }
   if (target.kind === "issue") {
     const issue = contextTargets.issues.find((item) => item.id === target.id);
+    if (issue?.owner === "audio") {
+      return (
+        <p className="text-xs leading-5 vs-muted">
+          Issue · {issue.label} · {issue.recovery.label} · Queue ·{" "}
+          {audio.queue.readyCount.toString()}/{audio.queue.totalSegments.toString()} ready · Job{" "}
+          {audio.jobLabel}
+        </p>
+      );
+    }
     return (
       <p className="text-xs leading-5 vs-muted">
         Issue · {issue?.label ?? target.label} · {issue?.recovery.label ?? "Review"}

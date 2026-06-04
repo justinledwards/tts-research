@@ -78,13 +78,12 @@ export function resolvePreviewReadinessModel(
     source.status === "ready" && spoken.status === "ready" && voice.status === "ready";
   const audio = resolveGeneratedAudioReadiness(input.generatedAudioLifecycle, input.audioPipeline);
   const canOpenAudioSurface = input.generatedAudioLifecycle === "ready";
-  const canCreate = input.canCreate && canAudition && review.status === "ready";
+  const canCreate = input.canCreate && canAudition;
   const canOpenTeleprompt = source.status === "ready" && spoken.status === "ready";
   const canOpenTheatre = canOpenTeleprompt;
   const createDisabledReason = canCreate
     ? undefined
-    : (firstBlockingDetail([source, spoken, review, voice, runtime]) ??
-      firstWarningDetail([review]) ??
+    : (firstBlockingDetail([source, spoken, voice, runtime]) ??
       input.createDisabledReason ??
       "Select a ready source or wait for the current run.");
   const openTelepromptDisabledReason = canOpenTeleprompt
@@ -346,8 +345,16 @@ function resolveGeneratedAudioReadiness(
       status: "waiting",
     };
   }
+  if (lifecycle === "failed" && pipeline?.canRetryGeneration && pipeline.canCreateAndListen) {
+    return {
+      detail: pipeline.detail,
+      id: "audio",
+      label: "Generated audio",
+      status: "warning",
+    };
+  }
   return {
-    detail: descriptor.disabledReason,
+    detail: pipeline?.detail ?? descriptor.disabledReason,
     id: "audio",
     label: "Generated audio",
     status: "blocked",
@@ -385,7 +392,8 @@ function previewPrimaryLabel(
 ): string {
   if (
     ((pipeline?.state === "failed" || pipeline?.state === "cancelled") &&
-      pipeline.canRetryGeneration) ||
+      pipeline.canRetryGeneration &&
+      pipeline.canCreateAndListen) ||
     (!pipeline && lifecycle === "failed")
   ) {
     return OPERATIONAL_RECOVERY_LABELS.retryGeneration;
@@ -398,8 +406,4 @@ function previewPrimaryLabel(
 
 function firstBlockingDetail(rows: readonly PreviewReadinessRow[]): string | undefined {
   return rows.find((row) => row.status === "blocked" || row.status === "working")?.detail;
-}
-
-function firstWarningDetail(rows: readonly PreviewReadinessRow[]): string | undefined {
-  return rows.find((row) => row.status === "warning")?.detail;
 }

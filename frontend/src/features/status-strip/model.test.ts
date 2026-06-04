@@ -129,12 +129,17 @@ describe("resolveNarrationStatusModel", () => {
     expect(model.primaryAction?.id).toBe("openCinema");
   });
 
-  it("surfaces failures and cancellations with recovery copy", () => {
+  it("surfaces retryable failures and cancellations with recovery copy", () => {
     const failed = resolveNarrationStatusModel(
       input({
         canCreate: true,
         generatedAudioLifecycle: "failed",
-        job: job({ error: "Provider failed", status: "failed" }),
+        job: job({
+          error: "Provider failed",
+          retriable: true,
+          status: "failed",
+          terminalReason: "provider_failed",
+        }),
       }),
     );
     const cancelled = resolveNarrationStatusModel(
@@ -145,11 +150,49 @@ describe("resolveNarrationStatusModel", () => {
       }),
     );
 
-    expect(failed.state).toBe("failed");
+    expect(failed.state).toBe("blocked");
     expect(failed.blocker?.detail).toBe("Provider failed");
+    expect(failed.primaryAction).toMatchObject({
+      id: "retry",
+      label: "Retry generation",
+      tone: "warning",
+    });
+    expect(failed.chips.find((chip) => chip.id === "source")).toMatchObject({
+      tone: "success",
+      value: "Narratable",
+    });
+    expect(failed.chips.find((chip) => chip.id === "audio")).toMatchObject({
+      tone: "warning",
+      value: "Retry",
+    });
     expect(cancelled.state).toBe("cancelled");
     expect(cancelled.primaryLabel).toBe("Generation cancelled");
     expect(cancelled.primaryMessage).toBe("Generation cancelled. Retry generation");
+  });
+
+  it("keeps non-retryable generation failures in diagnostics-critical recovery", () => {
+    const model = resolveNarrationStatusModel(
+      input({
+        canCreate: true,
+        generatedAudioLifecycle: "failed",
+        job: job({
+          error: "Voice profile artifact is missing.",
+          retriable: false,
+          status: "failed",
+          terminalReason: "configuration_failed",
+        }),
+      }),
+    );
+
+    expect(model.state).toBe("failed");
+    expect(model.blocker).toMatchObject({
+      title: "Configuration blocks generation",
+    });
+    expect(model.primaryAction).toMatchObject({
+      id: "openDiagnostics",
+      label: "Open diagnostics",
+      tone: "danger",
+    });
   });
 
   it("blocks stale or degraded audio before ready playback", () => {
@@ -240,6 +283,42 @@ describe("resolveNarrationStatusModel", () => {
     });
     expect(model.blocker).toMatchObject({
       title: "Audio needs rebuild",
+    });
+  });
+
+  it("keeps source readiness separate from failed generated audio", () => {
+    const model = resolveNarrationStatusModel(
+      input({
+        canCreate: true,
+        generatedAudioLifecycle: "failed",
+        job: job({
+          retriable: true,
+          status: "failed",
+          terminalReason: "provider_failed",
+        }),
+        sourceLifecycle: sourceLifecycle({
+          canonicalState: "narratable",
+          generatedAudioState: "failed",
+          sourceReadiness: {
+            detail: "Source metadata and structure are confirmed for Preview.",
+            state: "ready",
+            title: "Existing source",
+          },
+        }),
+      }),
+    );
+
+    expect(model.chips.find((chip) => chip.id === "source")).toMatchObject({
+      tone: "success",
+      value: "Narratable",
+    });
+    expect(model.chips.find((chip) => chip.id === "audio")).toMatchObject({
+      tone: "warning",
+      value: "Retry",
+    });
+    expect(model.primaryAction).toMatchObject({
+      id: "retry",
+      label: "Retry generation",
     });
   });
 

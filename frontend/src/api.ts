@@ -144,7 +144,7 @@ export async function createVoicePreview(
   });
 
   if (!response.ok) {
-    throw new Error(await readError(response));
+    throw await apiError(response);
   }
 
   const contentType = response.headers.get("Content-Type") ?? "audio/wav";
@@ -1524,12 +1524,31 @@ export function backendAssetUrl(path: string): string {
 }
 
 async function readError(response: Response): Promise<string> {
+  const fallback = `Request failed with ${String(response.status)}`;
+  let rawBody = "";
   try {
-    const payload = (await response.json()) as { error?: string };
-    return payload.error ?? `Request failed with ${String(response.status)}`;
+    rawBody = await response.text();
   } catch {
-    return `Request failed with ${String(response.status)}`;
+    return fallback;
   }
+  const trimmed = rawBody.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  try {
+    const payload = JSON.parse(trimmed) as { error?: unknown; message?: unknown };
+    const error = typeof payload.error === "string" ? payload.error.trim() : "";
+    if (error) {
+      return error;
+    }
+    const message = typeof payload.message === "string" ? payload.message.trim() : "";
+    if (message) {
+      return message;
+    }
+  } catch {
+    return trimmed;
+  }
+  return trimmed;
 }
 
 async function apiError(response: Response): Promise<ApiRequestError> {

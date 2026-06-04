@@ -282,6 +282,7 @@ import {
 } from "./features/playback/playbackSurfaceRules";
 import { resolvePreviewReadinessModel } from "./features/preview/previewReadiness";
 import {
+  PREVIEW_AUDITION_NOT_FOUND_MESSAGE,
   PreviewGeneratedAudioPanel,
   PreviewConfirmationStrip,
   PreviewReadinessChecklist,
@@ -685,6 +686,15 @@ function workspaceSourceType(sourceMode: SourceMode): WorkspaceSourceType {
     return "prepared";
   }
   return "draft";
+}
+
+function canRetryVoiceJob(candidate: VoiceJob | null): candidate is VoiceJob {
+  return Boolean(
+    candidate?.id &&
+      (candidate.status === "failed" || candidate.status === "cancelled") &&
+      candidate.retriable !== false &&
+      candidate.terminalReason !== "configuration_failed",
+  );
 }
 
 function isSameCinemaFocusState(left: UiMemoryCinemaState, right: UiMemoryCinemaState): boolean {
@@ -3206,19 +3216,11 @@ export function App() {
   } else if (!isProcessing) {
     hasCreatableCurrentSource = text.trim().length > 0;
   }
-  const reviewCompleteForGeneration = revisionHealthSummary.previewWarnings === 0;
-  const canCreateCurrentSource =
-    hasCreatableCurrentSource && !createAndListenCapabilityReason && reviewCompleteForGeneration;
-  let createAndListenDisabledReason: string | undefined;
-  if (!canCreateCurrentSource) {
-    if (createAndListenCapabilityReason) {
-      createAndListenDisabledReason = createAndListenCapabilityReason;
-    } else if (reviewCompleteForGeneration) {
-      createAndListenDisabledReason = "Select a ready source or wait for the current run.";
-    } else {
-      createAndListenDisabledReason = "Open Review and repair warnings before creating audio.";
-    }
-  }
+  const canCreateCurrentSource = hasCreatableCurrentSource && !createAndListenCapabilityReason;
+  const createAndListenDisabledReason = canCreateCurrentSource
+    ? undefined
+    : (createAndListenCapabilityReason ?? "Select a ready source or wait for the current run.");
+  const canRunCurrentGenerationAction = canCreateCurrentSource || canRetryVoiceJob(job);
   const createAndListenScope = createAndListenScopeForSource({
     selectedBookScope: effectiveBookScope,
     selectedBookSource: activeNarrationBookSource,
@@ -3245,7 +3247,13 @@ export function App() {
   }
   const activeWorkbenchStageStatus = resolveWorkspaceStageStatus({
     audioLifecycle: generatedAudioLifecycle,
-    canCreate: canCreateCurrentSource,
+    audioFailureCanRetry:
+      generatedAudioLifecycle === "failed" && job ? canRetryVoiceJob(job) : undefined,
+    audioFailureDetail:
+      generatedAudioLifecycle === "failed"
+        ? previewGenerationFailureRecoveryDetail(job)
+        : undefined,
+    canCreate: canRunCurrentGenerationAction,
     canOpenCinema: canOpenCurrentCinema,
     createDisabledReason: createAndListenDisabledReason,
     hasListenerText: hasListenerReadyText,
@@ -3402,7 +3410,7 @@ export function App() {
   const narrationStatusModel = useMemo(
     () =>
       resolveNarrationStatusModel({
-        canCreate: canCreateCurrentSource,
+        canCreate: canRunCurrentGenerationAction,
         canOpenCinema: canOpenCurrentCinema,
         disclosure: workspaceDisclosure,
         generatedAudioLifecycle,
@@ -3419,7 +3427,7 @@ export function App() {
       }),
     [
       activeWorkbenchStageStatus,
-      canCreateCurrentSource,
+      canRunCurrentGenerationAction,
       canOpenCurrentCinema,
       generatedAudioLifecycle,
       isPlaybackActive,
@@ -3506,6 +3514,21 @@ export function App() {
       statusSourceLifecycle.sourceId,
     ],
   );
+  const previewWorkspaceInspectorFallbackTarget = useMemo<WorkspaceInspectorTarget | null>(() => {
+    if (contentMode !== "preview") {
+      return null;
+    }
+    const audioIssue = workspaceInspectorTargets.issues.find(
+      (issue) => issue.owner === "audio" && issue.severity !== "ok",
+    );
+    if (audioIssue) {
+      return { id: audioIssue.id, kind: "issue", label: audioIssue.label };
+    }
+    const activeInspectorJob = workspaceInspectorTargets.jobs.at(0);
+    return activeInspectorJob
+      ? { id: activeInspectorJob.id, kind: "job", label: activeInspectorJob.label }
+      : null;
+  }, [contentMode, workspaceInspectorTargets.issues, workspaceInspectorTargets.jobs]);
   const selectWorkspaceInspectorTarget = useCallback((target: WorkspaceInspectorTarget | null) => {
     setSelectedWorkspaceInspectorTarget(target);
     if (target) {
@@ -3543,6 +3566,19 @@ export function App() {
       setPinnedWorkspaceInspectorTarget(null);
     }
   }, [pinnedWorkspaceInspectorTarget, workspaceInspectorPinned]);
+  const previousWorkspaceInspectorStageRef = useRef<WorkspaceStage>(contentMode);
+  useEffect(() => {
+    const previousStage = previousWorkspaceInspectorStageRef.current;
+    previousWorkspaceInspectorStageRef.current = contentMode;
+    if (
+      contentMode === "preview" &&
+      previousStage !== "preview" &&
+      !workspaceInspectorPinned &&
+      selectedWorkspaceInspectorTarget?.kind === "cue"
+    ) {
+      setSelectedWorkspaceInspectorTarget(null);
+    }
+  }, [contentMode, selectedWorkspaceInspectorTarget, workspaceInspectorPinned]);
   const effectiveWorkspaceInspectorDisplayState =
     workspaceInspectorPinned || workspaceInspectorDisplayState === "pinned"
       ? "pinned"
@@ -6496,7 +6532,7 @@ export function App() {
   function handleSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!canCreateCurrentSource) {
+    if (!canRunCurrentGenerationAction) {
       return;
     }
 
@@ -6517,12 +6553,25 @@ export function App() {
     }
   }
 
-  function canRetryVoiceJob(candidate: VoiceJob | null): candidate is VoiceJob {
-    return Boolean(
-      candidate?.id &&
-        (candidate.status === "failed" || candidate.status === "cancelled") &&
-        candidate.retriable !== false,
+  function previewGenerationFailureRecoveryDetail(candidate: VoiceJob | null): string {
+    if (candidate?.retriable === false || candidate?.terminalReason === "configuration_failed") {
+      return (
+        candidate.error ?? "Full narration generation failed. Open diagnostics before retrying."
+      );
+    }
+    const readySegments = Math.max(0, candidate?.audioReadySegments ?? 0);
+    const totalSegments = Math.max(
+      readySegments,
+      candidate?.retries.totalSegments ?? 0,
+      candidate?.progress.totalSegments ?? 0,
+      candidate?.segments?.length ?? 0,
     );
+    if (readySegments > 0 && totalSegments > 0) {
+      return `Full narration generation failed. ${readySegments.toString()}/${totalSegments.toString()} ready segments remain available. Retry generation to create the full narration track.`;
+    }
+    return candidate?.error
+      ? `${candidate.error} Retry generation to create the full narration track.`
+      : "Full narration generation failed. Retry generation to create the full narration track.";
   }
 
   async function retryGenerationFromCurrentJob(currentJob: VoiceJob) {
@@ -6579,7 +6628,17 @@ export function App() {
   async function auditionVoicePreviewFromCurrentConfig(
     sampleText: string,
   ): Promise<VoicePreviewAudio> {
-    return createVoicePreview(buildVoiceJobRequest(sampleText));
+    const request = buildVoiceJobRequest(sampleText);
+    request.projectId = activeProject?.id ?? activeProjectId;
+    try {
+      return await createVoicePreview(request);
+    } catch (caughtError) {
+      if (isApiNotFoundError(caughtError)) {
+        void refreshProjects();
+        throw new Error(PREVIEW_AUDITION_NOT_FOUND_MESSAGE);
+      }
+      throw caughtError;
+    }
   }
 
   async function submitVoiceJob() {
@@ -6742,11 +6801,11 @@ export function App() {
   }
 
   function createAndListenFromCurrentSource() {
-    if (!canCreateCurrentSource) {
-      return;
-    }
     if (canRetryVoiceJob(job)) {
       void retryGenerationFromCurrentJob(job);
+      return;
+    }
+    if (!canCreateCurrentSource) {
       return;
     }
     createGenerationFromCurrentSourcePlan();
@@ -6802,14 +6861,14 @@ export function App() {
           return;
         }
         default: {
-          if (canCreateCurrentSource) {
+          if (canRunCurrentGenerationAction) {
             createAndListenFromCurrentSourceRef.current();
           }
         }
       }
     },
     [
-      canCreateCurrentSource,
+      canRunCurrentGenerationAction,
       closeCommandPalette,
       inspectNarrationStatusIssueFromShortcut,
       isCommandPaletteOpen,
@@ -7617,7 +7676,7 @@ export function App() {
         <Suspense fallback={null}>
           <LazyDemoMode
             activeDemoProjectId={activeDemoProjectId}
-            canCreateAudio={canCreateCurrentSource}
+            canCreateAudio={canRunCurrentGenerationAction}
             canOpenCinema={canOpenCurrentCinema}
             currentStage={contentMode}
             hasGeneratedAudio={Boolean(job)}
@@ -7661,7 +7720,7 @@ export function App() {
             bookSources={bookSources}
             bundleActivity={bundleOperationActivity}
             bundleReport={bundleOperationReport}
-            canCreate={canCreateCurrentSource}
+            canCreate={canRunCurrentGenerationAction}
             isOpen={isCommandCenterOpen}
             job={job}
             metrics={systemMetrics}
@@ -8375,7 +8434,7 @@ export function App() {
               projectId={activeProjectId}
               bookSourceError={bookSourceError}
               bookSources={bookSources}
-              canSubmit={canCreateCurrentSource}
+              canSubmit={canRunCurrentGenerationAction}
               contentMode={contentMode}
               isImportingBookSource={isImportingBookSource}
               isPreparingSource={isPreparingSource}
@@ -8402,7 +8461,7 @@ export function App() {
                   <LazyTelepromptStudio
                     activeBlockId={workspaceContext.activeBlockId}
                     blocks={narrationPreviewBlocks}
-                    canCreate={canCreateCurrentSource}
+                    canCreate={canRunCurrentGenerationAction}
                     canOpenCinema={canOpenCurrentCinema}
                     contextInspectorDensity={workspaceLayout.contextInspector}
                     createAndListenCapabilityReason={createAndListenCapabilityReason}
@@ -8600,6 +8659,7 @@ export function App() {
                     }),
                   }}
                   displayState={effectiveWorkspaceInspectorDisplayState}
+                  fallbackTarget={previewWorkspaceInspectorFallbackTarget}
                   history={{
                     facts: [
                       { label: "Stage", value: workspaceStageMeta(contentMode).label },
@@ -8683,7 +8743,7 @@ export function App() {
       )}
       <NarrationStatusStrip
         canCancel={Boolean(activeJobId)}
-        canCreate={canCreateCurrentSource}
+        canCreate={canRunCurrentGenerationAction}
         canOpenCinema={canOpenCurrentCinema}
         mode={activityFooterMode}
         model={narrationStatusModel}
@@ -10861,7 +10921,7 @@ function workbenchExtractionState(
   generatedAudioState: SourceLifecycleEnvelope["generatedAudioState"],
   narratableCount: number,
 ): SourceLifecycleEnvelope["extractionState"] {
-  if (status === "failed" || generatedAudioState === "failed") return "failed";
+  if (status === "failed") return "failed";
   if (generatedAudioState === "ready" || narratableCount > 0 || hasContent) return "extracted";
   return status === "ready" ? "imported" : "extracting";
 }
@@ -10878,7 +10938,7 @@ function workbenchLifecycleStates({
   status: string;
 }): Pick<SourceLifecycleEnvelope, "canonicalState" | "narrationState"> {
   let narrationState: SourceLifecycleEnvelope["narrationState"] = "prepared";
-  if (status === "failed" || generatedAudioState === "failed") narrationState = "failed";
+  if (status === "failed") narrationState = "failed";
   else if (generatedAudioState === "stale" || generatedAudioState === "degraded")
     narrationState = "stale";
   else if (generatedAudioState === "ready") narrationState = "audioReady";
@@ -11256,7 +11316,7 @@ function SourceTextPanel({
       {contentMode === "preview" ? (
         <NarrationPreviewStage
           bookScopeContent={bookScopeContent}
-          canCreate={canSubmit && !isProcessing}
+          canCreate={canSubmit && (!isProcessing || canRetryVoiceJob(job))}
           canOpenCinema={canOpenCinema}
           job={job}
           optimizedText={optimizedText}
@@ -11651,8 +11711,10 @@ function NarrationPreviewStage({
     job ? audioSource(job, { partial: true }) : "",
     56,
   );
-  const playbackLifecycle = playbackControls.isAvailable ? "ready" : generatedAudioLifecycle;
-  const previewPlaybackDisabledReason = playbackControls.isAvailable
+  const previewPlaybackAvailable =
+    playbackControls.isAvailable && generatedAudioLifecycle === "ready";
+  const playbackLifecycle = previewPlaybackAvailable ? "ready" : generatedAudioLifecycle;
+  const previewPlaybackDisabledReason = previewPlaybackAvailable
     ? undefined
     : (readiness.generatedPlaybackDisabledReason ??
       playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle }));
@@ -11663,7 +11725,7 @@ function NarrationPreviewStage({
     job,
   );
   const canPreviewJump = Boolean(
-    playbackControls.isAvailable &&
+    previewPlaybackAvailable &&
       previewSeekTargetSec !== null &&
       (playbackControls.seekTo ?? playbackControls.skipBy),
   );
@@ -11729,12 +11791,12 @@ function NarrationPreviewStage({
       dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle, {
         primary: true,
       }),
-      disabled: !playbackControls.isAvailable,
+      disabled: !previewPlaybackAvailable,
       disabledReason: previewPlaybackDisabledReason,
       label: playbackControls.isPlaying ? "Pause" : "Play",
       primary: true,
       onClick: () => {
-        if (!playbackControls.isAvailable) {
+        if (!previewPlaybackAvailable) {
           return;
         }
         if (playbackControls.isPlaying) {
@@ -11767,11 +11829,11 @@ function NarrationPreviewStage({
       ariaKeyShortcuts: "Home",
       shortcutCommandId: "playback.restart",
       dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle),
-      disabled: !playbackControls.isAvailable,
+      disabled: !previewPlaybackAvailable,
       disabledReason: previewPlaybackDisabledReason,
       label: "Restart",
       onClick: () => {
-        if (playbackControls.isAvailable) {
+        if (previewPlaybackAvailable) {
           void playbackControls.restart();
         }
       },
@@ -11930,7 +11992,7 @@ function NarrationPreviewStage({
             generatedAudioReadiness?.detail ??
             "Create & Listen will generate playback for this scope."
           }
-          playbackAvailable={playbackControls.isAvailable}
+          playbackAvailable={previewPlaybackAvailable}
           status={generatedAudioReadiness?.status ?? "waiting"}
           playbackToolbar={
             <LocalizedPlaybackToolbar

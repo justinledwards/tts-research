@@ -67,7 +67,8 @@ export function resolveAudioGenerationPipelineModel(
   const canRetryGeneration = Boolean(
     input.job &&
       (input.job.status === "failed" || input.job.status === "cancelled") &&
-      input.job.retriable !== false,
+      input.job.retriable !== false &&
+      input.job.terminalReason !== "configuration_failed",
   );
   const canAudioFollow = state === "readyToListen";
   return {

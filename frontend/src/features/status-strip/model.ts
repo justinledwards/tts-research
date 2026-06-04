@@ -214,7 +214,7 @@ function resolveNarrationPipelineState(
   queue: NarrationQueueSnapshot,
 ): NarrationPipelineState {
   if (input.job?.status === "failed") {
-    return "failed";
+    return isRetryableGenerationFailure(input) ? "blocked" : "failed";
   }
   if (
     input.stageStatus.blocker?.id === "sourceFailed" ||
@@ -226,7 +226,7 @@ function resolveNarrationPipelineState(
     return "cancelled";
   }
   if (input.generatedAudioLifecycle === "failed") {
-    return "failed";
+    return isRetryableGenerationFailure(input) ? "blocked" : "failed";
   }
   if (
     input.generatedAudioLifecycle === "stale" ||
@@ -257,6 +257,18 @@ function resolveNarrationPipelineState(
     return "waiting";
   }
   return "idle";
+}
+
+function isRetryableGenerationFailure(input: NarrationStatusModelInput): boolean {
+  if (!input.canCreate || !input.job) {
+    return false;
+  }
+  return (
+    input.job.status === "failed" &&
+    input.generatedAudioLifecycle === "failed" &&
+    input.job.retriable !== false &&
+    input.job.terminalReason !== "configuration_failed"
+  );
 }
 
 function resolveNarrationOperationalIssues({

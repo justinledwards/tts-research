@@ -5,6 +5,7 @@ import {
   clearHuggingFaceToken,
   createCustomSpeechPolicyProfile,
   createPreparedSource,
+  createVoicePreview,
   buildVoiceProfileArtifact,
   deleteProject,
   getProjectLexicon,
@@ -51,6 +52,95 @@ describe("API errors", () => {
       await expect(deleteProject("project-1")).rejects.toThrow(
         /Restart the backend with mise start -- pnpm start:local/,
       );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("creates voice previews with raw audio metadata", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (_input, init) => {
+      const url = fetchInputUrl(_input);
+      requests.push({ url, init });
+      return Promise.resolve(
+        new Response(new Uint8Array([82, 73, 70, 70]), {
+          headers: {
+            "Content-Type": "audio/wav",
+            "X-Voice-Preview-Duration-Ms": "1200",
+            "X-Voice-Preview-Provider": "mock",
+            "X-Voice-Preview-Voice": "af_heart",
+          },
+          status: 200,
+        }),
+      );
+    };
+
+    try {
+      const preview = await createVoicePreview({
+        projectId: "project-1",
+        text: "Audition this selected block.",
+        ttsEngine: "auto",
+      });
+
+      expect(requests[0]?.url).toBe("/api/voice-previews");
+      expect(requests[0]?.init?.method).toBe("POST");
+      const requestBody = requests[0]?.init?.body;
+      expect(typeof requestBody).toBe("string");
+      expect(JSON.parse(requestBody as string)).toMatchObject({
+        projectId: "project-1",
+        text: "Audition this selected block.",
+        ttsEngine: "auto",
+      });
+      expect(preview.contentType).toBe("audio/wav");
+      expect(preview.durationMs).toBe(1200);
+      expect(preview.provider).toBe("mock");
+      expect(preview.voice).toBe("af_heart");
+      expect(preview.audio.size).toBe(4);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("preserves structured 404s from voice preview failures", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () =>
+      Promise.resolve(Response.json({ error: "project not found" }, { status: 404 }));
+
+    try {
+      await expect(
+        createVoicePreview({
+          projectId: "missing-project",
+          text: "Audition this selected block.",
+          ttsEngine: "auto",
+        }),
+      ).rejects.toMatchObject({
+        message: "project not found",
+        name: "ApiRequestError",
+        status: 404,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("preserves text bodies from stale voice preview routes", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () =>
+      Promise.resolve(new Response("Cannot POST /api/voice-previews", { status: 404 }));
+
+    try {
+      await expect(
+        createVoicePreview({
+          projectId: "project-1",
+          text: "Audition this selected block.",
+          ttsEngine: "auto",
+        }),
+      ).rejects.toMatchObject({
+        message: "Cannot POST /api/voice-previews",
+        name: "ApiRequestError",
+        status: 404,
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }

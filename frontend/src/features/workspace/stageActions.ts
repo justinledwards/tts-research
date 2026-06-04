@@ -91,6 +91,8 @@ export interface WorkspaceStageBlocker {
 
 export interface WorkspaceStageStatusInput {
   readonly audioLifecycle: GeneratedAudioLifecycleState;
+  readonly audioFailureCanRetry?: boolean;
+  readonly audioFailureDetail?: string;
   readonly canCreate: boolean;
   readonly canOpenCinema: boolean;
   readonly createDisabledReason?: string;
@@ -446,16 +448,7 @@ function workspaceAudioStageBlocker(
     return null;
   }
   if (input.audioLifecycle === "failed") {
-    if (input.stage !== "preview") {
-      return null;
-    }
-    return {
-      correctiveAction: "retryGeneration",
-      detail: operationalGeneratedAudioLifecycleReason("failed"),
-      id: "generationFailed",
-      recovery: operationalRecovery("retryGeneration", input.canCreate),
-      title: "Generation failed",
-    };
+    return failedAudioStageBlocker(input);
   }
   if (isAudioRecoveryLifecycle(input.audioLifecycle)) {
     if (input.stage === "teleprompt" || input.stage === "theatre") {
@@ -464,6 +457,28 @@ function workspaceAudioStageBlocker(
     return audioRecoveryBlocker(input);
   }
   return null;
+}
+
+function failedAudioStageBlocker(input: WorkspaceStageStatusInput): WorkspaceStageBlocker | null {
+  if (input.stage !== "preview" || previewAudioFailureCanRecover(input)) {
+    return null;
+  }
+  const detail = input.audioFailureDetail ?? operationalGeneratedAudioLifecycleReason("failed");
+  const canRetry = input.canCreate && input.audioFailureCanRetry !== false;
+  const unavailableReason = input.createDisabledReason ?? detail;
+  const retryUnavailableReason = canRetry ? undefined : unavailableReason;
+  const recovery =
+    input.audioFailureCanRetry === false
+      ? operationalRecovery("openDiagnostics", true)
+      : operationalRecovery("retryGeneration", input.canCreate, retryUnavailableReason);
+  return {
+    correctiveAction: canRetry ? "retryGeneration" : null,
+    detail,
+    disabledReason: canRetry ? undefined : unavailableReason,
+    id: "generationFailed",
+    recovery,
+    title: "Generation failed",
+  };
 }
 
 function workspaceStagePrimaryActionForStatus(
@@ -484,6 +499,9 @@ function workspaceStagePrimaryActionForStatus(
     return workspaceStagePrimaryAction(input.stage);
   }
   if (input.stage === "preview") {
+    if (input.audioLifecycle === "failed" && previewAudioFailureCanRecover(input)) {
+      return "retryGeneration";
+    }
     return workspaceStagePrimaryAction(input.stage);
   }
   if (readiness.action) {
@@ -506,6 +524,9 @@ function workspaceStageNextAction(
     return "previewSpeech";
   }
   if (input.stage === "preview") {
+    if (input.audioLifecycle === "failed") {
+      return "retryGeneration";
+    }
     return input.audioLifecycle === "ready" ? "openTheatre" : "createAndListen";
   }
   if (input.stage === "teleprompt") {
@@ -725,10 +746,29 @@ function previewStageReadiness(input: WorkspaceStageStatusInput): WorkspaceStage
     });
   }
   if (input.audioLifecycle === "failed") {
+    if (previewAudioFailureCanRecover(input)) {
+      return stageReadiness({
+        action: "retryGeneration",
+        detail:
+          input.audioFailureDetail ??
+          "Full narration generation failed. Retry generation to create the full narration track.",
+        label: OPERATIONAL_RECOVERY_LABELS.retryGeneration,
+        stage: "preview",
+        state: "warning",
+        tone: "warning",
+      });
+    }
     return stageReadiness({
-      action: "retryGeneration",
-      detail: operationalGeneratedAudioLifecycleReason("failed"),
-      label: OPERATIONAL_RECOVERY_LABELS.retryGeneration,
+      action: input.canCreate && input.audioFailureCanRetry !== false ? "retryGeneration" : null,
+      detail: input.audioFailureDetail ?? operationalGeneratedAudioLifecycleReason("failed"),
+      disabledReason:
+        input.canCreate && input.audioFailureCanRetry !== false
+          ? undefined
+          : (input.createDisabledReason ?? operationalGeneratedAudioLifecycleReason("failed")),
+      label:
+        input.audioFailureCanRetry === false
+          ? "Open diagnostics"
+          : OPERATIONAL_RECOVERY_LABELS.retryGeneration,
       stage: "preview",
       state: "failed",
       tone: "danger",
@@ -929,6 +969,9 @@ function previewCurrentTaskAction(input: WorkspaceStageStatusInput): WorkspaceSt
   if (input.audioLifecycle === "ready") {
     return "openTheatre";
   }
+  if (input.audioLifecycle === "failed") {
+    return previewAudioFailureCanRecover(input) ? "retryGeneration" : null;
+  }
   if (input.audioLifecycle === "queued" || input.audioLifecycle === "generating") {
     return null;
   }
@@ -981,11 +1024,8 @@ function workspaceStageCurrentTaskTitle(
   if (input.stage === "review" && readiness.state === "warning") {
     return "Review needs repair";
   }
-  if (input.stage === "preview" && input.audioLifecycle === "missing") {
-    return "Ready to create";
-  }
-  if (input.stage === "preview" && input.audioLifecycle === "ready") {
-    return "Audio ready";
+  if (input.stage === "preview") {
+    return previewCurrentTaskTitle(input, readiness);
   }
   if (input.stage === "teleprompt" && readiness.state === "manual") {
     return "Rehearsal only";
@@ -1000,6 +1040,31 @@ function workspaceStageCurrentTaskTitle(
     return "Source ready";
   }
   return readiness.label;
+}
+
+function previewCurrentTaskTitle(
+  input: WorkspaceStageStatusInput,
+  readiness: WorkspaceStageReadiness,
+): string {
+  if (input.audioLifecycle === "missing") {
+    return "Ready to create";
+  }
+  if (input.audioLifecycle === "ready") {
+    return "Audio ready";
+  }
+  if (input.audioLifecycle === "failed") {
+    return previewAudioFailureCanRecover(input) ? "Generation needs retry" : "Generation failed";
+  }
+  return readiness.label;
+}
+
+function previewAudioFailureCanRecover(input: WorkspaceStageStatusInput): boolean {
+  return (
+    input.stage === "preview" &&
+    input.audioLifecycle === "failed" &&
+    input.canCreate &&
+    input.audioFailureCanRetry !== false
+  );
 }
 
 function audioRecoveryBlocker(input: WorkspaceStageStatusInput): WorkspaceStageBlocker {

@@ -554,21 +554,22 @@ function resolveFailedGenerationIssue(
       technicalDetail: terminalReasonDetail(terminalReason, job),
     });
   }
+  const retryAvailable = canCreate;
   return audioIssue({
     blocksCurrentStage: true,
-    chipValue: "Failed",
+    chipValue: retryAvailable ? "Retry" : "Failed",
     condition: "failed",
-    detail: job?.error ?? "The last generation attempt failed before playable audio was ready.",
+    detail: job?.error ?? "The last generation attempt failed. Retry generation to continue.",
     id: "audio-generation-failed",
     label: "Generation failed",
     recovery: operationalRecovery(
       "retryGeneration",
-      canCreate,
-      canCreate
+      retryAvailable,
+      retryAvailable
         ? undefined
         : "Retry generation is unavailable until the source and voice are ready.",
     ),
-    severity: "error",
+    severity: retryAvailable ? "warning" : "error",
     technicalDetail: terminalReasonDetail(terminalReason, job),
   });
 }

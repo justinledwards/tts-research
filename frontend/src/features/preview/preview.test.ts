@@ -6,11 +6,13 @@ import type { RunMode, VoiceJob } from "../../types";
 import { RunPlannerSummaryPanel } from "../run-config/RunPlannerSummaryPanel";
 import { buildRunPlannerSummary, compareRunPlannerSummaries } from "../run-config/runConfigSteps";
 import type { RevisionBlock } from "../revision";
+import { resolveAudioGenerationPipelineModel } from "../playback/audioGenerationPipeline";
 import {
   buildPreviewComparisonModel,
   buildPreviewQueue,
   findAdjacentPreviewQueueItem,
   formatPreviewClock,
+  PREVIEW_AUDITION_NOT_FOUND_MESSAGE,
   PreviewConfirmationStrip,
   PreviewGeneratedAudioPanel,
   previewComparisonSummary,
@@ -257,13 +259,11 @@ describe("preview readiness model", () => {
     expect(model.createDisabledReason).toBe("Select a ready voice or TTS engine.");
   });
 
-  it("surfaces Review warnings as Preview preflight blockers for generation", () => {
+  it("surfaces Review warnings without blocking Preview generation", () => {
     const model = resolvePreviewReadinessModel(readinessInput({ reviewWarningCount: 3 }));
 
-    expect(model.canCreate).toBe(false);
-    expect(model.createDisabledReason).toBe(
-      "3 review warnings need repair. Preview remains available while repairs continue.",
-    );
+    expect(model.canCreate).toBe(true);
+    expect(model.createDisabledReason).toBeUndefined();
     expect(model.rows.find((row) => row.id === "review")).toMatchObject({
       detail: "3 review warnings need repair. Preview remains available while repairs continue.",
       status: "warning",
@@ -279,6 +279,21 @@ describe("preview readiness model", () => {
     );
     const failed = resolvePreviewReadinessModel(
       readinessInput({ generatedAudioLifecycle: "failed" }),
+    );
+    const failedRetryable = resolvePreviewReadinessModel(
+      readinessInput({
+        audioPipeline: resolveAudioGenerationPipelineModel({
+          canCreate: true,
+          generatedAudioLifecycle: "failed",
+          hasSource: true,
+          hasSpokenText: true,
+          job: job({ retriable: true, status: "failed", terminalReason: "provider_failed" }),
+          reviewComplete: true,
+          runtimeReady: true,
+          voiceReady: true,
+        }),
+        generatedAudioLifecycle: "failed",
+      }),
     );
     const stale = resolvePreviewReadinessModel(
       readinessInput({ generatedAudioLifecycle: "stale" }),
@@ -304,6 +319,14 @@ describe("preview readiness model", () => {
       "Rehearsal only. Retry generation unlocks audio-follow.",
     );
     expect(failed.primaryLabel).toBe("Retry generation");
+    expect(failed.rows.find((row) => row.id === "audio")).toMatchObject({
+      status: "blocked",
+    });
+    expect(failedRetryable.rows.find((row) => row.id === "audio")).toMatchObject({
+      status: "warning",
+    });
+    expect(failedRetryable.createDisabledReason).toBeUndefined();
+    expect(failedRetryable.primaryLabel).toBe("Retry generation");
     expect(stale.cinemaDisabledReason).toContain("Audio needs rebuild");
     expect(ready.canOpenCinema).toBe(true);
     expect(ready.openTelepromptDetail).toBe("Teleprompt opens with generated cue playback ready.");
@@ -397,6 +420,27 @@ describe("preview readiness UI", () => {
     expect(markup).toContain("0:01 · mock · af_heart");
   });
 
+  it("keeps audition retryable after a 404 recovery message", () => {
+    const play = vi.fn();
+    const markup = renderToStaticMarkup(
+      createElement(VoiceAuditionPanel, {
+        sampleText: "Selected spoken block sample.",
+        state: {
+          detail: PREVIEW_AUDITION_NOT_FOUND_MESSAGE,
+          label: "Audition voice",
+          metadata: "",
+          play,
+          status: "error",
+        },
+      }),
+    );
+
+    expect(markup).toContain(PREVIEW_AUDITION_NOT_FOUND_MESSAGE);
+    expect(markup).toContain("Attention");
+    expect(markup).toContain('data-testid="ui-action-preview-audition-voice"');
+    expect(markup).not.toContain('disabled=""');
+  });
+
   it("renders a compact generated-audio placeholder before playback is available", () => {
     const markup = renderToStaticMarkup(
       createElement(PreviewGeneratedAudioPanel, {
@@ -463,7 +507,7 @@ function block(overrides: Partial<RevisionBlock>): RevisionBlock {
   };
 }
 
-function job(): VoiceJob {
+function job(overrides: Partial<VoiceJob> = {}): VoiceJob {
   return {
     audioReadySegments: 4,
     audioSegmentDurationsMs: [1000, 1000, 2000, 3000],
@@ -510,6 +554,7 @@ function job(): VoiceJob {
       similarity: 0.99,
       transcript: "Output",
     },
+    ...overrides,
   };
 }
 

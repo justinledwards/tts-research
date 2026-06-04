@@ -97,11 +97,13 @@ export function workspaceInspectorTargetEqual(
 }
 
 export function resolveWorkspaceInspectorTarget({
+  fallbackTarget,
   pinnedTarget,
   selectedTarget,
   stage,
   targets,
 }: Readonly<{
+  fallbackTarget?: WorkspaceInspectorTarget | null;
   pinnedTarget?: WorkspaceInspectorTarget | null;
   selectedTarget?: WorkspaceInspectorTarget | null;
   stage: WorkspaceStage;
@@ -126,6 +128,13 @@ export function resolveWorkspaceInspectorTarget({
       invalidPinnedTarget: null,
       source: "selected",
       target: selectedTarget,
+    };
+  }
+  if (fallbackTarget && workspaceInspectorTargetAvailable(fallbackTarget, targets)) {
+    return {
+      invalidPinnedTarget: null,
+      source: "fallback",
+      target: fallbackTarget,
     };
   }
   return {

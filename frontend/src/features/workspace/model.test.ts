@@ -332,29 +332,60 @@ describe("workspace stage model", () => {
     });
   });
 
-  it("routes failed generation to retry without creating a separate stage", () => {
+  it("routes retryable failed generation to recoverable Preview retry", () => {
     const status = resolveWorkspaceStageStatus(
-      stageStatusInput({ audioLifecycle: "failed", stage: "preview" }),
+      stageStatusInput({
+        audioFailureCanRetry: true,
+        audioFailureDetail:
+          "Audio generation failed. Retry generation to create the full narration track.",
+        audioLifecycle: "failed",
+        stage: "preview",
+      }),
     );
 
-    expect(status.blocker).toMatchObject({
-      correctiveAction: "retryGeneration",
-      id: "generationFailed",
-      title: "Generation failed",
-    });
+    expect(status.blocker).toBeNull();
+    expect(status.primaryAction).toBe("retryGeneration");
     expect(status.currentTask).toMatchObject({
       primaryAction: "retryGeneration",
-      title: "Generation failed",
+      primaryLabel: "Retry generation",
+      title: "Generation needs retry",
     });
     expect(status.readinessByStage.preview).toMatchObject({
       action: "retryGeneration",
       label: "Retry generation",
-      state: "failed",
+      state: "warning",
     });
     expect(status.readinessByStage.theatre).toMatchObject({
       action: "openTheatre",
       label: "Reading-only",
       state: "manual",
+    });
+  });
+
+  it("keeps non-retryable generation failures on diagnostics recovery", () => {
+    const status = resolveWorkspaceStageStatus(
+      stageStatusInput({
+        audioFailureCanRetry: false,
+        audioFailureDetail: "Audio generation failed. Open diagnostics before retrying.",
+        audioLifecycle: "failed",
+        stage: "preview",
+      }),
+    );
+
+    expect(status.blocker).toMatchObject({
+      correctiveAction: null,
+      id: "generationFailed",
+      recovery: { id: "openDiagnostics", label: "Open diagnostics" },
+      title: "Generation failed",
+    });
+    expect(status.currentTask).toMatchObject({
+      primaryAction: null,
+      title: "Generation failed",
+    });
+    expect(status.readinessByStage.preview).toMatchObject({
+      action: null,
+      label: "Open diagnostics",
+      state: "failed",
     });
   });
 

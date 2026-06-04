@@ -6,6 +6,9 @@ import type {
   PreviewReadinessRowStatus,
 } from "./previewReadiness";
 
+export const PREVIEW_AUDITION_NOT_FOUND_MESSAGE =
+  "Audition could not find the current project or preview route. Projects were refreshed; restart the backend if this continues.";
+
 export interface PreviewVoiceAuditionState {
   readonly detail: string;
   readonly label: string;
@@ -210,7 +213,7 @@ export function previewReadinessStatusLabel(status: PreviewReadinessRowStatus): 
     return "Blocked";
   }
   if (status === "warning") {
-    return "Review";
+    return "Needs attention";
   }
   return "Waiting";
 }
@@ -218,6 +221,9 @@ export function previewReadinessStatusLabel(status: PreviewReadinessRowStatus): 
 export function previewGeneratedAudioEmptyTitle(status: PreviewReadinessRowStatus): string {
   if (status === "working") {
     return "Audio is being prepared";
+  }
+  if (status === "warning") {
+    return "Audio needs retry";
   }
   if (status === "blocked") {
     return "Playback is unavailable";
