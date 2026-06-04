@@ -1,13 +1,14 @@
 import {
   resolveTelepromptShortcut,
+  shouldIgnoreTelepromptShortcutEvent,
   type TelepromptKeyboardEventLike,
   type TelepromptShortcutAction,
 } from "./telepromptToolbar";
 import {
   DEFAULT_SHORTCUT_PREFERENCES,
   resolveShortcutCommandBinding,
-  shouldIgnoreNarrationShortcutTarget,
   type ShortcutCommandId,
+  type ShortcutPreferences,
 } from "../shortcuts/shortcutRegistry";
 
 export type TelepromptTheatreShortcutAction =
@@ -16,6 +17,7 @@ export type TelepromptTheatreShortcutAction =
   | "jumpCurrentAudio"
   | "largeText"
   | "operatorPreview"
+  | "shortcutHelp"
   | "toggleControls"
   | "toggleHighContrast"
   | "toggleMirror"
@@ -23,18 +25,15 @@ export type TelepromptTheatreShortcutAction =
 
 export function resolveTelepromptTheatreShortcut(
   event: TelepromptKeyboardEventLike,
+  shortcutPreferences: ShortcutPreferences = DEFAULT_SHORTCUT_PREFERENCES,
 ): TelepromptTheatreShortcutAction | null {
-  if (shouldIgnoreNarrationShortcutTarget(event.target ?? null)) {
+  if (shouldIgnoreTelepromptShortcutEvent(event)) {
     return null;
   }
   return (
     theatreActionForShortcutCommand(
-      resolveShortcutCommandBinding(
-        event as KeyboardEvent,
-        DEFAULT_SHORTCUT_PREFERENCES,
-        "theatre",
-      ),
-    ) ?? resolveTelepromptShortcut(event)
+      resolveShortcutCommandBinding(event, shortcutPreferences, "theatre"),
+    ) ?? resolveTelepromptShortcut(event, shortcutPreferences)
   );
 }
 
@@ -77,6 +76,9 @@ function theatreActionForShortcutCommand(
     }
     case "theatre.restart": {
       return "restart";
+    }
+    case "theatre.shortcutHelp": {
+      return "shortcutHelp";
     }
     case "theatre.speed": {
       return resolved.bindingId === "right-bracket" ? "speedUp" : "speedDown";

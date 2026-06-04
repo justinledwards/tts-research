@@ -9,6 +9,7 @@ export {
   shortcutLabelForCommand,
   shortcutTooltip,
   shouldIgnoreGlobalShortcutTarget,
+  shouldIgnoreNarrationShortcutEvent,
   shouldIgnoreNarrationShortcutTarget,
   type ShortcutBinding,
   type ShortcutCommandId,

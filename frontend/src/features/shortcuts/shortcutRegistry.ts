@@ -5,6 +5,7 @@ export type ShortcutCategory =
   | "Review"
   | "Teleprompt"
   | "Theatre"
+  | "Status"
   | "Settings"
   | "Diagnostics";
 
@@ -108,6 +109,32 @@ export const SHORTCUT_COMMANDS = [
     description: "Open contextual workflow help.",
     id: "help.open",
     label: "Open help",
+    scope: "global",
+  },
+  {
+    bindings: [
+      { altKey: true, id: "alt-shift-a", key: "a", label: "Alt+Shift+A", shiftKey: true },
+      { id: "f8", key: "F8", label: "F8" },
+    ],
+    category: "Status",
+    configurable: true,
+    defaultBindingId: "alt-shift-a",
+    description: "Open Command Center Activity for current narration work.",
+    id: "status.openActivity",
+    label: "Open Activity",
+    scope: "global",
+  },
+  {
+    bindings: [
+      { altKey: true, id: "alt-shift-i", key: "i", label: "Alt+Shift+I", shiftKey: true },
+      { id: "f9", key: "F9", label: "F9" },
+    ],
+    category: "Status",
+    configurable: true,
+    defaultBindingId: "alt-shift-i",
+    description: "Inspect the selected or first active status issue.",
+    id: "status.inspectIssue",
+    label: "Inspect status issue",
     scope: "global",
   },
   {
@@ -287,6 +314,19 @@ export const SHORTCUT_COMMANDS = [
     scope: "review",
   },
   {
+    bindings: [
+      { id: "n", key: "n", label: "N" },
+      { altKey: true, id: "alt-n", key: "n", label: "Alt+N" },
+    ],
+    category: "Review",
+    configurable: true,
+    defaultBindingId: "n",
+    description: "Move to the next Review block that needs attention.",
+    id: "review.nextIssue",
+    label: "Next review issue",
+    scope: "review",
+  },
+  {
     bindings: [{ altKey: true, id: "alt-left", key: "ArrowLeft", label: "Alt+Left" }],
     category: "Review",
     configurable: false,
@@ -445,6 +485,19 @@ export const SHORTCUT_COMMANDS = [
     scope: "teleprompt",
   },
   {
+    bindings: [
+      { id: "teleprompt-t", key: "t", label: "T" },
+      { altKey: true, id: "alt-t", key: "t", label: "Alt+T" },
+    ],
+    category: "Teleprompt",
+    configurable: false,
+    defaultBindingId: "teleprompt-t",
+    description: "Open Teleprompt Theatre from the current cue.",
+    id: "teleprompt.openTheatre",
+    label: "Open Theatre",
+    scope: "teleprompt",
+  },
+  {
     bindings: [{ id: "escape", key: "Escape", label: "Esc" }],
     category: "Theatre",
     configurable: false,
@@ -534,6 +587,19 @@ export const SHORTCUT_COMMANDS = [
     description: "Show or hide Theatre controls.",
     id: "theatre.toggleControls",
     label: "Toggle controls",
+    scope: "theatre",
+  },
+  {
+    bindings: [
+      { id: "question", key: "?", label: "?", shiftKey: true },
+      { id: "f1", key: "F1", label: "F1" },
+    ],
+    category: "Theatre",
+    configurable: false,
+    defaultBindingId: "question",
+    description: "Show the Theatre shortcut help overlay.",
+    id: "theatre.shortcutHelp",
+    label: "Theatre shortcut help",
     scope: "theatre",
   },
   {
@@ -785,6 +851,15 @@ export function shouldIgnoreNarrationShortcutTarget(target: EventTarget | null):
   );
 }
 
+export function shouldIgnoreNarrationShortcutEvent(
+  event: ShortcutEventLike & { readonly target?: EventTarget | null },
+): boolean {
+  if (shouldIgnoreNarrationShortcutTarget(event.target ?? null)) {
+    return true;
+  }
+  return shouldPreserveNativeShortcutBehavior(event);
+}
+
 export function shortcutAvailability(
   available: boolean,
   reason?: string,
@@ -870,6 +945,7 @@ export function shortcutCommandsByCategory(preferences: ShortcutPreferences): {
     "Review",
     "Teleprompt",
     "Theatre",
+    "Status",
     "Navigation",
     "Settings",
     "Diagnostics",
@@ -943,3 +1019,46 @@ function shortcutBindingSignature(binding: ShortcutBinding): string {
     normalizeShortcutKey(binding.key),
   ].join(":");
 }
+
+function shouldPreserveNativeShortcutBehavior(
+  event: ShortcutEventLike & { readonly target?: EventTarget | null },
+): boolean {
+  if (!nativeNavigationKey(event.key)) {
+    return false;
+  }
+  if (typeof HTMLElement === "undefined" || !(event.target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(event.target.closest(NATIVE_SHORTCUT_TARGET_SELECTOR));
+}
+
+function nativeNavigationKey(key: string): boolean {
+  return (
+    key === " " ||
+    key === "Enter" ||
+    key === "ArrowDown" ||
+    key === "ArrowLeft" ||
+    key === "ArrowRight" ||
+    key === "ArrowUp"
+  );
+}
+
+const NATIVE_SHORTCUT_TARGET_SELECTOR = [
+  "a[href]",
+  "button",
+  "[role='button']",
+  "[role='checkbox']",
+  "[role='combobox']",
+  "[role='link']",
+  "[role='listbox']",
+  "[role='menuitem']",
+  "[role='menuitemcheckbox']",
+  "[role='menuitemradio']",
+  "[role='option']",
+  "[role='radio']",
+  "[role='slider']",
+  "[role='spinbutton']",
+  "[role='switch']",
+  "[role='tab']",
+  "[data-preserve-native-shortcuts]",
+].join(",");

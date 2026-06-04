@@ -102,6 +102,12 @@ function shortcutSettingLabel(commandId: string, fallback: string): string {
   if (commandId === "help.open") {
     return "Help shortcut";
   }
+  if (commandId === "status.openActivity") {
+    return "Open Activity shortcut";
+  }
+  if (commandId === "status.inspectIssue") {
+    return "Inspect status issue shortcut";
+  }
   if (commandId === "playback.createListen") {
     return "Create & Listen shortcut";
   }
@@ -119,6 +125,9 @@ function shortcutSettingLabel(commandId: string, fallback: string): string {
   }
   if (commandId === "review.inspector") {
     return "Inspector shortcut";
+  }
+  if (commandId === "review.nextIssue") {
+    return "Next issue shortcut";
   }
   return fallback;
 }

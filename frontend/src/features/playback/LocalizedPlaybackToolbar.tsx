@@ -6,6 +6,7 @@ import {
   shortcutAriaKeyShortcutsForCommand,
   shortcutTooltip,
   type ShortcutCommandId,
+  type ShortcutPreferences,
 } from "../shortcuts/shortcutRegistry";
 
 export type LocalizedPlaybackToolbarStage =
@@ -69,7 +70,8 @@ export interface LocalizedPlaybackToolbarModel {
 
 export function LocalizedPlaybackToolbar({
   model,
-}: Readonly<{ model: LocalizedPlaybackToolbarModel }>) {
+  shortcutPreferences = DEFAULT_SHORTCUT_PREFERENCES,
+}: Readonly<{ model: LocalizedPlaybackToolbarModel; shortcutPreferences?: ShortcutPreferences }>) {
   const variant = model.variant ?? "normal";
   const highContrast = variant === "theatre" || model.stage === "cinema-theatre";
   const compact = variant === "compact";
@@ -149,10 +151,15 @@ export function LocalizedPlaybackToolbar({
             action={action}
             highContrast={highContrast}
             key={action.testId ?? action.label}
+            shortcutPreferences={shortcutPreferences}
           />
         ))}
         {model.speed ? (
-          <ToolbarSpeedSelect highContrast={highContrast} speed={model.speed} />
+          <ToolbarSpeedSelect
+            highContrast={highContrast}
+            shortcutPreferences={shortcutPreferences}
+            speed={model.speed}
+          />
         ) : null}
         {disabledReasons.length > 0 ? (
           <p
@@ -246,11 +253,16 @@ function ToolbarProgress({
 function ToolbarButton({
   action,
   highContrast,
-}: Readonly<{ action: LocalizedPlaybackToolbarAction; highContrast: boolean }>) {
+  shortcutPreferences,
+}: Readonly<{
+  action: LocalizedPlaybackToolbarAction;
+  highContrast: boolean;
+  shortcutPreferences: ShortcutPreferences;
+}>) {
   const ariaKeyShortcuts =
     action.ariaKeyShortcuts ??
     (action.shortcutCommandId
-      ? shortcutAriaKeyShortcutsForCommand(action.shortcutCommandId, DEFAULT_SHORTCUT_PREFERENCES)
+      ? shortcutAriaKeyShortcutsForCommand(action.shortcutCommandId, shortcutPreferences)
       : undefined);
   return (
     <Button
@@ -273,7 +285,7 @@ function ToolbarButton({
       title={shortcutTooltip(
         action.label,
         action.shortcutCommandId,
-        DEFAULT_SHORTCUT_PREFERENCES,
+        shortcutPreferences,
         action.disabledReason,
       )}
       variant={action.primary ? "primary" : "secondary"}
@@ -286,13 +298,18 @@ function ToolbarButton({
 
 function ToolbarSpeedSelect({
   highContrast,
+  shortcutPreferences,
   speed,
-}: Readonly<{ highContrast: boolean; speed: LocalizedPlaybackToolbarSpeedControl }>) {
+}: Readonly<{
+  highContrast: boolean;
+  shortcutPreferences: ShortcutPreferences;
+  speed: LocalizedPlaybackToolbarSpeedControl;
+}>) {
   const rates = speed.rates ?? READER_PLAYBACK_RATES;
   const ariaKeyShortcuts =
     speed.ariaKeyShortcuts ??
     (speed.shortcutCommandId
-      ? shortcutAriaKeyShortcutsForCommand(speed.shortcutCommandId, DEFAULT_SHORTCUT_PREFERENCES)
+      ? shortcutAriaKeyShortcutsForCommand(speed.shortcutCommandId, shortcutPreferences)
       : undefined);
   return (
     <label
@@ -321,7 +338,7 @@ function ToolbarSpeedSelect({
         title={shortcutTooltip(
           "Playback speed",
           speed.shortcutCommandId,
-          DEFAULT_SHORTCUT_PREFERENCES,
+          shortcutPreferences,
           speed.disabledReason,
         )}
         value={String(speed.value)}

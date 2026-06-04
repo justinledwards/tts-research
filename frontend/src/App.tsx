@@ -348,7 +348,11 @@ import {
   type WorkspaceDisclosurePanelId,
   type WorkspaceDisclosurePins,
 } from "./features/workspace/disclosure";
-import { NarrationStatusStrip, resolveNarrationStatusModel } from "./features/status-strip";
+import {
+  NarrationStatusStrip,
+  resolveNarrationStatusModel,
+  type NarrationStatusChip,
+} from "./features/status-strip";
 import {
   resolveWorkspaceStageStatus,
   transitionWorkspaceContextForStageAction,
@@ -440,7 +444,6 @@ import {
   loadCommandMetadata,
 } from "./features/command-palette/commandPaletteHelpers";
 import {
-  DEFAULT_SHORTCUT_PREFERENCES,
   loadShortcutPreferences,
   resetShortcutPreferences,
   resolveGlobalShortcutCommand,
@@ -448,8 +451,9 @@ import {
   saveShortcutPreferences,
   shortcutLabelForCommand,
   shouldIgnoreGlobalShortcutTarget,
-  shouldIgnoreNarrationShortcutTarget,
+  shouldIgnoreNarrationShortcutEvent,
   type ResolvedShortcutCommand,
+  type ShortcutCommandId,
   type ShortcutPreferences,
 } from "./features/shortcuts/shortcutRuntime";
 import {
@@ -787,6 +791,7 @@ function focusRevisionInlineEditor(): void {
 type LocalizedReviewPreviewShortcut =
   | "jumpToAudio"
   | "nextBlock"
+  | "nextIssue"
   | "playPause"
   | "previousBlock"
   | "restart"
@@ -795,24 +800,19 @@ type LocalizedReviewPreviewShortcut =
 
 function resolveLocalizedReviewPreviewShortcut(
   event: KeyboardEvent,
+  shortcutPreferences: ShortcutPreferences,
 ): LocalizedReviewPreviewShortcut | null {
-  if (shouldIgnoreLocalizedPlaybackShortcutTarget(event.target)) {
+  if (shouldIgnoreLocalizedPlaybackShortcutEvent(event)) {
     return null;
   }
   return localizedReviewPreviewShortcutForCommand(
-    resolveShortcutCommandBinding(event, DEFAULT_SHORTCUT_PREFERENCES, "review") ??
-      resolveShortcutCommandBinding(event, DEFAULT_SHORTCUT_PREFERENCES, "reader"),
+    resolveShortcutCommandBinding(event, shortcutPreferences, "review") ??
+      resolveShortcutCommandBinding(event, shortcutPreferences, "reader"),
   );
 }
 
-function shouldIgnoreLocalizedPlaybackShortcutTarget(target: EventTarget | null): boolean {
-  if (shouldIgnoreNarrationShortcutTarget(target)) {
-    return true;
-  }
-  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
-    return false;
-  }
-  return target.tagName.toLowerCase() === "button";
+function shouldIgnoreLocalizedPlaybackShortcutEvent(event: KeyboardEvent): boolean {
+  return shouldIgnoreNarrationShortcutEvent(event);
 }
 
 function localizedReviewPreviewShortcutForCommand(
@@ -829,6 +829,9 @@ function localizedReviewPreviewShortcutForCommand(
     case "playback.nextBlock":
     case "review.nextBlock": {
       return "nextBlock";
+    }
+    case "review.nextIssue": {
+      return "nextIssue";
     }
     case "playback.previousBlock":
     case "review.previousBlock": {
@@ -847,6 +850,22 @@ function localizedReviewPreviewShortcutForCommand(
       return null;
     }
   }
+}
+
+function selectNextReviewIssueBlockId(
+  blocks: readonly RevisionBlock[],
+  activeBlockId: string | null,
+): string | null {
+  const issueBlocks = blocks.filter((block) => block.needsAttention);
+  if (issueBlocks.length === 0) {
+    return null;
+  }
+  const selectedBlockId = selectReviewBlockId(blocks, activeBlockId);
+  const selectedIndex = blocks.findIndex((block) => block.id === selectedBlockId);
+  const nextIssue =
+    issueBlocks.find((block) => blocks.findIndex((item) => item.id === block.id) > selectedIndex) ??
+    issueBlocks[0];
+  return nextIssue.id;
 }
 
 function resolveRunLocale(config: RunConfiguration): string {
@@ -3529,6 +3548,51 @@ export function App() {
       : workspaceInspectorDisplayState;
   const disclosureRails = workspaceDisclosureRails(baseWorkspaceRails, workspaceDisclosure);
   const activityFooterMode: ActivityFooterMode = disclosureRails.activityFooterMode;
+  const visibleNarrationStatusChips =
+    activityFooterMode === "collapsed"
+      ? narrationStatusModel.chips.slice(0, 3)
+      : narrationStatusModel.chips;
+  const handleNarrationStatusChipSelect = useCallback(
+    (chip: NarrationStatusChip) => {
+      if (chip.issue.id === "review-needs-repair" || chip.issue.id === "review-required") {
+        openReviewRepairQueue();
+        return;
+      }
+      selectWorkspaceInspectorTarget({
+        id: chip.issue.id,
+        kind: "issue",
+        label: chip.issue.label,
+      });
+    },
+    [openReviewRepairQueue, selectWorkspaceInspectorTarget],
+  );
+  const openStatusActivityFromShortcut = useCallback(() => {
+    inspectWorkspaceJob();
+    openCommandCenter("activity");
+  }, [inspectWorkspaceJob, openCommandCenter]);
+  const inspectNarrationStatusIssueFromShortcut = useCallback(() => {
+    if (visibleNarrationStatusChips.length === 0) {
+      announcePolite("No status issues.");
+      return;
+    }
+    const selectedChip =
+      selectedWorkspaceInspectorTarget?.kind === "issue"
+        ? visibleNarrationStatusChips.find(
+            (chip) => chip.issue.id === selectedWorkspaceInspectorTarget.id,
+          )
+        : undefined;
+    const actionableChip =
+      visibleNarrationStatusChips.find(
+        (chip) => chip.issue.blocksCurrentStage || chip.issue.recovery.id !== "none",
+      ) ?? visibleNarrationStatusChips[0];
+    const chip = selectedChip ?? actionableChip;
+    handleNarrationStatusChipSelect(chip);
+  }, [
+    announcePolite,
+    handleNarrationStatusChipSelect,
+    selectedWorkspaceInspectorTarget,
+    visibleNarrationStatusChips,
+  ]);
   const leftRailMode = disclosureRails.leftRailMode;
   const rightRailMode = disclosureRails.rightRailMode;
   const inspectorSummonedInTheatre =
@@ -6703,8 +6767,62 @@ export function App() {
   }
   createAndListenFromCurrentSourceRef.current = createAndListenFromCurrentSource;
 
+  const runGlobalShortcutCommand = useCallback(
+    (shortcutCommand: ShortcutCommandId) => {
+      switch (shortcutCommand) {
+        case "command.palette": {
+          if (isCommandPaletteOpen) {
+            closeCommandPalette();
+            return;
+          }
+          openCommandPalette("commands");
+          return;
+        }
+        case "shortcut.cheatsheet": {
+          openShortcutCheatSheet();
+          return;
+        }
+        case "status.openActivity": {
+          openStatusActivityFromShortcut();
+          return;
+        }
+        case "status.inspectIssue": {
+          inspectNarrationStatusIssueFromShortcut();
+          return;
+        }
+        case "settings.open": {
+          setSettingsCommandTarget(null);
+          setIsSettingsOpen(true);
+          return;
+        }
+        case "help.open": {
+          setHelpCommandTarget(null);
+          setIsHelpOpen(true);
+          return;
+        }
+        default: {
+          if (canCreateCurrentSource) {
+            createAndListenFromCurrentSourceRef.current();
+          }
+        }
+      }
+    },
+    [
+      canCreateCurrentSource,
+      closeCommandPalette,
+      inspectNarrationStatusIssueFromShortcut,
+      isCommandPaletteOpen,
+      openCommandPalette,
+      openShortcutCheatSheet,
+      openStatusActivityFromShortcut,
+    ],
+  );
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
       if (event.key === "Escape" && isCommandPaletteOpen) {
         event.preventDefault();
         closeCommandPalette();
@@ -6719,43 +6837,21 @@ export function App() {
       ) {
         return;
       }
+      if (shortcutCommand === "shortcut.cheatsheet" && contentMode === "theatre") {
+        return;
+      }
       event.preventDefault();
-      if (shortcutCommand === "command.palette") {
-        if (isCommandPaletteOpen) {
-          closeCommandPalette();
-          return;
-        }
-        openCommandPalette("commands");
-        return;
-      }
-      if (shortcutCommand === "shortcut.cheatsheet") {
-        openShortcutCheatSheet();
-        return;
-      }
-      if (shortcutCommand === "settings.open") {
-        setSettingsCommandTarget(null);
-        setIsSettingsOpen(true);
-        return;
-      }
-      if (shortcutCommand === "help.open") {
-        setHelpCommandTarget(null);
-        setIsHelpOpen(true);
-        return;
-      }
-      if (canCreateCurrentSource) {
-        createAndListenFromCurrentSourceRef.current();
-      }
+      runGlobalShortcutCommand(shortcutCommand);
     };
     globalThis.addEventListener("keydown", handleKeyDown);
     return () => {
       globalThis.removeEventListener("keydown", handleKeyDown);
     };
   }, [
-    canCreateCurrentSource,
     closeCommandPalette,
+    contentMode,
     isCommandPaletteOpen,
-    openCommandPalette,
-    openShortcutCheatSheet,
+    runGlobalShortcutCommand,
     shortcutPreferences,
   ]);
 
@@ -6765,10 +6861,13 @@ export function App() {
     }
     // eslint-disable-next-line sonarjs/cognitive-complexity
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
       if (isCommandPaletteOpen || isHelpOpen || isSettingsOpen) {
         return;
       }
-      const shortcut = resolveLocalizedReviewPreviewShortcut(event);
+      const shortcut = resolveLocalizedReviewPreviewShortcut(event, shortcutPreferences);
       if (!shortcut) {
         return;
       }
@@ -6780,6 +6879,24 @@ export function App() {
       const selectedBlockIndex = narrationPreviewBlocks.findIndex(
         (block) => block.id === selectedBlockId,
       );
+      if (shortcut === "nextIssue") {
+        if (contentMode !== "review") {
+          return;
+        }
+        const nextIssueBlockId = selectNextReviewIssueBlockId(
+          narrationPreviewBlocks,
+          selectedBlockId,
+        );
+        if (!nextIssueBlockId) {
+          announcePolite("No review issues.");
+          return;
+        }
+        setWorkspaceContext((currentContext) =>
+          withWorkspaceActiveBlock(currentContext, nextIssueBlockId),
+        );
+        inspectWorkspaceCue(nextIssueBlockId);
+        return;
+      }
       if (shortcut === "playPause") {
         if (!playbackControls.isAvailable) {
           return;
@@ -6837,6 +6954,7 @@ export function App() {
       globalThis.removeEventListener("keydown", handleKeyDown);
     };
   }, [
+    announcePolite,
     contentMode,
     isCommandPaletteOpen,
     isHelpOpen,
@@ -6846,6 +6964,7 @@ export function App() {
     narrationPreviewBlocks,
     playbackControls,
     playbackCursorSec,
+    shortcutPreferences,
     workspaceContext.activeBlockId,
   ]);
 
@@ -6962,6 +7081,21 @@ export function App() {
       setIsSettingsOpen,
       setContentMode,
       setWorkspaceLayoutMode,
+      openCommandCenterRoute: openCommandCenter,
+      openExportCurrent: () => {
+        setCommandCenterSection("importsExports");
+        setBundleReturnSection("importsExports");
+        setIsCommandCenterOpen(false);
+        setBundlePanelMode("export");
+        setIsBundlePanelOpen(true);
+      },
+      openImportBundle: () => {
+        setCommandCenterSection("importsExports");
+        setBundleReturnSection("importsExports");
+        setIsCommandCenterOpen(false);
+        setBundlePanelMode("import");
+        setIsBundlePanelOpen(true);
+      },
       createAndListenFromCurrentSource,
       handleAddPlaybackBookmark,
       handleResumeProgress,
@@ -7113,6 +7247,35 @@ export function App() {
       title: "Increase playback speed",
     },
     {
+      category: "Diagnostics",
+      detail: "Open Command Center Activity for active narration work.",
+      id: "status:activity:open",
+      keywords: ["activity", "status", "command center", "keyboard"],
+      owner: "status",
+      perform: openStatusActivityFromShortcut,
+      section: "Diagnostics",
+      shortcutCommandId: "status.openActivity",
+      title: "Open Activity",
+    },
+    {
+      availability: {
+        reason:
+          visibleNarrationStatusChips.length > 0
+            ? undefined
+            : "No status issues are currently visible.",
+        state: visibleNarrationStatusChips.length > 0 ? "available" : "disabled",
+      },
+      category: "Diagnostics",
+      detail: "Inspect the selected or first visible status issue.",
+      id: "status:issue:inspect",
+      keywords: ["issue", "status", "inspect", "keyboard"],
+      owner: "status",
+      perform: inspectNarrationStatusIssueFromShortcut,
+      section: "Diagnostics",
+      shortcutCommandId: "status.inspectIssue",
+      title: "Inspect status issue",
+    },
+    {
       availability: {
         reason:
           blockNavigationCommandBlockedReason ??
@@ -7158,6 +7321,40 @@ export function App() {
       section: "Review",
       shortcutCommandId: "review.nextBlock",
       title: "Next block",
+    },
+    {
+      availability: {
+        reason:
+          reviewCommandBlockedReason ??
+          (narrationPreviewBlocks.some((block) => block.needsAttention)
+            ? undefined
+            : "No review issues."),
+        state:
+          reviewCommandBlockedReason ||
+          !narrationPreviewBlocks.some((block) => block.needsAttention)
+            ? "disabled"
+            : "available",
+      },
+      category: "Review",
+      detail: "Move to the next Review block that needs attention.",
+      id: "review:block:next-issue",
+      keywords: ["next", "issue", "repair", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        const nextIssueBlockId = selectNextReviewIssueBlockId(
+          narrationPreviewBlocks,
+          selectedNarrationCommandBlockId,
+        );
+        if (nextIssueBlockId) {
+          setWorkspaceContext((currentContext) =>
+            withWorkspaceActiveBlock(currentContext, nextIssueBlockId),
+          );
+          inspectWorkspaceCue(nextIssueBlockId);
+        }
+      },
+      section: "Review",
+      shortcutCommandId: "review.nextIssue",
+      title: "Next review issue",
     },
     {
       availability: {
@@ -7261,6 +7458,21 @@ export function App() {
       section: "Review",
       shortcutCommandId: "review.inspector",
       title: "Open review inspector",
+    },
+    {
+      availability: {
+        reason: contentMode === "teleprompt" ? undefined : "Open Teleprompt before using Theatre.",
+        state: contentMode === "teleprompt" ? "available" : "blocked",
+      },
+      category: "Teleprompt",
+      detail: "Open Theatre from the current Teleprompt cue.",
+      id: "teleprompt:open-theatre",
+      keywords: ["teleprompt", "theatre", "cue", "keyboard"],
+      owner: "teleprompt",
+      perform: openTelepromptTheatreStage,
+      section: "Teleprompt",
+      shortcutCommandId: "teleprompt.openTheatre",
+      title: "Open Theatre",
     },
     {
       category: "Teleprompt",
@@ -8240,6 +8452,7 @@ export function App() {
                       text,
                     })}
                     settings={teleprompterSettings}
+                    shortcutPreferences={shortcutPreferences}
                     theatreSettings={telepromptTheatreSettings}
                     theatreSettingsMemoryEnabled={uiMemory.rememberTelepromptTheatreSettings}
                     sourceId={
@@ -8500,17 +8713,7 @@ export function App() {
         onOpenVoiceCloning={() => {
           handleStudioModeChange("voiceCloning");
         }}
-        onStatusChipSelect={(chip) => {
-          if (chip.issue.id === "review-needs-repair" || chip.issue.id === "review-required") {
-            openReviewRepairQueue();
-            return;
-          }
-          selectWorkspaceInspectorTarget({
-            id: chip.issue.id,
-            kind: "issue",
-            label: chip.issue.label,
-          });
-        }}
+        onStatusChipSelect={handleNarrationStatusChipSelect}
       />
     </main>
   );
@@ -11057,6 +11260,7 @@ function SourceTextPanel({
           selectedBookScope={selectedBookScope}
           selectedBookSource={activeBookSource}
           selectedPreparedSource={activePreparedSource}
+          shortcutPreferences={shortcutPreferences}
           sourceLifecycle={sourceLifecycle}
           sourceMode={sourceMode}
           text={text}
@@ -11211,6 +11415,7 @@ function NarrationPreviewStage({
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
+  shortcutPreferences,
   sourceLifecycle,
   sourceMode,
   text,
@@ -11244,6 +11449,7 @@ function NarrationPreviewStage({
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
+  shortcutPreferences: ShortcutPreferences;
   sourceLifecycle: SourceLifecycleEnvelope;
   sourceMode: SourceMode;
   text: string;
@@ -11714,7 +11920,10 @@ function NarrationPreviewStage({
             </p>
           </div>
           <div className="sticky top-3 z-10">
-            <LocalizedPlaybackToolbar model={previewPlaybackToolbar} />
+            <LocalizedPlaybackToolbar
+              model={previewPlaybackToolbar}
+              shortcutPreferences={shortcutPreferences}
+            />
           </div>
         </section>
       </div>
@@ -14139,6 +14348,12 @@ function NarrationReviewWorkbench({
     const nextBlock = reviewBlocks[nextIndex];
     onActiveBlockChange(nextBlock.id);
   };
+  const moveToNextReviewIssue = () => {
+    const nextIssueBlockId = selectNextReviewIssueBlockId(reviewBlocks, selectedBlockId);
+    if (nextIssueBlockId) {
+      onActiveBlockChange(nextIssueBlockId);
+    }
+  };
   const reviewPlaybackToolbar: LocalizedPlaybackToolbarModel = {
     activeDetail: selectedBlock
       ? `${selectedBlock.index.toString()} of ${Math.max(1, reviewBlocks.length).toString()} · ${formatDuration(selectedBlock.estimatedDurationMs)}`
@@ -14288,11 +14503,17 @@ function NarrationReviewWorkbench({
           validationSimilarity={job?.voiceCheck.similarity ?? 0}
           validationTranscript={validationTranscript}
           voiceProfileLabel={voiceProfileLabel}
-          playbackToolbar={<LocalizedPlaybackToolbar model={reviewPlaybackToolbar} />}
+          playbackToolbar={
+            <LocalizedPlaybackToolbar
+              model={reviewPlaybackToolbar}
+              shortcutPreferences={shortcutPreferences}
+            />
+          }
           onActiveBlockChange={onActiveBlockChange}
           onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
           onHistoryEntriesChange={onHistoryEntriesChange}
           onInspectStructure={inspectStructure}
+          onNextIssue={moveToNextReviewIssue}
           onPreviewSpeech={onPreviewSpeech}
           onStatusByBlockIdChange={onStatusByBlockIdChange}
           onTabChange={(tabId) => {

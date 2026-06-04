@@ -38,6 +38,10 @@ import {
   TelepromptTheatreCueText,
   telepromptTheatreWordLabel,
 } from "./telepromptTheatreCueContent";
+import {
+  DEFAULT_SHORTCUT_PREFERENCES,
+  type ShortcutPreferences,
+} from "../shortcuts/shortcutRegistry";
 
 export interface TelepromptTheatreProps {
   readonly activeBlock: RevisionBlock | null;
@@ -70,6 +74,7 @@ export interface TelepromptTheatreProps {
   readonly controlsVisible: boolean;
   readonly previewBlocks: RevisionBlock[];
   readonly settings: TelepromptTheatreSettings;
+  readonly shortcutPreferences?: ShortcutPreferences;
   readonly settingsMemoryEnabled: boolean;
   readonly summary: TelepromptTheatreSummary;
   readonly theatreViewMode: TelepromptTheatreViewMode;
@@ -143,6 +148,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       previewBlocks,
       presetId,
       settings,
+      shortcutPreferences = DEFAULT_SHORTCUT_PREFERENCES,
       settingsMemoryEnabled,
       summary,
       syncDebug,
@@ -623,7 +629,10 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
                 {settings.nextCuePlacement === "below" ? (
                   <CuePreviewList blocks={previewBlocks} />
                 ) : null}
-                <LocalizedPlaybackToolbar model={theatrePlaybackToolbar} />
+                <LocalizedPlaybackToolbar
+                  model={theatrePlaybackToolbar}
+                  shortcutPreferences={shortcutPreferences}
+                />
                 <p className="hidden text-xs text-[var(--vs-text-muted)] sm:block">
                   {theatreStateDetail}
                   {playbackControlsAvailable

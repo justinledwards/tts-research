@@ -69,7 +69,7 @@ import {
   resolveShortcutCommandBinding,
   shortcutAriaKeyShortcutsForCommand,
   shortcutTooltip,
-  shouldIgnoreNarrationShortcutTarget,
+  shouldIgnoreNarrationShortcutEvent,
   type ShortcutCommandId,
   type ShortcutPreferences,
 } from "../shortcuts/shortcutRegistry";
@@ -110,6 +110,7 @@ export interface RevisionPanelProps {
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
   onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
   onInspectStructure?: () => void;
+  onNextIssue?: () => void;
   onPreviewSpeech: () => void;
   onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
   onTabChange?: (tabId: RevisionTabId) => void;
@@ -139,6 +140,7 @@ export function RevisionPanel({
   onEditedTextByBlockIdChange,
   onHistoryEntriesChange,
   onInspectStructure,
+  onNextIssue,
   onPreviewSpeech,
   onStatusByBlockIdChange,
   onTabChange,
@@ -458,7 +460,7 @@ export function RevisionPanel({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (shouldIgnoreNarrationShortcutTarget(event.target)) {
+      if (shouldIgnoreNarrationShortcutEvent(event)) {
         return;
       }
       const resolved = resolveShortcutCommandBinding(event, shortcutPreferences, "review");
@@ -599,6 +601,7 @@ export function RevisionPanel({
             onDraftStateChange={handleDraftStateChange}
             onInlineEditRevert={revertInlineEdit}
             onInlineEditSave={saveInlineEdit}
+            onNextIssue={onNextIssue}
             onPreviewSpeech={() => {
               if (activeBlock) {
                 onActiveBlockChange(activeBlock.id);
@@ -1125,6 +1128,7 @@ function RevisionSelectedBlockEditor({
   onDraftStateChange,
   onInlineEditRevert,
   onInlineEditSave,
+  onNextIssue,
   onPreviewSpeech,
   onRevertHistoryEntry,
   onSetActiveTab,
@@ -1147,6 +1151,7 @@ function RevisionSelectedBlockEditor({
   onDraftStateChange: (blockId: string, dirty: boolean) => void;
   onInlineEditRevert: (block: RevisionBlock, previousSpokenText: string) => void;
   onInlineEditSave: (block: RevisionBlock, nextSpokenText: string) => void;
+  onNextIssue?: () => void;
   onPreviewSpeech: () => void;
   onRevertHistoryEntry: (entry: RevisionHistoryEntry) => void;
   onSetActiveTab: (tabId: RevisionTabId) => void;
@@ -1174,6 +1179,13 @@ function RevisionSelectedBlockEditor({
     "review.regenerate",
     "Regenerate",
     shortcutPreferences,
+  );
+  const nextIssueDisabledReason = summary.needsAttention > 0 ? undefined : "No review issues.";
+  const nextIssueShortcut = revisionShortcutButtonProps(
+    "review.nextIssue",
+    "Next issue",
+    shortcutPreferences,
+    nextIssueDisabledReason,
   );
 
   return (
@@ -1248,6 +1260,19 @@ function RevisionSelectedBlockEditor({
           variant="secondary"
         >
           Mark needs review
+        </Button>
+        <Button
+          {...nextIssueShortcut}
+          data-testid="ui-action-revision-block-next-issue"
+          disabled={!onNextIssue || summary.needsAttention === 0}
+          disabledReason={nextIssueDisabledReason ?? (onNextIssue ? undefined : "Unavailable.")}
+          onClick={() => {
+            onNextIssue?.();
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Next issue
         </Button>
         <Button
           data-testid="ui-action-revision-block-skip"

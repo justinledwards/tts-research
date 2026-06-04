@@ -37,6 +37,10 @@ import {
 } from "./telepromptToolbar";
 import { telepromptFullscreenAvailability } from "./telepromptFullscreen";
 import {
+  DEFAULT_SHORTCUT_PREFERENCES,
+  updateShortcutPreference,
+} from "../shortcuts/shortcutRegistry";
+import {
   TelepromptTheatre,
   TelepromptTheatreCueText,
   telepromptTheatreCrawlOffset,
@@ -71,7 +75,18 @@ describe("teleprompt toolbar model", () => {
     expect(resolveTelepromptShortcut({ key: "]" })).toBe("speedUp");
     expect(resolveTelepromptShortcut({ altKey: true, key: "j" })).toBe("jumpCurrentAudio");
     expect(resolveTelepromptShortcut({ key: "r" })).toBe("returnReview");
+    expect(resolveTelepromptShortcut({ key: "t" })).toBe("openTheatre");
     expect(resolveTelepromptShortcut({ ctrlKey: true, key: "k" })).toBeNull();
+  });
+
+  it("accepts shortcut preferences while resolving Teleprompt commands", () => {
+    const preferences = updateShortcutPreference(
+      DEFAULT_SHORTCUT_PREFERENCES,
+      "command.palette",
+      "alt-k",
+    );
+
+    expect(resolveTelepromptShortcut({ key: "t" }, preferences)).toBe("openTheatre");
   });
 
   it("counts words, estimates time, and finds adjacent cues", () => {
@@ -252,6 +267,8 @@ describe("teleprompt theatre model", () => {
     expect(resolveTelepromptTheatreShortcut({ key: "m" })).toBe("toggleMirror");
     expect(resolveTelepromptTheatreShortcut({ key: "j" })).toBe("jumpCurrentAudio");
     expect(resolveTelepromptTheatreShortcut({ key: "t" })).toBe("toggleControls");
+    expect(resolveTelepromptTheatreShortcut({ key: "?", shiftKey: true })).toBe("shortcutHelp");
+    expect(resolveTelepromptTheatreShortcut({ key: "F1" })).toBe("shortcutHelp");
     expect(resolveTelepromptTheatreShortcut({ key: "r" })).toBe("returnReview");
     expect(resolveTelepromptTheatreShortcut({ key: "v" })).toBe("returnPreview");
     expect(resolveTelepromptTheatreShortcut({ key: "ArrowRight" })).toBe("nextCue");

@@ -1507,3 +1507,12 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Review worktree scope
 - [x] Stage visual hierarchy work package
 - [x] Create commit
+
+## 2026-06-04 14:01 CEST - Keyboard Command Operation
+- [x] Extend shortcut registry and target guards
+- [x] Wire global status and review issue keyboard routes
+- [x] Add Teleprompt and Theatre shortcut help behavior
+- [x] Expand command palette routes
+- [x] Update shortcut discoverability and tests
+- [x] Run focused and project checks
+- Validation: frontend typecheck passed; focused shortcut, Teleprompt, ReviewPanel, and command-palette helper tests passed; command palette e2e passed; accessibility audit passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome warnings/infos.

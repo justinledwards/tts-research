@@ -3,14 +3,17 @@ import { playbackActionLabel } from "../playback";
 import {
   DEFAULT_SHORTCUT_PREFERENCES,
   resolveShortcutCommandBinding,
+  shouldIgnoreNarrationShortcutEvent,
   shouldIgnoreNarrationShortcutTarget,
   type ShortcutCommandId,
+  type ShortcutPreferences,
 } from "../shortcuts/shortcutRegistry";
 
 export type TelepromptShortcutAction =
   | "createListen"
   | "jumpCurrentAudio"
   | "nextCue"
+  | "openTheatre"
   | "playPause"
   | "previousCue"
   | "restart"
@@ -87,6 +90,12 @@ export const TELEPROMPT_SHORTCUTS: readonly TelepromptShortcutDefinition[] = [
     key: "C",
     label: playbackActionLabel("createAndListen"),
   },
+  {
+    action: "openTheatre",
+    description: "Open Theatre from the current cue",
+    key: "T",
+    label: "Open Theatre",
+  },
 ];
 
 export interface TelepromptKeyboardEventLike {
@@ -100,21 +109,22 @@ export interface TelepromptKeyboardEventLike {
 
 export function resolveTelepromptShortcut(
   event: TelepromptKeyboardEventLike,
+  shortcutPreferences: ShortcutPreferences = DEFAULT_SHORTCUT_PREFERENCES,
 ): TelepromptShortcutAction | null {
-  if (shouldIgnoreTelepromptShortcutTarget(event.target)) {
+  if (shouldIgnoreTelepromptShortcutEvent(event)) {
     return null;
   }
   return telepromptActionForShortcutCommand(
-    resolveShortcutCommandBinding(
-      event as KeyboardEvent,
-      DEFAULT_SHORTCUT_PREFERENCES,
-      "teleprompt",
-    ),
+    resolveShortcutCommandBinding(event, shortcutPreferences, "teleprompt"),
   );
 }
 
 export function shouldIgnoreTelepromptShortcutTarget(target: EventTarget | null | undefined) {
   return shouldIgnoreNarrationShortcutTarget(target ?? null);
+}
+
+export function shouldIgnoreTelepromptShortcutEvent(event: TelepromptKeyboardEventLike) {
+  return shouldIgnoreNarrationShortcutEvent(event);
 }
 
 function telepromptActionForShortcutCommand(
@@ -132,6 +142,9 @@ function telepromptActionForShortcutCommand(
     }
     case "teleprompt.jumpCurrentAudio": {
       return "jumpCurrentAudio";
+    }
+    case "teleprompt.openTheatre": {
+      return "openTheatre";
     }
     case "teleprompt.nextCue": {
       return "nextCue";

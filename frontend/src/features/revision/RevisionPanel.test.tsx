@@ -41,6 +41,8 @@ describe("RevisionPanel", () => {
     expect(markup).toContain('data-shortcut-command-id="review.edit"');
     expect(markup).toContain('data-shortcut-command-id="review.retry"');
     expect(markup).toContain('data-shortcut-command-id="review.regenerate"');
+    expect(markup).toContain('data-shortcut-command-id="review.nextIssue"');
+    expect(markup).toContain('aria-keyshortcuts="n"');
   });
 
   it("keeps diagnostics and history available as secondary selected-block details", () => {

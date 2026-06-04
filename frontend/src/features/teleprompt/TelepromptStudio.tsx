@@ -21,6 +21,7 @@ import {
 import { liveStatusMessages, useLiveStatus } from "../accessibility";
 import { nextReaderPlaybackRate } from "../reader-accessibility";
 import { useFocusedTheatreControls } from "../theatre/FocusedTheatreShell";
+import { useReaderModalLifecycle } from "../reader-accessibility";
 import type { RevisionBlock } from "../revision";
 import {
   generatedAudioLifecycleDescriptor,
@@ -102,6 +103,12 @@ import {
   resolveTelepromptShortcut,
   totalTelepromptWords,
 } from "./telepromptToolbar";
+import {
+  DEFAULT_SHORTCUT_PREFERENCES,
+  shortcutLabelForCommand,
+  type ShortcutCommandId,
+  type ShortcutPreferences,
+} from "../shortcuts/shortcutRegistry";
 
 export interface TelepromptPlaybackController {
   readonly isAvailable: boolean;
@@ -135,6 +142,7 @@ export interface TelepromptStudioProps {
   readonly returnStage: WorkspaceReturnStage;
   readonly scopeLabel: string;
   readonly settings: TeleprompterHighlightSettings;
+  readonly shortcutPreferences?: ShortcutPreferences;
   readonly theatreSettings: TelepromptTheatreSettings;
   readonly theatreSettingsMemoryEnabled: boolean;
   readonly sourceId: string | null;
@@ -191,6 +199,7 @@ export function TelepromptStudio({
   returnStage,
   scopeLabel,
   settings,
+  shortcutPreferences = DEFAULT_SHORTCUT_PREFERENCES,
   theatreSettings,
   theatreSettingsMemoryEnabled,
   sourceId,
@@ -222,6 +231,7 @@ export function TelepromptStudio({
   const [activeContextTab, setActiveContextTab] = useState<ContextPanelTabId>("overview");
   const [presetId, setPresetId] = useState<TelepromptPresetId>("standard");
   const [theatreMode, setTheatreMode] = useState<TelepromptTheatreMode>("inline");
+  const [theatreShortcutHelpOpen, setTheatreShortcutHelpOpen] = useState(false);
   const [theatreViewMode, setTheatreViewMode] = useState<TelepromptTheatreViewMode>("manual");
   const [countdownRemaining, setCountdownRemaining] = useState<number | null>(null);
   const theatreControls = useFocusedTheatreControls({
@@ -543,6 +553,7 @@ export function TelepromptStudio({
     }
     persistSnapshot(returnTarget);
     setFullscreenAvailability(telepromptFullscreenAvailability());
+    setTheatreShortcutHelpOpen(false);
     setTheatreMode("theatre");
     setStatusMessage("Teleprompt Theatre opened.");
     announcePolite(liveStatusMessages.telepromptTheatreEntered());
@@ -564,6 +575,7 @@ export function TelepromptStudio({
     void exitTelepromptFullscreen();
     setNativeFullscreenActive(false);
     setCountdownRemaining(null);
+    setTheatreShortcutHelpOpen(false);
     setTheatreMode("inline");
     setStatusMessage("Exited Teleprompt Theatre.");
     announcePolite(liveStatusMessages.telepromptTheatreExited());
@@ -660,6 +672,7 @@ export function TelepromptStudio({
 
   useEffect(() => {
     if (theatreMode === "inline") {
+      setTheatreShortcutHelpOpen(false);
       return;
     }
     requestAnimationFrame(() => {
@@ -1004,10 +1017,19 @@ export function TelepromptStudio({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (theatreMode !== "inline" && theatreShortcutHelpOpen && event.key === "Escape") {
+        event.preventDefault();
+        setTheatreShortcutHelpOpen(false);
+        setStatusMessage("Theatre shortcuts hidden.");
+        return;
+      }
       const shortcut =
         theatreMode === "inline"
-          ? resolveTelepromptShortcut(event)
-          : resolveTelepromptTheatreShortcut(event);
+          ? resolveTelepromptShortcut(event, shortcutPreferences)
+          : resolveTelepromptTheatreShortcut(event, shortcutPreferences);
       if (!shortcut) {
         return;
       }
@@ -1040,8 +1062,20 @@ export function TelepromptStudio({
           handleJumpToCurrentAudio();
           break;
         }
+        case "openTheatre": {
+          if (theatreMode === "inline") {
+            openTheatre();
+          }
+          break;
+        }
         case "restart": {
           handleRestart();
+          break;
+        }
+        case "shortcutHelp": {
+          setTheatreShortcutHelpOpen(true);
+          theatreControls.revealControls();
+          setStatusMessage("Theatre shortcuts shown.");
           break;
         }
         case "speedDown": {
@@ -1113,8 +1147,11 @@ export function TelepromptStudio({
     handleRestart,
     handleReturn,
     handleTheatrePlayPause,
+    openTheatre,
     moveCue,
     adjustPlaybackRate,
+    shortcutPreferences,
+    theatreShortcutHelpOpen,
     theatreSettings.mirrorMode,
     theatreMode,
     theatreControls,
@@ -1214,6 +1251,7 @@ export function TelepromptStudio({
           <aside className="sticky top-3 z-10 grid gap-3 self-start">
             <LocalizedPlaybackToolbar
               model={{ ...telepromptPlaybackToolbar, variant: "compact" }}
+              shortcutPreferences={shortcutPreferences}
             />
             <div className="grid gap-3 rounded-lg border p-3 shadow-sm vs-management-surface">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1578,6 +1616,7 @@ export function TelepromptStudio({
           )}
           ref={theatreRootRef}
           settings={effectiveTheatreSettings}
+          shortcutPreferences={shortcutPreferences}
           settingsMemoryEnabled={theatreSettingsMemoryEnabled}
           summary={theatreSummary}
           syncDebug={telepromptTheatreSyncDebug}
@@ -1617,7 +1656,92 @@ export function TelepromptStudio({
           onTogglePlayback={handleTheatrePlayPause}
         />
       )}
+      {theatreMode === "inline" || !theatreShortcutHelpOpen ? null : (
+        <TheatreShortcutHelpOverlay
+          shortcutPreferences={shortcutPreferences}
+          onClose={() => {
+            setTheatreShortcutHelpOpen(false);
+            setStatusMessage("Theatre shortcuts hidden.");
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function TheatreShortcutHelpOverlay({
+  shortcutPreferences,
+  onClose,
+}: Readonly<{ shortcutPreferences: ShortcutPreferences; onClose: () => void }>) {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  useReaderModalLifecycle(overlayRef, {
+    closeOnEscape: true,
+    lockScroll: false,
+    onClose,
+    trapFocus: true,
+  });
+  const rows: { commandId: ShortcutCommandId; label: string }[] = [
+    { commandId: "theatre.playPause", label: "Play/Pause" },
+    { commandId: "theatre.previousCue", label: "Previous cue" },
+    { commandId: "theatre.nextCue", label: "Next cue" },
+    { commandId: "theatre.restart", label: "Restart" },
+    { commandId: "theatre.speed", label: "Speed" },
+    { commandId: "theatre.jumpCurrentAudio", label: "Jump to audio" },
+    { commandId: "theatre.toggleControls", label: "Controls" },
+    { commandId: "theatre.operator", label: "Operator" },
+    { commandId: "theatre.fullscreen", label: "Fullscreen" },
+    { commandId: "theatre.mirror", label: "Mirror" },
+    { commandId: "theatre.highContrast", label: "Contrast" },
+    { commandId: "theatre.largeText", label: "Large text" },
+    { commandId: "theatre.exit", label: "Exit Theatre" },
+  ];
+  return (
+    <div
+      className="fixed inset-0 z-[90] grid place-items-center bg-[var(--vs-surface-overlay)] px-4 py-6"
+      data-testid="teleprompt-theatre-shortcut-help"
+      role="presentation"
+    >
+      <div
+        aria-label="Theatre shortcuts"
+        aria-modal="true"
+        className="max-h-[min(34rem,calc(100vh-3rem))] w-full max-w-xl overflow-hidden rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-chrome)] p-4 text-[var(--vs-theatre-text)] shadow-2xl"
+        ref={overlayRef}
+        role="dialog"
+        tabIndex={-1}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--vs-theatre-panel-border)] pb-3">
+          <div>
+            <h2 className="text-base font-semibold">Theatre shortcuts</h2>
+            <p className="mt-1 text-xs text-[var(--vs-text-secondary)]">
+              Active cue and display controls.
+            </p>
+          </div>
+          <Button
+            className="border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]"
+            data-reader-autofocus=""
+            data-testid="ui-action-teleprompt-theatre-shortcut-help-close"
+            onClick={onClose}
+            size="sm"
+            variant="secondary"
+          >
+            Close
+          </Button>
+        </div>
+        <div className="mt-4 grid max-h-[min(24rem,calc(100vh-12rem))] gap-2 overflow-auto pr-1 sm:grid-cols-2">
+          {rows.map((row) => (
+            <div
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] px-3 py-2 text-sm"
+              key={row.commandId}
+            >
+              <span className="min-w-0 truncate font-semibold">{row.label}</span>
+              <kbd className="rounded border border-[var(--vs-theatre-panel-border)] px-2 py-1 text-[0.68rem] font-semibold">
+                {shortcutLabelForCommand(row.commandId, shortcutPreferences) ?? "Unset"}
+              </kbd>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

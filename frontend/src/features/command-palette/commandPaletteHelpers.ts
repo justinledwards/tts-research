@@ -14,6 +14,7 @@ import type { CinemaFocusMode, CinemaSurfaceKind } from "../cinema";
 import type { BookScope, BookSource, PlaybackProgress, PreparedSource } from "../../types";
 import type { WorkspaceStageActionId } from "../workspace/stageActions";
 import type { WorkspaceLayoutMode, WorkspaceStage } from "../workspace/model";
+import { COMMAND_CENTER_ROUTES, type CommandCenterRouteId } from "../command-center/model";
 
 type SourceMode = "book" | "fileUrl" | "text";
 
@@ -48,8 +49,11 @@ export interface CommandWayfindingState {
 
 export interface CommandPaletteHandlers {
   openContextualHelp: (target: HelpCommandTarget | null) => void;
+  openCommandCenterRoute: (routeId: CommandCenterRouteId) => void;
   openCurrentCinema: () => void;
   openDraftSource: () => void;
+  openExportCurrent: () => void;
+  openImportBundle: () => void;
   openShortcutCheatSheet: () => void;
   openProject: (projectId: string) => void;
   openSettings: (target: SettingsCommandTarget | null) => void;
@@ -109,6 +113,9 @@ export interface CommandPaletteHandlerContext {
   setIsSettingsOpen: (open: boolean) => void;
   setContentMode: (mode: WorkspaceStage) => void;
   setWorkspaceLayoutMode: (mode: WorkspaceLayoutMode) => void;
+  openCommandCenterRoute: (routeId: CommandCenterRouteId) => void;
+  openExportCurrent: () => void;
+  openImportBundle: () => void;
   createAndListenFromCurrentSource: () => void;
   handleAddPlaybackBookmark: () => void | Promise<void>;
   handleResumeProgress: (progress: PlaybackProgress) => void | Promise<void>;
@@ -144,6 +151,9 @@ export function buildCommandPaletteHandlers({
   openTelepromptTheatreStage,
   openReadingCinema,
   openPreparedSourceCinema,
+  openCommandCenterRoute,
+  openExportCurrent,
+  openImportBundle,
   preparedSourceCinemaActionLabel,
   resolveBookSourceLabel,
   resolveDefaultBookScope,
@@ -207,10 +217,13 @@ export function buildCommandPaletteHandlers({
     openCurrentCinema: () => {
       openReadingCinema();
     },
+    openCommandCenterRoute,
     openDraftSource: () => {
       setSourceMode("text");
       setContentMode("intake");
     },
+    openExportCurrent,
+    openImportBundle,
     openPreparedSource: (source) => {
       void handleUsePreparedSource(source);
     },
@@ -447,6 +460,44 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
       title: "Open voice dashboard",
     },
   ];
+  const commandCenterRouteEntries = COMMAND_CENTER_ROUTES.map<CommandEntry>((route) => ({
+    category: commandCenterRouteCategory(route.id),
+    detail: route.description,
+    id: `command-center:${route.id}`,
+    keywords: ["command center", "activity", "operations", route.label, route.detail],
+    owner: "command-center",
+    perform: () => {
+      handlers.openCommandCenterRoute(route.id);
+    },
+    section: "Workspace",
+    title: route.id === "importsExports" ? "Open Import/Export" : `Open ${route.label}`,
+  }));
+  const bundleCommandEntries: CommandEntry[] = [
+    {
+      category: "Project",
+      detail: "Preview and import a portable project bundle.",
+      id: "bundle:import",
+      keywords: ["bundle", "import", "portable", "project"],
+      owner: "command-center",
+      perform: () => {
+        handlers.openImportBundle();
+      },
+      section: "Project",
+      title: "Import Bundle",
+    },
+    {
+      category: "Project",
+      detail: "Export the active project as a portable bundle.",
+      id: "bundle:export-current",
+      keywords: ["bundle", "export", "download", "project"],
+      owner: "command-center",
+      perform: () => {
+        handlers.openExportCurrent();
+      },
+      section: "Project",
+      title: "Export Current",
+    },
+  ];
   const workspaceCommandEntries = (commandMetadata?.workspace ?? []).map<CommandEntry>(
     (metadata) => ({
       detail: metadata.detail,
@@ -680,6 +731,8 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
   }));
   return [
     ...coreCommandEntries,
+    ...commandCenterRouteEntries,
+    ...bundleCommandEntries,
     ...workspaceCommandEntries,
     ...settingsCommandEntries,
     ...helpCommandEntries,
@@ -697,4 +750,14 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     ...bookmarkCommandEntries,
     ...recentCommandEntries,
   ];
+}
+
+function commandCenterRouteCategory(routeId: CommandCenterRouteId): CommandEntry["category"] {
+  if (routeId === "activity" || routeId === "reports") {
+    return "Diagnostics";
+  }
+  if (routeId === "assets") {
+    return "Source";
+  }
+  return "Project";
 }

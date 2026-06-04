@@ -14,6 +14,7 @@ import {
   type ShortcutPreferences,
 } from "../shortcuts/shortcutRegistry";
 import { overlayDataAttributes } from "../layout";
+import { useReaderModalLifecycle } from "../reader-accessibility";
 
 export type CommandPaletteView = "commands" | "shortcuts";
 
@@ -36,6 +37,7 @@ export function CommandPalette({
 }>) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const results = useMemo(() => searchCommandEntries(entries, query, 18), [entries, query]);
   const groupedResults = useMemo(() => commandEntriesByCategory(results), [results]);
@@ -48,6 +50,13 @@ export function CommandPalette({
   const cheatSheetShortcutLabel =
     shortcutLabelForCommand("shortcut.cheatsheet", shortcutPreferences) ?? "?";
   const activeEntry = results.at(activeIndex) ?? results.at(0) ?? null;
+
+  useReaderModalLifecycle(dialogRef, {
+    closeOnEscape: true,
+    isOpen,
+    lockScroll: false,
+    onClose,
+  });
 
   useEffect(() => {
     if (!isOpen) {
@@ -90,7 +99,9 @@ export function CommandPalette({
         aria-label="Command palette"
         aria-modal="true"
         className="vs-app mx-auto flex max-h-[min(760px,calc(100vh-3rem))] w-full max-w-3xl flex-col overflow-hidden rounded-lg border bg-[var(--vs-raised)] shadow-2xl vs-border"
+        ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
       >
         <div className="border-b p-3 vs-border">
           <div className="mb-3 inline-grid rounded-md border p-1 vs-border vs-surface">
@@ -141,6 +152,7 @@ export function CommandPalette({
                 aria-expanded="true"
                 className="h-12 w-full rounded-md border bg-[var(--vs-surface)] px-4 text-base font-semibold outline-none transition placeholder:text-[var(--vs-muted)] focus:border-[var(--vs-selected-border)] focus:ring-2 focus:ring-[var(--vs-focus-ring-soft)] vs-border"
                 data-ui-noop-reason="Search input is already focused when the command palette opens; typing filters commands."
+                data-reader-autofocus=""
                 id="command-palette-search"
                 onChange={(event) => {
                   setQuery(event.currentTarget.value);

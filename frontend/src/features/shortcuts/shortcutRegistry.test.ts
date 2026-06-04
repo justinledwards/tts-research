@@ -9,6 +9,7 @@ import {
   shortcutAvailabilityReason,
   shortcutLabelForCommand,
   shortcutPreferenceConflicts,
+  shouldIgnoreNarrationShortcutEvent,
   shouldIgnoreNarrationShortcutTarget,
   updateShortcutPreference,
 } from "./shortcutRegistry";
@@ -24,11 +25,12 @@ function keyEvent(
 
 class FakeHTMLElement {
   isContentEditable = false;
+  closestMatch = false;
 
   constructor(readonly tagName: string) {}
 
-  closest() {
-    return null;
+  closest(selector?: string) {
+    return this.closestMatch && selector?.includes("button") ? this : null;
   }
 }
 
@@ -57,6 +59,9 @@ describe("shortcut registry", () => {
 
     expect(shortcutLabelForCommand("command.palette", preferences)).toBe("Alt+K");
     expect(shortcutLabelForCommand("review.approve", preferences)).toBe("A");
+    expect(shortcutLabelForCommand("status.openActivity", preferences)).toBe("Alt+Shift+A");
+    expect(shortcutLabelForCommand("status.inspectIssue", preferences)).toBe("Alt+Shift+I");
+    expect(shortcutLabelForCommand("review.nextIssue", preferences)).toBe("N");
     expect(
       shortcutLabelForCommand(
         "review.approve",
@@ -72,6 +77,9 @@ describe("shortcut registry", () => {
     expect(
       shortcutAriaKeyShortcutsForCommand("theatre.toggleControls", DEFAULT_SHORTCUT_PREFERENCES),
     ).toBe("t");
+    expect(
+      shortcutAriaKeyShortcutsForCommand("theatre.shortcutHelp", DEFAULT_SHORTCUT_PREFERENCES),
+    ).toBe("Shift+? F1");
     expect(shortcutPreferenceConflicts(DEFAULT_SHORTCUT_PREFERENCES)).toEqual([]);
 
     const disabled = shortcutAvailability(false, "Generated audio is missing.");
@@ -90,5 +98,24 @@ describe("shortcut registry", () => {
     expect(shouldIgnoreNarrationShortcutTarget(input as unknown as EventTarget)).toBe(true);
     expect(shouldIgnoreNarrationShortcutTarget(editable as unknown as EventTarget)).toBe(true);
     expect(shouldIgnoreNarrationShortcutTarget(regular as unknown as EventTarget)).toBe(false);
+  });
+
+  it("preserves native Space, Enter, and arrow behavior on focused controls", () => {
+    vi.stubGlobal("HTMLElement", FakeHTMLElement);
+    const button = new FakeHTMLElement("button");
+    button.closestMatch = true;
+
+    expect(
+      shouldIgnoreNarrationShortcutEvent({ key: " ", target: button as unknown as EventTarget }),
+    ).toBe(true);
+    expect(
+      shouldIgnoreNarrationShortcutEvent({
+        key: "ArrowRight",
+        target: button as unknown as EventTarget,
+      }),
+    ).toBe(true);
+    expect(
+      shouldIgnoreNarrationShortcutEvent({ key: "k", target: button as unknown as EventTarget }),
+    ).toBe(false);
   });
 });
