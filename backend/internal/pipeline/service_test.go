@@ -2554,6 +2554,15 @@ func TestRetryJobReusesPersistedReadySegments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RetryJob returned error: %v", err)
 	}
+	if retry.RunMode != failed.RunMode {
+		t.Fatalf("retry run mode = %q, want saved failed job mode %q", retry.RunMode, failed.RunMode)
+	}
+	if retry.PerformanceMode != failed.PerformanceMode {
+		t.Fatalf("retry performance mode = %q, want saved failed job performance mode %q", retry.PerformanceMode, failed.PerformanceMode)
+	}
+	if retry.PipelineOptions != failed.PipelineOptions {
+		t.Fatalf("retry pipeline options = %#v, want saved failed job options %#v", retry.PipelineOptions, failed.PipelineOptions)
+	}
 	completed := waitForJob(t, service, retry.ID, pipeline.JobStatusCompleted)
 	if completed.RetryOfJobID != failed.ID {
 		t.Fatalf("retryOfJobId = %q, want %q", completed.RetryOfJobID, failed.ID)

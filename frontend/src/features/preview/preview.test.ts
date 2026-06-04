@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRunConfiguration } from "../../runConfig";
 import type { RunMode, VoiceJob } from "../../types";
+import { RunPlannerSummaryPanel } from "../run-config/RunPlannerSummaryPanel";
+import { buildRunPlannerSummary, compareRunPlannerSummaries } from "../run-config/runConfigSteps";
 import type { RevisionBlock } from "../revision";
 import {
   buildPreviewComparisonModel,
@@ -330,6 +333,43 @@ describe("preview readiness UI", () => {
     expect(markup).toContain("Default voice");
     expect(markup).toContain("Checked Master");
     expect(markup).toContain("audio/wav");
+  });
+
+  it("renders the next-run summary and saved retry plan warning", () => {
+    const currentSummary = buildRunPlannerSummary({
+      configuration: createRunConfiguration("draftPreview"),
+      policyLabel: "Enterprise",
+      sampleText: "Selected spoken block sample.",
+      scopeLabel: "Current source",
+      sourceLabel: "Preview source",
+      ttsEngines: [],
+      voiceLabel: "Default voice",
+    });
+    const retrySummary = buildRunPlannerSummary({
+      configuration: createRunConfiguration("publishMaster"),
+      policyLabel: "Accessibility",
+      sampleText: "Selected spoken block sample.",
+      scopeLabel: "Current source",
+      sourceLabel: "Preview source",
+      ttsEngines: [],
+      voiceLabel: "Default voice",
+    });
+    const markup = renderToStaticMarkup(
+      createElement(RunPlannerSummaryPanel, {
+        differences: compareRunPlannerSummaries(currentSummary, retrySummary),
+        retrySummary,
+        summary: currentSummary,
+        onCreateWithCurrentPlan: vi.fn(),
+      }),
+    );
+
+    expect(markup).toContain('data-testid="next-run-summary"');
+    expect(markup).toContain("Next-run plan");
+    expect(markup).toContain("Selected spoken block sample.");
+    expect(markup).toContain("Before generation starts");
+    expect(markup).toContain("Retry will reuse saved job plan");
+    expect(markup).toContain("Wizard differs");
+    expect(markup).toContain("Create with current plan");
   });
 
   it("renders selected-block audition with disabled-state copy", () => {

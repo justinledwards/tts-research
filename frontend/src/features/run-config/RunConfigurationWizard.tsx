@@ -2,8 +2,6 @@ import { Button, Panel, StatusChip, Toggle, fieldControlClassName } from "../../
 import {
   KOKORO_RENDER_MODE_OPTIONS,
   applyKokoroRenderMode,
-  describePerformanceMode,
-  getRunModePreset,
   isKokoroRenderEngine,
   kokoroEngineFamilyValue,
   kokoroRenderModeForConfiguration,
@@ -26,16 +24,17 @@ import {
   type ProviderCapabilityKey,
 } from "../provider-capabilities";
 import { ScopeBadge } from "../settings/ScopeBadge";
+import { RunPlannerSummaryPanel } from "./RunPlannerSummaryPanel";
 import {
   RUN_CONFIGURATION_VOICE_CHOICES,
   RUN_CONFIGURATION_WIZARD_STEPS,
   applyRunEngineSelection,
   applyRunIntent,
   applyVoiceChoice,
+  buildRunPlannerSummary,
   buildRunEngineOptions,
   kokoroRenderLabel,
-  runConfigurationSummary,
-  runIntentOptions,
+  runIntentDefinitions,
   voiceChoiceForConfiguration,
 } from "./runConfigSteps";
 
@@ -103,8 +102,6 @@ export function RunConfigurationWizard({
   const engineOptions = buildRunEngineOptions(ttsEngines);
   const activeEngineId = kokoroEngineFamilyValue(runConfiguration.ttsEngine);
   const activeVoiceChoice = voiceChoiceForConfiguration(runConfiguration, selectedProfile);
-  const summary = runConfigurationSummary(runConfiguration, selectedProfile);
-  const activeIntent = getRunModePreset(runConfiguration.runMode);
   const activeEngine = engineOptions.find((engine) => engine.id === activeEngineId);
   const activeProviderRuntime = resolveProviderRuntimeCapabilities(activeEngineId, ttsEngines);
   const activeKokoroMode = kokoroRenderModeForConfiguration(
@@ -115,6 +112,16 @@ export function RunConfigurationWizard({
     speechPolicyProfile,
     customSpeechPolicyProfiles,
   );
+  const plannerSummary = buildRunPlannerSummary({
+    configuration: runConfiguration,
+    policyLabel: activePolicyLabel,
+    sampleText: "The selected Preview sample will be generated before the full run.",
+    scopeLabel: "Current Preview scope",
+    selectedProfile,
+    sourceLabel: "Current source",
+    ttsEngines,
+    voiceLabel: selectedProfile?.name ?? "Default voice",
+  });
 
   return (
     <Panel
@@ -134,25 +141,28 @@ export function RunConfigurationWizard({
           scope="session"
         />
         <div className="grid gap-2 sm:grid-cols-2">
-          {runIntentOptions().map((preset) => (
+          {runIntentDefinitions().map((intent) => (
             <Button
               align="start"
               className="grid gap-2 p-3"
-              data-testid={`run-config-intent-${preset.mode}`}
-              key={preset.mode}
+              data-testid={`run-config-intent-${intent.mode}`}
+              key={intent.mode}
               onClick={() => {
-                onRunConfigurationChange(applyRunIntent(runConfiguration, preset.mode));
+                onRunConfigurationChange(applyRunIntent(runConfiguration, intent.mode));
               }}
-              selected={preset.mode === runConfiguration.runMode}
+              selected={intent.mode === runConfiguration.runMode}
               variant="mode"
             >
               <span className="flex items-center justify-between gap-3">
-                <span>{preset.label}</span>
+                <span>{intent.label}</span>
                 <StatusChip className="rounded-full py-0.5 text-[0.65rem]" tone="neutral">
-                  {preset.performanceMode}
+                  {intent.speed}
                 </StatusChip>
               </span>
-              <span className="vs-muted block text-xs leading-5">{preset.description}</span>
+              <span className="vs-muted block text-xs leading-5">{intent.description}</span>
+              <span className="vs-muted block text-xs leading-5">
+                {intent.checking} · {intent.retries} · {intent.reporting}
+              </span>
             </Button>
           ))}
         </div>
@@ -335,21 +345,7 @@ export function RunConfigurationWizard({
           label="6. Preview sample"
           scope="session"
         />
-        <Panel className="grid gap-2 p-3" variant="raised">
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusChip tone="info">{activeIntent.label}</StatusChip>
-            <StatusChip tone="neutral">
-              {describePerformanceMode(runConfiguration.performanceMode)}
-            </StatusChip>
-          </div>
-          <ul className="grid gap-2 text-sm leading-6">
-            {summary.map((item) => (
-              <li className="vs-muted" key={item}>
-                {item}
-              </li>
-            ))}
-          </ul>
-        </Panel>
+        <RunPlannerSummaryPanel summary={plannerSummary} />
       </section>
     </Panel>
   );

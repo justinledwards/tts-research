@@ -145,6 +145,12 @@ import {
   type KokoroRenderMode,
   type RunConfiguration,
 } from "./runConfig";
+import { RunPlannerSummaryPanel } from "./features/run-config/RunPlannerSummaryPanel";
+import {
+  buildRunPlannerSummary,
+  compareRunPlannerSummaries,
+  runConfigurationFromVoiceJob,
+} from "./features/run-config/runConfigSteps";
 import {
   ACTIVE_PROJECT_ID_STORAGE_KEY,
   clearProjectWorkspaceState,
@@ -6640,6 +6646,13 @@ export function App() {
       void retryGenerationFromCurrentJob(job);
       return;
     }
+    createGenerationFromCurrentSourcePlan();
+  }
+
+  function createGenerationFromCurrentSourcePlan() {
+    if (!canCreateCurrentSource) {
+      return;
+    }
     if (sourceMode === "book" && selectedBookSource && effectiveBookScope) {
       void submitBookNarrationJob(selectedBookSource, effectiveBookScope);
       return;
@@ -8209,6 +8222,7 @@ export function App() {
               voiceProfileLabel={selectedVoiceProfileLabel}
               voiceProfiles={voiceProfiles}
               onCreateAndListen={createAndListenFromCurrentSource}
+              onCreateWithCurrentPlan={createGenerationFromCurrentSourcePlan}
               createAndListenCapabilityReason={createAndListenCapabilityReason}
               createAndListenDisabledReason={createAndListenDisabledReason}
               createAndListenScope={createAndListenScope}
@@ -8247,7 +8261,9 @@ export function App() {
               onPrepareFile={handlePrepareSourceFile}
               onPrepareUrl={handlePrepareSourceUrl}
               providerBackedGenerationBoundary={providerBackedGenerationBoundary}
+              runConfiguration={runConfiguration}
               onSelectVoiceProfile={selectVoiceProfile}
+              selectedProfile={selectedVoiceProfile}
               onStageAction={runWorkspaceStageAction}
               onSpeechPolicyProfileChange={(profile) => {
                 void handleSpeechPolicyProfileChange(profile);
@@ -8266,6 +8282,7 @@ export function App() {
               onUseBookSource={handleUseBookText}
               onUsePreparedSource={handleUsePreparedSource}
               runConfigurationLabel={getRunModePreset(runConfiguration.runMode).label}
+              ttsEngines={ttsEngines}
             />
             {error ? (
               <section className="rounded-lg border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-4 text-sm text-[var(--vs-status-danger)]">
@@ -10706,6 +10723,7 @@ function SourceTextPanel({
   playbackCursorSec,
   onAuditionVoice,
   onCreateAndListen,
+  onCreateWithCurrentPlan,
   onInspectBookSource,
   onInspectPreparedSource,
   onOpenCinema,
@@ -10721,6 +10739,8 @@ function SourceTextPanel({
   onPrepareFile,
   onPrepareUrl,
   providerBackedGenerationBoundary,
+  runConfiguration,
+  selectedProfile,
   onSelectVoiceProfile,
   onStageAction,
   onSpeechPolicyProfileChange,
@@ -10733,6 +10753,7 @@ function SourceTextPanel({
   onUseBookSource,
   onUsePreparedSource,
   runConfigurationLabel,
+  ttsEngines,
 }: Readonly<{
   activeReviewPane: ReviewPane;
   activeReviewBlockId: string | null;
@@ -10774,6 +10795,7 @@ function SourceTextPanel({
   playbackCursorSec: number;
   onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
   onCreateAndListen: () => void;
+  onCreateWithCurrentPlan: () => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onOpenCinema: () => void;
@@ -10809,6 +10831,8 @@ function SourceTextPanel({
     preparationTarget?: IntakePreparationTarget,
   ) => Promise<SourceTextPanelPreparationResult>;
   providerBackedGenerationBoundary?: boolean;
+  runConfiguration: RunConfiguration;
+  selectedProfile: VoiceProfile | null;
   onSelectVoiceProfile: (profileId: string) => void;
   onStageAction: (actionId: WorkspaceStageActionId) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
@@ -10821,6 +10845,7 @@ function SourceTextPanel({
   onUseBookSource: (source: BookSource, scope: BookScope) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
   runConfigurationLabel: string;
+  ttsEngines: TTSEngineDiagnostics[];
 }>) {
   const showSourceIntake = contentMode === "intake";
   const activeBookSource = activeBookSourceForWorkbench(sourceMode, selectedBookSource);
@@ -10980,6 +11005,9 @@ function SourceTextPanel({
           text={text}
           voiceProfileLabel={voiceProfileLabel}
           runConfigurationLabel={runConfigurationLabel}
+          runConfiguration={runConfiguration}
+          selectedProfile={selectedProfile}
+          ttsEngines={ttsEngines}
           createAndListenCapabilityReason={createAndListenCapabilityReason}
           createAndListenDisabledReason={createAndListenDisabledReason}
           createAndListenScope={createAndListenScope}
@@ -10989,6 +11017,7 @@ function SourceTextPanel({
           playbackCursorSec={playbackCursorSec}
           onAuditionVoice={onAuditionVoice}
           onCreateAndListen={onCreateAndListen}
+          onCreateWithCurrentPlan={onCreateWithCurrentPlan}
           onOpenCinema={onOpenCinema}
           onOpenTheatre={onOpenTheatre}
           onActiveBlockChange={onReviewBlockChange}
@@ -11130,12 +11159,16 @@ function NarrationPreviewStage({
   text,
   voiceProfileLabel,
   runConfigurationLabel,
+  runConfiguration,
+  selectedProfile,
+  ttsEngines,
   createAndListenCapabilityReason,
   createAndListenDisabledReason: externalCreateAndListenDisabledReason,
   createAndListenScope,
   onActiveBlockChange,
   onAuditionVoice,
   onCreateAndListen,
+  onCreateWithCurrentPlan,
   onOpenCinema,
   onOpenTheatre,
   onOpenTeleprompt,
@@ -11159,12 +11192,16 @@ function NarrationPreviewStage({
   text: string;
   voiceProfileLabel: string;
   runConfigurationLabel: string;
+  runConfiguration: RunConfiguration;
+  selectedProfile: VoiceProfile | null;
+  ttsEngines: TTSEngineDiagnostics[];
   createAndListenCapabilityReason?: string;
   createAndListenDisabledReason?: string;
   createAndListenScope: CreateAndListenScope;
   onActiveBlockChange: (blockId: string | null) => void;
   onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
   onCreateAndListen: () => void;
+  onCreateWithCurrentPlan: () => void;
   onOpenCinema: () => void;
   onOpenTheatre: () => void;
   onOpenTeleprompt: () => void;
@@ -11280,6 +11317,54 @@ function NarrationPreviewStage({
   const openCinemaDisabledReason = canOpenCinema ? undefined : readiness.cinemaDisabledReason;
   const auditionSampleText = previewAuditionSampleText(
     selectedPreviewBlock?.spokenText ?? spokenText,
+  );
+  const nextRunSummary = useMemo(
+    () =>
+      buildRunPlannerSummary({
+        configuration: runConfiguration,
+        policyLabel: policyProfileLabel,
+        sampleText: auditionSampleText,
+        scopeLabel: scopeTitle,
+        selectedProfile,
+        sourceLabel,
+        ttsEngines,
+        voiceLabel: voiceProfileLabel,
+      }),
+    [
+      auditionSampleText,
+      policyProfileLabel,
+      runConfiguration,
+      scopeTitle,
+      selectedProfile,
+      sourceLabel,
+      ttsEngines,
+      voiceProfileLabel,
+    ],
+  );
+  const retryRunSummary = useMemo(() => {
+    if (
+      !job ||
+      (job.status !== "failed" && job.status !== "cancelled") ||
+      job.retriable === false
+    ) {
+      return null;
+    }
+    const retryPolicyLabel = job.speechPolicyProfile
+      ? speechPolicyProfileLabel(job.speechPolicyProfile)
+      : policyProfileLabel;
+    return buildRunPlannerSummary({
+      configuration: runConfigurationFromVoiceJob(job),
+      policyLabel: retryPolicyLabel,
+      sampleText: auditionSampleText,
+      scopeLabel: scopeTitle,
+      sourceLabel,
+      ttsEngines,
+      voiceLabel: job.voiceProfileName ?? job.voice,
+    });
+  }, [auditionSampleText, job, policyProfileLabel, scopeTitle, sourceLabel, ttsEngines]);
+  const retryPlanDifferences = useMemo(
+    () => (retryRunSummary ? compareRunPlannerSummaries(nextRunSummary, retryRunSummary) : []),
+    [nextRunSummary, retryRunSummary],
   );
   const voiceAudition = useVoiceAuditionController({
     canAudition: readiness.canAudition,
@@ -11483,6 +11568,14 @@ function NarrationPreviewStage({
       </div>
       <PreviewReadinessChecklist model={readiness} />
       <PreviewConfirmationStrip model={readiness} />
+      <RunPlannerSummaryPanel
+        createWithCurrentPlanDisabled={!readiness.canCreate}
+        createWithCurrentPlanDisabledReason={createAndListenDisabledReason}
+        differences={retryPlanDifferences}
+        retrySummary={retryRunSummary}
+        summary={nextRunSummary}
+        onCreateWithCurrentPlan={retryRunSummary ? onCreateWithCurrentPlan : undefined}
+      />
       <section className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

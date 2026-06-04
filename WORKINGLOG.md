@@ -1463,3 +1463,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Review worktree scope
 - [x] Stage voice cloning work package
 - [x] Create commit
+
+## 2026-06-04 11:00 CEST - Advanced Run Configuration Wizard
+- [x] Add next-run planner model
+- [x] Wire planner into Preview and Settings
+- [x] Preserve retry saved-config behavior in UI
+- [x] Add regression tests
+- [x] Run project checks
+- Validation: focused frontend run-config/Preview tests passed; focused backend retry test passed; frontend typecheck passed; `pnpm check` passed with existing unrelated lint warnings/infos.
