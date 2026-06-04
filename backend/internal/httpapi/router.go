@@ -338,6 +338,36 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(source)
 	})
 
+	app.Patch("/api/source-preps/:id", func(ctx fiber.Ctx) error {
+		var request struct {
+			Name string `json:"name"`
+		}
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		source, err := service.RenamePreparedSource(ctx.Params("id"), request.Name)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(source)
+	})
+
+	app.Delete("/api/source-preps/:id", func(ctx fiber.Ctx) error {
+		if err := service.DeletePreparedSource(ctx.Params("id")); err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrAssetInUse) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.SendStatus(fiber.StatusNoContent)
+	})
+
 	app.Post("/api/source-preps/:id/readiness/confirm", func(ctx fiber.Ctx) error {
 		var request pipeline.SourceReadinessConfirmationRequest
 		if err := ctx.Bind().Body(&request); err != nil {
@@ -432,6 +462,36 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return notFound(ctx, err)
 		}
 		return ctx.JSON(book)
+	})
+
+	app.Patch("/api/book-sources/:id", func(ctx fiber.Ctx) error {
+		var request struct {
+			Name string `json:"name"`
+		}
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		book, err := service.RenameBookSource(ctx.Params("id"), request.Name)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrBookSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(book)
+	})
+
+	app.Delete("/api/book-sources/:id", func(ctx fiber.Ctx) error {
+		if err := service.DeleteBookSource(ctx.Params("id")); err != nil {
+			if errors.Is(err, pipeline.ErrBookSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrAssetInUse) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.SendStatus(fiber.StatusNoContent)
 	})
 
 	app.Post("/api/book-sources/:id/readiness/confirm", func(ctx fiber.Ctx) error {
@@ -999,9 +1059,29 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 
 	app.Delete("/api/voice-profiles/:id", func(ctx fiber.Ctx) error {
 		if err := service.DeleteVoiceProfile(ctx.Params("id")); err != nil {
+			if errors.Is(err, pipeline.ErrAssetInUse) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
 			return notFound(ctx, err)
 		}
 		return ctx.SendStatus(fiber.StatusNoContent)
+	})
+
+	app.Patch("/api/voice-profiles/:id", func(ctx fiber.Ctx) error {
+		var request struct {
+			Name string `json:"name"`
+		}
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		profile, err := service.RenameVoiceProfile(ctx.Params("id"), request.Name)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProfileNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(profile)
 	})
 
 	app.Post("/api/voice-profiles/:id/targets/:targetId", func(ctx fiber.Ctx) error {

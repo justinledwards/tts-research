@@ -86,12 +86,23 @@ describe("Command Center", () => {
   it("groups source and voice assets together", () => {
     const markup = renderToStaticMarkup(<WorkspaceDrawer {...props()} activeSection="assets" />);
 
-    expect(markup).toContain("Sources");
+    expect(markup).toContain("Source Assets");
     expect(markup).toContain("Book One");
     expect(markup).toContain("Prepared Article");
-    expect(markup).toContain("Voice profiles");
+    expect(markup).toContain("Active source");
+    expect(markup).toContain("Available source");
+    expect(markup).toContain("Reusable");
+    expect(markup).toContain("Asset detail");
+    expect(markup).toContain("Provenance");
+    expect(markup).toContain("Reuse for narration");
+    expect(markup).toContain("Voice Assets");
+    expect(markup).toContain("Active voice");
     expect(markup).toContain("Narrator");
-    expect(markup).toContain("Speech Policy");
+    expect(markup).toContain("Speech Policy Assets");
+    expect(markup).toContain("Requires confirmation");
+    expect(markup).toContain(
+      "Changing the project default requires confirmation because source-specific overrides stay pinned.",
+    );
   });
 
   it("shows activity and bundle actions outside the narration workbench", () => {
@@ -179,23 +190,38 @@ function props(): Parameters<typeof WorkspaceDrawer>[0] {
     projectStorageError: null,
     projects: [project()],
     returnWorkspaceLabel: "Narration Workbench",
+    selectedBookScope: { type: "chapter", chapterIndex: 0, label: "Chapter 1" },
+    selectedBookSourceId: "book-1",
+    selectedPreparedSourceId: null,
     selectedProfileId: "profile-1",
     speechPolicyProfile: "general",
+    speechPolicyOverrides: {},
     speechPolicyProfiles: [],
     onCancelJob: () => Promise.resolve(),
     onCancelProfileSource: () => Promise.resolve(),
     onCancelProfileTarget: () => Promise.resolve(),
+    onClearVoiceProfile: () => null,
     onClose: () => null,
     onCreateProject: () => Promise.resolve(),
+    onDeleteBookSource: () => Promise.resolve(),
+    onDeletePreparedSource: () => Promise.resolve(),
     onDeleteProject: () => Promise.resolve(),
+    onDeleteVoiceProfile: () => Promise.resolve(),
     onExportOpen: () => null,
     onImportOpen: () => null,
+    onOpenIntake: () => null,
     onOpenSettings: () => null,
     onOpenVoiceDashboard: () => null,
+    onOpenVoiceCloning: () => null,
+    onRenameBookSource: () => Promise.resolve(),
+    onRenamePreparedSource: () => Promise.resolve(),
     onRenameProject: () => Promise.resolve(),
+    onRenameVoiceProfile: () => Promise.resolve(),
     onSelectProfile: () => null,
     onSelectProject: () => null,
     onSpeechPolicyProfileChange: () => null,
+    onUseBookSource: () => null,
+    onUsePreparedSource: () => Promise.resolve(),
   };
 }
 
@@ -286,6 +312,7 @@ function preparedSource(): PreparedSource {
     projectId: "project-1",
     segmentCount: 2,
     sourceName: "article.md",
+    sourceSpeechPolicyProfile: "Accessibility",
     speechPolicyProfile: "general",
     status: "ready",
     summary: {},

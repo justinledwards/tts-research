@@ -136,6 +136,9 @@ func registerProjectRoutes(app *fiber.App, service *pipeline.Service) {
 			if errors.Is(err, pipeline.ErrProjectNotFound) || errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
 				return notFound(ctx, err)
 			}
+			if errors.Is(err, pipeline.ErrAssetInUse) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 		}
 		return ctx.JSON(settings)

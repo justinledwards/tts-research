@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -479,10 +480,23 @@ func (service *Service) DeleteCustomSpeechPolicyProfile(projectID string, profil
 		service.mu.Unlock()
 		return ProjectSpeechPolicy{}, ErrSpeechPolicyProfileNotFound
 	}
-	project.SpeechPolicyProfiles = nextProfiles
 	if project.SpeechPolicyProfile == profileID {
-		project.SpeechPolicyProfile = string(policy.DefaultProfileName)
+		service.mu.Unlock()
+		return ProjectSpeechPolicy{}, fmt.Errorf("%w: speech policy profile is the project default", ErrAssetInUse)
 	}
+	for _, book := range service.books {
+		if book.ProjectID == project.ID && book.SourceSpeechPolicyProfile == profileID {
+			service.mu.Unlock()
+			return ProjectSpeechPolicy{}, fmt.Errorf("%w: speech policy profile is pinned to book source %s", ErrAssetInUse, book.ID)
+		}
+	}
+	for _, source := range service.sourcePreps {
+		if source.ProjectID == project.ID && source.SourceSpeechPolicyProfile == profileID {
+			service.mu.Unlock()
+			return ProjectSpeechPolicy{}, fmt.Errorf("%w: speech policy profile is pinned to prepared source %s", ErrAssetInUse, source.ID)
+		}
+	}
+	project.SpeechPolicyProfiles = nextProfiles
 	project = normalizeProjectSpeechPolicy(project)
 	project.UpdatedAt = time.Now().UTC()
 	for key, candidate := range service.projects {

@@ -44,6 +44,7 @@ var (
 	ErrProfileAnalysisUnavailable  = errors.New("voice profile source analysis is not configured")
 	ErrProjectNotFound             = errors.New("project not found")
 	ErrProjectProtected            = errors.New("default project cannot be deleted")
+	ErrAssetInUse                  = errors.New("asset is in use")
 	ErrBookSourceNotFound          = errors.New("book source not found")
 	ErrPreparedSourceNotFound      = errors.New("prepared source not found")
 	ErrContentIRNotFound           = errors.New("content IR not found")
@@ -957,9 +958,14 @@ func (service *Service) GetVoiceProfile(id string) (VoiceProfile, error) {
 }
 
 func (service *Service) DeleteVoiceProfile(id string) error {
+	cleanID := strings.TrimSpace(id)
+	if jobID := service.voiceProfileInUseByActiveJob(cleanID); jobID != "" {
+		return fmt.Errorf("%w: active job %s uses voice profile %s", ErrAssetInUse, jobID, cleanID)
+	}
+
 	service.mu.Lock()
-	profile, ok := service.profiles[id]
-	delete(service.profiles, id)
+	profile, ok := service.profiles[cleanID]
+	delete(service.profiles, cleanID)
 	service.mu.Unlock()
 	if !ok {
 		return ErrProfileNotFound

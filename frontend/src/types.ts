@@ -150,6 +150,10 @@ export interface SourceReadinessConfirmationRequest {
   voiceProfileId?: string;
 }
 
+export interface RenameAssetRequest {
+  name: string;
+}
+
 export type BookSourceKind = "pdf" | "epub" | "docx" | "html" | "markdown" | "image";
 
 export type BookImportProfile = "auto" | "scholarly";
@@ -1361,6 +1365,7 @@ export interface VoiceJob {
   voiceId?: string;
   ttsVoice?: string;
   ttsLanguage?: string;
+  voiceProfileId?: string;
   voiceProfileName?: string;
   ttsEngine?: string;
   engineOptions?: Partial<Record<string, string>>;

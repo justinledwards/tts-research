@@ -1141,12 +1141,59 @@ func TestProjectCustomSpeechPolicyProfilesPersistAndSelect(t *testing.T) {
 		t.Fatalf("updated policy = %#v, want edited custom settings", updated)
 	}
 
+	if _, err := reloaded.UpdateProjectSpeechPolicy(project.ID, "Enterprise"); err != nil {
+		t.Fatalf("UpdateProjectSpeechPolicy(Enterprise) returned error: %v", err)
+	}
 	deleted, err := reloaded.DeleteCustomSpeechPolicyProfile(project.ID, customID)
 	if err != nil {
 		t.Fatalf("DeleteCustomSpeechPolicyProfile returned error: %v", err)
 	}
 	if deleted.Profile != "Enterprise" || len(deleted.CustomProfiles) != 0 {
 		t.Fatalf("deleted policy = %#v, want Enterprise fallback without custom profiles", deleted)
+	}
+}
+
+func TestDeleteCustomSpeechPolicyProfileBlocksReferencedAssets(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	project, err := service.CreateProject("Policy references")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	created, err := service.CreateCustomSpeechPolicyProfile(project.ID, pipeline.UpsertSpeechPolicyProfileRequest{
+		Name:        "Pinned policy",
+		BaseProfile: "Enterprise",
+		Settings: policy.Settings{
+			Mode:      policy.ModeSpeak,
+			TableMode: policy.TableModeSummary,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateCustomSpeechPolicyProfile returned error: %v", err)
+	}
+	customID := created.Profile
+	if _, err := service.DeleteCustomSpeechPolicyProfile(project.ID, customID); !errors.Is(err, pipeline.ErrAssetInUse) {
+		t.Fatalf("DeleteCustomSpeechPolicyProfile(default) error = %v, want asset in use", err)
+	}
+	if _, err := service.UpdateProjectSpeechPolicy(project.ID, "Enterprise"); err != nil {
+		t.Fatalf("UpdateProjectSpeechPolicy(Enterprise) returned error: %v", err)
+	}
+	source, err := service.CreatePreparedSource(context.Background(), project.ID, pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "policy.md",
+		Text:       "# Policy\n\nThis source pins a custom policy.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if _, err := service.UpdatePreparedSourceSpeechPolicy(source.ID, pipeline.SourceSpeechPolicyUpdateRequest{
+		Profile: customID,
+	}); err != nil {
+		t.Fatalf("UpdatePreparedSourceSpeechPolicy returned error: %v", err)
+	}
+	if _, err := service.DeleteCustomSpeechPolicyProfile(project.ID, customID); !errors.Is(err, pipeline.ErrAssetInUse) {
+		t.Fatalf("DeleteCustomSpeechPolicyProfile(source pin) error = %v, want asset in use", err)
 	}
 }
 
@@ -1206,6 +1253,115 @@ func TestProjectDeleteAndStorageSummary(t *testing.T) {
 	}
 	if _, err := service.GetPreparedSource(source.ID); !errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
 		t.Fatalf("GetPreparedSource deleted error = %v, want not found", err)
+	}
+}
+
+func TestPreparedSourceRenameAndDeleteRespectActiveJobs(t *testing.T) {
+	t.Parallel()
+
+	optimizer := &cancelAwareBlockingOptimizer{started: make(chan struct{})}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:         3,
+			JobDataDir:         t.TempDir(),
+			ProjectDataDir:     t.TempDir(),
+			BookSourceDir:      t.TempDir(),
+			SourcePrepDir:      t.TempDir(),
+			ProgressDataDir:    t.TempDir(),
+			PlaybackSessionDir: t.TempDir(),
+		},
+	)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "asset.md",
+		Text:       "# Asset\n\nThis source is reusable project material.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	renamed, err := service.RenamePreparedSource(source.ID, "Renamed asset")
+	if err != nil {
+		t.Fatalf("RenamePreparedSource returned error: %v", err)
+	}
+	if renamed.Title != "Renamed asset" || renamed.SourceReadiness.Title != "Renamed asset" {
+		t.Fatalf("renamed source = %#v, want title propagated to readiness", renamed)
+	}
+
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	waitForSignal(t, optimizer.started, "optimizer start")
+	if err := service.DeletePreparedSource(source.ID); !errors.Is(err, pipeline.ErrAssetInUse) {
+		t.Fatalf("DeletePreparedSource(active job) error = %v, want asset in use", err)
+	}
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
+	if err := service.DeletePreparedSource(source.ID); err != nil {
+		t.Fatalf("DeletePreparedSource(after terminal job) returned error: %v", err)
+	}
+	if _, err := service.GetPreparedSource(source.ID); !errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+		t.Fatalf("GetPreparedSource deleted error = %v, want not found", err)
+	}
+}
+
+func TestBookSourceRenameAndDeleteRespectActiveJobs(t *testing.T) {
+	t.Parallel()
+
+	optimizer := &cancelAwareBlockingOptimizer{started: make(chan struct{})}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:         3,
+			JobDataDir:         t.TempDir(),
+			ProjectDataDir:     t.TempDir(),
+			BookSourceDir:      t.TempDir(),
+			SourcePrepDir:      t.TempDir(),
+			ProgressDataDir:    t.TempDir(),
+			PlaybackSessionDir: t.TempDir(),
+		},
+	)
+	epubPath := writeTestEPUB(t, "asset.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "asset.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	renamed, err := service.RenameBookSource(book.ID, "Renamed book")
+	if err != nil {
+		t.Fatalf("RenameBookSource returned error: %v", err)
+	}
+	if renamed.Title != "Renamed book" || renamed.SourceReadiness.Title != "Renamed book" {
+		t.Fatalf("renamed book = %#v, want title propagated to readiness", renamed)
+	}
+
+	job, err := service.CreateBookNarrationJob(context.Background(), book.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreateBookNarrationJob returned error: %v", err)
+	}
+	waitForSignal(t, optimizer.started, "optimizer start")
+	if err := service.DeleteBookSource(book.ID); !errors.Is(err, pipeline.ErrAssetInUse) {
+		t.Fatalf("DeleteBookSource(active job) error = %v, want asset in use", err)
+	}
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
+	if err := service.DeleteBookSource(book.ID); err != nil {
+		t.Fatalf("DeleteBookSource(after terminal job) returned error: %v", err)
+	}
+	if _, err := service.GetBookSource(book.ID); !errors.Is(err, pipeline.ErrBookSourceNotFound) {
+		t.Fatalf("GetBookSource deleted error = %v, want not found", err)
 	}
 }
 

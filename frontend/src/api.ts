@@ -28,6 +28,7 @@ import type {
   ProjectBundlePreview,
   ProjectBundleSummary,
   ProjectStorageSummary,
+  RenameAssetRequest,
   ResearchModuleDiagnostics,
   SpeechPolicyDefinition,
   SpeechPolicyOverrides,
@@ -556,6 +557,30 @@ export async function listProjectBookSources(projectId: string): Promise<BookSou
   return response.json() as Promise<BookSource[]>;
 }
 
+export async function renameBookSource(
+  bookSourceId: string,
+  request: RenameAssetRequest,
+): Promise<BookSource> {
+  const response = await fetch(`${apiBaseUrl}/api/book-sources/${bookSourceId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<BookSource>;
+}
+
+export async function deleteBookSource(bookSourceId: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/book-sources/${bookSourceId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+}
+
 export async function getBookSourceScope(
   bookSourceId: string,
   scope: BookScope,
@@ -697,6 +722,30 @@ export async function getPreparedSource(id: string): Promise<PreparedSource> {
     throw await apiError(response);
   }
   return normalizePreparedSource((await response.json()) as PreparedSource);
+}
+
+export async function renamePreparedSource(
+  preparedSourceId: string,
+  request: RenameAssetRequest,
+): Promise<PreparedSource> {
+  const response = await fetch(`${apiBaseUrl}/api/source-preps/${preparedSourceId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return normalizePreparedSource((await response.json()) as PreparedSource);
+}
+
+export async function deletePreparedSource(preparedSourceId: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/source-preps/${preparedSourceId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
 }
 
 export async function confirmPreparedSourceReadiness(
@@ -1329,6 +1378,21 @@ export function voiceProfileCandidatePreviewSource(
   kind: "clean" | "raw" = "clean",
 ): string {
   return `${apiBaseUrl}/api/voice-profile-sources/${sourceId}/candidates/${candidateId}/preview.wav?kind=${kind}`;
+}
+
+export async function renameVoiceProfile(
+  profileId: string,
+  request: RenameAssetRequest,
+): Promise<VoiceProfile> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-profiles/${profileId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<VoiceProfile>;
 }
 
 export async function deleteVoiceProfile(id: string): Promise<void> {

@@ -1433,3 +1433,12 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Review worktree scope
 - [x] Stage Command Center work package
 - [x] Create commit
+
+## 2026-06-04 08:28 CEST - Assets State Model And Detail Surfaces
+- [x] Inspect existing asset, source, voice, and policy contracts
+- [x] Add backend rename and delete support with active-use guards
+- [x] Add frontend asset view models and API calls
+- [x] Rework Command Center Assets detail surfaces
+- [x] Add regression tests
+- [x] Run focused and project checks
+- Validation: focused backend asset guard/router tests passed; focused frontend asset model and Command Center tests passed; frontend typecheck passed; frontend and backend package tests passed; `pnpm check` passed with existing unrelated lint warnings.

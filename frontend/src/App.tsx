@@ -35,8 +35,10 @@ import {
   createVoicePreview,
   createVoiceProfileFromCandidate,
   createVoiceProfileSource,
+  deleteBookSource,
   deleteProject,
   deleteCustomSpeechPolicyProfile,
+  deletePreparedSource,
   deleteVoiceProfile,
   getBookSourceScope,
   getContentIR,
@@ -68,7 +70,10 @@ import {
   queueVoiceProfileTarget,
   refreshVoiceProfileCandidateTranscript,
   refreshVoiceProfileSourceTranscript,
+  renameBookSource,
+  renamePreparedSource,
   renameProject,
+  renameVoiceProfile,
   retryVoiceJob,
   saveHuggingFaceToken,
   startPlaybackSession,
@@ -4284,6 +4289,93 @@ export function App() {
     );
   }, []);
 
+  const handleRenameBookSourceAsset = useCallback(async (id: string, name: string) => {
+    setBookSourceError(null);
+    try {
+      const renamed = await renameBookSource(id, { name });
+      setBookSources((currentBooks) =>
+        currentBooks.some((book) => book.id === renamed.id)
+          ? currentBooks.map((book) => (book.id === renamed.id ? renamed : book))
+          : [renamed, ...currentBooks],
+      );
+      setBookScopeContent((currentContent) =>
+        currentContent?.bookSourceId === renamed.id ? null : currentContent,
+      );
+    } catch (caughtError) {
+      setBookSourceError(formatErrorMessage(caughtError, "Unable to rename book source"));
+    }
+  }, []);
+
+  const handleDeleteBookSourceAsset = useCallback(
+    async (id: string) => {
+      setBookSourceError(null);
+      try {
+        await deleteBookSource(id);
+        setBookSources(removeBookSourceById(id));
+        setBookScopeContent((currentContent) =>
+          currentContent?.bookSourceId === id ? null : currentContent,
+        );
+        if (sourceMode === "book" && selectedBookSourceId === id) {
+          setSelectedBookSourceId(null);
+          setSelectedBookScope(null);
+          setSourceMode("text");
+          setContentMode("review");
+          setText("");
+          selectWorkspaceInspectorTarget({
+            id: "draft",
+            kind: "source",
+            label: "Draft text",
+          });
+        }
+      } catch (caughtError) {
+        setBookSourceError(formatErrorMessage(caughtError, "Unable to delete book source"));
+      }
+    },
+    [selectWorkspaceInspectorTarget, selectedBookSourceId, setContentMode, sourceMode],
+  );
+
+  const handleRenamePreparedSourceAsset = useCallback(async (id: string, name: string) => {
+    setSourcePrepError(null);
+    try {
+      const renamed = await renamePreparedSource(id, { name });
+      setPreparedSources((currentSources) =>
+        currentSources.some((source) => source.id === renamed.id)
+          ? currentSources.map((source) => (source.id === renamed.id ? renamed : source))
+          : [renamed, ...currentSources],
+      );
+      setJobPreparedSource((currentSource) =>
+        currentSource?.id === renamed.id ? renamed : currentSource,
+      );
+    } catch (caughtError) {
+      setSourcePrepError(formatErrorMessage(caughtError, "Unable to rename prepared source"));
+    }
+  }, []);
+
+  const handleDeletePreparedSourceAsset = useCallback(
+    async (id: string) => {
+      setSourcePrepError(null);
+      try {
+        await deletePreparedSource(id);
+        setPreparedSources((currentSources) => currentSources.filter((source) => source.id !== id));
+        setJobPreparedSource((currentSource) => (currentSource?.id === id ? null : currentSource));
+        if (sourceMode === "fileUrl" && selectedPreparedSourceId === id) {
+          setSelectedPreparedSourceId(null);
+          setSourceMode("text");
+          setContentMode("review");
+          setText("");
+          selectWorkspaceInspectorTarget({
+            id: "draft",
+            kind: "source",
+            label: "Draft text",
+          });
+        }
+      } catch (caughtError) {
+        setSourcePrepError(formatErrorMessage(caughtError, "Unable to delete prepared source"));
+      }
+    },
+    [selectWorkspaceInspectorTarget, selectedPreparedSourceId, setContentMode, sourceMode],
+  );
+
   const announceVoiceJobTerminalStatus = useCallback(
     (nextJob: VoiceJob) => {
       if (nextJob.status === "completed") {
@@ -5706,6 +5798,20 @@ export function App() {
     },
     [profileSource, selectVoiceProfile],
   );
+
+  const handleRenameVoiceProfile = useCallback(async (id: string, name: string) => {
+    setProfileError(null);
+    try {
+      const profile = await renameVoiceProfile(id, { name });
+      setVoiceProfiles((currentProfiles) =>
+        upsertVoiceProfileByCreatedAt(currentProfiles, profile),
+      );
+    } catch (caughtError) {
+      setProfileError(
+        caughtError instanceof Error ? caughtError.message : "Unable to rename voice profile",
+      );
+    }
+  }, []);
 
   const handleRefreshVoiceSourceTranscript = useCallback(async (sourceId: string) => {
     const key = `source:${sourceId}`;
@@ -7302,8 +7408,12 @@ export function App() {
               studioMode === "narration" ? "Narration Workbench" : "Voice Cloning Workbench"
             }
             customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+            selectedBookScope={sourceMode === "book" ? selectedBookScope : null}
             speechPolicyProfile={speechPolicyProfile}
+            speechPolicyOverrides={speechPolicyOverrides}
             speechPolicyProfiles={speechPolicyProfiles}
+            selectedBookSourceId={sourceMode === "book" ? selectedBookSourceId : null}
+            selectedPreparedSourceId={sourceMode === "fileUrl" ? selectedPreparedSourceId : null}
             selectedProfileId={selectedVoiceProfileId}
             cancelingProfileSourceId={cancelingProfileSourceId}
             cancelingTargetKey={cancelingTargetKey}
@@ -7334,17 +7444,35 @@ export function App() {
               setSettingsCommandTarget(null);
               setIsSettingsOpen(true);
             }}
+            onOpenIntake={() => {
+              setIsCommandCenterOpen(false);
+              setContentMode("intake");
+              setSourceMode("text");
+            }}
             onOpenVoiceDashboard={() => {
               setIsCommandCenterOpen(false);
               setIsVoiceDashboardOpen(true);
             }}
+            onOpenVoiceCloning={() => {
+              setIsCommandCenterOpen(false);
+              handleStudioModeChange("voiceCloning");
+            }}
             onRenameProject={handleRenameProject}
+            onRenameBookSource={handleRenameBookSourceAsset}
+            onRenamePreparedSource={handleRenamePreparedSourceAsset}
+            onRenameVoiceProfile={handleRenameVoiceProfile}
             onSectionChange={setCommandCenterSection}
             onSelectProject={selectProject}
             onSelectProfile={selectVoiceProfile}
+            onClearVoiceProfile={clearVoiceProfileSelection}
+            onDeleteBookSource={handleDeleteBookSourceAsset}
+            onDeletePreparedSource={handleDeletePreparedSourceAsset}
+            onDeleteVoiceProfile={handleDeleteVoiceProfile}
             onSpeechPolicyProfileChange={(profile) => {
               void handleSpeechPolicyProfileChange(profile);
             }}
+            onUseBookSource={handleUseBookText}
+            onUsePreparedSource={handleUsePreparedSource}
           />
         </Suspense>
       ) : null}

@@ -710,6 +710,116 @@ func TestProjectEndpointsCreateRenameAndListJobs(t *testing.T) {
 	}
 }
 
+func TestAssetEndpointsRenameAndDelete(t *testing.T) {
+	t.Parallel()
+
+	service, _, _ := newServiceWithContentIRDirs(t)
+	app := httpapi.NewRouter(service)
+	prepared, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "asset.md",
+		Text:       "# Asset\n\nPrepared source asset.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	epubPath := writeRouterTestEPUB(t)
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "asset.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Original voice", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	renamedPrepared := patchJSON[pipeline.PreparedSource](
+		t,
+		app,
+		"/api/source-preps/"+prepared.ID,
+		`{"name":"Renamed prepared"}`,
+	)
+	if renamedPrepared.Title != "Renamed prepared" {
+		t.Fatalf("renamed prepared title = %q", renamedPrepared.Title)
+	}
+	renamedBook := patchJSON[pipeline.BookSource](
+		t,
+		app,
+		"/api/book-sources/"+book.ID,
+		`{"name":"Renamed book"}`,
+	)
+	if renamedBook.Title != "Renamed book" {
+		t.Fatalf("renamed book title = %q", renamedBook.Title)
+	}
+	renamedProfile := patchJSON[pipeline.VoiceProfile](
+		t,
+		app,
+		"/api/voice-profiles/"+profile.ID,
+		`{"name":"Renamed voice"}`,
+	)
+	if renamedProfile.Name != "Renamed voice" {
+		t.Fatalf("renamed profile name = %q", renamedProfile.Name)
+	}
+
+	deleteAsset(t, app, "/api/source-preps/"+prepared.ID)
+	deleteAsset(t, app, "/api/book-sources/"+book.ID)
+	deleteAsset(t, app, "/api/voice-profiles/"+profile.ID)
+	if _, err := service.GetPreparedSource(prepared.ID); !errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+		t.Fatalf("GetPreparedSource deleted error = %v, want not found", err)
+	}
+	if _, err := service.GetBookSource(book.ID); !errors.Is(err, pipeline.ErrBookSourceNotFound) {
+		t.Fatalf("GetBookSource deleted error = %v, want not found", err)
+	}
+	if _, err := service.GetVoiceProfile(profile.ID); !errors.Is(err, pipeline.ErrProfileNotFound) {
+		t.Fatalf("GetVoiceProfile deleted error = %v, want not found", err)
+	}
+}
+
+func patchJSON[T any](t *testing.T, app *fiber.App, path string, body string) T {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodPatch, path, bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatalf("NewRequest(%s) returned error: %v", path, err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test(%s) returned error: %v", path, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("%s status = %d, want %d, body = %s", path, response.StatusCode, http.StatusOK, payload)
+	}
+	var value T
+	if err := json.NewDecoder(response.Body).Decode(&value); err != nil {
+		t.Fatalf("decode %s response: %v", path, err)
+	}
+	return value
+}
+
+func deleteAsset(t *testing.T, app *fiber.App, path string) {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodDelete, path, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(%s) returned error: %v", path, err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test(%s) returned error: %v", path, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("%s status = %d, want %d, body = %s", path, response.StatusCode, http.StatusNoContent, payload)
+	}
+}
+
 func TestContentIREndpoint(t *testing.T) {
 	t.Parallel()
 

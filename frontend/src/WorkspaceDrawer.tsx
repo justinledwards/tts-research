@@ -2,10 +2,12 @@ import { useMemo, useRef, useState } from "react";
 import { useReaderModalLifecycle } from "./features/reader-accessibility";
 import { formatDuration } from "./format";
 import type {
+  BookScope,
   BookSource,
   CustomSpeechPolicyProfile,
   PreparedSource,
   ProjectStorageSummary,
+  SpeechPolicyOverrides,
   SpeechPolicyProfile,
   SystemMetrics,
   VoiceJob,
@@ -19,6 +21,15 @@ import {
   sortCommandCenterProjects,
   visibleCommandCenterJobs,
 } from "./features/command-center";
+import {
+  buildSourceAssetModels,
+  buildSpeechPolicyAssetModel,
+  buildVoiceAssetModels,
+  type SourceAssetModel,
+  type SpeechPolicyAssetModel,
+  type VoiceAssetModel,
+} from "./features/assets/assetModels";
+import { resolveDefaultBookScope } from "./features/book-cinema/model";
 import { SPEECH_POLICY_PROFILE_OPTIONS, speechPolicyProfileLabel } from "./speechPolicy";
 import {
   CreateProjectRow,
@@ -58,8 +69,12 @@ export function WorkspaceDrawer({
   profiles,
   returnWorkspaceLabel,
   customSpeechPolicyProfiles,
+  selectedBookScope,
   speechPolicyProfile,
+  speechPolicyOverrides,
   speechPolicyProfiles,
+  selectedBookSourceId,
+  selectedPreparedSourceId,
   selectedProfileId,
   cancelingProfileSourceId,
   cancelingTargetKey,
@@ -72,12 +87,23 @@ export function WorkspaceDrawer({
   onExportOpen,
   onImportOpen,
   onOpenSettings,
+  onOpenIntake,
   onOpenVoiceDashboard,
+  onOpenVoiceCloning,
   onRenameProject,
+  onRenameBookSource,
+  onRenamePreparedSource,
+  onRenameVoiceProfile,
   onSectionChange,
   onSelectProject,
   onSelectProfile,
+  onClearVoiceProfile,
+  onDeleteBookSource,
+  onDeletePreparedSource,
+  onDeleteVoiceProfile,
   onSpeechPolicyProfileChange,
+  onUseBookSource,
+  onUsePreparedSource,
 }: Readonly<{
   activeProjectId: string;
   activeScopeLabel: string;
@@ -98,8 +124,12 @@ export function WorkspaceDrawer({
   profiles: VoiceProfile[];
   returnWorkspaceLabel: string;
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  selectedBookScope: BookScope | null;
   speechPolicyProfile: string;
+  speechPolicyOverrides: SpeechPolicyOverrides;
   speechPolicyProfiles: SpeechPolicyProfile[];
+  selectedBookSourceId: string | null;
+  selectedPreparedSourceId: string | null;
   selectedProfileId: string;
   cancelingProfileSourceId: string | null;
   cancelingTargetKey: string | null;
@@ -112,21 +142,82 @@ export function WorkspaceDrawer({
   onExportOpen: () => void;
   onImportOpen: () => void;
   onOpenSettings: () => void;
+  onOpenIntake: () => void;
   onOpenVoiceDashboard: () => void;
+  onOpenVoiceCloning: () => void;
   onRenameProject: (id: string, name: string) => Promise<void>;
+  onRenameBookSource: (id: string, name: string) => Promise<void>;
+  onRenamePreparedSource: (id: string, name: string) => Promise<void>;
+  onRenameVoiceProfile: (id: string, name: string) => Promise<void>;
   onSectionChange?: (section: CommandCenterSectionId) => void;
   onSelectProject: (id: string) => void;
   onSelectProfile: (profileId: string) => void;
+  onClearVoiceProfile: () => void;
+  onDeleteBookSource: (id: string) => Promise<void>;
+  onDeletePreparedSource: (id: string) => Promise<void>;
+  onDeleteVoiceProfile: (id: string) => Promise<void>;
   onSpeechPolicyProfileChange: (profile: string) => void;
+  onUseBookSource: (book: BookSource, scope: BookScope) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
 }>) {
   const drawerRef = useRef<HTMLElement | null>(null);
   useReaderModalLifecycle(drawerRef, { closeOnEscape: true, isOpen, onClose });
   const [localActiveSection, setLocalActiveSection] = useState<CommandCenterSectionId>("overview");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [inspectedAssetKey, setInspectedAssetKey] = useState<string | null>(null);
   const effectiveActiveSection = activeSection ?? localActiveSection;
   const visibleJobs = useMemo(
     () => visibleCommandCenterJobs({ activeProjectId, job, projectJobs }),
     [activeProjectId, job, projectJobs],
+  );
+  const sourceAssetModels = useMemo(
+    () =>
+      buildSourceAssetModels({
+        activeBookSourceId: selectedBookSourceId,
+        activePreparedSourceId: selectedPreparedSourceId,
+        bookSources,
+        jobs: visibleJobs,
+        preparedSources,
+        projectId: activeProjectId,
+        selectedBookScope,
+      }),
+    [
+      activeProjectId,
+      bookSources,
+      preparedSources,
+      selectedBookScope,
+      selectedBookSourceId,
+      selectedPreparedSourceId,
+      visibleJobs,
+    ],
+  );
+  const voiceAssetModels = useMemo(
+    () =>
+      buildVoiceAssetModels({
+        jobs: visibleJobs,
+        profiles,
+        selectedProfileId,
+      }),
+    [profiles, selectedProfileId, visibleJobs],
+  );
+  const speechPolicyAsset = useMemo(
+    () =>
+      buildSpeechPolicyAssetModel({
+        bookSources,
+        customProfiles: customSpeechPolicyProfiles,
+        preparedSources,
+        sessionOverrides: speechPolicyOverrides,
+        speechPolicyProfile,
+        speechPolicyProfiles,
+      }),
+    [
+      bookSources,
+      customSpeechPolicyProfiles,
+      preparedSources,
+      speechPolicyOverrides,
+      speechPolicyProfile,
+      speechPolicyProfiles,
+    ],
   );
   const sortedProjects = useMemo(
     () => sortCommandCenterProjects(projects, activeProjectId),
@@ -169,14 +260,19 @@ export function WorkspaceDrawer({
     COMMAND_CENTER_ROUTES.find((section) => section.id === effectiveActiveSection)?.label ??
     "Overview";
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) ?? null;
-  const totalSources = bookSources.length + preparedSources.length;
+  const totalSources = sourceAssetModels.length;
   const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
   const generatedAudioState = commandCenterGeneratedAudioState(visibleJobs);
   const currentWorkSource = `${activeSourceLabel} · ${activeScopeLabel}`;
   const selectedVoiceLabel = selectedProfile?.name ?? "Default";
   const sectionCounts: Record<CommandCenterSectionId, string> = {
     activity: activitySummaries.length > 0 ? activitySummaries.length.toString() : "",
-    assets: (totalSources + profiles.length + (profileSource ? 1 : 0)).toString(),
+    assets: (
+      totalSources +
+      voiceAssetModels.length +
+      speechPolicyAsset.customPresetCount +
+      (profileSource ? 1 : 0)
+    ).toString(),
     importsExports: "",
     overview: "",
     projects: projects.length.toString(),
@@ -403,36 +499,60 @@ export function WorkspaceDrawer({
             {effectiveActiveSection === "assets" ? (
               <WorkspaceSection
                 actions={
-                  <button
-                    className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
-                    data-testid="ui-action-voice-dashboard-open-drawer"
-                    data-ui-action-surface="Command Center"
-                    onClick={onOpenVoiceDashboard}
-                    type="button"
-                  >
-                    Voice Asset Detail
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                      data-testid="ui-action-command-center-intake"
+                      data-ui-action-surface="Command Center"
+                      onClick={onOpenIntake}
+                      type="button"
+                    >
+                      Intake
+                    </button>
+                    <button
+                      className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                      data-testid="ui-action-voice-dashboard-open-drawer"
+                      data-ui-action-surface="Command Center"
+                      onClick={onOpenVoiceDashboard}
+                      type="button"
+                    >
+                      Voice Asset Detail
+                    </button>
+                  </div>
                 }
                 id="command-center-assets"
                 title="Assets"
               >
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <SourceAssetList
-                    bookSources={bookSources}
-                    preparedSources={preparedSources}
-                    profileSource={profileSource}
-                  />
-                  <VoiceAssetList
-                    customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-                    profiles={profiles}
-                    selectedProfileId={selectedProfileId}
-                    speechPolicyProfile={speechPolicyProfile}
-                    speechPolicyProfiles={speechPolicyProfiles}
-                    onClose={onClose}
-                    onSelectProfile={onSelectProfile}
-                    onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
-                  />
-                </div>
+                <AssetManagementPanel
+                  activeSourceLabel={activeSourceLabel}
+                  activeScopeLabel={activeScopeLabel}
+                  inspectedAssetKey={inspectedAssetKey}
+                  profileSource={profileSource}
+                  sourceAssets={sourceAssetModels}
+                  speechPolicyAsset={speechPolicyAsset}
+                  speechPolicyProfile={speechPolicyProfile}
+                  speechPolicyProfiles={speechPolicyProfiles}
+                  customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+                  voiceAssets={voiceAssetModels}
+                  bookSources={bookSources}
+                  preparedSources={preparedSources}
+                  selectedBookScope={selectedBookScope}
+                  selectedVoiceLabel={selectedVoiceLabel}
+                  onClearVoiceProfile={onClearVoiceProfile}
+                  onDeleteBookSource={onDeleteBookSource}
+                  onDeletePreparedSource={onDeletePreparedSource}
+                  onDeleteVoiceProfile={onDeleteVoiceProfile}
+                  onInspectAsset={setInspectedAssetKey}
+                  onOpenIntake={onOpenIntake}
+                  onOpenVoiceCloning={onOpenVoiceCloning}
+                  onRenameBookSource={onRenameBookSource}
+                  onRenamePreparedSource={onRenamePreparedSource}
+                  onRenameVoiceProfile={onRenameVoiceProfile}
+                  onSelectProfile={onSelectProfile}
+                  onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+                  onUseBookSource={onUseBookSource}
+                  onUsePreparedSource={onUsePreparedSource}
+                />
               </WorkspaceSection>
             ) : null}
 
@@ -649,72 +769,170 @@ function OverviewRouteButton({
   );
 }
 
-function SourceAssetList({
+function AssetManagementPanel({
+  activeScopeLabel,
+  activeSourceLabel,
   bookSources,
+  customSpeechPolicyProfiles,
+  inspectedAssetKey,
   preparedSources,
   profileSource,
+  selectedBookScope,
+  selectedVoiceLabel,
+  sourceAssets,
+  speechPolicyAsset,
+  speechPolicyProfile,
+  speechPolicyProfiles,
+  voiceAssets,
+  onClearVoiceProfile,
+  onDeleteBookSource,
+  onDeletePreparedSource,
+  onDeleteVoiceProfile,
+  onInspectAsset,
+  onOpenIntake,
+  onOpenVoiceCloning,
+  onRenameBookSource,
+  onRenamePreparedSource,
+  onRenameVoiceProfile,
+  onSelectProfile,
+  onSpeechPolicyProfileChange,
+  onUseBookSource,
+  onUsePreparedSource,
 }: Readonly<{
+  activeScopeLabel: string;
+  activeSourceLabel: string;
   bookSources: BookSource[];
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  inspectedAssetKey: string | null;
   preparedSources: PreparedSource[];
   profileSource: VoiceProfileSource | null;
+  selectedBookScope: BookScope | null;
+  selectedVoiceLabel: string;
+  sourceAssets: SourceAssetModel[];
+  speechPolicyAsset: SpeechPolicyAssetModel;
+  speechPolicyProfile: string;
+  speechPolicyProfiles: SpeechPolicyProfile[];
+  voiceAssets: VoiceAssetModel[];
+  onClearVoiceProfile: () => void;
+  onDeleteBookSource: (id: string) => Promise<void>;
+  onDeletePreparedSource: (id: string) => Promise<void>;
+  onDeleteVoiceProfile: (id: string) => Promise<void>;
+  onInspectAsset: (assetKey: string) => void;
+  onOpenIntake: () => void;
+  onOpenVoiceCloning: () => void;
+  onRenameBookSource: (id: string, name: string) => Promise<void>;
+  onRenamePreparedSource: (id: string, name: string) => Promise<void>;
+  onRenameVoiceProfile: (id: string, name: string) => Promise<void>;
+  onSelectProfile: (profileId: string) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
+  onUseBookSource: (book: BookSource, scope: BookScope) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
 }>) {
+  const activeSource = sourceAssets.find((asset) => asset.availability === "active") ?? null;
+  const activeVoice =
+    voiceAssets.find((asset) => asset.availability === "active") ?? voiceAssets[0];
+  const selectedAssetKey = inspectedAssetKey ?? activeSource?.assetKey ?? "policy:project";
+  const inspectedSource = sourceAssets.find((asset) => asset.assetKey === selectedAssetKey) ?? null;
+  const inspectedVoice = voiceAssets.find((asset) => asset.assetKey === selectedAssetKey) ?? null;
+  const inspectPolicy =
+    selectedAssetKey === "policy:project" || (!inspectedSource && !inspectedVoice);
+
   return (
-    <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
-      <p className="text-sm font-semibold">Sources</p>
-      {profileSource ? (
-        <div className="rounded-md border p-3 vs-raised">
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <p className="min-w-0 truncate text-sm font-semibold" title={profileSource.sourceFile}>
-              {profileSource.sourceFile}
-            </p>
-            <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs vs-border">
-              {profileSource.status}
-            </span>
-          </div>
-          <p className="vs-muted mt-2 text-xs">
-            {profileSource.candidates.length} detected voice
-            {profileSource.candidates.length === 1 ? "" : "s"} - {profileSource.progressMessage}
-          </p>
+    <div className="grid gap-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <ActiveAssetSummary
+          detail={activeSource ? activeSource.selectedScope : activeScopeLabel}
+          label="Active source"
+          value={activeSource?.title ?? activeSourceLabel}
+        />
+        <ActiveAssetSummary
+          detail={activeVoice.readinessLabel}
+          label="Active voice"
+          value={activeVoice.title || selectedVoiceLabel}
+        />
+        <ActiveAssetSummary
+          detail={speechPolicyAsset.inheritedLabel}
+          label="Speech policy"
+          value={speechPolicyAsset.projectDefaultLabel}
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(20rem,0.95fr)]">
+        <div className="grid gap-4">
+          <SourceAssetsSection
+            bookSources={bookSources}
+            models={sourceAssets}
+            preparedSources={preparedSources}
+            profileSource={profileSource}
+            selectedBookScope={selectedBookScope}
+            onInspectAsset={onInspectAsset}
+            onOpenIntake={onOpenIntake}
+            onUseBookSource={onUseBookSource}
+            onUsePreparedSource={onUsePreparedSource}
+          />
+          <VoiceAssetsSection
+            models={voiceAssets}
+            onClearVoiceProfile={onClearVoiceProfile}
+            onInspectAsset={onInspectAsset}
+            onOpenVoiceCloning={onOpenVoiceCloning}
+            onSelectProfile={onSelectProfile}
+          />
+          <SpeechPolicyAssetsSection
+            customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+            model={speechPolicyAsset}
+            speechPolicyProfile={speechPolicyProfile}
+            speechPolicyProfiles={speechPolicyProfiles}
+            onInspectAsset={onInspectAsset}
+            onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+          />
         </div>
-      ) : null}
-      {bookSources.map((book) => (
-        <SourceAssetRow
-          detail={`${book.wordCount.toLocaleString()} words - ${book.status}`}
-          key={book.id}
-          kind={book.kind}
-          title={book.title ?? book.sourceFile}
-        />
-      ))}
-      {preparedSources.map((source) => (
-        <SourceAssetRow
-          detail={`${source.wordCount.toLocaleString()} words - ${source.status}`}
-          key={source.id}
-          kind={source.kind}
-          title={source.title ?? source.sourceName}
-        />
-      ))}
-      {!profileSource && bookSources.length === 0 && preparedSources.length === 0 ? (
-        <EmptyDrawerText>No source analysis or book source staged.</EmptyDrawerText>
-      ) : null}
+        <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
+          <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
+            Asset detail
+          </p>
+          {inspectedSource ? (
+            <SourceAssetDetail
+              asset={inspectedSource}
+              bookSources={bookSources}
+              preparedSources={preparedSources}
+              selectedBookScope={selectedBookScope}
+              onDeleteBookSource={onDeleteBookSource}
+              onDeletePreparedSource={onDeletePreparedSource}
+              onOpenIntake={onOpenIntake}
+              onRenameBookSource={onRenameBookSource}
+              onRenamePreparedSource={onRenamePreparedSource}
+              onUseBookSource={onUseBookSource}
+              onUsePreparedSource={onUsePreparedSource}
+            />
+          ) : null}
+          {inspectedVoice ? (
+            <VoiceAssetDetail
+              asset={inspectedVoice}
+              onClearVoiceProfile={onClearVoiceProfile}
+              onDeleteVoiceProfile={onDeleteVoiceProfile}
+              onOpenVoiceCloning={onOpenVoiceCloning}
+              onRenameVoiceProfile={onRenameVoiceProfile}
+              onSelectProfile={onSelectProfile}
+            />
+          ) : null}
+          {inspectPolicy ? <PolicyAssetDetail model={speechPolicyAsset} /> : null}
+        </div>
+      </div>
     </div>
   );
 }
 
-function SourceAssetRow({
+function ActiveAssetSummary({
   detail,
-  kind,
-  title,
-}: Readonly<{ detail: string; kind: string; title: string }>) {
+  label,
+  value,
+}: Readonly<{ detail: string; label: string; value: string }>) {
   return (
-    <div className="min-w-0 rounded-md border p-3 vs-raised">
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <p className="min-w-0 truncate text-sm font-semibold" title={title}>
-          {title}
-        </p>
-        <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
-          {kind}
-        </span>
-      </div>
+    <div className="min-w-0 rounded-md border p-3 vs-border vs-raised">
+      <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold" title={value}>
+        {value}
+      </p>
       <p className="vs-muted mt-1 truncate text-xs" title={detail}>
         {detail}
       </p>
@@ -722,103 +940,614 @@ function SourceAssetRow({
   );
 }
 
-function VoiceAssetList({
-  customSpeechPolicyProfiles,
-  profiles,
-  selectedProfileId,
-  speechPolicyProfile,
-  speechPolicyProfiles,
-  onClose,
-  onSelectProfile,
-  onSpeechPolicyProfileChange,
+function SourceAssetsSection({
+  bookSources,
+  models,
+  preparedSources,
+  profileSource,
+  selectedBookScope,
+  onInspectAsset,
+  onOpenIntake,
+  onUseBookSource,
+  onUsePreparedSource,
 }: Readonly<{
-  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
-  profiles: VoiceProfile[];
-  selectedProfileId: string;
-  speechPolicyProfile: string;
-  speechPolicyProfiles: SpeechPolicyProfile[];
-  onClose: () => void;
-  onSelectProfile: (profileId: string) => void;
-  onSpeechPolicyProfileChange: (profile: string) => void;
+  bookSources: BookSource[];
+  models: SourceAssetModel[];
+  preparedSources: PreparedSource[];
+  profileSource: VoiceProfileSource | null;
+  selectedBookScope: BookScope | null;
+  onInspectAsset: (assetKey: string) => void;
+  onOpenIntake: () => void;
+  onUseBookSource: (book: BookSource, scope: BookScope) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
 }>) {
   return (
-    <div className="grid content-start gap-4">
-      <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
-        <p className="text-sm font-semibold">Voice profiles</p>
-        <WorkspaceDashboardSummary
-          detail={
-            selectedProfileId
-              ? "Selected profile is active for narration and preview."
-              : "Default voice is active until a profile is selected."
-          }
-          label={
-            profiles.find((profile) => profile.id === selectedProfileId)?.name ?? "Default voice"
-          }
-          value={`${profiles.length.toString()} saved`}
-        />
-        <div className="grid gap-2">
-          {profiles.length > 0 ? (
-            profiles.map((profile) => (
-              <button
-                className={`min-w-0 rounded-md border p-3 text-left text-sm transition ${
-                  profile.id === selectedProfileId
-                    ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
-                    : "vs-raised hover:bg-[var(--vs-surface)]"
-                }`}
-                key={profile.id}
-                onClick={() => {
-                  onSelectProfile(profile.id);
-                  onClose();
-                }}
-                type="button"
-              >
-                <span className="block truncate font-semibold" title={profile.name}>
-                  {profile.name}
-                </span>
-                <span className="vs-muted mt-1 block truncate text-xs">
-                  {profile.language} -{" "}
-                  {formatDuration(profile.referenceDurationMs ?? profile.durationMs)}
-                </span>
-              </button>
-            ))
-          ) : (
-            <EmptyDrawerText>No saved voice profiles yet.</EmptyDrawerText>
-          )}
-        </div>
+    <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">Source Assets</p>
+        <button
+          className="h-8 rounded-md border px-2.5 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+          onClick={onOpenIntake}
+          type="button"
+        >
+          Add Source
+        </button>
       </div>
-      <div className="grid gap-2 rounded-md border p-4 vs-border vs-surface">
-        <p className="text-sm font-semibold">Speech Policy</p>
-        <label className="grid gap-1 text-sm font-semibold">
-          <span>Market profile</span>
-          <select
-            className="h-10 rounded-md border bg-[var(--vs-raised)] px-3 text-sm outline-none vs-border"
-            onChange={(event) => {
-              onSpeechPolicyProfileChange(event.currentTarget.value);
-            }}
-            value={speechPolicyProfile}
-          >
-            {(speechPolicyProfiles.length > 0
-              ? speechPolicyProfiles.map((profile) => profile.name)
-              : SPEECH_POLICY_PROFILE_OPTIONS
-            ).map((profile) => (
-              <option key={profile} value={profile}>
-                {speechPolicyProfileLabel(profile)}
-              </option>
-            ))}
-            {customSpeechPolicyProfiles.length > 0 ? (
-              <optgroup label="Custom profiles">
-                {customSpeechPolicyProfiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
-        </label>
+      {profileSource ? (
+        <div className="rounded-md border p-3 vs-raised">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <p className="min-w-0 truncate text-sm font-semibold" title={profileSource.sourceFile}>
+              {profileSource.sourceFile}
+            </p>
+            <StatusPill>{profileSource.status}</StatusPill>
+          </div>
+          <p className="vs-muted mt-2 text-xs">
+            Voice cloning intake · {profileSource.candidates.length} detected voice
+            {profileSource.candidates.length === 1 ? "" : "s"} · {profileSource.progressMessage}
+          </p>
+        </div>
+      ) : null}
+      {models.length > 0 ? (
+        models.map((asset) => (
+          <SourceAssetRow
+            asset={asset}
+            bookSources={bookSources}
+            key={asset.assetKey}
+            preparedSources={preparedSources}
+            selectedBookScope={selectedBookScope}
+            onInspectAsset={onInspectAsset}
+            onUseBookSource={onUseBookSource}
+            onUsePreparedSource={onUsePreparedSource}
+          />
+        ))
+      ) : (
+        <EmptyDrawerText>No source analysis or book source staged.</EmptyDrawerText>
+      )}
+    </div>
+  );
+}
+
+function SourceAssetRow({
+  asset,
+  bookSources,
+  preparedSources,
+  selectedBookScope,
+  onInspectAsset,
+  onUseBookSource,
+  onUsePreparedSource,
+}: Readonly<{
+  asset: SourceAssetModel;
+  bookSources: BookSource[];
+  preparedSources: PreparedSource[];
+  selectedBookScope: BookScope | null;
+  onInspectAsset: (assetKey: string) => void;
+  onUseBookSource: (book: BookSource, scope: BookScope) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
+}>) {
+  return (
+    <div
+      className={`min-w-0 rounded-md border p-3 ${
+        asset.isActive ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]" : "vs-raised"
+      }`}
+    >
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-sm font-semibold" title={asset.title}>
+          {asset.title}
+        </p>
+        <StatusPill>{asset.availabilityLabel}</StatusPill>
+      </div>
+      <p className="vs-muted mt-1 truncate text-xs" title={sourceAssetRowDetail(asset)}>
+        {sourceAssetRowDetail(asset)}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <AssetButton
+          onClick={() => {
+            onInspectAsset(asset.assetKey);
+          }}
+        >
+          Inspect
+        </AssetButton>
+        <AssetButton
+          disabled={!asset.routeState.canReview}
+          onClick={() => {
+            applySourceAsset(asset, bookSources, preparedSources, selectedBookScope, {
+              onUseBookSource,
+              onUsePreparedSource,
+            });
+          }}
+        >
+          Use in narration
+        </AssetButton>
       </div>
     </div>
   );
+}
+
+function VoiceAssetsSection({
+  models,
+  onClearVoiceProfile,
+  onInspectAsset,
+  onOpenVoiceCloning,
+  onSelectProfile,
+}: Readonly<{
+  models: VoiceAssetModel[];
+  onClearVoiceProfile: () => void;
+  onInspectAsset: (assetKey: string) => void;
+  onOpenVoiceCloning: () => void;
+  onSelectProfile: (profileId: string) => void;
+}>) {
+  return (
+    <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">Voice Assets</p>
+        <button
+          className="h-8 rounded-md border px-2.5 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+          onClick={onOpenVoiceCloning}
+          type="button"
+        >
+          Voice Cloning
+        </button>
+      </div>
+      {models.map((asset) => (
+        <div
+          className={`min-w-0 rounded-md border p-3 ${
+            asset.availability === "active"
+              ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+              : "vs-raised"
+          }`}
+          key={asset.assetKey}
+        >
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <p className="min-w-0 truncate text-sm font-semibold" title={asset.title}>
+              {asset.title}
+            </p>
+            <StatusPill>{asset.activeStateLabel}</StatusPill>
+          </div>
+          <p className="vs-muted mt-1 truncate text-xs" title={voiceAssetRowDetail(asset)}>
+            {voiceAssetRowDetail(asset)}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <AssetButton
+              onClick={() => {
+                onInspectAsset(asset.assetKey);
+              }}
+            >
+              Inspect
+            </AssetButton>
+            <AssetButton
+              onClick={() => {
+                if (asset.type === "default") {
+                  onClearVoiceProfile();
+                  return;
+                }
+                onSelectProfile(asset.id);
+              }}
+            >
+              {asset.type === "default" ? "Use default" : "Use saved voice"}
+            </AssetButton>
+          </div>
+        </div>
+      ))}
+      {models.every((asset) => asset.type === "default") ? (
+        <EmptyDrawerText>No saved voice profiles yet.</EmptyDrawerText>
+      ) : null}
+    </div>
+  );
+}
+
+function SpeechPolicyAssetsSection({
+  customSpeechPolicyProfiles,
+  model,
+  speechPolicyProfile,
+  speechPolicyProfiles,
+  onInspectAsset,
+  onSpeechPolicyProfileChange,
+}: Readonly<{
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  model: SpeechPolicyAssetModel;
+  speechPolicyProfile: string;
+  speechPolicyProfiles: SpeechPolicyProfile[];
+  onInspectAsset: (assetKey: string) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
+}>) {
+  return (
+    <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">Speech Policy Assets</p>
+        <AssetButton
+          onClick={() => {
+            onInspectAsset("policy:project");
+          }}
+        >
+          Inspect
+        </AssetButton>
+      </div>
+      <WorkspaceDashboardSummary
+        detail={`${model.sourcePinCount.toString()} source pin(s) · ${model.sessionOverrideCount.toString()} session override field(s)`}
+        label={model.projectDefaultLabel}
+        value={model.requiresConfirmation ? "Requires confirmation" : "Inherited"}
+      />
+      <label className="grid gap-1 text-sm font-semibold">
+        <span>Project default</span>
+        <select
+          className="h-10 rounded-md border bg-[var(--vs-raised)] px-3 text-sm outline-none vs-border"
+          onChange={(event) => {
+            const nextProfile = event.currentTarget.value;
+            if (
+              nextProfile !== speechPolicyProfile &&
+              model.requiresConfirmation &&
+              !confirmAssetAction(
+                "Change project default? Source-specific speech policy pins and overrides will remain unchanged.",
+              )
+            ) {
+              return;
+            }
+            onSpeechPolicyProfileChange(nextProfile);
+          }}
+          value={speechPolicyProfile}
+        >
+          {(speechPolicyProfiles.length > 0
+            ? speechPolicyProfiles.map((profile) => profile.name)
+            : SPEECH_POLICY_PROFILE_OPTIONS
+          ).map((profile) => (
+            <option key={profile} value={profile}>
+              {speechPolicyProfileLabel(profile)}
+            </option>
+          ))}
+          {customSpeechPolicyProfiles.length > 0 ? (
+            <optgroup label="Custom profiles">
+              {customSpeechPolicyProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
+        </select>
+      </label>
+      {model.requiresConfirmation ? (
+        <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-3 text-xs leading-5 text-[var(--vs-status-warning)]">
+          Changing the project default requires confirmation because source-specific overrides stay
+          pinned.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function SourceAssetDetail({
+  asset,
+  bookSources,
+  preparedSources,
+  selectedBookScope,
+  onDeleteBookSource,
+  onDeletePreparedSource,
+  onOpenIntake,
+  onRenameBookSource,
+  onRenamePreparedSource,
+  onUseBookSource,
+  onUsePreparedSource,
+}: Readonly<{
+  asset: SourceAssetModel;
+  bookSources: BookSource[];
+  preparedSources: PreparedSource[];
+  selectedBookScope: BookScope | null;
+  onDeleteBookSource: (id: string) => Promise<void>;
+  onDeletePreparedSource: (id: string) => Promise<void>;
+  onOpenIntake: () => void;
+  onRenameBookSource: (id: string, name: string) => Promise<void>;
+  onRenamePreparedSource: (id: string, name: string) => Promise<void>;
+  onUseBookSource: (book: BookSource, scope: BookScope) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
+}>) {
+  return (
+    <div className="grid gap-4">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="min-w-0 truncate text-lg font-semibold" title={asset.title}>
+            {asset.title}
+          </h4>
+          <StatusPill>{asset.availabilityLabel}</StatusPill>
+          <StatusPill>{asset.policyPinLabel}</StatusPill>
+        </div>
+        <p className="vs-muted mt-1 text-sm leading-6">{asset.lifecycleDetail}</p>
+      </div>
+      <DetailGrid
+        rows={[
+          ["Type", asset.typeLabel],
+          ["Word count", `${asset.envelope.wordCount?.toLocaleString() ?? "Unknown"} words`],
+          ["Structure", asset.structureLabel],
+          ["Extraction", asset.extractionStateLabel],
+          ["Readiness", `${asset.readinessLabel} · ${asset.readinessDetail}`],
+          ["Last prepared", formatDate(asset.lastPreparedAt)],
+          ["Last used", asset.usage.lastUsedAt ? formatDate(asset.usage.lastUsedAt) : "Never"],
+          ["Usage", asset.reuseLabel],
+          ["Policy scope", asset.policyPinLabel],
+          ["Provenance", asset.provenance],
+        ]}
+      />
+      <div className="flex flex-wrap gap-2">
+        <AssetButton
+          disabled={!asset.routeState.canReview}
+          onClick={() => {
+            applySourceAsset(asset, bookSources, preparedSources, selectedBookScope, {
+              onUseBookSource,
+              onUsePreparedSource,
+            });
+          }}
+        >
+          Reuse for narration
+        </AssetButton>
+        <AssetButton onClick={onOpenIntake}>Open Intake</AssetButton>
+        <AssetButton
+          onClick={() => {
+            const nextName = promptAssetName("Rename source asset", asset.title);
+            if (!nextName) {
+              return;
+            }
+            void (asset.owner === "book"
+              ? onRenameBookSource(asset.id, nextName)
+              : onRenamePreparedSource(asset.id, nextName));
+          }}
+        >
+          Rename
+        </AssetButton>
+        <DangerAssetButton
+          onClick={() => {
+            const message =
+              asset.availability === "active"
+                ? `${asset.deleteConfirmation} It is active, so narration will fall back to draft text.`
+                : asset.deleteConfirmation;
+            if (!confirmAssetAction(message)) {
+              return;
+            }
+            void (asset.owner === "book"
+              ? onDeleteBookSource(asset.id)
+              : onDeletePreparedSource(asset.id));
+          }}
+        >
+          Delete
+        </DangerAssetButton>
+      </div>
+    </div>
+  );
+}
+
+function VoiceAssetDetail({
+  asset,
+  onClearVoiceProfile,
+  onDeleteVoiceProfile,
+  onOpenVoiceCloning,
+  onRenameVoiceProfile,
+  onSelectProfile,
+}: Readonly<{
+  asset: VoiceAssetModel;
+  onClearVoiceProfile: () => void;
+  onDeleteVoiceProfile: (id: string) => Promise<void>;
+  onOpenVoiceCloning: () => void;
+  onRenameVoiceProfile: (id: string, name: string) => Promise<void>;
+  onSelectProfile: (profileId: string) => void;
+}>) {
+  return (
+    <div className="grid gap-4">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="min-w-0 truncate text-lg font-semibold" title={asset.title}>
+            {asset.title}
+          </h4>
+          {asset.labels.map((label) => (
+            <StatusPill key={label}>{label}</StatusPill>
+          ))}
+        </div>
+        <p className="vs-muted mt-1 text-sm leading-6">{asset.readinessDetail}</p>
+      </div>
+      <DetailGrid
+        rows={[
+          ["Provider", asset.providerLabel],
+          ["Engine", asset.engineLabel],
+          ["Readiness", asset.readinessLabel],
+          ["Language", asset.language],
+          ["Profile path", asset.profilePath],
+          ["Reference path", asset.referencePath],
+          ["Source", asset.sourceLabel],
+          ["Last used", asset.usage.lastUsedAt ? formatDate(asset.usage.lastUsedAt) : "Never"],
+          ["Usage", usageCountLabel(asset.usage.usageCount)],
+        ]}
+      />
+      <div className="flex flex-wrap gap-2">
+        <AssetButton
+          onClick={() => {
+            if (asset.type === "default") {
+              onClearVoiceProfile();
+              return;
+            }
+            onSelectProfile(asset.id);
+          }}
+        >
+          {asset.type === "default" ? "Use default voice" : "Use saved voice"}
+        </AssetButton>
+        <AssetButton onClick={onOpenVoiceCloning}>Open Voice Cloning</AssetButton>
+        {asset.type === "profile" ? (
+          <>
+            <AssetButton
+              onClick={() => {
+                const nextName = promptAssetName("Rename voice profile", asset.title);
+                if (nextName) {
+                  void onRenameVoiceProfile(asset.id, nextName);
+                }
+              }}
+            >
+              Rename
+            </AssetButton>
+            <DangerAssetButton
+              onClick={() => {
+                const message =
+                  asset.availability === "active"
+                    ? `${asset.deleteConfirmation ?? ""} It is active, so narration will fall back to the default voice.`
+                    : (asset.deleteConfirmation ?? "");
+                if (message && confirmAssetAction(message)) {
+                  void onDeleteVoiceProfile(asset.id);
+                }
+              }}
+            >
+              Delete
+            </DangerAssetButton>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function PolicyAssetDetail({ model }: Readonly<{ model: SpeechPolicyAssetModel }>) {
+  return (
+    <div className="grid gap-4">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="text-lg font-semibold">Speech policy preset</h4>
+          {model.statusLabels.map((label) => (
+            <StatusPill key={label}>{label}</StatusPill>
+          ))}
+        </div>
+        <p className="vs-muted mt-1 text-sm leading-6">
+          Project defaults are inherited by unpinned sources. Source-specific overrides are kept
+          separate and are not changed silently.
+        </p>
+      </div>
+      <DetailGrid
+        rows={[
+          ["Project default", model.projectDefaultLabel],
+          ["Session overrides", model.sessionOverrideCount.toLocaleString()],
+          ["Source pins", model.sourcePinCount.toLocaleString()],
+          ["Custom presets", model.customPresetCount.toLocaleString()],
+          ["Machine scope", model.machineDefaultLabel],
+          ["Default change", model.requiresConfirmation ? "Requires confirmation" : "Inherited"],
+        ]}
+      />
+    </div>
+  );
+}
+
+function DetailGrid({ rows }: Readonly<{ rows: [string, string][] }>) {
+  return (
+    <dl className="grid gap-2">
+      {rows.map(([label, value]) => (
+        <div className="grid gap-1 rounded-md border p-3 vs-border vs-raised" key={label}>
+          <dt className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.14em]">
+            {label}
+          </dt>
+          <dd className="break-words text-sm font-medium">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function StatusPill({ children }: Readonly<{ children: string }>) {
+  return (
+    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold capitalize vs-border">
+      {children}
+    </span>
+  );
+}
+
+function AssetButton({
+  children,
+  disabled = false,
+  onClick,
+}: Readonly<{ children: string; disabled?: boolean; onClick: () => void }>) {
+  return (
+    <button
+      className="h-8 rounded-md border px-2.5 text-xs font-semibold hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
+function DangerAssetButton({
+  children,
+  onClick,
+}: Readonly<{ children: string; onClick: () => void }>) {
+  return (
+    <button
+      className="h-8 rounded-md border border-[var(--vs-status-danger-border)] px-2.5 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)]"
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
+function sourceAssetRowDetail(asset: SourceAssetModel): string {
+  return [
+    asset.typeLabel,
+    `${asset.envelope.wordCount?.toLocaleString() ?? "Unknown"} words`,
+    asset.readinessLabel,
+    asset.policyPinLabel,
+    asset.reuseLabel,
+  ].join(" · ");
+}
+
+function voiceAssetRowDetail(asset: VoiceAssetModel): string {
+  return [
+    asset.providerLabel,
+    asset.engineLabel,
+    asset.readinessLabel,
+    usageCountLabel(asset.usage.usageCount),
+  ].join(" · ");
+}
+
+function usageCountLabel(count: number): string {
+  if (count === 0) {
+    return "Never used";
+  }
+  return `Used ${count.toLocaleString()} time${count === 1 ? "" : "s"}`;
+}
+
+function applySourceAsset(
+  asset: SourceAssetModel,
+  bookSources: BookSource[],
+  preparedSources: PreparedSource[],
+  selectedBookScope: BookScope | null,
+  actions: {
+    onUseBookSource: (book: BookSource, scope: BookScope) => void;
+    onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
+  },
+) {
+  if (asset.owner === "book") {
+    const book = bookSources.find((source) => source.id === asset.id);
+    if (book) {
+      actions.onUseBookSource(
+        book,
+        asset.isActive && selectedBookScope ? selectedBookScope : resolveDefaultBookScope(book),
+      );
+    }
+    return;
+  }
+  const source = preparedSources.find((item) => item.id === asset.id);
+  if (source) {
+    void actions.onUsePreparedSource(source);
+  }
+}
+
+function confirmAssetAction(message: string): boolean {
+  if (typeof globalThis.confirm !== "function") {
+    return true;
+  }
+  return globalThis.confirm(message);
+}
+
+function promptAssetName(label: string, currentName: string): string | null {
+  if (typeof globalThis.prompt !== "function") {
+    return null;
+  }
+  const nextName = globalThis.prompt(label, currentName)?.trim() ?? "";
+  return nextName.length > 0 && nextName !== currentName ? nextName : null;
 }
 
 function GeneratedAudioList({ visibleJobs }: Readonly<{ visibleJobs: VoiceJob[] }>) {
