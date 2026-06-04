@@ -81,8 +81,8 @@ export function VoiceProfileRow({
             >
               {profile.name}
             </button>
-            {selected ? <StatusChip tone="accent">Selected</StatusChip> : null}
-            <StatusChip tone="neutral">Cloned</StatusChip>
+            {selected ? <StatusChip tone="selected">Selected</StatusChip> : null}
+            <StatusChip tone="metadata">Cloned</StatusChip>
             <StatusChip tone={voiceReadinessTone(profile.readiness)}>
               {voiceReadinessLabel(profile.readiness)}
             </StatusChip>
@@ -214,7 +214,7 @@ export function TargetRow({
           <StatusChip tone={voiceReadinessTone(target.readiness)}>
             {voiceReadinessLabel(target.readiness)}
           </StatusChip>
-          {target.selected ? <StatusChip tone="accent">Target</StatusChip> : null}
+          {target.selected ? <StatusChip tone="selected">Target</StatusChip> : null}
         </div>
         <p className="vs-muted mt-1 truncate text-xs">
           {target.profileName} · {target.moduleLabel} · {target.engineLabel}

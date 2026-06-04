@@ -63,7 +63,7 @@ export function TopProductBar({
   onCommandCenterOpen: () => void;
 }>) {
   return (
-    <header className="vs-raised grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 lg:px-4 2xl:grid-cols-[minmax(205px,auto)_minmax(330px,0.9fr)_auto]">
+    <header className="vs-app-shell grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 lg:px-4 2xl:grid-cols-[minmax(205px,auto)_minmax(330px,0.9fr)_auto]">
       <div className="flex min-w-0 items-center gap-2.5">
         <Button
           aria-label="Open Command Center"
@@ -235,18 +235,20 @@ export function WorkspaceLayoutControl({
       <summary
         aria-label={`Workspace layout: ${activeMeta.label}`}
         className={cx(
-          "flex min-h-10 cursor-pointer list-none items-center justify-center rounded-md border bg-[var(--vs-raised)] px-3 text-sm font-semibold shadow-sm transition hover:bg-[var(--vs-surface)] vs-border [&::-webkit-details-marker]:hidden",
+          "flex min-h-10 cursor-pointer list-none items-center justify-center rounded-md border px-3 text-sm font-semibold shadow-sm transition hover:bg-[var(--vs-surface)] vs-work-surface [&::-webkit-details-marker]:hidden",
           compact ? "min-w-11 px-2 text-[var(--vs-action-primary)]" : "min-w-36 gap-2",
         )}
       >
         <span>Layout</span>
         {compact ? null : (
-          <StatusChip className="rounded-full py-0.5 text-[0.65rem]">{activeMeta.label}</StatusChip>
+          <StatusChip className="rounded-full py-0.5 text-[0.65rem]" tone="metadata">
+            {activeMeta.label}
+          </StatusChip>
         )}
       </summary>
       <div
         className={cx(
-          "absolute right-0 z-50 mt-2 grid w-[min(22rem,calc(100vw-1rem))] gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 text-sm shadow-xl vs-border",
+          "absolute right-0 z-50 mt-2 grid w-[min(22rem,calc(100vw-1rem))] gap-3 rounded-lg border p-3 text-sm shadow-xl vs-work-surface",
           compact ? "-right-20" : "",
         )}
       >
@@ -436,7 +438,7 @@ function TopProductBarContextSummary({
 }>) {
   return (
     <button
-      className="hidden min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 text-left transition hover:bg-[var(--vs-surface)] vs-surface 2xl:grid"
+      className="hidden min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 text-left transition hover:bg-[var(--vs-surface-muted)] vs-metadata-surface 2xl:grid"
       data-testid="ui-action-shell-context-summary"
       onClick={onOpenCommandCenter}
       title={`${context.workspaceLabel} · ${context.projectName} · ${context.chapterName}`}

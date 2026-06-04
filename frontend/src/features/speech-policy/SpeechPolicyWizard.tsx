@@ -301,7 +301,7 @@ export function SpeechPolicyWizard({
             variant="raised"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <StatusChip tone="accent">{goldenMinutePreview.profileLabel}</StatusChip>
+              <StatusChip tone="selected">{goldenMinutePreview.profileLabel}</StatusChip>
               <StatusChip tone="info">
                 {goldenMinutePreview.highlightGranularity} highlight
               </StatusChip>
@@ -350,7 +350,7 @@ export function SpeechPolicyWizard({
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h5 className="text-sm font-semibold">{previewItem.profileLabel}</h5>
-                  <StatusChip tone="neutral">{previewItem.highlightGranularity}</StatusChip>
+                  <StatusChip tone="metadata">{previewItem.highlightGranularity}</StatusChip>
                 </div>
                 <p className="vs-muted text-xs leading-5">{previewItem.citationHandling}</p>
                 <p className="text-xs leading-5">{previewItem.highlightPlan}</p>

@@ -1493,3 +1493,17 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Review worktree scope
 - [x] Stage reports diagnostics work package
 - [x] Create commit
+
+## 2026-06-04 13:23 CEST - Visual Hierarchy Design System
+- [x] Expand semantic design tokens
+- [x] Tighten shared component hierarchy
+- [x] Sweep high-use surfaces
+- [x] Update design-system documentation and baselines
+- [x] Add asset action IDs and disabled reasons for audit metadata
+- [x] Run visual, accessibility, and project checks
+- Validation: focused design contrast/raw-palette tests passed; frontend typecheck, frontend tests, component baseline, accessibility audit, responsive snapshots, and `pnpm check` passed with existing unrelated Biome warnings/infos. `pnpm e2e:surface-complexity` still fails the existing UI-action review gate for missing activation replay evidence and duplicate-control backlog groups, but refreshed dead-control metadata is clean with 0 missing stable IDs and 0 disabled-without-reason findings.
+
+## 2026-06-04 13:55 CEST - Commit Visual Hierarchy Design System
+- [x] Review worktree scope
+- [x] Stage visual hierarchy work package
+- [x] Create commit

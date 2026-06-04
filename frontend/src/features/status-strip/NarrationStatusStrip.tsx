@@ -58,7 +58,7 @@ export function NarrationStatusStrip({
   return (
     <footer
       className={cx(
-        "z-30 shrink-0 border-t px-3 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised",
+        "z-30 shrink-0 border-t px-3 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-status-strip-surface",
         mode === "full" && "py-3",
       )}
       data-status-strip-density={statusStripDensityLabel(mode)}
@@ -68,10 +68,10 @@ export function NarrationStatusStrip({
     >
       <div
         className={cx(
-          "grid min-w-0 gap-3 rounded-md border p-3 vs-border",
+          "grid min-w-0 gap-3 rounded-md border p-3",
           isAttention
             ? "border-[var(--vs-warning-border)] bg-[var(--vs-warning-soft)]"
-            : "bg-[var(--vs-surface)]",
+            : "vs-work-surface",
           mode === "full"
             ? "xl:grid-cols-[minmax(0,1fr)_auto]"
             : "lg:grid-cols-[minmax(0,1fr)_auto]",
@@ -116,6 +116,15 @@ export function NarrationStatusStrip({
             <Button
               data-testid={`ui-action-status-strip-${model.primaryAction.id}`}
               disabled={actionDisabled}
+              disabledReason={
+                actionDisabled
+                  ? disabledStatusActionReason(model.primaryAction.id, {
+                      canCancel,
+                      canCreate,
+                      canOpenCinema,
+                    })
+                  : undefined
+              }
               onClick={() => {
                 runStatusAction(model.primaryAction?.id ?? null, {
                   onCancel,
@@ -154,7 +163,7 @@ function NarrationStatusSelectableChip({
         "max-w-full rounded-full py-0.5 text-[0.65rem]",
         selected && "ring-2 ring-[var(--vs-focus-ring)]",
       )}
-      tone={chip.tone}
+      tone={selected ? "selected" : chip.tone}
     >
       <span className="shrink-0">{chip.label}</span>
       <span className="min-w-0 truncate before:px-1 before:content-['·']">{chip.value}</span>
@@ -253,6 +262,22 @@ function actionIsDisabled(
   return false;
 }
 
+function disabledStatusActionReason(
+  actionId: NarrationStatusActionId,
+  state: Readonly<{ canCancel: boolean; canCreate: boolean; canOpenCinema: boolean }>,
+): string | undefined {
+  if (actionId === "cancel" && !state.canCancel) {
+    return "There is no running narration job to cancel.";
+  }
+  if ((actionId === "create" || actionId === "retry") && !state.canCreate) {
+    return "Resolve source, voice, and policy readiness before creating narration.";
+  }
+  if (actionId === "openCinema" && !state.canOpenCinema) {
+    return "Create playable narration audio before opening Cinema.";
+  }
+  return undefined;
+}
+
 function buttonVariant(tone: "danger" | "primary" | "secondary" | "warning"): ButtonVariant {
   if (tone === "primary") {
     return "primary";
@@ -261,7 +286,7 @@ function buttonVariant(tone: "danger" | "primary" | "secondary" | "warning"): Bu
     return "destructive";
   }
   if (tone === "warning") {
-    return "secondary";
+    return "warning";
   }
   return "secondary";
 }

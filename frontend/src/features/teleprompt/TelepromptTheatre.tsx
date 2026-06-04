@@ -337,7 +337,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     const operatorPanelContent = (
       <>
         {readingOnlyDetail ? (
-          <p className="rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3 text-xs leading-5 text-[var(--vs-text-secondary)]">
+          <p className="rounded-lg border p-3 text-xs leading-5 text-[var(--vs-text-secondary)] vs-theatre-panel">
             {readingOnlyDetail}
           </p>
         ) : null}
@@ -349,7 +349,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           onChange={onSettingsChange}
         />
 
-        <div className="grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3">
+        <div className="grid gap-3 rounded-lg border p-3 vs-theatre-panel">
           <div>
             <p className="text-xs font-semibold uppercase text-[var(--vs-text-muted)]">
               Inline text preset
@@ -378,7 +378,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           />
         </div>
 
-        <div className="grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3">
+        <div className="grid gap-3 rounded-lg border p-3 vs-theatre-panel">
           <div>
             <p className="text-xs font-semibold uppercase text-[var(--vs-text-muted)]">
               Exit paths
@@ -389,7 +389,6 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           </div>
           <Button
             {...playbackActionDataAttributes("openCinema", playbackLifecycle)}
-            className="border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]"
             data-testid="ui-action-teleprompt-theatre-open-cinema"
             disabled={!canOpenCinema}
             disabledReason={openCinemaDisabledReason}
@@ -405,7 +404,6 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
             aria-label={playbackActionAriaLabel("createAndListen", {
               createScope: "current-scope",
             })}
-            className="border-[var(--vs-selected-border)] bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)] hover:bg-[var(--vs-action-primary-hover)]"
             data-testid="ui-action-teleprompt-theatre-create-listen"
             disabled={!canCreate}
             disabledReason={createAndListenDisabledReason}
@@ -417,7 +415,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           </Button>
         </div>
 
-        <div className="grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3">
+        <div className="grid gap-3 rounded-lg border p-3 vs-theatre-panel">
           <div>
             <p className="text-xs font-semibold uppercase text-[var(--vs-text-muted)]">
               Environment
@@ -427,7 +425,6 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
             </p>
           </div>
           <Button
-            className="border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]"
             data-testid="ui-action-teleprompt-theatre-operator-native-fullscreen"
             disabled={!fullscreenAvailability.supported}
             disabledReason={
@@ -464,14 +461,14 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
         ) : null}
 
         {fullscreenAvailability.supported ? null : (
-          <p className="rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3 text-xs leading-5 text-[var(--vs-text-secondary)]">
+          <p className="rounded-lg border p-3 text-xs leading-5 text-[var(--vs-text-secondary)] vs-theatre-panel">
             {fullscreenAvailability.reason}
           </p>
         )}
       </>
     );
     const operatorPanelClassName = cx(
-      "max-h-[min(34vh,22rem)] rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-chrome)] p-2 lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0",
+      "max-h-[min(34vh,22rem)] rounded-lg border p-2 vs-theatre-panel lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0",
       settings.operatorPanelPosition === "left" ? "lg:order-first" : "",
     );
     const renderOperatorPanel = (className = "") => (
@@ -620,7 +617,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
 
             {controlsVisible ? (
               <div
-                className="grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3"
+                className="grid gap-3 overflow-auto rounded-lg border p-3 vs-theatre-panel lg:max-h-40"
                 data-teleprompt-theatre-control-zone="transport"
               >
                 {settings.nextCuePlacement === "below" ? (
@@ -644,7 +641,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           settings.nextCuePlacement === "side" &&
           !settings.operatorPanelVisible ? (
             <aside
-              className="hidden min-h-0 gap-3 overflow-auto rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3 lg:grid"
+              className="hidden min-h-0 gap-3 overflow-auto rounded-lg border p-3 vs-theatre-panel lg:grid"
               data-teleprompt-theatre-control-zone="next-cue"
             >
               <CuePreviewList blocks={previewBlocks} />

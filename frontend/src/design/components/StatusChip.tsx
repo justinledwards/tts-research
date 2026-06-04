@@ -21,6 +21,7 @@ export function StatusChip({
         className,
       )}
       data-status-chip=""
+      data-status-tone={tone}
     >
       {children}
     </span>

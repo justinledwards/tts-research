@@ -381,12 +381,12 @@ export function WorkspaceDrawer({
       <aside
         aria-label="Command Center"
         aria-modal="true"
-        className="vs-app mx-auto flex h-full w-full max-w-6xl flex-col border-r shadow-2xl md:w-[92vw] xl:w-[1120px]"
+        className="vs-app vs-workbench mx-auto flex h-full w-full max-w-6xl flex-col border-r shadow-2xl md:w-[92vw] xl:w-[1120px]"
         ref={drawerRef}
         role="dialog"
         tabIndex={-1}
       >
-        <header className="flex items-center justify-between gap-4 border-b px-5 py-4 vs-border">
+        <header className="flex items-center justify-between gap-4 border-b px-5 py-4 vs-work-surface">
           <div className="min-w-0">
             <p className="vs-muted text-xs font-medium uppercase tracking-wide">
               Project and activity management
@@ -406,7 +406,7 @@ export function WorkspaceDrawer({
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[230px_minmax(0,1fr)]">
           <nav className="border-b p-4 vs-border md:border-r md:border-b-0">
-            <div className="grid gap-3 rounded-md border p-3 vs-border vs-surface">
+            <div className="grid gap-3 rounded-md border p-3 vs-metadata-surface">
               <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
                 Current work
               </p>
@@ -431,8 +431,8 @@ export function WorkspaceDrawer({
                   aria-current={effectiveActiveSection === section.id ? "page" : undefined}
                   className={`grid min-w-0 gap-1 rounded-md border px-3 py-2 text-left transition ${
                     effectiveActiveSection === section.id
-                      ? "border-[var(--vs-selected-border)] bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)] shadow-sm"
-                      : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
+                      ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)] shadow-sm"
+                      : "vs-work-surface hover:bg-[var(--vs-surface)]"
                   }`}
                   data-testid={`ui-action-command-center-section-${section.id}`}
                   data-ui-action-owner="command-center"
@@ -453,7 +453,7 @@ export function WorkspaceDrawer({
                       <span
                         className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] ${
                           effectiveActiveSection === section.id
-                            ? "border-[var(--vs-theatre-panel-border)] text-[var(--vs-action-primary-text)]"
+                            ? "border-[var(--vs-selected-border)] text-[var(--vs-selected-text)]"
                             : "vs-border vs-muted"
                         }`}
                       >
@@ -464,7 +464,7 @@ export function WorkspaceDrawer({
                   <span
                     className={`truncate text-[0.68rem] ${
                       effectiveActiveSection === section.id
-                        ? "text-[var(--vs-theatre-muted)]"
+                        ? "text-[var(--vs-selected-text)]"
                         : "vs-muted"
                     }`}
                   >
@@ -770,7 +770,7 @@ function CommandCenterOverview({
           value={selectedProfile?.name ?? "Default"}
         />
       </div>
-      <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
+      <div className="grid gap-3 rounded-md border p-4 vs-management-surface">
         <p className="text-sm font-semibold">Management routes</p>
         <div className="grid gap-2 md:grid-cols-3">
           <OverviewRouteButton
@@ -820,7 +820,7 @@ function OverviewStat({
   value,
 }: Readonly<{ detail: string; label: string; value: string }>) {
   return (
-    <div className="min-w-0 rounded-md border p-4 vs-border vs-raised">
+    <div className="min-w-0 rounded-md border p-4 vs-work-surface">
       <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">{label}</p>
       <p className="mt-2 truncate text-lg font-semibold" title={value}>
         {value}
@@ -839,7 +839,7 @@ function OverviewRouteButton({
 }: Readonly<{ children: string; detail: string; onClick: () => void }>) {
   return (
     <button
-      className="grid min-h-24 min-w-0 content-start gap-2 rounded-md border p-3 text-left transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-raised"
+      className="grid min-h-24 min-w-0 content-start gap-2 rounded-md border p-3 text-left transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-work-surface"
       onClick={onClick}
       type="button"
     >
@@ -1104,6 +1104,7 @@ function SourceAssetRow({
   onUseBookSource: (book: BookSource, scope: BookScope) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
 }>) {
+  const useDisabledReason = sourceAssetUseDisabledReason(asset);
   return (
     <div
       className={`min-w-0 rounded-md border p-3 ${
@@ -1121,6 +1122,7 @@ function SourceAssetRow({
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <AssetButton
+          testId={`ui-action-asset-source-inspect-${asset.assetKey}`}
           onClick={() => {
             onInspectAsset(asset.assetKey);
           }}
@@ -1128,7 +1130,10 @@ function SourceAssetRow({
           Inspect
         </AssetButton>
         <AssetButton
-          disabled={!asset.routeState.canReview}
+          disabled={Boolean(useDisabledReason)}
+          disabledReason={useDisabledReason}
+          selected={asset.isActive}
+          testId={`ui-action-asset-source-use-${asset.assetKey}`}
           onClick={() => {
             applySourceAsset(asset, bookSources, preparedSources, selectedBookScope, {
               onUseBookSource,
@@ -1188,6 +1193,7 @@ function VoiceAssetsSection({
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <AssetButton
+              testId={`ui-action-asset-voice-inspect-${asset.assetKey}`}
               onClick={() => {
                 onInspectAsset(asset.assetKey);
               }}
@@ -1195,6 +1201,14 @@ function VoiceAssetsSection({
               Inspect
             </AssetButton>
             <AssetButton
+              disabled={asset.availability === "active"}
+              disabledReason={
+                asset.availability === "active"
+                  ? "Already using this voice for narration."
+                  : undefined
+              }
+              selected={asset.availability === "active"}
+              testId={`ui-action-asset-voice-use-${asset.assetKey}`}
               onClick={() => {
                 if (asset.type === "default") {
                   onClearVoiceProfile();
@@ -1235,6 +1249,7 @@ function SpeechPolicyAssetsSection({
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold">Speech Policy Assets</p>
         <AssetButton
+          testId="ui-action-asset-policy-inspect"
           onClick={() => {
             onInspectAsset("policy:project");
           }}
@@ -1512,7 +1527,7 @@ function DetailGrid({ rows }: Readonly<{ rows: [string, string][] }>) {
   return (
     <dl className="grid gap-2">
       {rows.map(([label, value]) => (
-        <div className="grid gap-1 rounded-md border p-3 vs-border vs-raised" key={label}>
+        <div className="grid gap-1 rounded-md border p-3 vs-metadata-surface" key={label}>
           <dt className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.14em]">
             {label}
           </dt>
@@ -1525,7 +1540,7 @@ function DetailGrid({ rows }: Readonly<{ rows: [string, string][] }>) {
 
 function StatusPill({ children }: Readonly<{ children: string }>) {
   return (
-    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold capitalize vs-border">
+    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold capitalize vs-metadata-surface">
       {children}
     </span>
   );
@@ -1534,13 +1549,32 @@ function StatusPill({ children }: Readonly<{ children: string }>) {
 function AssetButton({
   children,
   disabled = false,
+  disabledReason,
   onClick,
-}: Readonly<{ children: string; disabled?: boolean; onClick: () => void }>) {
+  selected = false,
+  testId,
+}: Readonly<{
+  children: string;
+  disabled?: boolean;
+  disabledReason?: string;
+  onClick: () => void;
+  selected?: boolean;
+  testId?: string;
+}>) {
   return (
     <button
-      className="h-8 rounded-md border px-2.5 text-xs font-semibold hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
+      className={`h-8 rounded-md border px-2.5 text-xs font-semibold hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:border-[var(--vs-action-disabled-border)] disabled:bg-[var(--vs-action-disabled-bg)] disabled:text-[var(--vs-action-disabled-text)] ${
+        selected
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]"
+          : "vs-border"
+      }`}
+      data-disabled-reason={disabledReason}
+      data-selected={selected ? "true" : undefined}
+      data-testid={testId}
+      data-ui-noop-reason={selected ? (disabledReason ?? "Already selected.") : undefined}
       disabled={disabled}
       onClick={onClick}
+      title={disabled && disabledReason ? disabledReason : undefined}
       type="button"
     >
       {children}
@@ -1554,7 +1588,7 @@ function DangerAssetButton({
 }: Readonly<{ children: string; onClick: () => void }>) {
   return (
     <button
-      className="h-8 rounded-md border border-[var(--vs-status-danger-border)] px-2.5 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)]"
+      className="h-8 rounded-md border border-[var(--vs-action-destructive-border)] bg-[var(--vs-action-destructive-bg)] px-2.5 text-xs font-semibold text-[var(--vs-action-destructive)] hover:bg-[var(--vs-action-destructive-hover)]"
       onClick={onClick}
       type="button"
     >
@@ -1587,6 +1621,15 @@ function usageCountLabel(count: number): string {
     return "Never used";
   }
   return `Used ${count.toLocaleString()} time${count === 1 ? "" : "s"}`;
+}
+
+function sourceAssetUseDisabledReason(asset: SourceAssetModel): string | undefined {
+  if (asset.isActive) {
+    return "Already using this source for narration.";
+  }
+  return asset.routeState.canReview
+    ? undefined
+    : (asset.routeState.reviewDisabledReason ?? asset.enabledDisabledReason);
 }
 
 function applySourceAsset(
@@ -1734,7 +1777,7 @@ function HealthReportsPanel({
     "n/a";
   return (
     <div className="grid gap-3">
-      <div className="rounded-md border p-4 vs-border vs-surface">
+      <div className="rounded-md border p-4 vs-work-surface">
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="vs-muted text-xs font-semibold uppercase tracking-wide">Health report</p>
@@ -1747,7 +1790,7 @@ function HealthReportsPanel({
         </div>
       </div>
       {failedGeneration ? (
-        <div className="rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-4 text-sm text-[var(--vs-status-danger)]">
+        <div className="rounded-md border p-4 text-sm text-[var(--vs-status-danger)] vs-alert-surface">
           <p className="font-semibold">Failed generation</p>
           <p className="mt-1 leading-6">
             Terminal reason: {terminalReason}. Failure kind: {failureKind}.
@@ -1776,15 +1819,15 @@ function HealthReportsPanel({
       </div>
       {bundleReport ? <BundleOperationReportCard report={bundleReport} /> : null}
       {report.statusChips.length > 0 ? (
-        <div className="rounded-md border p-4 vs-border vs-surface">
+        <div className="rounded-md border p-4 vs-management-surface">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold">Status strip blockers</p>
-            <StatusChip tone="neutral">{report.statusChips.length.toString()}</StatusChip>
+            <StatusChip tone="metadata">{report.statusChips.length.toString()}</StatusChip>
           </div>
           <div className="mt-3 grid gap-2">
             {report.statusChips.map((chip) => (
               <div
-                className="flex min-w-0 items-start justify-between gap-3 rounded-md border px-3 py-2 vs-border"
+                className="flex min-w-0 items-start justify-between gap-3 rounded-md border px-3 py-2 vs-work-surface"
                 key={`${chip.label}-${chip.value}`}
               >
                 <div className="min-w-0">
@@ -1828,7 +1871,7 @@ function BundleOperationReportCard({ report }: Readonly<{ report: BundleOperatio
   }
 
   return (
-    <article className="rounded-md border p-4 vs-border vs-surface">
+    <article className="rounded-md border p-4 vs-management-surface">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="vs-muted text-xs font-semibold uppercase tracking-wide">
@@ -1872,7 +1915,7 @@ function BundleOperationReportCard({ report }: Readonly<{ report: BundleOperatio
 function HealthReportCardRow({ card }: Readonly<{ card: HealthReportCard }>) {
   return (
     <article
-      className="rounded-md border p-4 vs-border vs-surface"
+      className="rounded-md border p-4 vs-work-surface"
       id={`command-center-report-${healthReportAnchor(card.label)}`}
     >
       <div className="flex min-w-0 items-start justify-between gap-3">

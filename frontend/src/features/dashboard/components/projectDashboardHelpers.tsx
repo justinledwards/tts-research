@@ -146,7 +146,7 @@ export function ProjectDashboardTitle({
       >
         {project.name}
       </button>
-      {isActive ? <StatusChip tone="accent">Current</StatusChip> : null}
+      {isActive ? <StatusChip tone="selected">Current</StatusChip> : null}
       {isProtected ? <StatusChip tone="pinned">Protected</StatusChip> : null}
     </div>
   );

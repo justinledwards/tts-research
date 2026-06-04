@@ -8,6 +8,7 @@ export type ButtonVariant =
   | "tertiary"
   | "soft"
   | "ghost"
+  | "warning"
   | "destructive"
   | "mode"
   | "pinned";
@@ -31,14 +32,16 @@ const variantClassName: Record<ButtonVariant, string> = {
     "border-[var(--vs-action-secondary-border)] bg-[var(--vs-action-secondary-bg)] text-[var(--vs-action-secondary-text)] shadow-sm hover:bg-[var(--vs-action-secondary-hover)]",
   tertiary:
     "border-transparent bg-[var(--vs-action-tertiary-bg)] text-[var(--vs-action-tertiary-text)] hover:bg-[var(--vs-action-tertiary-hover)] hover:text-[var(--vs-text-primary)]",
-  soft: "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)] hover:bg-[color-mix(in_srgb,var(--vs-action-primary)_16%,transparent)]",
+  soft: "border-[var(--vs-action-soft-border)] bg-[var(--vs-action-soft-bg)] text-[var(--vs-action-soft-text)] hover:bg-[var(--vs-action-soft-hover)]",
   ghost:
     "border-transparent bg-transparent text-[var(--vs-text-muted)] hover:border-[var(--vs-border-subtle)] hover:bg-[var(--vs-action-tertiary-hover)] hover:text-[var(--vs-text-primary)]",
+  warning:
+    "border-[var(--vs-action-warning-border)] bg-[var(--vs-action-warning-bg)] text-[var(--vs-action-warning)] hover:bg-[var(--vs-action-warning-hover)]",
   destructive:
     "border-[var(--vs-action-destructive-border)] bg-[var(--vs-action-destructive-bg)] text-[var(--vs-action-destructive)] hover:bg-[var(--vs-action-destructive-hover)]",
   mode: "border-transparent bg-transparent text-[var(--vs-text-secondary)] hover:bg-[var(--vs-action-tertiary-hover)] hover:text-[var(--vs-text-primary)]",
   pinned:
-    "border-[var(--vs-pinned-border)] bg-[var(--vs-pinned)] text-[var(--vs-selected-text)] hover:bg-[color-mix(in_srgb,var(--vs-action-primary)_16%,transparent)]",
+    "border-[var(--vs-pinned-border)] bg-[var(--vs-pinned)] text-[var(--vs-pinned-text)] hover:bg-[var(--vs-action-soft-hover)]",
 };
 
 const selectedClassName =
@@ -62,7 +65,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   },
   ref,
 ) {
-  const shouldApplySelected = selected && variant !== "primary" && variant !== "destructive";
+  const shouldApplySelected =
+    selected && variant !== "primary" && variant !== "destructive" && variant !== "warning";
   const scrollSafeStyle = {
     scrollMarginBottom: "calc(var(--overlay-activity-footer-reserved, 5rem) + 1rem)",
     ...style,

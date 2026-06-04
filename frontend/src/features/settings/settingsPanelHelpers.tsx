@@ -150,7 +150,7 @@ export function PanelSection({
 
 export function AppliesToScope({ scope }: Readonly<{ scope: SettingsScope }>) {
   return (
-    <StatusChip className="gap-2" tone="neutral">
+    <StatusChip className="gap-2" tone="metadata">
       <span className="vs-muted">Applies to</span>
       <ScopeBadge scope={scope} />
     </StatusChip>

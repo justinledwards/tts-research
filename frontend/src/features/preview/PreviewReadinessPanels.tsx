@@ -1,4 +1,4 @@
-import { Button, StatusChip, type StatusChipTone } from "../../design";
+import { Button, Panel, StatusChip, type StatusChipTone } from "../../design";
 import type {
   PreviewReadinessModel,
   PreviewReadinessRow,
@@ -15,10 +15,12 @@ export interface PreviewVoiceAuditionState {
 
 export function PreviewReadinessChecklist({ model }: Readonly<{ model: PreviewReadinessModel }>) {
   return (
-    <section
+    <Panel
+      as="section"
       aria-label="Preview readiness checklist"
-      className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
+      className="grid gap-2 p-3"
       data-testid="preview-readiness-checklist"
+      variant={model.canCreate ? "workSurface" : "alert"}
     >
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold">Narration preflight</h3>
@@ -31,13 +33,13 @@ export function PreviewReadinessChecklist({ model }: Readonly<{ model: PreviewRe
           <PreviewReadinessItem key={row.id} row={row} />
         ))}
       </div>
-    </section>
+    </Panel>
   );
 }
 
 export function PreviewReadinessItem({ row }: Readonly<{ row: PreviewReadinessRow }>) {
   return (
-    <div className="min-w-0 rounded-md border bg-[var(--vs-raised)] p-3 vs-border">
+    <Panel as="div" className="p-3" variant="metadata">
       <div className="flex min-w-0 items-start justify-between gap-2">
         <h4 className="text-sm font-semibold">{row.label}</h4>
         <StatusChip tone={previewReadinessTone(row.status)}>
@@ -45,16 +47,18 @@ export function PreviewReadinessItem({ row }: Readonly<{ row: PreviewReadinessRo
         </StatusChip>
       </div>
       <p className="mt-2 text-xs leading-5 vs-muted">{row.detail}</p>
-    </div>
+    </Panel>
   );
 }
 
 export function PreviewConfirmationStrip({ model }: Readonly<{ model: PreviewReadinessModel }>) {
   return (
-    <section
+    <Panel
+      as="section"
       aria-label="Preview configuration confirmation"
-      className="grid gap-2 rounded-lg border bg-[var(--vs-raised)] p-3 vs-border md:grid-cols-3 xl:grid-cols-6"
+      className="grid gap-2 p-3 md:grid-cols-3 xl:grid-cols-6"
       data-testid="preview-confirmation-strip"
+      variant="metadata"
     >
       {model.confirmations.map((item) => (
         <div className="min-w-0" key={item.label}>
@@ -66,7 +70,7 @@ export function PreviewConfirmationStrip({ model }: Readonly<{ model: PreviewRea
           </p>
         </div>
       ))}
-    </section>
+    </Panel>
   );
 }
 
@@ -81,10 +85,12 @@ export function VoiceAuditionPanel({
 }>) {
   const disabled = Boolean(disabledReason) || state.status === "loading";
   return (
-    <section
+    <Panel
+      as="section"
       aria-label="Voice audition"
-      className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
+      className="grid gap-3 p-3"
       data-testid="preview-audition-panel"
+      variant="management"
     >
       <div>
         <h3 className="text-base font-semibold">Audition voice</h3>
@@ -92,7 +98,7 @@ export function VoiceAuditionPanel({
           Plays a short selected-block sample without creating full narration audio.
         </p>
       </div>
-      <p className="line-clamp-3 rounded-md bg-[var(--vs-raised)] px-3 py-2 text-sm leading-6 vs-border">
+      <p className="line-clamp-3 rounded-md px-3 py-2 text-sm leading-6 vs-work-surface">
         {sampleText || "Select a spoken block to audition."}
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -118,7 +124,7 @@ export function VoiceAuditionPanel({
         {state.metadata ? <span className="text-xs vs-muted">{state.metadata}</span> : null}
       </div>
       <p className="text-xs leading-5 vs-muted">{disabledReason ?? state.detail}</p>
-    </section>
+    </Panel>
   );
 }
 
@@ -133,7 +139,7 @@ export function previewReadinessTone(status: PreviewReadinessRowStatus): StatusC
     return "warning";
   }
   if (status === "blocked") {
-    return "warning";
+    return "failed";
   }
   return "neutral";
 }
@@ -162,7 +168,7 @@ export function voiceAuditionTone(status: PreviewVoiceAuditionState["status"]): 
     return "info";
   }
   if (status === "error") {
-    return "warning";
+    return "failed";
   }
   return "neutral";
 }

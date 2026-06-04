@@ -44,14 +44,14 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
         aria-label={label}
         aria-modal={modal ? true : undefined}
         className={cx(
-          "pointer-events-auto vs-app ml-auto flex h-full w-full max-w-[860px] flex-col border-l border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] shadow-2xl md:w-[820px]",
+          "pointer-events-auto vs-app vs-workbench ml-auto flex h-full w-full max-w-[860px] flex-col border-l border-[var(--vs-border-subtle)] shadow-2xl md:w-[820px]",
           className,
         )}
         ref={ref}
         role="dialog"
         tabIndex={-1}
       >
-        <header className="flex items-center justify-between gap-3 border-b border-[var(--vs-border-subtle)] px-5 py-4">
+        <header className="flex items-center justify-between gap-3 border-b px-5 py-4 vs-work-surface">
           <DrawerTitleSummary
             label={label}
             metadata={metadata}

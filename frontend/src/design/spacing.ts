@@ -3,11 +3,13 @@ export const touchTargetPx = minInteractiveSize;
 
 export const spacing = {
   actionGap: "gap-2",
+  metadataGap: "gap-1.5",
   panelGap: "gap-3",
   sectionGap: "gap-4",
   compactPadding: "p-3",
   comfortablePadding: "p-4",
   spaciousPadding: "p-5",
+  workbenchPadding: "p-4 sm:p-5",
 } as const;
 
 export const radius = {

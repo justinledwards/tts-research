@@ -58,7 +58,7 @@ export function TelepromptCurrentCueStage({
   workModeDataAttributes: Record<string, string | undefined>;
   workModeDetail: string;
   workModeLabel: string;
-  workModeTone: "neutral" | "accent" | "success" | "warning" | "danger" | "info" | "pinned";
+  workModeTone: StatusChipTone;
 }>) {
   const spokenText = block ? block.spokenText || block.text : "";
   const shouldRenderCue =
@@ -88,7 +88,7 @@ export function TelepromptCurrentCueStage({
         "grid min-h-[30rem] gap-4 rounded-lg border p-4 shadow-sm sm:min-h-[34rem] sm:p-5 xl:min-h-[40rem]",
         highContrast
           ? "border-[var(--vs-border-strong)] bg-[var(--vs-theatre-bg)] text-[var(--vs-theatre-text)]"
-          : "border-[var(--vs-selected-border)] bg-[var(--vs-surface)]",
+          : "border-[var(--vs-selected-border)] vs-work-surface",
       )}
       data-testid="teleprompt-current-cue-stage"
       data-teleprompt-cue-priority="primary"
@@ -222,7 +222,7 @@ export function TelepromptScriptBlock({
         <span>
           Cue {block.index.toString()}: {block.label}
         </span>
-        {active ? <StatusChip tone="success">Selected</StatusChip> : null}
+        {active ? <StatusChip tone="selected">Selected</StatusChip> : null}
       </button>
       <p className={cx("whitespace-pre-wrap", readingSurfaceClassName("cue"), presetClassName)}>
         {shouldRenderCue ? (
@@ -370,11 +370,11 @@ export function TelepromptBlockPreview({
   words,
 }: Readonly<{ block: RevisionBlock | null; label: string; words?: number }>) {
   return (
-    <Panel className="grid gap-2 p-3" variant="surface">
+    <Panel className="grid gap-2 p-3" variant="metadata">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">{label}</p>
         {block ? (
-          <StatusChip tone="neutral">
+          <StatusChip tone="metadata">
             {words?.toLocaleString() ?? countTelepromptWords(block.spokenText)} words
           </StatusChip>
         ) : null}
@@ -389,7 +389,7 @@ export function TelepromptBlockPreview({
 
 export function TelepromptMetric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
-    <div className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+    <div className="rounded-lg border p-3 vs-metadata-surface">
       <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] vs-muted">{label}</dt>
       <dd className="mt-1 text-base font-semibold">{value}</dd>
     </div>

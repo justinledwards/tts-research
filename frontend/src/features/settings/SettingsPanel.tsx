@@ -427,7 +427,7 @@ export function SettingsPanel({
         />
       ) : (
         <div className="mt-5 grid min-h-0 gap-4 lg:grid-cols-[210px_minmax(0,1fr)]">
-          <Panel as="nav" className="grid content-start gap-2 p-2" variant="surface">
+          <Panel as="nav" className="grid content-start gap-2 p-2" variant="inspector">
             <p className="px-2 pb-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
               {activeLayerMeta.label}
             </p>
@@ -451,7 +451,7 @@ export function SettingsPanel({
           </Panel>
 
           <div className="min-w-0">
-            <Panel className="mb-4 grid gap-3 p-4" variant="surface">
+            <Panel className="mb-4 grid gap-3 p-4" variant="workSurface">
               <div>
                 <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
                   {activeMeta.label}
@@ -595,7 +595,7 @@ function SettingsLayerSwitcher({
   onSelectLayer: (layerId: SettingsLayerId) => void;
 }>) {
   return (
-    <Panel className="grid gap-3 p-4" variant="raised">
+    <Panel className="grid gap-3 p-4" variant="management">
       <div className="grid gap-2 md:grid-cols-3">
         {SETTINGS_LAYERS.map((layer) => (
           <Button
@@ -746,7 +746,7 @@ function QuickSettings({
             )
           : false
       }
-      variant="raised"
+      variant="workSurface"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -912,7 +912,7 @@ function QuickSettings({
         </Button>
       </div>
       <SettingsAuditSummary rows={settingsAuditRows} />
-      <Panel className="grid gap-2 p-3" variant="surface">
+      <Panel className="grid gap-2 p-3" variant="management">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
           More configuration
         </p>
@@ -945,7 +945,7 @@ function QuickFact({
   value,
 }: Readonly<{ label: string; scope: SettingsScope; value: string }>) {
   return (
-    <div className="grid gap-1 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs vs-border">
+    <div className="grid gap-1 rounded-md border px-3 py-2 text-xs vs-metadata-surface">
       <span className="flex items-center gap-2 font-semibold">
         {label}
         <ScopeBadge scope={scope} />
@@ -1066,7 +1066,7 @@ function ErgonomicPresetControls({
       className="grid gap-3 p-3"
       data-settings-command-targets="field-ergonomicPresets scope-machine scope-session scope-project"
       data-testid="settings-ergonomic-presets"
-      variant="surface"
+      variant="management"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -1125,7 +1125,7 @@ function ErgonomicPresetControls({
           >
             Apply speech policy
           </Button>
-          <Panel className="grid gap-1 px-3 py-2 text-xs" variant="raised">
+          <Panel className="grid gap-1 px-3 py-2 text-xs" variant="metadata">
             <span className="font-semibold">Source pins stay unchanged</span>
             <span className="vs-muted leading-5">
               Individual controls below remain editable after applying a preset.
@@ -1140,7 +1140,7 @@ function ErgonomicPresetControls({
 function PresetChangeSetView({ changeSet }: Readonly<{ changeSet: PresetChangeSet }>) {
   return (
     <div
-      className="grid gap-3 rounded-md border bg-[var(--vs-raised)] p-3 vs-border"
+      className="grid gap-3 rounded-md border p-3 vs-work-surface"
       data-testid="ergonomic-preset-preview"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">

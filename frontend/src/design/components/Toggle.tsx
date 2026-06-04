@@ -29,8 +29,24 @@ export function Toggle({
       )}
     >
       <span className="min-w-0">
-        <span className="block font-semibold text-[var(--vs-text)]">{label}</span>
-        {detail ? <span className="mt-1 block text-xs leading-5 vs-muted">{detail}</span> : null}
+        <span
+          className={cx(
+            "block font-semibold",
+            disabled ? "text-[var(--vs-action-disabled-text)]" : "text-[var(--vs-text-primary)]",
+          )}
+        >
+          {label}
+        </span>
+        {detail ? (
+          <span
+            className={cx(
+              "mt-1 block text-xs leading-5",
+              disabled ? "text-[var(--vs-action-disabled-text)]" : "vs-muted",
+            )}
+          >
+            {detail}
+          </span>
+        ) : null}
       </span>
       <input
         {...inputProps}

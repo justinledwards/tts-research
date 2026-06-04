@@ -8,16 +8,29 @@
   --vs-surface-secondary: #f4eadc;
   --vs-surface-muted: #ede1d0;
   --vs-surface-inspector: #f9f1e7;
+  --vs-surface-management: #f1e4d4;
+  --vs-surface-status-strip: #fff4e6;
+  --vs-surface-alert: #fff4f1;
+  --vs-surface-metadata: #efe2d1;
   --vs-surface-overlay: rgb(23 19 15 / 0.34);
   --vs-text-primary: #17130f;
   --vs-text-secondary: #45382e;
   --vs-text-muted: #6d5f52;
   --vs-text-passive: #837467;
+  --vs-text-disabled: #66584c;
   --vs-border-subtle: #e4d5c2;
   --vs-border-strong: #c6a882;
+  --vs-border-management: #d1b690;
+  --vs-border-status-strip: #d7b17e;
+  --vs-border-alert: #dea39b;
+  --vs-border-metadata: #d8c6ad;
   --vs-action-primary: #c2410c;
   --vs-action-primary-hover: #9a3412;
   --vs-action-primary-text: #fffaf5;
+  --vs-action-soft-bg: #fff3e5;
+  --vs-action-soft-hover: #fee5ca;
+  --vs-action-soft-text: #85340a;
+  --vs-action-soft-border: #e3aa70;
   --vs-action-secondary-bg: #fffaf5;
   --vs-action-secondary-hover: #f4eadc;
   --vs-action-secondary-text: #2d241d;
@@ -25,25 +38,35 @@
   --vs-action-tertiary-bg: transparent;
   --vs-action-tertiary-hover: #f1e4d2;
   --vs-action-tertiary-text: #5b4634;
+  --vs-action-warning: #763900;
+  --vs-action-warning-bg: #fff2cc;
+  --vs-action-warning-hover: #ffe6a3;
+  --vs-action-warning-border: #d39b36;
   --vs-action-destructive: #b42318;
-  --vs-action-destructive-bg: rgb(180 35 24 / 0.1);
-  --vs-action-destructive-hover: rgb(180 35 24 / 0.16);
-  --vs-action-destructive-border: #e5aaa3;
-  --vs-action-disabled-bg: #e9ddcb;
-  --vs-action-disabled-text: #76685b;
-  --vs-action-disabled-border: #d6c7b5;
+  --vs-action-destructive-bg: #fff1f0;
+  --vs-action-destructive-hover: #ffe2df;
+  --vs-action-destructive-border: #df938b;
+  --vs-action-disabled-bg: #eee3d4;
+  --vs-action-disabled-text: #66584c;
+  --vs-action-disabled-border: #d7c7b3;
   --vs-status-info: #1d4ed8;
   --vs-status-info-bg: rgb(37 99 235 / 0.1);
   --vs-status-info-border: #b8cdfa;
   --vs-status-success: #047857;
   --vs-status-success-bg: rgb(4 120 87 / 0.1);
   --vs-status-success-border: #96d8c5;
-  --vs-status-warning: #8a3f0b;
-  --vs-status-warning-bg: rgb(217 119 6 / 0.13);
-  --vs-status-warning-border: #dfb56d;
+  --vs-status-warning: #763900;
+  --vs-status-warning-bg: #fff2cc;
+  --vs-status-warning-border: #d39b36;
   --vs-status-danger: #b42318;
-  --vs-status-danger-bg: rgb(180 35 24 / 0.1);
-  --vs-status-danger-border: #e5aaa3;
+  --vs-status-danger-bg: #fff1f0;
+  --vs-status-danger-border: #df938b;
+  --vs-status-disabled-bg: var(--vs-action-disabled-bg);
+  --vs-status-disabled-border: var(--vs-action-disabled-border);
+  --vs-status-disabled-text: var(--vs-action-disabled-text);
+  --vs-status-metadata-bg: var(--vs-surface-metadata);
+  --vs-status-metadata-border: var(--vs-border-metadata);
+  --vs-status-metadata-text: var(--vs-text-secondary);
   --vs-focus-ring: #b45309;
   --vs-focus-ring-soft: rgb(217 119 6 / 0.28);
   --vs-highlight-current-word: rgb(194 65 12 / 0.22);
@@ -63,11 +86,12 @@
   --vs-border: var(--vs-border-subtle);
   --vs-accent: var(--vs-action-primary);
   --vs-generating: var(--vs-status-info);
-  --vs-selected: rgb(194 65 12 / 0.11);
-  --vs-selected-border: #db8b44;
-  --vs-selected-text: #8f330c;
-  --vs-pinned: rgb(194 65 12 / 0.14);
-  --vs-pinned-border: rgb(194 65 12 / 0.46);
+  --vs-selected: #fff1df;
+  --vs-selected-border: #d78337;
+  --vs-selected-text: #7c2d12;
+  --vs-pinned: #f7ead5;
+  --vs-pinned-border: #b8894b;
+  --vs-pinned-text: #5f3d14;
   --vs-danger: var(--vs-status-danger);
   --vs-danger-soft: var(--vs-status-danger-bg);
   --vs-danger-border: var(--vs-status-danger-border);
@@ -122,21 +146,59 @@ body {
   --vs-surface-secondary: var(--vs-theatre-panel);
   --vs-surface-muted: rgb(255 247 237 / 0.05);
   --vs-surface-inspector: rgb(255 247 237 / 0.07);
+  --vs-surface-management: rgb(255 247 237 / 0.1);
+  --vs-surface-status-strip: rgb(5 5 5 / 0.96);
+  --vs-surface-alert: rgb(127 29 29 / 0.26);
+  --vs-surface-metadata: rgb(255 247 237 / 0.09);
   --vs-text-primary: var(--vs-theatre-text);
   --vs-text-secondary: #f3dfca;
   --vs-text-muted: var(--vs-theatre-muted);
+  --vs-text-passive: #bda996;
+  --vs-text-disabled: #cdbba9;
   --vs-border-subtle: var(--vs-theatre-panel-border);
   --vs-border-strong: rgb(251 146 60 / 0.56);
+  --vs-border-management: rgb(255 247 237 / 0.22);
+  --vs-border-status-strip: rgb(251 146 60 / 0.38);
+  --vs-border-alert: rgb(248 113 113 / 0.5);
+  --vs-border-metadata: rgb(255 247 237 / 0.18);
   --vs-action-primary: #fb923c;
   --vs-action-primary-hover: #fdba74;
   --vs-action-primary-text: #1f1308;
+  --vs-action-soft-bg: rgb(251 146 60 / 0.14);
+  --vs-action-soft-hover: rgb(251 146 60 / 0.22);
+  --vs-action-soft-text: #fed7aa;
+  --vs-action-soft-border: rgb(251 146 60 / 0.44);
   --vs-action-secondary-bg: rgb(255 247 237 / 0.08);
   --vs-action-secondary-hover: rgb(255 247 237 / 0.14);
   --vs-action-secondary-text: var(--vs-theatre-text);
   --vs-action-secondary-border: var(--vs-theatre-panel-border);
+  --vs-action-warning: #fde68a;
+  --vs-action-warning-bg: rgb(245 158 11 / 0.2);
+  --vs-action-warning-hover: rgb(245 158 11 / 0.28);
+  --vs-action-warning-border: rgb(251 191 36 / 0.58);
   --vs-action-disabled-bg: rgb(255 247 237 / 0.1);
   --vs-action-disabled-text: #cdbba9;
   --vs-action-disabled-border: rgb(255 247 237 / 0.14);
+  --vs-status-info: #93c5fd;
+  --vs-status-info-bg: rgb(59 130 246 / 0.16);
+  --vs-status-info-border: rgb(96 165 250 / 0.48);
+  --vs-status-success: #86efac;
+  --vs-status-success-bg: rgb(34 197 94 / 0.16);
+  --vs-status-success-border: rgb(74 222 128 / 0.5);
+  --vs-status-warning: #fde68a;
+  --vs-status-warning-bg: rgb(245 158 11 / 0.2);
+  --vs-status-warning-border: rgb(251 191 36 / 0.58);
+  --vs-status-danger: #fca5a5;
+  --vs-status-danger-bg: rgb(239 68 68 / 0.16);
+  --vs-status-danger-border: rgb(248 113 113 / 0.54);
+  --vs-status-disabled-bg: var(--vs-action-disabled-bg);
+  --vs-status-disabled-border: var(--vs-action-disabled-border);
+  --vs-status-disabled-text: var(--vs-action-disabled-text);
+  --vs-status-metadata-bg: var(--vs-surface-metadata);
+  --vs-status-metadata-border: var(--vs-border-metadata);
+  --vs-status-metadata-text: var(--vs-text-secondary);
+  --vs-highlight-current-word: rgb(251 146 60 / 0.32);
+  --vs-highlight-current-word-strong: #fff7ed;
   --vs-accent: var(--vs-theatre-accent);
   color-scheme: dark;
 }
@@ -172,22 +234,39 @@ select {
   --vs-surface-secondary: #231d17;
   --vs-surface-muted: #2c241d;
   --vs-surface-inspector: #18130f;
+  --vs-surface-management: #211a14;
+  --vs-surface-status-strip: #18130f;
+  --vs-surface-alert: #261613;
+  --vs-surface-metadata: #2a221b;
   --vs-surface-overlay: rgb(0 0 0 / 0.58);
   --vs-text-primary: #fff7ed;
   --vs-text-secondary: #ead9c7;
   --vs-text-muted: #c7b29f;
   --vs-text-passive: #a89584;
+  --vs-text-disabled: #ad9b8b;
   --vs-border-subtle: rgb(255 237 213 / 0.14);
   --vs-border-strong: rgb(255 237 213 / 0.28);
+  --vs-border-management: rgb(255 237 213 / 0.2);
+  --vs-border-status-strip: rgb(251 146 60 / 0.36);
+  --vs-border-alert: rgb(248 113 113 / 0.48);
+  --vs-border-metadata: rgb(255 237 213 / 0.16);
   --vs-action-primary: #fb923c;
   --vs-action-primary-hover: #fdba74;
   --vs-action-primary-text: #1e1208;
+  --vs-action-soft-bg: rgb(251 146 60 / 0.14);
+  --vs-action-soft-hover: rgb(251 146 60 / 0.22);
+  --vs-action-soft-text: #fed7aa;
+  --vs-action-soft-border: rgb(251 146 60 / 0.44);
   --vs-action-secondary-bg: #241d17;
   --vs-action-secondary-hover: #31271e;
   --vs-action-secondary-text: #fff7ed;
   --vs-action-secondary-border: rgb(255 237 213 / 0.18);
   --vs-action-tertiary-hover: rgb(255 237 213 / 0.08);
   --vs-action-tertiary-text: #ead9c7;
+  --vs-action-warning: #fde68a;
+  --vs-action-warning-bg: rgb(245 158 11 / 0.2);
+  --vs-action-warning-hover: rgb(245 158 11 / 0.28);
+  --vs-action-warning-border: rgb(251 191 36 / 0.58);
   --vs-action-destructive: #fecaca;
   --vs-action-destructive-bg: rgb(248 113 113 / 0.15);
   --vs-action-destructive-hover: rgb(248 113 113 / 0.22);
@@ -207,11 +286,18 @@ select {
   --vs-status-danger: #fca5a5;
   --vs-status-danger-bg: rgb(239 68 68 / 0.16);
   --vs-status-danger-border: rgb(248 113 113 / 0.54);
+  --vs-status-disabled-bg: var(--vs-action-disabled-bg);
+  --vs-status-disabled-border: var(--vs-action-disabled-border);
+  --vs-status-disabled-text: var(--vs-action-disabled-text);
+  --vs-status-metadata-bg: var(--vs-surface-metadata);
+  --vs-status-metadata-border: var(--vs-border-metadata);
+  --vs-status-metadata-text: var(--vs-text-secondary);
   --vs-selected: rgb(251 146 60 / 0.18);
   --vs-selected-border: rgb(251 146 60 / 0.6);
   --vs-selected-text: #fed7aa;
-  --vs-pinned: rgb(251 146 60 / 0.2);
-  --vs-pinned-border: rgb(251 146 60 / 0.62);
+  --vs-pinned: rgb(250 204 21 / 0.14);
+  --vs-pinned-border: rgb(250 204 21 / 0.48);
+  --vs-pinned-text: #fde68a;
   --vs-focus-ring: #fb923c;
   --vs-focus-ring-soft: rgb(251 146 60 / 0.24);
   --vs-highlight-current-word: rgb(251 146 60 / 0.24);
@@ -348,6 +434,48 @@ select {
   box-shadow: var(--vs-shadow);
 }
 
+.vs-app-shell {
+  border-color: var(--vs-border-subtle);
+  background: var(--vs-shell);
+  color: var(--vs-text-primary);
+}
+
+.vs-workbench {
+  border-color: var(--vs-border-subtle);
+  background: var(--vs-workspace);
+  color: var(--vs-text-primary);
+}
+
+.vs-work-surface {
+  border-color: var(--vs-border-subtle);
+  background: var(--vs-surface-primary);
+  color: var(--vs-text-primary);
+}
+
+.vs-management-surface {
+  border-color: var(--vs-border-management);
+  background: var(--vs-surface-management);
+  color: var(--vs-text-primary);
+}
+
+.vs-status-strip-surface {
+  border-color: var(--vs-border-status-strip);
+  background: var(--vs-surface-status-strip);
+  color: var(--vs-text-primary);
+}
+
+.vs-alert-surface {
+  border-color: var(--vs-border-alert);
+  background: var(--vs-surface-alert);
+  color: var(--vs-text-primary);
+}
+
+.vs-metadata-surface {
+  border-color: var(--vs-border-metadata);
+  background: var(--vs-surface-metadata);
+  color: var(--vs-text-secondary);
+}
+
 .vs-muted {
   color: var(--vs-text-muted);
 }
@@ -383,6 +511,24 @@ select {
   color: var(--vs-text-primary);
 }
 
+.vs-panel-management {
+  border-color: var(--vs-border-management);
+  background: var(--vs-surface-management);
+  color: var(--vs-text-primary);
+}
+
+.vs-panel-status {
+  border-color: var(--vs-border-status-strip);
+  background: var(--vs-surface-status-strip);
+  color: var(--vs-text-primary);
+}
+
+.vs-panel-alert {
+  border-color: var(--vs-border-alert);
+  background: var(--vs-surface-alert);
+  color: var(--vs-text-primary);
+}
+
 .vs-panel-muted {
   border-color: var(--vs-border-subtle);
   background: var(--vs-surface-muted);
@@ -403,6 +549,10 @@ select {
 
 .vs-text-passive {
   color: var(--vs-text-passive);
+}
+
+.vs-text-disabled {
+  color: var(--vs-text-disabled);
 }
 
 .vs-alert-info {

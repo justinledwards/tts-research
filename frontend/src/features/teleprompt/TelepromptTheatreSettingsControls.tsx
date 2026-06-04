@@ -41,7 +41,7 @@ export function TelepromptTheatreSettingsControls({
     <Panel
       className={variant === "compact" ? "grid gap-3 p-3" : "grid gap-4 p-3"}
       data-testid="teleprompt-theatre-settings"
-      variant="surface"
+      variant="management"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>

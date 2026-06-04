@@ -68,10 +68,10 @@ export function SourceLifecycleCard({
             <StatusChip tone={audioTone(envelope.generatedAudioState)}>
               {generatedAudioStateLabel(envelope.generatedAudioState)}
             </StatusChip>
-            <StatusChip tone={envelope.policyScope === "source" ? "pinned" : "neutral"}>
+            <StatusChip tone={envelope.policyScope === "source" ? "pinned" : "metadata"}>
               {sourcePolicyScopeLabel(envelope.policyScope)}
             </StatusChip>
-            {selected ? <StatusChip tone="accent">Active source</StatusChip> : null}
+            {selected ? <StatusChip tone="selected">Active source</StatusChip> : null}
           </div>
           <p className="vs-muted mt-1 text-xs leading-5">
             {sourceKindLabel(envelope.sourceKind)} · {sourceAdapterLabel(envelope.adapterKind)} ·{" "}
@@ -101,7 +101,7 @@ function sourceLifecycleTone(tone: SourceLifecycleEnvelopeTone): StatusChipTone 
     return "pinned";
   }
   if (tone === "accent") {
-    return "accent";
+    return "selected";
   }
   if (tone === "danger") {
     return "danger";
@@ -115,7 +115,7 @@ function sourceLifecycleTone(tone: SourceLifecycleEnvelopeTone): StatusChipTone 
   if (tone === "warning") {
     return "warning";
   }
-  return "neutral";
+  return "metadata";
 }
 
 function audioTone(state: SourceLifecycleEnvelope["generatedAudioState"]): StatusChipTone {
@@ -131,7 +131,7 @@ function audioTone(state: SourceLifecycleEnvelope["generatedAudioState"]): Statu
   if (state === "ready") {
     return "success";
   }
-  return "neutral";
+  return "metadata";
 }
 
 type SourceLifecycleEnvelopeTone = ReturnType<typeof sourceLifecycleDescriptor>["tone"];

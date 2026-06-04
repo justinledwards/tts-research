@@ -1164,10 +1164,10 @@ export function TelepromptStudio({
         className="grid gap-3 p-4"
         data-teleprompt-work-mode={workMode}
         data-testid="teleprompt-studio"
-        variant="raised"
+        variant="workSurface"
       >
         <section
-          className="flex min-w-0 flex-col gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border lg:flex-row lg:items-center lg:justify-between"
+          className="flex min-w-0 flex-col gap-2 rounded-lg border p-3 vs-metadata-surface lg:flex-row lg:items-center lg:justify-between"
           data-testid="teleprompt-source-strip"
         >
           <div className="min-w-0">
@@ -1182,8 +1182,8 @@ export function TelepromptStudio({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <StatusChip tone="neutral">{totalWords.toLocaleString()} words</StatusChip>
-            <StatusChip tone="neutral">{formatTelepromptDuration(estimatedDurationMs)}</StatusChip>
+            <StatusChip tone="metadata">{totalWords.toLocaleString()} words</StatusChip>
+            <StatusChip tone="metadata">{formatTelepromptDuration(estimatedDurationMs)}</StatusChip>
             <StatusChip tone={audioStatusTone}>{audioStatusLabel}</StatusChip>
           </div>
         </section>
@@ -1215,7 +1215,7 @@ export function TelepromptStudio({
             <LocalizedPlaybackToolbar
               model={{ ...telepromptPlaybackToolbar, variant: "compact" }}
             />
-            <div className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 shadow-sm vs-border">
+            <div className="grid gap-3 rounded-lg border p-3 shadow-sm vs-management-surface">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
@@ -1243,7 +1243,7 @@ export function TelepromptStudio({
             </div>
 
             {showAudioFollowRecovery ? (
-              <section className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 shadow-sm vs-border">
+              <section className="grid gap-2 rounded-lg border p-3 shadow-sm vs-alert-surface">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
