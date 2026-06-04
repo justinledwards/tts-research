@@ -13,7 +13,14 @@ import { defaultUiMemoryState } from "../preferences";
 import { DEFAULT_SHORTCUT_PREFERENCES } from "../shortcuts/shortcutRegistry";
 import { SettingsPanel } from "./SettingsPanel";
 import type { SettingsCommandTarget } from "./model";
-import type { CustomSpeechPolicyProfile, TTSEngineDiagnostics } from "../../types";
+import type {
+  AdapterDiagnostics,
+  CustomSpeechPolicyProfile,
+  ProjectStorageSummary,
+  SystemMetrics,
+  TTSEngineDiagnostics,
+  VoiceJob,
+} from "../../types";
 
 const noop = () => {
   // Test callback.
@@ -26,24 +33,31 @@ const asyncNoop = async () => {
 function renderSettingsPanel(
   commandTarget?: SettingsCommandTarget,
   options: Readonly<{
+    adapterDiagnostics?: Record<string, AdapterDiagnostics> | null;
     customSpeechPolicyProfiles?: CustomSpeechPolicyProfile[];
+    job?: VoiceJob | null;
+    metrics?: SystemMetrics | null;
+    projectStorage?: ProjectStorageSummary | null;
+    sourceFallbackLabel?: string | null;
     speechPolicyProfile?: string;
     ttsEngines?: TTSEngineDiagnostics[];
   }> = {},
 ): string {
   return renderToStaticMarkup(
     <SettingsPanel
+      adapterDiagnostics={options.adapterDiagnostics ?? null}
+      adapterDiagnosticsError={null}
       canSubmit
       commandTarget={commandTarget}
       customSpeechPolicyProfiles={options.customSpeechPolicyProfiles ?? []}
       isOpen
       isSpeechPolicyPreviewing={false}
-      job={null}
-      metrics={null}
+      job={options.job ?? null}
+      metrics={options.metrics ?? null}
       metricsError={null}
       profileSource={null}
       profileSourceDiagnostics={null}
-      projectStorage={null}
+      projectStorage={options.projectStorage ?? null}
       projectStorageError={null}
       readerAccessibilitySettings={DEFAULT_READER_ACCESSIBILITY_SETTINGS}
       readAlongPreferences={DEFAULT_READ_ALONG_PREFERENCES}
@@ -53,6 +67,7 @@ function renderSettingsPanel(
       selectedPreparedSource={null}
       selectedProfile={null}
       sourceMode="text"
+      sourceFallbackLabel={options.sourceFallbackLabel ?? "Draft text"}
       sourcePolicySavingKey={null}
       speechPolicyDefinition={DEFAULT_SPEECH_POLICY_DEFINITION}
       speechPolicyError={null}
@@ -262,4 +277,185 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Forced alignment required");
     expect(markup).toContain('data-command-id="readalong:word-highlight"');
   });
+
+  it("renders expert diagnostic facts with copy and JSON export controls", () => {
+    const markup = renderSettingsPanel(
+      {
+        groupId: "diagnostics",
+        layerId: "expert",
+        scope: "machine",
+      },
+      {
+        adapterDiagnostics: {
+          markdown: {
+            adapterId: "markdown",
+            available: true,
+            cliPath: "/usr/bin/markdown",
+            status: "available",
+          },
+        },
+        job: job({
+          failureKind: "engine",
+          status: "failed",
+          terminalReason: "provider_timeout",
+        }),
+        metrics: metrics(),
+        projectStorage: storage(),
+        ttsEngines: [
+          engine({
+            estimatedVram: "6 GB",
+            modelCache: "/models/kokoro",
+          }),
+        ],
+      },
+    );
+
+    expect(markup).toContain("Diagnostic summary");
+    expect(markup).toContain("Copy diagnostic summary");
+    expect(markup).toContain("Download diagnostics JSON");
+    expect(markup).toContain("Provider readiness");
+    expect(markup).toContain("failedJob");
+    expect(markup).toContain("Terminal reason");
+    expect(markup).toContain("provider_timeout");
+    expect(markup).toContain("Backend, process, host, and GPU");
+    expect(markup).toContain("Test GPU");
+    expect(markup).toContain("8,000/24,000 MiB");
+    expect(markup).toContain("Adapter diagnostics");
+    expect(markup).toContain("markdown");
+    expect(markup).toContain("/usr/bin/markdown");
+    expect(markup).toContain("Technical storage details");
+    expect(markup).toContain("/opt/tts-research-test/audio");
+    expect(markup).toContain("Engine health");
+    expect(markup).toContain("/models/kokoro");
+    expect(markup).toContain("Run configuration and speech policy JSON");
+    expect(markup).toContain("Active run configuration");
+    expect(markup).toContain("Speech policy and overrides");
+  });
 });
+
+function engine(overrides: Partial<TTSEngineDiagnostics> = {}): TTSEngineDiagnostics {
+  return {
+    default: true,
+    experimental: false,
+    id: "kokoro",
+    label: "Kokoro",
+    local: true,
+    status: "ready",
+    supportsReference: false,
+    supportsSSML: false,
+    supportsSwedish: true,
+    supportsVoice: true,
+    ...overrides,
+  };
+}
+
+function metrics(): SystemMetrics {
+  return {
+    collectedAt: "2026-06-04T09:00:00.000Z",
+    gpus: [
+      {
+        index: 0,
+        memoryFreeMiB: 16_000,
+        memoryTotalMiB: 24_000,
+        memoryUsedMiB: 8000,
+        name: "Test GPU",
+        powerDrawW: 50,
+        powerLimitW: 200,
+        temperatureCelsius: 54,
+        utilizationGpuPct: 10,
+        utilizationMemPct: 5,
+        uuid: "gpu-1",
+      },
+    ],
+    host: {
+      cpuCount: 8,
+      goMaxProcs: 8,
+      hostname: "test-host",
+      kernel: "test-kernel",
+      loadAvg1: 0.1,
+      loadAvg15: 0.3,
+      loadAvg5: 0.2,
+      memAvailableBytes: 512,
+      memTotalBytes: 1024,
+      os: "linux",
+      swapFreeBytes: 0,
+      swapTotalBytes: 0,
+    },
+    process: {
+      heapAllocBytes: 128,
+      numGoroutines: 4,
+      pid: 123,
+      rssBytes: 4096,
+      runtime: "go-test",
+      sysBytes: 512,
+      threads: 3,
+      totalAllocBytes: 256,
+      vmSizeBytes: 8192,
+      workingDir: "/opt/tts-research-test",
+    },
+    serviceVersion: "frontend-test",
+    warnings: [],
+  };
+}
+
+function storage(): ProjectStorageSummary {
+  return {
+    bookSourceBytes: 1024,
+    bookSourceCount: 1,
+    directories: {
+      audio: "/opt/tts-research-test/audio",
+      sources: "/opt/tts-research-test/sources",
+    },
+    downloads: [],
+    generatedAudioBytes: 2048,
+    jobBytes: 512,
+    jobCount: 1,
+    preparedSourceBytes: 256,
+    preparedSourceCount: 1,
+    projectId: "project-1",
+    projectName: "Project",
+    totalBytes: 3840,
+    updatedAt: "2026-06-04T09:00:00.000Z",
+  };
+}
+
+function job(overrides: Partial<VoiceJob> = {}): VoiceJob {
+  return {
+    audioUrl: "/audio.wav",
+    contentType: "audio/wav",
+    createdAt: "2026-06-04T08:59:00.000Z",
+    durationMs: 1000,
+    error: "Provider timed out.",
+    id: "job-1",
+    inputText: "Hello",
+    optimizedText: "Hello",
+    optimizer: "none",
+    progress: {
+      activeStage: "synthesis",
+      detail: "Provider timed out.",
+      message: "Provider timed out",
+    },
+    projectId: "project-1",
+    provider: "kokoro",
+    retries: {
+      attempts: 1,
+      currentSegment: 1,
+      maxRetries: 1,
+      segmentAttempts: 1,
+      totalSegments: 1,
+    },
+    stages: {},
+    status: "completed",
+    updatedAt: "2026-06-04T09:00:00.000Z",
+    voice: "default",
+    voiceCheck: {
+      complete: false,
+      needsResume: false,
+      provider: "none",
+      reason: "",
+      similarity: 0,
+      transcript: "",
+    },
+    ...overrides,
+  } as VoiceJob;
+}

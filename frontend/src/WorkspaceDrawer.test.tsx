@@ -2,14 +2,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { WorkspaceDrawer } from "./WorkspaceDrawer";
 import type {
+  AdapterDiagnostics,
   BookSource,
   PreparedSource,
   ProjectStorageSummary,
   SystemMetrics,
+  TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
   VoiceProject,
 } from "./types";
+import type { NarrationStatusModel } from "./features/status-strip";
 
 describe("Command Center", () => {
   it("renders consolidated IA and return behavior", () => {
@@ -122,12 +125,63 @@ describe("Command Center", () => {
   it("shows reports and storage summary", () => {
     const markup = renderToStaticMarkup(<WorkspaceDrawer {...props()} activeSection="reports" />);
 
-    expect(markup).toContain("frontend-test online");
+    expect(markup).toContain("Health report");
+    expect(markup).toContain("Ready to narrate");
+    expect(markup).toContain("Provider readiness");
+    expect(markup).toContain("Source extraction");
+    expect(markup).toContain("Job health");
     expect(markup).toContain("Test GPU");
+    expect(markup).toContain("Test GPU - 6,000/24,000 MiB VRAM");
     expect(markup).toContain("Storage");
-    expect(markup).toContain("Open diagnostics");
-    expect(markup).toContain("deeper Settings diagnostics");
+    expect(markup).toContain("Open Expert Diagnostics");
+    expect(markup).not.toContain("Model cache");
+    expect(markup).not.toContain("Active run configuration");
     expect(markup).not.toContain("Inspector");
+  });
+
+  it("links failed generation reports to job health and expert diagnostics", () => {
+    const failedJob = job({
+      failureKind: "engine",
+      status: "failed",
+      terminalReason: "provider_failed",
+    });
+    const markup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="reports"
+        job={failedJob}
+        projectJobs={[failedJob]}
+      />,
+    );
+
+    expect(markup).toContain("Failed generation");
+    expect(markup).toContain("Terminal reason: provider_failed");
+    expect(markup).toContain("Failure kind: engine");
+    expect(markup).toContain('href="#command-center-report-job-health"');
+    expect(markup).toContain("Open Expert Diagnostics");
+  });
+
+  it("uses the same status chip labels and tones as the bottom status strip model", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="reports"
+        narrationStatusModel={statusModel([
+          statusChip({
+            detail: "Open Review and fix two warnings.",
+            label: "Review",
+            tone: "warning",
+            value: "2 warnings",
+          }),
+        ])}
+      />,
+    );
+
+    expect(markup).toContain("Status strip blockers");
+    expect(markup).toContain("Review");
+    expect(markup).toContain("2 warnings");
+    expect(markup).toContain("Open Review and fix two warnings.");
+    expect(markup).toContain("vs-status-warning");
   });
 
   it("keeps empty and idle states quiet", () => {
@@ -162,9 +216,10 @@ describe("Command Center", () => {
     expect(assetsMarkup).toContain("No saved voice profiles yet.");
     expect(activityMarkup).toContain("No active background work.");
     expect(activityMarkup).toContain("Idle");
-    expect(reportsMarkup).toContain("Provider status pending");
+    expect(reportsMarkup).toContain("Health report");
+    expect(reportsMarkup).toContain("Pending");
     expect(reportsMarkup).toContain("GPU telemetry unavailable");
-    expect(reportsMarkup).toContain("Open diagnostics");
+    expect(reportsMarkup).toContain("Open Expert Diagnostics");
   });
 });
 
@@ -173,14 +228,18 @@ function props(): Parameters<typeof WorkspaceDrawer>[0] {
     activeProjectId: "project-1",
     activeScopeLabel: "Chapter 1",
     activeSourceLabel: "Book One",
+    adapterDiagnostics: adapterDiagnostics(),
+    adapterDiagnosticsError: null,
     bookSources: [bookSource()],
     cancelingProfileSourceId: null,
     cancelingTargetKey: null,
+    canCreate: true,
     customSpeechPolicyProfiles: [],
     isOpen: true,
     job: job(),
     metrics: metrics(),
     metricsError: null,
+    narrationStatusModel: statusModel(),
     preparedSources: [preparedSource()],
     profileSource: null,
     profiles: [profile()],
@@ -192,11 +251,15 @@ function props(): Parameters<typeof WorkspaceDrawer>[0] {
     returnWorkspaceLabel: "Narration Workbench",
     selectedBookScope: { type: "chapter", chapterIndex: 0, label: "Chapter 1" },
     selectedBookSourceId: "book-1",
+    selectedEngineId: "kokoro",
     selectedPreparedSourceId: null,
     selectedProfileId: "profile-1",
     speechPolicyProfile: "general",
     speechPolicyOverrides: {},
     speechPolicyProfiles: [],
+    sourceFallbackLabel: null,
+    ttsEngineError: null,
+    ttsEngines: [ttsEngine()],
     onCancelJob: () => Promise.resolve(),
     onCancelProfileSource: () => Promise.resolve(),
     onCancelProfileTarget: () => Promise.resolve(),
@@ -320,6 +383,106 @@ function preparedSource(): PreparedSource {
     updatedAt: "2026-05-31T20:00:00Z",
     wordCount: 1200,
   } as unknown as PreparedSource;
+}
+
+function ttsEngine(overrides: Partial<TTSEngineDiagnostics> = {}): TTSEngineDiagnostics {
+  return {
+    default: true,
+    experimental: false,
+    id: "kokoro",
+    label: "Kokoro",
+    local: true,
+    status: "ready",
+    supportsReference: false,
+    supportsSSML: false,
+    supportsSwedish: true,
+    supportsVoice: true,
+    ...overrides,
+  };
+}
+
+function adapterDiagnostics(): Record<string, AdapterDiagnostics> {
+  return {
+    markdown: {
+      adapterId: "markdown",
+      available: true,
+      status: "available",
+    },
+  };
+}
+
+function statusModel(chips: NarrationStatusModel["chips"] = []): NarrationStatusModel {
+  return {
+    activeJobDetail: "Generating audio.",
+    activeJobLabel: "Working",
+    activityItems: [],
+    blocker: null,
+    chips,
+    confidenceDetail: "Ready",
+    confidenceLabel: "Ready",
+    detail: "Ready",
+    eta: "soon",
+    issues: chips.map((chip) => chip.issue),
+    primaryAction: null,
+    primaryLabel: "Ready",
+    primaryMessage: "Ready",
+    queue: {
+      currentSegment: 1,
+      generatingCount: 0,
+      readyCount: 1,
+      totalSegments: 2,
+    },
+    recentJobs: [],
+    sourceTitle: "Book One",
+    stageLabel: "Preview",
+    stages: [],
+    state: "ready",
+    tone: chips[0]?.tone ?? "success",
+    voiceCloning: {
+      activeProfile: null,
+      actionLabel: "Open voice cloning",
+      candidateDetail: "No source queued",
+      detail: "Idle",
+      elapsed: "0s",
+      eta: "n/a",
+      lastUpdate: "n/a",
+      message: "Idle",
+      sourceDetail: "No source queued",
+      stages: [],
+      status: "idle",
+      statusLabel: "Idle",
+    },
+  };
+}
+
+function statusChip({
+  detail,
+  label,
+  tone,
+  value,
+}: {
+  detail: string;
+  label: string;
+  tone: NarrationStatusModel["tone"];
+  value: string;
+}): NarrationStatusModel["chips"][number] {
+  return {
+    id: label.toLowerCase(),
+    issue: {
+      blocksCurrentStage: true,
+      chipValue: value,
+      condition: "attention",
+      detail,
+      id: label.toLowerCase(),
+      label,
+      owner: "review",
+      recovery: { available: true, id: "openReview", label: "Open Review" },
+      severity: "warning",
+    },
+    label,
+    tone,
+    value,
+  };
 }
 
 function profile(): VoiceProfile {

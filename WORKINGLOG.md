@@ -1471,3 +1471,16 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add regression tests
 - [x] Run project checks
 - Validation: focused frontend run-config/Preview tests passed; focused backend retry test passed; frontend typecheck passed; `pnpm check` passed with existing unrelated lint warnings/infos.
+
+## 2026-06-04 11:48 CEST - Reports Diagnostics Boundary
+- [x] Add shared health report model
+- [x] Wire Command Center Reports
+- [x] Wire Settings Expert Diagnostics
+- [x] Add regression tests
+- [x] Run project checks
+- Validation: frontend tests passed; frontend typecheck passed; `pnpm check` passed with existing unrelated lint warnings/infos.
+
+## 2026-06-04 12:42 CEST - Commit Reports Diagnostics Boundary
+- [x] Review worktree scope
+- [x] Stage reports diagnostics work package
+- [x] Create commit

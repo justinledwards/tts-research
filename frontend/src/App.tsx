@@ -41,6 +41,7 @@ import {
   deletePreparedSource,
   deleteVoiceProfile,
   getBookSourceScope,
+  getAdapterDiagnostics,
   getContentIR,
   getHighlightMap,
   getHighlightMapV2,
@@ -361,6 +362,7 @@ import type {
   BookScope,
   BookSourceImportOptions,
   BookSourceScopeContent,
+  AdapterDiagnostics,
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
   CreateVoiceProfileSourceRequest,
@@ -2344,6 +2346,11 @@ export function App() {
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
   const [systemMetricsError, setSystemMetricsError] = useState<string | null>(null);
   const [systemMetricsUnavailable, setSystemMetricsUnavailable] = useState(false);
+  const [adapterDiagnostics, setAdapterDiagnostics] = useState<Record<
+    string,
+    AdapterDiagnostics
+  > | null>(null);
+  const [adapterDiagnosticsError, setAdapterDiagnosticsError] = useState<string | null>(null);
   const [ttsEngines, setTTSEngines] = useState<TTSEngineDiagnostics[]>([]);
   const [ttsEngineError, setTTSEngineError] = useState<string | null>(null);
   const providerRuntimeCapabilities = useMemo(
@@ -4061,6 +4068,19 @@ export function App() {
     }
   }, []);
 
+  const refreshAdapterDiagnostics = useCallback(async () => {
+    try {
+      const diagnostics = await getAdapterDiagnostics();
+      setAdapterDiagnostics(diagnostics);
+      setAdapterDiagnosticsError(null);
+    } catch (caughtError) {
+      setAdapterDiagnostics(null);
+      setAdapterDiagnosticsError(
+        caughtError instanceof Error ? caughtError.message : "Unable to load adapter diagnostics",
+      );
+    }
+  }, []);
+
   const refreshTTSEngines = useCallback(async () => {
     try {
       const engines = await listTTSEngines();
@@ -5632,17 +5652,26 @@ export function App() {
   }, [refreshProjects, refreshSpeechPolicyProfiles, refreshVoiceProfiles]);
 
   useEffect(() => {
-    if (studioMode !== "voiceCloning" && !isCommandPaletteOpen && !isHelpOpen && !isSettingsOpen) {
+    if (
+      studioMode !== "voiceCloning" &&
+      !isCommandCenterOpen &&
+      !isCommandPaletteOpen &&
+      !isHelpOpen &&
+      !isSettingsOpen
+    ) {
       return;
     }
+    void refreshAdapterDiagnostics();
     void refreshProfileSourceDiagnostics();
     void refreshResearchModules();
     void refreshTTSEngines();
     void refreshVoiceProfileCredentials();
   }, [
+    isCommandCenterOpen,
     isHelpOpen,
     isCommandPaletteOpen,
     isSettingsOpen,
+    refreshAdapterDiagnostics,
     refreshProfileSourceDiagnostics,
     refreshResearchModules,
     refreshTTSEngines,
@@ -7405,11 +7434,15 @@ export function App() {
             activeScopeLabel={activeNarrationScopeLabel}
             activeSection={commandCenterSection}
             activeSourceLabel={activeNarrationSourceLabel}
+            adapterDiagnostics={adapterDiagnostics}
+            adapterDiagnosticsError={adapterDiagnosticsError}
             bookSources={bookSources}
+            canCreate={canCreateCurrentSource}
             isOpen={isCommandCenterOpen}
             job={job}
             metrics={systemMetrics}
             metricsError={systemMetricsError}
+            narrationStatusModel={narrationStatusModel}
             preparedSources={preparedSources}
             projectError={projectError}
             projectJobs={projectJobs}
@@ -7428,9 +7461,15 @@ export function App() {
             speechPolicyProfiles={speechPolicyProfiles}
             selectedBookSourceId={sourceMode === "book" ? selectedBookSourceId : null}
             selectedPreparedSourceId={sourceMode === "fileUrl" ? selectedPreparedSourceId : null}
+            selectedEngineId={runConfiguration.ttsEngine}
             selectedProfileId={selectedVoiceProfileId}
+            sourceFallbackLabel={
+              sourceMode === "text" && hasNarrationSource ? activeNarrationSourceLabel : null
+            }
             cancelingProfileSourceId={cancelingProfileSourceId}
             cancelingTargetKey={cancelingTargetKey}
+            ttsEngineError={ttsEngineError}
+            ttsEngines={ttsEngines}
             onCancelJob={handleCancelVoiceJob}
             onCancelProfileSource={handleCancelVoiceProfileSource}
             onCancelProfileTarget={handleCancelVoiceProfileTarget}
@@ -7453,9 +7492,9 @@ export function App() {
               setBundlePanelMode("import");
               setIsBundlePanelOpen(true);
             }}
-            onOpenSettings={() => {
+            onOpenSettings={(target = null) => {
               setIsCommandCenterOpen(false);
-              setSettingsCommandTarget(null);
+              setSettingsCommandTarget(target);
               setIsSettingsOpen(true);
             }}
             onOpenIntake={() => {
@@ -7550,6 +7589,8 @@ export function App() {
       {isSettingsOpen ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading settings..." />}>
           <SettingsPanel
+            adapterDiagnostics={adapterDiagnostics}
+            adapterDiagnosticsError={adapterDiagnosticsError}
             canSubmit={canCreateCurrentSource}
             commandTarget={settingsCommandTarget}
             customSpeechPolicyProfiles={customSpeechPolicyProfiles}
@@ -7570,6 +7611,9 @@ export function App() {
             selectedPreparedSource={selectedPreparedSource}
             selectedProfile={selectedVoiceProfile}
             sourceMode={sourceMode}
+            sourceFallbackLabel={
+              sourceMode === "text" && hasNarrationSource ? activeNarrationSourceLabel : null
+            }
             sourcePolicySavingKey={sourcePolicySavingKey}
             speechPolicyDefinition={speechPolicyDefinition}
             speechPolicyError={speechPolicyError}

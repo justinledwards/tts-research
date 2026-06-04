@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { backendAssetUrl } from "../../api";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { Button, Panel, StatusChip, Toggle, fieldControlClassName } from "../../design";
@@ -58,8 +58,10 @@ import {
 import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
 import { VOICE_STUDIO_THEMES } from "../../theme";
 import type {
+  AdapterDiagnostics,
   BookSource,
   CustomSpeechPolicyProfile,
+  ExtractorChainStep,
   PerformanceMode,
   PipelineOptions,
   PreparedSource,
@@ -120,6 +122,12 @@ import {
   type ErgonomicPresetId,
 } from "./ergonomicPresets";
 import { DEFAULT_SPEECH_POLICY_PROFILE } from "../../speechPolicy";
+import {
+  buildHealthReport,
+  type DiagnosticSummary,
+  type HealthReport,
+  type HealthReportCard,
+} from "../health-report";
 
 const COMMON_PIPELINE_OPTIONS: (keyof PipelineOptions)[] = [
   "textPreprocess",
@@ -169,6 +177,8 @@ interface SourcePolicyTarget {
 type SettingsSourceMode = "book" | "fileUrl" | "text";
 
 export function SettingsPanel({
+  adapterDiagnostics,
+  adapterDiagnosticsError,
   canSubmit,
   commandTarget,
   customSpeechPolicyProfiles,
@@ -189,6 +199,7 @@ export function SettingsPanel({
   selectedPreparedSource,
   selectedProfile,
   sourceMode,
+  sourceFallbackLabel,
   sourcePolicySavingKey,
   speechPolicyDefinition,
   speechPolicyError,
@@ -227,6 +238,8 @@ export function SettingsPanel({
   onUiMemoryReset,
   onUpdateCustomSpeechPolicyProfile,
 }: Readonly<{
+  adapterDiagnostics: Record<string, AdapterDiagnostics> | null;
+  adapterDiagnosticsError: string | null;
   canSubmit: boolean;
   commandTarget?: SettingsCommandTarget | null;
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
@@ -247,6 +260,7 @@ export function SettingsPanel({
   selectedPreparedSource: PreparedSource | null;
   selectedProfile: VoiceProfile | null;
   sourceMode: SettingsSourceMode;
+  sourceFallbackLabel: string | null;
   sourcePolicySavingKey: string | null;
   speechPolicyDefinition: SpeechPolicyDefinition;
   speechPolicyError: string | null;
@@ -309,6 +323,43 @@ export function SettingsPanel({
     () => commandTarget?.groupId ?? "run",
   );
   const highlightedCommandToken = commandTarget ? settingsCommandTargetToken(commandTarget) : null;
+  const healthReport = useMemo(
+    () =>
+      buildHealthReport({
+        adapterDiagnostics,
+        adapterDiagnosticsError,
+        canCreate: canSubmit,
+        job,
+        metrics,
+        metricsError,
+        projectJobs: [],
+        projectStorage,
+        projectStorageError,
+        selectedBookSource: sourceMode === "book" ? selectedBookSource : null,
+        selectedEngineId: runConfiguration.ttsEngine,
+        selectedPreparedSource: sourceMode === "fileUrl" ? selectedPreparedSource : null,
+        sourceFallbackLabel,
+        ttsEngineError,
+        ttsEngines,
+      }),
+    [
+      adapterDiagnostics,
+      adapterDiagnosticsError,
+      canSubmit,
+      job,
+      metrics,
+      metricsError,
+      projectStorage,
+      projectStorageError,
+      runConfiguration.ttsEngine,
+      selectedBookSource,
+      selectedPreparedSource,
+      sourceFallbackLabel,
+      sourceMode,
+      ttsEngineError,
+      ttsEngines,
+    ],
+  );
 
   useEffect(() => {
     if (!commandTarget) {
@@ -503,6 +554,14 @@ export function SettingsPanel({
             ) : null}
             {activeGroup === "diagnostics" ? (
               <DiagnosticsSettingsGroup
+                adapterDiagnostics={adapterDiagnostics}
+                adapterDiagnosticsError={adapterDiagnosticsError}
+                diagnosticSummary={diagnosticSummaryWithSettingsContext(healthReport, {
+                  runConfiguration,
+                  speechPolicyOverrides,
+                  speechPolicyProfile,
+                })}
+                healthReport={healthReport}
                 highlightedCommandToken={highlightedCommandToken}
                 job={job}
                 metrics={metrics}
@@ -511,7 +570,12 @@ export function SettingsPanel({
                 profileSourceDiagnostics={profileSourceDiagnostics}
                 projectStorage={projectStorage}
                 projectStorageError={projectStorageError}
+                runConfiguration={runConfiguration}
+                selectedBookSource={selectedBookSource}
+                selectedPreparedSource={selectedPreparedSource}
                 selectedProfile={selectedProfile}
+                speechPolicyOverrides={speechPolicyOverrides}
+                speechPolicyProfile={speechPolicyProfile}
                 ttsEngineError={ttsEngineError}
                 ttsEngines={ttsEngines}
               />
@@ -2044,6 +2108,10 @@ function RuntimeSettingsGroup({
 }
 
 function DiagnosticsSettingsGroup({
+  adapterDiagnostics,
+  adapterDiagnosticsError,
+  diagnosticSummary,
+  healthReport,
   highlightedCommandToken,
   job,
   metrics,
@@ -2052,10 +2120,19 @@ function DiagnosticsSettingsGroup({
   profileSourceDiagnostics,
   projectStorage,
   projectStorageError,
+  runConfiguration,
+  selectedBookSource,
+  selectedPreparedSource,
   selectedProfile,
+  speechPolicyOverrides,
+  speechPolicyProfile,
   ttsEngineError,
   ttsEngines,
 }: Readonly<{
+  adapterDiagnostics: Record<string, AdapterDiagnostics> | null;
+  adapterDiagnosticsError: string | null;
+  diagnosticSummary: DiagnosticSummary;
+  healthReport: HealthReport;
   highlightedCommandToken: string | null;
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
@@ -2064,7 +2141,12 @@ function DiagnosticsSettingsGroup({
   profileSourceDiagnostics: VoiceProfileSourceDiagnostics | null;
   projectStorage: ProjectStorageSummary | null;
   projectStorageError: string | null;
+  runConfiguration: RunConfiguration;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
   selectedProfile: VoiceProfile | null;
+  speechPolicyOverrides: SpeechPolicyOverrides;
+  speechPolicyProfile: string;
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
 }>) {
@@ -2077,6 +2159,7 @@ function DiagnosticsSettingsGroup({
       title="Diagnostics"
       subtitle="Operational health and storage facts."
     >
+      <DiagnosticsSummaryPanel summary={diagnosticSummary} report={healthReport} />
       <div className="grid gap-2 sm:grid-cols-2">
         <DiagnosticLine
           label="Backend"
@@ -2105,10 +2188,28 @@ function DiagnosticsSettingsGroup({
               : (job?.voiceCheck.provider ?? "Resolved when a job runs")
           }
         />
+        <DiagnosticLine label="Provider readiness" value={healthReport.provider.readiness} />
+        <DiagnosticLine label="Source extraction" value={healthReport.sourceExtraction.value} />
       </div>
       {ttsEngineError ? (
         <p className="text-sm leading-6 text-[var(--vs-status-danger)]">{ttsEngineError}</p>
       ) : null}
+      <BackendRuntimeDiagnosticsPanel metrics={metrics} metricsError={metricsError} />
+      <SourceExtractionDiagnosticsPanel
+        healthReport={healthReport}
+        selectedBookSource={selectedBookSource}
+        selectedPreparedSource={selectedPreparedSource}
+      />
+      <DiagnosticsFactsPanel
+        cards={[
+          healthReport.provider,
+          healthReport.sourceExtraction,
+          healthReport.job,
+          healthReport.backend,
+          healthReport.storage,
+        ]}
+      />
+      <AdapterDiagnosticsPanel diagnostics={adapterDiagnostics} error={adapterDiagnosticsError} />
       <ProjectStorageSummaryPanel
         job={job}
         profileSource={profileSource}
@@ -2117,8 +2218,352 @@ function DiagnosticsSettingsGroup({
         selectedProfile={selectedProfile}
       />
       <TTSEngineHealthFacts engines={ttsEngines} />
+      <RunPolicyDiagnosticsPanel
+        runConfiguration={runConfiguration}
+        speechPolicyOverrides={speechPolicyOverrides}
+        speechPolicyProfile={speechPolicyProfile}
+      />
     </PanelSection>
   );
+}
+
+function diagnosticSummaryWithSettingsContext(
+  report: HealthReport,
+  context: Readonly<{
+    runConfiguration: RunConfiguration;
+    speechPolicyOverrides: SpeechPolicyOverrides;
+    speechPolicyProfile: string;
+  }>,
+): DiagnosticSummary {
+  const json = {
+    ...report.diagnosticSummary.json,
+    runConfiguration: context.runConfiguration,
+    speechPolicy: {
+      overrides: context.speechPolicyOverrides,
+      profile: context.speechPolicyProfile,
+    },
+  };
+  const text = [
+    report.diagnosticSummary.text,
+    "Run configuration:",
+    `- Engine: ${context.runConfiguration.ttsEngine}`,
+    `- Run mode: ${context.runConfiguration.runMode}`,
+    `- Performance: ${context.runConfiguration.performanceMode}`,
+    `- Pipeline options: ${JSON.stringify(context.runConfiguration.options)}`,
+    "Speech policy:",
+    `- Profile: ${context.speechPolicyProfile}`,
+    `- Overrides JSON: ${JSON.stringify(context.speechPolicyOverrides)}`,
+  ].join("\n");
+  return {
+    generatedAt: report.diagnosticSummary.generatedAt,
+    json,
+    text,
+  };
+}
+
+function DiagnosticsSummaryPanel({
+  report,
+  summary,
+}: Readonly<{
+  report: HealthReport;
+  summary: DiagnosticSummary;
+}>) {
+  return (
+    <Panel className="grid gap-3 p-3" variant="surface">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold">Diagnostic summary</h4>
+          <p className="vs-muted mt-1 text-sm leading-6">{report.overall.detail}</p>
+        </div>
+        <StatusChip tone={report.overall.tone}>{report.overall.value}</StatusChip>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <DiagnosticLine label="Can narrate now" value={report.canNarrateNow ? "Yes" : "No"} />
+        <DiagnosticLine label="Provider" value={report.provider.readiness} />
+        <DiagnosticLine label="Source" value={report.sourceExtraction.value} />
+        <DiagnosticLine label="Generated" value={summary.generatedAt} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          data-testid="settings-copy-diagnostic-summary"
+          onClick={() => {
+            copyDiagnosticSummary(summary);
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Copy diagnostic summary
+        </Button>
+        <Button
+          data-testid="settings-download-diagnostics-json"
+          onClick={() => {
+            downloadDiagnosticSummary(summary);
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Download diagnostics JSON
+        </Button>
+      </div>
+    </Panel>
+  );
+}
+
+function DiagnosticsFactsPanel({
+  cards,
+}: Readonly<{
+  cards: readonly HealthReportCard[];
+}>) {
+  return (
+    <Panel className="grid gap-3 p-3" variant="surface">
+      <h4 className="text-sm font-semibold">Operational facts</h4>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {cards.map((card) => (
+          <div className="rounded-md border p-3 vs-border" key={card.label}>
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{card.label}</p>
+                <p className="vs-muted mt-1 text-xs leading-5">{card.detail}</p>
+              </div>
+              <StatusChip className="py-0.5" tone={card.tone}>
+                {card.value}
+              </StatusChip>
+            </div>
+            {card.facts.length > 0 ? (
+              <dl className="mt-3 grid gap-2">
+                {card.facts.map((fact) => (
+                  <DiagnosticLine
+                    key={`${card.label}-${fact.label}`}
+                    label={fact.label}
+                    value={fact.value}
+                  />
+                ))}
+              </dl>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function BackendRuntimeDiagnosticsPanel({
+  metrics,
+  metricsError,
+}: Readonly<{
+  metrics: SystemMetrics | null;
+  metricsError: string | null;
+}>) {
+  const gpu = metrics?.gpus?.[0] ?? null;
+  return (
+    <Panel className="grid gap-3 p-3" variant="surface">
+      <h4 className="text-sm font-semibold">Backend, process, host, and GPU</h4>
+      {metricsError ? (
+        <p className="text-sm leading-6 text-[var(--vs-status-danger)]">{metricsError}</p>
+      ) : null}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <DiagnosticLine label="Service version" value={metrics?.serviceVersion ?? "Pending"} />
+        <DiagnosticLine label="Collected at" value={metrics?.collectedAt ?? "Pending"} />
+        <DiagnosticLine label="Process ID" value={String(metrics?.process.pid ?? "n/a")} />
+        <DiagnosticLine label="Runtime" value={metrics?.process.runtime ?? "n/a"} />
+        <DiagnosticLine label="RSS" value={formatBytes(metrics?.process.rssBytes ?? 0)} />
+        <DiagnosticLine label="Working directory" value={metrics?.process.workingDir ?? "n/a"} />
+        <DiagnosticLine label="Host" value={metrics?.host.hostname ?? "n/a"} />
+        <DiagnosticLine
+          label="OS"
+          value={metrics ? `${metrics.host.os} · ${metrics.host.kernel}` : "n/a"}
+        />
+        <DiagnosticLine label="CPU count" value={String(metrics?.host.cpuCount ?? "n/a")} />
+        <DiagnosticLine
+          label="Load average"
+          value={
+            metrics
+              ? `${metrics.host.loadAvg1.toFixed(2)} / ${metrics.host.loadAvg5.toFixed(2)} / ${metrics.host.loadAvg15.toFixed(2)}`
+              : "n/a"
+          }
+        />
+        <DiagnosticLine label="GPU" value={gpu?.name ?? "GPU telemetry unavailable"} />
+        <DiagnosticLine
+          label="VRAM"
+          value={
+            gpu
+              ? `${gpu.memoryUsedMiB.toLocaleString()}/${gpu.memoryTotalMiB.toLocaleString()} MiB`
+              : "n/a"
+          }
+        />
+      </div>
+    </Panel>
+  );
+}
+
+function SourceExtractionDiagnosticsPanel({
+  healthReport,
+  selectedBookSource,
+  selectedPreparedSource,
+}: Readonly<{
+  healthReport: HealthReport;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+}>) {
+  const bookChain = selectedBookSource?.ingestion?.extractorChain ?? [];
+  return (
+    <Panel className="grid gap-3 p-3" variant="surface">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold">Source extraction</h4>
+          <p className="vs-muted mt-1 text-xs leading-5">{healthReport.sourceExtraction.detail}</p>
+        </div>
+        <StatusChip tone={healthReport.sourceExtraction.tone}>
+          {healthReport.sourceExtraction.value}
+        </StatusChip>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <DiagnosticLine
+          label="Book source"
+          value={selectedBookSource?.title ?? selectedBookSource?.sourceFile ?? "None"}
+        />
+        <DiagnosticLine
+          label="Prepared source"
+          value={selectedPreparedSource?.title ?? selectedPreparedSource?.sourceName ?? "None"}
+        />
+        <DiagnosticLine
+          label="Readiness state"
+          value={
+            selectedBookSource?.sourceReadiness?.state ??
+            selectedPreparedSource?.sourceReadiness?.state ??
+            "n/a"
+          }
+        />
+        <DiagnosticLine
+          label="Extractor support"
+          value={selectedBookSource?.ingestion?.supportTierLabel ?? "n/a"}
+        />
+        <DiagnosticLine
+          label="Prepared format"
+          value={selectedPreparedSource?.sourceFormat ?? selectedPreparedSource?.kind ?? "n/a"}
+        />
+        <DiagnosticLine
+          label="Prepared parser"
+          value={selectedPreparedSource?.markdownParseMode ?? "n/a"}
+        />
+      </div>
+      {bookChain.length > 0 ? (
+        <div className="grid gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide vs-muted">Extractor chain</p>
+          {bookChain.map((step) => (
+            <DiagnosticLine
+              key={step.id}
+              label={step.label}
+              value={extractorStepDiagnosticValue(step)}
+            />
+          ))}
+        </div>
+      ) : null}
+    </Panel>
+  );
+}
+
+function AdapterDiagnosticsPanel({
+  diagnostics,
+  error,
+}: Readonly<{
+  diagnostics: Record<string, AdapterDiagnostics> | null;
+  error: string | null;
+}>) {
+  const entries = Object.values(diagnostics ?? {});
+  return (
+    <Panel className="grid gap-3 p-3" variant="surface">
+      <h4 className="text-sm font-semibold">Adapter diagnostics</h4>
+      {error ? <p className="text-sm leading-6 text-[var(--vs-status-danger)]">{error}</p> : null}
+      {entries.length > 0 ? (
+        <div className="grid gap-2">
+          {entries.map((adapter) => (
+            <div className="rounded-md border p-3 vs-border" key={adapter.adapterId}>
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <p className="truncate text-sm font-semibold" title={adapter.adapterId}>
+                  {adapter.adapterId}
+                </p>
+                <StatusChip tone={adapter.available ? "success" : "warning"}>
+                  {adapter.status}
+                </StatusChip>
+              </div>
+              <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                <DiagnosticLine label="CLI path" value={adapter.cliPath ?? "n/a"} />
+                <DiagnosticLine
+                  label="Warnings"
+                  value={(adapter.warnings ?? []).join(", ") || "None"}
+                />
+                {Object.entries(adapter.tools ?? {}).map(([tool, status]) => (
+                  <DiagnosticLine
+                    key={`${adapter.adapterId}-${tool}`}
+                    label={tool}
+                    value={`${status.status} · ${status.available ? "available" : "missing"}`}
+                  />
+                ))}
+              </dl>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="vs-muted rounded-md border border-dashed p-3 text-sm vs-border">
+          Adapter diagnostics are pending.
+        </p>
+      )}
+    </Panel>
+  );
+}
+
+function extractorStepDiagnosticValue(step: ExtractorChainStep): string {
+  const confidence = step.confidence ? ` · ${String(step.confidence)}` : "";
+  return `${step.status}${confidence}`;
+}
+
+function RunPolicyDiagnosticsPanel({
+  runConfiguration,
+  speechPolicyOverrides,
+  speechPolicyProfile,
+}: Readonly<{
+  runConfiguration: RunConfiguration;
+  speechPolicyOverrides: SpeechPolicyOverrides;
+  speechPolicyProfile: string;
+}>) {
+  return (
+    <Panel className="grid gap-3 p-3" variant="surface">
+      <h4 className="text-sm font-semibold">Run configuration and speech policy JSON</h4>
+      <details className="rounded-md border p-3 text-xs vs-border vs-surface">
+        <summary className="cursor-pointer font-semibold">Active run configuration</summary>
+        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border p-3 vs-border">
+          {JSON.stringify(runConfiguration, null, 2)}
+        </pre>
+      </details>
+      <details className="rounded-md border p-3 text-xs vs-border vs-surface">
+        <summary className="cursor-pointer font-semibold">Speech policy and overrides</summary>
+        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border p-3 vs-border">
+          {JSON.stringify(
+            { overrides: speechPolicyOverrides, profile: speechPolicyProfile },
+            null,
+            2,
+          )}
+        </pre>
+      </details>
+    </Panel>
+  );
+}
+
+function copyDiagnosticSummary(summary: DiagnosticSummary): void {
+  void globalThis.navigator.clipboard.writeText(summary.text);
+}
+
+function downloadDiagnosticSummary(summary: DiagnosticSummary): void {
+  const blob = new Blob([JSON.stringify(summary.json, null, 2)], {
+    type: "application/json",
+  });
+  const url = globalThis.URL.createObjectURL(blob);
+  const anchor = globalThis.document.createElement("a");
+  anchor.download = `tts-diagnostics-${summary.generatedAt.replaceAll(/[:.]/g, "-")}.json`;
+  anchor.href = url;
+  anchor.click();
+  globalThis.URL.revokeObjectURL(url);
 }
 
 function ProjectStorageSummaryPanel({
@@ -2296,7 +2741,7 @@ function TTSEngineHealthFacts({ engines }: Readonly<{ engines: TTSEngineDiagnost
         <DiagnosticLine
           key={engine.id}
           label={engine.label}
-          value={`${engine.status} · ${engine.reason ?? engine.setup ?? formatProviderLanguageSummary(engine)}`}
+          value={`${engine.status} · ${engine.reason ?? engine.setup ?? engine.modelCache ?? formatProviderLanguageSummary(engine)}`}
         />
       ))}
     </Panel>

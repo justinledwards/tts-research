@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from "react";
+import { StatusChip } from "./design";
 import { useReaderModalLifecycle } from "./features/reader-accessibility";
 import { formatDuration } from "./format";
 import type {
+  AdapterDiagnostics,
   BookScope,
   BookSource,
   CustomSpeechPolicyProfile,
@@ -10,11 +12,19 @@ import type {
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
   SystemMetrics,
+  TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
   VoiceProfileSource,
   VoiceProject,
 } from "./types";
+import {
+  buildHealthReport,
+  type HealthReport,
+  type HealthReportCard,
+} from "./features/health-report";
+import type { NarrationStatusModel } from "./features/status-strip";
+import type { SettingsCommandTarget } from "./features/settings/model";
 import {
   COMMAND_CENTER_ROUTES,
   commandCenterGeneratedAudioState,
@@ -54,11 +64,15 @@ export function WorkspaceDrawer({
   activeScopeLabel,
   activeSection,
   activeSourceLabel,
+  adapterDiagnostics,
+  adapterDiagnosticsError,
   bookSources,
+  canCreate,
   isOpen,
   job,
   metrics,
   metricsError,
+  narrationStatusModel,
   preparedSources,
   projectError,
   projectJobs,
@@ -73,11 +87,15 @@ export function WorkspaceDrawer({
   speechPolicyProfile,
   speechPolicyOverrides,
   speechPolicyProfiles,
+  sourceFallbackLabel,
   selectedBookSourceId,
   selectedPreparedSourceId,
+  selectedEngineId,
   selectedProfileId,
   cancelingProfileSourceId,
   cancelingTargetKey,
+  ttsEngineError,
+  ttsEngines,
   onCreateProject,
   onCancelJob,
   onCancelProfileSource,
@@ -109,11 +127,15 @@ export function WorkspaceDrawer({
   activeScopeLabel: string;
   activeSection?: CommandCenterSectionId;
   activeSourceLabel: string;
+  adapterDiagnostics: Record<string, AdapterDiagnostics> | null;
+  adapterDiagnosticsError: string | null;
   bookSources: BookSource[];
+  canCreate: boolean;
   isOpen: boolean;
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
   metricsError: string | null;
+  narrationStatusModel: NarrationStatusModel;
   preparedSources: PreparedSource[];
   projectError: string | null;
   projectJobs: VoiceJob[];
@@ -128,11 +150,15 @@ export function WorkspaceDrawer({
   speechPolicyProfile: string;
   speechPolicyOverrides: SpeechPolicyOverrides;
   speechPolicyProfiles: SpeechPolicyProfile[];
+  sourceFallbackLabel: string | null;
   selectedBookSourceId: string | null;
   selectedPreparedSourceId: string | null;
+  selectedEngineId: string;
   selectedProfileId: string;
   cancelingProfileSourceId: string | null;
   cancelingTargetKey: string | null;
+  ttsEngineError: string | null;
+  ttsEngines: TTSEngineDiagnostics[];
   onCreateProject: (name: string) => Promise<void>;
   onCancelJob: () => Promise<void>;
   onCancelProfileSource: (sourceId: string) => Promise<void>;
@@ -141,7 +167,7 @@ export function WorkspaceDrawer({
   onDeleteProject: (id: string) => Promise<void>;
   onExportOpen: () => void;
   onImportOpen: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (target?: SettingsCommandTarget | null) => void;
   onOpenIntake: () => void;
   onOpenVoiceDashboard: () => void;
   onOpenVoiceCloning: () => void;
@@ -169,6 +195,60 @@ export function WorkspaceDrawer({
   const visibleJobs = useMemo(
     () => visibleCommandCenterJobs({ activeProjectId, job, projectJobs }),
     [activeProjectId, job, projectJobs],
+  );
+  const reportBookSource = useMemo(
+    () =>
+      selectedBookSourceId
+        ? (bookSources.find((book) => book.id === selectedBookSourceId) ?? null)
+        : null,
+    [bookSources, selectedBookSourceId],
+  );
+  const reportPreparedSource = useMemo(
+    () =>
+      selectedPreparedSourceId
+        ? (preparedSources.find((source) => source.id === selectedPreparedSourceId) ?? null)
+        : null,
+    [preparedSources, selectedPreparedSourceId],
+  );
+  const healthReport = useMemo(
+    () =>
+      buildHealthReport({
+        adapterDiagnostics,
+        adapterDiagnosticsError,
+        canCreate,
+        job,
+        metrics,
+        metricsError,
+        projectJobs: visibleJobs,
+        projectStorage,
+        projectStorageError,
+        selectedBookSource: reportBookSource,
+        selectedEngineId,
+        selectedPreparedSource: reportPreparedSource,
+        sourceFallbackLabel:
+          !reportBookSource && !reportPreparedSource ? sourceFallbackLabel : null,
+        statusChips: narrationStatusModel.chips,
+        ttsEngineError,
+        ttsEngines,
+      }),
+    [
+      adapterDiagnostics,
+      adapterDiagnosticsError,
+      canCreate,
+      job,
+      metrics,
+      metricsError,
+      narrationStatusModel.chips,
+      projectStorage,
+      projectStorageError,
+      reportBookSource,
+      reportPreparedSource,
+      selectedEngineId,
+      sourceFallbackLabel,
+      ttsEngineError,
+      ttsEngines,
+      visibleJobs,
+    ],
   );
   const sourceAssetModels = useMemo(
     () =>
@@ -251,7 +331,6 @@ export function WorkspaceDrawer({
     return null;
   }
 
-  const gpu = metrics?.gpus?.[0];
   const providerStatus = metrics
     ? `${metrics.serviceVersion || "backend"} online`
     : (metricsError ?? "Provider status pending");
@@ -605,25 +684,12 @@ export function WorkspaceDrawer({
 
             {effectiveActiveSection === "reports" ? (
               <WorkspaceSection id="command-center-reports" title="Reports">
-                <div className="grid gap-3 rounded-md border p-4 vs-surface">
-                  <p className="font-semibold">{providerStatus}</p>
-                  <p className="vs-muted text-xs">
-                    {gpu
-                      ? `${gpu.name} - ${String(gpu.memoryUsedMiB)}/${String(gpu.memoryTotalMiB)} MiB`
-                      : "GPU telemetry unavailable"}
-                  </p>
-                  <StorageBreakdown
-                    projectStorage={projectStorage}
-                    projectStorageError={projectStorageError}
-                  />
-                  <button
-                    className="h-9 rounded-md border px-3 text-sm font-semibold hover:bg-[var(--vs-raised)] vs-border"
-                    onClick={onOpenSettings}
-                    type="button"
-                  >
-                    Open diagnostics
-                  </button>
-                </div>
+                <HealthReportsPanel
+                  report={healthReport}
+                  onOpenDiagnostics={() => {
+                    onOpenSettings({ groupId: "diagnostics", layerId: "expert", scope: "machine" });
+                  }}
+                />
               </WorkspaceSection>
             ) : null}
           </div>
@@ -1623,6 +1689,138 @@ function generatedAudioSegmentProgress(item: VoiceJob): string {
 
 function generatedAudioVoiceLabel(item: VoiceJob): string {
   return item.voiceProfileName ?? item.ttsVoice ?? item.voice;
+}
+
+function HealthReportsPanel({
+  report,
+  onOpenDiagnostics,
+}: Readonly<{
+  report: HealthReport;
+  onOpenDiagnostics: () => void;
+}>) {
+  const reportCards = [
+    report.overall,
+    report.provider,
+    report.sourceExtraction,
+    report.job,
+    report.storage,
+    report.backend,
+  ];
+  const failedGeneration =
+    report.provider.readiness === "failedJob" || report.job.value === "Failed generation";
+  const terminalReason =
+    report.job.facts.find((fact) => fact.label === "Terminal reason")?.value ??
+    report.provider.facts.find((fact) => fact.label === "Terminal reason")?.value ??
+    "n/a";
+  const failureKind =
+    report.job.facts.find((fact) => fact.label === "Failure kind")?.value ??
+    report.provider.facts.find((fact) => fact.label === "Failure kind")?.value ??
+    "n/a";
+  return (
+    <div className="grid gap-3">
+      <div className="rounded-md border p-4 vs-border vs-surface">
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="vs-muted text-xs font-semibold uppercase tracking-wide">Health report</p>
+            <h3 className="mt-1 text-base font-semibold">{report.overall.value}</h3>
+            <p className="vs-muted mt-1 text-sm leading-6">{report.overall.detail}</p>
+          </div>
+          <StatusChip tone={report.overall.tone}>
+            {report.canNarrateNow ? "Can narrate now" : "Needs attention"}
+          </StatusChip>
+        </div>
+      </div>
+      {failedGeneration ? (
+        <div className="rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-4 text-sm text-[var(--vs-status-danger)]">
+          <p className="font-semibold">Failed generation</p>
+          <p className="mt-1 leading-6">
+            Terminal reason: {terminalReason}. Failure kind: {failureKind}.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              className="rounded-md border px-3 py-2 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+              href="#command-center-report-job-health"
+            >
+              View job health
+            </a>
+            <button
+              className="rounded-md border px-3 py-2 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+              onClick={onOpenDiagnostics}
+              type="button"
+            >
+              Open Expert Diagnostics
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <div className="grid gap-2 lg:grid-cols-2">
+        {reportCards.map((card) => (
+          <HealthReportCardRow card={card} key={card.label} />
+        ))}
+      </div>
+      {report.statusChips.length > 0 ? (
+        <div className="rounded-md border p-4 vs-border vs-surface">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold">Status strip blockers</p>
+            <StatusChip tone="neutral">{report.statusChips.length.toString()}</StatusChip>
+          </div>
+          <div className="mt-3 grid gap-2">
+            {report.statusChips.map((chip) => (
+              <div
+                className="flex min-w-0 items-start justify-between gap-3 rounded-md border px-3 py-2 vs-border"
+                key={`${chip.label}-${chip.value}`}
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold" title={chip.label}>
+                    {chip.label}
+                  </p>
+                  <p className="vs-muted mt-1 line-clamp-2 text-xs leading-5">{chip.detail}</p>
+                </div>
+                <StatusChip className="py-0.5" tone={chip.tone}>
+                  {chip.value}
+                </StatusChip>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="flex justify-end">
+        <button
+          className="h-9 rounded-md border px-3 text-sm font-semibold hover:bg-[var(--vs-raised)] vs-border"
+          onClick={onOpenDiagnostics}
+          type="button"
+        >
+          Open Expert Diagnostics
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HealthReportCardRow({ card }: Readonly<{ card: HealthReportCard }>) {
+  return (
+    <article
+      className="rounded-md border p-4 vs-border vs-surface"
+      id={`command-center-report-${healthReportAnchor(card.label)}`}
+    >
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold" title={card.label}>
+            {card.label}
+          </p>
+          <p className="vs-muted mt-1 text-sm leading-6">{card.detail}</p>
+        </div>
+        <StatusChip tone={card.tone}>{card.value}</StatusChip>
+      </div>
+    </article>
+  );
+}
+
+function healthReportAnchor(label: string): string {
+  return label
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/(^-|-$)/g, "");
 }
 
 function StorageBreakdown({
