@@ -267,7 +267,8 @@ describe("workspace stage model", () => {
     expect(review.nextAction).toBe("previewSpeech");
     expect(review.primaryAction).toBe("previewSpeech");
     expect(review.currentTask).toMatchObject({
-      primaryAction: null,
+      primaryAction: "reviewBlocks",
+      primaryLabel: "Review warnings",
       title: "Review needs repair",
     });
     expect(review.readinessByStage.review).toMatchObject({

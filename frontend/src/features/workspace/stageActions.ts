@@ -262,6 +262,23 @@ export function workspaceStagePrimaryActionDisplayLabel(
   return workspaceStageActionLabel(actionId);
 }
 
+export function workspaceStageCurrentTaskActionLabel(
+  task: Pick<WorkspaceStageCurrentTask, "primaryAction">,
+  status: Pick<WorkspaceStageStatus, "reviewWarningCount" | "stage">,
+): string | null {
+  if (!task.primaryAction) {
+    return null;
+  }
+  if (
+    status.stage === "review" &&
+    task.primaryAction === "reviewBlocks" &&
+    status.reviewWarningCount > 0
+  ) {
+    return "Review warnings";
+  }
+  return workspaceStageActionLabel(task.primaryAction);
+}
+
 export function resolveWorkspaceStageStatus(
   input: WorkspaceStageStatusInput,
 ): WorkspaceStageStatus {
@@ -862,16 +879,22 @@ function workspaceStageCurrentTask(
   readiness: WorkspaceStageReadiness,
 ): WorkspaceStageCurrentTask {
   const primaryAction = workspaceStageCurrentTaskAction(input, readiness, blocker);
-  return {
+  const currentTask: Omit<WorkspaceStageCurrentTask, "primaryLabel"> = {
     detail: blocker?.detail ?? readiness.detail,
     disabledReason:
       blocker?.disabledReason ??
       readiness.disabledReason ??
       (primaryAction === null ? readiness.detail : undefined),
     primaryAction,
-    primaryLabel: primaryAction ? workspaceStageActionLabel(primaryAction) : null,
     title: blocker?.title ?? workspaceStageCurrentTaskTitle(input, readiness),
     tone: blocker ? blockerTone(blocker) : readiness.tone,
+  };
+  return {
+    ...currentTask,
+    primaryLabel: workspaceStageCurrentTaskActionLabel(currentTask, {
+      reviewWarningCount: Math.max(0, input.reviewWarningCount ?? 0),
+      stage: input.stage,
+    }),
   };
 }
 
@@ -919,8 +942,11 @@ function reviewCurrentTaskAction(
   input: WorkspaceStageStatusInput,
   readiness: WorkspaceStageReadiness,
 ): WorkspaceStageActionId | null {
-  if (input.reviewRequired || !input.hasListenerText || readiness.state === "warning") {
+  if (input.reviewRequired || !input.hasListenerText) {
     return null;
+  }
+  if (readiness.state === "warning") {
+    return "reviewBlocks";
   }
   return "previewSpeech";
 }

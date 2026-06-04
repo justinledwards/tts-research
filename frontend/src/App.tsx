@@ -8534,6 +8534,7 @@ export function App() {
               runConfiguration={runConfiguration}
               onSelectVoiceProfile={selectVoiceProfile}
               selectedProfile={selectedVoiceProfile}
+              onOpenReviewRepair={openReviewRepairQueue}
               onStageAction={runWorkspaceStageAction}
               onSpeechPolicyProfileChange={(profile) => {
                 void handleSpeechPolicyProfileChange(profile);
@@ -11003,6 +11004,7 @@ function SourceTextPanel({
   selectedProfile,
   onSelectVoiceProfile,
   onStageAction,
+  onOpenReviewRepair,
   onSpeechPolicyProfileChange,
   onReviewBlockChange,
   onEditedTextByBlockIdChange,
@@ -11095,6 +11097,7 @@ function SourceTextPanel({
   selectedProfile: VoiceProfile | null;
   onSelectVoiceProfile: (profileId: string) => void;
   onStageAction: (actionId: WorkspaceStageActionId) => void;
+  onOpenReviewRepair: () => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onReviewBlockChange: (blockId: string | null) => void;
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
@@ -11165,6 +11168,7 @@ function SourceTextPanel({
             status={stageStatus}
             onCreateAndListen={onCreateAndListen}
             onOpenCinema={onOpenCinema}
+            onOpenReviewRepair={onOpenReviewRepair}
             onStageAction={onStageAction}
           />
         </>
@@ -11297,12 +11301,14 @@ function WorkbenchStageStepper({
   status,
   onCreateAndListen,
   onOpenCinema,
+  onOpenReviewRepair,
   onStageAction,
 }: Readonly<{
   activeStage: WorkspaceStage;
   status: WorkspaceStageStatus;
   onCreateAndListen: () => void;
   onOpenCinema: () => void;
+  onOpenReviewRepair: () => void;
   onStageAction: (actionId: WorkspaceStageActionId) => void;
 }>) {
   const runTaskAction = (actionId: WorkspaceStageActionId | null) => {
@@ -11315,6 +11321,10 @@ function WorkbenchStageStepper({
     }
     if (actionId === "openCinema") {
       onOpenCinema();
+      return;
+    }
+    if (actionId === "reviewBlocks" && status.reviewWarningCount > 0) {
+      onOpenReviewRepair();
       return;
     }
     onStageAction(actionId);
@@ -14464,6 +14474,7 @@ function NarrationReviewWorkbench({
     stage: "review",
     statusLabel: playbackControls.isPlaying || isPlaybackActive ? "Playing" : "Ready",
     testId: "localized-review-playback-toolbar",
+    variant: "compact",
   };
 
   useEffect(() => {
@@ -14504,10 +14515,12 @@ function NarrationReviewWorkbench({
           validationTranscript={validationTranscript}
           voiceProfileLabel={voiceProfileLabel}
           playbackToolbar={
-            <LocalizedPlaybackToolbar
-              model={reviewPlaybackToolbar}
-              shortcutPreferences={shortcutPreferences}
-            />
+            playbackControls.isAvailable ? (
+              <LocalizedPlaybackToolbar
+                model={reviewPlaybackToolbar}
+                shortcutPreferences={shortcutPreferences}
+              />
+            ) : null
           }
           onActiveBlockChange={onActiveBlockChange}
           onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}

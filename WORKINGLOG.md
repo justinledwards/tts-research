@@ -1,3 +1,12 @@
+## 2026-06-04 14:59 CEST - Review Guided Repair Ergonomics
+- [x] Update Review stage action model
+- [x] Rework Review panel guided repair layout
+- [x] Embed available playback inside selected repair
+- [x] Add focused tests and layout checks
+- [x] Run targeted and project checks
+- Validation: focused Review/workspace/playback frontend tests passed; frontend typecheck passed; managed `e2e:ui-actions:quick` replayed 48/48 actions with 0 failed/no-op activations and 0 overlay collisions but still reported existing duplicate review-gate findings; `e2e:responsive-snapshots` passed; `pnpm check` passed with existing unrelated Biome warnings; `git diff --check` passed.
+- [x] Commit work package
+
 ## 2026-06-04 12:44 CEST - Safe Portable Bundle Import Export
 - [x] Inspect existing bundle APIs and staged Command Center changes
 - [x] Add backend export options, sanitization, preview validation, and safer import staging

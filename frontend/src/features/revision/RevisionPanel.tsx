@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type Ref,
   type ReactNode,
   type SetStateAction,
 } from "react";
@@ -154,6 +155,8 @@ export function RevisionPanel({
   const [statusMessage, setStatusMessage] = useState("Revision workflow ready.");
   const [exportText, setExportText] = useState<string | null>(null);
   const handledReviewFocusRequestIdRef = useRef<number | null>(null);
+  const pendingRepairFocusRef = useRef(false);
+  const selectedRepairRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setActiveTabId(normalizeRevisionTabId(initialTabId));
@@ -226,10 +229,11 @@ export function RevisionPanel({
     setActiveTabId("blocks");
     onTabChange?.("blocks");
     const nextBlockId = firstRevisionRepairBlockId(blocksWithState);
+    pendingRepairFocusRef.current = Boolean(nextBlockId);
     onActiveBlockChange(nextBlockId);
     setStatusMessage(
       nextBlockId
-        ? "Opened the first Review repair item from status."
+        ? "Opened the first Review warning. Fix or approve this block, then use Next issue."
         : "Review opened, but no repair items were found.",
     );
   }, [
@@ -239,6 +243,17 @@ export function RevisionPanel({
     reviewOpenFocusRequest?.focus,
     reviewOpenFocusRequest?.requestId,
   ]);
+
+  useEffect(() => {
+    if (!pendingRepairFocusRef.current || !activeBlock) {
+      return;
+    }
+    pendingRepairFocusRef.current = false;
+    globalThis.requestAnimationFrame(() => {
+      selectedRepairRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+      selectedRepairRef.current?.focus({ preventScroll: true });
+    });
+  }, [activeBlock]);
 
   const updateFilter = <K extends keyof RevisionFilterState>(
     key: K,
@@ -506,8 +521,8 @@ export function RevisionPanel({
             </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {onInspectStructure ? (
+        {onInspectStructure ? (
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               {...revisionShortcutButtonProps(
                 "review.inspector",
@@ -521,29 +536,33 @@ export function RevisionPanel({
             >
               Content Structure
             </Button>
-          ) : null}
-          <Button
-            data-testid="workspace-stage-action-previewSpeech"
-            onClick={onPreviewSpeech}
-            size="sm"
-            variant="primary"
-          >
-            Preview Speech
-          </Button>
-        </div>
+          </div>
+        ) : null}
       </div>
 
-      <RevisionHealthBanner summary={summary} onPreviewSpeech={onPreviewSpeech} />
+      <RevisionHealthBanner
+        statusMessage={statusMessage}
+        summary={summary}
+        onPreviewSpeech={onPreviewSpeech}
+      />
 
-      <output
-        className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs font-semibold vs-border"
-        data-testid="revision-status-message"
-      >
-        {statusMessage}
-      </output>
-
-      <div className="grid gap-3 2xl:grid-cols-[minmax(18rem,0.95fr)_minmax(0,1.45fr)] 2xl:items-start">
-        <div className="grid gap-3">
+      <div className="grid gap-3 xl:grid-cols-[minmax(20rem,0.85fr)_minmax(0,1.25fr)] xl:items-start">
+        <section
+          aria-label="Review repair queue"
+          className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
+          data-testid="revision-guided-repair-queue"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+                Repair queue
+              </p>
+              <h4 className="mt-1 text-base font-semibold">Review warnings</h4>
+            </div>
+            <StatusChip tone={summary.needsRepair > 0 ? "warning" : "success"}>
+              {summary.needsRepair.toLocaleString()} to resolve
+            </StatusChip>
+          </div>
           <RevisionFilterBar
             filters={filters}
             hasActiveFilters={hasActiveFilters}
@@ -579,10 +598,9 @@ export function RevisionPanel({
             onActiveBlockChange={onActiveBlockChange}
             onToggleBlockSelection={toggleBlockSelection}
           />
-        </div>
+        </section>
 
         <div className="grid gap-3">
-          {playbackToolbar ? <div className="sticky top-3 z-10">{playbackToolbar}</div> : null}
           <RevisionSelectedBlockEditor
             activeBaseBlock={activeBaseBlock}
             activeBlock={activeBlock}
@@ -590,7 +608,9 @@ export function RevisionPanel({
             activeTabId={activeTabId}
             blocks={filteredBlocks}
             historyEntries={historyEntries}
+            playbackToolbar={playbackToolbar}
             policyProfileLabel={policyProfileLabel}
+            repairRef={selectedRepairRef}
             scopeLabel={scopeLabel}
             shortcutPreferences={shortcutPreferences}
             summary={summary}
@@ -602,12 +622,6 @@ export function RevisionPanel({
             onInlineEditRevert={revertInlineEdit}
             onInlineEditSave={saveInlineEdit}
             onNextIssue={onNextIssue}
-            onPreviewSpeech={() => {
-              if (activeBlock) {
-                onActiveBlockChange(activeBlock.id);
-              }
-              onPreviewSpeech();
-            }}
             onRevertHistoryEntry={(entry) => {
               const block = blocksWithState.find((candidate) => candidate.id === entry.blockId);
               if (block) {
@@ -663,9 +677,9 @@ function RevisionFilterBar({
   onReset: () => void;
 }>) {
   return (
-    <div className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
-      <div className="grid gap-2 lg:grid-cols-[minmax(12rem,1.2fr)_repeat(5,minmax(8rem,1fr))_auto]">
-        <label className="grid gap-1 text-xs font-semibold">
+    <div className="grid gap-2 border-b pb-3 vs-border">
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        <label className="grid gap-1 text-xs font-semibold xl:col-span-2">
           Search blocks
           <input
             className={fieldControlClassName}
@@ -751,7 +765,7 @@ function RevisionFilterBar({
           <option value="no">No attention flag</option>
         </RevisionSelect>
         {hasActiveFilters ? (
-          <div className="flex items-end">
+          <div className="flex items-end md:col-span-2 xl:col-span-1">
             <Button data-testid="ui-action-revision-filter-reset" onClick={onReset} size="sm">
               Show all
             </Button>
@@ -821,62 +835,74 @@ function RevisionBatchBar({
       ? approveDisabledReason
       : "No visible clean blocks are waiting for approval.";
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
-      <label className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-[var(--vs-raised)] px-3 text-sm font-semibold vs-border">
-        <input
-          checked={allVisibleSelected}
-          className="h-4 w-4"
-          data-testid="revision-select-visible"
-          onChange={(event) => {
-            onToggleVisibleSelection(event.target.checked);
-          }}
-          type="checkbox"
-        />
-        Select visible ({selectedVisibleCount.toString()}/{visibleCount.toString()})
-      </label>
-      <Button
-        data-testid="ui-action-revision-clear-selection"
-        disabled={!hasSelection}
-        disabledReason={hasSelection ? undefined : "Select blocks before clearing selection."}
-        onClick={onClearSelection}
-        size="sm"
-        variant="secondary"
-      >
-        Clear selection
-      </Button>
-      <Button
-        data-testid="ui-action-revision-batch-approve-clean"
-        disabled={Boolean(approveCleanDisabledReason)}
-        disabledReason={approveCleanDisabledReason}
-        onClick={onApproveCleanVisible}
-        size="sm"
-        variant="soft"
-      >
-        Approve clean blocks ({cleanVisibleCount.toLocaleString()})
-      </Button>
-      <span className="text-xs font-semibold vs-muted">{selectedCount.toString()} selected</span>
-      {REVISION_BATCH_ACTIONS.map((action) => {
-        const actionDisabledReason = revisionBatchActionDisabledReason(
-          action.actionId,
-          hasSelection,
-          approveDisabledReason,
-        );
-        return (
-          <Button
-            data-testid={action.testId}
-            disabled={Boolean(actionDisabledReason)}
-            disabledReason={actionDisabledReason}
-            key={action.actionId}
-            onClick={() => {
-              onBatchAction(action.actionId);
+    <div className="grid gap-2 border-b pb-3 vs-border">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-[var(--vs-raised)] px-3 text-sm font-semibold vs-border">
+          <input
+            checked={allVisibleSelected}
+            className="h-4 w-4"
+            data-testid="revision-select-visible"
+            onChange={(event) => {
+              onToggleVisibleSelection(event.target.checked);
             }}
+            type="checkbox"
+          />
+          Select visible ({selectedVisibleCount.toString()}/{visibleCount.toString()})
+        </label>
+        <Button
+          data-testid="ui-action-revision-batch-approve-clean"
+          disabled={Boolean(approveCleanDisabledReason)}
+          disabledReason={approveCleanDisabledReason}
+          onClick={onApproveCleanVisible}
+          size="sm"
+          variant="soft"
+        >
+          Approve clean blocks ({cleanVisibleCount.toLocaleString()})
+        </Button>
+        <span className="text-xs font-semibold vs-muted">{selectedCount.toString()} selected</span>
+      </div>
+      <details
+        className="rounded-md border bg-[var(--vs-raised)] px-3 py-2 vs-border"
+        open={hasSelection || undefined}
+      >
+        <summary className="cursor-pointer text-xs font-semibold vs-muted">
+          More batch actions
+        </summary>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button
+            data-testid="ui-action-revision-clear-selection"
+            disabled={!hasSelection}
+            disabledReason={hasSelection ? undefined : "Select blocks before clearing selection."}
+            onClick={onClearSelection}
             size="sm"
             variant="secondary"
           >
-            {action.label}
+            Clear selection
           </Button>
-        );
-      })}
+          {REVISION_BATCH_ACTIONS.map((action) => {
+            const actionDisabledReason = revisionBatchActionDisabledReason(
+              action.actionId,
+              hasSelection,
+              approveDisabledReason,
+            );
+            return (
+              <Button
+                data-testid={action.testId}
+                disabled={Boolean(actionDisabledReason)}
+                disabledReason={actionDisabledReason}
+                key={action.actionId}
+                onClick={() => {
+                  onBatchAction(action.actionId);
+                }}
+                size="sm"
+                variant="secondary"
+              >
+                {action.label}
+              </Button>
+            );
+          })}
+        </div>
+      </details>
     </div>
   );
 }
@@ -943,44 +969,61 @@ function RevisionOverview({
 }
 
 function RevisionHealthBanner({
+  statusMessage,
   summary,
   onPreviewSpeech,
-}: Readonly<{ summary: RevisionHealthSummary; onPreviewSpeech: () => void }>) {
+}: Readonly<{
+  statusMessage: string;
+  summary: RevisionHealthSummary;
+  onPreviewSpeech: () => void;
+}>) {
   const readinessTone = summary.previewReadiness === "ready" ? "success" : "warning";
+  const hasRepair = summary.needsRepair > 0;
+  const repairCountLabel = `${summary.needsRepair.toLocaleString()} review warning${
+    summary.needsRepair === 1 ? "" : "s"
+  } to resolve`;
+  const guidanceTitle = hasRepair ? repairCountLabel : "Review is clear";
   return (
     <div className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
+          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+            Guided review
+          </p>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold">Review health</p>
+            <h4 className="text-base font-semibold">{guidanceTitle}</h4>
             <StatusChip tone={readinessTone}>{revisionPreviewReadinessLabel(summary)}</StatusChip>
           </div>
           <p className="mt-1 text-sm vs-muted">
-            Next action: {revisionNextActionLabel(summary)}. Preview Speech stays available while
-            warnings are resolved.
+            Next: {revisionNextActionLabel(summary)}. Preview Speech stays available while warnings
+            are resolved.
           </p>
         </div>
         <Button
-          data-testid="workspace-stage-action-previewSpeech-selected"
+          data-testid="workspace-stage-action-previewSpeech"
           onClick={onPreviewSpeech}
           size="sm"
-          variant={summary.previewReadiness === "ready" ? "primary" : "soft"}
+          variant="secondary"
         >
           Preview Speech
         </Button>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <RevisionHealthStat label="Ready" value={summary.ready.toLocaleString()} />
         <RevisionHealthStat label="Needs repair" value={summary.needsRepair.toLocaleString()} />
         <RevisionHealthStat
           label="Pronunciation"
           value={summary.pronunciationItems.toLocaleString()}
         />
-        <RevisionHealthStat label="Skipped" value={summary.skipped.toLocaleString()} />
-        <RevisionHealthStat label="Policy" value={summary.policyTransforms.toLocaleString()} />
-        <RevisionHealthStat label="Approved" value={summary.approved.toLocaleString()} />
         <RevisionHealthStat label="Warnings" value={summary.previewWarnings.toLocaleString()} />
       </div>
+      <output
+        aria-live="polite"
+        className="rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs font-semibold vs-border"
+        data-testid="revision-status-message"
+      >
+        {statusMessage}
+      </output>
     </div>
   );
 }
@@ -1117,7 +1160,9 @@ function RevisionSelectedBlockEditor({
   activeTabId,
   blocks,
   historyEntries,
+  playbackToolbar,
   policyProfileLabel,
+  repairRef,
   scopeLabel,
   shortcutPreferences,
   summary,
@@ -1129,7 +1174,6 @@ function RevisionSelectedBlockEditor({
   onInlineEditRevert,
   onInlineEditSave,
   onNextIssue,
-  onPreviewSpeech,
   onRevertHistoryEntry,
   onSetActiveTab,
   onSetBlockStatus,
@@ -1140,7 +1184,9 @@ function RevisionSelectedBlockEditor({
   activeTabId: RevisionTabId;
   blocks: RevisionBlock[];
   historyEntries: RevisionHistoryEntry[];
+  playbackToolbar?: ReactNode;
   policyProfileLabel: string;
+  repairRef?: Ref<HTMLElement>;
   scopeLabel: string;
   shortcutPreferences: ShortcutPreferences;
   summary: RevisionHealthSummary;
@@ -1152,7 +1198,6 @@ function RevisionSelectedBlockEditor({
   onInlineEditRevert: (block: RevisionBlock, previousSpokenText: string) => void;
   onInlineEditSave: (block: RevisionBlock, nextSpokenText: string) => void;
   onNextIssue?: () => void;
-  onPreviewSpeech: () => void;
   onRevertHistoryEntry: (entry: RevisionHistoryEntry) => void;
   onSetActiveTab: (tabId: RevisionTabId) => void;
   onSetBlockStatus: (block: RevisionBlock, status: RevisionStatus, userAction: string) => void;
@@ -1191,15 +1236,17 @@ function RevisionSelectedBlockEditor({
   return (
     <section
       aria-label={`Selected block editor for ${activeBlock.label}`}
-      className="grid gap-3"
+      className="grid scroll-mt-24 gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 outline-none vs-border"
       data-testid="revision-selected-block-editor"
+      ref={repairRef}
+      tabIndex={-1}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] vs-muted">
-            Selected Block Editor
+            Current repair
           </p>
-          <h4 className="mt-1 truncate text-lg font-semibold" title={activeBlock.label}>
+          <h4 className="mt-1 text-lg font-semibold leading-snug" title={activeBlock.label}>
             {activeBlock.index.toString()}. {activeBlock.label}
           </h4>
           <p className="mt-1 text-xs vs-muted">
@@ -1215,98 +1262,98 @@ function RevisionSelectedBlockEditor({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          {...approveShortcut}
-          data-testid="ui-action-revision-block-approve"
-          disabled={!canApprove}
-          disabledReason={approveDisabledReason}
-          onClick={() => {
-            onSetBlockStatus(activeBlock, "approved", "Block approved");
-          }}
-          size="sm"
-          variant="primary"
-        >
-          Approve
-        </Button>
-        <Button
-          {...editShortcut}
-          data-testid="ui-action-revision-block-edit-focus"
-          data-ui-focus-target="revision-inline-edit-textarea"
-          onClick={() => {
-            document
-              .querySelector<HTMLTextAreaElement>('[data-testid="revision-inline-edit-textarea"]')
-              ?.focus();
-          }}
-          size="sm"
-          variant="secondary"
-        >
-          Edit
-        </Button>
-        <Button
-          data-testid="ui-action-revision-block-preview"
-          onClick={onPreviewSpeech}
-          size="sm"
-          variant="soft"
-        >
-          Preview Speech
-        </Button>
-        <Button
-          data-testid="ui-action-revision-block-needs-review"
-          onClick={() => {
-            onSetBlockStatus(activeBlock, "needsReview", "Marked needs review");
-          }}
-          size="sm"
-          variant="secondary"
-        >
-          Mark needs review
-        </Button>
-        <Button
-          {...nextIssueShortcut}
-          data-testid="ui-action-revision-block-next-issue"
-          disabled={!onNextIssue || summary.needsAttention === 0}
-          disabledReason={nextIssueDisabledReason ?? (onNextIssue ? undefined : "Unavailable.")}
-          onClick={() => {
-            onNextIssue?.();
-          }}
-          size="sm"
-          variant="secondary"
-        >
-          Next issue
-        </Button>
-        <Button
-          data-testid="ui-action-revision-block-skip"
-          onClick={() => {
-            onSetBlockStatus(activeBlock, "skipped", "Block skipped");
-          }}
-          size="sm"
-          variant="secondary"
-        >
-          Skip
-        </Button>
-        <Button
-          {...retryShortcut}
-          data-testid="ui-action-revision-block-retry"
-          onClick={() => {
-            onSetBlockStatus(activeBlock, "retrying", "Retry requested");
-          }}
-          size="sm"
-          variant="secondary"
-        >
-          Retry
-        </Button>
-        <Button
-          {...regenerateShortcut}
-          data-testid="ui-action-revision-block-regenerate"
-          onClick={() => {
-            onSetBlockStatus(activeBlock, "regenerating", "Regeneration requested");
-          }}
-          size="sm"
-          variant="secondary"
-        >
-          Regenerate
-        </Button>
+      <div className="grid gap-2 rounded-md border bg-[var(--vs-raised)] p-2 vs-border">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            {...approveShortcut}
+            data-testid="ui-action-revision-block-approve"
+            disabled={!canApprove}
+            disabledReason={approveDisabledReason}
+            onClick={() => {
+              onSetBlockStatus(activeBlock, "approved", "Block approved");
+            }}
+            size="sm"
+            variant="primary"
+          >
+            Approve
+          </Button>
+          <Button
+            {...nextIssueShortcut}
+            data-testid="ui-action-revision-block-next-issue"
+            disabled={!onNextIssue || summary.needsAttention === 0}
+            disabledReason={nextIssueDisabledReason ?? (onNextIssue ? undefined : "Unavailable.")}
+            onClick={() => {
+              onNextIssue?.();
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            Next issue
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            {...editShortcut}
+            data-testid="ui-action-revision-block-edit-focus"
+            data-ui-focus-target="revision-inline-edit-textarea"
+            onClick={() => {
+              document
+                .querySelector<HTMLTextAreaElement>('[data-testid="revision-inline-edit-textarea"]')
+                ?.focus();
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            Edit
+          </Button>
+          <Button
+            data-testid="ui-action-revision-block-skip"
+            onClick={() => {
+              onSetBlockStatus(activeBlock, "skipped", "Block skipped");
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            Skip
+          </Button>
+          <Button
+            {...retryShortcut}
+            data-testid="ui-action-revision-block-retry"
+            onClick={() => {
+              onSetBlockStatus(activeBlock, "retrying", "Retry requested");
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            Retry
+          </Button>
+          <Button
+            {...regenerateShortcut}
+            data-testid="ui-action-revision-block-regenerate"
+            onClick={() => {
+              onSetBlockStatus(activeBlock, "regenerating", "Regeneration requested");
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            Regenerate
+          </Button>
+          <Button
+            data-testid="ui-action-revision-block-needs-review"
+            onClick={() => {
+              onSetBlockStatus(activeBlock, "needsReview", "Marked needs review");
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            Mark needs review
+          </Button>
+        </div>
       </div>
+
+      {playbackToolbar ? (
+        <div data-testid="revision-selected-playback">{playbackToolbar}</div>
+      ) : null}
 
       <RevisionSourceSpokenSurface block={activeBlock} />
 

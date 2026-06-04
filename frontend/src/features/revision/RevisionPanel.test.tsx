@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { RevisionPanel } from "./RevisionPanel";
 import type { RevisionHistoryEntry } from "./revisionHistory";
 import type { RevisionBlock, RevisionStatus } from "./revisionFilters";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 const noop = () => {
   // Test callback.
@@ -17,20 +17,38 @@ describe("RevisionPanel", () => {
   it("renders health, grouped repair queue, selected editor, and pronunciation repair rows", () => {
     const markup = renderRevisionPanel();
 
-    expect(markup).toContain("Review health");
+    expect(markup).toContain("Guided review");
+    expect(markup).toContain("Review warnings");
     expect(markup).toContain("Audio blockers");
     expect(markup).toContain("Pronunciation repair");
-    expect(markup).toContain("Selected Block Editor");
+    expect(markup).toContain("Current repair");
     expect(markup).toContain("Source text");
     expect(markup).toContain("Spoken form");
     expect(markup).toContain("Repair Notes");
     expect(markup).toContain("Pronunciation Repair");
     expect(markup).toContain("Apply repair");
     expect(markup).toContain('data-testid="ui-action-revision-batch-approve-clean"');
+    expect(markup).toContain("More batch actions");
     expect(markup).toContain("Approve clean blocks (1)");
     expect(markup).toContain("OpenAI");
     expect(markup).toContain("Open A I");
     expect(markup).toContain("Preview Speech");
+    expect(markup.match(/workspace-stage-action-previewSpeech/g)?.length).toBe(1);
+    expect(markup).not.toContain("Selected Block Editor");
+  });
+
+  it("embeds available review playback inside the selected repair surface", () => {
+    const markup = renderRevisionPanel(
+      "overview",
+      "pronunciation",
+      <div data-testid="mock-review-playback">Review Playback</div>,
+    );
+
+    expect(markup).toContain('data-testid="revision-selected-playback"');
+    expect(markup).toContain('data-testid="mock-review-playback"');
+    expect(markup.indexOf('data-testid="revision-selected-block-editor"')).toBeLessThan(
+      markup.indexOf('data-testid="revision-selected-playback"'),
+    );
   });
 
   it("renders review action shortcuts for discoverability", () => {
@@ -61,6 +79,7 @@ describe("RevisionPanel", () => {
 function renderRevisionPanel(
   initialTabId: "diagnostics" | "history" | "overview" = "overview",
   activeBlockId = "pronunciation",
+  playbackToolbar?: ReactNode,
 ) {
   return renderToStaticMarkup(
     <RevisionPanel
@@ -69,6 +88,7 @@ function renderRevisionPanel(
       blocks={blocks}
       historyEntries={historyEntries}
       initialTabId={initialTabId}
+      playbackToolbar={playbackToolbar}
       policyProfileLabel="Accessibility"
       runConfigurationLabel="Checked Master"
       scopeLabel="Chapter 1"

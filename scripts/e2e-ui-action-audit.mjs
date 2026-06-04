@@ -1177,6 +1177,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await capture("workspace-stage-02-source-selected");
     await page.getByTestId("workspace-stage-review").click();
     await page.getByText("Revision Panel").first().waitFor();
+    await assertWorkspaceReviewRepairLayout(page);
     await selectWorkspaceLayout(page, "Full");
     await page.getByTestId("ui-action-project-dashboard-open-rail").click();
     await page.getByRole("dialog", { name: "Command Center" }).waitFor();
@@ -1196,6 +1197,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
       .getByText(/approved/i)
       .waitFor();
     await page.getByTestId("revision-tab-overview").click();
+    await assertWorkspaceReviewRepairLayout(page);
     await capture("workspace-stage-03-review-after");
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
@@ -1328,6 +1330,64 @@ async function selectWorkspaceLayout(page, label) {
   const menu = page.getByTestId("ui-action-workspace-layout-menu").first();
   await menu.locator("summary").click();
   await page.getByRole("button", { exact: true, name: `${label} workspace layout` }).click();
+}
+
+async function assertWorkspaceReviewRepairLayout(page) {
+  await page.getByTestId("revision-guided-repair-queue").waitFor({ state: "visible" });
+  await page.getByTestId("revision-selected-block-editor").waitFor({ state: "visible" });
+  const report = await page.evaluate(() => {
+    const failures = [];
+    const visible = (element) =>
+      element instanceof HTMLElement &&
+      element.offsetParent !== null &&
+      element.getClientRects().length > 0 &&
+      !element.closest("[aria-hidden='true']");
+    const rectFor = (selector) => {
+      const element = document.querySelector(selector);
+      if (!visible(element)) {
+        failures.push(`${selector} is not visible`);
+        return null;
+      }
+      const rect = element.getBoundingClientRect();
+      return {
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        width: rect.width,
+      };
+    };
+    const overlapArea = (left, right) =>
+      Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left)) *
+      Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top));
+    const editor = rectFor("[data-testid='revision-selected-block-editor']");
+    const queue = rectFor("[data-testid='revision-guided-repair-queue']");
+    const approve = rectFor("[data-testid='ui-action-revision-block-approve']");
+    const nextIssue = rectFor("[data-testid='ui-action-revision-block-next-issue']");
+    const footerElement = document.querySelector("[data-testid='narration-status-strip']");
+    const footer = visible(footerElement) ? footerElement.getBoundingClientRect() : null;
+    if (editor && queue && overlapArea(editor, queue) > 64) {
+      failures.push("Review queue overlaps the selected repair editor");
+    }
+    if (footer) {
+      for (const [label, rect] of [
+        ["Approve", approve],
+        ["Next issue", nextIssue],
+      ]) {
+        if (rect && overlapArea(rect, footer) > 0) {
+          failures.push(`${label} repair action overlaps the status strip`);
+        }
+      }
+    }
+    if (document.querySelector("[data-testid='localized-review-playback-toolbar']")) {
+      failures.push("Review playback toolbar is visible before checked audio is available");
+    }
+    return failures;
+  });
+  if (report.length > 0) {
+    throw new Error(`Workspace review repair layout failed: ${report.join("; ")}`);
+  }
 }
 
 async function clickPreviewMiniPlayerIfReady(page) {
