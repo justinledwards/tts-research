@@ -35,6 +35,95 @@ export interface SettingsFieldMeta {
   scope: SettingsScope;
 }
 
+export type SettingsPersistenceTarget =
+  | "browserSession"
+  | "localRuntime"
+  | "projectRecord"
+  | "readOnly"
+  | "sourceRecord";
+export type SettingsResetTarget =
+  | "display"
+  | "machineMemory"
+  | "none"
+  | "projectDefault"
+  | "runDefaults"
+  | "sourceOverride";
+export type SettingsConfirmationLevel = "none" | "confirm" | "expert";
+
+export interface SettingsScopeContract {
+  confirmationLevel: SettingsConfirmationLevel;
+  persistenceTarget: SettingsPersistenceTarget;
+  presetEligible: boolean;
+  previewSupported: boolean;
+  resetTarget: SettingsResetTarget;
+  sourceOfTruth: string;
+}
+
+export type ScopedSettingDefinition = SettingsFieldMeta & SettingsScopeContract;
+
+export interface SettingsChangeSetItemInput {
+  after: string;
+  before: string;
+  confirmationLevel?: SettingsConfirmationLevel;
+  fieldId: string;
+  preserved?: boolean;
+}
+
+export interface SettingsChangeSetItem {
+  after: string;
+  before: string;
+  changed: boolean;
+  confirmationLevel: SettingsConfirmationLevel;
+  fieldId: string;
+  label: string;
+  preserved: boolean;
+  resetTarget: SettingsResetTarget;
+  scope: SettingsScope;
+  sourceOfTruth: string;
+}
+
+export interface SettingsChangeSet {
+  affectedScopes: SettingsScope[];
+  changedCount: number;
+  id: string;
+  items: SettingsChangeSetItem[];
+  label: string;
+  preservedCount: number;
+  requiresConfirmation: boolean;
+}
+
+export interface PresetChangeSet extends SettingsChangeSet {
+  presetId: string;
+  presetLabel: string;
+}
+
+export interface SettingsDraft {
+  changeSet: SettingsChangeSet;
+  id: string;
+  label: string;
+  status: "applied" | "previewed" | "staged";
+}
+
+export interface SettingsAuditRowInput {
+  currentValue: string;
+  fieldId: string;
+  pendingValue?: string;
+}
+
+export interface SettingsAuditRow {
+  confirmationLevel: SettingsConfirmationLevel;
+  currentValue: string;
+  fieldId: string;
+  label: string;
+  owningScope: SettingsScope;
+  pendingValue?: string;
+  previewSupported: boolean;
+  resetAction: string;
+  resetTarget: SettingsResetTarget;
+  scope: SettingsScope;
+  sourceOfTruth: string;
+}
+
 export interface SettingsCommandTarget {
   fieldId?: string;
   groupId: SettingsGroupId;
@@ -75,6 +164,173 @@ export const SETTINGS_SCOPE_META: Record<SettingsScope, SettingsScopeMeta> = {
     description: "Durable source-level pins for prepared sources and book sources.",
     label: "Source",
     shortLabel: "Source",
+  },
+};
+
+export const SETTINGS_PRECEDENCE: readonly {
+  description: string;
+  label: string;
+  scope: SettingsScope | "builtIn" | "previewDraft";
+}[] = [
+  {
+    description: "Product defaults used when no saved preference exists.",
+    label: "Built-in defaults",
+    scope: "builtIn",
+  },
+  {
+    description: "Local browser/runtime preferences such as display, theme, and UI memory.",
+    label: "Machine defaults",
+    scope: "machine",
+  },
+  {
+    description: "Durable defaults for unpinned sources in the active project.",
+    label: "Project defaults",
+    scope: "project",
+  },
+  {
+    description: "Durable selected-source policy profile and field pins.",
+    label: "Source pins",
+    scope: "source",
+  },
+  {
+    description: "Temporary choices for this browser session or next run.",
+    label: "Session overrides",
+    scope: "session",
+  },
+  {
+    description: "Uncommitted values used only for before/after review and preview.",
+    label: "Preview draft",
+    scope: "previewDraft",
+  },
+];
+
+export const SETTINGS_RESET_META: Record<
+  SettingsResetTarget,
+  { description: string; label: string }
+> = {
+  display: {
+    description: "Restore reader display and theme defaults.",
+    label: "Reset display",
+  },
+  machineMemory: {
+    description: "Clear local/browser UI memory for the selected area.",
+    label: "Reset machine memory",
+  },
+  none: {
+    description: "Read-only setting; there is no reset action.",
+    label: "No reset",
+  },
+  projectDefault: {
+    description: "Restore the current project default.",
+    label: "Reset project default",
+  },
+  runDefaults: {
+    description: "Restore next-run session defaults.",
+    label: "Reset run defaults",
+  },
+  sourceOverride: {
+    description: "Clear the selected-source pin or override.",
+    label: "Reset source override",
+  },
+};
+
+const SETTINGS_SCOPE_CONTRACT_DEFAULTS: Record<SettingsScope, SettingsScopeContract> = {
+  machine: {
+    confirmationLevel: "none",
+    persistenceTarget: "localRuntime",
+    presetEligible: true,
+    previewSupported: true,
+    resetTarget: "machineMemory",
+    sourceOfTruth: "Local browser/runtime storage",
+  },
+  project: {
+    confirmationLevel: "confirm",
+    persistenceTarget: "projectRecord",
+    presetEligible: true,
+    previewSupported: true,
+    resetTarget: "projectDefault",
+    sourceOfTruth: "Backend project record",
+  },
+  session: {
+    confirmationLevel: "none",
+    persistenceTarget: "browserSession",
+    presetEligible: true,
+    previewSupported: true,
+    resetTarget: "runDefaults",
+    sourceOfTruth: "Browser session state",
+  },
+  source: {
+    confirmationLevel: "confirm",
+    persistenceTarget: "sourceRecord",
+    presetEligible: false,
+    previewSupported: true,
+    resetTarget: "sourceOverride",
+    sourceOfTruth: "Backend source record",
+  },
+};
+
+const SETTINGS_FIELD_CONTRACT_OVERRIDES: Record<string, Partial<SettingsScopeContract>> = {
+  activeSource: {
+    confirmationLevel: "none",
+    presetEligible: false,
+    previewSupported: false,
+    resetTarget: "sourceOverride",
+  },
+  debugOutput: {
+    confirmationLevel: "expert",
+    persistenceTarget: "readOnly",
+    presetEligible: false,
+    previewSupported: false,
+    resetTarget: "none",
+    sourceOfTruth: "Runtime diagnostics",
+  },
+  ergonomicPresets: {
+    confirmationLevel: "confirm",
+    presetEligible: false,
+    previewSupported: true,
+    resetTarget: "display",
+    sourceOfTruth: "Preset draft",
+  },
+  previewSample: {
+    presetEligible: false,
+    sourceOfTruth: "Preview draft",
+  },
+  profileImportExport: {
+    confirmationLevel: "confirm",
+    presetEligible: false,
+    resetTarget: "projectDefault",
+  },
+  projectSpeechPolicy: {
+    confirmationLevel: "confirm",
+    presetEligible: true,
+    sourceOfTruth: "Backend project speech policy",
+  },
+  readerPreferences: {
+    resetTarget: "display",
+    sourceOfTruth: "Local reader preferences",
+  },
+  readAlongPreferences: {
+    sourceOfTruth: "Read-along preference scope",
+  },
+  runtimeDiagnostics: {
+    confirmationLevel: "expert",
+    persistenceTarget: "readOnly",
+    presetEligible: false,
+    previewSupported: false,
+    resetTarget: "none",
+    sourceOfTruth: "Backend runtime diagnostics",
+  },
+  sourceSpeechPolicy: {
+    confirmationLevel: "confirm",
+    presetEligible: false,
+    sourceOfTruth: "Backend selected-source pin",
+  },
+  structuredContent: {
+    sourceOfTruth: "Session speech policy overrides",
+  },
+  uiMemory: {
+    presetEligible: false,
+    sourceOfTruth: "Local UI memory",
   },
 };
 
@@ -300,6 +556,29 @@ export function settingsFieldMeta(id: string): SettingsFieldMeta | null {
   return SETTINGS_FIELD_META.find((field) => field.id === id) ?? null;
 }
 
+export function scopedSettingDefinition(id: string): ScopedSettingDefinition | null {
+  const field = settingsFieldMeta(id);
+  if (!field) {
+    return null;
+  }
+  return {
+    ...field,
+    ...SETTINGS_SCOPE_CONTRACT_DEFAULTS[field.scope],
+    ...SETTINGS_FIELD_CONTRACT_OVERRIDES[field.id],
+  };
+}
+
+export function scopedSettingDefinitions(): ScopedSettingDefinition[] {
+  const definitions: ScopedSettingDefinition[] = [];
+  for (const field of SETTINGS_FIELD_META) {
+    const definition = scopedSettingDefinition(field.id);
+    if (definition) {
+      definitions.push(definition);
+    }
+  }
+  return definitions;
+}
+
 export function settingsScopeAppliesTo(scope: SettingsScope): string {
   return SETTINGS_SCOPE_META[scope].appliesTo;
 }
@@ -329,4 +608,76 @@ export function settingsGroupsForLayer(
   layer: Exclude<SettingsLayerId, "quick">,
 ): SettingsGroupMeta[] {
   return SETTINGS_GROUPS.filter((group) => group.layer === layer);
+}
+
+export function settingsResetLabel(resetTarget: SettingsResetTarget): string {
+  return SETTINGS_RESET_META[resetTarget].label;
+}
+
+export function buildSettingsChangeSet({
+  id,
+  items,
+  label,
+}: Readonly<{
+  id: string;
+  items: readonly SettingsChangeSetItemInput[];
+  label: string;
+}>): SettingsChangeSet {
+  const resolvedItems = items.map((item) => {
+    const definition = scopedSettingDefinition(item.fieldId);
+    const fallbackScope: SettingsScope = "session";
+    const preserved = item.preserved === true;
+    const confirmationLevel = item.confirmationLevel ?? definition?.confirmationLevel ?? "none";
+    return {
+      after: item.after,
+      before: item.before,
+      changed: !preserved && item.before !== item.after,
+      confirmationLevel,
+      fieldId: item.fieldId,
+      label: definition?.label ?? item.fieldId,
+      preserved,
+      resetTarget: definition?.resetTarget ?? "runDefaults",
+      scope: definition?.scope ?? fallbackScope,
+      sourceOfTruth: definition?.sourceOfTruth ?? "Settings draft",
+    };
+  });
+  const affectedScopes = uniqueScopes(resolvedItems.map((item) => item.scope));
+  return {
+    affectedScopes,
+    changedCount: resolvedItems.filter((item) => item.changed).length,
+    id,
+    items: resolvedItems,
+    label,
+    preservedCount: resolvedItems.filter((item) => item.preserved).length,
+    requiresConfirmation: resolvedItems.some(
+      (item) => item.changed && item.confirmationLevel !== "none",
+    ),
+  };
+}
+
+export function buildSettingsAuditRows(
+  inputs: readonly SettingsAuditRowInput[],
+): SettingsAuditRow[] {
+  return inputs.map((input) => {
+    const definition = scopedSettingDefinition(input.fieldId);
+    const resetTarget = definition?.resetTarget ?? "runDefaults";
+    return {
+      confirmationLevel: definition?.confirmationLevel ?? "none",
+      currentValue: input.currentValue,
+      fieldId: input.fieldId,
+      label: definition?.label ?? input.fieldId,
+      owningScope: definition?.scope ?? "session",
+      pendingValue: input.pendingValue,
+      previewSupported: definition?.previewSupported ?? false,
+      resetAction: settingsResetLabel(resetTarget),
+      resetTarget,
+      scope: definition?.scope ?? "session",
+      sourceOfTruth: definition?.sourceOfTruth ?? "Settings draft",
+    };
+  });
+}
+
+function uniqueScopes(scopes: SettingsScope[]): SettingsScope[] {
+  const orderedScopes: SettingsScope[] = ["session", "source", "project", "machine"];
+  return orderedScopes.filter((scope) => scopes.includes(scope));
 }

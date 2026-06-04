@@ -106,6 +106,10 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Output intent");
     expect(markup).toContain("Use-case preset");
     expect(markup).toContain("Long-form book listening");
+    expect(markup).toContain("Before / after summary");
+    expect(markup).toContain("Settings audit");
+    expect(markup).toContain("Built-in defaults -&gt; Machine defaults -&gt; Project defaults");
+    expect(markup).toContain("Preview draft");
     expect(markup).toContain("Apply preset defaults");
     expect(markup).toContain("Policy requires confirm");
     expect(markup).toContain("Preview sample");
@@ -125,6 +129,8 @@ describe("SettingsPanel", () => {
 
     expect(markup).toContain("Golden-minute policy preview");
     expect(markup).toContain("Visual spoken-text preview");
+    expect(markup).toContain("Reset project default");
+    expect(markup).toContain("without changing selected-source pins");
     expect(markup).toContain("citation [^gm1]");
     expect(markup).toContain("Dr. -&gt; Doctor");
     expect(markup).toContain("Enterprise vs Education");

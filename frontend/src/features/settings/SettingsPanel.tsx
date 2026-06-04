@@ -21,7 +21,7 @@ import { RunConfigurationWizard } from "../run-config/RunConfigurationWizard";
 import { applyRunEngineSelection } from "../run-config/runConfigSteps";
 import { SpeechPolicyWizard } from "../speech-policy/SpeechPolicyWizard";
 import { ShortcutSettings, type ShortcutPreferences } from "./shortcutSettings";
-import { accessibilityPresetById, useLiveStatus } from "../accessibility";
+import { useLiveStatus } from "../accessibility";
 import {
   SpeechPolicyControls,
   SourcePolicyPinEditor,
@@ -49,11 +49,8 @@ import {
   type TeleprompterHighlightSettings,
 } from "../../teleprompter";
 import { TelepromptTheatreSettingsControls } from "../teleprompt/TelepromptTheatreSettingsControls";
-import {
-  telepromptTheatrePreset,
-  type TelepromptTheatreSettings,
-} from "../teleprompt/telepromptTheatreSettings";
-import { READ_ALONG_PREFERENCE_LABELS, type ReadAlongPreferences } from "../readalong";
+import type { TelepromptTheatreSettings } from "../teleprompt/telepromptTheatreSettings";
+import type { ReadAlongPreferences } from "../readalong";
 import {
   bookSourceLifecycleEnvelope,
   preparedSourceLifecycleEnvelope,
@@ -84,12 +81,17 @@ import type {
 import {
   SETTINGS_FIELD_META,
   SETTINGS_LAYERS,
+  SETTINGS_PRECEDENCE,
   SETTINGS_SCOPE_META,
+  buildSettingsAuditRows,
   settingsGroupMeta,
   settingsGroupsForLayer,
   settingsLayerForCommandTarget,
   settingsLayerMeta,
   settingsScopeAppliesTo,
+  type PresetChangeSet,
+  type SettingsAuditRow,
+  type SettingsChangeSetItem,
   type SettingsCommandTarget,
   type SettingsGroupId,
   type SettingsLayerId,
@@ -110,15 +112,14 @@ import {
   settingsGroupsForActiveLayer,
 } from "./settingsPanelHelpers";
 import {
-  ERGONOMIC_CONTEXT_PANEL_LABELS,
   ERGONOMIC_PRESETS,
-  ERGONOMIC_PREVIEW_BEHAVIOR_LABELS,
-  ERGONOMIC_TRANSPORT_DENSITY_LABELS,
   applyErgonomicPresetDefaults,
+  buildErgonomicPresetChangeSet,
   ergonomicPresetById,
   type ErgonomicPreset,
   type ErgonomicPresetId,
 } from "./ergonomicPresets";
+import { DEFAULT_SPEECH_POLICY_PROFILE } from "../../speechPolicy";
 
 const COMMON_PIPELINE_OPTIONS: (keyof PipelineOptions)[] = [
   "textPreprocess",
@@ -612,6 +613,38 @@ function QuickSettings({
     selectedBookSource,
     selectedPreparedSource,
   );
+  const activePolicyLabel = speechPolicyProfileLabel(speechPolicyProfile, profileOptions);
+  const settingsAuditRows = buildSettingsAuditRows([
+    {
+      currentValue: getRunModePreset(runConfiguration.runMode).label,
+      fieldId: "runMode",
+    },
+    {
+      currentValue: runConfiguration.performanceMode,
+      fieldId: "performanceMode",
+    },
+    {
+      currentValue: selectedProfile?.name ?? "Default voice",
+      fieldId: "voice",
+    },
+    {
+      currentValue: activeSourceLabel,
+      fieldId: "activeSource",
+    },
+    {
+      currentValue: themeName,
+      fieldId: "readerPreferences",
+    },
+    {
+      currentValue: activePolicyLabel,
+      fieldId: "projectSpeechPolicy",
+    },
+    {
+      currentValue: ergonomicPresetById(selectedErgonomicPresetId).label,
+      fieldId: "ergonomicPresets",
+      pendingValue: "Preview draft",
+    },
+  ]);
   const resetRunDefaults = () => {
     const next = createRunConfiguration("checkedMaster");
     onRunConfigurationChange({
@@ -814,6 +847,7 @@ function QuickSettings({
           Reset display
         </Button>
       </div>
+      <SettingsAuditSummary rows={settingsAuditRows} />
       <Panel className="grid gap-2 p-3" variant="surface">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
           More configuration
@@ -926,7 +960,17 @@ function ErgonomicPresetControls({
   const { announcePolite } = useLiveStatus();
   const preset = ergonomicPresetById(selectedPresetId);
   const policyLabel = speechPolicyProfileLabel(preset.speechPolicyProfile, profileOptions);
+  const currentPolicyLabel = speechPolicyProfileLabel(speechPolicyProfile, profileOptions);
   const policyAlreadyActive = speechPolicyProfile === preset.speechPolicyProfile;
+  const presetChangeSet = buildErgonomicPresetChangeSet(selectedPresetId, {
+    readerAccessibilitySettings,
+    readAlongPreferences,
+    runConfiguration,
+    sourcePinSummary: "Existing source pins",
+    speechPolicyProfile,
+    speechPolicyProfileLabel: (profile) => speechPolicyProfileLabel(profile, profileOptions),
+    telepromptTheatreSettings,
+  });
   const applyPreset = () => {
     const next = applyErgonomicPresetDefaults(selectedPresetId, {
       readerAccessibilitySettings,
@@ -945,7 +989,7 @@ function ErgonomicPresetControls({
       announcePolite(`${policyLabel} speech policy is already active.`);
       return;
     }
-    if (!confirmErgonomicPolicyChange(preset, policyLabel)) {
+    if (!confirmErgonomicPolicyChange(preset, currentPolicyLabel, policyLabel)) {
       announcePolite(`Speech policy change cancelled for ${preset.label}.`);
       return;
     }
@@ -994,67 +1038,7 @@ function ErgonomicPresetControls({
         ))}
       </div>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_15rem]">
-        <div
-          className="grid gap-2 rounded-md border bg-[var(--vs-raised)] p-3 vs-border"
-          data-testid="ergonomic-preset-preview"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h5 className="text-sm font-semibold">{preset.label}</h5>
-            <span className="vs-muted text-xs">{getRunModePreset(preset.runMode).label}</span>
-          </div>
-          <div className="grid gap-2 md:grid-cols-2">
-            <ErgonomicPreviewRow
-              label="Reader display"
-              scope="machine"
-              value={accessibilityPresetById(preset.readerDisplayPreset).label}
-            />
-            <ErgonomicPreviewRow
-              label="Highlight"
-              scope="machine"
-              value={`${READ_ALONG_PREFERENCE_LABELS.granularity[preset.readAlong.highlightGranularity]} / ${READ_ALONG_PREFERENCE_LABELS.style[preset.readAlong.highlightStyle]}`}
-            />
-            <ErgonomicPreviewRow
-              label="Scroll follow"
-              scope="machine"
-              value={READ_ALONG_PREFERENCE_LABELS.scrollFollow[preset.readAlong.scrollFollow]}
-            />
-            <ErgonomicPreviewRow
-              label="Sync strictness"
-              scope="machine"
-              value={READ_ALONG_PREFERENCE_LABELS.syncStrictness[preset.readAlong.syncStrictness]}
-            />
-            <ErgonomicPreviewRow
-              label="Transport"
-              scope="session"
-              value={ERGONOMIC_TRANSPORT_DENSITY_LABELS[preset.transportDensity]}
-            />
-            <ErgonomicPreviewRow
-              label="Context panel"
-              scope="session"
-              value={ERGONOMIC_CONTEXT_PANEL_LABELS[preset.contextPanelDefault]}
-            />
-            <ErgonomicPreviewRow
-              label="Teleprompt Theatre"
-              scope="machine"
-              value={telepromptTheatrePreset(preset.telepromptTheatrePreset).label}
-            />
-            <ErgonomicPreviewRow
-              label="Preview player"
-              scope="session"
-              value={ERGONOMIC_PREVIEW_BEHAVIOR_LABELS[preset.previewPlayerBehavior]}
-            />
-            <ErgonomicPreviewRow
-              label="Segment boundary"
-              scope="machine"
-              value={segmentBoundaryPreview(preset)}
-            />
-            <ErgonomicPreviewRow
-              label="Speech policy"
-              scope="project"
-              value={`${policyLabel} (confirm)`}
-            />
-          </div>
-        </div>
+        <PresetChangeSetView changeSet={presetChangeSet} />
         <div className="grid content-start gap-2">
           <Button
             data-testid="ui-action-ergonomic-preset-apply"
@@ -1089,50 +1073,138 @@ function ErgonomicPresetControls({
   );
 }
 
-function ErgonomicPreviewRow({
-  label,
-  scope,
-  value,
-}: Readonly<{ label: string; scope: SettingsScope; value: string }>) {
+function PresetChangeSetView({ changeSet }: Readonly<{ changeSet: PresetChangeSet }>) {
   return (
-    <div className="min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 py-2 vs-border">
-      <div className="flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.12em] vs-muted">
-        {label}
-        <ScopeBadge scope={scope} />
+    <div
+      className="grid gap-3 rounded-md border bg-[var(--vs-raised)] p-3 vs-border"
+      data-testid="ergonomic-preset-preview"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h5 className="text-sm font-semibold">Before / after summary</h5>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            {changeSet.changedCount.toString()} changes, {changeSet.preservedCount.toString()}{" "}
+            preserved fields.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {changeSet.affectedScopes.map((scope) => (
+            <ScopeBadge key={scope} scope={scope} />
+          ))}
+        </div>
       </div>
-      <p className="mt-1 truncate text-sm font-semibold" title={value}>
-        {value}
-      </p>
+      <div className="grid gap-2">
+        {changeSet.items.map((item) => (
+          <PresetChangeSetRow item={item} key={item.fieldId} />
+        ))}
+      </div>
+      {changeSet.requiresConfirmation ? (
+        <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-xs font-semibold text-[var(--vs-status-warning)]">
+          Policy changes are recommendations until confirmed.
+        </p>
+      ) : null}
     </div>
   );
+}
+
+function PresetChangeSetRow({ item }: Readonly<{ item: SettingsChangeSetItem }>) {
+  const status = presetChangeSetRowStatus(item);
+  return (
+    <div className="grid gap-2 rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-xs vs-border md:grid-cols-[minmax(7rem,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 font-semibold">
+        <span className="truncate">{item.label}</span>
+        <ScopeBadge scope={item.scope} />
+      </div>
+      <div className="min-w-0">
+        <span className="vs-muted block text-[0.65rem] uppercase tracking-[0.12em]">Before</span>
+        <span className="block truncate text-sm font-medium" title={item.before}>
+          {item.before}
+        </span>
+      </div>
+      <div className="min-w-0">
+        <span className="vs-muted block text-[0.65rem] uppercase tracking-[0.12em]">After</span>
+        <span className="block truncate text-sm font-medium" title={item.after}>
+          {item.after}
+        </span>
+      </div>
+      <span className="rounded-full border px-2 py-1 text-center text-[0.65rem] font-semibold uppercase tracking-[0.12em] vs-border vs-muted">
+        {status}
+      </span>
+    </div>
+  );
+}
+
+function presetChangeSetRowStatus(item: SettingsChangeSetItem): string {
+  if (item.preserved) {
+    return "Preserved";
+  }
+  if (!item.changed) {
+    return "Unchanged";
+  }
+  if (item.confirmationLevel === "none") {
+    return "Changed";
+  }
+  return "Confirm";
 }
 
 function speechPolicyProfileLabel(profile: string, options: SpeechPolicyProfile[]): string {
   return options.find((option) => option.name === profile)?.label ?? profile;
 }
 
-function confirmErgonomicPolicyChange(preset: ErgonomicPreset, policyLabel: string): boolean {
+function confirmErgonomicPolicyChange(
+  preset: ErgonomicPreset,
+  currentPolicyLabel: string,
+  policyLabel: string,
+): boolean {
   if (typeof globalThis.confirm !== "function") {
     return true;
   }
   return globalThis.confirm(
-    `Apply ${policyLabel} as the project speech policy for ${preset.label}? Source-level pins and overrides stay unchanged.`,
+    `Change project speech policy from ${currentPolicyLabel} to ${policyLabel} for ${preset.label}? Source-level pins and overrides stay unchanged.`,
   );
 }
 
-function segmentBoundaryPreview(preset: ErgonomicPreset): string {
-  const boundary = preset.readAlong.segmentBoundary;
-  const parts = [
-    boundary.autoAdvance ? "auto advance" : "manual advance",
-    boundary.pauseAtSegmentBoundary ? "pause at boundary" : "no boundary pause",
-  ];
-  if (boundary.flashSegment) {
-    parts.push("flash segment");
-  }
-  if (boundary.fadePreviousPhrase) {
-    parts.push("fade previous");
-  }
-  return parts.join(", ");
+function SettingsAuditSummary({ rows }: Readonly<{ rows: SettingsAuditRow[] }>) {
+  return (
+    <details className="rounded-md border bg-[var(--vs-surface)] p-3 vs-border">
+      <summary className="cursor-pointer text-sm font-semibold">Settings audit</summary>
+      <p className="vs-muted mt-2 text-xs leading-5">
+        Precedence: {SETTINGS_PRECEDENCE.map((item) => item.label).join(" -> ")}.
+      </p>
+      <div className="mt-3 grid gap-2">
+        {rows.map((row) => (
+          <div
+            className="grid gap-2 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs vs-border md:grid-cols-[minmax(7rem,0.7fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+            key={row.fieldId}
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-2 font-semibold">
+              <span className="truncate">{row.label}</span>
+              <ScopeBadge scope={row.scope} />
+            </div>
+            <div className="min-w-0">
+              <span className="vs-muted block text-[0.65rem] uppercase tracking-[0.12em]">
+                Current
+              </span>
+              <span className="block truncate text-sm font-medium" title={row.currentValue}>
+                {row.currentValue}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <span className="vs-muted block text-[0.65rem] uppercase tracking-[0.12em]">
+                Source of truth
+              </span>
+              <span className="block truncate" title={row.sourceOfTruth}>
+                {row.sourceOfTruth}
+              </span>
+            </div>
+            <span className="rounded-full border px-2 py-1 text-center text-[0.65rem] font-semibold uppercase tracking-[0.12em] vs-border vs-muted">
+              {row.pendingValue ? `Pending: ${row.pendingValue}` : row.resetAction}
+            </span>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
 }
 
 function ScopeLegend() {
@@ -1816,6 +1888,45 @@ function SourceSettingsGroup({
         onProfileChange={onSpeechPolicyProfileChange}
         onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
       />
+      <Panel
+        className="grid gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+        variant="surface"
+      >
+        <div>
+          <h4 className="flex items-center gap-2 text-sm font-semibold">
+            Project default reset
+            <ScopeBadge scope="project" />
+          </h4>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            Restore the project speech policy default without changing selected-source pins.
+          </p>
+        </div>
+        <Button
+          data-confirm="Reset project default"
+          data-testid="settings-reset-project-default"
+          data-ui-action-surface="Settings"
+          disabled={speechPolicyProfile === DEFAULT_SPEECH_POLICY_PROFILE}
+          disabledReason={
+            speechPolicyProfile === DEFAULT_SPEECH_POLICY_PROFILE
+              ? "Project policy already uses the default profile."
+              : undefined
+          }
+          onClick={() => {
+            if (
+              typeof globalThis.confirm === "function" &&
+              !globalThis.confirm(
+                "Reset the current project speech policy default? Source pins stay unchanged.",
+              )
+            ) {
+              return;
+            }
+            onSpeechPolicyProfileChange(DEFAULT_SPEECH_POLICY_PROFILE);
+          }}
+          variant="secondary"
+        >
+          Reset project default
+        </Button>
+      </Panel>
       <details className="rounded-md border p-3 vs-border vs-surface">
         <summary className="cursor-pointer text-sm font-semibold">Advanced policy editor</summary>
         <div className="mt-3">

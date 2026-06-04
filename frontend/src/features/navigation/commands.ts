@@ -10,6 +10,7 @@ import {
   SETTINGS_GROUPS,
   SETTINGS_LAYERS,
   SETTINGS_SCOPE_META,
+  scopedSettingDefinition,
   settingsLayerForGroup,
   type SettingsGroupId,
   type SettingsCommandTarget,
@@ -68,7 +69,7 @@ export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandT
   }));
   const fieldCommands = SETTINGS_FIELD_META.map((field) => ({
     category: "Settings" as const,
-    detail: `${SETTINGS_SCOPE_META[field.scope].label} scope · ${field.description}`,
+    detail: fieldCommandDetail(field.id, field.scope, field.description),
     id: `settings:field:${field.id}`,
     keywords: [
       "settings",
@@ -76,6 +77,8 @@ export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandT
       field.layer,
       field.scope,
       SETTINGS_SCOPE_META[field.scope].description,
+      scopedSettingDefinition(field.id)?.resetTarget ?? "",
+      scopedSettingDefinition(field.id)?.sourceOfTruth ?? "",
     ],
     owner: "settings",
     section: "Settings" as const,
@@ -97,6 +100,12 @@ export function buildSettingsCommandMetadata(): CommandMetadata<SettingsCommandT
     title: `${SETTINGS_SCOPE_META[scope].label} scope`,
   }));
   return [...layerCommands, ...groupCommands, ...fieldCommands, ...scopeCommands];
+}
+
+function fieldCommandDetail(fieldId: string, scope: SettingsScope, description: string): string {
+  const definition = scopedSettingDefinition(fieldId);
+  const source = definition ? ` · ${definition.sourceOfTruth}` : "";
+  return `${SETTINGS_SCOPE_META[scope].label} scope${source} · ${description}`;
 }
 
 export function buildWorkspaceCommandMetadata(): CommandMetadata<WorkspaceCommandTarget>[] {

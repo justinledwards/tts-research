@@ -194,6 +194,43 @@ func TestLayeredEvaluatorReportsSourceAndSessionPrecedence(t *testing.T) {
 	}
 }
 
+func TestLayeredEvaluatorAppliesScopedSettingsPrecedence(t *testing.T) {
+	t.Parallel()
+
+	evaluator := NewLayeredEvaluatorForSettings(
+		"project-enterprise",
+		"Project Enterprise",
+		ProfileByName(ProfileEnterprise).Settings,
+		Overrides{
+			CodeMode:  CodeModeLiteral,
+			TableMode: TableModeRowLinear,
+		},
+		Overrides{CodeMode: CodeModeSkip},
+		"profile",
+	)
+	settings := evaluator.Settings()
+	if settings.FootnoteMode != FootnoteModeOnDemand {
+		t.Fatalf("footnote mode = %q, want project default onDemand", settings.FootnoteMode)
+	}
+	if settings.TableMode != TableModeRowLinear {
+		t.Fatalf("table mode = %q, want source override rowLinear", settings.TableMode)
+	}
+	if settings.CodeMode != CodeModeSkip {
+		t.Fatalf("code mode = %q, want session override skip", settings.CodeMode)
+	}
+
+	table := evaluator.Evaluate(Element{Kind: "table", Text: "| Metric | Value |\n|---|---|\n| Latency | 12ms |"})
+	if table.Policy.Mode != string(ModeSpeak) ||
+		table.Policy.Explanation != "This table is spoken because a source override sets table to rowLinear." {
+		t.Fatalf("table decision = %#v, want source override row-linear speech", table.Policy)
+	}
+	code := evaluator.Evaluate(Element{Kind: "code", Text: "fmt.Println(\"hello\")"})
+	if code.Policy.Mode != string(ModeSkip) ||
+		code.Policy.Explanation != "This code block is skipped because a session override sets code to skip." {
+		t.Fatalf("code decision = %#v, want session override skip", code.Policy)
+	}
+}
+
 func TestDefinitionExposesSharedPolicyFields(t *testing.T) {
 	t.Parallel()
 

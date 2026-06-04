@@ -2176,7 +2176,7 @@ export function App() {
   const [bookSourceError, setBookSourceError] = useState<string | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
   const [runConfiguration, setRunConfiguration] = useState<RunConfiguration>(() => {
-    const savedConfiguration = localStorage.getItem(RUN_CONFIG_STORAGE_KEY);
+    const savedConfiguration = sessionStorage.getItem(RUN_CONFIG_STORAGE_KEY);
     if (!savedConfiguration) {
       return createRunConfiguration("checkedMaster");
     }
@@ -5963,7 +5963,7 @@ export function App() {
   ]);
 
   useEffect(() => {
-    localStorage.setItem(RUN_CONFIG_STORAGE_KEY, JSON.stringify(runConfiguration));
+    sessionStorage.setItem(RUN_CONFIG_STORAGE_KEY, JSON.stringify(runConfiguration));
   }, [runConfiguration]);
 
   useEffect(() => {

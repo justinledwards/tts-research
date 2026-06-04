@@ -3,7 +3,12 @@ import {
   SETTINGS_FIELD_META,
   SETTINGS_GROUPS,
   SETTINGS_LAYERS,
+  SETTINGS_PRECEDENCE,
   SETTINGS_SCOPE_META,
+  buildSettingsAuditRows,
+  buildSettingsChangeSet,
+  scopedSettingDefinition,
+  scopedSettingDefinitions,
   settingsFieldMeta,
   settingsGroupsForLayer,
   settingsGroupMeta,
@@ -50,6 +55,89 @@ describe("settings metadata", () => {
     expect(settingsFieldMeta("ergonomicPresets")?.scope).toBe("machine");
     expect(settingsFieldMeta("runtimeDiagnostics")?.group).toBe("runtime");
     expect(settingsFieldMeta("shortcuts")?.group).toBe("reader");
+  });
+
+  it("defines a scoped contract for every searchable setting", () => {
+    expect(scopedSettingDefinitions()).toHaveLength(SETTINGS_FIELD_META.length);
+    expect(scopedSettingDefinition("runMode")).toMatchObject({
+      persistenceTarget: "browserSession",
+      resetTarget: "runDefaults",
+      scope: "session",
+    });
+    expect(scopedSettingDefinition("projectSpeechPolicy")).toMatchObject({
+      confirmationLevel: "confirm",
+      persistenceTarget: "projectRecord",
+      resetTarget: "projectDefault",
+    });
+    expect(scopedSettingDefinition("sourceSpeechPolicy")).toMatchObject({
+      presetEligible: false,
+      resetTarget: "sourceOverride",
+      sourceOfTruth: "Backend selected-source pin",
+    });
+    expect(scopedSettingDefinition("runtimeDiagnostics")).toMatchObject({
+      confirmationLevel: "expert",
+      persistenceTarget: "readOnly",
+      resetTarget: "none",
+    });
+  });
+
+  it("keeps the formal settings precedence visible and ordered", () => {
+    expect(SETTINGS_PRECEDENCE.map((item) => item.scope)).toEqual([
+      "builtIn",
+      "machine",
+      "project",
+      "source",
+      "session",
+      "previewDraft",
+    ]);
+  });
+
+  it("builds scoped change sets and audit rows from the shared contract", () => {
+    const changeSet = buildSettingsChangeSet({
+      id: "preset:test",
+      label: "Preset test",
+      items: [
+        { after: "Fast Create", before: "Checked Master", fieldId: "runMode" },
+        { after: "Accessibility", before: "Enterprise", fieldId: "projectSpeechPolicy" },
+        {
+          after: "Unchanged by preset",
+          before: "Existing source pins",
+          fieldId: "sourceSpeechPolicy",
+          preserved: true,
+        },
+      ],
+    });
+
+    expect(changeSet.affectedScopes).toEqual(["session", "source", "project"]);
+    expect(changeSet.changedCount).toBe(2);
+    expect(changeSet.preservedCount).toBe(1);
+    expect(changeSet.requiresConfirmation).toBe(true);
+    expect(changeSet.items.find((item) => item.fieldId === "sourceSpeechPolicy")).toMatchObject({
+      preserved: true,
+      changed: false,
+    });
+
+    expect(
+      buildSettingsAuditRows([
+        { currentValue: "Checked Master", fieldId: "runMode" },
+        {
+          currentValue: "Long-form book listening",
+          fieldId: "ergonomicPresets",
+          pendingValue: "Preview draft",
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        fieldId: "runMode",
+        resetAction: "Reset run defaults",
+        sourceOfTruth: "Browser session state",
+      }),
+      expect.objectContaining({
+        fieldId: "ergonomicPresets",
+        pendingValue: "Preview draft",
+        resetAction: "Reset display",
+      }),
+    ]);
   });
 
   it("routes settings command targets into progressive layers", () => {

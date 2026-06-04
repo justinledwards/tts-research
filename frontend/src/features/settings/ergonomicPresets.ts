@@ -1,17 +1,25 @@
 import { createRunConfiguration, type RunConfiguration } from "../../runConfig";
 import type { BuiltInSpeechPolicyProfileName, PerformanceMode, RunMode } from "../../types";
 import { applyAccessibilityPreset, type AccessibilityPresetId } from "../accessibility";
-import type { ReaderAccessibilitySettings } from "../reader-accessibility";
 import {
+  READER_LINE_SPACING_LABELS,
+  READER_MEASURE_LABELS,
+  READER_TEXT_SCALE_LABELS,
+  type ReaderAccessibilitySettings,
+} from "../reader-accessibility";
+import {
+  READ_ALONG_PREFERENCE_LABELS,
   normalizeReadAlongPreferences,
   type ReadAlongPreferences,
   type ReadAlongSegmentBoundaryPreferences,
 } from "../readalong";
 import {
   applyTelepromptTheatrePreset,
+  telepromptTheatrePreset,
   type TelepromptTheatrePresetId,
   type TelepromptTheatreSettings,
 } from "../teleprompt/telepromptTheatreSettings";
+import { buildSettingsChangeSet, type PresetChangeSet } from "./model";
 
 export const ERGONOMIC_PRESET_IDS = [
   "longFormBookListening",
@@ -77,6 +85,12 @@ export interface AppliedErgonomicPresetDefaults {
   readAlongPreferences: ReadAlongPreferences;
   runConfiguration: RunConfiguration;
   telepromptTheatreSettings: TelepromptTheatreSettings;
+}
+
+export interface BuildErgonomicPresetChangeSetInput extends ApplyErgonomicPresetInput {
+  sourcePinSummary?: string;
+  speechPolicyProfile: string;
+  speechPolicyProfileLabel?: (profile: string) => string;
 }
 
 const DEFAULT_SEGMENT_BOUNDARY: ReadAlongSegmentBoundaryPreferences = {
@@ -290,6 +304,62 @@ export function applyErgonomicPresetDefaults(
   };
 }
 
+export function buildErgonomicPresetChangeSet(
+  id: ErgonomicPresetId,
+  current: BuildErgonomicPresetChangeSetInput,
+): PresetChangeSet {
+  const preset = ergonomicPresetById(id);
+  const next = applyErgonomicPresetDefaults(id, current);
+  const labelPolicy = current.speechPolicyProfileLabel ?? ((profile: string) => profile);
+  const changeSet = buildSettingsChangeSet({
+    id: `ergonomic-preset:${preset.id}`,
+    label: preset.label,
+    items: [
+      {
+        after: runModeLabel(next.runConfiguration),
+        before: runModeLabel(current.runConfiguration),
+        fieldId: "runMode",
+      },
+      {
+        after: performanceLabel(next.runConfiguration.performanceMode),
+        before: performanceLabel(current.runConfiguration.performanceMode),
+        fieldId: "performanceMode",
+      },
+      {
+        after: readerSettingsLabel(next.readerAccessibilitySettings),
+        before: readerSettingsLabel(current.readerAccessibilitySettings),
+        fieldId: "readerPreferences",
+      },
+      {
+        after: readAlongSettingsLabel(next.readAlongPreferences),
+        before: readAlongSettingsLabel(current.readAlongPreferences),
+        fieldId: "readAlongPreferences",
+      },
+      {
+        after: telepromptTheatrePreset(next.telepromptTheatreSettings.presetId).label,
+        before: telepromptTheatrePreset(current.telepromptTheatreSettings.presetId).label,
+        fieldId: "telepromptTheatre",
+      },
+      {
+        after: labelPolicy(preset.speechPolicyProfile),
+        before: labelPolicy(current.speechPolicyProfile),
+        fieldId: "projectSpeechPolicy",
+      },
+      {
+        after: "Unchanged by preset",
+        before: current.sourcePinSummary ?? "Existing source pins",
+        fieldId: "sourceSpeechPolicy",
+        preserved: true,
+      },
+    ],
+  });
+  return {
+    ...changeSet,
+    presetId: preset.id,
+    presetLabel: preset.label,
+  };
+}
+
 export const ERGONOMIC_TRANSPORT_DENSITY_LABELS: Record<ErgonomicTransportDensity, string> = {
   balanced: "Balanced controls",
   compact: "Compact controls",
@@ -314,3 +384,49 @@ export const ERGONOMIC_PREVIEW_BEHAVIOR_LABELS: Record<ErgonomicPreviewPlayerBeh
   shortAudition: "Short audition",
   telepromptRehearsal: "Teleprompt rehearsal",
 };
+
+function runModeLabel(configuration: RunConfiguration): string {
+  return createRunConfiguration(configuration.runMode).runMode === configuration.runMode
+    ? RUN_MODE_LABELS[configuration.runMode]
+    : configuration.runMode;
+}
+
+const RUN_MODE_LABELS: Record<RunMode, string> = {
+  checkedMaster: "Checked Master",
+  draftPreview: "Draft Preview",
+  fastCreate: "Fast Create",
+  publishMaster: "Publish Master",
+};
+
+function performanceLabel(mode: PerformanceMode): string {
+  if (mode === "throughput") {
+    return "Throughput";
+  }
+  if (mode === "quality") {
+    return "Quality";
+  }
+  return "Balanced";
+}
+
+function readerSettingsLabel(settings: ReaderAccessibilitySettings): string {
+  const flags = [
+    settings.highContrast ? "high contrast" : "",
+    settings.reducedMotion ? "reduced motion" : "",
+  ].filter(Boolean);
+  return [
+    READER_TEXT_SCALE_LABELS[settings.textScale],
+    READER_LINE_SPACING_LABELS[settings.lineSpacing],
+    READER_MEASURE_LABELS[settings.measure],
+    ...flags,
+  ].join(" / ");
+}
+
+function readAlongSettingsLabel(settings: ReadAlongPreferences): string {
+  const normalized = normalizeReadAlongPreferences(settings);
+  return [
+    READ_ALONG_PREFERENCE_LABELS.granularity[normalized.highlightGranularity],
+    READ_ALONG_PREFERENCE_LABELS.style[normalized.highlightStyle],
+    READ_ALONG_PREFERENCE_LABELS.scrollFollow[normalized.scrollFollow],
+    READ_ALONG_PREFERENCE_LABELS.syncStrictness[normalized.syncStrictness],
+  ].join(" / ");
+}

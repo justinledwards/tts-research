@@ -7,6 +7,7 @@ import {
   ERGONOMIC_PRESET_IDS,
   ERGONOMIC_PRESETS,
   applyErgonomicPresetDefaults,
+  buildErgonomicPresetChangeSet,
   ergonomicPresetById,
 } from "./ergonomicPresets";
 
@@ -60,5 +61,31 @@ describe("ergonomic presets", () => {
     expect(preset.speechPolicyProfile).toBe("Accessibility");
     expect(preset.readerDisplayPreset).toBe("lowVision");
     expect(preset.telepromptTheatrePreset).toBe("lowVision");
+  });
+
+  it("summarizes preset changes without silently overriding source pins", () => {
+    const changeSet = buildErgonomicPresetChangeSet("accessibilityFirst", {
+      readerAccessibilitySettings: DEFAULT_READER_ACCESSIBILITY_SETTINGS,
+      readAlongPreferences: DEFAULT_READ_ALONG_PREFERENCES,
+      runConfiguration: createRunConfiguration("publishMaster"),
+      sourcePinSummary: "Pinned source profile",
+      speechPolicyProfile: "Enterprise",
+      speechPolicyProfileLabel: (profile) =>
+        profile === "Accessibility" ? "Accessibility profile" : profile,
+      telepromptTheatreSettings: DEFAULT_TELEPROMPT_THEATRE_SETTINGS,
+    });
+
+    expect(changeSet.presetId).toBe("accessibilityFirst");
+    expect(changeSet.requiresConfirmation).toBe(true);
+    expect(changeSet.items.find((item) => item.fieldId === "projectSpeechPolicy")).toMatchObject({
+      after: "Accessibility profile",
+      before: "Enterprise",
+      confirmationLevel: "confirm",
+    });
+    expect(changeSet.items.find((item) => item.fieldId === "sourceSpeechPolicy")).toMatchObject({
+      after: "Unchanged by preset",
+      before: "Pinned source profile",
+      preserved: true,
+    });
   });
 });

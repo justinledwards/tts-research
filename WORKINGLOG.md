@@ -1,3 +1,11 @@
+## 2026-06-04 10:31 CEST - Studio Settings Scoped Defaults
+- [x] Add scoped settings contract and audit model
+- [x] Update preset preview, apply, confirmation, and reset flows
+- [x] Add frontend regression coverage
+- [x] Add backend precedence regression coverage
+- [x] Run project checks
+- Validation: focused frontend settings/navigation tests passed; frontend typecheck passed; backend policy tests passed; `pnpm check` passed with existing unrelated lint warnings. `pnpm e2e:settings-ia` reached the scoped preset/defaults assertions, then failed later waiting for the existing Open workspace button.
+
 ## 2026-06-03 16:28 CEST - Shared Reading Follow-Along Renderer
 - [x] Add shared renderer spec and model
 - [x] Implement ReadingFollowAlongRenderer

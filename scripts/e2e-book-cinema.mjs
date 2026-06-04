@@ -681,6 +681,35 @@ async function runSettingsIAUX(browser, projectId) {
     await page.getByRole("button", { exact: true, name: "Open settings" }).click();
     await page.getByText("Studio Settings").first().waitFor();
     await page.getByText("Quick settings").first().waitFor();
+    await page.getByTestId("ergonomic-preset-preview").waitFor();
+    await page.getByText("Before / after summary").first().waitFor();
+    await page.getByText("Settings audit").first().waitFor();
+    await page.getByTestId("ui-action-ergonomic-preset-accessibilityFirst").click();
+    await page.getByText("Existing source pins").first().waitFor();
+    await page.getByText("Unchanged by preset").first().waitFor();
+    const policyBeforePresetDefaults = await page
+      .getByTestId("settings-quick-basic-policy")
+      .inputValue();
+    await page.getByTestId("ui-action-ergonomic-preset-apply").click();
+    const policyAfterPresetDefaults = await page
+      .getByTestId("settings-quick-basic-policy")
+      .inputValue();
+    if (policyAfterPresetDefaults !== policyBeforePresetDefaults) {
+      throw new Error("Applying preset defaults changed project speech policy without confirm.");
+    }
+    let policyDialogMessage = "";
+    page.once("dialog", async (dialog) => {
+      policyDialogMessage = dialog.message();
+      await dialog.accept();
+    });
+    await page.getByTestId("ui-action-ergonomic-preset-apply-policy").click();
+    if (!/Source-level pins and overrides stay unchanged/.test(policyDialogMessage)) {
+      throw new Error(`Unexpected preset policy confirmation: ${policyDialogMessage}`);
+    }
+    await page.waitForFunction(() => {
+      const select = document.querySelector("[data-testid='settings-quick-basic-policy']");
+      return select instanceof HTMLSelectElement && select.value === "Accessibility";
+    });
     const settingsScreenshot = path.join(screenshotsDir, "settings-ia-settings.png");
     await page.screenshot({ fullPage: false, path: settingsScreenshot });
     screenshots.push(settingsScreenshot);
