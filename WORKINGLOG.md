@@ -1525,3 +1525,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update shortcut discoverability and tests
 - [x] Run focused and project checks
 - Validation: frontend typecheck passed; focused shortcut, Teleprompt, ReviewPanel, and command-palette helper tests passed; command palette e2e passed; accessibility audit passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome warnings/infos.
+
+## 2026-06-04 15:30 CEST - Preview Generated Audio Empty State
+- [x] Replace disabled Preview playback with compact placeholder
+- [x] Update Preview regression and e2e expectations
+- [x] Run focused and project checks
+- [x] Commit work package
+- Validation: focused frontend Preview tests passed; frontend typecheck passed; responsive snapshots passed; `pnpm check` passed with existing unrelated Biome warnings. Managed `e2e:ui-actions:quick` replay passed 48/48 activations with 0 overlay collisions, but the filtered run still exits non-zero for existing review-gate coverage and duplicate-control backlog.

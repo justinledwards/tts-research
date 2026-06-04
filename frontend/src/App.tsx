@@ -282,6 +282,7 @@ import {
 } from "./features/playback/playbackSurfaceRules";
 import { resolvePreviewReadinessModel } from "./features/preview/previewReadiness";
 import {
+  PreviewGeneratedAudioPanel,
   PreviewConfirmationStrip,
   PreviewReadinessChecklist,
   VoiceAuditionPanel,
@@ -11588,6 +11589,7 @@ function NarrationPreviewStage({
   const createDisabled = !readiness.canCreate;
   const createAndListenDisabledReason = readiness.createDisabledReason;
   const openCinemaDisabledReason = canOpenCinema ? undefined : readiness.cinemaDisabledReason;
+  const generatedAudioReadiness = readiness.rows.find((row) => row.id === "audio");
   const auditionSampleText = previewAuditionSampleText(
     selectedPreviewBlock?.spokenText ?? spokenText,
   );
@@ -11922,20 +11924,21 @@ function NarrationPreviewStage({
               : readiness.rows.find((row) => row.id === "audition")?.detail
           }
         />
-        <section className="grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
-          <div>
-            <h3 className="text-base font-semibold">Generated audio playback</h3>
-            <p className="mt-1 text-xs vs-muted">
-              Full narration playback is available after Create & Listen finishes.
-            </p>
-          </div>
-          <div className="sticky top-3 z-10">
+        <PreviewGeneratedAudioPanel
+          detail={
+            readiness.generatedPlaybackDisabledReason ??
+            generatedAudioReadiness?.detail ??
+            "Create & Listen will generate playback for this scope."
+          }
+          playbackAvailable={playbackControls.isAvailable}
+          status={generatedAudioReadiness?.status ?? "waiting"}
+          playbackToolbar={
             <LocalizedPlaybackToolbar
               model={previewPlaybackToolbar}
               shortcutPreferences={shortcutPreferences}
             />
-          </div>
-        </section>
+          }
+        />
       </div>
       <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)]">
         <div className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border">

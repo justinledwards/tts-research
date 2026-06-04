@@ -1206,6 +1206,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
       .getByText(/Default voice|Default mock narrator/)
       .first()
       .waitFor();
+    await assertWorkspacePreviewEmptyLayout(page);
     await clickPreviewMiniPlayerIfReady(page);
     await clickIfEnabledTestId(page, "ui-action-preview-local-next");
     await clickIfEnabledTestId(page, "ui-action-preview-local-previous");
@@ -1321,6 +1322,14 @@ async function openWorkspaceStage(page, label) {
       page.getByTestId("workspace-stage-action-openTeleprompt").waitFor({ state: "visible" }),
       page.getByTestId("ui-action-preview-local-play").waitFor({ state: "visible" }),
     ]);
+    if (
+      await page
+        .getByTestId("preview-generated-audio-empty-state")
+        .isVisible()
+        .catch(() => false)
+    ) {
+      await assertWorkspacePreviewEmptyLayout(page);
+    }
   } else {
     await page.getByText("Teleprompt Studio").first().waitFor();
   }
@@ -1387,6 +1396,73 @@ async function assertWorkspaceReviewRepairLayout(page) {
   });
   if (report.length > 0) {
     throw new Error(`Workspace review repair layout failed: ${report.join("; ")}`);
+  }
+}
+
+async function assertWorkspacePreviewEmptyLayout(page) {
+  await page.getByTestId("preview-generated-audio-empty-state").waitFor({ state: "visible" });
+  await waitForEnabledTestId(page, "workspace-stage-action-createAndListen");
+  const report = await page.evaluate(() => {
+    const failures = [];
+    const visible = (element) =>
+      element instanceof HTMLElement &&
+      element.offsetParent !== null &&
+      element.getClientRects().length > 0 &&
+      !element.closest("[aria-hidden='true']");
+    const rectFor = (selector) => {
+      const element = document.querySelector(selector);
+      if (!visible(element)) {
+        failures.push(`${selector} is not visible`);
+        return null;
+      }
+      const rect = element.getBoundingClientRect();
+      return {
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        width: rect.width,
+      };
+    };
+    const overlapArea = (left, right) =>
+      Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left)) *
+      Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top));
+    const audition = rectFor("[data-testid='preview-audition-panel']");
+    const generated = rectFor("[data-testid='preview-generated-audio-panel']");
+    const placeholder = rectFor("[data-testid='preview-generated-audio-empty-state']");
+    const create = rectFor("[data-testid='workspace-stage-action-createAndListen']");
+    const footerElement = document.querySelector("[data-testid='narration-status-strip']");
+    const footer = visible(footerElement) ? footerElement.getBoundingClientRect() : null;
+    const createElement = document.querySelector(
+      "[data-testid='workspace-stage-action-createAndListen']",
+    );
+    if (
+      createElement instanceof HTMLButtonElement &&
+      (createElement.disabled || createElement.getAttribute("aria-disabled") === "true")
+    ) {
+      failures.push("Create & Listen is not reachable from Preview empty state");
+    }
+    if (audition && generated && overlapArea(audition, generated) > 64) {
+      failures.push("Preview audition panel overlaps generated-audio placeholder");
+    }
+    if (footer) {
+      for (const [label, rect] of [
+        ["Create & Listen", create],
+        ["Generated audio placeholder", placeholder],
+      ]) {
+        if (rect && overlapArea(rect, footer) > 0) {
+          failures.push(`${label} overlaps the status strip`);
+        }
+      }
+    }
+    if (visible(document.querySelector("[data-testid='localized-preview-playback-toolbar']"))) {
+      failures.push("Preview playback toolbar is visible before generated audio is available");
+    }
+    return failures;
+  });
+  if (report.length > 0) {
+    throw new Error(`Workspace preview empty layout failed: ${report.join("; ")}`);
   }
 }
 

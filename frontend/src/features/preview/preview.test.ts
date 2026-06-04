@@ -12,6 +12,7 @@ import {
   findAdjacentPreviewQueueItem,
   formatPreviewClock,
   PreviewConfirmationStrip,
+  PreviewGeneratedAudioPanel,
   previewComparisonSummary,
   previewQueueProgress,
   PreviewReadinessChecklist,
@@ -394,6 +395,47 @@ describe("preview readiness UI", () => {
     expect(markup).toContain('data-disabled-reason="Select a ready voice or TTS engine."');
     expect(markup).toContain("Select a ready voice or TTS engine.");
     expect(markup).toContain("0:01 · mock · af_heart");
+  });
+
+  it("renders a compact generated-audio placeholder before playback is available", () => {
+    const markup = renderToStaticMarkup(
+      createElement(PreviewGeneratedAudioPanel, {
+        detail:
+          "Preview shows the listener-ready text. No generated audio exists yet. Create & Listen to generate audio for this scope.",
+        playbackAvailable: false,
+        playbackToolbar: createElement(
+          "div",
+          { "data-testid": "localized-preview-playback-toolbar" },
+          "Transport",
+        ),
+        status: "waiting",
+      }),
+    );
+
+    expect(markup).toContain('data-testid="preview-generated-audio-empty-state"');
+    expect(markup).toContain("Audio not generated yet");
+    expect(markup).toContain("No generated audio exists yet");
+    expect(markup).not.toContain('data-testid="localized-preview-playback-toolbar"');
+    expect(markup).not.toContain("Jump to Audio");
+  });
+
+  it("embeds generated-audio playback once playable audio is available", () => {
+    const markup = renderToStaticMarkup(
+      createElement(PreviewGeneratedAudioPanel, {
+        detail: "Audio ready. Preview playback and Cinema are available.",
+        playbackAvailable: true,
+        playbackToolbar: createElement(
+          "div",
+          { "data-testid": "localized-preview-playback-toolbar" },
+          "Transport",
+        ),
+        status: "ready",
+      }),
+    );
+
+    expect(markup).toContain('data-testid="preview-generated-audio-playback"');
+    expect(markup).toContain('data-testid="localized-preview-playback-toolbar"');
+    expect(markup).not.toContain('data-testid="preview-generated-audio-empty-state"');
   });
 });
 

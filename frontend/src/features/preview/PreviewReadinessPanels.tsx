@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Button, Panel, StatusChip, type StatusChipTone } from "../../design";
 import type {
   PreviewReadinessModel,
@@ -11,6 +12,13 @@ export interface PreviewVoiceAuditionState {
   readonly metadata?: string;
   readonly play: () => void;
   readonly status: "error" | "idle" | "loading" | "playing" | "ready";
+}
+
+export interface PreviewGeneratedAudioPanelProps {
+  readonly detail: string;
+  readonly playbackAvailable: boolean;
+  readonly playbackToolbar: ReactNode;
+  readonly status: PreviewReadinessRowStatus;
 }
 
 export function PreviewReadinessChecklist({ model }: Readonly<{ model: PreviewReadinessModel }>) {
@@ -33,6 +41,53 @@ export function PreviewReadinessChecklist({ model }: Readonly<{ model: PreviewRe
           <PreviewReadinessItem key={row.id} row={row} />
         ))}
       </div>
+    </Panel>
+  );
+}
+
+export function PreviewGeneratedAudioPanel({
+  detail,
+  playbackAvailable,
+  playbackToolbar,
+  status,
+}: Readonly<PreviewGeneratedAudioPanelProps>) {
+  const emptyTitle = previewGeneratedAudioEmptyTitle(status);
+  const statusLabel = playbackAvailable ? "Ready" : previewReadinessStatusLabel(status);
+  const statusTone = playbackAvailable ? "success" : previewReadinessTone(status);
+  return (
+    <Panel
+      as="section"
+      aria-label="Generated audio playback"
+      className="grid gap-3 p-3"
+      data-testid="preview-generated-audio-panel"
+      variant="workSurface"
+    >
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold">Generated audio playback</h3>
+          <p className="mt-1 text-xs leading-5 vs-muted">
+            {playbackAvailable
+              ? "Full narration playback is ready for this scope."
+              : "Playback appears here after Create & Listen finishes."}
+          </p>
+        </div>
+        <StatusChip tone={statusTone}>{statusLabel}</StatusChip>
+      </div>
+      {playbackAvailable ? (
+        <div data-testid="preview-generated-audio-playback">{playbackToolbar}</div>
+      ) : (
+        <div
+          aria-live="polite"
+          className="grid gap-2 rounded-md border border-dashed border-[var(--vs-border-subtle)] p-3 vs-work-surface"
+          data-testid="preview-generated-audio-empty-state"
+        >
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+            Preview playback
+          </p>
+          <p className="text-sm font-semibold">{emptyTitle}</p>
+          <p className="text-xs leading-5 vs-muted">{detail}</p>
+        </div>
+      )}
     </Panel>
   );
 }
@@ -158,6 +213,16 @@ export function previewReadinessStatusLabel(status: PreviewReadinessRowStatus): 
     return "Review";
   }
   return "Waiting";
+}
+
+export function previewGeneratedAudioEmptyTitle(status: PreviewReadinessRowStatus): string {
+  if (status === "working") {
+    return "Audio is being prepared";
+  }
+  if (status === "blocked") {
+    return "Playback is unavailable";
+  }
+  return "Audio not generated yet";
 }
 
 export function voiceAuditionTone(status: PreviewVoiceAuditionState["status"]): StatusChipTone {

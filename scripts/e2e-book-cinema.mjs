@@ -560,7 +560,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.getByTestId("workspace-stage-action-previewSpeech").click();
     await page.getByText("Spoken Form").first().waitFor();
     await page.getByText("Generated audio playback").first().waitFor();
-    await page.getByTestId("localized-preview-playback-toolbar").waitFor();
+    await page.getByTestId("preview-generated-audio-empty-state").waitFor();
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Studio").first().waitFor();
     await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
