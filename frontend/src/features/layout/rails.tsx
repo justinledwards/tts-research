@@ -7,14 +7,14 @@ export function railColumnWidth(mode: WorkspaceRailMode, side: "left" | "right")
   }
   if (mode === "compact") {
     if (side === "right") {
-      return "clamp(220px, 18vw, 300px)";
+      return "clamp(280px, 20vw, 340px)";
     }
     return "140px";
   }
   if (side === "left") {
     return "clamp(256px, 18vw, 360px)";
   }
-  return "clamp(252px, 19vw, 360px)";
+  return "clamp(340px, 24vw, 460px)";
 }
 
 export function RailMiniStack({

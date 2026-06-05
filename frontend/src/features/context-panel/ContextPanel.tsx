@@ -68,8 +68,8 @@ export function ContextPanel({
               <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
                 Inspector
               </p>
-              <h3 className="mt-1 truncate text-sm font-semibold">{visibleHeadingTitle}</h3>
-              <p className="mt-1 line-clamp-2 text-xs vs-muted">{visibleHeadingDetail}</p>
+              <h3 className="mt-1 text-sm font-semibold break-words">{visibleHeadingTitle}</h3>
+              <p className="mt-1 text-xs leading-5 break-words vs-muted">{visibleHeadingDetail}</p>
             </div>
             <Button
               className="shrink-0"
@@ -108,8 +108,8 @@ export function ContextPanel({
             <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
               Inspector
             </p>
-            <h3 className="mt-1 truncate text-sm font-semibold">{visibleHeadingTitle}</h3>
-            <p className="mt-1 line-clamp-2 text-xs vs-muted">{visibleHeadingDetail}</p>
+            <h3 className="mt-1 text-sm font-semibold break-words">{visibleHeadingTitle}</h3>
+            <p className="mt-1 text-xs leading-5 break-words vs-muted">{visibleHeadingDetail}</p>
           </div>
           {onPinnedChange ? (
             <Button
@@ -158,14 +158,14 @@ export function ContextPanel({
                   variant={isActive ? "mode" : "secondary"}
                 >
                   <span className="flex min-w-0 items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-sm font-semibold">{tab.title}</span>
+                    <span className="min-w-0 text-sm font-semibold break-words">{tab.title}</span>
                     {tab.advanced ? (
                       <StatusChip className="py-0.5 text-[0.65rem]" tone="warning">
                         Advanced
                       </StatusChip>
                     ) : null}
                   </span>
-                  <span className="mt-1 block line-clamp-2 text-left text-xs vs-muted">
+                  <span className="mt-1 block text-left text-xs leading-5 break-words vs-muted">
                     {tab.detail}
                   </span>
                 </Button>
@@ -204,8 +204,8 @@ export function ContextPanel({
               key={section.id}
             >
               <div className="min-w-0">
-                <h4 className="truncate text-sm font-semibold">{section.title}</h4>
-                <p className="mt-1 text-xs vs-muted">{section.detail}</p>
+                <h4 className="text-sm font-semibold break-words">{section.title}</h4>
+                <p className="mt-1 text-xs leading-5 break-words vs-muted">{section.detail}</p>
               </div>
               {sectionAdvancedReason ? (
                 <p

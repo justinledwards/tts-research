@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -2695,7 +2696,7 @@ func TestRetryJobReusesPersistedReadySegments(t *testing.T) {
 
 	jobDataDir := t.TempDir()
 	projectDataDir := t.TempDir()
-	checker := &rejectSecondChecker{}
+	tts := &failOnceTTSAgent{failCall: 2}
 	options := pipeline.Options{
 		JobDataDir:      jobDataDir,
 		MaxRetries:      1,
@@ -2705,8 +2706,8 @@ func TestRetryJobReusesPersistedReadySegments(t *testing.T) {
 	}
 	service := pipeline.NewService(
 		agents.NewVoiceOptimizationAgent(),
-		agents.NewMockTTSAgent(),
-		checker,
+		tts,
+		agents.NewMockVoiceCheckerAgent(),
 		options,
 	)
 
@@ -5499,7 +5500,7 @@ func TestCreateJobRetriesRejectedSegmentFromStart(t *testing.T) {
 	}
 }
 
-func TestCreateJobMarksCheckerFailedWhenRetryLimitExhausts(t *testing.T) {
+func TestCreateJobCompletesWithAudioReviewWarningWhenCheckerRetryLimitExhausts(t *testing.T) {
 	t.Parallel()
 
 	service := pipeline.NewService(
@@ -5514,18 +5515,86 @@ func TestCreateJobMarksCheckerFailedWhenRetryLimitExhausts(t *testing.T) {
 		t.Fatalf("CreateJob returned error: %v", err)
 	}
 
-	failed := waitForFailedJob(t, service, job.ID)
-	if failed.Stages.Checker != pipeline.StageStatusFailed {
-		t.Fatalf("checker stage = %q, want %q", failed.Stages.Checker, pipeline.StageStatusFailed)
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.Stages.Checker != pipeline.StageStatusDone {
+		t.Fatalf("checker stage = %q, want %q", completed.Stages.Checker, pipeline.StageStatusDone)
 	}
-	if failed.Stages.Synthesis != pipeline.StageStatusDone {
-		t.Fatalf("synthesis stage = %q, want %q", failed.Stages.Synthesis, pipeline.StageStatusDone)
+	if completed.Stages.Synthesis != pipeline.StageStatusDone {
+		t.Fatalf("synthesis stage = %q, want %q", completed.Stages.Synthesis, pipeline.StageStatusDone)
 	}
-	if failed.Retries.Attempts != 2 {
-		t.Fatalf("attempts = %d, want 2", failed.Retries.Attempts)
+	if completed.Retries.Attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", completed.Retries.Attempts)
 	}
-	if failed.TerminalReason != pipeline.JobTerminalReasonValidationFailed || !failed.Retriable {
-		t.Fatalf("failed terminal metadata = (%q, %t), want validation-failed/retriable", failed.TerminalReason, failed.Retriable)
+	if completed.TerminalReason != "" || completed.Retriable {
+		t.Fatalf("completed terminal metadata = (%q, %t), want empty/non-retriable", completed.TerminalReason, completed.Retriable)
+	}
+	if len(completed.Segments) == 0 || completed.Segments[0].Status != "ready" || len(completed.Segments[0].Warnings) != 1 {
+		t.Fatalf("completed segment = %#v, want ready with one ASR warning", completed.Segments)
+	}
+	if completed.QualityReport == nil || completed.QualityReport.WarningCount != 1 || completed.QualityReport.UnverifiedSegmentCount != 1 {
+		t.Fatalf("quality report = %#v, want one warning and one unverified segment", completed.QualityReport)
+	}
+}
+
+func TestCreateJobContinuesWhenSegmentThirteenASRDoesNotMatch(t *testing.T) {
+	t.Parallel()
+
+	checker := &rejectMatchingSegmentChecker{
+		rejectMatches: []string{"Segment 13.", "Segment thirteen."},
+		reason:        "ASR transcript did not sufficiently match and did not look like a clean cutoff",
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		checker,
+		pipeline.Options{
+			MaxRetries:      2,
+			SegmentWorkers:  1,
+			SegmentMaxRunes: 12,
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+		},
+	)
+
+	segments := make([]string, 0, 15)
+	for index := 1; index <= 15; index += 1 {
+		segments = append(segments, fmt.Sprintf("Segment %02d.", index))
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: strings.Join(segments, " ")})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.AudioReadySegments != 15 {
+		t.Fatalf("audio ready segments = %d, want 15", completed.AudioReadySegments)
+	}
+	if len(completed.Segments) != 15 {
+		t.Fatalf("segments = %d, want 15", len(completed.Segments))
+	}
+	for index, segment := range completed.Segments {
+		if segment.Status != "ready" {
+			t.Fatalf("segment %d status = %q, want ready", index+1, segment.Status)
+		}
+	}
+	warned := completed.Segments[12]
+	if warned.Attempts != 2 {
+		t.Fatalf("segment 13 attempts = %d, want 2", warned.Attempts)
+	}
+	if warned.Similarity != 0.1 {
+		t.Fatalf("segment 13 similarity = %f, want 0.1", warned.Similarity)
+	}
+	if len(warned.Warnings) != 1 || !strings.Contains(warned.Warnings[0], checker.reason) {
+		t.Fatalf("segment 13 warnings = %#v, want ASR review warning", warned.Warnings)
+	}
+	if completed.Status != pipeline.JobStatusCompleted || completed.Error != "" {
+		t.Fatalf("completed status/error = %q/%q, want completed with no error", completed.Status, completed.Error)
+	}
+	if completed.VoiceCheck.Complete != true || !strings.Contains(completed.VoiceCheck.Reason, "segment review warning") {
+		t.Fatalf("voice check = %#v, want completed aggregate warning", completed.VoiceCheck)
+	}
+	if completed.QualityReport == nil || completed.QualityReport.WarningCount != 1 || completed.QualityReport.UnverifiedSegmentCount != 1 {
+		t.Fatalf("quality report = %#v, want one ASR warning", completed.QualityReport)
 	}
 }
 
@@ -5581,6 +5650,148 @@ func TestCreateJobTreatsProviderTimeoutAsRetriableFailure(t *testing.T) {
 	failed := waitForFailedJob(t, service, job.ID)
 	if failed.Status == pipeline.JobStatusCancelled {
 		t.Fatal("provider timeout must not become a user-cancelled job")
+	}
+	if failed.TerminalReason != pipeline.JobTerminalReasonProviderTimeout || !failed.Retriable {
+		t.Fatalf("failed terminal metadata = (%q, %t), want provider-timeout/retriable", failed.TerminalReason, failed.Retriable)
+	}
+}
+
+func TestCreateJobRetriesTransientProviderCancellationBeforeFailingRun(t *testing.T) {
+	t.Parallel()
+
+	tts := &transientRuntimeTTSAgent{err: context.Canceled}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		tts,
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 2, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			ASRCheck: boolPtr(false),
+		},
+		Text: "Transient provider cancellation should retry the segment.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if calls := tts.calls(); calls != 2 {
+		t.Fatalf("tts calls = %d, want 2", calls)
+	}
+	if completed.TerminalReason != "" || completed.Retriable {
+		t.Fatalf("completed terminal metadata = (%q, %t), want empty/non-retriable", completed.TerminalReason, completed.Retriable)
+	}
+	if completed.Retries.Attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", completed.Retries.Attempts)
+	}
+}
+
+func TestCreateJobRetriesTransientCheckerTimeoutBeforeFailingRun(t *testing.T) {
+	t.Parallel()
+
+	checker := &transientRuntimeChecker{err: context.DeadlineExceeded}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		checker,
+		pipeline.Options{MaxRetries: 2, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text: "Transient checker timeout should retry the current segment.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if calls := checker.calls(); calls != 2 {
+		t.Fatalf("checker calls = %d, want 2", calls)
+	}
+	if completed.TerminalReason != "" || completed.Retriable {
+		t.Fatalf("completed terminal metadata = (%q, %t), want empty/non-retriable", completed.TerminalReason, completed.Retriable)
+	}
+	if completed.Retries.Attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", completed.Retries.Attempts)
+	}
+}
+
+func TestCreateJobCompletesWithAudioReviewWarningWhenCheckerTimeoutExhausts(t *testing.T) {
+	t.Parallel()
+
+	checker := &alwaysRuntimeChecker{err: context.DeadlineExceeded}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		checker,
+		pipeline.Options{MaxRetries: 2, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text: "Checker timeout should not discard generated speech.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if calls := checker.calls(); calls != 2 {
+		t.Fatalf("checker calls = %d, want 2", calls)
+	}
+	if completed.TerminalReason != "" || completed.Retriable || completed.Error != "" {
+		t.Fatalf("completed terminal metadata = (%q, %t, %q), want empty/non-retriable", completed.TerminalReason, completed.Retriable, completed.Error)
+	}
+	if completed.AudioReadySegments != completed.Retries.TotalSegments {
+		t.Fatalf("ready segments = %d, want %d", completed.AudioReadySegments, completed.Retries.TotalSegments)
+	}
+	if len(completed.Segments) != 1 || len(completed.Segments[0].Warnings) != 1 {
+		t.Fatalf("segment warnings = %#v, want one ASR review warning", completed.Segments)
+	}
+	if !strings.Contains(completed.Segments[0].Warnings[0], "voice checker timed out") {
+		t.Fatalf("segment warning = %q, want timeout detail", completed.Segments[0].Warnings[0])
+	}
+	if completed.QualityReport == nil || completed.QualityReport.UnverifiedSegmentCount != 1 || completed.QualityReport.WarningCount != 1 {
+		t.Fatalf("quality report = %#v, want one unverified warning", completed.QualityReport)
+	}
+}
+
+func TestCreateJobExhaustedProviderRetriesPreserveReadyPrefix(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		&prefixThenTimeoutTTSAgent{failFromCall: 2},
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:      2,
+			SegmentWorkers:  1,
+			SegmentMaxRunes: 20,
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+		},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			ASRCheck: boolPtr(false),
+		},
+		Text: "First sentence. Second sentence.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	failed := waitForFailedJob(t, service, job.ID)
+	if failed.AudioReadySegments != 1 {
+		t.Fatalf("audio ready segments = %d, want 1", failed.AudioReadySegments)
+	}
+	if failed.AudioPartialURL == "" {
+		t.Fatal("partial audio URL should be preserved for the ready prefix")
+	}
+	if failed.Retries.CurrentSegment != 2 || failed.Retries.SegmentAttempts != 2 {
+		t.Fatalf("retry progress = segment %d attempts %d, want segment 2 attempts 2", failed.Retries.CurrentSegment, failed.Retries.SegmentAttempts)
+	}
+	if len(failed.Segments) < 2 || failed.Segments[0].Status != "ready" || failed.Segments[1].Status != "failed" {
+		t.Fatalf("segment statuses = %#v, want ready prefix then failed segment", failed.Segments)
 	}
 	if failed.TerminalReason != pipeline.JobTerminalReasonProviderTimeout || !failed.Retriable {
 		t.Fatalf("failed terminal metadata = (%q, %t), want provider-timeout/retriable", failed.TerminalReason, failed.Retriable)
@@ -5847,6 +6058,60 @@ type timeoutTTSAgent struct{}
 
 func (timeoutTTSAgent) Synthesize(context.Context, string) (agents.TTSResult, error) {
 	return agents.TTSResult{}, context.DeadlineExceeded
+}
+
+type failOnceTTSAgent struct {
+	mu       sync.Mutex
+	calls    int
+	failCall int
+}
+
+func (agent *failOnceTTSAgent) Synthesize(_ context.Context, text string) (agents.TTSResult, error) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	agent.calls += 1
+	if agent.calls == agent.failCall {
+		return agents.TTSResult{}, context.DeadlineExceeded
+	}
+	return silentTTSResult(text, "fail-once")
+}
+
+type transientRuntimeTTSAgent struct {
+	mu       sync.Mutex
+	err      error
+	attempts int
+}
+
+func (agent *transientRuntimeTTSAgent) Synthesize(_ context.Context, text string) (agents.TTSResult, error) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	agent.attempts += 1
+	if agent.attempts == 1 {
+		return agents.TTSResult{}, agent.err
+	}
+	return silentTTSResult(text, "transient-runtime")
+}
+
+func (agent *transientRuntimeTTSAgent) calls() int {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	return agent.attempts
+}
+
+type prefixThenTimeoutTTSAgent struct {
+	mu           sync.Mutex
+	calls        int
+	failFromCall int
+}
+
+func (agent *prefixThenTimeoutTTSAgent) Synthesize(_ context.Context, text string) (agents.TTSResult, error) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	agent.calls += 1
+	if agent.calls >= agent.failFromCall {
+		return agents.TTSResult{}, context.DeadlineExceeded
+	}
+	return silentTTSResult(text, "prefix-timeout")
 }
 
 type recordingTTSAgent struct {
@@ -6176,6 +6441,54 @@ func (checker *retryRejectedChecker) Check(_ context.Context, optimizedText stri
 	}, nil
 }
 
+type transientRuntimeChecker struct {
+	mu       sync.Mutex
+	err      error
+	attempts int
+}
+
+func (checker *transientRuntimeChecker) Check(_ context.Context, optimizedText string, _ []byte) (agents.VoiceCheckResult, error) {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+	checker.attempts += 1
+	if checker.attempts == 1 {
+		return agents.VoiceCheckResult{}, checker.err
+	}
+	return agents.VoiceCheckResult{
+		Complete:    true,
+		Transcript:  optimizedText,
+		NeedsResume: false,
+		Reason:      "test complete after transient checker error",
+		Provider:    "test",
+		Similarity:  1,
+	}, nil
+}
+
+func (checker *transientRuntimeChecker) calls() int {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+	return checker.attempts
+}
+
+type alwaysRuntimeChecker struct {
+	mu       sync.Mutex
+	err      error
+	attempts int
+}
+
+func (checker *alwaysRuntimeChecker) Check(_ context.Context, _ string, _ []byte) (agents.VoiceCheckResult, error) {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+	checker.attempts += 1
+	return agents.VoiceCheckResult{}, checker.err
+}
+
+func (checker *alwaysRuntimeChecker) calls() int {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+	return checker.attempts
+}
+
 type alwaysRejectChecker struct{}
 
 func (checker *alwaysRejectChecker) Check(_ context.Context, _ string, _ []byte) (agents.VoiceCheckResult, error) {
@@ -6186,6 +6499,36 @@ func (checker *alwaysRejectChecker) Check(_ context.Context, _ string, _ []byte)
 		Reason:      "test rejected attempt",
 		Provider:    "test",
 		Similarity:  0.1,
+	}, nil
+}
+
+type rejectMatchingSegmentChecker struct {
+	rejectMatches []string
+	reason        string
+}
+
+func (checker *rejectMatchingSegmentChecker) Check(_ context.Context, optimizedText string, _ []byte) (agents.VoiceCheckResult, error) {
+	trimmed := strings.TrimSpace(optimizedText)
+	for _, candidate := range checker.rejectMatches {
+		if trimmed != candidate {
+			continue
+		}
+		return agents.VoiceCheckResult{
+			Complete:    false,
+			Transcript:  "unrelated transcript",
+			NeedsResume: false,
+			Reason:      checker.reason,
+			Provider:    "test",
+			Similarity:  0.1,
+		}, nil
+	}
+	return agents.VoiceCheckResult{
+		Complete:    true,
+		Transcript:  optimizedText,
+		NeedsResume: false,
+		Reason:      "test complete",
+		Provider:    "test",
+		Similarity:  1,
 	}, nil
 }
 

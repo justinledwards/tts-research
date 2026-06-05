@@ -1254,21 +1254,34 @@ export function TelepromptStudio({
               shortcutPreferences={shortcutPreferences}
             />
             <div className="grid gap-3 rounded-lg border p-3 shadow-sm vs-management-surface">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
                     Performance
                   </p>
                   <p className="mt-1 text-xs font-semibold">{workModeModel.label}</p>
                 </div>
-                <Button
-                  data-testid="ui-action-teleprompt-enter-theatre"
-                  onClick={openTheatre}
-                  size="sm"
-                  variant="primary"
-                >
-                  Enter Theatre
-                </Button>
+                <div className="grid min-w-0 grid-cols-1 gap-2 sm:min-w-64 sm:grid-cols-2">
+                  <Button
+                    {...playbackActionDataAttributes("openCinema", playbackLifecycle)}
+                    data-testid="ui-action-teleprompt-open-cinema"
+                    disabled={!canOpenCinema}
+                    disabledReason={openCinemaDisabledReason}
+                    onClick={handleOpenCinema}
+                    size="sm"
+                    variant="primary"
+                  >
+                    {workspaceStageActionLabel("openCinema")}
+                  </Button>
+                  <Button
+                    data-testid="ui-action-teleprompt-enter-theatre"
+                    onClick={openTheatre}
+                    size="sm"
+                    variant="primary"
+                  >
+                    Enter Theatre
+                  </Button>
+                </div>
               </div>
               <SegmentedControl
                 ariaLabel="Teleprompt work mode"

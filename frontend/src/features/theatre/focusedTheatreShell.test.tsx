@@ -44,6 +44,13 @@ describe("focused theatre shell", () => {
             onClick: vi.fn(),
           },
           {
+            controlZone: "listener",
+            label: "Open Cinema",
+            primary: true,
+            testId: "ui-action-open-cinema",
+            onClick: vi.fn(),
+          },
+          {
             controlZone: "environment",
             label: "Native fullscreen",
             testId: "ui-action-native-fullscreen",
@@ -77,9 +84,15 @@ describe("focused theatre shell", () => {
     expect(markup).toContain('data-theatre-runtime-mode="audio-follow"');
     expect(markup).toContain('data-theatre-availability-state="ready"');
     expect(markup).toContain("Current cue text is readable.");
+    expect(markup).toContain('data-focused-theatre-action-group="listener"');
     expect(markup).toContain('data-focused-theatre-action-group="return"');
     expect(markup).toContain('data-focused-theatre-action-group="environment"');
+    expect(markup).toContain("Listen");
+    expect(markup).toContain("Return");
+    expect(markup).toContain("Display");
+    expect(markup).toContain("Open Cinema");
     expect(markup).toContain("Back to Review");
     expect(markup).toContain("Native fullscreen");
+    expect(markup).not.toContain("border-t border");
   });
 });

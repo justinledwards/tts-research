@@ -83,21 +83,22 @@ export function InspectorFactList({ facts }: Readonly<{ facts: readonly Inspecto
           <dt className="vs-muted">{fact.label}</dt>
           <dd className="min-w-0">
             {fact.tone ? (
-              <StatusChip className="max-w-full py-0.5 text-[0.65rem]" tone={fact.tone}>
-                <span className="truncate" title={fact.value}>
-                  {fact.value}
-                </span>
+              <StatusChip
+                className="max-w-full whitespace-normal py-0.5 text-left text-[0.65rem] break-words"
+                tone={fact.tone}
+              >
+                <span title={fact.value}>{fact.value}</span>
               </StatusChip>
             ) : (
               <span
-                className="block truncate font-semibold text-[var(--vs-text)]"
+                className="block font-semibold break-words text-[var(--vs-text)]"
                 title={fact.value}
               >
                 {fact.value}
               </span>
             )}
             {fact.detail ? (
-              <span className="mt-1 block leading-5 vs-muted">{fact.detail}</span>
+              <span className="mt-1 block leading-5 break-words vs-muted">{fact.detail}</span>
             ) : null}
           </dd>
         </div>
@@ -118,7 +119,7 @@ function InspectorNoteList({ notes }: Readonly<{ notes: readonly InspectorNote[]
           key={note.label}
         >
           <span className="font-semibold text-[var(--vs-text)]">{note.label}: </span>
-          <span className="vs-muted">{note.detail}</span>
+          <span className="break-words vs-muted">{note.detail}</span>
           {note.tone ? (
             <StatusChip className="ml-2 py-0.5 text-[0.65rem]" tone={note.tone}>
               {note.tone}

@@ -860,6 +860,7 @@ export interface JobSegment {
   similarity?: number;
   reason?: string;
   reusedFromJobId?: string;
+  warnings?: string[];
 }
 
 export type VoiceProfileStatus = "ready" | "error" | "pending";
@@ -1452,6 +1453,8 @@ export interface JobQualityReport {
   averageSimilarity: number;
   averageLatencyMs: number;
   segmentCount: number;
+  warningCount?: number;
+  unverifiedSegmentCount?: number;
   referenceProfile: boolean;
   reason: string;
 }

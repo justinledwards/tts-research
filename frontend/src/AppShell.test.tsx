@@ -67,9 +67,11 @@ describe("TopProductBar", () => {
       />,
     );
 
-    expect(markup).toContain("Command Center");
+    expect(markup.match(/Command Center/g)?.length).toBe(1);
     expect(markup).toContain('aria-label="Open Command Center"');
+    expect(markup).not.toContain('data-testid="ui-action-workspace-open"');
     expect(markup).toContain('data-testid="ui-action-shell-context-summary"');
+    expect(markup).toContain(">Work</span>");
     expect(markup).toContain("Narration Workbench");
     expect(markup).toContain("Novel");
     expect(markup).toContain("Current chapter");

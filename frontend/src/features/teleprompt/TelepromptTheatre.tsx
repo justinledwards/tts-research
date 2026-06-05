@@ -325,7 +325,18 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       testId: "ui-action-teleprompt-operator-preview",
       onClick: onToggleOperatorPreview,
     };
+    const openCinemaAction = {
+      controlZone: "listener" as const,
+      dataAttributes: playbackActionDataAttributes("openCinema", playbackLifecycle),
+      disabled: !canOpenCinema,
+      disabledReason: openCinemaDisabledReason,
+      label: workspaceStageActionLabel("openCinema"),
+      primary: true,
+      testId: "ui-action-teleprompt-theatre-open-cinema",
+      onClick: onOpenCinema,
+    };
     const theatreChromeActions = [
+      openCinemaAction,
       backToReviewAction,
       backToPreviewAction,
       operatorAction,
@@ -393,17 +404,6 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
               Leaving theatre preserves source, cue, voice, policy, and return target.
             </p>
           </div>
-          <Button
-            {...playbackActionDataAttributes("openCinema", playbackLifecycle)}
-            data-testid="ui-action-teleprompt-theatre-open-cinema"
-            disabled={!canOpenCinema}
-            disabledReason={openCinemaDisabledReason}
-            onClick={onOpenCinema}
-            size="sm"
-            variant="secondary"
-          >
-            {workspaceStageActionLabel("openCinema")}
-          </Button>
           <Button
             {...playbackActionDataAttributes("createAndListen", playbackLifecycle)}
             {...providerCapabilityDataAttributes("tts", createAndListenCapabilityReason)}
@@ -623,22 +623,25 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
 
             {controlsVisible ? (
               <div
-                className="grid gap-3 overflow-auto rounded-lg border p-3 vs-theatre-panel lg:max-h-40"
+                className="grid max-h-[min(18vh,10rem)] gap-2 overflow-auto rounded-lg border p-2 vs-theatre-panel"
                 data-teleprompt-theatre-control-zone="transport"
               >
                 {settings.nextCuePlacement === "below" ? (
                   <CuePreviewList blocks={previewBlocks} />
                 ) : null}
-                <LocalizedPlaybackToolbar
-                  model={theatrePlaybackToolbar}
-                  shortcutPreferences={shortcutPreferences}
-                />
-                <p className="hidden text-xs text-[var(--vs-text-muted)] sm:block">
-                  {theatreStateDetail}
-                  {playbackControlsAvailable
-                    ? ` · audio segment ${audioProgressPercent.toString()}%`
-                    : ""}
-                </p>
+                {playbackControlsAvailable && runtimeShellState.availabilityState === "ready" ? (
+                  <LocalizedPlaybackToolbar
+                    model={theatrePlaybackToolbar}
+                    shortcutPreferences={shortcutPreferences}
+                  />
+                ) : (
+                  <TheatrePlaybackPlaceholder
+                    activeLabel={activeBlock?.label ?? "No active cue"}
+                    detail={theatreStateDetail}
+                    durationLabel={summary.estimatedRemainingLabel}
+                    progressPercent={audioProgressPercent}
+                  />
+                )}
               </div>
             ) : null}
           </main>
@@ -661,6 +664,58 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     );
   },
 );
+
+function TheatrePlaybackPlaceholder({
+  activeLabel,
+  detail,
+  durationLabel,
+  progressPercent,
+}: Readonly<{
+  activeLabel: string;
+  detail: string;
+  durationLabel: string;
+  progressPercent: number;
+}>) {
+  const normalizedProgress = Math.max(0, Math.min(100, progressPercent));
+  return (
+    <section
+      aria-label="Theatre playback status"
+      className="grid gap-2 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3 text-[var(--vs-theatre-text)]"
+      data-testid="teleprompt-theatre-playback-placeholder"
+    >
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase text-[var(--vs-theatre-accent)]">
+            Theatre playback
+          </p>
+          <h3 className="mt-1 text-sm font-semibold break-words">{activeLabel}</h3>
+        </div>
+        <span className="text-xs tabular-nums text-[var(--vs-text-secondary)]">
+          {durationLabel}
+        </span>
+      </div>
+      <div className="grid gap-1">
+        <div
+          aria-label={`${normalizedProgress.toString()}% through the current theatre cue`}
+          className="h-1.5 overflow-hidden rounded-full bg-[var(--vs-surface-muted)]"
+          role="progressbar"
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={normalizedProgress}
+        >
+          <div
+            className="h-full rounded-full bg-[var(--vs-theatre-accent)]"
+            style={{ width: `${normalizedProgress.toString()}%` }}
+          />
+        </div>
+        <span className="text-xs tabular-nums text-[var(--vs-text-secondary)]">
+          {normalizedProgress.toString()}%
+        </span>
+      </div>
+      <p className="text-xs leading-5 break-words text-[var(--vs-text-secondary)]">{detail}</p>
+    </section>
+  );
+}
 
 function theatreLayoutClassName(
   settings: TelepromptTheatreSettings,

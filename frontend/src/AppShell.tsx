@@ -63,7 +63,7 @@ export function TopProductBar({
   onCommandCenterOpen: () => void;
 }>) {
   return (
-    <header className="vs-app-shell grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 lg:px-4 2xl:grid-cols-[minmax(205px,auto)_minmax(330px,0.9fr)_auto]">
+    <header className="vs-app-shell grid min-h-[58px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b px-3 lg:gap-3 lg:px-4">
       <div className="flex min-w-0 items-center gap-2.5">
         <Button
           aria-label="Open Command Center"
@@ -82,16 +82,6 @@ export function TopProductBar({
             Reading studio · {describePerformanceMode(runConfiguration.performanceMode)}
           </p>
         </div>
-        <Button
-          align="start"
-          className="hidden items-center gap-2 2xl:flex"
-          data-testid="ui-action-workspace-open"
-          onClick={onCommandCenterOpen}
-          size="md"
-          variant="secondary"
-        >
-          <span>Command Center</span>
-        </Button>
       </div>
       <TopProductBarContextSummary
         context={workContext}
@@ -99,11 +89,11 @@ export function TopProductBar({
       />
       <nav
         aria-label="Primary workspace actions"
-        className="hidden min-w-0 items-center justify-end gap-1.5 md:flex"
+        className="hidden min-w-0 items-center justify-end gap-1 md:flex"
       >
         <SegmentedControl
           ariaLabel="Studio mode"
-          className="min-w-[230px]"
+          className="min-w-[210px]"
           options={[
             { label: "Narration", testId: "ui-action-studio-mode-narration", value: "narration" },
             {
@@ -116,6 +106,7 @@ export function TopProductBar({
           onChange={onStudioModeChange}
         />
         <WorkspaceLayoutControl
+          compact
           customLayout={workspaceCustomLayout}
           disclosurePins={workspaceDisclosurePins}
           layoutMode={workspaceLayoutMode}
@@ -125,7 +116,7 @@ export function TopProductBar({
         />
         <Button
           aria-label="Open command palette"
-          className="gap-2"
+          className="gap-2 px-3"
           data-command-id="command.palette"
           data-shortcut-command-id="command.palette"
           data-testid="ui-action-command-palette-open"
@@ -138,7 +129,7 @@ export function TopProductBar({
           variant="secondary"
         >
           <CommandIcon />
-          <span className="hidden 2xl:inline">Actions</span>
+          <span className="hidden xl:inline">Actions</span>
         </Button>
         <Button
           aria-label="Open settings"
@@ -438,36 +429,24 @@ function TopProductBarContextSummary({
 }>) {
   return (
     <button
-      className="hidden min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 text-left transition hover:bg-[var(--vs-surface-muted)] vs-metadata-surface 2xl:grid"
+      className="hidden min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-3 py-2 text-left transition hover:bg-[var(--vs-surface-muted)] vs-metadata-surface lg:flex"
       data-testid="ui-action-shell-context-summary"
       onClick={onOpenCommandCenter}
       title={`${context.workspaceLabel} · ${context.projectName} · ${context.chapterName}`}
       type="button"
     >
-      <span className="grid min-w-0 gap-0.5">
-        <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
-          Workbench
-        </span>
-        <span className="min-w-0 truncate px-1 py-0.5 text-sm font-semibold">
-          {context.workspaceLabel}
-        </span>
+      <span className="vs-muted shrink-0 text-[0.64rem] font-semibold uppercase tracking-[0.16em]">
+        Work
       </span>
-      <span className="grid min-w-0 gap-0.5 border-l pl-3 vs-border">
-        <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
-          Project
-        </span>
-        <span className="min-w-0 truncate px-1 py-0.5 text-sm font-semibold">
-          {context.projectName}
-        </span>
+      <span className="min-w-0 truncate text-sm font-semibold">{context.workspaceLabel}</span>
+      <span aria-hidden="true" className="vs-muted shrink-0 text-xs">
+        /
       </span>
-      <span className="grid min-w-0 gap-0.5 border-l pl-3 vs-border">
-        <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
-          Chapter
-        </span>
-        <span className="min-w-0 truncate px-1 py-0.5 text-sm font-semibold">
-          {context.chapterName}
-        </span>
+      <span className="min-w-0 truncate text-sm font-semibold">{context.projectName}</span>
+      <span aria-hidden="true" className="vs-muted shrink-0 text-xs">
+        /
       </span>
+      <span className="min-w-0 truncate text-sm font-semibold">{context.chapterName}</span>
     </button>
   );
 }

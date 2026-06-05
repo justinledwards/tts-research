@@ -22,6 +22,7 @@ export interface PreviewGeneratedAudioPanelProps {
   readonly playbackAvailable: boolean;
   readonly playbackToolbar: ReactNode;
   readonly status: PreviewReadinessRowStatus;
+  readonly summary?: string;
 }
 
 export function PreviewReadinessChecklist({ model }: Readonly<{ model: PreviewReadinessModel }>) {
@@ -53,10 +54,16 @@ export function PreviewGeneratedAudioPanel({
   playbackAvailable,
   playbackToolbar,
   status,
+  summary,
 }: Readonly<PreviewGeneratedAudioPanelProps>) {
   const emptyTitle = previewGeneratedAudioEmptyTitle(status);
   const statusLabel = playbackAvailable ? "Ready" : previewReadinessStatusLabel(status);
   const statusTone = playbackAvailable ? "success" : previewReadinessTone(status);
+  const panelSummary =
+    summary ??
+    (playbackAvailable
+      ? "Full narration playback is ready for this scope."
+      : "Generated audio appears here when playable media is available.");
   return (
     <Panel
       as="section"
@@ -68,11 +75,7 @@ export function PreviewGeneratedAudioPanel({
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-base font-semibold">Generated audio playback</h3>
-          <p className="mt-1 text-xs leading-5 vs-muted">
-            {playbackAvailable
-              ? "Full narration playback is ready for this scope."
-              : "Playback appears here after Create & Listen finishes."}
-          </p>
+          <p className="mt-1 text-xs leading-5 vs-muted">{panelSummary}</p>
         </div>
         <StatusChip tone={statusTone}>{statusLabel}</StatusChip>
       </div>

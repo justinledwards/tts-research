@@ -45,26 +45,29 @@ type PipelineOptions struct {
 }
 
 type JobQualityReport struct {
-	Enabled              bool    `json:"enabled"`
-	PreprocessChangedPct float64 `json:"preprocessChangedPct"`
-	RetryCount           int     `json:"retryCount"`
-	AverageSimilarity    float64 `json:"averageSimilarity"`
-	AverageLatencyMS     int     `json:"averageLatencyMs"`
-	SegmentCount         int     `json:"segmentCount"`
-	ReferenceProfile     bool    `json:"referenceProfile"`
-	Reason               string  `json:"reason"`
+	Enabled                bool    `json:"enabled"`
+	PreprocessChangedPct   float64 `json:"preprocessChangedPct"`
+	RetryCount             int     `json:"retryCount"`
+	AverageSimilarity      float64 `json:"averageSimilarity"`
+	AverageLatencyMS       int     `json:"averageLatencyMs"`
+	SegmentCount           int     `json:"segmentCount"`
+	WarningCount           int     `json:"warningCount,omitempty"`
+	UnverifiedSegmentCount int     `json:"unverifiedSegmentCount,omitempty"`
+	ReferenceProfile       bool    `json:"referenceProfile"`
+	Reason                 string  `json:"reason"`
 }
 
 type JobSegment struct {
-	Index           int     `json:"index"`
-	Text            string  `json:"text"`
-	Status          string  `json:"status,omitempty"`
-	Attempts        int     `json:"attempts,omitempty"`
-	DurationMS      int     `json:"durationMs,omitempty"`
-	LatencyMS       int     `json:"latencyMs,omitempty"`
-	Similarity      float64 `json:"similarity,omitempty"`
-	Reason          string  `json:"reason,omitempty"`
-	ReusedFromJobID string  `json:"reusedFromJobId,omitempty"`
+	Index           int      `json:"index"`
+	Text            string   `json:"text"`
+	Status          string   `json:"status,omitempty"`
+	Attempts        int      `json:"attempts,omitempty"`
+	DurationMS      int      `json:"durationMs,omitempty"`
+	LatencyMS       int      `json:"latencyMs,omitempty"`
+	Similarity      float64  `json:"similarity,omitempty"`
+	Reason          string   `json:"reason,omitempty"`
+	Warnings        []string `json:"warnings,omitempty"`
+	ReusedFromJobID string   `json:"reusedFromJobId,omitempty"`
 }
 
 type VoiceProfileStatus string

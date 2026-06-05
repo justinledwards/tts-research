@@ -10,6 +10,10 @@ import {
 } from "../../appHelpers";
 import type { StatusChipTone } from "../../design";
 import type { StageStatus, VoiceJob } from "../../types";
+import {
+  audioReviewWarningCount,
+  audioReviewWarningSummary,
+} from "../playback/audioReviewWarnings";
 import type { GeneratedAudioLifecycleState } from "../playback/generatedAudioLifecycle";
 import {
   operationalGeneratedAudioLifecycleReason,
@@ -426,6 +430,22 @@ function resolveCheckIssue(job: VoiceJob | null, confidenceLabel: string): Opera
     });
   }
   if (job.voiceCheck.complete) {
+    const reviewWarningCount = audioReviewWarningCount(job);
+    if (reviewWarningCount > 0) {
+      const warningSummary = audioReviewWarningSummary(job);
+      const reason = job.voiceCheck.reason.trim();
+      return operationalStaticIssue({
+        chipValue: `${reviewWarningCount.toString()} review`,
+        condition: "attention",
+        detail: warningSummary ?? reason,
+        id: "check-audio-review",
+        label: "Audio check needs review",
+        owner: "check",
+        recovery: operationalRecovery("openDiagnostics", true),
+        severity: "warning",
+        technicalDetail: reason || undefined,
+      });
+    }
     return operationalStaticIssue({
       chipValue: confidenceLabel,
       condition: job.voiceCheck.needsResume ? "attention" : "ready",
@@ -650,7 +670,7 @@ function primaryActionForRecovery(
   const failureTone = state === "failed" ? "danger" : "warning";
   switch (recovery.id) {
     case "retryGeneration": {
-      return { id: "retry", label: recovery.label, tone: failureTone };
+      return { id: "retry", label: "Retry full audio", tone: failureTone };
     }
     case "rebuildAudio": {
       return { id: "retry", label: recovery.label, tone: "warning" };
@@ -686,65 +706,124 @@ function resolvePrimaryCopy(
   queue: NarrationQueueSnapshot,
   blocker: NarrationStatusBlocker | null,
 ): { detail: string; label: string; message: string } {
-  if (state === "failed") {
-    const label = blocker?.title ?? "Generation failed";
-    return {
-      detail: blocker?.detail ?? "Retry generation when the source and voice are ready.",
-      label,
-      message: `${label}. ${blocker?.actionLabel ?? blocker?.recovery?.unavailableReason ?? "Retry generation."}`,
-    };
+  switch (state) {
+    case "failed": {
+      return failedPrimaryCopy(blocker);
+    }
+    case "blocked": {
+      return blockedPrimaryCopy(blocker);
+    }
+    case "cancelled": {
+      return cancelledPrimaryCopy(blocker);
+    }
+    case "playing": {
+      return playingPrimaryCopy(queue);
+    }
+    case "generating": {
+      return generatingPrimaryCopy(input, queue);
+    }
+    case "ready": {
+      return readyPrimaryCopy(input.job, queue);
+    }
+    case "waiting": {
+      return waitingPrimaryCopy(input, blocker);
+    }
+    case "idle": {
+      return {
+        detail: input.hint,
+        label: "Idle",
+        message: "Choose a source to begin.",
+      };
+    }
   }
-  if (state === "blocked") {
-    const label = blocker?.title ?? "Blocked";
-    return {
-      detail: blocker?.detail ?? "Resolve the blocker before continuing.",
-      label,
-      message: `${label}. ${blocker?.actionLabel ?? blocker?.recovery?.unavailableReason ?? "Review the issue."}`,
-    };
-  }
-  if (state === "cancelled") {
-    const label = blocker?.title ?? "Generation cancelled";
-    return {
-      detail: blocker?.detail ?? "Retry when you are ready.",
-      label,
-      message: `${label}. ${blocker?.actionLabel ?? "Retry generation when ready."}`,
-    };
-  }
-  if (state === "playing") {
-    return {
-      detail: queue.totalSegments > 0 ? queueDetail(queue) : "Playback is using current audio.",
-      label: "Playing",
-      message: "Playing current narration audio.",
-    };
-  }
-  if (state === "generating") {
-    return {
-      detail:
-        queue.totalSegments > 0 ? queueDetail(queue) : (input.job?.progress.detail ?? input.hint),
-      label: input.job?.status === "queued" ? "Queued" : "Generating",
-      message: generatingMessage(input.job, queue),
-    };
-  }
-  if (state === "ready") {
-    return {
-      detail: queue.totalSegments > 0 ? queueDetail(queue) : "Current generated audio is ready.",
-      label: "Audio ready",
-      message: "Audio ready.",
-    };
-  }
-  if (state === "waiting") {
-    const waitingDetail =
-      blocker?.detail ?? waitingDetailForLifecycle(input.generatedAudioLifecycle);
-    return {
-      detail: waitingDetail,
-      label: "Waiting",
-      message: waitingMessage(input, blocker),
-    };
-  }
+}
+
+function failedPrimaryCopy(blocker: NarrationStatusBlocker | null): {
+  detail: string;
+  label: string;
+  message: string;
+} {
+  const label = blocker?.title ?? "Generation failed";
   return {
-    detail: input.hint,
-    label: "Idle",
-    message: "Choose a source to begin.",
+    detail: blocker?.detail ?? "Retry generation when the source and voice are ready.",
+    label,
+    message: `${label}. ${blocker?.actionLabel ?? blocker?.recovery?.unavailableReason ?? "Retry generation."}`,
+  };
+}
+
+function blockedPrimaryCopy(blocker: NarrationStatusBlocker | null): {
+  detail: string;
+  label: string;
+  message: string;
+} {
+  const label = blocker?.title ?? "Blocked";
+  return {
+    detail: blocker?.detail ?? "Resolve the blocker before continuing.",
+    label,
+    message: `${label}. ${blocker?.actionLabel ?? blocker?.recovery?.unavailableReason ?? "Review the issue."}`,
+  };
+}
+
+function cancelledPrimaryCopy(blocker: NarrationStatusBlocker | null): {
+  detail: string;
+  label: string;
+  message: string;
+} {
+  const label = blocker?.title ?? "Generation cancelled";
+  return {
+    detail: blocker?.detail ?? "Retry when you are ready.",
+    label,
+    message: `${label}. ${blocker?.actionLabel ?? "Retry generation when ready."}`,
+  };
+}
+
+function playingPrimaryCopy(queue: NarrationQueueSnapshot): {
+  detail: string;
+  label: string;
+  message: string;
+} {
+  return {
+    detail: queue.totalSegments > 0 ? queueDetail(queue) : "Playback is using current audio.",
+    label: "Playing",
+    message: "Playing current narration audio.",
+  };
+}
+
+function generatingPrimaryCopy(
+  input: NarrationStatusModelInput,
+  queue: NarrationQueueSnapshot,
+): { detail: string; label: string; message: string } {
+  return {
+    detail:
+      queue.totalSegments > 0 ? queueDetail(queue) : (input.job?.progress.detail ?? input.hint),
+    label: input.job?.status === "queued" ? "Queued" : "Generating",
+    message: generatingMessage(input.job, queue),
+  };
+}
+
+function readyPrimaryCopy(
+  job: VoiceJob | null,
+  queue: NarrationQueueSnapshot,
+): { detail: string; label: string; message: string } {
+  const warningSummary = audioReviewWarningSummary(job);
+  return {
+    detail:
+      warningSummary ??
+      (queue.totalSegments > 0 ? queueDetail(queue) : "Current generated audio is ready."),
+    label: warningSummary ? "Audio ready with review warnings" : "Audio ready",
+    message: warningSummary ?? "Audio ready.",
+  };
+}
+
+function waitingPrimaryCopy(
+  input: NarrationStatusModelInput,
+  blocker: NarrationStatusBlocker | null,
+): { detail: string; label: string; message: string } {
+  const waitingDetail = blocker?.detail ?? waitingDetailForLifecycle(input.generatedAudioLifecycle);
+  return {
+    detail: waitingDetail,
+    label: "Waiting",
+    message: waitingMessage(input, blocker),
   };
 }
 

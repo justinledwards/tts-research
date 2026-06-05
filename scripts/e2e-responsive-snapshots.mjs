@@ -388,6 +388,12 @@ async function captureTelepromptTheatreScenario(browser, viewport, fixture) {
       const theatre = document.querySelector("[data-testid='teleprompt-theatre']");
       const cue = document.querySelector("[data-testid='teleprompt-theatre-current-cue']");
       const cueRect = rectFor(cue);
+      const openCinema = document.querySelector(
+        "[data-testid='ui-action-teleprompt-theatre-open-cinema']",
+      );
+      const transportRect = rectFor(
+        document.querySelector("[data-teleprompt-theatre-control-zone='transport']"),
+      );
       const controlZones = [
         ...document.querySelectorAll(
           "[data-focused-theatre-chrome], [data-teleprompt-theatre-control-zone]",
@@ -409,6 +415,12 @@ async function captureTelepromptTheatreScenario(browser, viewport, fixture) {
         .filter((zone) => zone.area > 8)
         .map((zone) => `${zone.label} overlaps cue by ${String(zone.area)}px`);
       const text = cue?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+      if (!visible(openCinema)) {
+        overlapFailures.push("Open Cinema is not visible in Theatre controls");
+      }
+      if (transportRect && transportRect.height > Math.min(window.innerHeight * 0.22, 190)) {
+        overlapFailures.push("Theatre transport controls exceed the compact height budget");
+      }
       return {
         cueRect,
         hasTheatre: theatre !== null,

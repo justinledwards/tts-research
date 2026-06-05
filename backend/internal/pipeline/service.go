@@ -1361,6 +1361,11 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		completedDetail := "All generated segments passed voice checking."
 		if !config.pipelineOptions.ASRCheck {
 			completedDetail = "Audio generated with ASR checking disabled for this run."
+		} else if job.QualityReport != nil && job.QualityReport.UnverifiedSegmentCount > 0 {
+			completedDetail = fmt.Sprintf(
+				"Audio generated with %d segment(s) needing audio review.",
+				job.QualityReport.UnverifiedSegmentCount,
+			)
 		}
 		setProgress(job, string(JobStatusCompleted), "Audio ready", completedDetail, job.Retries.TotalSegments, job.Retries.TotalSegments)
 		metadataErr = service.writeJobMetadata(job.VoiceJob)
@@ -1525,6 +1530,7 @@ type reusableAudioSegment struct {
 	transcript  string
 	similarity  float64
 	reason      string
+	warnings    []string
 }
 
 func (service *Service) reusableAudioPrefix(sourceJobID string, targetSegments []string) []reusableAudioSegment {
@@ -1602,6 +1608,7 @@ func (service *Service) reusableAudioPrefix(sourceJobID string, targetSegments [
 			transcript:  sourceSegment.Text,
 			similarity:  sourceSegment.Similarity,
 			reason:      check.Reason,
+			warnings:    append([]string(nil), sourceSegment.Warnings...),
 		})
 	}
 	return reused
@@ -1703,10 +1710,13 @@ func (service *Service) synthesizeUntilComplete(
 		err                error
 		transcript         string
 		similarity         float64
+		warnings           []string
 	}
 
 	totalAttempts := 0
 	totalSegments := len(segments)
+	warningCount := 0
+	unverifiedSegmentCount := 0
 	mergedSegmentsPCM := make([]byte, 0, 4096)
 	transcripts := make([]string, 0, totalSegments)
 	similarities := make([]float64, 0, totalSegments)
@@ -1747,6 +1757,62 @@ func (service *Service) synthesizeUntilComplete(
 		committedSegmentPCM := make([]byte, 0)
 		committedSegmentDurationMS := 0
 		segmentStart := time.Now()
+		keepCandidateWithWarning := func(reason string, check agents.VoiceCheckResult, result agents.TTSResult, candidateSegmentAudio []byte, candidateSegmentPCM []byte, segmentSpec audio.WAVSpec) segmentResult {
+			warning := asrSegmentReviewWarning(reason)
+			output.err = nil
+			output.audio = candidateSegmentAudio
+			output.audioPCM = candidateSegmentPCM
+			output.audioSpec = segmentSpec
+			output.audioDurationMS = committedSegmentDurationMS + result.DurationMS
+			output.latencyMS = int(time.Since(segmentStart).Milliseconds())
+			output.transcript = firstNonEmpty(check.Transcript, expectedSegment)
+			output.similarity = check.Similarity
+			output.contentType = result.ContentType
+			output.provider = result.Provider
+			output.voice = result.Voice
+			output.nativeTimingEvents = result.TimingEvents
+			output.warnings = []string{warning}
+			if check.Provider == "" {
+				check.Provider = "unknown"
+			}
+			check.Complete = false
+			check.NeedsResume = false
+			check.Reason = warning
+			if check.Transcript == "" {
+				check.Transcript = output.transcript
+			}
+			output.check = check
+			return output
+		}
+		markSegmentAttemptRetry := func(stageLabel string, nextStage JobStatus, attempt int, err error) {
+			detail := fmt.Sprintf(
+				"%s attempt %d of %d hit a retryable error: %s",
+				stageLabel,
+				attempt,
+				maxAttempts,
+				err.Error(),
+			)
+			service.updateJob(id, func(job *storedJob) {
+				job.Status = JobStatusRetrying
+				job.Retries.CurrentSegment = segmentIndex
+				job.Retries.SegmentAttempts = output.attempts
+				job.Retries.TotalSegments = totalSegments
+				updateJobSegment(job, segmentIndex, func(segment *JobSegment) {
+					segment.Status = "retrying"
+					segment.Attempts = output.attempts
+					segment.DurationMS = committedSegmentDurationMS
+					segment.Reason = detail
+				})
+				setProgress(
+					job,
+					string(JobStatusRetrying),
+					fmt.Sprintf("Retrying segment %d of %d", segmentIndex, totalSegments),
+					fmt.Sprintf("%s Retrying %s on the existing segment budget.", detail, string(nextStage)),
+					segmentIndex,
+					totalSegments,
+				)
+			})
+		}
 
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
 			if pipelineCtx.Err() != nil {
@@ -1756,6 +1822,7 @@ func (service *Service) synthesizeUntilComplete(
 
 			output.attempts += 1
 			service.updateJob(id, func(job *storedJob) {
+				job.Status = JobStatusSynthesizing
 				updateJobSegment(job, segmentIndex, func(segment *JobSegment) {
 					segment.Status = "running"
 					segment.Attempts = output.attempts
@@ -1801,8 +1868,12 @@ func (service *Service) synthesizeUntilComplete(
 					output.err = pipelineCtx.Err()
 					return output
 				}
-				if errors.Is(err, context.Canceled) {
-					output.err = fmt.Errorf("synthesis provider cancelled segment %d unexpectedly: %w", segmentIndex, err)
+				if isRetryableSegmentRuntimeError(err) {
+					if attempt < maxAttempts {
+						markSegmentAttemptRetry("Synthesis", JobStatusSynthesizing, attempt, err)
+						continue
+					}
+					output.err = formatSegmentRuntimeFailure("synthesis provider", segmentIndex, err)
 					return output
 				}
 				output.err = fmt.Errorf("synthesize text for segment %d: %w", segmentIndex, err)
@@ -1865,6 +1936,7 @@ func (service *Service) synthesizeUntilComplete(
 			}
 
 			service.updateJob(id, func(job *storedJob) {
+				job.Status = JobStatusChecking
 				updateJobSegment(job, segmentIndex, func(segment *JobSegment) {
 					segment.Status = "checking"
 					segment.Attempts = output.attempts
@@ -1879,12 +1951,44 @@ func (service *Service) synthesizeUntilComplete(
 					output.err = pipelineCtx.Err()
 					return output
 				}
-				if errors.Is(err, context.Canceled) {
-					output.err = fmt.Errorf("voice checker cancelled segment %d unexpectedly: %w", segmentIndex, err)
-					return output
+				if isRetryableSegmentRuntimeError(err) {
+					if attempt < maxAttempts {
+						markSegmentAttemptRetry("Voice check", JobStatusChecking, attempt, err)
+						continue
+					}
+					return keepCandidateWithWarning(
+						formatSegmentRuntimeFailure("voice checker", segmentIndex, err).Error(),
+						agents.VoiceCheckResult{
+							Complete:    false,
+							NeedsResume: false,
+							Reason:      err.Error(),
+							Provider:    "unknown",
+							Similarity:  0,
+						},
+						result,
+						candidateSegmentAudio,
+						candidateSegmentPCM,
+						segmentSpec,
+					)
 				}
-				output.err = fmt.Errorf("check audio for segment %d: %w", segmentIndex, err)
-				return output
+				if attempt < maxAttempts {
+					markSegmentAttemptRetry("Voice check", JobStatusChecking, attempt, err)
+					continue
+				}
+				return keepCandidateWithWarning(
+					fmt.Sprintf("check audio for segment %d: %v", segmentIndex, err),
+					agents.VoiceCheckResult{
+						Complete:    false,
+						NeedsResume: false,
+						Reason:      err.Error(),
+						Provider:    "unknown",
+						Similarity:  0,
+					},
+					result,
+					candidateSegmentAudio,
+					candidateSegmentPCM,
+					segmentSpec,
+				)
 			}
 			output.check = check
 
@@ -1919,7 +2023,7 @@ func (service *Service) synthesizeUntilComplete(
 				segmentIndex,
 				check.Reason,
 			)
-			return output
+			return keepCandidateWithWarning(output.err.Error(), check, result, candidateSegmentAudio, candidateSegmentPCM, segmentSpec)
 		}
 
 		output.err = fmt.Errorf(
@@ -1942,6 +2046,10 @@ func (service *Service) synthesizeUntilComplete(
 			totalDurationMS += reusable.durationMS
 			transcripts = append(transcripts, reusable.transcript)
 			similarities = append(similarities, reusable.similarity)
+			warningCount += len(reusable.warnings)
+			if len(reusable.warnings) > 0 {
+				unverifiedSegmentCount += 1
+			}
 			contentType = reusable.contentType
 			provider = reusable.provider
 			voice = reusable.voice
@@ -1974,6 +2082,7 @@ func (service *Service) synthesizeUntilComplete(
 					segment.LatencyMS = reusable.latencyMS
 					segment.Similarity = reusable.similarity
 					segment.Reason = reusable.reason
+					segment.Warnings = append([]string(nil), reusable.warnings...)
 					segment.ReusedFromJobID = currentJob.RetryOfJobID
 				})
 				setProgress(
@@ -2110,6 +2219,10 @@ func (service *Service) synthesizeUntilComplete(
 			totalDurationMS += nextResult.audioDurationMS
 			transcripts = append(transcripts, nextResult.transcript)
 			similarities = append(similarities, nextResult.similarity)
+			warningCount += len(nextResult.warnings)
+			if len(nextResult.warnings) > 0 {
+				unverifiedSegmentCount += 1
+			}
 			lastCheck = nextResult.check
 			contentType = nextResult.contentType
 			provider = nextResult.provider
@@ -2140,6 +2253,7 @@ func (service *Service) synthesizeUntilComplete(
 					segment.LatencyMS = nextResult.latencyMS
 					segment.Similarity = nextResult.similarity
 					segment.Reason = nextResult.check.Reason
+					segment.Warnings = append([]string(nil), nextResult.warnings...)
 				})
 				job.AudioPartialURL = fmt.Sprintf("/api/voice-jobs/%s/audio/partial", job.ID)
 				job.ContentType = nextResult.contentType
@@ -2219,7 +2333,7 @@ func (service *Service) synthesizeUntilComplete(
 	mergedResult.Provider = provider
 	mergedResult.Voice = voice
 
-	return mergedResult, aggregateVoiceCheck(transcripts, similarities, lastCheck.Provider), nil
+	return mergedResult, aggregateVoiceCheck(transcripts, similarities, lastCheck.Provider, warningCount, unverifiedSegmentCount), nil
 }
 
 func (service *Service) writeJobAudio(id string, audioBytes []byte) (string, error) {
@@ -2695,7 +2809,7 @@ func parseAudioStreamIndexFromFFmpegOutput(output []byte) int {
 	return -1
 }
 
-func aggregateVoiceCheck(transcripts []string, similarities []float64, provider string) agents.VoiceCheckResult {
+func aggregateVoiceCheck(transcripts []string, similarities []float64, provider string, warningCount int, unverifiedSegmentCount int) agents.VoiceCheckResult {
 	if len(transcripts) == 0 {
 		return agents.VoiceCheckResult{
 			Complete: false,
@@ -2718,6 +2832,12 @@ func aggregateVoiceCheck(transcripts []string, similarities []float64, provider 
 	reason := "all generated segments passed voice checking"
 	if provider == "disabled" {
 		reason = "ASR check disabled for this run"
+	} else if unverifiedSegmentCount > 0 {
+		reason = fmt.Sprintf(
+			"completed with %d segment review warning(s); %d segment(s) need audio review",
+			warningCount,
+			unverifiedSegmentCount,
+		)
 	}
 
 	return agents.VoiceCheckResult{
@@ -2739,8 +2859,14 @@ func buildQualityReport(job VoiceJob, options PipelineOptions, check agents.Voic
 	totalLatencyMS := 0
 	similarityTotal := 0.0
 	similarityCount := 0
+	warningCount := 0
+	unverifiedSegmentCount := 0
 	for _, segment := range job.Segments {
 		totalLatencyMS += segment.LatencyMS
+		warningCount += len(segment.Warnings)
+		if len(segment.Warnings) > 0 {
+			unverifiedSegmentCount += 1
+		}
 		if segment.Similarity > 0 {
 			similarityTotal += segment.Similarity
 			similarityCount += 1
@@ -2775,17 +2901,25 @@ func buildQualityReport(job VoiceJob, options PipelineOptions, check agents.Voic
 	reason := "Quality report generated from segment telemetry."
 	if !options.ASRCheck {
 		reason = "Quality report generated without ASR checker confidence."
+	} else if unverifiedSegmentCount > 0 {
+		reason = fmt.Sprintf(
+			"Quality report generated with %d segment review warning(s); %d segment(s) need audio review.",
+			warningCount,
+			unverifiedSegmentCount,
+		)
 	}
 
 	return &JobQualityReport{
-		Enabled:              true,
-		PreprocessChangedPct: preprocessChangedPct,
-		RetryCount:           retryCount,
-		AverageSimilarity:    averageSimilarity,
-		AverageLatencyMS:     averageLatencyMS,
-		SegmentCount:         segmentCount,
-		ReferenceProfile:     job.VoiceProfileID != "" || strings.HasPrefix(job.VoiceID, "clone_"),
-		Reason:               reason,
+		Enabled:                true,
+		PreprocessChangedPct:   preprocessChangedPct,
+		RetryCount:             retryCount,
+		AverageSimilarity:      averageSimilarity,
+		AverageLatencyMS:       averageLatencyMS,
+		SegmentCount:           segmentCount,
+		WarningCount:           warningCount,
+		UnverifiedSegmentCount: unverifiedSegmentCount,
+		ReferenceProfile:       job.VoiceProfileID != "" || strings.HasPrefix(job.VoiceID, "clone_"),
+		Reason:                 reason,
 	}
 }
 
@@ -2942,6 +3076,42 @@ func formatMilliseconds(milliseconds int) string {
 	}
 
 	return fmt.Sprintf("%.1fs", float64(milliseconds)/1000)
+}
+
+func isRetryableSegmentRuntimeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	lowerMessage := strings.ToLower(err.Error())
+	return strings.Contains(lowerMessage, "timed out") ||
+		strings.Contains(lowerMessage, "timeout") ||
+		strings.Contains(lowerMessage, "deadline exceeded")
+}
+
+func formatSegmentRuntimeFailure(component string, segmentIndex int, err error) error {
+	if errors.Is(err, context.Canceled) {
+		return fmt.Errorf("%s cancelled segment %d unexpectedly after retry budget was exhausted: %w", component, segmentIndex, err)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("%s timed out for segment %d after retry budget was exhausted: %w", component, segmentIndex, err)
+	}
+	if isRetryableSegmentRuntimeError(err) {
+		return fmt.Errorf("%s timed out for segment %d after retry budget was exhausted: %w", component, segmentIndex, err)
+	}
+
+	return fmt.Errorf("%s failed segment %d after retry budget was exhausted: %w", component, segmentIndex, err)
+}
+
+func asrSegmentReviewWarning(reason string) string {
+	cleanReason := strings.TrimSpace(reason)
+	if cleanReason == "" {
+		cleanReason = "ASR checker did not confirm the generated segment."
+	}
+	return "ASR validation exhausted; audio kept for review: " + cleanReason
 }
 
 func (service *Service) snapshot(id string) (VoiceJob, error) {

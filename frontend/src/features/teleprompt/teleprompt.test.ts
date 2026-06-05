@@ -228,8 +228,20 @@ describe("teleprompt studio cue-first render", () => {
     expect(markup).toContain('data-testid="teleprompt-script-scroll"');
     expect(markup).toContain("Previous block");
     expect(markup).toContain("Next block");
+    expect(markup).toContain('data-testid="ui-action-teleprompt-open-cinema"');
     expect(markup.match(/ui-action-teleprompt-enter-theatre/g)).toHaveLength(1);
     expect(markup).not.toContain("ui-action-teleprompt-workflow-theatre");
+  });
+
+  it("keeps Cinema visible beside Theatre with disabled recovery copy", () => {
+    const markup = renderToStaticMarkup(
+      createElement(TelepromptStudio, studioProps({ canOpenCinema: false })),
+    );
+
+    expect(markup).toContain('data-testid="ui-action-teleprompt-open-cinema"');
+    expect(markup).toContain("Open Cinema");
+    expect(markup).toContain("Enter Theatre");
+    expect(markup).toContain("Open Cinema unlocks");
   });
 
   it("defaults to audio-follow when current generated audio is ready", () => {
@@ -321,12 +333,32 @@ describe("teleprompt theatre model", () => {
     expect(hiddenMarkup).not.toContain("Native fullscreen");
     expect(hiddenMarkup).not.toContain("Operator");
     expect(visibleMarkup).toContain('data-focused-theatre-action-group="return"');
+    expect(visibleMarkup).toContain('data-focused-theatre-action-group="listener"');
     expect(visibleMarkup).toContain('data-focused-theatre-action-group="operator"');
     expect(visibleMarkup).toContain('data-focused-theatre-action-group="environment"');
+    expect(visibleMarkup).toContain("Open Cinema");
     expect(visibleMarkup).toContain("Back to Review");
     expect(visibleMarkup).toContain("Back to Preview");
     expect(visibleMarkup).toContain("Native fullscreen");
     expect(visibleMarkup).toContain("Operator");
+  });
+
+  it("uses a compact Theatre playback placeholder when timing is not trusted", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TelepromptTheatre,
+        telepromptTheatreProps({
+          controlsVisible: true,
+          currentTimingState: "estimated",
+          playbackControlsAvailable: true,
+          playbackLifecycle: "ready",
+        }),
+      ),
+    );
+
+    expect(markup).toContain('data-testid="teleprompt-theatre-playback-placeholder"');
+    expect(markup).toContain("Audio may be available");
+    expect(markup).not.toContain('data-testid="localized-theatre-playback-toolbar"');
   });
 
   it("surfaces low-confidence timing without treating confidence as ambient chrome", () => {

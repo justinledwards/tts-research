@@ -262,13 +262,17 @@ function FocusedTheatreTitleRow({
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2">
         {statusLabel ? (
-          <span className="rounded-full border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] px-2 py-1 text-xs font-semibold text-[var(--vs-text-primary)]">
+          <span
+            className="max-w-full rounded-full border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] px-2 py-1 text-left text-xs font-semibold break-words text-[var(--vs-text-primary)]"
+            title={statusLabel}
+          >
             {statusLabel}
           </span>
         ) : null}
         <Button
+          aria-label={controlsVisible ? "Hide controls" : "Show controls"}
           aria-keyshortcuts={shortcutAriaKeyShortcutsForCommand(
             "theatre.toggleControls",
             DEFAULT_SHORTCUT_PREFERENCES,
@@ -286,7 +290,7 @@ function FocusedTheatreTitleRow({
           )}
           variant="secondary"
         >
-          {controlsVisible ? "Hide controls" : "Controls"}
+          {controlsVisible ? "Hide" : "Controls"}
         </Button>
         {titleActions.map((action) => (
           <FocusedTheatreButton action={action} key={action.testId ?? action.label} persistent />
@@ -361,7 +365,10 @@ function FocusedTheatreDetail({
         </p>
       ) : null}
       {actionGroups.length > 0 ? (
-        <div className="grid gap-2" data-focused-theatre-actions="">
+        <div
+          className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] px-2 py-2"
+          data-focused-theatre-actions=""
+        >
           {actionGroups.map((group) => (
             <div
               className={theatreActionGroupClassName(group.zone)}
@@ -369,6 +376,9 @@ function FocusedTheatreDetail({
               data-theatre-control-zone={group.zone}
               key={group.zone}
             >
+              <span className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[var(--vs-text-muted)]">
+                {theatreActionGroupLabel(group.zone)}
+              </span>
               {group.actions.map((action) => (
                 <FocusedTheatreButton action={action} key={action.testId ?? action.label} />
               ))}
@@ -443,14 +453,30 @@ function groupFocusedTheatreActions(
 }
 
 function theatreActionGroupClassName(zone: TheatreControlZone): string {
-  const base = "flex flex-wrap items-center gap-2";
-  if (zone === "listener") {
-    return base;
+  return cx("flex min-w-0 flex-wrap items-center gap-2", zone === "emergency" && "ml-auto");
+}
+
+function theatreActionGroupLabel(zone: TheatreControlZone): string {
+  switch (zone) {
+    case "emergency": {
+      return "Exit";
+    }
+    case "environment": {
+      return "Display";
+    }
+    case "listener": {
+      return "Listen";
+    }
+    case "operator": {
+      return "Mode";
+    }
+    case "persistent": {
+      return "Pinned";
+    }
+    case "return": {
+      return "Return";
+    }
   }
-  if (zone === "emergency") {
-    return `${base} border-t border-[var(--vs-theatre-panel-border)] pt-2`;
-  }
-  return `${base} border-t border-[var(--vs-theatre-panel-border)] pt-2`;
 }
 
 function clampProgress(value: number): number {

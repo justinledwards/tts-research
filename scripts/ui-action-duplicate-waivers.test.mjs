@@ -90,7 +90,7 @@ test("classifies the global workspace layout control as shell chrome", () => {
   assert.equal(classification.id, "wp46-workspace-layout-shell-control");
 });
 
-test("classifies playback Cinema navigation under the cinema navigation burn-down", () => {
+test("classifies playback Cinema navigation as an allowed listening destination", () => {
   const classification = classifyDuplicateGroup({
     actionClass: "navigation",
     actionIds: ["ui-action-rail-playback-open-cinema", "ui-action-rail-playback-open-cinema"],
@@ -102,8 +102,8 @@ test("classifies playback Cinema navigation under the cinema navigation burn-dow
     surfaces: ["Playback"],
   });
 
-  assert.equal(classification.category, "overexposed");
-  assert.equal(classification.burnDownIssue, "WP46-BD-CINEMA-NAV");
+  assert.equal(classification.category, "allowed-surface-parity");
+  assert.equal(classification.burnDownIssue, null);
 });
 
 test("leaves unknown duplicate groups unclassified", () => {

@@ -270,6 +270,34 @@ describe("preview readiness model", () => {
     });
   });
 
+  it("keeps Review warnings non-blocking for audio generation pipeline actions", () => {
+    const readyToGenerate = resolveAudioGenerationPipelineModel({
+      canCreate: true,
+      generatedAudioLifecycle: "missing",
+      hasSource: true,
+      hasSpokenText: true,
+      reviewComplete: false,
+      runtimeReady: true,
+      voiceReady: true,
+    });
+    const retryableFailed = resolveAudioGenerationPipelineModel({
+      canCreate: true,
+      generatedAudioLifecycle: "failed",
+      hasSource: true,
+      hasSpokenText: true,
+      job: job({ retriable: true, status: "failed", terminalReason: "provider_timeout" }),
+      reviewComplete: false,
+      runtimeReady: true,
+      voiceReady: true,
+    });
+
+    expect(readyToGenerate.state).toBe("readyToGenerate");
+    expect(readyToGenerate.canCreateAndListen).toBe(true);
+    expect(retryableFailed.state).toBe("failed");
+    expect(retryableFailed.canRetryGeneration).toBe(true);
+    expect(retryableFailed.canCreateAndListen).toBe(true);
+  });
+
   it("distinguishes missing, generating, failed, stale, and ready audio transitions", () => {
     const missing = resolvePreviewReadinessModel(
       readinessInput({ generatedAudioLifecycle: "missing" }),
@@ -463,6 +491,28 @@ describe("preview readiness UI", () => {
     expect(markup).not.toContain("Jump to Audio");
   });
 
+  it("describes partial generated audio without implying playback waits for completion", () => {
+    const markup = renderToStaticMarkup(
+      createElement(PreviewGeneratedAudioPanel, {
+        detail:
+          "Partially ready. 4/70 segments can play; pending segments will unlock as generation continues.",
+        playbackAvailable: false,
+        playbackToolbar: createElement(
+          "div",
+          { "data-testid": "localized-preview-playback-toolbar" },
+          "Transport",
+        ),
+        status: "working",
+        summary: "Audio is being prepared. Ready segments are tracked as generation continues.",
+      }),
+    );
+
+    expect(markup).toContain("Audio is being prepared");
+    expect(markup).toContain("4/70 segments can play");
+    expect(markup).not.toContain("after Create &amp; Listen finishes");
+    expect(markup).not.toContain('data-testid="localized-preview-playback-toolbar"');
+  });
+
   it("embeds generated-audio playback once playable audio is available", () => {
     const markup = renderToStaticMarkup(
       createElement(PreviewGeneratedAudioPanel, {
@@ -480,6 +530,27 @@ describe("preview readiness UI", () => {
     expect(markup).toContain('data-testid="preview-generated-audio-playback"');
     expect(markup).toContain('data-testid="localized-preview-playback-toolbar"');
     expect(markup).not.toContain('data-testid="preview-generated-audio-empty-state"');
+  });
+
+  it("keeps completed playback visible when generated audio needs segment review", () => {
+    const markup = renderToStaticMarkup(
+      createElement(PreviewGeneratedAudioPanel, {
+        detail: "Audio ready. One segment needs audio review.",
+        playbackAvailable: true,
+        playbackToolbar: createElement(
+          "div",
+          { "data-testid": "localized-preview-playback-toolbar" },
+          "Transport",
+        ),
+        status: "ready",
+        summary: "Audio generated with 1 segment needing audio review. Playback remains available.",
+      }),
+    );
+
+    expect(markup).toContain("Audio generated with 1 segment needing audio review");
+    expect(markup).toContain('data-testid="preview-generated-audio-playback"');
+    expect(markup).toContain('data-testid="localized-preview-playback-toolbar"');
+    expect(markup).not.toContain("Retry generation");
   });
 });
 

@@ -129,6 +129,76 @@ describe("resolveNarrationStatusModel", () => {
     expect(model.primaryAction?.id).toBe("openCinema");
   });
 
+  it("keeps completed audio playable when ASR segment warnings need review", () => {
+    const model = resolveNarrationStatusModel(
+      input({
+        canOpenCinema: true,
+        generatedAudioLifecycle: "ready",
+        job: job({
+          audioReadySegments: 2,
+          qualityReport: {
+            averageLatencyMs: 120,
+            averageSimilarity: 0.88,
+            enabled: true,
+            preprocessChangedPct: 0,
+            reason: "completed with 1 segment review warning(s)",
+            referenceProfile: false,
+            retryCount: 2,
+            segmentCount: 2,
+            unverifiedSegmentCount: 1,
+            warningCount: 1,
+          },
+          retries: {
+            attempts: 2,
+            currentSegment: 2,
+            maxRetries: 2,
+            segmentAttempts: 2,
+            totalSegments: 2,
+          },
+          segments: [
+            { index: 1, status: "ready", text: "Intro." },
+            {
+              index: 2,
+              reason: "ASR transcript did not sufficiently match",
+              similarity: 0.42,
+              status: "ready",
+              text: "Long segment.",
+              warnings: [
+                "ASR validation exhausted; audio kept for review: ASR transcript did not sufficiently match",
+              ],
+            },
+          ],
+          status: "completed",
+          voiceCheck: {
+            complete: true,
+            needsResume: false,
+            provider: "mock",
+            reason: "completed with 1 segment review warning(s)",
+            similarity: 0.88,
+            transcript: "Intro. Long segment.",
+          },
+        }),
+      }),
+    );
+
+    expect(model.state).toBe("ready");
+    expect(model.primaryAction?.id).toBe("openCinema");
+    expect(model.primaryLabel).toBe("Audio ready with review warnings");
+    expect(model.primaryAction?.label).not.toBe("Retry full audio");
+    expect(model.chips.find((chip) => chip.id === "audio")).toMatchObject({
+      tone: "success",
+      value: "Ready",
+    });
+    expect(model.chips.find((chip) => chip.id === "check")).toMatchObject({
+      tone: "warning",
+      value: "1 review",
+    });
+    expect(model.issues.find((issue) => issue.id === "check-audio-review")).toMatchObject({
+      detail: "Audio generated with 1 segment needing audio review.",
+      technicalDetail: "completed with 1 segment review warning(s)",
+    });
+  });
+
   it("surfaces retryable failures and cancellations with recovery copy", () => {
     const failed = resolveNarrationStatusModel(
       input({
@@ -154,7 +224,7 @@ describe("resolveNarrationStatusModel", () => {
     expect(failed.blocker?.detail).toBe("Provider failed");
     expect(failed.primaryAction).toMatchObject({
       id: "retry",
-      label: "Retry generation",
+      label: "Retry full audio",
       tone: "warning",
     });
     expect(failed.chips.find((chip) => chip.id === "source")).toMatchObject({
@@ -318,7 +388,7 @@ describe("resolveNarrationStatusModel", () => {
     });
     expect(model.primaryAction).toMatchObject({
       id: "retry",
-      label: "Retry generation",
+      label: "Retry full audio",
     });
   });
 

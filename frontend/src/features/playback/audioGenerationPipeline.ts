@@ -50,7 +50,6 @@ export function resolveAudioGenerationPipelineModel(
   const prerequisitesReady =
     input.hasSource &&
     input.hasSpokenText &&
-    input.reviewComplete !== false &&
     input.runtimeReady !== false &&
     input.voiceReady !== false;
   const working = input.job ? isWorkingJob(input.job) : false;

@@ -1119,11 +1119,41 @@ function createScenarios(seed) {
     workspaceScenario(seed.projectId, "workspace-review", "Review", "Review", workspaceText),
     workspaceScenario(seed.projectId, "workspace-preview", "Preview", "Preview", workspaceText),
     {
+      description: "Workspace Preview with active long-form audio generation.",
+      id: "workspace-preview-generation-running",
+      label: "Workspace Preview generation running",
+      open: (page) => openPreviewGenerationRunning(page, seed.website.job, seed.website.source),
+      storageState: projectStorageState(seed.projectId, {
+        jobId: seed.website.job.id,
+        preparedSourceId: seed.website.source.id,
+        sourceMode: "fileUrl",
+        sourceType: "prepared",
+        stage: "preview",
+        text: seed.website.source.speechText ?? seed.website.source.text ?? "",
+      }),
+      surface: "Preview",
+    },
+    {
       description: "Workspace Preview with a retryable full-audio generation failure.",
       id: "workspace-preview-generation-failed",
       label: "Workspace Preview generation failed",
       open: (page) =>
         openPreviewGenerationFailedRecovery(page, seed.website.job, seed.website.source),
+      storageState: projectStorageState(seed.projectId, {
+        jobId: seed.website.job.id,
+        preparedSourceId: seed.website.source.id,
+        sourceMode: "fileUrl",
+        sourceType: "prepared",
+        stage: "preview",
+        text: seed.website.source.speechText ?? seed.website.source.text ?? "",
+      }),
+      surface: "Preview",
+    },
+    {
+      description: "Workspace Preview with completed audio and one ASR segment review warning.",
+      id: "workspace-preview-asr-warning",
+      label: "Workspace Preview ASR warning",
+      open: (page) => openPreviewAsrWarning(page, seed.website.job, seed.website.source),
       storageState: projectStorageState(seed.projectId, {
         jobId: seed.website.job.id,
         preparedSourceId: seed.website.source.id,
@@ -1501,36 +1531,24 @@ async function assertWorkspacePreviewEmptyLayout(page) {
   }
 }
 
-async function assertWorkspacePreviewGenerationFailedRecoveryLayout(page) {
-  const generatedAudioEmptyState = page.getByTestId("preview-generated-audio-empty-state");
-  await generatedAudioEmptyState.scrollIntoViewIfNeeded();
-  await generatedAudioEmptyState.waitFor({ state: "visible" });
+async function assertWorkspacePreviewGenerationRunningLayout(page) {
+  const cockpit = page.getByTestId("preview-generation-cockpit");
+  await cockpit.scrollIntoViewIfNeeded();
+  await cockpit.waitFor({ state: "visible" });
+  await page.getByTestId("ui-action-preview-cancel-run").waitFor({ state: "visible" });
   await page
-    .getByRole("button", { name: /Retry generation/i })
+    .getByText(/review warnings, generation continues/i)
     .first()
     .waitFor();
-  const retryReachable = await page
-    .getByRole("button", { name: /Retry generation/i })
-    .evaluateAll((buttons) =>
-      buttons.some(
-        (button) =>
-          button instanceof HTMLButtonElement &&
-          !button.disabled &&
-          button.getAttribute("aria-disabled") !== "true",
-      ),
-    );
-  if (!retryReachable) {
-    throw new Error("Retry generation is not reachable in Preview failed-generation recovery.");
-  }
-  const generatedAudioPlaceholderText =
-    (await page.getByTestId("preview-generated-audio-empty-state").textContent()) ?? "";
-  if (!/Audio needs retry|Retry generation/i.test(generatedAudioPlaceholderText)) {
-    throw new Error("Preview generated-audio placeholder does not describe retry recovery.");
-  }
   await page
-    .getByText(/Issue · Generation failed/i)
+    .getByText(/Issue · Audio working|Job ·/i)
     .first()
     .waitFor();
+  const generatedPanelText =
+    (await page.getByTestId("preview-generated-audio-panel").textContent()) ?? "";
+  if (!/Audio is being prepared|Ready segments|Partially ready/i.test(generatedPanelText)) {
+    throw new Error("Preview generated-audio panel does not describe active generation progress.");
+  }
   const report = await page.evaluate(() => {
     const failures = [];
     const visible = (element) =>
@@ -1557,10 +1575,128 @@ async function assertWorkspacePreviewGenerationFailedRecoveryLayout(page) {
     const overlapArea = (left, right) =>
       Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left)) *
       Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top));
-    const audition = rectFor("[data-testid='preview-audition-panel']");
+    const topChrome = rectFor("header");
+    const stageStepper = rectFor("[data-testid='workspace-stage-stepper']");
+    const cockpit = rectFor("[data-testid='preview-generation-cockpit']");
+    const manual = rectFor("[data-testid='preview-manual-reading-secondary']");
+    const preflight = rectFor("[data-testid='preview-generation-preflight-summary']");
     const generated = rectFor("[data-testid='preview-generated-audio-panel']");
-    const placeholder = rectFor("[data-testid='preview-generated-audio-empty-state']");
-    const inspector = rectFor("[data-context-panel-surface='Workspace']");
+    const inspector = rectFor("[data-overlay-owner='right-rail']");
+    const cancelRun = rectFor("[data-testid='ui-action-preview-cancel-run']");
+    const footerElement = document.querySelector("[data-testid='narration-status-strip']");
+    const footer = visible(footerElement) ? footerElement.getBoundingClientRect() : null;
+    const inspectorText =
+      document.querySelector("[data-context-panel-surface='Workspace']")?.textContent ?? "";
+    const reviewCardText =
+      document.querySelector("[data-testid='workspace-stage-review']")?.textContent ?? "";
+    if (!/Audio working|Queue|Job/i.test(inspectorText)) {
+      failures.push("Preview inspector does not show active audio/job context");
+    }
+    if (/Cue ·|Cue detail/i.test(inspectorText)) {
+      failures.push("Preview inspector defaults to cropped cue text during generation");
+    }
+    if (!/generation continues|Needs repair/i.test(reviewCardText)) {
+      failures.push("Review warning stage is not represented during active generation");
+    }
+    for (const [label, left, right] of [
+      ["top chrome/stage map", topChrome, stageStepper],
+      ["stage map/generation cockpit", stageStepper, cockpit],
+      ["generation cockpit/manual reading", cockpit, manual],
+      ["manual reading/preflight", manual, preflight],
+      ["preflight/generated audio", preflight, generated],
+    ]) {
+      if (left && right && overlapArea(left, right) > 64) {
+        failures.push(`${label} overlaps in active-generation Preview`);
+      }
+    }
+    if (footer) {
+      for (const [label, rect] of [
+        ["Cancel Run", cancelRun],
+        ["Generation cockpit", cockpit],
+        ["Inspector", inspector],
+      ]) {
+        if (rect && overlapArea(rect, footer) > 0) {
+          failures.push(`${label} overlaps the status strip`);
+        }
+      }
+    }
+    return failures;
+  });
+  if (report.length > 0) {
+    throw new Error(`Workspace preview active-generation layout failed: ${report.join("; ")}`);
+  }
+}
+
+async function assertWorkspacePreviewGenerationFailedRecoveryLayout(page) {
+  const cockpit = page.getByTestId("preview-generation-cockpit");
+  await cockpit.scrollIntoViewIfNeeded();
+  await cockpit.waitFor({ state: "visible" });
+  const generatedAudioPanel = page.getByTestId("preview-generated-audio-panel");
+  await generatedAudioPanel.scrollIntoViewIfNeeded();
+  await generatedAudioPanel.waitFor({ state: "visible" });
+  await page
+    .getByRole("button", { name: /Retry generation/i })
+    .first()
+    .waitFor();
+  const retryReachable = await page
+    .getByRole("button", { name: /Retry generation/i })
+    .evaluateAll((buttons) =>
+      buttons.some(
+        (button) =>
+          button instanceof HTMLButtonElement &&
+          !button.disabled &&
+          button.getAttribute("aria-disabled") !== "true",
+      ),
+    );
+  if (!retryReachable) {
+    throw new Error("Retry generation is not reachable in Preview failed-generation recovery.");
+  }
+  const generatedAudioPanelText =
+    (await page.getByTestId("preview-generated-audio-panel").textContent()) ?? "";
+  if (
+    !/Audio needs retry|Retry generation|Ready prefix|Ready segments/i.test(generatedAudioPanelText)
+  ) {
+    throw new Error("Preview generated-audio panel does not describe retry recovery.");
+  }
+  await page
+    .getByText(/Issue · Generation failed/i)
+    .first()
+    .waitFor();
+  const report = await page.evaluate(() => {
+    const failures = [];
+    const visible = (element) =>
+      element instanceof HTMLElement &&
+      element.offsetParent !== null &&
+      element.getClientRects().length > 0 &&
+      !element.closest("[aria-hidden='true']");
+    const rectFor = (selector, required = true) => {
+      const element = document.querySelector(selector);
+      if (!visible(element)) {
+        if (required) {
+          failures.push(`${selector} is not visible`);
+        }
+        return null;
+      }
+      const rect = element.getBoundingClientRect();
+      return {
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        width: rect.width,
+      };
+    };
+    const overlapArea = (left, right) =>
+      Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left)) *
+      Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top));
+    const cockpit = rectFor("[data-testid='preview-generation-cockpit']");
+    const manual = rectFor("[data-testid='preview-manual-reading-secondary']");
+    const preflight = rectFor("[data-testid='preview-generation-preflight-summary']");
+    const generated = rectFor("[data-testid='preview-generated-audio-panel']");
+    const placeholder = rectFor("[data-testid='preview-generated-audio-empty-state']", false);
+    const playback = rectFor("[data-testid='localized-preview-playback-toolbar']", false);
+    const inspector = rectFor("[data-overlay-owner='right-rail']");
     const footerElement = document.querySelector("[data-testid='narration-status-strip']");
     const footer = visible(footerElement) ? footerElement.getBoundingClientRect() : null;
     const inspectorText =
@@ -1574,17 +1710,29 @@ async function assertWorkspacePreviewGenerationFailedRecoveryLayout(page) {
     if (/Cue ·|Cue detail/i.test(inspectorText)) {
       failures.push("Preview inspector still defaults to cue text in failed generation state");
     }
-    if (audition && generated && overlapArea(audition, generated) > 64) {
-      failures.push("Preview audition panel overlaps generated-audio recovery placeholder");
+    for (const [label, left, right] of [
+      ["generation cockpit/manual reading", cockpit, manual],
+      ["manual reading/preflight", manual, preflight],
+      ["preflight/generated audio", preflight, generated],
+    ]) {
+      if (left && right && overlapArea(left, right) > 64) {
+        failures.push(`${label} overlaps in failed-generation Preview`);
+      }
     }
     if (footer && inspector && overlapArea(inspector, footer) > 64) {
       failures.push("Preview recovery inspector overlaps the status strip");
     }
-    if (footer && placeholder && overlapArea(placeholder, footer) > 0) {
-      failures.push("Generated-audio recovery placeholder overlaps the status strip");
+    if (footer && cockpit && overlapArea(cockpit, footer) > 0) {
+      failures.push("Preview recovery cockpit overlaps the status strip");
     }
-    if (visible(document.querySelector("[data-testid='localized-preview-playback-toolbar']"))) {
-      failures.push("Preview playback toolbar is visible while generated audio failed");
+    for (const [label, rect] of [
+      ["Generated-audio recovery placeholder", placeholder],
+      ["Generated-audio recovery playback", playback],
+      ["Generated-audio recovery panel", generated],
+    ]) {
+      if (footer && rect && overlapArea(rect, footer) > 0) {
+        failures.push(`${label} overlaps the status strip`);
+      }
     }
     return failures;
   });
@@ -1592,6 +1740,99 @@ async function assertWorkspacePreviewGenerationFailedRecoveryLayout(page) {
     throw new Error(
       `Workspace preview failed-generation recovery layout failed: ${report.join("; ")}`,
     );
+  }
+}
+
+async function assertWorkspacePreviewAsrWarningLayout(page) {
+  const generatedAudioPanel = page.getByTestId("preview-generated-audio-panel");
+  await generatedAudioPanel.scrollIntoViewIfNeeded();
+  await generatedAudioPanel.waitFor({ state: "visible" });
+  await page.getByTestId("localized-preview-playback-toolbar").waitFor({ state: "visible" });
+  await page
+    .getByText(/Audio generated with 1 segment needing audio review/i)
+    .first()
+    .waitFor();
+  await page
+    .getByText(/Audio review/i)
+    .first()
+    .waitFor();
+  const retryVisible = await page
+    .getByRole("button", { name: /Retry generation/i })
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (retryVisible) {
+    throw new Error("Retry generation is visible for completed audio with ASR review warnings.");
+  }
+  const report = await page.evaluate(() => {
+    const failures = [];
+    const visible = (element) =>
+      element instanceof HTMLElement &&
+      element.offsetParent !== null &&
+      element.getClientRects().length > 0 &&
+      !element.closest("[aria-hidden='true']");
+    const rectFor = (selector) => {
+      const element = document.querySelector(selector);
+      if (!visible(element)) {
+        failures.push(`${selector} is not visible`);
+        return null;
+      }
+      const rect = element.getBoundingClientRect();
+      return {
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        width: rect.width,
+      };
+    };
+    const overlapArea = (left, right) =>
+      Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left)) *
+      Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top));
+    const generated = rectFor("[data-testid='preview-generated-audio-panel']");
+    const toolbar = rectFor("[data-testid='localized-preview-playback-toolbar']");
+    const inspector = rectFor("[data-overlay-owner='right-rail']");
+    const footerElement = document.querySelector("[data-testid='narration-status-strip']");
+    const footer = visible(footerElement) ? footerElement.getBoundingClientRect() : null;
+    const pageText = document.body.textContent ?? "";
+    const inspectorText =
+      document.querySelector("[data-context-panel-surface='Workspace']")?.textContent ?? "";
+    if (!/Audio generated with 1 segment needing audio review/i.test(pageText)) {
+      failures.push("Preview does not surface completed-audio ASR review warning");
+    }
+    if (/Retry generation/i.test(pageText)) {
+      failures.push("Completed-audio ASR warning is presented as retry-generation recovery");
+    }
+    if (!/Audio review|Segment 13|segment warning/i.test(inspectorText)) {
+      failures.push("Preview inspector does not show ASR audio review context");
+    }
+    if (!/Audio generated with 1 segment needing audio review\./i.test(inspectorText)) {
+      failures.push("Preview inspector does not show the full ASR review explanation");
+    }
+    if (/generated wit\.\.\.|completed with\s*\.\.\./i.test(inspectorText)) {
+      failures.push("Preview inspector truncates ASR warning copy with an ellipsis");
+    }
+    if (/Cue ·|Cue detail/i.test(inspectorText)) {
+      failures.push("Preview inspector defaults to cropped cue text for ASR warning fixture");
+    }
+    if (generated && toolbar && overlapArea(generated, toolbar) <= 0) {
+      failures.push("Generated audio playback toolbar is not embedded in the generated panel");
+    }
+    if (footer) {
+      for (const [label, rect] of [
+        ["Generated audio panel", generated],
+        ["Inspector", inspector],
+      ]) {
+        if (rect && overlapArea(rect, footer) > 0) {
+          failures.push(`${label} overlaps the status strip`);
+        }
+      }
+    }
+    return failures;
+  });
+  if (report.length > 0) {
+    throw new Error(`Workspace preview ASR warning layout failed: ${report.join("; ")}`);
   }
 }
 
@@ -1606,6 +1847,63 @@ async function clickPreviewMiniPlayerIfReady(page) {
   await selectIfEnabledTestId(page, "ui-action-preview-local-speed", "1.25");
 }
 
+async function openPreviewGenerationRunning(page, job, source) {
+  const runningJob = runningPreviewGenerationJob(job);
+  const warningSource = preparedSourceWithReviewWarningsForGenerationFixture(source);
+  await page.route("**/api/voice-jobs/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === "GET" && url.pathname === `/api/voice-jobs/${runningJob.id}`) {
+      await route.fulfill({
+        body: JSON.stringify(runningJob),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (
+      route.request().method() === "GET" &&
+      url.pathname === `/api/voice-jobs/${runningJob.id}/events`
+    ) {
+      await route.fulfill({
+        body: `data: ${JSON.stringify(runningJob)}\n\n`,
+        contentType: "text/event-stream",
+        status: 200,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route("**/api/source-preps/*/voice-jobs", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify([runningJob]),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/projects/*/source-preps", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    const response = await route.fetch();
+    const sources = await response.json();
+    const patchedSources = Array.isArray(sources)
+      ? sources.map((item) => (item.id === warningSource.id ? warningSource : item))
+      : sources;
+    await route.fulfill({
+      body: JSON.stringify(patchedSources),
+      contentType: "application/json",
+      status: response.status(),
+    });
+  });
+  await gotoApp(page);
+  await assertWorkspacePreviewGenerationRunningLayout(page);
+}
+
 async function openPreviewGenerationFailedRecovery(page, job, source) {
   const failedJob = failedPreviewGenerationJob(job);
   const cleanSource = cleanPreparedSourceForGenerationFailedFixture(source);
@@ -1615,6 +1913,17 @@ async function openPreviewGenerationFailedRecovery(page, job, source) {
       await route.fulfill({
         body: JSON.stringify(failedJob),
         contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (
+      route.request().method() === "GET" &&
+      url.pathname === `/api/voice-jobs/${failedJob.id}/events`
+    ) {
+      await route.fulfill({
+        body: `data: ${JSON.stringify(failedJob)}\n\n`,
+        contentType: "text/event-stream",
         status: 200,
       });
       return;
@@ -1647,6 +1956,17 @@ async function openPreviewGenerationFailedRecovery(page, job, source) {
     }
     await route.fallback();
   });
+  await page.route("**/api/source-preps/*/voice-jobs", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify([failedJob]),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
   await page.route("**/api/projects/*/source-preps", async (route) => {
     if (route.request().method() !== "GET") {
       await route.fallback();
@@ -1667,6 +1987,78 @@ async function openPreviewGenerationFailedRecovery(page, job, source) {
   await assertWorkspacePreviewGenerationFailedRecoveryLayout(page);
 }
 
+async function openPreviewAsrWarning(page, job, source) {
+  const warnedJob = completedPreviewAsrWarningJob(job);
+  const cleanSource = cleanPreparedSourceForGenerationFailedFixture(source);
+  await page.route("**/api/voice-jobs/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === "GET" && url.pathname === `/api/voice-jobs/${warnedJob.id}`) {
+      await route.fulfill({
+        body: JSON.stringify(warnedJob),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (
+      route.request().method() === "GET" &&
+      url.pathname === `/api/voice-jobs/${warnedJob.id}/events`
+    ) {
+      await route.fulfill({
+        body: `data: ${JSON.stringify(warnedJob)}\n\n`,
+        contentType: "text/event-stream",
+        status: 200,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route("**/api/source-preps/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() === "GET" &&
+      url.pathname === `/api/source-preps/${cleanSource.id}`
+    ) {
+      await route.fulfill({
+        body: JSON.stringify(cleanSource),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route("**/api/source-preps/*/voice-jobs", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify([warnedJob]),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/projects/*/source-preps", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    const response = await route.fetch();
+    const sources = await response.json();
+    const patchedSources = Array.isArray(sources)
+      ? sources.map((item) => (item.id === cleanSource.id ? cleanSource : item))
+      : sources;
+    await route.fulfill({
+      body: JSON.stringify(patchedSources),
+      contentType: "application/json",
+      status: response.status(),
+    });
+  });
+  await gotoApp(page);
+  await assertWorkspacePreviewAsrWarningLayout(page);
+}
+
 async function openPreviewAudition404Recovery(page) {
   await openWorkspaceStage(page, "Preview");
   await page.route("**/api/voice-previews", async (route) => {
@@ -1681,6 +2073,47 @@ async function openPreviewAudition404Recovery(page) {
   await page.getByTestId("ui-action-preview-audition-voice").click();
   await page.getByText(/Audition could not find the current project or preview route/i).waitFor();
   await assertWorkspacePreviewEmptyLayout(page);
+}
+
+function runningPreviewGenerationJob(job) {
+  const totalSegments = Math.max(
+    70,
+    job.retries?.totalSegments ?? 0,
+    job.progress?.totalSegments ?? 0,
+    job.segments?.length ?? 0,
+  );
+  const readySegments = Math.min(6, totalSegments);
+  const currentSegment = Math.min(readySegments + 1, totalSegments);
+  return {
+    ...job,
+    audioReadySegments: readySegments,
+    audioUrl: "",
+    audioPartialUrl: `/api/voice-jobs/${job.id}/audio/partial`,
+    error: "",
+    failureKind: "",
+    progress: {
+      ...job.progress,
+      activeStage: "synthesizing",
+      currentSegment,
+      detail: `${readySegments.toString()}/${totalSegments.toString()} segments can play; pending segments will unlock as generation continues.`,
+      message: `Generating segment ${currentSegment.toString()} of ${totalSegments.toString()}`,
+      totalSegments,
+    },
+    retries: {
+      ...job.retries,
+      currentSegment,
+      segmentAttempts: 1,
+      totalSegments,
+    },
+    retriable: true,
+    segments: Array.from({ length: totalSegments }).map((_, index) => ({
+      index: index + 1,
+      status: index < readySegments ? "ready" : index === readySegments ? "running" : "pending",
+      text: `Segment ${String(index + 1)}`,
+    })),
+    status: "synthesizing",
+    terminalReason: "",
+  };
 }
 
 function failedPreviewGenerationJob(job) {
@@ -1712,6 +2145,89 @@ function failedPreviewGenerationJob(job) {
     retriable: true,
     status: "failed",
     terminalReason: "provider_failed",
+  };
+}
+
+function completedPreviewAsrWarningJob(job) {
+  const totalSegments = Math.max(
+    70,
+    job.retries?.totalSegments ?? 0,
+    job.progress?.totalSegments ?? 0,
+    job.segments?.length ?? 0,
+  );
+  const warning =
+    "ASR validation exhausted; audio kept for review: ASR transcript did not sufficiently match and did not look like a clean cutoff";
+  return {
+    ...job,
+    audioReadySegments: totalSegments,
+    error: "",
+    failureKind: "",
+    progress: {
+      ...job.progress,
+      activeStage: "done",
+      currentSegment: totalSegments,
+      detail: "Audio generated with 1 segment needing audio review.",
+      message: "Completed with audio review warnings",
+      totalSegments,
+    },
+    qualityReport: {
+      averageLatencyMs: 90,
+      averageSimilarity: 0.91,
+      enabled: true,
+      preprocessChangedPct: 0,
+      reason: "completed with 1 segment review warning(s); 1 segment(s) need audio review",
+      referenceProfile: false,
+      retryCount: 2,
+      segmentCount: totalSegments,
+      unverifiedSegmentCount: 1,
+      warningCount: 1,
+    },
+    retries: {
+      ...job.retries,
+      currentSegment: totalSegments,
+      segmentAttempts: Math.max(job.retries?.segmentAttempts ?? 0, totalSegments + 1),
+      totalSegments,
+    },
+    retriable: false,
+    segments: Array.from({ length: totalSegments }).map((_, index) => ({
+      attempts: index === 12 ? 2 : 1,
+      index: index + 1,
+      reason:
+        index === 12
+          ? "ASR transcript did not sufficiently match and did not look like a clean cutoff"
+          : "ok",
+      similarity: index === 12 ? 0.42 : 0.97,
+      status: "ready",
+      text: `Segment ${String(index + 1)}`,
+      warnings: index === 12 ? [warning] : [],
+    })),
+    stages: {
+      ...job.stages,
+      checker: "done",
+      optimization: "done",
+      synthesis: "done",
+    },
+    status: "completed",
+    terminalReason: "",
+    voiceCheck: {
+      ...job.voiceCheck,
+      complete: true,
+      needsResume: false,
+      reason: "completed with 1 segment review warning(s); 1 segment(s) need audio review",
+      similarity: 0.91,
+    },
+  };
+}
+
+function preparedSourceWithReviewWarningsForGenerationFixture(source) {
+  return {
+    ...cleanPreparedSourceForGenerationFailedFixture(source),
+    blocks: (source.blocks ?? []).map((block, index) => ({
+      ...block,
+      confidence: index === 0 ? 0.62 : 1,
+      warnings:
+        index === 0 ? ["Verify pronunciation before final approval."] : (block.warnings ?? []),
+    })),
   };
 }
 
@@ -1903,6 +2419,8 @@ async function openTeleprompt(page) {
   await waitForEnabledTestId(page, "workspace-stage-action-openTeleprompt");
   await page.getByTestId("workspace-stage-action-openTeleprompt").click();
   await page.getByText("Teleprompt Studio").first().waitFor();
+  await page.getByTestId("ui-action-teleprompt-open-cinema").waitFor({ state: "visible" });
+  await page.getByTestId("ui-action-teleprompt-enter-theatre").waitFor({ state: "visible" });
   await page.getByTestId("ui-action-teleprompt-local-previous-cue").waitFor({ state: "visible" });
   await page.getByTestId("teleprompt-status-message").waitFor({ state: "visible" });
 }
@@ -1910,7 +2428,14 @@ async function openTeleprompt(page) {
 async function openTelepromptTheatre(page) {
   await openTeleprompt(page);
   await page.getByTestId("ui-action-teleprompt-enter-theatre").click();
-  await page.getByTestId("teleprompt-theatre").waitFor();
+  const theatre = page.getByTestId("teleprompt-theatre");
+  await theatre.waitFor();
+  await theatre.hover();
+  const backToPreview = page.getByTestId("ui-action-teleprompt-theatre-back-preview");
+  if (!(await backToPreview.isVisible().catch(() => false))) {
+    await page.getByTestId("ui-action-teleprompt-theatre-toggle-controls").click();
+  }
+  await backToPreview.waitFor({ state: "visible" });
 }
 
 async function waitForEnabledTestId(page, testId) {

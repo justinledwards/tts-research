@@ -52,15 +52,16 @@ export const DUPLICATE_WAIVER_REGISTRY = [
       "Preview",
       "Preview mini-player",
       "Command Center",
+      "Teleprompt",
       "Teleprompt Theatre",
     ],
-    burnDownIssue: "WP46-BD-CINEMA-NAV",
-    category: "overexposed",
+    burnDownIssue: null,
+    category: "allowed-surface-parity",
     id: "wp46-cinema-navigation",
     labels: ["Cinema", "Open Cinema"],
     owner: "navigation-ia",
     reason:
-      "Cinema entry points appear in dashboard, intake, preview, and theatre contexts. Keep them visible only where the target source/context is clear.",
+      "Cinema is a first-class listening destination and remains visible from source setup, Preview, Teleprompt, and Theatre when the target source/context is clear.",
     reviewDate: REVIEW_DATE,
   },
   {
@@ -128,10 +129,20 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     ],
     category: "allowed-surface-parity",
     id: "wp66-contextual-inspector-affordance",
-    labels: ["Expand", "Expand Inspector"],
+    labels: ["Collapse", "Expand", "Expand Inspector", "Pin"],
     owner: "workspace-ia",
     reason:
       "Collapsed contextual inspectors expose one repeated expansion affordance across narration stages.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: WORKSPACE_STAGE_SURFACES,
+    category: "allowed-surface-parity",
+    id: "wp68-workspace-context-summary",
+    labelPatterns: ["^Work.*Narration Workbench/"],
+    owner: "workspace-ia",
+    reason:
+      "The compact work context summary is a single shell breadcrumb affordance repeated across workspace scenarios.",
     reviewDate: REVIEW_DATE,
   },
   {
@@ -440,6 +451,17 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     owner: "workspace-ia",
     reason:
       "Primary workflow navigation appears on each first-class surface so scenario coverage can enter and leave stages consistently.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: WORKSPACE_STAGE_SURFACES,
+    actionClasses: ["diagnostic"],
+    category: "allowed-surface-parity",
+    id: "wp68-workspace-status-chip-inspection",
+    labelPatterns: ["^Inspect (Audio|Check|Queue|Review|Source|System):"],
+    owner: "workspace-ia",
+    reason:
+      "Status chip inspection repeats across Review and Preview so operators can inspect the same source, audio, queue, and system signals from each stage.",
     reviewDate: REVIEW_DATE,
   },
   {

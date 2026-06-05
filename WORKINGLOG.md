@@ -1551,3 +1551,27 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Review worktree scope
 - [x] Stage Preview recovery work package
 - [x] Create commit
+
+## 2026-06-04 22:12 CEST - Preview Generation Reliability And Chrome Cleanup
+- [x] Add bounded segment retry resilience
+- [x] Rework Preview generation cockpit and Inspector
+- [x] Compact top product chrome
+- [x] Update regression and layout coverage
+- [x] Run focused and project checks
+- Validation: focused backend pipeline retry tests passed; focused frontend Preview/AppShell/status/context/workspace tests passed; responsive snapshots passed; managed UI-action quick replay passed 80/80 activations with 0 overlay collisions and 0 unclassified duplicate groups; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome warnings/infos. Packaged existing-server `e2e:ui-actions:quick` still fails during seed on the local/private URL guard before UI replay.
+
+## 2026-06-04 23:33 CEST - ASR Segment Exhaustion Continuation
+- [x] Preserve generated audio when ASR validation exhausts
+- [x] Add segment warning quality metadata
+- [x] Surface warned completed audio in Preview and status
+- [x] Add RCA regression and layout coverage
+- [x] Run focused and project checks
+- Validation: focused backend pipeline tests passed, including checker mismatch and exhausted checker timeout continuation; focused frontend Preview/status/Inspector tests passed; frontend typecheck passed; ASR-warning UI-action fixture inventory and quick replay passed with 0 failed activations and only existing advisory duplicate-control findings; responsive snapshots passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome warnings/infos.
+
+## 2026-06-05 08:36 CEST - Teleprompt Theatre Ergonomics
+- [x] Promote Cinema as peer playback destination
+- [x] Compact Theatre controls and unavailable playback states
+- [x] Improve Inspector width and readable warning copy
+- [x] Update regression and layout coverage
+- [x] Run focused and project checks
+- Validation: focused Teleprompt/Theatre/Inspector/status tests passed; frontend typecheck passed; responsive snapshots passed; packaged existing-server UI-action quick still hit the known private/local URL seed guard, while managed targeted UI-action replay passed 46/46 activations with advisory findings only; `pnpm check` passed with existing unrelated Biome warnings/infos.

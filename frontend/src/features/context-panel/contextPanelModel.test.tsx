@@ -120,6 +120,38 @@ describe("context panel inspector contract", () => {
     expect(markup).not.toContain("Voice details");
   });
 
+  it("allows expanded inspector headings and details to wrap instead of truncating", () => {
+    const longDetail =
+      "Audio generated with 17 segments needing audio review. completed with 17 segment review warning(s).";
+    const tabs = buildContextPanelTabs([
+      {
+        children: <p>{longDetail}</p>,
+        detail: longDetail,
+        id: "audio-review",
+        kind: "narration-block-status",
+        tabId: "overview",
+        title: "Audio check needs review",
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(
+      <ContextPanel
+        activeTabId="overview"
+        displayState="expanded"
+        headingDetail={longDetail}
+        headingTitle="Issue · Audio check needs review"
+        surface="Workspace"
+        tabs={tabs}
+        onTabChange={() => null}
+      />,
+    );
+
+    expect(markup).toContain(longDetail);
+    expect(markup).toContain("break-words");
+    expect(markup).not.toContain("line-clamp-2");
+    expect(markup).not.toContain("truncate");
+  });
+
   it("shows scoped review task content in the workspace inspector", () => {
     const markup = renderToStaticMarkup(
       <WorkspaceContextInspector
@@ -248,6 +280,61 @@ describe("context panel inspector contract", () => {
     expect(markup).toContain("What happened");
     expect(markup).toContain("Preview readiness");
     expect(markup).toContain("Queue");
+    expect(markup).not.toContain("Cue · Block 1");
+  });
+
+  it("defaults Preview inspector to audio review context for completed warned jobs", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceContextInspector
+        {...workspaceInspectorProps({
+          audio: {
+            detail: "Audio generated with 1 segment needing audio review.",
+            eta: "Ready",
+            jobLabel: "job-123456",
+            lifecycleLabel: "Audio review",
+            queue: {
+              currentSegment: 13,
+              generatingCount: 0,
+              readyCount: 70,
+              totalSegments: 70,
+            },
+            tone: "warning",
+          },
+          stage: "preview",
+          status: stageStatus({ stage: "preview" }),
+        })}
+        fallbackTarget={{ id: "job-123456", kind: "job", label: "job-123456" }}
+        targets={inspectorTargets({
+          jobs: [
+            {
+              detail: "Audio generated with 1 segment needing audio review.",
+              facts: [
+                { label: "Job", value: "job-123456" },
+                { label: "Lifecycle", tone: "warning", value: "Audio review" },
+                { label: "Audio review", tone: "warning", value: "1" },
+                { label: "Ready", value: "70" },
+                { label: "Total", value: "70" },
+              ],
+              id: "job-123456",
+              label: "job-123456",
+              notes: [
+                {
+                  detail:
+                    "Segment 13: ASR validation exhausted; audio kept for review: ASR transcript did not sufficiently match",
+                  label: "Segment warning",
+                  tone: "warning",
+                },
+              ],
+              tone: "warning",
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(markup).toContain('data-context-panel-active-tab="diagnostics"');
+    expect(markup).toContain("Audio review");
+    expect(markup).toContain("Segment 13");
     expect(markup).not.toContain("Cue · Block 1");
   });
 

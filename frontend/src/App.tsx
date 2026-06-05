@@ -265,7 +265,17 @@ import {
   generatedAudioLifecycleFromJob,
   generatedAudioLifecycleLabel,
 } from "./features/playback/generatedAudioLifecycle";
-import { resolveAudioGenerationPipelineModel } from "./features/playback/audioGenerationPipeline";
+import {
+  isAudioGenerationWorking,
+  resolveAudioGenerationPipelineModel,
+  type AudioGenerationPipelineModel,
+} from "./features/playback/audioGenerationPipeline";
+import {
+  audioReviewWarningCount,
+  audioReviewWarningReasons,
+  audioReviewWarningSummary,
+  audioReviewWarningTotal,
+} from "./features/playback/audioReviewWarnings";
 import {
   providerCapabilityGate,
   resolveProviderRuntimeCapabilities,
@@ -280,7 +290,11 @@ import {
   previewPlayerVariantForSurface,
   shouldShowGlobalPreviewPlayer,
 } from "./features/playback/playbackSurfaceRules";
-import { resolvePreviewReadinessModel } from "./features/preview/previewReadiness";
+import {
+  resolvePreviewReadinessModel,
+  type PreviewReadinessModel,
+  type PreviewReadinessRow,
+} from "./features/preview/previewReadiness";
 import {
   PREVIEW_AUDITION_NOT_FOUND_MESSAGE,
   PreviewGeneratedAudioPanel,
@@ -317,6 +331,7 @@ import {
   Panel,
   StatusChip,
   compactHitTargetClassName,
+  cx,
   minInteractiveSize,
   type ButtonVariant,
   type StatusChipTone,
@@ -3474,6 +3489,13 @@ export function App() {
     sourceMode,
     voiceProfileLabel: selectedVoiceProfileLabel,
   });
+  const workspaceAudioReviewSummary = audioReviewWarningSummary(job);
+  const workspaceAudioLifecycleLabel = workspaceAudioReviewSummary
+    ? "Audio review"
+    : generatedAudioLifecycleLabel(generatedAudioLifecycle);
+  const workspaceAudioLifecycleTone = workspaceAudioReviewSummary
+    ? "warning"
+    : audioLifecycleTone(generatedAudioLifecycle);
   const workspaceInspectorTargets = useMemo<WorkspaceInspectorContextTargets>(
     () => ({
       cues: narrationPreviewBlocks.map((block) =>
@@ -3483,7 +3505,7 @@ export function App() {
       jobs: job
         ? [
             workspaceInspectorJobDetail({
-              audioLifecycleLabel: generatedAudioLifecycleLabel(generatedAudioLifecycle),
+              audioLifecycleLabel: workspaceAudioLifecycleLabel,
               job,
               queue: narrationStatusModel.queue,
             }),
@@ -3504,7 +3526,6 @@ export function App() {
     }),
     [
       activeNarrationSourceLabel,
-      generatedAudioLifecycle,
       job,
       narrationPreviewBlocks,
       narrationStatusModel.issues,
@@ -3512,8 +3533,10 @@ export function App() {
       selectedVoiceProfileId,
       selectedVoiceProfileLabel,
       statusSourceLifecycle.sourceId,
+      workspaceAudioLifecycleLabel,
     ],
   );
+  const workspaceInspectorPinned = workspaceLayout.contextInspector === "pinned";
   const previewWorkspaceInspectorFallbackTarget = useMemo<WorkspaceInspectorTarget | null>(() => {
     if (contentMode !== "preview") {
       return null;
@@ -3529,6 +3552,26 @@ export function App() {
       ? { id: activeInspectorJob.id, kind: "job", label: activeInspectorJob.label }
       : null;
   }, [contentMode, workspaceInspectorTargets.issues, workspaceInspectorTargets.jobs]);
+  const previewAudioInspectorShouldExpand = Boolean(
+    previewWorkspaceInspectorFallbackTarget &&
+      (previewWorkspaceInspectorFallbackTarget.kind === "issue" ||
+        previewWorkspaceInspectorFallbackTarget.kind === "job") &&
+      job &&
+      (Boolean(workspaceAudioReviewSummary) ||
+        ["queued", "optimizing", "synthesizing", "checking", "retrying"].includes(job.status) ||
+        (job.status === "failed" &&
+          job.retriable !== false &&
+          job.terminalReason !== "configuration_failed")),
+  );
+  useEffect(() => {
+    if (
+      previewAudioInspectorShouldExpand &&
+      !workspaceInspectorPinned &&
+      workspaceInspectorDisplayState === "collapsed"
+    ) {
+      setWorkspaceInspectorDisplayState("expanded");
+    }
+  }, [previewAudioInspectorShouldExpand, workspaceInspectorDisplayState, workspaceInspectorPinned]);
   const selectWorkspaceInspectorTarget = useCallback((target: WorkspaceInspectorTarget | null) => {
     setSelectedWorkspaceInspectorTarget(target);
     if (target) {
@@ -3560,7 +3603,6 @@ export function App() {
       });
     }
   }, [selectWorkspaceInspectorTarget, workspaceInspectorTargets.jobs]);
-  const workspaceInspectorPinned = workspaceLayout.contextInspector === "pinned";
   useEffect(() => {
     if (!workspaceInspectorPinned && pinnedWorkspaceInspectorTarget) {
       setPinnedWorkspaceInspectorTarget(null);
@@ -8560,6 +8602,9 @@ export function App() {
               playbackControls={playbackControls}
               playbackCursorSec={playbackCursorSec}
               onAuditionVoice={auditionVoicePreviewFromCurrentConfig}
+              onCancelRun={() => {
+                void handleCancelVoiceJob();
+              }}
               onInspectBookSource={(book) => {
                 selectWorkspaceInspectorTarget({
                   id: book.id,
@@ -8626,18 +8671,26 @@ export function App() {
             className={`vs-raised order-2 hidden min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:flex lg:min-h-0 lg:overflow-y-auto ${
               rightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
             }`}
+            style={{
+              maxHeight: "calc(100vh - var(--overlay-activity-footer-reserved, 5rem) - 4rem)",
+            }}
             {...overlayDataAttributes("right-rail", "right-rail")}
           >
             {workspaceInspectorDisplayVisible ? (
-              <div className="grid gap-3 p-2 xl:p-4">
+              <div
+                className="grid gap-3 p-2 xl:p-4"
+                style={{
+                  paddingBottom: "calc(var(--overlay-activity-footer-reserved, 5rem) + 1rem)",
+                }}
+              >
                 <WorkspaceInspectorPanel
                   audio={{
-                    detail: narrationStatusModel.detail,
+                    detail: workspaceAudioReviewSummary ?? narrationStatusModel.detail,
                     eta: narrationStatusModel.eta,
                     jobLabel: narrationStatusModel.activeJobLabel,
-                    lifecycleLabel: generatedAudioLifecycleLabel(generatedAudioLifecycle),
+                    lifecycleLabel: workspaceAudioLifecycleLabel,
                     queue: narrationStatusModel.queue,
-                    tone: audioLifecycleTone(generatedAudioLifecycle),
+                    tone: workspaceAudioLifecycleTone,
                   }}
                   diagnostics={{
                     facts: workspaceInspectorDiagnosticsFacts({
@@ -11044,6 +11097,7 @@ function SourceTextPanel({
   playbackControls,
   playbackCursorSec,
   onAuditionVoice,
+  onCancelRun,
   onCreateAndListen,
   onCreateWithCurrentPlan,
   onInspectBookSource,
@@ -11117,6 +11171,7 @@ function SourceTextPanel({
   playbackControls: PlaybackController;
   playbackCursorSec: number;
   onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
+  onCancelRun: () => void;
   onCreateAndListen: () => void;
   onCreateWithCurrentPlan: () => void;
   onInspectBookSource: (source: BookSource) => void;
@@ -11197,7 +11252,17 @@ function SourceTextPanel({
     surface: workspaceSourceLifecycleSurface(contentMode),
     text,
   });
-  const canOpenCinema = generatedAudioLifecycleFromJob({ job }) === "ready";
+  const workbenchAudioLifecycle = generatedAudioLifecycleFromJob({ job });
+  const canOpenCinema = workbenchAudioLifecycle === "ready";
+  const previewGenerationFocus =
+    contentMode === "preview" &&
+    Boolean(
+      job &&
+        (["queued", "optimizing", "synthesizing", "checking", "retrying"].includes(job.status) ||
+          (job.status === "failed" &&
+            job.retriable !== false &&
+            job.terminalReason !== "configuration_failed")),
+    );
   const stageLabel = workspaceStageMeta(contentMode).label;
   const showWorkbenchChrome = workspaceStageShowsGlobalChrome(contentMode);
 
@@ -11226,6 +11291,7 @@ function SourceTextPanel({
 
           <WorkbenchStageStepper
             activeStage={contentMode}
+            generationFocus={previewGenerationFocus}
             status={stageStatus}
             onCreateAndListen={onCreateAndListen}
             onOpenCinema={onOpenCinema}
@@ -11344,6 +11410,7 @@ function SourceTextPanel({
           onAuditionVoice={onAuditionVoice}
           onCreateAndListen={onCreateAndListen}
           onCreateWithCurrentPlan={onCreateWithCurrentPlan}
+          onCancelRun={onCancelRun}
           onOpenCinema={onOpenCinema}
           onOpenTheatre={onOpenTheatre}
           onActiveBlockChange={onReviewBlockChange}
@@ -11359,6 +11426,7 @@ function SourceTextPanel({
 
 function WorkbenchStageStepper({
   activeStage,
+  generationFocus,
   status,
   onCreateAndListen,
   onOpenCinema,
@@ -11366,6 +11434,7 @@ function WorkbenchStageStepper({
   onStageAction,
 }: Readonly<{
   activeStage: WorkspaceStage;
+  generationFocus?: boolean;
   status: WorkspaceStageStatus;
   onCreateAndListen: () => void;
   onOpenCinema: () => void;
@@ -11426,11 +11495,16 @@ function WorkbenchStageStepper({
           ) : null}
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-5" role="tablist" aria-label="Workbench stages">
+      <div
+        className={cx("gap-2", generationFocus ? "flex flex-wrap" : "grid sm:grid-cols-5")}
+        role="tablist"
+        aria-label="Workbench stages"
+      >
         {WORKSPACE_STAGES.map((stage) => {
           const meta = workspaceStageMeta(stage);
           const readiness = status.readinessByStage[stage];
           const selected = stage === activeStage;
+          const compactStage = Boolean(generationFocus && !selected);
           const disabled = !readiness.action;
           let stageButtonVariant: ButtonVariant = "secondary";
           if (readiness.state === "failed") {
@@ -11443,7 +11517,14 @@ function WorkbenchStageStepper({
             <Button
               align="start"
               aria-selected={selected}
-              className="min-w-0 flex-col gap-1 px-3 py-2"
+              className={cx(
+                "min-w-0 gap-1 px-3 py-2",
+                compactStage
+                  ? "min-h-9 max-w-full flex-row items-center justify-between"
+                  : "flex-col",
+                generationFocus && selected ? "min-w-[18rem] flex-1" : "",
+                compactStage ? "min-w-[10rem] flex-1 sm:flex-none" : "",
+              )}
               data-workspace-stage-readiness={readiness.state}
               data-testid={`workspace-stage-${stage}`}
               disabled={disabled}
@@ -11461,7 +11542,13 @@ function WorkbenchStageStepper({
                 <span className="truncate text-sm font-semibold">{meta.label}</span>
                 <StatusChip tone={readiness.tone}>{readiness.label}</StatusChip>
               </span>
-              <span className="line-clamp-2 text-xs font-normal vs-muted">{readiness.detail}</span>
+              {compactStage ? (
+                <span className="sr-only">{readiness.detail}</span>
+              ) : (
+                <span className="line-clamp-2 text-xs font-normal vs-muted">
+                  {readiness.detail}
+                </span>
+              )}
             </Button>
           );
         })}
@@ -11500,6 +11587,7 @@ function NarrationPreviewStage({
   createAndListenScope,
   onActiveBlockChange,
   onAuditionVoice,
+  onCancelRun,
   onCreateAndListen,
   onCreateWithCurrentPlan,
   onOpenCinema,
@@ -11534,6 +11622,7 @@ function NarrationPreviewStage({
   createAndListenScope: CreateAndListenScope;
   onActiveBlockChange: (blockId: string | null) => void;
   onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
+  onCancelRun: () => void;
   onCreateAndListen: () => void;
   onCreateWithCurrentPlan: () => void;
   onOpenCinema: () => void;
@@ -11571,6 +11660,7 @@ function NarrationPreviewStage({
     selectedPreparedSource,
   });
   const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
+  const audioReviewSummary = audioReviewWarningSummary(job);
   const createDetail = job
     ? `${job.status} · ${estimateFirstAudioETA(job)}`
     : "Ready to create checked narration";
@@ -11650,6 +11740,8 @@ function NarrationPreviewStage({
   const createAndListenDisabledReason = readiness.createDisabledReason;
   const openCinemaDisabledReason = canOpenCinema ? undefined : readiness.cinemaDisabledReason;
   const generatedAudioReadiness = readiness.rows.find((row) => row.id === "audio");
+  const showGenerationCockpit = previewGenerationNeedsCockpit(audioPipeline);
+  const generationIsActive = isAudioGenerationWorking(audioPipeline.state);
   const auditionSampleText = previewAuditionSampleText(
     selectedPreviewBlock?.spokenText ?? spokenText,
   );
@@ -11712,7 +11804,8 @@ function NarrationPreviewStage({
     56,
   );
   const previewPlaybackAvailable =
-    playbackControls.isAvailable && generatedAudioLifecycle === "ready";
+    playbackControls.isAvailable &&
+    (generatedAudioLifecycle === "ready" || audioPipeline.canUsePartialAudio);
   const playbackLifecycle = previewPlaybackAvailable ? "ready" : generatedAudioLifecycle;
   const previewPlaybackDisabledReason = previewPlaybackAvailable
     ? undefined
@@ -11742,6 +11835,12 @@ function NarrationPreviewStage({
     const nextBlock = previewBlocks[nextIndex];
     onActiveBlockChange(nextBlock.id);
   };
+  let previewPlaybackStatusLabel = "Ready";
+  if (playbackControls.isPlaying || isPlaybackActive) {
+    previewPlaybackStatusLabel = "Playing";
+  } else if (audioPipeline.canUsePartialAudio && generatedAudioLifecycle !== "ready") {
+    previewPlaybackStatusLabel = "Partial";
+  }
   const previewPlaybackToolbar: LocalizedPlaybackToolbarModel = {
     activeDetail: selectedPreviewBlock
       ? `${selectedPreviewBlock.index.toString()} of ${Math.max(1, previewBlocks.length).toString()} · ${formatDuration(selectedPreviewBlock.estimatedDurationMs)}`
@@ -11849,8 +11948,9 @@ function NarrationPreviewStage({
       onChange: playbackControls.setPlaybackRate,
     },
     stage: "preview",
-    statusLabel: playbackControls.isPlaying || isPlaybackActive ? "Playing" : "Ready",
+    statusLabel: previewPlaybackStatusLabel,
     testId: "localized-preview-playback-toolbar",
+    variant: showGenerationCockpit ? "compact" : "normal",
   };
 
   return (
@@ -11869,123 +11969,160 @@ function NarrationPreviewStage({
           stateLabel={generatedAudioLifecycle === "missing" ? "Source ready" : null}
           surfaceName="Preview"
         />
-        <div className="grid gap-2 sm:min-w-64">
-          <Button
-            data-testid={workspaceStageActionTestId("openTeleprompt")}
-            disabled={!readiness.canOpenTeleprompt}
-            disabledReason={readiness.openTelepromptDisabledReason}
-            onClick={onOpenTeleprompt}
-            size="sm"
-            variant="soft"
-          >
-            {workspaceStageActionLabel("openTeleprompt")}
-          </Button>
-          <p className="text-xs leading-5 vs-muted">{readiness.openTelepromptDetail}</p>
-          <Button
-            disabled={!readiness.canOpenTheatre}
-            disabledReason={readiness.openTheatreDisabledReason}
-            data-testid={workspaceStageActionTestId("openTheatre")}
-            onClick={onOpenTheatre}
-            size="sm"
-            variant="secondary"
-          >
-            {workspaceStageActionLabel("openTheatre")}
-          </Button>
-          {readiness.canOpenTheatre && !readiness.canOpenCinema ? (
-            <p className="text-xs leading-5 vs-muted">
-              Theatre opens in reading-only mode until generated audio and timing are ready.
-            </p>
-          ) : null}
-          {!readiness.canOpenTheatre && readiness.openTheatreDisabledReason ? (
-            <p className="text-xs leading-5 text-[var(--vs-selected-text)]">
-              {readiness.openTheatreDisabledReason}
-            </p>
-          ) : null}
-        </div>
+        {showGenerationCockpit ? null : (
+          <PreviewManualReadingPanel
+            compact={false}
+            readiness={readiness}
+            onOpenTeleprompt={onOpenTeleprompt}
+            onOpenTheatre={onOpenTheatre}
+          />
+        )}
       </div>
-      <PreviewReadinessChecklist model={readiness} />
-      <PreviewConfirmationStrip model={readiness} />
-      <RunPlannerSummaryPanel
-        createWithCurrentPlanDisabled={!readiness.canCreate}
-        createWithCurrentPlanDisabledReason={createAndListenDisabledReason}
-        differences={retryPlanDifferences}
-        retrySummary={retryRunSummary}
-        summary={nextRunSummary}
-        onCreateWithCurrentPlan={retryRunSummary ? onCreateWithCurrentPlan : undefined}
-      />
-      <section className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-semibold">
-              {readiness.canOpenCinema ? "Audio ready" : "Create full narration"}
-            </h3>
-            <StatusChip tone={job ? "info" : "neutral"}>{createDetail}</StatusChip>
-          </div>
-          <p className="mt-1 text-sm leading-6 vs-muted">
-            {readiness.createHelper}
-            {createDisabled && createAndListenDisabledReason
-              ? ` ${createAndListenDisabledReason}`
-              : ""}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          {readiness.canOpenCinema ? (
-            <Button
-              {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
-              disabledReason={openCinemaDisabledReason}
-              data-testid={workspaceStageActionTestId("openCinema")}
-              disabled={!canOpenCinema}
-              onClick={onOpenCinema}
-              size="lg"
-              variant="primary"
-            >
-              {workspaceStageActionLabel("openCinema")}
-            </Button>
-          ) : null}
-          <Button
-            {...workspacePlaybackActionDataAttributes("createAndListen", generatedAudioLifecycle)}
-            {...createAndListenCapabilityAttributes(createAndListenCapabilityReason)}
-            aria-label={createAndListenAriaLabel(createAndListenScope)}
-            data-create-listen-scope={createAndListenScope}
-            disabledReason={createAndListenDisabledReason}
-            data-testid={workspaceStageActionTestId("createAndListen")}
-            disabled={createDisabled}
-            onClick={onCreateAndListen}
-            size="lg"
-            variant={readiness.canOpenCinema ? "secondary" : "primary"}
-          >
-            {readiness.primaryLabel}
-          </Button>
-          {readiness.canOpenCinema ? null : (
-            <Button
-              {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
-              disabledReason={openCinemaDisabledReason}
-              data-testid={workspaceStageActionTestId("openCinema")}
-              disabled={!canOpenCinema}
-              onClick={onOpenCinema}
-              size="lg"
-              variant="secondary"
-            >
-              {workspaceStageActionLabel("openCinema")}
-            </Button>
-          )}
-        </div>
-        {!readiness.canOpenCinema && openCinemaDisabledReason ? (
-          <p className="text-xs text-[var(--vs-selected-text)] lg:col-span-2">
-            {openCinemaDisabledReason}
-          </p>
-        ) : null}
-      </section>
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-        <VoiceAuditionPanel
-          sampleText={auditionSampleText}
-          state={voiceAudition}
-          disabledReason={
-            readiness.canAudition
-              ? undefined
-              : readiness.rows.find((row) => row.id === "audition")?.detail
-          }
-        />
+      {showGenerationCockpit ? (
+        <>
+          <PreviewGenerationCockpit
+            audioPipeline={audioPipeline}
+            canCancelRun={generationIsActive && Boolean(job)}
+            canRetryGeneration={readiness.canCreate}
+            createDisabledReason={createAndListenDisabledReason}
+            job={job}
+            reviewWarningCount={reviewWarningCount}
+            onCancelRun={onCancelRun}
+            onRetryGeneration={onCreateAndListen}
+          />
+          <PreviewManualReadingPanel
+            compact
+            readiness={readiness}
+            onOpenTeleprompt={onOpenTeleprompt}
+            onOpenTheatre={onOpenTheatre}
+          />
+          <PreviewGenerationPreflightSummary rows={readiness.rows} />
+          <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+            <summary className="cursor-pointer text-sm font-semibold">Next-run plan</summary>
+            <div className="mt-3">
+              <RunPlannerSummaryPanel
+                createWithCurrentPlanDisabled={!readiness.canCreate}
+                createWithCurrentPlanDisabledReason={createAndListenDisabledReason}
+                differences={retryPlanDifferences}
+                retrySummary={retryRunSummary}
+                summary={nextRunSummary}
+                onCreateWithCurrentPlan={retryRunSummary ? onCreateWithCurrentPlan : undefined}
+              />
+            </div>
+          </details>
+        </>
+      ) : (
+        <>
+          <PreviewReadinessChecklist model={readiness} />
+          <PreviewConfirmationStrip model={readiness} />
+          <RunPlannerSummaryPanel
+            createWithCurrentPlanDisabled={!readiness.canCreate}
+            createWithCurrentPlanDisabledReason={createAndListenDisabledReason}
+            differences={retryPlanDifferences}
+            retrySummary={retryRunSummary}
+            summary={nextRunSummary}
+            onCreateWithCurrentPlan={retryRunSummary ? onCreateWithCurrentPlan : undefined}
+          />
+          <section className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-semibold">
+                  {readiness.canOpenCinema ? "Audio ready" : "Create full narration"}
+                </h3>
+                <StatusChip tone={job ? "info" : "neutral"}>{createDetail}</StatusChip>
+              </div>
+              <p className="mt-1 text-sm leading-6 vs-muted">
+                {readiness.createHelper}
+                {createDisabled && createAndListenDisabledReason
+                  ? ` ${createAndListenDisabledReason}`
+                  : ""}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+              {readiness.canOpenCinema ? (
+                <Button
+                  {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
+                  disabledReason={openCinemaDisabledReason}
+                  data-testid={workspaceStageActionTestId("openCinema")}
+                  disabled={!canOpenCinema}
+                  onClick={onOpenCinema}
+                  size="lg"
+                  variant="primary"
+                >
+                  {workspaceStageActionLabel("openCinema")}
+                </Button>
+              ) : null}
+              <Button
+                {...workspacePlaybackActionDataAttributes(
+                  "createAndListen",
+                  generatedAudioLifecycle,
+                )}
+                {...createAndListenCapabilityAttributes(createAndListenCapabilityReason)}
+                aria-label={createAndListenAriaLabel(createAndListenScope)}
+                data-create-listen-scope={createAndListenScope}
+                disabledReason={createAndListenDisabledReason}
+                data-testid={workspaceStageActionTestId("createAndListen")}
+                disabled={createDisabled}
+                onClick={onCreateAndListen}
+                size="lg"
+                variant={readiness.canOpenCinema ? "secondary" : "primary"}
+              >
+                {readiness.primaryLabel}
+              </Button>
+              {readiness.canOpenCinema ? null : (
+                <Button
+                  {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
+                  disabledReason={openCinemaDisabledReason}
+                  data-testid={workspaceStageActionTestId("openCinema")}
+                  disabled={!canOpenCinema}
+                  onClick={onOpenCinema}
+                  size="lg"
+                  variant="secondary"
+                >
+                  {workspaceStageActionLabel("openCinema")}
+                </Button>
+              )}
+            </div>
+            {!readiness.canOpenCinema && openCinemaDisabledReason ? (
+              <p className="text-xs text-[var(--vs-selected-text)] lg:col-span-2">
+                {openCinemaDisabledReason}
+              </p>
+            ) : null}
+          </section>
+        </>
+      )}
+      <div
+        className={cx(
+          "grid gap-3",
+          showGenerationCockpit ? "" : "xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]",
+        )}
+      >
+        {showGenerationCockpit ? (
+          <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+            <summary className="cursor-pointer text-sm font-semibold">Audition voice</summary>
+            <div className="mt-3">
+              <VoiceAuditionPanel
+                sampleText={auditionSampleText}
+                state={voiceAudition}
+                disabledReason={
+                  readiness.canAudition
+                    ? undefined
+                    : readiness.rows.find((row) => row.id === "audition")?.detail
+                }
+              />
+            </div>
+          </details>
+        ) : (
+          <VoiceAuditionPanel
+            sampleText={auditionSampleText}
+            state={voiceAudition}
+            disabledReason={
+              readiness.canAudition
+                ? undefined
+                : readiness.rows.find((row) => row.id === "audition")?.detail
+            }
+          />
+        )}
         <PreviewGeneratedAudioPanel
           detail={
             readiness.generatedPlaybackDisabledReason ??
@@ -11994,6 +12131,12 @@ function NarrationPreviewStage({
           }
           playbackAvailable={previewPlaybackAvailable}
           status={generatedAudioReadiness?.status ?? "waiting"}
+          summary={previewGeneratedAudioPanelSummary({
+            audioReviewSummary,
+            audioPipeline,
+            generatedAudioLifecycle,
+            playbackAvailable: previewPlaybackAvailable,
+          })}
           playbackToolbar={
             <LocalizedPlaybackToolbar
               model={previewPlaybackToolbar}
@@ -12026,6 +12169,330 @@ function NarrationPreviewStage({
       </div>
     </Panel>
   );
+}
+
+function previewGenerationNeedsCockpit(audioPipeline: AudioGenerationPipelineModel): boolean {
+  return (
+    isAudioGenerationWorking(audioPipeline.state) ||
+    ((audioPipeline.state === "failed" || audioPipeline.state === "cancelled") &&
+      audioPipeline.canRetryGeneration)
+  );
+}
+
+function PreviewGenerationCockpit({
+  audioPipeline,
+  canCancelRun,
+  canRetryGeneration,
+  createDisabledReason,
+  job,
+  reviewWarningCount,
+  onCancelRun,
+  onRetryGeneration,
+}: Readonly<{
+  audioPipeline: AudioGenerationPipelineModel;
+  canCancelRun: boolean;
+  canRetryGeneration: boolean;
+  createDisabledReason?: string;
+  job: VoiceJob | null;
+  reviewWarningCount: number;
+  onCancelRun: () => void;
+  onRetryGeneration: () => void;
+}>) {
+  const totalSegments = Math.max(audioPipeline.totalSegments, audioPipeline.readySegments, 1);
+  const progressRatio = Math.min(1, Math.max(0, audioPipeline.readySegments / totalSegments));
+  const active = isAudioGenerationWorking(audioPipeline.state);
+  const currentSegment = job?.retries.currentSegment ?? job?.progress.currentSegment ?? 0;
+  let heading = "Generation needs retry";
+  if (active) {
+    heading = "Generating full narration";
+  } else if (audioPipeline.state === "cancelled") {
+    heading = "Generation cancelled";
+  }
+  const detail =
+    job?.progress.detail && active
+      ? `${audioPipeline.detail} ${job.progress.detail}`
+      : audioPipeline.detail;
+  return (
+    <Panel
+      as="section"
+      aria-label="Preview generation cockpit"
+      className="grid gap-3 p-3"
+      data-testid="preview-generation-cockpit"
+      variant="workSurface"
+    >
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+            Preview generation
+          </p>
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold">{heading}</h3>
+            <StatusChip tone={previewGenerationCockpitTone(audioPipeline)}>
+              {audioPipeline.label}
+            </StatusChip>
+          </div>
+          <p className="mt-1 max-w-4xl text-sm leading-6 vs-muted">{detail}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          {reviewWarningCount > 0 ? (
+            <StatusChip tone="warning">
+              {reviewWarningCount.toString()} review warnings, generation continues
+            </StatusChip>
+          ) : null}
+          {active ? (
+            <Button
+              data-testid="ui-action-preview-cancel-run"
+              disabled={!canCancelRun}
+              disabledReason={canCancelRun ? undefined : "No active generation run to cancel."}
+              onClick={onCancelRun}
+              size="sm"
+              variant="destructive"
+            >
+              Cancel active run
+            </Button>
+          ) : (
+            <Button
+              data-playback-action="retry-generation"
+              data-playback-owner="workspace"
+              data-testid={workspaceStageActionTestId("retryGeneration")}
+              data-ui-action-owner="workspace"
+              disabled={!canRetryGeneration}
+              disabledReason={
+                canRetryGeneration
+                  ? undefined
+                  : (createDisabledReason ?? "Generation cannot be retried yet.")
+              }
+              onClick={onRetryGeneration}
+              size="sm"
+              variant="primary"
+            >
+              Retry full narration
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="grid gap-2 md:grid-cols-4">
+        <PreviewGenerationFact label="Ready" value={audioPipeline.readySegments.toString()} />
+        <PreviewGenerationFact
+          label={active ? "Current" : "Pending"}
+          value={
+            active ? previewSegmentValue(currentSegment) : audioPipeline.pendingSegments.toString()
+          }
+        />
+        <PreviewGenerationFact label="Total" value={totalSegments.toString()} />
+        <PreviewGenerationFact label="Job" value={job ? shortJobId(job.id) : "None"} />
+      </div>
+      <div className="grid gap-1">
+        <div
+          aria-label={`${audioPipeline.readySegments.toString()} of ${totalSegments.toString()} segments ready`}
+          className="h-2 overflow-hidden rounded-full bg-[var(--vs-border-subtle)]"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={totalSegments}
+          aria-valuenow={audioPipeline.readySegments}
+        >
+          <div
+            className="h-full rounded-full bg-[var(--vs-theatre-accent)]"
+            style={{ width: `${(progressRatio * 100).toFixed(1)}%` }}
+          />
+        </div>
+        <p className="text-xs leading-5 vs-muted">
+          {job?.progress.message ?? audioPipeline.label}
+          {job?.progress.activeStage ? ` · ${job.progress.activeStage}` : ""}
+        </p>
+      </div>
+    </Panel>
+  );
+}
+
+function PreviewGenerationFact({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="min-w-0 rounded-md border bg-[var(--vs-surface-muted)] p-2 vs-border">
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold" title={value}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function PreviewManualReadingPanel({
+  compact,
+  readiness,
+  onOpenTeleprompt,
+  onOpenTheatre,
+}: Readonly<{
+  compact: boolean;
+  readiness: PreviewReadinessModel;
+  onOpenTeleprompt: () => void;
+  onOpenTheatre: () => void;
+}>) {
+  return (
+    <section
+      aria-label="Manual reading"
+      className={cx(
+        "grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border",
+        compact
+          ? "md:grid-cols-[minmax(10rem,0.7fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-center"
+          : "sm:min-w-64",
+      )}
+      data-testid={compact ? "preview-manual-reading-secondary" : "preview-manual-reading"}
+    >
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold">Manual reading</h3>
+        <p className="mt-1 text-xs leading-5 vs-muted">
+          {compact ? "Secondary while audio generation runs." : readiness.openTelepromptDetail}
+        </p>
+      </div>
+      <Button
+        data-testid={workspaceStageActionTestId("openTeleprompt")}
+        disabled={!readiness.canOpenTeleprompt}
+        disabledReason={readiness.openTelepromptDisabledReason}
+        onClick={onOpenTeleprompt}
+        size="sm"
+        variant="soft"
+      >
+        {workspaceStageActionLabel("openTeleprompt")}
+      </Button>
+      <Button
+        data-testid={workspaceStageActionTestId("openTheatre")}
+        disabled={!readiness.canOpenTheatre}
+        disabledReason={readiness.openTheatreDisabledReason}
+        onClick={onOpenTheatre}
+        size="sm"
+        variant="secondary"
+      >
+        {workspaceStageActionLabel("openTheatre")}
+      </Button>
+      {!compact && readiness.canOpenTheatre && !readiness.canOpenCinema ? (
+        <p className="text-xs leading-5 vs-muted">
+          Theatre opens in reading-only mode until generated audio and timing are ready.
+        </p>
+      ) : null}
+      {!readiness.canOpenTheatre && readiness.openTheatreDisabledReason ? (
+        <p className="text-xs leading-5 text-[var(--vs-selected-text)] md:col-span-3">
+          {readiness.openTheatreDisabledReason}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function PreviewGenerationPreflightSummary({
+  rows,
+}: Readonly<{ rows: readonly PreviewReadinessRow[] }>) {
+  const visibleRows = rows.filter((row) =>
+    ["source", "spoken", "review", "voice", "runtime", "audio"].includes(row.id),
+  );
+  return (
+    <section
+      aria-label="Preview generation preflight summary"
+      className="flex min-w-0 flex-wrap gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
+      data-testid="preview-generation-preflight-summary"
+    >
+      {visibleRows.map((row) => (
+        <span
+          className="inline-flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-md border bg-[var(--vs-surface-muted)] px-2 py-1 text-xs vs-border"
+          key={row.id}
+          title={row.detail}
+        >
+          <span className="shrink-0 font-semibold">{row.label}</span>
+          <StatusChip tone={previewReadinessStatusTone(row.status)}>
+            {previewReadinessCompactStatus(row)}
+          </StatusChip>
+        </span>
+      ))}
+    </section>
+  );
+}
+
+function previewGeneratedAudioPanelSummary({
+  audioReviewSummary,
+  audioPipeline,
+  generatedAudioLifecycle,
+  playbackAvailable,
+}: Readonly<{
+  audioReviewSummary?: string | null;
+  audioPipeline: AudioGenerationPipelineModel;
+  generatedAudioLifecycle: ReturnType<typeof generatedAudioLifecycleFromJob>;
+  playbackAvailable: boolean;
+}>): string {
+  if (
+    playbackAvailable &&
+    audioPipeline.canUsePartialAudio &&
+    generatedAudioLifecycle !== "ready"
+  ) {
+    return "Ready segments can be previewed while generation continues.";
+  }
+  if (playbackAvailable) {
+    if (audioReviewSummary) {
+      return `${audioReviewSummary} Playback remains available.`;
+    }
+    return "Full narration playback is ready for this scope.";
+  }
+  if (audioPipeline.state === "partialReady") {
+    return "Audio is being prepared. Ready segments are tracked as generation continues.";
+  }
+  if (audioPipeline.state === "queued" || audioPipeline.state === "generating") {
+    return "Audio is being prepared. Playback appears when playable media is available.";
+  }
+  if (audioPipeline.state === "failed" && audioPipeline.readySegments > 0) {
+    return "Ready prefix audio is preserved; retry generation resumes from valid audio.";
+  }
+  return "Generated audio appears here when playable media is available.";
+}
+
+function previewGenerationCockpitTone(audioPipeline: AudioGenerationPipelineModel): StatusChipTone {
+  if (audioPipeline.state === "failed" || audioPipeline.state === "cancelled") {
+    return "warning";
+  }
+  if (audioPipeline.state === "partialReady" || isAudioGenerationWorking(audioPipeline.state)) {
+    return "info";
+  }
+  return "neutral";
+}
+
+function previewReadinessStatusTone(status: PreviewReadinessRow["status"]): StatusChipTone {
+  if (status === "ready") {
+    return "success";
+  }
+  if (status === "working") {
+    return "info";
+  }
+  if (status === "warning") {
+    return "warning";
+  }
+  if (status === "blocked") {
+    return "danger";
+  }
+  return "neutral";
+}
+
+function previewReadinessCompactStatus(row: PreviewReadinessRow): string {
+  if (row.id === "review" && row.status === "warning") {
+    return "Continues";
+  }
+  if (row.status === "ready") {
+    return "Ready";
+  }
+  if (row.status === "working") {
+    return "Working";
+  }
+  if (row.status === "warning") {
+    return "Attention";
+  }
+  if (row.status === "blocked") {
+    return "Blocked";
+  }
+  return "Waiting";
+}
+
+function shortJobId(jobId: string): string {
+  return jobId.length > 12 ? jobId.slice(0, 12) : jobId || "None";
+}
+
+function previewSegmentValue(value: number): string {
+  return value > 0 ? value.toString() : "n/a";
 }
 
 interface VoiceAuditionController {
@@ -12594,12 +13061,33 @@ function workspaceInspectorJobDetail({
     totalSegments: number;
   };
 }>): WorkspaceInspectorJobDetail {
+  const reviewWarningCount = audioReviewWarningCount(job);
+  const reviewWarningTotal = audioReviewWarningTotal(job);
+  const reviewWarningSummary = audioReviewWarningSummary(job);
+  const reviewWarningReasons = audioReviewWarningReasons(job);
   return {
-    detail: firstNonEmptyString(job.error, job.progress.message, job.status) ?? job.status,
+    detail:
+      reviewWarningSummary ??
+      firstNonEmptyString(job.error, job.progress.message, job.status) ??
+      job.status,
     facts: [
       { label: "Job", value: shortIdentifier(job.id) },
       { label: "Status", value: job.status },
       { label: "Lifecycle", value: audioLifecycleLabel },
+      ...(reviewWarningCount > 0
+        ? [
+            {
+              label: "Audio review",
+              tone: "warning" as const,
+              value: reviewWarningCount.toString(),
+            },
+            {
+              label: "Warnings",
+              tone: "warning" as const,
+              value: reviewWarningTotal.toString(),
+            },
+          ]
+        : []),
       { label: "Current", value: queue.currentSegment > 0 ? String(queue.currentSegment) : "n/a" },
       { label: "Ready", value: queue.readyCount.toString() },
       { label: "Generating", value: queue.generatingCount.toString() },
@@ -12610,10 +13098,18 @@ function workspaceInspectorJobDetail({
     id: job.id,
     label: shortIdentifier(job.id),
     notes: [
+      reviewWarningSummary
+        ? { detail: reviewWarningSummary, label: "Audio review", tone: "warning" }
+        : null,
+      ...reviewWarningReasons.map((reason) => ({
+        detail: reason,
+        label: "Segment warning",
+        tone: "warning" as const,
+      })),
       job.error ? { detail: job.error, label: "Error", tone: "warning" } : null,
       job.progress.detail ? { detail: job.progress.detail, label: "Progress" } : null,
     ].filter(Boolean) as InspectorNote[],
-    tone: toneForJobStatus(job.status),
+    tone: reviewWarningCount > 0 ? "warning" : toneForJobStatus(job.status),
   };
 }
 
