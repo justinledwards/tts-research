@@ -266,6 +266,10 @@ import {
   generatedAudioLifecycleLabel,
 } from "./features/playback/generatedAudioLifecycle";
 import {
+  findRestorableWorkbenchJob,
+  type WorkbenchAudioRestoreSource,
+} from "./features/playback/workbenchAudioRestore";
+import {
   isAudioGenerationWorking,
   resolveAudioGenerationPipelineModel,
   type AudioGenerationPipelineModel,
@@ -939,13 +943,6 @@ function dominantPreparedSourceLanguage(source?: PreparedSource | null): string 
 function normalizeSupertonicLanguage(value: string | undefined): string | null {
   const normalized = value?.trim().toLowerCase().split(/[-_]/)[0] ?? "";
   return SUPERTONIC_LANGUAGE_CODES.has(normalized) ? normalized : null;
-}
-
-function getStudioJobName(job: VoiceJob | null): string {
-  if (job?.voiceProfileName) {
-    return `${job.voiceProfileName} - Long Form`;
-  }
-  return "Clean Energy - Long Form";
 }
 
 function upsertVoiceProfileByCreatedAt(
@@ -2824,6 +2821,15 @@ export function App() {
   );
   const activeNarrationBookSource = sourceMode === "book" ? selectedBookSource : null;
   const activeNarrationPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
+  const workbenchAudioRestoreSource = useMemo<WorkbenchAudioRestoreSource>(() => {
+    if (activeNarrationPreparedSource) {
+      return { mode: "prepared", source: activeNarrationPreparedSource };
+    }
+    if (activeNarrationBookSource) {
+      return { mode: "book", scope: effectiveBookScope, source: activeNarrationBookSource };
+    }
+    return { mode: "draft", text };
+  }, [activeNarrationBookSource, activeNarrationPreparedSource, effectiveBookScope, text]);
   const activeSourceReadiness = sourceReadinessForWorkbench({
     selectedBookSource: activeNarrationBookSource,
     selectedPreparedSource: activeNarrationPreparedSource,
@@ -6118,6 +6124,31 @@ export function App() {
     if (activeDemoProjectId || projectStateReadyId !== activeProjectId) {
       return;
     }
+    const restoredJob = findRestorableWorkbenchJob({
+      activeProjectId,
+      currentJob: job,
+      jobs: projectJobs,
+      source: workbenchAudioRestoreSource,
+    });
+    if (!restoredJob || restoredJob.id === job?.id) {
+      return;
+    }
+    setJob(restoredJob);
+    applyJobStatusState(restoredJob);
+  }, [
+    activeDemoProjectId,
+    activeProjectId,
+    applyJobStatusState,
+    job,
+    projectJobs,
+    projectStateReadyId,
+    workbenchAudioRestoreSource,
+  ]);
+
+  useEffect(() => {
+    if (activeDemoProjectId || projectStateReadyId !== activeProjectId) {
+      return;
+    }
     saveProjectWorkspaceState(activeProjectId, {
       activeBlockId: workspaceContext.activeBlockId,
       bookScope: selectedBookScope,
@@ -7070,8 +7101,11 @@ export function App() {
     workspaceContext.activeBlockId,
   ]);
 
-  const studioJobName = getStudioJobName(job);
   const studioProjectName = activeProject?.name ?? DEFAULT_PROJECT_NAME;
+  const studioContextSourceName =
+    studioMode === "narration" ? activeNarrationSourceLabel : studioProjectName;
+  const studioContextScopeName =
+    studioMode === "narration" ? activeNarrationScopeLabel : selectedVoiceProfileLabel;
   const studioRightRailMode = studioMode === "narration" ? displayRightRailMode : rightRailMode;
   const studioGridStyle = {
     "--studio-left-column": railColumnWidth(leftRailMode, "left"),
@@ -7675,8 +7709,8 @@ export function App() {
         }
         studioMode={studioMode}
         workContext={{
-          chapterName: studioJobName,
-          projectName: studioProjectName,
+          chapterName: studioContextScopeName,
+          projectName: studioContextSourceName,
           workspaceLabel:
             studioMode === "narration" ? "Narration Workbench" : "Voice Cloning Workbench",
         }}

@@ -1575,3 +1575,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update regression and layout coverage
 - [x] Run focused and project checks
 - Validation: focused Teleprompt/Theatre/Inspector/status tests passed; frontend typecheck passed; responsive snapshots passed; packaged existing-server UI-action quick still hit the known private/local URL seed guard, while managed targeted UI-action replay passed 46/46 activations with advisory findings only; `pnpm check` passed with existing unrelated Biome warnings/infos.
+
+## 2026-06-05 09:54 CEST - Header Context And Audio Restore
+- [x] Fix shell header context
+- [x] Add matching audio restore helper
+- [x] Wire auto-attach restore into workspace
+- [x] Add frontend and backend regressions
+- [x] Run focused and project checks
+- Validation: focused frontend Vitest passed; frontend typecheck passed; backend tests passed; `pnpm check` passed with existing unrelated Biome warnings/infos; rendered Playwright smoke passed after mock service restart with missing saved job id restored to ready audio.

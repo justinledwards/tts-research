@@ -50,8 +50,8 @@ describe("TopProductBar", () => {
         settingsShortcutLabel="Ctrl+,"
         studioMode="narration"
         workContext={{
-          chapterName: "Current chapter",
-          projectName: "Novel",
+          chapterName: "Full source",
+          projectName: "Designing High Function Cockpits",
           workspaceLabel: "Narration Workbench",
         }}
         workspaceCustomLayout={DEFAULT_WORKSPACE_CUSTOM_LAYOUT}
@@ -73,8 +73,9 @@ describe("TopProductBar", () => {
     expect(markup).toContain('data-testid="ui-action-shell-context-summary"');
     expect(markup).toContain(">Work</span>");
     expect(markup).toContain("Narration Workbench");
-    expect(markup).toContain("Novel");
-    expect(markup).toContain("Current chapter");
+    expect(markup).toContain("Designing High Function Cockpits");
+    expect(markup).toContain("Full source");
+    expect(markup).not.toContain("Clean Energy - Long Form");
     expect(markup).toContain('data-segmented-control="Studio mode"');
     expect(markup).toContain("Layout");
     expect(markup).toContain('aria-label="Open settings"');

@@ -1066,6 +1066,97 @@ func TestProjectsCreateRenameAndGroupJobs(t *testing.T) {
 	}
 }
 
+func TestProjectCompletedAudioSurvivesServiceRestart(t *testing.T) {
+	t.Parallel()
+
+	options := pipeline.Options{
+		MaxRetries:         3,
+		JobDataDir:         t.TempDir(),
+		ProjectDataDir:     t.TempDir(),
+		BookSourceDir:      t.TempDir(),
+		SourcePrepDir:      t.TempDir(),
+		ProgressDataDir:    t.TempDir(),
+		PlaybackSessionDir: t.TempDir(),
+	}
+	newService := func() *pipeline.Service {
+		return pipeline.NewService(
+			agents.NewVoiceOptimizationAgent(),
+			agents.NewMockTTSAgent(),
+			agents.NewMockVoiceCheckerAgent(),
+			options,
+		)
+	}
+
+	service := newService()
+	project, err := service.CreateProject("Restart audio project")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		ProjectID: project.ID,
+		Text:      "Persisted audio should remain available after a service restart.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	assertCompletedAudioMetadata(t, completed)
+
+	reloaded := newService()
+	projectJobs, err := reloaded.ListProjectJobs(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectJobs after restart returned error: %v", err)
+	}
+	var restored *pipeline.VoiceJob
+	for index := range projectJobs {
+		if projectJobs[index].ID == completed.ID {
+			restored = &projectJobs[index]
+			break
+		}
+	}
+	if restored == nil {
+		t.Fatalf("project jobs after restart = %#v, want completed job %q", projectJobs, completed.ID)
+	}
+	assertCompletedAudioMetadata(t, *restored)
+
+	audio, contentType, err := reloaded.GetAudio(completed.ID)
+	if err != nil {
+		t.Fatalf("GetAudio after restart returned error: %v", err)
+	}
+	if contentType != "audio/wav" {
+		t.Fatalf("content type after restart = %q, want audio/wav", contentType)
+	}
+	if len(audio) <= 44 {
+		t.Fatalf("audio length after restart = %d, want WAV data", len(audio))
+	}
+}
+
+func assertCompletedAudioMetadata(t *testing.T, job pipeline.VoiceJob) {
+	t.Helper()
+
+	if job.AudioURL == "" {
+		t.Fatal("completed job should include audio URL")
+	}
+	if job.AudioPath == "" {
+		t.Fatal("completed job should include audio path")
+	}
+	if job.AudioReadySegments <= 0 {
+		t.Fatalf("audio ready segments = %d, want persisted ready segment metadata", job.AudioReadySegments)
+	}
+	if len(job.Segments) == 0 {
+		t.Fatal("completed job should include segment metadata")
+	}
+	readySegments := 0
+	for _, segment := range job.Segments {
+		if segment.Status == "ready" {
+			readySegments += 1
+		}
+	}
+	if readySegments == 0 {
+		t.Fatalf("segments = %#v, want at least one ready segment", job.Segments)
+	}
+}
+
 func TestProjectCustomSpeechPolicyProfilesPersistAndSelect(t *testing.T) {
 	t.Parallel()
 
