@@ -246,6 +246,7 @@ export function CreateProjectRow({ onCancel, onCreateProject, onCreated }: Creat
         <input
           aria-label="New project name"
           className="min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm font-semibold vs-border"
+          data-reader-autofocus=""
           onChange={(event) => {
             setName(event.currentTarget.value);
           }}

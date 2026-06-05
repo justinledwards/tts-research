@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import type { PlaybackProgress, PreparedSource, VoiceJob } from "../../types";
-import { playbackActionLabel } from "../playback";
+import { playbackActionLabel, playbackTimeLabels } from "../playback";
 import { READER_SEEK_SECONDS, type ReaderAccessibilitySettings } from "../reader-accessibility";
 import { CinemaTheatreTransport } from "./CinemaTheatre";
 import type { CinemaTransportModel } from "./CinemaTransportBar";
@@ -15,7 +15,6 @@ import {
 } from "./model";
 import type { PreparedSourceCinemaPlaybackControls } from "./PreparedSourceCinemaBase";
 import {
-  formatClockTime,
   PauseIcon,
   PlayIcon,
   PreparedSourceCinemaAudioBarsIcon,
@@ -78,12 +77,12 @@ export function PreparedSourceCinemaTransport({
 }>) {
   const progressRatio = playbackProgressRatio(playbackCursorSec, job, progress);
   const durationMs = job?.durationMs ?? 0;
-  const displayCursorSec = playbackDisplayCursorSec(
-    playbackCursorSec,
-    job,
-    progress,
-    progressRatio,
-  );
+  const displayCursorSec = playbackDisplayCursorSec(playbackCursorSec, job, progress);
+  const timelineLabels = playbackTimeLabels({
+    currentSec: displayCursorSec,
+    durationMs,
+    fallbackRatio: progressRatio,
+  });
   const canStart = canCreateAudio && !isProcessing && source.status === "ready";
   const isPlaybackTransport =
     playbackState === "playable" ||
@@ -163,8 +162,8 @@ export function PreparedSourceCinemaTransport({
       onClick: handlePrimary,
     },
     progress: {
-      currentLabel: formatClockTime(displayCursorSec),
-      durationLabel: durationMs > 0 ? formatClockTime(durationMs / 1000) : "--:--",
+      currentLabel: timelineLabels.elapsedLabel,
+      durationLabel: timelineLabels.remainingLabel,
       ratio: progressRatio,
       waveform: job ? (
         <Waveform audioUrl={job.audioUrl} progressRatio={progressRatio} />

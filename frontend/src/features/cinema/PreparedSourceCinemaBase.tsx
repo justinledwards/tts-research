@@ -19,6 +19,7 @@ import type {
   NarrationBlock,
   PlaybackProgress,
   PreparedSource,
+  HighlightMap,
   SourceSpeechPolicyUpdateRequest,
   SpeechPolicyDefinition,
   SpeechPolicyOverrides,
@@ -39,10 +40,13 @@ import {
   alignmentRepairMapStaleness,
   buildReadAlongSyncDebugSnapshot,
   effectiveReadAlongPreferences,
+  type HighlightMapV2,
   evaluatePreparedSourceReadAlongInvariant,
   HighlightRenderer,
   parseAlignmentRepairMap,
+  ReadAlongWordScheduler,
   readAlongCalibrationOffsetMs,
+  readAlongAudioElementForJob,
   readAlongInvariantStatusLabel,
   readAlongAnchorForBlock,
   readAlongAnchorForWord,
@@ -56,13 +60,17 @@ import {
   serializeAlignmentRepairMap,
   type AlignmentRepairContext,
   type AlignmentRepairMap,
+  type ReadAlongHighlightMotion,
   type ReadAlongHighlightStyle,
   type ReadAlongHighlightVisualMode,
   type ReadAlongPreferences,
   type ReadAlongScrollFollow,
   type ReadAlongCueRole,
   type ReadAlongTimingState,
+  type WordTimeline,
   type SyncDebugSourceLocator,
+  wordTimelineFromPreparedSourceHighlightMapV2,
+  wordTimelineFromPreparedSourceLegacyHighlightMap,
 } from "../readalong";
 import {
   normalizeReaderAccessibilitySettings,
@@ -216,6 +224,8 @@ export function PreparedSourceCinemaOverlay({
   activeWordIndex,
   canCreateAudio,
   customPolicyProfiles,
+  highlightMap,
+  highlightMapV2,
   importError,
   isImporting,
   isProcessing,
@@ -265,6 +275,8 @@ export function PreparedSourceCinemaOverlay({
   activeWordIndex: number;
   canCreateAudio: boolean;
   customPolicyProfiles: CustomSpeechPolicyProfile[];
+  highlightMap: HighlightMap | null;
+  highlightMapV2: HighlightMapV2 | null;
   importError: string | null;
   isImporting: boolean;
   isProcessing: boolean;
@@ -484,6 +496,36 @@ export function PreparedSourceCinemaOverlay({
   });
   const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime, effectiveReadAlong);
   const readAlongTimingState = readAlongTimingStateFromRuntime({ runtime: readAlongRuntime });
+  const schedulerTimeline = useMemo(() => {
+    if (
+      !job ||
+      !preparedSourceCinemaJobMatchesSource(job, source) ||
+      isPreparedSourceMarkdownDocument(source)
+    ) {
+      return null;
+    }
+    if (highlightMapV2?.generatedAudioId === job.id && highlightMapV2.sourceId === source.id) {
+      return wordTimelineFromPreparedSourceHighlightMapV2({
+        map: highlightMapV2,
+        source,
+      });
+    }
+    if (
+      highlightMap &&
+      (!highlightMap.jobId || highlightMap.jobId === job.id) &&
+      (!highlightMap.bookSourceId || highlightMap.bookSourceId === source.id)
+    ) {
+      return wordTimelineFromPreparedSourceLegacyHighlightMap({
+        map: highlightMap,
+        source,
+      });
+    }
+    return null;
+  }, [highlightMap, highlightMapV2, job, source]);
+  const wordSchedulerAvailable =
+    Boolean(job && schedulerTimeline) &&
+    playbackControls.isPlaying &&
+    readAlongVisualMode === "word";
   const readAlongReport = useMemo(
     () =>
       evaluatePreparedSourceReadAlongInvariant({
@@ -990,7 +1032,10 @@ export function PreparedSourceCinemaOverlay({
           autoFollow={autoFollow}
           accessibilitySettings={focusedAccessibilitySettings}
           canvasFirst={cinemaTheatre.active || cinemaFocus.layoutState.canvasFirst}
+          calibratedPlaybackCursorSec={calibratedPlaybackCursorSec}
+          highlightMotion={effectiveReadAlong.highlightMotion}
           highlightStyle={effectiveReadAlong.highlightStyle}
+          jobId={job?.id ?? null}
           isFullscreen={isFullscreen || cinemaTheatre.fullscreenActive}
           readAlongVisualMode={readAlongVisualMode}
           readAlongTimingState={readAlongTimingState}
@@ -998,7 +1043,9 @@ export function PreparedSourceCinemaOverlay({
           rendererRetryKey={rendererRetryKey}
           scrollFollow={effectiveReadAlong.scrollFollow}
           source={source}
+          schedulerTimeline={schedulerTimeline}
           theatreActive={cinemaTheatre.active}
+          wordSchedulerAvailable={wordSchedulerAvailable}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           onAutoFollowChange={setAutoFollow}
           onFullscreenToggle={handleFullscreenToggle}
@@ -1499,8 +1546,11 @@ function PreparedSourceCinemaReader({
   activeWordIndex,
   accessibilitySettings,
   autoFollow,
+  calibratedPlaybackCursorSec,
   canvasFirst,
+  highlightMotion,
   highlightStyle,
+  jobId,
   isFullscreen,
   readAlongVisualMode,
   readAlongTimingState,
@@ -1508,7 +1558,9 @@ function PreparedSourceCinemaReader({
   rendererRetryKey,
   scrollFollow,
   source,
+  schedulerTimeline,
   theatreActive,
+  wordSchedulerAvailable,
   onAccessibilitySettingsChange,
   onAutoFollowChange,
   onFullscreenToggle,
@@ -1520,8 +1572,11 @@ function PreparedSourceCinemaReader({
   activeWordIndex: number;
   accessibilitySettings: ReaderAccessibilitySettings;
   autoFollow: boolean;
+  calibratedPlaybackCursorSec: number;
   canvasFirst: boolean;
+  highlightMotion: ReadAlongHighlightMotion;
   highlightStyle: ReadAlongHighlightStyle;
+  jobId: string | null;
   isFullscreen: boolean;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   readAlongTimingState: ReadAlongTimingState;
@@ -1529,7 +1584,9 @@ function PreparedSourceCinemaReader({
   rendererRetryKey: number;
   scrollFollow: ReadAlongScrollFollow;
   source: PreparedSource;
+  schedulerTimeline: WordTimeline | null;
   theatreActive: boolean;
+  wordSchedulerAvailable: boolean;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
   onAutoFollowChange: (enabled: boolean) => void;
   onFullscreenToggle: () => void;
@@ -1555,7 +1612,8 @@ function PreparedSourceCinemaReader({
   const shouldHighlightWord =
     activeBlock &&
     isPreparedCinemaWordHighlightable(activeBlock) &&
-    readAlongShouldHighlightWord(readAlongVisualMode);
+    readAlongShouldHighlightWord(readAlongVisualMode) &&
+    !wordSchedulerAvailable;
   const shouldHighlightBlock = readAlongShouldHighlightBlock(readAlongVisualMode);
   const blockHighlight =
     activeWord && activeBlock && shouldHighlightBlock
@@ -1688,7 +1746,47 @@ function PreparedSourceCinemaReader({
   }
 
   useEffect(() => {
-    if (!autoFollow || activeWordIndex < 0) {
+    if (!wordSchedulerAvailable || !jobId || !schedulerTimeline || rendererLifecycle !== "ready") {
+      return;
+    }
+    const surface = preparedSourceCinemaKind(source) === "website" ? "website" : "document";
+    const scheduler = new ReadAlongWordScheduler({
+      audioElement: () => readAlongAudioElementForJob(jobId),
+      highlight: {
+        accessibilitySettings,
+        autoFollow,
+        highlightMotion,
+        highlightStyle,
+        mode: readAlongVisualMode,
+        root: () => readerRef.current,
+        scrollFollow,
+        sourceId: source.id,
+        surface,
+      },
+      initialCursorSec: calibratedPlaybackCursorSec,
+      timeline: schedulerTimeline,
+    });
+    scheduler.start();
+    return () => {
+      scheduler.stop();
+    };
+  }, [
+    accessibilitySettings,
+    autoFollow,
+    calibratedPlaybackCursorSec,
+    highlightMotion,
+    highlightStyle,
+    jobId,
+    readAlongVisualMode,
+    rendererLifecycle,
+    schedulerTimeline,
+    scrollFollow,
+    source,
+    wordSchedulerAvailable,
+  ]);
+
+  useEffect(() => {
+    if (!autoFollow || activeWordIndex < 0 || wordSchedulerAvailable) {
       return;
     }
     const anchor =
@@ -1727,6 +1825,7 @@ function PreparedSourceCinemaReader({
     scrollFollow,
     shouldHighlightWord,
     source,
+    wordSchedulerAvailable,
   ]);
 
   useEffect(() => {
@@ -1762,7 +1861,11 @@ function PreparedSourceCinemaReader({
       contentDataAttributes={{
         ...readerDataAttributes(accessibilitySettings),
         ...readingSurfaceDataAttributes({ kind: "spoken" }),
+        "data-cinema-sync-active-word-index": activeWordIndex,
+        "data-cinema-sync-display-driver": wordSchedulerAvailable ? "word-scheduler" : "react",
+        "data-cinema-sync-playback-cursor-sec": calibratedPlaybackCursorSec.toFixed(3),
         "data-cinema-reader-scroll-padding": "transport-safe",
+        "data-readalong-highlight-motion": highlightMotion,
       }}
       contentRef={readerRef}
       frameMode="reading"

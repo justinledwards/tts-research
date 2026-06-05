@@ -1,6 +1,7 @@
 import type { HighlightCue } from "../../highlightMap";
 import { resolveHighlightCue } from "../../highlightMap";
 import type { HighlightFragment, HighlightMap, HighlightToken } from "../../types";
+import type { ReadAlongTimingLookupOptions } from "./timingLookup";
 
 export const READ_ALONG_WORD_DRIFT_TARGET_MS = 150;
 export const READ_ALONG_PHRASE_DRIFT_TARGET_MS = 350;
@@ -17,6 +18,7 @@ export interface ReadAlongDriftInput {
   activeCue?: HighlightCue | null;
   audioTimeSec: number;
   highlightMap?: HighlightMap | null;
+  timingLookup?: ReadAlongTimingLookupOptions;
 }
 
 export interface ReadAlongDriftReport {
@@ -33,9 +35,10 @@ export function detectReadAlongDrift({
   activeCue,
   audioTimeSec,
   highlightMap,
+  timingLookup,
 }: ReadAlongDriftInput): ReadAlongDriftReport {
   const audioTimeMs = Math.max(0, Math.round(audioTimeSec * 1000));
-  const expectedCue = resolveHighlightCue(highlightMap, audioTimeSec);
+  const expectedCue = resolveHighlightCue(highlightMap, audioTimeSec, timingLookup);
   const activeRange = timingRangeForCue(activeCue ?? expectedCue, "token");
   const expectedRange = timingRangeForCue(expectedCue, "token");
   const activePhraseRange = timingRangeForCue(activeCue ?? expectedCue, "fragment");

@@ -1,5 +1,10 @@
 import type { HighlightFragment, HighlightMap, HighlightToken, ReadingPosition } from "./types";
 import type { ContentIRLocator } from "./content-ir";
+import {
+  resolveReadAlongTimingItem,
+  type ReadAlongTimingLookupOptions,
+  type ReadAlongTimingRangeLike,
+} from "./features/readalong/timingLookup";
 
 export interface HighlightCue {
   activeWordIndex: number;
@@ -16,17 +21,22 @@ export interface HighlightCue {
 export function resolveHighlightCue(
   map: HighlightMap | null | undefined,
   playbackCursorSec: number,
+  options: ReadAlongTimingLookupOptions = {},
 ): HighlightCue | null {
   if (!map) {
     return null;
   }
   const ms = Math.max(0, Math.round(playbackCursorSec * 1000));
-  const fragment = findTimingAt(map.fragments, ms) ?? map.fragments.at(-1);
+  const fragment =
+    resolveReadAlongTimingItem(map.fragments, ms, options)?.item ??
+    fallbackTimingItem(map.fragments, ms);
   if (!fragment) {
     return null;
   }
   const tokensInFragment = map.tokens.filter((token) => token.fragmentIndex === fragment.index);
-  const token = findTimingAt(tokensInFragment, ms) ?? tokensInFragment.at(-1);
+  const token =
+    resolveReadAlongTimingItem(tokensInFragment, ms, options)?.item ??
+    fallbackTimingItem(tokensInFragment, ms);
   const mode = map.mode === "word" && token ? "word" : "phrase";
   const readingPosition =
     mode === "word"
@@ -99,11 +109,19 @@ export function highlightMapMatchesJob(
   return Boolean(map?.jobId && jobId && map.jobId === jobId);
 }
 
-function findTimingAt<T extends { endMs: number; startMs: number }>(
-  items: T[],
+function fallbackTimingItem<T extends ReadAlongTimingRangeLike>(
+  items: readonly T[],
   ms: number,
 ): T | undefined {
-  return items.find((item) => ms >= item.startMs && ms <= item.endMs);
+  if (items.length === 0) {
+    return undefined;
+  }
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (items[index].startMs <= ms) {
+      return items[index];
+    }
+  }
+  return items[0];
 }
 
 function findTokenByLocator(

@@ -259,6 +259,22 @@ describe("teleprompt studio cue-first render", () => {
     expect(markup).not.toContain('data-testid="ui-action-teleprompt-audio-recovery"');
   });
 
+  it("shows elapsed and remaining full-audio labels in Teleprompt playback", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TelepromptStudio,
+        studioProps({
+          job: voiceJob({ durationMs: 60_000 }),
+          playbackCursorSec: 24,
+        }),
+      ),
+    );
+
+    expect(markup).toContain('data-testid="localized-teleprompt-playback-toolbar"');
+    expect(markup).toContain("0:24");
+    expect(markup).toContain("-0:36");
+  });
+
   it("keeps failed audio recovery compact and labels retry generation", () => {
     const base = studioProps();
     const markup = renderToStaticMarkup(
@@ -386,6 +402,28 @@ describe("teleprompt theatre model", () => {
     expect(visibleMarkup).toContain("Operator");
   });
 
+  it("uses full-audio elapsed and remaining labels for Theatre transport", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TelepromptTheatre,
+        telepromptTheatreProps({
+          controlsVisible: true,
+          playbackProgress: {
+            currentLabel: "0:24",
+            durationLabel: "-0:36",
+            ratio: 0.4,
+          },
+        }),
+      ),
+    );
+
+    expect(markup).toContain('data-testid="localized-theatre-playback-toolbar"');
+    expect(markup).toContain("0:24");
+    expect(markup).toContain("-0:36");
+    expect(markup).toContain("width:40%");
+    expect(markup).not.toContain("42%");
+  });
+
   it("uses a compact Theatre playback placeholder when timing is not trusted", () => {
     const markup = renderToStaticMarkup(
       createElement(
@@ -401,6 +439,8 @@ describe("teleprompt theatre model", () => {
 
     expect(markup).toContain('data-testid="teleprompt-theatre-playback-placeholder"');
     expect(markup).toContain("Audio may be available");
+    expect(markup).toContain("0:24");
+    expect(markup).toContain("-0:36");
     expect(markup).not.toContain('data-testid="localized-theatre-playback-toolbar"');
   });
 
@@ -794,7 +834,6 @@ function telepromptTheatreProps(
   return {
     activeBlock,
     activeBlockIndex: 1,
-    audioProgressPercent: 42,
     canCreate: true,
     canOpenCinema: true,
     cueSyncDetail: "Audio-follow cue sync ready.",
@@ -813,6 +852,11 @@ function telepromptTheatreProps(
     playbackControlsAvailable: true,
     playbackControlsPlaying: false,
     playbackLifecycle: "ready",
+    playbackProgress: {
+      currentLabel: "0:24",
+      durationLabel: "-0:36",
+      ratio: 0.4,
+    },
     playbackRate: 1,
     presetId: "standard",
     countdownRemaining: null,

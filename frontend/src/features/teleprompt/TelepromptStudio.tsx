@@ -31,6 +31,7 @@ import {
   playbackActionDataAttributes,
   playbackActionDisabledReason,
   playbackActionLabel,
+  playbackTimeLabels,
   telepromptSecondaryActionVariant,
   type LocalizedPlaybackToolbarModel,
 } from "../playback";
@@ -358,6 +359,7 @@ export function TelepromptStudio({
   const estimatedDurationMs =
     blocks.reduce((total, block) => total + block.estimatedDurationMs, 0) ||
     estimateTelepromptDurationMs(totalWords);
+  const telepromptDurationMs = job?.durationMs ?? estimatedDurationMs;
   const effectiveSettings = useMemo(
     () => telepromptPresetHighlightSettings(presetId, settings),
     [presetId, settings],
@@ -366,6 +368,16 @@ export function TelepromptStudio({
     () => buildTeleprompterCue(job, playbackCursorSec, effectiveSettings),
     [effectiveSettings, job, playbackCursorSec],
   );
+  const telepromptTimelineLabels = playbackTimeLabels({
+    currentSec: playbackCursorSec,
+    durationMs: telepromptDurationMs,
+    fallbackRatio: cue?.segmentProgress ?? 0,
+  });
+  const telepromptPlaybackProgress: LocalizedPlaybackToolbarModel["progress"] = {
+    currentLabel: telepromptTimelineLabels.elapsedLabel,
+    durationLabel: telepromptTimelineLabels.remainingLabel,
+    ratio: telepromptTimelineLabels.ratio,
+  };
   const preset = telepromptPreset(presetId);
   const playbackStatusLabel =
     playbackControls.isPlaying || isPlaybackActive ? "Recording playback" : "Ready to record";
@@ -406,9 +418,7 @@ export function TelepromptStudio({
     activeBlockIndex >= 0 && blocks.length > 0
       ? Math.round(((activeBlockIndex + 1) / blocks.length) * 100)
       : 0;
-  const audioProgressPercent = cueSync.activeCue
-    ? Math.round(cueSync.activeCue.cueProgress * 100)
-    : Math.round((cue?.segmentProgress ?? 0) * 100);
+  const audioProgressPercent = Math.round(telepromptTimelineLabels.ratio * 100);
   const waveformAudioUrl = telepromptWaveformAudioSource(job);
   const waveformBars = useAudioWaveformBars(waveformAudioUrl, TELEPROMPT_WAVEFORM_BAR_COUNT);
   const workModeModel = useMemo(
@@ -975,7 +985,6 @@ export function TelepromptStudio({
     returnTarget,
     theatreMode,
   ]);
-  const telepromptDurationMs = job?.durationMs ?? estimatedDurationMs;
   const cueMarkers = useMemo(
     () =>
       telepromptCueMarkers({
@@ -1071,14 +1080,8 @@ export function TelepromptStudio({
       testId: "ui-action-teleprompt-local-previous-cue",
     },
     progress: {
-      currentLabel: formatTelepromptDuration(playbackCursorSec * 1000),
-      durationLabel:
-        telepromptDurationMs > 0 ? formatTelepromptDuration(telepromptDurationMs) : "--:--",
+      ...telepromptPlaybackProgress,
       markers: cueMarkers,
-      ratio:
-        telepromptDurationMs > 0
-          ? Math.max(0, Math.min(1, (playbackCursorSec * 1000) / telepromptDurationMs))
-          : 0,
       seek:
         telepromptDurationMs > 0
           ? {
@@ -1702,7 +1705,6 @@ export function TelepromptStudio({
         <TelepromptTheatre
           activeBlock={activeBlock}
           activeBlockIndex={activeBlockIndex}
-          audioProgressPercent={audioProgressPercent}
           canCreate={canCreate}
           canOpenCinema={canOpenCinema}
           createAndListenCapabilityReason={createAndListenCapabilityReason}
@@ -1724,6 +1726,7 @@ export function TelepromptStudio({
           playbackControlsAvailable={audioFollowAvailable}
           playbackControlsPlaying={playbackControls.isPlaying}
           playbackLifecycle={playbackLifecycle}
+          playbackProgress={telepromptPlaybackProgress}
           playbackRate={playbackControls.playbackRate}
           presetId={theatrePresetId}
           countdownRemaining={countdownRemaining}

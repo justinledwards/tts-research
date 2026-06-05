@@ -11,6 +11,7 @@ import {
 } from "./driftDetection";
 import { legacyHighlightMapFromTimingArtifact, type TimingArtifact } from "./highlightMapV2";
 import type { ReadAlongRuntimeSnapshot, ReadAlongRuntimeState } from "./readAlongState";
+import type { ReadAlongTimingLookupOptions } from "./timingLookup";
 
 export interface ReadAlongResyncInput {
   activeCue?: HighlightCue | null;
@@ -21,6 +22,7 @@ export interface ReadAlongResyncInput {
   isPlaying?: boolean;
   isSeeking?: boolean;
   timingArtifact?: TimingArtifact | null;
+  timingLookup?: ReadAlongTimingLookupOptions;
 }
 
 export interface ReadAlongResyncOptions {
@@ -68,6 +70,7 @@ export function resolveReadAlongRuntimeSnapshot({
   phraseDriftTargetMs = READ_ALONG_PHRASE_DRIFT_TARGET_MS,
   resyncCount = 0,
   timingArtifact,
+  timingLookup,
   wordDriftTargetMs = READ_ALONG_WORD_DRIFT_TARGET_MS,
 }: ReadAlongResyncInput &
   Readonly<{
@@ -82,6 +85,7 @@ export function resolveReadAlongRuntimeSnapshot({
     activeCue,
     audioTimeSec,
     highlightMap: effectiveHighlightMap,
+    timingLookup,
   });
   const expectedCue = drift.expectedCue;
 

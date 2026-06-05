@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -27,6 +27,12 @@ export function useReaderModalLifecycle(
     trapFocus = true,
   }: ReaderModalLifecycleOptions = {},
 ) {
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -44,7 +50,7 @@ export function useReaderModalLifecycle(
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && closeOnEscape && !event.defaultPrevented) {
         event.preventDefault();
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
       if (event.key === "Tab" && trapFocus && container) {
@@ -60,15 +66,34 @@ export function useReaderModalLifecycle(
       globalThis.removeEventListener("keydown", handleKeyDown);
       previouslyFocused?.focus();
     };
-  }, [closeOnEscape, containerRef, isOpen, lockScroll, onClose, trapFocus]);
+  }, [closeOnEscape, containerRef, isOpen, lockScroll, trapFocus]);
 }
 
 function focusInitialElement(container: HTMLElement | null) {
   if (!container) {
     return;
   }
+  const activeElement = document.activeElement;
+  if (
+    activeElement instanceof HTMLElement &&
+    container.contains(activeElement) &&
+    isEditableFocusTarget(activeElement)
+  ) {
+    return;
+  }
   const autofocus = container.querySelector<HTMLElement>("[data-reader-autofocus]");
   (autofocus ?? container).focus();
+}
+
+function isEditableFocusTarget(element: HTMLElement): boolean {
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement
+  ) {
+    return true;
+  }
+  return element.isContentEditable;
 }
 
 function trapTabFocus(event: KeyboardEvent, container: HTMLElement) {

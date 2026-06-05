@@ -1,9 +1,30 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { FocusedTheatreChrome } from "./FocusedTheatreShell";
+import { FocusedTheatreChrome, focusedTheatreControlsMayReveal } from "./FocusedTheatreShell";
 
 describe("focused theatre shell", () => {
+  it("keeps passive pointer movement from undoing an explicit hide", () => {
+    expect(
+      focusedTheatreControlsMayReveal({
+        explicitHideLocked: true,
+        intent: "passive",
+      }),
+    ).toBe(false);
+    expect(
+      focusedTheatreControlsMayReveal({
+        explicitHideLocked: true,
+        intent: "intentional",
+      }),
+    ).toBe(true);
+    expect(
+      focusedTheatreControlsMayReveal({
+        explicitHideLocked: false,
+        intent: "passive",
+      }),
+    ).toBe(true);
+  });
+
   it("keeps progress and escape visible while secondary controls are hidden", () => {
     const markup = renderToStaticMarkup(
       createElement(FocusedTheatreChrome, {
@@ -30,6 +51,7 @@ describe("focused theatre shell", () => {
     expect(markup).toContain('data-focused-theatre-controls="hidden"');
     expect(markup).toContain("42%");
     expect(markup).toContain("Exit Theatre");
+    expect(markup).toContain("data-focused-theatre-toggle-controls");
     expect(markup).not.toContain("This detail appears only when controls are visible.");
   });
 

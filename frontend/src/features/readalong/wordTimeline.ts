@@ -1,4 +1,4 @@
-import type { BookSourceWordSpan, HighlightMap, NarrationBlock } from "../../types";
+import type { BookSourceWordSpan, HighlightMap, NarrationBlock, PreparedSource } from "../../types";
 import type {
   HighlightMapV2,
   HighlightMapV2TimingLevel,
@@ -14,6 +14,7 @@ import {
   wordTimelineEntryFromV2Entry,
   normalizeWordIdentityText,
 } from "./wordTimelineHelpers";
+import type { ReadAlongTimingLookupOptions } from "./timingLookup";
 
 export type WordTimelineProvenance =
   | HighlightMapV2TimingSource
@@ -22,6 +23,7 @@ export type WordTimelineProvenance =
   | "estimate";
 
 export interface NarrationWordLedgerEntry {
+  readonly anchorTokenOffset?: number;
   readonly blockId?: string;
   readonly blockKind?: string;
   readonly displayText: string;
@@ -43,6 +45,9 @@ export interface SpeechTokenLedgerEntry {
 }
 
 export interface WordTimelineEntry {
+  readonly anchorNodeId?: string;
+  readonly anchorTokenOffset?: number;
+  readonly anchorWordIndex?: number;
   readonly audioEndMs: number;
   readonly audioStartMs: number;
   readonly confidence: number;
@@ -217,15 +222,154 @@ export function wordTimelineFromLegacyHighlightMap({
   };
 }
 
+export function wordTimelineFromPreparedSourceHighlightMapV2({
+  map,
+  source,
+}: Readonly<{
+  map: HighlightMapV2 | null | undefined;
+  source: PreparedSource;
+}>): WordTimeline | null {
+  if (!map) {
+    return null;
+  }
+  const scopeKey = map.scopeKey;
+  const ledger = buildPreparedSourceWordLedger({
+    scopeKey,
+    source,
+    sourceId: source.id,
+  });
+  if (ledger.length === 0) {
+    return null;
+  }
+  const wordEntries = sortedEntries(
+    map.entries.filter(
+      (entry) =>
+        entry.level === "word" &&
+        entry.generatedAudioId === map.generatedAudioId &&
+        (!entry.sourceId || entry.sourceId === source.id),
+    ),
+  );
+  if (wordEntries.length === 0) {
+    return null;
+  }
+  const entries = wordEntries
+    .map((entry, ordinal) =>
+      wordTimelineEntryFromV2Entry({
+        entry,
+        ledger,
+        map,
+        ordinal,
+        scopeKey,
+        sourceId: source.id,
+      }),
+    )
+    .filter(isPresent);
+  if (entries.length === 0) {
+    return null;
+  }
+  return {
+    durationMs: map.durationMs,
+    entries,
+    ledger,
+    source: "highlight-map-v2",
+    speechTokens: entries.map((entry) => speechTokenLedgerEntryFromTimelineEntry(entry)),
+    status: map.summary.status,
+  };
+}
+
+export function wordTimelineFromPreparedSourceLegacyHighlightMap({
+  map,
+  source,
+}: Readonly<{
+  map: HighlightMap | null | undefined;
+  source: PreparedSource;
+}>): WordTimeline | null {
+  if (!map || map.tokens.length === 0) {
+    return null;
+  }
+  const scopeKey = map.scopeKey ?? "prepared-source";
+  const ledger = buildPreparedSourceWordLedger({
+    scopeKey,
+    source,
+    sourceId: source.id,
+  });
+  if (ledger.length === 0) {
+    return null;
+  }
+  // eslint-disable-next-line unicorn/no-array-sort -- toSorted is not available in this TS lib.
+  const tokens = [...map.tokens].sort((left, right) => left.startMs - right.startMs);
+  const entries = tokens
+    .map((token, ordinal) =>
+      wordTimelineEntryFromLegacyToken({
+        ledger,
+        map,
+        ordinal,
+        scopeKey,
+        sourceId: source.id,
+        token,
+      }),
+    )
+    .filter(isPresent);
+  if (entries.length === 0) {
+    return null;
+  }
+  return {
+    durationMs: map.durationMs,
+    entries,
+    ledger,
+    source: "legacy-highlight-map",
+    speechTokens: entries.map((entry) => speechTokenLedgerEntryFromTimelineEntry(entry)),
+    status: map.status,
+  };
+}
+
+export function buildPreparedSourceWordLedger({
+  scopeKey,
+  source,
+  sourceId,
+}: Readonly<{
+  scopeKey: string;
+  source: PreparedSource;
+  sourceId: string;
+}>): NarrationWordLedgerEntry[] {
+  const ledger: NarrationWordLedgerEntry[] = [];
+  for (const block of source.blocks ?? []) {
+    if (block.speakMode === "skip") {
+      continue;
+    }
+    const text = block.spokenText ?? block.text ?? "";
+    let tokenOffset = 0;
+    for (const match of text.matchAll(/(\S+)(\s*)/g)) {
+      const sourceWordIndex = ledger.length;
+      const matchStart = match.index;
+      ledger.push({
+        anchorTokenOffset: tokenOffset,
+        blockId: block.id,
+        blockKind: block.kind,
+        displayText: match[1],
+        endOffset: block.startOffset + matchStart + match[1].length,
+        normalizedText: normalizeWordIdentityText(match[1]),
+        sourceWordId: sourceWordIdFor(sourceId, scopeKey, sourceWordIndex),
+        sourceWordIndex,
+        startOffset: block.startOffset + matchStart,
+        text: match[1],
+      });
+      tokenOffset += 1;
+    }
+  }
+  return ledger;
+}
+
 export function resolveWordTimelineAtCursor(
   timeline: WordTimeline | null | undefined,
   cursorMs: number,
+  options: ReadAlongTimingLookupOptions = {},
 ): WordTimelineCursorResolution | null {
   const entries = timeline?.entries ?? [];
   if (entries.length === 0) {
     return null;
   }
-  const activeEntry = activeTimelineEntryAtCursor(entries, cursorMs);
+  const activeEntry = activeTimelineEntryAtCursor(entries, cursorMs, options);
   if (!activeEntry) {
     return null;
   }

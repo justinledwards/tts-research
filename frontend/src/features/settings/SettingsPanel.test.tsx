@@ -276,6 +276,8 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Phrase highlight fallback available");
     expect(markup).toContain("Forced alignment required");
     expect(markup).toContain('data-command-id="readalong:word-highlight"');
+    expect(markup).toContain("Smooth cursor");
+    expect(markup).toContain('data-readalong-highlight-motion="static"');
   });
 
   it("renders expert diagnostic facts with copy and JSON export controls", () => {

@@ -4,6 +4,7 @@ import {
   HighlightRenderer,
   READ_ALONG_DEGRADED_SYNC_DISPLAY_OPTIONS,
   READ_ALONG_HIGHLIGHT_GRANULARITIES,
+  READ_ALONG_HIGHLIGHT_MOTIONS,
   READ_ALONG_HIGHLIGHT_PRESET_IDS,
   READ_ALONG_HIGHLIGHT_STYLES,
   READ_ALONG_PREFERENCE_LABELS,
@@ -223,6 +224,29 @@ export function ReadAlongSettingsControls({
         />
       </div>
 
+      <Panel className="grid gap-3 p-3" variant="raised">
+        <h5 className="text-sm font-semibold">Highlight motion</h5>
+        <Toggle
+          checked={preferences.highlightMotion === "smoothCursor"}
+          data-testid="ui-action-readalong-highlight-motion-smooth-cursor"
+          data-ui-action-surface="Settings"
+          detail={
+            effectivePreferences.highlightMotion === "static" &&
+            preferences.highlightMotion === "smoothCursor"
+              ? "Disabled by reduced motion or high-contrast reader settings."
+              : "Moves a decorative cursor between timed words without changing sync state."
+          }
+          label={READ_ALONG_PREFERENCE_LABELS.motion.smoothCursor}
+          onChange={(checked) => {
+            update({
+              highlightMotion: checked
+                ? READ_ALONG_HIGHLIGHT_MOTIONS[1]
+                : READ_ALONG_HIGHLIGHT_MOTIONS[0],
+            });
+          }}
+        />
+      </Panel>
+
       <ProviderTimingLimitations
         phraseTimingDisabledReason={phraseTimingDisabledReason}
         providerRuntime={providerRuntime}
@@ -319,10 +343,14 @@ export function ReadAlongSettingsControls({
           <h5 className="text-sm font-semibold">Golden-minute highlight preview</h5>
           <span className="vs-muted text-xs">
             {READ_ALONG_PREFERENCE_LABELS.granularity[preferences.highlightGranularity]} ·{" "}
-            {READ_ALONG_PREFERENCE_LABELS.scrollFollow[effectivePreferences.scrollFollow]}
+            {READ_ALONG_PREFERENCE_LABELS.scrollFollow[effectivePreferences.scrollFollow]} ·{" "}
+            {READ_ALONG_PREFERENCE_LABELS.motion[effectivePreferences.highlightMotion]}
           </span>
         </div>
-        <p className="rounded-md border bg-[var(--vs-surface)] p-3 text-lg leading-9 vs-border">
+        <p
+          className="rounded-md border bg-[var(--vs-surface)] p-3 text-lg leading-9 vs-border"
+          data-readalong-highlight-motion={effectivePreferences.highlightMotion}
+        >
           <HighlightRenderer
             activeWordIndex={5}
             highlightStyle={effectivePreferences.highlightStyle}

@@ -33,6 +33,36 @@ export {
   type ReadAlongPlaybackClockOptions,
 } from "./ReadAlongClock";
 export {
+  ReadAlongWordScheduler,
+  applyReadAlongDomHighlight,
+  clearReadAlongDomHighlight,
+  nextWordBoundaryMs,
+  resolveWordTimelineIndex,
+  type ReadAlongDomHighlighterOptions,
+  type ReadAlongDomHighlightState,
+  type ReadAlongWordSchedulerOptions,
+  type ReadAlongWordSchedulerRuntime,
+} from "./ReadAlongWordScheduler";
+export {
+  readAlongAudioElementForJob,
+  registerReadAlongAudioElement,
+} from "./readAlongMediaRegistry";
+export {
+  markReadAlongPerformance,
+  readAlongPerformanceSnapshot,
+  resetReadAlongPerformanceSnapshot,
+  startReadAlongLongTaskObserver,
+  type ReadAlongPerformanceCounter,
+  type ReadAlongPerformanceSnapshot,
+} from "./readAlongPerformance";
+export {
+  clampCursorDuration,
+  clearReadAlongMotionCursor,
+  updateReadAlongMotionCursor,
+  type ReadAlongMotionCursorInput,
+  type ReadAlongMotionCursorState,
+} from "./readAlongMotionCursor";
+export {
   alignmentQualityLabel,
   alignmentStatusFromReport,
   type AlignmentStatus,
@@ -128,6 +158,7 @@ export {
   GOLDEN_MINUTE_HIGHLIGHT_PREVIEW_TEXT,
   READ_ALONG_DEGRADED_SYNC_DISPLAY_OPTIONS,
   READ_ALONG_HIGHLIGHT_GRANULARITIES,
+  READ_ALONG_HIGHLIGHT_MOTIONS,
   READ_ALONG_HIGHLIGHT_STYLES,
   READ_ALONG_MACHINE_PREFERENCES_STORAGE_KEY,
   READ_ALONG_PREFERENCE_LABELS,
@@ -146,6 +177,7 @@ export {
   saveReadAlongPreferences,
   type ReadAlongDegradedSyncDisplay,
   type ReadAlongHighlightGranularity,
+  type ReadAlongHighlightMotion,
   type ReadAlongHighlightStyle,
   type ReadAlongPreferenceScope,
   type ReadAlongPreferences,
@@ -201,13 +233,26 @@ export {
   type TimingArtifactValidationStatus,
 } from "./timingArtifact";
 export {
+  READ_ALONG_DEFAULT_LOOKAHEAD_MS,
+  READ_ALONG_DISPLAY_LOOKUP,
+  normalizeReadAlongTimingLookupOptions,
+  resolveReadAlongTimingItem,
+  type ReadAlongTimingLookupMode,
+  type ReadAlongTimingLookupOptions,
+  type ReadAlongTimingLookupResult,
+  type ReadAlongTimingRangeLike,
+} from "./timingLookup";
+export {
   buildNarrationWordLedger,
+  buildPreparedSourceWordLedger,
   resolveWordTimelineAtCursor,
   sourceWordIdFor,
   sourceWordIdForSpan,
   wordTimelineEntryForSourceWordId,
   wordTimelineFromHighlightMapV2,
   wordTimelineFromLegacyHighlightMap,
+  wordTimelineFromPreparedSourceHighlightMapV2,
+  wordTimelineFromPreparedSourceLegacyHighlightMap,
   type NarrationWordLedgerEntry,
   type SpeechTokenLedgerEntry,
   type WordTimeline,

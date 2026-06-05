@@ -14,7 +14,11 @@ import {
 import { compactHitTargetClassName, minInteractiveSize } from "../../design";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
-import { generatedAudioLifecycleFromJob, playbackActionLabel } from "../playback";
+import {
+  generatedAudioLifecycleFromJob,
+  playbackActionLabel,
+  playbackTimeLabels,
+} from "../playback";
 import { OPERATIONAL_RECOVERY_LABELS } from "../operational-status";
 import {
   CinemaFocusModeToolbar,
@@ -117,7 +121,9 @@ import {
   buildReadAlongSyncDebugSnapshot,
   evaluateBookReadAlongInvariant,
   HighlightRenderer,
+  ReadAlongWordScheduler,
   ReadAlongResyncController,
+  readAlongAudioElementForJob,
   readAlongAnchorForWord,
   readAlongInvariantStatusLabel,
   effectiveReadAlongPreferences,
@@ -126,6 +132,8 @@ import {
   readAlongRuntimeStateLabel,
   readAlongVisualModeFromRuntime,
   scrollReadAlongAnchor,
+  wordTimelineFromHighlightMapV2,
+  wordTimelineFromLegacyHighlightMap,
   type AlignmentStatus,
   type ReadAlongHighlightStyle,
   type ReadAlongHighlightVisualMode,
@@ -1064,6 +1072,37 @@ export function BookCinemaOverlay({
     timingActiveWordIndex,
     progress,
   );
+  const schedulerTimeline = useMemo(() => {
+    if (!activeBookJob || book.kind === "markdown" || scopedSpans.length === 0) {
+      return null;
+    }
+    const blocks = scopeContent?.blocks ?? [];
+    if (activeReadAlongTimingMapV2) {
+      return wordTimelineFromHighlightMapV2({
+        blocks,
+        map: activeReadAlongTimingMapV2,
+        scopeKey: normalizedScopeKey,
+        sourceId: book.id,
+        spans: scopedSpans,
+      });
+    }
+    return wordTimelineFromLegacyHighlightMap({
+      blocks,
+      map: activeReadAlongTimingMap,
+      scopeKey: normalizedScopeKey,
+      sourceId: book.id,
+      spans: scopedSpans,
+    });
+  }, [
+    activeBookJob,
+    activeReadAlongTimingMap,
+    activeReadAlongTimingMapV2,
+    book.id,
+    book.kind,
+    normalizedScopeKey,
+    scopedSpans,
+    scopeContent?.blocks,
+  ]);
   const pointerWordIndex = useMemo(() => {
     if (!pointerOption) {
       return -1;
@@ -1075,6 +1114,48 @@ export function BookCinemaOverlay({
     end: resolvedTimingCue.phraseWordEnd,
     start: resolvedTimingCue.phraseWordStart,
   };
+  const wordSchedulerAvailable =
+    Boolean(activeBookJob && schedulerTimeline) &&
+    book.kind !== "markdown" &&
+    pointerWordIndex < 0 &&
+    readAlongVisualMode === "word";
+  useEffect(() => {
+    if (!wordSchedulerAvailable || !activeBookJob || !playbackControls.isPlaying) {
+      return;
+    }
+    const scheduler = new ReadAlongWordScheduler({
+      audioElement: () => readAlongAudioElementForJob(activeBookJob.id),
+      highlight: {
+        accessibilitySettings: normalizedAccessibility,
+        autoFollow: true,
+        highlightMotion: effectiveReadAlong.highlightMotion,
+        highlightStyle: effectiveReadAlong.highlightStyle,
+        mode: readAlongVisualMode,
+        root: () => dialogRef.current,
+        scrollFollow: effectiveReadAlong.scrollFollow,
+        sourceId: book.id,
+        surface: "book",
+      },
+      initialCursorSec: calibratedPlaybackCursorSec,
+      timeline: schedulerTimeline,
+    });
+    scheduler.start();
+    return () => {
+      scheduler.stop();
+    };
+  }, [
+    activeBookJob,
+    book.id,
+    calibratedPlaybackCursorSec,
+    effectiveReadAlong.highlightStyle,
+    effectiveReadAlong.highlightMotion,
+    effectiveReadAlong.scrollFollow,
+    normalizedAccessibility,
+    playbackControls.isPlaying,
+    readAlongVisualMode,
+    schedulerTimeline,
+    wordSchedulerAvailable,
+  ]);
   const queueOptions = useMemo(() => {
     const narratable = scopeOptions.filter(
       (option) => option.isNarratable && (option.wordCount ?? 0) > 0,
@@ -1145,10 +1226,12 @@ export function BookCinemaOverlay({
       "data-cinema-sync-active-word-index": readerActiveWordIndex,
       "data-cinema-sync-active-word-text":
         activeSpan?.text ?? runtimeHighlightCue?.token?.text ?? "",
+      "data-cinema-sync-display-driver": wordSchedulerAvailable ? "word-scheduler" : "react",
       "data-cinema-sync-job-id": activeBookJob?.id ?? "",
       "data-cinema-sync-playback-cursor-sec": calibratedPlaybackCursorSec.toFixed(3),
       "data-cinema-sync-runtime-state": readAlongRuntime.state,
       "data-cinema-sync-timing-source": timingSource,
+      "data-readalong-highlight-motion": effectiveReadAlong.highlightMotion,
     };
   }, [
     activeBookJob?.id,
@@ -1156,9 +1239,11 @@ export function BookCinemaOverlay({
     activeReadAlongTimingMapV2,
     activeSpan?.text,
     calibratedPlaybackCursorSec,
+    effectiveReadAlong.highlightMotion,
     readAlongRuntime.state,
     readerActiveWordIndex,
     runtimeHighlightCue?.token?.text,
+    wordSchedulerAvailable,
   ]);
   const sourceLifecycle = useMemo(
     () =>
@@ -1684,16 +1769,21 @@ export function BookCinemaOverlay({
     });
   }, [activeBookJob, hasPlayableAudio]);
 
-  let transportCurrentLabel = "0:00";
+  const playbackTimelineCurrentSec =
+    playbackCursorSec > 0 ? playbackCursorSec : (progress?.currentTimeSec ?? 0);
+  const playbackTimelineLabels = playbackTimeLabels({
+    currentSec: playbackTimelineCurrentSec,
+    durationMs: activeBookJob?.durationMs ?? scopeContent?.estimatedDurationMs,
+    fallbackRatio: progress?.progress ?? 0,
+  });
+  let transportCurrentLabel = playbackTimelineLabels.elapsedLabel;
   if (isActiveBookJobGenerating || playbackState === "generating") {
     transportCurrentLabel = generationProgress.currentLabel;
-  } else if (progress) {
-    transportCurrentLabel = formatEstimatedDuration(progress.currentTimeSec * 1000);
   }
   const transportProgressRatio =
     isActiveBookJobGenerating || playbackState === "generating"
       ? generationProgress.ratio
-      : (progress?.progress ?? 0);
+      : playbackTimelineLabels.ratio;
 
   const bookTransportModel: CinemaTransportModel = {
     bookmark: {
@@ -1740,12 +1830,12 @@ export function BookCinemaOverlay({
     },
     progress: {
       currentLabel: transportCurrentLabel,
-      durationLabel: formatEstimatedDuration(scopeContent?.estimatedDurationMs),
+      durationLabel: playbackTimelineLabels.remainingLabel,
       ratio: transportProgressRatio,
       waveform: activeBookJob ? (
         <BookCinemaWaveform
           audioUrl={bookJobAudioUrl(activeBookJob)}
-          progress={progress?.progress ?? 0}
+          progress={transportProgressRatio}
         />
       ) : (
         <BookCinemaWaveformPlaceholder />

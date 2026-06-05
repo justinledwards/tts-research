@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { READ_ALONG_DISPLAY_LOOKUP } from "../readalong";
 import {
   BOOK_SOURCE_ACCEPT,
   bookCinemaKeyboardCommandForKey,
@@ -161,6 +162,46 @@ describe("Book Cinema helpers", () => {
       phraseWordEnd: 84,
       phraseWordStart: 83,
     });
+  });
+
+  it("uses display timing lookup to show the next source word inside the lookahead window", () => {
+    const spans = indexedSpans("Alpha beta gamma", 80);
+    const map = highlightMapV2([
+      v2Entry({
+        audioEndMs: 1600,
+        audioStartMs: 1000,
+        fragmentIndex: 0,
+        level: "word",
+        sourceWordIndex: 81,
+        spokenText: "beta",
+        tokenIndex: 1,
+      }),
+      v2Entry({
+        audioEndMs: 2100,
+        audioStartMs: 1700,
+        fragmentIndex: 0,
+        level: "word",
+        sourceWordIndex: 82,
+        spokenText: "gamma",
+        tokenIndex: 2,
+      }),
+    ]);
+
+    expect(
+      resolveBookTimingMapV2WordIndexes({
+        map,
+        playbackCursorSec: 1.63,
+        scopedSpans: spans,
+      })?.activeWordIndex,
+    ).toBe(81);
+    expect(
+      resolveBookTimingMapV2WordIndexes({
+        map,
+        playbackCursorSec: 1.63,
+        scopedSpans: spans,
+        timingLookup: READ_ALONG_DISPLAY_LOOKUP,
+      })?.activeWordIndex,
+    ).toBe(82);
   });
 
   it("trusts v2 source identity across blocks even when spoken text is transformed", () => {

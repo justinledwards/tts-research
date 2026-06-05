@@ -63,31 +63,50 @@ export function playbackProgressRatio(
   job: VoiceJob | null,
   progress: PlaybackProgress | null,
 ): number {
-  if (progress) {
-    return clamp01(progress.progress);
+  const durationSec = playbackTimelineDurationSec(job);
+  if (durationSec > 0) {
+    return clamp01(playbackTimelineCursorSec(playbackCursorSec, job, progress) / durationSec);
   }
-  if (!job || job.durationMs <= 0) {
-    return 0;
-  }
-  return clamp01(playbackCursorSec / (job.durationMs / 1000));
+  return progress ? clamp01(progress.progress) : 0;
 }
 
 export function playbackDisplayCursorSec(
   playbackCursorSec: number,
   job: VoiceJob | null,
   progress: PlaybackProgress | null,
-  progressRatio: number,
 ): number {
+  const durationSec = playbackTimelineDurationSec(job);
+  if (durationSec > 0) {
+    return playbackTimelineCursorSec(playbackCursorSec, job, progress);
+  }
   if (playbackCursorSec > 0) {
     return playbackCursorSec;
   }
   if (progress && progress.currentTimeSec > 0) {
     return progress.currentTimeSec;
   }
-  if (job && job.durationMs > 0 && progressRatio > 0) {
-    return (job.durationMs / 1000) * progressRatio;
-  }
   return playbackCursorSec;
+}
+
+function playbackTimelineCursorSec(
+  playbackCursorSec: number,
+  job: VoiceJob | null,
+  progress: PlaybackProgress | null,
+): number {
+  const durationSec = playbackTimelineDurationSec(job);
+  const cursorSec =
+    playbackCursorSec > 0 ? playbackCursorSec : (progress?.currentTimeSec ?? playbackCursorSec);
+  if (durationSec <= 0) {
+    return Math.max(0, cursorSec);
+  }
+  return Math.max(0, Math.min(durationSec, cursorSec));
+}
+
+function playbackTimelineDurationSec(job: VoiceJob | null): number {
+  if (!job || job.durationMs <= 0) {
+    return 0;
+  }
+  return job.durationMs / 1000;
 }
 
 export function formatClockTime(totalSeconds: number): string {

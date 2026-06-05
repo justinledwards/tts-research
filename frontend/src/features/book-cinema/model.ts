@@ -12,6 +12,7 @@ import {
   resolveWordTimelineAtCursor,
   wordTimelineFromHighlightMapV2,
   type HighlightMapV2,
+  type ReadAlongTimingLookupOptions,
 } from "../readalong";
 import {
   READER_LINE_HEIGHT_RATIO,
@@ -433,10 +434,12 @@ export function resolveBookTimingMapV2WordIndexes({
   map,
   playbackCursorSec,
   scopedSpans,
+  timingLookup,
 }: Readonly<{
   map: HighlightMapV2 | null | undefined;
   playbackCursorSec: number;
   scopedSpans: readonly BookSourceWordSpan[];
+  timingLookup?: ReadAlongTimingLookupOptions;
 }>): BookTimingCueWordIndexes | null {
   if (!map || scopedSpans.length === 0) {
     return null;
@@ -450,6 +453,7 @@ export function resolveBookTimingMapV2WordIndexes({
       spans: scopedSpans,
     }),
     cursorMs,
+    timingLookup,
   );
   if (timelineResolution) {
     const result: BookTimingCueWordIndexes = {

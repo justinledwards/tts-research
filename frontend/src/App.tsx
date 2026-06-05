@@ -93,6 +93,7 @@ import {
 } from "./api";
 
 import { formatDuration } from "./format";
+import { formatPlaybackClock, playbackTimeLabels } from "./features/playback";
 import {
   activeWordIndexForProgress,
   estimateFirstAudioETA,
@@ -134,6 +135,7 @@ import {
   resolveBookActiveWordIndex,
   resolveDefaultBookScope,
 } from "./features/book-cinema/model";
+import type { MarkdownWordCueState } from "./MarkdownRenderer";
 import { looksLikeMermaidDiagram } from "./markdownModel";
 import { findKokoroVoicepack, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
 import {
@@ -248,9 +250,15 @@ import { liveStatusMessages, useLiveStatus } from "./features/accessibility";
 import { nextReaderPlaybackRate } from "./features/reader-accessibility";
 import {
   DEFAULT_READ_ALONG_PREFERENCES,
+  clearReadAlongMotionCursor,
   clearStoredReadAlongPreferences,
+  effectiveReadAlongPreferences,
   loadReadAlongPreferences,
+  markReadAlongPerformance,
+  readAlongPreferenceDataAttributes,
+  registerReadAlongAudioElement,
   saveReadAlongPreferences,
+  updateReadAlongMotionCursor,
   type HighlightMapV2,
   type ReadAlongCueRole,
   type ReadAlongPreferences,
@@ -440,7 +448,11 @@ import {
   speechPolicyProfileLabel,
 } from "./speechPolicy";
 import type { ContentIRDocument } from "./content-ir";
-import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
+import {
+  markdownBlockText,
+  resolvePreparedSourceActiveWord,
+  type PreparedSourceActiveWord,
+} from "./markdownCinema";
 import { sessionSpeechPolicyRequest } from "./features/policy/model";
 import {
   preparedSourceCinemaActionLabel,
@@ -738,13 +750,7 @@ const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
 };
 
 function formatPlaybackClockSeconds(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "0:00";
-  }
-  const totalSeconds = Math.round(value);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes.toString()}:${seconds.toString().padStart(2, "0")}`;
+  return formatPlaybackClock(value);
 }
 
 function playbackDurationSec(job: VoiceJob | null): number {
@@ -960,11 +966,13 @@ function upsertVoiceProfileByCreatedAt(
 }
 
 function TeleprompterPanel({
+  accessibilitySettings,
   canOpenBookCinema,
   isPlaybackActive,
   job,
   latestProgress,
   openSignal,
+  readAlongPreferences,
   showCinemaAction = true,
   showInlinePreview = true,
   onOpenBookCinema,
@@ -976,11 +984,13 @@ function TeleprompterPanel({
   themeName,
   onOpenSettings,
 }: Readonly<{
+  accessibilitySettings: ReaderAccessibilitySettings;
   canOpenBookCinema: boolean;
   isPlaybackActive: boolean;
   job: VoiceJob | null;
   latestProgress: PlaybackProgress | null;
   openSignal: number;
+  readAlongPreferences: ReadAlongPreferences;
   showCinemaAction?: boolean;
   showInlinePreview?: boolean;
   onOpenBookCinema: () => void;
@@ -1095,16 +1105,23 @@ function TeleprompterPanel({
   }
 
   const currentWordLabel = teleprompterWordLabel(cue);
+  const cinemaSourceTitle = narrationReviewSourceLabel(preparedSourceForCinema, null);
   const cinemaOverlay = isCinemaOpen ? (
     <CinemaTeleprompterOverlay
       cue={cue}
+      audioDurationMs={job?.durationMs ?? 0}
       isContextVisible={isContextVisible}
       isFocusEnabled={isFocusEnabled}
+      accessibilitySettings={accessibilitySettings}
       settings={effectiveSettings}
       themeName={cinemaThemeName}
       markdownSource={markdownCinemaSource}
+      markdownActiveWordIndex={null}
       playbackControls={playbackControls}
+      playbackCursorSec={playbackCursorSec}
+      readAlongPreferences={readAlongPreferences}
       resumeProgress={cinemaResumeProgress}
+      sourceTitle={cinemaSourceTitle}
       textSize={cinemaTextSize}
       isPlaybackActive={isPlaybackActive}
       onClose={handleCloseCinema}
@@ -1568,15 +1585,21 @@ const CINEMA_PLAYBACK_RATES = [0.8, 1, 1.25, 1.5] as const;
 
 type CinemaViewMode = "teleprompter" | "markdown";
 
-function CinemaTeleprompterOverlay({
+export function CinemaTeleprompterOverlay({
+  accessibilitySettings,
   cue,
+  audioDurationMs,
   isContextVisible,
   isFocusEnabled,
   isPlaybackActive,
   markdownSource,
+  markdownActiveWordIndex,
   playbackControls,
+  playbackCursorSec,
+  readAlongPreferences,
   resumeProgress,
   settings,
+  sourceTitle,
   themeName,
   textSize,
   onClose,
@@ -1590,14 +1613,20 @@ function CinemaTeleprompterOverlay({
   onThemeChange,
   onTextSizeChange,
 }: Readonly<{
+  accessibilitySettings: ReaderAccessibilitySettings;
   cue: TeleprompterCue;
+  audioDurationMs: number;
   isContextVisible: boolean;
   isFocusEnabled: boolean;
   isPlaybackActive: boolean;
   markdownSource: PreparedSource | null;
+  markdownActiveWordIndex: number | null;
   playbackControls: PlaybackController;
+  playbackCursorSec: number;
+  readAlongPreferences: ReadAlongPreferences;
   resumeProgress: PlaybackProgress | null;
   settings: TeleprompterHighlightSettings;
+  sourceTitle: string;
   themeName: ThemeName;
   textSize: CinemaTextSize;
   onClose: () => void;
@@ -1614,6 +1643,16 @@ function CinemaTeleprompterOverlay({
   const [viewMode, setViewMode] = useState<CinemaViewMode>(
     markdownSource ? "markdown" : "teleprompter",
   );
+  const effectiveReadAlong = useMemo(
+    () => effectiveReadAlongPreferences(readAlongPreferences, accessibilitySettings),
+    [accessibilitySettings, readAlongPreferences],
+  );
+  const timelineLabels = playbackTimeLabels({
+    currentSec: playbackCursorSec,
+    durationMs: audioDurationMs,
+    fallbackRatio: cue.segmentProgress,
+  });
+  const timelinePercent = Math.round(timelineLabels.ratio * 100);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -1650,8 +1689,8 @@ function CinemaTeleprompterOverlay({
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--vs-action-primary)]">
             Cinema Teleprompter
           </p>
-          <h2 className="mt-1 text-lg font-semibold sm:text-xl">
-            {isPlaybackActive ? "Following playback" : "Ready for playback"}
+          <h2 className="mt-1 truncate text-lg font-semibold sm:text-xl" title={sourceTitle}>
+            {sourceTitle}
           </h2>
         </div>
         <div className="flex flex-wrap items-center gap-3 lg:justify-end">
@@ -1690,6 +1729,9 @@ function CinemaTeleprompterOverlay({
           >
             {isPlaybackActive ? "Playing" : "Paused"}
           </span>
+          <span className="rounded-full border bg-[var(--vs-surface)] px-3 py-1 text-xs font-semibold tabular-nums vs-border vs-muted">
+            {timelineLabels.totalLabel}
+          </span>
           <span className="vs-muted hidden text-sm sm:inline">
             Segment {String(cue.segmentIndex + 1)} / {String(cue.segmentCount)} ·{" "}
             {teleprompterWordLabel(cue)} words
@@ -1725,7 +1767,11 @@ function CinemaTeleprompterOverlay({
           <div className="max-h-[68vh] min-h-0 overflow-y-auto rounded-xl border bg-[var(--vs-raised)] p-5 shadow-2xl sm:p-8">
             {viewMode === "markdown" && markdownSource ? (
               <MarkdownCinemaView
-                activeWordIndex={cue.documentActiveWordIndex}
+                activeWordIndex={markdownActiveWordIndex ?? cue.documentActiveWordIndex}
+                accessibilitySettings={accessibilitySettings}
+                cue={cue}
+                playbackRate={playbackControls.playbackRate}
+                readAlongPreferences={effectiveReadAlong}
                 source={markdownSource}
                 textSize={textSize}
               />
@@ -1868,10 +1914,21 @@ function CinemaTeleprompterOverlay({
             A+
           </button>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-selected)]">
+        <div className="mb-1 flex items-center justify-between gap-3 text-xs tabular-nums vs-muted">
+          <span>{timelineLabels.elapsedLabel}</span>
+          <span>{timelineLabels.remainingLabel}</span>
+        </div>
+        <div
+          aria-label={`${timelineLabels.elapsedLabel} elapsed, ${timelineLabels.remainingLabel} remaining`}
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={timelinePercent}
+          className="h-2 overflow-hidden rounded-full bg-[var(--vs-selected)]"
+          role="progressbar"
+        >
           <div
             className="h-full rounded-full transition-[width] vs-accent-bg"
-            style={{ width: `${String(Math.round(cue.segmentProgress * 100))}%` }}
+            style={{ width: `${timelinePercent.toString()}%` }}
           />
         </div>
         <p className="vs-muted mt-3 text-center text-xs">Press Escape to return to the studio.</p>
@@ -1882,10 +1939,18 @@ function CinemaTeleprompterOverlay({
 
 function MarkdownCinemaView({
   activeWordIndex,
+  accessibilitySettings,
+  cue,
+  playbackRate,
+  readAlongPreferences,
   source,
   textSize,
 }: Readonly<{
   activeWordIndex: number;
+  accessibilitySettings: ReaderAccessibilitySettings;
+  cue: TeleprompterCue;
+  playbackRate: number;
+  readAlongPreferences: ReadAlongPreferences;
   source: PreparedSource;
   textSize: CinemaTextSize;
 }>) {
@@ -1907,21 +1972,68 @@ function MarkdownCinemaView({
     massive: "text-2xl leading-[2.8rem] sm:text-3xl",
   };
   const shouldHighlightWord = activeBlock ? isMarkdownCinemaWordHighlightable(activeBlock) : false;
+  const shouldUseSmoothCursor =
+    readAlongPreferences.highlightMotion === "smoothCursor" && shouldHighlightWord;
+  const markdownWordStates = useMemo(() => markdownWordStatesForCue(cue), [cue]);
+  const shouldRenderWordAnchors =
+    shouldHighlightWord && (shouldUseSmoothCursor || markdownWordStates.size > 0);
+  const blockWordStartIndex = activeWord ? activeWordIndex - activeWord.wordOffset : undefined;
+  const motionDurationMs = useMemo(
+    () => markdownMotionDurationMs(cue, playbackRate),
+    [cue, playbackRate],
+  );
+  const readAlongDataAttributes = useMemo(
+    () => readAlongPreferenceDataAttributes(readAlongPreferences),
+    [readAlongPreferences],
+  );
 
   useEffect(() => {
-    if (!activeWord) {
+    const root = containerRef.current;
+    if (!root) {
       return;
     }
-    containerRef.current?.querySelector(".markdown-cinema-word-active")?.scrollIntoView({
-      block: "center",
-      inline: "nearest",
-      behavior: "smooth",
+    if (!activeWord) {
+      clearReadAlongMotionCursor(root);
+      return;
+    }
+    const activeElement = root.querySelector<HTMLElement>(".markdown-cinema-word-active");
+    if (!activeElement) {
+      clearReadAlongMotionCursor(root);
+      return;
+    }
+    scrollMarkdownActiveWordIntoSafeBand(root, activeElement, accessibilitySettings);
+    const nextElement =
+      shouldUseSmoothCursor && activeWordIndex >= 0
+        ? root.querySelector<HTMLElement>(
+            `[data-readalong-word-index="${String(activeWordIndex + 1)}"]`,
+          )
+        : null;
+    updateReadAlongMotionCursor({
+      accessibilitySettings,
+      activeElement,
+      highlightMotion: readAlongPreferences.highlightMotion,
+      nextElement,
+      root,
+      transitionDurationMs: motionDurationMs,
     });
-  }, [activeWord]);
+  }, [
+    accessibilitySettings,
+    activeWord,
+    activeWordIndex,
+    motionDurationMs,
+    readAlongPreferences.highlightMotion,
+    shouldUseSmoothCursor,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      clearReadAlongMotionCursor(containerRef.current);
+    };
+  }, []);
 
   if (source.text) {
     return (
-      <div ref={containerRef}>
+      <div ref={containerRef} {...readAlongDataAttributes}>
         <Suspense fallback={<LazySurfaceFallback label="Loading markdown..." />}>
           <MarkdownRenderer
             className={`markdown-cinema prose-markdown ${markdownTextClassBySize[textSize]} text-[var(--vs-text)]`}
@@ -1937,8 +2049,12 @@ function MarkdownCinemaView({
               activeWord && shouldHighlightWord
                 ? {
                     activeWordOffset: activeWord.wordOffset,
+                    activeWordIndex,
+                    blockWordStartIndex,
                     blockEndOffset: activeWord.blockEndOffset,
                     blockStartOffset: activeWord.blockStartOffset,
+                    renderWordAnchors: shouldRenderWordAnchors,
+                    wordStates: markdownWordStates,
                   }
                 : undefined
             }
@@ -1953,12 +2069,19 @@ function MarkdownCinemaView({
   return (
     <div
       className={`markdown-cinema prose-markdown ${markdownTextClassBySize[textSize]} text-[var(--vs-text)]`}
+      ref={containerRef}
+      {...readAlongDataAttributes}
     >
       {blocks.map((block) => (
         <MarkdownCinemaBlock
+          activeWord={activeWord}
+          activeWordIndex={activeWordIndex}
           block={block}
+          blockWordStartIndex={block.id === activeWord?.blockId ? blockWordStartIndex : undefined}
           isActive={block.id === activeWord?.blockId}
           key={block.id}
+          renderWordAnchors={shouldRenderWordAnchors}
+          wordStates={markdownWordStates}
         />
       ))}
     </div>
@@ -1975,15 +2098,70 @@ function isMarkdownCinemaWordHighlightable(block: PreparedSourceBlock): boolean 
   );
 }
 
+function markdownMotionDurationMs(cue: TeleprompterCue, playbackRate: number): number | null {
+  const activeCue = cue.wordCues.find((wordCue) => wordCue.wordIndex === cue.activeWordIndex);
+  if (!activeCue) {
+    return null;
+  }
+  const nextCue = cue.wordCues.find((wordCue) => wordCue.wordIndex === cue.activeWordIndex + 1);
+  const durationMs = Math.max(0, (nextCue?.startMs ?? activeCue.endMs) - activeCue.startMs);
+  const safeRate = Number.isFinite(playbackRate) && playbackRate > 0 ? playbackRate : 1;
+  return durationMs / safeRate;
+}
+
+function markdownWordStatesForCue(cue: TeleprompterCue): ReadonlyMap<number, MarkdownWordCueState> {
+  const segmentWordStartIndex = cue.documentActiveWordIndex - cue.activeWordIndex;
+  const states = new Map<number, MarkdownWordCueState>();
+  for (const wordCue of cue.wordCues) {
+    const documentWordIndex = segmentWordStartIndex + wordCue.wordIndex;
+    states.set(documentWordIndex, {
+      intensity: wordCue.intensity,
+      state: wordCue.state,
+      wordRole: teleprompterReadAlongRole(wordCue.state, wordCue.wordIndex, cue.activeWordIndex),
+    });
+  }
+  return states;
+}
+
+function scrollMarkdownActiveWordIntoSafeBand(
+  root: HTMLElement,
+  activeElement: HTMLElement,
+  accessibilitySettings: Pick<ReaderAccessibilitySettings, "reducedMotion">,
+): void {
+  const rootRect = root.getBoundingClientRect();
+  const activeRect = activeElement.getBoundingClientRect();
+  const safeTop = rootRect.top + rootRect.height * 0.28;
+  const safeBottom = rootRect.top + rootRect.height * 0.72;
+  if (activeRect.top >= safeTop && activeRect.bottom <= safeBottom) {
+    return;
+  }
+  activeElement.scrollIntoView({
+    behavior: accessibilitySettings.reducedMotion ? "auto" : "smooth",
+    block: "center",
+    inline: "nearest",
+  });
+}
+
 function MarkdownCinemaBlock({
+  activeWord,
+  activeWordIndex,
   block,
+  blockWordStartIndex,
   isActive,
+  renderWordAnchors,
+  wordStates,
 }: Readonly<{
+  activeWord: PreparedSourceActiveWord | null;
+  activeWordIndex: number;
   block: NonNullable<PreparedSource["blocks"]>[number];
+  blockWordStartIndex: number | undefined;
   isActive: boolean;
+  renderWordAnchors: boolean;
+  wordStates: ReadonlyMap<number, MarkdownWordCueState>;
 }>) {
   const blockRef = useRef<HTMLElement | null>(null);
   const blockText = markdownBlockText(block);
+  const shouldHighlightWord = isActive && activeWord && isMarkdownCinemaWordHighlightable(block);
 
   useEffect(() => {
     if (!isActive) {
@@ -2010,7 +2188,14 @@ function MarkdownCinemaBlock({
       data-active={isActive ? "true" : "false"}
       ref={blockRef}
     >
-      {renderMarkdownCinemaBlockContent(block, blockText)}
+      {renderMarkdownCinemaBlockContent(block, blockText, {
+        activeWord,
+        activeWordIndex,
+        blockWordStartIndex,
+        renderWordAnchors,
+        shouldHighlightWord: Boolean(shouldHighlightWord),
+        wordStates,
+      })}
     </section>
   );
 }
@@ -2018,6 +2203,14 @@ function MarkdownCinemaBlock({
 function renderMarkdownCinemaBlockContent(
   block: NonNullable<PreparedSource["blocks"]>[number],
   blockText: string,
+  highlight: {
+    activeWord: PreparedSourceActiveWord | null;
+    activeWordIndex: number;
+    blockWordStartIndex: number | undefined;
+    renderWordAnchors: boolean;
+    shouldHighlightWord: boolean;
+    wordStates: ReadonlyMap<number, MarkdownWordCueState>;
+  },
 ): ReactNode {
   if (block.kind === "code" && looksLikeMermaidDiagram(blockText)) {
     return (
@@ -2037,7 +2230,24 @@ function renderMarkdownCinemaBlockContent(
 
   return (
     <Suspense fallback={<LazySurfaceFallback label="Loading markdown..." />}>
-      <MarkdownRenderer className="contents">{blockText}</MarkdownRenderer>
+      <MarkdownRenderer
+        className="contents"
+        wordHighlight={
+          highlight.activeWord && highlight.shouldHighlightWord
+            ? {
+                activeWordOffset: highlight.activeWord.wordOffset,
+                activeWordIndex: highlight.activeWordIndex,
+                blockEndOffset: blockText.length,
+                blockStartOffset: 0,
+                blockWordStartIndex: highlight.blockWordStartIndex,
+                renderWordAnchors: highlight.renderWordAnchors,
+                wordStates: highlight.wordStates,
+              }
+            : undefined
+        }
+      >
+        {blockText}
+      </MarkdownRenderer>
     </Suspense>
   );
 }
@@ -8115,6 +8325,7 @@ export function App() {
         </Suspense>
       ) : null}
       <TeleprompterPanel
+        accessibilitySettings={readerAccessibilitySettings}
         canOpenBookCinema={canOpenBookCinema}
         isPlaybackActive={isPlaybackActive}
         job={job}
@@ -8123,6 +8334,7 @@ export function App() {
         playbackControls={playbackControls}
         playbackCursorSec={playbackCursorSec}
         preparedSourceForCinema={jobPreparedSource ?? selectedPreparedSource}
+        readAlongPreferences={readAlongPreferences}
         settings={teleprompterSettings}
         showInlinePreview={false}
         themeName={themeName}
@@ -8227,6 +8439,8 @@ export function App() {
             accessibilitySettings={readerAccessibilitySettings}
             activeWordIndex={preparedSourceCinemaCue?.documentActiveWordIndex ?? -1}
             canCreateAudio={!isProcessing}
+            highlightMap={highlightMap}
+            highlightMapV2={highlightMapV2}
             importError={sourcePrepError}
             isImporting={isPreparingSource}
             isProcessing={isProcessing}
@@ -16590,7 +16804,7 @@ function useCompletedAudioEventHandlers({
   currentTimeRef,
   isSeekCommitInProgressRef,
   isSeekingRef,
-  onPlaybackCursorChange,
+  onPlaybackCursorSample,
   onPlaybackStateChange,
   setCurrentTimeSec,
   setDurationSec,
@@ -16601,7 +16815,7 @@ function useCompletedAudioEventHandlers({
   currentTimeRef: WritableRef<number>;
   isSeekCommitInProgressRef: WritableRef<boolean>;
   isSeekingRef: WritableRef<boolean>;
-  onPlaybackCursorChange?: (cursorSec: number) => void;
+  onPlaybackCursorSample?: (cursorSec: number, options?: { force?: boolean }) => void;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
   setCurrentTimeSec: (value: number) => void;
   setDurationSec: (value: number) => void;
@@ -16620,9 +16834,9 @@ function useCompletedAudioEventHandlers({
     } else {
       currentTimeRef.current = audio.currentTime;
       setCurrentTimeSec(audio.currentTime);
-      onPlaybackCursorChange?.(audio.currentTime);
+      onPlaybackCursorSample?.(audio.currentTime, { force: true });
     }
-  }, [audioRef, currentTimeRef, onPlaybackCursorChange, setCurrentTimeSec, setDurationSec]);
+  }, [audioRef, currentTimeRef, onPlaybackCursorSample, setCurrentTimeSec, setDurationSec]);
 
   const onTimeUpdate = useCallback(() => {
     const audio = audioRef.current;
@@ -16632,22 +16846,22 @@ function useCompletedAudioEventHandlers({
     const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
     currentTimeRef.current = current;
     setCurrentTimeSec(current);
-    onPlaybackCursorChange?.(current);
+    onPlaybackCursorSample?.(current);
   }, [
     audioRef,
     currentTimeRef,
     isSeekCommitInProgressRef,
     isSeekingRef,
-    onPlaybackCursorChange,
+    onPlaybackCursorSample,
     setCurrentTimeSec,
   ]);
 
   const onPlay = useCallback(() => {
     setError(null);
     setIsPlaying(true);
-    onPlaybackCursorChange?.(currentTimeRef.current);
+    onPlaybackCursorSample?.(currentTimeRef.current, { force: true });
     onPlaybackStateChange?.(true);
-  }, [currentTimeRef, onPlaybackCursorChange, onPlaybackStateChange, setError, setIsPlaying]);
+  }, [currentTimeRef, onPlaybackCursorSample, onPlaybackStateChange, setError, setIsPlaying]);
 
   const onPause = useCallback(() => {
     setIsPlaying(false);
@@ -16865,7 +17079,20 @@ function CompletedAudioPlayer({
   const isSeekCommitInProgressRef = useRef(false);
   const currentTimeRef = useRef(0);
   const seekSliderValueRef = useRef(0);
+  const lastPlaybackCursorCommitMsRef = useRef(-Infinity);
   const resolvedDurationSec = Math.max(0, durationSec > 0 ? durationSec : durationMs / 1000);
+  const publishPlaybackCursorSample = useCallback(
+    (cursorSec: number, options: { force?: boolean } = {}) => {
+      const now = typeof performance === "undefined" ? Date.now() : performance.now();
+      if (!options.force && now - lastPlaybackCursorCommitMsRef.current < 250) {
+        return;
+      }
+      lastPlaybackCursorCommitMsRef.current = now;
+      markReadAlongPerformance("react-cursor-commit");
+      onPlaybackCursorChange?.(cursorSec);
+    },
+    [onPlaybackCursorChange],
+  );
 
   useCompletedAudioAvailabilityReset({
     audioRef,
@@ -16890,38 +17117,13 @@ function CompletedAudioPlayer({
       currentTimeRef,
       isSeekCommitInProgressRef,
       isSeekingRef,
-      onPlaybackCursorChange,
+      onPlaybackCursorSample: publishPlaybackCursorSample,
       onPlaybackStateChange,
       setCurrentTimeSec,
       setDurationSec,
       setError,
       setIsPlaying,
     });
-
-  useEffect(() => {
-    if (!canPlayCompleted || !isPlaying) {
-      return;
-    }
-    let isMounted = true;
-    let stopClock: (() => void) | null = null;
-    void import("./features/readalong/ReadAlongClock").then(({ startReadAlongPlaybackClock }) => {
-      if (!isMounted) {
-        return;
-      }
-      stopClock = startReadAlongPlaybackClock({
-        audioElement: () => audioRef.current,
-        onCursor: (cursorSec) => {
-          currentTimeRef.current = cursorSec;
-          setCurrentTimeSec(cursorSec);
-          onPlaybackCursorChange?.(cursorSec);
-        },
-      });
-    });
-    return () => {
-      isMounted = false;
-      stopClock?.();
-    };
-  }, [canPlayCompleted, isPlaying, onPlaybackCursorChange]);
 
   const { handlePlayToggle, playCompletedAudio, restartCompletedAudio } = useCompletedAudioCommands(
     {
@@ -16993,6 +17195,12 @@ function CompletedAudioPlayer({
   });
 
   useCompletedAudioElementSource({ audioRef, canPlayCompleted, src, volume });
+  useEffect(() => {
+    if (!canPlayCompleted) {
+      return;
+    }
+    return registerReadAlongAudioElement(job.id, audioRef.current);
+  }, [canPlayCompleted, job.id]);
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.playbackRate = playbackRate;

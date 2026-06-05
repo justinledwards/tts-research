@@ -331,13 +331,22 @@ function reactNodeToText(node: ReactNode): string {
 export interface MarkdownWordHighlight {
   activeWordOffset: number;
   activeWordIndex?: number;
+  blockWordStartIndex?: number;
   blockEndOffset: number;
   blockStartOffset: number;
   cueRole?: ReadAlongCueRole;
   nodeId?: string;
+  renderWordAnchors?: boolean;
   sourceId?: string;
   timingState?: ReadAlongTimingState;
   wordRole?: ReadAlongWordRole;
+  wordStates?: ReadonlyMap<number, MarkdownWordCueState>;
+}
+
+export interface MarkdownWordCueState {
+  intensity: number;
+  state: "active" | "idle" | "spoken" | "upcoming";
+  wordRole: ReadAlongWordRole;
 }
 
 export interface MarkdownBlockHighlight {
@@ -478,11 +487,7 @@ function splitHighlightedTextNode(
     }
 
     const wordOffset = nextWordOffset();
-    parts.push(
-      wordOffset === highlight.activeWordOffset
-        ? highlightedMarkdownWordNode(word, highlight)
-        : { type: "text", value: word },
-    );
+    parts.push(markdownWordNodeForHighlight(word, wordOffset, highlight));
     lastIndex = index + word.length;
   }
 
@@ -492,32 +497,76 @@ function splitHighlightedTextNode(
   return parts.length > 0 ? parts : [node];
 }
 
-function highlightedMarkdownWordNode(word: string, highlight: MarkdownWordHighlight): HastNode {
-  const wordRole = highlight.wordRole ?? "active";
+function markdownWordNodeForHighlight(
+  word: string,
+  wordOffset: number,
+  highlight: MarkdownWordHighlight,
+): HastNode {
+  const isActive = wordOffset === highlight.activeWordOffset;
+  const absoluteWordIndex =
+    highlight.blockWordStartIndex === undefined
+      ? highlight.activeWordIndex
+      : highlight.blockWordStartIndex + wordOffset;
+  const wordState =
+    absoluteWordIndex === undefined ? undefined : highlight.wordStates?.get(absoluteWordIndex);
+  if (!isActive && !highlight.renderWordAnchors && !wordState) {
+    return { type: "text", value: word };
+  }
+  const visualState = wordState?.state ?? (isActive ? "active" : "idle");
+  const wordRole = wordState?.wordRole ?? (isActive ? (highlight.wordRole ?? "active") : "idle");
   const properties: Record<string, unknown> = {
-    className: ["markdown-cinema-word-active", `readalong-word-role--${wordRole}`],
+    className: markdownWordClassList({ isActive, visualState, wordRole, wordState }),
   };
-  if (highlight.activeWordIndex !== undefined) {
-    properties["data-readalong-word-index"] = String(highlight.activeWordIndex);
+  applyMarkdownWordStateProperties(properties, wordState);
+  if (absoluteWordIndex !== undefined) {
+    properties["data-readalong-word-index"] = String(absoluteWordIndex);
   }
-  if (highlight.cueRole) {
-    properties["data-readalong-cue-role"] = highlight.cueRole;
-  }
-  if (highlight.nodeId) {
-    properties["data-readalong-node-id"] = highlight.nodeId;
-  }
-  if (highlight.sourceId) {
-    properties["data-readalong-source-id"] = highlight.sourceId;
-  }
-  if (highlight.timingState) {
-    properties["data-readalong-timing-state"] = highlight.timingState;
-  }
+  applyMarkdownHighlightProperties(properties, highlight);
   properties["data-readalong-word-role"] = wordRole;
+  if (isActive) {
+    properties["aria-current"] = "true";
+    properties["data-readalong-dom-active"] = "true";
+  }
   return {
     children: [{ type: "text", value: word }],
     properties,
     tagName: "span",
     type: "element",
+  };
+}
+
+function markdownWordClassList({
+  isActive,
+  visualState,
+  wordRole,
+  wordState,
+}: {
+  isActive: boolean;
+  visualState: MarkdownWordCueState["state"];
+  wordRole: ReadAlongWordRole;
+  wordState: MarkdownWordCueState | undefined;
+}): string[] {
+  return [
+    "markdown-cinema-word",
+    isActive ? "markdown-cinema-word-active" : "",
+    wordState ? "teleprompter-word" : "",
+    wordState ? "teleprompter-word--cinema" : "",
+    wordState ? `teleprompter-word--${visualState}` : "",
+    `readalong-word-role--${wordRole}`,
+  ].filter(Boolean);
+}
+
+function applyMarkdownWordStateProperties(
+  properties: Record<string, unknown>,
+  wordState: MarkdownWordCueState | undefined,
+): void {
+  if (!wordState) {
+    return;
+  }
+  properties["data-effect"] = "spark";
+  properties.style = {
+    "--teleprompter-accent": "#fb923c",
+    "--teleprompter-intensity": String(wordState.intensity),
   };
 }
 

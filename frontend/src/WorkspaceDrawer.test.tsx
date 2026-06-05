@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { WorkspaceDrawer } from "./WorkspaceDrawer";
+import { CreateProjectRow } from "./WorkspaceDrawerHelpers";
 import type {
   AdapterDiagnostics,
   BookSource,
@@ -59,6 +60,19 @@ describe("Command Center", () => {
     expect(markup).toContain("1 of 2 segments ready");
     expect(markup).toContain("Narrator");
     expect(markup).toContain("Export");
+  });
+
+  it("marks the new project name field as the stable autofocus target", () => {
+    const markup = renderToStaticMarkup(
+      <CreateProjectRow
+        onCancel={() => null}
+        onCreateProject={() => Promise.resolve()}
+        onCreated={() => null}
+      />,
+    );
+
+    expect(markup).toContain('aria-label="New project name"');
+    expect(markup).toContain('data-reader-autofocus=""');
   });
 
   it("sorts projects active-first and generated audio newest-first", () => {

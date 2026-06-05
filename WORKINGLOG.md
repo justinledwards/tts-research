@@ -1,3 +1,58 @@
+## 2026-06-05 16:05 CEST - Markdown Teleprompter Highlight Parity
+- [x] Compare Teleprompter and Markdown Render highlight semantics
+- [x] Map Teleprompter word cue states into Markdown Render anchors
+- [x] Align Markdown active styling with Teleprompter behavior
+- [x] Add focused regression coverage
+- [x] Run focused and project checks
+- Validation: focused MarkdownRenderer/CinemaTeleprompterOverlay/style/ReadAlong scheduler Vitest passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `pnpm e2e:readalong-sync` passed; `git diff --check` passed.
+
+## 2026-06-05 15:49 CEST - Markdown Smooth Cursor Parity
+- [x] Inspect Markdown Render follow-along surface
+- [x] Add stable smooth-cursor anchors or adapter wiring
+- [x] Add focused regression coverage
+- [x] Run focused and project checks
+- Validation: focused MarkdownRenderer/CinemaTeleprompterOverlay/style/ReadAlong scheduler Vitest passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `pnpm e2e:readalong-sync` passed; `git diff --check` passed.
+
+## 2026-06-05 15:22 CEST - Smooth Cursor Follow-Along
+- [x] Extend read-along preferences and settings
+- [x] Add lightweight motion cursor adapter
+- [x] Wire scheduler-backed cinema surfaces
+- [x] Add focused regression coverage
+- [x] Run focused and project checks
+- Validation: focused ReadAlong scheduler/preferences/settings/style Vitest passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `pnpm e2e:readalong-sync` passed; `pnpm e2e:book-cinema` passed Markdown and Website narration, then hit the existing Intake button timeout in `openBookCinemaOverlay`; `git diff --check` passed.
+
+## 2026-06-05 14:44 CEST - Low-CPU Follow-Along Scheduler
+- [x] Inspect current read-along timing/render surfaces
+- [x] Add measurement hooks
+- [x] Add event-driven word scheduler
+- [x] Wire display-only DOM highlighting safely
+- [x] Extend scheduler to prepared-source block renderers
+- [x] Add focused regression coverage
+- [x] Run focused and project checks
+- Validation: focused ReadAlong scheduler/runtime/highlight/Book/Prepared Cinema Vitest passed; frontend typecheck passed; `pnpm e2e:readalong-sync` passed; `pnpm e2e:book-cinema` passed Markdown and Website narration, then hit the existing Intake button timeout in `openBookCinemaOverlay`; `pnpm check` passed with existing unrelated Biome warnings/infos; `git diff --check` passed.
+
+## 2026-06-05 14:15 CEST - Follow-Along Highlight Rollback
+- [x] Identify stuck-word regression source
+- [x] Remove display prediction from live follow-along surfaces
+- [x] Restore previous stable timing behavior
+- [x] Run focused checks
+- Validation: focused readalong/highlight/book-cinema/teleprompt/Cinema overlay Vitest passed; frontend typecheck passed; lint passed with existing unrelated Biome warnings/infos; `pnpm e2e:readalong-sync` passed; `pnpm check` passed with existing unrelated Biome warnings/infos.
+
+## 2026-06-05 14:07 CEST - Follow-Along Highlight Rework
+- [x] Inspect anti-lag changes for resource and UX regressions
+- [x] Replace heavy or over-eager timing behavior with a smaller display policy
+- [x] Update regression coverage
+- [x] Run focused checks
+- Validation: focused readalong/highlight/book-cinema/teleprompt/Cinema overlay Vitest passed; frontend typecheck passed; lint passed with existing unrelated Biome warnings/infos; `pnpm e2e:readalong-sync` passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `git diff --check` passed.
+
+## 2026-06-05 13:32 CEST - Follow-Along Highlight Anti-Lag
+- [x] Add shared predictive read-along timing lookup
+- [x] Wire display lookup through reader and teleprompt surfaces
+- [x] Use timing artifacts in legacy Markdown Render overlay
+- [x] Add focused regression coverage
+- [x] Run focused and project checks
+- Validation: focused readalong/highlight/book-cinema/teleprompt/Cinema overlay Vitest passed; frontend typecheck passed; `pnpm e2e:readalong-sync` passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `git diff --check` passed. `pnpm e2e:book-cinema` passed Markdown and Website narration setup twice, then failed both runs waiting for the existing Book Cinema overlay `Intake` button.
+
 ## 2026-06-04 14:59 CEST - Review Guided Repair Ergonomics
 - [x] Update Review stage action model
 - [x] Rework Review panel guided repair layout
@@ -1576,6 +1631,14 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Run focused and project checks
 - Validation: focused Teleprompt/Theatre/Inspector/status tests passed; frontend typecheck passed; responsive snapshots passed; packaged existing-server UI-action quick still hit the known private/local URL seed guard, while managed targeted UI-action replay passed 46/46 activations with advisory findings only; `pnpm check` passed with existing unrelated Biome warnings/infos.
 
+## 2026-06-05 09:12 CEST - Command Center Focus And Theatre Control Intent
+- [x] Stabilize Command Center create-project focus
+- [x] Make Theatre Hide controls respect explicit user intent
+- [x] Make theatre/readalong highlights line-safe
+- [x] Add focused regression coverage
+- [x] Run focused and project checks
+- Validation: focused Command Center/Theatre/Teleprompt/Cinema/style tests passed; frontend typecheck passed; responsive snapshots passed; targeted managed UI-action replay exercised Command Center and Theatre with 46/46 successful activations and 0 overlay collisions but exited non-zero for existing duplicate-action review gates; `pnpm check` passed with existing unrelated Biome warnings/infos.
+
 ## 2026-06-05 09:54 CEST - Header Context And Audio Restore
 - [x] Fix shell header context
 - [x] Add matching audio restore helper
@@ -1592,3 +1655,17 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add focused frontend regression coverage
 - [x] Run validation checks
 - Validation: focused playback/Teleprompt/status/rail Vitest passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `pnpm e2e:teleprompt-memory` passed; `git diff --check` passed.
+
+## 2026-06-05 11:14 CEST - Cinema Full Timeline Stabilization
+- [x] Stabilize Cinema progress ratio against full audio duration
+- [x] Add focused regression coverage
+- [x] Run focused and project checks
+- Validation: focused Cinema Vitest passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `git diff --check` passed. `pnpm e2e:book-cinema` passed Markdown and website narration setup, then failed waiting for the existing Book Cinema overlay `Intake` button.
+
+## 2026-06-05 13:00 CEST - Focused Playback Timeline UX
+- [x] Add shared elapsed and remaining labels
+- [x] Update Cinema Teleprompter header and footer timeline
+- [x] Update Teleprompt and Theatre timeline labels
+- [x] Add focused regression coverage
+- [x] Run focused and project checks
+- Validation: frontend Vitest passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `git diff --check` passed; `pnpm e2e:teleprompt-memory` passed.

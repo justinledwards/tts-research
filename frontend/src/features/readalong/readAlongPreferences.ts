@@ -19,6 +19,7 @@ export const READ_ALONG_HIGHLIGHT_STYLES = [
   "leftBar",
   "highContrastShape",
 ] as const;
+export const READ_ALONG_HIGHLIGHT_MOTIONS = ["static", "smoothCursor"] as const;
 export const READ_ALONG_SCROLL_FOLLOW_POLICIES = [
   "off",
   "pageBoundaryOnly",
@@ -39,6 +40,7 @@ export const READ_ALONG_DEGRADED_SYNC_DISPLAY_OPTIONS = [
 
 export type ReadAlongPreferenceScope = (typeof READ_ALONG_PREFERENCE_SCOPES)[number];
 export type ReadAlongHighlightGranularity = (typeof READ_ALONG_HIGHLIGHT_GRANULARITIES)[number];
+export type ReadAlongHighlightMotion = (typeof READ_ALONG_HIGHLIGHT_MOTIONS)[number];
 export type ReadAlongHighlightStyle = (typeof READ_ALONG_HIGHLIGHT_STYLES)[number];
 export type ReadAlongScrollFollow = (typeof READ_ALONG_SCROLL_FOLLOW_POLICIES)[number];
 export type ReadAlongSyncStrictness = (typeof READ_ALONG_SYNC_STRICTNESS_OPTIONS)[number];
@@ -56,6 +58,7 @@ export interface ReadAlongPreferences {
   degradedSyncDisplay: ReadAlongDegradedSyncDisplay;
   globalHighlightOffsetMs: number;
   highlightGranularity: ReadAlongHighlightGranularity;
+  highlightMotion: ReadAlongHighlightMotion;
   highlightStyle: ReadAlongHighlightStyle;
   providerOffsetsMs: Record<string, number>;
   scope: ReadAlongPreferenceScope;
@@ -68,6 +71,7 @@ export const DEFAULT_READ_ALONG_PREFERENCES: ReadAlongPreferences = {
   degradedSyncDisplay: "neverClaimWordSync",
   globalHighlightOffsetMs: 0,
   highlightGranularity: "auto",
+  highlightMotion: "static",
   highlightStyle: "background",
   providerOffsetsMs: {},
   scope: "session",
@@ -99,6 +103,10 @@ export const READ_ALONG_PREFERENCE_LABELS = {
     project: "Project",
     session: "Session",
   } satisfies Record<ReadAlongPreferenceScope, string>,
+  motion: {
+    smoothCursor: "Smooth cursor",
+    static: "Static",
+  } satisfies Record<ReadAlongHighlightMotion, string>,
   scrollFollow: {
     centerCurrentLine: "Center current line",
     gentle: "Gentle",
@@ -145,6 +153,11 @@ export function normalizeReadAlongPreferences(value: unknown): ReadAlongPreferen
       READ_ALONG_HIGHLIGHT_GRANULARITIES,
       DEFAULT_READ_ALONG_PREFERENCES.highlightGranularity,
     ),
+    highlightMotion: normalizeOption(
+      candidate.highlightMotion,
+      READ_ALONG_HIGHLIGHT_MOTIONS,
+      DEFAULT_READ_ALONG_PREFERENCES.highlightMotion,
+    ),
     highlightStyle: normalizeOption(
       candidate.highlightStyle,
       READ_ALONG_HIGHLIGHT_STYLES,
@@ -177,6 +190,10 @@ export function effectiveReadAlongPreferences(
   const normalized = normalizeReadAlongPreferences(preferences);
   return {
     ...normalized,
+    highlightMotion:
+      accessibilitySettings.reducedMotion || accessibilitySettings.highContrast
+        ? "static"
+        : normalized.highlightMotion,
     highlightStyle: accessibilitySettings.highContrast
       ? "highContrastShape"
       : normalized.highlightStyle,
@@ -243,6 +260,7 @@ export function readAlongPreferenceDataAttributes(
   return {
     "data-readalong-degraded-display": normalized.degradedSyncDisplay,
     "data-readalong-highlight-granularity": normalized.highlightGranularity,
+    "data-readalong-highlight-motion": normalized.highlightMotion,
     "data-readalong-highlight-style": normalized.highlightStyle,
     "data-readalong-scroll-follow": normalized.scrollFollow,
     "data-readalong-segment-auto-advance": String(normalized.segmentBoundary.autoAdvance),

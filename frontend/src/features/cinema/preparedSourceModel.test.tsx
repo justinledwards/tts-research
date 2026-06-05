@@ -257,6 +257,8 @@ describe("prepared source cinema helpers", () => {
         activeWordIndex={1}
         canCreateAudio
         customPolicyProfiles={[]}
+        highlightMap={null}
+        highlightMapV2={null}
         importError={null}
         isImporting={false}
         isPlaybackActive

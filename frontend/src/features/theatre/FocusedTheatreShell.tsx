@@ -18,8 +18,22 @@ export interface FocusedTheatreControls {
   readonly controlsVisible: boolean;
   readonly focusControls: () => void;
   readonly hideControls: () => void;
-  readonly revealControls: () => void;
+  readonly revealControls: (intent?: FocusedTheatreRevealIntent) => void;
   readonly toggleControls: () => void;
+}
+
+export type FocusedTheatreRevealIntent = "intentional" | "passive";
+
+export const FOCUSED_THEATRE_TOGGLE_CONTROLS_SELECTOR = "[data-focused-theatre-toggle-controls]";
+
+export function focusedTheatreControlsMayReveal({
+  explicitHideLocked,
+  intent,
+}: Readonly<{
+  explicitHideLocked: boolean;
+  intent: FocusedTheatreRevealIntent;
+}>): boolean {
+  return !(intent === "passive" && explicitHideLocked);
 }
 
 export interface FocusedTheatreAction {
@@ -52,6 +66,7 @@ export function useFocusedTheatreControls({
   initialVisible?: boolean;
 }>): FocusedTheatreControls {
   const autoHideTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const explicitHideLockedRef = useRef(false);
   const focusWithinRef = useRef(false);
   const [controlsVisible, setControlsVisible] = useState(initialVisible);
 
@@ -74,18 +89,31 @@ export function useFocusedTheatreControls({
     }, autoHideMs);
   }, [active, autoHideMs, clearAutoHide]);
 
-  const revealControls = useCallback(() => {
-    if (!active) {
-      return;
-    }
-    setControlsVisible(true);
-    queueAutoHide();
-  }, [active, queueAutoHide]);
+  const revealControls = useCallback(
+    (intent: FocusedTheatreRevealIntent = "intentional") => {
+      if (!active) {
+        return;
+      }
+      if (
+        !focusedTheatreControlsMayReveal({
+          explicitHideLocked: explicitHideLockedRef.current,
+          intent,
+        })
+      ) {
+        return;
+      }
+      explicitHideLockedRef.current = false;
+      setControlsVisible(true);
+      queueAutoHide();
+    },
+    [active, queueAutoHide],
+  );
 
   const focusControls = useCallback(() => {
     if (!active) {
       return;
     }
+    explicitHideLockedRef.current = false;
     focusWithinRef.current = true;
     clearAutoHide();
     setControlsVisible(true);
@@ -98,6 +126,7 @@ export function useFocusedTheatreControls({
 
   const hideControls = useCallback(() => {
     clearAutoHide();
+    explicitHideLockedRef.current = true;
     focusWithinRef.current = false;
     setControlsVisible(false);
   }, [clearAutoHide]);
@@ -109,8 +138,10 @@ export function useFocusedTheatreControls({
     setControlsVisible((current) => {
       const next = !current;
       if (next) {
+        explicitHideLockedRef.current = false;
         queueAutoHide();
       } else {
+        explicitHideLockedRef.current = true;
         clearAutoHide();
       }
       return next;
@@ -122,6 +153,7 @@ export function useFocusedTheatreControls({
       hideControls();
       return;
     }
+    explicitHideLockedRef.current = false;
     focusWithinRef.current = false;
     setControlsVisible(initialVisible);
     if (initialVisible) {
@@ -279,6 +311,7 @@ function FocusedTheatreTitleRow({
           )}
           className="border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] text-[var(--vs-theatre-text)] hover:bg-[var(--vs-theatre-panel)]"
           data-shortcut-command-id="theatre.toggleControls"
+          data-focused-theatre-toggle-controls=""
           data-testid={toggleControlsTestId ?? `${testId}-toggle-controls`}
           onClick={onToggleControls}
           selected={controlsVisible}

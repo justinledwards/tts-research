@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { READ_ALONG_DISPLAY_LOOKUP } from "./features/readalong";
 import { resolveHighlightCue, secondsForReadingPosition } from "./highlightMap";
 import type { HighlightMap } from "./types";
 
@@ -79,6 +80,26 @@ describe("highlight map lookup", () => {
     expect(cue?.mode).toBe("word");
     expect(cue?.activeWordIndex).toBe(9);
     expect(cue?.tokenIndex).toBe(1);
+  });
+
+  it("advances word timing on exact token boundaries", () => {
+    const cue = resolveHighlightCue(fixtureMap("word"), 0.5);
+
+    expect(cue?.activeWordIndex).toBe(9);
+    expect(cue?.tokenIndex).toBe(1);
+  });
+
+  it("uses display lookahead to avoid stale previous-word highlighting in short gaps", () => {
+    const map = fixtureMap("word");
+    map.tokens[0].endMs = 400;
+    map.tokens[1].startMs = 600;
+
+    const strictCue = resolveHighlightCue(map, 0.53);
+    const displayCue = resolveHighlightCue(map, 0.53, READ_ALONG_DISPLAY_LOOKUP);
+
+    expect(strictCue?.activeWordIndex).toBe(8);
+    expect(displayCue?.activeWordIndex).toBe(9);
+    expect(displayCue?.tokenIndex).toBe(1);
   });
 
   it("falls back to phrase range when the map is phrase-level", () => {

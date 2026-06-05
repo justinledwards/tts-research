@@ -1,5 +1,7 @@
 export type ReadAlongClockReason = "frame" | "metadata" | "play" | "seek" | "timeupdate";
 
+import { markReadAlongPerformance } from "./readAlongPerformance";
+
 export interface ReadAlongClockTick {
   audioTimeSec: number;
   reason: ReadAlongClockReason;
@@ -27,7 +29,7 @@ export interface ReadAlongPlaybackClockOptions {
   runtime?: ReadAlongClockRuntime;
 }
 
-const DEFAULT_MIN_FRAME_INTERVAL_MS = 80;
+const DEFAULT_MIN_FRAME_INTERVAL_MS = 250;
 const DEFAULT_MIN_CURSOR_DELTA_SEC = 0.025;
 
 function noopReadAlongClockStop(): void {
@@ -59,6 +61,7 @@ export class ReadAlongClock {
       reason,
       timestampMs: this.runtime.now(),
     };
+    markReadAlongPerformance("cursor-tick");
     this.lastEmitMs = tick.timestampMs;
     this.options.onTick(tick);
     return tick;

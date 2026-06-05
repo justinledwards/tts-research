@@ -29,6 +29,7 @@ describe("read-along preferences", () => {
     expect(preferences.highlightGranularity).toBe(
       DEFAULT_READ_ALONG_PREFERENCES.highlightGranularity,
     );
+    expect(preferences.highlightMotion).toBe("static");
     expect(preferences.scope).toBe("project");
     expect(preferences.globalHighlightOffsetMs).toBe(2000);
     expect(preferences.providerOffsetsMs.kokoro).toBe(-2000);
@@ -61,6 +62,7 @@ describe("read-along preferences", () => {
     const preferences = effectiveReadAlongPreferences(
       {
         ...DEFAULT_READ_ALONG_PREFERENCES,
+        highlightMotion: "smoothCursor",
         highlightStyle: "leftBar",
         scrollFollow: "telepromptContinuous",
         segmentBoundary: {
@@ -73,6 +75,7 @@ describe("read-along preferences", () => {
       { highContrast: true, reducedMotion: true },
     );
 
+    expect(preferences.highlightMotion).toBe("static");
     expect(preferences.highlightStyle).toBe("highContrastShape");
     expect(preferences.scrollFollow).toBe("gentle");
     expect(preferences.segmentBoundary.flashSegment).toBe(false);
@@ -82,6 +85,7 @@ describe("read-along preferences", () => {
   it("reports calibration and data attributes for reader surfaces", () => {
     const preferences = normalizeReadAlongPreferences({
       globalHighlightOffsetMs: 75,
+      highlightMotion: "smoothCursor",
       highlightStyle: "outline",
       providerOffsetsMs: {
         mock: -25,
@@ -91,6 +95,7 @@ describe("read-along preferences", () => {
 
     expect(readAlongCalibrationOffsetMs(preferences, "mock")).toBe(50);
     expect(readAlongPreferenceDataAttributes(preferences)).toMatchObject({
+      "data-readalong-highlight-motion": "smoothCursor",
       "data-readalong-highlight-style": "outline",
       "data-readalong-scroll-follow": "centerCurrentLine",
     });

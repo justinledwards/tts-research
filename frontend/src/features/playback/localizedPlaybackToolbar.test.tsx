@@ -6,6 +6,7 @@ import {
   localizedPlaybackSeekSecondsFromPointer,
   localizedPlaybackStageLabel,
 } from "./LocalizedPlaybackToolbar";
+import { playbackTimeLabels } from "./playbackTimeLabels";
 
 describe("LocalizedPlaybackToolbar", () => {
   it("renders one primary local playback surface with disabled reasons", () => {
@@ -107,5 +108,27 @@ describe("LocalizedPlaybackToolbar", () => {
     expect(localizedPlaybackSeekSecondsForKey("ArrowLeft", 3, 60)).toBe(0);
     expect(localizedPlaybackSeekSecondsForKey("PageUp", 20, 60)).toBe(50);
     expect(localizedPlaybackSeekSecondsForKey("Tab", 20, 60)).toBeNull();
+  });
+
+  it("builds elapsed, remaining, total, and clamped full-audio ratios", () => {
+    expect(playbackTimeLabels({ currentSec: 12, durationMs: 70_000 })).toMatchObject({
+      elapsedLabel: "0:12",
+      ratio: 12 / 70,
+      remainingLabel: "-0:58",
+      totalLabel: "Total 1:10",
+    });
+    expect(playbackTimeLabels({ currentSec: 120, durationMs: 70_000 })).toMatchObject({
+      elapsedLabel: "1:10",
+      ratio: 1,
+      remainingLabel: "-0:00",
+    });
+    expect(playbackTimeLabels({ currentSec: 12, durationMs: 0, fallbackRatio: 0.4 })).toMatchObject(
+      {
+        elapsedLabel: "0:12",
+        ratio: 0.4,
+        remainingLabel: "--:--",
+        totalLabel: "Total --:--",
+      },
+    );
   });
 });

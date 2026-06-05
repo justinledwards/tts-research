@@ -5,6 +5,7 @@ import type {
   SpeechTokenLedgerEntry,
   WordTimelineEntry,
 } from "./wordTimeline";
+import { resolveReadAlongTimingItem, type ReadAlongTimingLookupOptions } from "./timingLookup";
 
 export function wordTimelineEntryFromV2Entry({
   entry,
@@ -29,6 +30,9 @@ export function wordTimelineEntryFromV2Entry({
     optionalString(entry.spokenTokenId) ??
     `${map.speechPlanId}:token:${(entry.tokenIndex ?? ordinal).toString()}`;
   return {
+    anchorNodeId: ledgerEntry.blockId,
+    anchorTokenOffset: ledgerEntry.anchorTokenOffset,
+    anchorWordIndex: ledgerEntry.anchorTokenOffset ?? ledgerEntry.sourceWordIndex,
     audioEndMs: resolvedEndMs(entry),
     audioStartMs: resolvedStartMs(entry),
     confidence: safeConfidence(entry.confidence, 1),
@@ -72,6 +76,9 @@ export function wordTimelineEntryFromLegacyToken({
     return null;
   }
   return {
+    anchorNodeId: ledgerEntry.blockId,
+    anchorTokenOffset: ledgerEntry.anchorTokenOffset,
+    anchorWordIndex: ledgerEntry.anchorTokenOffset ?? ledgerEntry.sourceWordIndex,
     audioEndMs: Math.max(token.endMs, token.startMs + 1),
     audioStartMs: Math.max(0, token.startMs),
     confidence: safeConfidence(token.confidence, 1),
@@ -242,9 +249,18 @@ export function uniqueLedgerEntryByText(
 export function activeTimelineEntryAtCursor(
   entries: readonly WordTimelineEntry[],
   cursorMs: number,
+  options: ReadAlongTimingLookupOptions = {},
 ): WordTimelineEntry | null {
   if (entries.length === 0) {
     return null;
+  }
+  if (options.mode === "current-or-next") {
+    const timingEntries = entries.map((entry) => ({
+      ...entry,
+      endMs: entry.audioEndMs,
+      startMs: entry.audioStartMs,
+    }));
+    return resolveReadAlongTimingItem(timingEntries, cursorMs, options)?.item ?? null;
   }
   const safeCursor = Math.max(0, cursorMs);
   let low = 0;

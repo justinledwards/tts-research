@@ -5,6 +5,7 @@ import type {
   ReadAlongHighlightSurface,
   ReadAlongHighlightVisualMode,
 } from "./highlightVisualModes";
+import { markReadAlongPerformance } from "./readAlongPerformance";
 
 export type ReadAlongScrollPolicy =
   | "gentle"
@@ -99,6 +100,7 @@ export function scrollReadAlongAnchor(
   const decision = resolveReadAlongScrollPolicy(input);
   const resolved = resolveReadAlongDomAnchor(root, anchor, input.fallbackSelectors ?? []);
   if (decision.shouldScroll && resolved.element) {
+    markReadAlongPerformance("scroll-call");
     resolved.element.scrollIntoView({
       behavior: decision.behavior,
       block: decision.block,

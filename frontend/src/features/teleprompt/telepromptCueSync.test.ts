@@ -36,6 +36,7 @@ describe("teleprompt cue timeline sync", () => {
           audioEndMs: 1300,
           audioStartMs: 1050,
           fragmentIndex: 1,
+          sourceWordIndex: 100,
           spokenText: "Follow",
           tokenIndex: 0,
         }),
@@ -43,6 +44,7 @@ describe("teleprompt cue timeline sync", () => {
           audioEndMs: 1700,
           audioStartMs: 1320,
           fragmentIndex: 1,
+          sourceWordIndex: 101,
           spokenText: "the",
           tokenIndex: 1,
         }),
@@ -71,6 +73,47 @@ describe("teleprompt cue timeline sync", () => {
     expect(sync.previousCue?.sourceBlockId).toBe("intro");
     expect(sync.shouldUpdateActiveBlock).toBe(true);
     expect(sync.statusLabel).toBe("Audio-follow cue sync active");
+  });
+
+  it("keeps teleprompt cue sync strict by default", () => {
+    const timeline = buildTelepromptCueTimeline({
+      blocks,
+      highlightMapV2: highlightMapV2([
+        phraseEntry({
+          audioEndMs: 2400,
+          audioStartMs: 1000,
+          fragmentIndex: 1,
+          spokenText: "Follow the generated audio timeline.",
+        }),
+        wordEntry({
+          audioEndMs: 1200,
+          audioStartMs: 1050,
+          fragmentIndex: 1,
+          spokenText: "Follow",
+          tokenIndex: 0,
+        }),
+        wordEntry({
+          audioEndMs: 1700,
+          audioStartMs: 1280,
+          fragmentIndex: 1,
+          spokenText: "the",
+          tokenIndex: 1,
+        }),
+      ]),
+    });
+
+    const sync = resolveTelepromptCueSync({
+      activeBlockId: "body",
+      mode: "audio-follow",
+      playbackAvailable: true,
+      playbackCursorSec: 1.23,
+      playbackPlaying: true,
+      timeline,
+    });
+
+    const timingWords = sync.activeCue?.wordTimings ?? [];
+    expect(sync.activeCue?.currentWordIndex).toBe(timingWords[0]?.wordIndex);
+    expect(sync.activeCue?.currentSourceWordId ?? null).toBe(timingWords[0]?.sourceWordId ?? null);
   });
 
   it("preserves the selected cue in manual mode while audio keeps moving", () => {

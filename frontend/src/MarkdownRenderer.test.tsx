@@ -43,6 +43,61 @@ describe("Markdown rendering helpers", () => {
     expect(markup).toContain(">world</span>");
   });
 
+  it("can render stable word anchors for smooth Markdown cursor motion", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer
+        wordHighlight={{
+          activeWordIndex: 8,
+          activeWordOffset: 1,
+          blockEndOffset: 18,
+          blockStartOffset: 0,
+          blockWordStartIndex: 7,
+          renderWordAnchors: true,
+        }}
+      >
+        {"First second third"}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain('data-readalong-word-index="7"');
+    expect(markup).toContain('data-readalong-word-index="8"');
+    expect(markup).toContain('data-readalong-word-index="9"');
+    expect(markup).toContain('aria-current="true"');
+    expect(markup).toContain('data-readalong-dom-active="true"');
+    expect(markup).toContain("markdown-cinema-word-active");
+    expect(markup).toContain("readalong-word-role--idle");
+  });
+
+  it("mirrors Teleprompter word cue states for Markdown Render parity", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer
+        wordHighlight={{
+          activeWordIndex: 8,
+          activeWordOffset: 1,
+          blockEndOffset: 18,
+          blockStartOffset: 0,
+          blockWordStartIndex: 7,
+          renderWordAnchors: true,
+          wordStates: new Map([
+            [7, { intensity: 0.2, state: "spoken", wordRole: "recent" }],
+            [8, { intensity: 1, state: "active", wordRole: "active" }],
+            [9, { intensity: 0.18, state: "upcoming", wordRole: "upcoming" }],
+          ]),
+        }}
+      >
+        {"First second third"}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain("teleprompter-word--spoken");
+    expect(markup).toContain("teleprompter-word--active");
+    expect(markup).toContain("teleprompter-word--upcoming");
+    expect(markup).toContain('data-effect="spark"');
+    expect(markup).toContain("--teleprompter-intensity:1");
+    expect(markup).toContain("readalong-word-role--recent");
+    expect(markup).toContain("readalong-word-role--upcoming");
+  });
+
   it("marks an active generated block without wrapping individual words", () => {
     const markup = renderToStaticMarkup(
       <MarkdownRenderer blockHighlight={{ blockEndOffset: 30, blockStartOffset: 0 }}>

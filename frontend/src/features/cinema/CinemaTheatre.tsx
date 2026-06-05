@@ -8,9 +8,11 @@ import {
   type TheatreFullscreenAvailability,
 } from "../theatre/fullscreen";
 import {
+  FOCUSED_THEATRE_TOGGLE_CONTROLS_SELECTOR,
   FocusedTheatreChrome,
   useFocusedTheatreControls,
   type FocusedTheatreProgress,
+  type FocusedTheatreRevealIntent,
 } from "../theatre/FocusedTheatreShell";
 import { theatreRuntimeShellState, type TheatreAvailabilityState } from "../theatre/model";
 import { READER_SEEK_SECONDS } from "../reader-accessibility";
@@ -30,7 +32,7 @@ export interface CinemaTheatreController {
   readonly hideControls: () => void;
   readonly open: () => void;
   readonly requestFullscreen: () => void;
-  readonly revealControls: () => void;
+  readonly revealControls: (intent?: FocusedTheatreRevealIntent) => void;
   readonly toggleControls: () => void;
 }
 
@@ -117,6 +119,15 @@ export function useCinemaTheatreController(
       return;
     }
     const revealControls = () => {
+      focusedControls.revealControls("passive");
+    };
+    const intentionallyRevealControls = (event: PointerEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(FOCUSED_THEATRE_TOGGLE_CONTROLS_SELECTOR)
+      ) {
+        return;
+      }
       focusedControls.revealControls();
     };
     const focusControls = () => {
@@ -126,12 +137,12 @@ export function useCinemaTheatreController(
       focusedControls.blurControls();
     };
     root.addEventListener("pointermove", revealControls);
-    root.addEventListener("pointerdown", revealControls);
+    root.addEventListener("pointerdown", intentionallyRevealControls);
     root.addEventListener("focusin", focusControls);
     root.addEventListener("focusout", blurControls);
     return () => {
       root.removeEventListener("pointermove", revealControls);
-      root.removeEventListener("pointerdown", revealControls);
+      root.removeEventListener("pointerdown", intentionallyRevealControls);
       root.removeEventListener("focusin", focusControls);
       root.removeEventListener("focusout", blurControls);
     };

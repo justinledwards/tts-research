@@ -5,8 +5,9 @@ import type {
   HighlightMapV2Entry,
   HighlightMapV2TimingLevel,
   HighlightMapV2TimingSource,
+  ReadAlongTimingLookupOptions,
 } from "../readalong";
-import { sourceWordIdFor } from "../readalong";
+import { resolveReadAlongTimingItem, sourceWordIdFor } from "../readalong";
 import type { RevisionBlock } from "../revision";
 import {
   applyEstimateRange,
@@ -100,6 +101,7 @@ export interface ResolveTelepromptCueSyncInput {
   readonly playbackAvailable: boolean;
   readonly playbackCursorSec: number;
   readonly playbackPlaying: boolean;
+  readonly timingLookup?: ReadAlongTimingLookupOptions;
   readonly timeline: TelepromptCueTimeline;
 }
 
@@ -151,6 +153,7 @@ export function resolveTelepromptCueSync({
   playbackAvailable,
   playbackCursorSec,
   playbackPlaying,
+  timingLookup = {},
   timeline,
 }: ResolveTelepromptCueSyncInput): TelepromptCueSyncState {
   const shouldFollowAudio =
@@ -158,9 +161,11 @@ export function resolveTelepromptCueSync({
   const cursorMs = Math.max(0, playbackCursorSec * 1000);
   const selectedCue = cueForBlockId(timeline, activeBlockId) ?? firstCue(timeline);
   const timelineCue = shouldFollowAudio
-    ? (cueForAudioTime(timeline, cursorMs) ?? selectedCue)
+    ? (cueForAudioTime(timeline, cursorMs, timingLookup) ?? selectedCue)
     : selectedCue;
-  const activeCue = timelineCue ? cueWithRuntimePosition(timelineCue, cursorMs) : null;
+  const activeCue = timelineCue
+    ? cueWithRuntimePosition(timelineCue, cursorMs, timingLookup)
+    : null;
   const previousCue = activeCue ? cueForBlockId(timeline, activeCue.previousCueId) : null;
   const nextCue = activeCue ? cueForBlockId(timeline, activeCue.nextCueId) : null;
 
@@ -484,15 +489,19 @@ function entryInCueRange(entry: HighlightMapV2Entry, cue: MutableCueDraft): bool
 function cueForAudioTime(
   timeline: TelepromptCueTimeline,
   cursorMs: number,
+  timingLookup: ReadAlongTimingLookupOptions,
 ): TelepromptCueTimelineEntry | null {
   if (timeline.cues.length === 0) {
     return null;
   }
+  const timingCues = timeline.cues.map((cue) => ({
+    ...cue,
+    endMs: cue.audioEndMs,
+    startMs: cue.audioStartMs,
+  }));
   return (
-    timeline.cues.find((cue) => cursorMs >= cue.audioStartMs && cursorMs < cue.audioEndMs) ??
-    timeline.cues.find((cue) => cursorMs < cue.audioStartMs) ??
-    timeline.cues.at(-1) ??
-    null
+    resolveReadAlongTimingItem(timingCues, cursorMs, timingLookup)?.item ??
+    fallbackCueForAudioTime(timeline, cursorMs)
   );
 }
 
@@ -510,9 +519,23 @@ function firstCue(timeline: TelepromptCueTimeline): TelepromptCueTimelineEntry |
   return fallbackAt(timeline.cues, 0);
 }
 
+function fallbackCueForAudioTime(
+  timeline: TelepromptCueTimeline,
+  cursorMs: number,
+): TelepromptCueTimelineEntry | null {
+  for (let index = timeline.cues.length - 1; index >= 0; index -= 1) {
+    const cue = timeline.cues[index];
+    if (cue.audioStartMs <= cursorMs) {
+      return cue;
+    }
+  }
+  return firstCue(timeline);
+}
+
 function cueWithRuntimePosition(
   cue: TelepromptCueTimelineEntry,
   cursorMs: number,
+  timingLookup: ReadAlongTimingLookupOptions,
 ): TelepromptCueTimelineEntry {
   const durationMs = Math.max(1, cue.audioEndMs - cue.audioStartMs);
   const cueCursorMs = clamp(cursorMs - cue.audioStartMs, 0, durationMs);
@@ -520,8 +543,8 @@ function cueWithRuntimePosition(
   return {
     ...cue,
     cueProgress,
-    currentSourceWordId: sourceWordIdForCue(cue, cursorMs),
-    currentWordIndex: wordIndexForCue(cue, cursorMs, cueProgress),
+    currentSourceWordId: sourceWordIdForCue(cue, cursorMs, timingLookup),
+    currentWordIndex: wordIndexForCue(cue, cursorMs, cueProgress, timingLookup),
   };
 }
 
@@ -529,21 +552,34 @@ function wordIndexForCue(
   cue: TelepromptCueTimelineEntry,
   cursorMs: number,
   cueProgress: number,
+  timingLookup: ReadAlongTimingLookupOptions,
 ): number {
-  const activeTiming = cue.wordTimings.find(
-    (word) => cursorMs >= word.audioStartMs && cursorMs < word.audioEndMs,
-  );
+  const activeTiming = wordTimingAtCursor(cue, cursorMs, timingLookup);
   if (activeTiming) {
     return activeTiming.wordIndex;
   }
   return pickTeleprompterWordIndex(cue.spokenText, cueProgress);
 }
 
-function sourceWordIdForCue(cue: TelepromptCueTimelineEntry, cursorMs: number): string | null {
-  return (
-    cue.wordTimings.find((word) => cursorMs >= word.audioStartMs && cursorMs < word.audioEndMs)
-      ?.sourceWordId ?? null
-  );
+function sourceWordIdForCue(
+  cue: TelepromptCueTimelineEntry,
+  cursorMs: number,
+  timingLookup: ReadAlongTimingLookupOptions,
+): string | null {
+  return wordTimingAtCursor(cue, cursorMs, timingLookup)?.sourceWordId ?? null;
+}
+
+function wordTimingAtCursor(
+  cue: TelepromptCueTimelineEntry,
+  cursorMs: number,
+  timingLookup: ReadAlongTimingLookupOptions,
+): TelepromptCueWordTiming | null {
+  const timingWords = cue.wordTimings.map((word) => ({
+    ...word,
+    endMs: word.audioEndMs,
+    startMs: word.audioStartMs,
+  }));
+  return resolveReadAlongTimingItem(timingWords, cursorMs, timingLookup)?.item ?? null;
 }
 
 function cueSyncStatusLabel(

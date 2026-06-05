@@ -2,7 +2,11 @@ import { forwardRef, useMemo } from "react";
 import type { RevisionBlock } from "../revision";
 import type { ReadAlongTimingState } from "../readalong";
 import { Button, SegmentedControl, Toggle, cx } from "../../design";
-import { FocusedTheatreChrome } from "../theatre/FocusedTheatreShell";
+import {
+  FOCUSED_THEATRE_TOGGLE_CONTROLS_SELECTOR,
+  FocusedTheatreChrome,
+  type FocusedTheatreRevealIntent,
+} from "../theatre/FocusedTheatreShell";
 import { theatreRuntimeShellState } from "../theatre/model";
 import {
   LocalizedPlaybackToolbar,
@@ -46,7 +50,6 @@ import {
 export interface TelepromptTheatreProps {
   readonly activeBlock: RevisionBlock | null;
   readonly activeBlockIndex: number;
-  readonly audioProgressPercent: number;
   readonly canCreate: boolean;
   readonly canOpenCinema: boolean;
   readonly createAndListenCapabilityReason?: string;
@@ -68,6 +71,7 @@ export interface TelepromptTheatreProps {
   readonly playbackControlsAvailable: boolean;
   readonly playbackControlsPlaying: boolean;
   readonly playbackLifecycle: GeneratedAudioLifecycleState;
+  readonly playbackProgress: LocalizedPlaybackToolbarModel["progress"];
   readonly playbackRate: number;
   readonly presetId: TelepromptPresetId;
   readonly countdownRemaining: number | null;
@@ -93,7 +97,7 @@ export interface TelepromptTheatreProps {
   readonly onPresetChange: (presetId: TelepromptPresetId) => void;
   readonly onRequestNativeFullscreen: () => void;
   readonly onRestart: () => void;
-  readonly onRevealControls: () => void;
+  readonly onRevealControls: (intent?: FocusedTheatreRevealIntent) => void;
   readonly onSettingsChange: (settings: TelepromptTheatreSettings) => void;
   readonly onToggleControls: () => void;
   readonly onToggleMirror: (checked: boolean) => void;
@@ -120,7 +124,6 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
     {
       activeBlock,
       activeBlockIndex,
-      audioProgressPercent,
       canCreate,
       canOpenCinema,
       createAndListenCapabilityReason,
@@ -144,6 +147,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       playbackControlsAvailable,
       playbackControlsPlaying,
       playbackLifecycle,
+      playbackProgress,
       playbackRate,
       previewBlocks,
       presetId,
@@ -298,11 +302,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       next: { ...theatreNextAction, visible: false },
       playPause: { ...theatrePlayPauseAction, visible: false },
       previous: { ...theatrePreviousAction, visible: false },
-      progress: {
-        currentLabel: `${Math.max(0, Math.min(100, audioProgressPercent)).toString()}%`,
-        durationLabel: summary.estimatedRemainingLabel,
-        ratio: audioProgressPercent / 100,
-      },
+      progress: playbackProgress,
       restart: { ...theatreRestartAction, visible: false },
       speed: theatreSpeedControl,
       stage: "theatre",
@@ -524,8 +524,18 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           event.stopPropagation();
           onExitTheatre();
         }}
-        onPointerDown={onRevealControls}
-        onPointerMove={onRevealControls}
+        onPointerDown={(event) => {
+          if (
+            event.target instanceof Element &&
+            event.target.closest(FOCUSED_THEATRE_TOGGLE_CONTROLS_SELECTOR)
+          ) {
+            return;
+          }
+          onRevealControls();
+        }}
+        onPointerMove={() => {
+          onRevealControls("passive");
+        }}
       >
         <FocusedTheatreChrome
           availabilityState={runtimeShellState.availabilityState}
@@ -535,11 +545,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
           confidenceLabel={theatreConfidenceLabel}
           controlsVisible={controlsVisible}
           persistentAction={exitAction}
-          progress={{
-            currentLabel: `${Math.max(0, Math.min(100, audioProgressPercent)).toString()}%`,
-            durationLabel: summary.estimatedRemainingLabel,
-            ratio: audioProgressPercent / 100,
-          }}
+          progress={playbackProgress}
           scopeLabel={summary.cuePositionLabel}
           sourceLabel={summary.sourceScopeLabel}
           runtimeMode={runtimeShellState.mode}
@@ -638,8 +644,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
                   <TheatrePlaybackPlaceholder
                     activeLabel={activeBlock?.label ?? "No active cue"}
                     detail={theatreStateDetail}
-                    durationLabel={summary.estimatedRemainingLabel}
-                    progressPercent={audioProgressPercent}
+                    progress={playbackProgress}
                   />
                 )}
               </div>
@@ -668,15 +673,13 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
 function TheatrePlaybackPlaceholder({
   activeLabel,
   detail,
-  durationLabel,
-  progressPercent,
+  progress,
 }: Readonly<{
   activeLabel: string;
   detail: string;
-  durationLabel: string;
-  progressPercent: number;
+  progress: LocalizedPlaybackToolbarModel["progress"];
 }>) {
-  const normalizedProgress = Math.max(0, Math.min(100, progressPercent));
+  const normalizedProgress = Math.round(Math.max(0, Math.min(1, progress.ratio)) * 100);
   return (
     <section
       aria-label="Theatre playback status"
@@ -691,12 +694,12 @@ function TheatrePlaybackPlaceholder({
           <h3 className="mt-1 text-sm font-semibold break-words">{activeLabel}</h3>
         </div>
         <span className="text-xs tabular-nums text-[var(--vs-text-secondary)]">
-          {durationLabel}
+          {progress.durationLabel ?? "--:--"}
         </span>
       </div>
       <div className="grid gap-1">
         <div
-          aria-label={`${normalizedProgress.toString()}% through the current theatre cue`}
+          aria-label={`${progress.currentLabel ?? "0:00"} elapsed, ${progress.durationLabel ?? "--:--"} remaining`}
           className="h-1.5 overflow-hidden rounded-full bg-[var(--vs-surface-muted)]"
           role="progressbar"
           aria-valuemax={100}
@@ -708,9 +711,10 @@ function TheatrePlaybackPlaceholder({
             style={{ width: `${normalizedProgress.toString()}%` }}
           />
         </div>
-        <span className="text-xs tabular-nums text-[var(--vs-text-secondary)]">
-          {normalizedProgress.toString()}%
-        </span>
+        <div className="flex items-center justify-between gap-3 text-xs tabular-nums text-[var(--vs-text-secondary)]">
+          <span>{progress.currentLabel ?? "0:00"}</span>
+          <span>{progress.durationLabel ?? "--:--"}</span>
+        </div>
       </div>
       <p className="text-xs leading-5 break-words text-[var(--vs-text-secondary)]">{detail}</p>
     </section>
