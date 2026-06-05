@@ -1,6 +1,7 @@
 import {
   Children,
   isValidElement,
+  memo,
   useEffect,
   useId,
   useMemo,
@@ -20,26 +21,29 @@ import type {
 import { buildUiActionId } from "./features/ui-audit/actionIds";
 export { looksLikeMermaidDiagram } from "./markdownModel";
 
-export function MarkdownRenderer({
+export const MarkdownRenderer = memo(function MarkdownRenderer({
   children,
   artifactRendering = "none",
   blockHighlight,
   className = "prose-markdown",
+  wordAnchors,
   wordHighlight,
 }: Readonly<{
   artifactRendering?: "document-cinema" | "none";
   children: string;
   blockHighlight?: MarkdownBlockHighlight;
   className?: string;
+  wordAnchors?: MarkdownWordAnchors;
   wordHighlight?: MarkdownWordHighlight;
 }>) {
   const rehypePlugins = useMemo(
     () => [
       ...(artifactRendering === "document-cinema" ? [documentCinemaInlineArtifactPlugin] : []),
       ...(blockHighlight ? [createBlockHighlightPlugin(blockHighlight)] : []),
+      ...(wordAnchors && !wordHighlight ? [createWordAnchorPlugin(wordAnchors)] : []),
       ...(wordHighlight ? [createWordHighlightPlugin(wordHighlight)] : []),
     ],
-    [artifactRendering, blockHighlight, wordHighlight],
+    [artifactRendering, blockHighlight, wordAnchors, wordHighlight],
   );
 
   return (
@@ -53,7 +57,7 @@ export function MarkdownRenderer({
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 export function MermaidDiagram({ chart }: Readonly<{ chart: string }>) {
   const rawId = useId();
@@ -343,6 +347,16 @@ export interface MarkdownWordHighlight {
   wordStates?: ReadonlyMap<number, MarkdownWordCueState>;
 }
 
+export interface MarkdownWordAnchors {
+  blockEndOffset: number;
+  blockStartOffset: number;
+  blockWordStartIndex?: number;
+  cueRole?: ReadAlongCueRole;
+  nodeId?: string;
+  sourceId?: string;
+  timingState?: ReadAlongTimingState;
+}
+
 export interface MarkdownWordCueState {
   intensity: number;
   state: "active" | "idle" | "spoken" | "upcoming";
@@ -381,6 +395,15 @@ function createWordHighlightPlugin(highlight: MarkdownWordHighlight) {
     return function transformTree(tree: HastNode) {
       let blockWordOffset = 0;
       transformChildren(tree, highlight, () => blockWordOffset++);
+    };
+  };
+}
+
+function createWordAnchorPlugin(anchors: MarkdownWordAnchors) {
+  return function anchorMarkdownWords() {
+    return function transformTree(tree: HastNode) {
+      let blockWordOffset = 0;
+      transformAnchorChildren(tree, anchors, () => blockWordOffset++);
     };
   };
 }
@@ -463,6 +486,31 @@ function transformChildren(
   node.children = nextChildren;
 }
 
+function transformAnchorChildren(
+  node: HastNode,
+  anchors: MarkdownWordAnchors,
+  nextWordOffset: () => number,
+) {
+  if (!node.children) {
+    return;
+  }
+
+  const nextChildren: HastNode[] = [];
+  for (const child of node.children) {
+    if (child.type === "text" && typeof child.value === "string") {
+      nextChildren.push(...splitAnchoredTextNode(child, anchors, nextWordOffset));
+      continue;
+    }
+    if (isSpeechSkippedElement(child)) {
+      nextChildren.push(child);
+      continue;
+    }
+    transformAnchorChildren(child, anchors, nextWordOffset);
+    nextChildren.push(child);
+  }
+  node.children = nextChildren;
+}
+
 function isSpeechSkippedElement(node: HastNode): boolean {
   return node.type === "element" && node.properties?.["data-speech-mode"] === "skip";
 }
@@ -495,6 +543,56 @@ function splitHighlightedTextNode(
     parts.push({ type: "text", value: node.value.slice(lastIndex) });
   }
   return parts.length > 0 ? parts : [node];
+}
+
+function splitAnchoredTextNode(
+  node: HastNode,
+  anchors: MarkdownWordAnchors,
+  nextWordOffset: () => number,
+): HastNode[] {
+  if (!nodePositionOverlapsHighlight(node.position, anchors) || !node.value) {
+    return [node];
+  }
+
+  const parts: HastNode[] = [];
+  const wordPattern = /\S+/g;
+  let lastIndex = 0;
+  for (const match of node.value.matchAll(wordPattern)) {
+    const word = match[0];
+    const index = match.index;
+    if (index > lastIndex) {
+      parts.push({ type: "text", value: node.value.slice(lastIndex, index) });
+    }
+
+    const wordOffset = nextWordOffset();
+    parts.push(markdownWordAnchorNode(word, wordOffset, anchors));
+    lastIndex = index + word.length;
+  }
+
+  if (lastIndex < node.value.length) {
+    parts.push({ type: "text", value: node.value.slice(lastIndex) });
+  }
+  return parts.length > 0 ? parts : [node];
+}
+
+function markdownWordAnchorNode(
+  word: string,
+  wordOffset: number,
+  anchors: MarkdownWordAnchors,
+): HastNode {
+  const absoluteWordIndex = (anchors.blockWordStartIndex ?? 0) + wordOffset;
+  const properties: Record<string, unknown> = {
+    className: ["markdown-cinema-word", "readalong-word-role--idle"],
+    "data-readalong-word-index": String(absoluteWordIndex),
+    "data-readalong-word-role": "idle",
+  };
+  applyMarkdownHighlightProperties(properties, anchors);
+  return {
+    children: [{ type: "text", value: word }],
+    properties,
+    tagName: "span",
+    type: "element",
+  };
 }
 
 function markdownWordNodeForHighlight(

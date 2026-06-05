@@ -1,3 +1,13 @@
+## 2026-06-05 16:35 CEST - CPU-First Follow-Along Optimization
+- [x] Add advisory read-along performance benchmark artifacts
+- [x] Extend read-along performance snapshot metrics
+- [x] Cache scheduler DOM highlight lookups
+- [x] Move Markdown Render smooth word-state updates to DOM
+- [x] Add focused regression coverage
+- [x] Run focused and project checks
+- [ ] Investigate Book Cinema E2E Intake navigation timeout
+- Validation: focused MarkdownRenderer/ReadAlong scheduler/performance Vitest passed; frontend typecheck passed; short `pnpm e2e:readalong-performance` smoke passed and wrote advisory artifacts; `pnpm e2e:readalong-sync` passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `git diff --check` passed. `pnpm e2e:book-cinema` passed Markdown and Website narration setup, then failed waiting for the existing Book Cinema overlay `Intake` button.
+
 ## 2026-06-05 16:05 CEST - Markdown Teleprompter Highlight Parity
 - [x] Compare Teleprompter and Markdown Render highlight semantics
 - [x] Map Teleprompter word cue states into Markdown Render anchors

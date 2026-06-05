@@ -54,6 +54,7 @@
     "e2e:golden-minute:matrix": "node scripts/e2e-golden-minute-provider-matrix.mjs",
     "e2e:book-cinema": "node scripts/e2e-book-cinema.mjs",
     "e2e:read-along-fidelity": "node scripts/e2e-read-along-fidelity.mjs",
+    "e2e:readalong-performance": "node scripts/e2e-readalong-performance.mjs",
     "e2e:readalong-sync": "node scripts/e2e-readalong-sync.mjs",
     "e2e:workspace-flow": "E2E_WORKSPACE_FLOW=1 node scripts/e2e-book-cinema.mjs",
     "e2e:settings-ia": "E2E_SETTINGS_IA=1 node scripts/e2e-book-cinema.mjs",

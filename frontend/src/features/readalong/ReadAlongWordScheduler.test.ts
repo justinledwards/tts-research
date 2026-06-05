@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ReadAlongDomHighlighterSession,
   ReadAlongWordScheduler,
   applyReadAlongDomHighlight,
   nextWordBoundaryMs,
@@ -160,6 +161,104 @@ describe("read-along DOM highlight adapter", () => {
 
     expect(selectors.some((selector) => selector.includes("block-1"))).toBe(true);
     expect(current.getAttribute("aria-current")).toBe("true");
+  });
+});
+
+describe("ReadAlongDomHighlighterSession", () => {
+  it("caches resolved word anchors after the first lookup", () => {
+    const current = fakeElement();
+    const root = fakeAnchorRoot({ elementsByWordIndex: new Map([[1, current]]) });
+    const session = new ReadAlongDomHighlighterSession();
+    const options = {
+      mode: "word" as const,
+      root: () => root,
+      sourceId: "book",
+      surface: "book" as const,
+    };
+
+    session.apply(options, entry({ sourceWordIndex: 1 }));
+    const callsAfterFirstResolve = root.querySelectorCalls;
+    session.apply(options, entry({ sourceWordIndex: 1 }));
+
+    expect(callsAfterFirstResolve).toBeGreaterThan(0);
+    expect(root.querySelectorCalls).toBe(callsAfterFirstResolve);
+    expect(current.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("invalidates cached anchors when the root changes", () => {
+    const first = fakeElement();
+    const second = fakeElement();
+    const firstRoot = fakeAnchorRoot({ elementsByWordIndex: new Map([[1, first]]) });
+    const secondRoot = fakeAnchorRoot({ elementsByWordIndex: new Map([[1, second]]) });
+    const session = new ReadAlongDomHighlighterSession();
+
+    session.apply(
+      {
+        mode: "word",
+        root: () => firstRoot,
+        sourceId: "book",
+        surface: "book",
+      },
+      entry({ sourceWordIndex: 1 }),
+    );
+    session.apply(
+      {
+        mode: "word",
+        root: () => secondRoot,
+        sourceId: "book",
+        surface: "book",
+      },
+      entry({ sourceWordIndex: 1 }),
+    );
+
+    expect(first.getAttribute("aria-current")).toBeNull();
+    expect(second.getAttribute("aria-current")).toBe("true");
+    expect(secondRoot.querySelectorCalls).toBeGreaterThan(0);
+  });
+
+  it("clears the previous active element when an anchor is missing", () => {
+    const previous = fakeElement();
+    const root = fakeAnchorRoot({ elementsByWordIndex: new Map([[1, previous]]) });
+    const session = new ReadAlongDomHighlighterSession();
+    const options = {
+      mode: "word" as const,
+      root: () => root,
+      sourceId: "book",
+      surface: "book" as const,
+    };
+
+    session.apply(options, entry({ sourceWordIndex: 1 }));
+    const result = session.apply(options, entry({ sourceWordIndex: 2 }));
+
+    expect(result.activeElement).toBeNull();
+    expect(previous.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("cleans up active state without rescanning on every word boundary", () => {
+    const first = fakeElement();
+    const second = fakeElement();
+    const root = fakeAnchorRoot({
+      elementsByWordIndex: new Map([
+        [1, first],
+        [2, second],
+      ]),
+    });
+    const session = new ReadAlongDomHighlighterSession();
+    const options = {
+      mode: "word" as const,
+      root: () => root,
+      sourceId: "book",
+      surface: "book" as const,
+    };
+
+    session.apply(options, entry({ sourceWordIndex: 1 }));
+    const scansAfterSetup = root.querySelectorAllCalls;
+    session.apply(options, entry({ sourceWordIndex: 2 }));
+    session.clear(options);
+
+    expect(root.querySelectorAllCalls).toBe(scansAfterSetup + 1);
+    expect(first.getAttribute("aria-current")).toBeNull();
+    expect(second.getAttribute("aria-current")).toBeNull();
   });
 });
 
@@ -328,6 +427,14 @@ function fakeRoot({
   } as unknown as ParentNode;
 }
 
+function fakeAnchorRoot({
+  elementsByWordIndex,
+}: {
+  elementsByWordIndex: Map<number, FakeElement>;
+}): FakeAnchorRoot & ParentNode {
+  return new FakeAnchorRoot(elementsByWordIndex) as FakeAnchorRoot & ParentNode;
+}
+
 function fakeMotionRoot(rect: FakeRect): FakeElement {
   return new FakeElement(rect);
 }
@@ -432,6 +539,27 @@ class FakeElement {
 
   setAttribute(name: string, value: string): void {
     this.attributes.set(name, value);
+  }
+}
+
+class FakeAnchorRoot {
+  querySelectorAllCalls = 0;
+  querySelectorCalls = 0;
+
+  constructor(private readonly elementsByWordIndex: Map<number, FakeElement>) {}
+
+  querySelector(selector: string): FakeElement | null {
+    this.querySelectorCalls += 1;
+    const wordIndex = /data-readalong-word-index="(\d+)"/.exec(selector)?.[1];
+    if (wordIndex === undefined) {
+      return null;
+    }
+    return this.elementsByWordIndex.get(Number(wordIndex)) ?? null;
+  }
+
+  querySelectorAll(): FakeElement[] {
+    this.querySelectorAllCalls += 1;
+    return [];
   }
 }
 

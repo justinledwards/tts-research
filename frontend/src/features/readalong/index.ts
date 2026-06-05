@@ -33,6 +33,7 @@ export {
   type ReadAlongPlaybackClockOptions,
 } from "./ReadAlongClock";
 export {
+  ReadAlongDomHighlighterSession,
   ReadAlongWordScheduler,
   applyReadAlongDomHighlight,
   clearReadAlongDomHighlight,
@@ -48,12 +49,16 @@ export {
   registerReadAlongAudioElement,
 } from "./readAlongMediaRegistry";
 export {
+  formatReadAlongPerformanceReport,
   markReadAlongPerformance,
   readAlongPerformanceSnapshot,
   resetReadAlongPerformanceSnapshot,
   startReadAlongLongTaskObserver,
+  type ReadAlongLongTaskSummary,
   type ReadAlongPerformanceCounter,
   type ReadAlongPerformanceSnapshot,
+  type ReadAlongPerformanceSurface,
+  type ResetReadAlongPerformanceOptions,
 } from "./readAlongPerformance";
 export {
   clampCursorDuration,

@@ -53,6 +53,12 @@ export interface ReadAlongDomHighlightMotionInput {
 }
 
 const MIN_TIMEOUT_DELAY_MS = 8;
+const PREVIOUS_ACTIVE_WORD_SELECTOR = [
+  '[data-readalong-dom-active="true"]',
+  '[aria-current="true"][data-readalong-word-index]',
+  ".book-cinema-word-active",
+  ".website-cinema-word-active",
+].join(",");
 
 const WORD_ROLE_CLASSES = [
   "readalong-word-role--idle",
@@ -68,6 +74,7 @@ const WORD_ROLE_CLASSES = [
 export class ReadAlongWordScheduler {
   private activeIndex: number | null = null;
   private cleanupAudioListeners: (() => void) | null = null;
+  private readonly highlighter = new ReadAlongDomHighlighterSession();
   private readonly options: ReadAlongWordSchedulerOptions;
   private readonly runtime: ReadAlongWordSchedulerRuntime;
   private timeoutId: number | null = null;
@@ -96,7 +103,7 @@ export class ReadAlongWordScheduler {
     this.cleanupAudioListeners = null;
     this.activeIndex = null;
     if (clearHighlight && this.options.highlight) {
-      clearReadAlongDomHighlight(this.options.highlight);
+      this.highlighter.clear(this.options.highlight);
     }
   }
 
@@ -118,7 +125,7 @@ export class ReadAlongWordScheduler {
       this.activeIndex = nextIndex;
       markReadAlongPerformance("word-resolve");
       if (this.options.highlight) {
-        applyReadAlongDomHighlight(this.options.highlight, activeEntry, {
+        this.highlighter.apply(this.options.highlight, activeEntry, {
           nextEntry: entries[nextIndex + 1] ?? null,
           transitionDurationMs: durationUntilNextBoundaryMs(entries, nextIndex, cursorMs, audio),
         });
@@ -166,48 +173,7 @@ export function applyReadAlongDomHighlight(
   entry: WordTimelineEntry,
   motion: ReadAlongDomHighlightMotionInput = {},
 ): ReadAlongDomHighlightState {
-  const root = options.root();
-  if (!root || options.mode !== "word") {
-    clearReadAlongMotionCursor(root);
-    return { activeElement: null, activeWordIndex: null };
-  }
-  const previous = root.querySelectorAll<HTMLElement>(
-    [
-      '[data-readalong-dom-active="true"]',
-      '[aria-current="true"][data-readalong-word-index]',
-      ".book-cinema-word-active",
-      ".website-cinema-word-active",
-    ].join(","),
-  );
-  for (const element of previous) {
-    deactivateReadAlongWordElement(element);
-  }
-  const wordElement = resolveReadAlongWordElement(root, options, entry);
-  if (!wordElement) {
-    updateReadAlongMotionCursor({
-      accessibilitySettings: options.accessibilitySettings,
-      activeElement: null,
-      highlightMotion: options.highlightMotion,
-      root,
-    });
-    return { activeElement: null, activeWordIndex: entry.sourceWordIndex };
-  }
-  activateReadAlongWordElement(wordElement, options);
-  maybeScrollReadAlongDomHighlight(wordElement, options);
-  const nextElement =
-    options.highlightMotion === "smoothCursor" && motion.nextEntry
-      ? resolveReadAlongWordElement(root, options, motion.nextEntry)
-      : null;
-  updateReadAlongMotionCursor({
-    accessibilitySettings: options.accessibilitySettings,
-    activeElement: wordElement,
-    highlightMotion: options.highlightMotion,
-    nextElement,
-    root,
-    transitionDurationMs: motion.transitionDurationMs,
-  });
-  markReadAlongPerformance("dom-highlight-swap");
-  return { activeElement: wordElement, activeWordIndex: entry.sourceWordIndex };
+  return new ReadAlongDomHighlighterSession().apply(options, entry, motion);
 }
 
 export function clearReadAlongDomHighlight(options: ReadAlongDomHighlighterOptions): void {
@@ -220,6 +186,127 @@ export function clearReadAlongDomHighlight(options: ReadAlongDomHighlighterOptio
     deactivateReadAlongWordElement(element);
   }
   clearReadAlongMotionCursor(root);
+}
+
+export class ReadAlongDomHighlighterSession {
+  private activeElement: HTMLElement | null = null;
+  private readonly elementCache = new Map<string, HTMLElement>();
+  private root: ParentNode | null = null;
+  private rootKey = "";
+
+  apply(
+    options: ReadAlongDomHighlighterOptions,
+    entry: WordTimelineEntry,
+    motion: ReadAlongDomHighlightMotionInput = {},
+  ): ReadAlongDomHighlightState {
+    const root = options.root();
+    if (!root || options.mode !== "word") {
+      clearReadAlongMotionCursor(root);
+      this.reset(null, "");
+      return { activeElement: null, activeWordIndex: null };
+    }
+    this.prepareRoot(root, options);
+    const wordElement = this.resolveWordElement(root, options, entry);
+    if (!wordElement) {
+      this.deactivateActiveElement();
+      updateReadAlongMotionCursor({
+        accessibilitySettings: options.accessibilitySettings,
+        activeElement: null,
+        highlightMotion: options.highlightMotion,
+        root,
+      });
+      return { activeElement: null, activeWordIndex: entry.sourceWordIndex };
+    }
+    if (this.activeElement === wordElement) {
+      activateReadAlongWordElement(wordElement, options);
+    } else {
+      this.deactivateActiveElement();
+      activateReadAlongWordElement(wordElement, options);
+      this.activeElement = wordElement;
+      maybeScrollReadAlongDomHighlight(wordElement, options);
+    }
+    const nextElement =
+      options.highlightMotion === "smoothCursor" && motion.nextEntry
+        ? this.resolveWordElement(root, options, motion.nextEntry)
+        : null;
+    updateReadAlongMotionCursor({
+      accessibilitySettings: options.accessibilitySettings,
+      activeElement: wordElement,
+      highlightMotion: options.highlightMotion,
+      nextElement,
+      root,
+      transitionDurationMs: motion.transitionDurationMs,
+    });
+    markReadAlongPerformance("dom-highlight-swap");
+    return { activeElement: wordElement, activeWordIndex: entry.sourceWordIndex };
+  }
+
+  clear(options?: ReadAlongDomHighlighterOptions): void {
+    const root = options?.root() ?? this.root;
+    if (root) {
+      this.clearRoot(root);
+      clearReadAlongMotionCursor(root);
+    }
+    this.reset(null, "");
+  }
+
+  private prepareRoot(root: ParentNode, options: ReadAlongDomHighlighterOptions): void {
+    const nextRootKey = readAlongHighlighterRootKey(options);
+    if (this.root === root && this.rootKey === nextRootKey) {
+      return;
+    }
+    if (this.root && this.root !== root) {
+      this.clearRoot(this.root);
+      clearReadAlongMotionCursor(this.root);
+    }
+    this.reset(root, nextRootKey);
+    this.clearRoot(root);
+  }
+
+  private clearRoot(root: ParentNode): void {
+    this.deactivateActiveElement();
+    const active = root.querySelectorAll<HTMLElement>(PREVIOUS_ACTIVE_WORD_SELECTOR);
+    for (const element of active) {
+      deactivateReadAlongWordElement(element);
+    }
+  }
+
+  private deactivateActiveElement(): void {
+    if (!this.activeElement) {
+      return;
+    }
+    deactivateReadAlongWordElement(this.activeElement);
+    this.activeElement = null;
+  }
+
+  private resolveWordElement(
+    root: ParentNode,
+    options: ReadAlongDomHighlighterOptions,
+    entry: WordTimelineEntry,
+  ): HTMLElement | null {
+    const cacheKey = readAlongWordElementCacheKey(options, entry);
+    const cached = this.elementCache.get(cacheKey);
+    if (cached && isCachedReadAlongElementUsable(root, cached)) {
+      markReadAlongPerformance("dom-anchor-cache-hit");
+      return cached;
+    }
+    if (cached) {
+      this.elementCache.delete(cacheKey);
+    }
+    markReadAlongPerformance("dom-anchor-resolve");
+    const element = resolveReadAlongWordElement(root, options, entry);
+    if (element) {
+      this.elementCache.set(cacheKey, element);
+    }
+    return element;
+  }
+
+  private reset(root: ParentNode | null, rootKey: string): void {
+    this.activeElement = null;
+    this.elementCache.clear();
+    this.root = root;
+    this.rootKey = rootKey;
+  }
 }
 
 export function resolveWordTimelineIndex(
@@ -299,6 +386,45 @@ function resolveReadAlongWordElement(
     [],
   ).element;
   return element ? readAlongHighlightElement(element) : null;
+}
+
+function readAlongHighlighterRootKey(options: ReadAlongDomHighlighterOptions): string {
+  return JSON.stringify({
+    highlightMotion: options.highlightMotion ?? "static",
+    highlightStyle: options.highlightStyle ?? "none",
+    mode: options.mode,
+    sourceId: options.sourceId ?? "",
+    surface: options.surface,
+  });
+}
+
+function readAlongWordElementCacheKey(
+  options: ReadAlongDomHighlighterOptions,
+  entry: WordTimelineEntry,
+): string {
+  return JSON.stringify({
+    anchorNodeId: entry.anchorNodeId ?? "",
+    anchorTokenOffset: entry.anchorTokenOffset ?? null,
+    anchorWordIndex: entry.anchorWordIndex ?? entry.sourceWordIndex,
+    sourceId: options.sourceId ?? "",
+    sourceWordIndex: entry.sourceWordIndex,
+    text: entry.text,
+  });
+}
+
+function isCachedReadAlongElementUsable(root: ParentNode, element: HTMLElement): boolean {
+  if ("isConnected" in element && !element.isConnected) {
+    return false;
+  }
+  if (
+    typeof Node !== "undefined" &&
+    root instanceof Node &&
+    element instanceof Node &&
+    !root.contains(element)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function activateReadAlongWordElement(

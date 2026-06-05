@@ -1,6 +1,7 @@
 import {
   Suspense,
   lazy,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -135,7 +136,7 @@ import {
   resolveBookActiveWordIndex,
   resolveDefaultBookScope,
 } from "./features/book-cinema/model";
-import type { MarkdownWordCueState } from "./MarkdownRenderer";
+import type { MarkdownWordAnchors, MarkdownWordCueState } from "./MarkdownRenderer";
 import { looksLikeMermaidDiagram } from "./markdownModel";
 import { findKokoroVoicepack, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
 import {
@@ -1963,6 +1964,8 @@ function MarkdownCinemaView({
     [activeWord?.blockId, source.blocks],
   );
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const domWordStateSessionRef = useRef<MarkdownCinemaDomWordStateSession | null>(null);
+  domWordStateSessionRef.current ??= new MarkdownCinemaDomWordStateSession();
   const blocks = source.blocks ?? [];
   const markdownTextClassBySize: Record<CinemaTextSize, string> = {
     compact: "text-sm leading-7 sm:text-base",
@@ -1974,10 +1977,36 @@ function MarkdownCinemaView({
   const shouldHighlightWord = activeBlock ? isMarkdownCinemaWordHighlightable(activeBlock) : false;
   const shouldUseSmoothCursor =
     readAlongPreferences.highlightMotion === "smoothCursor" && shouldHighlightWord;
-  const markdownWordStates = useMemo(() => markdownWordStatesForCue(cue), [cue]);
-  const shouldRenderWordAnchors =
-    shouldHighlightWord && (shouldUseSmoothCursor || markdownWordStates.size > 0);
   const blockWordStartIndex = activeWord ? activeWordIndex - activeWord.wordOffset : undefined;
+  const staticMarkdownWordStates = useMemo(
+    () => (shouldUseSmoothCursor ? EMPTY_MARKDOWN_WORD_STATES : markdownWordStatesForCue(cue)),
+    [cue, shouldUseSmoothCursor],
+  );
+  const shouldRenderWordAnchors =
+    shouldHighlightWord && (shouldUseSmoothCursor || staticMarkdownWordStates.size > 0);
+  const activeWordBlockEndOffset = activeWord?.blockEndOffset;
+  const activeWordBlockStartOffset = activeWord?.blockStartOffset;
+  const smoothMarkdownWordAnchors = useMemo<MarkdownWordAnchors | undefined>(() => {
+    if (
+      activeWordBlockEndOffset === undefined ||
+      activeWordBlockStartOffset === undefined ||
+      !shouldHighlightWord ||
+      !shouldUseSmoothCursor
+    ) {
+      return;
+    }
+    return {
+      blockEndOffset: activeWordBlockEndOffset,
+      blockStartOffset: activeWordBlockStartOffset,
+      blockWordStartIndex,
+    };
+  }, [
+    activeWordBlockEndOffset,
+    activeWordBlockStartOffset,
+    blockWordStartIndex,
+    shouldHighlightWord,
+    shouldUseSmoothCursor,
+  ]);
   const motionDurationMs = useMemo(
     () => markdownMotionDurationMs(cue, playbackRate),
     [cue, playbackRate],
@@ -1989,9 +2018,22 @@ function MarkdownCinemaView({
 
   useEffect(() => {
     const root = containerRef.current;
+    const domWordStateSession = domWordStateSessionRef.current;
     if (!root) {
       return;
     }
+    if (shouldUseSmoothCursor && activeWord) {
+      domWordStateSession?.apply({
+        accessibilitySettings,
+        activeWordIndex,
+        cue,
+        highlightMotion: readAlongPreferences.highlightMotion,
+        motionDurationMs,
+        root,
+      });
+      return;
+    }
+    domWordStateSession?.clear();
     if (!activeWord) {
       clearReadAlongMotionCursor(root);
       return;
@@ -2020,6 +2062,7 @@ function MarkdownCinemaView({
     accessibilitySettings,
     activeWord,
     activeWordIndex,
+    cue,
     motionDurationMs,
     readAlongPreferences.highlightMotion,
     shouldUseSmoothCursor,
@@ -2027,6 +2070,7 @@ function MarkdownCinemaView({
 
   useEffect(() => {
     return () => {
+      domWordStateSessionRef.current?.clear();
       clearReadAlongMotionCursor(containerRef.current);
     };
   }, []);
@@ -2046,7 +2090,7 @@ function MarkdownCinemaView({
                 : undefined
             }
             wordHighlight={
-              activeWord && shouldHighlightWord
+              activeWord && shouldHighlightWord && !shouldUseSmoothCursor
                 ? {
                     activeWordOffset: activeWord.wordOffset,
                     activeWordIndex,
@@ -2054,10 +2098,11 @@ function MarkdownCinemaView({
                     blockEndOffset: activeWord.blockEndOffset,
                     blockStartOffset: activeWord.blockStartOffset,
                     renderWordAnchors: shouldRenderWordAnchors,
-                    wordStates: markdownWordStates,
+                    wordStates: staticMarkdownWordStates,
                   }
                 : undefined
             }
+            wordAnchors={smoothMarkdownWordAnchors}
           >
             {source.text}
           </MarkdownRenderer>
@@ -2074,14 +2119,15 @@ function MarkdownCinemaView({
     >
       {blocks.map((block) => (
         <MarkdownCinemaBlock
-          activeWord={activeWord}
-          activeWordIndex={activeWordIndex}
+          activeWord={shouldUseSmoothCursor ? null : activeWord}
+          activeWordIndex={shouldUseSmoothCursor ? -1 : activeWordIndex}
           block={block}
           blockWordStartIndex={block.id === activeWord?.blockId ? blockWordStartIndex : undefined}
           isActive={block.id === activeWord?.blockId}
           key={block.id}
-          renderWordAnchors={shouldRenderWordAnchors}
-          wordStates={markdownWordStates}
+          renderWordAnchors={!shouldUseSmoothCursor && shouldRenderWordAnchors}
+          useStableWordAnchors={shouldUseSmoothCursor && block.id === activeWord?.blockId}
+          wordStates={staticMarkdownWordStates}
         />
       ))}
     </div>
@@ -2123,6 +2169,195 @@ function markdownWordStatesForCue(cue: TeleprompterCue): ReadonlyMap<number, Mar
   return states;
 }
 
+const EMPTY_MARKDOWN_WORD_STATES: ReadonlyMap<number, MarkdownWordCueState> = new Map();
+const MARKDOWN_DOM_WORD_STATE_CLASSES = [
+  "markdown-cinema-word-active",
+  "teleprompter-word",
+  "teleprompter-word--cinema",
+  "teleprompter-word--idle",
+  "teleprompter-word--spoken",
+  "teleprompter-word--active",
+  "teleprompter-word--upcoming",
+  "readalong-word-role--idle",
+  "readalong-word-role--spoken",
+  "readalong-word-role--recent",
+  "readalong-word-role--active",
+  "readalong-word-role--activePhrase",
+  "readalong-word-role--upcoming",
+  "readalong-word-role--skipped",
+  "readalong-word-role--transformed",
+] as const;
+
+interface MarkdownCinemaDomWordStateInput {
+  accessibilitySettings: Pick<ReaderAccessibilitySettings, "reducedMotion">;
+  activeWordIndex: number;
+  cue: TeleprompterCue;
+  highlightMotion: ReadAlongPreferences["highlightMotion"];
+  motionDurationMs: number | null;
+  root: HTMLElement;
+}
+
+class MarkdownCinemaDomWordStateSession {
+  private activeElement: HTMLElement | null = null;
+  private readonly elementCache = new Map<number, HTMLElement>();
+  private root: HTMLElement | null = null;
+  private readonly touchedStateKeys = new Map<number, string>();
+  private readonly touchedElements = new Map<number, HTMLElement>();
+
+  apply({
+    accessibilitySettings,
+    activeWordIndex,
+    cue,
+    highlightMotion,
+    motionDurationMs,
+    root,
+  }: MarkdownCinemaDomWordStateInput): void {
+    this.prepareRoot(root);
+    const states = markdownWordStatesForCue(cue);
+    const nextTouchedElements = new Map<number, HTMLElement>();
+    const nextTouchedStateKeys = new Map<number, string>();
+    for (const [wordIndex, wordState] of states) {
+      const element = this.resolveWordElement(root, wordIndex);
+      if (!element) {
+        continue;
+      }
+      const isActive = wordIndex === activeWordIndex;
+      const stateKey = markdownCinemaWordStateKey(wordState, isActive);
+      if (this.touchedStateKeys.get(wordIndex) !== stateKey) {
+        applyMarkdownCinemaDomWordState(element, wordState, isActive);
+      }
+      nextTouchedElements.set(wordIndex, element);
+      nextTouchedStateKeys.set(wordIndex, stateKey);
+    }
+    for (const [wordIndex, element] of this.touchedElements) {
+      if (!nextTouchedElements.has(wordIndex)) {
+        clearMarkdownCinemaDomWordState(element);
+      }
+    }
+    this.touchedElements.clear();
+    this.touchedStateKeys.clear();
+    for (const [wordIndex, element] of nextTouchedElements) {
+      this.touchedElements.set(wordIndex, element);
+    }
+    for (const [wordIndex, stateKey] of nextTouchedStateKeys) {
+      this.touchedStateKeys.set(wordIndex, stateKey);
+    }
+
+    const activeElement =
+      nextTouchedElements.get(activeWordIndex) ?? this.resolveWordElement(root, activeWordIndex);
+    if (!activeElement) {
+      this.activeElement = null;
+      clearReadAlongMotionCursor(root);
+      return;
+    }
+    if (this.activeElement !== activeElement) {
+      markReadAlongPerformance("dom-highlight-swap");
+    }
+    this.activeElement = activeElement;
+    scrollMarkdownActiveWordIntoSafeBand(root, activeElement, accessibilitySettings);
+    updateReadAlongMotionCursor({
+      accessibilitySettings,
+      activeElement,
+      highlightMotion,
+      nextElement: this.resolveWordElement(root, activeWordIndex + 1),
+      root,
+      transitionDurationMs: motionDurationMs,
+    });
+  }
+
+  clear(): void {
+    for (const element of this.touchedElements.values()) {
+      clearMarkdownCinemaDomWordState(element);
+    }
+    this.touchedElements.clear();
+    this.touchedStateKeys.clear();
+    this.elementCache.clear();
+    this.activeElement = null;
+    clearReadAlongMotionCursor(this.root);
+    this.root = null;
+  }
+
+  private prepareRoot(root: HTMLElement): void {
+    if (this.root === root) {
+      return;
+    }
+    this.clear();
+    this.root = root;
+  }
+
+  private resolveWordElement(root: HTMLElement, wordIndex: number): HTMLElement | null {
+    if (wordIndex < 0) {
+      return null;
+    }
+    const cached = this.elementCache.get(wordIndex);
+    if (cached && isMarkdownCinemaCachedElementUsable(root, cached)) {
+      markReadAlongPerformance("dom-anchor-cache-hit");
+      return cached;
+    }
+    if (cached) {
+      this.elementCache.delete(wordIndex);
+    }
+    markReadAlongPerformance("dom-anchor-resolve");
+    const element = root.querySelector<HTMLElement>(
+      `[data-readalong-word-index="${String(wordIndex)}"]`,
+    );
+    if (element) {
+      this.elementCache.set(wordIndex, element);
+    }
+    return element;
+  }
+}
+
+function markdownCinemaWordStateKey(wordState: MarkdownWordCueState, isActive: boolean): string {
+  return `${wordState.state}:${wordState.wordRole}:${wordState.intensity.toFixed(3)}:${
+    isActive ? "1" : "0"
+  }`;
+}
+
+function applyMarkdownCinemaDomWordState(
+  element: HTMLElement,
+  wordState: MarkdownWordCueState,
+  isActive: boolean,
+): void {
+  element.classList.remove(...MARKDOWN_DOM_WORD_STATE_CLASSES);
+  element.classList.add(
+    "teleprompter-word",
+    "teleprompter-word--cinema",
+    `teleprompter-word--${wordState.state}`,
+    `readalong-word-role--${wordState.wordRole}`,
+  );
+  if (isActive) {
+    element.classList.add("markdown-cinema-word-active");
+    element.setAttribute("aria-current", "true");
+    element.dataset.readalongDomActive = "true";
+  } else {
+    element.removeAttribute("aria-current");
+    delete element.dataset.readalongDomActive;
+  }
+  element.dataset.effect = "spark";
+  element.dataset.readalongWordRole = wordState.wordRole;
+  element.style.setProperty("--teleprompter-accent", "#fb923c");
+  element.style.setProperty("--teleprompter-intensity", String(wordState.intensity));
+}
+
+function clearMarkdownCinemaDomWordState(element: HTMLElement): void {
+  element.classList.remove(...MARKDOWN_DOM_WORD_STATE_CLASSES);
+  element.classList.add("readalong-word-role--idle");
+  element.removeAttribute("aria-current");
+  delete element.dataset.effect;
+  delete element.dataset.readalongDomActive;
+  element.dataset.readalongWordRole = "idle";
+  element.style.removeProperty("--teleprompter-accent");
+  element.style.removeProperty("--teleprompter-intensity");
+}
+
+function isMarkdownCinemaCachedElementUsable(root: HTMLElement, element: HTMLElement): boolean {
+  if (!element.isConnected) {
+    return false;
+  }
+  return root.contains(element);
+}
+
 function scrollMarkdownActiveWordIntoSafeBand(
   root: HTMLElement,
   activeElement: HTMLElement,
@@ -2140,15 +2375,17 @@ function scrollMarkdownActiveWordIntoSafeBand(
     block: "center",
     inline: "nearest",
   });
+  markReadAlongPerformance("scroll-call");
 }
 
-function MarkdownCinemaBlock({
+const MarkdownCinemaBlock = memo(function MarkdownCinemaBlock({
   activeWord,
   activeWordIndex,
   block,
   blockWordStartIndex,
   isActive,
   renderWordAnchors,
+  useStableWordAnchors,
   wordStates,
 }: Readonly<{
   activeWord: PreparedSourceActiveWord | null;
@@ -2157,11 +2394,22 @@ function MarkdownCinemaBlock({
   blockWordStartIndex: number | undefined;
   isActive: boolean;
   renderWordAnchors: boolean;
+  useStableWordAnchors: boolean;
   wordStates: ReadonlyMap<number, MarkdownWordCueState>;
 }>) {
   const blockRef = useRef<HTMLElement | null>(null);
   const blockText = markdownBlockText(block);
   const shouldHighlightWord = isActive && activeWord && isMarkdownCinemaWordHighlightable(block);
+  const wordAnchors = useMemo<MarkdownWordAnchors | undefined>(() => {
+    if (!useStableWordAnchors || blockWordStartIndex === undefined) {
+      return;
+    }
+    return {
+      blockEndOffset: blockText.length,
+      blockStartOffset: 0,
+      blockWordStartIndex,
+    };
+  }, [blockText.length, blockWordStartIndex, useStableWordAnchors]);
 
   useEffect(() => {
     if (!isActive) {
@@ -2194,11 +2442,12 @@ function MarkdownCinemaBlock({
         blockWordStartIndex,
         renderWordAnchors,
         shouldHighlightWord: Boolean(shouldHighlightWord),
+        wordAnchors,
         wordStates,
       })}
     </section>
   );
-}
+});
 
 function renderMarkdownCinemaBlockContent(
   block: NonNullable<PreparedSource["blocks"]>[number],
@@ -2209,6 +2458,7 @@ function renderMarkdownCinemaBlockContent(
     blockWordStartIndex: number | undefined;
     renderWordAnchors: boolean;
     shouldHighlightWord: boolean;
+    wordAnchors?: MarkdownWordAnchors;
     wordStates: ReadonlyMap<number, MarkdownWordCueState>;
   },
 ): ReactNode {
@@ -2232,8 +2482,9 @@ function renderMarkdownCinemaBlockContent(
     <Suspense fallback={<LazySurfaceFallback label="Loading markdown..." />}>
       <MarkdownRenderer
         className="contents"
+        wordAnchors={highlight.wordAnchors}
         wordHighlight={
-          highlight.activeWord && highlight.shouldHighlightWord
+          highlight.activeWord && highlight.shouldHighlightWord && !highlight.wordAnchors
             ? {
                 activeWordOffset: highlight.activeWord.wordOffset,
                 activeWordIndex: highlight.activeWordIndex,

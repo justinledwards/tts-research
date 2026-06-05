@@ -68,6 +68,28 @@ describe("Markdown rendering helpers", () => {
     expect(markup).toContain("readalong-word-role--idle");
   });
 
+  it("renders stable word anchors without active-state classes", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer
+        wordAnchors={{
+          blockEndOffset: 18,
+          blockStartOffset: 0,
+          blockWordStartIndex: 20,
+        }}
+      >
+        {"First second third"}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain('data-readalong-word-index="20"');
+    expect(markup).toContain('data-readalong-word-index="21"');
+    expect(markup).toContain('data-readalong-word-index="22"');
+    expect(markup).toContain("markdown-cinema-word");
+    expect(markup).toContain("readalong-word-role--idle");
+    expect(markup).not.toContain("markdown-cinema-word-active");
+    expect(markup).not.toContain('aria-current="true"');
+  });
+
   it("mirrors Teleprompter word cue states for Markdown Render parity", () => {
     const markup = renderToStaticMarkup(
       <MarkdownRenderer
