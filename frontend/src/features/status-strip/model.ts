@@ -287,6 +287,7 @@ function resolveNarrationOperationalIssues({
   sourceDescriptor: ReturnType<typeof sourceLifecycleDescriptor>;
 }>): OperationalStatusIssue[] {
   const blocker = input.stageStatus.blocker;
+  const completedPlayableAudio = isCompletedPlayableAudio(input.job, input.generatedAudioLifecycle);
   const audioIssue = resolveOperationalAudioIssue({
     canCancel: Boolean(input.job && !isTerminalJob(input.job) && input.isProcessing),
     canCreate: input.canCreate,
@@ -311,11 +312,11 @@ function resolveNarrationOperationalIssues({
     }),
     resolveOperationalReviewIssue({
       required: blocker?.id === "reviewRequired",
-      warningCount: input.stageStatus.reviewWarningCount,
+      warningCount: completedPlayableAudio ? 0 : input.stageStatus.reviewWarningCount,
     }),
     audioIssue,
     resolveQueueIssue(queue),
-    resolveCheckIssue(input.job, confidenceLabel),
+    resolveCheckIssue(input.job, confidenceLabel, input.generatedAudioLifecycle),
     resolveOperationalSystemIssue({
       attentionCount: input.disclosure.attentionCount,
       critical: input.disclosure.highestPriorityPanel?.status === "blocking",
@@ -417,60 +418,114 @@ function resolveQueueIssue(queue: NarrationQueueSnapshot): OperationalStatusIssu
   });
 }
 
-function resolveCheckIssue(job: VoiceJob | null, confidenceLabel: string): OperationalStatusIssue {
+function resolveCheckIssue(
+  job: VoiceJob | null,
+  confidenceLabel: string,
+  generatedAudioLifecycle: GeneratedAudioLifecycleState,
+): OperationalStatusIssue {
   if (!job) {
-    return operationalStaticIssue({
-      chipValue: "Waiting",
-      condition: "waiting",
-      detail: "No check yet.",
-      id: "check-waiting",
-      label: "Check waiting",
-      owner: "check",
-      severity: "ok",
-    });
+    return checkWaitingIssue("No check yet.", "Waiting");
   }
   if (job.voiceCheck.complete) {
-    const reviewWarningCount = audioReviewWarningCount(job);
-    if (reviewWarningCount > 0) {
-      const warningSummary = audioReviewWarningSummary(job);
-      const reason = job.voiceCheck.reason.trim();
-      return operationalStaticIssue({
-        chipValue: `${reviewWarningCount.toString()} review`,
-        condition: "attention",
-        detail: warningSummary ?? reason,
-        id: "check-audio-review",
-        label: "Audio check needs review",
-        owner: "check",
-        recovery: operationalRecovery("openDiagnostics", true),
-        severity: "warning",
-        technicalDetail: reason || undefined,
-      });
-    }
-    return operationalStaticIssue({
-      chipValue: confidenceLabel,
-      condition: job.voiceCheck.needsResume ? "attention" : "ready",
-      detail: job.voiceCheck.reason.trim() || "Voice check completed.",
-      id: job.voiceCheck.needsResume ? "check-needs-review" : "check-ready",
-      label: job.voiceCheck.needsResume ? "Check needs review" : "Check ready",
-      owner: "check",
-      severity: job.voiceCheck.needsResume ? "warning" : "ok",
-    });
+    return completedCheckIssue(job, confidenceLabel, generatedAudioLifecycle);
   }
   if (job.status === "checking" || job.status === "retrying") {
+    return checkWorkingIssue();
+  }
+  return checkWaitingIssue("Audio check is waiting.", confidenceLabel);
+}
+
+function completedCheckIssue(
+  job: VoiceJob,
+  confidenceLabel: string,
+  generatedAudioLifecycle: GeneratedAudioLifecycleState,
+): OperationalStatusIssue {
+  if (job.voiceCheck.needsResume) {
     return operationalStaticIssue({
-      chipValue: "Checking",
-      condition: "working",
-      detail: "Audio check is running.",
-      id: "check-working",
-      label: "Check working",
+      chipValue: confidenceLabel,
+      condition: "attention",
+      detail: job.voiceCheck.reason.trim() || "Voice check needs review.",
+      id: "check-needs-review",
+      label: "Check needs review",
       owner: "check",
-      severity: "info",
+      severity: "warning",
     });
+  }
+  const reviewWarningCount = audioReviewWarningCount(job);
+  if (reviewWarningCount > 0) {
+    return audioReviewCheckIssue(job, reviewWarningCount, generatedAudioLifecycle);
   }
   return operationalStaticIssue({
     chipValue: confidenceLabel,
+    condition: "ready",
+    detail: job.voiceCheck.reason.trim() || "Voice check completed.",
+    id: "check-ready",
+    label: "Check ready",
+    owner: "check",
+    severity: "ok",
+  });
+}
+
+function audioReviewCheckIssue(
+  job: VoiceJob,
+  reviewWarningCount: number,
+  generatedAudioLifecycle: GeneratedAudioLifecycleState,
+): OperationalStatusIssue {
+  const reason = job.voiceCheck.reason.trim();
+  const completedPlayable = isCompletedPlayableAudio(job, generatedAudioLifecycle);
+  return operationalStaticIssue({
+    chipValue: audioReviewCheckChipValue(reviewWarningCount, completedPlayable),
+    condition: completedPlayable ? "ready" : "attention",
+    detail: audioReviewCheckDetail(job, reviewWarningCount, completedPlayable, reason),
+    id: completedPlayable ? "check-audio-review-notes" : "check-audio-review",
+    label: audioReviewCheckLabel(completedPlayable),
+    owner: "check",
+    recovery: operationalRecovery("openDiagnostics", true),
+    severity: completedPlayable ? "ok" : "warning",
+    technicalDetail: reason || undefined,
+  });
+}
+
+function audioReviewCheckChipValue(count: number, completedPlayable: boolean): string {
+  if (completedPlayable) {
+    return `${count.toString()} ${count === 1 ? "note" : "notes"}`;
+  }
+  return `${count.toString()} review`;
+}
+
+function audioReviewCheckDetail(
+  job: VoiceJob,
+  count: number,
+  completedPlayable: boolean,
+  reason: string,
+): string {
+  if (completedPlayable) {
+    return audioReviewNoteSummary(count);
+  }
+  return audioReviewWarningSummary(job) ?? reason;
+}
+
+function audioReviewCheckLabel(completedPlayable: boolean): string {
+  return completedPlayable ? "Audio check ready with review notes" : "Audio check needs review";
+}
+
+function checkWorkingIssue(): OperationalStatusIssue {
+  return operationalStaticIssue({
+    chipValue: "Checking",
+    condition: "working",
+    detail: "Audio check is running.",
+    id: "check-working",
+    label: "Check working",
+    owner: "check",
+    severity: "info",
+  });
+}
+
+function checkWaitingIssue(detail: string, chipValue: string): OperationalStatusIssue {
+  return operationalStaticIssue({
+    chipValue,
     condition: "waiting",
-    detail: "Audio check is waiting.",
+    detail,
     id: "check-waiting",
     label: "Check waiting",
     owner: "check",
@@ -805,14 +860,28 @@ function readyPrimaryCopy(
   job: VoiceJob | null,
   queue: NarrationQueueSnapshot,
 ): { detail: string; label: string; message: string } {
-  const warningSummary = audioReviewWarningSummary(job);
+  const warningCount = audioReviewWarningCount(job);
+  const noteSummary = warningCount > 0 ? audioReviewNoteSummary(warningCount) : null;
   return {
     detail:
-      warningSummary ??
+      noteSummary ??
       (queue.totalSegments > 0 ? queueDetail(queue) : "Current generated audio is ready."),
-    label: warningSummary ? "Audio ready with review warnings" : "Audio ready",
-    message: warningSummary ?? "Audio ready.",
+    label: "Audio ready",
+    message: noteSummary ? `Audio ready. ${noteSummary}` : "Audio ready.",
   };
+}
+
+function isCompletedPlayableAudio(
+  job: VoiceJob | null,
+  generatedAudioLifecycle: GeneratedAudioLifecycleState,
+): boolean {
+  return (
+    generatedAudioLifecycle === "ready" && job?.status === "completed" && Boolean(job.audioUrl)
+  );
+}
+
+function audioReviewNoteSummary(count: number): string {
+  return `${count.toString()} ${count === 1 ? "segment has" : "segments have"} review notes.`;
 }
 
 function waitingPrimaryCopy(

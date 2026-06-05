@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Button, cx, fieldControlClassName } from "../../design";
 import { READER_PLAYBACK_RATES } from "../reader-accessibility";
 import {
@@ -47,9 +47,26 @@ export interface LocalizedPlaybackToolbarSpeedControl {
 export interface LocalizedPlaybackToolbarProgress {
   readonly currentLabel?: string;
   readonly durationLabel?: string;
+  readonly markers?: readonly LocalizedPlaybackToolbarProgressMarker[];
   readonly ratio: number;
+  readonly seek?: LocalizedPlaybackToolbarProgressSeek;
   readonly waveform?: ReactNode;
   readonly waveformBars?: readonly number[] | null;
+}
+
+export interface LocalizedPlaybackToolbarProgressMarker {
+  readonly active?: boolean;
+  readonly id: string;
+  readonly label: string;
+  readonly ratio: number;
+}
+
+export interface LocalizedPlaybackToolbarProgressSeek {
+  readonly currentSec: number;
+  readonly disabled?: boolean;
+  readonly disabledReason?: string;
+  readonly durationSec: number;
+  readonly onSeekSeconds: (seconds: number) => void;
 }
 
 export interface LocalizedPlaybackToolbarModel {
@@ -205,31 +222,12 @@ function ToolbarProgress({
     return <div className="min-w-0">{progress.waveform}</div>;
   }
   if (progress.waveformBars?.length) {
-    const activeIndex = Math.round(clampProgress(progress.ratio) * progress.waveformBars.length);
     return (
-      <div
-        aria-label="Playback waveform"
-        className={cx(
-          "grid h-9 min-w-0 items-center gap-px rounded-md py-1",
-          highContrast ? "bg-[var(--vs-theatre-panel)]" : "bg-[var(--vs-surface)]",
-        )}
-        role="img"
-        style={{
-          gridTemplateColumns: `repeat(${progress.waveformBars.length.toString()}, minmax(0, 1fr))`,
-        }}
-      >
-        {progress.waveformBars.map((bar, index) => (
-          <span
-            aria-hidden="true"
-            className={cx(
-              "w-full rounded-full",
-              waveformBarClassName(index, activeIndex, highContrast),
-            )}
-            key={`localized-waveform-${index.toString()}`}
-            style={{ height: `${Math.round(4 + Math.max(0, Math.min(1, bar)) * 24).toString()}px` }}
-          />
-        ))}
-      </div>
+      <ToolbarWaveformProgress
+        highContrast={highContrast}
+        progress={progress}
+        waveformBars={progress.waveformBars}
+      />
     );
   }
   return (
@@ -248,6 +246,253 @@ function ToolbarProgress({
       />
     </div>
   );
+}
+
+function ToolbarWaveformProgress({
+  highContrast,
+  progress,
+  waveformBars,
+}: Readonly<{
+  highContrast: boolean;
+  progress: LocalizedPlaybackToolbarProgress;
+  waveformBars: readonly number[];
+}>) {
+  const seekable = progressSeekable(progress.seek);
+  const waveformClassName = waveformProgressClassName(highContrast, seekable);
+  const waveformGridStyle = {
+    gridTemplateColumns: `repeat(${waveformBars.length.toString()}, minmax(0, 1fr))`,
+  };
+  const waveformContent = (
+    <ToolbarWaveformContent
+      activeIndex={Math.round(clampProgress(progress.ratio) * waveformBars.length)}
+      highContrast={highContrast}
+      markers={progress.markers}
+      waveformBars={waveformBars}
+    />
+  );
+  if (progress.seek) {
+    return (
+      <button
+        aria-disabled={progress.seek.disabled ? true : undefined}
+        aria-label="Playback waveform timeline"
+        aria-valuemax={localizedPlaybackSeekValueMax(progress.seek)}
+        aria-valuemin={0}
+        aria-valuenow={localizedPlaybackSeekValueNow(progress.seek)}
+        aria-valuetext={localizedPlaybackSeekValueText(progress)}
+        className={cx(waveformClassName, "appearance-none border-0 px-0")}
+        data-testid="localized-playback-waveform"
+        disabled={!seekable}
+        onKeyDown={(event) => {
+          handleProgressSeekKeyDown(event, progress.seek);
+        }}
+        onMouseDown={(event) => {
+          handleProgressSeekPointer(event, progress.seek);
+        }}
+        role="slider"
+        style={waveformGridStyle}
+        title={progress.seek.disabledReason ?? "Click or use arrow keys to seek audio."}
+        type="button"
+      >
+        {waveformContent}
+      </button>
+    );
+  }
+  return (
+    <div
+      aria-label="Playback waveform"
+      className={waveformClassName}
+      data-testid="localized-playback-waveform"
+      role="img"
+      style={waveformGridStyle}
+    >
+      {waveformContent}
+    </div>
+  );
+}
+
+function ToolbarWaveformContent({
+  activeIndex,
+  highContrast,
+  markers,
+  waveformBars,
+}: Readonly<{
+  activeIndex: number;
+  highContrast: boolean;
+  markers?: readonly LocalizedPlaybackToolbarProgressMarker[];
+  waveformBars: readonly number[];
+}>) {
+  return (
+    <>
+      {waveformBars.map((bar, index) => (
+        <span
+          aria-hidden="true"
+          className={cx(
+            "w-full rounded-full",
+            waveformBarClassName(index, activeIndex, highContrast),
+          )}
+          key={`localized-waveform-${index.toString()}`}
+          style={{ height: `${Math.round(4 + Math.max(0, Math.min(1, bar)) * 24).toString()}px` }}
+        />
+      ))}
+      {markers?.map((marker) => (
+        <span
+          aria-hidden="true"
+          className={cx(
+            "pointer-events-none absolute top-1 bottom-1 w-px rounded-full",
+            waveformMarkerClassName(Boolean(marker.active), highContrast),
+          )}
+          data-active={marker.active ? "true" : undefined}
+          data-testid="localized-playback-cue-marker"
+          key={marker.id}
+          style={{ left: `${Math.round(clampProgress(marker.ratio) * 100).toString()}%` }}
+          title={marker.label}
+        />
+      ))}
+    </>
+  );
+}
+
+function waveformProgressClassName(highContrast: boolean, seekable: boolean): string {
+  return cx(
+    "relative grid h-9 min-w-0 items-center gap-px rounded-md py-1",
+    seekable
+      ? "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--vs-focus)]"
+      : "",
+    highContrast ? "bg-[var(--vs-theatre-panel)]" : "bg-[var(--vs-surface)]",
+  );
+}
+
+function waveformMarkerClassName(active: boolean, highContrast: boolean): string {
+  if (active) {
+    return "bg-[var(--vs-selected-border)] shadow-[0_0_0_1px_var(--vs-selected-border)]";
+  }
+  if (highContrast) {
+    return "bg-[var(--vs-text-secondary)]";
+  }
+  return "bg-[var(--vs-border-strong)]";
+}
+
+function progressSeekable(
+  seek: LocalizedPlaybackToolbarProgressSeek | undefined,
+): seek is LocalizedPlaybackToolbarProgressSeek {
+  return Boolean(
+    seek && !seek.disabled && Number.isFinite(seek.durationSec) && seek.durationSec > 0,
+  );
+}
+
+function localizedPlaybackSeekValueMax(
+  seek: LocalizedPlaybackToolbarProgressSeek,
+): number | undefined {
+  return seek.durationSec > 0 ? Math.round(seek.durationSec) : undefined;
+}
+
+function localizedPlaybackSeekValueNow(
+  seek: LocalizedPlaybackToolbarProgressSeek,
+): number | undefined {
+  if (seek.durationSec <= 0) {
+    return undefined;
+  }
+  return Math.round(Math.max(0, Math.min(seek.durationSec, seek.currentSec)));
+}
+
+function localizedPlaybackSeekValueText(progress: LocalizedPlaybackToolbarProgress): string {
+  const seek = progress.seek;
+  if (!seek) {
+    return "";
+  }
+  return `${progress.currentLabel ?? formatSeekSeconds(seek.currentSec)} of ${
+    progress.durationLabel ?? formatSeekSeconds(seek.durationSec)
+  }`;
+}
+
+function handleProgressSeekPointer(
+  event: MouseEvent<HTMLElement>,
+  seek: LocalizedPlaybackToolbarProgressSeek | undefined,
+): void {
+  if (!progressSeekable(seek)) {
+    return;
+  }
+  event.preventDefault();
+  const rect = event.currentTarget.getBoundingClientRect();
+  const width = rect.width > 0 ? rect.width : 1;
+  seek.onSeekSeconds(
+    localizedPlaybackSeekSecondsFromPointer(event.clientX, rect.left, width, seek.durationSec),
+  );
+}
+
+function handleProgressSeekKeyDown(
+  event: KeyboardEvent<HTMLElement>,
+  seek: LocalizedPlaybackToolbarProgressSeek | undefined,
+): void {
+  if (!progressSeekable(seek)) {
+    return;
+  }
+  const next = localizedPlaybackSeekSecondsForKey(event.key, seek.currentSec, seek.durationSec);
+  if (next === null) {
+    return;
+  }
+  event.preventDefault();
+  seek.onSeekSeconds(next);
+}
+
+export function localizedPlaybackSeekSecondsFromPointer(
+  clientX: number,
+  left: number,
+  width: number,
+  durationSec: number,
+): number {
+  if (!Number.isFinite(durationSec) || durationSec <= 0) {
+    return 0;
+  }
+  const safeWidth = Number.isFinite(width) && width > 0 ? width : 1;
+  const ratio = Math.max(0, Math.min(1, (clientX - left) / safeWidth));
+  return ratio * durationSec;
+}
+
+export function localizedPlaybackSeekSecondsForKey(
+  key: string,
+  currentSec: number,
+  durationSec: number,
+): number | null {
+  if (!Number.isFinite(durationSec) || durationSec <= 0) {
+    return null;
+  }
+  const current = Math.max(0, Math.min(durationSec, Number.isFinite(currentSec) ? currentSec : 0));
+  switch (key) {
+    case "Home": {
+      return 0;
+    }
+    case "End": {
+      return durationSec;
+    }
+    case "ArrowLeft":
+    case "ArrowDown": {
+      return Math.max(0, current - 5);
+    }
+    case "ArrowRight":
+    case "ArrowUp": {
+      return Math.min(durationSec, current + 5);
+    }
+    case "PageDown": {
+      return Math.max(0, current - 30);
+    }
+    case "PageUp": {
+      return Math.min(durationSec, current + 30);
+    }
+    default: {
+      return null;
+    }
+  }
+}
+
+function formatSeekSeconds(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return "0:00";
+  }
+  const rounded = Math.round(seconds);
+  const minutes = Math.floor(rounded / 60);
+  const remainingSeconds = rounded % 60;
+  return `${minutes.toString()}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
 function ToolbarButton({
@@ -405,7 +650,7 @@ function localizedPlaybackDisabledReasons(
 ): string[] {
   const reasons: string[] = [];
   for (const action of actions) {
-    if (action.disabled && action.disabledReason) {
+    if (action.disabled && action.disabledReason && action.primary) {
       reasons.push(action.disabledReason);
     }
   }

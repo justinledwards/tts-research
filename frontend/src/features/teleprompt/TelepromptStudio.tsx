@@ -77,6 +77,7 @@ import {
   buildTelepromptCueTimeline,
   resolveTelepromptCueSync,
   telepromptCueSeekSeconds,
+  type TelepromptCueTimeline,
   type TelepromptCueSyncMode,
 } from "./telepromptCueTimeline";
 import {
@@ -176,6 +177,57 @@ function telepromptTheatreSettingsForWorkspaceLayout(
   settings: TelepromptTheatreSettings,
 ): TelepromptTheatreSettings {
   return settings;
+}
+
+export const TELEPROMPT_WAVEFORM_BAR_COUNT = 96;
+
+export function telepromptWaveformAudioSource(job: VoiceJob | null): string {
+  if (!job) {
+    return "";
+  }
+  if (job.status === "completed" && job.audioUrl) {
+    return audioSource(job);
+  }
+  return audioSource(job, { partial: true });
+}
+
+export function telepromptCueMarkers({
+  activeCueId,
+  durationMs,
+  timeline,
+}: Readonly<{
+  activeCueId?: string | null;
+  durationMs: number;
+  timeline: TelepromptCueTimeline;
+}>): LocalizedPlaybackToolbarModel["progress"]["markers"] {
+  const markerDurationMs = durationMs > 0 ? durationMs : timeline.durationMs;
+  if (markerDurationMs <= 0) {
+    return [];
+  }
+  return timeline.cues.map((cue, index) => ({
+    active: cue.cueId === activeCueId,
+    id: cue.cueId,
+    label: `Cue ${(index + 1).toString()}: ${cue.text}`,
+    ratio: cue.audioStartMs / markerDurationMs,
+  }));
+}
+
+function telepromptTimelineSeekDisabledReason({
+  audioFollowAvailable,
+  cuePlaybackDisabledReason,
+  playbackControls,
+}: Readonly<{
+  audioFollowAvailable: boolean;
+  cuePlaybackDisabledReason?: string;
+  playbackControls: TelepromptPlaybackController;
+}>): string | undefined {
+  if (audioFollowAvailable) {
+    if (playbackControls.seekTo || playbackControls.skipBy) {
+      return undefined;
+    }
+    return "Audio seeking is available after playback controls finish loading.";
+  }
+  return cuePlaybackDisabledReason;
 }
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -357,7 +409,8 @@ export function TelepromptStudio({
   const audioProgressPercent = cueSync.activeCue
     ? Math.round(cueSync.activeCue.cueProgress * 100)
     : Math.round((cue?.segmentProgress ?? 0) * 100);
-  const waveformBars = useAudioWaveformBars(job ? audioSource(job, { partial: true }) : "", 56);
+  const waveformAudioUrl = telepromptWaveformAudioSource(job);
+  const waveformBars = useAudioWaveformBars(waveformAudioUrl, TELEPROMPT_WAVEFORM_BAR_COUNT);
   const workModeModel = useMemo(
     () =>
       buildTelepromptWorkModeModel({
@@ -923,6 +976,46 @@ export function TelepromptStudio({
     theatreMode,
   ]);
   const telepromptDurationMs = job?.durationMs ?? estimatedDurationMs;
+  const cueMarkers = useMemo(
+    () =>
+      telepromptCueMarkers({
+        activeCueId: cueSync.activeCue?.cueId ?? null,
+        durationMs: telepromptDurationMs,
+        timeline: cueTimeline,
+      }),
+    [cueSync.activeCue?.cueId, cueTimeline, telepromptDurationMs],
+  );
+  const timelineSeekDisabledReason = telepromptTimelineSeekDisabledReason({
+    audioFollowAvailable,
+    cuePlaybackDisabledReason,
+    playbackControls,
+  });
+  const handleTimelineSeek = useCallback(
+    (targetSeconds: number) => {
+      if (!audioFollowAvailable) {
+        setStatusMessage("Playback controls are available after Create & Listen.");
+        return;
+      }
+      const durationSeconds = telepromptDurationMs > 0 ? telepromptDurationMs / 1000 : 0;
+      if (durationSeconds <= 0) {
+        setStatusMessage("Audio duration is not available yet.");
+        return;
+      }
+      const clampedSeconds = Math.max(0, Math.min(durationSeconds, targetSeconds));
+      if (playbackControls.seekTo) {
+        playbackControls.seekTo(clampedSeconds);
+      } else if (playbackControls.skipBy) {
+        playbackControls.skipBy(clampedSeconds - playbackCursorSec);
+      } else {
+        setStatusMessage("Audio seeking is available after playback controls finish loading.");
+        return;
+      }
+      setWorkMode("audio-follow");
+      setCueSyncMode("audio-follow");
+      setStatusMessage(`Jumped to ${formatTelepromptDuration(clampedSeconds * 1000)}.`);
+    },
+    [audioFollowAvailable, playbackControls, playbackCursorSec, telepromptDurationMs],
+  );
   const telepromptPlaybackToolbar: LocalizedPlaybackToolbarModel = {
     activeDetail: activeBlock
       ? `Cue ${activeBlock.index.toString()} of ${Math.max(1, blocks.length).toString()} · ${cueSync.statusLabel}`
@@ -981,10 +1074,21 @@ export function TelepromptStudio({
       currentLabel: formatTelepromptDuration(playbackCursorSec * 1000),
       durationLabel:
         telepromptDurationMs > 0 ? formatTelepromptDuration(telepromptDurationMs) : "--:--",
+      markers: cueMarkers,
       ratio:
         telepromptDurationMs > 0
           ? Math.max(0, Math.min(1, (playbackCursorSec * 1000) / telepromptDurationMs))
           : 0,
+      seek:
+        telepromptDurationMs > 0
+          ? {
+              currentSec: playbackCursorSec,
+              disabled: Boolean(timelineSeekDisabledReason),
+              disabledReason: timelineSeekDisabledReason,
+              durationSec: telepromptDurationMs / 1000,
+              onSeekSeconds: handleTimelineSeek,
+            }
+          : undefined,
       waveformBars,
     },
     restart: {

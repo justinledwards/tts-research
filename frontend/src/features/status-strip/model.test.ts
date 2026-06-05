@@ -178,23 +178,32 @@ describe("resolveNarrationStatusModel", () => {
             transcript: "Intro. Long segment.",
           },
         }),
+        stageStatus: stageStatus({
+          reviewState: "needsRepair",
+          reviewWarningCount: 17,
+        }),
       }),
     );
 
     expect(model.state).toBe("ready");
     expect(model.primaryAction?.id).toBe("openCinema");
-    expect(model.primaryLabel).toBe("Audio ready with review warnings");
+    expect(model.primaryLabel).toBe("Audio ready");
+    expect(model.primaryMessage).toBe("Audio ready. 1 segment has review notes.");
     expect(model.primaryAction?.label).not.toBe("Retry full audio");
+    expect(model.chips.find((chip) => chip.id === "review")).toMatchObject({
+      tone: "success",
+      value: "Ready",
+    });
     expect(model.chips.find((chip) => chip.id === "audio")).toMatchObject({
       tone: "success",
       value: "Ready",
     });
     expect(model.chips.find((chip) => chip.id === "check")).toMatchObject({
-      tone: "warning",
-      value: "1 review",
+      tone: "success",
+      value: "1 note",
     });
-    expect(model.issues.find((issue) => issue.id === "check-audio-review")).toMatchObject({
-      detail: "Audio generated with 1 segment needing audio review.",
+    expect(model.issues.find((issue) => issue.id === "check-audio-review-notes")).toMatchObject({
+      detail: "1 segment has review notes.",
       technicalDetail: "completed with 1 segment review warning(s)",
     });
   });

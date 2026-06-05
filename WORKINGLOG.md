@@ -1583,3 +1583,12 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add frontend and backend regressions
 - [x] Run focused and project checks
 - Validation: focused frontend Vitest passed; frontend typecheck passed; backend tests passed; `pnpm check` passed with existing unrelated Biome warnings/infos; rendered Playwright smoke passed after mock service restart with missing saved job id restored to ready audio.
+
+## 2026-06-05 10:24 CEST - Teleprompt Playback Ergonomics
+- [x] Use completed full audio for Teleprompt waveform
+- [x] Add seekable waveform timeline and cue markers
+- [x] Make completed review notes non-blocking in status
+- [x] Replace compact rail counts with action cards
+- [x] Add focused frontend regression coverage
+- [x] Run validation checks
+- Validation: focused playback/Teleprompt/status/rail Vitest passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `pnpm e2e:teleprompt-memory` passed; `git diff --check` passed.

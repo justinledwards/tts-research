@@ -26,4 +26,36 @@ describe("workspace rail summaries", () => {
     expect(markup).not.toContain("Slim</button>");
     expect(markup).not.toContain("Hide</button>");
   });
+
+  it("renders compact rail summaries as actionable cards when handlers are provided", () => {
+    const markup = renderToStaticMarkup(
+      <RailMiniStack
+        items={[
+          {
+            actionSurface: "Source Rail",
+            detail: "Full source",
+            label: "Source",
+            onClick: () => null,
+            testId: "rail-source",
+            value: "Designing High-Function Cockpits",
+          },
+          {
+            actionSurface: "Audio Rail",
+            detail: "12:20",
+            label: "Audio",
+            onClick: () => null,
+            testId: "rail-audio",
+            tone: "ready",
+            value: "Audio ready",
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="rail-source"');
+    expect(markup).toContain('data-testid="rail-audio"');
+    expect(markup).toContain('data-ui-action-surface="Audio Rail"');
+    expect(markup).toContain("Audio ready");
+    expect(markup).toContain("bg-[var(--vs-success-soft)]");
+  });
 });

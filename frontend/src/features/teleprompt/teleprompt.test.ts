@@ -11,7 +11,13 @@ import {
   normalizeTelepromptTheatreSettings,
 } from "./telepromptTheatreSettings";
 import { DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS } from "../../teleprompter";
-import { TelepromptStudio, type TelepromptStudioProps } from "./TelepromptStudio";
+import {
+  TELEPROMPT_WAVEFORM_BAR_COUNT,
+  TelepromptStudio,
+  telepromptCueMarkers,
+  telepromptWaveformAudioSource,
+  type TelepromptStudioProps,
+} from "./TelepromptStudio";
 import {
   buildTelepromptWorkModeModel,
   defaultTelepromptWorkMode,
@@ -53,7 +59,7 @@ import {
   type TelepromptTheatreProps,
 } from "./TelepromptTheatre";
 import { resolveTelepromptTheatreShortcut } from "./telepromptTheatreShortcuts";
-import type { TelepromptCueWordTiming } from "./telepromptCueTimeline";
+import { buildTelepromptCueTimeline, type TelepromptCueWordTiming } from "./telepromptCueTimeline";
 import { buildTelepromptTheatreSummary } from "./telepromptTheatreState";
 import type { GeneratedAudioLifecycleState } from "../playback";
 import type { ReadAlongTimingState } from "../readalong";
@@ -269,6 +275,43 @@ describe("teleprompt studio cue-first render", () => {
     expect(markup).toContain('data-testid="ui-action-teleprompt-audio-recovery"');
     expect(markup).toContain("Retry generation");
     expect(markup).toContain("Generation failed. Retry generation before playback.");
+  });
+});
+
+describe("teleprompt waveform timeline", () => {
+  it("selects final completed audio for waveform decoding and partial audio while generating", () => {
+    expect(TELEPROMPT_WAVEFORM_BAR_COUNT).toBe(96);
+    expect(
+      telepromptWaveformAudioSource(
+        voiceJob({
+          audioPartialUrl: "/audio/job.partial.wav",
+          audioUrl: "/audio/job.final.wav",
+          status: "completed",
+        }),
+      ),
+    ).toBe("/audio/job.final.wav");
+    expect(
+      telepromptWaveformAudioSource(
+        voiceJob({
+          audioPartialUrl: "/audio/job.partial.wav",
+          audioUrl: "",
+          status: "synthesizing",
+        }),
+      ),
+    ).toBe("/audio/job.partial.wav");
+  });
+
+  it("maps cue timeline starts into active waveform markers", () => {
+    const timeline = buildTelepromptCueTimeline({ blocks });
+    const markers = telepromptCueMarkers({
+      activeCueId: timeline.cues[1]?.cueId ?? null,
+      durationMs: timeline.durationMs,
+      timeline,
+    });
+
+    expect(markers).toHaveLength(3);
+    expect(markers?.map((marker) => Number(marker.ratio.toFixed(2)))).toEqual([0, 0.33, 0.67]);
+    expect(markers?.[1]).toMatchObject({ active: true, label: "Cue 2: Text" });
   });
 });
 

@@ -8485,15 +8485,44 @@ export function App() {
             ) : null}
             {leftRailMode === "compact" ? (
               <NarrationRailMini
-                activeSourceLabel={
-                  activeNarrationPreparedSource?.title ??
-                  (activeNarrationBookSource
-                    ? bookSourceName(activeNarrationBookSource)
-                    : undefined)
+                activeScopeLabel={activeNarrationScopeLabel}
+                activeSourceLabel={activeNarrationSourceLabel}
+                audioDetail={
+                  job?.durationMs
+                    ? `${formatDuration(job.durationMs)} · ${activeWorkbenchStageStatus.currentTask.title}`
+                    : activeWorkbenchStageStatus.currentTask.title
+                }
+                audioReady={canOpenCurrentCinema}
+                audioValue={
+                  canOpenCurrentCinema
+                    ? "Audio ready"
+                    : generatedAudioLifecycleLabel(generatedAudioLifecycle)
                 }
                 profile={selectedVoiceProfile}
+                settingsDetail={`${speechPolicyProfileDisplayName(
+                  speechPolicyProfile,
+                  customSpeechPolicyProfiles,
+                )} · ${getRunModePreset(runConfiguration.runMode).label}`}
+                settingsValue={activeWorkbenchStageStatus.label}
                 sourceCount={preparedSources.length + bookSources.length}
-                onOpenVoiceCloning={() => {
+                onOpenAudio={() => {
+                  if (canOpenCurrentCinema) {
+                    openReadingCinema();
+                    return;
+                  }
+                  createAndListenFromCurrentSource();
+                }}
+                onOpenSettings={() => {
+                  openCommandCenter("overview");
+                }}
+                onOpenSource={() => {
+                  if (!hasNarrationSource) {
+                    setContentMode("intake");
+                    return;
+                  }
+                  openCommandCenter("assets");
+                }}
+                onOpenVoice={() => {
                   handleStudioModeChange("voiceCloning");
                 }}
               />
@@ -8869,27 +8898,73 @@ export function App() {
 }
 
 function NarrationRailMini({
+  activeScopeLabel,
   activeSourceLabel,
+  audioDetail,
+  audioReady,
+  audioValue,
   profile,
+  settingsDetail,
+  settingsValue,
   sourceCount,
-  onOpenVoiceCloning,
+  onOpenAudio,
+  onOpenSettings,
+  onOpenSource,
+  onOpenVoice,
 }: Readonly<{
-  activeSourceLabel?: string;
+  activeScopeLabel: string;
+  activeSourceLabel: string;
+  audioDetail: string;
+  audioReady: boolean;
+  audioValue: string;
   profile: VoiceProfile | null;
+  settingsDetail: string;
+  settingsValue: string;
   sourceCount: number;
-  onOpenVoiceCloning: () => void;
+  onOpenAudio: () => void;
+  onOpenSettings: () => void;
+  onOpenSource: () => void;
+  onOpenVoice: () => void;
 }>) {
   return (
     <RailMiniStack
       items={[
-        { label: "Sources", value: String(sourceCount), detail: activeSourceLabel ?? "No source" },
-        { label: "Voice", value: profile?.name ?? "Default", detail: profile?.status ?? "ready" },
-        { label: "Backend", value: "Run", detail: "Settings" },
+        {
+          actionSurface: "Source Rail",
+          detail: `${activeScopeLabel} · ${sourceCount.toString()} source${
+            sourceCount === 1 ? "" : "s"
+          }`,
+          label: "Source",
+          onClick: onOpenSource,
+          testId: "ui-action-rail-narration-source",
+          value: activeSourceLabel,
+        },
+        {
+          actionSurface: "Voice Rail",
+          detail: profile?.status ?? "ready",
+          label: "Voice",
+          onClick: onOpenVoice,
+          testId: "ui-action-rail-narration-voice",
+          value: profile?.name ?? "Default",
+        },
+        {
+          actionSurface: "Audio Rail",
+          detail: audioDetail,
+          label: "Audio",
+          onClick: onOpenAudio,
+          testId: "ui-action-rail-narration-audio",
+          tone: audioReady ? "ready" : "default",
+          value: audioValue,
+        },
+        {
+          actionSurface: "Settings Rail",
+          detail: settingsDetail,
+          label: "Settings",
+          onClick: onOpenSettings,
+          testId: "ui-action-rail-narration-settings",
+          value: settingsValue,
+        },
       ]}
-      actionLabel="Clone"
-      actionSurface="Voice Command"
-      actionTestId="ui-action-rail-narration-open-voice-cloning"
-      onAction={onOpenVoiceCloning}
     />
   );
 }
