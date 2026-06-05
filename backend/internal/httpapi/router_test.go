@@ -410,6 +410,81 @@ func TestCreateJobEndpoint(t *testing.T) {
 	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 }
 
+func TestDeleteVoiceJobEndpoint(t *testing.T) {
+	t.Parallel()
+
+	service := newService(t)
+	app := httpapi.NewRouter(service)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: "Delete this generated narration."})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+
+	deleteRequest, err := http.NewRequest(http.MethodDelete, "/api/voice-jobs/"+job.ID, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(delete) returned error: %v", err)
+	}
+	deleteResponse, err := app.Test(deleteRequest)
+	if err != nil {
+		t.Fatalf("app.Test(delete) returned error: %v", err)
+	}
+	defer deleteResponse.Body.Close()
+	if deleteResponse.StatusCode != http.StatusNoContent {
+		payload, _ := io.ReadAll(deleteResponse.Body)
+		t.Fatalf("delete status = %d, want %d, body = %s", deleteResponse.StatusCode, http.StatusNoContent, payload)
+	}
+
+	missingRequest, err := http.NewRequest(http.MethodDelete, "/api/voice-jobs/missing", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(missing) returned error: %v", err)
+	}
+	missingResponse, err := app.Test(missingRequest)
+	if err != nil {
+		t.Fatalf("app.Test(missing) returned error: %v", err)
+	}
+	defer missingResponse.Body.Close()
+	if missingResponse.StatusCode != http.StatusNotFound {
+		payload, _ := io.ReadAll(missingResponse.Body)
+		t.Fatalf("missing status = %d, want %d, body = %s", missingResponse.StatusCode, http.StatusNotFound, payload)
+	}
+}
+
+func TestDeleteVoiceJobEndpointRejectsActiveJob(t *testing.T) {
+	t.Parallel()
+
+	optimizer := &httpBlockingOptimizer{started: make(chan struct{}, 1)}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	app := httpapi.NewRouter(service)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: strings.Repeat("active. ", 80)})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForHTTPOptimizerSignal(t, optimizer.started)
+
+	request, err := http.NewRequest(http.MethodDelete, "/api/voice-jobs/"+job.ID, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(active delete) returned error: %v", err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test(active delete) returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusConflict {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("active delete status = %d, want %d, body = %s", response.StatusCode, http.StatusConflict, payload)
+	}
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob returned error: %v", err)
+	}
+}
+
 func TestCreateVoicePreviewEndpointReturnsRawAudio(t *testing.T) {
 	t.Parallel()
 
@@ -1177,4 +1252,27 @@ func newVoiceProfileSourceUploadRequest(
 	}
 	request.Header.Set("Content-Type", writer.FormDataContentType())
 	return request
+}
+
+type httpBlockingOptimizer struct {
+	started chan struct{}
+}
+
+func (optimizer *httpBlockingOptimizer) Optimize(ctx context.Context, _ string) (string, error) {
+	select {
+	case optimizer.started <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func waitForHTTPOptimizerSignal(t *testing.T, signal <-chan struct{}) {
+	t.Helper()
+
+	select {
+	case <-signal:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for active optimizer")
+	}
 }

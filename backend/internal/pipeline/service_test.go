@@ -1350,6 +1350,152 @@ func TestProjectDeleteAndStorageSummary(t *testing.T) {
 	}
 }
 
+func TestDeleteVoiceJobRemovesTerminalNarrationArtifactsAndPlaybackReferences(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	project, err := service.CreateProject("Job cleanup")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	source, err := service.CreatePreparedSource(context.Background(), project.ID, pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "cleanup.md",
+		Text:       "# Cleanup\n\nThis source should keep its progress after deleting audio.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	jobDir := filepath.Join(service.Options().JobDataDir, completed.ID)
+	if _, err := os.Stat(filepath.Join(jobDir, "metadata.json")); err != nil {
+		t.Fatalf("job metadata should exist before delete: %v", err)
+	}
+	if completed.AudioPath == "" {
+		t.Fatal("completed job should have an audio path")
+	}
+	if _, err := os.Stat(completed.AudioPath); err != nil {
+		t.Fatalf("job audio should exist before delete: %v", err)
+	}
+	if _, err := service.UpdatePlaybackProgress("prepared:"+source.ID, pipeline.PlaybackProgressUpdate{
+		ProjectID:        project.ID,
+		PreparedSourceID: source.ID,
+		JobID:            completed.ID,
+		CurrentTimeSec:   1,
+		Progress:         0.25,
+	}); err != nil {
+		t.Fatalf("UpdatePlaybackProgress(prepared) returned error: %v", err)
+	}
+	if _, err := service.UpdatePlaybackProgress("job:"+completed.ID, pipeline.PlaybackProgressUpdate{
+		ProjectID:      project.ID,
+		JobID:          completed.ID,
+		CurrentTimeSec: 1,
+		Progress:       0.25,
+	}); err != nil {
+		t.Fatalf("UpdatePlaybackProgress(job) returned error: %v", err)
+	}
+	session, err := service.StartPlaybackSession(pipeline.PlaybackProgressUpdate{
+		TargetID:         "prepared:" + source.ID,
+		ProjectID:        project.ID,
+		PreparedSourceID: source.ID,
+		JobID:            completed.ID,
+		CurrentTimeSec:   1,
+	})
+	if err != nil {
+		t.Fatalf("StartPlaybackSession returned error: %v", err)
+	}
+
+	if err := service.DeleteVoiceJob(completed.ID); err != nil {
+		t.Fatalf("DeleteVoiceJob returned error: %v", err)
+	}
+	if _, err := service.GetJob(completed.ID); !errors.Is(err, pipeline.ErrJobNotFound) {
+		t.Fatalf("GetJob deleted error = %v, want not found", err)
+	}
+	if _, err := os.Stat(jobDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("job dir stat error = %v, want not exist", err)
+	}
+	jobs, err := service.ListProjectJobs(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectJobs returned error: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("project jobs = %d, want 0", len(jobs))
+	}
+	progress, err := service.ListProjectProgress(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectProgress returned error: %v", err)
+	}
+	if len(progress) != 1 || progress[0].JobID != "" || progress[0].PreparedSourceID != source.ID {
+		t.Fatalf("progress = %#v, want source progress without deleted job id", progress)
+	}
+	if _, err := service.SyncPlaybackSession(session.ID, pipeline.PlaybackProgressUpdate{}); !errors.Is(err, pipeline.ErrPlaybackSessionNotFound) {
+		t.Fatalf("SyncPlaybackSession deleted error = %v, want not found", err)
+	}
+}
+
+func TestDeleteVoiceJobRejectsActiveJob(t *testing.T) {
+	t.Parallel()
+
+	optimizer := &repeatBlockingOptimizer{started: make(chan struct{}, 2)}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: strings.Repeat("active. ", 80)})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForSignal(t, optimizer.started, "optimizer start")
+
+	if err := service.DeleteVoiceJob(job.ID); !errors.Is(err, pipeline.ErrJobInUse) {
+		t.Fatalf("DeleteVoiceJob(active) error = %v, want in use", err)
+	}
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
+}
+
+func TestDeleteVoiceJobRejectsActiveRetryDependency(t *testing.T) {
+	t.Parallel()
+
+	optimizer := &repeatBlockingOptimizer{started: make(chan struct{}, 2)}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: strings.Repeat("retry source. ", 80)})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForSignal(t, optimizer.started, "first optimizer start")
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob(first) returned error: %v", err)
+	}
+	cancelled := waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
+
+	retry, err := service.RetryJob(context.Background(), cancelled.ID)
+	if err != nil {
+		t.Fatalf("RetryJob returned error: %v", err)
+	}
+	waitForSignal(t, optimizer.started, "retry optimizer start")
+	if err := service.DeleteVoiceJob(cancelled.ID); !errors.Is(err, pipeline.ErrJobInUse) {
+		t.Fatalf("DeleteVoiceJob(active retry dependency) error = %v, want in use", err)
+	}
+	if err := service.CancelJob(retry.ID); err != nil {
+		t.Fatalf("CancelJob(retry) returned error: %v", err)
+	}
+	waitForJob(t, service, retry.ID, pipeline.JobStatusCancelled)
+}
+
 func TestPreparedSourceRenameAndDeleteRespectActiveJobs(t *testing.T) {
 	t.Parallel()
 
@@ -5955,6 +6101,10 @@ type cancelAwareBlockingOptimizer struct {
 	started chan struct{}
 }
 
+type repeatBlockingOptimizer struct {
+	started chan struct{}
+}
+
 type mockProfileSourceAnalyzer struct {
 	result pipeline.VoiceProfileSourceAnalysisResult
 	err    error
@@ -6488,6 +6638,15 @@ func (optimizer *cancelAwareBlockingOptimizer) Optimize(ctx context.Context, _ s
 	optimizer.once.Do(func() {
 		close(optimizer.started)
 	})
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func (optimizer *repeatBlockingOptimizer) Optimize(ctx context.Context, _ string) (string, error) {
+	select {
+	case optimizer.started <- struct{}{}:
+	default:
+	}
 	<-ctx.Done()
 	return "", ctx.Err()
 }

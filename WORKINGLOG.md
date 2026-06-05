@@ -1679,3 +1679,18 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add focused regression coverage
 - [x] Run focused and project checks
 - Validation: frontend Vitest passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `git diff --check` passed; `pnpm e2e:teleprompt-memory` passed.
+
+## 2026-06-05 17:32 CEST - Command Center Narration Actions
+- [x] Add terminal-only narration deletion API
+- [x] Wire Command Center source generation action
+- [x] Wire generated-audio deletion action
+- [x] Add backend and frontend regression coverage
+- [x] Run focused and project checks
+- Validation: focused backend pipeline and HTTP deletion tests passed; focused frontend Command Center/API Vitest passed; frontend typecheck passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome warnings/infos.
+
+## 2026-06-05 18:34 CEST - Command Center Follow-up Debug
+- [x] Identify expected versus actual behavior
+- [x] Reproduce the mismatch locally
+- [x] Patch the root cause
+- [x] Rerun focused validation
+- Validation: fixed Command Center asset generation so inactive rows do not reuse active review-session text and list-only prepared sources hydrate before generation; focused frontend/backend checks passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome warnings/infos.

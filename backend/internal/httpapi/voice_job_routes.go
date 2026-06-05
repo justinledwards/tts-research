@@ -64,6 +64,17 @@ func registerVoiceJobRoutes(app *fiber.App, service *pipeline.Service) {
 		return ctx.JSON(job)
 	})
 
+	app.Delete("/api/voice-jobs/:id", func(ctx fiber.Ctx) error {
+		if err := service.DeleteVoiceJob(ctx.Params("id")); err != nil {
+			if errors.Is(err, pipeline.ErrJobInUse) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return notFound(ctx, err)
+		}
+
+		return ctx.SendStatus(fiber.StatusNoContent)
+	})
+
 	app.Get("/api/voice-jobs/:id/highlight-map", func(ctx fiber.Ctx) error {
 		payload, err := service.GetHighlightMap(ctx.Params("id"))
 		if err != nil {

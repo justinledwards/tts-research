@@ -32,6 +32,7 @@ var (
 	ErrProfileNotFound             = errors.New("voice profile not found")
 	ErrAudioNotReady               = errors.New("voice job audio is not ready")
 	ErrJobNotRetriable             = errors.New("voice job is not retryable")
+	ErrJobInUse                    = errors.New("voice job is in use")
 	ErrRetryExhaust                = errors.New("voice checker did not confirm complete audio before retry limit")
 	ErrProfileTooLarge             = errors.New("voice profile upload exceeds allowed size")
 	ErrProfileExtractionFailed     = errors.New("unable to extract voice profile audio")

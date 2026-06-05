@@ -60,6 +60,10 @@ import {
   type WorkspaceActivitySummary,
 } from "./WorkspaceDrawerHelpers";
 
+interface GenerateNarrationOptions {
+  useCurrentReviewSession?: boolean;
+}
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function WorkspaceDrawer({
   activeProjectId,
@@ -123,6 +127,9 @@ export function WorkspaceDrawer({
   onDeleteBookSource,
   onDeletePreparedSource,
   onDeleteVoiceProfile,
+  onDeleteVoiceJob,
+  onGenerateBookSourceNarration,
+  onGeneratePreparedSourceNarration,
   onSpeechPolicyProfileChange,
   onUseBookSource,
   onUsePreparedSource,
@@ -188,6 +195,16 @@ export function WorkspaceDrawer({
   onDeleteBookSource: (id: string) => Promise<void>;
   onDeletePreparedSource: (id: string) => Promise<void>;
   onDeleteVoiceProfile: (id: string) => Promise<void>;
+  onDeleteVoiceJob: (id: string) => Promise<void>;
+  onGenerateBookSourceNarration: (
+    book: BookSource,
+    scope: BookScope,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onGeneratePreparedSourceNarration: (
+    source: PreparedSource,
+    options?: GenerateNarrationOptions,
+  ) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onUseBookSource: (book: BookSource, scope: BookScope) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
@@ -583,7 +600,10 @@ export function WorkspaceDrawer({
                       </EmptyDrawerText>
                     )}
                   </div>
-                  <GeneratedAudioList visibleJobs={visibleJobs} />
+                  <GeneratedAudioList
+                    visibleJobs={visibleJobs}
+                    onDeleteVoiceJob={onDeleteVoiceJob}
+                  />
                 </div>
               </WorkspaceSection>
             ) : null}
@@ -634,6 +654,8 @@ export function WorkspaceDrawer({
                   onDeleteBookSource={onDeleteBookSource}
                   onDeletePreparedSource={onDeletePreparedSource}
                   onDeleteVoiceProfile={onDeleteVoiceProfile}
+                  onGenerateBookSourceNarration={onGenerateBookSourceNarration}
+                  onGeneratePreparedSourceNarration={onGeneratePreparedSourceNarration}
                   onInspectAsset={setInspectedAssetKey}
                   onOpenIntake={onOpenIntake}
                   onOpenVoiceCloning={onOpenVoiceCloning}
@@ -868,6 +890,8 @@ function AssetManagementPanel({
   onDeleteBookSource,
   onDeletePreparedSource,
   onDeleteVoiceProfile,
+  onGenerateBookSourceNarration,
+  onGeneratePreparedSourceNarration,
   onInspectAsset,
   onOpenIntake,
   onOpenVoiceCloning,
@@ -897,6 +921,15 @@ function AssetManagementPanel({
   onDeleteBookSource: (id: string) => Promise<void>;
   onDeletePreparedSource: (id: string) => Promise<void>;
   onDeleteVoiceProfile: (id: string) => Promise<void>;
+  onGenerateBookSourceNarration: (
+    book: BookSource,
+    scope: BookScope,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onGeneratePreparedSourceNarration: (
+    source: PreparedSource,
+    options?: GenerateNarrationOptions,
+  ) => void;
   onInspectAsset: (assetKey: string) => void;
   onOpenIntake: () => void;
   onOpenVoiceCloning: () => void;
@@ -946,6 +979,8 @@ function AssetManagementPanel({
             profileSource={profileSource}
             selectedBookScope={selectedBookScope}
             onInspectAsset={onInspectAsset}
+            onGenerateBookSourceNarration={onGenerateBookSourceNarration}
+            onGeneratePreparedSourceNarration={onGeneratePreparedSourceNarration}
             onOpenIntake={onOpenIntake}
             onUseBookSource={onUseBookSource}
             onUsePreparedSource={onUsePreparedSource}
@@ -1027,6 +1062,8 @@ function SourceAssetsSection({
   profileSource,
   selectedBookScope,
   onInspectAsset,
+  onGenerateBookSourceNarration,
+  onGeneratePreparedSourceNarration,
   onOpenIntake,
   onUseBookSource,
   onUsePreparedSource,
@@ -1037,6 +1074,15 @@ function SourceAssetsSection({
   profileSource: VoiceProfileSource | null;
   selectedBookScope: BookScope | null;
   onInspectAsset: (assetKey: string) => void;
+  onGenerateBookSourceNarration: (
+    book: BookSource,
+    scope: BookScope,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onGeneratePreparedSourceNarration: (
+    source: PreparedSource,
+    options?: GenerateNarrationOptions,
+  ) => void;
   onOpenIntake: () => void;
   onUseBookSource: (book: BookSource, scope: BookScope) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
@@ -1076,6 +1122,8 @@ function SourceAssetsSection({
             preparedSources={preparedSources}
             selectedBookScope={selectedBookScope}
             onInspectAsset={onInspectAsset}
+            onGenerateBookSourceNarration={onGenerateBookSourceNarration}
+            onGeneratePreparedSourceNarration={onGeneratePreparedSourceNarration}
             onUseBookSource={onUseBookSource}
             onUsePreparedSource={onUsePreparedSource}
           />
@@ -1093,6 +1141,8 @@ function SourceAssetRow({
   preparedSources,
   selectedBookScope,
   onInspectAsset,
+  onGenerateBookSourceNarration,
+  onGeneratePreparedSourceNarration,
   onUseBookSource,
   onUsePreparedSource,
 }: Readonly<{
@@ -1101,10 +1151,20 @@ function SourceAssetRow({
   preparedSources: PreparedSource[];
   selectedBookScope: BookScope | null;
   onInspectAsset: (assetKey: string) => void;
+  onGenerateBookSourceNarration: (
+    book: BookSource,
+    scope: BookScope,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onGeneratePreparedSourceNarration: (
+    source: PreparedSource,
+    options?: GenerateNarrationOptions,
+  ) => void;
   onUseBookSource: (book: BookSource, scope: BookScope) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
 }>) {
   const useDisabledReason = sourceAssetUseDisabledReason(asset);
+  const generateDisabledReason = sourceAssetGenerateDisabledReason(asset);
   return (
     <div
       className={`min-w-0 rounded-md border p-3 ${
@@ -1142,6 +1202,19 @@ function SourceAssetRow({
           }}
         >
           Use in narration
+        </AssetButton>
+        <AssetButton
+          disabled={Boolean(generateDisabledReason)}
+          disabledReason={generateDisabledReason}
+          testId={`ui-action-asset-source-generate-${asset.assetKey}`}
+          onClick={() => {
+            generateSourceAsset(asset, bookSources, preparedSources, selectedBookScope, {
+              onGenerateBookSourceNarration,
+              onGeneratePreparedSourceNarration,
+            });
+          }}
+        >
+          Generate narration
         </AssetButton>
       </div>
     </div>
@@ -1584,12 +1657,25 @@ function AssetButton({
 
 function DangerAssetButton({
   children,
+  disabled = false,
+  disabledReason,
   onClick,
-}: Readonly<{ children: string; onClick: () => void }>) {
+  testId,
+}: Readonly<{
+  children: string;
+  disabled?: boolean;
+  disabledReason?: string;
+  onClick: () => void;
+  testId?: string;
+}>) {
   return (
     <button
-      className="h-8 rounded-md border border-[var(--vs-action-destructive-border)] bg-[var(--vs-action-destructive-bg)] px-2.5 text-xs font-semibold text-[var(--vs-action-destructive)] hover:bg-[var(--vs-action-destructive-hover)]"
+      className="h-8 rounded-md border border-[var(--vs-action-destructive-border)] bg-[var(--vs-action-destructive-bg)] px-2.5 text-xs font-semibold text-[var(--vs-action-destructive)] hover:bg-[var(--vs-action-destructive-hover)] disabled:cursor-not-allowed disabled:border-[var(--vs-action-disabled-border)] disabled:bg-[var(--vs-action-disabled-bg)] disabled:text-[var(--vs-action-disabled-text)]"
+      data-disabled-reason={disabledReason}
+      data-testid={testId}
+      disabled={disabled}
       onClick={onClick}
+      title={disabled && disabledReason ? disabledReason : undefined}
       type="button"
     >
       {children}
@@ -1632,6 +1718,12 @@ function sourceAssetUseDisabledReason(asset: SourceAssetModel): string | undefin
     : (asset.routeState.reviewDisabledReason ?? asset.enabledDisabledReason);
 }
 
+function sourceAssetGenerateDisabledReason(asset: SourceAssetModel): string | undefined {
+  return asset.routeState.canReview
+    ? undefined
+    : (asset.routeState.reviewDisabledReason ?? asset.enabledDisabledReason);
+}
+
 function applySourceAsset(
   asset: SourceAssetModel,
   bookSources: BookSource[],
@@ -1658,6 +1750,42 @@ function applySourceAsset(
   }
 }
 
+function generateSourceAsset(
+  asset: SourceAssetModel,
+  bookSources: BookSource[],
+  preparedSources: PreparedSource[],
+  selectedBookScope: BookScope | null,
+  actions: {
+    onGenerateBookSourceNarration: (
+      book: BookSource,
+      scope: BookScope,
+      options?: GenerateNarrationOptions,
+    ) => void;
+    onGeneratePreparedSourceNarration: (
+      source: PreparedSource,
+      options?: GenerateNarrationOptions,
+    ) => void;
+  },
+) {
+  if (asset.owner === "book") {
+    const book = bookSources.find((source) => source.id === asset.id);
+    if (book) {
+      const scope =
+        asset.isActive && selectedBookScope ? selectedBookScope : resolveDefaultBookScope(book);
+      actions.onGenerateBookSourceNarration(book, scope, {
+        useCurrentReviewSession: asset.isActive,
+      });
+    }
+    return;
+  }
+  const source = preparedSources.find((item) => item.id === asset.id);
+  if (source) {
+    actions.onGeneratePreparedSourceNarration(source, {
+      useCurrentReviewSession: asset.isActive,
+    });
+  }
+}
+
 function confirmAssetAction(message: string): boolean {
   if (typeof globalThis.confirm !== "function") {
     return true;
@@ -1673,26 +1801,54 @@ function promptAssetName(label: string, currentName: string): string | null {
   return nextName.length > 0 && nextName !== currentName ? nextName : null;
 }
 
-function GeneratedAudioList({ visibleJobs }: Readonly<{ visibleJobs: VoiceJob[] }>) {
+function GeneratedAudioList({
+  visibleJobs,
+  onDeleteVoiceJob,
+}: Readonly<{ visibleJobs: VoiceJob[]; onDeleteVoiceJob: (id: string) => Promise<void> }>) {
   return (
     <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
       <p className="text-sm font-semibold">Generated Audio</p>
       {visibleJobs.length > 0 ? (
-        visibleJobs.slice(0, 8).map((item) => (
-          <div className="grid gap-1 rounded-md border p-3 vs-raised" key={item.id}>
-            <div className="flex min-w-0 items-center justify-between gap-3">
-              <p className="min-w-0 truncate text-sm font-semibold" title={item.inputText}>
-                {generatedAudioTitle(item)}
-              </p>
-              <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
-                {item.status}
-              </span>
+        visibleJobs.slice(0, 8).map((item) => {
+          const deleteDisabledReason = generatedAudioDeleteDisabledReason(item);
+          const title = generatedAudioTitle(item);
+          return (
+            <div className="grid gap-3 rounded-md border p-3 vs-raised" key={item.id}>
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="min-w-0 truncate text-sm font-semibold" title={item.inputText}>
+                    {title}
+                  </p>
+                  <p className="vs-muted mt-1 truncate text-xs" title={generatedAudioDetail(item)}>
+                    {generatedAudioDetail(item)}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
+                  {item.status}
+                </span>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <DangerAssetButton
+                  disabled={Boolean(deleteDisabledReason)}
+                  disabledReason={deleteDisabledReason}
+                  testId={`ui-action-generated-audio-delete-${item.id}`}
+                  onClick={() => {
+                    if (
+                      !confirmAssetAction(
+                        `Delete narration "${title}"? This removes generated audio and timing artifacts but keeps the source asset.`,
+                      )
+                    ) {
+                      return;
+                    }
+                    void onDeleteVoiceJob(item.id);
+                  }}
+                >
+                  Delete
+                </DangerAssetButton>
+              </div>
             </div>
-            <p className="vs-muted truncate text-xs" title={generatedAudioDetail(item)}>
-              {generatedAudioDetail(item)}
-            </p>
-          </div>
-        ))
+          );
+        })
       ) : (
         <EmptyDrawerText>
           No generated audio is attached to the current project yet.
@@ -1700,6 +1856,12 @@ function GeneratedAudioList({ visibleJobs }: Readonly<{ visibleJobs: VoiceJob[] 
       )}
     </div>
   );
+}
+
+function generatedAudioDeleteDisabledReason(item: VoiceJob): string | undefined {
+  return item.status === "completed" || item.status === "failed" || item.status === "cancelled"
+    ? undefined
+    : "Cancel this run before deleting.";
 }
 
 function generatedAudioTitle(item: VoiceJob): string {

@@ -44,6 +44,7 @@ import {
   deleteProject,
   deleteCustomSpeechPolicyProfile,
   deletePreparedSource,
+  deleteVoiceJob,
   deleteVoiceProfile,
   getBookSourceScope,
   getAdapterDiagnostics,
@@ -508,6 +509,10 @@ import {
 } from "./features/i18n/languageVoiceMapping";
 
 type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
+
+interface AssetNarrationGenerationOptions {
+  useCurrentReviewSession?: boolean;
+}
 
 type VoiceProfileArtifactBuildAction = (
   profileId: string,
@@ -5022,6 +5027,63 @@ export function App() {
     [selectWorkspaceInspectorTarget, selectedPreparedSourceId, setContentMode, sourceMode],
   );
 
+  const handleDeleteVoiceJob = useCallback(
+    async (id: string) => {
+      setProjectError(null);
+      try {
+        await deleteVoiceJob(id);
+        setProjectJobs((currentJobs) => currentJobs.filter((item) => item.id !== id));
+        void refreshProjectJobs(activeProjectId);
+        void refreshProjectStorage(activeProjectId);
+        if (job?.id === id) {
+          setJob(null);
+          setRequestState("idle");
+          setError(null);
+          setHighlightMap(null);
+          setHighlightMapV2(null);
+          setActivePlaybackSession(null);
+          setPendingPlaybackResume(null);
+          resetPlaybackSurface();
+          saveProjectWorkspaceState(activeProjectId, {
+            activeBlockId: workspaceContext.activeBlockId,
+            bookScope: selectedBookScope,
+            bookSourceId: selectedBookSourceId,
+            jobId: null,
+            preparedSourceId: selectedPreparedSourceId,
+            readingPosition: currentReadingPosition,
+            sourceMode,
+            sourceType: workspaceSourceType(sourceMode),
+            speechPolicyProfile,
+            stage: contentMode,
+            text,
+            voiceProfileId: selectedVoiceProfileId,
+          });
+        }
+      } catch (caughtError) {
+        setProjectError(
+          caughtError instanceof Error ? caughtError.message : "Unable to delete narration",
+        );
+      }
+    },
+    [
+      activeProjectId,
+      contentMode,
+      currentReadingPosition,
+      job?.id,
+      refreshProjectJobs,
+      refreshProjectStorage,
+      resetPlaybackSurface,
+      selectedBookScope,
+      selectedBookSourceId,
+      selectedPreparedSourceId,
+      selectedVoiceProfileId,
+      sourceMode,
+      speechPolicyProfile,
+      text,
+      workspaceContext.activeBlockId,
+    ],
+  );
+
   const announceVoiceJobTerminalStatus = useCallback(
     (nextJob: VoiceJob) => {
       if (nextJob.status === "completed") {
@@ -7223,7 +7285,11 @@ export function App() {
     }
   }
 
-  async function submitBookNarrationJob(book: BookSource, scope: BookScope) {
+  async function submitBookNarrationJob(
+    book: BookSource,
+    scope: BookScope,
+    options: AssetNarrationGenerationOptions = {},
+  ) {
     if (book.status !== "ready") {
       setBookSourceError(book.error ?? "Book source is not ready for narration.");
       return;
@@ -7232,15 +7298,19 @@ export function App() {
     if (!scopedText) {
       return;
     }
+    const useCurrentReviewSession = options.useCurrentReviewSession ?? true;
+    const applyReviewSession = useCurrentReviewSession && hasRevisionSessionChanges;
     const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
-    const narrationText = reviewedNarrationSpeechText || scopedText;
+    const narrationText = useCurrentReviewSession
+      ? reviewedNarrationSpeechText || scopedText
+      : scopedText;
     const request = {
       ...buildVoiceJobRequest(narrationText),
       bookSourceId: book.id,
       bookScope: scope,
       progressTargetId: progressTargetIdForBookScope(book.id, scope),
       sourceKind: "book",
-      ...(hasRevisionSessionChanges ? { speechRenderApplied: true } : {}),
+      ...(applyReviewSession ? { speechRenderApplied: true } : {}),
       ...(hasSpeechPolicyOverrides(sessionOverrides)
         ? { speechPolicyOverrides: sessionOverrides }
         : {}),
@@ -7252,11 +7322,12 @@ export function App() {
     setIsPlaybackActive(false);
     setSelectedBookSourceId(book.id);
     setSelectedBookScope(scope);
+    setSourceMode("book");
     setText(scopedText);
     announcePolite(liveStatusMessages.audioGenerationStarted());
 
     try {
-      const nextJob = hasRevisionSessionChanges
+      const nextJob = applyReviewSession
         ? await createVoiceJob(request)
         : await createBookNarrationJob(book.id, request);
       setActiveDemoProjectId(null);
@@ -7276,32 +7347,76 @@ export function App() {
     }
   }
 
-  async function submitPreparedSourceJob(source: PreparedSource) {
+  async function loadPreparedSourceForNarration(
+    source: PreparedSource,
+    applyReviewSession: boolean,
+  ): Promise<PreparedSource | null> {
+    if (applyReviewSession || !isPreparedSourceDisplayIncomplete(source)) {
+      return source;
+    }
+    try {
+      const hydratedSource = await getPreparedSource(source.id);
+      setPreparedSources((currentSources) => upsertPreparedSource(currentSources, hydratedSource));
+      return hydratedSource;
+    } catch (caughtError) {
+      setSourcePrepError(
+        caughtError instanceof Error ? caughtError.message : "Unable to load prepared source",
+      );
+      return null;
+    }
+  }
+
+  function speechTextForPreparedNarration(
+    source: PreparedSource,
+    applyReviewSession: boolean,
+  ): string {
+    if (applyReviewSession && reviewedNarrationSpeechText.trim()) {
+      return reviewedNarrationSpeechText;
+    }
+    return source.speechText ?? "";
+  }
+
+  function selectedBlockIdsForPreparedNarration(
+    source: PreparedSource,
+    applyReviewSession: boolean,
+  ): string[] {
+    if (applyReviewSession) {
+      return narrationPreviewBlocks
+        .filter((block) => !revisionBlockIsSkipped(block))
+        .map((block) => block.id);
+    }
+    return (
+      source.blocks?.filter((block) => block.speakMode !== "skip").map((block) => block.id) ?? []
+    );
+  }
+
+  async function submitPreparedSourceJob(
+    source: PreparedSource,
+    options: AssetNarrationGenerationOptions = {},
+  ) {
     if (source.status !== "ready") {
       setSourcePrepError(source.error ?? "Prepared source is not ready for narration.");
       return;
     }
-    const speechText =
-      hasRevisionSessionChanges && reviewedNarrationSpeechText.trim()
-        ? reviewedNarrationSpeechText
-        : (source.speechText ?? "");
-    if (!speechText.trim()) {
+    const useCurrentReviewSession = options.useCurrentReviewSession ?? true;
+    const applyReviewSession = useCurrentReviewSession && hasRevisionSessionChanges;
+    const jobSource = await loadPreparedSourceForNarration(source, applyReviewSession);
+    if (!jobSource) {
+      return;
+    }
+    const speechText = speechTextForPreparedNarration(jobSource, applyReviewSession);
+    if (applyReviewSession && !speechText.trim()) {
       setSourcePrepError("Prepared source has no speakable blocks.");
       return;
     }
     const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
     const request = {
-      ...buildVoiceJobRequest(speechText, source),
-      preparedSourceId: source.id,
-      selectedBlockIds: hasRevisionSessionChanges
-        ? narrationPreviewBlocks
-            .filter((block) => !revisionBlockIsSkipped(block))
-            .map((block) => block.id)
-        : (source.blocks?.filter((block) => block.speakMode !== "skip").map((block) => block.id) ??
-          []),
-      sourceKind: source.kind,
-      progressTargetId: `prepared:${source.id}`,
-      ...(hasRevisionSessionChanges ? { speechRenderApplied: true } : {}),
+      ...buildVoiceJobRequest(speechText, jobSource),
+      preparedSourceId: jobSource.id,
+      selectedBlockIds: selectedBlockIdsForPreparedNarration(jobSource, applyReviewSession),
+      sourceKind: jobSource.kind,
+      progressTargetId: `prepared:${jobSource.id}`,
+      ...(applyReviewSession ? { speechRenderApplied: true } : {}),
       ...(hasSpeechPolicyOverrides(sessionOverrides)
         ? { speechPolicyOverrides: sessionOverrides }
         : {}),
@@ -7311,14 +7426,17 @@ export function App() {
     setSourcePrepError(null);
     setPlaybackCursorSec(0);
     setIsPlaybackActive(false);
-    setSelectedPreparedSourceId(source.id);
-    setText(speechText);
+    setSelectedPreparedSourceId(jobSource.id);
+    setSourceMode("fileUrl");
+    if (speechText.trim()) {
+      setText(speechText);
+    }
     announcePolite(liveStatusMessages.audioGenerationStarted());
 
     try {
-      const nextJob = hasRevisionSessionChanges
+      const nextJob = applyReviewSession
         ? await createVoiceJob(request)
-        : await createPreparedSourceJob(source.id, request);
+        : await createPreparedSourceJob(jobSource.id, request);
       setActiveDemoProjectId(null);
       setJob(nextJob);
       setContentMode("preview");
@@ -8341,6 +8459,15 @@ export function App() {
             onDeleteBookSource={handleDeleteBookSourceAsset}
             onDeletePreparedSource={handleDeletePreparedSourceAsset}
             onDeleteVoiceProfile={handleDeleteVoiceProfile}
+            onDeleteVoiceJob={handleDeleteVoiceJob}
+            onGenerateBookSourceNarration={(book, scope, options) => {
+              setIsCommandCenterOpen(false);
+              void submitBookNarrationJob(book, scope, options);
+            }}
+            onGeneratePreparedSourceNarration={(source, options) => {
+              setIsCommandCenterOpen(false);
+              void submitPreparedSourceJob(source, options);
+            }}
             onSpeechPolicyProfileChange={(profile) => {
               void handleSpeechPolicyProfileChange(profile);
             }}

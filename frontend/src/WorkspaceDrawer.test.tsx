@@ -100,6 +100,29 @@ describe("Command Center", () => {
     expect(markup.indexOf("Newest chapter")).toBeLessThan(markup.indexOf("Older chapter"));
   });
 
+  it("gates generated audio deletion to terminal jobs", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="projects"
+        job={null}
+        projectJobs={[
+          job({ id: "job-ready", status: "completed" }),
+          job({ id: "job-active", status: "synthesizing" }),
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="ui-action-generated-audio-delete-job-ready"');
+    expect(markup).not.toMatch(
+      /data-testid="ui-action-generated-audio-delete-job-ready"[^>]*disabled/,
+    );
+    expect(markup).toMatch(
+      /data-testid="ui-action-generated-audio-delete-job-active"[^>]*disabled/,
+    );
+    expect(markup).toContain("Cancel this run before deleting.");
+  });
+
   it("groups source and voice assets together", () => {
     const markup = renderToStaticMarkup(<WorkspaceDrawer {...props()} activeSection="assets" />);
 
@@ -112,6 +135,7 @@ describe("Command Center", () => {
     expect(markup).toContain("Asset detail");
     expect(markup).toContain("Provenance");
     expect(markup).toContain("Reuse for narration");
+    expect(markup).toContain("Generate narration");
     expect(markup).toContain("Voice Assets");
     expect(markup).toContain("Active voice");
     expect(markup).toContain("Narrator");
@@ -345,8 +369,11 @@ function props(): Parameters<typeof WorkspaceDrawer>[0] {
     onDeleteBookSource: () => Promise.resolve(),
     onDeletePreparedSource: () => Promise.resolve(),
     onDeleteProject: () => Promise.resolve(),
+    onDeleteVoiceJob: () => Promise.resolve(),
     onDeleteVoiceProfile: () => Promise.resolve(),
     onExportOpen: () => null,
+    onGenerateBookSourceNarration: () => null,
+    onGeneratePreparedSourceNarration: () => null,
     onImportOpen: () => null,
     onOpenIntake: () => null,
     onOpenSettings: () => null,

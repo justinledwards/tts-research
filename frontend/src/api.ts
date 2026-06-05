@@ -124,6 +124,16 @@ export async function retryVoiceJob(id: string): Promise<VoiceJob> {
   return response.json() as Promise<VoiceJob>;
 }
 
+export async function deleteVoiceJob(id: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+}
+
 export interface VoicePreviewAudio {
   readonly audio: Blob;
   readonly contentType: string;

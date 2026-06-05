@@ -8,6 +8,7 @@ import {
   createVoicePreview,
   buildVoiceProfileArtifact,
   deleteProject,
+  deleteVoiceJob,
   getProjectLexicon,
   getAdapterCapabilities,
   getAdapterDiagnostics,
@@ -52,6 +53,25 @@ describe("API errors", () => {
       await expect(deleteProject("project-1")).rejects.toThrow(
         /Restart the backend with mise start -- pnpm start:local/,
       );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("deletes generated narration jobs by id", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      requests.push({ url: fetchInputUrl(input), init });
+      return Promise.resolve(new Response(null, { status: 204 }));
+    };
+
+    try {
+      await deleteVoiceJob("job-1");
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.url).toBe("/api/voice-jobs/job-1");
+      expect(requests[0]?.init?.method).toBe("DELETE");
     } finally {
       globalThis.fetch = originalFetch;
     }
