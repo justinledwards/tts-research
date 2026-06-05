@@ -87,7 +87,7 @@ export function readAlongAnchorSelectors(anchor: ReadAlongDomAnchor): string[] {
       ].join(""),
     );
   }
-  if (anchor.wordIndex !== undefined) {
+  if (!anchor.nodeId && anchor.wordIndex !== undefined) {
     selectors.push(
       `[data-book-word="${String(anchor.wordIndex)}"]`,
       `[data-readalong-word-index="${String(anchor.wordIndex)}"]`,

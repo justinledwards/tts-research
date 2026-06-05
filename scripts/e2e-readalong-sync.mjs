@@ -78,6 +78,15 @@ async function main() {
             `${check.observationId} DOM active node ${check.activeNodeId} did not match evidence ${check.highlightedNodeId}.`,
           );
         }
+        if (
+          check.expectedNodeId &&
+          check.activeNodeId &&
+          check.activeNodeId !== check.expectedNodeId
+        ) {
+          browserFailures.push(
+            `${check.observationId} wrong visible block: active node ${check.activeNodeId} did not match expected node ${check.expectedNodeId}.`,
+          );
+        }
         if (check.activeNodeId && check.activeReadAlongNodeId !== check.activeNodeId) {
           browserFailures.push(
             `${check.observationId} active read-along node ${check.activeReadAlongNodeId} did not match DOM sync node ${check.activeNodeId}.`,

@@ -1759,3 +1759,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Revert Cinema presentation/state changes without touching reference skip fixes
 - [x] Run focused validation
 - [x] Validated with focused frontend tests, `pnpm check`, and `git diff --check`
+
+## 2026-06-05 23:48 CEST - Follow-Along Skipped Markdown Blocks
+- [x] Inspect read-along skipped-block mapping
+- [x] Add skipped and summarized Markdown fixtures
+- [x] Enforce wrong-visible-block failures
+- [x] Run focused and project validation
+- [x] Validated with focused script/frontend/backend tests, `pnpm e2e:readalong-sync`, `pnpm e2e:read-along-fidelity`, `pnpm check`, and `git diff --check`; `pnpm e2e:markdown-cockpit-import` is not defined in this checkout

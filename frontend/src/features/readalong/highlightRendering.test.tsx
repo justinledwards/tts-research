@@ -83,10 +83,24 @@ describe("read-along highlight rendering", () => {
     });
 
     expect(anchor.anchorId).toBe("book-1:chapter-1-block-2:42:2");
-    expect(readAlongAnchorSelectors(anchor)).toContain('[data-readalong-word-index="42"]');
+    expect(readAlongAnchorSelectors(anchor)).toContain(
+      '[data-readalong-node-id="chapter-1:block-2"][data-readalong-word-index="42"]',
+    );
+    expect(readAlongAnchorSelectors(anchor)).not.toContain('[data-readalong-word-index="42"]');
     expect(
       readAlongAnchorSelectors(anchor).some((selector) => selector.includes("chapter-1")),
     ).toBe(true);
+  });
+
+  it("keeps global word-index fallback only for unscoped anchors", () => {
+    const anchor = readAlongAnchorForWord({
+      fallbackTextQuote: "current word",
+      sourceId: "book-1",
+      wordIndex: 42,
+    });
+
+    expect(readAlongAnchorSelectors(anchor)).toContain('[data-readalong-word-index="42"]');
+    expect(readAlongAnchorSelectors(anchor)).toContain('[data-book-word="42"]');
   });
 
   it("keeps reduced-motion scroll bounded and disables auto-follow when requested", () => {

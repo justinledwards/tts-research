@@ -134,6 +134,67 @@ describe("Markdown rendering helpers", () => {
     expect(markup).not.toContain("markdown-cinema-word-active");
   });
 
+  it("keeps skipped Markdown blocks from consuming the active paragraph word offset", () => {
+    const paragraph = "Spoken paragraph after skipped code.";
+    const source = [
+      "```ts",
+      "const skipped = true;",
+      "```",
+      "",
+      paragraph,
+      "",
+      "| Silent | Table |",
+      "| --- | --- |",
+      "| not | spoken |",
+    ].join("\n");
+    const blockStartOffset = source.indexOf(paragraph);
+    const blockEndOffset = blockStartOffset + paragraph.length;
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer
+        wordHighlight={{
+          activeWordOffset: 1,
+          blockEndOffset,
+          blockStartOffset,
+          nodeId: "spoken-paragraph",
+          renderWordAnchors: true,
+        }}
+      >
+        {source}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain('data-readalong-node-id="spoken-paragraph"');
+    expect(markup).toContain(">paragraph</span>");
+    expect(markup).toContain("markdown-cinema-word-active");
+    expect(markup).toContain("const skipped = true;");
+    expect(markup).toContain("<table>");
+    expect(markup).not.toContain(">const</span>");
+    expect(markup).not.toContain(">Silent</span>");
+  });
+
+  it("skips citation chips while assigning word offsets inside the spoken paragraph", () => {
+    const source = "Claim [cite][turn40search10] stays aligned.";
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer
+        artifactRendering="document-cinema"
+        wordHighlight={{
+          activeWordOffset: 1,
+          blockEndOffset: source.length,
+          blockStartOffset: 0,
+          nodeId: "citation-paragraph",
+          renderWordAnchors: true,
+        }}
+      >
+        {source}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain(">stays</span>");
+    expect(markup).toContain("markdown-cinema-word-active");
+    expect(markup).toContain('data-speech-mode="skip"');
+    expect(markup).not.toContain("[cite]");
+  });
+
   it("maps active teleprompter word indexes back to prepared-source blocks", () => {
     const source = makePreparedSource([
       makeBlock("block-1", "First two", "First two"),

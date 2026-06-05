@@ -10,6 +10,7 @@
     "short-document",
     "citation-heavy-document",
     "website-article",
+    "markdown-skipped-blocks",
     "speed-change",
     "seek-resume",
     "stale-audio"

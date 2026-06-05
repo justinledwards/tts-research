@@ -44,6 +44,10 @@ interface ArtifactPattern {
 
 interface HastNode {
   children?: HastNode[];
+  position?: {
+    end?: { offset?: number };
+    start?: { offset?: number };
+  };
   properties?: Record<string, unknown>;
   tagName?: string;
   type: string;
@@ -131,7 +135,7 @@ function transformNode(node: HastNode) {
   const nextChildren: HastNode[] = [];
   for (const child of node.children) {
     if (child.type === "text" && typeof child.value === "string") {
-      nextChildren.push(...splitTextArtifacts(child.value));
+      nextChildren.push(...splitTextArtifacts(child));
       continue;
     }
     if (child.type === "element") {
@@ -143,25 +147,49 @@ function transformNode(node: HastNode) {
   node.children = nextChildren;
 }
 
-function splitTextArtifacts(value: string): HastNode[] {
+function splitTextArtifacts(node: HastNode): HastNode[] {
+  const value = node.value ?? "";
   const artifacts = findDocumentInlineArtifacts(value);
   if (artifacts.length === 0) {
-    return [{ type: "text", value }];
+    return [node];
   }
 
   const nodes: HastNode[] = [];
   let cursor = 0;
   for (const artifact of artifacts) {
     if (artifact.start > cursor) {
-      nodes.push({ type: "text", value: value.slice(cursor, artifact.start) });
+      nodes.push(textSliceNode(node, cursor, artifact.start));
     }
     nodes.push(chipNode(artifact));
     cursor = artifact.end;
   }
   if (cursor < value.length) {
-    nodes.push({ type: "text", value: value.slice(cursor) });
+    nodes.push(textSliceNode(node, cursor, value.length));
   }
   return nodes;
+}
+
+function textSliceNode(node: HastNode, start: number, end: number): HastNode {
+  return {
+    position: slicePosition(node.position, start, end),
+    type: "text",
+    value: (node.value ?? "").slice(start, end),
+  };
+}
+
+function slicePosition(
+  position: HastNode["position"],
+  start: number,
+  end: number,
+): HastNode["position"] {
+  const baseOffset = position?.start?.offset;
+  if (baseOffset === undefined) {
+    return undefined;
+  }
+  return {
+    end: { offset: baseOffset + end },
+    start: { offset: baseOffset + start },
+  };
 }
 
 function chipNode(artifact: DocumentInlineArtifact): HastNode {

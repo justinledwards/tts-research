@@ -10,12 +10,26 @@ export function normalizeFixture(fixture) {
 }
 
 export function buildFixtureTimings(fixture) {
+  const blocks = [];
   const words = [];
   const phrases = [];
   let wordIndex = 0;
   let phraseIndex = 0;
   for (const node of fixture.nodes ?? []) {
-    const nodeWords = tokenize(node.text);
+    if (!nodeIsSpeakable(node)) {
+      continue;
+    }
+    const nodeText = nodeSpeechText(node);
+    const nodeWords = tokenize(nodeText);
+    const nodeStartMs = node.startMs;
+    const nodeEndMs = node.startMs + node.durationMs;
+    blocks.push({
+      endMs: nodeEndMs,
+      nodeId: node.nodeId,
+      speechMode: nodeSpeechMode(node),
+      startMs: nodeStartMs,
+      text: nodeText,
+    });
     const wordDurationMs = Math.max(1, Math.floor(node.durationMs / Math.max(1, nodeWords.length)));
     const phraseWordCount = node.phraseWordCount ?? fixture.phraseWordCount ?? 4;
     for (const [localIndex, word] of nodeWords.entries()) {
@@ -57,7 +71,7 @@ export function buildFixtureTimings(fixture) {
       }
     }
   }
-  return { phrases, words };
+  return { blocks, phrases, words };
 }
 
 export function evaluateFixture(fixture) {
@@ -94,6 +108,7 @@ export function evaluateFixture(fixture) {
 function evaluateObservation(fixture, timings, observation, index) {
   const expectedWord = findTimingAt(timings.words, observation.audioTimeMs);
   const expectedPhrase = findTimingAt(timings.phrases, observation.audioTimeMs);
+  const expectedBlock = findTimingAt(timings.blocks, observation.audioTimeMs);
   const expectedLevel = observation.expectedLevel ?? fixture.expectedLevel ?? "word";
   const runtimeState = observation.runtimeState ?? runtimeStateForObservation(fixture, observation);
   const sampleDurationMs = observation.sampleDurationMs ?? fixture.sampleDurationMs ?? 250;
@@ -129,6 +144,30 @@ function evaluateObservation(fixture, timings, observation, index) {
         issue: "stale-highlight",
         issues,
         message: "Stale audio drove a visible highlight.",
+      });
+    }
+  } else if (
+    observation.highlightedNodeId &&
+    expectedBlock &&
+    observation.highlightedNodeId !== expectedBlock.nodeId
+  ) {
+    addIssue({
+      failures,
+      fixture,
+      index,
+      issue: "wrong-node",
+      issues,
+      message: `Wrong visible block: highlighted node ${observation.highlightedNodeId} instead of ${expectedBlock.nodeId}.`,
+    });
+  } else if (expectedLevel === "block") {
+    if (!observation.highlightedNodeId) {
+      addIssue({
+        failures,
+        fixture,
+        index,
+        issue: "missed-highlight",
+        issues,
+        message: "Expected block-level highlight was missing.",
       });
     }
   } else if (expectedLevel === "word") {
@@ -191,12 +230,30 @@ function evaluateObservation(fixture, timings, observation, index) {
     });
   }
 
+  if (
+    observation.expectedScrollTargetNodeId &&
+    observation.observedScrollTargetNodeId !== observation.expectedScrollTargetNodeId
+  ) {
+    addIssue({
+      failures,
+      fixture,
+      index,
+      issue: "scroll-target",
+      issues,
+      message: `Scroll target ${observation.observedScrollTargetNodeId ?? "missing"} did not match ${observation.expectedScrollTargetNodeId}.`,
+    });
+  }
+
   return {
     audioState: observation.audioState ?? "ready",
     audioTimeMs: observation.audioTimeMs,
     expectedLevel,
     expectedNodeId:
-      expectedWord?.nodeId ?? expectedPhrase?.nodeId ?? observation.expectedNodeId ?? null,
+      expectedWord?.nodeId ??
+      expectedPhrase?.nodeId ??
+      expectedBlock?.nodeId ??
+      observation.expectedNodeId ??
+      null,
     expectedPhraseIndex: expectedPhrase?.phraseIndex ?? null,
     expectedWordIndex: expectedWord?.wordIndex ?? null,
     failures,
@@ -211,13 +268,16 @@ function evaluateObservation(fixture, timings, observation, index) {
     runtimeState,
     sampleDurationMs,
     scrollJumpPx: observation.scrollJumpPx ?? 0,
+    scrollTargetNodeId: observation.observedScrollTargetNodeId ?? null,
     wordDriftMs: wordDriftMs === null ? null : roundMetric(wordDriftMs),
   };
 }
 
 export function renderSyncEvidenceHtml(fixture, timelineRows) {
   const timings = buildFixtureTimings(fixture);
-  const rowMarkup = timelineRows.map((row) => renderObservationRow(row, timings)).join("\n");
+  const rowMarkup = timelineRows
+    .map((row) => renderObservationRow(row, timings, fixture))
+    .join("\n");
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -487,6 +547,28 @@ function tokenize(text) {
   return text.trim().match(/\S+/g) ?? [];
 }
 
+function nodeSpeechMode(node) {
+  return String(node.speakMode ?? node.speechMode ?? "speak")
+    .trim()
+    .toLowerCase();
+}
+
+function nodeIsSpeakable(node) {
+  const mode = nodeSpeechMode(node);
+  return mode !== "skip" && mode !== "ondemand" && mode !== "on-demand";
+}
+
+function nodeIsSummarized(node) {
+  const mode = nodeSpeechMode(node);
+  return mode === "summarize" || mode === "summarise" || mode === "summary";
+}
+
+function nodeSpeechText(node) {
+  return nodeIsSummarized(node)
+    ? (node.spokenText ?? node.summaryText ?? node.text ?? "")
+    : node.text;
+}
+
 function percentile(values, p) {
   if (values.length === 0) {
     return 0;
@@ -512,45 +594,85 @@ function formatNullableMs(value) {
   return typeof value === "number" ? `${formatNumber(value)}ms` : "-";
 }
 
-function renderObservationRow(row, timings) {
+function renderObservationRow(row, timings, fixture) {
   const highlightedPhrase =
     row.highlightedPhraseIndex === null
       ? null
       : (timings.phrases.find((phrase) => phrase.phraseIndex === row.highlightedPhraseIndex) ??
         null);
-  const wordsMarkup = timings.words
-    .filter((word) => word.nodeId === row.expectedNodeId)
-    .map((word) => {
-      const phraseActive =
-        highlightedPhrase &&
-        word.nodeId === highlightedPhrase.nodeId &&
-        word.wordIndex >= highlightedPhrase.wordStartIndex &&
-        word.wordIndex <= highlightedPhrase.wordEndIndex;
-      const active = word.wordIndex === row.highlightedWordIndex || phraseActive;
-      const className = [
-        "word",
-        active ? "active" : "",
-        row.expectedLevel === "phrase" && active ? "phrase" : "",
-        row.runtimeState === "degraded" ? "degraded" : "",
-      ]
-        .filter(Boolean)
+  const sourceId = row.fixtureId ?? row.observationId ?? "readalong-fixture";
+  const wordsByNodeId = new Map();
+  for (const word of timings.words) {
+    const bucket = wordsByNodeId.get(word.nodeId) ?? [];
+    bucket.push(word);
+    wordsByNodeId.set(word.nodeId, bucket);
+  }
+  const nodesMarkup = (fixture.nodes ?? [])
+    .map((node) => {
+      if (!nodeIsSpeakable(node)) {
+        return `<div class="visible-node skipped" data-visible-node-id="${escapeHtml(
+          node.nodeId,
+        )}" data-speech-mode="skip">${escapeHtml(node.text)}</div>`;
+      }
+      if (nodeIsSummarized(node)) {
+        const active = row.highlightedNodeId === node.nodeId && row.expectedLevel === "block";
+        const className = [
+          "visible-node",
+          "summary",
+          active ? "active" : "",
+          row.runtimeState === "degraded" ? "degraded" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return `<div class="${className}" data-sync-node-id="${escapeHtml(
+          node.nodeId,
+        )}" data-readalong-source-id="${escapeHtml(sourceId)}" data-readalong-node-id="${escapeHtml(
+          node.nodeId,
+        )}" data-readalong-timing-state="${escapeHtml(
+          row.runtimeState,
+        )}" data-source-word-id="${escapeHtml(
+          `${sourceId}:${node.nodeId}:summary`,
+        )}" data-sync-active="${active ? "true" : "false"}">${escapeHtml(node.text)}</div>`;
+      }
+      const wordsMarkup = (wordsByNodeId.get(node.nodeId) ?? [])
+        .map((word) => {
+          const phraseActive =
+            highlightedPhrase &&
+            word.nodeId === highlightedPhrase.nodeId &&
+            word.wordIndex >= highlightedPhrase.wordStartIndex &&
+            word.wordIndex <= highlightedPhrase.wordEndIndex;
+          const wordActive =
+            word.wordIndex === row.highlightedWordIndex &&
+            (!row.highlightedNodeId || row.highlightedNodeId === word.nodeId);
+          const active = wordActive || phraseActive;
+          const className = [
+            "word",
+            active ? "active" : "",
+            row.expectedLevel === "phrase" && active ? "phrase" : "",
+            row.runtimeState === "degraded" ? "degraded" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return `<span class="${className}" data-sync-node-id="${escapeHtml(
+            word.nodeId,
+          )}" data-readalong-source-id="${escapeHtml(sourceId)}" data-readalong-node-id="${escapeHtml(
+            word.nodeId,
+          )}" data-readalong-word-index="${String(
+            word.wordIndex,
+          )}" data-readalong-timing-state="${escapeHtml(
+            row.runtimeState,
+          )}" data-source-word-id="${escapeHtml(
+            `${sourceId}:${word.nodeId}:${String(word.wordIndex)}`,
+          )}" data-sync-word-index="${String(word.wordIndex)}" data-sync-active="${
+            active ? "true" : "false"
+          }">${escapeHtml(word.text)}</span>`;
+        })
         .join(" ");
-      const sourceId = row.fixtureId ?? row.observationId ?? "readalong-fixture";
-      return `<span class="${className}" data-sync-node-id="${escapeHtml(
-        word.nodeId,
-      )}" data-readalong-source-id="${escapeHtml(sourceId)}" data-readalong-node-id="${escapeHtml(
-        word.nodeId,
-      )}" data-readalong-word-index="${String(
-        word.wordIndex,
-      )}" data-readalong-timing-state="${escapeHtml(
-        row.runtimeState,
-      )}" data-source-word-id="${escapeHtml(
-        `${sourceId}:${word.nodeId}:${String(word.wordIndex)}`,
-      )}" data-sync-word-index="${String(word.wordIndex)}" data-sync-active="${
-        active ? "true" : "false"
-      }">${escapeHtml(word.text)}</span>`;
+      return `<p class="visible-node" data-visible-node-id="${escapeHtml(
+        node.nodeId,
+      )}">${wordsMarkup}</p>`;
     })
-    .join(" ");
+    .join("\n");
   return `<section data-sync-observation-id="${escapeHtml(
     row.observationId,
   )}" data-sync-runtime-state="${escapeHtml(row.runtimeState)}" data-sync-expected-node="${escapeHtml(
@@ -562,7 +684,7 @@ function renderObservationRow(row, timings) {
   )}ms · state=${escapeHtml(row.runtimeState)} · word drift=${formatNullableMs(
     row.wordDriftMs,
   )} · phrase drift=${formatNullableMs(row.phraseDriftMs)}</p>
-  <p>${wordsMarkup || "No visible highlight expected."}</p>
+  <div>${nodesMarkup || "No visible highlight expected."}</div>
 </section>`;
 }
 

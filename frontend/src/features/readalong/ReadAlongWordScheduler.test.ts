@@ -193,6 +193,38 @@ describe("read-along DOM highlight adapter", () => {
       false,
     );
   });
+
+  it("does not fall back to a same-index word in the wrong visible block", () => {
+    const wrongVisibleWord = fakeElement();
+    const selectors: string[] = [];
+    const root = {
+      querySelector: (selector: string) => {
+        selectors.push(selector);
+        return selector === '[data-readalong-word-index="2"]' ? wrongVisibleWord : null;
+      },
+      querySelectorAll: () => [],
+    } as unknown as ParentNode;
+
+    const result = applyReadAlongDomHighlight(
+      {
+        mode: "word",
+        root: () => root,
+        sourceId: "source-1",
+        surface: "document",
+      },
+      entry({
+        anchorNodeId: "target-block",
+        anchorTokenOffset: 2,
+        anchorWordIndex: 2,
+        sourceWordIndex: 17,
+      }),
+    );
+
+    expect(result.activeElement).toBeNull();
+    expect(wrongVisibleWord.getAttribute("aria-current")).toBeNull();
+    expect(selectors).not.toContain('[data-readalong-word-index="2"]');
+    expect(selectors.some((selector) => selector.includes("target-block"))).toBe(true);
+  });
 });
 
 describe("ReadAlongDomHighlighterSession", () => {

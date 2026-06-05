@@ -284,6 +284,101 @@
       ]
     },
     {
+      "id": "markdown-skipped-block-integrity",
+      "kind": "markdown-skipped-blocks",
+      "title": "Markdown skipped block follow-along fixture",
+      "timingSource": "forced-alignment",
+      "expectedLevel": "word",
+      "nodes": [
+        {
+          "nodeId": "skip-before-intro-code",
+          "text": "```json\n{\"speech\":\"skip before intro\"}\n```",
+          "speakMode": "skip"
+        },
+        {
+          "nodeId": "md-p1",
+          "text": "Opening paragraph remains first spoken target.",
+          "startMs": 0,
+          "durationMs": 2400
+        },
+        {
+          "nodeId": "skip-between-table",
+          "text": "| Silent | Table |\n| --- | --- |\n| not | spoken |",
+          "speakMode": "skip"
+        },
+        {
+          "nodeId": "md-p2",
+          "text": "Second paragraph follows skipped table without index drift.",
+          "startMs": 2400,
+          "durationMs": 3600
+        },
+        {
+          "nodeId": "summary-inside-section",
+          "text": "| Raw | Section | Measurements |\n| --- | --- | --- |\n| many | cells | skipped |",
+          "spokenText": "Table summary",
+          "speakMode": "summarize",
+          "startMs": 6000,
+          "durationMs": 1200
+        },
+        {
+          "nodeId": "reference-before-bookmark",
+          "text": "[23](https://example.com/reference-only)",
+          "speakMode": "skip"
+        },
+        {
+          "nodeId": "bookmark-target",
+          "text": "Bookmark target paragraph follows references exactly.",
+          "startMs": 7200,
+          "durationMs": 3200
+        },
+        {
+          "nodeId": "skip-end-diagram",
+          "text": "```mermaid\nflowchart LR\nA --> B\n```",
+          "speakMode": "skip"
+        }
+      ],
+      "observations": [
+        {
+          "id": "md-skip-before-spoken",
+          "audioTimeMs": 200,
+          "highlightedNodeId": "md-p1",
+          "highlightedWordIndex": 0,
+          "observedHighlightTimeMs": 230
+        },
+        {
+          "id": "md-skip-between-spoken",
+          "audioTimeMs": 3000,
+          "highlightedNodeId": "md-p2",
+          "highlightedWordIndex": 7,
+          "observedHighlightTimeMs": 3060
+        },
+        {
+          "id": "md-summary-stable-unit",
+          "expectedLevel": "block",
+          "audioTimeMs": 6400,
+          "highlightedNodeId": "summary-inside-section",
+          "highlightedWordIndex": null,
+          "observedHighlightTimeMs": 6450
+        },
+        {
+          "id": "md-reference-before-bookmark",
+          "audioTimeMs": 7600,
+          "highlightedNodeId": "bookmark-target",
+          "highlightedWordIndex": 16,
+          "observedHighlightTimeMs": 7640,
+          "expectedScrollTargetNodeId": "bookmark-target",
+          "observedScrollTargetNodeId": "bookmark-target"
+        },
+        {
+          "id": "md-skip-at-end",
+          "audioTimeMs": 10000,
+          "highlightedNodeId": "bookmark-target",
+          "highlightedWordIndex": 21,
+          "observedHighlightTimeMs": 10050
+        }
+      ]
+    },
+    {
       "id": "website-article",
       "kind": "website-article",
       "title": "Website article sync fixture",

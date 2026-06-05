@@ -121,6 +121,48 @@ func TestBuildFromContentIRKeepsCitationFixturesSpeechSafe(t *testing.T) {
 	}
 }
 
+func TestBuildFromContentIRKeepsSkippedBlocksOutOfCueSequence(t *testing.T) {
+	t.Parallel()
+
+	document := contentir.NewDocument(
+		"markdown-skipped-blocks",
+		"preparedSource",
+		"markdown-skipped-blocks",
+		"default",
+		"skipped-blocks.md",
+		"test-adapter",
+		time.Unix(0, 0).UTC(),
+		[]contentir.Node{
+			node("skip-before", "```go\nfmt.Println(\"skip\")\n```", policy.ModeSkip),
+			node("intro", "Opening paragraph remains first spoken target.", policy.ModeSpeak),
+			node("skip-between", "| Silent | Table |", policy.ModeSkip),
+			node("summary", "Table summary.", policy.ModeSummarise),
+			citationFixtureNode("reference-before-bookmark", "reference", "[23](https://example.com/reference)", "", policy.ModeOnDemand),
+			node("bookmark-target", "Bookmark target paragraph follows references exactly.", policy.ModeSpeak),
+			node("skip-end", "```mermaid\nflowchart LR\nA --> B\n```", policy.ModeSkip),
+		},
+	)
+
+	plan, err := BuildFromContentIR(document, BuildOptions{
+		ID:          "skipped-block-plan",
+		GeneratedAt: time.Unix(30, 0).UTC(),
+	})
+	if err != nil {
+		t.Fatalf("BuildFromContentIR returned error: %v", err)
+	}
+	gotNodeIDs := make([]string, 0, len(plan.Segments))
+	for _, segment := range plan.Segments {
+		gotNodeIDs = append(gotNodeIDs, segment.NodeID)
+	}
+	wantNodeIDs := []string{"intro", "summary", "bookmark-target"}
+	if strings.Join(gotNodeIDs, ",") != strings.Join(wantNodeIDs, ",") {
+		t.Fatalf("segments node IDs = %#v, want %#v", gotNodeIDs, wantNodeIDs)
+	}
+	if plan.Segments[1].Text != "Table summary." {
+		t.Fatalf("summary segment text = %q, want stable generated summary", plan.Segments[1].Text)
+	}
+}
+
 func node(id string, text string, mode policy.Mode) contentir.Node {
 	return contentir.Node{
 		NodeID:         id,
