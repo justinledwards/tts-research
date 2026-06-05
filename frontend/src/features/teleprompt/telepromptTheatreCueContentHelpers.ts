@@ -1,5 +1,6 @@
 import { createElement, type ElementType, type ReactElement } from "react";
 import type { RevisionBlock } from "../revision";
+import { telepromptBlockIsCueProgressionCandidate } from "./telepromptToolbar";
 import { splitHighlightText, type HighlightRendererToken } from "../readalong";
 import type { TelepromptCueSyncMode } from "./telepromptCueTimeline";
 
@@ -141,8 +142,7 @@ function telepromptTheatreCueSectionsFromBlocks({
 }
 
 function isCueSectionCandidate(block: RevisionBlock): boolean {
-  const text = (block.spokenText || block.text).trim();
-  return text.length > 0;
+  return telepromptBlockIsCueProgressionCandidate(block);
 }
 
 function consumeCueSectionPrefix(

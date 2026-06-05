@@ -42,8 +42,8 @@ describe("speech policy helpers", () => {
     expect(normalizeSpeechPolicyProfile("custom-reader")).toBe("custom-reader");
     expect(normalizeSpeechPolicyProfile(null)).toBe("Enterprise");
     expect(BUILT_IN_SPEECH_POLICY_SETTINGS.Enterprise.citationMode).toBe("onDemand");
-    expect(BUILT_IN_SPEECH_POLICY_SETTINGS.Education.citationMode).toBe("inline");
-    expect(BUILT_IN_SPEECH_POLICY_SETTINGS.Accessibility.citationMode).toBe("inline");
+    expect(BUILT_IN_SPEECH_POLICY_SETTINGS.Education.citationMode).toBe("onDemand");
+    expect(BUILT_IN_SPEECH_POLICY_SETTINGS.Accessibility.citationMode).toBe("onDemand");
     expect(BUILT_IN_SPEECH_POLICY_SETTINGS.LanguageLearning.citationMode).toBe("onDemand");
   });
 

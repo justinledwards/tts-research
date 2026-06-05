@@ -32,7 +32,7 @@ export function wordTimelineEntryFromV2Entry({
   return {
     anchorNodeId: ledgerEntry.blockId,
     anchorTokenOffset: ledgerEntry.anchorTokenOffset,
-    anchorWordIndex: ledgerEntry.anchorTokenOffset ?? ledgerEntry.sourceWordIndex,
+    anchorWordIndex: ledgerEntry.anchorWordIndex,
     audioEndMs: resolvedEndMs(entry),
     audioStartMs: resolvedStartMs(entry),
     confidence: safeConfidence(entry.confidence, 1),
@@ -78,7 +78,7 @@ export function wordTimelineEntryFromLegacyToken({
   return {
     anchorNodeId: ledgerEntry.blockId,
     anchorTokenOffset: ledgerEntry.anchorTokenOffset,
-    anchorWordIndex: ledgerEntry.anchorTokenOffset ?? ledgerEntry.sourceWordIndex,
+    anchorWordIndex: ledgerEntry.anchorWordIndex,
     audioEndMs: Math.max(token.endMs, token.startMs + 1),
     audioStartMs: Math.max(0, token.startMs),
     confidence: safeConfidence(token.confidence, 1),

@@ -17,11 +17,12 @@ func PreparedSourceFromIR(document contentir.Document, source PreparedSource) Pr
 	}
 	source.Blocks = blocks
 	source.Metadata = map[string]any(document.Metadata)
-	source.SpeechText = preparedSourceSpeechText(blocks)
+	source = sanitizePreparedSourceReferenceCueLeaks(source, defaultSourcePrepSentenceMaxRunes)
+	source.SpeechText = preparedSourceSpeechText(source.Blocks)
 	source.WordCount = countWords(source.SpeechText)
-	source.BlockCount = len(blocks)
-	source.SegmentCount = countPreparedSegments(blocks)
-	source.Summary = summarizePreparedSource(blocks)
+	source.BlockCount = len(source.Blocks)
+	source.SegmentCount = countPreparedSegments(source.Blocks)
+	source.Summary = summarizePreparedSource(source.Blocks)
 	return source
 }
 

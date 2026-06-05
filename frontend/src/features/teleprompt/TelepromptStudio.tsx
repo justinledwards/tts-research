@@ -22,8 +22,9 @@ import { liveStatusMessages, useLiveStatus } from "../accessibility";
 import { nextReaderPlaybackRate } from "../reader-accessibility";
 import { useFocusedTheatreControls } from "../theatre/FocusedTheatreShell";
 import { useReaderModalLifecycle } from "../reader-accessibility";
-import type { RevisionBlock } from "../revision";
+import { revisionBlockIsSpeakable, type RevisionBlock } from "../revision";
 import {
+  canQueueGeneratedAudioPlayback,
   generatedAudioLifecycleDescriptor,
   generatedAudioLifecycleFromJob,
   LocalizedPlaybackToolbar,
@@ -100,6 +101,7 @@ import {
   adjacentTelepromptBlockId,
   countTelepromptWords,
   estimateTelepromptDurationMs,
+  firstTelepromptCueBlockId,
   formatTelepromptDuration,
   resolveTelepromptBlockIndex,
   resolveTelepromptShortcut,
@@ -273,13 +275,15 @@ export function TelepromptStudio({
 }: Readonly<TelepromptStudioProps>) {
   const generatedAudioLifecycle =
     sourceLifecycle?.generatedAudioState ?? generatedAudioLifecycleFromJob({ job });
+  const generatedAudioPlaybackAvailable =
+    generatedAudioLifecycle === "ready" || canQueueGeneratedAudioPlayback(job);
   const audioFollowAvailable = telepromptGeneratedAudioReady({
     generatedAudioLifecycle,
-    playbackAvailable: playbackControls.isAvailable,
+    playbackAvailable: playbackControls.isAvailable && generatedAudioPlaybackAvailable,
   });
   const defaultWorkMode = defaultTelepromptWorkMode({
     generatedAudioLifecycle,
-    playbackAvailable: playbackControls.isAvailable,
+    playbackAvailable: playbackControls.isAvailable && generatedAudioPlaybackAvailable,
   });
   const [activeContextTab, setActiveContextTab] = useState<ContextPanelTabId>("overview");
   const [presetId, setPresetId] = useState<TelepromptPresetId>("standard");
@@ -694,8 +698,11 @@ export function TelepromptStudio({
   }, [activeBlockId, blocks, onActiveBlockChange, projectId, rememberReturnMemory, sourceKey]);
 
   useEffect(() => {
-    if (!activeBlock && blocks[0]) {
-      onActiveBlockChange(blocks[0].id);
+    if (!activeBlock) {
+      const firstCueBlockId = firstTelepromptCueBlockId(blocks);
+      if (firstCueBlockId) {
+        onActiveBlockChange(firstCueBlockId);
+      }
     }
   }, [activeBlock, blocks, onActiveBlockChange]);
 
@@ -1650,14 +1657,14 @@ export function TelepromptStudio({
                   wordSpacing: preset.wordSpacing,
                 }}
               >
-                {blocks.map((block, blockIndex) => (
+                {blocks.map((block) => (
                   <TelepromptScriptBlock
                     active={block.id === activeBlock?.id}
                     block={block}
                     cueRole={telepromptCueRoleForBlock({
                       activeBlockIndex,
                       block,
-                      blockIndex,
+                      blocks,
                       cueSyncNextBlockId: cueSync.nextCue?.sourceBlockId ?? null,
                       cueSyncPreviousBlockId: cueSync.previousCue?.sourceBlockId ?? null,
                     })}
@@ -1885,29 +1892,39 @@ function telepromptStageTextClassName(presetId: TelepromptPresetId): string {
 function telepromptCueRoleForBlock({
   activeBlockIndex,
   block,
-  blockIndex,
+  blocks,
   cueSyncNextBlockId,
   cueSyncPreviousBlockId,
 }: Readonly<{
   activeBlockIndex: number;
   block: RevisionBlock;
-  blockIndex: number;
+  blocks: readonly RevisionBlock[];
   cueSyncNextBlockId: string | null;
   cueSyncPreviousBlockId: string | null;
 }>): ReadAlongCueRole {
-  if (block.speakMode.trim().toLowerCase() === "skip" || block.status === "skipped") {
+  if (!revisionBlockIsSpeakable(block)) {
     return "skipped";
   }
   if (activeBlockIndex < 0) {
     return "unavailable";
   }
-  if (blockIndex === activeBlockIndex) {
+  const activeBlock = blocks.at(activeBlockIndex);
+  if (!activeBlock) {
+    return "unavailable";
+  }
+  const cueBlocks = blocks.filter((item) => revisionBlockIsSpeakable(item));
+  const activeCueIndex = cueBlocks.findIndex((item) => item.id === activeBlock.id);
+  const blockCueIndex = cueBlocks.findIndex((item) => item.id === block.id);
+  if (activeCueIndex === -1 || blockCueIndex === -1) {
+    return "unavailable";
+  }
+  if (blockCueIndex === activeCueIndex) {
     return "current";
   }
-  if (block.id === cueSyncNextBlockId || blockIndex === activeBlockIndex + 1) {
+  if (block.id === cueSyncNextBlockId || blockCueIndex === activeCueIndex + 1) {
     return "next";
   }
-  if (block.id === cueSyncPreviousBlockId || blockIndex < activeBlockIndex) {
+  if (block.id === cueSyncPreviousBlockId || blockCueIndex < activeCueIndex) {
     return "previous";
   }
   return "unavailable";

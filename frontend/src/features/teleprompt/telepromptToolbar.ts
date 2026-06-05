@@ -1,4 +1,4 @@
-import type { RevisionBlock } from "../revision";
+import { revisionBlockIsSpeakable, type RevisionBlock } from "../revision";
 import { playbackActionLabel } from "../playback";
 import {
   DEFAULT_SHORTCUT_PREFERENCES,
@@ -175,7 +175,13 @@ export function countTelepromptWords(value: string): number {
 }
 
 export function totalTelepromptWords(blocks: readonly RevisionBlock[]): number {
-  return blocks.reduce((total, block) => total + countTelepromptWords(block.spokenText), 0);
+  let total = 0;
+  for (const block of blocks) {
+    if (telepromptBlockIsCueProgressionCandidate(block)) {
+      total += countTelepromptWords(block.spokenText);
+    }
+  }
+  return total;
 }
 
 export function estimateTelepromptDurationMs(wordCount: number, wordsPerMinute = 155): number {
@@ -212,9 +218,35 @@ export function adjacentTelepromptBlockId(
   direction: -1 | 1,
 ): string | null {
   const currentIndex = resolveTelepromptBlockIndex(blocks, activeBlockId);
-  if (currentIndex < 0) {
+  if (currentIndex === -1) {
     return null;
   }
-  const nextIndex = Math.min(blocks.length - 1, Math.max(0, currentIndex + direction));
-  return blocks[nextIndex]?.id ?? null;
+  for (
+    let index = Math.min(blocks.length - 1, Math.max(0, currentIndex + direction));
+    index >= 0 && index < blocks.length;
+    index += direction
+  ) {
+    const block = blocks[index];
+    if (telepromptBlockIsCueProgressionCandidate(block)) {
+      return block.id;
+    }
+    if (index === 0 && direction < 0) {
+      break;
+    }
+    if (index === blocks.length - 1 && direction > 0) {
+      break;
+    }
+  }
+  const currentBlock = blocks[currentIndex];
+  return telepromptBlockIsCueProgressionCandidate(currentBlock)
+    ? currentBlock.id
+    : firstTelepromptCueBlockId(blocks);
+}
+
+export function firstTelepromptCueBlockId(blocks: readonly RevisionBlock[]): string | null {
+  return blocks.find((block) => telepromptBlockIsCueProgressionCandidate(block))?.id ?? null;
+}
+
+export function telepromptBlockIsCueProgressionCandidate(block: RevisionBlock): boolean {
+  return revisionBlockIsSpeakable(block);
 }

@@ -81,6 +81,8 @@ export function resolvePreviewReadinessModel(
   const canCreate = input.canCreate && canAudition;
   const canOpenTeleprompt = source.status === "ready" && spoken.status === "ready";
   const canOpenTheatre = canOpenTeleprompt;
+  const canPlayGeneratedAudio =
+    input.generatedAudioLifecycle === "ready" || Boolean(input.audioPipeline?.canUsePartialAudio);
   const createDisabledReason = canCreate
     ? undefined
     : (firstBlockingDetail([source, spoken, voice, runtime]) ??
@@ -111,15 +113,15 @@ export function resolvePreviewReadinessModel(
       canOpenAudioSurface,
       input.audioPipeline,
     ),
-    generatedPlaybackDisabledReason: canOpenAudioSurface ? undefined : audio.detail,
-    openTelepromptDetail: canOpenAudioSurface
-      ? "Teleprompt opens with generated cue playback ready."
+    generatedPlaybackDisabledReason: canPlayGeneratedAudio ? undefined : audio.detail,
+    openTelepromptDetail: canPlayGeneratedAudio
+      ? "Teleprompt opens with generated cue playback available."
       : telepromptDetailForAudioLifecycle(input.generatedAudioLifecycle),
     openTelepromptDisabledReason,
     openTheatreDisabledReason: canOpenTheatre ? undefined : openTelepromptDisabledReason,
     primaryLabel: previewPrimaryLabel(
       input.generatedAudioLifecycle,
-      canOpenAudioSurface,
+      canPlayGeneratedAudio,
       input.audioPipeline,
     ),
     rows: [

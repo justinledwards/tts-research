@@ -50,7 +50,7 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 			{"table", "rowLinear", "speak", "Table. Row 1. Metric: Latency; Value: 12ms."},
 			{"code", "syntaxAware", "literal", "A go code block with 1 line appears here. fmt.Println(\"hello\")"},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"citation", "inline", "speak", "Research note."},
+			{"citation", "onDemand", "onDemand", ""},
 			{"image", "describeLong", "describeLong", "Image description: Architecture diagram."},
 			{"caption", "speak", "speak", "Figure: request flow overview"},
 			{"list", "announce", "speak", "List item: First item"},
@@ -62,7 +62,7 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 			{"table", "summary", "summarise", "A table appears here with columns: Metric, Value."},
 			{"code", "summary", "summarise", "A go code block with 1 line appears here."},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"citation", "inline", "speak", "Research note."},
+			{"citation", "onDemand", "onDemand", ""},
 			{"image", "describeShort", "describeShort", "Image: Architecture diagram."},
 			{"caption", "speak", "speak", "Figure: request flow overview"},
 			{"list", "announce", "speak", "List item: First item"},
@@ -112,6 +112,25 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 	}
 }
 
+func TestBuiltInProfilesKeepReferencesOnDemandByDefault(t *testing.T) {
+	t.Parallel()
+
+	for _, profile := range Profiles() {
+		profile := profile
+		t.Run(string(profile.Name), func(t *testing.T) {
+			t.Parallel()
+
+			decision := NewEvaluator(profile.Name, Overrides{}).Evaluate(Element{
+				Kind: "reference",
+				Text: "https://example.com/reference",
+			})
+			if decision.Policy.Mode != string(ModeOnDemand) || decision.SpeechText != "" {
+				t.Fatalf("reference decision = %#v speech=%q, want on-demand without speech", decision.Policy, decision.SpeechText)
+			}
+		})
+	}
+}
+
 func TestArtifactCitationTokensUseSafeSpeech(t *testing.T) {
 	t.Parallel()
 
@@ -120,7 +139,7 @@ func TestArtifactCitationTokensUseSafeSpeech(t *testing.T) {
 		t.Fatalf("enterprise artifact decision = %#v, speech %q; want on-demand without speech", enterprise.Policy, enterprise.SpeechText)
 	}
 
-	accessibility := NewEvaluator(ProfileAccessibility, Overrides{}).Evaluate(Element{Kind: "artifact_token", Text: "[cite][turn40search10]"})
+	accessibility := NewEvaluator(ProfileAccessibility, Overrides{CitationMode: CitationModeInline}).Evaluate(Element{Kind: "artifact_token", Text: "[cite][turn40search10]"})
 	if accessibility.Policy.Mode != string(ModeSpeak) || accessibility.SpeechText == "[cite][turn40search10]" || accessibility.SpeechText == "" {
 		t.Fatalf("accessibility artifact speech = %q, want safe non-empty label", accessibility.SpeechText)
 	}

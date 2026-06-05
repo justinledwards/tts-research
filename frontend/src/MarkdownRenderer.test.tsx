@@ -122,12 +122,15 @@ describe("Markdown rendering helpers", () => {
 
   it("marks an active generated block without wrapping individual words", () => {
     const markup = renderToStaticMarkup(
-      <MarkdownRenderer blockHighlight={{ blockEndOffset: 30, blockStartOffset: 0 }}>
+      <MarkdownRenderer
+        blockHighlight={{ blockEndOffset: 30, blockStartOffset: 0, nodeId: "block-1" }}
+      >
         {"| One | Two |\n|---|---|\n| A | B |"}
       </MarkdownRenderer>,
     );
 
     expect(markup).toContain("markdown-cinema-block-active");
+    expect(markup).toContain('data-readalong-node-id="block-1"');
     expect(markup).not.toContain("markdown-cinema-word-active");
   });
 

@@ -184,13 +184,7 @@ export function preparedSourceCinemaOutline(
 export function preparedSourceCinemaPrimaryBlocks(source: PreparedSource): NarrationBlock[] {
   const blocks = source.blocks ?? [];
   if (blocks.length > 0) {
-    const spokenBlocks = blocks.filter(
-      (block) => block.speakMode !== "skip" && markdownBlockText(block).trim().length > 0,
-    );
-    const readableBlocks =
-      spokenBlocks.length > 0
-        ? spokenBlocks
-        : blocks.filter((block) => markdownBlockText(block).trim().length > 0);
+    const readableBlocks = blocks.filter((block) => markdownBlockText(block).trim().length > 0);
     if (preparedSourceCinemaKind(source) === "website") {
       return focusWebsiteCinemaBlocks(readableBlocks, source);
     }
@@ -233,7 +227,18 @@ export function preparedSourceCinemaActiveBlock(
       return activeBlock;
     }
   }
-  return primaryBlocks.find((block) => block.speakMode !== "skip") ?? null;
+  return primaryBlocks.find((block) => preparedSourceNarrationBlockIsSpeakable(block)) ?? null;
+}
+
+export function preparedSourceNarrationBlockIsSpeakable(block: NarrationBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  return (
+    speakMode !== "skip" &&
+    policyMode !== "skip" &&
+    policyMode !== "ondemand" &&
+    (block.spokenText ?? "").trim().length > 0
+  );
 }
 
 export function preparedSourceCinemaJobMatchesSource(

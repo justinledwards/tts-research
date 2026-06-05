@@ -15,7 +15,7 @@ import {
 import type { ReadAlongCueRole, ReadAlongTimingState, ReadAlongWordRole } from "../readalong";
 import type { TelepromptCueSyncMode, TelepromptCueWordTiming } from "./telepromptCueTimeline";
 import { estimateTelepromptDurationMs, countTelepromptWords } from "./telepromptToolbar";
-import type { RevisionBlock } from "../revision";
+import { revisionBlockIsSpeakable, type RevisionBlock } from "../revision";
 
 export function TelepromptCurrentCueStage({
   activeRef,
@@ -60,7 +60,7 @@ export function TelepromptCurrentCueStage({
   workModeLabel: string;
   workModeTone: StatusChipTone;
 }>) {
-  const spokenText = block ? block.spokenText || block.text : "";
+  const spokenText = block && revisionBlockIsSpeakable(block) ? block.spokenText : "";
   const shouldRenderCue =
     Boolean(block) &&
     ((typeof currentWordIndex === "number" && currentWordIndex >= 0) ||
@@ -195,7 +195,7 @@ export function TelepromptScriptBlock({
   wordTimings?: readonly TelepromptCueWordTiming[];
   onSelect: () => void;
 }>) {
-  const spokenText = block.spokenText || block.text;
+  const spokenText = revisionBlockIsSpeakable(block) ? block.spokenText : "";
   const shouldRenderCue =
     active &&
     ((typeof currentWordIndex === "number" && currentWordIndex >= 0) ||
@@ -381,7 +381,9 @@ export function TelepromptBlockPreview({
       </div>
       <p className="text-sm font-semibold">{block ? block.label : "No block"}</p>
       <p className="line-clamp-4 text-xs leading-5 vs-muted">
-        {block ? block.spokenText || block.text : "This edge of the script is empty."}
+        {block && revisionBlockIsSpeakable(block)
+          ? block.spokenText
+          : "This edge of the script is empty."}
       </p>
     </Panel>
   );

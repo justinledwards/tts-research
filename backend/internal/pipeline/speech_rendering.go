@@ -103,6 +103,7 @@ func looksLikeStandaloneMath(text string) bool {
 }
 
 func (service *Service) applySpeechRenderToPreparedSource(source PreparedSource, options SpeechRenderOptions) PreparedSource {
+	source = sanitizePreparedSourceReferenceCueLeaks(source, service.options.SourcePrepSentenceMaxRunes)
 	options.ProjectID = firstNonEmpty(options.ProjectID, source.ProjectID)
 	for index := range source.Blocks {
 		block := source.Blocks[index]
@@ -137,6 +138,7 @@ func (service *Service) applySpeechRenderToPreparedSource(source PreparedSource,
 	source.WordCount = countWords(source.SpeechText)
 	source.SegmentCount = countPreparedSegments(source.Blocks)
 	source.Summary = summarizePreparedSource(source.Blocks)
+	source = sanitizePreparedSourceReferenceCueLeaks(source, service.options.SourcePrepSentenceMaxRunes)
 	return source
 }
 

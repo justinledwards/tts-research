@@ -381,7 +381,7 @@ function resolveReadAlongWordElement(
       nodeId: entry.anchorNodeId,
       sourceId: options.sourceId,
       tokenOffset: entry.anchorTokenOffset,
-      wordIndex: entry.anchorWordIndex ?? entry.sourceWordIndex,
+      wordIndex: readAlongAnchorWordIndex(entry),
     }),
     [],
   ).element;
@@ -405,11 +405,18 @@ function readAlongWordElementCacheKey(
   return JSON.stringify({
     anchorNodeId: entry.anchorNodeId ?? "",
     anchorTokenOffset: entry.anchorTokenOffset ?? null,
-    anchorWordIndex: entry.anchorWordIndex ?? entry.sourceWordIndex,
+    anchorWordIndex: readAlongAnchorWordIndex(entry) ?? null,
     sourceId: options.sourceId ?? "",
     sourceWordIndex: entry.sourceWordIndex,
     text: entry.text,
   });
+}
+
+function readAlongAnchorWordIndex(entry: WordTimelineEntry): number | undefined {
+  if (entry.anchorWordIndex !== undefined) {
+    return entry.anchorWordIndex;
+  }
+  return entry.anchorNodeId ? undefined : entry.sourceWordIndex;
 }
 
 function isCachedReadAlongElementUsable(root: ParentNode, element: HTMLElement): boolean {

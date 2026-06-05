@@ -69,16 +69,23 @@ type sourcePreprocessResult struct {
 
 var (
 	citationGlyphPattern      = regexp.MustCompile(`cite[^]*`)
-	chatGPTCitationPattern    = regexp.MustCompile(`(?i)\[cite\]\s*\[\s*turn\d+(?:search|view|news|fetch)\d+\s*\]`)
+	chatGPTArtifactPattern    = regexp.MustCompile(`[^]*`)
+	chatGPTCitationPattern    = regexp.MustCompile(`(?i)\[cite\]\s*\[\s*turn\d+(?:search|view|news|fetch|image)\d+\s*\]`)
 	contentReferencePattern   = regexp.MustCompile(`:contentReference\[[^\]\n]+\]\{[^}\n]*\}`)
 	malformedCitationPattern  = regexp.MustCompile(`(?i)\[(?:cite|citation|source|reference)(?::[^\]\n]*)?\]`)
-	turnCitationPattern       = regexp.MustCompile(`\bturn\d+(?:search|view|news|fetch)\d+\b`)
+	turnCitationPattern       = regexp.MustCompile(`\bturn\d+(?:search|view|news|fetch|image)\d+\b`)
 	footnoteReferencePattern  = regexp.MustCompile(`\[\^[^\]\s]+\]`)
 	referenceMarkerPattern    = regexp.MustCompile(`\[(?:\d+(?:\s*(?:,|-|–)\s*\d+)*(?:,\s*p\.?\s*\d+)?|[A-Z][A-Za-z .'-]{1,40}(?:19|20)\d{2}[^\]\n]{0,20})\]`)
 	bracketedMetadataPattern  = regexp.MustCompile(`(?i)\[(?:todo|note|metadata|draft|review|debug|loc(?:ator)?|id|ref)[:\s][^\]\n]{0,80}\]`)
 	markdownLinkPattern       = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+	markdownReferenceLink     = regexp.MustCompile(`(?i)!?\[[^\]\n]*\]\(\s*(?:https?://|www\.|doi:|10\.)[^)\s]*\s*\)`)
 	markdownImagePattern      = regexp.MustCompile(`!\[([^\]]*)\]\([^)]+\)`)
 	markdownImageOnlyLine     = regexp.MustCompile(`^!\[[^\]]*\]\([^)]+\)\s*$`)
+	referenceSectionMarker    = regexp.MustCompile(`(?i)^<!--\s*deep-research-references\s*:\s*(start|end)\s*-->$`)
+	referenceSectionLabel     = regexp.MustCompile(`(?i)^(references?|reference\s+list|bibliograph(?:y|ies)|works?\s+cited|sources?|source\s+list|further\s+reading|selected\s+references?)$`)
+	referenceURLPattern       = regexp.MustCompile(`(?i)\b(?:https?://|www\.)\S+`)
+	referenceDOIPattern       = regexp.MustCompile(`(?i)\b(?:doi:\s*|https?://(?:dx\.)?doi\.org/|10\.\d{4,9}/)[-._;()/:A-Z0-9]+`)
+	referenceNumberPattern    = regexp.MustCompile(`^\s*\[?\s*\d{1,4}\s*\]?\s*$`)
 	inlineCodeSpeechPattern   = regexp.MustCompile("`([^`]+)`")
 	htmlScriptStylePattern    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>|<noscript[^>]*>.*?</noscript>`)
 	htmlChromePattern         = regexp.MustCompile(`(?is)<(?:nav|header|footer|aside|form|dialog)\b[^>]*>.*?</(?:nav|header|footer|aside|form|dialog)>`)
@@ -174,6 +181,7 @@ func (service *Service) CreatePreparedSource(
 	prepared.Blocks = preprocessed.Blocks
 	prepared.Warnings = preprocessed.Warnings
 	prepared.Metadata = preprocessed.Metadata
+	prepared = sanitizePreparedSourceReferenceCueLeaks(prepared, service.options.SourcePrepSentenceMaxRunes)
 	if urlSafety != nil {
 		if prepared.Metadata == nil {
 			prepared.Metadata = map[string]any{}
@@ -487,6 +495,7 @@ func (service *Service) CreatePreparedSourceJob(
 		Locale:         request.Locale,
 		TTSEngine:      request.TTSEngine,
 	})
+	source = sanitizePreparedSourceReferenceCueLeaks(source, service.options.SourcePrepSentenceMaxRunes)
 	selected := map[string]struct{}{}
 	for _, id := range request.SelectedBlockIDs {
 		selected[strings.TrimSpace(id)] = struct{}{}
@@ -504,9 +513,6 @@ func (service *Service) CreatePreparedSourceJob(
 			continue
 		}
 		text := strings.TrimSpace(block.SpokenText)
-		if text == "" {
-			text = strings.TrimSpace(block.Text)
-		}
 		if text == "" {
 			continue
 		}
@@ -557,6 +563,7 @@ func clonePreparedSource(source PreparedSource) PreparedSource {
 	source.Metadata = cloneAnyMap(source.Metadata)
 	source.TranscriptMetadata = cloneTranscriptMetadata(source.TranscriptMetadata)
 	source.TranscriptGeneratedAt = cloneTimePtr(source.TranscriptGeneratedAt)
+	source = sanitizePreparedSourceReferenceCueLeaks(source, defaultSourcePrepSentenceMaxRunes)
 	return source
 }
 
@@ -1053,6 +1060,7 @@ func preparePlainNarrationBlocks(input string, maxSentenceRunes int) ([]Narratio
 	skipped := make([]SkippedSourceItem, 0)
 	warnings := make([]string, 0)
 	offsetCursor := 0
+	referenceMode := ""
 	for _, paragraph := range paragraphs {
 		raw := strings.TrimSpace(paragraph)
 		if raw == "" {
@@ -1066,6 +1074,52 @@ func preparePlainNarrationBlocks(input string, maxSentenceRunes int) ([]Narratio
 			start = offsetCursor
 		}
 		end := start + len(raw)
+		if marker := deepResearchReferencesMarker(raw); marker == "start" {
+			referenceMode = "marker"
+			offsetCursor = end
+			continue
+		} else if marker == "end" {
+			referenceMode = ""
+			offsetCursor = end
+			continue
+		}
+		if paragraphStartsMarkerReferenceSection(raw) {
+			referenceMode = "marker"
+			block := newReferenceSectionBlock(len(blocks), "References", raw, start, end, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference section available on demand"))
+			warnings = append(warnings, block.Warnings...)
+			offsetCursor = end
+			continue
+		}
+		if isReferenceSectionLabel(raw) || paragraphStartsReferenceSection(raw) {
+			referenceMode = "implicit"
+			block := newReferenceSectionBlock(len(blocks), "References", raw, start, end, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference section available on demand"))
+			warnings = append(warnings, block.Warnings...)
+			offsetCursor = end
+			continue
+		}
+		if referenceMode != "" {
+			if referenceMode == "marker" || isReferenceLikeText(raw) {
+				block := newReferenceSectionBlock(len(blocks), "Reference section", raw, start, end, maxSentenceRunes)
+				blocks = append(blocks, block)
+				skipped = append(skipped, skippedSourceItem(block, "reference section available on demand"))
+				warnings = append(warnings, block.Warnings...)
+				offsetCursor = end
+				continue
+			}
+			referenceMode = ""
+		}
+		if kind, label, ok := standaloneReferenceOnlyText(raw); ok {
+			block := newSkippedInlineReferenceBlock(len(blocks), kind, label, raw, start, end, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference or artifact marker available on demand"))
+			warnings = append(warnings, block.Warnings...)
+			offsetCursor = end
+			continue
+		}
 		clean := cleanMarkdownInline(raw)
 		kind := NarrationBlockKindBody
 		mode := NarrationSpeakModeSpeak
@@ -1277,6 +1331,7 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 	mathStart := 0
 	var tableLines []string
 	tableStart := 0
+	referenceMode := ""
 
 	flushParagraph := func(endOffset int) {
 		if len(paragraph) == 0 {
@@ -1284,6 +1339,12 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 		}
 		raw := strings.Join(paragraph, " ")
 		paragraph = nil
+		if kind, label, ok := standaloneReferenceOnlyText(raw); ok {
+			block := newSkippedInlineReferenceBlock(len(blocks), kind, label, raw, paragraphStart, endOffset, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference or artifact marker available on demand"))
+			return
+		}
 		clean := cleanMarkdownInline(raw)
 		if strings.TrimSpace(clean) == "" {
 			return
@@ -1367,6 +1428,19 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 			mathLines = append(mathLines, line)
 			continue
 		}
+		if marker := deepResearchReferencesMarker(trimmed); marker == "start" {
+			flushParagraph(lineStart)
+			flushTable(lineStart)
+			flushMath(lineStart)
+			referenceMode = "marker"
+			continue
+		} else if marker == "end" {
+			flushParagraph(lineStart)
+			flushTable(lineStart)
+			flushMath(lineStart)
+			referenceMode = ""
+			continue
+		}
 		if matches := markdownFenceLine.FindStringSubmatch(trimmed); len(matches) > 0 {
 			flushParagraph(lineStart)
 			flushTable(lineStart)
@@ -1397,6 +1471,28 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 			flushTable(lineStart)
 			continue
 		}
+		if isReferenceSectionLabel(trimmed) {
+			flushParagraph(lineStart)
+			flushTable(lineStart)
+			flushMath(lineStart)
+			referenceMode = "implicit"
+			block := newReferenceSectionBlock(len(blocks), cleanMarkdownInline(trimmed), trimmed, lineStart, offsetCursor, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference section available on demand"))
+			continue
+		}
+		if referenceMode != "" {
+			if referenceMode == "marker" || isReferenceLikeText(trimmed) {
+				flushParagraph(lineStart)
+				flushTable(lineStart)
+				flushMath(lineStart)
+				block := newReferenceSectionBlock(len(blocks), "Reference section", trimmed, lineStart, offsetCursor, maxSentenceRunes)
+				blocks = append(blocks, block)
+				skipped = append(skipped, skippedSourceItem(block, "reference section available on demand"))
+				continue
+			}
+			referenceMode = ""
+		}
 		if strings.Contains(trimmed, "|") || markdownTableDividerLine.MatchString(trimmed) {
 			flushParagraph(lineStart)
 			if len(tableLines) == 0 {
@@ -1423,10 +1519,17 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 			blocks = append(blocks, block)
 			continue
 		}
+		if kind, label, ok := standaloneReferenceOnlyText(trimmed); ok {
+			flushParagraph(lineStart)
+			block := newSkippedInlineReferenceBlock(len(blocks), kind, label, trimmed, lineStart, offsetCursor, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference or artifact marker available on demand"))
+			continue
+		}
 		if markdownFootnoteLine.MatchString(trimmed) || markdownRawURLLine.MatchString(trimmed) || shouldSkipCitationBlock(trimmed) {
 			flushParagraph(lineStart)
 			clean := cleanMarkdownInline(trimmed)
-			block := newNarrationBlock(len(blocks), NarrationBlockKindCitation, NarrationSpeakModeSpeak, "Citation", trimmed, clean, lineStart, offsetCursor, maxSentenceRunes)
+			block := newNarrationBlock(len(blocks), NarrationBlockKindCitation, NarrationSpeakModeSkip, "Citation", trimmed, "", lineStart, offsetCursor, maxSentenceRunes)
 			block.Warnings = append(block.Warnings, "citation_skipped")
 			blocks = append(blocks, block)
 			skipped = append(skipped, SkippedSourceItem{ID: block.ID, Kind: block.Kind, Text: clean, Reason: "citation or raw URL skipped", Offset: lineStart})
@@ -1457,6 +1560,506 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 		warnings = append(warnings, block.Warnings...)
 	}
 	return blocks, skipped, uniqueStrings(warnings)
+}
+
+func deepResearchReferencesMarker(value string) string {
+	matches := referenceSectionMarker.FindStringSubmatch(strings.TrimSpace(value))
+	if len(matches) < 2 {
+		return ""
+	}
+	return strings.ToLower(matches[1])
+}
+
+func isReferenceSectionLabel(value string) bool {
+	candidate := strings.TrimSpace(value)
+	if matches := markdownHeadingLine.FindStringSubmatch(candidate); len(matches) == 3 {
+		candidate = matches[2]
+	}
+	candidate = markdownListPrefixPattern.ReplaceAllString(candidate, "")
+	clean := strings.TrimRight(cleanMarkdownInline(candidate), ":：")
+	return referenceSectionLabel.MatchString(strings.TrimSpace(clean))
+}
+
+func paragraphStartsReferenceSection(value string) bool {
+	lines := nonEmptyReferenceLines(value)
+	if len(lines) < 2 || !isReferenceSectionLabel(lines[0]) {
+		return false
+	}
+	return referenceLineRatio(strings.Join(lines[1:], "\n")) > 0
+}
+
+func paragraphStartsMarkerReferenceSection(value string) bool {
+	lines := nonEmptyReferenceLines(value)
+	return len(lines) >= 2 && isReferenceSectionLabel(lines[0]) && deepResearchReferencesMarker(lines[1]) == "start"
+}
+
+func isReferenceLikeText(value string) bool {
+	return referenceLineRatio(value) > 0
+}
+
+func sanitizePreparedSourceReferenceCueLeaks(source PreparedSource, maxSentenceRunes int) PreparedSource {
+	if len(source.Blocks) == 0 {
+		return source
+	}
+	if maxSentenceRunes <= 0 {
+		maxSentenceRunes = defaultSourcePrepSentenceMaxRunes
+	}
+	referenceMode := ""
+	for index := range source.Blocks {
+		block := source.Blocks[index]
+		text := referenceCueCandidateText(block)
+		marker := deepResearchReferencesMarker(text)
+		if marker == "" && blockHasReferenceSectionMetadata(block) {
+			marker = deepResearchReferencesMarker(block.Text)
+		}
+		switch marker {
+		case "start":
+			referenceMode = "marker"
+			source.Blocks[index] = forceReferenceCueLeakBlock(block, NarrationBlockKindReference, "Reference section", []string{"reference_section", "reference_on_demand"}, maxSentenceRunes)
+			source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference section available on demand"))
+			continue
+		case "end":
+			source.Blocks[index] = forceReferenceCueLeakBlock(block, NarrationBlockKindReference, "Reference section", []string{"reference_section", "reference_on_demand"}, maxSentenceRunes)
+			source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference section available on demand"))
+			referenceMode = ""
+			continue
+		}
+		if blockHasReferenceSectionMetadata(block) || isReferenceSectionLabel(text) {
+			referenceMode = "implicit"
+			source.Blocks[index] = forceReferenceCueLeakBlock(block, NarrationBlockKindReference, "References", []string{"reference_section", "reference_on_demand"}, maxSentenceRunes)
+			source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference section available on demand"))
+			continue
+		}
+		if referenceMode != "" {
+			if referenceMode == "marker" || isReferenceLikeText(text) || referenceControlledKind(block.Kind) {
+				source.Blocks[index] = forceReferenceCueLeakBlock(block, NarrationBlockKindReference, "Reference section", []string{"reference_section", "reference_on_demand"}, maxSentenceRunes)
+				source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference section available on demand"))
+				continue
+			}
+			referenceMode = ""
+		}
+		if alreadySilentReferenceCue(block) || explicitlySpeakingReferenceCue(block) {
+			continue
+		}
+		if kind, label, ok := standaloneReferenceOnlyText(text); ok {
+			source.Blocks[index] = forceReferenceCueLeakBlock(block, kind, label, referenceCueLeakWarnings(kind), maxSentenceRunes)
+			source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference or artifact marker available on demand"))
+			continue
+		}
+		if referenceControlledKind(block.Kind) && standaloneReferenceNumberText(firstNonEmpty(block.Text, block.SpokenText, block.Label)) {
+			source.Blocks[index] = forceReferenceCueLeakBlock(block, block.Kind, firstNonEmpty(block.Label, "Reference"), referenceCueLeakWarnings(block.Kind), maxSentenceRunes)
+			source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference marker available on demand"))
+			continue
+		}
+		if shouldStripInlineReferenceTail(block) {
+			if stripped, ok := stripTrailingInlineReferenceNumberSpeech(block.SpokenText); ok {
+				block.SpokenText = stripped
+				if block.Metadata == nil {
+					block.Metadata = map[string]any{}
+				}
+				block.Metadata["policySpeechText"] = stripped
+				block.Segments, block.Warnings = resetPolicySegments(block, maxSentenceRunes)
+				block.Warnings = uniqueStrings(append(block.Warnings, "citation_reference_number_removed"))
+				block.EstimatedDurationMS = estimateBookDurationMS(countWords(block.SpokenText))
+				block.Emphasis, block.PauseBeforeMS, block.PauseAfterMS = narrationEmphasis(block.Kind, block.SpeakMode)
+				block.Confidence = confidenceForBlock(block.Kind, block.SpeakMode)
+				source.Blocks[index] = block
+			}
+		}
+	}
+	source.SpeechText = preparedSourceSpeechText(source.Blocks)
+	source.WordCount = countWords(source.SpeechText)
+	source.BlockCount = len(source.Blocks)
+	source.SegmentCount = countPreparedSegments(source.Blocks)
+	source.Summary = summarizePreparedSource(source.Blocks)
+	return source
+}
+
+func standaloneReferenceOnlyText(value string) (NarrationBlockKind, string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", "", false
+	}
+	candidate := markdownListPrefixPattern.ReplaceAllString(trimmed, "")
+	candidate = strings.TrimSpace(strings.TrimPrefix(candidate, ">"))
+	remainder := stripStandaloneReferenceArtifacts(candidate)
+	if strings.Trim(remainder, " \t\n\r[]().,;:|*_`>\"'-") != "" {
+		return "", "", false
+	}
+	switch {
+	case citationGlyphPattern.MatchString(candidate) ||
+		chatGPTCitationPattern.MatchString(candidate) ||
+		malformedCitationPattern.MatchString(candidate):
+		return NarrationBlockKindCitation, "Citation", true
+	case chatGPTArtifactPattern.MatchString(candidate) ||
+		(turnCitationPattern.MatchString(candidate) && strings.Contains(strings.ToLower(candidate), "image")):
+		return NarrationBlockKindArtifact, "Artifact token", true
+	case footnoteReferencePattern.MatchString(candidate):
+		return NarrationBlockKindFootnote, "Footnote", true
+	default:
+		return NarrationBlockKindReference, "Reference", true
+	}
+}
+
+func stripStandaloneReferenceArtifacts(value string) string {
+	clean := markdownReferenceLink.ReplaceAllString(value, " ")
+	clean = markdownImagePattern.ReplaceAllString(clean, " ")
+	clean = stripMarkdownInlineArtifacts(clean)
+	clean = referenceURLPattern.ReplaceAllString(clean, " ")
+	clean = referenceDOIPattern.ReplaceAllString(clean, " ")
+	return clean
+}
+
+func referenceCueCandidateText(block NarrationBlock) string {
+	return firstNonEmpty(block.Text, block.SpokenText, block.Label)
+}
+
+func blockHasReferenceSectionMetadata(block NarrationBlock) bool {
+	if hasWarning(block.Warnings, "reference_section") {
+		return true
+	}
+	if block.Metadata == nil {
+		return false
+	}
+	value, ok := block.Metadata["referenceSection"]
+	if !ok {
+		return false
+	}
+	if boolValue, ok := value.(bool); ok {
+		return boolValue
+	}
+	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(value)), "true")
+}
+
+func referenceControlledKind(kind NarrationBlockKind) bool {
+	switch kind {
+	case NarrationBlockKindCitation,
+		NarrationBlockKindFootnote,
+		NarrationBlockKindReference,
+		NarrationBlockKindArtifact,
+		NarrationBlockKindUnknownMark:
+		return true
+	default:
+		return false
+	}
+}
+
+func alreadySilentReferenceCue(block NarrationBlock) bool {
+	if block.SpeakMode != NarrationSpeakModeSkip || strings.TrimSpace(block.SpokenText) != "" || len(block.Segments) != 0 {
+		return false
+	}
+	if referenceControlledKind(block.Kind) || blockHasReferenceSectionMetadata(block) {
+		return true
+	}
+	return referencePolicyModeIsNonSpeaking(block.SpeechPolicy.Mode)
+}
+
+func shouldStripInlineReferenceTail(block NarrationBlock) bool {
+	if block.SpeakMode == NarrationSpeakModeSkip || strings.TrimSpace(block.SpokenText) == "" {
+		return false
+	}
+	return hasWarning(block.Warnings, "citation_removed") ||
+		hasWarning(block.Warnings, "reference_marker_removed") ||
+		hasWarning(block.Warnings, "citation_reference_number_removed") ||
+		blockHasPolicyInlineReferenceArtifact(block)
+}
+
+func blockHasPolicyInlineReferenceArtifact(block NarrationBlock) bool {
+	if block.Metadata == nil {
+		return false
+	}
+	raw, ok := block.Metadata["inlineArtifacts"]
+	if !ok {
+		return false
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		fields, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		kind := strings.ToLower(strings.TrimSpace(fmt.Sprint(fields["kind"])))
+		if kind == "citation" || kind == "reference" || kind == "footnote" {
+			return true
+		}
+	}
+	return false
+}
+
+func explicitlySpeakingReferenceCue(block NarrationBlock) bool {
+	if strings.TrimSpace(block.SpokenText) == "" || !strings.EqualFold(strings.TrimSpace(block.SpeechPolicy.Mode), string(policy.ModeSpeak)) {
+		return false
+	}
+	switch block.Kind {
+	case NarrationBlockKindCitation, NarrationBlockKindFootnote, NarrationBlockKindReference:
+	default:
+		return false
+	}
+	explanation := strings.TrimSpace(strings.ToLower(block.SpeechPolicy.Explanation))
+	return explanation != "" && !strings.Contains(explanation, "not been evaluated")
+}
+
+func referencePolicyModeIsNonSpeaking(mode string) bool {
+	clean := strings.TrimSpace(mode)
+	return strings.EqualFold(clean, string(policy.ModeSkip)) || strings.EqualFold(clean, string(policy.ModeOnDemand))
+}
+
+func referencePolicyExplanationLooksExplicit(explanation string) bool {
+	clean := strings.TrimSpace(strings.ToLower(explanation))
+	return clean != "" && !strings.Contains(clean, "not been evaluated")
+}
+
+func standaloneReferenceNumberText(value string) bool {
+	clean := strings.TrimSpace(strings.ToLower(value))
+	if clean == "" {
+		return false
+	}
+	clean = strings.Trim(clean, "[]().,;:|*_`>\"'")
+	if referenceNumberPattern.MatchString(clean) {
+		return true
+	}
+	fields := strings.Fields(strings.ReplaceAll(clean, "-", " "))
+	if len(fields) == 0 || len(fields) > 4 {
+		return false
+	}
+	for _, field := range fields {
+		if !referenceNumberWord(field) {
+			return false
+		}
+	}
+	return true
+}
+
+func referenceNumberWord(value string) bool {
+	switch value {
+	case "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+		"ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+		"seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty", "fifty",
+		"sixty", "seventy", "eighty", "ninety", "hundred", "thousand":
+		return true
+	default:
+		return false
+	}
+}
+
+func stripTrailingInlineReferenceNumberSpeech(value string) (string, bool) {
+	tokens := indexedSpeechTokens(value)
+	if len(tokens) == 0 {
+		return value, false
+	}
+	for length := minInt(4, len(tokens)); length >= 1; length -= 1 {
+		suffix := tokens[len(tokens)-length:]
+		if !referenceNumberSpeechTokens(suffix) {
+			continue
+		}
+		stripped := strings.TrimSpace(value[:suffix[0].start])
+		if stripped == "" {
+			return value, false
+		}
+		return stripped, true
+	}
+	return value, false
+}
+
+type indexedSpeechToken struct {
+	start int
+	text  string
+}
+
+func indexedSpeechTokens(value string) []indexedSpeechToken {
+	tokens := make([]indexedSpeechToken, 0)
+	inToken := false
+	start := 0
+	for index, char := range value {
+		if char == ' ' || char == '\t' || char == '\n' || char == '\r' {
+			if inToken {
+				tokens = append(tokens, indexedSpeechToken{start: start, text: value[start:index]})
+				inToken = false
+			}
+			continue
+		}
+		if !inToken {
+			start = index
+			inToken = true
+		}
+	}
+	if inToken {
+		tokens = append(tokens, indexedSpeechToken{start: start, text: value[start:]})
+	}
+	return tokens
+}
+
+func referenceNumberSpeechTokens(tokens []indexedSpeechToken) bool {
+	if len(tokens) == 0 || len(tokens) > 4 {
+		return false
+	}
+	words := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		clean := strings.Trim(strings.ToLower(token.text), "[]().,;:|*_`>\"'-")
+		if clean == "" {
+			return false
+		}
+		if referenceNumberPattern.MatchString(clean) {
+			words = append(words, clean)
+			continue
+		}
+		for _, part := range strings.Fields(strings.ReplaceAll(clean, "-", " ")) {
+			if !referenceNumberWord(part) {
+				return false
+			}
+			words = append(words, part)
+		}
+	}
+	return len(words) > 0
+}
+
+func minInt(left int, right int) int {
+	if left < right {
+		return left
+	}
+	return right
+}
+
+func referenceCueLeakWarnings(kind NarrationBlockKind) []string {
+	switch kind {
+	case NarrationBlockKindArtifact:
+		return []string{"artifact_token_removed", "artifact_token_policy"}
+	case NarrationBlockKindFootnote:
+		return []string{"footnote_reference", "footnote_policy"}
+	case NarrationBlockKindCitation:
+		return []string{"citation_skipped"}
+	default:
+		return []string{"reference_marker_removed", "reference_on_demand"}
+	}
+}
+
+func forceReferenceCueLeakBlock(block NarrationBlock, kind NarrationBlockKind, label string, warnings []string, maxSentenceRunes int) NarrationBlock {
+	block.Kind = kind
+	block.SpeakMode = NarrationSpeakModeSkip
+	block.Label = firstNonEmpty(label, block.Label, labelForBlock(kind, block.Text))
+	block.SpokenText = ""
+	block.Segments = nil
+	block.EstimatedDurationMS = 0
+	block.LanguageSpans = nil
+	block.Pronunciations = nil
+	block.Normalisations = nil
+	block.MathPreview = nil
+	block.Warnings = uniqueStrings(append(block.Warnings, warnings...))
+	if block.Metadata == nil {
+		block.Metadata = map[string]any{}
+	}
+	if hasWarning(block.Warnings, "reference_section") {
+		block.Metadata["referenceSection"] = true
+	} else {
+		block.Metadata["standaloneReferenceOnly"] = true
+	}
+	if strings.TrimSpace(block.SpeechPolicy.Profile) == "" {
+		block.SpeechPolicy.Profile = string(policy.DefaultProfileName)
+	}
+	if strings.TrimSpace(block.SpeechPolicy.Element) == "" {
+		block.SpeechPolicy.Element = string(kind)
+	}
+	policyMode := strings.TrimSpace(block.SpeechPolicy.Mode)
+	keepSpeakingPolicy := strings.EqualFold(policyMode, string(policy.ModeSpeak)) &&
+		referencePolicyExplanationLooksExplicit(block.SpeechPolicy.Explanation) &&
+		!hasWarning(block.Warnings, "reference_section") &&
+		(kind == NarrationBlockKindCitation || kind == NarrationBlockKindFootnote || kind == NarrationBlockKindReference)
+	if policyMode == "" || (!referencePolicyModeIsNonSpeaking(policyMode) && !keepSpeakingPolicy) {
+		block.SpeechPolicy.Mode = string(policy.ModeSkip)
+	}
+	if strings.TrimSpace(block.SpeechPolicy.ElementMode) == "" {
+		block.SpeechPolicy.ElementMode = block.SpeechPolicy.Mode
+	}
+	if strings.TrimSpace(block.SpeechPolicy.Explanation) == "" || strings.Contains(strings.ToLower(block.SpeechPolicy.Explanation), "not been evaluated") {
+		block.SpeechPolicy.Explanation = "Reference material is skipped in generated speech."
+	}
+	block.Emphasis, block.PauseBeforeMS, block.PauseAfterMS = narrationEmphasis(block.Kind, block.SpeakMode)
+	block.Confidence = confidenceForBlock(block.Kind, block.SpeakMode)
+	_ = maxSentenceRunes
+	return block
+}
+
+func mergeSkippedSourceItems(existing []SkippedSourceItem, next SkippedSourceItem) []SkippedSourceItem {
+	if strings.TrimSpace(next.ID) == "" {
+		return existing
+	}
+	for index, item := range existing {
+		if item.ID == next.ID {
+			existing[index] = next
+			return existing
+		}
+	}
+	return append(existing, next)
+}
+
+func referenceLineRatio(value string) float64 {
+	lines := nonEmptyReferenceLines(value)
+	if len(lines) == 0 {
+		return 0
+	}
+	referenceLines := 0
+	for _, line := range lines {
+		clean := markdownListPrefixPattern.ReplaceAllString(strings.TrimSpace(line), "")
+		clean = strings.TrimSpace(strings.TrimPrefix(clean, ">"))
+		if referenceURLPattern.MatchString(clean) || referenceDOIPattern.MatchString(clean) {
+			referenceLines += 1
+		}
+	}
+	if referenceLines == 0 {
+		return 0
+	}
+	if referenceLines == len(lines) {
+		return 1
+	}
+	ratio := float64(referenceLines) / float64(len(lines))
+	if len(lines) > 1 && ratio >= 0.6 {
+		return ratio
+	}
+	return 0
+}
+
+func nonEmptyReferenceLines(value string) []string {
+	lines := strings.Split(strings.TrimSpace(value), "\n")
+	output := make([]string, 0, len(lines))
+	for _, line := range lines {
+		clean := strings.TrimSpace(line)
+		if clean != "" {
+			output = append(output, clean)
+		}
+	}
+	return output
+}
+
+func newReferenceSectionBlock(index int, label string, text string, startOffset int, endOffset int, maxSentenceRunes int) NarrationBlock {
+	block := newNarrationBlock(index, NarrationBlockKindReference, NarrationSpeakModeSkip, label, text, "", startOffset, endOffset, maxSentenceRunes)
+	block.Warnings = uniqueStrings(append(block.Warnings, "reference_section", "reference_on_demand"))
+	if block.Metadata == nil {
+		block.Metadata = map[string]any{}
+	}
+	block.Metadata["referenceSection"] = true
+	return block
+}
+
+func newSkippedInlineReferenceBlock(index int, kind NarrationBlockKind, label string, text string, startOffset int, endOffset int, maxSentenceRunes int) NarrationBlock {
+	block := newNarrationBlock(index, kind, NarrationSpeakModeSkip, label, text, "", startOffset, endOffset, maxSentenceRunes)
+	switch kind {
+	case NarrationBlockKindArtifact:
+		block.Warnings = uniqueStrings(append(block.Warnings, "artifact_token_removed", "artifact_token_policy"))
+	case NarrationBlockKindFootnote:
+		block.Warnings = uniqueStrings(append(block.Warnings, "footnote_reference", "footnote_policy"))
+	case NarrationBlockKindCitation:
+		block.Warnings = uniqueStrings(append(block.Warnings, "citation_skipped"))
+	default:
+		block.Warnings = uniqueStrings(append(block.Warnings, "reference_marker_removed", "reference_on_demand"))
+	}
+	if block.Metadata == nil {
+		block.Metadata = map[string]any{}
+	}
+	block.Metadata["standaloneReferenceOnly"] = true
+	return block
 }
 
 func newNarrationBlock(index int, kind NarrationBlockKind, mode NarrationSpeakMode, label string, text string, spokenText string, startOffset int, endOffset int, maxSentenceRunes int) NarrationBlock {
@@ -1499,6 +2102,7 @@ func applySpeechPolicyToPreparedSource(source PreparedSource, profileName string
 
 func applySpeechPolicyToPreparedSourceWithEvaluator(source PreparedSource, evaluator policy.Evaluator, maxSentenceRunes int) PreparedSource {
 	source.SpeechPolicyProfile = evaluator.ProfileID()
+	source = sanitizePreparedSourceReferenceCueLeaks(source, maxSentenceRunes)
 	source.SkippedItems = nil
 	for index := range source.Blocks {
 		block := source.Blocks[index]
@@ -1533,6 +2137,7 @@ func applySpeechPolicyToPreparedSourceWithEvaluator(source PreparedSource, evalu
 		block.Confidence = confidenceForBlock(block.Kind, block.SpeakMode)
 		source.Blocks[index] = block
 	}
+	source = sanitizePreparedSourceReferenceCueLeaks(source, maxSentenceRunes)
 	source.SpeechText = preparedSourceSpeechText(source.Blocks)
 	source.WordCount = countWords(source.SpeechText)
 	source.BlockCount = len(source.Blocks)

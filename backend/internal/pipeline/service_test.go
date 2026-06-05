@@ -241,6 +241,110 @@ func TestPreparedSourceSkipsResearchCitationsAndKeepsHeadings(t *testing.T) {
 	}
 }
 
+func TestPreparedSourceJobExcludesReferenceOnlyCueLeaks(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceServiceWithOptions(t, pipeline.Options{StudioSegmentMaxRunes: 120})
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "reference-cue-leaks.md",
+		Text: strings.Join([]string{
+			"Narrative introduction with a [useful link](https://example.com/guide) and [6] citation.",
+			"",
+			"## References",
+			"",
+			"<!-- deep-research-references:start -->",
+			"",
+			"one. https://opentelemetry.io/docs/what-is-opentelemetry/ two. https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf three. https://www.w3.org/TR/trace-context/",
+			"",
+			"<!-- deep-research-references:end -->",
+			"",
+			"[6](https://example.com/reference)",
+			"",
+			"iturn14image2turn14image5",
+			"",
+			"After the reference section, normal narration resumes.",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	forbidden := []string{"opentelemetry", "Shneiderman", "turn14image", "https://example.com/reference"}
+	assertNoReferenceCueLeak(t, source.SpeechText, forbidden, "prepared source speech text")
+	if !strings.Contains(source.SpeechText, "Narrative introduction with a useful link and citation.") ||
+		!strings.Contains(source.SpeechText, "After the reference section, normal narration resumes.") {
+		t.Fatalf("prepared source speech text lost body content: %q", source.SpeechText)
+	}
+
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	assertNoReferenceCueLeak(t, job.InputText, forbidden, "job input text")
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	completed, err := service.GetJob(job.ID)
+	if err != nil {
+		t.Fatalf("GetJob returned error: %v", err)
+	}
+	for _, segment := range completed.Segments {
+		assertNoReferenceCueLeak(t, segment.Text, forbidden, "job segment text")
+	}
+}
+
+func TestPreparedSourceJobTimingUsesPreparedSourceScope(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceServiceWithOptions(t, pipeline.Options{StudioSegmentMaxRunes: 120})
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "follow-along.md",
+		Text: strings.Join([]string{
+			"# Follow Along",
+			"",
+			"Intro body.",
+			"",
+			"| Raw | Source |",
+			"| --- | --- |",
+			"| A | B |",
+			"",
+			"Tail body.",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	timing, err := service.GetHighlightMapV2(completed.ID)
+	if err != nil {
+		t.Fatalf("GetHighlightMapV2 returned error: %v", err)
+	}
+	if timing.SourceID != source.ID {
+		t.Fatalf("highlight sourceId = %q, want prepared source %q", timing.SourceID, source.ID)
+	}
+	if timing.ScopeKey != "prepared-source" {
+		t.Fatalf("highlight scopeKey = %q, want prepared-source", timing.ScopeKey)
+	}
+	if len(timing.Entries) == 0 {
+		t.Fatalf("highlight timing has no entries: summary=%#v", timing.Summary)
+	}
+	var sourceIndexes []int
+	for _, entry := range timing.Entries {
+		if entry.SourceID != source.ID {
+			t.Fatalf("entry sourceId = %q, want prepared source %q", entry.SourceID, source.ID)
+		}
+		if entry.SourceWordIndex != nil {
+			sourceIndexes = append(sourceIndexes, *entry.SourceWordIndex)
+		}
+	}
+	if len(sourceIndexes) == 0 || sourceIndexes[0] != 0 {
+		t.Fatalf("source word indexes = %#v, want prepared speech indexes starting at 0", sourceIndexes)
+	}
+}
+
 func TestPreparedSourceMarkdownStrictDefaultPreservesMetadataAndEmbeddedNodes(t *testing.T) {
 	t.Parallel()
 
@@ -6868,6 +6972,18 @@ func (checker *countingRejectChecker) Check(_ context.Context, _ string, _ []byt
 		Provider:    "test",
 		Similarity:  0.1,
 	}, nil
+}
+
+func assertNoReferenceCueLeak(t *testing.T, text string, forbidden []string, label string) {
+	t.Helper()
+	for _, token := range forbidden {
+		if strings.Contains(text, token) {
+			t.Fatalf("%s leaked %q: %q", label, token, text)
+		}
+	}
+	if regexp.MustCompile(`\b6\b`).MatchString(text) {
+		t.Fatalf("%s leaked numeric citation: %q", label, text)
+	}
 }
 
 func boolPtr(value bool) *bool {

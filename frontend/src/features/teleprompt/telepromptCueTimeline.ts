@@ -25,6 +25,7 @@ import {
   v2EntryKey,
   v2EntryText,
 } from "./utils/telepromptCueTimelineHelpers";
+import { telepromptBlockIsCueProgressionCandidate } from "./telepromptToolbar";
 
 export type TelepromptCueSyncMode =
   | "manual"
@@ -128,23 +129,24 @@ export function buildTelepromptCueTimeline({
   highlightMapV2,
   job,
 }: BuildTelepromptCueTimelineInput): TelepromptCueTimeline {
-  if (blocks.length === 0) {
+  const cueBlocks = blocks.filter((block) => telepromptBlockIsCueProgressionCandidate(block));
+  if (cueBlocks.length === 0) {
     return emptyTelepromptCueTimeline("estimated");
   }
 
   if (highlightMapV2?.entries.length) {
-    return timelineFromHighlightMapV2(blocks, highlightMapV2);
+    return timelineFromHighlightMapV2(cueBlocks, highlightMapV2);
   }
 
   if (highlightMap?.fragments.length) {
-    return timelineFromLegacyHighlightMap(blocks, highlightMap);
+    return timelineFromLegacyHighlightMap(cueBlocks, highlightMap);
   }
 
   if (job?.segments?.length) {
-    return timelineFromJobSegments(blocks, job);
+    return timelineFromJobSegments(cueBlocks, job);
   }
 
-  return timelineFromEstimates(blocks);
+  return timelineFromEstimates(cueBlocks);
 }
 
 export function resolveTelepromptCueSync({

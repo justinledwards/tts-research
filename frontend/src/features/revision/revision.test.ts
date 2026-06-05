@@ -12,9 +12,12 @@ import {
   groupRevisionTriageItems,
   normalizeRevisionPolicyNoteType,
   revisionBlockIsCleanApprovable,
+  revisionBlockIsSpeakable,
   revisionPreviewReadinessLabel,
   revisionFiltersAreDefault,
   revisionNextActionLabel,
+  revisionTextIsStandaloneArtifactToken,
+  stripRevisionTrailingReferenceNumberText,
   summarizeRevisionHealth,
   summarizeRevisionBlocks,
   type RevisionBlock,
@@ -214,6 +217,55 @@ describe("revision filters", () => {
     expect(deriveRevisionBlockStatus({ warnings: ["needs review"] })).toBe("needsReview");
     expect(deriveRevisionBlockStatus({ confidence: 0.5 })).toBe("needsReview");
     expect(deriveRevisionBlockStatus({ confidence: 0.92 })).toBe("waiting");
+  });
+
+  it("classifies stale reference-only spoken forms as non-speaking", () => {
+    expect(
+      revisionBlockIsSpeakable(
+        block({
+          kind: "reference",
+          label: "Reference",
+          spokenText: "thirty four",
+          text: "[34](https://example.com/reference)",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      revisionBlockIsSpeakable(
+        block({
+          kind: "body",
+          label: "Artifact",
+          spokenText: "iturn14image2turn14image5turn15image8turn15image9",
+          text: "iturn14image2turn14image5turn15image8turn15image9",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      revisionTextIsStandaloneArtifactToken(
+        "iturn14image2turn14image5turn15image8turn15image9",
+      ),
+    ).toBe(true);
+    expect(
+      revisionBlockIsSpeakable(
+        block({
+          kind: "body",
+          spokenText:
+            "one. https://opentelemetry.io/docs/what-is-opentelemetry/ thirty four. https://example.com/reference.pdf",
+          text: "one. https://opentelemetry.io/docs/what-is-opentelemetry/ thirty four. https://example.com/reference.pdf",
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("strips stale inline citation number tails without removing body prose", () => {
+    expect(
+      stripRevisionTrailingReferenceNumberText(
+        "Industrial alarm guidance and healthcare reviews converge on that finding. forty three",
+      ),
+    ).toBe("Industrial alarm guidance and healthcare reviews converge on that finding.");
+    expect(stripRevisionTrailingReferenceNumberText("Findings converge. 43")).toBe(
+      "Findings converge.",
+    );
   });
 });
 

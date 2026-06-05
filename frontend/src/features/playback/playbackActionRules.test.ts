@@ -4,8 +4,10 @@ import {
   GENERATED_AUDIO_LIFECYCLE_STATES,
   PLAYBACK_OWNERS,
   buildPlaybackState,
+  canQueueGeneratedAudioPlayback,
   generatedAudioLifecycleFromJob,
   generatedAudioLifecycleVisualClassName,
+  isGeneratedAudioPartiallyPlayable,
   playbackActionAriaLabel,
   playbackActionDisabledReason,
   playbackActionLabel,
@@ -51,6 +53,31 @@ describe("playback ownership model", () => {
     expect(
       generatedAudioLifecycleFromJob({ job: voiceJob("completed", "/audio.wav"), stale: true }),
     ).toBe("stale");
+  });
+
+  it("distinguishes final, partial, and queueable generated audio jobs", () => {
+    const partialJob = {
+      audioPartialUrl: "/jobs/job-1/partial.wav",
+      audioReadySegments: 1,
+      retries: { totalSegments: 3 },
+      status: "synthesizing",
+    } as VoiceJob;
+    const queueableJob = {
+      audioReadySegments: 0,
+      retries: { totalSegments: 3 },
+      status: "synthesizing",
+    } as VoiceJob;
+    const unplannedJob = {
+      audioReadySegments: 0,
+      retries: { totalSegments: 0 },
+      status: "optimizing",
+    } as VoiceJob;
+
+    expect(isGeneratedAudioPartiallyPlayable(partialJob)).toBe(true);
+    expect(canQueueGeneratedAudioPlayback(partialJob)).toBe(true);
+    expect(isGeneratedAudioPartiallyPlayable(queueableJob)).toBe(false);
+    expect(canQueueGeneratedAudioPlayback(queueableJob)).toBe(true);
+    expect(canQueueGeneratedAudioPlayback(unplannedJob)).toBe(false);
   });
 
   it("keeps stale generated audio visually distinct from ready audio", () => {

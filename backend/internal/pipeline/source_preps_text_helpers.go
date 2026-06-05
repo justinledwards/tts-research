@@ -184,6 +184,7 @@ func markdownInlineArtifactPatterns() []*regexp.Regexp {
 	return []*regexp.Regexp{
 		chatGPTCitationPattern,
 		citationGlyphPattern,
+		chatGPTArtifactPattern,
 		contentReferencePattern,
 		malformedCitationPattern,
 		turnCitationPattern,

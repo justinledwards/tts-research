@@ -37,6 +37,7 @@ import {
   countTelepromptWords,
   estimateTelepromptDurationMs,
   formatTelepromptDuration,
+  firstTelepromptCueBlockId,
   resolveTelepromptBlockIndex,
   resolveTelepromptShortcut,
   totalTelepromptWords,
@@ -103,10 +104,30 @@ describe("teleprompt toolbar model", () => {
     expect(adjacentTelepromptBlockId(blocks, "b", 1)).toBe("c");
     expect(adjacentTelepromptBlockId(blocks, "a", -1)).toBe("a");
   });
+
+  it("keeps skipped blocks visible but out of cue progression", () => {
+    const scriptBlocks = [
+      block({ id: "intro", spokenText: "Intro words." }),
+      block({
+        id: "ref",
+        kind: "reference",
+        speakMode: "skip",
+        spokenText: "",
+        status: "skipped",
+        text: "[6](https://example.com/reference)",
+      }),
+      block({ id: "body", spokenText: "Body words." }),
+    ];
+
+    expect(firstTelepromptCueBlockId(scriptBlocks)).toBe("intro");
+    expect(totalTelepromptWords(scriptBlocks)).toBe(4);
+    expect(adjacentTelepromptBlockId(scriptBlocks, "intro", 1)).toBe("body");
+    expect(adjacentTelepromptBlockId(scriptBlocks, "body", -1)).toBe("intro");
+  });
 });
 
 describe("teleprompt studio work modes", () => {
-  it("defaults to audio-follow only when current generated audio is ready", () => {
+  it("defaults to audio-follow when generated audio is ready or progressively playable", () => {
     expect(
       defaultTelepromptWorkMode({
         generatedAudioLifecycle: "ready",
@@ -121,10 +142,24 @@ describe("teleprompt studio work modes", () => {
       }),
     ).toBe(true);
 
+    const progressiveStates: GeneratedAudioLifecycleState[] = ["queued", "generating"];
+    for (const generatedAudioLifecycle of progressiveStates) {
+      expect(
+        defaultTelepromptWorkMode({
+          generatedAudioLifecycle,
+          playbackAvailable: true,
+        }),
+      ).toBe("audio-follow");
+      expect(
+        telepromptGeneratedAudioReady({
+          generatedAudioLifecycle,
+          playbackAvailable: true,
+        }),
+      ).toBe(true);
+    }
+
     const nonReadyStates: GeneratedAudioLifecycleState[] = [
       "missing",
-      "queued",
-      "generating",
       "stale",
       "degraded",
       "failed",
@@ -174,11 +209,26 @@ describe("teleprompt studio work modes", () => {
     expect(
       buildTelepromptWorkModeModel({
         mode: "audio-follow",
+        generatedAudioLifecycle: "ready",
         playbackAvailable: true,
         playbackPlaying: false,
       }),
     ).toMatchObject({
       detail: "Generated audio is ready. Play to follow cues automatically.",
+      label: "Audio-follow",
+      syncMode: "audio-follow",
+      tone: "info",
+    });
+    expect(
+      buildTelepromptWorkModeModel({
+        mode: "audio-follow",
+        generatedAudioLifecycle: "generating",
+        playbackAvailable: true,
+        playbackPlaying: false,
+      }),
+    ).toMatchObject({
+      detail:
+        "Partial generated audio is available. Play to follow ready cues as new segments arrive.",
       label: "Audio-follow",
       syncMode: "audio-follow",
       tone: "info",
@@ -239,6 +289,34 @@ describe("teleprompt studio cue-first render", () => {
     expect(markup).not.toContain("ui-action-teleprompt-workflow-theatre");
   });
 
+  it("renders skipped script entries without making them active cues", () => {
+    const scriptBlocks = [
+      block({ id: "intro", index: 1, spokenText: "Intro words." }),
+      block({
+        id: "ref",
+        index: 2,
+        kind: "reference",
+        speakMode: "skip",
+        spokenText: "",
+        status: "skipped",
+        text: "[6](https://example.com/reference)",
+      }),
+      block({ id: "body", index: 3, spokenText: "Body words." }),
+    ];
+    const markup = renderToStaticMarkup(
+      createElement(
+        TelepromptStudio,
+        studioProps({ activeBlockId: "intro", blocks: scriptBlocks }),
+      ),
+    );
+
+    expect(markup).not.toContain("[6](https://example.com/reference)");
+    expect(markup).toContain("No spoken text is available for this cue.");
+    expect(markup).toContain('data-readalong-cue-role="skipped"');
+    expect(markup).toContain("Next block");
+    expect(markup).toContain("Body words.");
+  });
+
   it("keeps Cinema visible beside Theatre with disabled recovery copy", () => {
     const markup = renderToStaticMarkup(
       createElement(TelepromptStudio, studioProps({ canOpenCinema: false })),
@@ -247,7 +325,7 @@ describe("teleprompt studio cue-first render", () => {
     expect(markup).toContain('data-testid="ui-action-teleprompt-open-cinema"');
     expect(markup).toContain("Open Cinema");
     expect(markup).toContain("Enter Theatre");
-    expect(markup).toContain("Open Cinema unlocks");
+    expect(markup).toContain("Open Cinema unlocks after current scope audio is ready.");
   });
 
   it("defaults to audio-follow when current generated audio is ready", () => {
@@ -328,6 +406,35 @@ describe("teleprompt waveform timeline", () => {
     expect(markers).toHaveLength(3);
     expect(markers?.map((marker) => Number(marker.ratio.toFixed(2)))).toEqual([0, 0.33, 0.67]);
     expect(markers?.[1]).toMatchObject({ active: true, label: "Cue 2: Text" });
+  });
+
+  it("builds cue timelines from speakable blocks only", () => {
+    const timeline = buildTelepromptCueTimeline({
+      blocks: [
+        block({ id: "intro", spokenText: "Intro words." }),
+        block({
+          id: "ref",
+          kind: "reference",
+          speakMode: "skip",
+          spokenText: "",
+          status: "skipped",
+          text: "https://example.com/reference",
+        }),
+        block({ id: "body", spokenText: "Body words." }),
+      ],
+      job: {
+        ...voiceJob(),
+        audioSegmentDurationsMs: [1000, 2000],
+        segments: [
+          { index: 1, status: "ready", text: "Intro words." },
+          { index: 2, status: "ready", text: "Body words." },
+        ],
+      },
+    });
+
+    expect(timeline.cues.map((cue) => cue.sourceBlockId)).toEqual(["intro", "body"]);
+    expect(timeline.cues.map((cue) => cue.spokenText)).toEqual(["Intro words.", "Body words."]);
+    expect(timeline.durationMs).toBe(3000);
   });
 });
 
@@ -519,6 +626,41 @@ describe("teleprompt theatre model", () => {
     expect(renderCueWithBlocks({ activeBlock, previewBlocks, text })).toContain(
       'data-teleprompt-theatre-section-kind="subheading"',
     );
+  });
+
+  it("ignores skipped preview blocks when splitting combined theatre cues", () => {
+    const activeBlock = block({
+      id: "title",
+      kind: "heading",
+      spokenText: "Cache and Cache Coherency",
+    });
+    const previewBlocks = [
+      block({
+        id: "ref",
+        kind: "reference",
+        speakMode: "skip",
+        spokenText: "",
+        status: "skipped",
+        text: "https://example.com/reference",
+      }),
+      block({
+        id: "body",
+        kind: "body",
+        spokenText: "A cache is a small, fast storage structure.",
+      }),
+    ];
+    const text = "Cache and Cache Coherency A cache is a small, fast storage structure.";
+
+    const sections = telepromptTheatreCueSections({
+      activeBlock,
+      previewBlocks,
+      text,
+    });
+
+    expect(sections.map((section) => [section.id, section.kind])).toEqual([
+      ["block:title", "heading"],
+      ["block:body", "body"],
+    ]);
   });
 
   it("maps combined theatre cue sections onto cue-local word indexes", () => {

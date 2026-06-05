@@ -78,7 +78,7 @@
       "spokenText": "The method is reproducible and the project notes mention voice_id.",
       "startOffset": 30,
       "text": "The method is reproducible[^1] and the [project notes](https://example.com/notes) mention `voice_id`.",
-      "warnings": ["footnote_reference", "link_reference", "inline_code_policy", "citation_removed"]
+      "warnings": ["footnote_reference", "link_reference", "inline_code_policy"]
     },
     {
       "confidence": 0.98,
@@ -106,7 +106,7 @@
         "sourceSlice": "[^1]"
       },
       "speakMode": "skip",
-      "spokenText": "Footnote 1.",
+      "spokenText": "",
       "startOffset": 56,
       "text": "[^1]",
       "warnings": ["inline_artifact", "footnote_reference", "footnote_policy"]
@@ -137,7 +137,7 @@
         "sourceSlice": "[project notes](https://example.com/notes)"
       },
       "speakMode": "skip",
-      "spokenText": "project notes",
+      "spokenText": "",
       "startOffset": 69,
       "text": "[project notes](https://example.com/notes)",
       "warnings": ["inline_artifact", "link_reference", "reference_policy"]
@@ -343,12 +343,7 @@
           "highlightUnitHint": "node",
           "progressionHint": "linear"
         },
-        "warnings": [
-          "footnote_reference",
-          "link_reference",
-          "inline_code_policy",
-          "citation_removed"
-        ]
+        "warnings": ["footnote_reference", "link_reference", "inline_code_policy"]
       },
       {
         "adapterVersion": "markdown-adapter-v2",
@@ -416,7 +411,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "Footnote 1.",
+        "speechText": "",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
@@ -489,7 +484,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "project notes",
+        "speechText": "",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"

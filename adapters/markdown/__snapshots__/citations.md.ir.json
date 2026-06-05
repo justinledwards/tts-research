@@ -84,7 +84,7 @@
         "sourceSlice": "citeturn40search10"
       },
       "speakMode": "skip",
-      "spokenText": "Citation marker.",
+      "spokenText": "",
       "startOffset": 48,
       "text": "citeturn40search10",
       "warnings": ["inline_artifact", "citation_removed", "citation_policy"]
@@ -348,7 +348,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "Citation marker.",
+        "speechText": "",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"

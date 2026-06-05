@@ -22,19 +22,22 @@ describe("golden-minute speech policy preview", () => {
     );
   });
 
-  it("makes inline citation and highlight changes visible between profiles", () => {
+  it("makes explicit inline citation and highlight changes visible", () => {
     const enterprise = buildGoldenMinutePolicyPreview(
       BUILT_IN_SPEECH_POLICY_SETTINGS.Enterprise,
       "Enterprise",
     );
-    const education = buildGoldenMinutePolicyPreview(
-      BUILT_IN_SPEECH_POLICY_SETTINGS.Education,
-      "Education",
+    const educationInline = buildGoldenMinutePolicyPreview(
+      {
+        ...BUILT_IN_SPEECH_POLICY_SETTINGS.Education,
+        citationMode: "inline",
+      },
+      "Education inline override",
     );
-    const comparison = buildGoldenMinutePolicyComparison(enterprise, education);
+    const comparison = buildGoldenMinutePolicyComparison(enterprise, educationInline);
 
-    expect(education.citationHandling).toContain("read inline");
-    expect(education.highlightGranularity).toBe("sentence");
+    expect(educationInline.citationHandling).toContain("read inline");
+    expect(educationInline.highlightGranularity).toBe("sentence");
     expect(comparison.differences.join(" ")).toContain("citation handling differs");
     expect(comparison.differences.join(" ")).toContain("Highlight granularity changes");
   });

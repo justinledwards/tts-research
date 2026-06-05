@@ -41,7 +41,12 @@ export function telepromptGeneratedAudioReady({
   generatedAudioLifecycle,
   playbackAvailable,
 }: TelepromptGeneratedAudioModeInput): boolean {
-  return playbackAvailable && generatedAudioLifecycle === "ready";
+  return (
+    playbackAvailable &&
+    (generatedAudioLifecycle === "ready" ||
+      generatedAudioLifecycle === "generating" ||
+      generatedAudioLifecycle === "queued")
+  );
 }
 
 export function defaultTelepromptWorkMode(
@@ -66,6 +71,7 @@ export function buildTelepromptWorkModeModel({
   const detail = workModeDetail({
     audioProgressPercent,
     disabledReason,
+    generatedAudioLifecycle,
     mode,
     playbackAvailable,
     playbackPlaying,
@@ -127,6 +133,7 @@ function workModeDisabledReason(
 function workModeDetail({
   audioProgressPercent = 0,
   disabledReason,
+  generatedAudioLifecycle = "missing",
   mode,
   playbackAvailable,
   playbackPlaying,
@@ -151,6 +158,11 @@ function workModeDetail({
   }
   if (!playbackAvailable) {
     return "Generated audio and timing are required for audio-follow. Rehearsal remains available.";
+  }
+  if (generatedAudioLifecycle !== "ready") {
+    return playbackPlaying
+      ? `Following generated audio at ${audioProgressPercent.toString()}% while generation continues.`
+      : "Partial generated audio is available. Play to follow ready cues as new segments arrive.";
   }
   return playbackPlaying
     ? `Following generated audio at ${audioProgressPercent.toString()}%.`

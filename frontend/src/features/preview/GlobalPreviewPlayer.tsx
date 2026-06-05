@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { audioSource } from "../../api";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import { Button, cx, fieldControlClassName, Toggle } from "../../design";
 import type { RunMode, TTSEngineDiagnostics, VoiceJob } from "../../types";
 import { pickTeleprompterWordIndex } from "../../teleprompter";
 import { overlayDataAttributes, type PreviewPlayerPlacement } from "../layout";
 import {
+  canQueueGeneratedAudioPlayback,
   generatedAudioLifecycleFromJob,
   playbackActionAriaLabel,
   playbackActionDataAttributes,
@@ -133,7 +135,7 @@ export function GlobalPreviewPlayer({
   const activeIndex = resolvePreviewQueueIndex(queue, activeBlockId, playbackCursorSec);
   const activeItem = activePreviewQueueItem(queue, activeIndex);
   const progress = previewQueueProgress(queue, playbackCursorSec);
-  const waveformBars = useAudioWaveformBars(job?.audioUrl, 56);
+  const waveformBars = useAudioWaveformBars(job ? audioSource(job, { partial: true }) : "", 56);
   const choiceA = useMemo<PreviewComparisonChoice>(
     () => ({
       policyId: currentPolicyId,
@@ -165,7 +167,10 @@ export function GlobalPreviewPlayer({
   );
   const auditionGate = providerCapabilityGateForPlaybackAction(providerRuntime, "audition");
   const abComparisonGate = providerCapabilityGateForPlaybackAction(providerRuntime, "abCompare");
-  const playbackAvailable = hasPreviewPlayback(playbackControls, queue) && !auditionGate.disabled;
+  const playbackAvailable =
+    (hasPreviewPlayback(playbackControls, queue) || canQueueGeneratedAudioPlayback(job)) &&
+    playbackControls.isAvailable &&
+    !auditionGate.disabled;
   const playbackLifecycle = playbackAvailable ? "ready" : generatedAudioLifecycleFromJob({ job });
   const playbackDisabledReason = playbackAvailable
     ? undefined

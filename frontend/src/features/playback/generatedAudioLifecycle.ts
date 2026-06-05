@@ -197,6 +197,48 @@ export function isGeneratedAudioPlayable(state: GeneratedAudioLifecycleState): b
   return state === "ready";
 }
 
+export function generatedAudioReadySegmentCount(job: VoiceJob | null | undefined): number {
+  if (!job) {
+    return 0;
+  }
+  const readyBySegments = (job.segments ?? []).filter(
+    (segment) => segment.status === "ready",
+  ).length;
+  return Math.max(0, job.audioReadySegments ?? 0, readyBySegments);
+}
+
+export function generatedAudioTotalSegmentCount(job: VoiceJob | null | undefined): number {
+  if (!job) {
+    return 0;
+  }
+  const legacyRetries = (job as { retries?: { totalSegments?: number } }).retries;
+  return Math.max(0, legacyRetries?.totalSegments ?? 0, job.segments?.length ?? 0);
+}
+
+export function isGeneratedAudioWorkingJob(job: VoiceJob | null | undefined): boolean {
+  return (
+    job?.status === "queued" ||
+    job?.status === "optimizing" ||
+    job?.status === "synthesizing" ||
+    job?.status === "checking" ||
+    job?.status === "retrying"
+  );
+}
+
+export function isGeneratedAudioPartiallyPlayable(job: VoiceJob | null | undefined): boolean {
+  if (!job || job.status === "completed") {
+    return false;
+  }
+  return generatedAudioReadySegmentCount(job) > 0 && (job.audioPartialUrl?.trim() ?? "").length > 0;
+}
+
+export function canQueueGeneratedAudioPlayback(job: VoiceJob | null | undefined): boolean {
+  return (
+    isGeneratedAudioPartiallyPlayable(job) ||
+    (isGeneratedAudioWorkingJob(job) && generatedAudioTotalSegmentCount(job) > 0)
+  );
+}
+
 function lifecycleDescriptor(
   descriptor: GeneratedAudioLifecycleDescriptor,
 ): GeneratedAudioLifecycleDescriptor {

@@ -1680,6 +1680,16 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Run focused and project checks
 - Validation: frontend Vitest passed; frontend typecheck passed; `pnpm check` passed with existing unrelated Biome warnings/infos; `git diff --check` passed; `pnpm e2e:teleprompt-memory` passed.
 
+## 2026-06-05 17:00 CEST - References List Narration Defaults
+- [x] Update built-in citation defaults
+- [x] Add Markdown reference-section detection
+- [x] Add fixtures and regression coverage
+- [x] Run focused and project checks
+- Validation: focused Markdown adapter, backend policy/pipeline, and frontend speech-policy checks passed; `pnpm check` passed with existing non-failing Biome warnings/infos.
+- [x] Cover backend plain and legacy Markdown fallback paths
+- [x] Rerun focused validation
+- Validation: Markdown adapter, backend policy/pipeline, and frontend speech-policy checks passed after fallback coverage; `git diff --check` passed. `pnpm check` is currently blocked by an unrelated ESLint error in `frontend/src/WorkspaceDrawer.tsx`.
+
 ## 2026-06-05 17:32 CEST - Command Center Narration Actions
 - [x] Add terminal-only narration deletion API
 - [x] Wire Command Center source generation action
@@ -1694,3 +1704,58 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Patch the root cause
 - [x] Rerun focused validation
 - Validation: fixed Command Center asset generation so inactive rows do not reuse active review-session text and list-only prepared sources hydrate before generation; focused frontend/backend checks passed; `git diff --check` passed; `pnpm check` passed with existing unrelated Biome warnings/infos.
+
+## 2026-06-05 19:03 CEST - Reference Cue Leak Closure
+- [x] Harden Markdown artifact and reference-only detection
+- [x] Mirror reference-only handling in Go fallback prep
+- [x] Exclude skipped blocks from cue progression and synthesis paths
+- [x] Add adapter, backend, and frontend regressions
+- [x] Run focused and project checks
+- Validation: Markdown adapter, backend policy/pipeline, focused frontend cue/model/speech-policy tests, `pnpm check`, and `git diff --check` passed; `pnpm check` reported existing non-failing Biome warnings/infos.
+
+## 2026-06-05 19:33 CEST - Spoken Form Leak Closure And Source Sync
+- [x] Harden stale prepared-source reference sanitization
+- [x] Tighten frontend speakable cue filtering and raw fallback display
+- [x] Sync Markdown source preview to visible Spoken Form cue
+- [x] Add backend and frontend regressions
+- [x] Run focused and project checks
+- Validation: Markdown adapter, backend policy/pipeline, focused frontend Preview/Revision/Teleprompt/Cinema/MarkdownRenderer tests, frontend typecheck, `pnpm check`, and `git diff --check` passed. `pnpm check` still reports existing non-failing Biome warnings/infos.
+
+## 2026-06-05 20:08 CEST - Inline Citation Number Strip
+- [x] Reproduce bare citation number leak
+- [x] Strip inline citation number remnants from spoken text
+- [x] Add focused regressions
+- [x] Run focused checks
+- Validation: backend policy/pipeline tests, focused frontend Preview/Revision/Teleprompt/Cinema tests, frontend typecheck, `pnpm check`, and `git diff --check` passed. `pnpm check` still reports existing non-failing Biome warnings/infos.
+
+## 2026-06-05 20:19 CEST - Standalone Image Token Skip
+- [x] Detect standalone ChatGPT image artifact tokens across cue predicates
+- [x] Add frontend and backend stale-token regressions
+- [x] Run focused checks
+- Validation: backend policy/pipeline tests, focused frontend Preview/Revision/Teleprompt/Cinema tests, frontend typecheck, `pnpm check`, and `git diff --check` passed. `pnpm check` still reports existing non-failing Biome warnings/infos.
+
+## 2026-06-05 20:25 CEST - Follow Along Position Integrity
+- [x] Audit block/segment/word mapping through skipped and summarized blocks
+- [x] Add regressions for skip and summary follow-along alignment
+- [x] Patch mapping drift if found
+- [x] Run focused checks
+- Validation: focused frontend readalong/MarkdownRenderer tests, frontend typecheck, Markdown adapter tests, backend policy/pipeline tests, `pnpm check`, and `git diff --check` passed. `pnpm check` still reports existing non-failing Biome warnings/infos.
+
+## 2026-06-05 22:11 CEST - Progressive Cinema Playback
+- [x] Split Cinema openability from final audio readiness
+- [x] Enable progressive partial-audio playback gates
+- [x] Preserve cue/readalong alignment with ready segments only
+- [x] Add focused frontend/backend regressions
+- [x] Run focused and project checks
+- [x] Validated with focused tests, backend policy/pipeline tests, markdown adapter tests, `pnpm check`, and `git diff --check`
+
+## 2026-06-05 22:35 CEST - Restore Cinema Feel
+- [x] Inspect Cinema visual diffs from progressive playback work
+- [x] Superseded by direct Cinema progressive revert below
+- [x] Run focused checks as part of direct revert
+
+## 2026-06-05 22:41 CEST - Revert Cinema Progressive Changes
+- [x] Identify Cinema-only progressive playback edits
+- [x] Revert Cinema presentation/state changes without touching reference skip fixes
+- [x] Run focused validation
+- [x] Validated with focused frontend tests, `pnpm check`, and `git diff --check`

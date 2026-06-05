@@ -1,5 +1,11 @@
 import type { VoiceJob } from "../../types";
-import type { GeneratedAudioLifecycleState } from "./generatedAudioLifecycle";
+import {
+  generatedAudioReadySegmentCount,
+  generatedAudioTotalSegmentCount,
+  isGeneratedAudioPartiallyPlayable,
+  isGeneratedAudioWorkingJob,
+  type GeneratedAudioLifecycleState,
+} from "./generatedAudioLifecycle";
 
 export const AUDIO_GENERATION_PIPELINE_STATES = [
   "notReady",
@@ -61,7 +67,8 @@ export function resolveAudioGenerationPipelineModel(
     totalSegments,
     working,
   });
-  const canUsePartialAudio = readySegments > 0 && state !== "readyToListen";
+  const canUsePartialAudio =
+    isGeneratedAudioPartiallyPlayable(input.job) && state !== "readyToListen";
   const canCreateAndListen = prerequisitesReady && input.canCreate && !working;
   const canRetryGeneration = Boolean(
     input.job &&
@@ -233,29 +240,13 @@ function failureDetail(job: VoiceJob | null): string {
 }
 
 function readySegmentCount(job: VoiceJob | null | undefined): number {
-  if (!job) {
-    return 0;
-  }
-  const readyBySegments = (job.segments ?? []).filter(
-    (segment) => segment.status === "ready",
-  ).length;
-  return Math.max(0, job.audioReadySegments ?? 0, readyBySegments);
+  return generatedAudioReadySegmentCount(job);
 }
 
 function totalSegmentCount(job: VoiceJob | null | undefined): number {
-  if (!job) {
-    return 0;
-  }
-  const retryMetadata = (job as Partial<VoiceJob>).retries;
-  return Math.max(0, retryMetadata?.totalSegments ?? 0, job.segments?.length ?? 0);
+  return generatedAudioTotalSegmentCount(job);
 }
 
 function isWorkingJob(job: VoiceJob): boolean {
-  return (
-    job.status === "queued" ||
-    job.status === "optimizing" ||
-    job.status === "synthesizing" ||
-    job.status === "checking" ||
-    job.status === "retrying"
-  );
+  return isGeneratedAudioWorkingJob(job);
 }

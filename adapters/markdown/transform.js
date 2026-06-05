@@ -9,6 +9,7 @@ import {
   buildByteOffsetMap,
   cleanSpeechText,
   containsCitationMarkup,
+  deepResearchReferencesMarker,
   findInlineArtifacts,
   findMystRoles,
   firstTitle,
@@ -16,11 +17,14 @@ import {
   inlineArtifactWarnings,
   inlineSpeechText,
   inlineText,
+  isReferenceLikeNode,
+  isReferenceSectionLabel,
   labelForDirective,
   labelForEmbedded,
   parseCallout,
   parseMystDirectiveLanguage,
   shouldSkipCitationBlock,
+  standaloneReferenceOnlyNode,
   spanForNode,
   sourceSlice,
   uniqueStrings,
@@ -42,6 +46,7 @@ export function transformMarkdownAst(tree, source, options = {}) {
       frontmatter: [],
     },
     nodes: [],
+    referenceSection: null,
     source,
     warnings: [...(options.parseWarnings ?? [])],
   };
@@ -56,11 +61,54 @@ export function transformMarkdownAst(tree, source, options = {}) {
 
 function transformChildren(children, path, parentId, context) {
   for (const [index, child] of children.entries()) {
+    const marker = deepResearchReferencesMarker(child);
+    if (marker === "end") {
+      transformNode(child, `${path}/${index}`, parentId, context);
+      context.referenceSection = null;
+      continue;
+    }
+    if (shouldCloseImplicitReferenceSection(child, context)) {
+      context.referenceSection = null;
+    }
     transformNode(child, `${path}/${index}`, parentId, context);
+    if (marker === "start") {
+      context.referenceSection = {
+        label: "deep-research-references",
+        mode: "marker",
+      };
+    }
   }
 }
 
+function shouldCloseImplicitReferenceSection(node, context) {
+  if (context.referenceSection?.mode !== "implicit") {
+    return false;
+  }
+  if (deepResearchReferencesMarker(node) === "start" || node.type === "html") {
+    return false;
+  }
+  return !isReferenceSectionLabel(node) && !isReferenceLikeNode(node, context);
+}
+
 function transformNode(node, astPath, parentId, context) {
+  if (isReferenceSectionLabel(node)) {
+    const label = inlineText(node);
+    context.referenceSection = {
+      label,
+      mode: context.referenceSection?.mode === "marker" ? "marker" : "implicit",
+    };
+    pushReferenceSectionNode(node, astPath, parentId, context, {
+      label,
+      metadata: {
+        referenceSectionHeading: true,
+      },
+    });
+    return;
+  }
+  if (context.referenceSection && node.type !== "html") {
+    pushReferenceSectionNode(node, astPath, parentId, context);
+    return;
+  }
   switch (node.type) {
     case "yaml":
     case "toml":
@@ -174,6 +222,27 @@ function transformNode(node, astPath, parentId, context) {
   }
 }
 
+function pushReferenceSectionNode(node, astPath, parentId, context, fields = {}) {
+  const section = context.referenceSection ?? { label: "", mode: "implicit" };
+  pushSemanticNode(node, astPath, parentId, context, {
+    kind: "reference",
+    label: fields.label ?? "Reference section",
+    metadata: {
+      referenceSection: true,
+      referenceSectionLabel: section.label,
+      referenceSectionMode: section.mode,
+      ...(fields.metadata ?? {}),
+    },
+    speakMode: "skip",
+    speechText: "",
+    warnings: uniqueStrings([
+      "reference_section",
+      "reference_on_demand",
+      ...(fields.warnings ?? []),
+    ]),
+  });
+}
+
 function pushFrontmatter(node, astPath, parentId, context) {
   const format = node.type;
   const warnings = ["frontmatter_metadata"];
@@ -215,6 +284,28 @@ function pushParagraph(node, astPath, parentId, context) {
   }
   const speechText = cleanSpeechText(inlineSpeechText(node));
   const raw = sourceSlice(node, context);
+  const standaloneReference = standaloneReferenceOnlyNode(node, context, inlineArtifacts);
+  if (standaloneReference) {
+    pushSemanticNode(node, astPath, parentId, context, {
+      kind: standaloneReference.kind,
+      label: standaloneReference.label,
+      metadata:
+        inlineArtifacts.length > 0
+          ? {
+              inlineArtifacts: inlineArtifacts.map((artifact) => artifactMetadata(artifact)),
+            }
+          : {},
+      speakMode: "skip",
+      speechText: "",
+      warnings: inlineArtifactWarnings(
+        inlineArtifacts,
+        raw,
+        "",
+        uniqueStrings([...warnings, ...standaloneReference.warnings]),
+      ),
+    });
+    return;
+  }
   const emitsSyntheticArtifacts =
     inlineArtifacts.length > 0 && speechText !== "" && !shouldSkipCitationBlock(raw);
   if (speechText !== "") {
@@ -286,7 +377,25 @@ function pushBlockquote(node, astPath, parentId, context) {
 
 function pushList(node, astPath, parentId, context) {
   for (const [index, child] of (node.children ?? []).entries()) {
-    const speechText = cleanSpeechText(mdastToString(child));
+    const inlineArtifacts = findInlineArtifacts(child, context);
+    const standaloneReference = standaloneReferenceOnlyNode(child, context, inlineArtifacts);
+    if (standaloneReference) {
+      const raw = sourceSlice(child, context);
+      pushSemanticNode(child, `${astPath}/children/${index}`, parentId, context, {
+        kind: standaloneReference.kind,
+        label: standaloneReference.label,
+        metadata: {
+          checked: child.checked ?? null,
+          inlineArtifacts: inlineArtifacts.map((artifact) => artifactMetadata(artifact)),
+          listOrdered: Boolean(node.ordered),
+        },
+        speakMode: "skip",
+        speechText: "",
+        warnings: inlineArtifactWarnings(inlineArtifacts, raw, "", standaloneReference.warnings),
+      });
+      continue;
+    }
+    const speechText = cleanSpeechText(inlineSpeechText(child));
     if (speechText === "") {
       continue;
     }
@@ -405,7 +514,7 @@ function pushSyntheticInlineArtifact(artifact, astPath, parentId, context) {
     role: artifact.kind,
     sourceSlice: artifact.raw,
     speakMode: "skip",
-    speechText: artifact.speechText,
+    speechText: "",
     startOffset: artifact.startOffset,
     warnings: uniqueStrings(["inline_artifact", artifact.warning, `${artifact.kind}_policy`]),
   });

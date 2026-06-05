@@ -35,9 +35,10 @@ func (service *Service) refreshTimingArtifacts(ctx context.Context, id string, f
 	warnings := alignmentResult.Warnings
 	scopeContent, _ := service.timingScopeContent(job.VoiceJob)
 	scopeKey := scopeKeyForJob(job.VoiceJob)
+	timingSourceID := firstNonEmpty(job.PreparedSourceID, job.BookSourceID, job.ID)
 	highlight := highlightmap.Build(highlightmap.BuildRequest{
 		JobID:        job.ID,
-		BookSourceID: job.BookSourceID,
+		BookSourceID: timingSourceID,
 		ScopeKey:     scopeKey,
 		Text:         scopeContent.Text,
 		WordSpans:    highlightWordSpans(scopeContent.WordSpans),
@@ -50,7 +51,7 @@ func (service *Service) refreshTimingArtifacts(ctx context.Context, id string, f
 	highlight.Summary.LowConfidence = highlight.Summary.LowConfidence || len(warnings) > 0 && highlight.Mode == highlightmap.ModePhrase
 	highlightV2 := highlightmap.BuildV2(highlightmap.BuildV2Request{
 		JobID:        job.ID,
-		BookSourceID: job.BookSourceID,
+		BookSourceID: timingSourceID,
 		ScopeKey:     scopeKey,
 		SpeechPlanID: job.ID,
 		Text:         scopeContent.Text,
@@ -257,10 +258,56 @@ func (service *Service) jobArtifactDir(id string) (string, error) {
 }
 
 func (service *Service) timingScopeContent(job VoiceJob) (BookSourceScopeContent, error) {
-	if strings.TrimSpace(job.BookSourceID) == "" {
-		return BookSourceScopeContent{}, ErrBookSourceNotFound
+	if strings.TrimSpace(job.BookSourceID) != "" {
+		return service.GetBookSourceScope(job.BookSourceID, job.BookScope)
 	}
-	return service.GetBookSourceScope(job.BookSourceID, job.BookScope)
+	if strings.TrimSpace(job.PreparedSourceID) != "" {
+		source, ok := service.preparedSourceByID(job.PreparedSourceID)
+		if !ok {
+			return BookSourceScopeContent{}, ErrPreparedSourceNotFound
+		}
+		return preparedSourceTimingScopeContent(job, source), nil
+	}
+	return BookSourceScopeContent{}, ErrBookSourceNotFound
+}
+
+func preparedSourceTimingScopeContent(job VoiceJob, source PreparedSource) BookSourceScopeContent {
+	selected := map[string]struct{}{}
+	for _, id := range job.SelectedBlockIDs {
+		if trimmed := strings.TrimSpace(id); trimmed != "" {
+			selected[trimmed] = struct{}{}
+		}
+	}
+	blocks := make([]NarrationBlock, 0, len(source.Blocks))
+	for _, block := range source.Blocks {
+		if len(selected) > 0 {
+			if _, ok := selected[block.ID]; !ok {
+				continue
+			}
+		}
+		if block.SpeakMode == NarrationSpeakModeSkip || strings.TrimSpace(block.SpokenText) == "" {
+			continue
+		}
+		blocks = append(blocks, block)
+	}
+	text := strings.TrimSpace(job.InputText)
+	if text == "" {
+		text = preparedSourceSpeechText(blocks)
+	}
+	spans := normalizeBookSpanIndexes(buildBookWordSpans(text, 0, 0, 0))
+	return BookSourceScopeContent{
+		BookSourceID:         source.ID,
+		Scope:                BookScope{Type: BookScopeTypeBook, Label: "Prepared source"},
+		Text:                 text,
+		WordSpans:            spans,
+		WordCount:            len(spans),
+		EstimatedDurationMS:  estimateBookDurationMS(len(spans)),
+		SourceStructureValid: true,
+		Blocks:               blocks,
+		SkippedItems:         append([]SkippedSourceItem(nil), source.SkippedItems...),
+		Summary:              summarizePreparedSource(blocks),
+		Warnings:             append([]string(nil), source.Warnings...),
+	}
 }
 
 func timingSegmentsForJob(job storedJob, final bool) []alignment.SegmentInput {
@@ -332,6 +379,9 @@ func highlightWordSpans(spans []BookSourceWordSpan) []highlightmap.WordSpan {
 
 func scopeKeyForJob(job VoiceJob) string {
 	if job.BookScope == nil {
+		if strings.TrimSpace(job.PreparedSourceID) != "" {
+			return "prepared-source"
+		}
 		return ""
 	}
 	switch job.BookScope.Type {

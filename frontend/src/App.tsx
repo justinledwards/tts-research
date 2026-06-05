@@ -137,7 +137,11 @@ import {
   resolveBookActiveWordIndex,
   resolveDefaultBookScope,
 } from "./features/book-cinema/model";
-import type { MarkdownWordAnchors, MarkdownWordCueState } from "./MarkdownRenderer";
+import type {
+  MarkdownBlockHighlight,
+  MarkdownWordAnchors,
+  MarkdownWordCueState,
+} from "./MarkdownRenderer";
 import { looksLikeMermaidDiagram } from "./markdownModel";
 import { findKokoroVoicepack, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
 import {
@@ -214,7 +218,10 @@ import {
   deriveRevisionBlockStatus,
   normalizeRevisionPolicyNoteType,
   REVISION_STATUS_LABELS,
-  revisionBlockIsSkipped,
+  revisionBlockIsSpeakable,
+  revisionTextIsStandaloneArtifactToken,
+  revisionTextLooksLikeReferenceCueLeak,
+  stripRevisionTrailingReferenceNumberText,
   summarizeRevisionHealth,
   type RevisionBlock,
   type RevisionHistoryEntry,
@@ -272,6 +279,7 @@ import {
   type TelepromptTheatreSettings,
 } from "./features/teleprompt/telepromptTheatreSettings";
 import {
+  canQueueGeneratedAudioPlayback,
   generatedAudioLifecycleFromJob,
   generatedAudioLifecycleLabel,
 } from "./features/playback/generatedAudioLifecycle";
@@ -783,7 +791,10 @@ function playbackSeekSecondsForRevisionBlock(
   let cursorMs = 0;
   for (const block of blocks) {
     if (block.id === blockId) {
-      return cursorMs / 1000;
+      return revisionBlockIsSpeakable(block) ? cursorMs / 1000 : null;
+    }
+    if (!revisionBlockIsSpeakable(block)) {
+      continue;
     }
     const segmentCount = Math.max(1, block.segmentCount);
     for (let offset = 0; offset < segmentCount; offset += 1) {
@@ -7382,11 +7393,13 @@ export function App() {
   ): string[] {
     if (applyReviewSession) {
       return narrationPreviewBlocks
-        .filter((block) => !revisionBlockIsSkipped(block))
+        .filter((block) => revisionBlockIsSpeakable(block))
         .map((block) => block.id);
     }
     return (
-      source.blocks?.filter((block) => block.speakMode !== "skip").map((block) => block.id) ?? []
+      source.blocks
+        ?.filter((block) => narrationBlockIsPreparedSelectionSpeakable(block))
+        .map((block) => block.id) ?? []
     );
   }
 
@@ -12353,13 +12366,6 @@ function NarrationPreviewStage({
   const spokenText =
     firstNonEmptyString(optimizedText, selectedPreparedSource?.speechText, text.trim()) ??
     "Create audio to generate listener-ready spoken text.";
-  const previewContent = narrationReviewPreviewContent({
-    bookScopeContent,
-    previewText,
-    selectedBookScope,
-    selectedBookSource,
-    selectedPreparedSource,
-  });
   const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
   const audioReviewSummary = audioReviewWarningSummary(job);
   const createDetail = job
@@ -12384,7 +12390,7 @@ function NarrationPreviewStage({
       text,
     ],
   );
-  const selectedPreviewBlockId = selectReviewBlockId(previewBlocks, activeBlockId);
+  const selectedPreviewBlockId = selectSpeakableReviewBlockId(previewBlocks, activeBlockId);
   const selectedPreviewBlock =
     previewBlocks.find((block) => block.id === selectedPreviewBlockId) ??
     previewBlocks.at(0) ??
@@ -12399,7 +12405,28 @@ function NarrationPreviewStage({
     sourceMode,
     text,
   });
-  const hasSpokenPreviewText = previewBlocks.some((block) => block.spokenText.trim().length > 0);
+  const hasSpokenPreviewText = previewBlocks.some((block) => revisionBlockIsSpeakable(block));
+  const [visibleSpokenCueBlockId, setVisibleSpokenCueBlockId] = useState<string | null>(
+    selectedPreviewBlock?.id ?? null,
+  );
+  const sourcePreviewRef = useRef<HTMLDivElement | null>(null);
+  const visibleSpokenCueBlock =
+    previewBlocks.find((block) => block.id === visibleSpokenCueBlockId) ?? selectedPreviewBlock;
+  const markdownBlockHighlight = useMemo(
+    () => markdownPreviewBlockHighlight(selectedPreparedSource, visibleSpokenCueBlock),
+    [selectedPreparedSource, visibleSpokenCueBlock],
+  );
+  const previewContent = narrationReviewPreviewContent({
+    blockHighlight: markdownBlockHighlight,
+    bookScopeContent,
+    previewText,
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+  });
+  useEffect(() => {
+    scrollMarkdownPreviewToBlock(sourcePreviewRef.current, markdownBlockHighlight);
+  }, [markdownBlockHighlight]);
   const sourcePreparing = sourceLifecycle.extractionState === "extracting";
   const sourceError =
     selectedPreparedSource?.error ??
@@ -12506,7 +12533,9 @@ function NarrationPreviewStage({
   );
   const previewPlaybackAvailable =
     playbackControls.isAvailable &&
-    (generatedAudioLifecycle === "ready" || audioPipeline.canUsePartialAudio);
+    (generatedAudioLifecycle === "ready" ||
+      audioPipeline.canUsePartialAudio ||
+      canQueueGeneratedAudioPlayback(job));
   const playbackLifecycle = previewPlaybackAvailable ? "ready" : generatedAudioLifecycle;
   const previewPlaybackDisabledReason = previewPlaybackAvailable
     ? undefined
@@ -12525,15 +12554,28 @@ function NarrationPreviewStage({
   );
   const previewJumpAlreadyAtTarget =
     previewSeekTargetSec !== null && Math.abs(previewSeekTargetSec - playbackCursorSec) < 0.25;
+  const nextPreviewBlock = adjacentSpeakableReviewBlock(
+    previewBlocks,
+    selectedPreviewBlockIndex,
+    1,
+  );
+  const previousPreviewBlock = adjacentSpeakableReviewBlock(
+    previewBlocks,
+    selectedPreviewBlockIndex,
+    -1,
+  );
   const movePreviewBlock = (direction: -1 | 1) => {
     if (previewBlocks.length === 0 || selectedPreviewBlockIndex < 0) {
       return;
     }
-    const nextIndex = Math.max(
-      0,
-      Math.min(previewBlocks.length - 1, selectedPreviewBlockIndex + direction),
+    const nextBlock = adjacentSpeakableReviewBlock(
+      previewBlocks,
+      selectedPreviewBlockIndex,
+      direction,
     );
-    const nextBlock = previewBlocks[nextIndex];
+    if (!nextBlock) {
+      return;
+    }
     onActiveBlockChange(nextBlock.id);
   };
   let previewPlaybackStatusLabel = "Ready";
@@ -12541,6 +12583,8 @@ function NarrationPreviewStage({
     previewPlaybackStatusLabel = "Playing";
   } else if (audioPipeline.canUsePartialAudio && generatedAudioLifecycle !== "ready") {
     previewPlaybackStatusLabel = "Partial";
+  } else if (canQueueGeneratedAudioPlayback(job) && generatedAudioLifecycle !== "ready") {
+    previewPlaybackStatusLabel = "Queued";
   }
   const previewPlaybackToolbar: LocalizedPlaybackToolbarModel = {
     activeDetail: selectedPreviewBlock
@@ -12570,12 +12614,9 @@ function NarrationPreviewStage({
     next: {
       ariaKeyShortcuts: "Alt+ArrowRight",
       shortcutCommandId: "review.nextBlock",
-      disabled:
-        selectedPreviewBlockIndex < 0 || selectedPreviewBlockIndex >= previewBlocks.length - 1,
+      disabled: nextPreviewBlock === null,
       disabledReason:
-        selectedPreviewBlockIndex >= previewBlocks.length - 1
-          ? "Already at the final block."
-          : "No block is selected.",
+        nextPreviewBlock === null ? "Already at the final block." : "No block is selected.",
       label: "Next",
       onClick: () => {
         movePreviewBlock(1);
@@ -12610,8 +12651,8 @@ function NarrationPreviewStage({
     previous: {
       ariaKeyShortcuts: "Alt+ArrowLeft",
       shortcutCommandId: "review.previousBlock",
-      disabled: selectedPreviewBlockIndex <= 0,
-      disabledReason: selectedPreviewBlockIndex <= 0 ? "Already at the first block." : undefined,
+      disabled: previousPreviewBlock === null,
+      disabledReason: previousPreviewBlock === null ? "Already at the first block." : undefined,
       label: "Previous",
       onClick: () => {
         movePreviewBlock(-1);
@@ -12847,7 +12888,10 @@ function NarrationPreviewStage({
         />
       </div>
       <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)]">
-        <div className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border">
+        <div
+          className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border"
+          ref={sourcePreviewRef}
+        >
           {previewContent}
         </div>
         <div className="grid min-w-0 gap-3">
@@ -12864,6 +12908,7 @@ function NarrationPreviewStage({
               playbackCursorSec={playbackCursorSec}
               selectedBlockIndex={selectedPreviewBlockIndex}
               selectedFallbackText={spokenText}
+              onVisibleCueChange={setVisibleSpokenCueBlockId}
             />
           </Panel>
         </div>
@@ -15860,13 +15905,106 @@ function narrationReviewSourceMeta({
   return `${text.trim().length.toLocaleString()} characters`;
 }
 
+function selectSpeakableReviewBlockId(
+  blocks: readonly RevisionBlock[],
+  selectedBlockId: string | null,
+): string | null {
+  if (
+    selectedBlockId &&
+    blocks.some((block) => block.id === selectedBlockId && revisionBlockIsSpeakable(block))
+  ) {
+    return selectedBlockId;
+  }
+  return blocks.find((block) => revisionBlockIsSpeakable(block))?.id ?? null;
+}
+
+function adjacentSpeakableReviewBlock(
+  blocks: readonly RevisionBlock[],
+  selectedIndex: number,
+  direction: -1 | 1,
+): RevisionBlock | null {
+  if (selectedIndex < 0 || blocks.length === 0) {
+    return null;
+  }
+  let index = selectedIndex + direction;
+  while (index >= 0 && index < blocks.length) {
+    const block = blocks[index];
+    if (revisionBlockIsSpeakable(block)) {
+      return block;
+    }
+    index += direction;
+  }
+  return null;
+}
+
+function markdownPreviewBlockHighlight(
+  source: PreparedSource | null,
+  block: RevisionBlock | null,
+): MarkdownBlockHighlight | undefined {
+  if (!block || source?.renderMode !== "markdown") {
+    return undefined;
+  }
+  const startOffset = block.startOffset;
+  const endOffset = block.endOffset;
+  if (
+    typeof startOffset !== "number" ||
+    typeof endOffset !== "number" ||
+    startOffset < 0 ||
+    endOffset <= startOffset
+  ) {
+    return undefined;
+  }
+  return {
+    blockEndOffset: endOffset,
+    blockStartOffset: startOffset,
+    cueRole: revisionBlockIsSpeakable(block) ? "current" : "skipped",
+    nodeId: block.id,
+    sourceId: source.id,
+    timingState: "estimated",
+  };
+}
+
+function scrollMarkdownPreviewToBlock(
+  container: HTMLDivElement | null,
+  highlight: MarkdownBlockHighlight | undefined,
+) {
+  if (!container || !highlight?.nodeId) {
+    return;
+  }
+  const target =
+    [...container.querySelectorAll<HTMLElement>("[data-readalong-node-id]")].find(
+      (element) => element.dataset.readalongNodeId === highlight.nodeId,
+    ) ?? null;
+  if (!target) {
+    return;
+  }
+  const containerRect = container.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const nextScrollTop =
+    container.scrollTop +
+    targetRect.top -
+    containerRect.top -
+    (containerRect.height - targetRect.height) / 2;
+  const safeTop = Math.max(0, nextScrollTop);
+  if (typeof container.scrollTo === "function") {
+    container.scrollTo({
+      top: safeTop,
+      behavior: "smooth",
+    });
+    return;
+  }
+  container.scrollTop = safeTop;
+}
+
 function narrationReviewPreviewContent({
+  blockHighlight,
   bookScopeContent,
   previewText,
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
 }: Readonly<{
+  blockHighlight?: MarkdownBlockHighlight;
   bookScopeContent: BookSourceScopeContent | null;
   previewText: string;
   selectedBookScope: BookScope | null;
@@ -15876,7 +16014,10 @@ function narrationReviewPreviewContent({
   if (selectedPreparedSource?.renderMode === "markdown" && selectedPreparedSource.text) {
     return (
       <Suspense fallback={<LazySurfaceFallback label="Loading markdown preview..." />}>
-        <MarkdownRenderer className="prose-markdown text-sm leading-6">
+        <MarkdownRenderer
+          blockHighlight={blockHighlight}
+          className="prose-markdown text-sm leading-6"
+        >
           {selectedPreparedSource.text}
         </MarkdownRenderer>
       </Suspense>
@@ -15898,16 +16039,50 @@ function narrationReviewPreviewContent({
 function PreviewSpokenCueList({
   blocks,
   job,
+  onVisibleCueChange,
   playbackCursorSec,
   selectedBlockIndex,
   selectedFallbackText,
 }: Readonly<{
   blocks: readonly RevisionBlock[];
   job: VoiceJob | null;
+  onVisibleCueChange: (blockId: string | null) => void;
   playbackCursorSec: number;
   selectedBlockIndex: number;
   selectedFallbackText: string;
 }>) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const cueListLayoutKey = blocks.map((block) => block.id).join("\u0000");
+  const updateVisibleCue = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) {
+      onVisibleCueChange(null);
+      return;
+    }
+    const containerRect = container.getBoundingClientRect();
+    const centerY = containerRect.top + containerRect.height / 2;
+    let bestBlockId: string | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const cue of container.querySelectorAll<HTMLElement>("[data-preview-cue-block-id]")) {
+      const rect = cue.getBoundingClientRect();
+      if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) {
+        continue;
+      }
+      const distance = Math.abs(rect.top + rect.height / 2 - centerY);
+      if (distance < bestDistance) {
+        bestBlockId = cue.dataset.previewCueBlockId ?? null;
+        bestDistance = distance;
+      }
+    }
+    onVisibleCueChange(bestBlockId);
+  }, [onVisibleCueChange]);
+  useEffect(() => {
+    if (cueListLayoutKey === "") {
+      onVisibleCueChange(null);
+      return;
+    }
+    updateVisibleCue();
+  }, [cueListLayoutKey, onVisibleCueChange, updateVisibleCue]);
   if (blocks.length === 0) {
     return (
       <p className="max-h-[20rem] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
@@ -15921,19 +16096,22 @@ function PreviewSpokenCueList({
       className="max-h-[20rem] overflow-auto rounded-md border bg-[var(--vs-surface)] p-3 font-mono text-sm leading-7 vs-border"
       data-readalong-timing-state="estimated"
       data-testid="preview-spoken-cue-list"
+      ref={scrollRef}
+      onScroll={updateVisibleCue}
     >
-      {blocks.map((block, index) => {
-        const cueRole = previewCueRole(block, index, activeIndex);
+      {blocks.map((block) => {
+        const cueRole = previewCueRole(block, blocks, activeIndex);
         const activeWordIndex =
           cueRole === "current"
             ? previewBlockActiveWordIndex(blocks, block, job, playbackCursorSec)
             : null;
-        const text = block.spokenText || block.text;
+        const text = revisionBlockIsSpeakable(block) ? block.spokenText : "";
         return (
           <section
             className={`preview-spoken-cue ${cueRole === "current" ? "font-semibold" : ""}`}
             data-readalong-cue-role={cueRole}
             data-readalong-timing-state="estimated"
+            data-preview-cue-block-id={block.id}
             data-testid={`preview-spoken-cue-${block.id}`}
             key={block.id}
           >
@@ -15942,21 +16120,25 @@ function PreviewSpokenCueList({
               <span>{cueRole}</span>
             </div>
             <p className="m-0 whitespace-pre-wrap break-words">
-              <ReadingFollowAlongRenderer
-                activeWordIndex={activeWordIndex}
-                cue={{
-                  cueText: text,
-                  spokenText: block.spokenText,
-                  sourceText: block.text,
-                }}
-                cueRole={cueRole}
-                exactWordTiming={false}
-                mode={job ? "audio-follow" : "reading-only"}
-                surface="teleprompt"
-                surfaceKind="spoken"
-                timingState="estimated"
-                upcomingWindow={3}
-              />
+              {revisionBlockIsSpeakable(block) ? (
+                <ReadingFollowAlongRenderer
+                  activeWordIndex={activeWordIndex}
+                  cue={{
+                    cueText: text,
+                    spokenText: block.spokenText,
+                    sourceText: block.text,
+                  }}
+                  cueRole={cueRole}
+                  exactWordTiming={false}
+                  mode={job ? "audio-follow" : "reading-only"}
+                  surface="teleprompt"
+                  surfaceKind="spoken"
+                  timingState="estimated"
+                  upcomingWindow={3}
+                />
+              ) : (
+                <span className="vs-muted">Skipped by speech policy.</span>
+              )}
             </p>
           </section>
         );
@@ -15967,22 +16149,55 @@ function PreviewSpokenCueList({
 
 function previewCueRole(
   block: RevisionBlock,
-  index: number,
+  blocks: readonly RevisionBlock[],
   activeIndex: number,
 ): ReadAlongCueRole {
-  if (block.speakMode.trim().toLowerCase() === "skip" || block.status === "skipped") {
+  if (!revisionBlockIsSpeakable(block)) {
     return "skipped";
   }
-  if (index === activeIndex) {
+  const activeBlock = activePreviewSpeakableBlock(blocks, activeIndex);
+  if (!activeBlock) {
+    return "unavailable";
+  }
+  const speakableBlocks = blocks.filter((item) => revisionBlockIsSpeakable(item));
+  const activeSpeakableIndex = speakableBlocks.findIndex((item) => item.id === activeBlock.id);
+  const blockSpeakableIndex = speakableBlocks.findIndex((item) => item.id === block.id);
+  if (activeSpeakableIndex === -1 || blockSpeakableIndex === -1) {
+    return "unavailable";
+  }
+  if (blockSpeakableIndex === activeSpeakableIndex) {
     return "current";
   }
-  if (index === activeIndex + 1) {
+  if (blockSpeakableIndex === activeSpeakableIndex + 1) {
     return "next";
   }
-  if (index < activeIndex) {
+  if (blockSpeakableIndex < activeSpeakableIndex) {
     return "previous";
   }
   return "unavailable";
+}
+
+function activePreviewSpeakableBlock(
+  blocks: readonly RevisionBlock[],
+  activeIndex: number,
+): RevisionBlock | null {
+  const activeBlock = blocks.at(activeIndex);
+  if (activeBlock && revisionBlockIsSpeakable(activeBlock)) {
+    return activeBlock;
+  }
+  for (let index = Math.max(0, activeIndex); index < blocks.length; index += 1) {
+    const block = blocks[index];
+    if (revisionBlockIsSpeakable(block)) {
+      return block;
+    }
+  }
+  for (let index = Math.min(blocks.length - 1, activeIndex); index >= 0; index -= 1) {
+    const block = blocks[index];
+    if (revisionBlockIsSpeakable(block)) {
+      return block;
+    }
+  }
+  return null;
 }
 
 function previewBlockActiveWordIndex(
@@ -15991,7 +16206,7 @@ function previewBlockActiveWordIndex(
   job: VoiceJob | null,
   playbackCursorSec: number,
 ): number | null {
-  const text = block.spokenText || block.text;
+  const text = revisionBlockIsSpeakable(block) ? block.spokenText : "";
   if (!text.trim()) {
     return null;
   }
@@ -16168,22 +16383,28 @@ function buildNarrationReviewBlocks({
 function narrationBlockToReviewBlock(block: NarrationBlock, index: number): RevisionBlock {
   const confidence = typeof block.confidence === "number" ? block.confidence : null;
   const warnings = block.warnings ?? [];
+  const forceSilent = narrationBlockIsNonSpeakingCue(block);
+  const speakMode = forceSilent ? "skip" : block.speakMode;
+  const rawSpokenText = block.spokenText ?? block.text ?? "";
+  const spokenText =
+    forceSilent || rawSpokenText.trim().length === 0
+      ? ""
+      : stripNarrationBlockInlineReferenceTail(block, rawSpokenText);
   const status = deriveRevisionBlockStatus({
     confidence,
-    speakMode: block.speakMode,
+    speakMode,
     warnings,
   });
   const sourceSection = narrationBlockSourceSection(block, index);
-  const policyNoteType = normalizeRevisionPolicyNoteType(block.speechPolicy.element ?? block.kind);
+  const policyNoteType = narrationBlockRevisionPolicyNoteType(block, forceSilent);
   return {
     confidence,
-    estimatedDurationMs:
-      block.estimatedDurationMs ??
-      estimateNarrationTextDurationMs(block.spokenText ?? block.text ?? ""),
+    estimatedDurationMs: block.estimatedDurationMs ?? estimateNarrationTextDurationMs(spokenText),
+    endOffset: block.endOffset,
     id: block.id,
     index: index + 1,
     kind: block.kind,
-    label: block.label ?? firstWords(block.spokenText ?? block.text ?? "", 8),
+    label: block.label ?? firstWords(firstNonEmptyString(spokenText, block.text, "") ?? "", 8),
     mathSpeech: block.mathPreview?.speech,
     needsAttention: status === "needsReview" || warnings.length > 0,
     normalisationCount: block.normalisations?.length ?? 0,
@@ -16194,14 +16415,103 @@ function narrationBlockToReviewBlock(block: NarrationBlock, index: number): Revi
     policyNoteType,
     pronunciationCount: block.pronunciations?.length ?? 0,
     pronunciations: block.pronunciations ?? [],
-    segmentCount: block.segments?.length ?? 0,
+    segmentCount: forceSilent ? 0 : (block.segments?.length ?? 0),
     sourceSection,
-    speakMode: block.speakMode,
-    spokenText: block.spokenText ?? block.text ?? "",
+    speakMode,
+    spokenText,
+    startOffset: block.startOffset,
     status,
     text: block.text ?? block.spokenText ?? block.label ?? "",
     warnings,
   };
+}
+
+function narrationBlockIsNonSpeakingCue(block: NarrationBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  if (speakMode === "skip" || policyMode === "skip" || policyMode === "ondemand") {
+    return true;
+  }
+  if (narrationBlockLooksLikeReferenceSection(block)) {
+    return true;
+  }
+  if (narrationBlockIsStandaloneArtifactToken(block)) {
+    return true;
+  }
+  if (block.spokenText?.trim()) {
+    return false;
+  }
+  const kind = block.kind.trim().toLowerCase();
+  if (
+    !["artifact_token", "citation", "footnote", "reference", "unknown_inline_marker"].includes(kind)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function narrationBlockIsPreparedSelectionSpeakable(block: NarrationBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  return (
+    speakMode !== "skip" &&
+    policyMode !== "skip" &&
+    policyMode !== "ondemand" &&
+    (block.spokenText ?? "").trim().length > 0 &&
+    !narrationBlockIsStandaloneArtifactToken(block)
+  );
+}
+
+function narrationBlockIsStandaloneArtifactToken(block: NarrationBlock): boolean {
+  return revisionTextIsStandaloneArtifactToken(block.spokenText ?? block.text ?? block.label ?? "");
+}
+
+function stripNarrationBlockInlineReferenceTail(block: NarrationBlock, spokenText: string): string {
+  if (!narrationBlockHasInlineReferenceEvidence(block)) {
+    return spokenText;
+  }
+  return stripRevisionTrailingReferenceNumberText(spokenText);
+}
+
+function narrationBlockHasInlineReferenceEvidence(block: NarrationBlock): boolean {
+  const warnings = block.warnings ?? [];
+  if (
+    warnings.includes("citation_removed") ||
+    warnings.includes("reference_marker_removed") ||
+    warnings.includes("citation_reference_number_removed")
+  ) {
+    return true;
+  }
+  const inlineArtifacts = block.metadata?.inlineArtifacts;
+  if (!Array.isArray(inlineArtifacts)) {
+    return false;
+  }
+  return inlineArtifacts.some((item) => {
+    if (!item || typeof item !== "object" || !("kind" in item)) {
+      return false;
+    }
+    const artifact = item as Readonly<Record<string, unknown>>;
+    const kind = String(artifact.kind).trim().toLowerCase();
+    return kind === "citation" || kind === "reference" || kind === "footnote";
+  });
+}
+
+function narrationBlockLooksLikeReferenceSection(block: NarrationBlock): boolean {
+  const text = (block.text ?? block.spokenText ?? block.label ?? "").trim();
+  return revisionTextLooksLikeReferenceCueLeak(text);
+}
+
+function narrationBlockRevisionPolicyNoteType(
+  block: NarrationBlock,
+  forceSilent: boolean,
+): RevisionBlock["policyNoteType"] {
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  if (forceSilent && policyMode === "ondemand") {
+    return "onDemand";
+  }
+  const speechPolicyElement = block.speechPolicy.element ?? "";
+  const policyElement = speechPolicyElement.trim().length > 0 ? speechPolicyElement : block.kind;
+  return normalizeRevisionPolicyNoteType(policyElement);
 }
 
 function draftTextToRevisionBlock(
@@ -16395,9 +16705,8 @@ function StreamingAudioPanel({
   onPlaybackStateChange?: (isPlaying: boolean) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
-  const readySegments = job.audioReadySegments ?? 0;
   const canPlayCompleted = job.status === "completed";
-  const canPlayArrival = readySegments > 0 && Boolean(job.audioPartialUrl ?? job.audioUrl);
+  const canPlayArrival = canQueueGeneratedAudioPlayback(job);
   const [playMode, setPlayMode] = useState<AudioPlaybackMode>(() =>
     job.status === "completed" ? "completed" : "arrival",
   );
@@ -18720,7 +19029,7 @@ function ArrivalAudioPlayerQueue({
   const sliderMax =
     totalDurationSec > 0 ? totalDurationSec : Math.max(1, currentTimeSec, cursorSecRef.current);
   const sliderValue = Math.max(0, Math.min(currentTimeSec, sliderMax));
-  const showArrivalPendingMessage = !canPlay;
+  const showArrivalPendingMessage = Math.max(0, readySegments) <= 0;
 
   return (
     <div className="grid gap-3">

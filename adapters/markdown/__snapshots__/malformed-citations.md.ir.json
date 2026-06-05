@@ -84,7 +84,7 @@
         "sourceSlice": "[cite]"
       },
       "speakMode": "skip",
-      "spokenText": "Citation placeholder.",
+      "spokenText": "",
       "startOffset": 68,
       "text": "[cite]",
       "warnings": ["inline_artifact", "malformed_citation_placeholder", "citation_policy"]
@@ -161,7 +161,7 @@
         "sourceSlice": "[citation: pending source]"
       },
       "speakMode": "skip",
-      "spokenText": "Citation placeholder.",
+      "spokenText": "",
       "startOffset": 112,
       "text": "[citation: pending source]",
       "warnings": ["inline_artifact", "malformed_citation_placeholder", "citation_policy"]
@@ -192,7 +192,7 @@
         "sourceSlice": "turn2search3"
       },
       "speakMode": "skip",
-      "spokenText": "Citation locator.",
+      "spokenText": "",
       "startOffset": 149,
       "text": "turn2search3",
       "warnings": ["inline_artifact", "artifact_token_removed", "artifact_token_policy"]
@@ -456,7 +456,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "Citation placeholder.",
+        "speechText": "",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
@@ -617,7 +617,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "Citation placeholder.",
+        "speechText": "",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
@@ -690,7 +690,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "Citation locator.",
+        "speechText": "",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"

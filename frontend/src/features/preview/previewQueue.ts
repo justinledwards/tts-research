@@ -1,6 +1,12 @@
 import type { VoiceJob } from "../../types";
-import { generatedAudioLifecycleFromJob, playbackActionDisabledReason } from "../playback";
-import type { RevisionBlock } from "../revision";
+import {
+  canQueueGeneratedAudioPlayback,
+  generatedAudioLifecycleFromJob,
+  generatedAudioReadySegmentCount,
+  isGeneratedAudioPartiallyPlayable,
+  playbackActionDisabledReason,
+} from "../playback";
+import { revisionBlockIsSpeakable, type RevisionBlock } from "../revision";
 
 export type PreviewQueueItemStatus = "failed" | "generating" | "ready" | "skipped" | "waiting";
 
@@ -51,13 +57,15 @@ export function buildPreviewQueue(
   const hasGeneratedAudio = Boolean(
     job &&
       ((job.status === "completed" && job.audioUrl) ||
-        (readySegments > 0 && (job.audioPartialUrl ?? job.audioUrl))),
+        isGeneratedAudioPartiallyPlayable(job) ||
+        canQueueGeneratedAudioPlayback(job)),
   );
   let segmentCursor = 0;
   let estimatedCursorMs = 0;
 
   const items = blocks.map((block): PreviewQueueItem => {
-    const segmentCount = Math.max(1, block.segmentCount || 1);
+    const speakable = revisionBlockIsSpeakable(block);
+    const segmentCount = speakable ? Math.max(1, block.segmentCount || 1) : 0;
     const durationMs = blockDurationMs(block, durations, segmentCursor, segmentCount);
     const startSec = estimatedCursorMs / 1000;
     const endSec = (estimatedCursorMs + durationMs) / 1000;
@@ -66,7 +74,7 @@ export function buildPreviewQueue(
       hasGeneratedAudio &&
       status === "ready" &&
       (job?.status === "completed" || segmentCursor + segmentCount <= readySegments);
-    const canPreview = audioReady && block.spokenText.trim().length > 0;
+    const canPreview = audioReady && speakable;
     const disabledReason = canPreview
       ? null
       : previewDisabledReason({ block, hasGeneratedAudio, job, status });
@@ -92,7 +100,9 @@ export function buildPreviewQueue(
       status,
       text: block.text,
     };
-    segmentCursor += segmentCount;
+    if (speakable) {
+      segmentCursor += segmentCount;
+    }
     estimatedCursorMs += durationMs;
     return item;
   });
@@ -204,6 +214,9 @@ function blockDurationMs(
   segmentCursor: number,
   segmentCount: number,
 ): number {
+  if (segmentCount <= 0 || !revisionBlockIsSpeakable(block)) {
+    return 0;
+  }
   const segmentDuration = durations
     .slice(segmentCursor, segmentCursor + segmentCount)
     .reduce((total, duration) => total + duration, 0);
@@ -220,6 +233,9 @@ function previewQueueItemStatus(
   segmentCount: number,
 ): PreviewQueueItemStatus {
   if (block.speakMode.trim().toLowerCase() === "skip" || block.status === "skipped") {
+    return "skipped";
+  }
+  if (!revisionBlockIsSpeakable(block)) {
     return "skipped";
   }
   if (!job) {
@@ -291,13 +307,7 @@ function previewQueueDurationMs(items: readonly PreviewQueueItem[], job: VoiceJo
 }
 
 function readyAudioSegmentCount(job: VoiceJob | null): number {
-  if (!job) {
-    return 0;
-  }
-  const readyBySegments = (job.segments ?? []).filter(
-    (segment) => segment.status === "ready",
-  ).length;
-  return Math.max(0, job.audioReadySegments ?? 0, readyBySegments);
+  return generatedAudioReadySegmentCount(job);
 }
 
 function normalizeQueueIndex(index: number, length: number): number {

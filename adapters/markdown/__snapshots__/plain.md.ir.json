@@ -95,7 +95,7 @@
         "sourceSlice": "[reference link](https://example.com)"
       },
       "speakMode": "skip",
-      "spokenText": "reference link",
+      "spokenText": "",
       "startOffset": 75,
       "text": "[reference link](https://example.com)",
       "warnings": ["inline_artifact", "link_reference", "reference_policy"]
@@ -405,7 +405,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "reference link",
+        "speechText": "",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"

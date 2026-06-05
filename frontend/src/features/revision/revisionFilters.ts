@@ -46,6 +46,7 @@ export type RevisionPreviewReadiness = "ready" | "warning";
 
 export interface RevisionBlock {
   confidence: number | null;
+  endOffset?: number;
   estimatedDurationMs: number;
   id: string;
   index: number;
@@ -63,6 +64,7 @@ export interface RevisionBlock {
   sourceSection: string;
   speakMode: string;
   spokenText: string;
+  startOffset?: number;
   status: RevisionStatus;
   text: string;
   warnings: string[];
@@ -236,6 +238,56 @@ const REVISION_TRIAGE_ORDER: RevisionTriageCategory[] = [
 const REVISION_TRIAGE_SEVERITY: Record<RevisionTriageCategory, number> = Object.fromEntries(
   REVISION_TRIAGE_ORDER.map((category, index) => [category, index]),
 ) as Record<RevisionTriageCategory, number>;
+
+const REFERENCE_HEADING_LABELS = new Set([
+  "bibliographies",
+  "bibliography",
+  "further reading",
+  "reference",
+  "reference list",
+  "references",
+  "selected references",
+  "source",
+  "source list",
+  "sources",
+  "work cited",
+  "works cited",
+]);
+
+const REFERENCE_NUMBER_WORDS = new Set([
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+  "twenty",
+  "thirty",
+  "forty",
+  "fifty",
+  "sixty",
+  "seventy",
+  "eighty",
+  "ninety",
+  "hundred",
+  "thousand",
+]);
+
+const REFERENCE_URL_START_PATTERN = /\b(?:https?:\/\/|www\.|doi:|10\.\d{4,9}\/)/gi;
 
 export function normalizeRevisionTabId(
   value: unknown,
@@ -634,9 +686,316 @@ export function revisionBlockIsSkipped(block: RevisionBlock): boolean {
   return block.status === "skipped" || speakMode === "skip" || block.policyNoteType === "skipped";
 }
 
+export function revisionBlockIsNonSpeaking(block: RevisionBlock): boolean {
+  if (revisionBlockIsSkipped(block)) {
+    return true;
+  }
+  if (block.policyNoteType === "onDemand") {
+    return true;
+  }
+  if (revisionTextIsStandaloneArtifactToken(firstRevisionText(block))) {
+    return true;
+  }
+  if (block.spokenText.trim().length === 0) {
+    return true;
+  }
+  if (revisionBlockLooksLikeReferenceSection(block)) {
+    return true;
+  }
+  if (revisionBlockIsReferenceOnly(block)) {
+    return true;
+  }
+  return false;
+}
+
+export function revisionBlockIsSpeakable(block: RevisionBlock): boolean {
+  return !revisionBlockIsNonSpeaking(block);
+}
+
+export function revisionTextLooksLikeReferenceCueLeak(value: string): boolean {
+  const text = value.trim();
+  if (!text) {
+    return false;
+  }
+  if (isDeepResearchReferenceMarker(text) || isReferenceHeadingLabel(text)) {
+    return true;
+  }
+  return countReferenceLinks(text) >= 2 && hasEnumeratedReferenceLink(text);
+}
+
+export function revisionTextIsStandaloneArtifactToken(value: string): boolean {
+  const text = value.trim();
+  if (!text.includes("") || !text.includes("")) {
+    return false;
+  }
+  const stripped = stripChatGPTPrivateUseTokens(text);
+  if (stripped === text) {
+    return false;
+  }
+  return trimReferenceMarkerPunctuation(stripped).trim() === "";
+}
+
+export function stripRevisionTrailingReferenceNumberText(value: string): string {
+  const tokens = indexedReferenceSpeechTokens(value);
+  if (tokens.length === 0) {
+    return value;
+  }
+  const maxLength = Math.min(4, tokens.length);
+  for (let length = maxLength; length >= 1; length -= 1) {
+    const suffix = tokens.slice(tokens.length - length);
+    if (!referenceNumberSpeechTokens(suffix)) {
+      continue;
+    }
+    const stripped = value.slice(0, suffix[0].start).trim();
+    return stripped.length > 0 ? stripped : value;
+  }
+  return value;
+}
+
 export function revisionBlockHasPolicyTransform(block: RevisionBlock): boolean {
   const speakMode = block.speakMode.trim().toLowerCase();
   return block.policyNoteType !== "spoken" || (speakMode.length > 0 && speakMode !== "speak");
+}
+
+function revisionBlockIsReferenceOnly(block: RevisionBlock): boolean {
+  const kind = block.kind.trim().toLowerCase();
+  if (
+    !["artifact_token", "citation", "footnote", "reference", "unknown_inline_marker"].includes(kind)
+  ) {
+    return false;
+  }
+  const text =
+    [block.text, block.spokenText, block.label].find((value) => value.trim().length > 0) ?? "";
+  if (countReferenceLinks(text) > 0) {
+    return true;
+  }
+  if (containsChatGPTArtifactToken(text) || containsTurnArtifactToken(text)) {
+    return true;
+  }
+  const compact = trimReferenceMarkerPunctuation(text.trim().toLowerCase());
+  if (/^\d{1,4}$/.test(compact)) {
+    return true;
+  }
+  const words = compact.replaceAll("-", " ").split(/\s+/).filter(Boolean);
+  return (
+    words.length > 0 && words.length <= 4 && words.every((word) => REFERENCE_NUMBER_WORDS.has(word))
+  );
+}
+
+function revisionBlockLooksLikeReferenceSection(block: RevisionBlock): boolean {
+  return revisionTextLooksLikeReferenceCueLeak(firstRevisionText(block));
+}
+
+function firstRevisionText(block: RevisionBlock): string {
+  return [block.text, block.spokenText, block.label].find((value) => value.trim().length > 0) ?? "";
+}
+
+function isDeepResearchReferenceMarker(text: string): boolean {
+  const compact = text.toLowerCase().replaceAll(/\s+/g, "");
+  return (
+    compact === "<!--deep-research-references:start-->" ||
+    compact === "<!--deep-research-references:end-->"
+  );
+}
+
+function isReferenceHeadingLabel(text: string): boolean {
+  let clean = text.trim();
+  let headingDepth = 0;
+  while (headingDepth < clean.length && clean[headingDepth] === "#") {
+    headingDepth += 1;
+  }
+  if (headingDepth > 0 && headingDepth <= 6) {
+    clean = clean.slice(headingDepth).trimStart();
+  }
+  clean = trimReferenceMarkerPunctuation(clean.toLowerCase())
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" ");
+  return REFERENCE_HEADING_LABELS.has(clean);
+}
+
+function countReferenceLinks(text: string): number {
+  return [...text.matchAll(REFERENCE_URL_START_PATTERN)].length;
+}
+
+function hasEnumeratedReferenceLink(text: string): boolean {
+  for (const match of text.matchAll(REFERENCE_URL_START_PATTERN)) {
+    const matchIndex = match.index;
+    const prefix = text.slice(Math.max(0, matchIndex - 48), matchIndex);
+    if (referenceEnumeratorBeforeUrl(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function referenceEnumeratorBeforeUrl(prefix: string): boolean {
+  const trimmed = prefix.trimEnd();
+  if (!trimmed.endsWith(".") && !trimmed.endsWith(")")) {
+    return false;
+  }
+  const words = trimmed.slice(0, -1).trimEnd().split(/\s+/).filter(Boolean);
+  const last = words.at(-1) ?? "";
+  const previous = words.at(-2) ?? "";
+  return referenceEnumeratorToken(last) || referenceEnumeratorToken(`${previous} ${last}`);
+}
+
+function referenceEnumeratorToken(token: string): boolean {
+  const clean = trimReferenceMarkerPunctuation(token.toLowerCase());
+  if (/^\d{1,4}$/.test(clean)) {
+    return true;
+  }
+  const words = clean.split(/\s+/).filter(Boolean);
+  return (
+    words.length > 0 && words.length <= 2 && words.every((word) => REFERENCE_NUMBER_WORDS.has(word))
+  );
+}
+
+interface IndexedReferenceSpeechToken {
+  readonly start: number;
+  readonly text: string;
+}
+
+function indexedReferenceSpeechTokens(value: string): IndexedReferenceSpeechToken[] {
+  const tokens: IndexedReferenceSpeechToken[] = [];
+  let tokenStart: number | null = null;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === " " || char === "\t" || char === "\n" || char === "\r") {
+      if (tokenStart !== null) {
+        tokens.push({ start: tokenStart, text: value.slice(tokenStart, index) });
+        tokenStart = null;
+      }
+      continue;
+    }
+    tokenStart ??= index;
+  }
+  if (tokenStart !== null) {
+    tokens.push({ start: tokenStart, text: value.slice(tokenStart) });
+  }
+  return tokens;
+}
+
+function referenceNumberSpeechTokens(tokens: readonly IndexedReferenceSpeechToken[]): boolean {
+  if (tokens.length === 0 || tokens.length > 4) {
+    return false;
+  }
+  const words: string[] = [];
+  for (const token of tokens) {
+    const clean = trimReferenceMarkerPunctuation(token.text.toLowerCase());
+    if (!clean) {
+      return false;
+    }
+    if (/^\d{1,4}$/.test(clean)) {
+      words.push(clean);
+      continue;
+    }
+    for (const part of clean.replaceAll("-", " ").split(/\s+/).filter(Boolean)) {
+      if (!REFERENCE_NUMBER_WORDS.has(part)) {
+        return false;
+      }
+      words.push(part);
+    }
+  }
+  return words.length > 0;
+}
+
+function containsChatGPTArtifactToken(text: string): boolean {
+  return revisionTextIsStandaloneArtifactToken(text) || (text.includes("") && text.includes(""));
+}
+
+function stripChatGPTPrivateUseTokens(value: string): string {
+  let output = "";
+  let cursor = 0;
+  let removed = false;
+  while (cursor < value.length) {
+    const start = value.indexOf("", cursor);
+    if (start === -1) {
+      output += value.slice(cursor);
+      break;
+    }
+    output += value.slice(cursor, start);
+    const end = value.indexOf("", start + 1);
+    if (end === -1) {
+      output += value.slice(start);
+      break;
+    }
+    output += " ";
+    cursor = end + 1;
+    removed = true;
+  }
+  return removed ? output : value;
+}
+
+function containsTurnArtifactToken(text: string): boolean {
+  const lower = text.toLowerCase();
+  if (!lower.includes("turn")) {
+    return false;
+  }
+  for (const chunk of lower.split("turn").slice(1)) {
+    const digitCount = leadingDigitCount(chunk);
+    if (digitCount === 0) {
+      continue;
+    }
+    const rest = chunk.slice(digitCount);
+    if (
+      ["search", "view", "news", "fetch", "image"].some((marker) => {
+        if (!rest.startsWith(marker)) {
+          return false;
+        }
+        return leadingDigitCount(rest.slice(marker.length)) > 0;
+      })
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function leadingDigitCount(value: string): number {
+  let count = 0;
+  while (
+    count < value.length &&
+    (value.codePointAt(count) ?? 0) >= 48 &&
+    (value.codePointAt(count) ?? 0) <= 57
+  ) {
+    count += 1;
+  }
+  return count;
+}
+
+function trimReferenceMarkerPunctuation(value: string): string {
+  const removable = new Set([
+    " ",
+    "\t",
+    "\n",
+    "\r",
+    "[",
+    "]",
+    "(",
+    ")",
+    ".",
+    ",",
+    ";",
+    ":",
+    "|",
+    "*",
+    "_",
+    "`",
+    ">",
+    '"',
+    "'",
+    "-",
+  ]);
+  let start = 0;
+  let end = value.length;
+  while (start < end && removable.has(value[start])) {
+    start += 1;
+  }
+  while (end > start && removable.has(value[end - 1])) {
+    end -= 1;
+  }
+  return value.slice(start, end);
 }
 
 function formatRevisionConfidence(value: number | null): string {

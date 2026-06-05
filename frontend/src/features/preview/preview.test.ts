@@ -48,8 +48,8 @@ describe("preview queue", () => {
     expect(queue.readyCount).toBe(2);
     expect(queue.items.map((item) => [item.id, item.startSec, item.endSec, item.status])).toEqual([
       ["a", 0, 1, "ready"],
-      ["b", 1, 2, "skipped"],
-      ["c", 2, 7, "ready"],
+      ["b", 1, 1, "skipped"],
+      ["c", 1, 4, "ready"],
     ]);
     expect(resolvePreviewQueueIndex(queue, null, 3)).toBe(2);
     expect(previewQueueProgress(queue, 3.5)).toMatchObject({
@@ -90,6 +90,76 @@ describe("preview queue", () => {
       ["c", false, "generating"],
     ]);
     expect(queue.items[2].disabledReason).toBe("Generated audio is not ready for this block yet.");
+  });
+
+  it("allows arrival playback to queue before the first segment is ready", () => {
+    const queueableJob = {
+      ...job(),
+      audioPartialUrl: "",
+      audioReadySegments: 0,
+      audioUrl: "",
+      status: "synthesizing",
+      retries: { ...job().retries, currentSegment: 1, totalSegments: 4 },
+      segments: [
+        { index: 1, status: "running", text: "Hello world." },
+        { index: 2, status: "pending", text: "" },
+        { index: 3, status: "pending", text: "Next" },
+        { index: 4, status: "pending", text: "block" },
+      ],
+    } satisfies VoiceJob;
+    const queue = buildPreviewQueue(blocks, queueableJob);
+
+    expect(queue.hasGeneratedAudio).toBe(true);
+    expect(queue.readyCount).toBe(0);
+    expect(queue.items.map((item) => [item.id, item.audioReady, item.status])).toEqual([
+      ["a", false, "generating"],
+      ["b", false, "skipped"],
+      ["c", false, "generating"],
+    ]);
+  });
+
+  it("keeps on-demand reference leaks visible but out of segment alignment", () => {
+    const leakBlocks = [
+      block({ id: "intro", index: 1, segmentCount: 1, spokenText: "Intro body." }),
+      block({
+        id: "refs-heading",
+        index: 2,
+        kind: "reference",
+        label: "References",
+        policyNoteType: "onDemand",
+        segmentCount: 1,
+        speakMode: "speak",
+        spokenText: "## References",
+        text: "## References",
+      }),
+      block({
+        id: "number",
+        index: 3,
+        kind: "reference",
+        label: "Reference",
+        segmentCount: 1,
+        spokenText: "thirty four",
+        text: "[34](https://example.com/reference)",
+      }),
+      block({ id: "body", index: 4, segmentCount: 1, spokenText: "Body resumes." }),
+    ];
+    const queue = buildPreviewQueue(leakBlocks, job({ audioSegmentDurationsMs: [1000, 2500] }));
+
+    expect(
+      queue.items.map((item) => [
+        item.id,
+        item.status,
+        item.segmentCount,
+        item.startSec,
+        item.endSec,
+      ]),
+    ).toEqual([
+      ["intro", "ready", 1, 0, 1],
+      ["refs-heading", "skipped", 0, 1, 1],
+      ["number", "skipped", 0, 1, 1],
+      ["body", "ready", 1, 1, 3.5],
+    ]);
+    expect(findAdjacentPreviewQueueItem(queue, 0, 1, { skipSilence: true })?.id).toBe("body");
   });
 });
 
@@ -337,12 +407,19 @@ describe("preview readiness model", () => {
       "Manual rehearsal is available. Audio-follow unlocks when generated audio and timing are ready.",
     );
     expect(missing.canOpenCinema).toBe(false);
+    expect(missing.cinemaDisabledReason).toBe(
+      "Preview shows the listener-ready text. No generated audio exists yet. Create & Listen to generate audio for this scope.",
+    );
     expect(missing.canOpenTheatre).toBe(true);
     expect(generating.canOpenCinema).toBe(false);
     expect(generating.cinemaDisabledReason).toBe(
       "Audio is generating. Playback unlocks when ready.",
     );
+    expect(generating.generatedPlaybackDisabledReason).toBe(
+      "Audio is generating. Playback unlocks when ready.",
+    );
     expect(failed.cinemaDisabledReason).toContain("Generation failed");
+    expect(failed.generatedPlaybackDisabledReason).toContain("Generation failed");
     expect(failed.openTelepromptDetail).toBe(
       "Rehearsal only. Retry generation unlocks audio-follow.",
     );
@@ -356,8 +433,11 @@ describe("preview readiness model", () => {
     expect(failedRetryable.createDisabledReason).toBeUndefined();
     expect(failedRetryable.primaryLabel).toBe("Retry generation");
     expect(stale.cinemaDisabledReason).toContain("Audio needs rebuild");
+    expect(stale.generatedPlaybackDisabledReason).toContain("Audio needs rebuild");
     expect(ready.canOpenCinema).toBe(true);
-    expect(ready.openTelepromptDetail).toBe("Teleprompt opens with generated cue playback ready.");
+    expect(ready.openTelepromptDetail).toBe(
+      "Teleprompt opens with generated cue playback available.",
+    );
     expect(ready.primaryLabel).toBe("Create Again");
   });
 });

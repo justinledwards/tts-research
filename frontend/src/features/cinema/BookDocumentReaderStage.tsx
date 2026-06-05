@@ -249,16 +249,22 @@ function bookCinemaActiveBlock(
     return null;
   }
   if (!activeSpan) {
-    return blocks.find((block) => block.speakMode !== "skip") ?? blocks[0];
+    return blocks.find((block) => bookDocumentBlockIsSpeakable(block)) ?? blocks[0];
   }
   return (
     blocks.find(
       (block) =>
         activeSpan.startOffset >= block.startOffset && activeSpan.startOffset <= block.endOffset,
     ) ??
-    blocks.find((block) => block.speakMode !== "skip") ??
+    blocks.find((block) => bookDocumentBlockIsSpeakable(block)) ??
     blocks[0]
   );
+}
+
+function bookDocumentBlockIsSpeakable(block: NarrationBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  return speakMode !== "skip" && policyMode !== "skip" && policyMode !== "ondemand";
 }
 
 function bookMarkdownHighlight(

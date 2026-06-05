@@ -152,6 +152,7 @@ import {
   preparedSourceCinemaSkippedGroups,
   preparedSourceCinemaSourceHref,
   preparedSourceCinemaTitle,
+  preparedSourceNarrationBlockIsSpeakable,
 } from "./preparedSourceModel";
 import { preparedSourceCinemaPolicyNotes } from "./preparedSourcePolicyNotes";
 
@@ -1685,7 +1686,7 @@ function PreparedSourceCinemaReader({
           )} ${textClass} text-[var(--vs-text)]`}
           data-testid="website-cinema-article"
         >
-          {blocks.map((block, blockIndex) => (
+          {blocks.map((block) => (
             <PreparedSourceCinemaBlock
               activeWordOffset={
                 activeWord?.blockId === block.id && shouldHighlightWord
@@ -1693,7 +1694,7 @@ function PreparedSourceCinemaReader({
                   : null
               }
               block={block}
-              cueRole={preparedSourceCueRole(block, blockIndex, activeBlockIndex)}
+              cueRole={preparedSourceCueRole(block, blocks, activeBlockIndex)}
               highlightStyle={highlightStyle}
               isActive={block.id === activeBlockId}
               key={block.id}
@@ -2257,22 +2258,32 @@ function PreparedSourceCinemaBlock({
 
 function preparedSourceCueRole(
   block: NarrationBlock,
-  blockIndex: number,
+  blocks: readonly NarrationBlock[],
   activeBlockIndex: number,
 ): ReadAlongCueRole {
-  if (block.speakMode.trim().toLowerCase() === "skip") {
+  if (!preparedSourceNarrationBlockIsSpeakable(block)) {
     return "skipped";
   }
   if (activeBlockIndex < 0) {
     return "unavailable";
   }
-  if (blockIndex === activeBlockIndex) {
+  const activeBlock = blocks.at(activeBlockIndex);
+  if (!activeBlock) {
+    return "unavailable";
+  }
+  const speakableBlocks = blocks.filter((item) => preparedSourceNarrationBlockIsSpeakable(item));
+  const activeSpeakableIndex = speakableBlocks.findIndex((item) => item.id === activeBlock.id);
+  const blockSpeakableIndex = speakableBlocks.findIndex((item) => item.id === block.id);
+  if (activeSpeakableIndex === -1 || blockSpeakableIndex === -1) {
+    return "unavailable";
+  }
+  if (blockSpeakableIndex === activeSpeakableIndex) {
     return "current";
   }
-  if (blockIndex === activeBlockIndex + 1) {
+  if (blockSpeakableIndex === activeSpeakableIndex + 1) {
     return "next";
   }
-  if (blockIndex < activeBlockIndex) {
+  if (blockSpeakableIndex < activeSpeakableIndex) {
     return "previous";
   }
   return "unavailable";

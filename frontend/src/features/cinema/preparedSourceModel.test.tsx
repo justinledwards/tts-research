@@ -177,6 +177,63 @@ describe("prepared source cinema helpers", () => {
     expect(preparedSourceCinemaActiveBlock(source, -1)?.id).toBe("article-title");
   });
 
+  it("keeps skipped document blocks visible for inspection", () => {
+    const source = makePreparedSource({
+      kind: "text",
+      renderMode: "plain",
+      sourceContentType: "text/plain",
+      blocks: [
+        {
+          endOffset: 12,
+          id: "intro",
+          index: 0,
+          kind: "body",
+          segments: [],
+          speakMode: "speak",
+          speechPolicy: { explanation: "Body is spoken.", mode: "speak", profile: "default" },
+          spokenText: "Intro words.",
+          startOffset: 0,
+          text: "Intro words.",
+        },
+        {
+          endOffset: 52,
+          id: "ref",
+          index: 1,
+          kind: "reference",
+          segments: [],
+          speakMode: "skip",
+          speechPolicy: {
+            explanation: "Reference is available on demand.",
+            mode: "onDemand",
+            profile: "default",
+          },
+          spokenText: "",
+          startOffset: 13,
+          text: "[6](https://example.com/reference)",
+        },
+        {
+          endOffset: 64,
+          id: "body",
+          index: 2,
+          kind: "body",
+          segments: [],
+          speakMode: "speak",
+          speechPolicy: { explanation: "Body is spoken.", mode: "speak", profile: "default" },
+          spokenText: "Body words.",
+          startOffset: 53,
+          text: "Body words.",
+        },
+      ],
+    });
+
+    expect(preparedSourceCinemaPrimaryBlocks(source).map((block) => block.id)).toEqual([
+      "intro",
+      "ref",
+      "body",
+    ]);
+    expect(preparedSourceCinemaActiveBlock(source, -1)?.id).toBe("intro");
+  });
+
   it("builds policy notes for inline document artifacts", () => {
     const source = makePreparedSource({
       blocks: [

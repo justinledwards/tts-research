@@ -1,0 +1,1118 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.98,
+      "endOffset": 88,
+      "id": "block-0001",
+      "index": 1,
+      "kind": "body",
+      "label": "Narrative introduction with a useful link and citation.",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 70,
+            "identifier": "",
+            "kind": "reference",
+            "markerType": "markdown_link",
+            "raw": "[useful link](https://example.com/guide)",
+            "speechText": "useful link",
+            "startOffset": 30,
+            "url": "https://example.com/guide",
+            "visualLabel": "link"
+          },
+          {
+            "endOffset": 78,
+            "identifier": "",
+            "kind": "reference",
+            "markerType": "reference_marker",
+            "raw": "[6]",
+            "speechText": "Reference 6.",
+            "startOffset": 75,
+            "url": "",
+            "visualLabel": "ref"
+          }
+        ],
+        "astPath": "/children/0",
+        "columnEnd": 89,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "Narrative introduction with a [useful link](https://example.com/guide) and [6] citation."
+      },
+      "speakMode": "speak",
+      "spokenText": "Narrative introduction with a useful link and citation.",
+      "startOffset": 0,
+      "text": "Narrative introduction with a [useful link](https://example.com/guide) and [6] citation.",
+      "warnings": ["link_reference", "reference_marker_removed"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 70,
+      "id": "block-0002",
+      "index": 2,
+      "kind": "reference",
+      "label": "Link",
+      "language": "",
+      "metadata": {
+        "endOffset": 70,
+        "identifier": "",
+        "kind": "reference",
+        "markerType": "markdown_link",
+        "raw": "[useful link](https://example.com/guide)",
+        "speechText": "useful link",
+        "startOffset": 30,
+        "url": "https://example.com/guide",
+        "visualLabel": "link",
+        "astPath": "/children/0/inline-artifact/0",
+        "columnEnd": 71,
+        "columnStart": 31,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "[useful link](https://example.com/guide)"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 30,
+      "text": "[useful link](https://example.com/guide)",
+      "warnings": ["inline_artifact", "link_reference", "reference_policy"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 78,
+      "id": "block-0003",
+      "index": 3,
+      "kind": "reference",
+      "label": "Reference",
+      "language": "",
+      "metadata": {
+        "endOffset": 78,
+        "identifier": "",
+        "kind": "reference",
+        "markerType": "reference_marker",
+        "raw": "[6]",
+        "speechText": "Reference 6.",
+        "startOffset": 75,
+        "url": "",
+        "visualLabel": "ref",
+        "astPath": "/children/0/inline-artifact/1",
+        "columnEnd": 79,
+        "columnStart": 76,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "[6]"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 75,
+      "text": "[6]",
+      "warnings": ["inline_artifact", "reference_marker_removed", "reference_policy"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 103,
+      "id": "block-0004",
+      "index": 4,
+      "kind": "reference",
+      "label": "References",
+      "language": "",
+      "metadata": {
+        "referenceSection": true,
+        "referenceSectionLabel": "References",
+        "referenceSectionMode": "implicit",
+        "referenceSectionHeading": true,
+        "astPath": "/children/1",
+        "columnEnd": 14,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "## References"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 90,
+      "text": "## References",
+      "warnings": ["reference_section", "reference_on_demand"]
+    },
+    {
+      "confidence": 0.72,
+      "endOffset": 144,
+      "id": "block-0005",
+      "index": 5,
+      "kind": "embedded",
+      "label": "HTML embedded html",
+      "language": "",
+      "metadata": {
+        "embeddedFamily": "html",
+        "embeddedName": "html",
+        "astPath": "/children/2",
+        "columnEnd": 40,
+        "columnStart": 1,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "sourceSlice": "<!-- deep-research-references:start -->"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 105,
+      "text": "<!-- deep-research-references:start -->",
+      "warnings": ["embedded_fallback"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 311,
+      "id": "block-0006",
+      "index": 6,
+      "kind": "reference",
+      "label": "Reference section",
+      "language": "",
+      "metadata": {
+        "referenceSection": true,
+        "referenceSectionLabel": "deep-research-references",
+        "referenceSectionMode": "marker",
+        "astPath": "/children/3",
+        "columnEnd": 166,
+        "columnStart": 1,
+        "lineEnd": 7,
+        "lineStart": 7,
+        "sourceSlice": "one. https://opentelemetry.io/docs/what-is-opentelemetry/ two. https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf three. https://www.w3.org/TR/trace-context/"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 146,
+      "text": "one. https://opentelemetry.io/docs/what-is-opentelemetry/ two. https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf three. https://www.w3.org/TR/trace-context/",
+      "warnings": ["reference_section", "reference_on_demand"]
+    },
+    {
+      "confidence": 0.72,
+      "endOffset": 350,
+      "id": "block-0007",
+      "index": 7,
+      "kind": "embedded",
+      "label": "HTML embedded html",
+      "language": "",
+      "metadata": {
+        "embeddedFamily": "html",
+        "embeddedName": "html",
+        "astPath": "/children/4",
+        "columnEnd": 38,
+        "columnStart": 1,
+        "lineEnd": 9,
+        "lineStart": 9,
+        "sourceSlice": "<!-- deep-research-references:end -->"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 313,
+      "text": "<!-- deep-research-references:end -->",
+      "warnings": ["embedded_fallback"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 386,
+      "id": "block-0008",
+      "index": 8,
+      "kind": "reference",
+      "label": "Reference",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 386,
+            "identifier": "",
+            "kind": "reference",
+            "markerType": "markdown_link",
+            "raw": "[6](https://example.com/reference)",
+            "speechText": "6",
+            "startOffset": 352,
+            "url": "https://example.com/reference",
+            "visualLabel": "link"
+          }
+        ],
+        "astPath": "/children/5",
+        "columnEnd": 35,
+        "columnStart": 1,
+        "lineEnd": 11,
+        "lineStart": 11,
+        "sourceSlice": "[6](https://example.com/reference)"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 352,
+      "text": "[6](https://example.com/reference)",
+      "warnings": ["reference_marker_removed", "reference_on_demand", "link_reference"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 425,
+      "id": "block-0009",
+      "index": 9,
+      "kind": "artifact_token",
+      "label": "Artifact token",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 425,
+            "identifier": "",
+            "kind": "artifact_token",
+            "markerType": "chatgpt_artifact_token",
+            "raw": "iturn14image2turn14image5",
+            "speechText": "Artifact reference.",
+            "startOffset": 388,
+            "url": "",
+            "visualLabel": "token"
+          }
+        ],
+        "astPath": "/children/6",
+        "columnEnd": 30,
+        "columnStart": 1,
+        "lineEnd": 13,
+        "lineStart": 13,
+        "sourceSlice": "iturn14image2turn14image5"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 388,
+      "text": "iturn14image2turn14image5",
+      "warnings": ["artifact_token_removed", "artifact_token_policy"]
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 481,
+      "id": "block-0010",
+      "index": 10,
+      "kind": "body",
+      "label": "After the reference section, normal narration resumes.",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/7",
+        "columnEnd": 55,
+        "columnStart": 1,
+        "lineEnd": 15,
+        "lineStart": 15,
+        "sourceSlice": "After the reference section, normal narration resumes."
+      },
+      "speakMode": "speak",
+      "spokenText": "After the reference section, normal narration resumes.",
+      "startOffset": 427,
+      "text": "After the reference section, normal narration resumes.",
+      "warnings": []
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "reference-cue-leaks",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": []
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "Narrative introduction with a [useful link](https://example.com/guide) and [6] citation.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 70,
+              "identifier": "",
+              "kind": "reference",
+              "markerType": "markdown_link",
+              "raw": "[useful link](https://example.com/guide)",
+              "speechText": "useful link",
+              "startOffset": 30,
+              "url": "https://example.com/guide",
+              "visualLabel": "link"
+            },
+            {
+              "endOffset": 78,
+              "identifier": "",
+              "kind": "reference",
+              "markerType": "reference_marker",
+              "raw": "[6]",
+              "speechText": "Reference 6.",
+              "startOffset": 75,
+              "url": "",
+              "visualLabel": "ref"
+            }
+          ],
+          "astPath": "/children/0",
+          "columnEnd": 89,
+          "columnStart": 1,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "Narrative introduction with a [useful link](https://example.com/guide) and [6] citation."
+        },
+        "nodeId": "block-0001",
+        "normalisedText": "Narrative introduction with a [useful link](https://example.com/guide) and [6] citation.",
+        "orderKey": "00000001",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 89,
+              "columnStart": 1,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "reference-cue-leaks.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 88,
+            "start": 0
+          },
+          "sourceId": "reference-cue-leaks"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Narrative introduction with a useful link and citation.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["link_reference", "reference_marker_removed"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[useful link](https://example.com/guide)",
+        "kind": "reference",
+        "lang": "und",
+        "metadata": {
+          "endOffset": 70,
+          "identifier": "",
+          "kind": "reference",
+          "markerType": "markdown_link",
+          "raw": "[useful link](https://example.com/guide)",
+          "speechText": "useful link",
+          "startOffset": 30,
+          "url": "https://example.com/guide",
+          "visualLabel": "link",
+          "astPath": "/children/0/inline-artifact/0",
+          "columnEnd": 71,
+          "columnStart": 31,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "[useful link](https://example.com/guide)"
+        },
+        "nodeId": "block-0002",
+        "normalisedText": "[useful link](https://example.com/guide)",
+        "orderKey": "00000002",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0/inline-artifact/0",
+              "columnEnd": 71,
+              "columnStart": 31,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "reference-cue-leaks.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 70,
+            "start": 30
+          },
+          "sourceId": "reference-cue-leaks"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "reference",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_artifact", "link_reference", "reference_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[6]",
+        "kind": "reference",
+        "lang": "und",
+        "metadata": {
+          "endOffset": 78,
+          "identifier": "",
+          "kind": "reference",
+          "markerType": "reference_marker",
+          "raw": "[6]",
+          "speechText": "Reference 6.",
+          "startOffset": 75,
+          "url": "",
+          "visualLabel": "ref",
+          "astPath": "/children/0/inline-artifact/1",
+          "columnEnd": 79,
+          "columnStart": 76,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "[6]"
+        },
+        "nodeId": "block-0003",
+        "normalisedText": "[6]",
+        "orderKey": "00000003",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0/inline-artifact/1",
+              "columnEnd": 79,
+              "columnStart": 76,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "reference-cue-leaks.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 78,
+            "start": 75
+          },
+          "sourceId": "reference-cue-leaks"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "reference",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_artifact", "reference_marker_removed", "reference_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "## References",
+        "kind": "reference",
+        "lang": "und",
+        "metadata": {
+          "referenceSection": true,
+          "referenceSectionLabel": "References",
+          "referenceSectionMode": "implicit",
+          "referenceSectionHeading": true,
+          "astPath": "/children/1",
+          "columnEnd": 14,
+          "columnStart": 1,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "## References"
+        },
+        "nodeId": "block-0004",
+        "normalisedText": "## References",
+        "orderKey": "00000004",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 14,
+              "columnStart": 1,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "reference-cue-leaks.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 103,
+            "start": 90
+          },
+          "sourceId": "reference-cue-leaks"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "reference",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["reference_section", "reference_on_demand"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.72,
+        "dir": "ltr",
+        "displayText": "<!-- deep-research-references:start -->",
+        "kind": "embedded",
+        "lang": "und",
+        "metadata": {
+          "embeddedFamily": "html",
+          "embeddedName": "html",
+          "astPath": "/children/2",
+          "columnEnd": 40,
+          "columnStart": 1,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "<!-- deep-research-references:start -->"
+        },
+        "nodeId": "block-0005",
+        "normalisedText": "<!-- deep-research-references:start -->",
+        "orderKey": "00000005",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 40,
+              "columnStart": 1,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "reference-cue-leaks.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 144,
+            "start": 105
+          },
+          "sourceId": "reference-cue-leaks"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "embedded",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["embedded_fallback"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "one. https://opentelemetry.io/docs/what-is-opentelemetry/ two. https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf three. https://www.w3.org/TR/trace-context/",
+        "kind": "reference",
+        "lang": "und",
+        "metadata": {
+          "referenceSection": true,
+          "referenceSectionLabel": "deep-research-references",
+          "referenceSectionMode": "marker",
+          "astPath": "/children/3",
+          "columnEnd": 166,
+          "columnStart": 1,
+          "lineEnd": 7,
+          "lineStart": 7,
+          "sourceSlice": "one. https://opentelemetry.io/docs/what-is-opentelemetry/ two. https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf three. https://www.w3.org/TR/trace-context/"
+        },
+        "nodeId": "block-0006",
+        "normalisedText": "one. https://opentelemetry.io/docs/what-is-opentelemetry/ two. https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf three. https://www.w3.org/TR/trace-context/",
+        "orderKey": "00000006",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3",
+              "columnEnd": 166,
+              "columnStart": 1,
+              "lineEnd": 7,
+              "lineStart": 7,
+              "path": "reference-cue-leaks.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 311,
+            "start": 146
+          },
+          "sourceId": "reference-cue-leaks"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "reference",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["reference_section", "reference_on_demand"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.72,
+        "dir": "ltr",
+        "displayText": "<!-- deep-research-references:end -->",
+        "kind": "embedded",
+        "lang": "und",
+        "metadata": {
+          "embeddedFamily": "html",
+          "embeddedName": "html",
+          "astPath": "/children/4",
+          "columnEnd": 38,
+          "columnStart": 1,
+          "lineEnd": 9,
+          "lineStart": 9,
+          "sourceSlice": "<!-- deep-research-references:end -->"
+        },
+        "nodeId": "block-0007",
+        "normalisedText": "<!-- deep-research-references:end -->",
+        "orderKey": "00000007",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/4",
+              "columnEnd": 38,
+              "columnStart": 1,
+              "lineEnd": 9,
+              "lineStart": 9,
+              "path": "reference-cue-leaks.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 350,
+            "start": 313
+          },
+          "sourceId": "reference-cue-leaks"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "embedded",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["embedded_fallback"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[6](https://example.com/reference)",
+        "kind": "reference",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 386,
+              "identifier": "",
+              "kind": "reference",
+              "markerType": "markdown_link",
+              "raw": "[6](https://example.com/reference)",
+              "speechText": "6",
+              "startOffset": 352,
+              "url": "https://example.com/reference",
+              "visualLabel": "link"
+            }
+          ],
+          "astPath": "/children/5",
+          "columnEnd": 35,
+          "columnStart": 1,
+          "lineEnd": 11,
+          "lineStart": 11,
+          "sourceSlice": "[6](https://example.com/reference)"
+        },
+        "nodeId": "block-0008",
+        "normalisedText": "[6](https://example.com/reference)",
+        "orderKey": "00000008",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/5",
+              "columnEnd": 35,
+              "columnStart": 1,
+              "lineEnd": 11,
+              "lineStart": 11,
+              "path": "reference-cue-leaks.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 386,
+            "start": 352
+          },
+          "sourceId": "reference-cue-leaks"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "reference",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["reference_marker_removed", "reference_on_demand", "link_reference"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "iturn14image2turn14image5",
+        "kind": "artifact_token",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 425,
+              "identifier": "",
+              "kind": "artifact_token",
+              "markerType": "chatgpt_artifact_token",
+              "raw": "iturn14image2turn14image5",
+              "speechText": "Artifact reference.",
+              "startOffset": 388,
+              "url": "",
+              "visualLabel": "token"
+            }
+          ],
+          "astPath": "/children/6",
+          "columnEnd": 30,
+          "columnStart": 1,
+          "lineEnd": 13,
+          "lineStart": 13,
+          "sourceSlice": "iturn14image2turn14image5"
+        },
+        "nodeId": "block-0009",
+        "normalisedText": "iturn14image2turn14image5",
+        "orderKey": "00000009",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/6",
+              "columnEnd": 30,
+              "columnStart": 1,
+              "lineEnd": 13,
+              "lineStart": 13,
+              "path": "reference-cue-leaks.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 425,
+            "start": 388
+          },
+          "sourceId": "reference-cue-leaks"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "artifact_token",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["artifact_token_removed", "artifact_token_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "After the reference section, normal narration resumes.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/7",
+          "columnEnd": 55,
+          "columnStart": 1,
+          "lineEnd": 15,
+          "lineStart": 15,
+          "sourceSlice": "After the reference section, normal narration resumes."
+        },
+        "nodeId": "block-0010",
+        "normalisedText": "After the reference section, normal narration resumes.",
+        "orderKey": "00000010",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/7",
+              "columnEnd": 55,
+              "columnStart": 1,
+              "lineEnd": 15,
+              "lineStart": 15,
+              "path": "reference-cue-leaks.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 481,
+            "start": 427
+          },
+          "sourceId": "reference-cue-leaks"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "After the reference section, normal narration resumes.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "reference-cue-leaks",
+    "sourceName": "reference-cue-leaks.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "parseMode": "strict",
+  "skippedItems": [
+    {
+      "id": "block-0002",
+      "kind": "reference",
+      "offset": 30,
+      "reason": "reference marker available through citation policy",
+      "text": "[useful link](https://example.com/guide)"
+    },
+    {
+      "id": "block-0003",
+      "kind": "reference",
+      "offset": 75,
+      "reason": "reference marker available through citation policy",
+      "text": "[6]"
+    },
+    {
+      "id": "block-0004",
+      "kind": "reference",
+      "offset": 90,
+      "reason": "reference marker available through citation policy",
+      "text": "## References"
+    },
+    {
+      "id": "block-0005",
+      "kind": "embedded",
+      "offset": 105,
+      "reason": "embedded construct kept as safe fallback",
+      "text": "<!-- deep-research-references:start -->"
+    },
+    {
+      "id": "block-0006",
+      "kind": "reference",
+      "offset": 146,
+      "reason": "reference marker available through citation policy",
+      "text": "one. https://opentelemetry.io/docs/what-is-opentelemetry/ two. https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf three. https://www.w3.org/TR/trace-context/"
+    },
+    {
+      "id": "block-0007",
+      "kind": "embedded",
+      "offset": 313,
+      "reason": "embedded construct kept as safe fallback",
+      "text": "<!-- deep-research-references:end -->"
+    },
+    {
+      "id": "block-0008",
+      "kind": "reference",
+      "offset": 352,
+      "reason": "reference marker available through citation policy",
+      "text": "[6](https://example.com/reference)"
+    },
+    {
+      "id": "block-0009",
+      "kind": "artifact_token",
+      "offset": 388,
+      "reason": "raw artifact token kept out of spoken playback",
+      "text": "iturn14image2turn14image5"
+    }
+  ],
+  "title": "",
+  "warnings": ["markdown_mdx_parse_recovered"]
+}

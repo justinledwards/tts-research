@@ -162,6 +162,37 @@ describe("read-along DOM highlight adapter", () => {
     expect(selectors.some((selector) => selector.includes("block-1"))).toBe(true);
     expect(current.getAttribute("aria-current")).toBe("true");
   });
+
+  it("uses the block anchor for generated entries without a stable word anchor", () => {
+    const rawWord = fakeElement();
+    const summaryBlock = fakeElement();
+    const root = fakeGeneratedBlockRoot({
+      block: summaryBlock,
+      word: rawWord,
+    });
+
+    applyReadAlongDomHighlight(
+      {
+        mode: "word",
+        root: () => root,
+        sourceId: "prepared-1",
+        surface: "document",
+      },
+      entry({
+        anchorNodeId: "summary",
+        anchorTokenOffset: undefined,
+        anchorWordIndex: undefined,
+        sourceWordIndex: 17,
+        text: "summary",
+      }),
+    );
+
+    expect(summaryBlock.getAttribute("aria-current")).toBe("true");
+    expect(rawWord.getAttribute("aria-current")).toBeNull();
+    expect(root.selectors.some((selector) => selector.includes("data-readalong-word-index"))).toBe(
+      false,
+    );
+  });
 });
 
 describe("ReadAlongDomHighlighterSession", () => {
@@ -435,6 +466,16 @@ function fakeAnchorRoot({
   return new FakeAnchorRoot(elementsByWordIndex) as FakeAnchorRoot & ParentNode;
 }
 
+function fakeGeneratedBlockRoot({
+  block,
+  word,
+}: {
+  block: FakeElement;
+  word: FakeElement;
+}): FakeGeneratedBlockRoot & ParentNode {
+  return new FakeGeneratedBlockRoot(block, word) as FakeGeneratedBlockRoot & ParentNode;
+}
+
 function fakeMotionRoot(rect: FakeRect): FakeElement {
   return new FakeElement(rect);
 }
@@ -559,6 +600,30 @@ class FakeAnchorRoot {
 
   querySelectorAll(): FakeElement[] {
     this.querySelectorAllCalls += 1;
+    return [];
+  }
+}
+
+class FakeGeneratedBlockRoot {
+  readonly selectors: string[] = [];
+
+  constructor(
+    private readonly block: FakeElement,
+    private readonly word: FakeElement,
+  ) {}
+
+  querySelector(selector: string): FakeElement | null {
+    this.selectors.push(selector);
+    if (selector.includes("data-readalong-word-index")) {
+      return this.word;
+    }
+    if (selector.includes('data-readalong-node-id="summary"')) {
+      return this.block;
+    }
+    return null;
+  }
+
+  querySelectorAll(): FakeElement[] {
     return [];
   }
 }

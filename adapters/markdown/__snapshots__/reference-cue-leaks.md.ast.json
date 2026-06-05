@@ -1,0 +1,444 @@
+{
+  "type": "root",
+  "position": {
+    "start": {
+      "line": 1,
+      "column": 1,
+      "offset": 0
+    },
+    "end": {
+      "line": 16,
+      "column": 1,
+      "offset": 474
+    }
+  },
+  "children": [
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 1,
+          "column": 1,
+          "offset": 0
+        },
+        "end": {
+          "line": 1,
+          "column": 89,
+          "offset": 88
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "Narrative introduction with a ",
+          "position": {
+            "start": {
+              "line": 1,
+              "column": 1,
+              "offset": 0
+            },
+            "end": {
+              "line": 1,
+              "column": 31,
+              "offset": 30
+            }
+          }
+        },
+        {
+          "type": "link",
+          "position": {
+            "start": {
+              "line": 1,
+              "column": 31,
+              "offset": 30
+            },
+            "end": {
+              "line": 1,
+              "column": 71,
+              "offset": 70
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "useful link",
+              "position": {
+                "start": {
+                  "line": 1,
+                  "column": 32,
+                  "offset": 31
+                },
+                "end": {
+                  "line": 1,
+                  "column": 43,
+                  "offset": 42
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "value": " and [6] citation.",
+          "position": {
+            "start": {
+              "line": 1,
+              "column": 71,
+              "offset": 70
+            },
+            "end": {
+              "line": 1,
+              "column": 89,
+              "offset": 88
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "position": {
+        "start": {
+          "line": 3,
+          "column": 1,
+          "offset": 90
+        },
+        "end": {
+          "line": 3,
+          "column": 14,
+          "offset": 103
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "References",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 4,
+              "offset": 93
+            },
+            "end": {
+              "line": 3,
+              "column": 14,
+              "offset": 103
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "html",
+      "value": "<!-- deep-research-references:start -->",
+      "position": {
+        "start": {
+          "line": 5,
+          "column": 1,
+          "offset": 105
+        },
+        "end": {
+          "line": 5,
+          "column": 40,
+          "offset": 144
+        }
+      }
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 7,
+          "column": 1,
+          "offset": 146
+        },
+        "end": {
+          "line": 7,
+          "column": 166,
+          "offset": 311
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "one. ",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 1,
+              "offset": 146
+            },
+            "end": {
+              "line": 7,
+              "column": 6,
+              "offset": 151
+            }
+          }
+        },
+        {
+          "type": "link",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 6,
+              "offset": 151
+            },
+            "end": {
+              "line": 7,
+              "column": 58,
+              "offset": 203
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "https://opentelemetry.io/docs/what-is-opentelemetry/",
+              "position": {
+                "start": {
+                  "line": 7,
+                  "column": 6,
+                  "offset": 151
+                },
+                "end": {
+                  "line": 7,
+                  "column": 58,
+                  "offset": 203
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "value": " two. ",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 58,
+              "offset": 203
+            },
+            "end": {
+              "line": 7,
+              "column": 64,
+              "offset": 209
+            }
+          }
+        },
+        {
+          "type": "link",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 64,
+              "offset": 209
+            },
+            "end": {
+              "line": 7,
+              "column": 122,
+              "offset": 267
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf",
+              "position": {
+                "start": {
+                  "line": 7,
+                  "column": 64,
+                  "offset": 209
+                },
+                "end": {
+                  "line": 7,
+                  "column": 122,
+                  "offset": 267
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "value": " three. ",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 122,
+              "offset": 267
+            },
+            "end": {
+              "line": 7,
+              "column": 130,
+              "offset": 275
+            }
+          }
+        },
+        {
+          "type": "link",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 130,
+              "offset": 275
+            },
+            "end": {
+              "line": 7,
+              "column": 166,
+              "offset": 311
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "https://www.w3.org/TR/trace-context/",
+              "position": {
+                "start": {
+                  "line": 7,
+                  "column": 130,
+                  "offset": 275
+                },
+                "end": {
+                  "line": 7,
+                  "column": 166,
+                  "offset": 311
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "html",
+      "value": "<!-- deep-research-references:end -->",
+      "position": {
+        "start": {
+          "line": 9,
+          "column": 1,
+          "offset": 313
+        },
+        "end": {
+          "line": 9,
+          "column": 38,
+          "offset": 350
+        }
+      }
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 11,
+          "column": 1,
+          "offset": 352
+        },
+        "end": {
+          "line": 11,
+          "column": 35,
+          "offset": 386
+        }
+      },
+      "children": [
+        {
+          "type": "link",
+          "position": {
+            "start": {
+              "line": 11,
+              "column": 1,
+              "offset": 352
+            },
+            "end": {
+              "line": 11,
+              "column": 35,
+              "offset": 386
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "6",
+              "position": {
+                "start": {
+                  "line": 11,
+                  "column": 2,
+                  "offset": 353
+                },
+                "end": {
+                  "line": 11,
+                  "column": 3,
+                  "offset": 354
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 13,
+          "column": 1,
+          "offset": 388
+        },
+        "end": {
+          "line": 13,
+          "column": 30,
+          "offset": 417
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "iturn14image2turn14image5",
+          "position": {
+            "start": {
+              "line": 13,
+              "column": 1,
+              "offset": 388
+            },
+            "end": {
+              "line": 13,
+              "column": 30,
+              "offset": 417
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 15,
+          "column": 1,
+          "offset": 419
+        },
+        "end": {
+          "line": 15,
+          "column": 55,
+          "offset": 473
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "After the reference section, normal narration resumes.",
+          "position": {
+            "start": {
+              "line": 15,
+              "column": 1,
+              "offset": 419
+            },
+            "end": {
+              "line": 15,
+              "column": 55,
+              "offset": 473
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

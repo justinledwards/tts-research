@@ -24,6 +24,7 @@ export type WordTimelineProvenance =
 
 export interface NarrationWordLedgerEntry {
   readonly anchorTokenOffset?: number;
+  readonly anchorWordIndex?: number;
   readonly blockId?: string;
   readonly blockKind?: string;
   readonly displayText: string;
@@ -334,30 +335,75 @@ export function buildPreparedSourceWordLedger({
 }>): NarrationWordLedgerEntry[] {
   const ledger: NarrationWordLedgerEntry[] = [];
   for (const block of source.blocks ?? []) {
-    if (block.speakMode === "skip") {
-      continue;
-    }
-    const text = block.spokenText ?? block.text ?? "";
-    let tokenOffset = 0;
-    for (const match of text.matchAll(/(\S+)(\s*)/g)) {
-      const sourceWordIndex = ledger.length;
-      const matchStart = match.index;
-      ledger.push({
-        anchorTokenOffset: tokenOffset,
-        blockId: block.id,
-        blockKind: block.kind,
-        displayText: match[1],
-        endOffset: block.startOffset + matchStart + match[1].length,
-        normalizedText: normalizeWordIdentityText(match[1]),
-        sourceWordId: sourceWordIdFor(sourceId, scopeKey, sourceWordIndex),
-        sourceWordIndex,
-        startOffset: block.startOffset + matchStart,
-        text: match[1],
-      });
-      tokenOffset += 1;
-    }
+    ledger.push(
+      ...preparedSourceLedgerEntriesForBlock({
+        block,
+        scopeKey,
+        sourceId,
+        sourceWordStart: ledger.length,
+      }),
+    );
   }
   return ledger;
+}
+
+function preparedSourceLedgerEntriesForBlock({
+  block,
+  scopeKey,
+  sourceId,
+  sourceWordStart,
+}: Readonly<{
+  block: NarrationBlock;
+  scopeKey: string;
+  sourceId: string;
+  sourceWordStart: number;
+}>): NarrationWordLedgerEntry[] {
+  if (!preparedSourceBlockIsSpeakableForLedger(block)) {
+    return [];
+  }
+  const text = block.spokenText ?? block.text ?? "";
+  const anchorsGeneratedSpeech = preparedSourceBlockAnchorsGeneratedSpeech(block);
+  return Array.from(text.matchAll(/(\S+)(\s*)/g), (match, tokenOffset) => {
+    const sourceWordIndex = sourceWordStart + tokenOffset;
+    const matchStart = match.index;
+    return {
+      anchorTokenOffset: anchorsGeneratedSpeech ? undefined : tokenOffset,
+      anchorWordIndex: anchorsGeneratedSpeech ? undefined : tokenOffset,
+      blockId: block.id,
+      blockKind: block.kind,
+      displayText: match[1],
+      endOffset: anchorsGeneratedSpeech
+        ? block.endOffset
+        : block.startOffset + matchStart + match[1].length,
+      normalizedText: normalizeWordIdentityText(match[1]),
+      sourceWordId: sourceWordIdFor(sourceId, scopeKey, sourceWordIndex),
+      sourceWordIndex,
+      startOffset: anchorsGeneratedSpeech ? block.startOffset : block.startOffset + matchStart,
+      text: match[1],
+    };
+  });
+}
+
+function preparedSourceBlockIsSpeakableForLedger(block: NarrationBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  return (
+    speakMode !== "skip" &&
+    policyMode !== "skip" &&
+    policyMode !== "ondemand" &&
+    (block.spokenText ?? "").trim().length > 0
+  );
+}
+
+function preparedSourceBlockAnchorsGeneratedSpeech(block: NarrationBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  return (
+    speakMode === "summarize" ||
+    policyMode === "summarize" ||
+    policyMode === "summarise" ||
+    policyMode === "summary"
+  );
 }
 
 export function resolveWordTimelineAtCursor(

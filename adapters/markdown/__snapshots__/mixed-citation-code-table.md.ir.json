@@ -67,7 +67,7 @@
       "spokenText": "Use prepareSource() before reviewing citation-heavy notes.",
       "startOffset": 24,
       "text": "Use `prepareSource()` before reviewing citation-heavy notes [12].",
-      "warnings": ["inline_code_policy", "reference_marker_removed", "citation_removed"]
+      "warnings": ["inline_code_policy", "reference_marker_removed"]
     },
     {
       "confidence": 0.98,
@@ -95,7 +95,7 @@
         "sourceSlice": "[12]"
       },
       "speakMode": "skip",
-      "spokenText": "Reference 12.",
+      "spokenText": "",
       "startOffset": 84,
       "text": "[12]",
       "warnings": ["inline_artifact", "reference_marker_removed", "reference_policy"]
@@ -316,7 +316,7 @@
           "highlightUnitHint": "node",
           "progressionHint": "linear"
         },
-        "warnings": ["inline_code_policy", "reference_marker_removed", "citation_removed"]
+        "warnings": ["inline_code_policy", "reference_marker_removed"]
       },
       {
         "adapterVersion": "markdown-adapter-v2",
@@ -384,7 +384,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "Reference 12.",
+        "speechText": "",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
