@@ -82,6 +82,89 @@ describe("preview audio currentness", () => {
     expect(generatedAudioLifecycleFromJob({ job, stale: currentness.stale })).toBe("ready");
   });
 
+  it("keeps prepared-source selected-block audio current when selected IDs match the current speech plan", () => {
+    const plan = buildCanonicalPreviewSpeechPlan([
+      revisionBlock({
+        id: "block-a",
+        spokenText: "Current selected block A.",
+        text: "Current selected block A.",
+      }),
+      revisionBlock({
+        id: "block-b",
+        spokenText: "Current selected block B.",
+        text: "Current selected block B.",
+      }),
+    ]);
+    const job = voiceJob({
+      inputText: "Stored aggregate text from the prepared-source renderer.",
+      optimizedText: "Stored aggregate text from the prepared-source renderer.",
+      preparedSourceId: "prepared-source-1",
+      selectedBlockIds: ["block-a", "block-b"],
+      segments: [
+        {
+          index: 1,
+          status: "ready",
+          text: "Stored aggregate text from the prepared-source renderer.",
+        },
+      ],
+    });
+
+    const currentness = resolvePreviewAudioCurrentness({
+      job,
+      request: request({ text: plan.text }),
+      speechPlan: plan,
+    });
+
+    expect(currentness).toMatchObject({ playable: true, reasons: [], stale: false });
+    expect(generatedAudioLifecycleFromJob({ job, stale: currentness.stale })).toBe("ready");
+  });
+
+  it("keeps text mismatch authoritative for prepared-source jobs while review edits are active", () => {
+    const plan = buildCanonicalPreviewSpeechPlan([
+      revisionBlock({
+        id: "block-a",
+        spokenText: "Edited selected block.",
+        text: "Edited selected block.",
+      }),
+    ]);
+
+    const currentness = resolvePreviewAudioCurrentness({
+      allowPreparedSourceSelectionMatch: false,
+      job: voiceJob({
+        inputText: "Old selected block.",
+        optimizedText: "Old selected block.",
+        preparedSourceId: "prepared-source-1",
+        selectedBlockIds: ["block-a"],
+      }),
+      request: request({ text: plan.text }),
+      speechPlan: plan,
+    });
+
+    expect(currentness.stale).toBe(true);
+    expect(currentness.reasons).toContain("text-mismatch");
+  });
+
+  it("accepts segment text as current when aggregate job text differs by segmentation", () => {
+    const plan = speechPlan("First sentence.\n\nSecond sentence.");
+    const job = voiceJob({
+      inputText: "Rendered aggregate changed.",
+      optimizedText: "Rendered aggregate changed.",
+      segments: [
+        { index: 2, status: "ready", text: "Second sentence." },
+        { index: 1, status: "ready", text: "First sentence." },
+      ],
+    });
+
+    const currentness = resolvePreviewAudioCurrentness({
+      job,
+      request: request({ text: plan.text }),
+      speechPlan: plan,
+    });
+
+    expect(currentness.stale).toBe(false);
+    expect(currentness.reasons).not.toContain("text-mismatch");
+  });
+
   it("blocks true text drift and reports the stale predicate", () => {
     const currentness = resolvePreviewAudioCurrentness({
       job: voiceJob({ inputText: "Old text.", optimizedText: "Old text." }),

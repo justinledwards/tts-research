@@ -328,6 +328,23 @@ func (service *Service) bookScopePolicySource(
 	request SpeechPolicyPreviewRequest,
 ) (PreparedSource, []string) {
 	blocks, warnings := service.bookScopeBlocks(book, scope, text)
+	return service.bookPolicySourceForBlocks(book, blocks, request), warnings
+}
+
+func (service *Service) bookTextPolicySource(
+	book BookSource,
+	text string,
+	request SpeechPolicyPreviewRequest,
+) (PreparedSource, []string) {
+	blocks, _, warnings := prepareNarrationBlocks(text, service.options.SourcePrepSentenceMaxRunes)
+	return service.bookPolicySourceForBlocks(book, blocks, request), warnings
+}
+
+func (service *Service) bookPolicySourceForBlocks(
+	book BookSource,
+	blocks []NarrationBlock,
+	request SpeechPolicyPreviewRequest,
+) PreparedSource {
 	profileName := strings.TrimSpace(request.Profile)
 	project, err := service.GetProject(book.ProjectID)
 	if err == nil && profileName != "" {
@@ -346,9 +363,9 @@ func (service *Service) bookScopePolicySource(
 			source,
 			speechPolicyEvaluatorForSource(project, book.SourceSpeechPolicyProfile, book.SourceSpeechPolicyOverrides, profileName, request.Overrides),
 			service.options.SourcePrepSentenceMaxRunes,
-		), warnings
+		)
 	}
-	return applySpeechPolicyToPreparedSource(source, profileName, request.Overrides, service.options.SourcePrepSentenceMaxRunes), warnings
+	return applySpeechPolicyToPreparedSource(source, profileName, request.Overrides, service.options.SourcePrepSentenceMaxRunes)
 }
 
 func (service *Service) bookScopeBlocks(
@@ -432,16 +449,25 @@ func (service *Service) CreateBookNarrationJob(
 	if err != nil {
 		return VoiceJob{}, err
 	}
+	useRequestSpeechText := false
 	if trimmedSpeechText := strings.TrimSpace(request.SpeechText); trimmedSpeechText != "" {
 		narrationText = trimmedSpeechText
+		useRequestSpeechText = true
 	}
-	policySource, warnings := service.bookScopePolicySource(book, scope, narrationText, SpeechPolicyPreviewRequest{
+	policyRequest := SpeechPolicyPreviewRequest{
 		Profile:        request.SpeechPolicyProfile,
 		Overrides:      request.SpeechPolicyOverrides,
 		VoiceProfileID: request.VoiceProfileID,
 		Locale:         request.Locale,
 		TTSEngine:      request.TTSEngine,
-	})
+	}
+	var policySource PreparedSource
+	var warnings []string
+	if useRequestSpeechText {
+		policySource, warnings = service.bookTextPolicySource(book, narrationText, policyRequest)
+	} else {
+		policySource, warnings = service.bookScopePolicySource(book, scope, narrationText, policyRequest)
+	}
 	narrationText = strings.TrimSpace(policySource.SpeechText)
 	if narrationText == "" {
 		return VoiceJob{}, ErrEmptyText

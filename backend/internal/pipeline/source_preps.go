@@ -498,7 +498,31 @@ func (service *Service) CreatePreparedSourceJob(
 	source = sanitizePreparedSourceReferenceCueLeaks(source, service.options.SourcePrepSentenceMaxRunes)
 	selected := map[string]struct{}{}
 	for _, id := range request.SelectedBlockIDs {
-		selected[strings.TrimSpace(id)] = struct{}{}
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" {
+			continue
+		}
+		selected[trimmed] = struct{}{}
+	}
+	selectionIndex := make(map[string]NarrationBlock, len(source.Blocks))
+	for _, block := range source.Blocks {
+		selectionIndex[block.ID] = block
+	}
+	sourceBlockIDs := make(map[string]struct{}, len(source.Blocks))
+	for _, block := range source.Blocks {
+		sourceBlockIDs[block.ID] = struct{}{}
+	}
+	selectionWarnings := make([]string, 0)
+	if len(selected) > 0 {
+		for selectedID := range selected {
+			if _, ok := sourceBlockIDs[selectedID]; !ok {
+				selectionWarnings = append(selectionWarnings, "selected block id not found: "+selectedID)
+				continue
+			}
+			if !isPreparedSourceSelectionSpeakable(selectionIndex[selectedID]) {
+				selectionWarnings = append(selectionWarnings, "selected block id not speakable: "+selectedID)
+			}
+		}
 	}
 	parts := make([]string, 0, len(source.Blocks))
 	warnings := make([]string, 0)
@@ -509,7 +533,7 @@ func (service *Service) CreatePreparedSourceJob(
 				continue
 			}
 		}
-		if block.SpeakMode == NarrationSpeakModeSkip {
+		if !isPreparedSourceSelectionSpeakable(block) {
 			continue
 		}
 		text := strings.TrimSpace(block.SpokenText)
@@ -519,6 +543,9 @@ func (service *Service) CreatePreparedSourceJob(
 		parts = append(parts, text)
 		warnings = append(warnings, block.Warnings...)
 		selectedIDs = append(selectedIDs, block.ID)
+	}
+	if len(selectionWarnings) > 0 {
+		warnings = append(warnings, selectionWarnings...)
 	}
 	if len(parts) == 0 {
 		return VoiceJob{}, ErrEmptyText
@@ -546,6 +573,22 @@ func (service *Service) CreatePreparedSourceJob(
 		}
 	}
 	return job, nil
+}
+
+func isPreparedSourceSelectionSpeakable(block NarrationBlock) bool {
+	if block.SpeakMode == NarrationSpeakModeSkip {
+		return false
+	}
+	if strings.TrimSpace(block.SpokenText) == "" {
+		return false
+	}
+	if referencePolicyModeIsNonSpeaking(block.SpeechPolicy.Mode) {
+		return false
+	}
+	if _, _, isStandaloneReferenceOnly := standaloneReferenceOnlyText(block.SpokenText); isStandaloneReferenceOnly {
+		return false
+	}
+	return true
 }
 
 func (service *Service) updatePreparedSource(source PreparedSource) {

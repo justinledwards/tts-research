@@ -3784,6 +3784,7 @@ export function App() {
   );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
   const previewAudioCurrentness = resolvePreviewAudioCurrentness({
+    allowPreparedSourceSelectionMatch: !hasRevisionSessionChanges,
     job,
     request: canonicalPreviewGenerationRequest,
     speechPlan: canonicalPreviewSpeechPlan,
@@ -7425,7 +7426,15 @@ export function App() {
     source: PreparedSource,
     options: AssetNarrationGenerationOptions = {},
   ) {
-    await submitPreparedSourceJobFromFeature(submissionDependencies, source, options);
+    let fallbackSelectedBlockIds = options.fallbackSelectedBlockIds;
+    if (!fallbackSelectedBlockIds || fallbackSelectedBlockIds.length === 0) {
+      fallbackSelectedBlockIds =
+        job?.preparedSourceId === source.id ? job.selectedBlockIds : undefined;
+    }
+    await submitPreparedSourceJobFromFeature(submissionDependencies, source, {
+      ...options,
+      fallbackSelectedBlockIds,
+    });
   }
 
   function createAndListenFromCurrentSource() {

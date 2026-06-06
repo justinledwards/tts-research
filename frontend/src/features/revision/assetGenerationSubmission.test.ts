@@ -374,7 +374,14 @@ describe("asset-generation submission orchestration", () => {
       revisionBlock({ id: "canonical-block" }),
     ]);
     state.deps.reviewedNarrationSpeechText = "Reviewed narration.";
-    const source = basePreparedSource({ speechText: "Prepared source speech text." });
+    const source = basePreparedSource({
+      speechText: "Prepared source speech text.",
+      blocks: [
+        {
+          ...revisionBlock({ id: "canonical-block" }),
+        } as unknown as PreparedSourceBlock,
+      ],
+    });
     const targetVoiceJob = completeJob({ projectId: "project-1" });
     state.deps.createVoiceJob = vi.fn().mockResolvedValue(targetVoiceJob);
 
@@ -391,6 +398,111 @@ describe("asset-generation submission orchestration", () => {
       selectedBlockIds: ["canonical-block"],
       text: state.deps.canonicalPreviewSpeechPlan.text,
     });
+  });
+
+  it("falls back to non-skip source-local blocks when canonical selection is stale during active review session", async () => {
+    const state = makeRunningState();
+    state.deps.hasRevisionSessionChanges = true;
+    state.deps.canonicalPreviewSpeechPlan = buildCanonicalPreviewSpeechPlan([
+      revisionBlock({ id: "stale-canonical-id" }),
+      revisionBlock({ id: "source-skip-id", speakMode: "skip" }),
+    ]);
+    state.deps.reviewedNarrationSpeechText = "Reviewed narration.";
+    const source = basePreparedSource({
+      speechText: "Prepared source speech text.",
+      blocks: [
+        {
+          ...revisionBlock({
+            id: "source-speaking-id",
+            spokenText: "This should remain selected.",
+          }),
+        } as unknown as PreparedSourceBlock,
+        {
+          ...revisionBlock({
+            id: "source-skip-id",
+            speakMode: "skip",
+            spokenText: "Skip this block.",
+          }),
+        } as unknown as PreparedSourceBlock,
+      ],
+    });
+    state.deps.narrationPreviewBlocks = [
+      revisionBlock({ id: "source-speaking-id", spokenText: "This should remain selected." }),
+      revisionBlock({ id: "source-skip-id", speakMode: "skip", spokenText: "Skip this block." }),
+    ];
+    const targetVoiceJob = completeJob({ projectId: "project-1" });
+    state.deps.createVoiceJob = vi.fn().mockResolvedValue(targetVoiceJob);
+
+    await submitPreparedSourceJob(state.deps, source);
+
+    expect(state.deps.createVoiceJob).toHaveBeenCalledOnce();
+    expect(state.deps.createPreparedSourceJob).not.toHaveBeenCalled();
+    const request = vi.mocked(state.deps.createVoiceJob).mock.calls[0]?.[0];
+    expect(request).toMatchObject({
+      preparedSourceId: source.id,
+      progressTargetId: `prepared:${source.id}`,
+      sourceKind: "text",
+      speechRenderApplied: true,
+      selectedBlockIds: ["source-speaking-id"],
+      text: "This should remain selected.",
+    });
+  });
+
+  it("filters review-session skipped IDs from payload and text even when source block remains speakable", async () => {
+    const state = makeRunningState();
+    state.deps.hasRevisionSessionChanges = true;
+    state.deps.canonicalPreviewSpeechPlan = buildCanonicalPreviewSpeechPlan([
+      revisionBlock({ id: "stale-canonical-id" }),
+      revisionBlock({ id: "source-skip-id", speakMode: "speak" }),
+    ]);
+    const source = basePreparedSource({
+      speechText: "Prepared source speech text.",
+      blocks: [
+        {
+          ...revisionBlock({
+            id: "source-speaking-id",
+            spokenText: "Keep this block.",
+            speakMode: "speak",
+          }),
+        } as unknown as PreparedSourceBlock,
+        {
+          ...revisionBlock({
+            id: "source-skip-id",
+            speakMode: "speak",
+            spokenText: "Review skip this block.",
+          }),
+        } as unknown as PreparedSourceBlock,
+      ],
+    });
+    state.deps.reviewedNarrationSpeechText = "Reviewed narration.";
+    state.deps.narrationPreviewBlocks = [
+      revisionBlock({
+        id: "source-speaking-id",
+        spokenText: "Keep this block.",
+        status: "waiting",
+      }),
+      revisionBlock({
+        id: "source-skip-id",
+        spokenText: "Review skip this block.",
+        status: "skipped",
+      }),
+    ];
+    const targetVoiceJob = completeJob({ projectId: "project-1" });
+    state.deps.createVoiceJob = vi.fn().mockResolvedValue(targetVoiceJob);
+
+    await submitPreparedSourceJob(state.deps, source);
+
+    expect(state.deps.createVoiceJob).toHaveBeenCalledOnce();
+    const request = vi.mocked(state.deps.createVoiceJob).mock.calls[0]?.[0];
+    expect(request).toMatchObject({
+      preparedSourceId: source.id,
+      progressTargetId: `prepared:${source.id}`,
+      sourceKind: "text",
+      speechRenderApplied: true,
+      selectedBlockIds: ["source-speaking-id"],
+      text: "Keep this block.",
+    });
+    expect(request.selectedBlockIds).not.toContain("source-skip-id");
   });
 
   it("does not submit prepared-source narration for non-ready prepared source", async () => {

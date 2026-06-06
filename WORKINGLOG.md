@@ -1,3 +1,11 @@
+## 2026-06-06 19:55 CEST - Fix Create & Listen CUE skip regression
+- [x] Stabilize prepared-source selected block resolution with canonical-plan validation and fallback.
+- [x] Harden prepared-source request assembly with source-scope dedupe/order guard and non-empty fallback.
+- [x] Add create-job mismatch diagnostics in debug/dev logging.
+- [x] Add front-end regression tests for stale canonical IDs and skip-preserving selection.
+- [x] Add backend test coverage for unknown selected IDs and skip exclusion.
+- [x] Add backend invariant for unknown/skip selected IDs in CreatePreparedSourceJob.
+
 ## 2026-06-06 09:00 UTC - Close stale playback bypass for preview toolbar controls
 - [x] Audit remaining playback gates for preview/review toolbar action handlers.
 - [x] Enforce `generatedAudioLifecycle === "ready"` on preview-local replay controls.
@@ -1867,3 +1875,18 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Enforce stale-state hard block for Cinema/teleprompter/playback callbacks and restart/play/jump handlers.
 - [x] Add/refresh stale transport regression coverage in focused frontend tests.
 - [x] Run focused frontend tests for `previewAudioCurrentness.test.ts` and `preview.test.ts`.
+
+## 2026-06-06 23:05 CEST - Fix Create & Listen CUE-skip regression
+- [x] Diagnose review-session prepared-source route mismatch in create/recreate flow.
+- [x] Ensure selected-block resolution reuses current review blocks for fallback filtering.
+- [x] Keep canonical plan preferred when complete and valid; fallback to review-filtered source-local selection when mismatched.
+- [x] Build fallback narration text from resolved selected blocks instead of raw `source.speechText`.
+- [x] Update frontend regression tests for canonical drift fallback and review skip enforcement.
+
+## 2026-06-06 21:41 CEST - Restore listen-readalong after false stale audio
+- [x] Trace currentness mismatch for completed prepared-source audio.
+- [x] Fix text matching so 55/55 ready audio unlocks follow/readalong.
+- [x] Add regression coverage for prepared-source selected-block jobs.
+- [x] Preserve canonical review text for book narration backend jobs.
+- [x] Run focused validation and full `pnpm check`.
+- [x] Commit changes and update PR branch.

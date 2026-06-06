@@ -15,6 +15,7 @@ import {
   shouldUseCanonicalPreviewPlanForPreparedSourceNarration,
   resolvePreparedSourceNarrationSelectedBlockIds,
   resolvePreparedSourceNarrationText,
+  narrationBlockIsPreparedSelectionSpeakable,
 } from "./preparedSourceNarration";
 import {
   canonicalPreviewSpeechPlanHasBlocks,
@@ -24,6 +25,7 @@ import type { RevisionBlock } from "./revisionFilters";
 
 export interface AssetNarrationGenerationOptions {
   useCurrentReviewSession?: boolean;
+  fallbackSelectedBlockIds?: readonly string[];
 }
 
 type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
@@ -110,6 +112,168 @@ function isPreparedSourceDisplayIncomplete(source: PreparedSource | null): boole
     return !source.text;
   }
   return !source.text || !source.speechText;
+}
+
+function uniqueOrderedBlockIds(blockIds: readonly string[], allowed: Set<string>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const blockId of blockIds) {
+    const trimmed = blockId.trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (!allowed.has(trimmed) || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+
+  return result;
+}
+
+function buildPreparedSourceSelectionDebugReasons(
+  sourceBlockIds: Set<string>,
+  sourceBlocks: PreparedSource["blocks"],
+  requestedBlockIds: readonly string[],
+): string[] {
+  const reasons: string[] = [];
+  const requestedNormalized = uniqueOrderedBlockIds(requestedBlockIds, sourceBlockIds);
+  if (requestedBlockIds.length !== requestedNormalized.length) {
+    reasons.push("selection contained invalid or duplicate block ids");
+  }
+
+  const sourceById = new Map(
+    (sourceBlocks ?? []).map((block) => {
+      return [block.id, block] as const;
+    }),
+  );
+  for (const blockId of uniqueOrderedBlockIds(requestedBlockIds, new Set(requestedBlockIds))) {
+    const sourceBlock = sourceById.get(blockId);
+    if (!sourceBlock) {
+      reasons.push(`requested blockId not in source scope: ${blockId}`);
+      continue;
+    }
+    if (!narrationBlockIsPreparedSelectionSpeakable(sourceBlock)) {
+      reasons.push(`requested blockId not speakable: ${blockId}`);
+    }
+  }
+
+  return reasons;
+}
+
+interface PreparedSourceSelectionPayloadOptions {
+  applyReviewSession: boolean;
+  useCanonicalPreviewPlan: boolean;
+  canonicalPreviewSpeechPlan: CanonicalPreviewSpeechPlan;
+  narrationPreviewBlocks: readonly RevisionBlock[];
+  fallbackSelectedBlockIds?: readonly string[];
+}
+
+interface PreparedSourceSelectionPayload {
+  selectedBlockIds: string[];
+  mismatchReasons: string[];
+  sourceBlockCount: number;
+  nonSkipSourceBlockCount: number;
+  resolvedSelectedBlockCount: number;
+  error?: string;
+}
+
+function resolvePreparedSourceSelectionPayload(
+  source: PreparedSource,
+  options: PreparedSourceSelectionPayloadOptions,
+): PreparedSourceSelectionPayload {
+  const sourceBlocks = source.blocks ?? [];
+  const sourceBlockIds = new Set(sourceBlocks.map((block) => block.id));
+  const sourceSpeakableBlockIds = sourceBlocks
+    .filter((block) => narrationBlockIsPreparedSelectionSpeakable(block))
+    .map((block) => block.id);
+  const resolvedSelectedBlockIds = resolvePreparedSourceNarrationSelectedBlockIds(source, {
+    applyReviewSession: options.applyReviewSession,
+    useCanonicalPreviewPlan: options.useCanonicalPreviewPlan,
+    canonicalPreviewSpeechPlan: options.canonicalPreviewSpeechPlan,
+    narrationPreviewBlocks: options.narrationPreviewBlocks,
+    fallbackSelectedBlockIds: options.fallbackSelectedBlockIds,
+  });
+  const canonicalRequestedBlockIds =
+    options.useCanonicalPreviewPlan && options.applyReviewSession
+      ? options.canonicalPreviewSpeechPlan.blockIds
+      : [];
+  const requestedForDebug =
+    canonicalRequestedBlockIds.length > 0 ? canonicalRequestedBlockIds : resolvedSelectedBlockIds;
+  const mismatchReasons = buildPreparedSourceSelectionDebugReasons(
+    sourceBlockIds,
+    sourceBlocks,
+    requestedForDebug,
+  );
+  const selectedBlockIds = uniqueOrderedBlockIds(resolvedSelectedBlockIds, sourceBlockIds);
+  if (selectedBlockIds.length > 0) {
+    return {
+      mismatchReasons,
+      nonSkipSourceBlockCount: sourceSpeakableBlockIds.length,
+      resolvedSelectedBlockCount: resolvedSelectedBlockIds.length,
+      selectedBlockIds,
+      sourceBlockCount: sourceBlocks.length,
+    };
+  }
+  return resolveEmptyPreparedSourceSelectionPayload({
+    applyReviewSession: options.applyReviewSession,
+    mismatchReasons: [
+      ...mismatchReasons,
+      "selection was empty after scope validation; falling back to source speakable blocks",
+    ],
+    resolvedSelectedBlockCount: resolvedSelectedBlockIds.length,
+    sourceBlockIds,
+    sourceBlocks,
+    sourceSpeakableBlockIds,
+  });
+}
+
+function resolveEmptyPreparedSourceSelectionPayload({
+  applyReviewSession,
+  mismatchReasons,
+  resolvedSelectedBlockCount,
+  sourceBlockIds,
+  sourceBlocks,
+  sourceSpeakableBlockIds,
+}: {
+  applyReviewSession: boolean;
+  mismatchReasons: string[];
+  resolvedSelectedBlockCount: number;
+  sourceBlockIds: Set<string>;
+  sourceBlocks: PreparedSource["blocks"];
+  sourceSpeakableBlockIds: readonly string[];
+}): PreparedSourceSelectionPayload {
+  const sourceBlockCount = sourceBlocks?.length ?? 0;
+  if (applyReviewSession) {
+    return {
+      error: "Prepared source has no selected blocks for review session generation.",
+      mismatchReasons,
+      nonSkipSourceBlockCount: sourceSpeakableBlockIds.length,
+      resolvedSelectedBlockCount,
+      selectedBlockIds: [],
+      sourceBlockCount,
+    };
+  }
+  const selectedBlockIds = uniqueOrderedBlockIds(sourceSpeakableBlockIds, sourceBlockIds);
+  if (selectedBlockIds.length === 0) {
+    return {
+      error: "Prepared source has no speakable blocks available for generation.",
+      mismatchReasons,
+      nonSkipSourceBlockCount: sourceSpeakableBlockIds.length,
+      resolvedSelectedBlockCount,
+      selectedBlockIds,
+      sourceBlockCount,
+    };
+  }
+  return {
+    mismatchReasons,
+    nonSkipSourceBlockCount: sourceSpeakableBlockIds.length,
+    resolvedSelectedBlockCount,
+    selectedBlockIds,
+    sourceBlockCount,
+  };
 }
 
 function upsertPreparedSource(
@@ -319,6 +483,7 @@ export async function submitPreparedSourceJob(
     reviewedNarrationSpeechText: deps.reviewedNarrationSpeechText,
     useCanonicalPreviewPlan,
     canonicalPreviewSpeechPlan: deps.canonicalPreviewSpeechPlan,
+    narrationPreviewBlocks: deps.narrationPreviewBlocks,
   });
 
   if ((applyReviewSession || useCanonicalPreviewPlan) && !speechText.trim()) {
@@ -326,16 +491,45 @@ export async function submitPreparedSourceJob(
     return;
   }
 
+  const selectionPayload = resolvePreparedSourceSelectionPayload(jobSource, {
+    applyReviewSession,
+    useCanonicalPreviewPlan,
+    canonicalPreviewSpeechPlan: deps.canonicalPreviewSpeechPlan,
+    narrationPreviewBlocks: deps.narrationPreviewBlocks,
+    fallbackSelectedBlockIds: options.fallbackSelectedBlockIds,
+  });
+
+  if (selectionPayload.error) {
+    deps.setSourcePrepError(selectionPayload.error);
+    if (import.meta.env.DEV) {
+      console.debug("Prepared source selection invalid with no fallback candidates", {
+        sourceId: jobSource.id,
+        sourceBlockCount: selectionPayload.sourceBlockCount,
+        applyReviewSession,
+        useCanonicalPreviewPlan,
+        mismatchReasons: selectionPayload.mismatchReasons,
+      });
+    }
+    return;
+  }
+
+  if (import.meta.env.DEV) {
+    console.debug("Prepared source selection payload", {
+      sourceId: jobSource.id,
+      sourceBlockCount: selectionPayload.sourceBlockCount,
+      nonSkipSourceBlockCount: selectionPayload.nonSkipSourceBlockCount,
+      resolvedSelectedBlockCount: selectionPayload.resolvedSelectedBlockCount,
+      selectedBlockCount: selectionPayload.selectedBlockIds.length,
+      useCanonicalPreviewPlan,
+      mismatchReasons: selectionPayload.mismatchReasons,
+    });
+  }
+
   const sessionOverrides = compactSpeechPolicyOverrides(deps.speechPolicyOverrides);
   const request: CreateVoiceJobRequest = {
     ...deps.buildVoiceJobRequest(speechText, jobSource),
     preparedSourceId: jobSource.id,
-    selectedBlockIds: resolvePreparedSourceNarrationSelectedBlockIds(jobSource, {
-      applyReviewSession,
-      useCanonicalPreviewPlan,
-      canonicalPreviewSpeechPlan: deps.canonicalPreviewSpeechPlan,
-      narrationPreviewBlocks: deps.narrationPreviewBlocks,
-    }),
+    selectedBlockIds: selectionPayload.selectedBlockIds,
     sourceKind: jobSource.kind,
     progressTargetId: `prepared:${jobSource.id}`,
     ...(applyReviewSession ? { speechRenderApplied: true } : {}),

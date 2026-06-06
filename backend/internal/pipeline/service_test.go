@@ -583,6 +583,82 @@ func TestPreparedSourceJobDefensivelyExcludesOnDemandSelectedBlocks(t *testing.T
 	}
 }
 
+func TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "selected-unknown.md",
+		Text: strings.Join([]string{
+			"# Selected unknown",
+			"",
+			"Narrative introduction stays speakable.",
+			"",
+			"[^1]: Selected footnote should not be narrated.",
+			"",
+			"Tail body stays speakable.",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+
+	overrides := policy.Overrides{FootnoteMode: policy.FootnoteModeOnDemand}
+	preview, err := service.PreviewPreparedSourceSpeechPolicy(source.ID, pipeline.SpeechPolicyPreviewRequest{
+		Overrides: overrides,
+	})
+	if err != nil {
+		t.Fatalf("PreviewPreparedSourceSpeechPolicy returned error: %v", err)
+	}
+	footnote := findPreparedBlockByKind(preview.Blocks, pipeline.NarrationBlockKindFootnote)
+	if footnote == nil || footnote.SpeechPolicy.Mode != string(policy.ModeOnDemand) {
+		t.Fatalf("footnote block = %#v, want on-demand footnote", footnote)
+	}
+
+	selectedBlockID := ""
+	selectedBlockText := ""
+	for _, block := range preview.Blocks {
+		if block.ID != footnote.ID && block.SpeechPolicy.Mode != string(policy.ModeOnDemand) {
+			selectedBlockID = block.ID
+			selectedBlockText = strings.TrimSpace(block.SpokenText)
+			break
+		}
+	}
+	if selectedBlockID == "" {
+		t.Fatal("expected a non-on-demand block id for controlled selection")
+	}
+
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{
+		SelectedBlockIDs:      []string{"missing-source-block-id", selectedBlockID, footnote.ID},
+		SpeechPolicyOverrides: overrides,
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	if selectedBlockText == "" {
+		t.Fatal("expected selected block text for controlled selection")
+	}
+	if !strings.Contains(job.InputText, selectedBlockText) {
+		t.Fatalf("job input text = %q, want selected non-on-demand speech text", job.InputText)
+	}
+	if strings.Contains(job.InputText, "Selected footnote should not be narrated") {
+		t.Fatalf("job input text = %q, want on-demand footnote excluded", job.InputText)
+	}
+	if strings.Contains(strings.Join(job.SelectedBlockIDs, ","), footnote.ID) {
+		t.Fatalf("job selected ids = %#v, want on-demand footnote id %q omitted", job.SelectedBlockIDs, footnote.ID)
+	}
+	if !containsString(job.SelectedBlockIDs, selectedBlockID) {
+		t.Fatalf("job selected ids = %#v, want selected block %q retained", job.SelectedBlockIDs, selectedBlockID)
+	}
+	if !strings.Contains(strings.Join(job.SegmentationWarnings, ","), "selected block id not found: missing-source-block-id") {
+		t.Fatalf("job segmentation warnings = %#v, want missing source block warning", job.SegmentationWarnings)
+	}
+	if !strings.Contains(strings.Join(job.SegmentationWarnings, ","), "selected block id not speakable: "+footnote.ID) {
+		t.Fatalf("job segmentation warnings = %#v, want non-speakable selected block warning", job.SegmentationWarnings)
+	}
+}
+
 func TestPreparedSourcePolicyPinFollowsPrecedenceOrder(t *testing.T) {
 	t.Parallel()
 

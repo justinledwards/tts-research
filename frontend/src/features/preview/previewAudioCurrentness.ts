@@ -35,9 +35,11 @@ export interface PreviewAudioCurrentnessInput {
   readonly job: VoiceJob | null;
   readonly request: CreateVoiceJobRequest;
   readonly speechPlan: CanonicalPreviewSpeechPlan;
+  readonly allowPreparedSourceSelectionMatch?: boolean;
 }
 
 export function resolvePreviewAudioCurrentness({
+  allowPreparedSourceSelectionMatch = true,
   job,
   request,
   speechPlan,
@@ -53,7 +55,15 @@ export function resolvePreviewAudioCurrentness({
 
   if (
     canonicalPreviewSpeechPlanHasBlocks(speechPlan) &&
-    !previewSpeechPlanMatchesJobText(speechPlan, job.optimizedText, job.inputText)
+    !previewSpeechPlanMatchesJobText(
+      speechPlan,
+      job.optimizedText,
+      job.inputText,
+      jobSegmentsText(job),
+    ) &&
+    !(
+      allowPreparedSourceSelectionMatch && preparedSourceSelectionMatchesSpeechPlan(job, speechPlan)
+    )
   ) {
     reasons.push("text-mismatch");
   }
@@ -159,4 +169,43 @@ function overridesFingerprint(overrides: SpeechPolicyOverrides | undefined): str
   const keys = Object.keys(compact);
   keys.sort((left, right) => left.localeCompare(right));
   return JSON.stringify(compact, keys);
+}
+
+function jobSegmentsText(job: VoiceJob): string {
+  const segments = job.segments ?? [];
+  if (segments.length === 0) {
+    return "";
+  }
+  const orderedSegments: NonNullable<VoiceJob["segments"]> = [];
+  for (const segment of segments) {
+    const insertIndex = orderedSegments.findIndex((candidate) => candidate.index > segment.index);
+    if (insertIndex === -1) {
+      orderedSegments.push(segment);
+    } else {
+      orderedSegments.splice(insertIndex, 0, segment);
+    }
+  }
+  return orderedSegments
+    .map((segment) => segment.text.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function preparedSourceSelectionMatchesSpeechPlan(
+  job: VoiceJob,
+  speechPlan: CanonicalPreviewSpeechPlan,
+): boolean {
+  if (!job.preparedSourceId || !job.selectedBlockIds || job.selectedBlockIds.length === 0) {
+    return false;
+  }
+  const selectedBlockIds = normalizeBlockIds(job.selectedBlockIds);
+  const speechPlanBlockIds = normalizeBlockIds(speechPlan.blockIds);
+  if (selectedBlockIds.length === 0 || selectedBlockIds.length !== speechPlanBlockIds.length) {
+    return false;
+  }
+  return selectedBlockIds.every((blockId, index) => blockId === speechPlanBlockIds[index]);
+}
+
+function normalizeBlockIds(blockIds: readonly string[]): string[] {
+  return blockIds.map((blockId) => blockId.trim()).filter(Boolean);
 }

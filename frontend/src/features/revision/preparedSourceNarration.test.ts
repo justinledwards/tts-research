@@ -95,8 +95,8 @@ describe("prepared source narration resolution", () => {
   it("prefers the canonical preview plan when applying the active review session", () => {
     const source = buildPreparedSource({
       blocks: [
-        buildNarrationBlock({ id: "source-shared-id" }),
-        buildNarrationBlock({ id: "source-only-id" }),
+        buildNarrationBlock({ id: "shared-id" }),
+        buildNarrationBlock({ id: "canonical-only-id" }),
       ],
     });
 
@@ -115,6 +115,48 @@ describe("prepared source narration resolution", () => {
 
     expect(speechText).toBe(canonicalPreviewSpeechPlan.text);
     expect(selectedBlockIds).toEqual(canonicalPreviewSpeechPlan.blockIds);
+  });
+
+  it("falls back to source-local speakable block IDs when canonical IDs are stale or mismatched", () => {
+    const source = buildPreparedSource({
+      blocks: [
+        buildNarrationBlock({ id: "source-speaking-id", spokenText: "Speakable block." }),
+        buildNarrationBlock({
+          id: "source-skip-id",
+          speakMode: "skip",
+          spokenText: "Skip this block.",
+        }),
+      ],
+    });
+    const stalePlan = buildCanonicalPreviewSpeechPlan([
+      buildRevisionBlock({ id: "stale-canonical-id" }),
+      buildRevisionBlock({ id: "source-skip-id" }),
+    ]);
+    const currentReviewBlocks = [
+      buildRevisionBlock({ id: "source-speaking-id", spokenText: "Speakable block." }),
+      buildRevisionBlock({
+        id: "source-skip-id",
+        speakMode: "skip",
+        spokenText: "Skip this block.",
+      }),
+    ];
+    const staleText = resolvePreparedSourceNarrationText(source, {
+      applyReviewSession: true,
+      reviewedNarrationSpeechText,
+      useCanonicalPreviewPlan: true,
+      canonicalPreviewSpeechPlan: stalePlan,
+      narrationPreviewBlocks: currentReviewBlocks,
+    });
+
+    const selectedBlockIds = resolvePreparedSourceNarrationSelectedBlockIds(source, {
+      applyReviewSession: true,
+      useCanonicalPreviewPlan: true,
+      canonicalPreviewSpeechPlan: stalePlan,
+      narrationPreviewBlocks: currentReviewBlocks,
+    });
+
+    expect(staleText).toBe("Speakable block.");
+    expect(selectedBlockIds).toEqual(["source-speaking-id"]);
   });
 
   it("uses source-local narration data for inactive prepared assets", () => {
