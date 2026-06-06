@@ -2597,6 +2597,46 @@ func TestCreateBookNarrationJobUsesBookText(t *testing.T) {
 	}
 }
 
+func TestCreateBookNarrationJobUsesCanonicalReviewTextWhenProvided(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceServiceWithOptions(t, pipeline.Options{
+		SourcePrepSentenceMaxRunes: 24,
+	})
+	epubPath := writeTestEPUB(t, "canonical-override.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "canonical-override.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	overrideText := "This sentence is far too long to fit in the configured sentence chunk limit without a warning."
+	job, err := service.CreateBookNarrationJob(
+		context.Background(),
+		book.ID,
+		pipeline.CreateJobRequest{
+			SpeechText: overrideText,
+			RunMode:    pipeline.RunModeDraftPreview,
+			PipelineOptions: pipeline.CreateJobPipelineOptions{
+				ASRCheck:  boolPtr(false),
+				AutoRetry: boolPtr(false),
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateBookNarrationJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.InputText != overrideText {
+		t.Fatalf("job input text = %q, want override text %q", completed.InputText, overrideText)
+	}
+	if !strings.Contains(strings.Join(completed.SegmentationWarnings, ","), "sentence_too_long") {
+		t.Fatalf("job segmentation warnings = %#v, want sentence_too_long", completed.SegmentationWarnings)
+	}
+}
+
 func TestCreateBookNarrationJobOutlivesRequestContextCancellation(t *testing.T) {
 	t.Parallel()
 

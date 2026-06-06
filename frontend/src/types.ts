@@ -33,6 +33,7 @@ export type StageStatus = "waiting" | "running" | "done" | "failed";
 
 export interface CreateVoiceJobRequest {
   text: string;
+  speechText?: string;
   voiceId?: string;
   projectId?: string;
   bookSourceId?: string;

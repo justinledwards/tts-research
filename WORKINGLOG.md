@@ -1830,3 +1830,7 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update preview audio config mismatch comparators in `frontend/src/features/preview/previewAudioCurrentness.ts`.
 - [x] Add regression tests in `frontend/src/features/preview/previewAudioCurrentness.test.ts` for missing-config drift cases.
 - [x] Run focused preview currentness tests.
+
+## 2026-06-06 18:55 CEST - Restrict book narration canonical-plan routing
+- [x] Fix remaining lint failures in book narration gate edits.
+- [x] Re-run commit flow after lint fixes.

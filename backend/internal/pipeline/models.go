@@ -60,6 +60,7 @@ const (
 
 type CreateJobRequest struct {
 	Text                  string                   `json:"text"`
+	SpeechText            string                   `json:"speechText,omitempty"`
 	VoiceID               string                   `json:"voiceId,omitempty"`
 	ProjectID             string                   `json:"projectId,omitempty"`
 	BookSourceID          string                   `json:"bookSourceId,omitempty"`

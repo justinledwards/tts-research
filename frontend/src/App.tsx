@@ -220,6 +220,7 @@ import {
   composeReviewedSpeechText,
   deriveRevisionBlockStatus,
   normalizeRevisionPolicyNoteType,
+  shouldUseCanonicalPreviewPlanForBookNarration,
   REVISION_STATUS_LABELS,
   revisionBlockIsSpeakable,
   resolvePreparedSourceNarrationSelectedBlockIds,
@@ -7363,17 +7364,21 @@ export function App() {
     }
   }
 
-  async function loadBookNarrationText(book: BookSource, scope: BookScope): Promise<string | null> {
-    const existingText = bookScopeContentMatches(bookScopeContent, book.id, scope)
-      ? (bookScopeContent?.text ?? "")
-      : bookScopeText(book, scope);
-    if (existingText.trim()) {
-      return existingText;
+  async function loadBookNarrationText(
+    book: BookSource,
+    scope: BookScope,
+  ): Promise<BookSourceScopeContent | null> {
+    const existingContent = bookScopeContentMatches(bookScopeContent, book.id, scope)
+      ? bookScopeContent
+      : null;
+    const existingContentText = existingContent?.text ?? "";
+    if (existingContentText.trim()) {
+      return existingContent;
     }
     try {
       const content = await getBookSourceScope(book.id, scope);
       setBookScopeContent(content);
-      return content.text;
+      return content;
     } catch (caughtError) {
       if (isApiNotFoundError(caughtError)) {
         clearMissingBookSource(book.id);
@@ -7393,14 +7398,22 @@ export function App() {
       setBookSourceError(book.error ?? "Book source is not ready for narration.");
       return;
     }
-    const scopedText = await loadBookNarrationText(book, scope);
-    if (!scopedText) {
+    const scopeContent = await loadBookNarrationText(book, scope);
+    if (!scopeContent) {
       return;
     }
+    const matchingScopeContent = bookScopeContentMatches(bookScopeContent, book.id, scope)
+      ? bookScopeContent
+      : null;
+    const scopedText = scopeContent.text;
     const useCurrentReviewSession = options.useCurrentReviewSession ?? true;
     const applyReviewSession = useCurrentReviewSession && hasRevisionSessionChanges;
-    const useCanonicalPreviewPlan =
-      useCurrentReviewSession && canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan);
+    const useCanonicalPreviewPlan = shouldUseCanonicalPreviewPlanForBookNarration({
+      applyReviewSession,
+      canonicalPreviewSpeechPlan,
+      bookScopeContent: matchingScopeContent,
+      isMatchingScopeContent: Boolean(matchingScopeContent),
+    });
     const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
     const narrationText = useCanonicalPreviewPlan ? canonicalPreviewSpeechPlan.text : scopedText;
     if (useCanonicalPreviewPlan && !narrationText.trim()) {
@@ -7413,13 +7426,13 @@ export function App() {
       bookScope: scope,
       progressTargetId: progressTargetIdForBookScope(book.id, scope),
       sourceKind: "book",
-      ...(applyReviewSession ||
-      (useCanonicalPreviewPlan && (bookScopeContent?.blocks?.length ?? 0) > 0)
+      ...(applyReviewSession || (useCanonicalPreviewPlan && (scopeContent.blocks?.length ?? 0) > 0)
         ? { speechRenderApplied: true }
         : {}),
       ...(hasSpeechPolicyOverrides(sessionOverrides)
         ? { speechPolicyOverrides: sessionOverrides }
         : {}),
+      ...(useCanonicalPreviewPlan ? { speechText: narrationText } : {}),
     };
     setRequestState("running");
     setError(null);
@@ -7429,13 +7442,11 @@ export function App() {
     setSelectedBookSourceId(book.id);
     setSelectedBookScope(scope);
     setSourceMode("book");
-    setText(scopedText);
+    setText(narrationText);
     announcePolite(liveStatusMessages.audioGenerationStarted());
 
     try {
-      const nextJob = useCanonicalPreviewPlan
-        ? await createVoiceJob(request)
-        : await createBookNarrationJob(book.id, request);
+      const nextJob = await createBookNarrationJob(book.id, request);
       setActiveDemoProjectId(null);
       setJob(nextJob);
       setSelectedBookSourceId(nextJob.bookSourceId ?? book.id);

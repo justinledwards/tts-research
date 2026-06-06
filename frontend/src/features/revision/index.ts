@@ -73,6 +73,7 @@ export {
   previewSpeechPlanMatchesJobText,
   type CanonicalPreviewSpeechPlan,
 } from "./revisionSpeechPlan";
+export { shouldUseCanonicalPreviewPlanForBookNarration } from "./bookNarration";
 export {
   narrationBlockIsPreparedSelectionSpeakable,
   resolvePreparedSourceNarrationSelectedBlockIds,

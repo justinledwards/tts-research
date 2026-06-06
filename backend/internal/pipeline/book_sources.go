@@ -432,6 +432,9 @@ func (service *Service) CreateBookNarrationJob(
 	if err != nil {
 		return VoiceJob{}, err
 	}
+	if trimmedSpeechText := strings.TrimSpace(request.SpeechText); trimmedSpeechText != "" {
+		narrationText = trimmedSpeechText
+	}
 	policySource, warnings := service.bookScopePolicySource(book, scope, narrationText, SpeechPolicyPreviewRequest{
 		Profile:        request.SpeechPolicyProfile,
 		Overrides:      request.SpeechPolicyOverrides,
