@@ -3,6 +3,11 @@
 - [x] Add regression tests for inactive vs active prepared-source generation block/text selection.
 - [x] Verify changed files and summarize implementation in final handoff.
 
+## 2026-06-06 18:30 CEST - Restrict book canonical preview job routing
+- [x] Add scope-safe canonical-plan gate for book narration submissions.
+- [x] Add backend override hook so canonical book preview text stays on `CreateBookNarrationJob`.
+- [x] Add regression tests for fallback split IDs and book-scope policy/warnings preservation.
+
 ## 2026-06-06 18:07 CEST - Uncap canonical preview generation source
 - [x] Add preview review chunk cap constant and chunk-limit-aware split helper.
 - [x] Split narration review block derivation into uncapped generation path and capped UI path.
@@ -1819,3 +1824,9 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add focused frontend regressions
 - [x] Run focused and project checks
 - [x] Validated with focused frontend Preview/status/playback/API tests, `pnpm check`, and `git diff --check`; `pnpm check` still reports existing non-failing Biome warnings/infos in unrelated files
+
+## 2026-06-06 15:37 UTC - Preview audio currentness drift handling
+- [x] Append WORKINGLOG entry for currentness logic fix.
+- [x] Update preview audio config mismatch comparators in `frontend/src/features/preview/previewAudioCurrentness.ts`.
+- [x] Add regression tests in `frontend/src/features/preview/previewAudioCurrentness.test.ts` for missing-config drift cases.
+- [x] Run focused preview currentness tests.

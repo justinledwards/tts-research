@@ -122,6 +122,92 @@ describe("preview audio currentness", () => {
     expect(providerVoiceOnly.reasons).not.toContain("tts-voice-mismatch");
   });
 
+  it("treats missing stored engine as config drift", () => {
+    const plan = speechPlan("Intro body.");
+    const currentness = resolvePreviewAudioCurrentness({
+      job: voiceJob({
+        inputText: "Intro body.",
+        optimizedText: "Intro body.",
+        ttsEngine: "",
+      }),
+      request: request({ text: plan.text, ttsEngine: "supertonic-3" }),
+      speechPlan: plan,
+    });
+
+    expect(currentness.stale).toBe(true);
+    expect(currentness.reasons).toContain("tts-engine-mismatch");
+  });
+
+  it("treats missing stored run mode, performance mode, and language as config drift", () => {
+    const plan = speechPlan("Intro body.");
+    const missingRunMode = resolvePreviewAudioCurrentness({
+      job: voiceJob({
+        inputText: "Intro body.",
+        optimizedText: "Intro body.",
+        runMode: "",
+      }),
+      request: request({ text: plan.text }),
+      speechPlan: plan,
+    });
+    const missingPerformanceMode = resolvePreviewAudioCurrentness({
+      job: voiceJob({
+        inputText: "Intro body.",
+        optimizedText: "Intro body.",
+        performanceMode: "",
+      }),
+      request: request({ text: plan.text }),
+      speechPlan: plan,
+    });
+    const missingLanguage = resolvePreviewAudioCurrentness({
+      job: voiceJob({
+        inputText: "Intro body.",
+        optimizedText: "Intro body.",
+      }),
+      request: request({
+        text: plan.text,
+        ttsLanguage: "en-US",
+      }),
+      speechPlan: plan,
+    });
+
+    expect(missingRunMode.stale).toBe(true);
+    expect(missingRunMode.reasons).toContain("run-mode-mismatch");
+    expect(missingPerformanceMode.stale).toBe(true);
+    expect(missingPerformanceMode.reasons).toContain("performance-mode-mismatch");
+    expect(missingLanguage.stale).toBe(true);
+    expect(missingLanguage.reasons).toContain("tts-language-mismatch");
+  });
+
+  it("flags missing stored policy profile when request uses a non-default profile", () => {
+    const plan = speechPlan("Intro body.");
+    const currentness = resolvePreviewAudioCurrentness({
+      job: voiceJob({
+        inputText: "Intro body.",
+        optimizedText: "Intro body.",
+      }),
+      request: request({ text: plan.text, speechPolicyProfile: "Accessibility" }),
+      speechPlan: plan,
+    });
+
+    expect(currentness.stale).toBe(true);
+    expect(currentness.reasons).toContain("policy-profile-mismatch");
+  });
+
+  it("treats missing stored and default profile as matching", () => {
+    const plan = speechPlan("Intro body.");
+    const currentness = resolvePreviewAudioCurrentness({
+      job: voiceJob({
+        inputText: "Intro body.",
+        optimizedText: "Intro body.",
+      }),
+      request: request({ text: plan.text }),
+      speechPlan: plan,
+    });
+
+    expect(currentness.stale).toBe(false);
+    expect(currentness.reasons).not.toContain("policy-profile-mismatch");
+  });
+
   it("reports missing playable audio without treating it as source drift", () => {
     const plan = speechPlan("Intro body.");
     const currentness = resolvePreviewAudioCurrentness({

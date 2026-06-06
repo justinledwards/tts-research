@@ -83,13 +83,13 @@ function appendConfigCurrentnessReasons(
   job: VoiceJob,
   request: CreateVoiceJobRequest,
 ): void {
-  if (comparableFieldDiffers(job.runMode, request.runMode)) {
+  if (requestedFieldDiffers(job.runMode, request.runMode)) {
     reasons.push("run-mode-mismatch");
   }
-  if (comparableFieldDiffers(job.performanceMode, request.performanceMode)) {
+  if (requestedFieldDiffers(job.performanceMode, request.performanceMode)) {
     reasons.push("performance-mode-mismatch");
   }
-  if (comparableFieldDiffers(job.ttsEngine, request.ttsEngine)) {
+  if (requestedFieldDiffers(job.ttsEngine, request.ttsEngine)) {
     reasons.push("tts-engine-mismatch");
   }
   if (optionalFieldDiffers(job.voiceProfileId, request.voiceProfileId)) {
@@ -98,17 +98,15 @@ function appendConfigCurrentnessReasons(
   if (optionalFieldDiffers(job.voiceId, request.voiceId)) {
     reasons.push("voice-id-mismatch");
   }
-  if (comparableFieldDiffers(job.ttsVoice, request.ttsVoice)) {
+  if (ttsVoiceDiffers(job.ttsVoice, request.ttsVoice)) {
     reasons.push("tts-voice-mismatch");
   }
-  if (comparableFieldDiffers(job.ttsLanguage, request.ttsLanguage)) {
+  if (requestedFieldDiffers(job.ttsLanguage, request.ttsLanguage)) {
     reasons.push("tts-language-mismatch");
   }
   if (
-    job.speechPolicyProfile &&
-    request.speechPolicyProfile &&
     normalizeSpeechPolicyProfile(job.speechPolicyProfile) !==
-      normalizeSpeechPolicyProfile(request.speechPolicyProfile)
+    normalizeSpeechPolicyProfile(request.speechPolicyProfile)
   ) {
     reasons.push("policy-profile-mismatch");
   }
@@ -123,13 +121,13 @@ function appendConfigCurrentnessReasons(
   }
 }
 
-function comparableFieldDiffers(
+function requestedFieldDiffers(
   stored: string | null | undefined,
   expected: string | null | undefined,
 ): boolean {
   const cleanStored = (stored ?? "").trim();
   const cleanExpected = (expected ?? "").trim();
-  return cleanStored.length > 0 && cleanExpected.length > 0 && cleanStored !== cleanExpected;
+  return cleanExpected.length > 0 && cleanStored !== cleanExpected;
 }
 
 function optionalFieldDiffers(
@@ -138,6 +136,18 @@ function optionalFieldDiffers(
 ): boolean {
   const cleanStored = (stored ?? "").trim();
   const cleanExpected = (expected ?? "").trim();
+  return (cleanStored.length > 0 || cleanExpected.length > 0) && cleanStored !== cleanExpected;
+}
+
+function ttsVoiceDiffers(
+  stored: string | null | undefined,
+  expected: string | null | undefined,
+): boolean {
+  const cleanStored = (stored ?? "").trim();
+  const cleanExpected = (expected ?? "").trim();
+  if (cleanStored.length === 0 && cleanExpected.length > 0) {
+    return false;
+  }
   return (cleanStored.length > 0 || cleanExpected.length > 0) && cleanStored !== cleanExpected;
 }
 
