@@ -1,3 +1,11 @@
+## 2026-06-06 18:07 CEST - Uncap canonical preview generation source
+- [x] Add preview review chunk cap constant and chunk-limit-aware split helper.
+- [x] Split narration review block derivation into uncapped generation path and capped UI path.
+- [x] Update canonical speech plan source to use uncapped blocks.
+- [x] Ensure draft/book fallback split is uncapped for generation input while UI remains capped.
+- [x] Execute focused frontend regression checks from user-requested suite.
+- [x] Record test results and post-change risk notes.
+
 ## 2026-06-06 12:59 CEST - Commit Current State
 - [x] Record working log checkpoint for commit request
 - [x] Review and stage intended file changes

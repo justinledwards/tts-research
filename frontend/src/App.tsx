@@ -1337,6 +1337,8 @@ function normalizeComparableText(value: string): string {
   return value.trim().replaceAll(/\s+/g, " ");
 }
 
+const PREVIEW_REVIEW_BLOCK_LIMIT = 36;
+
 function generationTextForPreviewSpeechPlan(
   plan: CanonicalPreviewSpeechPlan,
   fallbackText: string,
@@ -3390,17 +3392,43 @@ export function App() {
       text,
     ],
   );
+  const cappedBaseNarrationPreviewBlocks = useMemo(
+    () =>
+      buildNarrationReviewBlocks({
+        optimizedText: job?.optimizedText ?? "",
+        bookScopeContent,
+        selectedBookScope: effectiveBookScope,
+        selectedBookSource: activeNarrationBookSource,
+        selectedPreparedSource: activeNarrationPreparedSource,
+        text,
+        draftTextBlockLimit: PREVIEW_REVIEW_BLOCK_LIMIT,
+      }),
+    [
+      activeNarrationBookSource,
+      activeNarrationPreparedSource,
+      bookScopeContent,
+      effectiveBookScope,
+      job?.optimizedText,
+      text,
+    ],
+  );
   const narrationPreviewBlocks = useMemo(
     () =>
-      applyRevisionSessionState(baseNarrationPreviewBlocks, {
+      applyRevisionSessionState(cappedBaseNarrationPreviewBlocks, {
         editedTextByBlockId: revisionEditedTextByBlockId,
         statusByBlockId: revisionStatusByBlockId,
       }),
-    [baseNarrationPreviewBlocks, revisionEditedTextByBlockId, revisionStatusByBlockId],
+    [cappedBaseNarrationPreviewBlocks, revisionEditedTextByBlockId, revisionStatusByBlockId],
   );
   const canonicalPreviewSpeechPlan = useMemo(
-    () => buildCanonicalPreviewSpeechPlan(narrationPreviewBlocks),
-    [narrationPreviewBlocks],
+    () =>
+      buildCanonicalPreviewSpeechPlan(
+        applyRevisionSessionState(baseNarrationPreviewBlocks, {
+          editedTextByBlockId: revisionEditedTextByBlockId,
+          statusByBlockId: revisionStatusByBlockId,
+        }),
+      ),
+    [baseNarrationPreviewBlocks, revisionEditedTextByBlockId, revisionStatusByBlockId],
   );
   const canonicalPreviewGenerationRequest = applySpeechPolicyToCreateVoiceJobRequest(
     buildVoiceJobRequest(
@@ -16397,6 +16425,7 @@ function buildNarrationReviewBlocks({
   selectedBookSource,
   selectedPreparedSource,
   text,
+  draftTextBlockLimit,
 }: Readonly<{
   bookScopeContent: BookSourceScopeContent | null;
   optimizedText: string;
@@ -16404,6 +16433,7 @@ function buildNarrationReviewBlocks({
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
   text: string;
+  draftTextBlockLimit?: number | null;
 }>): RevisionBlock[] {
   if (selectedPreparedSource?.blocks && selectedPreparedSource.blocks.length > 0) {
     return selectedPreparedSource.blocks.map((block, index) =>
@@ -16421,15 +16451,15 @@ function buildNarrationReviewBlocks({
       bookScopeContent?.text ??
       (selectedBookScope ? bookScopeText(selectedBookSource, selectedBookScope) : "");
     if (scopedBookText.trim()) {
-      return splitNarrationDraftIntoBlocks(scopedBookText.trim()).map((part, index) =>
-        draftTextToRevisionBlock(part, index, "book", "body", "Book scope"),
+      return splitNarrationDraftIntoBlocks(scopedBookText.trim(), draftTextBlockLimit).map(
+        (part, index) => draftTextToRevisionBlock(part, index, "book", "body", "Book scope"),
       );
     }
   }
 
   const draft = (optimizedText || text).trim();
   if (draft) {
-    return splitNarrationDraftIntoBlocks(draft).map((part, index) =>
+    return splitNarrationDraftIntoBlocks(draft, draftTextBlockLimit).map((part, index) =>
       draftTextToRevisionBlock(part, index, "draft", "text", "Draft text"),
     );
   }
@@ -16676,13 +16706,17 @@ function metadataString(metadata: Record<string, unknown>, key: string): string 
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function splitNarrationDraftIntoBlocks(value: string): string[] {
+function splitNarrationDraftIntoBlocks(value: string, maxBlocks?: number | null): string[] {
   const paragraphs = value
     .split(/\n{2,}/)
     .map((part) => part.trim())
     .filter(Boolean);
   const source = paragraphs.length > 0 ? paragraphs : [value];
-  return source.flatMap((part) => chunkLongNarrationText(part, 720)).slice(0, 36);
+  const blocks = source.flatMap((part) => chunkLongNarrationText(part, 720));
+  if (typeof maxBlocks === "number") {
+    return blocks.slice(0, Math.max(0, maxBlocks));
+  }
+  return blocks;
 }
 
 function chunkLongNarrationText(value: string, maxLength: number): string[] {
