@@ -3756,6 +3756,8 @@ export function App() {
     job,
     stale: previewAudioCurrentness.stale,
   });
+  const playbackLifecycleReady =
+    playbackControls.isAvailable && generatedAudioLifecycle === "ready";
   const canOpenCurrentCinema = generatedAudioLifecycle === "ready";
   const canonicalPreviewHasBlocks = canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan);
   const hasCanonicalPreviewSpeechText =
@@ -7545,7 +7547,7 @@ export function App() {
         return;
       }
       if (shortcut === "playPause") {
-        if (!playbackControls.isAvailable) {
+        if (!playbackLifecycleReady) {
           return;
         }
         if (playbackControls.isPlaying) {
@@ -7556,7 +7558,7 @@ export function App() {
         return;
       }
       if (shortcut === "restart") {
-        if (playbackControls.isAvailable) {
+        if (playbackLifecycleReady) {
           void playbackControls.restart();
         }
         return;
@@ -7574,7 +7576,7 @@ export function App() {
           job,
         );
         if (
-          playbackControls.isAvailable &&
+          playbackLifecycleReady &&
           seekTargetSec !== null &&
           (playbackControls.seekTo ?? playbackControls.skipBy)
         ) {
@@ -7611,6 +7613,7 @@ export function App() {
     narrationPreviewBlocks,
     playbackControls,
     playbackCursorSec,
+    playbackLifecycleReady,
     shortcutPreferences,
     workspaceContext.activeBlockId,
   ]);
@@ -7798,11 +7801,15 @@ export function App() {
   } else {
     reviewCommandBlockedReason = "Open Review before using this command.";
   }
-  const playbackCommandDisabledReason = playbackControls.isAvailable
-    ? undefined
-    : "Create or load generated audio before controlling playback.";
+  const playbackLifecycle: GeneratedAudioLifecycleState = playbackLifecycleReady
+    ? "ready"
+    : generatedAudioLifecycle;
+  const playbackCommandDisabledReason = playbackActionDisabledReason({
+    action: "audition",
+    lifecycle: playbackLifecycle,
+  });
   const runPlaybackToggleCommand = () => {
-    if (!playbackControls.isAvailable) {
+    if (!playbackLifecycleReady) {
       return;
     }
     if (playbackControls.isPlaying) {
@@ -7833,7 +7840,7 @@ export function App() {
       job,
     );
     if (
-      playbackControls.isAvailable &&
+      playbackLifecycleReady &&
       seekTargetSec !== null &&
       (playbackControls.seekTo ?? playbackControls.skipBy)
     ) {
@@ -7867,7 +7874,7 @@ export function App() {
       keywords: ["restart", "audio", "keyboard"],
       owner: "playback",
       perform: () => {
-        if (playbackControls.isAvailable) {
+        if (playbackLifecycleReady) {
           void playbackControls.restart();
         }
       },
@@ -8008,9 +8015,7 @@ export function App() {
     },
     {
       availability: {
-        reason:
-          blockNavigationCommandBlockedReason ??
-          (playbackControls.isAvailable ? undefined : playbackCommandDisabledReason),
+        reason: blockNavigationCommandBlockedReason ?? playbackCommandDisabledReason,
         state:
           blockNavigationCommandBlockedReason || playbackCommandDisabledReason
             ? "disabled"

@@ -1,3 +1,9 @@
+## 2026-06-06 09:00 UTC - Preview audio stale playback command hardening
+- [x] Audit/fix App command-layer stale bypass for playback.
+- [x] Confirm `GlobalPreviewPlayer` and `NarrationReviewWorkbench` lifecycle propagation.
+- [x] Update regression tests.
+- [x] Run focused frontend tests.
+
 ## 2026-06-06 09:00 UTC - Preview audio stale gating in playback surfaces
 - [x] Wire lifecycle prop in App.tsx into `LazyGlobalPreviewPlayer`.
 - [x] Add/consume stale-aware `generatedAudioLifecycle` in `GlobalPreviewPlayer`.
