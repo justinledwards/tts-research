@@ -75,6 +75,15 @@ export {
 } from "./revisionSpeechPlan";
 export { shouldUseCanonicalPreviewPlanForBookNarration } from "./bookNarration";
 export {
+  type AssetNarrationGenerationOptions,
+  generationTextForPreviewSpeechPlan,
+  submitBookNarrationJob,
+  submitPreparedSourceJob,
+  submitVoiceJob,
+  type SubmissionDependencies,
+  type SubmissionStateSetters,
+} from "./assetGenerationSubmission";
+export {
   narrationBlockIsPreparedSelectionSpeakable,
   resolvePreparedSourceNarrationSelectedBlockIds,
   resolvePreparedSourceNarrationText,

@@ -220,12 +220,8 @@ import {
   composeReviewedSpeechText,
   deriveRevisionBlockStatus,
   normalizeRevisionPolicyNoteType,
-  shouldUseCanonicalPreviewPlanForBookNarration,
   REVISION_STATUS_LABELS,
   revisionBlockIsSpeakable,
-  resolvePreparedSourceNarrationSelectedBlockIds,
-  resolvePreparedSourceNarrationText,
-  shouldUseCanonicalPreviewPlanForPreparedSourceNarration,
   revisionTextIsStandaloneArtifactToken,
   revisionTextLooksLikeReferenceCueLeak,
   stripRevisionTrailingReferenceNumberText,
@@ -236,6 +232,13 @@ import {
   type RevisionStatus,
   type RevisionTabId,
 } from "./features/revision";
+import {
+  submitBookNarrationJob as submitBookNarrationJobFromFeature,
+  submitPreparedSourceJob as submitPreparedSourceJobFromFeature,
+  submitVoiceJob as submitVoiceJobFromFeature,
+  type AssetNarrationGenerationOptions,
+  type SubmissionDependencies,
+} from "./features/revision/assetGenerationSubmission";
 import {
   loadUiMemory,
   rememberCinemaFocusState,
@@ -526,10 +529,6 @@ import {
 } from "./features/i18n/languageVoiceMapping";
 
 type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
-
-interface AssetNarrationGenerationOptions {
-  useCurrentReviewSession?: boolean;
-}
 
 type VoiceProfileArtifactBuildAction = (
   profileId: string,
@@ -2572,14 +2571,6 @@ const READER_RESUME_BUDGET_MS = 500;
 
 function formatErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
-}
-
-function bookScopeContentMatches(
-  content: BookSourceScopeContent | null,
-  bookId: string,
-  scope: BookScope,
-): boolean {
-  return content?.bookSourceId === bookId && bookScopeKey(content.scope) === bookScopeKey(scope);
 }
 
 function removeBookSourceById(bookId: string): (books: BookSource[]) => BookSource[] {
@@ -7329,64 +7320,55 @@ export function App() {
     }
   }
 
-  async function submitVoiceJob() {
-    const sourceText = generationTextForPreviewSpeechPlan(canonicalPreviewSpeechPlan, text);
-    if (canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan) && !sourceText.trim()) {
-      setError("Current preview has no speakable blocks.");
-      return;
-    }
-    const request = applySpeechPolicyToCreateVoiceJobRequest(buildVoiceJobRequest(sourceText), {
-      speechPolicyOverrides,
-      speechPolicyProfile,
-    });
-    if (hasRevisionSessionChanges) {
-      request.speechRenderApplied = true;
-    }
-
-    setRequestState("running");
-    setError(null);
-    setPlaybackCursorSec(0);
-    setIsPlaybackActive(false);
-    announcePolite(liveStatusMessages.audioGenerationStarted());
-
-    try {
-      const nextJob = await createVoiceJob(request);
-      setActiveDemoProjectId(null);
-      setJob(nextJob);
-      setContentMode("preview");
-      void refreshProjectJobs(nextJob.projectId || activeProjectId);
-      setRequestState(nextJob.status === "completed" ? "complete" : "running");
-      announceVoiceJobTerminalStatus(nextJob);
-    } catch (caughtError) {
-      setRequestState("error");
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to create voice job");
+  const submissionDependencies: SubmissionDependencies = {
+    activeProjectId,
+    hasRevisionSessionChanges,
+    speechPolicyOverrides,
+    speechPolicyProfile,
+    reviewedNarrationSpeechText,
+    canonicalPreviewSpeechPlan,
+    text,
+    narrationPreviewBlocks,
+    bookScopeContent,
+    buildVoiceJobRequest,
+    applySpeechPolicyToCreateVoiceJobRequest,
+    createVoiceJob,
+    createBookNarrationJob,
+    createPreparedSourceJob,
+    getBookSourceScope,
+    getPreparedSource,
+    isApiNotFoundError,
+    announcePolite: () => {
+      announcePolite(liveStatusMessages.audioGenerationStarted());
+    },
+    announceAssertive: () => {
       announceAssertive(liveStatusMessages.audioGenerationFailed());
-    }
-  }
+    },
+    announceVoiceJobTerminalStatus,
+    refreshProjectJobs,
+    setRequestState,
+    setError,
+    setBookSourceError,
+    setSourcePrepError,
+    setPlaybackCursorSec,
+    setIsPlaybackActive,
+    setActiveDemoProjectId,
+    setJob,
+    setContentMode: (mode) => {
+      setContentMode(mode as WorkspaceStage);
+    },
+    setSelectedBookSourceId,
+    setSelectedBookScope,
+    setSourceMode,
+    setText,
+    setSelectedPreparedSourceId,
+    setBookScopeContent,
+    setPreparedSources,
+    clearMissingBookSource,
+  };
 
-  async function loadBookNarrationText(
-    book: BookSource,
-    scope: BookScope,
-  ): Promise<BookSourceScopeContent | null> {
-    const existingContent = bookScopeContentMatches(bookScopeContent, book.id, scope)
-      ? bookScopeContent
-      : null;
-    const existingContentText = existingContent?.text ?? "";
-    if (existingContentText.trim()) {
-      return existingContent;
-    }
-    try {
-      const content = await getBookSourceScope(book.id, scope);
-      setBookScopeContent(content);
-      return content;
-    } catch (caughtError) {
-      if (isApiNotFoundError(caughtError)) {
-        clearMissingBookSource(book.id);
-      } else {
-        setBookSourceError(formatErrorMessage(caughtError, "Unable to load book narration text"));
-      }
-      return null;
-    }
+  async function submitVoiceJob() {
+    await submitVoiceJobFromFeature(submissionDependencies);
   }
 
   async function submitBookNarrationJob(
@@ -7394,169 +7376,14 @@ export function App() {
     scope: BookScope,
     options: AssetNarrationGenerationOptions = {},
   ) {
-    if (book.status !== "ready") {
-      setBookSourceError(book.error ?? "Book source is not ready for narration.");
-      return;
-    }
-    const scopeContent = await loadBookNarrationText(book, scope);
-    if (!scopeContent) {
-      return;
-    }
-    const matchingScopeContent = bookScopeContentMatches(bookScopeContent, book.id, scope)
-      ? bookScopeContent
-      : null;
-    const scopedText = scopeContent.text;
-    const useCurrentReviewSession = options.useCurrentReviewSession ?? true;
-    const applyReviewSession = useCurrentReviewSession && hasRevisionSessionChanges;
-    const useCanonicalPreviewPlan = shouldUseCanonicalPreviewPlanForBookNarration({
-      applyReviewSession,
-      canonicalPreviewSpeechPlan,
-      bookScopeContent: matchingScopeContent,
-      isMatchingScopeContent: Boolean(matchingScopeContent),
-    });
-    const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
-    const narrationText = useCanonicalPreviewPlan ? canonicalPreviewSpeechPlan.text : scopedText;
-    if (useCanonicalPreviewPlan && !narrationText.trim()) {
-      setBookSourceError("Current preview has no speakable blocks.");
-      return;
-    }
-    const request = {
-      ...buildVoiceJobRequest(narrationText),
-      bookSourceId: book.id,
-      bookScope: scope,
-      progressTargetId: progressTargetIdForBookScope(book.id, scope),
-      sourceKind: "book",
-      ...(applyReviewSession || (useCanonicalPreviewPlan && (scopeContent.blocks?.length ?? 0) > 0)
-        ? { speechRenderApplied: true }
-        : {}),
-      ...(hasSpeechPolicyOverrides(sessionOverrides)
-        ? { speechPolicyOverrides: sessionOverrides }
-        : {}),
-      ...(useCanonicalPreviewPlan ? { speechText: narrationText } : {}),
-    };
-    setRequestState("running");
-    setError(null);
-    setBookSourceError(null);
-    setPlaybackCursorSec(0);
-    setIsPlaybackActive(false);
-    setSelectedBookSourceId(book.id);
-    setSelectedBookScope(scope);
-    setSourceMode("book");
-    setText(narrationText);
-    announcePolite(liveStatusMessages.audioGenerationStarted());
-
-    try {
-      const nextJob = await createBookNarrationJob(book.id, request);
-      setActiveDemoProjectId(null);
-      setJob(nextJob);
-      setSelectedBookSourceId(nextJob.bookSourceId ?? book.id);
-      setSelectedBookScope(nextJob.bookScope ?? scope);
-      setContentMode("preview");
-      void refreshProjectJobs(nextJob.projectId || activeProjectId);
-      setRequestState(nextJob.status === "completed" ? "complete" : "running");
-      announceVoiceJobTerminalStatus(nextJob);
-    } catch (caughtError) {
-      setRequestState("error");
-      setBookSourceError(
-        caughtError instanceof Error ? caughtError.message : "Unable to create book narration",
-      );
-      announceAssertive(liveStatusMessages.audioGenerationFailed());
-    }
-  }
-
-  async function loadPreparedSourceForNarration(
-    source: PreparedSource,
-    applyReviewSession: boolean,
-  ): Promise<PreparedSource | null> {
-    if (applyReviewSession || !isPreparedSourceDisplayIncomplete(source)) {
-      return source;
-    }
-    try {
-      const hydratedSource = await getPreparedSource(source.id);
-      setPreparedSources((currentSources) => upsertPreparedSource(currentSources, hydratedSource));
-      return hydratedSource;
-    } catch (caughtError) {
-      setSourcePrepError(
-        caughtError instanceof Error ? caughtError.message : "Unable to load prepared source",
-      );
-      return null;
-    }
+    await submitBookNarrationJobFromFeature(submissionDependencies, book, scope, options);
   }
 
   async function submitPreparedSourceJob(
     source: PreparedSource,
     options: AssetNarrationGenerationOptions = {},
   ) {
-    if (source.status !== "ready") {
-      setSourcePrepError(source.error ?? "Prepared source is not ready for narration.");
-      return;
-    }
-    const useCurrentReviewSession = options.useCurrentReviewSession ?? true;
-    const applyReviewSession = useCurrentReviewSession && hasRevisionSessionChanges;
-    const useCanonicalPreviewPlan = shouldUseCanonicalPreviewPlanForPreparedSourceNarration(
-      applyReviewSession,
-      canonicalPreviewSpeechPlan,
-    );
-    const jobSource = await loadPreparedSourceForNarration(source, applyReviewSession);
-    if (!jobSource) {
-      return;
-    }
-    const speechText = resolvePreparedSourceNarrationText(jobSource, {
-      applyReviewSession,
-      reviewedNarrationSpeechText,
-      useCanonicalPreviewPlan,
-      canonicalPreviewSpeechPlan,
-    });
-    if ((applyReviewSession || useCanonicalPreviewPlan) && !speechText.trim()) {
-      setSourcePrepError("Prepared source has no speakable blocks.");
-      return;
-    }
-    const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
-    const request = {
-      ...buildVoiceJobRequest(speechText, jobSource),
-      preparedSourceId: jobSource.id,
-      selectedBlockIds: resolvePreparedSourceNarrationSelectedBlockIds(jobSource, {
-        applyReviewSession,
-        useCanonicalPreviewPlan,
-        canonicalPreviewSpeechPlan,
-        narrationPreviewBlocks,
-      }),
-      sourceKind: jobSource.kind,
-      progressTargetId: `prepared:${jobSource.id}`,
-      ...(applyReviewSession ? { speechRenderApplied: true } : {}),
-      ...(hasSpeechPolicyOverrides(sessionOverrides)
-        ? { speechPolicyOverrides: sessionOverrides }
-        : {}),
-    };
-    setRequestState("running");
-    setError(null);
-    setSourcePrepError(null);
-    setPlaybackCursorSec(0);
-    setIsPlaybackActive(false);
-    setSelectedPreparedSourceId(jobSource.id);
-    setSourceMode("fileUrl");
-    if (speechText.trim()) {
-      setText(speechText);
-    }
-    announcePolite(liveStatusMessages.audioGenerationStarted());
-
-    try {
-      const nextJob = applyReviewSession
-        ? await createVoiceJob(request)
-        : await createPreparedSourceJob(jobSource.id, request);
-      setActiveDemoProjectId(null);
-      setJob(nextJob);
-      setContentMode("preview");
-      void refreshProjectJobs(nextJob.projectId || activeProjectId);
-      setRequestState(nextJob.status === "completed" ? "complete" : "running");
-      announceVoiceJobTerminalStatus(nextJob);
-    } catch (caughtError) {
-      setRequestState("error");
-      setSourcePrepError(
-        caughtError instanceof Error ? caughtError.message : "Unable to create prepared narration",
-      );
-      announceAssertive(liveStatusMessages.audioGenerationFailed());
-    }
+    await submitPreparedSourceJobFromFeature(submissionDependencies, source, options);
   }
 
   function createAndListenFromCurrentSource() {

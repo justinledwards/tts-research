@@ -1,3 +1,10 @@
+## 2026-06-06 19:16 CEST - Route-level submission orchestration extraction
+- [x] Extract App submission handlers into a revision submission service.
+- [x] Add focused route-level submit tests with mocked API interactions.
+- [x] Add branch coverage for long draft, inactive asset states, and unloaded book scope.
+- [x] Wire App.tsx to delegate to shared submission helpers.
+- [x] Verify targeted frontend tests and report outcomes.
+
 ## 2026-06-06 18:09 CEST - Respect current-source scope in prepared narration
 - [x] Add prepared-source canonical-plan gating in `App.tsx` to honor `useCurrentReviewSession`.
 - [x] Add regression tests for inactive vs active prepared-source generation block/text selection.
