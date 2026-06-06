@@ -1760,9 +1760,27 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Run focused validation
 - [x] Validated with focused frontend tests, `pnpm check`, and `git diff --check`
 
+## 2026-06-05 23:08 CEST - Reviewer Branch Zip Script
+- [x] Inspect packaging conventions
+- [x] Add branch archive script
+- [x] Generate reviewer zip
+- [x] Run project checks
+- [x] Validated with generated reviewer zip, zip listing smoke check, `git diff --check`, and `pnpm check`
+
 ## 2026-06-05 23:48 CEST - Follow-Along Skipped Markdown Blocks
 - [x] Inspect read-along skipped-block mapping
 - [x] Add skipped and summarized Markdown fixtures
 - [x] Enforce wrong-visible-block failures
 - [x] Run focused and project validation
 - [x] Validated with focused script/frontend/backend tests, `pnpm e2e:readalong-sync`, `pnpm e2e:read-along-fidelity`, `pnpm check`, and `git diff --check`; `pnpm e2e:markdown-cockpit-import` is not defined in this checkout
+
+## 2026-06-06 11:18 CEST - Canonical Preview Speech Plan
+- [x] Add shared frontend speech plan helper
+- [x] Wire Create & Listen and stale playback gates to canonical text
+- [x] Add frontend and backend regressions
+- [x] Run focused and project checks
+- [x] Validated with focused frontend revision/preview tests, backend pipeline tests, frontend typecheck, `pnpm check`, and `git diff --check`; `pnpm check` still reports existing non-failing Biome warnings/infos in unrelated files
+
+## 2026-06-06 11:37 CEST - Commit Current Repo State
+- [x] Stage current changes
+- [x] Create commit

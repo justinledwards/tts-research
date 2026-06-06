@@ -527,6 +527,62 @@ func TestPreparedSourcePolicyPreviewAndOverrides(t *testing.T) {
 	}
 }
 
+func TestPreparedSourceJobDefensivelyExcludesOnDemandSelectedBlocks(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "selected-on-demand.md",
+		Text: strings.Join([]string{
+			"# Selected on-demand",
+			"",
+			"Narrative introduction stays speakable.",
+			"",
+			"[^1]: Selected footnote should not be narrated.",
+			"",
+			"Tail body stays speakable.",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+
+	overrides := policy.Overrides{FootnoteMode: policy.FootnoteModeOnDemand}
+	preview, err := service.PreviewPreparedSourceSpeechPolicy(source.ID, pipeline.SpeechPolicyPreviewRequest{
+		Overrides: overrides,
+	})
+	if err != nil {
+		t.Fatalf("PreviewPreparedSourceSpeechPolicy returned error: %v", err)
+	}
+	footnote := findPreparedBlockByKind(preview.Blocks, pipeline.NarrationBlockKindFootnote)
+	if footnote == nil || footnote.SpeechPolicy.Mode != string(policy.ModeOnDemand) {
+		t.Fatalf("footnote block = %#v, want on-demand footnote", footnote)
+	}
+	selectedBlockIDs := make([]string, 0, len(preview.Blocks))
+	for _, block := range preview.Blocks {
+		selectedBlockIDs = append(selectedBlockIDs, block.ID)
+	}
+
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{
+		SelectedBlockIDs:      selectedBlockIDs,
+		SpeechPolicyOverrides: overrides,
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	if strings.Contains(job.InputText, "Selected footnote should not be narrated") {
+		t.Fatalf("job input text = %q, want on-demand footnote omitted", job.InputText)
+	}
+	if strings.Contains(strings.Join(job.SelectedBlockIDs, ","), footnote.ID) {
+		t.Fatalf("job selected ids = %#v, want on-demand footnote id %q omitted", job.SelectedBlockIDs, footnote.ID)
+	}
+	if !strings.Contains(job.InputText, "Narrative introduction stays speakable.") ||
+		!strings.Contains(job.InputText, "Tail body stays speakable.") {
+		t.Fatalf("job input text = %q, want surrounding body narration", job.InputText)
+	}
+}
+
 func TestPreparedSourcePolicyPinFollowsPrecedenceOrder(t *testing.T) {
 	t.Parallel()
 

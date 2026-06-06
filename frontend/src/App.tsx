@@ -214,8 +214,11 @@ import {
 } from "./features/review/model";
 import {
   applyRevisionSessionState,
+  buildCanonicalPreviewSpeechPlan,
+  canonicalPreviewSpeechPlanHasBlocks,
   composeReviewedSpeechText,
   deriveRevisionBlockStatus,
+  previewSpeechPlanJobInputIsStale,
   normalizeRevisionPolicyNoteType,
   REVISION_STATUS_LABELS,
   revisionBlockIsSpeakable,
@@ -223,6 +226,7 @@ import {
   revisionTextLooksLikeReferenceCueLeak,
   stripRevisionTrailingReferenceNumberText,
   summarizeRevisionHealth,
+  type CanonicalPreviewSpeechPlan,
   type RevisionBlock,
   type RevisionHistoryEntry,
   type RevisionStatus,
@@ -1330,6 +1334,73 @@ function preparedSourceTextMatchesJob(source: PreparedSource, job: VoiceJob): bo
 
 function normalizeComparableText(value: string): string {
   return value.trim().replaceAll(/\s+/g, " ");
+}
+
+function voiceJobConfigIsStaleForRequest(
+  job: VoiceJob | null,
+  request: CreateVoiceJobRequest,
+): boolean {
+  if (job?.status !== "completed") {
+    return false;
+  }
+  if (storedFieldDiffers(job.runMode, request.runMode)) {
+    return true;
+  }
+  if (storedFieldDiffers(job.performanceMode, request.performanceMode)) {
+    return true;
+  }
+  if (storedFieldDiffers(job.ttsEngine, request.ttsEngine)) {
+    return true;
+  }
+  if (storedFieldDiffers(job.voiceProfileId, request.voiceProfileId)) {
+    return true;
+  }
+  if (storedFieldDiffers(job.voiceId, request.voiceId)) {
+    return true;
+  }
+  if (request.ttsVoice && storedFieldDiffers(job.ttsVoice ?? job.voice, request.ttsVoice)) {
+    return true;
+  }
+  if (request.ttsLanguage && storedFieldDiffers(job.ttsLanguage, request.ttsLanguage)) {
+    return true;
+  }
+  if (
+    job.speechPolicyProfile &&
+    request.speechPolicyProfile &&
+    normalizeSpeechPolicyProfile(job.speechPolicyProfile) !==
+      normalizeSpeechPolicyProfile(request.speechPolicyProfile)
+  ) {
+    return true;
+  }
+  return (
+    compactOverridesFingerprint(job.speechPolicyOverrides) !==
+      compactOverridesFingerprint(request.speechPolicyOverrides) &&
+    (compactOverridesFingerprint(job.speechPolicyOverrides) !== "{}" ||
+      compactOverridesFingerprint(request.speechPolicyOverrides) !== "{}")
+  );
+}
+
+function storedFieldDiffers(
+  stored: string | null | undefined,
+  expected: string | null | undefined,
+): boolean {
+  const cleanStored = (stored ?? "").trim();
+  const cleanExpected = (expected ?? "").trim();
+  if (!cleanStored && !cleanExpected) {
+    return false;
+  }
+  return cleanStored !== cleanExpected;
+}
+
+function compactOverridesFingerprint(overrides: SpeechPolicyOverrides | undefined): string {
+  return JSON.stringify(compactSpeechPolicyOverrides(overrides ?? {}));
+}
+
+function generationTextForPreviewSpeechPlan(
+  plan: CanonicalPreviewSpeechPlan,
+  fallbackText: string,
+): string {
+  return canonicalPreviewSpeechPlanHasBlocks(plan) ? plan.text : fallbackText;
 }
 
 function upsertPreparedSource(
@@ -3386,6 +3457,19 @@ export function App() {
       }),
     [baseNarrationPreviewBlocks, revisionEditedTextByBlockId, revisionStatusByBlockId],
   );
+  const canonicalPreviewSpeechPlan = useMemo(
+    () => buildCanonicalPreviewSpeechPlan(narrationPreviewBlocks),
+    [narrationPreviewBlocks],
+  );
+  const canonicalPreviewGenerationRequest = buildVoiceJobRequest(
+    generationTextForPreviewSpeechPlan(canonicalPreviewSpeechPlan, text),
+    activeNarrationPreparedSource,
+  );
+  canonicalPreviewGenerationRequest.speechPolicyProfile = speechPolicyProfile;
+  const canonicalPreviewSessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
+  if (hasSpeechPolicyOverrides(canonicalPreviewSessionOverrides)) {
+    canonicalPreviewGenerationRequest.speechPolicyOverrides = canonicalPreviewSessionOverrides;
+  }
   const hasRevisionSessionChanges =
     Object.keys(revisionEditedTextByBlockId).length > 0 ||
     Object.keys(revisionStatusByBlockId).length > 0;
@@ -3700,19 +3784,35 @@ export function App() {
     [activeProjectId, effectiveBookScope, hashReadingPosition, selectedBookSource],
   );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
-  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
+  const previewAudioStale =
+    previewSpeechPlanJobInputIsStale(canonicalPreviewSpeechPlan, job) ||
+    voiceJobConfigIsStaleForRequest(job, canonicalPreviewGenerationRequest);
+  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({
+    job,
+    stale: previewAudioStale,
+  });
   const canOpenCurrentCinema = generatedAudioLifecycle === "ready";
+  const canonicalPreviewHasBlocks = canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan);
+  const hasCanonicalPreviewSpeechText =
+    !canonicalPreviewHasBlocks || canonicalPreviewSpeechPlan.text.trim().length > 0;
   let hasCreatableCurrentSource = false;
   if (!isProcessing && sourceMode === "book") {
     hasCreatableCurrentSource =
-      selectedBookSource?.status === "ready" && Boolean(effectiveBookScope) && isActiveSourceReady;
+      selectedBookSource?.status === "ready" &&
+      Boolean(effectiveBookScope) &&
+      isActiveSourceReady &&
+      hasCanonicalPreviewSpeechText;
   } else if (!isProcessing && sourceMode === "fileUrl") {
     hasCreatableCurrentSource =
       selectedPreparedSource?.status === "ready" &&
       isActiveSourceReady &&
-      Boolean((selectedPreparedSource.speechText ?? selectedPreparedSource.text ?? "").trim());
+      hasCanonicalPreviewSpeechText &&
+      Boolean(
+        canonicalPreviewHasBlocks ||
+          (selectedPreparedSource.speechText ?? selectedPreparedSource.text ?? "").trim(),
+      );
   } else if (!isProcessing) {
-    hasCreatableCurrentSource = text.trim().length > 0;
+    hasCreatableCurrentSource = hasCanonicalPreviewSpeechText && text.trim().length > 0;
   }
   const canCreateCurrentSource = hasCreatableCurrentSource && !createAndListenCapabilityReason;
   const createAndListenDisabledReason = canCreateCurrentSource
@@ -3776,6 +3876,7 @@ export function App() {
   const statusSourceLifecycle = useMemo(
     () =>
       workbenchSourceLifecycleEnvelope({
+        generatedAudioLifecycle,
         job,
         projectId: activeProjectId,
         selectedBookSource: activeNarrationBookSource,
@@ -3791,6 +3892,7 @@ export function App() {
       activeNarrationScopeLabel,
       activeProjectId,
       contentMode,
+      generatedAudioLifecycle,
       job,
       sourceMode,
       text,
@@ -7249,7 +7351,12 @@ export function App() {
   }
 
   async function submitVoiceJob() {
-    const request = buildVoiceJobRequest(reviewedNarrationSpeechText || text);
+    const sourceText = generationTextForPreviewSpeechPlan(canonicalPreviewSpeechPlan, text);
+    if (canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan) && !sourceText.trim()) {
+      setError("Current preview has no speakable blocks.");
+      return;
+    }
+    const request = buildVoiceJobRequest(sourceText);
     if (hasRevisionSessionChanges) {
       request.speechRenderApplied = true;
     }
@@ -7311,17 +7418,24 @@ export function App() {
     }
     const useCurrentReviewSession = options.useCurrentReviewSession ?? true;
     const applyReviewSession = useCurrentReviewSession && hasRevisionSessionChanges;
+    const useCanonicalPreviewPlan =
+      useCurrentReviewSession && canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan);
     const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
-    const narrationText = useCurrentReviewSession
-      ? reviewedNarrationSpeechText || scopedText
-      : scopedText;
+    const narrationText = useCanonicalPreviewPlan ? canonicalPreviewSpeechPlan.text : scopedText;
+    if (useCanonicalPreviewPlan && !narrationText.trim()) {
+      setBookSourceError("Current preview has no speakable blocks.");
+      return;
+    }
     const request = {
       ...buildVoiceJobRequest(narrationText),
       bookSourceId: book.id,
       bookScope: scope,
       progressTargetId: progressTargetIdForBookScope(book.id, scope),
       sourceKind: "book",
-      ...(applyReviewSession ? { speechRenderApplied: true } : {}),
+      ...(applyReviewSession ||
+      (useCanonicalPreviewPlan && (bookScopeContent?.blocks?.length ?? 0) > 0)
+        ? { speechRenderApplied: true }
+        : {}),
       ...(hasSpeechPolicyOverrides(sessionOverrides)
         ? { speechPolicyOverrides: sessionOverrides }
         : {}),
@@ -7338,7 +7452,7 @@ export function App() {
     announcePolite(liveStatusMessages.audioGenerationStarted());
 
     try {
-      const nextJob = applyReviewSession
+      const nextJob = useCanonicalPreviewPlan
         ? await createVoiceJob(request)
         : await createBookNarrationJob(book.id, request);
       setActiveDemoProjectId(null);
@@ -7381,6 +7495,9 @@ export function App() {
     source: PreparedSource,
     applyReviewSession: boolean,
   ): string {
+    if (canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan)) {
+      return canonicalPreviewSpeechPlan.text;
+    }
     if (applyReviewSession && reviewedNarrationSpeechText.trim()) {
       return reviewedNarrationSpeechText;
     }
@@ -7391,6 +7508,9 @@ export function App() {
     source: PreparedSource,
     applyReviewSession: boolean,
   ): string[] {
+    if (canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan)) {
+      return canonicalPreviewSpeechPlan.blockIds;
+    }
     if (applyReviewSession) {
       return narrationPreviewBlocks
         .filter((block) => revisionBlockIsSpeakable(block))
@@ -7418,7 +7538,10 @@ export function App() {
       return;
     }
     const speechText = speechTextForPreparedNarration(jobSource, applyReviewSession);
-    if (applyReviewSession && !speechText.trim()) {
+    if (
+      (applyReviewSession || canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan)) &&
+      !speechText.trim()
+    ) {
       setSourcePrepError("Prepared source has no speakable blocks.");
       return;
     }
@@ -9146,6 +9269,7 @@ export function App() {
               bookSources={bookSources}
               canSubmit={canRunCurrentGenerationAction}
               contentMode={contentMode}
+              generatedAudioLifecycle={generatedAudioLifecycle}
               isImportingBookSource={isImportingBookSource}
               isPreparingSource={isPreparingSource}
               isProcessing={isProcessing}
@@ -9154,6 +9278,7 @@ export function App() {
               historyEntries={revisionHistoryEntries}
               optimizedText={job?.optimizedText ?? ""}
               preparedSources={preparedSources}
+              previewSpeechPlan={canonicalPreviewSpeechPlan}
               reviewBlocks={narrationPreviewBlocks}
               revisionStatusByBlockId={revisionStatusByBlockId}
               selectedBookScope={effectiveBookScope}
@@ -9200,6 +9325,7 @@ export function App() {
                       activeNarrationBookSource,
                     )}
                     sourceLifecycle={workbenchSourceLifecycleEnvelope({
+                      generatedAudioLifecycle,
                       job,
                       projectId: activeProjectId,
                       selectedScopeLabel: workbenchScopeTitle({
@@ -11511,6 +11637,7 @@ function legacyBookSourceReadiness(source: BookSource): SourceReadiness {
 }
 
 function workbenchSourceLifecycleEnvelope({
+  generatedAudioLifecycle,
   job,
   projectId,
   selectedScopeLabel,
@@ -11520,6 +11647,7 @@ function workbenchSourceLifecycleEnvelope({
   surface,
   text,
 }: Readonly<{
+  generatedAudioLifecycle?: SourceLifecycleEnvelope["generatedAudioState"];
   job: VoiceJob | null;
   projectId: string;
   selectedScopeLabel: string;
@@ -11531,10 +11659,9 @@ function workbenchSourceLifecycleEnvelope({
 }>): SourceLifecycleEnvelope {
   if (sourceMode === "fileUrl" && selectedPreparedSource) {
     const sourceJob = job?.preparedSourceId === selectedPreparedSource.id ? job : null;
-    const generatedAudioState = workbenchGeneratedAudioState(
-      sourceJob,
-      selectedPreparedSource.updatedAt,
-    );
+    const generatedAudioState =
+      generatedAudioLifecycle ??
+      workbenchGeneratedAudioState(sourceJob, selectedPreparedSource.updatedAt);
     const extractionState = workbenchExtractionState(
       selectedPreparedSource.status,
       selectedPreparedSource.blockCount > 0 ||
@@ -11589,10 +11716,9 @@ function workbenchSourceLifecycleEnvelope({
   }
   if (sourceMode === "book" && selectedBookSource) {
     const sourceJob = job?.bookSourceId === selectedBookSource.id ? job : null;
-    const generatedAudioState = workbenchGeneratedAudioState(
-      sourceJob,
-      selectedBookSource.updatedAt,
-    );
+    const generatedAudioState =
+      generatedAudioLifecycle ??
+      workbenchGeneratedAudioState(sourceJob, selectedBookSource.updatedAt);
     const narratableCount =
       selectedBookSource.sections?.filter((section) => section.isNarratable).length ??
       selectedBookSource.chapters?.filter((chapter) => chapter.isNarratable !== false).length ??
@@ -11638,7 +11764,7 @@ function workbenchSourceLifecycleEnvelope({
       title: bookSourceName(selectedBookSource),
     };
   }
-  const generatedAudioState = generatedAudioLifecycleFromJob({ job });
+  const generatedAudioState = generatedAudioLifecycle ?? generatedAudioLifecycleFromJob({ job });
   const hasText = text.trim().length > 0;
   const extractionState = hasText ? "imported" : "new";
   const narrationState = hasText ? "previewable" : "new";
@@ -11781,6 +11907,7 @@ function SourceTextPanel({
   bookSources,
   canSubmit,
   contentMode,
+  generatedAudioLifecycle,
   isImportingBookSource,
   isPreparingSource,
   isProcessing,
@@ -11789,6 +11916,7 @@ function SourceTextPanel({
   stageStatus,
   optimizedText,
   preparedSources,
+  previewSpeechPlan,
   reviewBlocks,
   revisionStatusByBlockId,
   projectId,
@@ -11855,6 +11983,7 @@ function SourceTextPanel({
   bookSources: BookSource[];
   canSubmit: boolean;
   contentMode: WorkspaceStage;
+  generatedAudioLifecycle: ReturnType<typeof generatedAudioLifecycleFromJob>;
   stageStatus: WorkspaceStageStatus;
   isImportingBookSource: boolean;
   isPreparingSource: boolean;
@@ -11863,6 +11992,7 @@ function SourceTextPanel({
   historyEntries: RevisionHistoryEntry[];
   optimizedText: string;
   preparedSources: PreparedSource[];
+  previewSpeechPlan: CanonicalPreviewSpeechPlan;
   reviewBlocks: RevisionBlock[];
   revisionStatusByBlockId: Record<string, RevisionStatus>;
   projectId: string;
@@ -11957,6 +12087,7 @@ function SourceTextPanel({
     sourceMode,
   });
   const sourceLifecycle = workbenchSourceLifecycleEnvelope({
+    generatedAudioLifecycle,
     job,
     projectId,
     selectedScopeLabel: scopeTitle,
@@ -11966,7 +12097,7 @@ function SourceTextPanel({
     surface: workspaceSourceLifecycleSurface(contentMode),
     text,
   });
-  const workbenchAudioLifecycle = generatedAudioLifecycleFromJob({ job });
+  const workbenchAudioLifecycle = generatedAudioLifecycle;
   const canOpenCinema = workbenchAudioLifecycle === "ready";
   const previewGenerationFocus =
     contentMode === "preview" &&
@@ -12098,9 +12229,12 @@ function SourceTextPanel({
           bookScopeContent={bookScopeContent}
           canCreate={canSubmit && (!isProcessing || canRetryVoiceJob(job))}
           canOpenCinema={canOpenCinema}
+          generatedAudioLifecycle={generatedAudioLifecycle}
           job={job}
           optimizedText={optimizedText}
           policyProfileLabel={speechPolicyProfileLabel}
+          previewBlocks={reviewBlocks}
+          previewSpeechPlan={previewSpeechPlan}
           reviewWarningCount={stageStatus.reviewWarningCount}
           selectedBookScope={selectedBookScope}
           selectedBookSource={activeBookSource}
@@ -12277,12 +12411,15 @@ function NarrationPreviewStage({
   bookScopeContent,
   canCreate,
   canOpenCinema,
+  generatedAudioLifecycle,
   job,
   isPlaybackActive,
   playbackControls,
   playbackCursorSec,
   optimizedText,
   policyProfileLabel,
+  previewBlocks,
+  previewSpeechPlan,
   reviewWarningCount,
   selectedBookScope,
   selectedBookSource,
@@ -12312,12 +12449,15 @@ function NarrationPreviewStage({
   bookScopeContent: BookSourceScopeContent | null;
   canCreate: boolean;
   canOpenCinema: boolean;
+  generatedAudioLifecycle: ReturnType<typeof generatedAudioLifecycleFromJob>;
   job: VoiceJob | null;
   isPlaybackActive: boolean;
   playbackControls: PlaybackController;
   playbackCursorSec: number;
   optimizedText: string;
   policyProfileLabel: string;
+  previewBlocks: RevisionBlock[];
+  previewSpeechPlan: CanonicalPreviewSpeechPlan;
   reviewWarningCount: number;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
@@ -12364,32 +12504,16 @@ function NarrationPreviewStage({
       text.trim(),
     ) ?? "Select or prepare a source to preview spoken output.";
   const spokenText =
-    firstNonEmptyString(optimizedText, selectedPreparedSource?.speechText, text.trim()) ??
-    "Create audio to generate listener-ready spoken text.";
-  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
+    firstNonEmptyString(
+      previewSpeechPlan.text,
+      optimizedText,
+      selectedPreparedSource?.speechText,
+      text.trim(),
+    ) ?? "Create audio to generate listener-ready spoken text.";
   const audioReviewSummary = audioReviewWarningSummary(job);
   const createDetail = job
     ? `${job.status} · ${estimateFirstAudioETA(job)}`
     : "Ready to create checked narration";
-  const previewBlocks = useMemo(
-    () =>
-      buildNarrationReviewBlocks({
-        optimizedText,
-        bookScopeContent,
-        selectedBookScope,
-        selectedBookSource,
-        selectedPreparedSource,
-        text,
-      }),
-    [
-      bookScopeContent,
-      optimizedText,
-      selectedBookScope,
-      selectedBookSource,
-      selectedPreparedSource,
-      text,
-    ],
-  );
   const selectedPreviewBlockId = selectSpeakableReviewBlockId(previewBlocks, activeBlockId);
   const selectedPreviewBlock =
     previewBlocks.find((block) => block.id === selectedPreviewBlockId) ??

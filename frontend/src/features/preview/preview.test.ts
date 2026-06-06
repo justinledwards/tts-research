@@ -5,8 +5,13 @@ import { createRunConfiguration } from "../../runConfig";
 import type { RunMode, VoiceJob } from "../../types";
 import { RunPlannerSummaryPanel } from "../run-config/RunPlannerSummaryPanel";
 import { buildRunPlannerSummary, compareRunPlannerSummaries } from "../run-config/runConfigSteps";
-import type { RevisionBlock } from "../revision";
+import {
+  buildCanonicalPreviewSpeechPlan,
+  previewSpeechPlanJobInputIsStale,
+  type RevisionBlock,
+} from "../revision";
 import { resolveAudioGenerationPipelineModel } from "../playback/audioGenerationPipeline";
+import { generatedAudioLifecycleFromJob } from "../playback/generatedAudioLifecycle";
 import {
   buildPreviewComparisonModel,
   buildPreviewQueue,
@@ -439,6 +444,38 @@ describe("preview readiness model", () => {
       "Teleprompt opens with generated cue playback available.",
     );
     expect(ready.primaryLabel).toBe("Create Again");
+  });
+
+  it("requires rebuild when completed audio input differs from the current spoken plan", () => {
+    const plan = buildCanonicalPreviewSpeechPlan([
+      block({ id: "intro", index: 1, spokenText: "Intro body." }),
+      block({
+        id: "refs-heading",
+        index: 2,
+        kind: "reference",
+        label: "References",
+        policyNoteType: "onDemand",
+        spokenText: "## References",
+        text: "## References",
+      }),
+      block({ id: "body", index: 3, spokenText: "Body resumes." }),
+    ]);
+    const oldJob = job({
+      inputText: "Intro body.\n\n## References\n\nBody resumes.",
+      optimizedText: "Intro body.\n\n## References\n\nBody resumes.",
+    });
+    const lifecycle = generatedAudioLifecycleFromJob({
+      job: oldJob,
+      stale: previewSpeechPlanJobInputIsStale(plan, oldJob),
+    });
+
+    const readiness = resolvePreviewReadinessModel(
+      readinessInput({ generatedAudioLifecycle: lifecycle }),
+    );
+
+    expect(lifecycle).toBe("stale");
+    expect(readiness.generatedPlaybackDisabledReason).toContain("Audio needs rebuild");
+    expect(readiness.canOpenCinema).toBe(false);
   });
 });
 

@@ -22,6 +22,10 @@ import {
   summarizeRevisionBlocks,
   type RevisionBlock,
 } from "./revisionFilters";
+import {
+  buildCanonicalPreviewSpeechPlan,
+  previewSpeechPlanJobInputIsStale,
+} from "./revisionSpeechPlan";
 
 const blocks: RevisionBlock[] = [
   block({
@@ -204,6 +208,66 @@ describe("revision filters", () => {
     expect(sessionBlocks.find((item) => item.id === "a")?.spokenText).toBe("Edited spoken intro.");
     expect(sessionBlocks.find((item) => item.id === "b")?.status).toBe("skipped");
     expect(composeReviewedSpeechText(sessionBlocks)).toBe("Edited spoken intro.");
+  });
+
+  it("builds canonical speech text and ids from speakable preview cues", () => {
+    const previewBlocks = [
+      block({ id: "intro", index: 1, spokenText: "Intro body." }),
+      block({
+        id: "refs-heading",
+        index: 2,
+        kind: "reference",
+        label: "References",
+        policyNoteType: "onDemand",
+        spokenText: "## References",
+        text: "## References",
+      }),
+      block({
+        id: "number",
+        index: 3,
+        kind: "reference",
+        label: "Reference",
+        spokenText: "thirty four",
+        text: "[34](https://example.com/reference)",
+      }),
+      block({ id: "body", index: 4, spokenText: "Body resumes." }),
+    ];
+
+    const plan = buildCanonicalPreviewSpeechPlan(previewBlocks);
+
+    expect(plan.text).toBe("Intro body.\n\nBody resumes.");
+    expect(plan.blockIds).toEqual(["intro", "body"]);
+    expect(plan.skippedBlockIds).toEqual(["refs-heading", "number"]);
+    expect(composeReviewedSpeechText(previewBlocks)).toBe(plan.text);
+  });
+
+  it("marks completed audio stale when job input still contains skipped cues", () => {
+    const plan = buildCanonicalPreviewSpeechPlan([
+      block({ id: "intro", index: 1, spokenText: "Intro body." }),
+      block({
+        id: "refs-heading",
+        index: 2,
+        kind: "reference",
+        label: "References",
+        policyNoteType: "onDemand",
+        spokenText: "## References",
+        text: "## References",
+      }),
+      block({ id: "body", index: 3, spokenText: "Body resumes." }),
+    ]);
+
+    expect(
+      previewSpeechPlanJobInputIsStale(plan, {
+        inputText: "Intro body.\n\n## References\n\nBody resumes.",
+        status: "completed",
+      }),
+    ).toBe(true);
+    expect(
+      previewSpeechPlanJobInputIsStale(plan, {
+        inputText: "Intro body. Body resumes.",
+        status: "completed",
+      }),
+    ).toBe(false);
   });
 
   it("normalizes policy note types from source decisions", () => {

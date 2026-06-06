@@ -467,7 +467,7 @@ export function applyRevisionSessionState(
 
 export function composeReviewedSpeechText(blocks: readonly RevisionBlock[]): string {
   return blocks
-    .filter((block) => !revisionBlockIsSkipped(block))
+    .filter((block) => revisionBlockIsSpeakable(block))
     .map((block) => block.spokenText.trim())
     .filter(Boolean)
     .join("\n\n");

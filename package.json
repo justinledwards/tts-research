@@ -18,6 +18,7 @@
     "setup:alignment": "bash ./scripts/runtime-setup.sh setup-alignment",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "review:local": "node scripts/validate-local/review-evidence.mjs",
+    "review:zip": "node scripts/zip-branch-for-review.mjs",
     "validate:local": "pnpm validate:local:fast",
     "validate:local:fast": "node scripts/validate-local/validate-local.mjs --lane=fast",
     "validate:local:quick": "VALIDATE_LOCAL_QUICK=1 pnpm validate:local:fast -- --quick",

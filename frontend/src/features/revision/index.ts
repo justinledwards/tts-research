@@ -65,3 +65,11 @@ export {
   type RevisionHistoryContext,
   type RevisionHistoryEntry,
 } from "./revisionHistory";
+export {
+  buildCanonicalPreviewSpeechPlan,
+  canonicalPreviewSpeechPlanHasBlocks,
+  normalizePreviewSpeechPlanText,
+  previewSpeechPlanJobInputIsStale,
+  previewSpeechPlanMatchesJobInput,
+  type CanonicalPreviewSpeechPlan,
+} from "./revisionSpeechPlan";
