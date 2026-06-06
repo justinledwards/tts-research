@@ -1,3 +1,8 @@
+## 2026-06-06 18:09 CEST - Respect current-source scope in prepared narration
+- [x] Add prepared-source canonical-plan gating in `App.tsx` to honor `useCurrentReviewSession`.
+- [x] Add regression tests for inactive vs active prepared-source generation block/text selection.
+- [x] Verify changed files and summarize implementation in final handoff.
+
 ## 2026-06-06 18:07 CEST - Uncap canonical preview generation source
 - [x] Add preview review chunk cap constant and chunk-limit-aware split helper.
 - [x] Split narration review block derivation into uncapped generation path and capped UI path.

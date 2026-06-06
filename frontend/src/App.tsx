@@ -222,6 +222,9 @@ import {
   normalizeRevisionPolicyNoteType,
   REVISION_STATUS_LABELS,
   revisionBlockIsSpeakable,
+  resolvePreparedSourceNarrationSelectedBlockIds,
+  resolvePreparedSourceNarrationText,
+  shouldUseCanonicalPreviewPlanForPreparedSourceNarration,
   revisionTextIsStandaloneArtifactToken,
   revisionTextLooksLikeReferenceCueLeak,
   stripRevisionTrailingReferenceNumberText,
@@ -7469,38 +7472,6 @@ export function App() {
     }
   }
 
-  function speechTextForPreparedNarration(
-    source: PreparedSource,
-    applyReviewSession: boolean,
-  ): string {
-    if (canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan)) {
-      return canonicalPreviewSpeechPlan.text;
-    }
-    if (applyReviewSession && reviewedNarrationSpeechText.trim()) {
-      return reviewedNarrationSpeechText;
-    }
-    return source.speechText ?? "";
-  }
-
-  function selectedBlockIdsForPreparedNarration(
-    source: PreparedSource,
-    applyReviewSession: boolean,
-  ): string[] {
-    if (canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan)) {
-      return canonicalPreviewSpeechPlan.blockIds;
-    }
-    if (applyReviewSession) {
-      return narrationPreviewBlocks
-        .filter((block) => revisionBlockIsSpeakable(block))
-        .map((block) => block.id);
-    }
-    return (
-      source.blocks
-        ?.filter((block) => narrationBlockIsPreparedSelectionSpeakable(block))
-        .map((block) => block.id) ?? []
-    );
-  }
-
   async function submitPreparedSourceJob(
     source: PreparedSource,
     options: AssetNarrationGenerationOptions = {},
@@ -7511,15 +7482,21 @@ export function App() {
     }
     const useCurrentReviewSession = options.useCurrentReviewSession ?? true;
     const applyReviewSession = useCurrentReviewSession && hasRevisionSessionChanges;
+    const useCanonicalPreviewPlan = shouldUseCanonicalPreviewPlanForPreparedSourceNarration(
+      applyReviewSession,
+      canonicalPreviewSpeechPlan,
+    );
     const jobSource = await loadPreparedSourceForNarration(source, applyReviewSession);
     if (!jobSource) {
       return;
     }
-    const speechText = speechTextForPreparedNarration(jobSource, applyReviewSession);
-    if (
-      (applyReviewSession || canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan)) &&
-      !speechText.trim()
-    ) {
+    const speechText = resolvePreparedSourceNarrationText(jobSource, {
+      applyReviewSession,
+      reviewedNarrationSpeechText,
+      useCanonicalPreviewPlan,
+      canonicalPreviewSpeechPlan,
+    });
+    if ((applyReviewSession || useCanonicalPreviewPlan) && !speechText.trim()) {
       setSourcePrepError("Prepared source has no speakable blocks.");
       return;
     }
@@ -7527,7 +7504,12 @@ export function App() {
     const request = {
       ...buildVoiceJobRequest(speechText, jobSource),
       preparedSourceId: jobSource.id,
-      selectedBlockIds: selectedBlockIdsForPreparedNarration(jobSource, applyReviewSession),
+      selectedBlockIds: resolvePreparedSourceNarrationSelectedBlockIds(jobSource, {
+        applyReviewSession,
+        useCanonicalPreviewPlan,
+        canonicalPreviewSpeechPlan,
+        narrationPreviewBlocks,
+      }),
       sourceKind: jobSource.kind,
       progressTargetId: `prepared:${jobSource.id}`,
       ...(applyReviewSession ? { speechRenderApplied: true } : {}),
@@ -16557,18 +16539,6 @@ function narrationBlockIsNonSpeakingCue(block: NarrationBlock): boolean {
     return false;
   }
   return true;
-}
-
-function narrationBlockIsPreparedSelectionSpeakable(block: NarrationBlock): boolean {
-  const speakMode = block.speakMode.trim().toLowerCase();
-  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
-  return (
-    speakMode !== "skip" &&
-    policyMode !== "skip" &&
-    policyMode !== "ondemand" &&
-    (block.spokenText ?? "").trim().length > 0 &&
-    !narrationBlockIsStandaloneArtifactToken(block)
-  );
 }
 
 function narrationBlockIsStandaloneArtifactToken(block: NarrationBlock): boolean {
