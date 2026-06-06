@@ -1,3 +1,10 @@
+## 2026-06-06 09:00 UTC - Close stale playback bypass for preview toolbar controls
+- [x] Audit remaining playback gates for preview/review toolbar action handlers.
+- [x] Enforce `generatedAudioLifecycle === "ready"` on preview-local replay controls.
+- [x] Keep `GlobalPreviewPlayer`/`NarrationReviewWorkbench` lifecycle gating intact.
+- [x] Add/extend stale transport assertions for preview restart/play buttons.
+- [x] Prepare and run focused frontend test commands.
+
 ## 2026-06-06 09:00 UTC - Preview audio stale playback command hardening
 - [x] Audit/fix App command-layer stale bypass for playback.
 - [x] Confirm `GlobalPreviewPlayer` and `NarrationReviewWorkbench` lifecycle propagation.
@@ -1854,3 +1861,9 @@ duplicating every implementation detail from commits, PR text, or generated revi
 ## 2026-06-06 18:55 CEST - Restrict book narration canonical-plan routing
 - [x] Fix remaining lint failures in book narration gate edits.
 - [x] Re-run commit flow after lint fixes.
+## 2026-06-06 09:00 UTC - Close remaining stale playback bypasses for App-level controls
+- [x] Audit remaining App-level playback surfaces for direct `isAvailable`-only playback gating.
+- [x] Thread `generatedAudioLifecycle` into `TeleprompterPanel` and apply it to local playback controls.
+- [x] Enforce stale-state hard block for Cinema/teleprompter/playback callbacks and restart/play/jump handlers.
+- [x] Add/refresh stale transport regression coverage in focused frontend tests.
+- [x] Run focused frontend tests for `previewAudioCurrentness.test.ts` and `preview.test.ts`.

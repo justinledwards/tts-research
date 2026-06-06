@@ -340,6 +340,11 @@ describe("preview A/B comparison", () => {
       'data-disabled-reason="Audio needs rebuild. Rebuild before treating it as current. Preview audition unlocks after generated audio is ready."',
     );
     expect(markup).toContain('disabled=""');
+    expect(markup).toContain('data-testid="ui-action-preview-mini-restart"');
+    expect(markup).toContain('disabled=""');
+    expect(markup).toContain(
+      'data-disabled-reason="Audio needs rebuild. Rebuild before treating it as current. Preview audition unlocks after generated audio is ready."',
+    );
   });
 });
 

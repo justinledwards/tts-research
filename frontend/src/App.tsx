@@ -1005,6 +1005,7 @@ function TeleprompterPanel({
   onResumeProgress,
   playbackControls,
   playbackCursorSec,
+  generatedAudioLifecycle,
   preparedSourceForCinema,
   settings,
   themeName,
@@ -1023,6 +1024,7 @@ function TeleprompterPanel({
   onResumeProgress: (progress: PlaybackProgress) => void;
   playbackControls: PlaybackController;
   playbackCursorSec: number;
+  generatedAudioLifecycle: ReturnType<typeof generatedAudioLifecycleFromJob>;
   preparedSourceForCinema: PreparedSource | null;
   settings: TeleprompterHighlightSettings;
   themeName: ThemeName;
@@ -1061,6 +1063,15 @@ function TeleprompterPanel({
   );
   const shouldOpenBookCinema = canOpenBookCinema && (!job || Boolean(job.bookSourceId));
   const canOpenCinema = Boolean(cue) || canOpenBookCinema;
+  const playbackLifecycleReady =
+    playbackControls.isAvailable && generatedAudioLifecycle === "ready";
+  const playbackLifecycle: GeneratedAudioLifecycleState = playbackLifecycleReady
+    ? "ready"
+    : generatedAudioLifecycle;
+  const teleprompterPlaybackActionDisabledReason = playbackActionDisabledReason({
+    action: "audition",
+    lifecycle: playbackLifecycle,
+  });
   const handleOpenCinema = useCallback(() => {
     if (shouldOpenBookCinema) {
       onOpenBookCinema();
@@ -1082,7 +1093,7 @@ function TeleprompterPanel({
     }
   }, [canOpenCinema, handleOpenCinema, openSignal]);
   const handlePlayPause = useCallback(() => {
-    if (!playbackControls.isAvailable) {
+    if (!playbackLifecycleReady) {
       return;
     }
     if (playbackControls.isPlaying) {
@@ -1090,18 +1101,21 @@ function TeleprompterPanel({
       return;
     }
     void playbackControls.play();
-  }, [playbackControls]);
+  }, [playbackControls, playbackLifecycleReady]);
   const handleRestart = useCallback(() => {
-    if (!playbackControls.isAvailable) {
+    if (!playbackLifecycleReady) {
       return;
     }
     void playbackControls.restart();
-  }, [playbackControls]);
+  }, [playbackControls, playbackLifecycleReady]);
   const handleSkip = useCallback(
     (seconds: number) => {
+      if (!playbackLifecycleReady) {
+        return;
+      }
       playbackControls.skipBy?.(seconds);
     },
-    [playbackControls],
+    [playbackControls, playbackLifecycleReady],
   );
 
   if (!cue) {
@@ -1158,6 +1172,9 @@ function TeleprompterPanel({
       onFocusToggle={() => {
         setIsFocusEnabled((current) => !current);
       }}
+      playbackActionDisabledReason={teleprompterPlaybackActionDisabledReason}
+      playbackLifecycle={playbackLifecycle}
+      playbackLifecycleReady={playbackLifecycleReady}
       onPlayPause={handlePlayPause}
       onRestart={handleRestart}
       onResumeProgress={onResumeProgress}
@@ -1201,16 +1218,20 @@ function TeleprompterPanel({
             Context
           </button>
           <button
+            {...playbackActionDataAttributes("audition", playbackLifecycle)}
             className="h-8 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.isAvailable}
+            disabled={!playbackLifecycleReady}
+            data-disabled-reason={teleprompterPlaybackActionDisabledReason}
             onClick={handleRestart}
             type="button"
           >
             Restart
           </button>
           <button
+            {...playbackActionDataAttributes("audition", playbackLifecycle)}
             className="h-8 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40 vs-accent-bg"
-            disabled={!playbackControls.isAvailable}
+            disabled={!playbackLifecycleReady}
+            data-disabled-reason={teleprompterPlaybackActionDisabledReason}
             onClick={handlePlayPause}
             type="button"
           >
@@ -1240,7 +1261,8 @@ function TeleprompterPanel({
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
           <button
             className="vs-muted rounded-md border px-3 py-1.5 font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={teleprompterPlaybackActionDisabledReason}
             onClick={() => {
               handleSkip(-10);
             }}
@@ -1255,7 +1277,8 @@ function TeleprompterPanel({
           </span>
           <button
             className="vs-muted rounded-md border px-3 py-1.5 font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={teleprompterPlaybackActionDisabledReason}
             onClick={() => {
               handleSkip(10);
             }}
@@ -1627,6 +1650,9 @@ export function CinemaTeleprompterOverlay({
   isContextVisible,
   isFocusEnabled,
   isPlaybackActive,
+  playbackActionDisabledReason,
+  playbackLifecycle,
+  playbackLifecycleReady,
   markdownSource,
   markdownActiveWordIndex,
   playbackControls,
@@ -1654,6 +1680,8 @@ export function CinemaTeleprompterOverlay({
   isContextVisible: boolean;
   isFocusEnabled: boolean;
   isPlaybackActive: boolean;
+  playbackActionDisabledReason?: string;
+  playbackLifecycleReady: boolean;
   markdownSource: PreparedSource | null;
   markdownActiveWordIndex: number | null;
   playbackControls: PlaybackController;
@@ -1668,6 +1696,7 @@ export function CinemaTeleprompterOverlay({
   onContextToggle: () => void;
   onFocusSettingsOpen: () => void;
   onFocusToggle: () => void;
+  playbackLifecycle: GeneratedAudioLifecycleState;
   onPlayPause: () => void;
   onRestart: () => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
@@ -1857,7 +1886,8 @@ export function CinemaTeleprompterOverlay({
           ) : null}
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.isAvailable}
+            disabled={!playbackLifecycleReady}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={onRestart}
             type="button"
           >
@@ -1865,7 +1895,8 @@ export function CinemaTeleprompterOverlay({
           </button>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={() => {
               onSkip(-10);
             }}
@@ -1874,8 +1905,10 @@ export function CinemaTeleprompterOverlay({
             -10s
           </button>
           <button
+            {...playbackActionDataAttributes("audition", playbackLifecycle)}
             className="h-12 min-w-28 rounded-full px-6 text-base font-semibold text-[var(--vs-action-primary-text)] shadow-lg shadow-[var(--vs-shadow)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 vs-accent-bg"
-            disabled={!playbackControls.isAvailable}
+            disabled={!playbackLifecycleReady}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={onPlayPause}
             type="button"
           >
@@ -1883,7 +1916,8 @@ export function CinemaTeleprompterOverlay({
           </button>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={() => {
               onSkip(10);
             }}
@@ -1893,7 +1927,8 @@ export function CinemaTeleprompterOverlay({
           </button>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={() => {
               onSkip(-30);
             }}
@@ -1903,7 +1938,8 @@ export function CinemaTeleprompterOverlay({
           </button>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={() => {
               onSkip(30);
             }}
@@ -6263,7 +6299,7 @@ export function App() {
   }, []);
 
   const handleBookCinemaPlayPause = useCallback(() => {
-    if (!playbackControls.isAvailable) {
+    if (!playbackLifecycleReady) {
       return;
     }
     if (playbackControls.isPlaying) {
@@ -6271,20 +6307,23 @@ export function App() {
       return;
     }
     void playbackControls.play();
-  }, [playbackControls]);
+  }, [playbackControls, playbackLifecycleReady]);
 
   const handleBookCinemaRestart = useCallback(() => {
-    if (!playbackControls.isAvailable) {
+    if (!playbackLifecycleReady) {
       return;
     }
     void playbackControls.restart();
-  }, [playbackControls]);
+  }, [playbackControls, playbackLifecycleReady]);
 
   const handleBookCinemaSkip = useCallback(
     (seconds: number) => {
+      if (!playbackLifecycleReady) {
+        return;
+      }
       playbackControls.skipBy?.(seconds);
     },
-    [playbackControls],
+    [playbackControls, playbackLifecycleReady],
   );
 
   const activeWordIndexForPlaybackProgress = useCallback(
@@ -8650,6 +8689,7 @@ export function App() {
         job={job}
         latestProgress={latestProgress}
         openSignal={teleprompterOpenSignal}
+        generatedAudioLifecycle={generatedAudioLifecycle}
         playbackControls={playbackControls}
         playbackCursorSec={playbackCursorSec}
         preparedSourceForCinema={jobPreparedSource ?? selectedPreparedSource}
@@ -12462,10 +12502,7 @@ function NarrationPreviewStage({
     56,
   );
   const previewPlaybackAvailable =
-    playbackControls.isAvailable &&
-    (generatedAudioLifecycle === "ready" ||
-      audioPipeline.canUsePartialAudio ||
-      canQueueGeneratedAudioPlayback(job));
+    playbackControls.isAvailable && generatedAudioLifecycle === "ready";
   const playbackLifecycle = previewPlaybackAvailable ? "ready" : generatedAudioLifecycle;
   const previewPlaybackDisabledReason = previewPlaybackAvailable
     ? undefined
@@ -12535,9 +12572,10 @@ function NarrationPreviewStage({
           : "Seeking is unavailable for this audio."),
       label: "Jump to Audio",
       onClick: () => {
-        if (previewSeekTargetSec !== null) {
-          seekPlaybackToSeconds(playbackControls, previewSeekTargetSec, playbackCursorSec);
+        if (!canPreviewJump || previewSeekTargetSec === null) {
+          return;
         }
+        seekPlaybackToSeconds(playbackControls, previewSeekTargetSec, playbackCursorSec);
       },
       testId: "ui-action-preview-local-jump-audio",
     },
@@ -15629,9 +15667,10 @@ function NarrationReviewWorkbench({
           : "Seeking is unavailable for this audio."),
       label: "Jump to Audio",
       onClick: () => {
-        if (reviewSeekTargetSec !== null) {
-          seekPlaybackToSeconds(playbackControls, reviewSeekTargetSec, playbackCursorSec);
+        if (!canReviewJump || reviewSeekTargetSec === null) {
+          return;
         }
+        seekPlaybackToSeconds(playbackControls, reviewSeekTargetSec, playbackCursorSec);
       },
       testId: "ui-action-review-local-jump-audio",
     },
