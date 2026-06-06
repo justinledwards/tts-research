@@ -1,3 +1,10 @@
+## 2026-06-06 09:00 UTC - Preview audio stale gating in playback surfaces
+- [x] Wire lifecycle prop in App.tsx into `LazyGlobalPreviewPlayer`.
+- [x] Add/consume stale-aware `generatedAudioLifecycle` in `GlobalPreviewPlayer`.
+- [x] Enforce review playback controls against stale lifecycle in `NarrationReviewWorkbench`.
+- [x] Add/update stale playback regression tests.
+- [x] Run focused test commands (`frontend/src/features/preview/previewAudioCurrentness.test.ts`, `frontend/src/features/preview/preview.test.ts`).
+
 ## 2026-06-06 19:16 CEST - Route-level submission orchestration extraction
 - [x] Extract App submission handlers into a revision submission service.
 - [x] Add focused route-level submit tests with mocked API interactions.

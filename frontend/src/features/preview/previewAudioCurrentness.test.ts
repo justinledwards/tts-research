@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CreateVoiceJobRequest, VoiceJob } from "../../types";
+import type { CreateVoiceJobRequest, PerformanceMode, RunMode, VoiceJob } from "../../types";
 import { generatedAudioLifecycleFromJob } from "../playback/generatedAudioLifecycle";
 import { buildCanonicalPreviewSpeechPlan, type RevisionBlock } from "../revision";
 import { resolvePreviewAudioCurrentness } from "./previewAudioCurrentness";
@@ -144,7 +144,7 @@ describe("preview audio currentness", () => {
       job: voiceJob({
         inputText: "Intro body.",
         optimizedText: "Intro body.",
-        runMode: "",
+        runMode: "" as RunMode,
       }),
       request: request({ text: plan.text }),
       speechPlan: plan,
@@ -153,7 +153,7 @@ describe("preview audio currentness", () => {
       job: voiceJob({
         inputText: "Intro body.",
         optimizedText: "Intro body.",
-        performanceMode: "",
+        performanceMode: "" as PerformanceMode,
       }),
       request: request({ text: plan.text }),
       speechPlan: plan,

@@ -294,6 +294,53 @@ describe("preview A/B comparison", () => {
     expect(markup).not.toContain('aria-current="true"');
     expect(markup).toContain('data-readalong-word-role="activePhrase"');
   });
+
+  it("marks stale lifecycle as audition-disabled for GlobalPreviewPlayer transport", () => {
+    const noop = vi.fn();
+    const markup = renderToStaticMarkup(
+      createElement(GlobalPreviewPlayer, {
+        activeBlockId: "a",
+        blocks,
+        canOpenCinema: true,
+        currentPolicyId: "Enterprise",
+        currentRunMode: "checkedMaster" as RunMode,
+        currentVoiceId: "default",
+        generatedAudioLifecycle: "stale",
+        isPlaybackActive: false,
+        job: job(),
+        playbackControls: {
+          isAvailable: true,
+          isPlaying: false,
+          pause: noop,
+          play: noop,
+          playbackRate: 1,
+          restart: noop,
+        },
+        playbackCursorSec: 0,
+        placement: "inline",
+        policyOptions: [{ id: "Enterprise", label: "Enterprise" }],
+        policyProfileLabel: "Enterprise",
+        runConfigurationLabel: "Checked Master",
+        scopeLabel: "Current source",
+        sourceLabel: "Preview source",
+        variant: "full",
+        voiceOptions: [{ id: "default", label: "Default voice" }],
+        voiceProfileLabel: "Default voice",
+        onActiveBlockChange: noop,
+        onOpenCinema: noop,
+        onPolicyProfileChange: noop,
+        onRunModeChange: noop,
+        onVoiceProfileChange: noop,
+      }),
+    );
+
+    expect(markup).toContain('data-generated-audio-lifecycle="stale"');
+    expect(markup).toContain('data-testid="ui-action-preview-mini-play"');
+    expect(markup).toContain(
+      'data-disabled-reason="Audio needs rebuild. Rebuild before treating it as current. Preview audition unlocks after generated audio is ready."',
+    );
+    expect(markup).toContain('disabled=""');
+  });
 });
 
 describe("preview readiness model", () => {

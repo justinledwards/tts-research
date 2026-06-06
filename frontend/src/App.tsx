@@ -293,6 +293,7 @@ import {
   canQueueGeneratedAudioPlayback,
   generatedAudioLifecycleFromJob,
   generatedAudioLifecycleLabel,
+  type GeneratedAudioLifecycleState,
 } from "./features/playback/generatedAudioLifecycle";
 import {
   findRestorableWorkbenchJob,
@@ -8593,6 +8594,7 @@ export function App() {
             currentVoiceId={selectedVoiceProfileId || "default"}
             hidden={!globalPreviewVisible || workspaceOverlay.previewPlacement === "hidden"}
             isPlaybackActive={isPlaybackActive}
+            generatedAudioLifecycle={generatedAudioLifecycle}
             job={job}
             mode="comparison-only"
             playbackControls={playbackControls}
@@ -11995,6 +11997,7 @@ function SourceTextPanel({
             bookScopeContent={bookScopeContent}
             historyEntries={historyEntries}
             job={job}
+            generatedAudioLifecycle={generatedAudioLifecycle}
             reviewBlocks={reviewBlocks}
             revisionStatusByBlockId={revisionStatusByBlockId}
             policyProfileLabel={speechPolicyProfileLabel}
@@ -15473,6 +15476,7 @@ function NarrationReviewWorkbench({
   onStatusByBlockIdChange,
   playbackControls,
   playbackCursorSec,
+  generatedAudioLifecycle,
   policyProfileLabel,
   reviewBlocks,
   revisionStatusByBlockId,
@@ -15514,6 +15518,7 @@ function NarrationReviewWorkbench({
   sourceLifecycle: SourceLifecycleEnvelope;
   text: string;
   voiceProfileLabel: string;
+  generatedAudioLifecycle: GeneratedAudioLifecycleState;
 }>) {
   const selectedBlockId = selectReviewBlockId(reviewBlocks, activeBlockId);
   const selectedBlock =
@@ -15564,9 +15569,11 @@ function NarrationReviewWorkbench({
   const selectedBlockIndex = selectedBlock
     ? reviewBlocks.findIndex((block) => block.id === selectedBlock.id)
     : -1;
-  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({ job });
-  const playbackLifecycle = playbackControls.isAvailable ? "ready" : generatedAudioLifecycle;
-  const reviewPlaybackDisabledReason = playbackControls.isAvailable
+  const playbackAvailable = playbackControls.isAvailable && generatedAudioLifecycle === "ready";
+  const playbackLifecycle: GeneratedAudioLifecycleState = playbackAvailable
+    ? "ready"
+    : generatedAudioLifecycle;
+  const reviewPlaybackDisabledReason = playbackAvailable
     ? undefined
     : playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle });
   const reviewSeekTargetSec = playbackSeekSecondsForRevisionBlock(
@@ -15575,7 +15582,7 @@ function NarrationReviewWorkbench({
     job,
   );
   const canReviewJump = Boolean(
-    playbackControls.isAvailable &&
+    playbackAvailable &&
       reviewSeekTargetSec !== null &&
       (playbackControls.seekTo ?? playbackControls.skipBy),
   );
@@ -15646,12 +15653,12 @@ function NarrationReviewWorkbench({
       dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle, {
         primary: true,
       }),
-      disabled: !playbackControls.isAvailable,
+      disabled: !playbackAvailable,
       disabledReason: reviewPlaybackDisabledReason,
       label: playbackControls.isPlaying ? "Pause" : "Play",
       primary: true,
       onClick: () => {
-        if (!playbackControls.isAvailable) {
+        if (!playbackAvailable) {
           return;
         }
         if (playbackControls.isPlaying) {
@@ -15686,11 +15693,11 @@ function NarrationReviewWorkbench({
       ariaKeyShortcuts: "Home",
       shortcutCommandId: "playback.restart",
       dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle),
-      disabled: !playbackControls.isAvailable,
+      disabled: !playbackAvailable,
       disabledReason: reviewPlaybackDisabledReason,
       label: "Restart",
       onClick: () => {
-        if (playbackControls.isAvailable) {
+        if (playbackAvailable) {
           void playbackControls.restart();
         }
       },

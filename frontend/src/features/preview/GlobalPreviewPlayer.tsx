@@ -75,6 +75,7 @@ export interface GlobalPreviewPlayerProps {
   readonly dock?: "bottom" | "top";
   readonly hidden?: boolean;
   readonly isPlaybackActive: boolean;
+  readonly generatedAudioLifecycle?: ReturnType<typeof generatedAudioLifecycleFromJob>;
   readonly job: VoiceJob | null;
   readonly playbackControls: GlobalPreviewPlaybackController;
   readonly playbackCursorSec: number;
@@ -108,6 +109,7 @@ export function GlobalPreviewPlayer({
   dock = "bottom",
   hidden = false,
   isPlaybackActive,
+  generatedAudioLifecycle,
   job,
   playbackControls,
   playbackCursorSec,
@@ -136,6 +138,7 @@ export function GlobalPreviewPlayer({
   const activeItem = activePreviewQueueItem(queue, activeIndex);
   const progress = previewQueueProgress(queue, playbackCursorSec);
   const waveformBars = useAudioWaveformBars(job ? audioSource(job, { partial: true }) : "", 56);
+  const playbackLifecycle = generatedAudioLifecycle ?? generatedAudioLifecycleFromJob({ job });
   const choiceA = useMemo<PreviewComparisonChoice>(
     () => ({
       policyId: currentPolicyId,
@@ -170,8 +173,8 @@ export function GlobalPreviewPlayer({
   const playbackAvailable =
     (hasPreviewPlayback(playbackControls, queue) || canQueueGeneratedAudioPlayback(job)) &&
     playbackControls.isAvailable &&
-    !auditionGate.disabled;
-  const playbackLifecycle = playbackAvailable ? "ready" : generatedAudioLifecycleFromJob({ job });
+    !auditionGate.disabled &&
+    playbackLifecycle === "ready";
   const playbackDisabledReason = playbackAvailable
     ? undefined
     : (auditionGate.reason ??
