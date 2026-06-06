@@ -52,22 +52,24 @@ export function normalizePreviewSpeechPlanText(value: string): string {
   return value.trim().replaceAll(/\s+/g, " ");
 }
 
-export function previewSpeechPlanMatchesJobInput(
+export function previewSpeechPlanMatchesJobText(
   plan: CanonicalPreviewSpeechPlan,
-  inputText: string | null | undefined,
+  ...jobTexts: (string | null | undefined)[]
 ): boolean {
-  return (
-    normalizePreviewSpeechPlanText(inputText ?? "") === normalizePreviewSpeechPlanText(plan.text)
-  );
+  const planText = normalizePreviewSpeechPlanText(plan.text);
+  return jobTexts.some((text) => normalizePreviewSpeechPlanText(text ?? "") === planText);
 }
 
-export function previewSpeechPlanJobInputIsStale(
+export function previewSpeechPlanJobTextIsStale(
   plan: CanonicalPreviewSpeechPlan,
-  job: Readonly<{ inputText?: string | null; status?: string }> | null | undefined,
+  job:
+    | Readonly<{ inputText?: string | null; optimizedText?: string | null; status?: string }>
+    | null
+    | undefined,
 ): boolean {
   return (
     job?.status === "completed" &&
     canonicalPreviewSpeechPlanHasBlocks(plan) &&
-    !previewSpeechPlanMatchesJobInput(plan, job.inputText)
+    !previewSpeechPlanMatchesJobText(plan, job.optimizedText, job.inputText)
   );
 }

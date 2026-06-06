@@ -7,7 +7,7 @@ import { RunPlannerSummaryPanel } from "../run-config/RunPlannerSummaryPanel";
 import { buildRunPlannerSummary, compareRunPlannerSummaries } from "../run-config/runConfigSteps";
 import {
   buildCanonicalPreviewSpeechPlan,
-  previewSpeechPlanJobInputIsStale,
+  previewSpeechPlanJobTextIsStale,
   type RevisionBlock,
 } from "../revision";
 import { resolveAudioGenerationPipelineModel } from "../playback/audioGenerationPipeline";
@@ -466,7 +466,7 @@ describe("preview readiness model", () => {
     });
     const lifecycle = generatedAudioLifecycleFromJob({
       job: oldJob,
-      stale: previewSpeechPlanJobInputIsStale(plan, oldJob),
+      stale: previewSpeechPlanJobTextIsStale(plan, oldJob),
     });
 
     const readiness = resolvePreviewReadinessModel(

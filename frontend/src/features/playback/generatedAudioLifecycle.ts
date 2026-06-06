@@ -152,7 +152,7 @@ export function generatedAudioLifecycleFromJob({
     return "generating";
   }
   if (job.status === "completed") {
-    return job.audioUrl ? "ready" : "degraded";
+    return completedJobHasPlayableAudio(job) ? "ready" : "degraded";
   }
   return "failed";
 }
@@ -213,6 +213,21 @@ export function generatedAudioTotalSegmentCount(job: VoiceJob | null | undefined
   }
   const legacyRetries = (job as { retries?: { totalSegments?: number } }).retries;
   return Math.max(0, legacyRetries?.totalSegments ?? 0, job.segments?.length ?? 0);
+}
+
+export function completedJobHasPlayableAudio(job: VoiceJob | null | undefined): boolean {
+  if (job?.status !== "completed") {
+    return false;
+  }
+  const audioUrls = job as { audioPartialUrl?: string; audioUrl?: string };
+  if ((audioUrls.audioUrl?.trim() ?? "").length > 0) {
+    return true;
+  }
+  if ((audioUrls.audioPartialUrl?.trim() ?? "").length === 0) {
+    return false;
+  }
+  const totalSegments = generatedAudioTotalSegmentCount(job);
+  return totalSegments > 0 && generatedAudioReadySegmentCount(job) >= totalSegments;
 }
 
 export function isGeneratedAudioWorkingJob(job: VoiceJob | null | undefined): boolean {

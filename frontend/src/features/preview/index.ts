@@ -36,6 +36,13 @@ export {
   type PreviewReadinessRowStatus,
 } from "./previewReadiness";
 export {
+  previewAudioCurrentnessTechnicalDetail,
+  resolvePreviewAudioCurrentness,
+  type PreviewAudioCurrentness,
+  type PreviewAudioCurrentnessInput,
+  type PreviewAudioCurrentnessReason,
+} from "./previewAudioCurrentness";
+export {
   PREVIEW_AUDITION_NOT_FOUND_MESSAGE,
   PreviewGeneratedAudioPanel,
   PreviewConfirmationStrip,

@@ -1,5 +1,6 @@
 import type { BookScope, BookSource, PreparedSource, VoiceJob } from "../../types";
 import { bookScopeKey } from "../book-cinema/model";
+import { completedJobHasPlayableAudio } from "./generatedAudioLifecycle";
 
 export type WorkbenchAudioRestoreSource =
   | {
@@ -92,7 +93,7 @@ export function voiceJobMatchesWorkbenchSource(
 }
 
 function isPlayableCompletedJob(job: VoiceJob): boolean {
-  return job.status === "completed" && job.audioUrl.trim().length > 0;
+  return completedJobHasPlayableAudio(job);
 }
 
 function belongsToProject(job: VoiceJob, activeProjectId: string): boolean {

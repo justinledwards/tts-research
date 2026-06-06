@@ -14,7 +14,10 @@ import {
   audioReviewWarningCount,
   audioReviewWarningSummary,
 } from "../playback/audioReviewWarnings";
-import type { GeneratedAudioLifecycleState } from "../playback/generatedAudioLifecycle";
+import {
+  completedJobHasPlayableAudio,
+  type GeneratedAudioLifecycleState,
+} from "../playback/generatedAudioLifecycle";
 import {
   operationalGeneratedAudioLifecycleReason,
   operationalIssueTone,
@@ -133,6 +136,7 @@ export interface NarrationStatusModel {
 }
 
 export interface NarrationStatusModelInput {
+  readonly audioCurrentnessDetail?: string;
   readonly canCreate: boolean;
   readonly canOpenCinema: boolean;
   readonly disclosure: WorkspaceDisclosureModel;
@@ -289,6 +293,7 @@ function resolveNarrationOperationalIssues({
   const blocker = input.stageStatus.blocker;
   const completedPlayableAudio = isCompletedPlayableAudio(input.job, input.generatedAudioLifecycle);
   const audioIssue = resolveOperationalAudioIssue({
+    audioCurrentnessDetail: input.audioCurrentnessDetail,
     canCancel: Boolean(input.job && !isTerminalJob(input.job) && input.isProcessing),
     canCreate: input.canCreate,
     canOpenCinema: input.canOpenCinema,
@@ -650,6 +655,7 @@ function audioLifecycleBlocker(input: NarrationStatusModelInput): NarrationStatu
     return {
       actionLabel: input.canCreate ? "Rebuild audio" : null,
       detail: operationalGeneratedAudioLifecycleReason("stale"),
+      technicalDetail: input.audioCurrentnessDetail,
       title: "Audio needs rebuild",
     };
   }
@@ -657,6 +663,7 @@ function audioLifecycleBlocker(input: NarrationStatusModelInput): NarrationStatu
     return {
       actionLabel: input.canCreate ? "Rebuild audio" : null,
       detail: operationalGeneratedAudioLifecycleReason("degraded"),
+      technicalDetail: input.audioCurrentnessDetail,
       title: "Audio needs rebuild",
     };
   }
@@ -875,9 +882,7 @@ function isCompletedPlayableAudio(
   job: VoiceJob | null,
   generatedAudioLifecycle: GeneratedAudioLifecycleState,
 ): boolean {
-  return (
-    generatedAudioLifecycle === "ready" && job?.status === "completed" && Boolean(job.audioUrl)
-  );
+  return generatedAudioLifecycle === "ready" && completedJobHasPlayableAudio(job);
 }
 
 function audioReviewNoteSummary(count: number): string {

@@ -1,3 +1,11 @@
+## 2026-06-06 12:59 CEST - Commit Current State
+- [x] Record working log checkpoint for commit request
+- [x] Review and stage intended file changes
+- [x] Run quick diff check
+- [x] Run project checks
+- Validation: `pnpm --filter @tts-research/frontend test -- frontend/src/features/preview/previewAudioCurrentness.test.ts frontend/src/features/preview/preview.test.ts frontend/src/features/revision/revision.test.ts frontend/src/features/playback/playbackActionRules.test.ts frontend/src/features/status-strip/model.test.ts frontend/src/features/operational-status/operationalStatus.test.ts frontend/src/runConfig.test.ts` was run; one unrelated failure in `frontend/src/features/cinema/preparedSourceModel.test.tsx` due `globalThis.localStorage` access in test environment.
+- [ ] Commit current working tree
+
 ## 2026-06-05 16:35 CEST - CPU-First Follow-Along Optimization
 - [x] Add advisory read-along performance benchmark artifacts
 - [x] Extend read-along performance snapshot metrics
@@ -1784,3 +1792,17 @@ duplicating every implementation detail from commits, PR text, or generated revi
 ## 2026-06-06 11:37 CEST - Commit Current Repo State
 - [x] Stage current changes
 - [x] Create commit
+
+## 2026-06-06 12:11 CEST - Fix False Audio Stale Completion
+- [x] Accept optimized text in Preview stale checks
+- [x] Align current request comparison with Create & Listen
+- [x] Add frontend regression coverage
+- [x] Run focused and project checks
+- [x] Validated with focused frontend revision/preview/run-config tests, `pnpm check`, and `git diff --check`; `pnpm check` still reports existing non-failing Biome warnings/infos in unrelated files
+
+## 2026-06-06 12:33 CEST - Fix Audio Review Ready State
+- [x] Add Preview audio currentness diagnostics
+- [x] Treat completed audio-review jobs as playable
+- [x] Add focused frontend regressions
+- [x] Run focused and project checks
+- [x] Validated with focused frontend Preview/status/playback/API tests, `pnpm check`, and `git diff --check`; `pnpm check` still reports existing non-failing Biome warnings/infos in unrelated files

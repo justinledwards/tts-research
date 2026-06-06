@@ -135,7 +135,9 @@ describe("resolveNarrationStatusModel", () => {
         canOpenCinema: true,
         generatedAudioLifecycle: "ready",
         job: job({
+          audioPartialUrl: "audio.partial.mp3",
           audioReadySegments: 2,
+          audioUrl: "",
           qualityReport: {
             averageLatencyMs: 120,
             averageSimilarity: 0.88,
@@ -277,6 +279,7 @@ describe("resolveNarrationStatusModel", () => {
   it("blocks stale or degraded audio before ready playback", () => {
     const stale = resolveNarrationStatusModel(
       input({
+        audioCurrentnessDetail: "audio-currentness=text-mismatch",
         generatedAudioLifecycle: "stale",
         job: job({ status: "completed" }),
       }),
@@ -290,6 +293,7 @@ describe("resolveNarrationStatusModel", () => {
 
     expect(stale.state).toBe("blocked");
     expect(stale.blocker?.title).toBe("Audio needs rebuild");
+    expect(stale.blocker?.technicalDetail).toContain("audio-currentness=text-mismatch");
     expect(degraded.state).toBe("blocked");
   });
 

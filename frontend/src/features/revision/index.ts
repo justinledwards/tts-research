@@ -69,7 +69,7 @@ export {
   buildCanonicalPreviewSpeechPlan,
   canonicalPreviewSpeechPlanHasBlocks,
   normalizePreviewSpeechPlanText,
-  previewSpeechPlanJobInputIsStale,
-  previewSpeechPlanMatchesJobInput,
+  previewSpeechPlanJobTextIsStale,
+  previewSpeechPlanMatchesJobText,
   type CanonicalPreviewSpeechPlan,
 } from "./revisionSpeechPlan";

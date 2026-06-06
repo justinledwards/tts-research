@@ -21,6 +21,7 @@ export {
   GENERATED_AUDIO_LIFECYCLE_DESCRIPTORS,
   GENERATED_AUDIO_LIFECYCLE_STATES,
   canQueueGeneratedAudioPlayback,
+  completedJobHasPlayableAudio,
   generatedAudioLifecycleDescriptor,
   generatedAudioLifecycleFromJob,
   generatedAudioLifecycleFromPlaybackState,

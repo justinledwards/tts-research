@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ApiRequestError,
+  audioSource,
   backendAssetUrl,
   clearHuggingFaceToken,
   createCustomSpeechPolicyProfile,
@@ -37,6 +38,16 @@ describe("API errors", () => {
     expect(backendAssetUrl("/api/voice-jobs/job/audio")).toBe("/api/voice-jobs/job/audio");
     expect(backendAssetUrl("api/voice-jobs/job/audio")).toBe("/api/voice-jobs/job/audio");
     expect(backendAssetUrl("https://example.com/audio.wav")).toBe("https://example.com/audio.wav");
+  });
+
+  it("falls back to partial audio when completed final audio URL is missing", () => {
+    expect(
+      audioSource({
+        audioPartialUrl: "/api/voice-jobs/job-1/audio/partial",
+        audioUrl: "",
+        status: "completed",
+      } as Parameters<typeof audioSource>[0]),
+    ).toBe("/api/voice-jobs/job-1/audio/partial");
   });
 
   it("explains stale backend project-delete routes", async () => {

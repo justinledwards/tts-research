@@ -135,6 +135,20 @@ describe("operational status model", () => {
     });
   });
 
+  it("includes Preview audio currentness reasons in rebuild diagnostics", () => {
+    const issue = resolveOperationalAudioIssue({
+      audioCurrentnessDetail: "audio-currentness=text-mismatch",
+      canCreate: true,
+      canOpenCinema: false,
+      job: job({ status: "completed" }),
+      lifecycle: "stale",
+      requiresAudio: true,
+    });
+
+    expect(issue.technicalDetail).toContain("status=completed");
+    expect(issue.technicalDetail).toContain("audio-currentness=text-mismatch");
+  });
+
   it("maps source, review, system, and cloning attention", () => {
     const source = resolveOperationalSourceIssue({
       descriptorLabel: "Narratable",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyKokoroRenderMode,
+  applySpeechPolicyToCreateVoiceJobRequest,
   buildCreateVoiceJobRequest,
   createRunConfiguration,
   kokoroEngineFamilyValue,
@@ -78,6 +79,30 @@ describe("run configuration helpers", () => {
     const draftRequest = buildCreateVoiceJobRequest("Hello", draft, "profile-1");
     expect(draftRequest.voiceProfileId).toBeUndefined();
     expect(draftRequest.pipelineOptions?.voiceClone).toBe(false);
+  });
+
+  it("normalizes speech policy fields for create job request parity", () => {
+    const request = buildCreateVoiceJobRequest("Hello", createRunConfiguration("draftPreview"), "");
+    const withPolicy = applySpeechPolicyToCreateVoiceJobRequest(request, {
+      speechPolicyOverrides: { footnoteMode: "skip" },
+      speechPolicyProfile: " Enterprise ",
+    });
+
+    expect(request.speechPolicyProfile).toBeUndefined();
+    expect(request.speechPolicyOverrides).toBeUndefined();
+    expect(withPolicy.speechPolicyProfile).toBe("Enterprise");
+    expect(withPolicy.speechPolicyOverrides).toEqual({ footnoteMode: "skip" });
+
+    const cleared = applySpeechPolicyToCreateVoiceJobRequest(withPolicy, {
+      speechPolicyOverrides: {},
+    });
+    expect(cleared.speechPolicyProfile).toBeUndefined();
+    expect(cleared.speechPolicyOverrides).toBeUndefined();
+
+    const defaulted = applySpeechPolicyToCreateVoiceJobRequest(request, {
+      speechPolicyProfile: "",
+    });
+    expect(defaulted.speechPolicyProfile).toBe("Enterprise");
   });
 
   it("maps Kokoro render modes to engine ids and clone intent", () => {

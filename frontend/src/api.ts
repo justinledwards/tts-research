@@ -1510,7 +1510,7 @@ export function audioSource(job: VoiceJob, options?: { partial: boolean }): stri
   const usePartial = options?.partial ?? false;
   const useStreamingPartial =
     usePartial && job.status !== "completed" && Boolean(job.audioPartialUrl);
-  const baseUrl = useStreamingPartial ? job.audioPartialUrl : job.audioUrl;
+  const baseUrl = useStreamingPartial ? job.audioPartialUrl : job.audioUrl || job.audioPartialUrl;
   if (!baseUrl) {
     return "";
   }

@@ -48,6 +48,17 @@ describe("playback ownership model", () => {
     expect(generatedAudioLifecycleFromJob({ job: voiceJob("completed", "/audio.wav") })).toBe(
       "ready",
     );
+    expect(
+      generatedAudioLifecycleFromJob({
+        job: {
+          audioPartialUrl: "/audio/partial.wav",
+          audioReadySegments: 2,
+          audioUrl: "",
+          retries: { totalSegments: 2 },
+          status: "completed",
+        } as VoiceJob,
+      }),
+    ).toBe("ready");
     expect(generatedAudioLifecycleFromJob({ job: voiceJob("completed") })).toBe("degraded");
     expect(generatedAudioLifecycleFromJob({ job: voiceJob("failed") })).toBe("failed");
     expect(

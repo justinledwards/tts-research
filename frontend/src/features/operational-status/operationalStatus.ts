@@ -66,6 +66,7 @@ export interface OperationalStatusIssue {
 }
 
 interface OperationalAudioIssueInput {
+  readonly audioCurrentnessDetail?: string;
   readonly canCancel?: boolean;
   readonly canCreate: boolean;
   readonly canOpenCinema: boolean;
@@ -227,6 +228,7 @@ export function operationalGeneratedAudioLifecycleReason(
 }
 
 export function resolveOperationalAudioIssue({
+  audioCurrentnessDetail,
   canCancel = false,
   canCreate,
   canOpenCinema,
@@ -247,11 +249,17 @@ export function resolveOperationalAudioIssue({
   }
 
   if (lifecycle === "ready") {
-    return resolveReadyAudioIssue(job, canOpenCinema);
+    return resolveReadyAudioIssue(job, canOpenCinema, audioCurrentnessDetail);
   }
 
   if (isAudioRecoveryLifecycle(lifecycle)) {
-    return resolveRecoveryAudioIssue(job, lifecycle, canCreate, requiresAudio);
+    return resolveRecoveryAudioIssue(
+      job,
+      lifecycle,
+      canCreate,
+      requiresAudio,
+      audioCurrentnessDetail,
+    );
   }
 
   if (lifecycle === "queued" || lifecycle === "generating") {
@@ -620,6 +628,7 @@ function resolveCancelledAudioIssue(
 function resolveReadyAudioIssue(
   job: VoiceJob | null,
   canOpenCinema: boolean,
+  audioCurrentnessDetail?: string,
 ): OperationalStatusIssue {
   return audioIssue({
     chipValue: "Ready",
@@ -631,7 +640,7 @@ function resolveReadyAudioIssue(
       ? operationalRecovery("openCinema", true)
       : operationalRecovery("none", false, "No audio recovery is needed."),
     severity: "ok",
-    technicalDetail: job ? jobDetail(job) : undefined,
+    technicalDetail: audioIssueTechnicalDetail(job, audioCurrentnessDetail),
   });
 }
 
@@ -646,6 +655,7 @@ function resolveRecoveryAudioIssue(
   lifecycle: Extract<GeneratedAudioLifecycleState, "archived" | "degraded" | "stale">,
   canCreate: boolean,
   requiresAudio: boolean,
+  audioCurrentnessDetail?: string,
 ): OperationalStatusIssue {
   const recoveryUnavailableReason =
     "Rebuild audio is unavailable until the source and voice are ready.";
@@ -662,7 +672,7 @@ function resolveRecoveryAudioIssue(
       canCreate ? undefined : recoveryUnavailableReason,
     ),
     severity: "warning",
-    technicalDetail: job ? jobDetail(job) : undefined,
+    technicalDetail: audioIssueTechnicalDetail(job, audioCurrentnessDetail),
   });
 }
 
@@ -707,6 +717,17 @@ function resolveMissingAudioIssue(
     severity: requiresAudio ? "warning" : "ok",
     technicalDetail: job ? jobDetail(job) : undefined,
   });
+}
+
+function audioIssueTechnicalDetail(
+  job: VoiceJob | null,
+  audioCurrentnessDetail?: string,
+): string | undefined {
+  const base = job ? jobDetail(job) : undefined;
+  if (base && audioCurrentnessDetail) {
+    return `${base} | ${audioCurrentnessDetail}`;
+  }
+  return audioCurrentnessDetail ?? base;
 }
 
 function audioIssue(

@@ -24,7 +24,7 @@ import {
 } from "./revisionFilters";
 import {
   buildCanonicalPreviewSpeechPlan,
-  previewSpeechPlanJobInputIsStale,
+  previewSpeechPlanJobTextIsStale,
 } from "./revisionSpeechPlan";
 
 const blocks: RevisionBlock[] = [
@@ -241,7 +241,35 @@ describe("revision filters", () => {
     expect(composeReviewedSpeechText(previewBlocks)).toBe(plan.text);
   });
 
-  it("marks completed audio stale when job input still contains skipped cues", () => {
+  it("keeps completed audio current when optimized job text matches the spoken plan", () => {
+    const plan = buildCanonicalPreviewSpeechPlan([
+      block({ id: "body", index: 1, spokenText: "CPU Nguyen paid twelve pounds." }),
+    ]);
+
+    expect(
+      previewSpeechPlanJobTextIsStale(plan, {
+        inputText: "CPU Nguyen paid £12.",
+        optimizedText: "CPU Nguyen paid twelve pounds.",
+        status: "completed",
+      }),
+    ).toBe(false);
+  });
+
+  it("marks completed audio stale when neither submitted nor optimized text matches", () => {
+    const plan = buildCanonicalPreviewSpeechPlan([
+      block({ id: "body", index: 1, spokenText: "Current narration body." }),
+    ]);
+
+    expect(
+      previewSpeechPlanJobTextIsStale(plan, {
+        inputText: "Previous narration body.",
+        optimizedText: "Previous narration body.",
+        status: "completed",
+      }),
+    ).toBe(true);
+  });
+
+  it("marks completed audio stale when job text still contains skipped cues", () => {
     const plan = buildCanonicalPreviewSpeechPlan([
       block({ id: "intro", index: 1, spokenText: "Intro body." }),
       block({
@@ -257,14 +285,16 @@ describe("revision filters", () => {
     ]);
 
     expect(
-      previewSpeechPlanJobInputIsStale(plan, {
+      previewSpeechPlanJobTextIsStale(plan, {
         inputText: "Intro body.\n\n## References\n\nBody resumes.",
+        optimizedText: "Intro body.\n\n## References\n\nBody resumes.",
         status: "completed",
       }),
     ).toBe(true);
     expect(
-      previewSpeechPlanJobInputIsStale(plan, {
+      previewSpeechPlanJobTextIsStale(plan, {
         inputText: "Intro body. Body resumes.",
+        optimizedText: "Intro body. Body resumes.",
         status: "completed",
       }),
     ).toBe(false);

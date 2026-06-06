@@ -31,6 +31,37 @@ describe("workbench audio restore", () => {
     ).toBe(newerJob.id);
   });
 
+  it("restores a completed prepared-source job with complete partial audio", () => {
+    const source = preparedSource({ id: "source-1", updatedAt: "2026-06-04T10:00:00Z" });
+    const partialJob = voiceJob({
+      audioPartialUrl: "/api/jobs/job/audio/partial",
+      audioReadySegments: 2,
+      audioUrl: "",
+      completedAt: "2026-06-04T10:15:00Z",
+      preparedSourceId: source.id,
+      retries: {
+        attempts: 2,
+        currentSegment: 2,
+        maxRetries: 2,
+        segmentAttempts: 2,
+        totalSegments: 2,
+      },
+      segments: [
+        { index: 1, status: "ready", text: "Prepared " },
+        { index: 2, status: "ready", text: "narration text" },
+      ],
+    });
+
+    expect(
+      findRestorableWorkbenchJob({
+        activeProjectId: PROJECT_ID,
+        currentJob: null,
+        jobs: [partialJob],
+        source: { mode: "prepared", source },
+      })?.id,
+    ).toBe(partialJob.id);
+  });
+
   it("rejects non-playable, stale, wrong-source, and wrong-project prepared jobs", () => {
     const source = preparedSource({ id: "source-1", updatedAt: "2026-06-04T10:00:00Z" });
 

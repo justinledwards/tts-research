@@ -146,6 +146,7 @@ import { looksLikeMermaidDiagram } from "./markdownModel";
 import { findKokoroVoicepack, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
 import {
   applyKokoroRenderMode,
+  applySpeechPolicyToCreateVoiceJobRequest,
   buildCreateVoiceJobRequest,
   createRunConfiguration,
   getRunModePreset,
@@ -218,7 +219,6 @@ import {
   canonicalPreviewSpeechPlanHasBlocks,
   composeReviewedSpeechText,
   deriveRevisionBlockStatus,
-  previewSpeechPlanJobInputIsStale,
   normalizeRevisionPolicyNoteType,
   REVISION_STATUS_LABELS,
   revisionBlockIsSpeakable,
@@ -321,6 +321,7 @@ import {
   type PreviewReadinessModel,
   type PreviewReadinessRow,
 } from "./features/preview/previewReadiness";
+import { resolvePreviewAudioCurrentness } from "./features/preview/previewAudioCurrentness";
 import {
   PREVIEW_AUDITION_NOT_FOUND_MESSAGE,
   PreviewGeneratedAudioPanel,
@@ -1334,66 +1335,6 @@ function preparedSourceTextMatchesJob(source: PreparedSource, job: VoiceJob): bo
 
 function normalizeComparableText(value: string): string {
   return value.trim().replaceAll(/\s+/g, " ");
-}
-
-function voiceJobConfigIsStaleForRequest(
-  job: VoiceJob | null,
-  request: CreateVoiceJobRequest,
-): boolean {
-  if (job?.status !== "completed") {
-    return false;
-  }
-  if (storedFieldDiffers(job.runMode, request.runMode)) {
-    return true;
-  }
-  if (storedFieldDiffers(job.performanceMode, request.performanceMode)) {
-    return true;
-  }
-  if (storedFieldDiffers(job.ttsEngine, request.ttsEngine)) {
-    return true;
-  }
-  if (storedFieldDiffers(job.voiceProfileId, request.voiceProfileId)) {
-    return true;
-  }
-  if (storedFieldDiffers(job.voiceId, request.voiceId)) {
-    return true;
-  }
-  if (request.ttsVoice && storedFieldDiffers(job.ttsVoice ?? job.voice, request.ttsVoice)) {
-    return true;
-  }
-  if (request.ttsLanguage && storedFieldDiffers(job.ttsLanguage, request.ttsLanguage)) {
-    return true;
-  }
-  if (
-    job.speechPolicyProfile &&
-    request.speechPolicyProfile &&
-    normalizeSpeechPolicyProfile(job.speechPolicyProfile) !==
-      normalizeSpeechPolicyProfile(request.speechPolicyProfile)
-  ) {
-    return true;
-  }
-  return (
-    compactOverridesFingerprint(job.speechPolicyOverrides) !==
-      compactOverridesFingerprint(request.speechPolicyOverrides) &&
-    (compactOverridesFingerprint(job.speechPolicyOverrides) !== "{}" ||
-      compactOverridesFingerprint(request.speechPolicyOverrides) !== "{}")
-  );
-}
-
-function storedFieldDiffers(
-  stored: string | null | undefined,
-  expected: string | null | undefined,
-): boolean {
-  const cleanStored = (stored ?? "").trim();
-  const cleanExpected = (expected ?? "").trim();
-  if (!cleanStored && !cleanExpected) {
-    return false;
-  }
-  return cleanStored !== cleanExpected;
-}
-
-function compactOverridesFingerprint(overrides: SpeechPolicyOverrides | undefined): string {
-  return JSON.stringify(compactSpeechPolicyOverrides(overrides ?? {}));
 }
 
 function generationTextForPreviewSpeechPlan(
@@ -3461,15 +3402,13 @@ export function App() {
     () => buildCanonicalPreviewSpeechPlan(narrationPreviewBlocks),
     [narrationPreviewBlocks],
   );
-  const canonicalPreviewGenerationRequest = buildVoiceJobRequest(
-    generationTextForPreviewSpeechPlan(canonicalPreviewSpeechPlan, text),
-    activeNarrationPreparedSource,
+  const canonicalPreviewGenerationRequest = applySpeechPolicyToCreateVoiceJobRequest(
+    buildVoiceJobRequest(
+      generationTextForPreviewSpeechPlan(canonicalPreviewSpeechPlan, text),
+      activeNarrationPreparedSource,
+    ),
+    { speechPolicyOverrides, speechPolicyProfile },
   );
-  canonicalPreviewGenerationRequest.speechPolicyProfile = speechPolicyProfile;
-  const canonicalPreviewSessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
-  if (hasSpeechPolicyOverrides(canonicalPreviewSessionOverrides)) {
-    canonicalPreviewGenerationRequest.speechPolicyOverrides = canonicalPreviewSessionOverrides;
-  }
   const hasRevisionSessionChanges =
     Object.keys(revisionEditedTextByBlockId).length > 0 ||
     Object.keys(revisionStatusByBlockId).length > 0;
@@ -3784,12 +3723,14 @@ export function App() {
     [activeProjectId, effectiveBookScope, hashReadingPosition, selectedBookSource],
   );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
-  const previewAudioStale =
-    previewSpeechPlanJobInputIsStale(canonicalPreviewSpeechPlan, job) ||
-    voiceJobConfigIsStaleForRequest(job, canonicalPreviewGenerationRequest);
+  const previewAudioCurrentness = resolvePreviewAudioCurrentness({
+    job,
+    request: canonicalPreviewGenerationRequest,
+    speechPlan: canonicalPreviewSpeechPlan,
+  });
   const generatedAudioLifecycle = generatedAudioLifecycleFromJob({
     job,
-    stale: previewAudioStale,
+    stale: previewAudioCurrentness.stale,
   });
   const canOpenCurrentCinema = generatedAudioLifecycle === "ready";
   const canonicalPreviewHasBlocks = canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan);
@@ -4012,6 +3953,7 @@ export function App() {
       resolveNarrationStatusModel({
         canCreate: canRunCurrentGenerationAction,
         canOpenCinema: canOpenCurrentCinema,
+        audioCurrentnessDetail: previewAudioCurrentness.technicalDetail,
         disclosure: workspaceDisclosure,
         generatedAudioLifecycle,
         hint: ttsPipelineHint,
@@ -4027,6 +3969,7 @@ export function App() {
       }),
     [
       activeWorkbenchStageStatus,
+      previewAudioCurrentness.technicalDetail,
       canRunCurrentGenerationAction,
       canOpenCurrentCinema,
       generatedAudioLifecycle,
@@ -4075,12 +4018,14 @@ export function App() {
     voiceProfileLabel: selectedVoiceProfileLabel,
   });
   const workspaceAudioReviewSummary = audioReviewWarningSummary(job);
-  const workspaceAudioLifecycleLabel = workspaceAudioReviewSummary
-    ? "Audio review"
-    : generatedAudioLifecycleLabel(generatedAudioLifecycle);
-  const workspaceAudioLifecycleTone = workspaceAudioReviewSummary
-    ? "warning"
-    : audioLifecycleTone(generatedAudioLifecycle);
+  const workspaceAudioLifecycleLabel =
+    workspaceAudioReviewSummary && generatedAudioLifecycle === "ready"
+      ? "Audio review"
+      : generatedAudioLifecycleLabel(generatedAudioLifecycle);
+  const workspaceAudioLifecycleTone =
+    workspaceAudioReviewSummary && generatedAudioLifecycle === "ready"
+      ? "warning"
+      : audioLifecycleTone(generatedAudioLifecycle);
   const workspaceInspectorTargets = useMemo<WorkspaceInspectorContextTargets>(
     () => ({
       cues: narrationPreviewBlocks.map((block) =>
@@ -4090,6 +4035,7 @@ export function App() {
       jobs: job
         ? [
             workspaceInspectorJobDetail({
+              audioCurrentnessDetail: previewAudioCurrentness.technicalDetail,
               audioLifecycleLabel: workspaceAudioLifecycleLabel,
               job,
               queue: narrationStatusModel.queue,
@@ -4115,6 +4061,7 @@ export function App() {
       narrationPreviewBlocks,
       narrationStatusModel.issues,
       narrationStatusModel.queue,
+      previewAudioCurrentness.technicalDetail,
       selectedVoiceProfileId,
       selectedVoiceProfileLabel,
       statusSourceLifecycle.sourceId,
@@ -7356,7 +7303,10 @@ export function App() {
       setError("Current preview has no speakable blocks.");
       return;
     }
-    const request = buildVoiceJobRequest(sourceText);
+    const request = applySpeechPolicyToCreateVoiceJobRequest(buildVoiceJobRequest(sourceText), {
+      speechPolicyOverrides,
+      speechPolicyProfile,
+    });
     if (hasRevisionSessionChanges) {
       request.speechRenderApplied = true;
     }
@@ -13918,10 +13868,12 @@ function workspaceInspectorCueDetail(
 }
 
 function workspaceInspectorJobDetail({
+  audioCurrentnessDetail,
   audioLifecycleLabel,
   job,
   queue,
 }: Readonly<{
+  audioCurrentnessDetail?: string;
   audioLifecycleLabel: string;
   job: VoiceJob;
   queue: {
@@ -13970,6 +13922,9 @@ function workspaceInspectorJobDetail({
     notes: [
       reviewWarningSummary
         ? { detail: reviewWarningSummary, label: "Audio review", tone: "warning" }
+        : null,
+      audioCurrentnessDetail
+        ? { detail: audioCurrentnessDetail, label: "Currentness", tone: "warning" }
         : null,
       ...reviewWarningReasons.map((reason) => ({
         detail: reason,
