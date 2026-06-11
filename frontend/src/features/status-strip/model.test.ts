@@ -532,6 +532,7 @@ function sourceLifecycle(
     selectedScope: "Draft text",
     sourceId: "draft",
     sourceKind: "draft",
+    sourceOwner: "project",
     sourceReadiness: {
       detail: "Source is ready for Review.",
       state: "ready",

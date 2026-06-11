@@ -392,6 +392,7 @@ type VoiceJob struct {
 	BookSourceID            string            `json:"bookSourceId,omitempty"`
 	BookScope               *BookScope        `json:"bookScope,omitempty"`
 	PreparedSourceID        string            `json:"preparedSourceId,omitempty"`
+	TemporarySourceID       string            `json:"temporarySourceId,omitempty"`
 	SelectedBlockIDs        []string          `json:"selectedBlockIds,omitempty"`
 	SourceKind              string            `json:"sourceKind,omitempty"`
 	ProgressTargetID        string            `json:"progressTargetId,omitempty"`

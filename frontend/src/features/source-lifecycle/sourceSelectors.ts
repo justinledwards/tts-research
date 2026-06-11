@@ -24,6 +24,7 @@ export {
   bookSourceLifecycleEnvelope,
   draftSourceLifecycleEnvelope,
   preparedSourceLifecycleEnvelope,
+  temporarySourceLifecycleEnvelope,
 } from "./sourceEnvelope";
 
 export interface SourceLifecycleRouteState {

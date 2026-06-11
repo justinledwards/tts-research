@@ -1,4 +1,11 @@
-import type { BookScope, BookSource, PreparedSource, SourceReadiness, VoiceJob } from "../../types";
+import type {
+  BookScope,
+  BookSource,
+  PreparedSource,
+  SourceReadiness,
+  TemporarySourceSession,
+  VoiceJob,
+} from "../../types";
 import { bookScopeLabel, bookSourceName } from "../book-cinema/model";
 import {
   generatedAudioLifecycleFromJob,
@@ -67,6 +74,8 @@ export function bookSourceLifecycleEnvelope(
     projectId: options.projectId ?? source.projectId,
     selectedScope: options.selectedScope ? bookScopeLabel(options.selectedScope) : "Default scope",
     sourceId: source.id,
+    sourceOwner: source.sourceOwner ?? "project",
+    temporarySourceId: source.temporarySourceId,
     sourceKind: source.kind === "html" ? "website" : "book",
     sourceReadiness,
     title: bookSourceName(source),
@@ -123,6 +132,8 @@ export function preparedSourceLifecycleEnvelope(
     projectId: options.projectId ?? source.projectId,
     selectedScope: "Full source",
     sourceId: source.id,
+    sourceOwner: source.sourceOwner ?? "project",
+    temporarySourceId: source.temporarySourceId,
     sourceKind: preparedSourceKind(source),
     sourceReadiness,
     title: source.title ?? source.sourceName,
@@ -164,6 +175,7 @@ export function draftSourceLifecycleEnvelope({
     projectId,
     selectedScope: "Draft text",
     sourceId: "draft",
+    sourceOwner: "project",
     sourceKind: "draft",
     sourceReadiness: {
       confidence: hasText ? "medium" : "low",
@@ -176,6 +188,62 @@ export function draftSourceLifecycleEnvelope({
     },
     title: "Draft text",
     wordCount: hasText ? text.trim().split(/\s+/).length : 0,
+  };
+}
+
+export function temporarySourceLifecycleEnvelope(
+  source: TemporarySourceSession,
+  options: {
+    activeBlockId?: string | null;
+    generated?: boolean;
+    isActive?: boolean;
+    job?: VoiceJob | null;
+    lastOpenedSurface?: SourceLifecycleSurface;
+  } = {},
+): SourceLifecycleEnvelope {
+  const generatedAudioState = sourceGeneratedAudioState({
+    generated: options.generated,
+    job: options.job,
+    sourceUpdatedAt: source.updatedAt,
+  });
+  const extractionState = temporaryExtractionState(source.status);
+  const sourceReadiness = temporarySourceReadiness(source);
+  const narrationState = temporaryNarrationState(
+    source.status,
+    generatedAudioState,
+    sourceReadiness,
+  );
+  const canonicalState = canonicalSourceLifecycleState({
+    extractionState,
+    generatedAudioState,
+    narrationState,
+  });
+
+  return {
+    activeBlockId: options.activeBlockId ?? null,
+    adapterKind: temporaryAdapterKind(source.kind),
+    canonicalState,
+    disabledReason: sourceReadinessDisabledReason(sourceReadiness, source.error),
+    expiresAt: source.expiresAt,
+    extractionState,
+    generatedAudioState,
+    isActive: Boolean(options.isActive),
+    language: sourceLanguage(source),
+    lastOpenedSurface: options.lastOpenedSurface ?? "Workspace",
+    narratableUnitCount: source.summary?.spokenBlockCount ?? source.blockCount ?? 0,
+    narrationState,
+    policyScope: "source",
+    promotionStatus: source.promotionStatus,
+    selectedScope: "Temporary session",
+    sourceId: source.id,
+    sourceKind: temporarySourceKind(source.kind),
+    sourceOwner: "temporary",
+    sourceReadiness,
+    temporarySourceId: source.temporarySourceId,
+    temporaryStatus: source.status,
+    title: source.title ?? source.sourceName,
+    updatedAt: source.updatedAt,
+    wordCount: source.wordCount,
   };
 }
 
@@ -222,6 +290,94 @@ function extractionStateForStatus(
     return status === "ready" ? "imported" : "extracting";
   }
   return "extracted";
+}
+
+function temporaryExtractionState(status: TemporarySourceSession["status"]): SourceExtractionState {
+  switch (status) {
+    case "created": {
+      return "new";
+    }
+    case "importing": {
+      return "extracting";
+    }
+    case "failed": {
+      return "failed";
+    }
+    case "discarded":
+    case "expired":
+    case "promoted": {
+      return "archived";
+    }
+    default: {
+      return "extracted";
+    }
+  }
+}
+
+function temporaryNarrationState(
+  status: TemporarySourceSession["status"],
+  generatedAudioState: GeneratedAudioLifecycleState,
+  readiness: SourceReadiness,
+): SourceNarrationState {
+  if (status === "failed" || generatedAudioState === "failed") {
+    return "failed";
+  }
+  if (status === "discarded" || status === "expired" || status === "promoted") {
+    return "archived";
+  }
+  if (status === "stale" || generatedAudioState === "stale" || generatedAudioState === "degraded") {
+    return "stale";
+  }
+  if (status === "audio_ready" || generatedAudioState === "ready") {
+    return "audioReady";
+  }
+  if (
+    status === "generating" ||
+    generatedAudioState === "generating" ||
+    generatedAudioState === "queued"
+  ) {
+    return "generating";
+  }
+  if (status === "previewable") {
+    return "previewable";
+  }
+  if (status === "reviewable" || readiness.state === "ready") {
+    return "reviewable";
+  }
+  return "prepared";
+}
+
+function temporarySourceReadiness(source: TemporarySourceSession): SourceReadiness {
+  if (source.sourceReadiness) {
+    return source.sourceReadiness;
+  }
+  if (source.status === "failed") {
+    return {
+      detail: source.error ?? "Temporary source failed.",
+      failureStage: "extraction",
+      state: "failed",
+      title: source.title ?? source.sourceName,
+    };
+  }
+  if (source.status === "needs_metadata") {
+    return {
+      detail: "Temporary source needs metadata before narration.",
+      state: "needsMetadata",
+      title: source.title ?? source.sourceName,
+    };
+  }
+  if (source.status === "expired" || source.status === "discarded") {
+    return {
+      detail: "Temporary source is no longer available.",
+      state: "stale",
+      title: source.title ?? source.sourceName,
+    };
+  }
+  return {
+    detail: "Temporary source is available for this session.",
+    state: source.status === "created" || source.status === "importing" ? "importing" : "ready",
+    title: source.title ?? source.sourceName,
+  };
 }
 
 function narrationStateForSource({
@@ -299,6 +455,40 @@ function preparedSourceAdapterKind(source: PreparedSource): SourceAdapterKind {
   return "unknown";
 }
 
+function temporarySourceKind(kind: TemporarySourceSession["kind"]): SourceKind {
+  if (kind === "url" || kind === "html") {
+    return "website";
+  }
+  if (kind === "text") {
+    return "text";
+  }
+  if (kind === "book" || kind === "epub" || kind === "pdf") {
+    return "book";
+  }
+  return "document";
+}
+
+function temporaryAdapterKind(kind: TemporarySourceSession["kind"]): SourceAdapterKind {
+  switch (kind) {
+    case "book":
+    case "docx":
+    case "epub":
+    case "html":
+    case "image":
+    case "markdown":
+    case "pdf":
+    case "text": {
+      return kind;
+    }
+    case "url": {
+      return "url";
+    }
+    case "file": {
+      return "unknown";
+    }
+  }
+}
+
 function bookAdapterKind(kind: BookSource["kind"]): SourceAdapterKind {
   if (kind === "html") {
     return "html";
@@ -335,7 +525,7 @@ function sourcePolicyScope(source: BookSource | PreparedSource): "project" | "so
     : "project";
 }
 
-function sourceLanguage(source: BookSource | PreparedSource): string {
+function sourceLanguage(source: BookSource | PreparedSource | TemporarySourceSession): string {
   const metadataLanguage =
     "metadata" in source && typeof source.metadata?.language === "string"
       ? source.metadata.language

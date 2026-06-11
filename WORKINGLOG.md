@@ -1,3 +1,10 @@
+## 2026-06-11 18:08 CEST - Reviewer ZIP and Screen Evidence
+- [x] Inspect existing reviewer archive and screenshot tooling
+- [x] Capture app screenshots for reviewer reference
+- [x] Add reviewer notes for temporary source workpackages
+- [x] Create reviewer ZIP package
+- [x] Run project checks before handoff
+
 ## 2026-06-06 19:55 CEST - Fix Create & Listen CUE skip regression
 - [x] Stabilize prepared-source selected block resolution with canonical-plan validation and fallback.
 - [x] Harden prepared-source request assembly with source-scope dedupe/order guard and non-empty fallback.
@@ -1830,6 +1837,13 @@ duplicating every implementation detail from commits, PR text, or generated revi
 
 ## 2026-06-05 23:48 CEST - Follow-Along Skipped Markdown Blocks
 - [x] Inspect read-along skipped-block mapping
+## 2026-06-11 18:59 CEST - Temporary Source Domain Model
+- [x] Map existing source schemas and API envelopes
+- [x] Add temporary source schema and lifecycle/state model
+- [x] Update backend and frontend source envelope types
+- [x] Add migration notes for unchanged project source behavior
+- [x] Run project checks
+
 - [x] Add skipped and summarized Markdown fixtures
 - [x] Enforce wrong-visible-block failures
 - [x] Run focused and project validation

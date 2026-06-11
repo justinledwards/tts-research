@@ -686,6 +686,7 @@ func createRetryJobRequest(job VoiceJob) CreateJobRequest {
 		BookSourceID:          job.BookSourceID,
 		BookScope:             cloneBookScope(job.BookScope),
 		PreparedSourceID:      job.PreparedSourceID,
+		TemporarySourceID:     job.TemporarySourceID,
 		SelectedBlockIDs:      append([]string(nil), job.SelectedBlockIDs...),
 		SourceKind:            job.SourceKind,
 		ProgressTargetID:      job.ProgressTargetID,

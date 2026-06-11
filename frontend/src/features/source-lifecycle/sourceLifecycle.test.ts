@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BookSource, PreparedSource, VoiceJob } from "../../types";
+import type { BookSource, PreparedSource, TemporarySourceSession, VoiceJob } from "../../types";
 import {
   ARTIFACT_COMPATIBILITY_UI_LABELS,
   SOURCE_LIFECYCLE_STATES,
@@ -9,6 +9,7 @@ import {
   preparedSourceLifecycleEnvelope,
   sourceSelectionContinuitySummary,
   sourceSelectorOption,
+  temporarySourceLifecycleEnvelope,
 } from "./index";
 
 describe("canonical source lifecycle", () => {
@@ -64,6 +65,33 @@ describe("canonical source lifecycle", () => {
     });
     expect(sourceSelectorOption(envelope, "prepared").optionLabel).toContain("Example article");
     expect(sourceSelectorOption(envelope, "prepared").optionLabel).toContain("Narratable");
+  });
+
+  it("keeps existing prepared sources project-owned by default", () => {
+    const envelope = preparedSourceLifecycleEnvelope(preparedSourceFixture);
+
+    expect(envelope).toMatchObject({
+      projectId: "project-1",
+      sourceId: "prepared-1",
+      sourceOwner: "project",
+      temporarySourceId: undefined,
+    });
+  });
+
+  it("builds temporary source envelopes without a project id", () => {
+    const envelope = temporarySourceLifecycleEnvelope(temporarySourceFixture);
+
+    expect(envelope).toMatchObject({
+      canonicalState: "reviewable",
+      expiresAt: "2026-05-23T09:00:00Z",
+      policyScope: "source",
+      promotionStatus: "notPromoted",
+      sourceId: "temp-source-1",
+      sourceOwner: "temporary",
+      temporarySourceId: "temp-source-1",
+      temporaryStatus: "reviewable",
+    });
+    expect("projectId" in envelope).toBe(false);
   });
 
   it("marks generated audio stale when the source changed after the run", () => {
@@ -163,6 +191,39 @@ const bookSourceFixture: BookSource = {
   title: "PDF source",
   updatedAt: "2026-05-22T09:00:00Z",
   wordCount: 1200,
+};
+
+const temporarySourceFixture: TemporarySourceSession = {
+  artifacts: [
+    {
+      createdAt: "2026-05-22T09:00:00Z",
+      id: "temp-artifact-1",
+      kind: "extraction",
+      scope: "temporary",
+    },
+  ],
+  blockCount: 2,
+  createdAt: "2026-05-22T09:00:00Z",
+  expiresAt: "2026-05-23T09:00:00Z",
+  id: "temp-source-1",
+  kind: "text",
+  lastAccessedAt: "2026-05-22T09:30:00Z",
+  promotionStatus: "notPromoted",
+  sourceName: "Quick listen",
+  sourceOwner: "temporary",
+  status: "reviewable",
+  summary: {
+    citationSkipCount: 0,
+    headingCount: 0,
+    sentenceSegmentCount: 2,
+    skippedBlockCount: 0,
+    spokenBlockCount: 2,
+  },
+  temporarySourceId: "temp-source-1",
+  text: "A short temporary source.",
+  title: "Quick listen",
+  updatedAt: "2026-05-22T09:30:00Z",
+  wordCount: 4,
 };
 
 const completedPreparedJob: VoiceJob = {

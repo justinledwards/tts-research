@@ -39,6 +39,7 @@ export interface CreateVoiceJobRequest {
   bookSourceId?: string;
   bookScope?: BookScope;
   preparedSourceId?: string;
+  temporarySourceId?: string;
   selectedBlockIds?: string[];
   sourceKind?: string;
   progressTargetId?: string;
@@ -113,6 +114,37 @@ export interface ProjectStorageSummary {
 }
 
 export type BookSourceStatus = "ready" | "failed";
+
+export type SourceOwner = "project" | "temporary";
+
+export type TemporarySourceLifecycleState =
+  | "created"
+  | "importing"
+  | "extracted"
+  | "needs_metadata"
+  | "reviewable"
+  | "previewable"
+  | "generating"
+  | "audio_ready"
+  | "stale"
+  | "failed"
+  | "promoted"
+  | "expired"
+  | "discarded";
+
+export type TemporarySourcePromotionStatus = "notPromoted" | "promoted" | "promotionFailed";
+
+export type SourceArtifactScope = "project" | "temporary";
+
+export interface SourceArtifactRef {
+  id: string;
+  scope: SourceArtifactScope;
+  kind: "extraction" | "review" | "previewAudio" | "generatedAudio" | "bookmark" | "progress";
+  url?: string;
+  bytes?: number;
+  createdAt: string;
+  expiresAt?: string;
+}
 
 export type SourceReadinessState =
   | "noSource"
@@ -218,6 +250,8 @@ export interface BookSourceSection {
 export interface BookSource {
   id: string;
   projectId: string;
+  sourceOwner?: SourceOwner;
+  temporarySourceId?: string;
   status: BookSourceStatus;
   sourceReadiness?: SourceReadiness;
   kind: BookSourceKind;
@@ -451,6 +485,8 @@ export interface TranscriptMetadata {
 export interface PreparedSource {
   id: string;
   projectId: string;
+  sourceOwner?: SourceOwner;
+  temporarySourceId?: string;
   status: PreparedSourceStatus;
   sourceReadiness?: SourceReadiness;
   kind: PreparedSourceKind;
@@ -534,6 +570,60 @@ export interface CreatePreparedSourceRequest {
   htmlContainerSelector?: string;
 }
 
+export interface TemporarySourceSession {
+  id: string;
+  temporarySourceId: string;
+  sourceOwner: "temporary";
+  projectId?: string;
+  status: TemporarySourceLifecycleState;
+  promotionStatus: TemporarySourcePromotionStatus;
+  promotedProjectId?: string;
+  promotedSourceId?: string;
+  kind: PreparedSourceKind | BookSourceKind;
+  sourceReadiness?: SourceReadiness;
+  sourceName: string;
+  sourceUrl?: string;
+  sourceContentType?: string;
+  sourceBytes?: number;
+  title?: string;
+  text?: string;
+  speechText?: string;
+  wordCount: number;
+  blockCount?: number;
+  segmentCount?: number;
+  summary?: PreparedSourceSummary;
+  blocks?: NarrationBlock[];
+  skippedItems?: SkippedSourceItem[];
+  reviewNotes?: string[];
+  artifacts: SourceArtifactRef[];
+  bookmarks?: ProgressBookmark[];
+  playbackProgress?: PlaybackProgress;
+  sourceSpeechPolicyProfile?: string;
+  sourceSpeechPolicyOverrides?: SpeechPolicyOverrides;
+  warnings?: string[];
+  error?: string;
+  createdAt: string;
+  lastAccessedAt: string;
+  expiresAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectSourceEnvelope {
+  sourceOwner: "project";
+  projectId: string;
+  temporarySourceId?: never;
+  source: BookSource | PreparedSource;
+}
+
+export interface TemporarySourceEnvelope {
+  sourceOwner: "temporary";
+  projectId?: never;
+  temporarySourceId: string;
+  source: TemporarySourceSession;
+}
+
+export type SourceEnvelope = ProjectSourceEnvelope | TemporarySourceEnvelope;
+
 export interface ProgressBookmark {
   id: string;
   label?: string;
@@ -545,6 +635,7 @@ export interface ProgressBookmark {
 
 export interface ReadingPosition {
   bookSourceId?: string;
+  temporarySourceId?: string;
   scopeKey?: string;
   activeWordIndex?: number;
   nodeId?: string;
@@ -555,10 +646,11 @@ export interface ReadingPosition {
 
 export interface PlaybackProgress {
   targetId: string;
-  projectId: string;
+  projectId?: string;
   jobId?: string;
   bookSourceId?: string;
   preparedSourceId?: string;
+  temporarySourceId?: string;
   bookScope?: BookScope;
   currentTimeSec: number;
   progress: number;
@@ -579,6 +671,7 @@ export interface PlaybackProgressUpdate {
   jobId?: string;
   bookSourceId?: string;
   preparedSourceId?: string;
+  temporarySourceId?: string;
   bookScope?: BookScope;
   currentTimeSec: number;
   durationSec?: number;
@@ -593,10 +686,11 @@ export interface PlaybackProgressUpdate {
 export interface PlaybackSession {
   id: string;
   targetId: string;
-  projectId: string;
+  projectId?: string;
   jobId?: string;
   bookSourceId?: string;
   preparedSourceId?: string;
+  temporarySourceId?: string;
   bookScope?: BookScope;
   currentTimeSec: number;
   activeWordIndex?: number;
@@ -1398,6 +1492,7 @@ export interface VoiceJob {
   bookSourceId?: string;
   bookScope?: BookScope;
   preparedSourceId?: string;
+  temporarySourceId?: string;
   selectedBlockIds?: string[];
   sourceKind?: string;
   progressTargetId?: string;

@@ -13,6 +13,7 @@ func (service *Service) prepareCreateJob(request CreateJobRequest) (storedJob, e
 	projectID := strings.TrimSpace(request.ProjectID)
 	bookSourceID := strings.TrimSpace(request.BookSourceID)
 	preparedSourceID := strings.TrimSpace(request.PreparedSourceID)
+	temporarySourceID := strings.TrimSpace(request.TemporarySourceID)
 	progressTargetID := strings.TrimSpace(request.ProgressTargetID)
 	speechPolicyProfile := strings.TrimSpace(request.SpeechPolicyProfile)
 	speechPolicyOverrides := policy.NormalizeOverrides(request.SpeechPolicyOverrides)
@@ -124,6 +125,7 @@ func (service *Service) prepareCreateJob(request CreateJobRequest) (storedJob, e
 			BookSourceID:          bookSourceID,
 			BookScope:             cloneBookScope(request.BookScope),
 			PreparedSourceID:      preparedSourceID,
+			TemporarySourceID:     temporarySourceID,
 			SelectedBlockIDs:      append([]string(nil), request.SelectedBlockIDs...),
 			SourceKind:            sourceKind,
 			ProgressTargetID:      progressTargetID,

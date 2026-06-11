@@ -105,6 +105,7 @@ function sourceLifecycleFixture(
     selectedScope: "Full source",
     sourceId: "source-1",
     sourceKind: "document",
+    sourceOwner: "project",
     sourceReadiness: {
       detail: "Source is ready for Review.",
       state: "ready",

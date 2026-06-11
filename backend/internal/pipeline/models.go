@@ -66,6 +66,7 @@ type CreateJobRequest struct {
 	BookSourceID          string                   `json:"bookSourceId,omitempty"`
 	BookScope             *BookScope               `json:"bookScope,omitempty"`
 	PreparedSourceID      string                   `json:"preparedSourceId,omitempty"`
+	TemporarySourceID     string                   `json:"temporarySourceId,omitempty"`
 	SelectedBlockIDs      []string                 `json:"selectedBlockIds,omitempty"`
 	SourceKind            string                   `json:"sourceKind,omitempty"`
 	ProgressTargetID      string                   `json:"progressTargetId,omitempty"`
@@ -144,6 +145,67 @@ const (
 	PreparedSourceStatusReady  PreparedSourceStatus = "ready"
 	PreparedSourceStatusFailed PreparedSourceStatus = "failed"
 )
+
+type SourceOwner string
+
+const (
+	SourceOwnerProject   SourceOwner = "project"
+	SourceOwnerTemporary SourceOwner = "temporary"
+)
+
+type TemporarySourceLifecycleState string
+
+const (
+	TemporarySourceStateCreated       TemporarySourceLifecycleState = "created"
+	TemporarySourceStateImporting     TemporarySourceLifecycleState = "importing"
+	TemporarySourceStateExtracted     TemporarySourceLifecycleState = "extracted"
+	TemporarySourceStateNeedsMetadata TemporarySourceLifecycleState = "needs_metadata"
+	TemporarySourceStateReviewable    TemporarySourceLifecycleState = "reviewable"
+	TemporarySourceStatePreviewable   TemporarySourceLifecycleState = "previewable"
+	TemporarySourceStateGenerating    TemporarySourceLifecycleState = "generating"
+	TemporarySourceStateAudioReady    TemporarySourceLifecycleState = "audio_ready"
+	TemporarySourceStateStale         TemporarySourceLifecycleState = "stale"
+	TemporarySourceStateFailed        TemporarySourceLifecycleState = "failed"
+	TemporarySourceStatePromoted      TemporarySourceLifecycleState = "promoted"
+	TemporarySourceStateExpired       TemporarySourceLifecycleState = "expired"
+	TemporarySourceStateDiscarded     TemporarySourceLifecycleState = "discarded"
+)
+
+type TemporarySourcePromotionStatus string
+
+const (
+	TemporarySourceNotPromoted     TemporarySourcePromotionStatus = "notPromoted"
+	TemporarySourcePromoted        TemporarySourcePromotionStatus = "promoted"
+	TemporarySourcePromotionFailed TemporarySourcePromotionStatus = "promotionFailed"
+)
+
+type SourceArtifactScope string
+
+const (
+	SourceArtifactScopeProject   SourceArtifactScope = "project"
+	SourceArtifactScopeTemporary SourceArtifactScope = "temporary"
+)
+
+type SourceArtifactKind string
+
+const (
+	SourceArtifactKindExtraction     SourceArtifactKind = "extraction"
+	SourceArtifactKindReview         SourceArtifactKind = "review"
+	SourceArtifactKindPreviewAudio   SourceArtifactKind = "previewAudio"
+	SourceArtifactKindGeneratedAudio SourceArtifactKind = "generatedAudio"
+	SourceArtifactKindBookmark       SourceArtifactKind = "bookmark"
+	SourceArtifactKindProgress       SourceArtifactKind = "progress"
+)
+
+type SourceArtifactRef struct {
+	ID        string              `json:"id"`
+	Scope     SourceArtifactScope `json:"scope"`
+	Kind      SourceArtifactKind  `json:"kind"`
+	URL       string              `json:"url,omitempty"`
+	Bytes     int64               `json:"bytes,omitempty"`
+	CreatedAt time.Time           `json:"createdAt"`
+	ExpiresAt *time.Time          `json:"expiresAt,omitempty"`
+}
 
 type SourceReadinessState string
 
@@ -286,6 +348,8 @@ type TranscriptMetadata struct {
 type PreparedSource struct {
 	ID                          string                `json:"id"`
 	ProjectID                   string                `json:"projectId"`
+	SourceOwner                 SourceOwner           `json:"sourceOwner,omitempty"`
+	TemporarySourceID           string                `json:"temporarySourceId,omitempty"`
 	Status                      PreparedSourceStatus  `json:"status"`
 	SourceReadiness             *SourceReadiness      `json:"sourceReadiness,omitempty"`
 	Kind                        PreparedSourceKind    `json:"kind"`
@@ -485,6 +549,8 @@ type BookSourceSection struct {
 type BookSource struct {
 	ID                          string                `json:"id"`
 	ProjectID                   string                `json:"projectId"`
+	SourceOwner                 SourceOwner           `json:"sourceOwner,omitempty"`
+	TemporarySourceID           string                `json:"temporarySourceId,omitempty"`
 	Status                      BookSourceStatus      `json:"status"`
 	SourceReadiness             *SourceReadiness      `json:"sourceReadiness,omitempty"`
 	Kind                        BookSourceKind        `json:"kind"`
@@ -594,6 +660,58 @@ type BookSourceScopeContent struct {
 	SkippedItems         []SkippedSourceItem   `json:"skippedItems,omitempty"`
 	Summary              PreparedSourceSummary `json:"summary"`
 	Warnings             []string              `json:"warnings,omitempty"`
+}
+
+type TemporarySourceSession struct {
+	ID                          string                         `json:"id"`
+	TemporarySourceID           string                         `json:"temporarySourceId"`
+	SourceOwner                 SourceOwner                    `json:"sourceOwner"`
+	ProjectID                   string                         `json:"projectId,omitempty"`
+	Status                      TemporarySourceLifecycleState  `json:"status"`
+	PromotionStatus             TemporarySourcePromotionStatus `json:"promotionStatus"`
+	PromotedProjectID           string                         `json:"promotedProjectId,omitempty"`
+	PromotedSourceID            string                         `json:"promotedSourceId,omitempty"`
+	Kind                        string                         `json:"kind"`
+	SourceReadiness             *SourceReadiness               `json:"sourceReadiness,omitempty"`
+	SourceName                  string                         `json:"sourceName"`
+	SourceURL                   string                         `json:"sourceUrl,omitempty"`
+	SourceContentType           string                         `json:"sourceContentType,omitempty"`
+	SourceBytes                 int64                          `json:"sourceBytes,omitempty"`
+	Title                       string                         `json:"title,omitempty"`
+	Text                        string                         `json:"text,omitempty"`
+	SpeechText                  string                         `json:"speechText,omitempty"`
+	WordCount                   int                            `json:"wordCount"`
+	BlockCount                  int                            `json:"blockCount,omitempty"`
+	SegmentCount                int                            `json:"segmentCount,omitempty"`
+	Summary                     *PreparedSourceSummary         `json:"summary,omitempty"`
+	Blocks                      []NarrationBlock               `json:"blocks,omitempty"`
+	SkippedItems                []SkippedSourceItem            `json:"skippedItems,omitempty"`
+	ReviewNotes                 []string                       `json:"reviewNotes,omitempty"`
+	Artifacts                   []SourceArtifactRef            `json:"artifacts"`
+	Bookmarks                   []ProgressBookmark             `json:"bookmarks,omitempty"`
+	PlaybackProgress            *PlaybackProgress              `json:"playbackProgress,omitempty"`
+	SourceSpeechPolicyProfile   string                         `json:"sourceSpeechPolicyProfile,omitempty"`
+	SourceSpeechPolicyOverrides policy.Overrides               `json:"sourceSpeechPolicyOverrides,omitempty"`
+	Warnings                    []string                       `json:"warnings,omitempty"`
+	Error                       string                         `json:"error,omitempty"`
+	CreatedAt                   time.Time                      `json:"createdAt"`
+	LastAccessedAt              time.Time                      `json:"lastAccessedAt"`
+	ExpiresAt                   time.Time                      `json:"expiresAt"`
+	UpdatedAt                   time.Time                      `json:"updatedAt"`
+}
+
+type ProjectSourceEnvelope struct {
+	SourceOwner       SourceOwner `json:"sourceOwner"`
+	ProjectID         string      `json:"projectId"`
+	TemporarySourceID string      `json:"temporarySourceId,omitempty"`
+	Source            any         `json:"source"`
+}
+
+type TemporarySourceEnvelope struct {
+	SourceOwner       SourceOwner            `json:"sourceOwner"`
+	ProjectID         string                 `json:"projectId,omitempty"`
+	TemporarySourceID string                 `json:"temporarySourceId"`
+	Source            TemporarySourceSession `json:"source"`
 }
 
 type TTSEngineVoice struct {
@@ -784,50 +902,53 @@ type ProgressBookmark struct {
 }
 
 type ReadingPosition struct {
-	BookSourceID    string                     `json:"bookSourceId,omitempty"`
-	ScopeKey        string                     `json:"scopeKey,omitempty"`
-	ActiveWordIndex int                        `json:"activeWordIndex,omitempty"`
-	NodeID          string                     `json:"nodeId,omitempty"`
-	Locator         *contentir.Locator         `json:"locator,omitempty"`
-	LocatorEnvelope *contentir.LocatorEnvelope `json:"locatorEnvelope,omitempty"`
-	TextQuote       string                     `json:"textQuote,omitempty"`
+	BookSourceID      string                     `json:"bookSourceId,omitempty"`
+	TemporarySourceID string                     `json:"temporarySourceId,omitempty"`
+	ScopeKey          string                     `json:"scopeKey,omitempty"`
+	ActiveWordIndex   int                        `json:"activeWordIndex,omitempty"`
+	NodeID            string                     `json:"nodeId,omitempty"`
+	Locator           *contentir.Locator         `json:"locator,omitempty"`
+	LocatorEnvelope   *contentir.LocatorEnvelope `json:"locatorEnvelope,omitempty"`
+	TextQuote         string                     `json:"textQuote,omitempty"`
 }
 
 type PlaybackProgress struct {
-	TargetID         string             `json:"targetId"`
-	ProjectID        string             `json:"projectId"`
-	JobID            string             `json:"jobId,omitempty"`
-	BookSourceID     string             `json:"bookSourceId,omitempty"`
-	PreparedSourceID string             `json:"preparedSourceId,omitempty"`
-	BookScope        *BookScope         `json:"bookScope,omitempty"`
-	CurrentTimeSec   float64            `json:"currentTimeSec"`
-	Progress         float64            `json:"progress"`
-	ActiveWordIndex  int                `json:"activeWordIndex,omitempty"`
-	ReadingPosition  *ReadingPosition   `json:"readingPosition,omitempty"`
-	Finished         bool               `json:"finished"`
-	Hidden           bool               `json:"hidden"`
-	Bookmarks        []ProgressBookmark `json:"bookmarks,omitempty"`
-	StartedAt        *time.Time         `json:"startedAt,omitempty"`
-	FinishedAt       *time.Time         `json:"finishedAt,omitempty"`
-	CreatedAt        time.Time          `json:"createdAt"`
-	UpdatedAt        time.Time          `json:"updatedAt"`
+	TargetID          string             `json:"targetId"`
+	ProjectID         string             `json:"projectId,omitempty"`
+	JobID             string             `json:"jobId,omitempty"`
+	BookSourceID      string             `json:"bookSourceId,omitempty"`
+	PreparedSourceID  string             `json:"preparedSourceId,omitempty"`
+	TemporarySourceID string             `json:"temporarySourceId,omitempty"`
+	BookScope         *BookScope         `json:"bookScope,omitempty"`
+	CurrentTimeSec    float64            `json:"currentTimeSec"`
+	Progress          float64            `json:"progress"`
+	ActiveWordIndex   int                `json:"activeWordIndex,omitempty"`
+	ReadingPosition   *ReadingPosition   `json:"readingPosition,omitempty"`
+	Finished          bool               `json:"finished"`
+	Hidden            bool               `json:"hidden"`
+	Bookmarks         []ProgressBookmark `json:"bookmarks,omitempty"`
+	StartedAt         *time.Time         `json:"startedAt,omitempty"`
+	FinishedAt        *time.Time         `json:"finishedAt,omitempty"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	UpdatedAt         time.Time          `json:"updatedAt"`
 }
 
 type PlaybackProgressUpdate struct {
-	TargetID         string            `json:"targetId,omitempty"`
-	ProjectID        string            `json:"projectId,omitempty"`
-	JobID            string            `json:"jobId,omitempty"`
-	BookSourceID     string            `json:"bookSourceId,omitempty"`
-	PreparedSourceID string            `json:"preparedSourceId,omitempty"`
-	BookScope        *BookScope        `json:"bookScope,omitempty"`
-	CurrentTimeSec   float64           `json:"currentTimeSec"`
-	DurationSec      float64           `json:"durationSec,omitempty"`
-	Progress         float64           `json:"progress,omitempty"`
-	ActiveWordIndex  int               `json:"activeWordIndex,omitempty"`
-	ReadingPosition  *ReadingPosition  `json:"readingPosition,omitempty"`
-	Finished         bool              `json:"finished,omitempty"`
-	Hidden           *bool             `json:"hidden,omitempty"`
-	AddBookmark      *ProgressBookmark `json:"addBookmark,omitempty"`
+	TargetID          string            `json:"targetId,omitempty"`
+	ProjectID         string            `json:"projectId,omitempty"`
+	JobID             string            `json:"jobId,omitempty"`
+	BookSourceID      string            `json:"bookSourceId,omitempty"`
+	PreparedSourceID  string            `json:"preparedSourceId,omitempty"`
+	TemporarySourceID string            `json:"temporarySourceId,omitempty"`
+	BookScope         *BookScope        `json:"bookScope,omitempty"`
+	CurrentTimeSec    float64           `json:"currentTimeSec"`
+	DurationSec       float64           `json:"durationSec,omitempty"`
+	Progress          float64           `json:"progress,omitempty"`
+	ActiveWordIndex   int               `json:"activeWordIndex,omitempty"`
+	ReadingPosition   *ReadingPosition  `json:"readingPosition,omitempty"`
+	Finished          bool              `json:"finished,omitempty"`
+	Hidden            *bool             `json:"hidden,omitempty"`
+	AddBookmark       *ProgressBookmark `json:"addBookmark,omitempty"`
 }
 
 type PlaybackSessionStatus string
@@ -838,18 +959,19 @@ const (
 )
 
 type PlaybackSession struct {
-	ID               string                `json:"id"`
-	TargetID         string                `json:"targetId"`
-	ProjectID        string                `json:"projectId"`
-	JobID            string                `json:"jobId,omitempty"`
-	BookSourceID     string                `json:"bookSourceId,omitempty"`
-	PreparedSourceID string                `json:"preparedSourceId,omitempty"`
-	BookScope        *BookScope            `json:"bookScope,omitempty"`
-	CurrentTimeSec   float64               `json:"currentTimeSec"`
-	ActiveWordIndex  int                   `json:"activeWordIndex,omitempty"`
-	ReadingPosition  *ReadingPosition      `json:"readingPosition,omitempty"`
-	Status           PlaybackSessionStatus `json:"status"`
-	StartedAt        time.Time             `json:"startedAt"`
-	UpdatedAt        time.Time             `json:"updatedAt"`
-	ClosedAt         *time.Time            `json:"closedAt,omitempty"`
+	ID                string                `json:"id"`
+	TargetID          string                `json:"targetId"`
+	ProjectID         string                `json:"projectId,omitempty"`
+	JobID             string                `json:"jobId,omitempty"`
+	BookSourceID      string                `json:"bookSourceId,omitempty"`
+	PreparedSourceID  string                `json:"preparedSourceId,omitempty"`
+	TemporarySourceID string                `json:"temporarySourceId,omitempty"`
+	BookScope         *BookScope            `json:"bookScope,omitempty"`
+	CurrentTimeSec    float64               `json:"currentTimeSec"`
+	ActiveWordIndex   int                   `json:"activeWordIndex,omitempty"`
+	ReadingPosition   *ReadingPosition      `json:"readingPosition,omitempty"`
+	Status            PlaybackSessionStatus `json:"status"`
+	StartedAt         time.Time             `json:"startedAt"`
+	UpdatedAt         time.Time             `json:"updatedAt"`
+	ClosedAt          *time.Time            `json:"closedAt,omitempty"`
 }

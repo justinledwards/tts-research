@@ -11559,6 +11559,7 @@ function workbenchSourceLifecycleEnvelope({
             : selectedPreparedSource.kind === "book"
               ? "book"
               : "document",
+      sourceOwner: "project",
       sourceReadiness: sourceReadinessForWorkbench({
         selectedBookSource: null,
         selectedPreparedSource,
@@ -11609,6 +11610,7 @@ function workbenchSourceLifecycleEnvelope({
       selectedScope: selectedScopeLabel,
       sourceId: selectedBookSource.id,
       sourceKind: selectedBookSource.kind === "html" ? "website" : "book",
+      sourceOwner: "project",
       sourceReadiness: sourceReadinessForWorkbench({
         selectedBookSource,
         selectedPreparedSource: null,
@@ -11640,6 +11642,7 @@ function workbenchSourceLifecycleEnvelope({
     selectedScope: "Draft text",
     sourceId: "draft",
     sourceKind: "draft",
+    sourceOwner: "project",
     sourceReadiness: sourceReadinessForWorkbench({
       selectedBookSource: null,
       selectedPreparedSource: null,

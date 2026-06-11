@@ -45,6 +45,7 @@ export {
   sourceLifecycleModelsFromSources,
   sourceLifecycleSourceKey,
   sourceSelectorOption,
+  temporarySourceLifecycleEnvelope,
   type SourceCardModel,
   type SourceLifecycleRouteState,
   type SourceLifecycleSelectorOption,

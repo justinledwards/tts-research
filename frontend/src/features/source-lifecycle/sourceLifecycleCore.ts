@@ -4,6 +4,9 @@ import type {
   PreparedSource,
   SourceReadiness,
   SourceReadinessState,
+  SourceOwner,
+  TemporarySourceLifecycleState,
+  TemporarySourcePromotionStatus,
 } from "../../types";
 
 export const SOURCE_LIFECYCLE_STATES = [
@@ -103,7 +106,12 @@ export type SourceLifecycleTone =
   | "warning";
 
 export interface SourceLifecycleEnvelope {
-  projectId: string;
+  sourceOwner: SourceOwner;
+  projectId?: string;
+  temporarySourceId?: string;
+  temporaryStatus?: TemporarySourceLifecycleState;
+  promotionStatus?: TemporarySourcePromotionStatus;
+  expiresAt?: string;
   sourceId: string;
   sourceKind: SourceKind;
   adapterKind: SourceAdapterKind;
@@ -138,6 +146,8 @@ export interface SourceSelectionSnapshot {
   policyScope: SourcePolicyScope;
   selectedScope: string;
   sourceId: string | null;
+  sourceOwner?: SourceOwner;
+  temporarySourceId?: string | null;
 }
 
 export interface SourceSelectionContinuityFact {
