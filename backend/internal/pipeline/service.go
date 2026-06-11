@@ -48,6 +48,8 @@ var (
 	ErrAssetInUse                  = errors.New("asset is in use")
 	ErrBookSourceNotFound          = errors.New("book source not found")
 	ErrPreparedSourceNotFound      = errors.New("prepared source not found")
+	ErrTemporarySourceNotFound     = errors.New("temporary source not found")
+	ErrTemporarySourceExpired      = errors.New("temporary source expired")
 	ErrContentIRNotFound           = errors.New("content IR not found")
 	ErrSpeechPolicyProfileNotFound = errors.New("speech policy profile not found")
 	ErrProgressNotFound            = errors.New("playback progress not found")
@@ -129,6 +131,11 @@ type Options struct {
 	ReferenceWorkerCount                 int
 	JobDataDir                           string
 	ProjectDataDir                       string
+	TemporarySourceDataDir               string
+	TemporaryArtifactDir                 string
+	TemporaryAudioDir                    string
+	TemporaryProgressDir                 string
+	TemporarySourceTTL                   time.Duration
 	BookSourceDir                        string
 	SourcePrepDir                        string
 	ProgressDataDir                      string
@@ -183,6 +190,11 @@ const (
 	defaultSourcePrepSentenceMaxRunes          = 420
 	defaultJobDataDir                          = "./data/jobs"
 	defaultProjectDataDir                      = "./data/projects"
+	defaultTemporarySourceDataDir              = "./data/temporary-sources"
+	defaultTemporaryArtifactDir                = "./data/temporary-artifacts"
+	defaultTemporaryAudioDir                   = "./data/temporary-audio"
+	defaultTemporaryProgressDir                = "./data/temporary-progress"
+	defaultTemporarySourceTTL                  = 24 * time.Hour
 	defaultBookSourceDir                       = "./data/book-sources"
 	defaultSourcePrepDir                       = "./data/source-preps"
 	defaultProgressDataDir                     = "./data/progress"
@@ -232,6 +244,7 @@ type Service struct {
 	mu            sync.RWMutex
 	jobs          map[string]storedJob
 	projects      map[string]VoiceProject
+	temporary     map[string]TemporarySourceSession
 	books         map[string]storedBookSource
 	sourcePreps   map[string]PreparedSource
 	progress      map[string]PlaybackProgress
@@ -403,6 +416,21 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if strings.TrimSpace(options.ProjectDataDir) == "" {
 		options.ProjectDataDir = defaultProjectDataDir
 	}
+	if strings.TrimSpace(options.TemporarySourceDataDir) == "" {
+		options.TemporarySourceDataDir = defaultTemporarySourceDataDir
+	}
+	if strings.TrimSpace(options.TemporaryArtifactDir) == "" {
+		options.TemporaryArtifactDir = defaultTemporaryArtifactDir
+	}
+	if strings.TrimSpace(options.TemporaryAudioDir) == "" {
+		options.TemporaryAudioDir = defaultTemporaryAudioDir
+	}
+	if strings.TrimSpace(options.TemporaryProgressDir) == "" {
+		options.TemporaryProgressDir = defaultTemporaryProgressDir
+	}
+	if options.TemporarySourceTTL <= 0 {
+		options.TemporarySourceTTL = defaultTemporarySourceTTL
+	}
 	if strings.TrimSpace(options.BookSourceDir) == "" {
 		options.BookSourceDir = defaultBookSourceDir
 	}
@@ -515,6 +543,7 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 		options:       options,
 		jobs:          map[string]storedJob{},
 		projects:      map[string]VoiceProject{},
+		temporary:     map[string]TemporarySourceSession{},
 		books:         map[string]storedBookSource{},
 		sourcePreps:   map[string]PreparedSource{},
 		progress:      map[string]PlaybackProgress{},
@@ -529,6 +558,7 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	}
 	service.loadCloneVoices()
 	service.reloadProjects()
+	service.reloadTemporarySources()
 	service.reloadBookSources()
 	service.reloadSourcePreps()
 	service.reloadVoiceProfileSources()
@@ -1375,6 +1405,7 @@ func (service *Service) runJob(ctx context.Context, id string) {
 	if metadataErr != nil {
 		service.failJobByID(id, fmt.Errorf("save job metadata: %w", metadataErr))
 	}
+	service.markTemporarySourceJobCompleted(id)
 }
 
 func (service *Service) resolveStoredJob(id string) (storedJob, error) {
@@ -2354,7 +2385,7 @@ func (service *Service) writeJobAudioFile(id string, filename string, audioBytes
 		return "", ErrAudioNotReady
 	}
 
-	outputDir, err := filepath.Abs(filepath.Join(service.options.JobDataDir, id))
+	outputDir, err := service.jobArtifactDirByID(id)
 	if err != nil {
 		return "", err
 	}
@@ -2404,7 +2435,11 @@ func (service *Service) readJobSegmentAudio(id string, index int) ([]byte, error
 	if index <= 0 {
 		return nil, ErrAudioNotReady
 	}
-	audioPath, err := filepath.Abs(filepath.Join(service.options.JobDataDir, id, jobSegmentAudioFilename(index)))
+	outputDir, err := service.jobArtifactDirByID(id)
+	if err != nil {
+		return nil, err
+	}
+	audioPath, err := filepath.Abs(filepath.Join(outputDir, jobSegmentAudioFilename(index)))
 	if err != nil {
 		return nil, err
 	}
@@ -2439,7 +2474,7 @@ func (service *Service) writeJobMetadata(job VoiceJob) error {
 		outputDir = filepath.Dir(job.AudioPath)
 	} else {
 		var err error
-		outputDir, err = filepath.Abs(filepath.Join(service.options.JobDataDir, job.ID))
+		outputDir, err = service.jobArtifactDirForJob(job)
 		if err != nil {
 			return err
 		}

@@ -229,6 +229,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 
 	registerProjectRoutes(app, service)
 	registerVoiceJobRoutes(app, service)
+	registerTemporarySourceRoutes(app, service)
 
 	app.Get("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
 		summary := strings.EqualFold(ctx.Query("summary"), "1") ||

@@ -1,3 +1,16 @@
+## 2026-06-11 19:29 CEST - Commit Temporary Source Boundary
+- [x] Review and stage intended temporary source files
+- [x] Commit temporary source API and storage boundary
+
+## 2026-06-11 19:14 CEST - Temporary Source API and Storage Boundary
+- [x] Inspect existing project source, job, artifact, and cleanup flows
+- [x] Add temporary source service/store and storage policy
+- [x] Add temporary source API routes
+- [x] Add expiry and cleanup behavior
+- [x] Add backend unit tests for temporary lifecycle and promotion
+- [x] Run project checks before handoff
+- Validation: `go test ./internal/pipeline ./internal/httpapi`, `pnpm --filter @tts-research/backend check`, and `pnpm check` passed. Root lint still reports existing Biome warnings/infos in adapter/scripts files, but the check completed successfully.
+
 ## 2026-06-11 18:08 CEST - Reviewer ZIP and Screen Evidence
 - [x] Inspect existing reviewer archive and screenshot tooling
 - [x] Capture app screenshots for reviewer reference

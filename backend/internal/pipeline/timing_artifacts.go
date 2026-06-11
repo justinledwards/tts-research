@@ -254,7 +254,7 @@ func (service *Service) storedJobSnapshot(id string) (storedJob, error) {
 }
 
 func (service *Service) jobArtifactDir(id string) (string, error) {
-	return filepath.Abs(filepath.Join(service.options.JobDataDir, id))
+	return service.jobArtifactDirByID(id)
 }
 
 func (service *Service) timingScopeContent(job VoiceJob) (BookSourceScopeContent, error) {

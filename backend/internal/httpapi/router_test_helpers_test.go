@@ -26,7 +26,19 @@ func newService(t *testing.T) *pipeline.Service {
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+		pipeline.Options{
+			MaxRetries:             3,
+			JobDataDir:             t.TempDir(),
+			ProjectDataDir:         t.TempDir(),
+			BookSourceDir:          t.TempDir(),
+			SourcePrepDir:          t.TempDir(),
+			ProgressDataDir:        t.TempDir(),
+			PlaybackSessionDir:     t.TempDir(),
+			TemporarySourceDataDir: t.TempDir(),
+			TemporaryArtifactDir:   t.TempDir(),
+			TemporaryAudioDir:      t.TempDir(),
+			TemporaryProgressDir:   t.TempDir(),
+		},
 	)
 }
 
@@ -39,13 +51,17 @@ func newServiceWithContentIRDirs(t *testing.T) (*pipeline.Service, string, strin
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
 		pipeline.Options{
-			MaxRetries:         3,
-			JobDataDir:         t.TempDir(),
-			ProjectDataDir:     t.TempDir(),
-			BookSourceDir:      bookSourceDir,
-			SourcePrepDir:      sourcePrepDir,
-			ProgressDataDir:    t.TempDir(),
-			PlaybackSessionDir: t.TempDir(),
+			MaxRetries:             3,
+			JobDataDir:             t.TempDir(),
+			ProjectDataDir:         t.TempDir(),
+			TemporarySourceDataDir: t.TempDir(),
+			TemporaryArtifactDir:   t.TempDir(),
+			TemporaryAudioDir:      t.TempDir(),
+			TemporaryProgressDir:   t.TempDir(),
+			BookSourceDir:          bookSourceDir,
+			SourcePrepDir:          sourcePrepDir,
+			ProgressDataDir:        t.TempDir(),
+			PlaybackSessionDir:     t.TempDir(),
 		},
 	)
 	return service, sourcePrepDir, bookSourceDir

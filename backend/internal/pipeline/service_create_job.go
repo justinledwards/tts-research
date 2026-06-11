@@ -36,11 +36,17 @@ func (service *Service) prepareCreateJob(request CreateJobRequest) (storedJob, e
 	if inputText == "" {
 		return storedJob{}, ErrEmptyText
 	}
-	if projectID == "" {
+	if projectID == "" && temporarySourceID == "" {
 		projectID = defaultProjectID
 	}
-	if _, err := service.GetProject(projectID); err != nil {
-		return storedJob{}, err
+	if temporarySourceID != "" {
+		if _, err := service.getTemporarySource(temporarySourceID, true); err != nil {
+			return storedJob{}, err
+		}
+	} else {
+		if _, err := service.GetProject(projectID); err != nil {
+			return storedJob{}, err
+		}
 	}
 	if voiceID != "" {
 		voice, err := service.ResolveVoice(voiceID)
