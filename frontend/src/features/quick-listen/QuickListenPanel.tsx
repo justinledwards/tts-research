@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Button, SegmentedControl, StatusChip, cx, fieldControlClassName } from "../../design";
 import type { MarkdownParseMode, PreparedSource, TemporarySourceSession } from "../../types";
+import { WebsiteExtractionSummary } from "../website-cinema/WebsiteExtractionSummary";
 
 type QuickListenMode = "paste" | "url" | "file" | "recent";
 
@@ -164,6 +165,16 @@ export function QuickListenPanel({
                   type="url"
                   value={url}
                 />
+                <div className="grid gap-2 rounded-md border p-3 text-sm leading-6 vs-border vs-surface">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusChip tone="metadata">Temporary webpage</StatusChip>
+                    <StatusChip tone="warning">Safety checked before fetch</StatusChip>
+                  </div>
+                  <p className="vs-muted">
+                    Readable article text, URL provenance, extraction confidence, and removed
+                    clutter stay temporary until you keep the source in a project.
+                  </p>
+                </div>
               </label>
             ) : null}
 
@@ -231,6 +242,18 @@ export function QuickListenPanel({
                       key={source.id}
                     >
                       <div className="min-w-0">
+                        <div className="mb-2 flex flex-wrap gap-2">
+                          {source.kind === "url" ? (
+                            <>
+                              <StatusChip tone="metadata">Temporary webpage</StatusChip>
+                              <WebsiteExtractionSummary
+                                source={temporarySessionToPreparedSource(source)}
+                              />
+                            </>
+                          ) : (
+                            <StatusChip tone="metadata">Temporary source</StatusChip>
+                          )}
+                        </div>
                         <p className="truncate text-sm font-semibold">
                           {source.title ?? source.sourceName}
                         </p>
@@ -315,6 +338,7 @@ export function temporarySessionToPreparedSource(source: TemporarySourceSession)
     createdAt: source.createdAt,
     id: source.id,
     kind: source.kind as PreparedSource["kind"],
+    metadata: source.metadata,
     projectId: "",
     renderMode: source.kind === "text" ? "markdown" : undefined,
     segmentCount: source.segmentCount ?? 0,

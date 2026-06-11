@@ -603,6 +603,7 @@ export interface TemporarySourceSession {
   blocks?: NarrationBlock[];
   skippedItems?: SkippedSourceItem[];
   reviewNotes?: string[];
+  metadata?: Record<string, unknown>;
   artifacts: SourceArtifactRef[];
   bookmarks?: ProgressBookmark[];
   playbackProgress?: PlaybackProgress;

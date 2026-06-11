@@ -11,7 +11,7 @@ import {
 } from "react";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
-import { Button, fieldControlClassName, Toggle } from "../../design";
+import { Button, fieldControlClassName, StatusChip, Toggle } from "../../design";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdownCinema";
 import { looksLikeMermaidDiagram } from "../../markdownModel";
 import type {
@@ -107,6 +107,7 @@ import { WebsiteExtractionReview } from "../website-cinema/WebsiteExtractionRevi
 import {
   WebsiteExtractionSummary,
   websiteExtractionQuality,
+  websiteExtractionTone,
 } from "../website-cinema/WebsiteExtractionSummary";
 import { useCinemaFocusController } from "./CinemaFocusController";
 import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
@@ -146,6 +147,7 @@ import {
   preparedSourceCinemaJobMatchesSource,
   preparedSourceCinemaKind,
   preparedSourceCinemaLabel,
+  preparedSourceCinemaDomain,
   preparedSourceCinemaMetrics,
   preparedSourceCinemaOutline,
   preparedSourceCinemaPrimaryBlocks,
@@ -260,6 +262,7 @@ export function PreparedSourceCinemaOverlay({
   onCreateAudio,
   onHelpOpen,
   onInspectStructure,
+  onKeepTemporarySource,
   onPrepareFile,
   onPlayPause,
   onRerunWebsiteExtraction,
@@ -311,6 +314,7 @@ export function PreparedSourceCinemaOverlay({
   onCreateAudio: (source: PreparedSource) => void;
   onHelpOpen?: () => void;
   onInspectStructure: (source: PreparedSource) => void;
+  onKeepTemporarySource?: (source: PreparedSource) => void;
   onPrepareFile: (file: File) => Promise<void>;
   onPlayPause: () => void;
   onRerunWebsiteExtraction?: (source: PreparedSource, containerSelector: string) => void;
@@ -459,6 +463,12 @@ export function PreparedSourceCinemaOverlay({
   });
   const metrics = preparedSourceCinemaMetrics(source);
   const href = preparedSourceCinemaSourceHref(source);
+  const webpageMetadata = websiteSourceMetadata(source);
+  const urlProvenance = websiteUrlProvenance(source);
+  const canonicalUrl = webpageMetadata.canonicalUrl || urlProvenance.fetchedUrl || href;
+  const sourceDomain =
+    urlProvenance.domain || domainFromHref(canonicalUrl) || preparedSourceCinemaDomain(source);
+  const isTemporarySource = source.sourceOwner === "temporary";
   const websiteQuality = isWebsiteCinema ? websiteExtractionQuality(source) : null;
   let readabilityHealthLabel = source.warnings && source.warnings.length > 0 ? "Warnings" : "Good";
   if (websiteQuality) {
@@ -634,6 +644,16 @@ export function PreparedSourceCinemaOverlay({
             onSelectSource={onSelectSource}
           />
           <dl className="grid gap-3 text-sm">
+            {isTemporarySource ? (
+              <div className="flex flex-wrap gap-2">
+                <StatusChip tone="metadata">Temporary webpage</StatusChip>
+                {websiteQuality ? (
+                  <StatusChip tone={websiteExtractionTone(websiteQuality)}>
+                    {websiteQuality.extractionConfidence} confidence
+                  </StatusChip>
+                ) : null}
+              </div>
+            ) : null}
             {href ? (
               <div className="grid min-w-0 grid-cols-[5.6rem_minmax(0,1fr)] gap-3">
                 <dt className="vs-muted">URL</dt>
@@ -644,6 +664,17 @@ export function PreparedSourceCinemaOverlay({
                 </dd>
               </div>
             ) : null}
+            {canonicalUrl ? <MetadataRow label="Canonical" value={canonicalUrl} /> : null}
+            <MetadataRow label="Domain" value={sourceDomain} />
+            {webpageMetadata.siteName ? (
+              <MetadataRow label="Site" value={webpageMetadata.siteName} />
+            ) : null}
+            {webpageMetadata.author ? (
+              <MetadataRow label="Author" value={webpageMetadata.author} />
+            ) : null}
+            {webpageMetadata.language ? (
+              <MetadataRow label="Language" value={webpageMetadata.language} />
+            ) : null}
             <MetadataRow label="Fetched" value={formatDateTime(source.updatedAt)} />
             <MetadataRow label="Page title" value={preparedSourceCinemaTitle(source)} />
             <MetadataRow
@@ -652,15 +683,34 @@ export function PreparedSourceCinemaOverlay({
             />
             <MetadataRow label="Reader mode" value={readerModeLabel(source)} valueTone="success" />
           </dl>
-          <Button
-            onClick={() => {
-              onInspectStructure(source);
-            }}
-            size="md"
-            variant="secondary"
-          >
-            Inspect structure
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => {
+                onInspectStructure(source);
+              }}
+              size="md"
+              variant="secondary"
+            >
+              Inspect structure
+            </Button>
+            {isTemporarySource ? (
+              <Button
+                disabled={!onKeepTemporarySource || source.temporarySourceId === undefined}
+                disabledReason="This temporary source cannot be promoted yet."
+                onClick={
+                  onKeepTemporarySource
+                    ? () => {
+                        onKeepTemporarySource(source);
+                      }
+                    : undefined
+                }
+                size="md"
+                variant="primary"
+              >
+                Keep as project source
+              </Button>
+            ) : null}
+          </div>
         </div>
       ),
       detail: href ?? source.sourceName,
@@ -2428,6 +2478,38 @@ function MetadataRow({
       </dd>
     </div>
   );
+}
+
+function websiteSourceMetadata(source: PreparedSource): Record<string, string> {
+  return stringRecord(source.metadata?.websiteMetadata);
+}
+
+function websiteUrlProvenance(source: PreparedSource): Record<string, string> {
+  return stringRecord(source.metadata?.urlProvenance);
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  const record: Record<string, string> = {};
+  for (const [key, rawValue] of Object.entries(value)) {
+    if (typeof rawValue === "string" && rawValue.trim() !== "") {
+      record[key] = rawValue.trim();
+    }
+  }
+  return record;
+}
+
+function domainFromHref(href: string | null): string {
+  if (!href) {
+    return "";
+  }
+  try {
+    return new URL(href).hostname.replace(/^www\./i, "");
+  } catch {
+    return "";
+  }
 }
 
 function activeOutlineItem(

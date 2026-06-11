@@ -687,6 +687,7 @@ type TemporarySourceSession struct {
 	Blocks                      []NarrationBlock               `json:"blocks,omitempty"`
 	SkippedItems                []SkippedSourceItem            `json:"skippedItems,omitempty"`
 	ReviewNotes                 []string                       `json:"reviewNotes,omitempty"`
+	Metadata                    map[string]any                 `json:"metadata,omitempty"`
 	Artifacts                   []SourceArtifactRef            `json:"artifacts"`
 	Bookmarks                   []ProgressBookmark             `json:"bookmarks,omitempty"`
 	PlaybackProgress            *PlaybackProgress              `json:"playbackProgress,omitempty"`

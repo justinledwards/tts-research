@@ -132,6 +132,88 @@ func inferReadableHTMLTitle(input string, readableText string, fallback string) 
 	return inferPreparedSourceTitle(readableText, fallback)
 }
 
+func visibleHTMLTextFallback(input string) string {
+	cleaned := htmlScriptStylePattern.ReplaceAllString(input, " ")
+	cleaned = htmlBlockBreakPattern.ReplaceAllString(cleaned, "\n")
+	cleaned = htmlTagSpeechPattern.ReplaceAllString(cleaned, " ")
+	return strings.TrimSpace(html.UnescapeString(cleaned))
+}
+
+func extractWebsiteMetadata(input string, fallback string) map[string]string {
+	metadata := map[string]string{}
+	if canonical := firstHTMLAttribute(input, htmlCanonicalPattern); canonical != "" {
+		metadata["canonicalUrl"] = canonical
+	}
+	if lang := firstHTMLAttribute(input, htmlLangPattern); lang != "" {
+		metadata["language"] = lang
+	}
+	for _, match := range htmlMetaPropertyPattern.FindAllStringSubmatch(input, -1) {
+		if len(match) < 3 {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(match[1]))
+		value := strings.TrimSpace(html.UnescapeString(match[2]))
+		if value == "" {
+			continue
+		}
+		switch key {
+		case "author", "article:author", "byl", "byline", "dc.creator":
+			setMetadataIfEmpty(metadata, "author", value)
+		case "og:site_name", "application-name":
+			setMetadataIfEmpty(metadata, "siteName", value)
+		case "og:url":
+			setMetadataIfEmpty(metadata, "canonicalUrl", value)
+		case "og:title", "twitter:title":
+			setMetadataIfEmpty(metadata, "title", value)
+		case "og:locale":
+			setMetadataIfEmpty(metadata, "language", value)
+		}
+	}
+	if title := firstHTMLText(input, htmlTitlePattern); title != "" {
+		setMetadataIfEmpty(metadata, "title", title)
+	}
+	if siteName := siteNameFromURL(fallback); siteName != "" {
+		setMetadataIfEmpty(metadata, "siteName", siteName)
+	}
+	return metadata
+}
+
+func firstHTMLAttribute(input string, pattern *regexp.Regexp) string {
+	matches := pattern.FindStringSubmatch(input)
+	if len(matches) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(html.UnescapeString(matches[1]))
+}
+
+func setMetadataIfEmpty(metadata map[string]string, key string, value string) {
+	if strings.TrimSpace(metadata[key]) == "" {
+		metadata[key] = strings.TrimSpace(value)
+	}
+}
+
+func siteNameFromURL(value string) string {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Hostname() == "" {
+		return ""
+	}
+	return strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
+}
+
+func urlProvenanceMetadata(requestedURL string, fetchedURL string) map[string]string {
+	provenance := map[string]string{}
+	if requested := strings.TrimSpace(requestedURL); requested != "" {
+		provenance["requestedUrl"] = requested
+	}
+	if fetched := strings.TrimSpace(fetchedURL); fetched != "" {
+		provenance["fetchedUrl"] = fetched
+		if domain := siteNameFromURL(fetched); domain != "" {
+			provenance["domain"] = domain
+		}
+	}
+	return provenance
+}
+
 func firstHTMLText(input string, pattern *regexp.Regexp) string {
 	matches := pattern.FindStringSubmatch(input)
 	if len(matches) < 2 {

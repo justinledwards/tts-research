@@ -1849,6 +1849,14 @@ duplicating every implementation detail from commits, PR text, or generated revi
 
 ## 2026-06-05 22:41 CEST - Revert Cinema Progressive Changes
 - [x] Identify Cinema-only progressive playback edits
+## 2026-06-11 19:54 CEST - Temporary Webpage Narration Flow
+- [x] Map temporary webpage APIs and Website Cinema entry points
+- [x] Add dedicated temporary webpage intake and status UI
+- [x] Wire temporary webpage extraction, fallback, promotion, and cinema launch
+- [x] Add focused coverage for temporary webpage behavior
+- [x] Run project checks
+- [x] Validated with focused backend temporary-source tests, frontend typecheck/tests, and `pnpm check`
+
 - [x] Revert Cinema presentation/state changes without touching reference skip fixes
 - [x] Run focused validation
 - [x] Validated with focused frontend tests, `pnpm check`, and `git diff --check`

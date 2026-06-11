@@ -78,6 +78,7 @@ import {
   previewBookSourceScopeSpeechPolicy,
   previewPreparedSourceSpeechPolicy,
   previewContentIRSpeechPolicy,
+  promoteTemporarySource,
   queueVoiceProfileTarget,
   refreshVoiceProfileCandidateTranscript,
   refreshVoiceProfileSourceTranscript,
@@ -3574,8 +3575,16 @@ export function App() {
     if (jobPreparedSource?.id === preparedSourceCinemaSourceId) {
       return jobPreparedSource;
     }
+    if (activeTemporaryPreparedSource?.id === preparedSourceCinemaSourceId) {
+      return activeTemporaryPreparedSource;
+    }
     return preparedSources.find((source) => source.id === preparedSourceCinemaSourceId) ?? null;
-  }, [jobPreparedSource, preparedSourceCinemaSourceId, preparedSources]);
+  }, [
+    activeTemporaryPreparedSource,
+    jobPreparedSource,
+    preparedSourceCinemaSourceId,
+    preparedSources,
+  ]);
   const preparedSourceCinemaJob = useMemo(
     () => (preparedSourceCinemaJobMatchesSource(job, preparedSourceCinemaSource) ? job : null),
     [job, preparedSourceCinemaSource],
@@ -4299,6 +4308,10 @@ export function App() {
   const isResumeRestoring = useDelayedBusy(resumeRestoreStartedAt !== null, 250);
   const openReadingCinema = useCallback(
     (target?: "book") => {
+      if (target !== "book" && activeNarrationPreparedSource) {
+        openPreparedSourceCinema(activeNarrationPreparedSource);
+        return;
+      }
       const shouldOpenSelectedBook = target === "book" || !job || Boolean(job.bookSourceId);
       if (canOpenBookCinema && shouldOpenSelectedBook) {
         bookCinemaOpenTiming.start({ target: "book" });
@@ -4308,7 +4321,14 @@ export function App() {
       }
       setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
     },
-    [bookCinemaOpenTiming, canOpenBookCinema, job, themeName],
+    [
+      activeNarrationPreparedSource,
+      bookCinemaOpenTiming,
+      canOpenBookCinema,
+      job,
+      openPreparedSourceCinema,
+      themeName,
+    ],
   );
   const openSelectedBookCinema = useCallback(() => {
     if (canOpenBookCinema) {
@@ -6073,21 +6093,6 @@ export function App() {
     ],
   );
 
-  const handleRerunWebsiteExtraction = useCallback(
-    (source: PreparedSource, containerSelector: string) => {
-      if (!source.sourceUrl) {
-        return;
-      }
-      void handlePrepareSourceUrl(
-        source.sourceUrl,
-        source.markdownParseMode ?? "strict",
-        "prepared",
-        containerSelector,
-      );
-    },
-    [handlePrepareSourceUrl],
-  );
-
   const handlePrepareDraftText = useCallback(
     async (draftText: string, markdownParseMode: MarkdownParseMode = "strict") => {
       setIsPreparingSource(true);
@@ -6208,6 +6213,34 @@ export function App() {
     [activateTemporarySource, announceAssertive, announcePolite],
   );
 
+  const handleRerunWebsiteExtraction = useCallback(
+    (source: PreparedSource, containerSelector: string) => {
+      if (!source.sourceUrl) {
+        return;
+      }
+      if (source.sourceOwner === "temporary") {
+        void createQuickListenSource(
+          {
+            htmlContainerSelector: containerSelector,
+            kind: "url",
+            markdownParseMode: source.markdownParseMode ?? "strict",
+            sourceName: source.sourceUrl,
+            url: source.sourceUrl,
+          },
+          source.markdownParseMode ?? "strict",
+        );
+        return;
+      }
+      void handlePrepareSourceUrl(
+        source.sourceUrl,
+        source.markdownParseMode ?? "strict",
+        "prepared",
+        containerSelector,
+      );
+    },
+    [createQuickListenSource, handlePrepareSourceUrl],
+  );
+
   const handleQuickListenText = useCallback(
     async (
       draftText: string,
@@ -6282,6 +6315,56 @@ export function App() {
       );
     }
   }, []);
+
+  const handleKeepTemporarySource = useCallback(
+    async (source: PreparedSource) => {
+      const temporarySourceId = source.temporarySourceId;
+      if (!temporarySourceId) {
+        return;
+      }
+      setSourcePrepError(null);
+      try {
+        const promoted = await promoteTemporarySource(temporarySourceId, {
+          projectId: activeProjectId,
+        });
+        setPreparedSources((currentSources) => [
+          promoted,
+          ...currentSources.filter((item) => item.id !== promoted.id),
+        ]);
+        setTemporarySources((currentSources) =>
+          currentSources.map((item) =>
+            item.id === temporarySourceId
+              ? {
+                  ...item,
+                  promotedProjectId: promoted.projectId,
+                  promotedSourceId: promoted.id,
+                  promotionStatus: "promoted",
+                  status: "promoted",
+                }
+              : item,
+          ),
+        );
+        setActiveTemporaryPreparedSource(null);
+        setSelectedPreparedSourceId(promoted.id);
+        setPreparedSourceCinemaSourceId(promoted.id);
+        setSourceMode("fileUrl");
+        selectWorkspaceInspectorTarget({
+          id: promoted.id,
+          kind: "source",
+          label: promoted.title ?? promoted.sourceName,
+        });
+        announcePolite("Temporary webpage kept as a project source.");
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to keep temporary source in the project.";
+        setSourcePrepError(message);
+        setQuickListenError(message);
+      }
+    },
+    [activeProjectId, announcePolite, selectWorkspaceInspectorTarget],
+  );
 
   const handleUsePreparedSource = useCallback(
     async (source: PreparedSource) => {
@@ -9055,6 +9138,9 @@ export function App() {
             }}
             onInspectStructure={(source) => {
               void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
+            }}
+            onKeepTemporarySource={(source) => {
+              void handleKeepTemporarySource(source);
             }}
             onPrepareFile={handlePrepareCinemaSourceFile}
             onPlayPause={handleBookCinemaPlayPause}

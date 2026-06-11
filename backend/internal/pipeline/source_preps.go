@@ -33,6 +33,7 @@ const (
 	readableURLUserAgent           = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 VoiceStudio/1.0"
 	maxHackerNewsComments          = 120
 	warningSentenceTooLong         = "sentence_too_long"
+	websiteVisibleTextOnlySelector = "__visible_text_only"
 )
 
 type fetchedReadableSource struct {
@@ -95,6 +96,9 @@ var (
 	htmlReadableClassPattern  = regexp.MustCompile(`(?is)<(?:div|section)\b[^>]*(?:class|id)=["'][^"']*(?:article|post|entry-content|story|main-content)[^"']*["'][^>]*>(.*?)</(?:div|section)>`)
 	htmlHeadingOnePattern     = regexp.MustCompile(`(?is)<h1\b[^>]*>(.*?)</h1>`)
 	htmlTitlePattern          = regexp.MustCompile(`(?is)<title\b[^>]*>(.*?)</title>`)
+	htmlCanonicalPattern      = regexp.MustCompile(`(?is)<link\b[^>]*\brel=["'][^"']*\bcanonical\b[^"']*["'][^>]*\bhref=["']([^"']+)["'][^>]*>`)
+	htmlMetaPropertyPattern   = regexp.MustCompile(`(?is)<meta\b[^>]*(?:name|property)=["']([^"']+)["'][^>]*\bcontent=["']([^"']*)["'][^>]*>`)
+	htmlLangPattern           = regexp.MustCompile(`(?is)<html\b[^>]*\blang=["']([^"']+)["']`)
 	htmlBlockBreakPattern     = regexp.MustCompile(`(?i)</(p|div|section|article|br|h[1-6]|li|tr)>`)
 	htmlTagSpeechPattern      = regexp.MustCompile(`(?s)<[^>]+>`)
 	markdownHeadingLine       = regexp.MustCompile(`^(#{1,6})\s+(.+)$`)
@@ -187,6 +191,7 @@ func (service *Service) CreatePreparedSource(
 			prepared.Metadata = map[string]any{}
 		}
 		prepared.Metadata["urlSafety"] = *urlSafety
+		prepared.Metadata["urlProvenance"] = urlProvenanceMetadata(request.URL, prepared.SourceURL)
 	}
 	prepared.SpeechPolicyProfile = project.SpeechPolicyProfile
 	prepared = applySpeechPolicyToPreparedSourceWithEvaluator(
@@ -1019,6 +1024,32 @@ func preprocessReadableSource(
 	sourceFormat := detectPreparedSourceFormat(sourceName, contentType, input)
 	switch sourceFormat {
 	case "html":
+		if strings.TrimSpace(htmlContainerSelector) == websiteVisibleTextOnlySelector {
+			readableText := normalizeReadableSourceText(visibleHTMLTextFallback(input))
+			blocks, skipped, warnings := preparePlainNarrationBlocks(readableText, maxSentenceRunes)
+			quality := sourceprep.HTMLExtractionQuality{
+				ChosenContainer:           "visible text",
+				ExtractionConfidence:      "medium",
+				ExtractionConfidenceScore: 0.58,
+				ArticleUncertain:          true,
+				NarrationBlockCount:       len(blocks),
+				ReadableTextRatio:         1,
+			}
+			return sourcePreprocessResult{
+				Blocks:              blocks,
+				SkippedItems:        skipped,
+				Warnings:            uniqueStrings(append(warnings, "website_visible_text_fallback")),
+				PreprocessorID:      "html-visible-text",
+				PreprocessorVersion: "html-visible-text-v1",
+				SourceFormat:        sourceFormat,
+				RenderMode:          "blocks",
+				Title:               inferReadableHTMLTitle(input, readableText, sourceName),
+				Metadata: map[string]any{
+					"websiteExtractionQuality": quality,
+					"websiteMetadata":          extractWebsiteMetadata(input, sourceName),
+				},
+			}
+		}
 		analysis := sourceprep.AnalyzeHTMLQuality(input, sourceprep.HTMLQualityOptions{
 			PreferredContainer: strings.TrimSpace(htmlContainerSelector),
 		})
@@ -1045,6 +1076,7 @@ func preprocessReadableSource(
 			Title:               inferReadableHTMLTitle(input, readableText, sourceName),
 			Metadata: map[string]any{
 				"websiteExtractionQuality": quality,
+				"websiteMetadata":          extractWebsiteMetadata(input, sourceName),
 			},
 		}
 	case "structured":

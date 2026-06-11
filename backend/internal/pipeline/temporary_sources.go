@@ -98,6 +98,7 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 	}
 	if urlSafety != nil {
 		metadata["urlSafety"] = *urlSafety
+		metadata["urlProvenance"] = urlProvenanceMetadata(request.URL, sourceURL)
 	}
 	metadata["preprocessorId"] = preprocessed.PreprocessorID
 	metadata["preprocessorVersion"] = preprocessed.PreprocessorVersion
@@ -509,6 +510,7 @@ func temporarySessionFromPreparedSource(source PreparedSource, now time.Time, ex
 		SourceSpeechPolicyProfile:   source.SourceSpeechPolicyProfile,
 		SourceSpeechPolicyOverrides: source.SourceSpeechPolicyOverrides,
 		Warnings:                    source.Warnings,
+		Metadata:                    cloneMetadataMap(source.Metadata),
 		CreatedAt:                   now,
 		LastAccessedAt:              now,
 		ExpiresAt:                   expiresAt,
@@ -545,6 +547,7 @@ func preparedSourceFromTemporarySession(session TemporarySourceSession) Prepared
 		Summary:                     summary,
 		Blocks:                      session.Blocks,
 		SkippedItems:                session.SkippedItems,
+		Metadata:                    cloneMetadataMap(session.Metadata),
 		Warnings:                    session.Warnings,
 		CreatedAt:                   session.CreatedAt,
 		UpdatedAt:                   session.UpdatedAt,
@@ -563,7 +566,19 @@ func cloneTemporarySourceSession(session TemporarySourceSession) TemporarySource
 	}
 	session.SourceSpeechPolicyOverrides = policy.NormalizeOverrides(session.SourceSpeechPolicyOverrides)
 	session.Warnings = append([]string(nil), session.Warnings...)
+	session.Metadata = cloneMetadataMap(session.Metadata)
 	return session
+}
+
+func cloneMetadataMap(metadata map[string]any) map[string]any {
+	if metadata == nil {
+		return nil
+	}
+	clone := make(map[string]any, len(metadata))
+	for key, value := range metadata {
+		clone[key] = value
+	}
+	return clone
 }
 
 func upsertSourceArtifact(artifacts []SourceArtifactRef, artifact SourceArtifactRef) []SourceArtifactRef {

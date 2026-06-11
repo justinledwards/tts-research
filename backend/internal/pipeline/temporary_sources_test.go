@@ -3,6 +3,8 @@ package pipeline_test
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/justinedwards/tts-research/backend/internal/agents"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
+	"github.com/justinedwards/tts-research/backend/internal/sourceprep"
 )
 
 func TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy(t *testing.T) {
@@ -96,6 +99,109 @@ func TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy(t *tes
 	}
 	if _, err := service.GetPreparedSource(promoted.ID); err != nil {
 		t.Fatalf("promoted project source should survive temporary deletion: %v", err)
+	}
+}
+
+func TestTemporaryWebpageMetadataAndPromotion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = response.Write([]byte(`<!doctype html>
+<html lang="en">
+<head>
+  <title>Temporary Webpage Fixture</title>
+  <link rel="canonical" href="https://example.com/articles/temporary-webpage-fixture">
+  <meta name="author" content="Fixture Author">
+  <meta property="og:site_name" content="Fixture Site">
+</head>
+<body>
+  <nav>Subscribe Search Menu</nav>
+  <article>
+    <h1>Temporary Webpage Fixture</h1>
+    <p>This article body is readable enough for temporary Website Cinema narration.</p>
+    <p>The closing paragraph gives the extraction path a second stable narration block.</p>
+  </article>
+</body>
+</html>`))
+	}))
+	defer server.Close()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:             1,
+			JobDataDir:             t.TempDir(),
+			ProjectDataDir:         t.TempDir(),
+			SourcePrepDir:          t.TempDir(),
+			TemporarySourceDataDir: t.TempDir(),
+			TemporaryArtifactDir:   t.TempDir(),
+			TemporaryAudioDir:      t.TempDir(),
+			TemporaryProgressDir:   t.TempDir(),
+			SourceURLAllowPrivate:  true,
+		},
+	)
+
+	temporary, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		Kind: pipeline.PreparedSourceKindURL,
+		URL:  server.URL + "/article",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource returned error: %v", err)
+	}
+	if temporary.ProjectID != "" || temporary.SourceOwner != pipeline.SourceOwnerTemporary {
+		t.Fatalf("temporary ownership = project %q owner %q, want temporary boundary", temporary.ProjectID, temporary.SourceOwner)
+	}
+	quality, ok := temporary.Metadata["websiteExtractionQuality"].(sourceprep.HTMLExtractionQuality)
+	if !ok {
+		t.Fatalf("website extraction quality metadata missing: %#v", temporary.Metadata)
+	}
+	if quality.ExtractionConfidence == "" || quality.SkippedBlockCount == 0 {
+		t.Fatalf("quality = %#v, want confidence and skipped clutter", quality)
+	}
+	websiteMetadata, ok := temporary.Metadata["websiteMetadata"].(map[string]string)
+	if !ok {
+		t.Fatalf("website metadata missing: %#v", temporary.Metadata)
+	}
+	if websiteMetadata["canonicalUrl"] != "https://example.com/articles/temporary-webpage-fixture" ||
+		websiteMetadata["author"] != "Fixture Author" ||
+		websiteMetadata["siteName"] != "Fixture Site" ||
+		websiteMetadata["language"] != "en" {
+		t.Fatalf("website metadata = %#v", websiteMetadata)
+	}
+	provenance, ok := temporary.Metadata["urlProvenance"].(map[string]string)
+	if !ok || provenance["requestedUrl"] == "" || provenance["fetchedUrl"] == "" {
+		t.Fatalf("url provenance = %#v, want requested and fetched URL", temporary.Metadata["urlProvenance"])
+	}
+
+	project, err := service.CreateProject("Webpage project")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	promoted, err := service.PromoteTemporarySource(context.Background(), temporary.ID, pipeline.TemporarySourcePromotionRequest{
+		ProjectID: project.ID,
+	})
+	if err != nil {
+		t.Fatalf("PromoteTemporarySource returned error: %v", err)
+	}
+	if promoted.ProjectID != project.ID || promoted.TemporarySourceID != temporary.ID {
+		t.Fatalf("promoted source = %#v, want project copy linked to temporary source", promoted)
+	}
+	if promoted.Metadata["websiteMetadata"] == nil || promoted.Metadata["urlProvenance"] == nil {
+		t.Fatalf("promoted metadata = %#v, want webpage provenance preserved", promoted.Metadata)
+	}
+
+	fallback, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		HTMLContainerSelector: "__visible_text_only",
+		Kind:                  pipeline.PreparedSourceKindURL,
+		URL:                   server.URL + "/article",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource fallback returned error: %v", err)
+	}
+	fallbackQuality, ok := fallback.Metadata["websiteExtractionQuality"].(sourceprep.HTMLExtractionQuality)
+	if !ok || fallbackQuality.ChosenContainer != "visible text" || !fallbackQuality.ArticleUncertain {
+		t.Fatalf("fallback quality = %#v, want visible text degraded extraction", fallback.Metadata["websiteExtractionQuality"])
 	}
 }
 

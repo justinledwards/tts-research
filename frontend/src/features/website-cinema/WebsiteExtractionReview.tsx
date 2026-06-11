@@ -39,6 +39,38 @@ export function WebsiteExtractionReview({
           {quality.extractionConfidence.toUpperCase()}
         </StatusChip>
       </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          disabled={!onRerunExtraction}
+          disabledReason="No re-fetch handler is available for this source."
+          onClick={
+            onRerunExtraction
+              ? () => {
+                  onRerunExtraction(source, "");
+                }
+              : undefined
+          }
+          size="sm"
+          variant="secondary"
+        >
+          Re-fetch
+        </Button>
+        <Button
+          disabled={!onRerunExtraction}
+          disabledReason="No fallback handler is available for this source."
+          onClick={
+            onRerunExtraction
+              ? () => {
+                  onRerunExtraction(source, "__visible_text_only");
+                }
+              : undefined
+          }
+          size="sm"
+          variant="secondary"
+        >
+          Use visible text only
+        </Button>
+      </div>
       <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-xs">
         <MetricRow label="Candidates" value={quality.articleCandidateCount.toString()} />
         <MetricRow label="Narration blocks" value={quality.narrationBlockCount.toString()} />
