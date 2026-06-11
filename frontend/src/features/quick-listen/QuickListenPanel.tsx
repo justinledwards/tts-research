@@ -1,9 +1,21 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button, SegmentedControl, StatusChip, cx, fieldControlClassName } from "../../design";
-import type { MarkdownParseMode, PreparedSource, TemporarySourceSession } from "../../types";
+import type {
+  MarkdownParseMode,
+  PreparedSource,
+  SourceReadinessConfirmationRequest,
+  TemporarySourceSession,
+} from "../../types";
+import {
+  detectIntakeSource,
+  sourceTypeLabel,
+  type IntakeSourceChoice,
+  type IntakeSourceType,
+} from "../intake/sourceTypeModel";
 import { WebsiteExtractionSummary } from "../website-cinema/WebsiteExtractionSummary";
 
 type QuickListenMode = "paste" | "url" | "file" | "recent";
+type QuickListenDestination = "review" | "preview";
 
 export interface QuickListenPanelProps {
   error: string | null;
@@ -11,13 +23,25 @@ export interface QuickListenPanelProps {
   isSubmitting: boolean;
   recentSources: TemporarySourceSession[];
   onClose: () => void;
-  onCreateFromFile: (file: File, markdownParseMode: MarkdownParseMode) => Promise<void>;
+  onCreateFromFile: (
+    file: File,
+    markdownParseMode: MarkdownParseMode,
+    confirmation: SourceReadinessConfirmationRequest,
+    destination: QuickListenDestination,
+  ) => Promise<void>;
   onCreateFromText: (
     text: string,
     markdownParseMode: MarkdownParseMode,
+    confirmation: SourceReadinessConfirmationRequest,
+    destination: QuickListenDestination,
     sourceName?: string,
   ) => Promise<void>;
-  onCreateFromUrl: (url: string, markdownParseMode: MarkdownParseMode) => Promise<void>;
+  onCreateFromUrl: (
+    url: string,
+    markdownParseMode: MarkdownParseMode,
+    confirmation: SourceReadinessConfirmationRequest,
+    destination: QuickListenDestination,
+  ) => Promise<void>;
   onDiscard: (source: TemporarySourceSession) => Promise<void>;
   onUseRecentSource: (source: TemporarySourceSession) => Promise<void>;
 }
@@ -42,21 +66,47 @@ export function QuickListenPanel({
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [markdownParseMode, setMarkdownParseMode] = useState<MarkdownParseMode>("strict");
+  const [sourceType, setSourceType] = useState<IntakeSourceType>("document");
+  const [language, setLanguage] = useState("en-US");
+  const [title, setTitle] = useState("");
+  const [hasEditedMetadata, setHasEditedMetadata] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const detection = useMemo(() => {
+    const sourceChoice = sourceChoiceForQuickListenMode(mode);
+    return detectIntakeSource({
+      fileName: file?.name,
+      intentId: mode === "url" ? "webpage" : "document",
+      pastedText: text,
+      sourceChoice,
+      templateSourceType: sourceType,
+      url,
+    });
+  }, [file?.name, mode, sourceType, text, url]);
+
+  const effectiveTitle =
+    title.trim() || detection.title || sourceNameForTemporaryInput(mode, file, url);
+  const effectiveLanguage = language.trim() || detection.language || "en-US";
+  const confirmation = {
+    language: effectiveLanguage,
+    sourceType,
+    structureLabel: detection.structureLabel,
+    title: effectiveTitle,
+  } satisfies SourceReadinessConfirmationRequest;
 
   if (!isOpen) {
     return null;
   }
 
-  const submit = () => {
+  const submit = (destination: QuickListenDestination) => {
     setLocalError(null);
     if (mode === "paste") {
       if (text.trim().length < 12) {
         setLocalError("Paste at least a sentence so Quick Listen has something useful to read.");
         return;
       }
-      void onCreateFromText(text, markdownParseMode, "Quick Listen paste");
+      void onCreateFromText(text, markdownParseMode, confirmation, destination, effectiveTitle);
       return;
     }
     if (mode === "url") {
@@ -65,7 +115,7 @@ export function QuickListenPanel({
         setLocalError("Enter a full http or https URL.");
         return;
       }
-      void onCreateFromUrl(trimmedUrl, markdownParseMode);
+      void onCreateFromUrl(trimmedUrl, markdownParseMode, confirmation, destination);
       return;
     }
     if (mode === "file") {
@@ -77,7 +127,7 @@ export function QuickListenPanel({
         setLocalError("That file type is not supported for Quick Listen yet.");
         return;
       }
-      void onCreateFromFile(file, markdownParseMode);
+      void onCreateFromFile(file, markdownParseMode, confirmation, destination);
       return;
     }
     if (recentSources.length === 0) {
@@ -135,6 +185,10 @@ export function QuickListenPanel({
             onChange={(value) => {
               setMode(value);
               setLocalError(null);
+              if (!hasEditedMetadata) {
+                const nextType = value === "url" ? "webpage" : "document";
+                setSourceType(nextType);
+              }
             }}
           />
 
@@ -146,6 +200,9 @@ export function QuickListenPanel({
                   className={cx(fieldControlClassName, "min-h-44 resize-y p-3 leading-6")}
                   onChange={(event) => {
                     setText(event.currentTarget.value);
+                    if (!hasEditedMetadata) {
+                      setTitle(titleFromQuickText(event.currentTarget.value));
+                    }
                   }}
                   placeholder="Paste the article, note, or excerpt you want narrated now."
                   value={text}
@@ -160,6 +217,10 @@ export function QuickListenPanel({
                   className={fieldControlClassName}
                   onChange={(event) => {
                     setUrl(event.currentTarget.value);
+                    if (!hasEditedMetadata) {
+                      setTitle(titleFromUrl(event.currentTarget.value));
+                      setSourceType("webpage");
+                    }
                   }}
                   placeholder="https://example.com/article"
                   type="url"
@@ -189,7 +250,12 @@ export function QuickListenPanel({
                 }}
                 onDrop={(event) => {
                   event.preventDefault();
-                  setFile(event.dataTransfer.files.item(0));
+                  const dropped = event.dataTransfer.files.item(0);
+                  setFile(dropped);
+                  if (dropped && !hasEditedMetadata) {
+                    setTitle(titleFromFileName(dropped.name));
+                    setSourceType(sourceTypeForQuickFile(dropped.name));
+                  }
                   setLocalError(null);
                 }}
                 onKeyDown={(event) => {
@@ -204,7 +270,12 @@ export function QuickListenPanel({
                   accept={ACCEPTED_QUICK_LISTEN_FILE_TYPES}
                   className="sr-only"
                   onChange={(event) => {
-                    setFile(event.currentTarget.files?.[0] ?? null);
+                    const selected = event.currentTarget.files?.[0] ?? null;
+                    setFile(selected);
+                    if (selected && !hasEditedMetadata) {
+                      setTitle(titleFromFileName(selected.name));
+                      setSourceType(sourceTypeForQuickFile(selected.name));
+                    }
                     setLocalError(null);
                   }}
                   ref={fileInputRef}
@@ -227,6 +298,67 @@ export function QuickListenPanel({
                 </div>
               </button>
             ) : null}
+
+            {mode === "recent" ? null : (
+              <div className="grid gap-3 rounded-md border p-3 vs-border vs-surface">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">Confirm source details</p>
+                  <StatusChip tone={detection.confidence === "low" ? "warning" : "metadata"}>
+                    {detection.confidence} confidence
+                  </StatusChip>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="grid gap-1 text-xs font-semibold">
+                    <span className="vs-muted">Title</span>
+                    <input
+                      className={fieldControlClassName}
+                      onChange={(event) => {
+                        setTitle(event.currentTarget.value);
+                        setHasEditedMetadata(true);
+                      }}
+                      placeholder={detection.title}
+                      value={title}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-semibold">
+                    <span className="vs-muted">Source type</span>
+                    <select
+                      className={fieldControlClassName}
+                      onChange={(event) => {
+                        setSourceType(event.currentTarget.value as IntakeSourceType);
+                        setHasEditedMetadata(true);
+                      }}
+                      value={sourceType}
+                    >
+                      <option value="document">Document</option>
+                      <option value="draft">Draft text</option>
+                      <option value="webpage">Webpage</option>
+                      <option value="book">Book</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-xs font-semibold">
+                    <span className="vs-muted">Language</span>
+                    <select
+                      className={fieldControlClassName}
+                      onChange={(event) => {
+                        setLanguage(event.currentTarget.value);
+                        setHasEditedMetadata(true);
+                      }}
+                      value={language}
+                    >
+                      <option value="en-US">English</option>
+                      <option value="sv-SE">Swedish</option>
+                      <option value="es-ES">Spanish</option>
+                      <option value="fr-FR">French</option>
+                      <option value="de-DE">German</option>
+                    </select>
+                  </label>
+                </div>
+                <p className="vs-muted text-xs leading-5">
+                  Detected as {sourceTypeLabel(sourceType)} with {detection.structureLabel}.
+                </p>
+              </div>
+            )}
 
             {mode === "recent" ? (
               <div className="grid gap-2">
@@ -322,13 +454,104 @@ export function QuickListenPanel({
           <p className="vs-muted max-w-sm text-xs leading-5">
             Keep in project appears after there is useful temporary work to save.
           </p>
-          <Button disabled={isSubmitting} onClick={submit} size="md" variant="primary">
-            {isSubmitting ? "Starting..." : "Start Quick Listen"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={isSubmitting}
+              onClick={() => {
+                submit("review");
+              }}
+              size="md"
+              variant="secondary"
+            >
+              {isSubmitting ? "Starting..." : "Review first"}
+            </Button>
+            <Button
+              disabled={isSubmitting}
+              onClick={() => {
+                submit("preview");
+              }}
+              size="md"
+              variant="primary"
+            >
+              {isSubmitting ? "Starting..." : "Create quick preview"}
+            </Button>
+          </div>
         </footer>
       </section>
     </div>
   );
+}
+
+function sourceNameForTemporaryInput(
+  mode: QuickListenMode,
+  file: File | null,
+  url: string,
+): string {
+  if (mode === "file" && file) {
+    return titleFromFileName(file.name);
+  }
+  if (mode === "url") {
+    return titleFromUrl(url);
+  }
+  return "Quick Listen paste";
+}
+
+function titleFromQuickText(value: string): string {
+  return (
+    value
+      .trim()
+      .split(/\r?\n/)
+      .find((line) => line.trim().length > 0)
+      ?.replace(/^#+\s*/, "")
+      .trim()
+      .slice(0, 80) ?? ""
+  );
+}
+
+function titleFromFileName(value: string): string {
+  return (
+    value
+      .replace(/\.[^.]+$/, "")
+      .replaceAll(/[-_]+/g, " ")
+      .trim() || value
+  );
+}
+
+function titleFromUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    const parts = url.pathname.split("/");
+    for (let index = parts.length - 1; index >= 0; index -= 1) {
+      const part = parts[index]?.trim();
+      if (part) {
+        return part.replaceAll(/[-_]+/g, " ");
+      }
+    }
+    return url.hostname;
+  } catch {
+    return value.trim();
+  }
+}
+
+function sourceChoiceForQuickListenMode(mode: QuickListenMode): IntakeSourceChoice {
+  if (mode === "file") {
+    return "file";
+  }
+  if (mode === "url") {
+    return "url";
+  }
+  return "pastedText";
+}
+
+function sourceTypeForQuickFile(value: string): IntakeSourceType {
+  const extension = value.toLowerCase().split(".").pop() ?? "";
+  if (extension === "html" || extension === "htm") {
+    return "webpage";
+  }
+  if (extension === "epub" || extension === "pdf" || extension === "docx") {
+    return "book";
+  }
+  return "document";
 }
 
 export function temporarySessionToPreparedSource(source: TemporarySourceSession): PreparedSource {

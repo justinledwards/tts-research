@@ -757,6 +757,24 @@ export async function deleteTemporarySource(id: string): Promise<void> {
   }
 }
 
+export async function confirmTemporarySourceReadiness(
+  id: string,
+  request: SourceReadinessConfirmationRequest,
+): Promise<TemporarySourceSession> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}/readiness/confirm`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporarySourceSession>;
+}
+
 export async function promoteTemporarySource(
   id: string,
   request: TemporarySourcePromotionRequest,

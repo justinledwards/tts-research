@@ -26,6 +26,7 @@ import {
   cancelVoiceProfileTarget,
   confirmBookSourceReadiness,
   confirmPreparedSourceReadiness,
+  confirmTemporarySourceReadiness,
   clearHuggingFaceToken,
   cloneResearchModule,
   closePlaybackSession,
@@ -6146,7 +6147,7 @@ export function App() {
   );
 
   const activateTemporarySource = useCallback(
-    (session: TemporarySourceSession) => {
+    (session: TemporarySourceSession, destination: "review" | "preview" = "review") => {
       const source = temporarySessionToPreparedSource(session);
       setTemporarySources((currentSources) => [
         session,
@@ -6166,7 +6167,7 @@ export function App() {
         kind: "source",
         label: source.title ?? source.sourceName,
       });
-      setContentMode(session.sourceReadiness?.state === "needsMetadata" ? "review" : "preview");
+      setContentMode(destination === "preview" ? "preview" : "review");
       announcePolite("Quick Listen source is ready as a temporary session.");
     },
     [announcePolite, selectWorkspaceInspectorTarget, setContentMode],
@@ -6176,13 +6177,15 @@ export function App() {
     async (
       request: Parameters<typeof createTemporarySource>[0],
       markdownParseMode: MarkdownParseMode,
+      confirmation?: SourceReadinessConfirmationRequest,
+      destination: "review" | "preview" = "review",
     ) => {
       setIsCreatingQuickListenSource(true);
       setQuickListenError(null);
       setSourcePrepError(null);
       announcePolite(liveStatusMessages.sourceExtractionStarted());
       try {
-        const session = await createTemporarySource(request, { markdownParseMode });
+        let session = await createTemporarySource(request, { markdownParseMode });
         if (session.status === "failed" || session.sourceReadiness?.state === "failed") {
           const message =
             session.error ?? session.sourceReadiness?.detail ?? "Quick Listen source failed.";
@@ -6199,7 +6202,10 @@ export function App() {
           announceAssertive(liveStatusMessages.sourceExtractionFailed());
           return;
         }
-        activateTemporarySource(session);
+        if (destination === "preview" && confirmation) {
+          session = await confirmTemporarySourceReadiness(session.id, confirmation);
+        }
+        activateTemporarySource(session, destination);
       } catch (caughtError) {
         const message =
           caughtError instanceof Error ? caughtError.message : "Unable to start Quick Listen";
@@ -6228,6 +6234,8 @@ export function App() {
             url: source.sourceUrl,
           },
           source.markdownParseMode ?? "strict",
+          undefined,
+          "review",
         );
         return;
       }
@@ -6245,6 +6253,8 @@ export function App() {
     async (
       draftText: string,
       markdownParseMode: MarkdownParseMode,
+      confirmation: SourceReadinessConfirmationRequest,
+      destination: "review" | "preview",
       sourceName = "Quick Listen paste",
     ) => {
       await createQuickListenSource(
@@ -6255,13 +6265,20 @@ export function App() {
           text: draftText,
         },
         markdownParseMode,
+        confirmation,
+        destination,
       );
     },
     [createQuickListenSource],
   );
 
   const handleQuickListenUrl = useCallback(
-    async (url: string, markdownParseMode: MarkdownParseMode) => {
+    async (
+      url: string,
+      markdownParseMode: MarkdownParseMode,
+      confirmation: SourceReadinessConfirmationRequest,
+      destination: "review" | "preview",
+    ) => {
       await createQuickListenSource(
         {
           kind: "url",
@@ -6270,14 +6287,21 @@ export function App() {
           url,
         },
         markdownParseMode,
+        confirmation,
+        destination,
       );
     },
     [createQuickListenSource],
   );
 
   const handleQuickListenFile = useCallback(
-    async (file: File, markdownParseMode: MarkdownParseMode) => {
-      await createQuickListenSource(file, markdownParseMode);
+    async (
+      file: File,
+      markdownParseMode: MarkdownParseMode,
+      confirmation: SourceReadinessConfirmationRequest,
+      destination: "review" | "preview",
+    ) => {
+      await createQuickListenSource(file, markdownParseMode, confirmation, destination);
     },
     [createQuickListenSource],
   );
@@ -6286,7 +6310,10 @@ export function App() {
     async (session: TemporarySourceSession) => {
       try {
         const refreshed = await getTemporarySource(session.id);
-        activateTemporarySource(refreshed);
+        activateTemporarySource(
+          refreshed,
+          refreshed.sourceReadiness?.state === "ready" ? "preview" : "review",
+        );
       } catch (caughtError) {
         const message =
           caughtError instanceof Error
@@ -6325,7 +6352,12 @@ export function App() {
       setSourcePrepError(null);
       try {
         const promoted = await promoteTemporarySource(temporarySourceId, {
+          language: source.sourceReadiness?.language,
           projectId: activeProjectId,
+          sourceType: source.sourceReadiness?.sourceType,
+          speechPolicyProfile: source.sourceSpeechPolicyProfile,
+          structureLabel: source.sourceReadiness?.structureLabel,
+          title: source.title ?? source.sourceReadiness?.title,
         });
         setPreparedSources((currentSources) => [
           promoted,
@@ -6353,7 +6385,7 @@ export function App() {
           kind: "source",
           label: promoted.title ?? promoted.sourceName,
         });
-        announcePolite("Temporary webpage kept as a project source.");
+        announcePolite("Temporary source kept as a project source.");
       } catch (caughtError) {
         const message =
           caughtError instanceof Error

@@ -4,6 +4,7 @@ import {
   audioSource,
   backendAssetUrl,
   clearHuggingFaceToken,
+  confirmTemporarySourceReadiness,
   createCustomSpeechPolicyProfile,
   createPreparedSource,
   createTemporarySource,
@@ -203,6 +204,51 @@ describe("API errors", () => {
       expect(typeof body).toBe("string");
       expect(JSON.parse(body as string)).toMatchObject({
         temporarySourceId: "temp-1",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("confirms temporary source readiness through the temporary route", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      requests.push({ url: fetchInputUrl(input), init });
+      return Promise.resolve(
+        Response.json({
+          id: "temp-1",
+          temporarySourceId: "temp-1",
+          sourceOwner: "temporary",
+          status: "previewable",
+          promotionStatus: "notPromoted",
+          kind: "text",
+          sourceName: "Pasted note",
+          wordCount: 10,
+          artifacts: [],
+          createdAt: "2026-06-11T17:00:00Z",
+          lastAccessedAt: "2026-06-11T17:00:00Z",
+          expiresAt: "2026-06-12T17:00:00Z",
+          updatedAt: "2026-06-11T17:00:00Z",
+        }),
+      );
+    };
+
+    try {
+      await confirmTemporarySourceReadiness("temp-1", {
+        language: "en-US",
+        sourceType: "document",
+        title: "Pasted note",
+      });
+
+      expect(requests[0]?.url).toBe("/api/temporary-sources/temp-1/readiness/confirm");
+      expect(requests[0]?.init?.method).toBe("PATCH");
+      const body = requests[0]?.init?.body;
+      expect(typeof body).toBe("string");
+      expect(JSON.parse(body as string)).toMatchObject({
+        language: "en-US",
+        sourceType: "document",
+        title: "Pasted note",
       });
     } finally {
       globalThis.fetch = originalFetch;

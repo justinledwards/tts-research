@@ -38,14 +38,19 @@ func TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy(t *tes
 	}
 
 	confirmed, err := service.ConfirmTemporarySourceReadiness(temporary.ID, pipeline.SourceReadinessConfirmationRequest{
-		Title:    "Scratch narration",
-		Language: "en",
+		Title:          "Scratch narration",
+		SourceType:     "document",
+		Language:       "en",
+		StructureLabel: "2 spoken blocks",
 	})
 	if err != nil {
 		t.Fatalf("ConfirmTemporarySourceReadiness returned error: %v", err)
 	}
 	if confirmed.Title != "Scratch narration" {
 		t.Fatalf("confirmed title = %q, want updated title", confirmed.Title)
+	}
+	if confirmed.Metadata["sourceType"] != "document" || confirmed.Metadata["language"] != "en" {
+		t.Fatalf("confirmed metadata = %#v, want source type and language", confirmed.Metadata)
 	}
 
 	job, err := service.CreateTemporarySourceJob(context.Background(), temporary.ID, pipeline.CreateJobRequest{})
@@ -83,6 +88,9 @@ func TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy(t *tes
 	}
 	if promoted.ID == temporary.ID || promoted.ProjectID != project.ID || promoted.TemporarySourceID != temporary.ID {
 		t.Fatalf("promoted source = %#v, want copied project source linked to temporary id", promoted)
+	}
+	if promoted.Metadata["sourceType"] != "document" || promoted.SourceReadiness.SourceType != "document" {
+		t.Fatalf("promoted metadata/readiness = %#v/%#v, want confirmed source type", promoted.Metadata, promoted.SourceReadiness)
 	}
 	if _, err := os.Stat(filepath.Join(service.Options().SourcePrepDir, promoted.ID, "source-prep.json")); err != nil {
 		t.Fatalf("promoted source metadata should exist: %v", err)
@@ -179,7 +187,9 @@ func TestTemporaryWebpageMetadataAndPromotion(t *testing.T) {
 		t.Fatalf("CreateProject returned error: %v", err)
 	}
 	promoted, err := service.PromoteTemporarySource(context.Background(), temporary.ID, pipeline.TemporarySourcePromotionRequest{
-		ProjectID: project.ID,
+		ProjectID:  project.ID,
+		SourceType: "webpage",
+		Language:   "en-US",
 	})
 	if err != nil {
 		t.Fatalf("PromoteTemporarySource returned error: %v", err)
@@ -189,6 +199,9 @@ func TestTemporaryWebpageMetadataAndPromotion(t *testing.T) {
 	}
 	if promoted.Metadata["websiteMetadata"] == nil || promoted.Metadata["urlProvenance"] == nil {
 		t.Fatalf("promoted metadata = %#v, want webpage provenance preserved", promoted.Metadata)
+	}
+	if promoted.Metadata["sourceType"] != "webpage" || promoted.Metadata["language"] != "en-US" {
+		t.Fatalf("promoted metadata = %#v, want promotion confirmation facts", promoted.Metadata)
 	}
 
 	fallback, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{

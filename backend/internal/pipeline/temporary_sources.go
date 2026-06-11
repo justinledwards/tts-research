@@ -30,7 +30,14 @@ type CreateTemporarySourceRequest struct {
 }
 
 type TemporarySourcePromotionRequest struct {
-	ProjectID string `json:"projectId"`
+	ProjectID           string `json:"projectId"`
+	Title               string `json:"title,omitempty"`
+	SourceType          string `json:"sourceType,omitempty"`
+	Language            string `json:"language,omitempty"`
+	StructureChoice     string `json:"structureChoice,omitempty"`
+	StructureLabel      string `json:"structureLabel,omitempty"`
+	SpeechPolicyProfile string `json:"speechPolicyProfile,omitempty"`
+	VoiceProfileID      string `json:"voiceProfileId,omitempty"`
 }
 
 func (service *Service) CreateTemporarySource(ctx context.Context, request CreateTemporarySourceRequest) (TemporarySourceSession, error) {
@@ -173,8 +180,20 @@ func (service *Service) ConfirmTemporarySourceReadiness(id string, request Sourc
 	if profile := strings.TrimSpace(request.SpeechPolicyProfile); profile != "" {
 		session.SourceSpeechPolicyProfile = profile
 	}
+	if session.Metadata == nil {
+		session.Metadata = map[string]any{}
+	}
 	if language := strings.TrimSpace(request.Language); language != "" {
-		session.SourceReadiness.Language = language
+		session.Metadata["language"] = language
+	}
+	if sourceType := strings.TrimSpace(request.SourceType); sourceType != "" {
+		session.Metadata["sourceType"] = sourceType
+	}
+	if structureChoice := strings.TrimSpace(request.StructureChoice); structureChoice != "" {
+		session.Metadata["structureChoice"] = structureChoice
+	}
+	if voiceProfileID := strings.TrimSpace(request.VoiceProfileID); voiceProfileID != "" {
+		session.Metadata["voiceProfileId"] = voiceProfileID
 	}
 	readiness := confirmedPreparedSourceReadiness(preparedSourceFromTemporarySession(session), request, now)
 	session.SourceReadiness = &readiness
@@ -331,6 +350,21 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 		return PreparedSource{}, err
 	}
 	now := time.Now().UTC()
+	if requestHasTemporaryPromotionMetadata(request) {
+		confirmed, confirmErr := service.ConfirmTemporarySourceReadiness(session.ID, SourceReadinessConfirmationRequest{
+			Title:               request.Title,
+			SourceType:          request.SourceType,
+			Language:            request.Language,
+			StructureChoice:     request.StructureChoice,
+			StructureLabel:      request.StructureLabel,
+			SpeechPolicyProfile: request.SpeechPolicyProfile,
+			VoiceProfileID:      request.VoiceProfileID,
+		})
+		if confirmErr != nil {
+			return PreparedSource{}, confirmErr
+		}
+		session = confirmed
+	}
 	source := preparedSourceFromTemporarySession(session)
 	source.ID = newID()
 	source.SourceOwner = SourceOwnerProject
@@ -365,6 +399,16 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 	service.temporary[session.ID] = cloneTemporarySourceSession(session)
 	service.mu.Unlock()
 	return source, nil
+}
+
+func requestHasTemporaryPromotionMetadata(request TemporarySourcePromotionRequest) bool {
+	return strings.TrimSpace(request.Title) != "" ||
+		strings.TrimSpace(request.SourceType) != "" ||
+		strings.TrimSpace(request.Language) != "" ||
+		strings.TrimSpace(request.StructureChoice) != "" ||
+		strings.TrimSpace(request.StructureLabel) != "" ||
+		strings.TrimSpace(request.SpeechPolicyProfile) != "" ||
+		strings.TrimSpace(request.VoiceProfileID) != ""
 }
 
 func (service *Service) getTemporarySource(id string, touch bool) (TemporarySourceSession, error) {

@@ -1861,6 +1861,12 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Run focused validation
 - [x] Validated with focused frontend tests, `pnpm check`, and `git diff --check`
 
+## 2026-06-11 21:02 CEST - Temporary File And Paste Narration
+- [x] Audit existing temporary source flows
+- [x] Add confirmable temporary metadata and promotion mapping
+- [x] Add review and quick-preview UX for paste/file temporary sources
+- [x] Run project checks
+
 ## 2026-06-05 23:08 CEST - Reviewer Branch Zip Script
 - [x] Inspect packaging conventions
 - [x] Add branch archive script

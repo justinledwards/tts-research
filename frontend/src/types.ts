@@ -576,6 +576,13 @@ export interface CreateTemporarySourceRequest extends CreatePreparedSourceReques
 
 export interface TemporarySourcePromotionRequest {
   projectId: string;
+  title?: string;
+  sourceType?: string;
+  language?: string;
+  structureChoice?: string;
+  structureLabel?: string;
+  speechPolicyProfile?: string;
+  voiceProfileId?: string;
 }
 
 export interface TemporarySourceSession {
