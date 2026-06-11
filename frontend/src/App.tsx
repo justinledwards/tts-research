@@ -214,10 +214,14 @@ import {
   workspaceOverlayState,
 } from "./features/layout";
 import {
+  buildTemporaryReviewStateAdapter,
   normalizeReviewPane,
+  normalizeReviewMode,
   selectReviewBlockId,
   type ReviewOpenFocusRequest,
+  type ReviewMode,
   type ReviewPane,
+  type TemporaryReviewStateAdapter,
 } from "./features/review/model";
 import {
   applyRevisionSessionState,
@@ -2824,6 +2828,7 @@ export function App() {
   );
   const [reviewOpenFocusRequest, setReviewOpenFocusRequest] =
     useState<ReviewOpenFocusRequest | null>(null);
+  const [temporaryReviewMode, setTemporaryReviewMode] = useState<ReviewMode>("quick");
   const [revisionStatusByBlockId, setRevisionStatusByBlockId] = useState<
     Record<string, RevisionStatus>
   >({});
@@ -3363,6 +3368,9 @@ export function App() {
   );
   const activeNarrationBookSource = sourceMode === "book" ? selectedBookSource : null;
   const activeNarrationPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
+  const activeNarrationIsTemporary =
+    activeNarrationPreparedSource?.sourceOwner === "temporary" ||
+    Boolean(activeNarrationPreparedSource?.temporarySourceId);
   const workbenchAudioRestoreSource = useMemo<WorkbenchAudioRestoreSource>(() => {
     if (activeNarrationPreparedSource) {
       return { mode: "prepared", source: activeNarrationPreparedSource };
@@ -3424,6 +3432,11 @@ export function App() {
     setRevisionEditedTextByBlockId({});
     setRevisionHistoryEntries([]);
   }, [revisionSessionSignature]);
+  useEffect(() => {
+    setTemporaryReviewMode((currentMode) =>
+      normalizeReviewMode(currentMode, activeNarrationIsTemporary),
+    );
+  }, [activeNarrationIsTemporary]);
   const baseNarrationPreviewBlocks = useMemo(
     () =>
       buildNarrationReviewBlocks({
@@ -3498,6 +3511,37 @@ export function App() {
   const revisionHealthSummary = useMemo(
     () => summarizeRevisionHealth(narrationPreviewBlocks),
     [narrationPreviewBlocks],
+  );
+  const temporaryReviewAdapter = useMemo(
+    () =>
+      activeNarrationIsTemporary
+        ? buildTemporaryReviewStateAdapter({
+            editedTextByBlockId: revisionEditedTextByBlockId,
+            mode: temporaryReviewMode,
+            noteCount: activeNarrationPreparedSource?.warnings?.length ?? 0,
+            policyPinned:
+              Boolean(activeNarrationPreparedSource?.sourceSpeechPolicyProfile?.trim()) ||
+              hasSpeechPolicyOverrides(
+                activeNarrationPreparedSource?.sourceSpeechPolicyOverrides ?? {},
+              ),
+            pronunciationOverrideCount: narrationPreviewBlocks.reduce(
+              (total, block) => total + block.pronunciationCount + block.normalisationCount,
+              0,
+            ),
+            sourceOwner: "temporary",
+            statusByBlockId: revisionStatusByBlockId,
+          })
+        : null,
+    [
+      activeNarrationIsTemporary,
+      activeNarrationPreparedSource?.sourceSpeechPolicyOverrides,
+      activeNarrationPreparedSource?.sourceSpeechPolicyProfile,
+      activeNarrationPreparedSource?.warnings?.length,
+      narrationPreviewBlocks,
+      revisionEditedTextByBlockId,
+      revisionStatusByBlockId,
+      temporaryReviewMode,
+    ],
   );
   const globalPreviewVoiceOptions = useMemo(
     () => [
@@ -6342,6 +6386,37 @@ export function App() {
       );
     }
   }, []);
+
+  const handleDiscardTemporaryPreparedSource = useCallback(
+    async (source: PreparedSource) => {
+      const temporarySourceId = source.temporarySourceId ?? source.id;
+      try {
+        await deleteTemporarySource(temporarySourceId);
+        setTemporarySources((currentSources) =>
+          currentSources.filter(
+            (session) =>
+              session.id !== temporarySourceId && session.temporarySourceId !== temporarySourceId,
+          ),
+        );
+        setActiveTemporaryPreparedSource((currentSource) =>
+          currentSource?.id === source.id || currentSource?.temporarySourceId === temporarySourceId
+            ? null
+            : currentSource,
+        );
+        setSelectedPreparedSourceId((currentId) => (currentId === source.id ? null : currentId));
+        setSourceMode("text");
+        setContentMode("intake");
+        announcePolite("Temporary source discarded.");
+      } catch (caughtError) {
+        setSourcePrepError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to discard temporary source.",
+        );
+      }
+    },
+    [announcePolite, setContentMode],
+  );
 
   const handleKeepTemporarySource = useCallback(
     async (source: PreparedSource) => {
@@ -9554,6 +9629,8 @@ export function App() {
                 </Suspense>
               }
               text={text}
+              temporaryReview={temporaryReviewAdapter}
+              temporaryReviewMode={temporaryReviewMode}
               voiceProfileId={selectedVoiceProfileId}
               voiceProfileLabel={selectedVoiceProfileLabel}
               voiceProfiles={voiceProfiles}
@@ -9604,6 +9681,16 @@ export function App() {
               onSelectVoiceProfile={selectVoiceProfile}
               selectedProfile={selectedVoiceProfile}
               onOpenReviewRepair={openReviewRepairQueue}
+              onDiscardTemporarySource={() => {
+                if (activeNarrationPreparedSource) {
+                  void handleDiscardTemporaryPreparedSource(activeNarrationPreparedSource);
+                }
+              }}
+              onKeepTemporarySource={() => {
+                if (activeNarrationPreparedSource) {
+                  void handleKeepTemporarySource(activeNarrationPreparedSource);
+                }
+              }}
               onStageAction={runWorkspaceStageAction}
               onSpeechPolicyProfileChange={(profile) => {
                 void handleSpeechPolicyProfileChange(profile);
@@ -9617,6 +9704,7 @@ export function App() {
               onEditedTextByBlockIdChange={setRevisionEditedTextByBlockId}
               onHistoryEntriesChange={setRevisionHistoryEntries}
               onReviewPaneChange={handleReviewPaneChange}
+              onTemporaryReviewModeChange={setTemporaryReviewMode}
               onStatusByBlockIdChange={setRevisionStatusByBlockId}
               onSubmit={handleSubmit}
               onUseBookSource={handleUseBookText}
@@ -11860,6 +11948,7 @@ function workbenchSourceLifecycleEnvelope({
       lastOpenedSurface: surface,
       narrationState,
       policyScope:
+        selectedPreparedSource.sourceOwner === "temporary" ||
         selectedPreparedSource.sourceSpeechPolicyProfile?.trim() ||
         hasSpeechPolicyOverrides(selectedPreparedSource.sourceSpeechPolicyOverrides ?? {})
           ? "source"
@@ -11875,7 +11964,8 @@ function workbenchSourceLifecycleEnvelope({
             : selectedPreparedSource.kind === "book"
               ? "book"
               : "document",
-      sourceOwner: "project",
+      sourceOwner: selectedPreparedSource.sourceOwner ?? "project",
+      temporarySourceId: selectedPreparedSource.temporarySourceId,
       sourceReadiness: sourceReadinessForWorkbench({
         selectedBookSource: null,
         selectedPreparedSource,
@@ -12102,6 +12192,8 @@ function SourceTextPanel({
   sourcePrepError,
   telepromptStage,
   text,
+  temporaryReview,
+  temporaryReviewMode,
   voiceProfileId,
   voiceProfileLabel,
   voiceProfiles,
@@ -12123,6 +12215,7 @@ function SourceTextPanel({
   onOpenVoiceCloning,
   onOpenPreparedSourceCinema,
   onImportBookSource,
+  onDiscardTemporarySource,
   onBookScopeChange,
   onConfirmBookSourceReadiness,
   onConfirmPreparedSourceReadiness,
@@ -12135,11 +12228,13 @@ function SourceTextPanel({
   onSelectVoiceProfile,
   onStageAction,
   onOpenReviewRepair,
+  onKeepTemporarySource,
   onSpeechPolicyProfileChange,
   onReviewBlockChange,
   onEditedTextByBlockIdChange,
   onHistoryEntriesChange,
   onReviewPaneChange,
+  onTemporaryReviewModeChange,
   onStatusByBlockIdChange,
   onSubmit,
   onUseBookSource,
@@ -12178,6 +12273,8 @@ function SourceTextPanel({
   sourcePrepError: string | null;
   telepromptStage: ReactNode;
   text: string;
+  temporaryReview: TemporaryReviewStateAdapter | null;
+  temporaryReviewMode: ReviewMode;
   voiceProfileId: string;
   voiceProfileLabel: string;
   voiceProfiles: VoiceProfile[];
@@ -12202,6 +12299,7 @@ function SourceTextPanel({
     files: File[],
     options?: BookSourceImportOptions,
   ) => Promise<SourceTextPanelBookImportResult>;
+  onDiscardTemporarySource: () => void;
   onBookScopeChange: (scope: BookScope) => void;
   onConfirmBookSourceReadiness: (
     source: BookSource,
@@ -12231,11 +12329,13 @@ function SourceTextPanel({
   onSelectVoiceProfile: (profileId: string) => void;
   onStageAction: (actionId: WorkspaceStageActionId) => void;
   onOpenReviewRepair: () => void;
+  onKeepTemporarySource: () => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onReviewBlockChange: (blockId: string | null) => void;
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
   onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
   onReviewPaneChange: (pane: ReviewPane) => void;
+  onTemporaryReviewModeChange: (mode: ReviewMode) => void;
   onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
   onSubmit: (event: React.SyntheticEvent<HTMLFormElement>) => void;
   onUseBookSource: (source: BookSource, scope: BookScope) => void;
@@ -12381,6 +12481,8 @@ function SourceTextPanel({
             shortcutPreferences={shortcutPreferences}
             isPlaybackActive={isPlaybackActive}
             sourceLifecycle={sourceLifecycle}
+            temporaryReview={temporaryReview}
+            temporaryReviewMode={temporaryReviewMode}
             text={text}
             voiceProfileLabel={voiceProfileLabel}
             playbackControls={playbackControls}
@@ -12389,11 +12491,14 @@ function SourceTextPanel({
             onInspectPreparedSource={onInspectPreparedSource}
             onActiveBlockChange={onReviewBlockChange}
             onActivePaneChange={onReviewPaneChange}
+            onDiscardTemporarySource={onDiscardTemporarySource}
             onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
             onHistoryEntriesChange={onHistoryEntriesChange}
+            onKeepTemporarySource={onKeepTemporarySource}
             onPreviewSpeech={() => {
               onStageAction("previewSpeech");
             }}
+            onReviewModeChange={onTemporaryReviewModeChange}
             onStatusByBlockIdChange={onStatusByBlockIdChange}
           />
         </div>
@@ -15841,9 +15946,12 @@ function NarrationReviewWorkbench({
   onInspectPreparedSource,
   onActiveBlockChange,
   onActivePaneChange,
+  onDiscardTemporarySource,
   onEditedTextByBlockIdChange,
   onHistoryEntriesChange,
+  onKeepTemporarySource,
   onPreviewSpeech,
+  onReviewModeChange,
   onStatusByBlockIdChange,
   playbackControls,
   playbackCursorSec,
@@ -15857,6 +15965,8 @@ function NarrationReviewWorkbench({
   selectedPreparedSource,
   shortcutPreferences,
   sourceLifecycle,
+  temporaryReview,
+  temporaryReviewMode,
   text,
   voiceProfileLabel,
 }: Readonly<{
@@ -15870,11 +15980,14 @@ function NarrationReviewWorkbench({
   isPlaybackActive: boolean;
   onActiveBlockChange: (blockId: string | null) => void;
   onActivePaneChange: (pane: ReviewPane) => void;
+  onDiscardTemporarySource: () => void;
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
   onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
+  onKeepTemporarySource: () => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
   onPreviewSpeech: () => void;
+  onReviewModeChange: (mode: ReviewMode) => void;
   onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
   playbackControls: PlaybackController;
   playbackCursorSec: number;
@@ -15887,6 +16000,8 @@ function NarrationReviewWorkbench({
   selectedPreparedSource: PreparedSource | null;
   shortcutPreferences: ShortcutPreferences;
   sourceLifecycle: SourceLifecycleEnvelope;
+  temporaryReview: TemporaryReviewStateAdapter | null;
+  temporaryReviewMode: ReviewMode;
   text: string;
   voiceProfileLabel: string;
   generatedAudioLifecycle: GeneratedAudioLifecycleState;
@@ -16115,7 +16230,9 @@ function NarrationReviewWorkbench({
           reviewOpenFocusRequest={reviewOpenFocusRequest}
           historyEntries={historyEntries}
           initialTabId={revisionTabForReviewPane(activePane)}
+          onDiscardTemporarySource={temporaryReview ? onDiscardTemporarySource : undefined}
           policyProfileLabel={policyProfileLabel}
+          reviewMode={temporaryReview ? temporaryReviewMode : "full"}
           runConfigurationLabel={runConfigurationLabel}
           scopeLabel={scopeTitle}
           sourceLifecycle={sourceLifecycle}
@@ -16123,6 +16240,7 @@ function NarrationReviewWorkbench({
           sourceMeta={sourceMeta}
           statusByBlockId={revisionStatusByBlockId}
           shortcutPreferences={shortcutPreferences}
+          temporaryReview={temporaryReview}
           validationReason={validationReason}
           validationSimilarity={job?.voiceCheck.similarity ?? 0}
           validationTranscript={validationTranscript}
@@ -16139,8 +16257,10 @@ function NarrationReviewWorkbench({
           onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
           onHistoryEntriesChange={onHistoryEntriesChange}
           onInspectStructure={inspectStructure}
+          onKeepTemporarySource={temporaryReview ? onKeepTemporarySource : undefined}
           onNextIssue={moveToNextReviewIssue}
           onPreviewSpeech={onPreviewSpeech}
+          onReviewModeChange={onReviewModeChange}
           onStatusByBlockIdChange={onStatusByBlockIdChange}
           onTabChange={(tabId) => {
             onActivePaneChange(reviewPaneForRevisionTab(tabId));
@@ -16550,6 +16670,12 @@ function workbenchScopeTitle({
   sourceMode: SourceMode;
 }>): string {
   if (selectedPreparedSource) {
+    if (
+      selectedPreparedSource.sourceOwner === "temporary" ||
+      selectedPreparedSource.temporarySourceId
+    ) {
+      return "Temporary session";
+    }
     return "Full source";
   }
   if (selectedBookSource) {

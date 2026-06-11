@@ -59,7 +59,13 @@ import {
   type RevisionTriageGroup,
   type RevisionTriageItem,
 } from "./revisionFilters";
-import type { ReviewOpenFocusRequest } from "../review/model";
+import {
+  reviewBlocksForMode,
+  reviewModeLabel,
+  type ReviewMode,
+  type ReviewOpenFocusRequest,
+  type TemporaryReviewStateAdapter,
+} from "../review/model";
 import {
   generatedAudioStateLabel,
   sourceLifecycleDescriptor,
@@ -93,8 +99,10 @@ export interface RevisionPanelProps {
   blocks: RevisionBlock[];
   historyEntries: RevisionHistoryEntry[];
   initialTabId?: RevisionTabId;
+  onDiscardTemporarySource?: () => void;
   policyProfileLabel: string;
   playbackToolbar?: ReactNode;
+  reviewMode?: ReviewMode;
   reviewOpenFocusRequest?: ReviewOpenFocusRequest | null;
   runConfigurationLabel: string;
   scopeLabel: string;
@@ -103,6 +111,7 @@ export interface RevisionPanelProps {
   sourceMeta: string;
   statusByBlockId: Record<string, RevisionStatus>;
   shortcutPreferences?: ShortcutPreferences;
+  temporaryReview?: TemporaryReviewStateAdapter | null;
   validationReason: string;
   validationSimilarity: number;
   validationTranscript: string;
@@ -111,8 +120,10 @@ export interface RevisionPanelProps {
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
   onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
   onInspectStructure?: () => void;
+  onKeepTemporarySource?: () => void;
   onNextIssue?: () => void;
   onPreviewSpeech: () => void;
+  onReviewModeChange?: (mode: ReviewMode) => void;
   onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
   onTabChange?: (tabId: RevisionTabId) => void;
 }
@@ -123,8 +134,10 @@ export function RevisionPanel({
   blocks,
   historyEntries,
   initialTabId = "overview",
+  onDiscardTemporarySource,
   policyProfileLabel,
   playbackToolbar,
+  reviewMode = "full",
   reviewOpenFocusRequest = null,
   runConfigurationLabel,
   scopeLabel,
@@ -133,6 +146,7 @@ export function RevisionPanel({
   sourceMeta,
   statusByBlockId,
   shortcutPreferences = DEFAULT_SHORTCUT_PREFERENCES,
+  temporaryReview = null,
   validationReason,
   validationSimilarity,
   validationTranscript,
@@ -141,8 +155,10 @@ export function RevisionPanel({
   onEditedTextByBlockIdChange,
   onHistoryEntriesChange,
   onInspectStructure,
+  onKeepTemporarySource,
   onNextIssue,
   onPreviewSpeech,
+  onReviewModeChange,
   onStatusByBlockIdChange,
   onTabChange,
 }: Readonly<RevisionPanelProps>) {
@@ -162,7 +178,17 @@ export function RevisionPanel({
     setActiveTabId(normalizeRevisionTabId(initialTabId));
   }, [initialTabId]);
 
-  const blocksWithState = blocks;
+  useEffect(() => {
+    if (reviewMode === "quick" && (activeTabId === "diagnostics" || activeTabId === "history")) {
+      setActiveTabId("overview");
+      onTabChange?.("overview");
+    }
+  }, [activeTabId, onTabChange, reviewMode]);
+
+  const blocksWithState = useMemo(() => {
+    const scopedBlocks = reviewBlocksForMode(blocks, reviewMode);
+    return scopedBlocks.length > 0 ? scopedBlocks : blocks;
+  }, [blocks, reviewMode]);
   useEffect(() => {
     setSelectedBlockIds((current) => {
       const allowed = new Set(blocks.map((block) => block.id));
@@ -505,7 +531,7 @@ export function RevisionPanel({
       <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] vs-muted">
-            Revision Panel
+            {temporaryReview?.headerLabel ?? "Revision Panel"}
           </p>
           <h3 className="mt-1 truncate text-lg font-semibold" title={sourceLabel}>
             {sourceLabel}
@@ -520,9 +546,32 @@ export function RevisionPanel({
               {sourceLifecycle.selectedScope}
             </p>
           ) : null}
+          {temporaryReview ? (
+            <p className="mt-1 text-xs vs-muted">
+              {temporaryReview.statusLabel} · Review notes, repair decisions, pronunciation
+              overrides, and policy changes stay in this session until promoted.
+            </p>
+          ) : null}
         </div>
-        {onInspectStructure ? (
+        {onInspectStructure || temporaryReview ? (
           <div className="flex flex-wrap items-center gap-2">
+            {temporaryReview ? (
+              <>
+                <SegmentedControl
+                  ariaLabel="Review mode"
+                  onChange={(value) => {
+                    onReviewModeChange?.(value);
+                  }}
+                  options={[
+                    { label: "Quick", value: "quick" },
+                    { label: "Full", value: "full" },
+                    { label: "Promote", value: "promotion" },
+                  ]}
+                  value={reviewMode}
+                />
+                <StatusChip tone="metadata">{reviewModeLabel(reviewMode)}</StatusChip>
+              </>
+            ) : null}
             <Button
               {...revisionShortcutButtonProps(
                 "review.inspector",
@@ -530,15 +579,65 @@ export function RevisionPanel({
                 shortcutPreferences,
               )}
               data-testid="workspace-stage-action-inspectStructure"
-              onClick={onInspectStructure}
+              disabled={!onInspectStructure}
+              onClick={() => {
+                onInspectStructure?.();
+              }}
               size="sm"
               variant="secondary"
             >
               Content Structure
             </Button>
+            {temporaryReview ? (
+              <>
+                <Button
+                  data-testid="ui-action-temporary-review-create-listen"
+                  onClick={onPreviewSpeech}
+                  size="sm"
+                  variant="primary"
+                >
+                  Create & Listen
+                </Button>
+                <Button
+                  data-testid="ui-action-temporary-review-keep"
+                  onClick={onKeepTemporarySource}
+                  size="sm"
+                  variant="secondary"
+                >
+                  Keep in project
+                </Button>
+                <Button
+                  data-testid="ui-action-temporary-review-discard"
+                  onClick={onDiscardTemporarySource}
+                  size="sm"
+                  variant="ghost"
+                >
+                  Discard
+                </Button>
+              </>
+            ) : null}
           </div>
         ) : null}
       </div>
+
+      {temporaryReview?.mode === "promotion" ? (
+        <div
+          className="rounded-lg border bg-[var(--vs-surface)] p-3 text-sm vs-border"
+          data-testid="temporary-review-promotion-mapping"
+        >
+          <p className="font-semibold">Promotion Review</p>
+          <p className="mt-1 vs-muted">
+            Choose what temporary review data should become part of the project source.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {temporaryReview.promotionMapping.summaryItems.map((item) => (
+              <StatusChip key={item} tone="metadata">
+                {item}
+              </StatusChip>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <RevisionHealthBanner
         statusMessage={statusMessage}
@@ -611,6 +710,7 @@ export function RevisionPanel({
             playbackToolbar={playbackToolbar}
             policyProfileLabel={policyProfileLabel}
             repairRef={selectedRepairRef}
+            reviewMode={reviewMode}
             scopeLabel={scopeLabel}
             shortcutPreferences={shortcutPreferences}
             summary={summary}
@@ -1163,6 +1263,7 @@ function RevisionSelectedBlockEditor({
   playbackToolbar,
   policyProfileLabel,
   repairRef,
+  reviewMode,
   scopeLabel,
   shortcutPreferences,
   summary,
@@ -1187,6 +1288,7 @@ function RevisionSelectedBlockEditor({
   playbackToolbar?: ReactNode;
   policyProfileLabel: string;
   repairRef?: Ref<HTMLElement>;
+  reviewMode: ReviewMode;
   scopeLabel: string;
   shortcutPreferences: ShortcutPreferences;
   summary: RevisionHealthSummary;
@@ -1232,6 +1334,29 @@ function RevisionSelectedBlockEditor({
     shortcutPreferences,
     nextIssueDisabledReason,
   );
+  const detailTabOptions = [
+    { label: "Overview", testId: "revision-tab-overview", value: "overview" as const },
+    { label: "Blocks", testId: "revision-tab-blocks", value: "blocks" as const },
+    {
+      label: "Pronunciation",
+      testId: "revision-tab-pronunciation",
+      value: "pronunciation" as const,
+    },
+    ...(reviewMode === "quick"
+      ? []
+      : [
+          {
+            label: "Diagnostics",
+            testId: "revision-tab-diagnostics",
+            value: "diagnostics" as const,
+          },
+          { label: "History", testId: "revision-tab-history", value: "history" as const },
+        ]),
+  ] satisfies {
+    label: string;
+    testId: string;
+    value: RevisionTabId;
+  }[];
 
   return (
     <section
@@ -1385,18 +1510,8 @@ function RevisionSelectedBlockEditor({
       <div className="grid gap-3">
         <SegmentedControl
           ariaLabel="Revision details"
-          columns={5}
-          options={[
-            { label: "Overview", testId: "revision-tab-overview", value: "overview" },
-            { label: "Blocks", testId: "revision-tab-blocks", value: "blocks" },
-            {
-              label: "Pronunciation",
-              testId: "revision-tab-pronunciation",
-              value: "pronunciation",
-            },
-            { label: "Diagnostics", testId: "revision-tab-diagnostics", value: "diagnostics" },
-            { label: "History", testId: "revision-tab-history", value: "history" },
-          ]}
+          columns={reviewMode === "quick" ? 3 : 5}
+          options={detailTabOptions}
           value={activeTabId}
           onChange={onSetActiveTab}
         />

@@ -985,7 +985,9 @@ function buildActivityItems(
       detail: input.sourceLifecycle.selectedScope,
       id: "source",
       status: state,
-      title: `Source: ${input.sourceLifecycle.title}`,
+      title: `${input.sourceLifecycle.sourceOwner === "temporary" ? "Temporary source" : "Source"}: ${
+        input.sourceLifecycle.title
+      }`,
       tone: toneForState(state),
     },
     {

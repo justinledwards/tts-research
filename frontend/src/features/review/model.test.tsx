@@ -1,7 +1,14 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ReviewPaneAccordion, type ReviewPaneItem } from "./ReviewPaneAccordion";
-import { buildReviewPaneSummaries, normalizeReviewPane, selectReviewBlockId } from "./model";
+import {
+  buildTemporaryReviewStateAdapter,
+  buildReviewPaneSummaries,
+  normalizeReviewMode,
+  normalizeReviewPane,
+  reviewBlocksForMode,
+  selectReviewBlockId,
+} from "./model";
 
 describe("review pane model", () => {
   it("normalizes active panes and falls back to blocks", () => {
@@ -31,6 +38,58 @@ describe("review pane model", () => {
       id: "validation",
       title: "Validation Transcript",
     });
+  });
+
+  it("defaults temporary review to quick mode and durable review to full mode", () => {
+    expect(normalizeReviewMode(undefined, true)).toBe("quick");
+    expect(normalizeReviewMode(undefined, false)).toBe("full");
+    expect(normalizeReviewMode("promotion", true)).toBe("promotion");
+  });
+
+  it("adapts temporary review state with session-scoped promotion mapping", () => {
+    const adapter = buildTemporaryReviewStateAdapter({
+      editedTextByBlockId: { block1: "Corrected spoken form" },
+      mode: "promotion",
+      noteCount: 2,
+      policyPinned: true,
+      pronunciationOverrideCount: 1,
+      sourceOwner: "temporary",
+      statusByBlockId: { block1: "approved" },
+    });
+
+    expect(adapter.headerLabel).toBe("Temporary source · Review");
+    expect(adapter.dataScope).toBe("temporary-session");
+    expect(adapter.statusLabel).toBe("Temporary review");
+    expect(adapter.promotionMapping.editCount).toBe(1);
+    expect(adapter.promotionMapping.noteCount).toBe(2);
+    expect(adapter.promotionMapping.pronunciationOverrideCount).toBe(1);
+    expect(adapter.promotionMapping.summaryItems).toContain("1 session policy override");
+  });
+
+  it("filters quick review to blockers, skipped content, suspicious blocks, and pronunciation warnings", () => {
+    const blocks = [
+      { id: "clean", status: "waiting", spokenText: "Clean text.", warnings: [] },
+      { id: "policy", policyNoteType: "summarized", status: "waiting", spokenText: "Summary." },
+      { id: "blocker", status: "retrying", spokenText: "" },
+      { id: "skipped", speakMode: "skip", status: "skipped", spokenText: "" },
+      { id: "pronunciation", pronunciationCount: 1, status: "waiting", spokenText: "O A I." },
+      { id: "warning", status: "waiting", spokenText: "Maybe.", warnings: ["Check structure"] },
+    ];
+
+    expect(reviewBlocksForMode(blocks, "quick").map((block) => block.id)).toEqual([
+      "blocker",
+      "skipped",
+      "pronunciation",
+      "warning",
+    ]);
+    expect(reviewBlocksForMode(blocks, "full").map((block) => block.id)).toEqual([
+      "clean",
+      "policy",
+      "blocker",
+      "skipped",
+      "pronunciation",
+      "warning",
+    ]);
   });
 });
 

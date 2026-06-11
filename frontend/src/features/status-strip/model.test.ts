@@ -44,6 +44,24 @@ describe("resolveNarrationStatusModel", () => {
     expect(model.primaryAction?.id).toBe("create");
   });
 
+  it("labels temporary sources in the status activity feed", () => {
+    const model = resolveNarrationStatusModel(
+      input({
+        sourceLifecycle: sourceLifecycle({
+          selectedScope: "Temporary session",
+          sourceOwner: "temporary",
+          temporarySourceId: "temp-1",
+          title: "Quick cleanup",
+        }),
+      }),
+    );
+
+    expect(model.activityItems.find((item) => item.id === "source")).toMatchObject({
+      detail: "Temporary session",
+      title: "Temporary source: Quick cleanup",
+    });
+  });
+
   it("shows review repair warnings without blocking preview readiness", () => {
     const model = resolveNarrationStatusModel(
       input({

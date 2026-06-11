@@ -1943,3 +1943,9 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Preserve canonical review text for book narration backend jobs.
 - [x] Run focused validation and full `pnpm check`.
 - [x] Commit changes and update PR branch.
+## 2026-06-11 21:50 CEST - Temporary Source Review Workspace
+- [x] Map existing review state and temporary source flow
+- [x] Add session-scoped temporary review adapter/state
+- [x] Update Review UI modes, actions, and status labeling
+- [x] Add promotion mapping coverage
+- [x] Run project checks
