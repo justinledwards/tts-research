@@ -193,6 +193,8 @@ const (
 	SourceArtifactKindReview         SourceArtifactKind = "review"
 	SourceArtifactKindPreviewAudio   SourceArtifactKind = "previewAudio"
 	SourceArtifactKindGeneratedAudio SourceArtifactKind = "generatedAudio"
+	SourceArtifactKindTiming         SourceArtifactKind = "timing"
+	SourceArtifactKindValidation     SourceArtifactKind = "validation"
 	SourceArtifactKindBookmark       SourceArtifactKind = "bookmark"
 	SourceArtifactKindProgress       SourceArtifactKind = "progress"
 )

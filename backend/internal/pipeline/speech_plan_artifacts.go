@@ -60,7 +60,7 @@ func (service *Service) GetJobSpeechPlan(id string) (speechplan.Document, error)
 }
 
 func jobSpeechPlan(job VoiceJob, generatedAt time.Time) speechplan.Document {
-	sourceID := firstNonEmpty(job.PreparedSourceID, job.BookSourceID, job.ID)
+	sourceID := firstNonEmpty(job.PreparedSourceID, job.BookSourceID, job.TemporarySourceID, job.ID)
 	trace := jobPolicyTrace(job)
 	plan := speechplan.Document{
 		SchemaVersion: speechplan.SchemaVersion,

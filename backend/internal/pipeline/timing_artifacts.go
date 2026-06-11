@@ -35,7 +35,7 @@ func (service *Service) refreshTimingArtifacts(ctx context.Context, id string, f
 	warnings := alignmentResult.Warnings
 	scopeContent, _ := service.timingScopeContent(job.VoiceJob)
 	scopeKey := scopeKeyForJob(job.VoiceJob)
-	timingSourceID := firstNonEmpty(job.PreparedSourceID, job.BookSourceID, job.ID)
+	timingSourceID := firstNonEmpty(job.PreparedSourceID, job.BookSourceID, job.TemporarySourceID, job.ID)
 	highlight := highlightmap.Build(highlightmap.BuildRequest{
 		JobID:        job.ID,
 		BookSourceID: timingSourceID,
@@ -268,6 +268,13 @@ func (service *Service) timingScopeContent(job VoiceJob) (BookSourceScopeContent
 		}
 		return preparedSourceTimingScopeContent(job, source), nil
 	}
+	if strings.TrimSpace(job.TemporarySourceID) != "" {
+		session, err := service.getTemporarySource(job.TemporarySourceID, false)
+		if err != nil {
+			return BookSourceScopeContent{}, err
+		}
+		return preparedSourceTimingScopeContent(job, preparedSourceFromTemporarySession(session)), nil
+	}
 	return BookSourceScopeContent{}, ErrBookSourceNotFound
 }
 
@@ -381,6 +388,9 @@ func scopeKeyForJob(job VoiceJob) string {
 	if job.BookScope == nil {
 		if strings.TrimSpace(job.PreparedSourceID) != "" {
 			return "prepared-source"
+		}
+		if strings.TrimSpace(job.TemporarySourceID) != "" {
+			return "temporary-source"
 		}
 		return ""
 	}

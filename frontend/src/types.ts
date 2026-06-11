@@ -139,7 +139,15 @@ export type SourceArtifactScope = "project" | "temporary";
 export interface SourceArtifactRef {
   id: string;
   scope: SourceArtifactScope;
-  kind: "extraction" | "review" | "previewAudio" | "generatedAudio" | "bookmark" | "progress";
+  kind:
+    | "extraction"
+    | "review"
+    | "previewAudio"
+    | "generatedAudio"
+    | "timing"
+    | "validation"
+    | "bookmark"
+    | "progress";
   url?: string;
   bytes?: number;
   createdAt: string;
@@ -583,6 +591,7 @@ export interface TemporarySourcePromotionRequest {
   structureLabel?: string;
   speechPolicyProfile?: string;
   voiceProfileId?: string;
+  preserveGeneratedArtifacts?: boolean;
 }
 
 export interface TemporarySourceSession {

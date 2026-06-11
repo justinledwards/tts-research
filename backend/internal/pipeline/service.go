@@ -704,6 +704,7 @@ func (service *Service) CancelJob(id string) error {
 	}
 	service.waitForJobRuntime(id, 2*time.Second)
 	_ = service.persistJobMetadata(id)
+	service.markTemporarySourceJobTerminal(job.VoiceJob, TemporarySourceStateStale)
 
 	return nil
 }
@@ -3186,6 +3187,9 @@ func (service *Service) failJobByID(id string, err error) {
 		setProgress(job, string(JobStatusFailed), "Job failed", err.Error(), job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	})
 	_ = service.persistJobMetadata(id)
+	if job, err := service.GetJob(id); err == nil {
+		service.markTemporarySourceJobTerminal(job, TemporarySourceStateFailed)
+	}
 }
 
 func (service *Service) cancelJobByID(id string) {
@@ -3209,6 +3213,9 @@ func (service *Service) cancelJobByID(id string) {
 		setProgress(job, string(JobStatusCancelled), "Job cancelled", "Processing was cancelled by user request.", job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	})
 	_ = service.persistJobMetadata(id)
+	if job, err := service.GetJob(id); err == nil {
+		service.markTemporarySourceJobTerminal(job, TemporarySourceStateStale)
+	}
 }
 
 func classifyJobFailure(err error) (JobTerminalReason, bool) {

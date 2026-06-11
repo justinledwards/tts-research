@@ -30,14 +30,15 @@ type CreateTemporarySourceRequest struct {
 }
 
 type TemporarySourcePromotionRequest struct {
-	ProjectID           string `json:"projectId"`
-	Title               string `json:"title,omitempty"`
-	SourceType          string `json:"sourceType,omitempty"`
-	Language            string `json:"language,omitempty"`
-	StructureChoice     string `json:"structureChoice,omitempty"`
-	StructureLabel      string `json:"structureLabel,omitempty"`
-	SpeechPolicyProfile string `json:"speechPolicyProfile,omitempty"`
-	VoiceProfileID      string `json:"voiceProfileId,omitempty"`
+	ProjectID                  string `json:"projectId"`
+	Title                      string `json:"title,omitempty"`
+	SourceType                 string `json:"sourceType,omitempty"`
+	Language                   string `json:"language,omitempty"`
+	StructureChoice            string `json:"structureChoice,omitempty"`
+	StructureLabel             string `json:"structureLabel,omitempty"`
+	SpeechPolicyProfile        string `json:"speechPolicyProfile,omitempty"`
+	VoiceProfileID             string `json:"voiceProfileId,omitempty"`
+	PreserveGeneratedArtifacts bool   `json:"preserveGeneratedArtifacts,omitempty"`
 }
 
 func (service *Service) CreateTemporarySource(ctx context.Context, request CreateTemporarySourceRequest) (TemporarySourceSession, error) {
@@ -386,6 +387,17 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 	if err := service.writePreparedSourceContentIR(source); err != nil {
 		return PreparedSource{}, err
 	}
+	if request.PreserveGeneratedArtifacts {
+		if _, err := service.promoteTemporarySourceJobArtifacts(session.ID, source); err != nil {
+			session.PromotionStatus = TemporarySourcePromotionFailed
+			session.Error = err.Error()
+			_ = service.persistTemporarySource(session)
+			service.mu.Lock()
+			service.temporary[session.ID] = cloneTemporarySourceSession(session)
+			service.mu.Unlock()
+			return PreparedSource{}, err
+		}
+	}
 	session.Status = TemporarySourceStatePromoted
 	session.PromotionStatus = TemporarySourcePromoted
 	session.PromotedProjectID = source.ProjectID
@@ -527,6 +539,118 @@ func (service *Service) removeTemporarySource(session TemporarySourceSession, st
 		}
 	}
 	return nil
+}
+
+func (service *Service) promoteTemporarySourceJobArtifacts(temporarySourceID string, source PreparedSource) (VoiceJob, error) {
+	sourceJob, ok := service.latestPromotableTemporaryJob(temporarySourceID)
+	if !ok {
+		return VoiceJob{}, nil
+	}
+	sourceDir, err := service.jobArtifactDirForJob(sourceJob.VoiceJob)
+	if err != nil {
+		return VoiceJob{}, err
+	}
+	if _, err := os.Stat(sourceDir); err != nil {
+		return VoiceJob{}, err
+	}
+	promotedJob := sourceJob.VoiceJob
+	promotedJob.ID = newID()
+	promotedJob.ProjectID = source.ProjectID
+	promotedJob.PreparedSourceID = source.ID
+	promotedJob.BookSourceID = ""
+	promotedJob.BookScope = nil
+	promotedJob.TemporarySourceID = ""
+	promotedJob.ProgressTargetID = ""
+	promotedJob.RetryOfJobID = ""
+	promotedJob.CreatedAt = time.Now().UTC()
+	promotedJob.UpdatedAt = promotedJob.CreatedAt
+	promotedJob.AudioURL = ""
+	promotedJob.AudioPartialURL = ""
+	if sourceJob.AudioURL != "" || sourceJob.AudioPath != "" {
+		promotedJob.AudioURL = fmt.Sprintf("/api/voice-jobs/%s/audio", promotedJob.ID)
+	}
+	if sourceJob.AudioPartialURL != "" || sourceJob.AudioReadySegments > 0 {
+		promotedJob.AudioPartialURL = fmt.Sprintf("/api/voice-jobs/%s/audio/partial", promotedJob.ID)
+	}
+	promotedJob.Timing = rewriteTimingArtifactURLs(promotedJob.Timing, promotedJob.ID)
+
+	targetDir, err := filepath.Abs(filepath.Join(service.options.JobDataDir, promotedJob.ID))
+	if err != nil {
+		return VoiceJob{}, err
+	}
+	if err := copyDirectory(sourceDir, targetDir); err != nil {
+		return VoiceJob{}, err
+	}
+	if promotedJob.AudioPath != "" {
+		promotedJob.AudioPath = filepath.Join(targetDir, filepath.Base(promotedJob.AudioPath))
+	}
+	stored := storedJob{VoiceJob: promotedJob}
+	service.hydratePersistedSegmentAudio(&stored)
+	service.save(stored)
+	if err := service.writeJobMetadata(promotedJob); err != nil {
+		return VoiceJob{}, err
+	}
+	return promotedJob, nil
+}
+
+func (service *Service) latestPromotableTemporaryJob(temporarySourceID string) (storedJob, bool) {
+	service.mu.RLock()
+	defer service.mu.RUnlock()
+	var selected storedJob
+	found := false
+	for _, job := range service.jobs {
+		if job.TemporarySourceID != temporarySourceID {
+			continue
+		}
+		if job.Status != JobStatusCompleted && job.AudioReadySegments <= 0 {
+			continue
+		}
+		if !found || job.UpdatedAt.After(selected.UpdatedAt) {
+			selected = job
+			found = true
+		}
+	}
+	return selected, found
+}
+
+func rewriteTimingArtifactURLs(timing *TimingArtifacts, jobID string) *TimingArtifacts {
+	if timing == nil {
+		return nil
+	}
+	next := *timing
+	next.HighlightMapURL = fmt.Sprintf("/api/voice-jobs/%s/highlight-map", jobID)
+	next.HighlightMapV2URL = fmt.Sprintf("/api/voice-jobs/%s/highlight-map-v2", jobID)
+	next.FragmentTimingURL = fmt.Sprintf("/api/voice-jobs/%s/timing/fragments", jobID)
+	next.TokenTimingURL = fmt.Sprintf("/api/voice-jobs/%s/timing/tokens", jobID)
+	next.AlignmentQualityURL = fmt.Sprintf("/api/voice-jobs/%s/timing/alignment", jobID)
+	return &next
+}
+
+func copyDirectory(sourceDir string, targetDir string) error {
+	if err := os.RemoveAll(targetDir); err != nil {
+		return err
+	}
+	return filepath.WalkDir(sourceDir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(sourceDir, path)
+		if err != nil {
+			return err
+		}
+		targetPath := filepath.Join(targetDir, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(targetPath, 0o755)
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if err := copyFile(path, targetPath); err != nil {
+			return err
+		}
+		return os.Chmod(targetPath, info.Mode())
+	})
 }
 
 func temporarySessionFromPreparedSource(source PreparedSource, now time.Time, expiresAt time.Time) TemporarySourceSession {
@@ -680,6 +804,13 @@ func (service *Service) markTemporarySourceJobCompleted(jobID string) {
 	if err != nil || strings.TrimSpace(job.TemporarySourceID) == "" {
 		return
 	}
+	service.markTemporarySourceJobTerminal(job, TemporarySourceStateAudioReady)
+}
+
+func (service *Service) markTemporarySourceJobTerminal(job VoiceJob, status TemporarySourceLifecycleState) {
+	if strings.TrimSpace(job.TemporarySourceID) == "" {
+		return
+	}
 	service.mu.RLock()
 	session, ok := service.temporary[job.TemporarySourceID]
 	service.mu.RUnlock()
@@ -688,19 +819,42 @@ func (service *Service) markTemporarySourceJobCompleted(jobID string) {
 	}
 	session = cloneTemporarySourceSession(session)
 	now := time.Now().UTC()
-	session.Status = TemporarySourceStateAudioReady
+	session.Status = status
 	session.LastAccessedAt = now
 	session.UpdatedAt = now
+	audioURL := job.AudioURL
+	if audioURL == "" {
+		audioURL = job.AudioPartialURL
+	}
 	artifact := SourceArtifactRef{
 		ID:        job.ID,
 		Scope:     SourceArtifactScopeTemporary,
 		Kind:      SourceArtifactKindGeneratedAudio,
-		URL:       job.AudioURL,
+		URL:       audioURL,
 		Bytes:     fileSize(job.AudioPath),
 		CreatedAt: now,
 		ExpiresAt: &session.ExpiresAt,
 	}
 	session.Artifacts = upsertSourceArtifact(session.Artifacts, artifact)
+	if job.Timing != nil {
+		session.Artifacts = upsertSourceArtifact(session.Artifacts, SourceArtifactRef{
+			ID:        job.ID + ":timing",
+			Scope:     SourceArtifactScopeTemporary,
+			Kind:      SourceArtifactKindTiming,
+			URL:       job.Timing.HighlightMapURL,
+			CreatedAt: now,
+			ExpiresAt: &session.ExpiresAt,
+		})
+	}
+	if job.QualityReport != nil || job.VoiceCheck.Transcript != "" {
+		session.Artifacts = upsertSourceArtifact(session.Artifacts, SourceArtifactRef{
+			ID:        job.ID + ":validation",
+			Scope:     SourceArtifactScopeTemporary,
+			Kind:      SourceArtifactKindValidation,
+			CreatedAt: now,
+			ExpiresAt: &session.ExpiresAt,
+		})
+	}
 	if err := service.persistTemporarySource(session); err != nil {
 		return
 	}

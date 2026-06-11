@@ -70,19 +70,33 @@ func TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy(t *tes
 	if _, _, err := service.GetAudio(job.ID); err != nil {
 		t.Fatalf("GetAudio(temporary job) returned error: %v", err)
 	}
+	if completed.Timing == nil || completed.Timing.HighlightMapURL == "" {
+		t.Fatalf("temporary job timing = %#v, want highlight and timing artifacts", completed.Timing)
+	}
+	if _, err := service.GetHighlightMap(job.ID); err != nil {
+		t.Fatalf("GetHighlightMap(temporary job) returned error: %v", err)
+	}
+	if _, err := service.GetFragmentTiming(job.ID); err != nil {
+		t.Fatalf("GetFragmentTiming(temporary job) returned error: %v", err)
+	}
 	artifacts, err := service.ListTemporarySourceArtifacts(temporary.ID)
 	if err != nil {
 		t.Fatalf("ListTemporarySourceArtifacts returned error: %v", err)
 	}
-	if len(artifacts) < 2 {
-		t.Fatalf("artifacts = %#v, want extraction and generated audio refs", artifacts)
+	if !hasSourceArtifactKind(artifacts, pipeline.SourceArtifactKindGeneratedAudio) ||
+		!hasSourceArtifactKind(artifacts, pipeline.SourceArtifactKindTiming) ||
+		!hasSourceArtifactKind(artifacts, pipeline.SourceArtifactKindValidation) {
+		t.Fatalf("artifacts = %#v, want generated audio, timing, and validation refs", artifacts)
 	}
 
 	project, err := service.CreateProject("Promoted")
 	if err != nil {
 		t.Fatalf("CreateProject returned error: %v", err)
 	}
-	promoted, err := service.PromoteTemporarySource(context.Background(), temporary.ID, pipeline.TemporarySourcePromotionRequest{ProjectID: project.ID})
+	promoted, err := service.PromoteTemporarySource(context.Background(), temporary.ID, pipeline.TemporarySourcePromotionRequest{
+		ProjectID:                  project.ID,
+		PreserveGeneratedArtifacts: true,
+	})
 	if err != nil {
 		t.Fatalf("PromoteTemporarySource returned error: %v", err)
 	}
@@ -95,6 +109,29 @@ func TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy(t *tes
 	if _, err := os.Stat(filepath.Join(service.Options().SourcePrepDir, promoted.ID, "source-prep.json")); err != nil {
 		t.Fatalf("promoted source metadata should exist: %v", err)
 	}
+	projectJobs, err := service.ListProjectJobs(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectJobs returned error: %v", err)
+	}
+	var promotedJob *pipeline.VoiceJob
+	for index := range projectJobs {
+		if projectJobs[index].PreparedSourceID == promoted.ID {
+			promotedJob = &projectJobs[index]
+			break
+		}
+	}
+	if promotedJob == nil {
+		t.Fatalf("project jobs = %#v, want preserved generated audio job for promoted source", projectJobs)
+	}
+	if promotedJob.TemporarySourceID != "" || promotedJob.AudioPath == "" || promotedJob.Timing == nil {
+		t.Fatalf("promoted job = %#v, want durable project audio with timing", promotedJob)
+	}
+	if _, _, err := service.GetAudio(promotedJob.ID); err != nil {
+		t.Fatalf("GetAudio(promoted job) returned error: %v", err)
+	}
+	if _, err := service.GetHighlightMap(promotedJob.ID); err != nil {
+		t.Fatalf("GetHighlightMap(promoted job) returned error: %v", err)
+	}
 
 	if err := service.DeleteTemporarySource(temporary.ID); err != nil {
 		t.Fatalf("DeleteTemporarySource returned error: %v", err)
@@ -105,9 +142,21 @@ func TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy(t *tes
 	if _, err := os.Stat(completed.AudioPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("temporary audio stat error = %v, want removed", err)
 	}
+	if _, _, err := service.GetAudio(promotedJob.ID); err != nil {
+		t.Fatalf("promoted audio should survive temporary deletion: %v", err)
+	}
 	if _, err := service.GetPreparedSource(promoted.ID); err != nil {
 		t.Fatalf("promoted project source should survive temporary deletion: %v", err)
 	}
+}
+
+func hasSourceArtifactKind(artifacts []pipeline.SourceArtifactRef, kind pipeline.SourceArtifactKind) bool {
+	for _, artifact := range artifacts {
+		if artifact.Kind == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func TestTemporaryWebpageMetadataAndPromotion(t *testing.T) {

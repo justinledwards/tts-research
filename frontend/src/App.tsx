@@ -6428,6 +6428,7 @@ export function App() {
       try {
         const promoted = await promoteTemporarySource(temporarySourceId, {
           language: source.sourceReadiness?.language,
+          preserveGeneratedArtifacts: true,
           projectId: activeProjectId,
           sourceType: source.sourceReadiness?.sourceType,
           speechPolicyProfile: source.sourceSpeechPolicyProfile,
@@ -12856,6 +12857,7 @@ function NarrationPreviewStage({
     generatedAudioLifecycle,
     hasSource: hasPreviewSource,
     hasSpokenText: hasSpokenPreviewText,
+    isTemporarySource: selectedPreparedSource?.sourceOwner === "temporary",
     outputFormat,
     policyLabel: policyProfileLabel,
     reviewWarningCount,

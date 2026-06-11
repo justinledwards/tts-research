@@ -36,6 +36,7 @@ export interface PreviewReadinessModelInput {
   readonly generatedAudioLifecycle: GeneratedAudioLifecycleState;
   readonly hasSource: boolean;
   readonly hasSpokenText: boolean;
+  readonly isTemporarySource?: boolean;
   readonly outputFormat: string;
   readonly policyLabel: string;
   readonly reviewWarningCount?: number;
@@ -112,6 +113,7 @@ export function resolvePreviewReadinessModel(
       input.generatedAudioLifecycle,
       canOpenAudioSurface,
       input.audioPipeline,
+      input.isTemporarySource,
     ),
     generatedPlaybackDisabledReason: canPlayGeneratedAudio ? undefined : audio.detail,
     openTelepromptDetail: canPlayGeneratedAudio
@@ -367,17 +369,22 @@ function createHelperForAudioLifecycle(
   lifecycle: GeneratedAudioLifecycleState,
   canOpenAudioSurface: boolean,
   pipeline?: AudioGenerationPipelineModel,
+  isTemporarySource = false,
 ): string {
+  const temporaryExpiryCopy =
+    "Temporary audio will expire unless you keep the source as a project source.";
   if (pipeline?.detail) {
-    return pipeline.detail;
+    return isTemporarySource ? `${pipeline.detail} ${temporaryExpiryCopy}` : pipeline.detail;
   }
   if (canOpenAudioSurface) {
-    return "Audio is ready. Recreate only if the source, voice, policy, or scope changed.";
+    const helper = "Audio is ready. Recreate only if the source, voice, policy, or scope changed.";
+    return isTemporarySource ? `${helper} ${temporaryExpiryCopy}` : helper;
   }
   if (lifecycle === "failed") {
     return `${OPERATIONAL_RECOVERY_LABELS.retryGeneration} with the current source, voice, policy, and scope.`;
   }
-  return "Generates current-scope audio, enables Preview playback, and unlocks Cinema.";
+  const helper = "Generates current-scope audio, enables Preview playback, and unlocks Cinema.";
+  return isTemporarySource ? `${helper} ${temporaryExpiryCopy}` : helper;
 }
 
 function telepromptDetailForAudioLifecycle(lifecycle: GeneratedAudioLifecycleState): string {

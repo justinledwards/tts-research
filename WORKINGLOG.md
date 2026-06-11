@@ -1949,3 +1949,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update Review UI modes, actions, and status labeling
 - [x] Add promotion mapping coverage
 - [x] Run project checks
+
+## 2026-06-11 22:09 CEST - Temporary Audio Generation
+- [x] Map existing audio job request and artifact lifecycle
+- [x] Add temporary CreateJob request support and lifecycle cleanup
+- [x] Add temporary preview readiness, retry, cancel, and partial playback handling
+- [x] Add promotion handling for generated artifacts
+- [x] Run project checks
