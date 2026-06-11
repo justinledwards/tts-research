@@ -24,6 +24,7 @@ import {
   telepromptCueSyncModeForWorkMode,
   telepromptGeneratedAudioReady,
 } from "./telepromptStudioModel";
+import { buildTemporaryTelepromptContextAdapter } from "./temporaryTelepromptContext";
 import {
   clearTelepromptReturnMemory,
   normalizeTelepromptReturnTarget,
@@ -66,6 +67,7 @@ import type { GeneratedAudioLifecycleState } from "../playback";
 import type { ReadAlongTimingState } from "../readalong";
 import type { RevisionBlock } from "../revision";
 import type { VoiceJob } from "../../types";
+import type { SourceLifecycleEnvelope } from "../source-lifecycle";
 
 const blocks: RevisionBlock[] = [
   block({ id: "a", spokenText: "One two three." }),
@@ -920,6 +922,87 @@ describe("teleprompt presets and return memory", () => {
     expect(readTelepromptReturnSnapshot("Project Alpha", "text:other:source:scope")).toBeNull();
     vi.unstubAllGlobals();
   });
+
+  it("keeps temporary return context in session-scoped memory", () => {
+    const localStorage = new Map<string, string>();
+    const sessionStorage = new Map<string, string>();
+    vi.stubGlobal("localStorage", mapStorage(localStorage));
+    vi.stubGlobal("sessionStorage", mapStorage(sessionStorage));
+    clearTelepromptReturnMemory();
+    const sourceKey = telepromptSourceKey({
+      scopeLabel: "Temporary session",
+      sourceId: "temp-1",
+      sourceLabel: "Paste",
+      sourceType: "prepared",
+    });
+
+    rememberTelepromptReturnSnapshot(
+      {
+        activeBlockId: "temp-block-2",
+        activeBlockLabel: "Temporary cue",
+        originatingStage: "review",
+        policyProfile: "Accessibility",
+        projectId: "",
+        returnTarget: "review",
+        scrollTop: 11,
+        selectedCueIndex: 2,
+        sourceKey,
+        sourceLabel: "Paste",
+        updatedAt: "2026-06-11T20:30:00.000Z",
+        voiceProfile: "Default voice",
+      },
+      "temporary-session",
+    );
+
+    expect(localStorage.size).toBe(0);
+    expect(sessionStorage.size).toBe(1);
+    expect(readTelepromptReturnSnapshot("", sourceKey, "temporary-session")).toMatchObject({
+      activeBlockId: "temp-block-2",
+      returnTarget: "review",
+      sourceKey,
+    });
+    expect(readTelepromptReturnSnapshot("", sourceKey)).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("adapts temporary Teleprompt context for Review return and Theatre labels", () => {
+    const adapter = buildTemporaryTelepromptContextAdapter({
+      returnStage: "review",
+      scopeLabel: "Temporary session",
+      sourceLifecycle: temporaryLifecycle({ generatedAudioState: "ready" }),
+    });
+
+    expect(adapter.active).toBe(true);
+    expect(adapter.memoryScope).toBe("temporary-session");
+    expect(adapter.returnTarget).toBe("review");
+    expect(adapter.sourceStatusLabel).toBe("Temporary source · audio ready");
+    expect(adapter.theatreSourceScopeLabel).toBe("Temporary source · Temporary session");
+  });
+});
+
+describe("TelepromptStudio temporary context", () => {
+  it("labels temporary sessions without requiring generated audio", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TelepromptStudio,
+        studioProps({
+          job: null,
+          playbackControls: {
+            isAvailable: false,
+            isPlaying: false,
+            pause: () => null,
+            play: vi.fn(),
+            playbackRate: 1,
+            restart: vi.fn(),
+          },
+          sourceLifecycle: temporaryLifecycle({ generatedAudioState: "missing" }),
+        }),
+      ),
+    );
+
+    expect(markup).toContain("Temporary source");
+    expect(markup).toContain("Manual rehearsal");
+  });
 });
 
 function studioProps(overrides: Partial<TelepromptStudioProps> = {}): TelepromptStudioProps {
@@ -965,6 +1048,53 @@ function studioProps(overrides: Partial<TelepromptStudioProps> = {}): Teleprompt
     onCreateAndListen: () => null,
     onOpenCinema: () => null,
     onTheatreSettingsChange: () => null,
+    ...overrides,
+  };
+}
+
+function mapStorage(storage: Map<string, string>): Storage {
+  return {
+    clear: () => {
+      storage.clear();
+    },
+    getItem: (key: string) => storage.get(key) ?? null,
+    key: (index: number) => [...storage.keys()][index] ?? null,
+    get length() {
+      return storage.size;
+    },
+    removeItem: (key: string) => {
+      storage.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      storage.set(key, value);
+    },
+  };
+}
+
+function temporaryLifecycle(
+  overrides: Partial<SourceLifecycleEnvelope> = {},
+): SourceLifecycleEnvelope {
+  return {
+    adapterKind: "text",
+    canonicalState: "reviewable",
+    extractionState: "extracted",
+    generatedAudioState: "missing",
+    language: "en",
+    lastOpenedSurface: "Teleprompt",
+    narrationState: "reviewable",
+    policyScope: "source",
+    selectedScope: "Temporary session",
+    sourceId: "temp-1",
+    sourceKind: "text",
+    sourceOwner: "temporary",
+    sourceReadiness: {
+      detail: "Temporary source is available for this session.",
+      state: "ready",
+      title: "Paste",
+    },
+    temporarySourceId: "temp-1",
+    temporaryStatus: "reviewable",
+    title: "Paste",
     ...overrides,
   };
 }

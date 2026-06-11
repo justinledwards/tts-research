@@ -66,9 +66,9 @@ import {
   readTelepromptReturnSnapshot,
   rememberTelepromptReturnSnapshot,
   telepromptSourceKey,
-  workspaceStageToTelepromptReturnTarget,
   type TelepromptReturnTarget,
 } from "./telepromptReturnMemory";
+import { buildTemporaryTelepromptContextAdapter } from "./temporaryTelepromptContext";
 import { resolveTelepromptTheatreShortcut } from "./telepromptTheatreShortcuts";
 import {
   buildTelepromptTheatreSummary,
@@ -163,6 +163,7 @@ export interface TelepromptStudioProps {
   readonly onExitTheatreStage?: () => void;
   readonly onOpenCinema: () => void;
   readonly onOpenTheatreStage?: () => void;
+  readonly onRefreshTemporarySource?: (temporarySourceId: string) => Promise<void> | void;
   readonly onTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
 }
 
@@ -271,6 +272,7 @@ export function TelepromptStudio({
   onExitTheatreStage,
   onOpenCinema,
   onOpenTheatreStage,
+  onRefreshTemporarySource,
   onTheatreSettingsChange,
 }: Readonly<TelepromptStudioProps>) {
   const generatedAudioLifecycle =
@@ -318,7 +320,11 @@ export function TelepromptStudio({
     [scopeLabel, sourceId, sourceLabel, sourceType],
   );
   const workModeSourceKeyRef = useRef(sourceKey);
-  const returnTarget = workspaceStageToTelepromptReturnTarget(returnStage);
+  const temporaryContext = useMemo(
+    () => buildTemporaryTelepromptContextAdapter({ returnStage, scopeLabel, sourceLifecycle }),
+    [returnStage, scopeLabel, sourceLifecycle],
+  );
+  const returnTarget = temporaryContext.returnTarget;
   const cueTimeline = useMemo(
     () => buildTelepromptCueTimeline({ blocks, highlightMap, highlightMapV2, job }),
     [blocks, highlightMap, highlightMapV2, job],
@@ -532,7 +538,7 @@ export function TelepromptStudio({
         estimatedDurationMs,
         isPlaybackActive: playbackControls.isPlaying || isPlaybackActive,
         playbackAvailable: audioFollowAvailable,
-        scopeLabel,
+        scopeLabel: temporaryContext.theatreSourceScopeLabel,
         sourceLabel,
       }),
       syncStatusLabel: cueSync.statusLabel,
@@ -546,7 +552,7 @@ export function TelepromptStudio({
       audioFollowAvailable,
       isPlaybackActive,
       playbackControls.isPlaying,
-      scopeLabel,
+      temporaryContext.theatreSourceScopeLabel,
       sourceLabel,
     ],
   );
@@ -559,20 +565,23 @@ export function TelepromptStudio({
         return;
       }
       const snapshotBlock = findTelepromptBlockById(blocks, nextBlockId);
-      rememberTelepromptReturnSnapshot({
-        activeBlockId: nextBlockId,
-        activeBlockLabel: snapshotBlock?.label ?? activeBlock?.label ?? null,
-        originatingStage: returnStage,
-        policyProfile,
-        projectId,
-        returnTarget: nextReturnTarget,
-        scrollTop: scriptScrollerRef.current?.scrollTop ?? 0,
-        selectedCueIndex: snapshotBlock?.index ?? activeBlock?.index ?? null,
-        sourceKey,
-        sourceLabel,
-        updatedAt: new Date().toISOString(),
-        voiceProfile,
-      });
+      rememberTelepromptReturnSnapshot(
+        {
+          activeBlockId: nextBlockId,
+          activeBlockLabel: snapshotBlock?.label ?? activeBlock?.label ?? null,
+          originatingStage: returnStage,
+          policyProfile,
+          projectId,
+          returnTarget: nextReturnTarget,
+          scrollTop: scriptScrollerRef.current?.scrollTop ?? 0,
+          selectedCueIndex: snapshotBlock?.index ?? activeBlock?.index ?? null,
+          sourceKey,
+          sourceLabel,
+          updatedAt: new Date().toISOString(),
+          voiceProfile,
+        },
+        temporaryContext.memoryScope,
+      );
     },
     [
       activeBlock?.id,
@@ -586,6 +595,7 @@ export function TelepromptStudio({
       returnTarget,
       sourceKey,
       sourceLabel,
+      temporaryContext.memoryScope,
       voiceProfile,
     ],
   );
@@ -680,7 +690,11 @@ export function TelepromptStudio({
       return;
     }
     restoredMemoryRef.current = true;
-    const snapshot = readTelepromptReturnSnapshot(projectId, sourceKey);
+    const snapshot = readTelepromptReturnSnapshot(
+      projectId,
+      sourceKey,
+      temporaryContext.memoryScope,
+    );
     const activeBlockStillExists = findTelepromptBlockById(blocks, activeBlockId) !== null;
     if (!activeBlockStillExists && snapshot?.activeBlockId) {
       const restoredBlock = findTelepromptBlockById(blocks, snapshot.activeBlockId);
@@ -695,7 +709,15 @@ export function TelepromptStudio({
         }
       });
     }
-  }, [activeBlockId, blocks, onActiveBlockChange, projectId, rememberReturnMemory, sourceKey]);
+  }, [
+    activeBlockId,
+    blocks,
+    onActiveBlockChange,
+    projectId,
+    rememberReturnMemory,
+    sourceKey,
+    temporaryContext.memoryScope,
+  ]);
 
   useEffect(() => {
     if (!activeBlock) {
@@ -749,6 +771,24 @@ export function TelepromptStudio({
       theatreRootRef.current?.focus();
     });
   }, [theatreMode]);
+
+  useEffect(() => {
+    if (
+      theatreMode === "inline" ||
+      !temporaryContext.temporarySourceId ||
+      !onRefreshTemporarySource
+    ) {
+      return;
+    }
+    const refresh = () => {
+      void onRefreshTemporarySource(temporaryContext.temporarySourceId ?? "");
+    };
+    refresh();
+    const timerId = globalThis.setInterval(refresh, 5 * 60 * 1000);
+    return () => {
+      globalThis.clearInterval(timerId);
+    };
+  }, [onRefreshTemporarySource, temporaryContext.temporarySourceId, theatreMode]);
 
   useEffect(() => {
     const documentRef = typeof document === "undefined" ? null : document;
@@ -1522,6 +1562,18 @@ export function TelepromptStudio({
                       {scopeLabel}
                     </dd>
                   </div>
+                  {temporaryContext.active ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <dt className="vs-muted">Session</dt>
+                      <dd
+                        className="truncate font-semibold"
+                        data-testid="teleprompt-temporary-session-status"
+                        title={temporaryContext.sourceStatusLabel}
+                      >
+                        {temporaryContext.sourceStatusLabel}
+                      </dd>
+                    </div>
+                  ) : null}
                   <div className="grid grid-cols-2 gap-2">
                     <dt className="vs-muted">Policy</dt>
                     <dd className="truncate font-semibold" title={policyProfile}>

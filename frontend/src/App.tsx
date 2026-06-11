@@ -6350,6 +6350,43 @@ export function App() {
     [createQuickListenSource],
   );
 
+  const markTemporarySourceExpired = useCallback((temporarySourceId: string, message: string) => {
+    setTemporarySources((currentSources) =>
+      currentSources.map((source) =>
+        source.id === temporarySourceId || source.temporarySourceId === temporarySourceId
+          ? {
+              ...source,
+              error: message,
+              sourceReadiness: {
+                detail: message,
+                state: "stale",
+                title: source.title ?? source.sourceName,
+              },
+              status: "expired",
+            }
+          : source,
+      ),
+    );
+    setActiveTemporaryPreparedSource((currentSource) => {
+      if (
+        currentSource?.id !== temporarySourceId &&
+        currentSource?.temporarySourceId !== temporarySourceId
+      ) {
+        return currentSource;
+      }
+      return {
+        ...currentSource,
+        sourceReadiness: {
+          detail: message,
+          state: "stale",
+          title: currentSource.title ?? currentSource.sourceName,
+        },
+        warnings: [...(currentSource.warnings ?? []), message],
+      };
+    });
+    setSourcePrepError(message);
+  }, []);
+
   const handleUseTemporarySource = useCallback(
     async (session: TemporarySourceSession) => {
       try {
@@ -6363,11 +6400,40 @@ export function App() {
           caughtError instanceof Error
             ? caughtError.message
             : "Temporary source is no longer available.";
+        markTemporarySourceExpired(session.id, message);
         setQuickListenError(message);
-        setSourcePrepError(message);
       }
     },
-    [activateTemporarySource],
+    [activateTemporarySource, markTemporarySourceExpired],
+  );
+
+  const refreshActiveTemporarySourceSession = useCallback(
+    async (temporarySourceId: string) => {
+      try {
+        const refreshed = await getTemporarySource(temporarySourceId);
+        setTemporarySources((currentSources) => [
+          refreshed,
+          ...currentSources.filter((item) => item.id !== refreshed.id),
+        ]);
+        setActiveTemporaryPreparedSource((currentSource) => {
+          if (
+            currentSource?.id !== refreshed.id &&
+            currentSource?.temporarySourceId !== refreshed.temporarySourceId
+          ) {
+            return currentSource;
+          }
+          return temporarySessionToPreparedSource(refreshed);
+        });
+      } catch (caughtError) {
+        markTemporarySourceExpired(
+          temporarySourceId,
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Temporary source expired after Theatre closed.",
+        );
+      }
+    },
+    [markTemporarySourceExpired],
   );
 
   const handleDiscardTemporarySource = useCallback(async (session: TemporarySourceSession) => {
@@ -9625,6 +9691,7 @@ export function App() {
                     onOpenTheatreStage={() => {
                       runWorkspaceStageAction("openTheatre");
                     }}
+                    onRefreshTemporarySource={refreshActiveTemporarySourceSession}
                     onTheatreSettingsChange={handleTelepromptTheatreSettingsChange}
                   />
                 </Suspense>

@@ -1,3 +1,11 @@
+## 2026-06-11 22:26 CEST - Temporary Teleprompt Theatre Continuity
+- [x] Map existing Teleprompt and Theatre context flows
+- [x] Add temporary context adapters and return memory
+- [x] Add temporary cue timeline and audio-follow readiness mapping
+- [x] Add expired-session recovery behavior
+- [x] Run project checks
+- Validation: focused Teleprompt tests, frontend typecheck, and `git diff --check` passed. `pnpm check` reached backend tests and failed in existing `TestPreparedSourceJobDefensivelyExcludesOnDemandSelectedBlocks` TempDir cleanup (`directory not empty`); focused rerun reproduced the same backend cleanup failure.
+
 ## 2026-06-11 19:52 CEST - Commit Quick Listen Work Package
 - [x] Review and stage intended Quick Listen files
 - [x] Commit Quick Listen entry point work package
