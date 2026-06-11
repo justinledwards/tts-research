@@ -8,6 +8,7 @@ import type {
   AdapterDiagnostics,
   BundleImportMode,
   CreatePreparedSourceRequest,
+  CreateTemporarySourceRequest,
   LexiconUpsertRequest,
   CreateVoiceProfileFromCandidateRequest,
   CreateVoiceJobRequest,
@@ -37,6 +38,8 @@ import type {
   SourceSpeechPolicyUpdateRequest,
   UpsertSpeechPolicyProfileRequest,
   SystemMetrics,
+  TemporarySourcePromotionRequest,
+  TemporarySourceSession,
   TokenTimingArtifact,
   TTSEngineDiagnostics,
   Voice,
@@ -709,6 +712,85 @@ export async function createPreparedSource(
     throw await apiError(response);
   }
   return normalizePreparedSource((await response.json()) as PreparedSource);
+}
+
+export async function createTemporarySource(
+  request: CreateTemporarySourceRequest | File,
+  options: { markdownParseMode?: MarkdownParseMode } = {},
+): Promise<TemporarySourceSession> {
+  const init: RequestInit = { method: "POST" };
+  if (request instanceof File) {
+    const formData = new FormData();
+    formData.append("file", request);
+    if (options.markdownParseMode) {
+      formData.append("markdownParseMode", options.markdownParseMode);
+    }
+    init.body = formData;
+  } else {
+    init.headers = { "Content-Type": "application/json" };
+    init.body = JSON.stringify({
+      ...request,
+      markdownParseMode: request.markdownParseMode ?? options.markdownParseMode,
+    });
+  }
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources`, init);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporarySourceSession>;
+}
+
+export async function getTemporarySource(id: string): Promise<TemporarySourceSession> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporarySourceSession>;
+}
+
+export async function deleteTemporarySource(id: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+}
+
+export async function promoteTemporarySource(
+  id: string,
+  request: TemporarySourcePromotionRequest,
+): Promise<PreparedSource> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}/promote`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return normalizePreparedSource((await response.json()) as PreparedSource);
+}
+
+export async function createTemporarySourceJob(
+  temporarySourceId: string,
+  request: CreateVoiceJobRequest,
+): Promise<VoiceJob> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(temporarySourceId)}/voice-jobs`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<VoiceJob>;
 }
 
 export async function createPreparedSourceJob(

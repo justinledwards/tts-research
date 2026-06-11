@@ -45,6 +45,7 @@ export function TopProductBar({
   onWorkspaceDisclosurePinChange,
   onWorkspaceLayoutModeChange,
   onCommandCenterOpen,
+  onQuickListenOpen,
 }: Readonly<{
   commandPaletteShortcutLabel: string;
   runConfiguration: RunConfiguration;
@@ -61,6 +62,7 @@ export function TopProductBar({
   onWorkspaceDisclosurePinChange: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
   onWorkspaceLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
   onCommandCenterOpen: () => void;
+  onQuickListenOpen: () => void;
 }>) {
   return (
     <header className="vs-app-shell grid min-h-[58px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b px-3 lg:gap-3 lg:px-4">
@@ -115,6 +117,20 @@ export function TopProductBar({
           onLayoutModeChange={onWorkspaceLayoutModeChange}
         />
         <Button
+          aria-label="Open Quick Listen"
+          className="gap-2 px-3"
+          data-command-id="quick-listen:open"
+          data-testid="ui-action-quick-listen-open"
+          data-ui-action-owner="quick-listen"
+          onClick={onQuickListenOpen}
+          size="md"
+          title="Quick Listen"
+          variant="primary"
+        >
+          <ListenIcon />
+          <span className="hidden xl:inline">Quick Listen</span>
+        </Button>
+        <Button
           aria-label="Open command palette"
           className="gap-2 px-3"
           data-command-id="command.palette"
@@ -165,6 +181,19 @@ export function TopProductBar({
           onDisclosurePinChange={onWorkspaceDisclosurePinChange}
           onLayoutModeChange={onWorkspaceLayoutModeChange}
         />
+        <Button
+          aria-label="Open Quick Listen"
+          className="text-[var(--vs-action-primary)]"
+          data-command-id="quick-listen:open"
+          data-testid="ui-action-quick-listen-open"
+          data-ui-action-owner="quick-listen"
+          onClick={onQuickListenOpen}
+          size="icon"
+          title="Quick Listen"
+          variant="secondary"
+        >
+          <ListenIcon />
+        </Button>
         <Button
           aria-label="Open command palette"
           className="text-[var(--vs-action-primary)]"
@@ -460,6 +489,27 @@ function MenuIcon() {
         strokeLinecap="round"
         strokeWidth="1.8"
       />
+    </svg>
+  );
+}
+
+function ListenIcon({ className = "h-4 w-4" }: Readonly<{ className?: string }>) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path
+        d="M5 14v-2a7 7 0 0 1 14 0v2"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M5 14h2.5a1.5 1.5 0 0 1 1.5 1.5v2A1.5 1.5 0 0 1 7.5 19H6a2 2 0 0 1-2-2v-1a2 2 0 0 1 1-2ZM19 14h-2.5a1.5 1.5 0 0 0-1.5 1.5v2a1.5 1.5 0 0 0 1.5 1.5H18a2 2 0 0 0 2-2v-1a2 2 0 0 0-1-2Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.6"
+      />
+      <path d="M11 10v4l3-2-3-2Z" fill="currentColor" />
     </svg>
   );
 }

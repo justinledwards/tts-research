@@ -1,3 +1,15 @@
+## 2026-06-11 19:52 CEST - Commit Quick Listen Work Package
+- [x] Review and stage intended Quick Listen files
+- [x] Commit Quick Listen entry point work package
+
+## 2026-06-11 19:33 CEST - Premium Quick Listen Entry Point
+- [x] Inspect shell, empty workspace, command palette, intake, cinema, and settings surfaces
+- [x] Add Quick Listen launcher and source input panel
+- [x] Wire temporary source session creation flow
+- [x] Add temporary-source copy and error states
+- [x] Run project checks before handoff
+- Validation: `pnpm --filter @tts-research/frontend test -- frontend/src/AppShell.test.tsx frontend/src/WorkspaceDrawer.test.tsx frontend/src/features/command-palette/commandPaletteHelpers.test.ts frontend/src/api.test.ts`, touched-file Biome/ESLint checks, frontend typecheck, and `pnpm check` passed. `pnpm check` still prints existing Biome warnings/infos in adapter/scripts files, but exits successfully.
+
 ## 2026-06-11 19:29 CEST - Commit Temporary Source Boundary
 - [x] Review and stage intended temporary source files
 - [x] Commit temporary source API and storage boundary

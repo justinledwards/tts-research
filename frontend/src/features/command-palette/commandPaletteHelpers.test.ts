@@ -31,6 +31,10 @@ describe("command palette helpers", () => {
     expect(entries.map((entry) => entry.id)).toContain("command-center:reports");
     expect(entries.map((entry) => entry.id)).toContain("bundle:import");
     expect(entries.map((entry) => entry.id)).toContain("bundle:export-current");
+    expect(entries.find((entry) => entry.id === "quick-listen:open")).toMatchObject({
+      category: "Source",
+      title: "Quick Listen",
+    });
     expect(entries.find((entry) => entry.id === "command-center:activity")).toMatchObject({
       category: "Diagnostics",
       title: "Open Activity",
@@ -53,6 +57,7 @@ const handlers: CommandPaletteHandlers = {
   openDraftSource: noop,
   openExportCurrent: noop,
   openImportBundle: noop,
+  openQuickListen: noop,
   openPreparedSource: noop,
   openPreparedSourceCinema: noop,
   openProject: noop,

@@ -309,6 +309,8 @@ describe("Command Center", () => {
     );
 
     expect(projectsMarkup).toContain("No saved projects yet");
+    expect(projectsMarkup).toContain('data-testid="ui-action-empty-workspace-quick-listen"');
+    expect(projectsMarkup).toContain("Quick Listen");
     expect(projectsMarkup).toContain("No generated audio is attached to the current project yet.");
     expect(assetsMarkup).toContain("No source analysis or book source staged.");
     expect(assetsMarkup).toContain("No saved voice profiles yet.");
@@ -376,6 +378,7 @@ function props(): Parameters<typeof WorkspaceDrawer>[0] {
     onGeneratePreparedSourceNarration: () => null,
     onImportOpen: () => null,
     onOpenIntake: () => null,
+    onOpenQuickListen: () => null,
     onOpenSettings: () => null,
     onOpenVoiceDashboard: () => null,
     onOpenVoiceCloning: () => null,

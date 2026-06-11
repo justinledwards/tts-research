@@ -54,6 +54,7 @@ export interface CommandPaletteHandlers {
   openDraftSource: () => void;
   openExportCurrent: () => void;
   openImportBundle: () => void;
+  openQuickListen: () => void;
   openShortcutCheatSheet: () => void;
   openProject: (projectId: string) => void;
   openSettings: (target: SettingsCommandTarget | null) => void;
@@ -116,6 +117,7 @@ export interface CommandPaletteHandlerContext {
   openCommandCenterRoute: (routeId: CommandCenterRouteId) => void;
   openExportCurrent: () => void;
   openImportBundle: () => void;
+  openQuickListen: () => void;
   createAndListenFromCurrentSource: () => void;
   handleAddPlaybackBookmark: () => void | Promise<void>;
   handleResumeProgress: (progress: PlaybackProgress) => void | Promise<void>;
@@ -154,6 +156,7 @@ export function buildCommandPaletteHandlers({
   openCommandCenterRoute,
   openExportCurrent,
   openImportBundle,
+  openQuickListen,
   preparedSourceCinemaActionLabel,
   resolveBookSourceLabel,
   resolveDefaultBookScope,
@@ -224,6 +227,7 @@ export function buildCommandPaletteHandlers({
     },
     openExportCurrent,
     openImportBundle,
+    openQuickListen,
     openPreparedSource: (source) => {
       void handleUsePreparedSource(source);
     },
@@ -401,6 +405,27 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
       section: "Help",
       shortcutCommandId: "help.open",
       title: "Open help",
+    },
+    {
+      category: "Source",
+      detail:
+        "Start temporary narration from pasted text, a URL, a file, or a recent temporary source.",
+      id: "quick-listen:open",
+      keywords: [
+        "quick listen",
+        "read this now",
+        "temporary",
+        "without saving",
+        "paste",
+        "url",
+        "file",
+      ],
+      owner: "quick-listen",
+      perform: () => {
+        handlers.openQuickListen();
+      },
+      section: "Sources",
+      title: "Quick Listen",
     },
     {
       capabilityGate: "tts",

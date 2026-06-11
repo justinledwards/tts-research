@@ -6,6 +6,8 @@ import {
   clearHuggingFaceToken,
   createCustomSpeechPolicyProfile,
   createPreparedSource,
+  createTemporarySource,
+  createTemporarySourceJob,
   createVoicePreview,
   buildVoiceProfileArtifact,
   deleteProject,
@@ -128,6 +130,80 @@ describe("API errors", () => {
       expect(preview.provider).toBe("mock");
       expect(preview.voice).toBe("af_heart");
       expect(preview.audio.size).toBe(4);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("creates temporary sources from URL JSON without a project id", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      requests.push({ url: fetchInputUrl(input), init });
+      return Promise.resolve(
+        Response.json({
+          id: "temp-1",
+          temporarySourceId: "temp-1",
+          sourceOwner: "temporary",
+          status: "reviewable",
+          promotionStatus: "notPromoted",
+          kind: "url",
+          sourceName: "https://example.com/story",
+          wordCount: 10,
+          artifacts: [],
+          createdAt: "2026-06-11T17:00:00Z",
+          lastAccessedAt: "2026-06-11T17:00:00Z",
+          expiresAt: "2026-06-12T17:00:00Z",
+          updatedAt: "2026-06-11T17:00:00Z",
+        }),
+      );
+    };
+
+    try {
+      await createTemporarySource({
+        kind: "url",
+        markdownParseMode: "strict",
+        sourceName: "https://example.com/story",
+        url: "https://example.com/story",
+      });
+
+      expect(requests[0]?.url).toBe("/api/temporary-sources");
+      expect(requests[0]?.init?.method).toBe("POST");
+      expect(requests[0]?.init?.headers).toEqual({ "Content-Type": "application/json" });
+      const body = requests[0]?.init?.body;
+      expect(typeof body).toBe("string");
+      expect(JSON.parse(body as string)).toMatchObject({
+        kind: "url",
+        markdownParseMode: "strict",
+        url: "https://example.com/story",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("creates temporary source jobs through the temporary route", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      requests.push({ url: fetchInputUrl(input), init });
+      return Promise.resolve(Response.json({ id: "job-temp", status: "queued", progress: {} }));
+    };
+
+    try {
+      await createTemporarySourceJob("temp-1", {
+        text: "Read this now.",
+        temporarySourceId: "temp-1",
+        ttsEngine: "auto",
+      });
+
+      expect(requests[0]?.url).toBe("/api/temporary-sources/temp-1/voice-jobs");
+      expect(requests[0]?.init?.method).toBe("POST");
+      const body = requests[0]?.init?.body;
+      expect(typeof body).toBe("string");
+      expect(JSON.parse(body as string)).toMatchObject({
+        temporarySourceId: "temp-1",
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }

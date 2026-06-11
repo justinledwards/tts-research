@@ -36,6 +36,8 @@ import {
   createCustomSpeechPolicyProfile,
   createPreparedSource,
   createPreparedSourceJob,
+  createTemporarySource,
+  createTemporarySourceJob,
   createVoiceJob,
   createVoicePreview,
   createVoiceProfileFromCandidate,
@@ -44,6 +46,7 @@ import {
   deleteProject,
   deleteCustomSpeechPolicyProfile,
   deletePreparedSource,
+  deleteTemporarySource,
   deleteVoiceJob,
   deleteVoiceProfile,
   getBookSourceScope,
@@ -56,6 +59,7 @@ import {
   getProjectStorageSummary,
   getSpeechPolicyDefinition,
   getSystemMetrics,
+  getTemporarySource,
   getVoiceJob,
   buildVoiceProfileArtifact,
   getVoiceProfileCredentials,
@@ -447,6 +451,7 @@ import type {
   SourceReadinessConfirmationRequest,
   StageStatus,
   SystemMetrics,
+  TemporarySourceSession,
   ThemeName,
   TTSEngineDiagnostics,
   VoiceJob,
@@ -528,6 +533,7 @@ import {
   orderedKokoroVoicepacksForLanguage,
   voiceProfileMatchesLanguage,
 } from "./features/i18n/languageVoiceMapping";
+import { temporarySessionToPreparedSource } from "./features/quick-listen";
 
 type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 
@@ -605,6 +611,9 @@ const SettingsPanel = lazy(() =>
 );
 const LazyIntakeWizard = lazy(() =>
   import("./features/intake").then((module) => ({ default: module.IntakeWizard })),
+);
+const LazyQuickListenPanel = lazy(() =>
+  import("./features/quick-listen").then((module) => ({ default: module.QuickListenPanel })),
 );
 const LazyTelepromptStudio = lazy(() =>
   import("./features/teleprompt").then((module) => ({ default: module.TelepromptStudio })),
@@ -2690,7 +2699,13 @@ export function App() {
   const [selectedBookScope, setSelectedBookScope] = useState<BookScope | null>(null);
   const [bookScopeContent, setBookScopeContent] = useState<BookSourceScopeContent | null>(null);
   const [preparedSources, setPreparedSources] = useState<PreparedSource[]>([]);
+  const [temporarySources, setTemporarySources] = useState<TemporarySourceSession[]>([]);
+  const [activeTemporaryPreparedSource, setActiveTemporaryPreparedSource] =
+    useState<PreparedSource | null>(null);
   const [selectedPreparedSourceId, setSelectedPreparedSourceId] = useState<string | null>(null);
+  const [isQuickListenOpen, setIsQuickListenOpen] = useState(false);
+  const [isCreatingQuickListenSource, setIsCreatingQuickListenSource] = useState(false);
+  const [quickListenError, setQuickListenError] = useState<string | null>(null);
   const [hydratingPreparedSourceId, setHydratingPreparedSourceId] = useState<string | null>(null);
   const [isPreparingSource, setIsPreparingSource] = useState(false);
   const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
@@ -3330,13 +3345,15 @@ export function App() {
         : (bookSources[0] ?? null),
     [bookSources, selectedBookSourceId],
   );
-  const selectedPreparedSource = useMemo(
-    () =>
-      selectedPreparedSourceId
-        ? (preparedSources.find((source) => source.id === selectedPreparedSourceId) ?? null)
-        : (preparedSources[0] ?? null),
-    [preparedSources, selectedPreparedSourceId],
-  );
+  const selectedPreparedSource = useMemo(() => {
+    if (selectedPreparedSourceId) {
+      if (activeTemporaryPreparedSource?.id === selectedPreparedSourceId) {
+        return activeTemporaryPreparedSource;
+      }
+      return preparedSources.find((source) => source.id === selectedPreparedSourceId) ?? null;
+    }
+    return preparedSources[0] ?? null;
+  }, [activeTemporaryPreparedSource, preparedSources, selectedPreparedSourceId]);
   const effectiveBookScope = useMemo(
     () =>
       selectedBookSource ? normalizeBookScopeForBook(selectedBookSource, selectedBookScope) : null,
@@ -4723,6 +4740,9 @@ export function App() {
           mergePreparedSourcesPreservingFullContent(currentSources, sources),
         );
         setSelectedPreparedSourceId((currentId) => {
+          if (currentId && activeTemporaryPreparedSource?.id === currentId) {
+            return currentId;
+          }
           if (currentId && sources.some((source) => source.id === currentId)) {
             return currentId;
           }
@@ -4740,7 +4760,7 @@ export function App() {
         setSourcePrepError(formatErrorMessage(caughtError, "Unable to load prepared sources"));
       }
     },
-    [refreshProjects],
+    [activeTemporaryPreparedSource, refreshProjects],
   );
 
   const refreshProjectProgress = useCallback(async (projectId: string) => {
@@ -6120,8 +6140,154 @@ export function App() {
     ],
   );
 
+  const activateTemporarySource = useCallback(
+    (session: TemporarySourceSession) => {
+      const source = temporarySessionToPreparedSource(session);
+      setTemporarySources((currentSources) => [
+        session,
+        ...currentSources.filter((item) => item.id !== session.id),
+      ]);
+      setActiveTemporaryPreparedSource(source);
+      setSelectedBookSourceId(null);
+      setSelectedBookScope(null);
+      setBookScopeContent(null);
+      setSelectedPreparedSourceId(source.id);
+      setSourceMode("fileUrl");
+      setQuickListenError(null);
+      setIsQuickListenOpen(false);
+      setText(source.speechText ?? source.text ?? "");
+      selectWorkspaceInspectorTarget({
+        id: source.id,
+        kind: "source",
+        label: source.title ?? source.sourceName,
+      });
+      setContentMode(session.sourceReadiness?.state === "needsMetadata" ? "review" : "preview");
+      announcePolite("Quick Listen source is ready as a temporary session.");
+    },
+    [announcePolite, selectWorkspaceInspectorTarget, setContentMode],
+  );
+
+  const createQuickListenSource = useCallback(
+    async (
+      request: Parameters<typeof createTemporarySource>[0],
+      markdownParseMode: MarkdownParseMode,
+    ) => {
+      setIsCreatingQuickListenSource(true);
+      setQuickListenError(null);
+      setSourcePrepError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
+      try {
+        const session = await createTemporarySource(request, { markdownParseMode });
+        if (session.status === "failed" || session.sourceReadiness?.state === "failed") {
+          const message =
+            session.error ?? session.sourceReadiness?.detail ?? "Quick Listen source failed.";
+          setQuickListenError(message);
+          setSourcePrepError(message);
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
+          return;
+        }
+        if (session.sourceReadiness?.state === "unsupported") {
+          const message =
+            session.sourceReadiness.detail || "That source is not supported for Quick Listen yet.";
+          setQuickListenError(message);
+          setSourcePrepError(message);
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
+          return;
+        }
+        activateTemporarySource(session);
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error ? caughtError.message : "Unable to start Quick Listen";
+        setQuickListenError(message);
+        setSourcePrepError(message);
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
+      } finally {
+        setIsCreatingQuickListenSource(false);
+      }
+    },
+    [activateTemporarySource, announceAssertive, announcePolite],
+  );
+
+  const handleQuickListenText = useCallback(
+    async (
+      draftText: string,
+      markdownParseMode: MarkdownParseMode,
+      sourceName = "Quick Listen paste",
+    ) => {
+      await createQuickListenSource(
+        {
+          kind: "text",
+          markdownParseMode,
+          sourceName,
+          text: draftText,
+        },
+        markdownParseMode,
+      );
+    },
+    [createQuickListenSource],
+  );
+
+  const handleQuickListenUrl = useCallback(
+    async (url: string, markdownParseMode: MarkdownParseMode) => {
+      await createQuickListenSource(
+        {
+          kind: "url",
+          markdownParseMode,
+          sourceName: url,
+          url,
+        },
+        markdownParseMode,
+      );
+    },
+    [createQuickListenSource],
+  );
+
+  const handleQuickListenFile = useCallback(
+    async (file: File, markdownParseMode: MarkdownParseMode) => {
+      await createQuickListenSource(file, markdownParseMode);
+    },
+    [createQuickListenSource],
+  );
+
+  const handleUseTemporarySource = useCallback(
+    async (session: TemporarySourceSession) => {
+      try {
+        const refreshed = await getTemporarySource(session.id);
+        activateTemporarySource(refreshed);
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Temporary source is no longer available.";
+        setQuickListenError(message);
+        setSourcePrepError(message);
+      }
+    },
+    [activateTemporarySource],
+  );
+
+  const handleDiscardTemporarySource = useCallback(async (session: TemporarySourceSession) => {
+    try {
+      await deleteTemporarySource(session.id);
+      setTemporarySources((currentSources) =>
+        currentSources.filter((source) => source.id !== session.id),
+      );
+      setActiveTemporaryPreparedSource((currentSource) =>
+        currentSource?.temporarySourceId === session.id ? null : currentSource,
+      );
+      setSelectedPreparedSourceId((currentId) => (currentId === session.id ? null : currentId));
+    } catch (caughtError) {
+      setQuickListenError(
+        caughtError instanceof Error ? caughtError.message : "Unable to discard temporary source.",
+      );
+    }
+  }, []);
+
   const handleUsePreparedSource = useCallback(
     async (source: PreparedSource) => {
+      if (source.sourceOwner !== "temporary") {
+        setActiveTemporaryPreparedSource(null);
+      }
       setSelectedPreparedSourceId(source.id);
       setSourceMode("fileUrl");
       setContentMode("review");
@@ -7378,6 +7544,7 @@ export function App() {
     createVoiceJob,
     createBookNarrationJob,
     createPreparedSourceJob,
+    createTemporarySourceJob,
     getBookSourceScope,
     getPreparedSource,
     isApiNotFoundError,
@@ -7796,6 +7963,10 @@ export function App() {
         setIsCommandCenterOpen(false);
         setBundlePanelMode("import");
         setIsBundlePanelOpen(true);
+      },
+      openQuickListen: () => {
+        setQuickListenError(null);
+        setIsQuickListenOpen(true);
       },
       createAndListenFromCurrentSource,
       handleAddPlaybackBookmark,
@@ -8282,6 +8453,10 @@ export function App() {
             studioMode === "narration" ? "Narration Workbench" : "Voice Cloning Workbench",
         }}
         onCommandPaletteOpen={openCommandPalette}
+        onQuickListenOpen={() => {
+          setQuickListenError(null);
+          setIsQuickListenOpen(true);
+        }}
         onSettingsOpen={() => {
           setSettingsCommandTarget(null);
           setIsSettingsOpen(true);
@@ -8347,6 +8522,24 @@ export function App() {
             onClose={closeCommandPalette}
             onCustomizeShortcuts={openShortcutSettings}
             onViewChange={setCommandPaletteView}
+          />
+        </Suspense>
+      ) : null}
+      {isQuickListenOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading Quick Listen..." />}>
+          <LazyQuickListenPanel
+            error={quickListenError}
+            isOpen={isQuickListenOpen}
+            isSubmitting={isCreatingQuickListenSource}
+            recentSources={temporarySources}
+            onClose={() => {
+              setIsQuickListenOpen(false);
+            }}
+            onCreateFromFile={handleQuickListenFile}
+            onCreateFromText={handleQuickListenText}
+            onCreateFromUrl={handleQuickListenUrl}
+            onDiscard={handleDiscardTemporarySource}
+            onUseRecentSource={handleUseTemporarySource}
           />
         </Suspense>
       ) : null}
@@ -8427,6 +8620,11 @@ export function App() {
               setIsCommandCenterOpen(false);
               setContentMode("intake");
               setSourceMode("text");
+            }}
+            onOpenQuickListen={() => {
+              setIsCommandCenterOpen(false);
+              setQuickListenError(null);
+              setIsQuickListenOpen(true);
             }}
             onOpenVoiceDashboard={() => {
               setIsCommandCenterOpen(false);

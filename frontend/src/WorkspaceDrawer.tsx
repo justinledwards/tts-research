@@ -114,6 +114,7 @@ export function WorkspaceDrawer({
   onImportOpen,
   onOpenSettings,
   onOpenIntake,
+  onOpenQuickListen,
   onOpenVoiceDashboard,
   onOpenVoiceCloning,
   onRenameProject,
@@ -182,6 +183,7 @@ export function WorkspaceDrawer({
   onImportOpen: () => void;
   onOpenSettings: (target?: SettingsCommandTarget | null) => void;
   onOpenIntake: () => void;
+  onOpenQuickListen: () => void;
   onOpenVoiceDashboard: () => void;
   onOpenVoiceCloning: () => void;
   onRenameProject: (id: string, name: string) => Promise<void>;
@@ -594,10 +596,31 @@ export function WorkspaceDrawer({
                         />
                       ))
                     ) : (
-                      <EmptyDrawerText>
-                        No saved projects yet. Create a project when you want a separate library, or
-                        keep using the draft workspace.
-                      </EmptyDrawerText>
+                      <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
+                        <EmptyDrawerText>
+                          No saved projects yet. Create a project when you want a separate library,
+                          or start temporary narration without saving anything.
+                        </EmptyDrawerText>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] vs-accent-bg"
+                            data-testid="ui-action-empty-workspace-quick-listen"
+                            onClick={onOpenQuickListen}
+                            type="button"
+                          >
+                            Quick Listen
+                          </button>
+                          <button
+                            className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                            onClick={() => {
+                              setIsCreatingProject(true);
+                            }}
+                            type="button"
+                          >
+                            New Project
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                   <GeneratedAudioList

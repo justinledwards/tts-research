@@ -59,6 +59,7 @@ describe("TopProductBar", () => {
         workspaceLayoutMode="balanced"
         onCommandCenterOpen={() => null}
         onCommandPaletteOpen={() => null}
+        onQuickListenOpen={() => null}
         onSettingsOpen={() => null}
         onStudioModeChange={() => null}
         onWorkspaceCustomLayoutChange={() => null}
@@ -77,6 +78,8 @@ describe("TopProductBar", () => {
     expect(markup).toContain("Full source");
     expect(markup).not.toContain("Clean Energy - Long Form");
     expect(markup).toContain('data-segmented-control="Studio mode"');
+    expect(markup).toContain('data-testid="ui-action-quick-listen-open"');
+    expect(markup).toContain("Quick Listen");
     expect(markup).toContain("Layout");
     expect(markup).toContain('aria-label="Open settings"');
     expect(markup).not.toContain('aria-label="Select project"');

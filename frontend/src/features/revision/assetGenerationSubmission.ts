@@ -76,6 +76,10 @@ export interface SubmissionDependencies extends SubmissionRuntime, SubmissionSta
   createVoiceJob: (request: CreateVoiceJobRequest) => Promise<VoiceJob>;
   createBookNarrationJob: (bookId: string, request: CreateVoiceJobRequest) => Promise<VoiceJob>;
   createPreparedSourceJob: (sourceId: string, request: CreateVoiceJobRequest) => Promise<VoiceJob>;
+  createTemporarySourceJob?: (
+    temporarySourceId: string,
+    request: CreateVoiceJobRequest,
+  ) => Promise<VoiceJob>;
   getBookSourceScope: (bookId: string, scope: BookScope) => Promise<BookSourceScopeContent>;
   getPreparedSource: (sourceId: string) => Promise<PreparedSource>;
   isApiNotFoundError: (error: unknown) => boolean;
@@ -274,6 +278,31 @@ function resolveEmptyPreparedSourceSelectionPayload({
     selectedBlockIds,
     sourceBlockCount,
   };
+}
+
+function preparedSourceProgressTargetId(source: PreparedSource): string {
+  if (source.sourceOwner === "temporary" && source.temporarySourceId) {
+    return `temporary-source:${source.temporarySourceId}`;
+  }
+  return `prepared:${source.id}`;
+}
+
+async function createPreparedNarrationJob(
+  deps: SubmissionDependencies,
+  source: PreparedSource,
+  request: CreateVoiceJobRequest,
+  applyReviewSession: boolean,
+): Promise<VoiceJob> {
+  if (source.sourceOwner === "temporary" && source.temporarySourceId) {
+    return (deps.createTemporarySourceJob ?? deps.createPreparedSourceJob)(
+      source.temporarySourceId,
+      request,
+    );
+  }
+  if (applyReviewSession) {
+    return deps.createVoiceJob(request);
+  }
+  return deps.createPreparedSourceJob(source.id, request);
 }
 
 function upsertPreparedSource(
@@ -528,10 +557,11 @@ export async function submitPreparedSourceJob(
   const sessionOverrides = compactSpeechPolicyOverrides(deps.speechPolicyOverrides);
   const request: CreateVoiceJobRequest = {
     ...deps.buildVoiceJobRequest(speechText, jobSource),
-    preparedSourceId: jobSource.id,
+    preparedSourceId: jobSource.sourceOwner === "temporary" ? undefined : jobSource.id,
     selectedBlockIds: selectionPayload.selectedBlockIds,
     sourceKind: jobSource.kind,
-    progressTargetId: `prepared:${jobSource.id}`,
+    temporarySourceId: jobSource.temporarySourceId,
+    progressTargetId: preparedSourceProgressTargetId(jobSource),
     ...(applyReviewSession ? { speechRenderApplied: true } : {}),
     ...(hasSpeechPolicyOverrides(sessionOverrides)
       ? { speechPolicyOverrides: sessionOverrides }
@@ -551,9 +581,7 @@ export async function submitPreparedSourceJob(
   deps.announcePolite();
 
   try {
-    const nextJob = applyReviewSession
-      ? await deps.createVoiceJob(request)
-      : await deps.createPreparedSourceJob(jobSource.id, request);
+    const nextJob = await createPreparedNarrationJob(deps, jobSource, request, applyReviewSession);
     deps.setActiveDemoProjectId(null);
     deps.setJob(nextJob);
     deps.setContentMode("preview");

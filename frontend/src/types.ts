@@ -570,6 +570,14 @@ export interface CreatePreparedSourceRequest {
   htmlContainerSelector?: string;
 }
 
+export interface CreateTemporarySourceRequest extends CreatePreparedSourceRequest {
+  localPath?: string;
+}
+
+export interface TemporarySourcePromotionRequest {
+  projectId: string;
+}
+
 export interface TemporarySourceSession {
   id: string;
   temporarySourceId: string;
